@@ -331,3 +331,36 @@ used direct byte comparison and Git Bash accordingly.
 M0's six goals are done. All six invariant gates green, 361 tests across 18 files, the
 guest loop and money loop both running end to end, headless, deterministic, saved and
 reloaded. Escalating for milestone sign-off per §5.4.
+
+---
+
+## 2026-08-07 — M0 SIGNED OFF, M1 opened
+
+The human asked the right question at sign-off: *is there anything playable?* No — and
+not only because there is no renderer. There is **no player agency at all**, because
+build and demolish are M1 and pricing is M4. §8's "playable-but-boring" is not
+achievable as M0 is scoped; the boring half shipped and the playable half is M1.
+
+Worth recording for whoever reads this later: the build loop was already visible in M0's
+numbers before any player could touch it. A capacity sweep at 30 days / seed 42 —
+1, 2, 3, 6, 12 rooms — shows satisfied guests scaling linearly to saturation near 6
+rooms, and 12 rooms serving the *same* 356 guests for 450,000p less profit, matching the
+six idle rooms' upkeep (6 x 2500p x 30 nights) to the penny. There is a real optimum in
+the economy around 4-6 rooms, discoverable, with no player able to discover it yet. That
+is the strongest single piece of evidence that the money and build loops are real rather
+than decorative, and it cost nothing to produce — the flags G-006 added were enough.
+
+The offer to build a minimal interactive harness before M1 was made and declined, on the
+grounds that it would be new scope smuggled into a signed-off milestone and would
+duplicate what M1's build commands do properly. Agreed and recorded.
+
+M1 seeded with four thin goals: G-007 grid, G-008 build/demolish with construction cost,
+G-009 validity rules, G-010 the bench measuring a real hotel. That last one is the parked
+I5 debt deliberately scheduled inside the milestone that causes it — M1 hands room count
+to the player, and I5 was measured failing between 50 and 75 rooms while the gate stayed
+green on a three-room bench. A gate that is green because it measures a toy is the same
+family as everything ADR-0007 catalogues.
+
+G-007 also inherits the first **multi-step** migration: the permanent v1 fixture will
+have to walk 1 -> 2 -> 3. The chain walk has been tested against synthetic gaps since
+G-003 and discharged once at G-004; this is where it does real work.

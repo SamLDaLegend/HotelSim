@@ -221,8 +221,113 @@ Critique rounds used: 1/3
 
 ---
 
-## M0 exit — human sign-off required
+## M0 exit — SIGNED OFF 2026-08-07
 
-When G-001 to G-006 are all `done`, that is a §5.4 escalation: a milestone's exit
-criteria are met and need human sign-off. Write it to `ESCALATIONS.md` and stop. Do
-not start M1, and do not let anyone open `apps/game`.
+All six goals done. 9 commits, 12 critique rounds of 18 budgeted, 6 MAJOR + 3 MINOR
+findings, zero BLOCKERs, zero budgets exceeded. All six gates green: I2
+`be508c487d49fd6c`, I5 12.5%, 361 tests across 18 files.
+
+Signed off with the explicit understanding that **M0 is not playable and cannot be as
+scoped** — build and demolish are M1, pricing is M4, so no player decision exists yet.
+§8's "playable-but-boring" arrives at M1. See `ESCALATIONS.md` for the reasoning.
+
+---
+
+# M1 — Structure
+
+> Multi-floor grid, build and demolish commands, room validity rules (enclosed, has a
+> door, has required items), construction cost. — `HOTELSIM.md` §8
+
+**This is the milestone that makes the game playable.** M0 proved the loops run; M1
+gives the player something to decide. The build loop is already visible in M0's numbers
+— demand saturates near 6 rooms and overbuilding costs upkeep — but nothing can act on
+it until build commands exist.
+
+`apps/game` stays shut. The renderer is M5, four milestones away (§9).
+
+## G-007 — Multi-floor grid and coordinates
+Status: pending
+Milestone: M1
+Owner pair: sim-engineer / sim-critic
+Statement: The world has a multi-floor grid of cells; an entity occupies a known cell;
+  positions are part of hashed, saved state and survive a round trip.
+Exit criteria:
+  - pnpm exec vitest run grid  (all green)
+  - a save taken mid-run, reloaded, and advanced 1,000 ticks matches the unsaved run's hash
+  - pnpm exec vitest run save  (green — the migration chain below)
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: build/demolish commands (G-008); validity rules (G-009); pathfinding and
+  vertical circulation (M3); anything drawn (M5)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+  KNOWN OBLIGATION (ADR-0006): `World` gains the grid, so the permanent v1 fixture is
+  rejected again. Bump SAVE_SCHEMA_VERSION to 3 and write a real 2 -> 3 migration; the
+  fixture then exercises the **first multi-step chain, 1 -> 2 -> 3**. Do not regenerate
+  it. G-003's runner already handles gaps, duplicates, out-of-order steps and mid-chain
+  throws, and G-004 discharged the single-step case, so this is the first goal where the
+  chain walk itself is load-bearing.
+
+## G-008 — Build and demolish commands with construction cost
+Status: pending
+Milestone: M1
+Owner pair: sim-engineer / sim-critic
+Statement: A host command places a room on the grid and charges its construction cost to
+  the ledger; another removes it. Illegal placements are refused deterministically.
+Exit criteria:
+  - pnpm exec vitest run build  (all green)
+  - pnpm sim:run --days 30 --seed 7 with a build schedule reports construction
+    transactions and a balance equal to the fold of its own log
+  - a build on an occupied cell, an out-of-bounds cell, or with insufficient cash is
+    refused, and refusal is a recorded outcome rather than a throw
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: any UI (M5); demand responding to capacity (M4); room variety (M6)
+  (-> PARKING.md)
+Critique rounds used: 0/3
+
+  Construction cost is content (I3/ADR-0003), integer pence (ADR-0002), and lands in the
+  ledger through a new `TransactionReason` member — the union and its choke point already
+  make that structural.
+
+## G-009 — Room validity rules
+Status: pending
+Milestone: M1
+Owner pair: sim-engineer / sim-critic
+Statement: A room is valid only if it is enclosed, has a door, and holds its required
+  items. An invalid room is not a provider, and the reason it is invalid is legible.
+Exit criteria:
+  - pnpm exec vitest run validity  (all green)
+  - pnpm sim:run --days 30 --seed 7 reports zero guests served by an invalid room
+  - every invalidity reason is reachable by a test that constructs it
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: item variety and item content beyond what a room requires (M6); staff (M4)
+  (-> PARKING.md)
+Critique rounds used: 0/3
+
+## G-010 — The bench simulates a real hotel, and tick cost stays linear
+Status: pending
+Milestone: M1
+Owner pair: sim-engineer / sim-critic
+Statement: `sim:bench` measures a hotel of realistic size rather than a three-room toy,
+  and tick cost grows linearly in room count rather than quadratically.
+Exit criteria:
+  - pnpm sim:bench green with the bench workload at 60 rooms or more
+  - pnpm exec vitest run scaling  asserts tick cost at 100 rooms is under 6x tick cost
+    at 25 rooms (4x rooms: linear is ~4x, quadratic would be ~16x)
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: threading; spatial partitioning beyond what the measurement requires
+  (-> PARKING.md)
+Critique rounds used: 0/3
+
+  This is the parked I5 debt coming due, and it is scheduled inside M1 deliberately:
+  M1 is the milestone that hands room count to the player, and `ai-critic` measured I5
+  failing between 50 and 75 rooms (27.7s projected at 75). The bench being a three-room
+  toy is why the gate is green while the game would be unplayable — fixing the workload
+  is half the goal. Any room -> occupant index built here is DERIVED state: rebuilt on
+  load, never saved, never authoritative (see PARKING.md for why).
+
+---
+
+## M1 exit — human sign-off required
+
+When G-007 to G-010 are all `done`, that is a §5.4 escalation. Write it to
+`ESCALATIONS.md` and stop. Do not start M2, and do not open `apps/game`.

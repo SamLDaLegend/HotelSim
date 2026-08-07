@@ -38,7 +38,27 @@ second sign-off before M1.
 
 ---
 
-## 2026-08-07 — OPEN — M0 walking skeleton complete, awaiting milestone sign-off
+## 2026-08-07 — RESOLVED — M0 walking skeleton complete, awaiting milestone sign-off
+
+**Resolution (2026-08-07):** Human signed off. M1 opened; the loop selects G-007.
+
+The human asked directly whether anything was playable. Answer given and accepted: no —
+not only is there no renderer (per M0's scope), there is **no player agency at all**,
+because build and demolish are M1 and pricing is M4. §8's "playable-but-boring" is not
+achievable as M0 is scoped; M0 delivered the boring half and the substrate under it.
+
+What the sign-off attests is therefore not that the game is fun, but that the machine
+under it is sound: determinism that has been attacked, saves that survive a real
+migration, an economy whose arithmetic closes to the penny, and gates each seen red.
+
+The build loop is already visible in the data even though no player can act on it — a
+capacity sweep at 30 days/seed 42 shows demand saturating near 6 rooms, with 12 rooms
+serving the same 356 guests for 450,000p less profit, matching the idle-room upkeep to
+the penny. M1's build commands are what make that reachable by a player.
+
+**Rejected alternative:** adding a minimal interactive harness before M1. It would be new
+scope smuggled into a signed-off milestone, and it duplicates work M1's build commands
+do properly.
 
 **Trigger:** §5.4 — a milestone's exit criteria are met and need human sign-off.
 
