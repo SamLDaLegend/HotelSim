@@ -1,0 +1,10 @@
+# Normalise line endings in the repository.
+#
+# CI compares the state hash across Linux, Windows and macOS to enforce I2. That
+# comparison is only meaningful if every platform checks out the same bytes.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ogg binary
+*.wav binary
