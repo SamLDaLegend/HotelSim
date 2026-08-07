@@ -415,7 +415,16 @@ warm-up; the critic's controlled number was 1.218 µs/tick, the G-006 figure to 
 decimal places. Both are the discipline propagating from earlier goals where it was
 absent.
 
-Fourth builder to report a gate defect rather than touch one: `check-purity.mjs` exempts
-test files from the Node-builtin ban, but the external-package catch-all rejects them
-anyway, so the exemption is unreachable and its comment overstates what the gate permits.
-Mine to fix, in its own commit.
+Fourth builder to report a gate defect rather than touch one: `check-purity.mjs` exempted
+test files from the Node-builtin ban, but the external-package catch-all rejected them
+anyway — so the exemption was dead code and the diagnostic called a builtin an "external
+package". Fixed in its own commit `c6e136d`. The behaviour was right and the code was
+lying about it, so the fix deletes the dead exemption rather than making it work: a sim
+test that needs the filesystem belongs in `tools/headless`, which is exactly where this
+goal's source-scan ended up after hitting the same wall.
+
+Four builders, four gate defects, four reports rather than edits. The ADR-0004 boundary
+is doing real work: keeping gates out of builder hands is what makes "an invariant gate
+has been modified to make a test pass" (§9) a check worth having, and it has cost
+nothing — every one of the four was found and fixed anyway, just in a commit where it
+could be seen.
