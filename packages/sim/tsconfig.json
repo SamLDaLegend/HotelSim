@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // I1 (sim purity), enforced at compile time rather than only by lint:
+    //   - no "DOM" lib  -> `document`, `window`, `fetch` do not typecheck here
+    //   - types: []     -> no @types/node, so `process`, `fs`, `Buffer` do not typecheck
+    // Do not add "DOM" or "node" to these arrays. Changing an invariant is a human
+    // decision (HOTELSIM.md §9).
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

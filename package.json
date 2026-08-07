@@ -1,0 +1,28 @@
+{
+  "name": "hotelsim",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r run typecheck",
+    "check:purity": "node tools/gates/check-purity.mjs && depcruise --config .dependency-cruiser.cjs packages apps tools",
+    "check:content": "node tools/gates/check-content.mjs",
+    "test": "vitest run",
+    "test:determinism": "node tools/gates/determinism.mjs",
+    "test:save": "vitest run save",
+    "sim:run": "tsx tools/headless/src/cli.ts",
+    "sim:bench": "node tools/gates/bench.mjs",
+    "verify": "node tools/gates/verify.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "dependency-cruiser": "^17.0.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,125 @@
+# GOALS
+
+The goal ledger. One block per goal, worked one at a time, top unblocked goal first.
+Exit criteria are commands, not adjectives. Rules in `HOTELSIM.md` §4 and §5.
+
+**Exactly one goal is `in-progress` at a time.** Anything discovered mid-goal that is
+not in the goal goes to `PARKING.md`.
+
+---
+
+## M0 — Walking skeleton
+
+> One room type, one guest, one need, one day cycle, money in and money out. Headless
+> only, no renderer at all. All six invariant gates green and wired into CI.
+> — `HOTELSIM.md` §8
+
+M0 is the most important milestone and the one most likely to be rushed. It should be
+playable-but-boring, and finished before anything is drawn on screen.
+
+Bootstrap (`HOTELSIM.md` §10) is complete: the workspace, the six gates, `pnpm verify`,
+CI and the agent roster exist, and the gates pass against an empty simulation. The
+sim itself is a deliberate stub — `packages/sim/src/*.ts` files marked
+`// SCAFFOLD` are placeholders that the goals below replace.
+
+---
+
+## G-001 — Tick scheduler and world entity model
+Status: pending
+Milestone: M0
+Owner pair: sim-engineer / sim-critic
+Statement: The world holds entities in a deterministic, stable store; the tick runs in
+  named phases with a documented order; commands are applied at one defined point in
+  the tick rather than wherever they arrive.
+Exit criteria:
+  - pnpm test -- world  (all green)
+  - pnpm test:determinism  (green — 100k ticks, 3 processes, seed-sensitive)
+  - pnpm sim:run --ticks 100000 --seed 42 --quiet  produces the same hash on two runs
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: multi-floor grid, build/demolish commands, room validity rules (M1);
+  pathfinding (M2)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+## G-002 — Content pipeline and one room type
+Status: pending
+Milestone: M0
+Owner pair: sim-engineer / sim-critic
+Statement: packages/content defines exactly one room type as JSON validated by a Zod
+  schema; the host loads and validates it and injects it into the sim; packages/sim
+  contains no content literal.
+Exit criteria:
+  - pnpm test -- content  (all green, including a test that invalid JSON is rejected)
+  - pnpm check:content  (green)
+  - pnpm sim:run --days 1 --seed 1  loads content and exits 0
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: room variety, items, staff roles, guest archetypes (M6); construction
+  cost (M1)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+## G-003 — Save and load the real world model
+Status: pending
+Milestone: M0
+Owner pair: sim-engineer / sim-critic
+Statement: The world produced by G-001 and G-002 serialises, deserialises and
+  re-hashes identically, carries a schema version, and has a gapless migration path.
+Exit criteria:
+  - pnpm test:save  (all green, including field coverage over every World key)
+  - a save taken mid-run, reloaded, and advanced 1,000 ticks matches the unsaved run's hash
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: save file UI, autosave, multiple save slots (M5)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+## G-004 — One guest, one need
+Status: pending
+Milestone: M0
+Owner pair: ai-engineer / ai-critic
+Statement: A guest arrives, occupies the one room type, forms one need, has it met or
+  not before patience runs out, pays, and leaves with a recorded outcome.
+Exit criteria:
+  - pnpm test -- guest  (all green)
+  - pnpm sim:run --days 30 --seed 7  reports at least one guest arrived, at least one
+    satisfied, and zero guests stuck in a non-terminal state at end of run
+  - pnpm sim:run --days 30 --seed 7  reports zero guests holding a reservation after despawn
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: full need vector, utility scoring across many providers, reviews (M2);
+  staff (M4); lifts and stairs (M3)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+## G-005 — Append-only ledger and nightly settlement
+Status: pending
+Milestone: M0
+Owner pair: economy-engineer / balance-critic
+Statement: Room revenue is recorded when a guest pays, upkeep is charged at nightly
+  settlement, and the cash balance is derived by folding the transaction log.
+Exit criteria:
+  - pnpm test -- ledger  and  pnpm test -- settlement  (all green)
+  - pnpm sim:run --days 30 --seed 3  reports a balance equal to the fold of its own
+    transaction log, and one settlement transaction per simulated night
+  - every transaction in a 30-day run carries a non-empty reason
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: pricing controls, demand curves, reputation, wages, decay (M4)
+  (-> PARKING.md)
+Critique rounds used: 0/3
+
+## G-006 — Day cycle and headless reporting
+Status: pending
+Milestone: M0
+Owner pair: sim-engineer / sim-critic
+Statement: The CLI runs whole days end to end and reports the M0 loop — guests in,
+  needs met and missed, money in and out — as a stable, machine-readable summary.
+Exit criteria:
+  - pnpm sim:run --days 365 --seed 42  completes in under 10s (pnpm sim:bench green)
+  - pnpm sim:run --days 30 --seed 42  prints arrivals, satisfied, unsatisfied, revenue,
+    upkeep and closing balance
+  - two runs of the same command produce byte-identical stdout
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: any renderer, any UI, speed controls (M5)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+---
+
+## M0 exit — human sign-off required
+
+When G-001 to G-006 are all `done`, that is a §5.4 escalation: a milestone's exit
+criteria are met and need human sign-off. Write it to `ESCALATIONS.md` and stop. Do
+not start M1, and do not let anyone open `apps/game`.

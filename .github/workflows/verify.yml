@@ -1,0 +1,85 @@
+name: verify
+
+# Every §2 invariant gate, on every push and pull request.
+#
+# I2 (determinism) is required to hold "on every platform", so the matrix is not
+# decoration: it is the only place a platform-dependent divergence — float
+# accumulation, locale-dependent sort, path separators leaking into a hash — will
+# actually be caught. Do not reduce it to one OS to make CI faster.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm verify
+
+  # I2 across platforms: the state hash after 100k ticks must be the same string on
+  # Linux, Windows and macOS. `pnpm verify` proves each machine agrees with itself;
+  # this job proves the machines agree with each other.
+  cross-platform-hash:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: State hash after 100k ticks
+        shell: bash
+        run: |
+          HASH=$(pnpm --silent sim:run --ticks 100000 --seed 42 --quiet)
+          echo "$HASH" > "hash-${{ matrix.os }}.txt"
+          echo "::notice title=state hash (${{ matrix.os }})::$HASH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hash-${{ matrix.os }}
+          path: hash-${{ matrix.os }}.txt
+
+  compare-hashes:
+    needs: cross-platform-hash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hash-*
+          merge-multiple: true
+      - name: All platforms must agree
+        shell: bash
+        run: |
+          cat *.txt
+          if [ "$(sort -u *.txt | wc -l)" -ne 1 ]; then
+            echo "::error::I2 violated — platforms disagree on the state hash after 100k ticks"
+            exit 1
+          fi
+          echo "I2 holds across platforms: $(sort -u *.txt)"
