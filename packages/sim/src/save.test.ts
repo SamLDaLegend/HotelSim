@@ -21,17 +21,19 @@ import {
   serialise,
 } from './save.js';
 import { run, stepTick } from './tick.js';
-import { createWorld, hashState } from './world.js';
+import { assertContentMatches, createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /**
- * Every top-level key of `World`, spelled out.
+ * `WORLD_KEYS` is imported, not retyped.
  *
- * Adding a field to `World` without adding it here AND to `assertWorldShape` is an I6
- * violation. This list turns "remember to update save.ts" from a convention into a
- * failing test.
+ * It used to be a hand-typed literal here — a third copy of `keyof World`, alongside
+ * the type itself and `assertWorldShape`. A literal in a test rots exactly the way a
+ * comment rots, because nothing connects it to the type it claims to describe
+ * (ADR-0005). It now lives in `world.ts`, derived from a mapped type over `keyof
+ * World`, so a field added to `World` and forgotten there is a TYPE error, and the
+ * coverage tests below are generated from it rather than written out by hand.
  */
-const WORLD_KEYS = ['contentHash', 'entities', 'ledger', 'rng', 'tick'] as const;
 
 const spawn = (entityKind: string): Command => ({ kind: 'spawnEntity', entityKind });
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
@@ -88,11 +90,13 @@ describe('I6 save round-trip', () => {
     expect(restored).toEqual(world);
   });
 
-  it('has exactly the top-level keys this suite knows how to round-trip', () => {
-    // If this fails you have added a field to World. Add it to WORLD_KEYS and to
-    // `assertWorldShape` in save.ts, in this change, not the next one (I6).
+  it('has exactly the top-level keys WORLD_KEYS declares', () => {
+    // If this fails you have added a field to World. Add it to `WORLD_KEY_SET` in
+    // world.ts and to `assertWorldShape` in save.ts, in this change, not the next one
+    // (I6). The typecheck will already have told you about the first one.
     expect(Object.keys(createWorld(1, content)).sort()).toEqual([...WORLD_KEYS]);
     expect(Object.keys(livedInWorld()).sort()).toEqual([...WORLD_KEYS]);
+    expect(WORLD_KEYS.length).toBeGreaterThan(0);
   });
 
   it('survives a second round trip without drifting', () => {
@@ -116,6 +120,27 @@ describe('I6 save round-trip', () => {
   it('refuses a save from a newer build rather than silently mangling it', () => {
     const blob = JSON.stringify({ schemaVersion: SAVE_SCHEMA_VERSION + 1, world: createWorld(1, content) });
     expect(() => deserialise(blob)).toThrow(/newer than this build/);
+  });
+
+  it('refuses a save that is not JSON at all, as a save error rather than a SyntaxError', () => {
+    // A save interrupted mid-write is a likelier real corruption than any of the
+    // structural shapes below it, and it used to escape as a raw parser grammar error.
+    // "Not JSON" and "JSON but not a save" are different mistakes with different fixes
+    // — the same call packages/content makes in `parseContentJson`.
+    const truncated = serialise(livedInWorld()).slice(0, 40);
+    for (const bad of [truncated, 'not json at all', '', '   ']) {
+      expect(() => deserialise(bad)).toThrow(/Save is corrupt: not valid JSON/);
+      // Reported as a save failure, not leaked as the parser's own error type.
+      expect(() => deserialise(bad)).not.toThrow(SyntaxError);
+    }
+  });
+
+  it('still separates "not JSON" from "JSON, but not a save"', () => {
+    // The distinction is the whole point of the wrapper: these must not collapse into
+    // one message, or a designer has to read a grammar error to tell them apart.
+    expect(() => deserialise('[1,2,3]')).toThrow(/top level is not an object/);
+    expect(() => deserialise('"a string"')).toThrow(/top level is not an object/);
+    expect(() => deserialise('{}')).toThrow(/schemaVersion/);
   });
 
   it('refuses a save with no schema version', () => {
@@ -150,6 +175,138 @@ describe('I6 save round-trip', () => {
     const restored = deserialise(serialise(world));
     // A save that loads but then diverges is worse than one that fails to load.
     expect(hashState(run(restored, content, 1_000))).toBe(hashState(run(world, content, 1_000)));
+  });
+});
+
+describe('I6 field coverage — assertWorldShape inspects every World key', () => {
+  // GENERATED from WORLD_KEYS, not written out by hand, so a new field arrives with its
+  // own rejection tests instead of waiting for someone to remember to write them.
+  //
+  // The round-trip tests above prove the fields SURVIVE serialisation. These prove
+  // `assertWorldShape` actually LOOKS at them. Those are different claims, and only the
+  // second one catches a field that was added to `World` and to `WORLD_KEYS` but
+  // forgotten in `save.ts` — which is the omission §6.1 tells sim-critic to hunt for.
+  for (const key of WORLD_KEYS) {
+    it(`refuses a save with no world.${key}`, () => {
+      const blob = blobOf(livedInWorld());
+      delete (blob['world'] as Record<string, unknown>)[key];
+      expect(() => deserialise(JSON.stringify(blob))).toThrow(new RegExp(key));
+    });
+
+    it(`refuses a save whose world.${key} is null`, () => {
+      // Stronger than deletion: this fails a check written as `key in world`, which
+      // would accept a present-but-meaningless value.
+      const blob = blobOf(livedInWorld());
+      (blob['world'] as Record<string, unknown>)[key] = null;
+      expect(() => deserialise(JSON.stringify(blob))).toThrow(new RegExp(key));
+    });
+  }
+});
+
+describe('I6 unknown top-level keys', () => {
+  it('refuses a save carrying a key World does not have', () => {
+    const blob = blobOf(livedInWorld());
+    (blob['world'] as Record<string, unknown>)['bonusCash'] = 999;
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/unknown top-level key "bonusCash"/);
+  });
+
+  it('rejects it because an extra key would change the state hash', () => {
+    // The reason this is a refusal rather than a shrug. `worldToJson` is an identity
+    // cast, so EVERY own key lands in the hash: an extra key that loaded happily would
+    // make the restored world hash differently from the world it claims to be — an I2
+    // divergence sourced from outside the simulation entirely.
+    const world = livedInWorld();
+    const smuggled = { ...world, bonusCash: 999 } as unknown as World;
+    expect(hashState(smuggled)).not.toBe(hashState(world));
+  });
+
+  it('refuses a __proto__ key rather than waving it through', () => {
+    // JSON.parse creates `__proto__` as an OWN property, so a membership test written
+    // as `key in KNOWN_KEYS` would find it on Object.prototype and accept it. The check
+    // uses WORLD_KEYS.includes for exactly this reason.
+    const json = JSON.stringify(blobOf(livedInWorld())).replace(
+      '{"tick":',
+      '{"__proto__":{"polluted":true},"tick":',
+    );
+    expect(json).toContain('__proto__');
+    expect(Object.keys(JSON.parse(json).world as object)).toContain('__proto__');
+    expect(() => deserialise(json)).toThrow(/unknown top-level key "__proto__"/);
+  });
+});
+
+describe('I6 the mid-run exit criterion — save, reload, advance 1,000 ticks', () => {
+  const SAVE_AT = 2_000;
+  const AFTER = 1_000;
+
+  // Commands on BOTH sides of the save point, so the 1,000 ticks after the reload do
+  // real work. `run` buckets the schedule by tick and starts from `world.tick`, so
+  // resuming with the same schedule replays nothing and drops nothing.
+  const schedule: readonly ScheduledCommand[] = [
+    { tick: 10, command: spawn('alpha') },
+    { tick: 900, command: spawn('beta') },
+    { tick: 1_500, command: despawn(1) },
+    { tick: 2_100, command: spawn('gamma') },
+    { tick: 2_400, command: despawn(2) },
+    { tick: 2_900, command: spawn('delta') },
+  ];
+  const fresh = (): World => createWorld(31, content);
+
+  it('matches the unsaved run AND an uninterrupted run of the same length', () => {
+    const mid = run(fresh(), content, SAVE_AT, schedule);
+    const resumed = run(deserialise(serialise(mid)), content, AFTER, schedule);
+    const unsaved = run(mid, content, AFTER, schedule);
+    const uninterrupted = run(fresh(), content, SAVE_AT + AFTER, schedule);
+
+    expect(hashState(resumed)).toBe(hashState(unsaved));
+    // The leg that matters, and the one a reload-vs-original comparison cannot supply:
+    // a save and reload is indistinguishable from never having stopped.
+    expect(hashState(resumed)).toBe(hashState(uninterrupted));
+    expect(resumed.tick).toBe(SAVE_AT + AFTER);
+  });
+
+  it('does real work across those 1,000 ticks', () => {
+    // Without this the criterion is satisfiable by 1,000 idle ticks, which would prove
+    // only that the tick counter and the RNG advance.
+    const mid = run(fresh(), content, SAVE_AT, schedule);
+    const resumed = run(deserialise(serialise(mid)), content, AFTER, schedule);
+    expect(entityCount(mid.entities)).toBeGreaterThan(0);
+    expect(resumed.entities.nextId).toBeGreaterThan(mid.entities.nextId);
+    expect(entityCount(resumed.entities)).not.toBe(entityCount(mid.entities));
+  });
+});
+
+describe('I6 a reloaded save must be re-bound to content', () => {
+  const definitions = (): RoomTypeData[] =>
+    ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'].map(roomType);
+
+  it('accepts an equal-but-distinct BoundContent, so a fresh process can load a save', () => {
+    const reloaded = deserialise(serialise(livedInWorld()));
+    const rebound = bindContent({ roomTypes: definitions() });
+    // By value, not by identity — otherwise no save would survive a restart, because
+    // the host binds a new object every time it starts.
+    expect(rebound).not.toBe(content);
+    expect(rebound.fingerprint).toBe(content.fingerprint);
+    expect(hashState(run(reloaded, rebound, 10))).toBe(hashState(run(reloaded, content, 10)));
+  });
+
+  it('refuses to tick when re-bound to DIFFERENT content', () => {
+    // G-002's guarantee, confirmed to survive a save round trip: a reloaded world under
+    // edited content refuses loudly instead of diverging at tick 40,000.
+    const reloaded = deserialise(serialise(livedInWorld()));
+    const different = bindContent({ roomTypes: [roomType('alpha')] });
+    expect(different.fingerprint).not.toBe(content.fingerprint);
+    expect(() => stepTick(reloaded, different, [])).toThrow(/Content mismatch/);
+    expect(() => run(reloaded, different, 1)).toThrow(/Content mismatch/);
+  });
+
+  it('does not check content at deserialise time — the refusal lands on the first tick', () => {
+    // `deserialise` takes no content and cannot acquire one without coupling the save
+    // format to the content registry. A host that wants to fail at LOAD time calls
+    // `assertContentMatches` itself (world.ts). Pinned so the split stays deliberate.
+    const json = serialise(livedInWorld());
+    const different = bindContent({ roomTypes: [roomType('alpha')] });
+    expect(() => deserialise(json)).not.toThrow();
+    expect(() => assertContentMatches(deserialise(json), different)).toThrow(/Content mismatch/);
   });
 });
 

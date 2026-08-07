@@ -89,7 +89,7 @@ Critique rounds used: 1/3
   modified; no probe residue.
 
 ## G-003 — Save and load the real world model
-Status: pending
+Status: done
 Milestone: M0
 Owner pair: sim-engineer / sim-critic
 Statement: The world produced by G-001 and G-002 serialises, deserialises and
@@ -98,8 +98,25 @@ Exit criteria:
   - pnpm test:save  (all green, including field coverage over every World key)
   - a save taken mid-run, reloaded, and advanced 1,000 ticks matches the unsaved run's hash
   - all §2 invariant gates green (pnpm verify)
-Out of scope: save file UI, autosave, multiple save slots (M5)  (-> PARKING.md)
-Critique rounds used: 0/3
+Out of scope: save file UI, autosave, multiple save slots (M5); loadWorld; nested
+  unknown-key rejection; --save/--load on the CLI  (-> PARKING.md)
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  test:save 64 tests green across 3 files · all six gates green · I2 hash unchanged at
+  71cc87bd9d1c8089 · a gapped chain [1->2, 3->4] now throws instead of feeding v2 data
+  through a v3 step, and an out-of-order chain throws · the step-count assertion fires
+  in BOTH directions (0 steps over a 1-version span and 2 steps over a 1-version span)
+  while the shipped v1->v1 chain passes · truncated, non-JSON, empty and whitespace
+  input all report "Save is corrupt: not valid JSON" rather than a raw SyntaxError ·
+  the v1 fixture's literal bytes deserialise to its literal hash 7880a56adc457726 and
+  re-serialise byte-identically · an unknown top-level key and a __proto__ own-key are
+  both rejected by name · no gate, CI or config file modified.
+
+  Fixed a live bootstrap defect: the migration runner used `migration.from >= current`,
+  so a gapped chain applied a later step to earlier data and deserialise returned it as
+  valid. assertMigrationPathComplete — the one check that would catch it — was never
+  called by deserialise. Both halves fixed. See ADR-0007.
 
 ## G-004 — One guest, one need
 Status: pending
@@ -116,6 +133,13 @@ Exit criteria:
 Out of scope: full need vector, utility scoring across many providers, reviews (M2);
   staff (M4); lifts and stairs (M3)  (-> PARKING.md)
 Critique rounds used: 0/3
+
+  KNOWN OBLIGATION (ADR-0006): this goal adds fields to `World`, which will be rejected
+  by the permanent v1 save fixture committed in G-003. That is deliberate. The correct
+  response is to bump SAVE_SCHEMA_VERSION to 2 and write a real 1 -> 2 migration — not to
+  regenerate the fixture, which would destroy the only thing it is for. Budget for it in
+  PLAN. G-003's synthetic-chain tests already prove the runner handles gaps, duplicates,
+  out-of-order steps and mid-chain throws, so the migration inherits a tested mechanism.
 
 ## G-005 — Append-only ledger and nightly settlement
 Status: pending

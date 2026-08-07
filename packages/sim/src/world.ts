@@ -42,6 +42,38 @@ export type World = {
   readonly contentHash: string;
 };
 
+/**
+ * Every top-level key of `World`, written down exactly once.
+ *
+ * A mapped type over `keyof World`, so it is exhaustive in BOTH directions — the same
+ * pattern `TICK_PHASE_FNS` uses in `tick.ts` for the same reason (ADR-0005). A field
+ * added to `World` and forgotten here is a TYPE error; a name here that is not a field
+ * of `World` is a type error. Neither is a comment anyone has to remember to update.
+ *
+ * This exists because `keyof World` used to be written a third time, as a hand-typed
+ * literal in `save.test.ts`. A literal in a test rots exactly the way a comment rots:
+ * nothing connects it to the type it claims to describe.
+ */
+const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
+  contentHash: true,
+  entities: true,
+  ledger: true,
+  rng: true,
+  tick: true,
+};
+
+/**
+ * The keys of `WORLD_KEY_SET`, ascending. Consumed by `assertWorldShape` (which rejects
+ * anything else) and by the field-coverage tests (which delete each one in turn).
+ *
+ * Sorted with an explicit, locale-free comparator rather than bare `.sort()`, matching
+ * `compareIds` in `content.ts`: `Object.keys` order is insertion order, and an order
+ * that happens to be right is not an order (I2).
+ */
+export const WORLD_KEYS: readonly (keyof World)[] = Object.freeze(
+  (Object.keys(WORLD_KEY_SET) as (keyof World)[]).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+);
+
 export function createWorld(seed: number, content: BoundContent): World {
   return {
     tick: 0,

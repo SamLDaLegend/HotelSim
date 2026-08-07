@@ -125,3 +125,74 @@ content costs ~250ms once, against ~160ms of actual simulation for 365 days. Not
 but the bench now measures a fixed startup cost that will only grow.
 
 Parked eight items, two of them gate defects for the orchestrator. Rounds used 1 of 3.
+
+---
+
+## 2026-08-07 — Gate repair (not a goal) — `check:content` was inspecting nothing
+
+Both defects `sim-engineer` found during G-002, fixed by the orchestrator in their own
+commit `8f1b7ff` so a gate repair never sits inside a feature diff — §9 treats a gate
+modified to make a test pass as a stop condition, and the way to keep that check
+meaningful is to keep gate changes out of builder hands and visibly separate.
+
+The first was worse than it looked. `Array.isArray(parsed) ? parsed : Object.values(parsed)`
+meant a wrapper-object content file inspected **zero** ids and reported `ok`. Measured
+against the old logic: 0 ids for `{"roomTypes":[...]}`, 0 for anything nested two deep.
+I3 has been green since bootstrap partly because it was barely looking. The document is
+now walked at any depth, and a content file yielding no ids at all is a violation — a
+gate that inspects nothing is worse than no gate, because it reports success.
+
+The second was the snake_case pattern living in both the gate and the Zod schema, which
+cannot share a module import. Single-sourced into `tools/gates/lib/content-id.mjs`, with
+a test that imports **both live values** and asserts they agree on 16 hand-picked and 729
+generated ids. Not a test against a copied literal — that distinction is ADR-0005's whole
+subject.
+
+Lesson worth carrying: the bootstrap proved each gate *bites* on the failure it was
+written for, and that is not the same as proving it *looks at everything it claims to*.
+A gate can be simultaneously correct on its test case and blind in production.
+
+---
+
+## 2026-08-07 — G-003 — Save and load the real world model (1/3 rounds)
+
+The first goal to come back from critique with **no BLOCKER and no MAJOR**. It also
+found the worst defect so far, and it was mine.
+
+`deserialise`'s migration runner used `migration.from >= current`. Given `[1 -> 2,
+3 -> 4]` and a v1 save, the v3 -> v4 step ran against v2 data and the result was returned
+as a valid world. `assertMigrationPathComplete` — the only check that could catch a
+gapped chain — was **never called by `deserialise`**. The builder's name for it is the
+one to keep: the gate for the failure and the code that would fail were wired to
+different circuits. Verified before approving, fixed both halves, and the line's history
+is now a comment rather than a silent correction.
+
+That made three instances of one defect in three goals, in code from three different
+hands, so it became **ADR-0007**: a check that can succeed while inspecting nothing is
+not a check. The critique then improved the ADR — `sim-critic` proved the builder's
+self-flagged terminal branch unreachable across 47,988 chain/span combinations and then
+argued *against* calling it a finding. **Vacuous** (succeeds while inspecting nothing and
+is relied on as evidence) is the defect; **unreachable** (cannot fail given the checks
+above, establishing a fact they already establish) is what a correct postcondition looks
+like. As first written the ADR would have had a builder delete a real backstop for a
+coverage argument, which §9 names as an anti-pattern.
+
+The anti-vacuity device is the best thing in the diff: `assertMigrationPathComplete` now
+asserts `migrations.length === currentVersion - minVersion`, so the shipped v1 -> v1 case
+is "0 required, 0 present" — a checked fact rather than an unvisited loop — and it is
+paired with a test running the same empty chain over a wider span and watching it throw.
+Verified it fires in both directions.
+
+The other structural win: `WORLD_KEYS` now derives from `Readonly<Record<keyof World,
+true>>`, so `keyof World` is written once and a forgotten field is a typecheck failure
+rather than a missed test. The unknown-key sweep uses `.includes` rather than `in`,
+which closes a real `__proto__` hole — `JSON.parse` makes it an own key.
+
+And the committed v1 fixture is now permanent (ADR-0006). The reader had only ever been
+tested as the inverse of the writer in the same build, so a coordinated rename would have
+kept the suite green while breaking every save on disk. The critic dry-ran the ADR's
+prediction and found the chain closed at every link, so G-004's migration obligation is
+demonstrated, not assumed.
+
+Parked five items. I5's drift turned out to be machine noise — 0.299 µs/tick against
+0.305 at G-002, measured under control rather than read off the bench.

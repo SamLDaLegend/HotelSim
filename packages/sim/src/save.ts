@@ -8,6 +8,7 @@
 import { assertEntityStoreInvariants } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
 import type { Transaction } from './ledger.js';
+import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
@@ -31,13 +32,76 @@ export type Migration = {
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * Empty at v1 because there is nothing older than v1 to come from. `test:save`
  * asserts the chain is complete, so this cannot silently rot.
+ *
+ * DO NOT invent a version bump to give this array something in it. An unnecessary
+ * migration is worse than an untested runner: the runner is exercised against
+ * synthetic chains in `save.migrations.test.ts`, which needs no production history.
  */
-export const MIGRATIONS: readonly Migration[] = [];
+export const MIGRATIONS: readonly Migration[] = Object.freeze([]);
 
-/** Throws if MIGRATIONS cannot carry the oldest supported save to the current version. */
-export function assertMigrationPathComplete(): void {
-  let version = MIN_SUPPORTED_SCHEMA_VERSION;
-  for (const migration of MIGRATIONS) {
+/**
+ * A version span and the chain that spans it.
+ *
+ * The production value is `SAVE_SCHEMA`. It is a parameter rather than a global so the
+ * runner can be driven against real multi-step chains in tests — a migration runner
+ * that has never migrated anything is not a migration path, it is a function that
+ * returns. Making the chain injectable is what lets the tests prove the machinery
+ * without fabricating a schema change nobody needs.
+ */
+export type SaveSchema = {
+  readonly migrations: readonly Migration[];
+  readonly minVersion: number;
+  readonly currentVersion: number;
+};
+
+/** The chain this build actually ships. */
+export const SAVE_SCHEMA: SaveSchema = Object.freeze({
+  migrations: MIGRATIONS,
+  minVersion: MIN_SUPPORTED_SCHEMA_VERSION,
+  currentVersion: SAVE_SCHEMA_VERSION,
+});
+
+/**
+ * Throws if `schema.migrations` cannot carry the oldest supported save to the current
+ * version.
+ *
+ * The step-count check exists because of how this function used to pass. With an empty
+ * `MIGRATIONS` the loop below never ran and the terminal comparison was `1 !== 1`, so
+ * "the migration path is complete" was asserted by a function that inspected nothing —
+ * the same defect as `check:content` reporting `ok` over zero ids, and as `TICK_PHASES`
+ * documenting an order nothing enforced. Requiring EXACTLY `currentVersion - minVersion`
+ * steps turns the v1 case from an unvisited loop into a checked fact: zero steps are
+ * required and zero are present. A bump to v2 without a migration now fails here.
+ */
+export function assertMigrationPathComplete(schema: SaveSchema = SAVE_SCHEMA): void {
+  const { migrations, minVersion, currentVersion } = schema;
+  if (!Number.isInteger(minVersion) || !Number.isInteger(currentVersion)) {
+    throw new Error(
+      `Migration chain is invalid: version bounds must be integers, got v${String(minVersion)} and v${String(currentVersion)}`,
+    );
+  }
+  if (currentVersion < minVersion) {
+    throw new Error(
+      `Migration chain is invalid: currentVersion v${currentVersion} is older than minVersion v${minVersion}`,
+    );
+  }
+
+  const required = currentVersion - minVersion;
+  if (migrations.length !== required) {
+    throw new Error(
+      `Migration chain has ${migrations.length} step(s) but v${minVersion} -> v${currentVersion} requires exactly ${required}. ` +
+        'Every version bump needs the migration that reaches it, in the same commit.',
+    );
+  }
+
+  let version = minVersion;
+  for (let i = 0; i < migrations.length; i += 1) {
+    const migration = migrations[i];
+    if (migration === undefined) {
+      throw new Error(`Migration chain is invalid: hole in the chain at index ${i}`);
+    }
+    // Catches a gap, a duplicate `from` and an out-of-order entry with one comparison:
+    // all three are "the step at this position does not start where the last one ended".
     if (migration.from !== version) {
       throw new Error(
         `Migration chain broken: expected a migration from v${version}, found v${migration.from}`,
@@ -50,16 +114,85 @@ export function assertMigrationPathComplete(): void {
     }
     version = migration.to;
   }
-  if (version !== SAVE_SCHEMA_VERSION) {
+
+  // Unreachable given the three checks above — they force `version` to land exactly on
+  // `currentVersion`. Kept because it is the postcondition this function actually
+  // promises: if any check above is ever weakened, this fails rather than going quiet.
+  if (version !== currentVersion) {
+    throw new Error(`Migration chain stops at v${version} but the current version is v${currentVersion}`);
+  }
+}
+
+/**
+ * Carry a parsed save world from `fromVersion` up to `schema.currentVersion`.
+ *
+ * The step predicate is `migration.from === current`, and the history of that line is
+ * worth keeping. It used to be `migration.from >= current`, which silently defeated the
+ * only check that could catch a broken chain: given `[1 -> 2, 3 -> 4]` and a v1 save,
+ * `>=` ran the v3 -> v4 migration against v2 data, `current` reached 4, the terminal
+ * comparison passed, and `deserialise` returned a corrupt world as valid. The gap
+ * detector — `assertMigrationPathComplete` — existed the whole time and was never
+ * called by `deserialise`: THE GATE FOR THE FAILURE AND THE CODE THAT WOULD FAIL WERE
+ * WIRED TO DIFFERENT CIRCUITS. Both halves are fixed here and in `deserialise`.
+ *
+ * Nothing is mutated: the input is a throwaway `JSON.parse` result and every step
+ * returns a new value, so a migration that throws halfway leaves the caller holding
+ * exactly what it had before.
+ */
+export function migrateSaveWorld(
+  world: unknown,
+  fromVersion: number,
+  schema: SaveSchema = SAVE_SCHEMA,
+): unknown {
+  let migrated: unknown = world;
+  let current = fromVersion;
+
+  for (let i = 0; i < schema.migrations.length; i += 1) {
+    const migration = schema.migrations[i];
+    if (migration === undefined) {
+      throw new Error(`Migration chain is invalid: hole in the chain at index ${i}`);
+    }
+    // Older than this save: it ran before this file was written. Skip it.
+    if (migration.from < current) continue;
+    // Not older, and not the step we need — the chain has a gap or is out of order.
+    // Stop rather than applying a migration to data it was not written for; the
+    // terminal check below reports it. This is the case `>=` used to sail through.
+    if (migration.from !== current) break;
+
+    let next: unknown;
+    try {
+      next = migration.migrate(migrated);
+    } catch (error) {
+      throw new Error(
+        `Migration v${migration.from} -> v${migration.to} failed; the save was not loaded`,
+        { cause: error },
+      );
+    }
+    if (!isRecord(next)) {
+      throw new Error(
+        `Migration v${migration.from} -> v${migration.to} returned ${next === undefined ? 'undefined' : typeof next}, not a world object. ` +
+          'Every step must return the migrated world; returning nothing would feed the next step garbage.',
+      );
+    }
+    migrated = next;
+    current = migration.to;
+  }
+
+  if (current !== schema.currentVersion) {
     throw new Error(
-      `Migration chain stops at v${version} but SAVE_SCHEMA_VERSION is v${SAVE_SCHEMA_VERSION}`,
+      `No migration path from v${fromVersion} to v${schema.currentVersion}: the chain stops at v${current}`,
     );
   }
+  return migrated;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+/** Mirrors `describe` in packages/content's registry: a message, never a thrown non-Error. */
+const describeError = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 function assertTransaction(value: unknown, index: number): asserts value is Transaction {
   if (!isRecord(value)) {
@@ -94,6 +227,22 @@ function assertEntity(value: unknown, index: number): asserts value is Entity {
 export function assertWorldShape(value: unknown): asserts value is World {
   if (!isRecord(value)) {
     throw new Error('Save is corrupt: world is not an object');
+  }
+  // Unknown keys are rejected, not ignored. `worldToJson` is an identity cast, so
+  // EVERY own key of this object lands in the state hash — an extra one loads happily
+  // and then makes the restored world hash differently from the world it claims to be,
+  // which is an I2 divergence introduced from outside the simulation.
+  //
+  // It also puts the burden where it belongs during a migration: a step that renames a
+  // field and forgets to delete the old one fails at load instead of shipping a world
+  // carrying both. `WORLD_KEYS.includes` rather than `key in WORLD_KEY_SET`, because
+  // `JSON.parse` can hand us an own `__proto__` key and `in` would wave it through.
+  for (const key of Object.keys(value)) {
+    if (!WORLD_KEYS.includes(key as keyof World)) {
+      throw new Error(
+        `Save is corrupt: world has unknown top-level key "${key}". Known keys are ${WORLD_KEYS.join(', ')}.`,
+      );
+    }
   }
   if (typeof value['tick'] !== 'number') {
     throw new Error('Save is corrupt: world.tick is missing or not a number');
@@ -144,8 +293,25 @@ export function serialise(world: World): string {
   return JSON.stringify(blob);
 }
 
-export function deserialise(json: string): World {
-  const parsed: unknown = JSON.parse(json);
+export function deserialise(json: string, schema: SaveSchema = SAVE_SCHEMA): World {
+  // The chain is validated BEFORE it is used, on the real load path. It used to be
+  // reachable only from a test, which meant the one function that could detect a broken
+  // chain never ran in the place where a broken chain does damage. Loads are rare and
+  // the chain is a frozen constant — this is a handful of integer comparisons, and it
+  // is not in the tick.
+  assertMigrationPathComplete(schema);
+
+  // "This is not JSON" and "this is JSON but it is not a save" are different mistakes
+  // with different fixes, and neither should surface as a raw parser grammar error —
+  // the same reasoning as `parseContentJson` in packages/content, applied to the same
+  // problem. A save interrupted mid-write is a likelier real corruption than most of
+  // the shapes below, and it used to be the only one that escaped as a bare SyntaxError.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (error) {
+    throw new Error(`Save is corrupt: not valid JSON: ${describeError(error)}`);
+  }
   if (!isRecord(parsed)) {
     throw new Error('Save is corrupt: top level is not an object');
   }
@@ -154,29 +320,16 @@ export function deserialise(json: string): World {
   if (typeof version !== 'number' || !Number.isInteger(version)) {
     throw new Error('Save is corrupt: schemaVersion is missing or not an integer');
   }
-  if (version < MIN_SUPPORTED_SCHEMA_VERSION) {
-    throw new Error(
-      `Save is v${version}; the oldest supported version is v${MIN_SUPPORTED_SCHEMA_VERSION}`,
-    );
+  if (version < schema.minVersion) {
+    throw new Error(`Save is v${version}; the oldest supported version is v${schema.minVersion}`);
   }
-  if (version > SAVE_SCHEMA_VERSION) {
+  if (version > schema.currentVersion) {
     throw new Error(
-      `Save is v${version}, which is newer than this build (v${SAVE_SCHEMA_VERSION})`,
+      `Save is v${version}, which is newer than this build (v${schema.currentVersion})`,
     );
   }
 
-  let world: unknown = parsed['world'];
-  let current = version;
-  for (const migration of MIGRATIONS) {
-    if (migration.from >= current) {
-      world = migration.migrate(world);
-      current = migration.to;
-    }
-  }
-  if (current !== SAVE_SCHEMA_VERSION) {
-    throw new Error(`No migration path from v${version} to v${SAVE_SCHEMA_VERSION}`);
-  }
-
+  const world = migrateSaveWorld(parsed['world'], version, schema);
   assertWorldShape(world);
   return world;
 }

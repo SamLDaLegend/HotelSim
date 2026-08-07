@@ -78,17 +78,14 @@ Raised by `sim-engineer` at PLAN. The first two are **gate defects** — gates a
 orchestrator-owned (ADR-0004), so they are fixed in their own labelled commit rather
 than inside a feature diff.
 
-- **GATE DEFECT — `check:content` skips wrapper objects.** `check-content.mjs` does
-  `Array.isArray(parsed) ? parsed : Object.values(parsed)` and then reads `entry.id`.
-  A content file shaped `{"roomTypes":[...]}` yields `[[...]]`, every `entry.id` is
-  `undefined`, and the snake_case id check **silently passes over nothing**. G-002 works
-  around it by shipping a top-level array, but the hole stays open for the next content
-  file. -> orchestrator, own commit, after G-002.
-- **GATE DEFECT — the snake_case pattern is written twice.** Once in
-  `tools/gates/check-content.mjs` and once in `contentIdSchema` in
-  `packages/content/src/schema.ts`. They cannot share a module: the gate is plain ESM by
-  design and the schema is TS + Zod. Real drift risk. Single-sourcing needs a shared
-  `.json` or `.mjs` constant. -> orchestrator, same commit as above.
+- ~~**GATE DEFECT — `check:content` skips wrapper objects.**~~ **RESOLVED `8f1b7ff`.**
+  The old logic inspected **0 ids** for any wrapper-object or nested file while reporting
+  "ok". Now walks the document depth-first with a JSON-path breadcrumb; a file yielding
+  no ids at all, and duplicate ids, are both violations.
+- ~~**GATE DEFECT — the snake_case pattern is written twice.**~~ **RESOLVED `8f1b7ff`.**
+  `tools/gates/lib/content-id.mjs` is now the source of truth, with
+  `content-id-agreement.test.ts` cross-checking it against the live Zod schema on 16
+  hand-picked and 729 generated ids — two live values, not a copied literal.
 - **A `--content <path>` flag for `sim:run`** so a host can inject alternative content,
   and so the CLI's non-zero exit on bad content is testable without a temp repo.
   -> G-006, or whenever the balance sweeps need it.

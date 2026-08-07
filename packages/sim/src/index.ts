@@ -28,13 +28,15 @@ export type { Transaction } from './ledger.js';
 export { appendTransaction, balanceOf } from './ledger.js';
 export type { RngState } from './rng.js';
 export { createRng, nextIntBelow, nextUint32 } from './rng.js';
-export type { Migration, SaveBlob } from './save.js';
+export type { Migration, SaveBlob, SaveSchema } from './save.js';
 export {
   assertMigrationPathComplete,
   assertWorldShape,
   deserialise,
+  migrateSaveWorld,
   MIGRATIONS,
   MIN_SUPPORTED_SCHEMA_VERSION,
+  SAVE_SCHEMA,
   SAVE_SCHEMA_VERSION,
   serialise,
 } from './save.js';
@@ -49,4 +51,12 @@ export {
   TICK_PHASES,
 } from './tick.js';
 export type { World } from './world.js';
-export { assertContentMatches, createWorld, dayOf, hashState, TICKS_PER_DAY, worldToJson } from './world.js';
+export {
+  assertContentMatches,
+  createWorld,
+  dayOf,
+  hashState,
+  TICKS_PER_DAY,
+  WORLD_KEYS,
+  worldToJson,
+} from './world.js';
