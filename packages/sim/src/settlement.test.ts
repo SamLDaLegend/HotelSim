@@ -54,7 +54,13 @@ const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: SATISFY
 /** One priced room type, one need. The M0 hotel with the G-005 field on it. */
 const content = bindContent({ roomTypes: [roomType('roomA')], needTypes: [needType] });
 
-const spawn = (entityKind: string): Command => ({ kind: 'spawnEntity', entityKind });
+// G-007: a spawn carries a cell. `column` defaults so that the many tests which do not
+// care about position stay unchanged in intent; tests that DO care pass one explicitly.
+const spawn = (entityKind: string, column = 0): Command => ({
+  kind: 'spawnEntity',
+  entityKind,
+  at: { floor: 0, column },
+});
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
@@ -141,8 +147,9 @@ describe('settlement reads the draft — the same visibility rule guests live by
   });
 
   it('refuses an entity whose kind the content does not define, rather than billing it 0', () => {
-    const draft = beginEntityDraft(createWorld(3, content).entities);
-    draftSpawn(draft, 'ghostRoom');
+    const world = createWorld(3, content);
+    const draft = beginEntityDraft(world.entities, world.grid);
+    draftSpawn(draft, 'ghostRoom', { floor: 0, column: 0 });
     expect(() => nightlyUpkeepOf(draft, content)).toThrow(/is not in the injected content/);
   });
 });

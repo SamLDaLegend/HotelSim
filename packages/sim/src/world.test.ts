@@ -104,14 +104,14 @@ describe('I2 determinism, in-process', () => {
 describe('state hash covers the whole world', () => {
   it('changes when an entity is added, so the store cannot hide from I2', () => {
     const world = createWorld(6, content);
-    const spawn: Command = { kind: 'spawnEntity', entityKind: 'alpha' };
+    const spawn: Command = { kind: 'spawnEntity', entityKind: 'alpha', at: { floor: 0, column: 0 } };
     expect(hashState(stepTick(world, content, [spawn]))).not.toBe(hashState(stepTick(world, content)));
   });
 
   it('projects the world to JSON without dropping or reordering a field', () => {
     // worldToJson is an identity cast, which is only safe while every field of World
     // is plain JSON. A Set, a Map or a class instance here would hash as `{}`.
-    const world = stepTick(createWorld(6, content), content, [{ kind: 'spawnEntity', entityKind: 'alpha' }]);
+    const world = stepTick(createWorld(6, content), content, [{ kind: 'spawnEntity', entityKind: 'alpha', at: { floor: 0, column: 0 } }]);
     expect(JSON.parse(JSON.stringify(worldToJson(world)))).toEqual(world);
   });
 });

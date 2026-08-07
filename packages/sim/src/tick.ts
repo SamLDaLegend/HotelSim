@@ -48,6 +48,15 @@
 // draft. `runGuests` was the first; `runSettlement` (G-005) is the second, and further
 // systems go beside them rather than inside them.
 //
+// NO PHASE WALKS THE GRID (G-007). `world.grid` is four integers read once per tick, by
+// `applyCommands`, to hand the draft its bounds; nothing iterates cells, because there
+// is no array of cells to iterate — a cell's contents are derived from the placements on
+// the entities. A placement costs one field on one spawn, so the idle tick stays O(1)
+// and `commitEntityDraft` still returns its base store by reference on a clean tick.
+// An unplaced room is still a usable provider and still pays upkeep here: making
+// placement a precondition of usefulness is G-009's validity rule, and doing it in this
+// goal would silently change what a migrated pre-grid world means.
+//
 // Injected content (G-002) rides in `TickState` alongside `committed`: tick-local,
 // never hashed, never saved. It is NOT a parameter of a phase — the phase signature
 // stays `(TickState) => TickState`, which is what lets `stepTick` fold over the table
@@ -214,7 +223,10 @@ function applyCommand(entities: EntityDraft, command: Command, content: BoundCon
           `applyCommands: unknown entity kind "${command.entityKind}" — it is not defined in the injected content`,
         );
       }
-      draftSpawn(entities, command.entityKind);
+      // The cell is validated by `draftSpawn` against the draft's own bounds, which are
+      // this world's plot. Out of bounds throws, for the same reason an unknown kind
+      // does: the caller is holding the world whose plot it just ignored.
+      draftSpawn(entities, command.entityKind, command.at);
       return 0;
     case 'despawnEntity':
       draftDespawn(entities, command.id);
@@ -251,7 +263,7 @@ export function applyCommands(state: TickState): TickState {
   if (state.committed) {
     throw new Error('applyCommands: entities were already committed this tick; commands may not arrive after the boundary');
   }
-  const entities = beginEntityDraft(state.world.entities);
+  const entities = beginEntityDraft(state.world.entities, state.world.grid);
   let arrivingGuests = 0;
   for (const command of state.commands) {
     arrivingGuests += applyCommand(entities, command, state.content);

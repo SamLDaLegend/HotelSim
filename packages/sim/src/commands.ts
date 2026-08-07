@@ -8,13 +8,25 @@
 // the three in `tick.ts` — not wherever they happen to arrive.
 
 import type { ContentId, EntityId } from './entities.js';
+import type { Cell } from './grid.js';
 
 export type Command =
   /** Does nothing, deterministically. Pins that a no-effect command is still a defined
    *  point in the tick rather than a special case that skips the phase. */
   | { readonly kind: 'noop' }
-  /** Creates one entity. The id is allocated by the store, not chosen by the caller. */
-  | { readonly kind: 'spawnEntity'; readonly entityKind: ContentId }
+  /**
+   * Creates one entity at one cell. The id is allocated by the store, not chosen by the
+   * caller; the CELL is chosen by the caller, because where a thing stands is the
+   * caller's decision and where it sits in the id space is not.
+   *
+   * The cell is REQUIRED (G-007). An optional one would leave every entity in the repo
+   * unplaced and make "positions are part of hashed, saved state" a claim no test could
+   * reach through the real path. A cell off the plot throws — a caller bug, the same
+   * class as an unknown `entityKind`. G-008 adds the player-facing build command, its
+   * construction cost, and refusal-as-a-recorded-outcome for an occupied cell, an
+   * out-of-bounds cell or insufficient cash.
+   */
+  | { readonly kind: 'spawnEntity'; readonly entityKind: ContentId; readonly at: Cell }
   /** Removes one entity. Unknown or already-removed ids are a deterministic no-op. */
   | { readonly kind: 'despawnEntity'; readonly id: EntityId }
   /**

@@ -56,8 +56,16 @@ function commandLog(ticks: number, content: BoundContent): readonly ScheduledCom
     schedule.push({ tick, command: { kind: 'noop' } });
   }
   // Ids are handed out from a monotonic counter, so the nth spawn always has id n.
+  //
+  // Each spawn lands on its OWN cell (G-007), walking the plot rather than stacking on
+  // one square, so the 100,000-tick determinism proof covers positions in hashed state
+  // as well as membership. The walk is a pure function of the spawn index — no RNG draw
+  // — so the hash stays a function of the seed and the command log, and of nothing else.
+  let spawnIndex = 0;
   for (let tick = 13; tick < ticks; tick += 1009) {
-    schedule.push({ tick, command: { kind: 'spawnEntity', entityKind } });
+    const at = { floor: spawnIndex % 21, column: spawnIndex % 80 };
+    spawnIndex += 1;
+    schedule.push({ tick, command: { kind: 'spawnEntity', entityKind, at } });
   }
   // Some of these target ids that are not live yet, or are already gone. That is
   // deliberate: a despawn of an unknown id must be a deterministic no-op.

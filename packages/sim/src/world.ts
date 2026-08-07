@@ -11,6 +11,8 @@
 import type { BoundContent } from './content.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
+import { createGridBounds } from './grid.js';
+import type { GridBounds } from './grid.js';
 import { createGuestOutcomes, createGuestStore } from './guests.js';
 import type { GuestOutcomes, GuestStore } from './guests.js';
 import { hashJson } from './hash.js';
@@ -57,6 +59,19 @@ export type World = {
    * the two cannot drift apart unnoticed.
    */
   readonly guestOutcomes: GuestOutcomes;
+  /**
+   * The plot this hotel is built on (G-007): the four edges of the coordinate space.
+   *
+   * THE CELLS THEMSELVES ARE NOT HERE, and that is the design rather than an omission.
+   * A cell's contents are derived from the `at` fields of the entities, so there is one
+   * authoritative record of where anything is — the same call I4 makes about the cash
+   * balance and G-004 makes about reservations. See the header of `grid.ts`.
+   *
+   * It is saved and hashed rather than being a build constant so that editing the
+   * default plot cannot silently reinterpret an existing save. A save carries its own
+   * plot; `assertWorldShape` validates that save's placements against THAT plot.
+   */
+  readonly grid: GridBounds;
 };
 
 /**
@@ -74,6 +89,7 @@ export type World = {
 const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   contentHash: true,
   entities: true,
+  grid: true,
   guestOutcomes: true,
   guests: true,
   ledger: true,
@@ -102,6 +118,7 @@ export function createWorld(seed: number, content: BoundContent): World {
     contentHash: content.fingerprint,
     guests: createGuestStore(),
     guestOutcomes: createGuestOutcomes(),
+    grid: createGridBounds(),
   };
 }
 

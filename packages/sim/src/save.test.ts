@@ -35,7 +35,13 @@ import type { World } from './world.js';
  * coverage tests below are generated from it rather than written out by hand.
  */
 
-const spawn = (entityKind: string): Command => ({ kind: 'spawnEntity', entityKind });
+// G-007: a spawn carries a cell. `column` defaults so that the many tests which do not
+// care about position stay unchanged in intent; tests that DO care pass one explicitly.
+const spawn = (entityKind: string, column = 0): Command => ({
+  kind: 'spawnEntity',
+  entityKind,
+  at: { floor: 0, column },
+});
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 
 /**

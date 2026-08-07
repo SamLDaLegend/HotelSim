@@ -60,34 +60,46 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v2', () => {
+  it('is a v1 blob, and this build now writes v3', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
-    // It stopped being true at G-004, exactly as ADR-0006 said it would, and the answer
-    // was the migration in `save.ts` — not a regenerated fixture. v1 remains the oldest
-    // version this build accepts, which is what keeps these bytes loadable at all.
-    expect(SAVE_SCHEMA_VERSION).toBe(2);
+    // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
+    // G-007. Both times the answer was a migration in `save.ts` — never a regenerated
+    // fixture. v1 remains the oldest version this build accepts, which is what keeps
+    // these bytes loadable at all, and the walk is now 1 -> 2 -> 3.
+    expect(SAVE_SCHEMA_VERSION).toBe(3);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
   it('is written back with its v1 half untouched, under the new version stamp', () => {
-    // Writer stability, restated for a migrated save. It is no longer byte-identical —
-    // it cannot be, the world has two more fields — so the claim is the stronger and
-    // more specific one: every v1 field comes back exactly as it went in, and nothing
-    // is quietly rewritten on the way past. The exact v2 bytes are pinned in
-    // `guest.save.test.ts`.
+    // Writer stability, restated for a save that has now been migrated twice. It is not
+    // byte-identical — it cannot be, the world has three more fields — so the claim is
+    // the stronger and more specific one: every v1 field comes back exactly as it went
+    // in, and nothing is quietly rewritten on the way past. The exact v2 bytes are
+    // pinned in `guest.save.test.ts` and the v3 bytes in `grid.save.test.ts`.
     const before = (JSON.parse(SAVE_V1_BYTES) as { world: Record<string, unknown> }).world;
     const after = (JSON.parse(serialise(deserialise(SAVE_V1_BYTES))) as { world: Record<string, unknown> }).world;
     for (const key of Object.keys(before)) {
+      // `entities` is the one v1 field a later migration touches, and it touches it in
+      // exactly one way: every entity gains `at: null` (G-007). Checked field by field
+      // rather than waved past, so a migration that changed anything ELSE about an
+      // entity would fail here.
+      if (key === 'entities') {
+        const beforeStore = before[key] as { nextId: number; list: Record<string, unknown>[] };
+        const afterStore = after[key] as { nextId: number; list: Record<string, unknown>[] };
+        expect(afterStore.nextId).toBe(beforeStore.nextId);
+        expect(afterStore.list).toEqual(beforeStore.list.map((entity) => ({ ...entity, at: null })));
+        continue;
+      }
       expect(after[key]).toEqual(before[key]);
     }
-    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 2);
+    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 3);
   });
 
   it('continues to simulate from where it was saved', () => {
     const world = deserialise(SAVE_V1_BYTES);
     const advanced = run(world, content, 1_000, [
-      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom' } },
+      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0 } } },
     ]);
     expect(advanced.tick).toBe(SAVE_V1_TICK + 1_000);
     expect(advanced.entities.nextId).toBe(7);

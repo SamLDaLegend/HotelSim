@@ -80,6 +80,28 @@ export const HOTEL_ROOMS = 3;
 export const TICKS_BETWEEN_ARRIVALS = 120;
 
 /**
+ * How many rooms this runner puts on a floor before starting the next one (G-007).
+ *
+ * A HOST DECISION, not a rule of the simulation. The sim knows only that an entity
+ * stands at a cell; how a hotel is laid out is the player's business at M5 and this
+ * runner's business until then. Room footprints are content (G-008), so a room occupies
+ * one column here; when it occupies four, this is the line that changes.
+ */
+export const ROOMS_PER_FLOOR = 20;
+
+/**
+ * Where the nth seeded room stands: left to right along a floor, then up.
+ *
+ * Deterministic and a pure function of the index — no RNG draw, so `--seed` does not
+ * move the building, and the layout is identical on every platform and every run.
+ * Starts at floor 0 (ground) and goes up; the basements the plot allows are left empty
+ * because nothing in M1 has a reason to be down there yet.
+ */
+export function roomCell(index: number): { readonly floor: number; readonly column: number } {
+  return { floor: Math.floor(index / ROOMS_PER_FLOOR), column: index % ROOMS_PER_FLOOR };
+}
+
+/**
  * Version of the `--json` document shape. Bump when the shape changes incompatibly —
  * the parked M2 change that turns the outcome tally into a per-reason table is the
  * scheduled first bump. Same discipline as SAVE_SCHEMA_VERSION, one integer.
@@ -191,7 +213,10 @@ export function schedule(
   }
   const commands: ScheduledCommand[] = [];
   for (let i = 0; i < rooms; i += 1) {
-    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind } });
+    // Each room gets its own cell (G-007). A cell off the plot throws inside the sim,
+    // which is the right failure for `--rooms 99999`: the plot is finite and the runner
+    // should say so rather than stack every room on one square.
+    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind, at: roomCell(i) } });
   }
   for (let tick = 1; tick < ticks; tick += arrivalEveryTicks) {
     commands.push({ tick, command: { kind: 'guestArrives' } });

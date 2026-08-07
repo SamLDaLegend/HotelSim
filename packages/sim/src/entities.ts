@@ -11,6 +11,12 @@
 // The ascending order is not maintained, it is free: ids are handed out from a
 // monotonic counter, so every new id is greater than every existing one and a commit
 // can append without sorting. No comparator exists here to get wrong.
+//
+// G-007: an entity carries its own position, and that field is the ONLY record of it.
+// See the header of `grid.ts` for why there is no cell -> entity back-pointer.
+
+import { assertCell, isWithinBounds } from './grid.js';
+import type { Cell, GridBounds } from './grid.js';
 
 /**
  * An id owned by `packages/content` and injected by the host.
@@ -38,7 +44,36 @@ export const NO_ENTITY: EntityId = 0;
 export type Entity = {
   readonly id: EntityId;
   readonly kind: ContentId;
+  /**
+   * Where this entity stands, or `null` for an entity that occupies no cell (G-007).
+   *
+   * THE ONLY RECORD OF A POSITION ANYWHERE — the same contract `Guest.roomEntityId` has
+   * for a reservation, and it closes the same class of bug by construction: there is no
+   * second copy to fall out of step with, and a despawned entity takes its cell with it.
+   *
+   * `Cell | null` rather than an optional `at?: Cell`, for two reasons. `canonicalise`
+   * THROWS on `undefined`, so an absent-versus-present-undefined distinction is a live
+   * hazard in hashed state rather than a stylistic one; and a required key with a
+   * reserved "nowhere" value is what this codebase already does — `NO_ENTITY`, `NO_GUEST`.
+   *
+   * WHAT `null` MEANS, AND WHY IT EXISTS. An unplaced entity exists, is addressable, and
+   * occupies no cell; it is neither in bounds nor out of bounds. It is still a live room
+   * — still found by `draftFindEntity`, still serving guests, still paying nightly
+   * upkeep — so the migration that produces one changes no economics. It is LEGACY-ONLY:
+   * nothing this build creates is unplaced, because `draftSpawn` requires a cell. The
+   * only route to `null` is the v2 -> v3 migration carrying a world that predates
+   * positions, and `grid.test.ts` pins that as a checked fact rather than a comment.
+   *
+   * Its consequence — a room occupying no cell cannot be enclosed, so it is not a valid
+   * provider — belongs to G-009, which inherits the concept rather than inventing it.
+   */
+  readonly at: Cell | null;
 };
+
+/** True when this entity occupies a cell. The one definition of "placed". */
+export function isPlaced(entity: Entity): entity is Entity & { readonly at: Cell } {
+  return entity.at !== null;
+}
 
 export type EntityStore = {
   /** The next id to hand out. Part of world state: saved, restored, never reset. */
@@ -96,7 +131,7 @@ export function hasEntity(store: EntityStore, id: EntityId): boolean {
  * otherwise load fine and then diverge silently — which is the whole class of bug I6
  * exists to catch.
  */
-export function assertEntityStoreInvariants(store: EntityStore): void {
+export function assertEntityStoreInvariants(store: EntityStore, bounds: GridBounds): void {
   if (!Number.isSafeInteger(store.nextId) || store.nextId < 1) {
     throw new Error(`Entity store is invalid: nextId must be a positive safe integer, got ${String(store.nextId)}`);
   }
@@ -111,6 +146,28 @@ export function assertEntityStoreInvariants(store: EntityStore): void {
     }
     if (typeof entity.kind !== 'string' || entity.kind.length === 0) {
       throw new Error(`Entity store is invalid: entity id ${entity.id} has an empty kind`);
+    }
+    // A position that is out of bounds, fractional or non-finite would load happily and
+    // then place an entity somewhere the simulation cannot address — checked against
+    // THIS store's own plot, which for a load is the plot the SAVE carries rather than
+    // the one this build would create. `null` is legal and means unplaced; see `Entity.at`.
+    const at = entity.at;
+    if (at !== null) {
+      if (typeof at !== 'object' || typeof at.floor !== 'number' || typeof at.column !== 'number') {
+        throw new Error(
+          `Entity store is invalid: entity id ${entity.id} has a position that is not a cell`,
+        );
+      }
+      if (!Number.isSafeInteger(at.floor) || !Number.isSafeInteger(at.column)) {
+        throw new Error(
+          `Entity store is invalid: entity id ${entity.id} has a non-integer position (floor ${String(at.floor)}, column ${String(at.column)})`,
+        );
+      }
+      if (!isWithinBounds(at, bounds)) {
+        throw new Error(
+          `Entity store is invalid: entity id ${entity.id} stands at floor ${at.floor}, column ${at.column}, which is outside the plot (floors ${bounds.minFloor}..${bounds.maxFloor}, columns ${bounds.minColumn}..${bounds.maxColumn})`,
+        );
+      }
     }
     if (entity.id >= store.nextId) {
       throw new Error(
@@ -135,6 +192,16 @@ export function assertEntityStoreInvariants(store: EntityStore): void {
  */
 export type EntityDraft = {
   base: EntityStore;
+  /**
+   * The plot this tick is running on (G-007).
+   *
+   * Carried on the draft rather than passed to each call, because it is constant for the
+   * whole tick and because it puts the bounds where the two things that need them are:
+   * `draftSpawn`, which refuses a cell off the plot at the moment of creation, and
+   * `commitEntityDraft`, which re-checks the whole store on the way out. Read-only —
+   * nothing in a tick may change the plot.
+   */
+  readonly bounds: GridBounds;
   /** Spawned this tick, ascending by id. Every id here is at or above `base.nextId`. */
   added: Entity[];
   /**
@@ -146,21 +213,41 @@ export type EntityDraft = {
 };
 
 /** O(1). Copies nothing — an untouched tick pays nothing. */
-export function beginEntityDraft(store: EntityStore): EntityDraft {
-  return { base: store, added: [], removed: new Set<EntityId>(), nextId: store.nextId };
+export function beginEntityDraft(store: EntityStore, bounds: GridBounds): EntityDraft {
+  return { base: store, bounds, added: [], removed: new Set<EntityId>(), nextId: store.nextId };
 }
 
-/** O(1). Returns the new id. */
-export function draftSpawn(draft: EntityDraft, kind: ContentId): EntityId {
+/**
+ * O(1). Returns the new id.
+ *
+ * THE CELL IS REQUIRED. Nothing this build creates is unplaced (see `Entity.at`), which
+ * is what makes "positions are part of hashed, saved state" a claim the real code path
+ * can reach rather than a headline no test can refute — the G-001 failure, avoided by
+ * construction. A cell off the plot THROWS: like `applyCommand`'s unknown-kind check it
+ * is a caller bug rather than a replay artefact, because the plot is part of the world
+ * the caller is already holding. G-008 turns a player's illegal build into a recorded
+ * refusal instead; this is the structural floor beneath it, not that feature.
+ *
+ * OVERLAP IS NOT POLICED HERE, DELIBERATELY. Two entities may stand on the same cell at
+ * G-007. Refusing it is G-008's rule, and G-008 is also where the question gets its real
+ * answer, which is not simply "no": an item inside a room (M2) shares that room's cells
+ * on purpose, so a blanket ban written here would be a decision made in the wrong goal
+ * with the wrong information. `grid.test.ts` pins the current permissiveness so that
+ * changing it is a visible decision rather than a silent discovery.
+ */
+export function draftSpawn(draft: EntityDraft, kind: ContentId, at: Cell): EntityId {
   if (typeof kind !== 'string' || kind.length === 0) {
     throw new Error('draftSpawn: kind must be a non-empty content id');
   }
+  assertCell(at, draft.bounds, 'draftSpawn');
   const id = draft.nextId;
   if (!Number.isSafeInteger(id + 1)) {
     throw new Error(`draftSpawn: entity ids are exhausted at ${id}; the next id would not be a safe integer`);
   }
   draft.nextId = id + 1;
-  draft.added.push({ id, kind });
+  // Copied, not held: the caller's object must not be able to move an entity after the
+  // fact. `canonicalise` would hash the change and nothing would have staged it.
+  draft.added.push({ id, kind, at: { floor: at.floor, column: at.column } });
   return id;
 }
 
@@ -240,6 +327,11 @@ export function draftGet(draft: EntityDraft, id: EntityId): Entity | undefined {
 /**
  * O(1) when nothing was staged — returns the SAME store object, which is the idle-tick
  * cost guarantee. O(n + a) otherwise: one pass over the live entities plus the spawns.
+ *
+ * G-007 changed this function's neighbourhood but not this property: the grid is not
+ * part of the draft's staged data, so an untouched tick still returns `draft.base` by
+ * reference and still runs no invariant scan. A signature change is exactly when a
+ * guarantee like that quietly dies, so `grid.test.ts` re-pins it by identity.
  */
 export function commitEntityDraft(draft: EntityDraft): EntityStore {
   if (draft.added.length === 0 && draft.removed.size === 0 && draft.nextId === draft.base.nextId) {
@@ -253,6 +345,6 @@ export function commitEntityDraft(draft: EntityDraft): EntityStore {
     if (!draft.removed.has(entity.id)) list.push(entity);
   }
   const store: EntityStore = { nextId: draft.nextId, list };
-  assertEntityStoreInvariants(store);
+  assertEntityStoreInvariants(store, draft.bounds);
   return store;
 }

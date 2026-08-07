@@ -35,22 +35,31 @@ import {
   SAVE_SCHEMA_VERSION,
   serialise,
 } from './save.js';
+import type { SaveSchema } from './save.js';
 import { run, stepTick } from './tick.js';
-import { createWorld, hashState, WORLD_KEYS } from './world.js';
+import { createWorld, hashState } from './world.js';
 import type { World } from './world.js';
 
 /**
- * The v1 blob re-serialised by this build, byte for byte.
+ * The v1 blob as this build's v1 -> v2 step leaves it, byte for byte.
  *
  * Pinned ONCE, here rather than in `fixtures/save-v1.ts`: the fixture is immutable DATA
  * and must not gain a line, while what this build makes of that data is an expectation
  * and belongs with the expectations. It is never regenerated either — if it moves, the
  * writer or the migration changed, and that is the question this asks.
+ *
+ * G-007 NOTE. `SAVE_SCHEMA_VERSION` is 3 now, so `serialise(deserialise(...))` no longer
+ * produces this document — the chain runs on past v2. These bytes are therefore checked
+ * against the INTERMEDIATE, reached by driving the real runner with a chain truncated at
+ * v2 (`TO_V2` below). The pin is KEPT ALIVE rather than retired, which is the whole
+ * point: it still asserts that the 1 -> 2 step means today exactly what it meant when it
+ * was written, and it is what makes the two-step chain observable link by link rather
+ * than only at its far end. The v3 half lives in `grid.save.test.ts`.
  */
 const MIGRATED_V2_BYTES =
   '{"schemaVersion":2,"world":{"tick":5000,"rng":{"a":380611476,"b":3528236117,"c":3141763490,"d":24321242},"ledger":[{"tick":1440,"amount":8500,"reason":"nightly revenue"},{"tick":2880,"amount":-2500,"reason":"nightly upkeep"}],"entities":{"nextId":6,"list":[{"id":2,"kind":"fixtureSuite"},{"id":4,"kind":"fixtureSuite"},{"id":5,"kind":"fixtureRoom"}]},"contentHash":"8e09fe4f0fa162a3","guests":{"nextId":1,"list":[]},"guestOutcomes":{"arrived":0,"satisfied":0,"unsatisfied":0,"evicted":0}}}';
 
-/** `hashState` of the migrated world. Pinned once, on the day the migration landed. */
+/** `hashState` of the world after the v1 -> v2 step. Pinned the day that migration landed. */
 const MIGRATED_V2_STATE_HASH = 'f250ba1dc0a8c3e1';
 
 const fixtureContent = bindContent(SAVE_V1_CONTENT);
@@ -58,10 +67,21 @@ const fixtureContent = bindContent(SAVE_V1_CONTENT);
 const v1World = (): Record<string, unknown> =>
   (JSON.parse(SAVE_V1_BYTES) as { world: Record<string, unknown> }).world;
 
+/** The production chain, truncated at v2, so this goal's step can be seen on its own. */
+const TO_V2: SaveSchema = { migrations: [MIGRATIONS[0]!], minVersion: 1, currentVersion: 2 };
+
+/** The v1 fixture carried up to v2 and no further, by the real runner. */
+const v2World = (): Record<string, unknown> =>
+  migrateSaveWorld(v1World(), 1, TO_V2) as Record<string, unknown>;
+
 describe('the v1 fixture, through the real migration', () => {
   it('loads, and arrives as a world with no guests and no outcomes', () => {
     // The defaults are the only reading of these bytes that asserts nothing they do not
     // say: no guest id has ever been issued, nobody is here, and nobody has left.
+    // Checked at v2 — where this step leaves it — and again after the full chain, so
+    // neither the step nor anything downstream of it can invent a guest.
+    expect(v2World()['guests']).toEqual({ nextId: 1, list: [] });
+    expect(v2World()['guestOutcomes']).toEqual({ arrived: 0, satisfied: 0, unsatisfied: 0, evicted: 0 });
     const world = deserialise(SAVE_V1_BYTES);
     expect(world.guests).toEqual({ nextId: 1, list: [] });
     expect(world.guestOutcomes).toEqual({ arrived: 0, satisfied: 0, unsatisfied: 0, evicted: 0 });
@@ -69,7 +89,7 @@ describe('the v1 fixture, through the real migration', () => {
 
   it('invents no history: every v1 field survives value for value', () => {
     const before = v1World();
-    const after = deserialise(SAVE_V1_BYTES) as unknown as Record<string, unknown>;
+    const after = v2World();
     for (const key of Object.keys(before)) {
       expect(after[key]).toEqual(before[key]);
     }
@@ -77,8 +97,22 @@ describe('the v1 fixture, through the real migration', () => {
     expect(after['contentHash']).toBe(SAVE_V1_CONTENT_FINGERPRINT);
     expect(balanceOf((after['ledger'] as World['ledger']))).toBe(6_000);
     // Exactly the two new keys, and no others.
-    expect(Object.keys(after).sort()).toEqual([...WORLD_KEYS]);
+    //
+    // A hand-written literal here rather than `WORLD_KEYS`, deliberately and contrary to
+    // the usual rule (ADR-0005): this is the key set of a v2 world, which is a HISTORICAL
+    // fact, and it must NOT track `keyof World` as later goals add fields. G-007 already
+    // added one. `WORLD_KEYS` is the right oracle for a CURRENT world and the wrong one
+    // for an intermediate step in a chain.
     expect(Object.keys(after).length).toBe(Object.keys(before).length + 2);
+    expect(Object.keys(after).sort()).toEqual([
+      'contentHash',
+      'entities',
+      'guestOutcomes',
+      'guests',
+      'ledger',
+      'rng',
+      'tick',
+    ]);
   });
 
   it('keeps the v1 pin alive: the v1 world still hashes to the value recorded for it', () => {
@@ -88,27 +122,32 @@ describe('the v1 fixture, through the real migration', () => {
   });
 
   it('hashes to a new value, because a migration that changed no hash was not needed', () => {
-    const world = deserialise(SAVE_V1_BYTES);
-    expect(hashState(world)).toBe(MIGRATED_V2_STATE_HASH);
-    expect(hashState(world)).not.toBe(SAVE_V1_STATE_HASH);
+    expect(hashJson(v2World() as JsonValue)).toBe(MIGRATED_V2_STATE_HASH);
+    expect(hashJson(v2World() as JsonValue)).not.toBe(SAVE_V1_STATE_HASH);
   });
 
   it('is written back as a v2 blob whose v1 half is unchanged', () => {
-    const rewritten = serialise(deserialise(SAVE_V1_BYTES));
+    const rewritten = JSON.stringify({ schemaVersion: 2, world: v2World() });
     expect(rewritten).toBe(MIGRATED_V2_BYTES);
     const before = v1World();
     const after = (JSON.parse(rewritten) as { world: Record<string, unknown> }).world;
     for (const key of Object.keys(before)) expect(after[key]).toEqual(before[key]);
   });
 
-  it('is stable from v2 onwards: loading and saving again changes nothing', () => {
-    const once = serialise(deserialise(SAVE_V1_BYTES));
-    expect(serialise(deserialise(once))).toBe(once);
+  it('converges: starting from the v1 blob or from the v2 blob gives the same world', () => {
+    // What "the chain is walked" means once there is more than one step. A save that
+    // stopped at v2 and one that never left v1 must arrive at the same v3 world — if
+    // they did not, the chain would depend on where a save happened to enter it.
+    const fromV1 = deserialise(SAVE_V1_BYTES);
+    const fromV2 = deserialise(MIGRATED_V2_BYTES);
+    expect(hashState(fromV2)).toBe(hashState(fromV1));
+    expect(serialise(fromV2)).toBe(serialise(fromV1));
   });
 
   it('is still a v1 blob, and v1 is still the oldest version this build accepts', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
-    expect(SAVE_SCHEMA_VERSION).toBe(2);
+    // G-007 bumped this to 3. The fixture did not move; the schema did.
+    expect(SAVE_SCHEMA_VERSION).toBe(3);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -119,7 +158,7 @@ describe('the v1 fixture, through the real migration', () => {
     expect(fixtureContent.fingerprint).toBe(SAVE_V1_CONTENT_FINGERPRINT);
     const world = deserialise(SAVE_V1_BYTES);
     const advanced = run(world, fixtureContent, 1_000, [
-      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom' } },
+      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0 } } },
     ]);
     expect(advanced.tick).toBe(SAVE_V1_TICK + 1_000);
     expect(entitiesInOrder(advanced.entities).map((entity) => entity.id)).toEqual([2, 4, 5, 6]);
@@ -155,10 +194,32 @@ describe('the 1 -> 2 step itself', () => {
     // ADR-0006's mechanism, fired. `assertWorldShape` rejects unknown keys and requires
     // the known ones, so a v1 world handed straight to this build is refused BY NAME —
     // which is the loud failure the fixture exists to produce.
+    //
+    // G-007 NOTE: the field named in the refusal is now `grid`, because
+    // `assertWorldShape` reaches the plot before it reaches the guests. That does not
+    // weaken the claim — the point is that the UNMIGRATED world is rejected rather than
+    // quietly accepted — so the assertion below pins BOTH: the world is refused, and the
+    // guests this step would have added are genuinely absent from it.
     const withoutMigration = { migrations: [], minVersion: 1, currentVersion: 1 };
     const asIs = migrateSaveWorld(v1World(), 1, withoutMigration) as Record<string, unknown>;
     expect(asIs['guests']).toBeUndefined();
-    expect(() => deserialise(SAVE_V1_BYTES, withoutMigration)).toThrow(/world\.guests is missing/);
+    expect(asIs['guestOutcomes']).toBeUndefined();
+    expect(() => deserialise(SAVE_V1_BYTES, withoutMigration)).toThrow(/Save is corrupt/);
+    // And with everything G-007 adds supplied, but the guests still missing, it is the
+    // GUESTS that are named — so this step remains the thing that carries them, which is
+    // the claim this test has always made.
+    const store = asIs['entities'] as { nextId: number; list: Record<string, unknown>[] };
+    const asIfV3 = {
+      ...asIs,
+      grid: { minFloor: -2, maxFloor: 20, minColumn: 0, maxColumn: 79 },
+      entities: { ...store, list: store.list.map((entity) => ({ ...entity, at: null })) },
+    };
+    const withoutGuests = {
+      migrations: [{ from: 1, to: 2, migrate: (): unknown => asIfV3 }],
+      minVersion: 1,
+      currentVersion: 2,
+    };
+    expect(() => deserialise(SAVE_V1_BYTES, withoutGuests)).toThrow(/world\.guests is missing/);
   });
 });
 
@@ -172,7 +233,7 @@ describe('a v2 world with guests in it', () => {
   });
   const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 };
   const content = bindContent({ roomTypes: [roomType('roomA', ['rest'])], needTypes: [needType] });
-  const spawnRoom: Command = { kind: 'spawnEntity', entityKind: 'roomA' };
+  const spawnRoom: Command = { kind: 'spawnEntity', entityKind: 'roomA', at: { floor: 0, column: 0 } };
   const arrive: Command = { kind: 'guestArrives' };
 
   /** A hotel mid-service: two guests resting, one waiting, two already departed. */

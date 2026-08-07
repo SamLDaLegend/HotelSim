@@ -205,6 +205,37 @@ Raised by `sim-engineer` at PLAN.
   seeds 42 and 43 differ only in the seed and state-hash lines. When the demand model
   makes arrivals seed-dependent, that test fails BY DESIGN and is retired deliberately —
   it is the parked seed caveat written as an assertion. -> M4, as a planned retirement.
+
+## Deferred out of G-007 (2026-08-07)
+
+Raised by `sim-engineer` at PLAN. G-007 builds the coordinate substrate only.
+
+- **`entityAt(world, cell)` and neighbour queries.** Functions over the placements, not
+  fields — they add no state and owe no migration, which is the point of storing position
+  on the entity rather than in cells. -> G-009, which needs them for enclosure.
+- **A derived cell -> entity index.** Only when a scan is measurably slow, and then as
+  DERIVED state: rebuilt on load, never saved, never authoritative. Same wording as the
+  room -> occupant index, for the same reason — a second record of who is where is the
+  drift G-004 closed by construction. -> G-008/G-010.
+- **Multi-cell footprints** (`widthCells` as content on the room type). The stored shape
+  stays one origin cell per entity, so this costs no migration when it lands. -> G-008.
+- **Overlap and occupancy rules.** Two entities may share a cell at G-007; the gap is
+  pinned by a test so changing it is visible. -> G-008, recorded in its goal block.
+- **`compareCells`** — written when something first needs to sort cells (floor then
+  column, explicit and locale-free). Deliberately not written unused: a comparator with
+  no caller is a thing to get wrong for free. -> G-009.
+- **Unplaced-as-invalid.** An unplaced room cannot be enclosed, so "unplaced" is a natural
+  invalidity reason G-009 inherits rather than invents. At G-007 an unplaced room is still
+  a live provider and still pays upkeep, deliberately, so the migration changes no
+  economics. -> G-009.
+- **Growing or shrinking the plot as a command, and per-scenario plots as content.**
+  Bounds are world state (a save carries its own plot, and `assertWorldShape` validates
+  placements against the SAVE's bounds, not the build's), so expanding the plot later is a
+  migration-free change. Making bounds content would move every content fingerprint and
+  leave the permanent fixture a husk that loads and can never tick. -> M6.
+- **Vertical circulation and adjacency for pathing** -> M3.
+- **`createWorld` taking custom bounds** — only if a test ever needs it; the default plot
+  (floors −2..20, columns 0..79, 1,840 cells) plus floor 999 covers out-of-bounds testing.
 - **Turn-away at the door.** A guest who finds the hotel full waits in the lobby and
   gives up when its patience runs out; there is no "saw the queue and left" path,
   because that is a demand behaviour. -> M4.

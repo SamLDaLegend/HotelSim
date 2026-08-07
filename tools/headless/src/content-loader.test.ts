@@ -134,14 +134,14 @@ describe('injection into a real simulation', () => {
     // content literal anywhere in packages/sim made this work.
     const content = loadContent();
     const id = content.content.roomTypes[0]!.id;
-    const world = stepTick(createWorld(1, content), content, [{ kind: 'spawnEntity', entityKind: id }]);
+    const world = stepTick(createWorld(1, content), content, [{ kind: 'spawnEntity', entityKind: id, at: { floor: 0, column: 0 } }]);
     expect(entitiesInOrder(world.entities).map((entity) => entity.kind)).toEqual([id]);
   });
 
   it('refuses a kind the shipped content does not define', () => {
     const content = loadContent();
     expect(() =>
-      stepTick(createWorld(1, content), content, [{ kind: 'spawnEntity', entityKind: 'penthouse_suite' }]),
+      stepTick(createWorld(1, content), content, [{ kind: 'spawnEntity', entityKind: 'penthouse_suite', at: { floor: 0, column: 0 } }]),
     ).toThrow(/unknown entity kind/);
   });
 

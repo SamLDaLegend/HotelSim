@@ -72,7 +72,7 @@ const simContent: SimContent = {
 };
 const content = bindContent(simContent);
 
-const spawnRoom: Command = { kind: 'spawnEntity', entityKind: 'roomA' };
+const spawnRoom: Command = { kind: 'spawnEntity', entityKind: 'roomA', at: { floor: 0, column: 0 } };
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });

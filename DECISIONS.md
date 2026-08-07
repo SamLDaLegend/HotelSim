@@ -202,6 +202,42 @@ table beats a comment describing the order.
 **Consequence.** Critics should hunt this class explicitly; it is not in §6.1 by name but
 it has produced more real defects here than anything that is.
 
+---
+
+## ADR-0008 — Things that describe the past must not track the present
+Date: 2026-08-07 · Context: G-007 build and critique · Decided by: orchestrator
+
+**Decision.** Any artefact whose subject is a *historical* fact — an old save's meaning, a
+retired schema version's shape — is written as a **frozen literal** and must not derive
+from anything the current build can change. Three consequences, all now in force:
+
+1. **A migration's output is a pure function of its input bytes and its own era.**
+   `migrateV2ToV3` carries `V3_MIGRATION_BOUNDS` as its own frozen four integers; it must
+   never call `createGridBounds()`. If it read the live constant, the same v2 bytes would
+   produce a *different* v3 world after anyone edited the plot — history would drift with
+   the build.
+2. **A test oracle for a historical schema version is a literal, not a mapped type.**
+   `guest.save.test.ts`'s v2 key set is hand-written **deliberately against ADR-0005's
+   mapped-type discipline**, because v2 is frozen and `WORLD_KEYS` tracks the current
+   `World`. This is not an exception to ADR-0005 — it is its precondition: "a mapped type
+   beats a hand-written list" holds when the list describes something that *changes*.
+3. **Where the values coincide, the guard must be structural, not a value assertion.**
+   `V3_MIGRATION_BOUNDS` and `createGridBounds()` are identical integers today, so no
+   assertion can tell the implementations apart. A source scan forbidding `save.ts` from
+   referencing the live grid constants is what makes the promise checkable.
+
+**Why.** `sim-critic` showed the cost of getting (2) wrong concretely: had the v2 oracle
+tracked `keyof World`, G-007 would have made it demand that a v2 intermediate carry a
+`grid` key, and the natural "fix" would have been to make the **v1 -> v2 step emit
+`grid`** — corrupting a historical migration to satisfy an oracle pointed at the wrong
+era. It also checked the tempting middle road, deriving the v2 key set from
+`MIGRATED_V2_BYTES`, and found it worse: both sides would then come from the same pinned
+artefact, making the assertion vacuous.
+
+**How to apply.** Ask what era the artefact describes. If the answer is "an era that is
+over", it is a literal, and anything that would make it move is a defect rather than an
+update. If the answer is "now", ADR-0005's mapped-type rule applies as written.
+
 **Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
 As first written this ADR could be read as condemning defensive asserts. It does not.
 `sim-critic` drew the line, and it is the right one:

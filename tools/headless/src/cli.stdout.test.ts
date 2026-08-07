@@ -29,6 +29,12 @@
 //   ledger      17      = 15 payments + 2 settlement transactions
 //   balance     112500p = 127500 - 15000
 //
+// G-007 MOVED THE STATE HASH AND NOTHING ELSE. `World` gained `grid` and every entity
+// gained `at`, so `c268d067bad7f5b3` became `a55b468ceea4b928`. Every other line above
+// is byte-identical, which is the point worth recording: giving the hotel a floor plan
+// changed no simulated outcome — same arrivals, same satisfactions, same money to the
+// penny. A grid that had quietly altered who got served would have shown up here first.
+//
 // Where tests need content files (the --content contract), they use RUNTIME TEMP
 // DIRECTORIES only — nothing content-shaped is committed where `check:content` or a
 // future widening of it could trip over fixture data.
@@ -71,7 +77,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     roomTypes: 1,
     needTypes: 1,
     entities: 3,
-    stateHash: 'c268d067bad7f5b3',
+    stateHash: 'a55b468ceea4b928',
   },
   guests: {
     arrived: 24,
@@ -112,7 +118,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'upkeep      -15000p',
     'settlements 2',
     'balance     112500p',
-    'state hash  c268d067bad7f5b3',
+    'state hash  a55b468ceea4b928',
   ].join('\n') + '\n';
 
 describe('byte-identical stdout across runs (G-006 exit criterion, verbatim)', () => {
@@ -189,7 +195,7 @@ describe('the DOCUMENTED invocation, through pnpm itself', () => {
   it('pnpm --silent sim:run --quiet yields the state hash alone', () => {
     const result = runPnpm(['--silent', 'sim:run', '--days', '2', '--seed', '42', '--quiet']);
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe('c268d067bad7f5b3\n');
+    expect(result.stdout).toBe('a55b468ceea4b928\n');
   });
 });
 
@@ -212,7 +218,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  c268d067bad7f5b3']);
+    expect(differing).toEqual(['seed        42', 'state hash  a55b468ceea4b928']);
     expect(lines43).toContain('seed        43');
   });
 });

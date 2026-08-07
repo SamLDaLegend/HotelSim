@@ -36,8 +36,8 @@ const content = bindContent({ roomTypes: ['alpha', 'beta'].map(roomType) });
 /** A world that has been somewhere, so a migration has real state to carry. */
 function currentWorld(): World {
   return run(createWorld(9, content), content, 120, [
-    { tick: 3, command: { kind: 'spawnEntity', entityKind: 'alpha' } },
-    { tick: 40, command: { kind: 'spawnEntity', entityKind: 'beta' } },
+    { tick: 3, command: { kind: 'spawnEntity', entityKind: 'alpha', at: { floor: 0, column: 0 } } },
+    { tick: 40, command: { kind: 'spawnEntity', entityKind: 'beta', at: { floor: 1, column: 2 } } },
     { tick: 90, command: { kind: 'despawnEntity', id: 1 } },
   ]);
 }

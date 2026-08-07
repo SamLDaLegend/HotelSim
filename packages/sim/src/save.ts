@@ -7,6 +7,8 @@
 
 import { assertEntityStoreInvariants } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
+import { assertGridBounds } from './grid.js';
+import type { GridBounds } from './grid.js';
 import { assertGuestOutcomes, assertGuestStoreInvariants } from './guests.js';
 import type { Guest, GuestOutcomes, GuestStore } from './guests.js';
 import type { Transaction } from './ledger.js';
@@ -14,7 +16,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 2;
+export const SAVE_SCHEMA_VERSION = 3;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -82,6 +84,98 @@ function migrateV1ToV2(world: unknown): unknown {
 }
 
 /**
+ * THE PLOT A v2 WORLD IS CARRIED ONTO, FROZEN AT THE MOMENT v3 WAS DEFINED.
+ *
+ * These four integers are a LITERAL and must stay one. `createGridBounds()` in `grid.ts`
+ * holds the same values today and the two are allowed to diverge later — that divergence
+ * is correct, not a bug to repair.
+ *
+ * Why the duplication is deliberate: a migration's output must be a pure function of its
+ * input bytes and of its own era. A migration that read today's constants would turn the
+ * same v2 bytes into a DIFFERENT v3 world the moment anyone edits the default plot, so
+ * history would drift with the build and the pinned hash of the migrated fixture would
+ * become a tripwire on an unrelated change rather than on this migration. Freezing them
+ * here costs one copied literal and buys a migration that means the same thing forever.
+ */
+const V3_MIGRATION_BOUNDS: GridBounds = Object.freeze({
+  minFloor: -2,
+  maxFloor: 20,
+  minColumn: 0,
+  maxColumn: 79,
+});
+
+/**
+ * v2 -> v3: a world that predates the building grid (G-007).
+ *
+ * ADR-0006 fired for the second time, and this is the first chain to have TWO steps: the
+ * permanent v1 fixture now walks 1 -> 2 -> 3. The fixture is not regenerated; this is
+ * what carries it.
+ *
+ * WHY THE PLOT MAY BE DEFAULTED AND A POSITION MAY NOT. The distinction is the whole
+ * argument, and it is not the same call G-004 made:
+ *
+ *   The BOUNDS are a property of the SPACE. No v2 entity has a position, so no v2 fact
+ *   can contradict a plot. Giving this world the standard plot says "nothing that
+ *   happened in this hotel depended on where its walls were", which is true of a world
+ *   in which nothing had a position at all.
+ *
+ *   A POSITION IS HISTORY. Writing `at: {floor: 0, column: 3}` on a migrated room claims
+ *   that room stands there — a claim about the world's contents that these bytes do not
+ *   support. And it would not be inert. G-008 refuses a build on an occupied cell, so an
+ *   invented position silently blocks a cell the player never touched; G-009 computes
+ *   enclosure from placements, so invented neighbours can make an invented room valid.
+ *   That is INVENTING HISTORY THAT THE SIMULATION THEN ACTS ON, which is worse than
+ *   inventing a counter, and it is why every migrated entity arrives unplaced.
+ *
+ * So: `at: null` for every entity, and nothing else about them touched. An unplaced room
+ * is still a live room — still found, still serving guests, still paying nightly upkeep
+ * — so this step changes no economics. What "unplaced" then MEANS to validity is
+ * G-009's, which inherits the concept rather than inventing one.
+ */
+function migrateV2ToV3(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way this step could destroy data — spreading over real state — is the one
+  // thing it refuses to do, exactly as the v1 -> v2 step refuses a world with guests.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an
+  // own key (G-003).
+  if (Object.keys(world).includes('grid')) {
+    throw new Error(
+      'world already has a "grid" field, so it is not a v2 world; migrating it would overwrite a real plot',
+    );
+  }
+
+  const entities = world['entities'];
+  if (!isRecord(entities)) {
+    throw new Error('Save is corrupt: world.entities is missing, so it cannot be carried onto a grid');
+  }
+  const list = entities['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.entities.list is missing or not an array');
+  }
+  const placed: unknown[] = list.map((entity, index) => {
+    if (!isRecord(entity)) {
+      throw new Error(`Save is corrupt: world.entities.list[${index}] is not an object`);
+    }
+    // Same refusal, one level down: an entity that already stands somewhere did not come
+    // from a world that predates positions.
+    if (Object.keys(entity).includes('at')) {
+      throw new Error(
+        `world.entities.list[${index}] already has an "at" field, so it is not a v2 entity; migrating it would overwrite a real position`,
+      );
+    }
+    return { ...entity, at: null };
+  });
+
+  return {
+    ...world,
+    entities: { ...entities, list: placed },
+    grid: { ...V3_MIGRATION_BOUNDS },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -91,6 +185,7 @@ function migrateV1ToV2(world: unknown): unknown {
  */
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 1, to: 2, migrate: migrateV1ToV2 }),
+  Object.freeze({ from: 2, to: 3, migrate: migrateV2ToV3 }),
 ]);
 
 /**
@@ -283,6 +378,25 @@ function assertEntity(value: unknown, index: number): asserts value is Entity {
   if (typeof value['kind'] !== 'string') {
     throw new Error(`Save is corrupt: world.entities.list[${index}].kind is not a string`);
   }
+  // PRESENT, and either null or a cell (G-007). A missing `at` is rejected rather than
+  // read as unplaced: `null` is a statement the writer made, an absent key is a save
+  // this build did not write and cannot vouch for, and the difference is exactly what
+  // the v2 -> v3 migration exists to settle. `Object.keys().includes` rather than `in`,
+  // for the `__proto__` reason above.
+  if (!Object.keys(value).includes('at')) {
+    throw new Error(`Save is corrupt: world.entities.list[${index}].at is missing`);
+  }
+  const at = value['at'];
+  if (at !== null) {
+    if (!isRecord(at)) {
+      throw new Error(`Save is corrupt: world.entities.list[${index}].at is neither null nor a cell`);
+    }
+    for (const key of ['floor', 'column'] as const) {
+      if (typeof at[key] !== 'number') {
+        throw new Error(`Save is corrupt: world.entities.list[${index}].at.${key} is not a number`);
+      }
+    }
+  }
 }
 
 function assertGuest(value: unknown, index: number): asserts value is Guest {
@@ -348,6 +462,24 @@ export function assertWorldShape(value: unknown): asserts value is World {
   }
   ledger.forEach(assertTransaction);
 
+  // The plot this hotel is built on (G-007). Validated BEFORE the entity store, because
+  // the store's placements are checked against it — a nonsensical plot would otherwise
+  // make every placement fail with a message about the wrong thing.
+  const grid = value['grid'];
+  if (!isRecord(grid)) {
+    throw new Error('Save is corrupt: world.grid is missing');
+  }
+  for (const key of ['minFloor', 'maxFloor', 'minColumn', 'maxColumn'] as const) {
+    if (typeof grid[key] !== 'number') {
+      throw new Error(`Save is corrupt: world.grid.${key} is missing or not a number`);
+    }
+  }
+  // Same function `createWorld` and the tick would use, so "a valid plot" has one
+  // definition. Note what is NOT checked: that the plot equals this build's default.
+  // A save's plot is its own, which is what stops a change to the default constants
+  // from silently reinterpreting every existing save.
+  assertGridBounds(grid as unknown as GridBounds);
+
   const entities = value['entities'];
   if (!isRecord(entities)) {
     throw new Error('Save is corrupt: world.entities is missing');
@@ -364,7 +496,8 @@ export function assertWorldShape(value: unknown): asserts value is World {
   // would collide with a live entity, loads fine and then diverges silently — exactly
   // the failure I6 exists to catch. The check is the SAME function the tick uses when
   // it commits, so "a valid store" has one definition rather than two that drift.
-  assertEntityStoreInvariants(entities as unknown as EntityStore);
+  // Against the plot THIS SAVE carries, not this build's default (see above).
+  assertEntityStoreInvariants(entities as unknown as EntityStore, grid as unknown as GridBounds);
 
   const guests = value['guests'];
   if (!isRecord(guests)) {

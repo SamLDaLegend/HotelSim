@@ -364,3 +364,58 @@ family as everything ADR-0007 catalogues.
 G-007 also inherits the first **multi-step** migration: the permanent v1 fixture will
 have to walk 1 -> 2 -> 3. The chain walk has been tested against synthetic gaps since
 G-003 and discharged once at G-004; this is where it does real work.
+
+---
+
+## 2026-08-07 — G-007 — Multi-floor grid and coordinates (1/3 rounds)
+
+**A cell is a coordinate, not a container.** `World.grid` is four integers of bounds;
+`Entity.at` is the sole authority for position; a cell's contents are derived. No
+cell -> entity back-pointer exists, so the two directions cannot drift and a demolished
+room cannot leave a ghost — the same call I4 makes about the balance and G-004 makes
+about reservations, now made a third time. The critic attacked the claim directly and
+found no second record anywhere in the diff.
+
+The multi-step migration worked, and the best evidence was a deletion: removing the
+2 -> 3 step fails **first** at G-003's step-count assertion — *"1 step(s) but v1 -> v3
+requires exactly 2"* — before any data is touched. That anti-vacuity device was written
+against an empty migration list where it could only assert "0 required, 0 present"; this
+is the first time it had a real number, and it caught the real failure first. Both links
+are pinned independently, so G-004's `f250ba1dc0a8c3e1` survived the chain growing past
+it rather than being retired.
+
+The migration question — what to do with three positionless rooms — got the right answer
+with a **stronger** argument than the G-004 precedent it cites. They become unplaced; no
+position is invented. G-004's case was that inventing a counter invents history; here an
+invented position is **not inert**, because G-008 refuses builds on occupied cells and
+G-009 computes enclosure from placements. Inventing history the simulation then acts on.
+The distinction that makes it coherent: **bounds may be defaulted because they are a
+property of the space; positions may not because they are history.**
+
+My one ruling changed the plan: the migration must hard-code its own era's bounds rather
+than call `createGridBounds()`, or the same v2 bytes yield different v3 worlds after
+anyone edits the plot. The critic then found that the test *named* for that guarantee
+could not verify it — the values coincide today, so it passed under either
+implementation. I reproduced the argument by performing the actual deduplication
+refactor: **411 tests stayed green and only the new source scan went red.** The fix is a
+scan rather than an assertion because no value assertion can separate implementations
+that agree; and because the scan runs inside `pnpm test`, `pnpm verify` catches it, so
+the guard is on the gate path.
+
+That produced **ADR-0008 — things that describe the past must not track the present**,
+which unifies three cases: a migration must not read live constants, a historical schema
+oracle is a literal not a mapped type, and where values coincide the guard must be
+structural. It is not an exception to ADR-0005; it is that rule's precondition.
+
+Two measurement notes. The builder measured the hash cost of its own design, found a
+dense cell array is **cheaper** until ~130 entities — the opposite of what it expected —
+and reported it rather than letting a convenient number carry the argument. And it
+refused to claim an I5 speedup its own before/after suggested, attributing it to machine
+warm-up; the critic's controlled number was 1.218 µs/tick, the G-006 figure to three
+decimal places. Both are the discipline propagating from earlier goals where it was
+absent.
+
+Fourth builder to report a gate defect rather than touch one: `check-purity.mjs` exempts
+test files from the Node-builtin ban, but the external-package catch-all rejects them
+anyway, so the exemption is unreachable and its comment overstates what the gate permits.
+Mine to fix, in its own commit.

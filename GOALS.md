@@ -246,7 +246,7 @@ it until build commands exist.
 `apps/game` stays shut. The renderer is M5, four milestones away (§9).
 
 ## G-007 — Multi-floor grid and coordinates
-Status: pending
+Status: done
 Milestone: M1
 Owner pair: sim-engineer / sim-critic
 Statement: The world has a multi-floor grid of cells; an entity occupies a known cell;
@@ -258,7 +258,26 @@ Exit criteria:
   - all §2 invariant gates green (pnpm verify)
 Out of scope: build/demolish commands (G-008); validity rules (G-009); pathfinding and
   vertical circulation (M3); anything drawn (M5)  (-> PARKING.md)
-Critique rounds used: 0/3
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  grid 57 tests / save 116 tests green · all six gates green, I2 964a195df576d979,
+  I5 16.0% · SAVE_V1_CONTENT fingerprint unmoved at 8e09fe4f0fa162a3, so the plot did
+  not leak into content · the fixture has a zero-line diff and walks 1->2->3 to
+  ba7441406ce995bc, chain now 2 steps · one column moves the state hash · an idle tick
+  still returns the same EntityStore AND grid by reference after two signature changes ·
+  no gate, CI or config file modified.
+
+  OBLIGATION DISCHARGED (ADR-0006): SAVE_SCHEMA_VERSION is 3 with a real 2 -> 3
+  migration, and the permanent v1 fixture now exercises the first MULTI-STEP chain. Both
+  links are pinned independently — a truncated [1->2] schema still reproduces G-004's
+  hash f250ba1dc0a8c3e1 unmoved, so that pin stayed alive rather than being retired when
+  the chain grew past it.
+
+  I reproduced the round-1 MINOR's central claim myself by performing the actual
+  deduplication refactor: 411 tests stayed GREEN and only the new source scan went red
+  (3 tests). Because the scan runs inside `pnpm test`, `pnpm verify` catches it too — so
+  the guard sits on the gate path, not merely in the suite.
 
   KNOWN OBLIGATION (ADR-0006): `World` gains the grid, so the permanent v1 fixture is
   rejected again. Bump SAVE_SCHEMA_VERSION to 3 and write a real 2 -> 3 migration; the
@@ -287,6 +306,14 @@ Critique rounds used: 0/3
   Construction cost is content (I3/ADR-0003), integer pence (ADR-0002), and lands in the
   ledger through a new `TransactionReason` member — the union and its choke point already
   make that structural.
+
+  INHERITED OBLIGATION from G-007: **two entities may currently share a cell.** G-007
+  placed positions on entities but wrote no occupancy rule, and pinned the overlap with a
+  test so that changing it is a visible decision rather than a silent gap. Occupancy and
+  overlap are this goal's to define. G-007 also draws the line you inherit: it made
+  placement *structural* (required cell, throw on out-of-bounds — a caller bug); this
+  goal makes placement a *player action* (cost, occupied-cell refusal, insufficient-cash
+  refusal, and refusal as a recorded outcome rather than a throw).
 
 ## G-009 — Room validity rules
 Status: pending

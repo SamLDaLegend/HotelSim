@@ -23,11 +23,22 @@ import {
   NO_ENTITY,
 } from './entities.js';
 import type { Entity, EntityId, EntityStore } from './entities.js';
+import { createGridBounds } from './grid.js';
 import { hashJson } from './hash.js';
+
+/**
+ * The plot these tests run on (G-007). The store's behaviour is independent of it —
+ * every assertion here is about ids, ordering and membership — so one shared plot keeps
+ * the position out of the way of what is actually being pinned.
+ */
+const bounds = createGridBounds();
+
+/** Distinct cells, so no test accidentally depends on two entities sharing one. */
+const cellFor = (n: number): { floor: number; column: number } => ({ floor: 0, column: n % 80 });
 
 /** Apply one batch of operations to a store, the way a single tick would. */
 function mutate(store: EntityStore, ops: (draft: ReturnType<typeof beginEntityDraft>) => void): EntityStore {
-  const draft = beginEntityDraft(store);
+  const draft = beginEntityDraft(store, bounds);
   ops(draft);
   return commitEntityDraft(draft);
 }
@@ -35,7 +46,7 @@ function mutate(store: EntityStore, ops: (draft: ReturnType<typeof beginEntityDr
 function spawnAll(store: EntityStore, kinds: readonly string[]): { store: EntityStore; ids: EntityId[] } {
   const ids: EntityId[] = [];
   const next = mutate(store, (draft) => {
-    for (const kind of kinds) ids.push(draftSpawn(draft, kind));
+    for (const kind of kinds) ids.push(draftSpawn(draft, kind, cellFor(ids.length)));
   });
   return { store: next, ids };
 }
@@ -94,12 +105,12 @@ describe('entity store — identity and allocation', () => {
   });
 
   it('refuses an empty kind rather than storing an unaddressable entity', () => {
-    expect(() => mutate(createEntityStore(), (draft) => void draftSpawn(draft, ''))).toThrow(/kind/);
+    expect(() => mutate(createEntityStore(), (draft) => void draftSpawn(draft, '', cellFor(0)))).toThrow(/kind/);
   });
 
   it('refuses to allocate past the safe integer range rather than wrapping', () => {
     const store: EntityStore = { nextId: Number.MAX_SAFE_INTEGER, list: [] };
-    expect(() => mutate(store, (draft) => void draftSpawn(draft, 'alpha'))).toThrow(/safe integer/);
+    expect(() => mutate(store, (draft) => void draftSpawn(draft, 'alpha', cellFor(0)))).toThrow(/safe integer/);
   });
 });
 
@@ -141,8 +152,8 @@ describe('entity store — despawn', () => {
 
   it('can despawn an entity spawned earlier in the same batch', () => {
     const store = mutate(createEntityStore(), (draft) => {
-      const a = draftSpawn(draft, 'alpha');
-      draftSpawn(draft, 'beta');
+      const a = draftSpawn(draft, 'alpha', cellFor(0));
+      draftSpawn(draft, 'beta', cellFor(1));
       expect(draftDespawn(draft, a)).toBe(true);
     });
     expect(entitiesInOrder(store).map((entity) => entity.kind)).toEqual(['beta']);
@@ -169,8 +180,8 @@ describe('entity store — lookup', () => {
 
   it('sees staged spawns and hides staged despawns from within the same batch', () => {
     const { store, ids } = spawnAll(createEntityStore(), ['alpha', 'beta']);
-    const draft = beginEntityDraft(store);
-    const fresh = draftSpawn(draft, 'gamma');
+    const draft = beginEntityDraft(store, bounds);
+    const fresh = draftSpawn(draft, 'gamma', cellFor(2));
 
     expect(draftGet(draft, fresh)?.kind).toBe('gamma');
     expect(draftGet(draft, ids[0]!)?.kind).toBe('alpha');
@@ -185,7 +196,7 @@ describe('entity store — commit', () => {
   it('returns the identical store object when nothing was staged', () => {
     // Referential identity, not deep equality: this is the O(1) idle-tick guarantee.
     const { store } = spawnAll(createEntityStore(), ['alpha', 'beta']);
-    expect(commitEntityDraft(beginEntityDraft(store))).toBe(store);
+    expect(commitEntityDraft(beginEntityDraft(store, bounds))).toBe(store);
   });
 
   it('produces byte-identical stores from identical operation sequences', () => {
@@ -193,7 +204,7 @@ describe('entity store — commit', () => {
       const { store, ids } = spawnAll(createEntityStore(), ['alpha', 'beta', 'gamma']);
       return mutate(store, (draft) => {
         draftDespawn(draft, ids[1]!);
-        draftSpawn(draft, 'delta');
+        draftSpawn(draft, 'delta', cellFor(3));
       });
     };
     expect(hashStore(build())).toBe(hashStore(build()));
@@ -201,8 +212,8 @@ describe('entity store — commit', () => {
 });
 
 describe('entity store — invariants', () => {
-  const bad = (store: EntityStore): (() => void) => (): void => assertEntityStoreInvariants(store);
-  const entity = (id: number, kind = 'alpha'): Entity => ({ id, kind });
+  const bad = (store: EntityStore): (() => void) => (): void => assertEntityStoreInvariants(store, bounds);
+  const entity = (id: number, kind = 'alpha'): Entity => ({ id, kind, at: { floor: 0, column: 0 } });
 
   it('accepts a store the simulation could actually have produced', () => {
     const { store } = spawnAll(createEntityStore(), ['alpha', 'beta']);

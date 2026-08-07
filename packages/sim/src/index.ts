@@ -29,8 +29,23 @@ export {
   entityCount,
   getEntity,
   hasEntity,
+  isPlaced,
   NO_ENTITY,
 } from './entities.js';
+export type { Cell, GridBounds } from './grid.js';
+export {
+  assertCell,
+  assertGridBounds,
+  cellsEqual,
+  createGridBounds,
+  DEFAULT_MAX_COLUMN,
+  DEFAULT_MAX_FLOOR,
+  DEFAULT_MIN_COLUMN,
+  DEFAULT_MIN_FLOOR,
+  describeBounds,
+  describeCell,
+  isWithinBounds,
+} from './grid.js';
 export type { Guest, GuestId, GuestOutcomes, GuestStore, GuestTickInput, GuestTickResult } from './guests.js';
 export {
   assertGuestOutcomes,
