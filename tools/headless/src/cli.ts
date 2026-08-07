@@ -11,6 +11,7 @@ import {
   assertGuestOutcomes,
   balanceOf,
   countOrphanedReservations,
+  countSettlementTransactions,
   countStuckGuests,
   createWorld,
   dayOf,
@@ -18,7 +19,9 @@ import {
   guestCount,
   hashState,
   run,
+  sumByReason,
   TICKS_PER_DAY,
+  TRANSACTION_REASONS,
 } from '@hotelsim/sim';
 import type { BoundContent, ScheduledCommand, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
@@ -144,7 +147,55 @@ function guestReport(world: World, content: BoundContent): GuestReport {
   };
 }
 
-function report(world: World, content: BoundContent, options: Options, guests: GuestReport): string {
+/**
+ * What the money loop did, and whether it can be believed (G-005).
+ *
+ * Two checks, both non-zero exits, both ADR-0007-shaped — each compares numbers
+ * computed by different code over the same log:
+ *
+ *   PARTITION — `balance` is the blind fold (`balanceOf` reads no reasons); the
+ *   per-reason totals read nothing else. They agree exactly when every transaction's
+ *   reason is in the union, so "every transaction carries a reason" is measured over
+ *   the whole run rather than trusted per call site. A log this run never wrote could
+ *   legitimately fail it; this run's log may not.
+ *
+ *   CADENCE — settlements are COUNTED BY THE SIM (`countSettlementTransactions`, the
+ *   `countStuckGuests` pattern) and compared against the days this world has
+ *   completed. One per simulated night, exactly: a dropped settlement phase reports
+ *   0 ≠ 30 here even though every other line of the report would look healthy.
+ */
+type MoneyReport = {
+  readonly balance: number;
+  readonly classified: number;
+  readonly settlements: number;
+  readonly nights: number;
+  readonly lines: readonly string[];
+};
+
+function moneyReport(world: World): MoneyReport {
+  const balance = balanceOf(world.ledger);
+  let classified = 0;
+  for (const reason of TRANSACTION_REASONS) {
+    classified += sumByReason(world.ledger, reason);
+  }
+  const settlements = countSettlementTransactions(world.ledger);
+  const nights = dayOf(world);
+  return {
+    balance,
+    classified,
+    settlements,
+    nights,
+    lines: [
+      `ledger      ${world.ledger.length} transactions`,
+      `revenue     ${sumByReason(world.ledger, 'roomRevenue')}p`,
+      `upkeep      ${sumByReason(world.ledger, 'upkeep')}p`,
+      `settlements ${settlements}`,
+      `balance     ${balance}p`,
+    ],
+  };
+}
+
+function report(world: World, content: BoundContent, options: Options, guests: GuestReport, money: MoneyReport): string {
   if (options.quiet) return hashState(world);
   return [
     `seed        ${options.seed}`,
@@ -154,8 +205,7 @@ function report(world: World, content: BoundContent, options: Options, guests: G
     `need types  ${content.content.needTypes?.length ?? 0}`,
     `entities    ${entityCount(world.entities)}`,
     ...guests.lines,
-    `ledger      ${world.ledger.length} transactions`,
-    `balance     ${balanceOf(world.ledger)}p`,
+    ...money.lines,
     `state hash  ${hashState(world)}`,
   ].join('\n');
 }
@@ -169,11 +219,25 @@ function main(): void {
   const content = loadContent();
   const world = run(createWorld(options.seed, content), content, options.ticks, schedule(options.ticks, content));
   const guests = guestReport(world, content);
-  process.stdout.write(`${report(world, content, options, guests)}\n`);
+  const money = moneyReport(world);
+  process.stdout.write(`${report(world, content, options, guests, money)}\n`);
   if (guests.stuck > 0 || guests.orphans > 0) {
     throw new Error(
       `Guest invariants broken at tick ${world.tick}: ${guests.stuck} guest(s) stuck in a non-terminal state, ` +
         `${guests.orphans} orphaned reservation(s). Both must be zero (G-004).`,
+    );
+  }
+  if (money.balance !== money.classified) {
+    throw new Error(
+      `Ledger invariant broken at tick ${world.tick}: the balance (${money.balance}p) does not equal the sum of its ` +
+        `per-reason folds (${money.classified}p), so ${money.balance - money.classified}p of it is unexplained — some ` +
+        'transaction carries a reason outside the union (G-005).',
+    );
+  }
+  if (money.settlements !== money.nights) {
+    throw new Error(
+      `Settlement invariant broken at tick ${world.tick}: ${money.settlements} settlement transaction(s) over ` +
+        `${money.nights} simulated night(s). Nightly settlement records exactly one per night (G-005).`,
     );
   }
 }

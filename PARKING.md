@@ -146,9 +146,14 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   the same reasoning that makes `commitEntityDraft` return by reference on an idle tick.
   **Do not simply delete it** — it is what makes a reservation leak loud, and it runs at
   load as well as at commit. -> M1, with the index.
-- **`appendTransaction` copies the whole log on every append.** 3,282 appends over 365
-  days is nothing; ten times the arrival density would not be. Flagged against the file
-  that owns it. -> **G-005**.
+- **`appendTransaction` copies the whole log on every append — MEASURED at G-005,
+  survives M0 and the critic's sweeps, breaks at M4 density.** economy-engineer's
+  benchmark (median of 5): 3,650 appends (365 days) 19ms · 12,000 (1000-day sweep) 299ms
+  · 24,000 (~2x M4 density) 3.1s · 120,000 did not finish in 120s — allocation is ~n²/2
+  elements and GC dominates. Restructuring now would change the hashed shape of
+  `World.ledger` and owe a migration for a problem M0 does not have. **Trigger: any goal
+  that pushes past ~15k appends per run (M4 wages-per-staff-per-night is the likely
+  one).** -> M4, with a real migration when it happens.
 - **Splitting the outcome tally by reason.** `unsatisfied` is "gave up waiting" and
   `evicted` is "the room stopped existing"; when guests can fail for more reasons than
   that, the tally wants to become a table rather than four counters. -> M2, with reviews.
@@ -159,9 +164,28 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   provider, with no decay and no scoring. -> M2.
 - **Reviews.** A guest leaves with a recorded outcome, not an opinion. The outcome is the
   raw material a review is computed from. -> M2.
-- **Moving payment to nightly settlement.** G-004 pays once per satisfied stay through a
-  single `payForStay` seam with one call site, so G-005 replaces the seam rather than
-  editing guest behaviour. -> G-005.
+- **Moving payment to nightly settlement.** DECIDED AT G-005: payment stays at departure.
+  The goal statement names two events on purpose — revenue is guest-driven, upkeep is
+  clock-driven — and per-night charging is proration, which is pricing, which is M4.
+  `runSettlement` is exactly where M4's per-night pricing lands, by deleting the
+  `payForStay` call and adding one fold. -> M4.
+
+## Deferred out of G-005 (2026-08-07)
+
+Raised by `economy-engineer` at PLAN.
+
+- **Bankruptcy / game-over on a negative balance.** The fold is signed, nothing gates on
+  it, and the sim ticks on below zero (pinned by test). Clamping would require the stored
+  balance I4 forbids. -> M4.
+- **Per-room settlement itemisation.** One aggregated upkeep transaction per night at M0;
+  a per-room breakdown is a reporting feature. -> M4.
+- **Migrating legacy free-text reasons into the union.** DECLINED PERMANENTLY unless a
+  goal needs it: rewriting history to satisfy a type invents semantics, needs v3, and
+  breaks the v1 fixture's pinned hash for nothing. The union governs what the sim
+  *writes*; `assertTransaction` at load requires only a non-empty string.
+- **The M4 rounding rule** — round half up, once, at settlement. G-005 needs no rounding
+  at all (integer sums and products only); the rule is stated in `settlement.ts`'s header
+  so M4 inherits a decision rather than an accident. -> M4.
 - **Turn-away at the door.** A guest who finds the hotel full waits in the lobby and
   gives up when its patience runs out; there is no "saw the queue and left" path,
   because that is a demand behaviour. -> M4.

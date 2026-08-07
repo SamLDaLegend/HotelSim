@@ -4,6 +4,7 @@
     "name": "Standard Room",
     "capacity": 2,
     "nightlyRatePence": 8500,
+    "nightlyUpkeepPence": 2500,
     "provides": ["night_rest"]
   }
 ]

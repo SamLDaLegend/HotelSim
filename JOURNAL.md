@@ -249,3 +249,46 @@ parked index targeted M2/M3 when **M1** is the milestone that hands room count t
 player. Threshold and measurements now recorded in `PARKING.md` so M1 meets it as a known
 cost. Deliberately not optimised here — I5 is green and stays green through M0, and
 optimising against a gate that is not failing is speculative work.
+
+---
+
+## 2026-08-07 — G-005 — Append-only ledger and nightly settlement (1/3 rounds)
+
+First goal for economy-engineer / balance-critic, and the first to come back with **no
+findings at any severity**. Money in and money out both run: seed 3, 30 days, revenue
+2,269,500p, upkeep −225,000p, balance 2,044,500p — every number matching its closed form
+to the penny, checked by hand at VERIFY.
+
+The design decisions that held: payment stays at departure (the goal names two events on
+purpose — revenue is guest-driven, upkeep is clock-driven; per-night charging is pricing,
+which is M4, and the `payForStay` seam survives for exactly that replacement). Settlement
+is **a law, not an event** — one transaction per night, unconditionally, so an empty
+hotel books amount 0 and `countSettlementTransactions === dayOf(world)` is exact with no
+exceptions to hide in. `Transaction.reason` became a closed union enforced at the single
+append choke point, but the load path only tightened to "non-empty string": the permanent
+v1 fixture carries free-text reasons, and migrating history to satisfy a type would
+invent semantics and break a pinned hash for nothing. The union governs what the sim
+writes, not what history contains.
+
+The G-004 phase-guard pattern scaled correctly to a second system: `runSettlement` has
+its own `settlementRun` boolean, and the exhaustive search — kept fully exhaustive at
+19,530 sequences, 579ms — still leaves exactly one survivor. The revenue-before-upkeep
+ordering on a shared tick is structural, not documented: `runSettlement` throws unless
+`guestsRun` is true.
+
+The honest headline from the critique: **balance-critic declared its own standing mandate
+vacuous.** Twelve seeds produce byte-identical economies, because the guest loop draws no
+randomness until M4's demand model — so a seed sweep is one anecdote reported twelve
+times, and it said so rather than dressing twelve identical rows up as a distribution.
+What the sweep did establish, once: the RNG stream stays out of the money path, arithmetic
+is exact at 1000-day scale (no division exists in the money path, so there is no drift to
+accumulate), and overflow headroom is ~3.2x10^8 simulated years. It also *tested* the one
+exploit reachable at M0 — demolish rooms before midnight to dodge upkeep — and found it
+unprofitable by 1,774,500p over 100 days, which is the difference between reasoning about
+an exploit and pricing it.
+
+The append-copy cost was measured (19ms at I5 scale, 3.1s at 2x M4 density, wall at 10x)
+and deliberately kept, with the restructure trigger (~15k appends/run) parked to M4 —
+changing the hashed ledger shape now would owe a migration for a problem M0 does not have.
+
+Parked four items. One goal left in M0.

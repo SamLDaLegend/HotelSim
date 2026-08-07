@@ -1,9 +1,10 @@
-// The tick: four named phases, in one documented order.
+// The tick: five named phases, in one documented order.
 //
 //   1. applyCommands    external intent enters the world, at exactly one point
 //   2. runGuests        the guest loop runs against the staged world (G-004)
-//   3. commitEntities   entity membership changes exactly once, at a boundary
-//   4. advanceTime      the tick counter and the RNG stream advance
+//   3. runSettlement    the night's books close, once per night (G-005)
+//   4. commitEntities   entity membership changes exactly once, at a boundary
+//   5. advanceTime      the tick counter and the RNG stream advance
 //
 // THE ORDER IS WRITTEN DOWN ONCE. `TICK_PHASES` is the order, and `stepTick` composes
 // the tick by iterating it — the documented order and the executed order are the same
@@ -22,7 +23,16 @@
 //   its occupant is concerned. Systems have always belonged in this slot; G-004 is the
 //   first one to fill it.
 //
-//   Entities commit THIRD so no observer ever sees a half-applied entity set. Nothing
+//   Settlement runs THIRD, after guests and against the same draft: THE NIGHT'S BOOKS
+//   CLOSE AFTER THE DAY'S BUSINESS. This is not arbitrary and it is observable — a
+//   stay completing on a settlement tick books its revenue BEFORE that night's upkeep,
+//   and the ledger order is pinned by a test. It is enforced structurally too: the
+//   phase's precondition requires `guestsRun`, so a table that settles before guests
+//   throws rather than quietly closing books a guest was about to write in. M4's
+//   per-night room pricing lands inside this phase and inherits the same position:
+//   charges for a night are computed after everyone who acted that night has acted.
+//
+//   Entities commit FOURTH so no observer ever sees a half-applied entity set. Nothing
 //   can depend on how far through a command batch a spawn happened.
 //
 //   Time advances LAST so that during phases 1 to 3 `world.tick` is the tick being
@@ -35,8 +45,8 @@
 // which is exactly when a silent reorder would start costing real money.
 //
 // World-driven systems belong BETWEEN commands and the entity commit, sharing the same
-// draft. `runGuests` is the first, and further systems (settlement at G-005) go beside
-// it rather than inside it.
+// draft. `runGuests` was the first; `runSettlement` (G-005) is the second, and further
+// systems go beside them rather than inside them.
 //
 // Injected content (G-002) rides in `TickState` alongside `committed`: tick-local,
 // never hashed, never saved. It is NOT a parameter of a phase — the phase signature
@@ -69,6 +79,7 @@ import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from '.
 import type { EntityDraft } from './entities.js';
 import { assertGuestOutcomes, assertGuestStoreInvariants, stepGuests } from './guests.js';
 import { nextUint32 } from './rng.js';
+import { isSettlementTick, settleNight } from './settlement.js';
 import { assertContentMatches } from './world.js';
 import type { World } from './world.js';
 
@@ -82,6 +93,7 @@ import type { World } from './world.js';
 export const TICK_PHASES = Object.freeze([
   'applyCommands',
   'runGuests',
+  'runSettlement',
   'commitEntities',
   'advanceTime',
 ] as const);
@@ -142,10 +154,21 @@ export type TickState = {
    *
    * ONE BOOLEAN PER SYSTEM PHASE, never a list of phases that ran. A list would be the
    * tick order written down a second time, in a second place, which is the exact thing
-   * ADR-0005 exists to prevent. G-005 puts nightly settlement in this same slot and
-   * should add its own flag beside this one.
+   * ADR-0005 exists to prevent. `settlementRun` below is the second such flag, added
+   * by G-005 exactly as this comment asked.
    */
   readonly guestsRun: boolean;
+  /**
+   * Whether settlement has already run this tick (G-005).
+   *
+   * The same contract `guestsRun` has, for the same reason: the settlement phase acts
+   * on at most one tick in 1,440, so a table that dropped it would run flawlessly for
+   * a simulated day at a time, and on the missing night the only witness would be a
+   * transaction that never appeared — a check that inspects nothing (ADR-0007). The
+   * flag is set by the phase itself on EVERY tick, quiet or not, so `stepTick` notices
+   * the drop on the very next tick. Tick-local, never hashed, never saved.
+   */
+  readonly settlementRun: boolean;
   readonly committed: boolean;
 };
 
@@ -167,6 +190,7 @@ export function beginTick(world: World, content: BoundContent, commands: readonl
     entities: null,
     arrivingGuests: 0,
     guestsRun: false,
+    settlementRun: false,
     committed: false,
   };
 }
@@ -216,7 +240,7 @@ function applyCommand(entities: EntityDraft, command: Command, content: BoundCon
 }
 
 /**
- * Phase 1 of 3. The one point at which external intent enters the world.
+ * Phase 1 of 5. The one point at which external intent enters the world.
  *
  * Precondition: no draft is open and nothing has been committed this tick.
  */
@@ -239,7 +263,7 @@ export function applyCommands(state: TickState): TickState {
 }
 
 /**
- * Phase 2 of 4. The guest loop: arrivals, reservations, patience, satisfaction and
+ * Phase 2 of 5. The guest loop: arrivals, reservations, patience, satisfaction and
  * payment (G-004).
  *
  * All of the behaviour is in `guests.ts`; this is the plumbing that turns a `TickState`
@@ -291,7 +315,62 @@ export function runGuests(state: TickState): TickState {
 }
 
 /**
- * Phase 3 of 4. Entity membership changes exactly once per tick, here.
+ * Phase 3 of 5. Nightly settlement: the night's books close, once per night (G-005).
+ *
+ * All of the behaviour is in `settlement.ts`; this is the plumbing that turns a
+ * `TickState` into that module's input and back — the same split, for the same
+ * dependency reason, as `runGuests` over `stepGuests`.
+ *
+ * It runs AFTER the guest loop, and that order is load-bearing: the night's books
+ * close after the day's business, so a stay completing on a settlement tick books its
+ * revenue before that night's upkeep. The `guestsRun` precondition makes the order
+ * structural rather than documented — a table that settles first throws on its first
+ * tick. It touches neither `tick` nor `rng`; settlement draws no randomness, so
+ * `advanceTime` remains the only phase that moves the stream.
+ *
+ * Precondition: a draft is open, nothing has been committed, the guest loop has run,
+ * and settlement has not already run this tick.
+ */
+export function runSettlement(state: TickState): TickState {
+  if (state.entities === null) {
+    throw new Error('runSettlement: no entity draft is open; applyCommands must run before it in the tick');
+  }
+  if (state.committed) {
+    throw new Error('runSettlement: entities were already committed this tick; settlement acts before the boundary');
+  }
+  if (!state.guestsRun) {
+    throw new Error(
+      'runSettlement: the guest loop has not run this tick; the books close after the day\'s business, so runGuests must run before it',
+    );
+  }
+  if (state.settlementRun) {
+    throw new Error('runSettlement: settlement has already run this tick; the night must not be charged twice');
+  }
+  const ledger = settleNight({
+    tick: state.world.tick,
+    ledger: state.world.ledger,
+    entities: state.entities,
+    content: state.content,
+  });
+  // Local postcondition, cheap on every tick: a settlement tick appended exactly one
+  // transaction, any other tick appended nothing. `countSettlementTransactions` over
+  // the whole log is the per-RUN law and lives with the host; this is the per-TICK
+  // half, and it cannot pass while inspecting nothing because one branch or the other
+  // applies to every tick there is.
+  const appended = ledger.length - state.world.ledger.length;
+  if (appended !== (isSettlementTick(state.world.tick) ? 1 : 0)) {
+    throw new Error(
+      `runSettlement: tick ${state.world.tick} appended ${appended} settlement transaction(s); a settlement tick appends exactly one and any other tick none`,
+    );
+  }
+  // An untouched night returns its input by reference, so a quiet tick allocates no
+  // world either — the same idle-tick guarantee runGuests keeps.
+  const world = ledger === state.world.ledger ? state.world : { ...state.world, ledger };
+  return { ...state, world, settlementRun: true };
+}
+
+/**
+ * Phase 4 of 5. Entity membership changes exactly once per tick, here.
  *
  * Precondition: a draft is open, so `applyCommands` has already run.
  */
@@ -306,7 +385,7 @@ export function commitEntities(state: TickState): TickState {
 }
 
 /**
- * Phase 4 of 4. The tick counter advances by one and the RNG stream advances by
+ * Phase 5 of 5. The tick counter advances by one and the RNG stream advances by
  * exactly one draw, unconditionally — so the stream position stays a pure function of
  * the tick count, and the state hash stays sensitive to the seed.
  *
@@ -334,6 +413,7 @@ export function advanceTime(state: TickState): TickState {
 const TICK_PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
   runGuests,
+  runSettlement,
   commitEntities,
   advanceTime,
 };
@@ -364,6 +444,13 @@ export function stepTick(world: World, content: BoundContent, commands: readonly
   // phase itself, so it cannot be satisfied by anything except the phase running.
   if (!state.guestsRun) {
     throw new Error('stepTick: the guest loop did not run this tick; the phase table is missing runGuests');
+  }
+  // And settlement ran, exactly once — the same reasoning, sharpened by cadence:
+  // settlement ACTS on one tick in 1,440, so without this flag a dropped phase would
+  // be invisible until midnight and silent even then, the missing transaction being
+  // precisely the kind of witness that inspects nothing (ADR-0007).
+  if (!state.settlementRun) {
+    throw new Error('stepTick: settlement did not run this tick; the phase table is missing runSettlement');
   }
   // Every guest who walked in was dealt with. Now a postcondition of the line above
   // rather than the guarantee itself: `runGuests` always consumes the doorway, so this

@@ -257,8 +257,19 @@ function assertTransaction(value: unknown, index: number): asserts value is Tran
       throw new Error(`Save is corrupt: ledger[${index}].${key} is not a number`);
     }
   }
-  if (typeof value['reason'] !== 'string') {
-    throw new Error(`Save is corrupt: ledger[${index}].reason is not a string`);
+  // Integer, not merely number (G-005). A float amount loaded from a hand-edited save
+  // would flow straight into `balanceOf` and accumulate — the exact platform-dependent
+  // drift ADR-0002 forbids, arriving through the one door `appendTransaction` does not
+  // guard.
+  if (!Number.isInteger(value['amount'])) {
+    throw new Error(`Save is corrupt: ledger[${index}].amount is not an integer (money is integer pence, ADR-0002)`);
+  }
+  // NON-EMPTY, not a member of `TransactionReason` (G-005). The union governs what the
+  // sim WRITES; the permanent v1 fixture carries free-text reasons from before it
+  // existed, and those bytes are immutable (ADR-0006). What no transaction may ever be
+  // is unexplained.
+  if (typeof value['reason'] !== 'string' || value['reason'].length === 0) {
+    throw new Error(`Save is corrupt: ledger[${index}].reason is not a non-empty string`);
   }
 }
 

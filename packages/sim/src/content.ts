@@ -51,6 +51,18 @@ export type RoomTypeData = {
    * `bindContent` erases anyway by deleting the key.
    */
   readonly provides?: readonly ContentId[] | undefined;
+  /**
+   * What one night of keeping this room costs, in integer pence (G-005). Charged per
+   * LIVE ROOM per night by nightly settlement; the rate lives here and never in code
+   * (I3, ADR-0002).
+   *
+   * OPTIONAL, and absence is not emptiness — the `provides` contract exactly. Content
+   * written before upkeep existed omits the key, fingerprints as it always did, and
+   * charges nothing; that is what keeps the permanent v1 save fixture a world that
+   * still ticks (ADR-0006). `0` is a different statement: this room is deliberately
+   * free to keep.
+   */
+  readonly nightlyUpkeepPence?: number | undefined;
 };
 
 /**
@@ -178,11 +190,26 @@ function normaliseTable<T extends { readonly id: ContentId }>(
  * point, an absent key and a key holding `undefined` are different documents.
  */
 function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
-  if (roomType.provides === undefined) {
-    const { provides: _absent, ...rest } = roomType;
-    return { ...rest };
+  // Money is validated at the boundary, like everything else about content: a float
+  // or negative upkeep from a raw host (one that did not come through the zod schema)
+  // dies here, at bind time, rather than at tick 1,439 inside `appendTransaction`
+  // (ADR-0002). Validated BEFORE the absent-key branch below so a room with no other
+  // G-005 field still cannot smuggle one in.
+  const upkeep = roomType.nightlyUpkeepPence;
+  if (upkeep !== undefined && (!Number.isInteger(upkeep) || upkeep < 0)) {
+    throw new Error(
+      `bindContent: room type "${roomType.id}" has a non-integer or negative nightlyUpkeepPence (${String(upkeep)}); money is integer pence (ADR-0002)`,
+    );
   }
-  const provides = [...roomType.provides];
+  // Both optional keys are STRIPPED when they hold undefined, not carried: an absent
+  // key and a key holding `undefined` are different documents to the fingerprint, and
+  // only the absent form is the "predates this field" statement (see the field docs).
+  const { provides: rawProvides, nightlyUpkeepPence: _rawUpkeep, ...rest } = roomType;
+  const base: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
+  if (rawProvides === undefined) {
+    return base;
+  }
+  const provides = [...rawProvides];
   for (const needId of provides) {
     if (typeof needId !== 'string' || needId.length === 0) {
       throw new Error(`bindContent: room type "${roomType.id}" provides an empty need id`);
@@ -194,7 +221,7 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
       throw new Error(`bindContent: room type "${roomType.id}" lists need "${String(provides[i])}" twice`);
     }
   }
-  return { ...roomType, provides: Object.freeze(provides) };
+  return { ...base, provides: Object.freeze(provides) };
 }
 
 /**

@@ -109,6 +109,21 @@ describe('parseContent — field rejection', () => {
     expect(() => parseOne({ capacity: 1.5 })).toThrow(/capacity/);
   });
 
+  it('accepts nightly upkeep as optional integer pence, and its absence (G-005)', () => {
+    // Absence is not emptiness: content that predates upkeep omits the key and
+    // fingerprints in the sim exactly as it did, which is what keeps old saves
+    // tickable. `0` is the different statement "deliberately free to keep".
+    expect(() => parseOne({ nightlyUpkeepPence: 2_500 })).not.toThrow();
+    expect(() => parseOne({ nightlyUpkeepPence: 0 })).not.toThrow();
+    expect(() => parseOne({})).not.toThrow();
+  });
+
+  it('rejects a float, negative or non-numeric upkeep (ADR-0002)', () => {
+    expect(() => parseOne({ nightlyUpkeepPence: 25.5 })).toThrow(/nightlyUpkeepPence/);
+    expect(() => parseOne({ nightlyUpkeepPence: -1 })).toThrow(/nightlyUpkeepPence/);
+    expect(() => parseOne({ nightlyUpkeepPence: '2500' })).toThrow(/nightlyUpkeepPence/);
+  });
+
   it('rejects a missing or empty name', () => {
     expect(() => parseContent([{ id: 'standard_room', capacity: 2, nightlyRatePence: 8_500 }])).toThrow(/name/);
     expect(() => parseOne({ name: '' })).toThrow(/name/);

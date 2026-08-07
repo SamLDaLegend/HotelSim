@@ -157,7 +157,7 @@ Critique rounds used: 1/3
   out-of-order steps and mid-chain throws, so the migration inherits a tested mechanism.
 
 ## G-005 — Append-only ledger and nightly settlement
-Status: pending
+Status: done
 Milestone: M0
 Owner pair: economy-engineer / balance-critic
 Statement: Room revenue is recorded when a guest pays, upkeep is charged at nightly
@@ -170,7 +170,23 @@ Exit criteria:
   - all §2 invariant gates green (pnpm verify)
 Out of scope: pricing controls, demand curves, reputation, wages, decay (M4)
   (-> PARKING.md)
-Critique rounds used: 0/3
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  ledger 13 and settlement 18 tests green · sim:run --days 30 --seed 3 exits 0 with
+  revenue 2269500p, upkeep -225000p, balance 2044500p, settlements 30 — all checked by
+  hand against the closed form (267x8500, 30x3x2500, 297 = 267+30) · all six gates
+  green, I2 hash be508c487d49fd6c · the appendTransaction choke point rejects an unknown
+  reason, legacy free text, a float amount and negative zero, and accepts a valid
+  transaction · balance-critic returned NO FINDINGS at any severity and re-ran the
+  exhaustive phase search independently (19,530 sequences, one survivor).
+
+  Balance-critic's standing-mandate report: 12 seeds x 1000 days produce byte-identical
+  economies (balance 68,974,500p exact to the closed form at every sampled day), which
+  is correct — the guest loop draws no randomness until M4 demand — and means the
+  distribution mandate is VACUOUS until then. Recorded honestly rather than dressed up.
+  Overflow headroom ~3.2x10^8 simulated years. The one testable exploit
+  (demolish-before-midnight upkeep dodge) is unprofitable: -1,774,500p net over 100 days.
 
 ## G-006 — Day cycle and headless reporting
 Status: pending

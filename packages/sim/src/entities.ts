@@ -205,6 +205,29 @@ export function draftFindEntity(
   return undefined;
 }
 
+/**
+ * Visit every live entity in the draft, in canonical ascending-id order.
+ *
+ * The iteration is `draftFindEntity`'s, exactly — `base.list` then `added`, skipping
+ * `removed` — so "the draft's canonical order" remains one order defined in one
+ * pattern, and a fold over the draft sees precisely the entities a search over it
+ * would. Exists so a system that AGGREGATES over entities — settlement summing
+ * nightly upkeep (G-005) — visits the draft without reaching into `base`, `added`
+ * and `removed` itself, for the same reason `draftFindEntity` exists for systems
+ * that CHOOSE one.
+ *
+ * Read-only by shape: the visitor receives entities, never the draft's internals,
+ * and this function mutates nothing. Allocates nothing — it is a scan, not a copy.
+ */
+export function draftForEach(draft: EntityDraft, visit: (entity: Entity) => void): void {
+  for (const entity of draft.base.list) {
+    if (!draft.removed.has(entity.id)) visit(entity);
+  }
+  for (const entity of draft.added) {
+    if (!draft.removed.has(entity.id)) visit(entity);
+  }
+}
+
 /** Lookup against the draft: staged spawns are visible, staged despawns are not. */
 export function draftGet(draft: EntityDraft, id: EntityId): Entity | undefined {
   if (draft.removed.has(id)) return undefined;

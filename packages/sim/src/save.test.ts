@@ -63,7 +63,7 @@ function livedInWorld(): World {
     { tick: 3_000, command: despawn(4) },
   ];
   const world = run(createWorld(4242, content), content, 5_000, schedule);
-  return { ...world, ledger: appendTransaction(world.ledger, { tick: 10, amount: -2_500, reason: 'test' }) };
+  return { ...world, ledger: appendTransaction(world.ledger, { tick: 10, amount: -2_500, reason: 'upkeep' }) };
 }
 
 /** Take a save blob apart so a test can corrupt one field of it. */

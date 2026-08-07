@@ -17,7 +17,7 @@ import type { Command, ScheduledCommand } from './commands.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { entitiesInOrder, NO_ENTITY } from './entities.js';
-import { balanceOf } from './ledger.js';
+import { balanceOf, sumByReason } from './ledger.js';
 import {
   assertGuestOutcomes,
   countOrphanedReservations,
@@ -34,6 +34,7 @@ import {
   commitEntities,
   run,
   runGuests,
+  runSettlement,
   stepTick,
 } from './tick.js';
 import type { TickPhase, TickPhaseFn } from './tick.js';
@@ -359,6 +360,7 @@ describe('the phase table', () => {
   const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
     applyCommands,
     runGuests,
+    runSettlement,
     commitEntities,
     advanceTime,
   };
@@ -451,8 +453,14 @@ describe('the exit criteria, over 30 simulated days', () => {
   });
 
   it('takes money for every satisfied stay and for no other', () => {
+    // Since G-005 the ledger also carries one settlement transaction per night —
+    // 0-amount here, because this content does not price upkeep — so "for no other"
+    // is now said by reason rather than by length: every penny of revenue is a
+    // satisfied stay, and the whole balance is revenue.
     const world = thirtyDays();
-    expect(world.ledger).toHaveLength(world.guestOutcomes.satisfied);
+    const revenue = world.ledger.filter((transaction) => transaction.reason === 'roomRevenue');
+    expect(revenue).toHaveLength(world.guestOutcomes.satisfied);
+    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(world.guestOutcomes.satisfied * RATE);
     expect(balanceOf(world.ledger)).toBe(world.guestOutcomes.satisfied * RATE);
   });
 });

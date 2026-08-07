@@ -14,6 +14,7 @@ import {
   commitEntities,
   run,
   runGuests,
+  runSettlement,
   stepTick,
   TICK_PHASES,
 } from './tick.js';
@@ -50,6 +51,7 @@ const at = (tick: number, command: Command): ScheduledCommand => ({ tick, comman
 const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
   runGuests,
+  runSettlement,
   commitEntities,
   advanceTime,
 };
@@ -72,7 +74,7 @@ function permutations<T>(items: readonly T[]): T[][] {
 
 describe('tick phases', () => {
   it('documents its order as a value, with no duplicates', () => {
-    expect([...TICK_PHASES]).toEqual(['applyCommands', 'runGuests', 'commitEntities', 'advanceTime']);
+    expect([...TICK_PHASES]).toEqual(['applyCommands', 'runGuests', 'runSettlement', 'commitEntities', 'advanceTime']);
     expect(new Set(TICK_PHASES).size).toBe(TICK_PHASES.length);
   });
 
@@ -113,8 +115,9 @@ describe('tick phases', () => {
     // phase yet. Each phase now states its precondition, so a wrong order throws.
     const world = createWorld(4, content);
     const orders = permutations([...TICK_PHASES]);
-    // 4! — the guest phase enlarged the search rather than being exempted from it.
-    expect(orders).toHaveLength(24);
+    // 5! — the settlement phase enlarged the search rather than being exempted from
+    // it, exactly as the guest phase did at G-004.
+    expect(orders).toHaveLength(120);
 
     const survived: string[] = [];
     for (const order of orders) {
@@ -133,7 +136,7 @@ describe('tick phases', () => {
     const world = createWorld(4, content);
     expect(() => runPhases(world, ['applyCommands', 'applyCommands'])).toThrow(/already open/);
     expect(() =>
-      runPhases(world, ['applyCommands', 'runGuests', 'commitEntities', 'commitEntities']),
+      runPhases(world, ['applyCommands', 'runGuests', 'runSettlement', 'commitEntities', 'commitEntities']),
     ).toThrow(/no entity draft/);
     // `runGuests` is the phase whose repeat NOTHING used to catch. `commitEntities`
     // cannot run twice because closing the draft removes its own precondition, and
@@ -141,23 +144,32 @@ describe('tick phases', () => {
     // such self-limit, so a table listing it twice drained patience and rest twice and
     // could hand one guest two rooms in a tick. It now carries its own flag.
     expect(() =>
-      runPhases(world, ['applyCommands', 'runGuests', 'runGuests', 'commitEntities', 'advanceTime']),
+      runPhases(world, ['applyCommands', 'runGuests', 'runGuests', 'runSettlement', 'commitEntities', 'advanceTime']),
     ).toThrow(/already run this tick/);
+    // `runSettlement` inherits the same flag pattern (G-005): repeated, it would
+    // charge the night twice — once a day, silently, which no aggregate could see.
+    expect(() =>
+      runPhases(world, ['applyCommands', 'runGuests', 'runSettlement', 'runSettlement', 'commitEntities', 'advanceTime']),
+    ).toThrow(/charged twice/);
   });
 
   it('admits exactly ONE phase sequence, across every ordering, omission and repeat', () => {
-    // The G-001 property, restated for a four-phase tick and hardened. The permutation
+    // The G-001 property, restated for a five-phase tick and hardened. The permutation
     // test above only ranges over orderings of DISTINCT phases; this searches every
-    // sequence of length 0..5 drawn from the four names WITH repetition — the empty one
-    // plus 4 + 16 + 64 + 256 + 1024 — and demands that exactly one survives with a
-    // whole tick to show for it.
+    // sequence of length 0..6 drawn from the five names WITH repetition — the empty one
+    // plus 5 + 25 + 125 + 625 + 3,125 + 15,625 — and demands that exactly one survives
+    // with a whole tick to show for it. Full, not capped: measured at 19,531 sequences
+    // x 2 passes it runs well inside the budget the orchestrator set for keeping it
+    // exhaustive, and a capped search that looks exhaustive is an ADR-0007 shape.
     //
     // It caught a real regression. Before `guestsRun` existed, three sequences survived
     // and two of them produced a different world: the canonical one, the one with
     // `runGuests` DROPPED (invisible on any tick with no arrival), and the one with
     // `runGuests` DUPLICATED (invisible always). Neither the permutation search nor the
     // repeat test above could see either, because both test the phases that already had
-    // guards rather than the one that did not.
+    // guards rather than the one that did not. `settlementRun` (G-005) is in the
+    // survivor predicate for exactly that reason: without it, a sequence with
+    // `runSettlement` dropped would survive this search on every tick but midnight.
     const world = createWorld(4, content);
     const sequences: TickPhase[][] = [[]];
     for (let length = 1; length <= TICK_PHASES.length + 1; length += 1) {
@@ -166,7 +178,7 @@ describe('tick phases', () => {
         for (const phase of TICK_PHASES) sequences.push([...sequence, phase]);
       }
     }
-    expect(sequences).toHaveLength(1_365);
+    expect(sequences).toHaveLength(19_531);
 
     const search = (commands: readonly Command[]): string[] => {
       const survivors: string[] = [];
@@ -182,6 +194,7 @@ describe('tick phases', () => {
           state.entities === null &&
           state.committed &&
           state.guestsRun &&
+          state.settlementRun &&
           state.arrivingGuests === 0 &&
           state.world.tick === world.tick + 1;
         if (whole) survivors.push(sequence.join('>'));
@@ -207,6 +220,10 @@ describe('tick phases', () => {
     expect(() =>
       runPhases(world, ['applyCommands', 'commitEntities', 'runGuests']),
     ).toThrow(/no entity draft is open/);
+    expect(() => runPhases(world, ['runSettlement'])).toThrow(/applyCommands must run before it/);
+    expect(() =>
+      runPhases(world, ['applyCommands', 'runSettlement']),
+    ).toThrow(/runGuests must run before it/);
   });
 
   it('applyCommands touches neither the tick counter nor the RNG', () => {

@@ -40,13 +40,14 @@ export const penceSchema = z.int();
  * silently ignored becomes "the balance is slightly wrong" three goals later, with
  * nothing pointing at the content file that caused it.
  *
- * Five fields, each of which M0 needs (HOTELSIM.md §8 — "one room type, one guest, one
+ * Six fields, each of which M0 needs (HOTELSIM.md §8 — "one room type, one guest, one
  * need, one day cycle, money in and money out"):
- *   id                identity, and the value the sim receives as an entity kind
- *   name              the human handle; display is the render layer's job at M5
- *   capacity          the PARTY a room holds — see below  -> G-004
- *   nightlyRatePence  room revenue                        -> G-005
- *   provides          which needs a stay here satisfies   -> G-004
+ *   id                 identity, and the value the sim receives as an entity kind
+ *   name               the human handle; display is the render layer's job at M5
+ *   capacity           the PARTY a room holds — see below   -> G-004
+ *   nightlyRatePence   room revenue, money in               -> G-005
+ *   nightlyUpkeepPence upkeep, money out — see below        -> G-005
+ *   provides           which needs a stay here satisfies    -> G-004
  *
  * `capacity` is the size of the party a room holds, NOT a count of unrelated bookings.
  * A party is one guest at M0. Two strangers sharing a room is not what this number
@@ -58,6 +59,13 @@ export const penceSchema = z.int();
  * fingerprint). A room that genuinely satisfies nothing — a broom cupboard at M1 — says
  * so with `[]`.
  *
+ * `nightlyUpkeepPence` (G-005) is what one night of keeping this room costs, charged
+ * per live room at nightly settlement. OPTIONAL under the same contract as `provides`:
+ * content that predates upkeep omits the key, fingerprints as it always did, and
+ * charges nothing — which is what keeps the permanent v1 save fixture tickable
+ * (ADR-0006). `0` is the different statement "deliberately free to keep". A designer
+ * balancing the economy edits this number and `nightlyRatePence`, never code (I3).
+ *
  * Construction cost is M1 and is deliberately absent.
  */
 export const roomTypeSchema = z.strictObject({
@@ -65,6 +73,7 @@ export const roomTypeSchema = z.strictObject({
   name: z.string().min(1),
   capacity: z.int().min(1),
   nightlyRatePence: penceSchema.min(0),
+  nightlyUpkeepPence: penceSchema.min(0).optional(),
   provides: z.array(contentIdSchema).optional(),
 });
 

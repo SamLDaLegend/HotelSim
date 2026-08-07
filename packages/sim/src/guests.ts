@@ -394,7 +394,7 @@ function payForStay(
   return appendTransaction(ledger, {
     tick,
     amount: roomType.nightlyRatePence,
-    reason: 'room revenue',
+    reason: 'roomRevenue',
   });
 }
 

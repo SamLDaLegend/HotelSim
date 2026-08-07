@@ -22,6 +22,7 @@ export {
   createEntityStore,
   draftDespawn,
   draftFindEntity,
+  draftForEach,
   draftGet,
   draftSpawn,
   entitiesInOrder,
@@ -48,8 +49,21 @@ export {
 } from './guests.js';
 export type { JsonValue } from './hash.js';
 export { canonicalise, hashJson } from './hash.js';
-export type { Transaction } from './ledger.js';
-export { appendTransaction, balanceOf } from './ledger.js';
+export type { Transaction, TransactionReason } from './ledger.js';
+export {
+  appendTransaction,
+  balanceOf,
+  isTransactionReason,
+  sumByReason,
+  TRANSACTION_REASONS,
+} from './ledger.js';
+export type { SettlementInput } from './settlement.js';
+export {
+  countSettlementTransactions,
+  isSettlementTick,
+  nightlyUpkeepOf,
+  settleNight,
+} from './settlement.js';
 export type { RngState } from './rng.js';
 export { createRng, nextIntBelow, nextUint32 } from './rng.js';
 export type { Migration, SaveBlob, SaveSchema } from './save.js';
@@ -72,6 +86,7 @@ export {
   commitEntities,
   run,
   runGuests,
+  runSettlement,
   stepTick,
   TICK_PHASES,
 } from './tick.js';
