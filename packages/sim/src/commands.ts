@@ -16,7 +16,21 @@ export type Command =
   /** Creates one entity. The id is allocated by the store, not chosen by the caller. */
   | { readonly kind: 'spawnEntity'; readonly entityKind: ContentId }
   /** Removes one entity. Unknown or already-removed ids are a deterministic no-op. */
-  | { readonly kind: 'despawnEntity'; readonly id: EntityId };
+  | { readonly kind: 'despawnEntity'; readonly id: EntityId }
+  /**
+   * One guest walks in (G-004).
+   *
+   * NO PAYLOAD. A guest has no archetype (M6) and no party size at M0, so there is
+   * nothing for a caller to choose: every arrival is the same event. The need it forms
+   * and the patience it has come from content, and the id it gets is allocated by the
+   * guest store, not by the caller — the same division `spawnEntity` uses.
+   *
+   * Arrival is a COMMAND rather than something the simulation decides, because how
+   * often guests turn up is demand, and demand is M4. Keeping it out here means the
+   * command log fully describes who arrived and when (I2), and a test can put a guest
+   * in the lobby on an exact tick without a demand model to argue with.
+   */
+  | { readonly kind: 'guestArrives' };
 
 export type ScheduledCommand = {
   /** Tick at which this command is applied. */

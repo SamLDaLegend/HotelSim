@@ -13,7 +13,13 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ContentError } from '@hotelsim/content';
 import { bindContent, createWorld, entitiesInOrder, findRoomType, hashState, run, stepTick } from '@hotelsim/sim';
-import { loadContent, loadContentFrom, ROOM_TYPES_PATH } from './content-loader.js';
+import {
+  loadContent,
+  loadContentFrom,
+  loadNeedTypesFrom,
+  NEED_TYPES_PATH,
+  ROOM_TYPES_PATH,
+} from './content-loader.js';
 
 const scratch = mkdtempSync(join(tmpdir(), 'hotelsim-content-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -55,6 +61,34 @@ describe('the shipped content file', () => {
     const id = content.content.roomTypes[0]!.id;
     expect(findRoomType(content, id)?.nightlyRatePence).toBe(content.content.roomTypes[0]!.nightlyRatePence);
     expect(content.fingerprint).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it('defines exactly one need, with a snake_case id and whole-tick durations (G-004)', () => {
+    const needTypes = loadNeedTypesFrom(NEED_TYPES_PATH);
+    expect(needTypes).toHaveLength(1);
+    const need = needTypes[0]!;
+    expect(need.id).toMatch(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/);
+    expect(Number.isInteger(need.satisfyTicks)).toBe(true);
+    expect(Number.isInteger(need.patienceTicks)).toBe(true);
+  });
+
+  it('ships a room type that actually provides the need it ships', () => {
+    // The shipped content, checked against the shipped content. A need nothing provides
+    // is guaranteed unhappiness (§6.1), and `bindContent` would refuse it — but a gate
+    // that only fires on someone else's mistake is not evidence about ours.
+    const content = loadContent();
+    const needs = content.content.needTypes ?? [];
+    expect(needs.length).toBeGreaterThan(0);
+    for (const need of needs) {
+      const providers = content.content.roomTypes.filter((room) => (room.provides ?? []).includes(need.id));
+      expect(providers.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('refuses to bind a room type that provides a need the content does not define', () => {
+    // The cross-reference `check:content` cannot see: it reads `id` fields, and this is
+    // a reference between two of them, in two different files.
+    expect(() => bindContent(loadContentFrom(ROOM_TYPES_PATH))).toThrow(/which this content does not define/);
   });
 });
 
@@ -129,7 +163,10 @@ describe('injection into a real simulation', () => {
     // and a world created under the old file refuses to continue under the new one.
     const shipped = loadContentFrom(ROOM_TYPES_PATH);
     const dearer = shipped.roomTypes.map((entry) => ({ ...entry, nightlyRatePence: entry.nightlyRatePence + 1 }));
-    const edited = bindContent(loadContentFrom(fileWith('dearer.json', JSON.stringify(dearer))));
+    const edited = bindContent({
+      ...loadContentFrom(fileWith('dearer.json', JSON.stringify(dearer))),
+      needTypes: loadNeedTypesFrom(NEED_TYPES_PATH),
+    });
     const original = loadContent();
 
     expect(edited.fingerprint).not.toBe(original.fingerprint);

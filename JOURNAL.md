@@ -196,3 +196,56 @@ demonstrated, not assumed.
 
 Parked five items. I5's drift turned out to be machine noise — 0.299 µs/tick against
 0.305 at G-002, measured under control rather than read off the bench.
+
+---
+
+## 2026-08-07 — G-004 — One guest, one need (1/3 rounds)
+
+First goal for the `ai-engineer` / `ai-critic` pair, and the first where the guest loop
+actually runs: 30 days, seed 7, 360 arrivals, 267 satisfied, 89 turned away, 0 stuck,
+0 orphaned reservations, balance exactly 267 x 8500p.
+
+Two design choices carried the goal, both the builder's. **A guest is not an `Entity`** —
+reasoned from `Entity.kind` being a validated content id, to the only content that could
+name a guest being an archetype, to archetypes being M6. So guests got their own store
+and the question dissolved: a guest is distinguished by nothing but its id and its stay.
+And **the reservation is a field of the guest and nothing else**, which closes §6.1's
+leak class *by construction* — a despawned guest cannot hold anything because it does not
+exist. The critic tried to break it (despawn mid-stay, spawn-and-despawn in one tick,
+save/load with three guests in mixed states) and could not. Its verdict on thrashing was
+"unexpressible, not merely unlikely", which is the stronger property.
+
+The smallest decision mattered most: making the new content fields **optional so that
+absent is not the same as empty**. That kept `SAVE_V1_CONTENT` fingerprinting to its
+original value, which kept the v1 fixture a world that still *ticks* rather than a husk
+that only exercises the reader.
+
+**ADR-0006 fired for real and worked.** The permanent fixture rejected the new world,
+forcing a genuine `1 -> 2` migration; the fixture has a zero-line diff and the migration
+is what carries it. The migration's defaults were argued rather than chosen: a v1 world
+is not a world whose guests were omitted, it is a world in which no guest ever existed,
+so the migration asserts nothing about them. G-003's `WORLD_KEYS` mapped type also paid
+for itself — `save.test.ts` was not edited and gained four tests on its own.
+
+The critic's MAJOR: the phase-guard property from G-001 had **regressed**. Adding
+`runGuests` took the survivor set from one sequence to three — the guest loop could be
+dropped on any quiet tick, or run twice, undetected. Worse, the code comment cited the
+arrival check as "the only thing that notices", and on a no-arrival tick that check
+inspects nothing. ADR-0007 in the wild, named in the code as the source of the guarantee.
+Fixed with a tick-local `guestsRun` flag, and the critic's distinction is the part worth
+keeping: **one boolean per system phase, never a `ranPhases` list**, because a list
+reintroduces the order written down twice, which is the exact thing ADR-0005 prevents.
+G-005 puts settlement in this same slot and now inherits the pattern instead of the gap.
+
+Two lessons about measurement. The builder reported I5 at 16%; the critic measured 10.5%
+and I measured 11.4% — the first figure was noise, and the builder said so plainly when
+told. And my own first survivor search reported two survivors and a regression; my
+predicate had omitted the new flag. **The probe was wrong, not the code.** Worth
+remembering that a verification tool needs verifying too, especially one written to check
+somebody else's work.
+
+The second MAJOR was mine, not the builder's: I5 breaks between 50 and 75 rooms, and the
+parked index targeted M2/M3 when **M1** is the milestone that hands room count to the
+player. Threshold and measurements now recorded in `PARKING.md` so M1 meets it as a known
+cost. Deliberately not optimised here — I5 is green and stays green through M0, and
+optimising against a gate that is not failing is speculative work.

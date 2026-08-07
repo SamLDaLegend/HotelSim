@@ -10,17 +10,27 @@
 // next caller to trip over — there is no registry to half-populate.
 
 import { z } from 'zod';
-import { roomTypesSchema } from './schema.js';
-import type { RoomType } from './schema.js';
+import { needTypesSchema, roomTypesSchema } from './schema.js';
+import type { NeedType, RoomType } from './schema.js';
 
 /**
  * Every content table, validated.
  *
- * One table today. When items, staff roles and guest archetypes arrive (M6) they are
- * fields here, and `SimContent` in `packages/sim` grows to match.
+ * `needTypes` is OPTIONAL, and absence is not emptiness: a registry assembled from a
+ * content set that predates need types omits the key, and therefore fingerprints in
+ * `packages/sim` exactly as it did before the table existed. That is what keeps a save
+ * taken under the older content loadable (G-002, G-004). When items, staff roles and
+ * guest archetypes arrive (M6) they are fields here, and `SimContent` in `packages/sim`
+ * grows to match.
+ *
+ * Cross-table coherence — every need having a provider — is NOT checked here. It is
+ * checked by `bindContent` in `packages/sim`, which is the one path every host goes
+ * through and the place where an unsatisfiable need would actually do harm. Checking it
+ * in two places would be two definitions of "coherent content" that drift.
  */
 export type ContentRegistry = {
   readonly roomTypes: readonly RoomType[];
+  readonly needTypes?: readonly NeedType[];
 };
 
 /**
@@ -47,13 +57,13 @@ const describe = (error: unknown): string => (error instanceof Error ? error.mes
  * non-determinism I2 exists to catch, arriving through the content file rather than
  * through the code. The Set here is membership-only and is never iterated.
  */
-function assertUniqueIds(roomTypes: readonly RoomType[]): void {
+function assertUniqueIds(entries: readonly { readonly id: string }[], table: string): void {
   const seen = new Set<string>();
-  for (const roomType of roomTypes) {
-    if (seen.has(roomType.id)) {
-      throw new ContentError(`duplicate room type id "${roomType.id}" — content ids must be unique`);
+  for (const entry of entries) {
+    if (seen.has(entry.id)) {
+      throw new ContentError(`duplicate ${table} id "${entry.id}" — content ids must be unique`);
     }
-    seen.add(roomType.id);
+    seen.add(entry.id);
   }
 }
 
@@ -69,8 +79,35 @@ export function parseContent(raw: unknown, sourceLabel = 'content'): ContentRegi
   if (!result.success) {
     throw new ContentError(`${sourceLabel} is not valid content:\n${z.prettifyError(result.error)}`);
   }
-  assertUniqueIds(result.data);
+  assertUniqueIds(result.data, 'room type');
   return { roomTypes: result.data };
+}
+
+/**
+ * Validate an already-parsed need-type document (G-004).
+ *
+ * Returns the table rather than a registry: one file is one table, and a registry is
+ * assembled from all of them by the host. Same all-or-nothing discipline as
+ * `parseContent` — nothing is cached and nothing is assigned on the way through.
+ */
+export function parseNeedTypes(raw: unknown, sourceLabel = 'content'): readonly NeedType[] {
+  const result = needTypesSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:\n${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'need type');
+  return result.data;
+}
+
+/** Validate a need-type JSON document. "Not JSON" and "not content" stay apart. */
+export function parseNeedTypesJson(text: string, sourceLabel = 'content'): readonly NeedType[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseNeedTypes(raw, sourceLabel);
 }
 
 /**

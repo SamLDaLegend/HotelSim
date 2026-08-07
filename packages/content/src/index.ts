@@ -13,7 +13,20 @@
 // This package reads no files. It validates whatever a caller hands it — which is why
 // its tsconfig still has `"types": []` and cannot so much as name `node:fs`.
 
-export type { RoomType } from './schema.js';
-export { contentIdSchema, penceSchema, roomTypeSchema, roomTypesSchema } from './schema.js';
+export type { NeedType, RoomType } from './schema.js';
+export {
+  contentIdSchema,
+  needTypeSchema,
+  needTypesSchema,
+  penceSchema,
+  roomTypeSchema,
+  roomTypesSchema,
+} from './schema.js';
 export type { ContentRegistry } from './registry.js';
-export { ContentError, parseContent, parseContentJson } from './registry.js';
+export {
+  ContentError,
+  parseContent,
+  parseContentJson,
+  parseNeedTypes,
+  parseNeedTypesJson,
+} from './registry.js';

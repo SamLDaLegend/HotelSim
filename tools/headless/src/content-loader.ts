@@ -13,8 +13,8 @@
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { ContentError, parseContentJson } from '@hotelsim/content';
-import type { ContentRegistry } from '@hotelsim/content';
+import { ContentError, parseContentJson, parseNeedTypesJson } from '@hotelsim/content';
+import type { ContentRegistry, NeedType } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
 
@@ -27,7 +27,9 @@ import type { BoundContent, SimContent } from '@hotelsim/sim';
  * vitest loads this module. One resolution path that works in both runtimes beats two
  * that each work in one.
  */
-export const ROOM_TYPES_PATH = createRequire(import.meta.url).resolve('@hotelsim/content/data/room-types.json');
+const resolveContent = createRequire(import.meta.url).resolve;
+export const ROOM_TYPES_PATH = resolveContent('@hotelsim/content/data/room-types.json');
+export const NEED_TYPES_PATH = resolveContent('@hotelsim/content/data/need-types.json');
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -39,13 +41,20 @@ const describe = (error: unknown): string => (error instanceof Error ? error.mes
  * through, so a failed load leaves no half-populated registry behind.
  */
 export function loadContentFrom(path: string): ContentRegistry {
-  let text: string;
+  return parseContentJson(readContentFile(path), path);
+}
+
+/** Read and validate one need-type file (G-004). Same all-or-nothing discipline. */
+export function loadNeedTypesFrom(path: string): readonly NeedType[] {
+  return parseNeedTypesJson(readContentFile(path), path);
+}
+
+function readContentFile(path: string): string {
   try {
-    text = readFileSync(path, 'utf8');
+    return readFileSync(path, 'utf8');
   } catch (error) {
     throw new ContentError(`Could not read content file ${path}: ${describe(error)}`);
   }
-  return parseContentJson(text, path);
 }
 
 /**
@@ -59,7 +68,14 @@ export function loadContentFrom(path: string): ContentRegistry {
  * line stops compiling.
  */
 export function loadContent(): BoundContent {
-  const registry = loadContentFrom(ROOM_TYPES_PATH);
+  const registry: ContentRegistry = {
+    ...loadContentFrom(ROOM_TYPES_PATH),
+    needTypes: loadNeedTypesFrom(NEED_TYPES_PATH),
+  };
   const injected: SimContent = registry;
+  // `bindContent` rejects content whose needs no room type provides, so a designer who
+  // adds a need and forgets the room finds out here — at startup, with the need named —
+  // rather than by watching every guest leave unhappy. It is the check `check:content`
+  // cannot make, because a cross-reference between two files is not an `id` field.
   return bindContent(injected);
 }

@@ -16,10 +16,19 @@
 import { describe, expect, it } from 'vitest';
 import type { Command } from './commands.js';
 import { bindContent, findRoomType, hasContentId } from './content.js';
-import type { RoomTypeData, SimContent } from './content.js';
+import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { entitiesInOrder } from './entities.js';
 import { deserialise, serialise } from './save.js';
-import { advanceTime, applyCommands, beginTick, commitEntities, run, stepTick, TICK_PHASES } from './tick.js';
+import {
+  advanceTime,
+  applyCommands,
+  beginTick,
+  commitEntities,
+  run,
+  runGuests,
+  stepTick,
+  TICK_PHASES,
+} from './tick.js';
 import type { TickPhase, TickPhaseFn } from './tick.js';
 import { assertContentMatches, createWorld, hashState } from './world.js';
 
@@ -37,6 +46,7 @@ const spawn = (entityKind: string): Command => ({ kind: 'spawnEntity', entityKin
 
 const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
+  runGuests,
   commitEntities,
   advanceTime,
 };
@@ -72,6 +82,71 @@ describe('bindContent — normalisation', () => {
 
   it('accepts an empty registry — how much content exists is a schema question', () => {
     expect(bindContent(contentOf()).content.roomTypes).toEqual([]);
+  });
+});
+
+describe('bindContent — need types, and why absence is not emptiness (G-004)', () => {
+  const need = (id: string): NeedTypeData => ({ id, name: id, satisfyTicks: 480, patienceTicks: 180 });
+  const provider = (id: string, provides: readonly string[]): RoomTypeData => ({
+    id,
+    name: id,
+    capacity: 2,
+    nightlyRatePence: 8_500,
+    provides,
+  });
+
+  it('leaves the fingerprint of content that defines no needs exactly where it was', () => {
+    // THE PROPERTY THE PERMANENT v1 FIXTURE DEPENDS ON. A content set written before
+    // need types existed omits the key, so the normalised document is byte-identical to
+    // what it was then and every save taken under it still loads AND still ticks. Had
+    // `needTypes: []` been written in instead, the fingerprint would have moved and the
+    // fixture would be a world that can never tick again.
+    const before = bindContent({ roomTypes: [roomType('alpha')] });
+    expect(before.content.needTypes).toBeUndefined();
+    // The regression pin for this is a value recorded BEFORE need types existed:
+    // `save.fixture.test.ts` asserts `bindContent(SAVE_V1_CONTENT)` still fingerprints
+    // to the 8e09fe4f0fa162a3 written into the committed v1 blob at G-003. What is
+    // pinned here is the rule that makes it hold.
+    expect(before.fingerprint).toBe(bindContent({ roomTypes: [roomType('alpha')] }).fingerprint);
+    // And `[]` is a DIFFERENT document: it says "this content deliberately defines no
+    // needs", which is a statement rather than a silence.
+    expect(bindContent({ roomTypes: [roomType('alpha')], needTypes: [] }).fingerprint).not.toBe(before.fingerprint);
+  });
+
+  it('normalises needs the way it normalises rooms: sorted, cloned, frozen, unique', () => {
+    const content = bindContent({
+      roomTypes: [provider('alpha', ['restA', 'restB'])],
+      needTypes: [need('restB'), need('restA')],
+    });
+    expect(content.content.needTypes?.map((entry) => entry.id)).toEqual(['restA', 'restB']);
+    expect(Object.isFrozen(content.content.needTypes?.[0])).toBe(true);
+    expect(() => bindContent({ roomTypes: [provider('alpha', ['restA'])], needTypes: [need('restA'), need('restA')] })).toThrow(
+      /duplicate need type id/,
+    );
+  });
+
+  it('fingerprints two orderings of the same needs identically', () => {
+    const forwards = bindContent({
+      roomTypes: [provider('alpha', ['restA', 'restB'])],
+      needTypes: [need('restA'), need('restB')],
+    });
+    const backwards = bindContent({
+      roomTypes: [provider('alpha', ['restB', 'restA'])],
+      needTypes: [need('restB'), need('restA')],
+    });
+    expect(backwards.fingerprint).toBe(forwards.fingerprint);
+  });
+
+  it('rejects a room type that lists the same need twice', () => {
+    expect(() =>
+      bindContent({ roomTypes: [provider('alpha', ['restA', 'restA'])], needTypes: [need('restA')] }),
+    ).toThrow(/lists need "restA" twice/);
+  });
+
+  it('does not mutate the provides list it was handed', () => {
+    const provides = ['restB', 'restA'];
+    bindContent({ roomTypes: [provider('alpha', provides)], needTypes: [need('restA'), need('restB')] });
+    expect(provides).toEqual(['restB', 'restA']);
   });
 });
 

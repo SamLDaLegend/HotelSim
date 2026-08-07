@@ -40,12 +40,23 @@ export const penceSchema = z.int();
  * silently ignored becomes "the balance is slightly wrong" three goals later, with
  * nothing pointing at the content file that caused it.
  *
- * Four fields, each of which M0 needs (HOTELSIM.md §8 — "one room type, one guest, one
+ * Five fields, each of which M0 needs (HOTELSIM.md §8 — "one room type, one guest, one
  * need, one day cycle, money in and money out"):
  *   id                identity, and the value the sim receives as an entity kind
  *   name              the human handle; display is the render layer's job at M5
- *   capacity          guests the room holds  -> G-004
- *   nightlyRatePence  room revenue           -> G-005
+ *   capacity          the PARTY a room holds — see below  -> G-004
+ *   nightlyRatePence  room revenue                        -> G-005
+ *   provides          which needs a stay here satisfies   -> G-004
+ *
+ * `capacity` is the size of the party a room holds, NOT a count of unrelated bookings.
+ * A party is one guest at M0. Two strangers sharing a room is not what this number
+ * means and would read as stupid to a watching player (HOTELSIM.md §6.1).
+ *
+ * `provides` is OPTIONAL, and absence is not emptiness. A room type that predates need
+ * types omits the key entirely and therefore hashes exactly as it did before need types
+ * existed, which is what keeps saves taken under that content loadable (G-002's content
+ * fingerprint). A room that genuinely satisfies nothing — a broom cupboard at M1 — says
+ * so with `[]`.
  *
  * Construction cost is M1 and is deliberately absent.
  */
@@ -54,6 +65,33 @@ export const roomTypeSchema = z.strictObject({
   name: z.string().min(1),
   capacity: z.int().min(1),
   nightlyRatePence: penceSchema.min(0),
+  provides: z.array(contentIdSchema).optional(),
+});
+
+/**
+ * One need a guest can form (G-004).
+ *
+ * M0 has exactly one need and one provider for it. The full need vector, decay, and
+ * utility scoring across many providers are M2 — this table is deliberately two
+ * integers and a name.
+ *
+ *   satisfyTicks   ticks of uninterrupted provision that MEET the need
+ *   patienceTicks  ticks a guest will wait for a provider before giving up
+ *
+ * Both are ticks, never seconds and never a wall-clock duration: one tick is one
+ * in-game minute (I2).
+ *
+ * WHICH provider satisfies this need is not recorded here. It is recorded on the
+ * provider, as `roomType.provides`, so a new provider can claim an existing need
+ * without editing the need. `bindContent` in packages/sim rejects a need that no
+ * provider claims — a need nothing can satisfy is guaranteed unhappiness, which is a
+ * bug rather than difficulty (HOTELSIM.md §6.1).
+ */
+export const needTypeSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  satisfyTicks: z.int().min(1),
+  patienceTicks: z.int().min(1),
 });
 
 /**
@@ -67,4 +105,8 @@ export const roomTypeSchema = z.strictObject({
  */
 export const roomTypesSchema = z.array(roomTypeSchema).min(1);
 
+/** The whole `need-types.json` document. A top-level array, for the same reason. */
+export const needTypesSchema = z.array(needTypeSchema).min(1);
+
 export type RoomType = z.infer<typeof roomTypeSchema>;
+export type NeedType = z.infer<typeof needTypeSchema>;

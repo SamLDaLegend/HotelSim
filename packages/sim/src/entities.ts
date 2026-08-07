@@ -177,6 +177,34 @@ export function draftDespawn(draft: EntityDraft, id: EntityId): boolean {
   return true;
 }
 
+/**
+ * The first live entity in the draft, in canonical ascending-id order, that `match`
+ * accepts — or undefined.
+ *
+ * The draft's canonical order is `base.list` then `added`, and that concatenation is
+ * ascending BY CONSTRUCTION: every id in `added` came from the counter and is therefore
+ * greater than every id in `base.list`. So this is the same one order `entitiesInOrder`
+ * exposes for a committed store, and no sort exists here either (I2).
+ *
+ * Exists so a system choosing between entities — `guests.ts` choosing a free room —
+ * scans the draft rather than reaching into `base`, `added` and `removed` itself. A
+ * caller that walked those three fields by hand would eventually walk them in some
+ * other order, and "which room did the guest take" would stop being a stable answer.
+ * Allocates nothing: it is a scan, not a filtered copy.
+ */
+export function draftFindEntity(
+  draft: EntityDraft,
+  match: (entity: Entity) => boolean,
+): Entity | undefined {
+  for (const entity of draft.base.list) {
+    if (!draft.removed.has(entity.id) && match(entity)) return entity;
+  }
+  for (const entity of draft.added) {
+    if (!draft.removed.has(entity.id) && match(entity)) return entity;
+  }
+  return undefined;
+}
+
 /** Lookup against the draft: staged spawns are visible, staged despawns are not. */
 export function draftGet(draft: EntityDraft, id: EntityId): Entity | undefined {
   if (draft.removed.has(id)) return undefined;

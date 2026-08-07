@@ -1,0 +1,8 @@
+[
+  {
+    "id": "night_rest",
+    "name": "Rest",
+    "satisfyTicks": 480,
+    "patienceTicks": 180
+  }
+]

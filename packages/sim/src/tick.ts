@@ -1,8 +1,9 @@
-// The tick: three named phases, in one documented order.
+// The tick: four named phases, in one documented order.
 //
 //   1. applyCommands    external intent enters the world, at exactly one point
-//   2. commitEntities   entity membership changes exactly once, at a boundary
-//   3. advanceTime      the tick counter and the RNG stream advance
+//   2. runGuests        the guest loop runs against the staged world (G-004)
+//   3. commitEntities   entity membership changes exactly once, at a boundary
+//   4. advanceTime      the tick counter and the RNG stream advance
 //
 // THE ORDER IS WRITTEN DOWN ONCE. `TICK_PHASES` is the order, and `stepTick` composes
 // the tick by iterating it — the documented order and the executed order are the same
@@ -16,10 +17,15 @@
 //   A command's effect is a function of its scheduled tick and its position in the log,
 //   and of nothing else, which is what makes a run replayable (I2).
 //
-//   Entities commit SECOND so no observer ever sees a half-applied entity set. Nothing
+//   Guests run SECOND, against the open draft, so a room built by a command this tick
+//   can be occupied this tick and a room demolished this tick is already gone as far as
+//   its occupant is concerned. Systems have always belonged in this slot; G-004 is the
+//   first one to fill it.
+//
+//   Entities commit THIRD so no observer ever sees a half-applied entity set. Nothing
 //   can depend on how far through a command batch a spawn happened.
 //
-//   Time advances LAST so that during phases 1 and 2 `world.tick` is the tick being
+//   Time advances LAST so that during phases 1 to 3 `world.tick` is the tick being
 //   simulated. The counter never moves under a phase's feet.
 //
 // Each phase states its precondition and throws when it is not met, so a reordering is
@@ -28,9 +34,9 @@
 // these guards a reordered tick would hash identically. That stops being true at G-004,
 // which is exactly when a silent reorder would start costing real money.
 //
-// World-driven systems (guest arrival, needs, settlement) belong BETWEEN phases 1 and
-// 2, sharing the same draft. There is no such system yet, so there is no such phase
-// yet — an empty phase named after an unbuilt feature is scaffolding, not design.
+// World-driven systems belong BETWEEN commands and the entity commit, sharing the same
+// draft. `runGuests` is the first, and further systems (settlement at G-005) go beside
+// it rather than inside it.
 //
 // Injected content (G-002) rides in `TickState` alongside `committed`: tick-local,
 // never hashed, never saved. It is NOT a parameter of a phase — the phase signature
@@ -57,10 +63,11 @@
 //   - depend on a phase that runs later in the same tick.
 
 import type { Command, ScheduledCommand } from './commands.js';
-import { hasContentId } from './content.js';
+import { firstNeedType, hasContentId } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
+import { assertGuestOutcomes, assertGuestStoreInvariants, stepGuests } from './guests.js';
 import { nextUint32 } from './rng.js';
 import { assertContentMatches } from './world.js';
 import type { World } from './world.js';
@@ -72,7 +79,12 @@ import type { World } from './world.js';
  * against a literal AND trips the phase preconditions below. There is nowhere else to
  * change the order from.
  */
-export const TICK_PHASES = Object.freeze(['applyCommands', 'commitEntities', 'advanceTime'] as const);
+export const TICK_PHASES = Object.freeze([
+  'applyCommands',
+  'runGuests',
+  'commitEntities',
+  'advanceTime',
+] as const);
 
 export type TickPhase = (typeof TICK_PHASES)[number];
 
@@ -101,6 +113,39 @@ export type TickState = {
   readonly commands: readonly Command[];
   /** The open entity draft, or null when no draft is open. */
   readonly entities: EntityDraft | null;
+  /**
+   * Guests arriving this tick, staged by `applyCommands` and consumed by `runGuests`.
+   *
+   * Tick-local: never hashed, never saved. It is a COUNT rather than a list because an
+   * arrival carries nothing — a guest has no archetype (M6) and no party size at M0.
+   * When it does, this becomes a list of arrival specs and nothing else moves.
+   *
+   * `runGuests` zeroes it on the way out, for the same reason `applyCommands` blanks
+   * the command log: intent that has been applied must not be readable again.
+   *
+   * It is NOT how a missing `runGuests` is detected — that is `guestsRun` below. A
+   * stranded arrival only exists on a tick where somebody happened to walk in, so
+   * relying on it meant the guarantee held on busy ticks and inspected an empty doorway
+   * on quiet ones.
+   */
+  readonly arrivingGuests: number;
+  /**
+   * Whether the guest loop has already run this tick.
+   *
+   * Tick-local, never hashed, never saved — the same contract `committed` has, and it
+   * exists for the same reason. `commitEntities` cannot run twice because closing the
+   * draft removes its own precondition; `runGuests` had no such self-limit, so a phase
+   * table listing it twice drained patience and rest twice and could serve one guest
+   * two rooms in a tick, undetected. Dropping it was equally quiet on any tick with no
+   * arrival, because the only thing that noticed was a pending arrival — a check that
+   * inspects nothing on an empty doorway (ADR-0007).
+   *
+   * ONE BOOLEAN PER SYSTEM PHASE, never a list of phases that ran. A list would be the
+   * tick order written down a second time, in a second place, which is the exact thing
+   * ADR-0005 exists to prevent. G-005 puts nightly settlement in this same slot and
+   * should add its own flag beside this one.
+   */
+  readonly guestsRun: boolean;
   readonly committed: boolean;
 };
 
@@ -115,13 +160,22 @@ export type TickPhaseFn = (state: TickState) => TickState;
  */
 export function beginTick(world: World, content: BoundContent, commands: readonly Command[] = []): TickState {
   assertContentMatches(world, content);
-  return { world, content, commands, entities: null, committed: false };
+  return {
+    world,
+    content,
+    commands,
+    entities: null,
+    arrivingGuests: 0,
+    guestsRun: false,
+    committed: false,
+  };
 }
 
-function applyCommand(entities: EntityDraft, command: Command, content: BoundContent): void {
+/** Applies one command, returning how many guests it put in the lobby (0 or 1). */
+function applyCommand(entities: EntityDraft, command: Command, content: BoundContent): number {
   switch (command.kind) {
     case 'noop':
-      return;
+      return 0;
     case 'spawnEntity':
       // The one place the simulation reads injected content today. Without it,
       // "the host injects content into the sim" would be a claim no test could
@@ -137,10 +191,23 @@ function applyCommand(entities: EntityDraft, command: Command, content: BoundCon
         );
       }
       draftSpawn(entities, command.entityKind);
-      return;
+      return 0;
     case 'despawnEntity':
       draftDespawn(entities, command.id);
-      return;
+      return 0;
+    case 'guestArrives':
+      // Checked here rather than in the guest system, alongside `spawnEntity`'s
+      // unknown-kind check and for the same reason: a guest that could form no need is
+      // a caller or content mistake, not a replay artefact, and it should fail where
+      // the intent entered rather than three lines into a system. `bindContent` has
+      // already established that every need this content DOES define has a provider, so
+      // past this point a guest's need is always one something can satisfy.
+      if (firstNeedType(content) === undefined) {
+        throw new Error(
+          'applyCommands: a guest arrived, but the injected content defines no need type for one to form',
+        );
+      }
+      return 1;
     default: {
       const exhaustive: never = command;
       throw new Error(`applyCommand: unhandled command ${JSON.stringify(exhaustive)}`);
@@ -161,17 +228,70 @@ export function applyCommands(state: TickState): TickState {
     throw new Error('applyCommands: entities were already committed this tick; commands may not arrive after the boundary');
   }
   const entities = beginEntityDraft(state.world.entities);
+  let arrivingGuests = 0;
   for (const command of state.commands) {
-    applyCommand(entities, command, state.content);
+    arrivingGuests += applyCommand(entities, command, state.content);
   }
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
   // in the tick" stops being a rule a later phase could break and becomes a fact about
   // what is in scope: there is nothing left to read.
-  return { ...state, entities, commands: NO_COMMANDS };
+  return { ...state, entities, arrivingGuests, commands: NO_COMMANDS };
 }
 
 /**
- * Phase 2 of 3. Entity membership changes exactly once per tick, here.
+ * Phase 2 of 4. The guest loop: arrivals, reservations, patience, satisfaction and
+ * payment (G-004).
+ *
+ * All of the behaviour is in `guests.ts`; this is the plumbing that turns a `TickState`
+ * into that module's input and back. The split is not tidiness: `world.ts` needs the
+ * guest types and this file needs the phase, so a `guests.ts` that imported either
+ * would close a cycle (`no-circular` in .dependency-cruiser.cjs).
+ *
+ * It runs BETWEEN commands and the entity commit, which is the slot the tick has always
+ * reserved for world-driven systems, and it works against the same draft: a room
+ * spawned by a command this tick is available to a guest this tick, and a room
+ * despawned this tick is already gone as far as its occupant is concerned.
+ *
+ * It touches neither `tick` nor `rng` — the guest loop draws no randomness at all, so
+ * `advanceTime` remains the only phase that moves the stream.
+ *
+ * Precondition: a draft is open, nothing has been committed, and the guest loop has not
+ * already run this tick — so `applyCommands` has run, `commitEntities` has not, and
+ * this is the first and only visit. Running twice would drain patience and rest twice
+ * and could hand one guest two rooms in a tick, which nothing downstream could see.
+ */
+export function runGuests(state: TickState): TickState {
+  if (state.entities === null) {
+    throw new Error('runGuests: no entity draft is open; applyCommands must run before it in the tick');
+  }
+  if (state.committed) {
+    throw new Error('runGuests: entities were already committed this tick; guests act before the boundary');
+  }
+  if (state.guestsRun) {
+    throw new Error('runGuests: the guest loop has already run this tick; it must run exactly once');
+  }
+  const result = stepGuests({
+    tick: state.world.tick,
+    guests: state.world.guests,
+    outcomes: state.world.guestOutcomes,
+    ledger: state.world.ledger,
+    entities: state.entities,
+    content: state.content,
+    arriving: state.arrivingGuests,
+  });
+  // An untouched guest loop returns its inputs by reference, so an idle tick allocates
+  // no world either.
+  const world =
+    result.guests === state.world.guests &&
+    result.outcomes === state.world.guestOutcomes &&
+    result.ledger === state.world.ledger
+      ? state.world
+      : { ...state.world, guests: result.guests, guestOutcomes: result.outcomes, ledger: result.ledger };
+  return { ...state, world, arrivingGuests: 0, guestsRun: true };
+}
+
+/**
+ * Phase 3 of 4. Entity membership changes exactly once per tick, here.
  *
  * Precondition: a draft is open, so `applyCommands` has already run.
  */
@@ -186,7 +306,7 @@ export function commitEntities(state: TickState): TickState {
 }
 
 /**
- * Phase 3 of 3. The tick counter advances by one and the RNG stream advances by
+ * Phase 4 of 4. The tick counter advances by one and the RNG stream advances by
  * exactly one draw, unconditionally — so the stream position stays a pure function of
  * the tick count, and the state hash stays sensitive to the seed.
  *
@@ -213,6 +333,7 @@ export function advanceTime(state: TickState): TickState {
  */
 const TICK_PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
+  runGuests,
   commitEntities,
   advanceTime,
 };
@@ -234,6 +355,31 @@ export function stepTick(world: World, content: BoundContent, commands: readonly
   if (state.entities !== null || !state.committed || state.world.tick !== world.tick + 1) {
     throw new Error('stepTick: the phase table did not run a whole tick');
   }
+  // And the guest loop ran, exactly once. A table that has lost `runGuests` still
+  // opens, commits and advances perfectly, so this is the only thing that notices —
+  // and it must notice on EVERY tick, not only on one where somebody happened to walk
+  // in. It used to be the `arrivingGuests` check below, which on a quiet tick inspected
+  // an empty doorway and passed: a check that can succeed while looking at nothing,
+  // relied on as proof that something was checked (ADR-0007). The flag is set by the
+  // phase itself, so it cannot be satisfied by anything except the phase running.
+  if (!state.guestsRun) {
+    throw new Error('stepTick: the guest loop did not run this tick; the phase table is missing runGuests');
+  }
+  // Every guest who walked in was dealt with. Now a postcondition of the line above
+  // rather than the guarantee itself: `runGuests` always consumes the doorway, so this
+  // cannot fail while `guestsRun` is true. Kept because it is what "took them in"
+  // actually means, and it fires if that ever stops being so.
+  if (state.arrivingGuests !== 0) {
+    throw new Error(
+      `stepTick: ${state.arrivingGuests} guest(s) arrived and no phase took them in; the phase table is missing runGuests`,
+    );
+  }
+  // The guest store and the entity store agree, and every guest is accounted for. Not
+  // reachable from the phases above as they stand — nothing removes an entity after
+  // `runGuests` has matched guests to it — which is precisely why it is here: it is the
+  // postcondition those phases promise, and it fires if that ever stops being true.
+  assertGuestStoreInvariants(state.world.guests, state.world.entities);
+  assertGuestOutcomes(state.world.guestOutcomes, state.world.guests);
   // And the tick ran under the content it was given. Identity, not equality: a phase
   // that rebuilt an equal-looking registry would still be a phase deciding what the
   // rest of the tick means, which is not a phase's job.

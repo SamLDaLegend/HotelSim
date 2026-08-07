@@ -11,6 +11,8 @@
 import type { BoundContent } from './content.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
+import { createGuestOutcomes, createGuestStore } from './guests.js';
+import type { GuestOutcomes, GuestStore } from './guests.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
 import type { Transaction } from './ledger.js';
@@ -40,6 +42,21 @@ export type World = {
    * either reproducible or rejected, never quietly wrong.
    */
   readonly contentHash: string;
+  /**
+   * Live guests (G-004). Guests that have left are not here — their outcome is in
+   * `guestOutcomes` instead, so the per-tick scan cost does not grow with the age of
+   * the run. A guest is NOT an entity; see the header of `guests.ts`.
+   */
+  readonly guests: GuestStore;
+  /**
+   * What happened to every guest that has left, counted.
+   *
+   * Not derivable from anything else: a departed guest leaves no trace in the store,
+   * and the ledger only records the ones who paid. Bound to the store by
+   * `assertGuestOutcomes` — arrived === satisfied + unsatisfied + evicted + live — so
+   * the two cannot drift apart unnoticed.
+   */
+  readonly guestOutcomes: GuestOutcomes;
 };
 
 /**
@@ -57,6 +74,8 @@ export type World = {
 const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   contentHash: true,
   entities: true,
+  guestOutcomes: true,
+  guests: true,
   ledger: true,
   rng: true,
   tick: true,
@@ -81,6 +100,8 @@ export function createWorld(seed: number, content: BoundContent): World {
     ledger: [],
     entities: createEntityStore(),
     contentHash: content.fingerprint,
+    guests: createGuestStore(),
+    guestOutcomes: createGuestOutcomes(),
   };
 }
 

@@ -13,6 +13,7 @@ import {
   beginTick,
   commitEntities,
   run,
+  runGuests,
   stepTick,
   TICK_PHASES,
 } from './tick.js';
@@ -26,18 +27,29 @@ import { createWorld, hashState } from './world.js';
  * literal in packages/sim is a leaked content ID (ADR-0003) and check:content scans
  * test files too.
  */
-const roomType = (id: string): RoomTypeData => ({ id, name: id, capacity: 2, nightlyRatePence: 8_500 });
+const roomType = (id: string): RoomTypeData => ({
+  id,
+  name: id,
+  capacity: 2,
+  nightlyRatePence: 8_500,
+  // Every room provides the one need, so a guest in these tests can always be housed
+  // and the phase search below is exercising the tick rather than an empty hotel.
+  provides: ['rest'],
+});
 const content = bindContent({
   roomTypes: ['alpha', 'beta', 'gamma', 'delta'].map(roomType),
+  needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 10 }],
 });
 
 const spawn = (entityKind: string): Command => ({ kind: 'spawnEntity', entityKind });
+const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
 
 /** The same table `stepTick` folds over, rebuilt here from the exported phases. */
 const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
+  runGuests,
   commitEntities,
   advanceTime,
 };
@@ -60,7 +72,7 @@ function permutations<T>(items: readonly T[]): T[][] {
 
 describe('tick phases', () => {
   it('documents its order as a value, with no duplicates', () => {
-    expect([...TICK_PHASES]).toEqual(['applyCommands', 'commitEntities', 'advanceTime']);
+    expect([...TICK_PHASES]).toEqual(['applyCommands', 'runGuests', 'commitEntities', 'advanceTime']);
     expect(new Set(TICK_PHASES).size).toBe(TICK_PHASES.length);
   });
 
@@ -101,7 +113,8 @@ describe('tick phases', () => {
     // phase yet. Each phase now states its precondition, so a wrong order throws.
     const world = createWorld(4, content);
     const orders = permutations([...TICK_PHASES]);
-    expect(orders).toHaveLength(6);
+    // 4! — the guest phase enlarged the search rather than being exempted from it.
+    expect(orders).toHaveLength(24);
 
     const survived: string[] = [];
     for (const order of orders) {
@@ -119,7 +132,70 @@ describe('tick phases', () => {
   it('refuses a repeated phase', () => {
     const world = createWorld(4, content);
     expect(() => runPhases(world, ['applyCommands', 'applyCommands'])).toThrow(/already open/);
-    expect(() => runPhases(world, ['applyCommands', 'commitEntities', 'commitEntities'])).toThrow(/no entity draft/);
+    expect(() =>
+      runPhases(world, ['applyCommands', 'runGuests', 'commitEntities', 'commitEntities']),
+    ).toThrow(/no entity draft/);
+    // `runGuests` is the phase whose repeat NOTHING used to catch. `commitEntities`
+    // cannot run twice because closing the draft removes its own precondition, and
+    // `applyCommands` cannot because opening one adds a blocker; the guest loop had no
+    // such self-limit, so a table listing it twice drained patience and rest twice and
+    // could hand one guest two rooms in a tick. It now carries its own flag.
+    expect(() =>
+      runPhases(world, ['applyCommands', 'runGuests', 'runGuests', 'commitEntities', 'advanceTime']),
+    ).toThrow(/already run this tick/);
+  });
+
+  it('admits exactly ONE phase sequence, across every ordering, omission and repeat', () => {
+    // The G-001 property, restated for a four-phase tick and hardened. The permutation
+    // test above only ranges over orderings of DISTINCT phases; this searches every
+    // sequence of length 0..5 drawn from the four names WITH repetition — the empty one
+    // plus 4 + 16 + 64 + 256 + 1024 — and demands that exactly one survives with a
+    // whole tick to show for it.
+    //
+    // It caught a real regression. Before `guestsRun` existed, three sequences survived
+    // and two of them produced a different world: the canonical one, the one with
+    // `runGuests` DROPPED (invisible on any tick with no arrival), and the one with
+    // `runGuests` DUPLICATED (invisible always). Neither the permutation search nor the
+    // repeat test above could see either, because both test the phases that already had
+    // guards rather than the one that did not.
+    const world = createWorld(4, content);
+    const sequences: TickPhase[][] = [[]];
+    for (let length = 1; length <= TICK_PHASES.length + 1; length += 1) {
+      const previous = sequences.filter((sequence) => sequence.length === length - 1);
+      for (const sequence of previous) {
+        for (const phase of TICK_PHASES) sequences.push([...sequence, phase]);
+      }
+    }
+    expect(sequences).toHaveLength(1_365);
+
+    const search = (commands: readonly Command[]): string[] => {
+      const survivors: string[] = [];
+      for (const sequence of sequences) {
+        let state;
+        try {
+          state = runPhases(world, sequence, commands);
+        } catch {
+          continue; // Rejected, which is the point.
+        }
+        // Exactly the postconditions `stepTick` enforces, on a hand-run sequence.
+        const whole =
+          state.entities === null &&
+          state.committed &&
+          state.guestsRun &&
+          state.arrivingGuests === 0 &&
+          state.world.tick === world.tick + 1;
+        if (whole) survivors.push(sequence.join('>'));
+      }
+      return survivors;
+    };
+
+    const canonical = [[...TICK_PHASES].join('>')];
+    // A busy tick AND a quiet one. The quiet pass is the one that matters: with an
+    // arrival in the batch, a dropped `runGuests` is caught by the stranded guest, so a
+    // search that only ever ran busy ticks would report the property as held while the
+    // thing holding it was the doorway rather than the flag.
+    expect(search([spawn('alpha'), arrive])).toEqual(canonical);
+    expect(search([])).toEqual(canonical);
   });
 
   it('names the phase that was missing when an order is rejected', () => {
@@ -127,6 +203,10 @@ describe('tick phases', () => {
     expect(() => runPhases(world, ['commitEntities'])).toThrow(/applyCommands must run before it/);
     expect(() => runPhases(world, ['advanceTime'])).toThrow(/commitEntities must run before it/);
     expect(() => runPhases(world, ['applyCommands', 'advanceTime'])).toThrow(/draft is still open/);
+    expect(() => runPhases(world, ['runGuests'])).toThrow(/applyCommands must run before it/);
+    expect(() =>
+      runPhases(world, ['applyCommands', 'commitEntities', 'runGuests']),
+    ).toThrow(/no entity draft is open/);
   });
 
   it('applyCommands touches neither the tick counter nor the RNG', () => {

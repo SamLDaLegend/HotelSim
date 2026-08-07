@@ -119,7 +119,7 @@ Critique rounds used: 1/3
   called by deserialise. Both halves fixed. See ADR-0007.
 
 ## G-004 — One guest, one need
-Status: pending
+Status: done
 Milestone: M0
 Owner pair: ai-engineer / ai-critic
 Statement: A guest arrives, occupies the one room type, forms one need, has it met or
@@ -132,7 +132,22 @@ Exit criteria:
   - all §2 invariant gates green (pnpm verify)
 Out of scope: full need vector, utility scoring across many providers, reviews (M2);
   staff (M4); lifts and stairs (M3)  (-> PARKING.md)
-Critique rounds used: 0/3
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  69 guest tests green across 3 files · sim:run --days 30 --seed 7 exits 0 with arrived
+  360, satisfied 267, unsatisfied 89, evicted 0, in hotel 4, stuck 0, orphan res 0, and
+  is byte-identical across runs · conservation closes exactly (267+89+0+4=360) and the
+  balance is exactly 267 x 8500p · all six gates green, I2 hash d279428ff74b8373 ·
+  fixtures/save-v1.ts has a zero-line diff and the 1->2 migration is what carries it ·
+  all five mutations of TICK_PHASES (runGuests dropped, duplicated, moved before
+  applyCommands, moved after commitEntities, advanceTime first) fail both the suite and
+  the I2 gate · an exhaustive search over all 1,365 phase sequences of length 0-5 WITH
+  repetition leaves exactly one survivor, on a busy tick and on a quiet one · no gate,
+  CI or config file modified.
+
+  OBLIGATION DISCHARGED (ADR-0006): SAVE_SCHEMA_VERSION is 2 with a real 1 -> 2
+  migration. The fixture was migrated, never regenerated.
 
   KNOWN OBLIGATION (ADR-0006): this goal adds fields to `World`, which will be rejected
   by the permanent v1 save fixture committed in G-003. That is deliberate. The correct

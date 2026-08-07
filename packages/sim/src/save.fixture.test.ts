@@ -16,8 +16,10 @@ import {
   SAVE_V1_STATE_HASH,
   SAVE_V1_TICK,
 } from './fixtures/save-v1.js';
+import { hashJson } from './hash.js';
+import type { JsonValue } from './hash.js';
 import { balanceOf } from './ledger.js';
-import { deserialise, SAVE_SCHEMA_VERSION, serialise } from './save.js';
+import { deserialise, MIN_SUPPORTED_SCHEMA_VERSION, SAVE_SCHEMA_VERSION, serialise } from './save.js';
 import { run, stepTick } from './tick.js';
 import { hashState } from './world.js';
 
@@ -30,9 +32,15 @@ describe('I6 stored v1 save fixture', () => {
     expect(content.fingerprint).toBe(SAVE_V1_CONTENT_FINGERPRINT);
   });
 
-  it('loads, and hashes to the value pinned when it was written', () => {
-    const world = deserialise(SAVE_V1_BYTES);
-    expect(hashState(world)).toBe(SAVE_V1_STATE_HASH);
+  it('still hashes, as v1 data, to the value pinned when it was written', () => {
+    // G-004 added two fields to `World`, so the world this build LOADS from these bytes
+    // hashes differently — that is what a migration is. The v1 pin is not retired for
+    // it: hashed as the v1 document it is, the fixture must still produce the value
+    // recorded on the day it was taken, which is what proves the bytes and the hasher
+    // have not moved. `guest.save.test.ts` owns the migrated side of this.
+    const v1World = (JSON.parse(SAVE_V1_BYTES) as { world: JsonValue }).world;
+    expect(hashJson(v1World)).toBe(SAVE_V1_STATE_HASH);
+    expect(hashState(deserialise(SAVE_V1_BYTES))).not.toBe(SAVE_V1_STATE_HASH);
   });
 
   it('restores every field, not merely a hash that happens to match', () => {
@@ -52,18 +60,28 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and v1 is still the version this build writes', () => {
+  it('is a v1 blob, and this build now writes v2', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
-    // When this stops being true there is a migration to write, and the fixture is the
-    // real old data to write it against.
-    expect(SAVE_SCHEMA_VERSION).toBe(1);
+    // It stopped being true at G-004, exactly as ADR-0006 said it would, and the answer
+    // was the migration in `save.ts` — not a regenerated fixture. v1 remains the oldest
+    // version this build accepts, which is what keeps these bytes loadable at all.
+    expect(SAVE_SCHEMA_VERSION).toBe(2);
+    expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
-  it('is written back byte for byte', () => {
-    // Writer stability. Without it the fixture would pin the reader only, and the next
-    // fixture taken would silently be in a different dialect from this one.
-    expect(serialise(deserialise(SAVE_V1_BYTES))).toBe(SAVE_V1_BYTES);
+  it('is written back with its v1 half untouched, under the new version stamp', () => {
+    // Writer stability, restated for a migrated save. It is no longer byte-identical —
+    // it cannot be, the world has two more fields — so the claim is the stronger and
+    // more specific one: every v1 field comes back exactly as it went in, and nothing
+    // is quietly rewritten on the way past. The exact v2 bytes are pinned in
+    // `guest.save.test.ts`.
+    const before = (JSON.parse(SAVE_V1_BYTES) as { world: Record<string, unknown> }).world;
+    const after = (JSON.parse(serialise(deserialise(SAVE_V1_BYTES))) as { world: Record<string, unknown> }).world;
+    for (const key of Object.keys(before)) {
+      expect(after[key]).toEqual(before[key]);
+    }
+    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 2);
   });
 
   it('continues to simulate from where it was saved', () => {

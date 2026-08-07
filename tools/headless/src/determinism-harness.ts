@@ -33,8 +33,15 @@ function parse(argv: readonly string[]): { seed: number; ticks: number } {
  *
  * It spawns and despawns entities, not just noops, so the 100,000-tick determinism
  * proof actually covers the entity store rather than only the tick counter and the
- * RNG. The three passes are appended in separate loops on purpose: the resulting
+ * RNG. The four passes are appended in separate loops on purpose: the resulting
  * schedule is NOT sorted by tick, which also exercises `run`'s bucketing.
+ *
+ * Guests arrive here for the same reason (G-004). Without them the 100,000-tick proof
+ * would say nothing about the guest loop — the exact hole this harness had at G-001,
+ * when it ran only noops and covered no entity at all. Because guests arrive faster
+ * than the rooms can serve them, and because the despawn pass removes rooms that are
+ * occupied at the time, this log exercises satisfaction, giving up AND eviction over
+ * 100,000 ticks in three processes.
  */
 function commandLog(ticks: number, content: BoundContent): readonly ScheduledCommand[] {
   // The kind comes from the LOADED CONTENT, not from a literal. So the 100,000-tick
@@ -57,6 +64,11 @@ function commandLog(ticks: number, content: BoundContent): readonly ScheduledCom
   for (let tick = 2_003; tick < ticks; tick += 4_001) {
     const id = Math.floor((tick - 2_003) / 4_001) * 3 + 1;
     schedule.push({ tick, command: { kind: 'despawnEntity', id } });
+  }
+  // Faster than the hotel can serve them, so the queue is never empty and the give-up
+  // path is exercised as hard as the satisfied one.
+  for (let tick = 101; tick < ticks; tick += 211) {
+    schedule.push({ tick, command: { kind: 'guestArrives' } });
   }
   return schedule;
 }

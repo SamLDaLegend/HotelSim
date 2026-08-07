@@ -267,23 +267,28 @@ describe('I6 migration path — a step that misbehaves', () => {
 
 describe('I6 migration path — the chain this build ships', () => {
   it('has exactly one step per version it claims to span', () => {
-    // At v1 that is zero steps, which is a CHECKED fact rather than an unvisited loop.
-    // The moment SAVE_SCHEMA_VERSION is bumped without a migration, this fails.
+    // At v1 that was zero steps; at v2 it is one. Either way it is a CHECKED fact
+    // rather than an unvisited loop, and the moment SAVE_SCHEMA_VERSION is bumped
+    // without the migration that reaches it, this fails.
     expect(MIGRATIONS.length).toBe(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
     expect(() => assertMigrationPathComplete()).not.toThrow();
     expect(() => assertMigrationPathComplete(SAVE_SCHEMA)).not.toThrow();
   });
 
   it('proves that green means something, by failing on a span it cannot cover', () => {
-    // The pair that matters. The test above passes on the shipped schema; this one shows
-    // the same assertion rejecting the same empty chain the moment a version is added.
+    // The pair that matters. The test above passes on the shipped schema; this one
+    // shows the same assertion rejecting that same chain the moment a version is added.
+    // The expected count is DERIVED, not written as a literal — a literal here would
+    // need editing at every bump, which is how a test stops describing the thing it is
+    // pointed at (ADR-0005).
+    const required = SAVE_SCHEMA_VERSION + 1 - MIN_SUPPORTED_SCHEMA_VERSION;
     expect(() =>
       assertMigrationPathComplete({
         migrations: MIGRATIONS,
         minVersion: MIN_SUPPORTED_SCHEMA_VERSION,
         currentVersion: SAVE_SCHEMA_VERSION + 1,
       }),
-    ).toThrow(/requires exactly 1/);
+    ).toThrow(new RegExp(`requires exactly ${String(required)}`));
   });
 
   it('exposes a frozen schema, so nothing can edit the chain at runtime', () => {

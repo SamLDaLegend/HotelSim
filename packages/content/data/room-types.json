@@ -3,6 +3,7 @@
     "id": "standard_room",
     "name": "Standard Room",
     "capacity": 2,
-    "nightlyRatePence": 8500
+    "nightlyRatePence": 8500,
+    "provides": ["night_rest"]
   }
 ]
