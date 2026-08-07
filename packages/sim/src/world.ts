@@ -8,6 +8,8 @@
 // The tick itself lives in `tick.ts`, so this module has no dependency on commands and
 // the module graph stays a DAG.
 
+import { createBuildOutcomes } from './build.js';
+import type { BuildOutcomes } from './build.js';
 import type { BoundContent } from './content.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
@@ -72,6 +74,22 @@ export type World = {
    * plot; `assertWorldShape` validates that save's placements against THAT plot.
    */
   readonly grid: GridBounds;
+  /**
+   * What the player's build commands have done, counted (G-008).
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, which is why it is a field rather than a fold. A
+   * refused build leaves no trace anywhere — no entity, no transaction, no id consumed —
+   * so "refusal is a recorded outcome rather than a throw" is only true if the record
+   * lives here. The same argument `guestOutcomes` makes about a departed guest.
+   *
+   * The alternative that would have avoided a field — recording refusals in the ledger as
+   * zero-amount transactions — was rejected: a money log recording that money did not
+   * move corrupts what the ledger means, and grows without bound with player misclicks.
+   *
+   * See the note on `BuildOutcomes` in `build.ts` for why this has no conservation law
+   * binding it to the entity store, and what is checked instead.
+   */
+  readonly buildOutcomes: BuildOutcomes;
 };
 
 /**
@@ -87,6 +105,7 @@ export type World = {
  * nothing connects it to the type it claims to describe.
  */
 const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
+  buildOutcomes: true,
   contentHash: true,
   entities: true,
   grid: true,
@@ -119,6 +138,7 @@ export function createWorld(seed: number, content: BoundContent): World {
     guests: createGuestStore(),
     guestOutcomes: createGuestOutcomes(),
     grid: createGridBounds(),
+    buildOutcomes: createBuildOutcomes(),
   };
 }
 

@@ -35,9 +35,12 @@ import type { World } from './world.js';
  * coverage tests below are generated from it rather than written out by hand.
  */
 
-// G-007: a spawn carries a cell. `column` defaults so that the many tests which do not
-// care about position stay unchanged in intent; tests that DO care pass one explicitly.
-const spawn = (entityKind: string, column = 0): Command => ({
+// G-007: a spawn carries a cell. G-008 made the column MEANINGFUL rather than incidental:
+// `spawnEntity` onto a cell where a room already stands now throws, so every spawn in a
+// world needs its own column. The parameter is therefore required — a default would let a
+// second spawn silently collide, and the failure would read as a test bug rather than as
+// the rule it is.
+const spawn = (entityKind: string, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
   at: { floor: 0, column },
@@ -60,12 +63,12 @@ const content = bindContent({
  */
 function livedInWorld(): World {
   const schedule: readonly ScheduledCommand[] = [
-    { tick: 10, command: spawn('alpha') },
-    { tick: 10, command: spawn('beta') },
-    { tick: 250, command: spawn('gamma') },
+    { tick: 10, command: spawn('alpha', 0) },
+    { tick: 10, command: spawn('beta', 1) },
+    { tick: 250, command: spawn('gamma', 2) },
     { tick: 900, command: despawn(2) },
-    { tick: 1_500, command: spawn('delta') },
-    { tick: 3_000, command: spawn('epsilon') },
+    { tick: 1_500, command: spawn('delta', 3) },
+    { tick: 3_000, command: spawn('epsilon', 4) },
     { tick: 3_000, command: despawn(4) },
   ];
   const world = run(createWorld(4242, content), content, 5_000, schedule);
@@ -248,12 +251,12 @@ describe('I6 the mid-run exit criterion — save, reload, advance 1,000 ticks', 
   // real work. `run` buckets the schedule by tick and starts from `world.tick`, so
   // resuming with the same schedule replays nothing and drops nothing.
   const schedule: readonly ScheduledCommand[] = [
-    { tick: 10, command: spawn('alpha') },
-    { tick: 900, command: spawn('beta') },
+    { tick: 10, command: spawn('alpha', 0) },
+    { tick: 900, command: spawn('beta', 1) },
     { tick: 1_500, command: despawn(1) },
-    { tick: 2_100, command: spawn('gamma') },
+    { tick: 2_100, command: spawn('gamma', 2) },
     { tick: 2_400, command: despawn(2) },
-    { tick: 2_900, command: spawn('delta') },
+    { tick: 2_900, command: spawn('delta', 3) },
   ];
   const fresh = (): World => createWorld(31, content);
 
@@ -331,7 +334,7 @@ describe('I6 save round-trip — the entity store', () => {
     // nextId is saved state, so the counter does not reset differently after a load.
     const world = livedInWorld();
     const restored = deserialise(serialise(world));
-    const grown = stepTick(restored, content, [spawn('zeta')]);
+    const grown = stepTick(restored, content, [spawn('zeta', 9)]);
     const ids = entitiesInOrder(grown.entities).map((entity) => entity.id);
     const fresh = ids[ids.length - 1]!;
     expect(fresh).toBe(world.entities.nextId);

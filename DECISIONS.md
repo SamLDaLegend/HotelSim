@@ -238,6 +238,70 @@ artefact, making the assertion vacuous.
 over", it is a literal, and anything that would make it move is a defect rather than an
 update. If the answer is "now", ADR-0005's mapped-type rule applies as written.
 
+---
+
+## ADR-0009 — The build refusal tests affordability, not wisdom
+Date: 2026-08-07 · Context: G-008 critique round 2 · Decided by: orchestrator
+
+**Decision.** `buildRoom` refuses when `balance - cost < 0` and on nothing else. It will
+not refuse a build the player can afford on the grounds that the room will never repay.
+
+**The finding this answers.** `balance-critic` showed the cash test is the economy's only
+negative feedback, and that it is *anti-correlated* with the harm it appears to prevent.
+Revenue is capped by demand (12 arrivals/day x 8,500p, saturating at ~4 rooms) while
+upkeep is unbounded in room count, so any cadence that keeps passing the cash test walks
+the hotel past the point of negative net income and holds it there. Worse, a **slower**
+cadence overshoots **further**, because cash accrues between attempts so more attempts
+pass: `--build 10080` reaches −38,214,000p at 2,000 days, falling exactly −23,000p/day
+with no floor, while `--build 120` ends +21,198,500p. The slowest strategy is the worst.
+
+**Why the predicate stays anyway.** Refusing an affordable build because the simulation
+judges it unwise is the simulation playing the game for the player. Overbuilding is
+*meant* to be possible and *meant* to hurt — that is the build loop having a real trap,
+and M0's capacity sweep found the same trap before a player could reach it. A rule that
+prevents the mistake also deletes the decision.
+
+**What is actually missing is a consequence, and it is M4's.** The spiral has no
+terminator because there is no bankruptcy state and no demand response. Both are M4.
+Pulling either forward would be M4 arriving inside a build-command goal.
+
+**Consequence.** M4 inherits two obligations, recorded in `PARKING.md`: give the spiral a
+terminator, and note that build cadence interacts with the cash brake in a way that
+punishes caution. The second is a balance signal nobody would guess — it should be tested
+against, not rediscovered.
+
+---
+
+## ADR-0010 — `nightlyRatePence` is per completed stay, and the name stays
+Date: 2026-08-07 · Context: G-008 critique round 2 · Decided by: orchestrator
+
+**Decision.** `nightlyRatePence` is charged once per *completed stay*, not once per night.
+A stay is `night_rest.satisfyTicks` (480 ticks = 8 hours), so a room bills 8,500p **three
+times a night**: 25,491.5p per room-day against 2,500p of upkeep, a **10.2:1 margin**, not
+the 3.4:1 the two field names imply. **The field is not renamed and the billing model is
+not changed.** The coupling is documented instead, in `schema.ts` and cross-referenced
+from `needTypeSchema`'s `satisfyTicks`.
+
+**Why not rename.** `perStayRatePence` would change `SAVE_V1_CONTENT`'s shape. That literal
+is frozen under ADR-0006, and its fingerprint `8e09fe4f0fa162a3` is what keeps the
+permanent v1 fixture a world that still **ticks** rather than a husk that only exercises
+the reader. G-004 spent its smallest and best decision avoiding exactly that outcome, and
+a field name is not worth undoing it.
+
+**Why not change the billing model.** Pro-rata per-night billing is a pricing change. That
+is M4's, and it would arrive inside a goal about build commands.
+
+**Why this could not simply be logged.** `schema.ts` told designers that balancing the
+economy means editing `nightlyUpkeepPence` and `nightlyRatePence`, "never code" — which was
+**false**: the dominant term is `satisfyTicks`, in a different content file that nobody
+balancing revenue would open. `balance-critic` measured a **3.85x swing in profitability**
+from editing it alone (1440 -> 5,957.5p per room-day; 480 -> 25,491.5p). A comment that
+misdirects the person balancing the game is worse than no comment.
+
+**Consequence.** M4 owns the model change, and when it lands, per-night billing also makes
+`constructionCostPence` a real decision: at 1,440-tick nights the margin is 5,957.5p/day
+and 250,000p is a 42-day payback rather than an 11-day one.
+
 **Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
 As first written this ADR could be read as condemning defensive asserts. It does not.
 `sim-critic` drew the line, and it is the right one:

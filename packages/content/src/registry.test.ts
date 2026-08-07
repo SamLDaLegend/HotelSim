@@ -17,8 +17,17 @@ const roomType = (overrides: Record<string, unknown> = {}): Record<string, unkno
   name: 'Standard Room',
   capacity: 2,
   nightlyRatePence: 8_500,
+  nightlyUpkeepPence: 2_500,
+  constructionCostPence: 250_000,
   ...overrides,
 });
+
+/** The same record with one key deleted, which is what a designer's oversight looks like. */
+const roomTypeWithout = (key: string): Record<string, unknown> => {
+  const entry = roomType();
+  delete entry[key];
+  return entry;
+};
 
 const parseOne = (overrides: Record<string, unknown> = {}): unknown => parseContent([roomType(overrides)]);
 
@@ -31,6 +40,8 @@ describe('parseContent — the happy path', () => {
       name: 'Standard Room',
       capacity: 2,
       nightlyRatePence: 8_500,
+      nightlyUpkeepPence: 2_500,
+      constructionCostPence: 250_000,
     });
   });
 
@@ -109,19 +120,16 @@ describe('parseContent — field rejection', () => {
     expect(() => parseOne({ capacity: 1.5 })).toThrow(/capacity/);
   });
 
-  it('accepts nightly upkeep as optional integer pence, and its absence (G-005)', () => {
-    // Absence is not emptiness: content that predates upkeep omits the key and
-    // fingerprints in the sim exactly as it did, which is what keeps old saves
-    // tickable. `0` is the different statement "deliberately free to keep".
-    expect(() => parseOne({ nightlyUpkeepPence: 2_500 })).not.toThrow();
-    expect(() => parseOne({ nightlyUpkeepPence: 0 })).not.toThrow();
-    expect(() => parseOne({})).not.toThrow();
-  });
-
   it('rejects a float, negative or non-numeric upkeep (ADR-0002)', () => {
     expect(() => parseOne({ nightlyUpkeepPence: 25.5 })).toThrow(/nightlyUpkeepPence/);
     expect(() => parseOne({ nightlyUpkeepPence: -1 })).toThrow(/nightlyUpkeepPence/);
     expect(() => parseOne({ nightlyUpkeepPence: '2500' })).toThrow(/nightlyUpkeepPence/);
+  });
+
+  it('rejects a float, negative or non-numeric construction cost (ADR-0002)', () => {
+    expect(() => parseOne({ constructionCostPence: 2_500.5 })).toThrow(/constructionCostPence/);
+    expect(() => parseOne({ constructionCostPence: -1 })).toThrow(/constructionCostPence/);
+    expect(() => parseOne({ constructionCostPence: '250000' })).toThrow(/constructionCostPence/);
   });
 
   it('rejects a missing or empty name', () => {
@@ -132,6 +140,59 @@ describe('parseContent — field rejection', () => {
   it('rejects duplicate ids, which would make lookup depend on document order', () => {
     expect(() => parseContent([roomType(), roomType()])).toThrow(/duplicate room type id/);
     expect(() => parseContent([roomType(), roomType()])).toThrow(/standard_room/);
+  });
+});
+
+describe('new content on disk must state both of its prices (G-008)', () => {
+  // THE FREE ROOM. A room type on disk that omits `nightlyUpkeepPence` and
+  // `constructionCostPence` is free to build and free to keep — strictly better than
+  // every priced room type on every axis, which is the dominant-strategy collapse the
+  // build loop dies of. Measured before this check existed, `--rooms 0 --build 1
+  // --days 200` under exactly the document below: 1,680 rooms built from a balance of
+  // 0, zero refusals, balance +20,366,000p. Under the shipped content, same flags:
+  // 0 rooms, balance 0, 1,680 insufficient-funds refusals. One forgotten JSON key.
+  //
+  // The keys stay OPTIONAL in `RoomTypeData` in packages/sim, which is not an
+  // inconsistency but the whole point: history may omit and still fingerprint as it
+  // did (ADR-0006's permanent v1 fixture is a frozen sim-side literal and never comes
+  // through this schema), while anything arriving on disk today must say its prices.
+  it('rejects a room type that omits nightlyUpkeepPence', () => {
+    expect(() => parseContent([roomTypeWithout('nightlyUpkeepPence')])).toThrow(ContentError);
+    expect(() => parseContent([roomTypeWithout('nightlyUpkeepPence')])).toThrow(/nightlyUpkeepPence/);
+  });
+
+  it('rejects a room type that omits constructionCostPence', () => {
+    expect(() => parseContent([roomTypeWithout('constructionCostPence')])).toThrow(ContentError);
+    expect(() => parseContent([roomTypeWithout('constructionCostPence')])).toThrow(/constructionCostPence/);
+  });
+
+  it('rejects the free room — both keys gone — naming both, not just the first', () => {
+    const free = roomTypeWithout('nightlyUpkeepPence');
+    delete free['constructionCostPence'];
+    let message = '';
+    try {
+      parseContent([free], 'data/room-types.json');
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain('data/room-types.json');
+    expect(message).toContain('nightlyUpkeepPence');
+    expect(message).toContain('constructionCostPence');
+  });
+
+  // THE COMPANION, and the reason the three above are evidence rather than noise: the
+  // byte-identical document WITH the two keys parses. So what those tests detect is the
+  // absence of the key and nothing else — no unrelated strictness, no accident of the
+  // factory. Restore either `.optional()` in `roomTypeSchema` and they go red while
+  // this one stays green, which is the mutation that must be caught.
+  it('accepts the same document once both prices are stated', () => {
+    expect(() => parseContent([roomType()])).not.toThrow();
+  });
+
+  it('accepts 0 — free is sayable, it just cannot be said by silence', () => {
+    // `0` and an absent key were always different statements. This keeps the deliberate
+    // one available: a designer who means "free to build" writes the number and owns it.
+    expect(() => parseOne({ nightlyUpkeepPence: 0, constructionCostPence: 0 })).not.toThrow();
   });
 });
 

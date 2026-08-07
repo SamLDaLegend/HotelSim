@@ -28,7 +28,7 @@
  * them in a migration would invent semantics for bytes that never meant them. The load
  * path therefore requires only a non-empty string (`assertTransaction` in save.ts).
  */
-export type TransactionReason = 'roomRevenue' | 'upkeep';
+export type TransactionReason = 'construction' | 'roomRevenue' | 'upkeep';
 
 /**
  * The reasons, written down exactly once as a mapped type — the `WORLD_KEY_SET`
@@ -36,6 +36,7 @@ export type TransactionReason = 'roomRevenue' | 'upkeep';
  * type error in BOTH directions, not a comment someone has to remember.
  */
 const TRANSACTION_REASON_SET: Readonly<Record<TransactionReason, true>> = Object.freeze({
+  construction: true,
   roomRevenue: true,
   upkeep: true,
 });

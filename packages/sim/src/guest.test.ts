@@ -72,14 +72,31 @@ const simContent: SimContent = {
 };
 const content = bindContent(simContent);
 
-const spawnRoom: Command = { kind: 'spawnEntity', entityKind: 'roomA', at: { floor: 0, column: 0 } };
+/**
+ * One room, in its own column.
+ *
+ * G-008 CHANGED THIS FROM A CONSTANT. It used to be a single `Command` value at (0,0)
+ * spawned N times, which relied on G-007's deliberate permissiveness about two entities
+ * sharing a cell — the gap G-007 pinned with a test so that closing it would be visible.
+ * G-008 closed it: `spawnEntity` onto a cell where a room already stands now throws,
+ * because it is the structural door and a caller stacking rooms is holding the world it
+ * just ignored. Every hotel in this file is therefore a ROW of rooms rather than a stack.
+ *
+ * Nothing else about these tests changes: the guest loop chooses by lowest id, not by
+ * position, and will keep doing so until M3 makes it nearest-by-path.
+ */
+const spawnRoom = (column: number): Command => ({
+  kind: 'spawnEntity',
+  entityKind: 'roomA',
+  at: { floor: 0, column },
+});
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
 
 /** A hotel with `rooms` rooms, built at tick 0, one tick in. */
 function hotel(rooms: number, seed = 1): World {
-  return stepTick(createWorld(seed, content), content, Array.from({ length: rooms }, () => spawnRoom));
+  return stepTick(createWorld(seed, content), content, Array.from({ length: rooms }, (_, i) => spawnRoom(i)));
 }
 
 const onlyGuest = (world: World): Guest => {
@@ -277,7 +294,7 @@ describe('a guest does not change its mind', () => {
     let world = stepTick(hotel(1), content, [arrive]);
     const chosen = onlyGuest(world).roomEntityId;
     for (let i = 1; i < SATISFY; i += 1) {
-      world = stepTick(world, content, [spawnRoom]);
+      world = stepTick(world, content, [spawnRoom(i)]);
       expect(onlyGuest(world).roomEntityId).toBe(chosen);
     }
   });
@@ -298,7 +315,7 @@ describe('the guest loop is a pure function of world state', () => {
     at(1, arrive),
     at(4, arrive),
     at(9, despawn(1)),
-    at(12, spawnRoom),
+    at(12, spawnRoom(2)),
     at(20, arrive),
     at(31, arrive),
   ];
@@ -430,7 +447,7 @@ describe('the exit criteria, over 30 simulated days', () => {
 
   const thirtyDays = (): World => {
     const ticks = DAYS * TICKS_PER_DAY;
-    const start = stepTick(createWorld(7, hotelContent), hotelContent, Array.from({ length: ROOMS }, () => spawnRoom));
+    const start = stepTick(createWorld(7, hotelContent), hotelContent, Array.from({ length: ROOMS }, (_, i) => spawnRoom(i)));
     const arrivals: ScheduledCommand[] = [];
     for (let tick = 1; tick < ticks; tick += EVERY) arrivals.push(at(tick, arrive));
     return run(start, hotelContent, ticks, arrivals);

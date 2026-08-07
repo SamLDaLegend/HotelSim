@@ -147,7 +147,7 @@ describe('the v1 fixture, through the real migration', () => {
   it('is still a v1 blob, and v1 is still the oldest version this build accepts', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     // G-007 bumped this to 3. The fixture did not move; the schema did.
-    expect(SAVE_SCHEMA_VERSION).toBe(3);
+    expect(SAVE_SCHEMA_VERSION).toBe(4);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -233,12 +233,17 @@ describe('a v2 world with guests in it', () => {
   });
   const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 };
   const content = bindContent({ roomTypes: [roomType('roomA', ['rest'])], needTypes: [needType] });
-  const spawnRoom: Command = { kind: 'spawnEntity', entityKind: 'roomA', at: { floor: 0, column: 0 } };
+  // A function of the column since G-008: `spawnEntity` onto an occupied cell throws.
+  const spawnRoom = (column: number): Command => ({
+    kind: 'spawnEntity',
+    entityKind: 'roomA',
+    at: { floor: 0, column },
+  });
   const arrive: Command = { kind: 'guestArrives' };
 
   /** A hotel mid-service: two guests resting, one waiting, two already departed. */
   function lived(): World {
-    const built = stepTick(createWorld(11, content), content, [spawnRoom, spawnRoom]);
+    const built = stepTick(createWorld(11, content), content, [spawnRoom(0), spawnRoom(1)]);
     return run(built, content, 40, [
       { tick: 1, command: arrive },
       { tick: 2, command: arrive },

@@ -43,8 +43,10 @@
 // boundary.
 
 import {
+  assertBuildOutcomes,
   assertGuestOutcomes,
   balanceOf,
+  countConstructionTransactions,
   countOrphanedReservations,
   countSettlementTransactions,
   countStuckGuests,
@@ -52,11 +54,12 @@ import {
   entityCount,
   guestCount,
   hashState,
+  isWithinBounds,
   sumByReason,
   TICKS_PER_DAY,
   TRANSACTION_REASONS,
 } from '@hotelsim/sim';
-import type { BoundContent, ScheduledCommand, World } from '@hotelsim/sim';
+import type { BoundContent, Cell, GridBounds, ScheduledCommand, World } from '@hotelsim/sim';
 
 /**
  * The hotel this runner simulates, until there is a way to build one.
@@ -80,31 +83,90 @@ export const HOTEL_ROOMS = 3;
 export const TICKS_BETWEEN_ARRIVALS = 120;
 
 /**
- * How many rooms this runner puts on a floor before starting the next one (G-007).
+ * `--build` and `--demolish` are OFF by default, and that is load-bearing (G-008).
  *
- * A HOST DECISION, not a rule of the simulation. The sim knows only that an entity
- * stands at a cell; how a hotel is laid out is the player's business at M5 and this
- * runner's business until then. Room footprints are content (G-008), so a room occupies
- * one column here; when it occupies four, this is the line that changes.
+ * The default run — no flags — is pinned byte-for-byte by the golden test and timed by
+ * `pnpm sim:bench`, so a build schedule that ran by default would change what I5 measures
+ * in the goal immediately BEFORE G-010 fixes tick cost. Opting in keeps the bench a
+ * measurement of the same workload it has always measured.
  */
-export const ROOMS_PER_FLOOR = 20;
+export const BUILD_OFF = 0;
 
 /**
- * Where the nth seeded room stands: left to right along a floor, then up.
+ * WHY THE SEEDED ROOMS ARE FREE AND THE BUILT ONES ARE NOT.
  *
- * Deterministic and a pure function of the index — no RNG draw, so `--seed` does not
- * move the building, and the layout is identical on every platform and every run.
- * Starts at floor 0 (ground) and goes up; the basements the plot allows are left empty
- * because nothing in M1 has a reason to be down there yet.
+ * `--rooms` is the hotel the scenario STARTS with — the one the player inherited — and it
+ * is placed with `spawnEntity`, the structural door: no charge, no refusal, a throw if the
+ * host asks for something impossible. `--build` is the player ACTING, through `buildRoom`:
+ * charged, refusable, recorded.
+ *
+ * The consequence is deliberate and it is what makes the exit criterion worth running.
+ * A world starts with a balance of ZERO, so the first scheduled build is REFUSED for
+ * insufficient funds; revenue accrues from the inherited rooms; later builds succeed. The
+ * refusal path is therefore exercised by the real CLI on a real run, not only by a unit
+ * test (ADR-0007), and it costs nothing to arrange because it is simply what being broke
+ * means. Starting capital as a scenario parameter is parked to M4, with demand.
  */
-export function roomCell(index: number): { readonly floor: number; readonly column: number } {
-  return { floor: Math.floor(index / ROOMS_PER_FLOOR), column: index % ROOMS_PER_FLOOR };
+export const BUILD_START_TICK = 1;
+
+/**
+ * The storey the walk starts on. Ground is 0 and basements are negative (`grid.ts`), and
+ * the walk goes UP from here: the basements the plot allows are left empty because
+ * nothing in M1 has a reason to be down there yet.
+ */
+const GROUND_FLOOR = 0;
+
+/**
+ * One room, one column. A HOST DECISION about layout, not a rule of the simulation.
+ *
+ * The sim knows only that an entity stands at a cell; how a hotel is laid out is the
+ * player's business at M5 and this runner's business until then. Room footprints are
+ * content, so when a room occupies four columns this is the line that changes.
+ */
+const COLUMNS_PER_ROOM = 1;
+
+/**
+ * Where the nth room this runner places stands: left to right along a floor, then up.
+ *
+ * Deterministic and a pure function of `(index, bounds)` — no RNG draw, so `--seed` does
+ * not move the building, and the layout is identical on every platform and every run.
+ *
+ * THE WALK IS AS WIDE AS THE PLOT (G-008 critique round 1). It used to stop at a hard
+ * 20 columns, which reached 420 of the plot's 1,840 cells and made the runner run out of
+ * building land long before the player ran out of money — so a fast `--build` cadence
+ * reported the PLOT as the binding constraint on a run whose real constraint was cash.
+ * The width now comes from the bounds the sim will check the cell against, so "off the
+ * plot" means the same thing on both sides of the call.
+ */
+export function roomCell(index: number, bounds: GridBounds): Cell {
+  // At least 1: `assertGridBounds` guarantees `minColumn <= maxColumn`, so the plot is at
+  // least one column wide, and a room is one column. The goal that widens a room (G-009,
+  // footprints) owns the case where a room is wider than the plot, and owns it there
+  // rather than here because that is where a room first HAS a width to compare.
+  const roomsPerFloor = Math.floor((bounds.maxColumn - bounds.minColumn + 1) / COLUMNS_PER_ROOM);
+  return {
+    floor: GROUND_FLOOR + Math.floor(index / roomsPerFloor),
+    column: bounds.minColumn + (index % roomsPerFloor) * COLUMNS_PER_ROOM,
+  };
 }
 
 /**
- * Version of the `--json` document shape. Bump when the shape changes incompatibly —
- * the parked M2 change that turns the outcome tally into a per-reason table is the
- * scheduled first bump. Same discipline as SAVE_SCHEMA_VERSION, one integer.
+ * Version of the `--json` document shape.
+ *
+ * THE POLICY, WRITTEN DOWN SO IT STOPS BEING RE-ARGUED EVERY GOAL: an ADDITIVE block or
+ * field does NOT bump this. A removal, a rename, or a type change DOES. The parked M2
+ * change that turns the outcome tally into a per-reason table is the scheduled first bump,
+ * because it replaces fields rather than adding them.
+ *
+ * G-008 added a whole `build` block and a `money.constructionPennies` field and did NOT
+ * bump, deliberately. A version that moves whenever anything is added stops distinguishing
+ * anything, and M4's sweep tooling — the consumer this exists for — learns to ignore it,
+ * which is exactly the failure the version was bought to prevent. A version that means
+ * something is worth more than a version that moves.
+ *
+ * Same discipline as SAVE_SCHEMA_VERSION, one integer. (Note the difference in kind: a
+ * SAVE bump is owed for ANY field, because an old save must still be readable; a REPORT is
+ * generated fresh every run and nothing has to read yesterday's.)
  */
 export const SUMMARY_SCHEMA_VERSION = 1;
 
@@ -115,6 +177,10 @@ export type Options = {
   readonly json: boolean;
   readonly rooms: number;
   readonly arrivalEveryTicks: number;
+  /** Ticks between player build attempts. `BUILD_OFF` (0) means the player never builds. */
+  readonly buildEveryTicks: number;
+  /** Ticks between player demolitions. `BUILD_OFF` (0) means the player never demolishes. */
+  readonly demolishEveryTicks: number;
   readonly contentDir: string | undefined;
 };
 
@@ -125,6 +191,8 @@ export function parseArgs(argv: readonly string[]): Options {
   let json = false;
   let rooms = HOTEL_ROOMS;
   let arrivalEveryTicks = TICKS_BETWEEN_ARRIVALS;
+  let buildEveryTicks = BUILD_OFF;
+  let demolishEveryTicks = BUILD_OFF;
   let contentDir: string | undefined;
 
   const requireNumber = (flag: string, raw: string | undefined): number => {
@@ -167,6 +235,17 @@ export function parseArgs(argv: readonly string[]): Options {
         }
         i += 1;
         break;
+      case '--build':
+        // 0 is legal and means "the player never builds", which is the default and the
+        // shape every run before G-008 had. A schedule loop with a step of 0 would not
+        // terminate, so `schedule` treats 0 as off rather than as a cadence.
+        buildEveryTicks = requireNumber('--build', argv[i + 1]);
+        i += 1;
+        break;
+      case '--demolish':
+        demolishEveryTicks = requireNumber('--demolish', argv[i + 1]);
+        i += 1;
+        break;
       case '--content': {
         const raw = argv[i + 1];
         if (raw === undefined) throw new Error('--content requires a directory path');
@@ -189,7 +268,17 @@ export function parseArgs(argv: readonly string[]): Options {
   if (quiet && json) {
     throw new Error('Pass either --quiet or --json, not both: two output modes on one stdout is an ambiguity with no consumer');
   }
-  return { seed, ticks, quiet, json, rooms, arrivalEveryTicks, contentDir };
+  return {
+    seed,
+    ticks,
+    quiet,
+    json,
+    rooms,
+    arrivalEveryTicks,
+    buildEveryTicks,
+    demolishEveryTicks,
+    contentDir,
+  };
 }
 
 /**
@@ -200,12 +289,19 @@ export function parseArgs(argv: readonly string[]): Options {
  *
  * The room kind comes from the LOADED CONTENT, never from a literal (I3, ADR-0003), and
  * is the lowest id after normalisation rather than "the first line of the file".
+ *
+ * `bounds` is THE WORLD'S OWN PLOT, threaded in by the caller rather than read from a
+ * constant here. The runner therefore lays its building out on exactly the plot the sim
+ * will validate every cell against; there is no second copy of the plot to drift.
  */
 export function schedule(
   ticks: number,
   content: BoundContent,
+  bounds: GridBounds,
   rooms: number,
   arrivalEveryTicks: number,
+  buildEveryTicks: number = BUILD_OFF,
+  demolishEveryTicks: number = BUILD_OFF,
 ): readonly ScheduledCommand[] {
   const entityKind = content.content.roomTypes[0]?.id;
   if (entityKind === undefined) {
@@ -215,11 +311,48 @@ export function schedule(
   for (let i = 0; i < rooms; i += 1) {
     // Each room gets its own cell (G-007). A cell off the plot throws inside the sim,
     // which is the right failure for `--rooms 99999`: the plot is finite and the runner
-    // should say so rather than stack every room on one square.
-    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind, at: roomCell(i) } });
+    // should say so rather than stack every room on one square. Since G-008 a cell that
+    // is already occupied throws too, which `roomCell` cannot produce — it is injective.
+    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind, at: roomCell(i, bounds) } });
   }
   for (let tick = 1; tick < ticks; tick += arrivalEveryTicks) {
     commands.push({ tick, command: { kind: 'guestArrives' } });
+  }
+  // THE PLAYER BUILDS (G-008). The walk continues from where `--rooms` stopped, so a built
+  // room never lands on an inherited one. Early attempts are refused — the hotel opens with
+  // nothing in the bank — and later ones succeed.
+  //
+  // THE INDEX ADVANCES ON EVERY ATTEMPT, REFUSED OR NOT, and it has to: this schedule is
+  // generated before the run, so it cannot observe a refusal, and advancing only on an
+  // attempt the host PREDICTS will succeed would put a copy of the sim's pricing and
+  // placement rules in the runner. A fast cadence therefore consumes plot quickly — and
+  // when the walk reaches the far end, THE SCHEDULE STOPS rather than emitting commands it
+  // can already prove will be refused. Both halves are the G-008 critique round 1 fix: the
+  // old walk was 20 columns wide and kept going past the top of the plot, so `--build 5`
+  // reported 8,223 off-plot refusals and blamed the plot for a run whose real constraint
+  // was cash. A refusal in a default-plot run is now about MONEY (or, with `--demolish`
+  // interleaved, an occupied cell) — `refused.outOfBounds` is 0, which report.test.ts
+  // sweeps across cadences rather than leaving as a claim in this comment (ADR-0007).
+  if (buildEveryTicks > BUILD_OFF) {
+    let index = rooms;
+    for (let tick = BUILD_START_TICK; tick < ticks; tick += buildEveryTicks) {
+      const at = roomCell(index, bounds);
+      // The SIM's own bounds predicate, not a copy of it, so the runner and the simulation
+      // cannot disagree about where the plot ends.
+      if (!isWithinBounds(at, bounds)) break;
+      commands.push({ tick, command: { kind: 'buildRoom', roomType: entityKind, at } });
+      index += 1;
+    }
+  }
+  // AND THE PLAYER DEMOLISHES. Oldest first, by id, starting at 1 — so the schedule
+  // demolishes the inherited rooms before anything it built, which is what puts a guest
+  // in a room that stops existing and makes `evicted` a number a real run can produce.
+  if (demolishEveryTicks > BUILD_OFF) {
+    let id = 1;
+    for (let tick = BUILD_START_TICK; tick < ticks; tick += demolishEveryTicks) {
+      commands.push({ tick, command: { kind: 'demolishRoom', id } });
+      id += 1;
+    }
   }
   return commands;
 }
@@ -241,6 +374,8 @@ export type RunSummary = {
     readonly ticks: number;
     readonly rooms: number;
     readonly arrivalEveryTicks: number;
+    readonly buildEveryTicks: number;
+    readonly demolishEveryTicks: number;
   };
   readonly world: {
     readonly tick: number;
@@ -263,9 +398,30 @@ export type RunSummary = {
     readonly transactions: number;
     readonly revenuePennies: number;
     readonly upkeepPennies: number;
+    /** Negative: construction is money out. One transaction per successful build. */
+    readonly constructionPennies: number;
     readonly settlements: number;
     readonly nights: number;
     readonly balancePennies: number;
+  };
+  /**
+   * What the player's build commands did (G-008).
+   *
+   * `refused` is nested and keyed by reason, mirroring the sim's own shape rather than
+   * flattening it: the reasons are a closed union there, and a report that renamed them on
+   * the way out would be a second place to keep in step.
+   */
+  readonly build: {
+    readonly built: number;
+    readonly demolished: number;
+    readonly refused: {
+      readonly insufficientFunds: number;
+      readonly noSuchRoom: number;
+      readonly occupied: number;
+      readonly outOfBounds: number;
+    };
+    /** One construction transaction per successful build. Must equal `built`. */
+    readonly constructionTransactions: number;
   };
 };
 
@@ -317,6 +473,9 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // Throws if a guest went missing or was counted twice. A report whose arithmetic
   // does not close is worse than no report.
   assertGuestOutcomes(world.guestOutcomes, world.guests);
+  // And that the build counters are still counters. Same function the tick and the load
+  // path call, so "valid build outcomes" has one definition in the codebase.
+  assertBuildOutcomes(world.buildOutcomes);
 
   const stuck = countStuckGuests(world.tick, world.guests, content);
   const orphans = countOrphanedReservations(world.guests, world.entities);
@@ -326,6 +485,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
     classified += sumByReason(world.ledger, reason);
   }
   const settlements = countSettlementTransactions(world.ledger);
+  const constructions = countConstructionTransactions(world.ledger);
   const nights = dayOf(world);
 
   const summary: RunSummary = {
@@ -335,6 +495,8 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       ticks: options.ticks,
       rooms: options.rooms,
       arrivalEveryTicks: options.arrivalEveryTicks,
+      buildEveryTicks: options.buildEveryTicks,
+      demolishEveryTicks: options.demolishEveryTicks,
     },
     world: {
       tick: world.tick,
@@ -357,9 +519,21 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       transactions: world.ledger.length,
       revenuePennies: sumByReason(world.ledger, 'roomRevenue'),
       upkeepPennies: sumByReason(world.ledger, 'upkeep'),
+      constructionPennies: sumByReason(world.ledger, 'construction'),
       settlements,
       nights,
       balancePennies: balance,
+    },
+    build: {
+      built: world.buildOutcomes.built,
+      demolished: world.buildOutcomes.demolished,
+      refused: {
+        insufficientFunds: world.buildOutcomes.refused.insufficientFunds,
+        noSuchRoom: world.buildOutcomes.refused.noSuchRoom,
+        occupied: world.buildOutcomes.refused.occupied,
+        outOfBounds: world.buildOutcomes.refused.outOfBounds,
+      },
+      constructionTransactions: constructions,
     },
   };
   assertIntegerLeaves(summary, '');
@@ -382,6 +556,20 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
     violations.push(
       `Settlement invariant broken at tick ${world.tick}: ${settlements} settlement transaction(s) over ` +
         `${nights} simulated night(s). Nightly settlement records exactly one per night (G-005).`,
+    );
+  }
+  // CONSTRUCTION — the cross-subsystem law (G-008). The counter is incremented by
+  // `applyBuildRoom` and the transaction is appended by the ledger a line later; they are
+  // written for different reasons and agree only if every successful build did both. This
+  // is what makes "reports construction transactions and a balance equal to the fold of
+  // its own log" a test OF CONSTRUCTION COST rather than a re-run of G-005's balance
+  // check: without it, a build that charged nothing and a build that forgot to record
+  // would both leave a balance that folds perfectly.
+  if (constructions !== summary.build.built) {
+    violations.push(
+      `Construction invariant broken at tick ${world.tick}: ${constructions} construction transaction(s) ` +
+        `against ${summary.build.built} room(s) recorded as built. Every successful build charges exactly ` +
+        'once and is counted exactly once (G-008).',
     );
   }
 
@@ -411,6 +599,11 @@ export function renderText(summary: RunSummary): string {
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,
     `upkeep      ${summary.money.upkeepPennies}p`,
+    `built       ${summary.build.built}`,
+    `demolished  ${summary.build.demolished}`,
+    `refused     ${summary.build.refused.insufficientFunds} funds, ${summary.build.refused.occupied} occupied, ` +
+      `${summary.build.refused.outOfBounds} off plot, ${summary.build.refused.noSuchRoom} no room`,
+    `building    ${summary.money.constructionPennies}p`,
     `settlements ${summary.money.settlements}`,
     `balance     ${summary.money.balancePennies}p`,
     `state hash  ${summary.world.stateHash}`,

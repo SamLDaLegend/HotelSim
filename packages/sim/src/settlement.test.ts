@@ -54,9 +54,12 @@ const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: SATISFY
 /** One priced room type, one need. The M0 hotel with the G-005 field on it. */
 const content = bindContent({ roomTypes: [roomType('roomA')], needTypes: [needType] });
 
-// G-007: a spawn carries a cell. `column` defaults so that the many tests which do not
-// care about position stay unchanged in intent; tests that DO care pass one explicitly.
-const spawn = (entityKind: string, column = 0): Command => ({
+// G-007: a spawn carries a cell. G-008 made the column MEANINGFUL rather than incidental:
+// `spawnEntity` onto a cell where a room already stands now throws, so every spawn in a
+// world needs its own column. The parameter is therefore required — a default would let a
+// second spawn silently collide, and the failure would read as a test bug rather than as
+// the rule it is.
+const spawn = (entityKind: string, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
   at: { floor: 0, column },
@@ -70,7 +73,7 @@ function hotel(rooms: number, bound = content, kind = 'roomA'): World {
   return stepTick(
     createWorld(3, bound),
     bound,
-    Array.from({ length: rooms }, () => spawn(kind)),
+    Array.from({ length: rooms }, (_, i) => spawn(kind, i)),
   );
 }
 
@@ -127,7 +130,7 @@ describe('one settlement transaction per simulated night', () => {
       roomTypes: [roomType('roomA'), roomType('roomFree', { nightlyUpkeepPence: undefined })],
       needTypes: [needType],
     });
-    const world = run(hotel(1, mixed, 'roomA'), mixed, TICKS_PER_DAY, [at(5, spawn('roomFree'))]);
+    const world = run(hotel(1, mixed, 'roomA'), mixed, TICKS_PER_DAY, [at(5, spawn('roomFree', 50))]);
     expect(world.ledger).toHaveLength(1);
     expect(world.ledger[0]!.amount).toBe(-UPKEEP);
   });
@@ -135,7 +138,7 @@ describe('one settlement transaction per simulated night', () => {
 
 describe('settlement reads the draft — the same visibility rule guests live by', () => {
   it('charges a room built at midnight for that very night', () => {
-    const world = run(hotel(0), content, TICKS_PER_DAY, [at(MIDNIGHT, spawn('roomA'))]);
+    const world = run(hotel(0), content, TICKS_PER_DAY, [at(MIDNIGHT, spawn('roomA', 50))]);
     expect(world.ledger[0]!.amount).toBe(-UPKEEP);
   });
 

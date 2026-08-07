@@ -5,6 +5,7 @@
     "capacity": 2,
     "nightlyRatePence": 8500,
     "nightlyUpkeepPence": 2500,
+    "constructionCostPence": 250000,
     "provides": ["night_rest"]
   }
 ]

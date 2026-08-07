@@ -61,8 +61,35 @@ export type RoomTypeData = {
    * charges nothing; that is what keeps the permanent v1 save fixture a world that
    * still ticks (ADR-0006). `0` is a different statement: this room is deliberately
    * free to keep.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK. `roomTypeSchema` in `packages/content` demands this
+   * key of every document it validates (G-008 round 3). The asymmetry is deliberate: an
+   * omission in history is a statement about when the document was written, an omission
+   * in a file a designer is editing today is an oversight that ships a free room. Only
+   * the schema can tell those apart, because only the schema knows the bytes came off
+   * disk. Nothing reaches this type without either coming through that schema or being
+   * a frozen fixture, and a fixture is history by construction.
    */
   readonly nightlyUpkeepPence?: number | undefined;
+  /**
+   * What it costs to BUILD one of these, in integer pence (G-008). Charged once, at the
+   * moment the room is placed; the rate lives here and never in code (I3, ADR-0002).
+   *
+   * OPTIONAL, and absence is not emptiness — the `provides` and `nightlyUpkeepPence`
+   * contract exactly. Content written before the build loop omits the key, fingerprints
+   * as it always did, and is free to build; that is what keeps the permanent v1 save
+   * fixture a world that still ticks (ADR-0006). `0` is the different statement: this
+   * room type is deliberately free to build.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK, for the reason set out on `nightlyUpkeepPence`
+   * above. A document omitting BOTH is a room free to build and free to keep — strictly
+   * dominant over every priced room type on every axis — and `roomTypeSchema` refuses it.
+   *
+   * A free room type still records a construction transaction of amount 0. See
+   * `applyBuildRoom` in `build.ts` — one transaction per successful build, no
+   * exceptions, is what makes the count a countable fact.
+   */
+  readonly constructionCostPence?: number | undefined;
 };
 
 /**
@@ -201,11 +228,27 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
       `bindContent: room type "${roomType.id}" has a non-integer or negative nightlyUpkeepPence (${String(upkeep)}); money is integer pence (ADR-0002)`,
     );
   }
-  // Both optional keys are STRIPPED when they hold undefined, not carried: an absent
+  // Construction cost, same discipline (G-008). A float or negative cost from a raw host
+  // would reach `appendTransaction` as the amount of a `construction` transaction and be
+  // rejected there — at the moment a player clicked, three subsystems from the cause.
+  // Dying here, at bind time, names the room type instead.
+  const cost = roomType.constructionCostPence;
+  if (cost !== undefined && (!Number.isInteger(cost) || cost < 0)) {
+    throw new Error(
+      `bindContent: room type "${roomType.id}" has a non-integer or negative constructionCostPence (${String(cost)}); money is integer pence (ADR-0002)`,
+    );
+  }
+  // Every optional key is STRIPPED when it holds undefined, not carried: an absent
   // key and a key holding `undefined` are different documents to the fingerprint, and
   // only the absent form is the "predates this field" statement (see the field docs).
-  const { provides: rawProvides, nightlyUpkeepPence: _rawUpkeep, ...rest } = roomType;
-  const base: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
+  const {
+    provides: rawProvides,
+    nightlyUpkeepPence: _rawUpkeep,
+    constructionCostPence: _rawCost,
+    ...rest
+  } = roomType;
+  const withUpkeep: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
+  const base: RoomTypeData = cost === undefined ? withUpkeep : { ...withUpkeep, constructionCostPence: cost };
   if (rawProvides === undefined) {
     return base;
   }

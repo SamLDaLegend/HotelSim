@@ -5,6 +5,8 @@
 // `assertWorldShape` too. A field that round-trips by accident today will be the
 // field that is silently missing from someone's save tomorrow.
 
+import { assertBuildOutcomes } from './build.js';
+import type { BuildOutcomes } from './build.js';
 import { assertEntityStoreInvariants } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
 import { assertGridBounds } from './grid.js';
@@ -16,7 +18,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 3;
+export const SAVE_SCHEMA_VERSION = 4;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -176,6 +178,75 @@ function migrateV2ToV3(world: unknown): unknown {
 }
 
 /**
+ * THE BUILD COUNTERS A v3 WORLD IS CARRIED ONTO, FROZEN AT THE MOMENT v4 WAS DEFINED.
+ *
+ * A LITERAL, and it must stay one. `createBuildOutcomes()` in `build.ts` returns the same
+ * shape today and the two are allowed to diverge later — that divergence is correct, not
+ * a bug to repair (ADR-0008).
+ *
+ * This is not pedantry about a bag of zeros. `BuildRefusalReason` is a union that WILL
+ * grow — G-009's validity rules are the obvious next member. If this step called
+ * `createBuildOutcomes()`, the day that member lands the same v3 bytes would start
+ * producing a v4 world carrying a counter for a refusal reason that did not exist when
+ * those bytes were written, and the pinned hash of the migrated fixture would move on a
+ * change that says nothing about it. History would drift with the build.
+ *
+ * The guard is structural rather than a value assertion, because the two agree today and
+ * no assertion can tell the implementations apart: a source scan in
+ * `tools/headless/src/migration-scan.build.grid.save.test.ts` forbids this file from naming
+ * `createBuildOutcomes` or `BUILD_REFUSAL_REASONS` in executable code.
+ */
+const V4_MIGRATION_BUILD_OUTCOMES: BuildOutcomes = Object.freeze({
+  built: 0,
+  demolished: 0,
+  refused: Object.freeze({ insufficientFunds: 0, noSuchRoom: 0, occupied: 0, outOfBounds: 0 }),
+});
+
+/**
+ * v3 -> v4: a world that predates the build loop (G-008).
+ *
+ * ADR-0006 fires for the third time, and the permanent v1 fixture now walks a THREE-step
+ * chain, 1 -> 2 -> 3 -> 4. It is not regenerated; this is what carries it.
+ *
+ * WHY ZEROS ARE THE READING OF AN OLD SAVE RATHER THAN A CONVENIENT DEFAULT. A v3 world
+ * is not a world whose build counters were left out of the file. It is a world in which
+ * no player could build at all: the commands did not exist, so no build was made, none
+ * was refused, and nothing was demolished by a player. Zero is not a placeholder here, it
+ * is the true count. That is a stronger position than the v2 -> v3 step had — there the
+ * question was what to do with entities whose positions were genuinely unknown, and the
+ * answer was to invent nothing. Here nothing is unknown.
+ *
+ * The rooms such a world contains were placed by `spawnEntity` or arrived unplaced from
+ * the v2 -> v3 step, and `built` deliberately does NOT count them: `built` is "rooms the
+ * player built", not "rooms that exist". Claiming otherwise would invent a history of
+ * player decisions in a world that had no player, and would break the one cross-subsystem
+ * law this goal has — `countConstructionTransactions === built` — for every migrated
+ * save, since those rooms were never charged for.
+ *
+ * No other field is renamed, dropped or reinterpreted, so the fixture still ticks.
+ */
+function migrateV3ToV4(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way this step could destroy data — spreading over real state — is the one
+  // thing it refuses to do, exactly as both earlier steps refuse. `Object.keys().includes`
+  // rather than `in`, because `JSON.parse` makes `__proto__` an own key (G-003).
+  if (Object.keys(world).includes('buildOutcomes')) {
+    throw new Error(
+      'world already has a "buildOutcomes" field, so it is not a v3 world; migrating it would overwrite real counters',
+    );
+  }
+  return {
+    ...world,
+    buildOutcomes: {
+      ...V4_MIGRATION_BUILD_OUTCOMES,
+      refused: { ...V4_MIGRATION_BUILD_OUTCOMES.refused },
+    },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -186,6 +257,7 @@ function migrateV2ToV3(world: unknown): unknown {
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 1, to: 2, migrate: migrateV1ToV2 }),
   Object.freeze({ from: 2, to: 3, migrate: migrateV2ToV3 }),
+  Object.freeze({ from: 3, to: 4, migrate: migrateV3ToV4 }),
 ]);
 
 /**
@@ -530,6 +602,25 @@ export function assertWorldShape(value: unknown): asserts value is World {
   // guest store" has one definition.
   assertGuestStoreInvariants(guests as unknown as GuestStore, entities as unknown as EntityStore);
   assertGuestOutcomes(guestOutcomes as unknown as GuestOutcomes, guests as unknown as GuestStore);
+
+  // The build counters (G-008). Same function the tick calls at its own boundary, so
+  // "valid build outcomes" has one definition rather than two that drift. It checks every
+  // known refusal reason is present AND that no unknown one is — an extra key would land
+  // in the state hash (`worldToJson` is an identity cast) and make the restored world
+  // hash differently from the world it claims to be.
+  const buildOutcomes = value['buildOutcomes'];
+  if (!isRecord(buildOutcomes)) {
+    throw new Error('Save is corrupt: world.buildOutcomes is missing');
+  }
+  for (const key of ['built', 'demolished'] as const) {
+    if (typeof buildOutcomes[key] !== 'number') {
+      throw new Error(`Save is corrupt: world.buildOutcomes.${key} is missing or not a number`);
+    }
+  }
+  if (!isRecord(buildOutcomes['refused'])) {
+    throw new Error('Save is corrupt: world.buildOutcomes.refused is missing');
+  }
+  assertBuildOutcomes(buildOutcomes as unknown as BuildOutcomes);
 }
 
 export function serialise(world: World): string {

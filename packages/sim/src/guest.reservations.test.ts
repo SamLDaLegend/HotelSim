@@ -54,13 +54,23 @@ const content = bindContent({
   needTypes: [needType()],
 });
 
-const spawnRoom: Command = { kind: 'spawnEntity', entityKind: 'roomA', at: { floor: 0, column: 0 } };
+/**
+ * One room, in its own column. G-008 turned this from a constant into a function of the
+ * column: `spawnEntity` onto a cell where a room already stands now THROWS, so a hotel
+ * is a row rather than a stack. G-007 pinned that permissiveness deliberately so closing
+ * it would be a visible decision; this is what visible looks like.
+ */
+const spawnRoom = (column: number): Command => ({
+  kind: 'spawnEntity',
+  entityKind: 'roomA',
+  at: { floor: 0, column },
+});
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
 
 const hotel = (rooms: number, seed = 3): World =>
-  stepTick(createWorld(seed, content), content, Array.from({ length: rooms }, () => spawnRoom));
+  stepTick(createWorld(seed, content), content, Array.from({ length: rooms }, (_, i) => spawnRoom(i)));
 
 const orphansIn = (world: World): number => countOrphanedReservations(world.guests, world.entities);
 const resting = (world: World): readonly Guest[] => guestsInOrder(world.guests).filter(isResting);
@@ -235,14 +245,19 @@ describe('thirty days of a hotel that is always over capacity', () => {
     // Rooms are demolished under their occupants throughout and rebuilt the tick after,
     // so eviction is exercised for the whole run rather than in one unit test.
     for (let tick = 5_000; tick < TICKS; tick += 7_000) {
-      commands.push(at(tick, despawn(1 + Math.floor((tick - 5_000) / 7_000))));
-      commands.push(at(tick + 1, spawnRoom));
+      const cycle = Math.floor((tick - 5_000) / 7_000);
+      commands.push(at(tick, despawn(1 + cycle)));
+      // Rebuilt in a fresh column rather than the one just vacated: the four seeded rooms
+      // occupy columns 0..3 and later cycles despawn ids that may already have been
+      // rebuilt, so reusing a column would be a spawn onto an occupied cell — which
+      // G-008 makes a throw. The churn this test is about is unaffected.
+      commands.push(at(tick + 1, spawnRoom(10 + cycle)));
     }
     return commands;
   };
 
   it('never holds an orphaned reservation, on any day', () => {
-    let world = stepTick(createWorld(7, busyContent), busyContent, [spawnRoom, spawnRoom, spawnRoom, spawnRoom]);
+    let world = stepTick(createWorld(7, busyContent), busyContent, [0, 1, 2, 3].map(spawnRoom));
     const commands = schedule();
     for (let day = 0; day < DAYS; day += 1) {
       world = run(world, busyContent, TICKS_PER_DAY, commands);

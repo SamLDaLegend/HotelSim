@@ -206,6 +206,47 @@ Raised by `sim-engineer` at PLAN.
   makes arrivals seed-dependent, that test fails BY DESIGN and is retired deliberately —
   it is the parked seed caveat written as an assertion. -> M4, as a planned retirement.
 
+## Deferred out of G-008 (2026-08-07) — balance-critic's findings, adjudicated
+
+Five MAJORs and two MINORs from the first non-vacuous balance sweep in the project. Two
+were fixed in G-008 (the free-room dominance and the false schema comment); these are the
+deferrals, each with the reason it is not G-008's.
+
+- **THE OVERBUILD SPIRAL HAS NO TERMINATOR. -> M4, as a named obligation.** The cash brake
+  is the economy's only negative feedback and cannot stop overbuilding (ADR-0009).
+  Measured: `--build 10080` reaches **−38,214,000p at 2,000 days, falling exactly
+  −23,000p/day with no floor**. M4 must give the spiral an end — bankruptcy, demand
+  response, or both. **Balance signal nobody would guess: a SLOWER build cadence is
+  WORSE**, because cash accrues between attempts so more attempts pass the affordability
+  test. `--build 10080` ends 36M behind `--build 120`. Test against that, do not
+  rediscover it.
+- **Per-night billing, and what it does to construction cost. -> M4.** ADR-0010 keeps
+  `nightlyRatePence` per-stay and documents the coupling. When M4 bills pro-rata, the
+  margin falls to 5,957.5p/room-day and 250,000p becomes a **42-day payback instead of
+  11** — which is the number that makes construction a real decision. **Do not also raise
+  `constructionCostPence`**; balance-critic showed raising it cannot fix the sink, because
+  total useful lifetime spend is bounded by N* x C and N* is demand-bounded at 4 (a 1% sink
+  against lifetime revenue, rising only to 8% at 2,000,000p).
+- **THE ZERO-ROOMS / ZERO-BALANCE ABSORBING STATE. -> M4 design call, flagged for human
+  ruling at M1 sign-off.** No rooms means no revenue means the balance never moves means
+  every build is refused forever. Reachable in three legal commands from the shipped
+  default: `--rooms 3 --demolish 1` scraps the inherited rooms before any revenue arrives.
+  1,000 days later: 12,000 guests arrived, 11,999 unsatisfied, every player action refused,
+  no notification. "Starting capital is parked" and "the game has a reachable dead state
+  with no exit" are different claims, and the second is what shipped. Candidate closures:
+  starting capital, a demolition refund (but see the 247,500p threshold below), or a loan.
+- **`capacity` is read by nothing.** A room earns the same whether capacity is 1, 2 or 4,
+  and one guest occupies one room. The v1 fixture already prices against it
+  (`fixtureSuite`, capacity 4 at 19,900p), so somebody has already reasoned from a number
+  the simulation ignores. It does enter the content fingerprint, so it is not free. -> M2,
+  with party sizes.
+- **A demolition refund reopens the G-005 upkeep dodge above 247,500p** — 99% of
+  construction cost. Now recorded in `build.ts`'s header, because it is the number a future
+  designer needs and the threshold moves with upkeep's share of build cost. -> M4.
+- **The build window shortens at fast cadences.** At `--build 5` the schedule exhausts the
+  plot on day ~5.8 with 2,390,000p unspent. Real, and correct given the plot cap; the fix
+  is starting capital or a larger plot, not predicting refusals in the host. -> M4.
+
 ## Deferred out of G-007 (2026-08-07)
 
 Raised by `sim-engineer` at PLAN. G-007 builds the coordinate substrate only.
@@ -250,3 +291,61 @@ Raised by `sim-engineer` at PLAN. G-007 builds the coordinate substrate only.
   bench exercising nothing. I5 moved 8.8% -> ~16% of budget for that reason. What is
   still missing is tick cost measured AGAINST agent count rather than in total. -> M3.
 
+## Deferred out of G-008 (2026-08-07)
+
+Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the diff.
+
+- **Multi-cell footprints** (`widthCells` as content on the room type). Re-parked from
+  G-007 with the argument that decides it: **G-009 is the first goal that genuinely needs
+  a room to have EXTENT**, because enclosure is computed over the cells a room occupies —
+  so landing footprints there puts them in the goal that can falsify them. A content field
+  whose only consumer is code written to consume it is decorative, and it would move every
+  content fingerprint for nothing. The stored shape stays one origin cell per entity, so
+  this still costs no migration when it lands. **`roomAt` in `build.ts` is the single site
+  that generalises**: one loop, one predicate. -> **G-009**.
+- **Per-command acknowledgement — WHICH build was refused, and where.** `BuildOutcomes`
+  counts refusals by reason, so a host learns how many and why by category, never which.
+  This sharpens the parked G-001 item "command acknowledgements"; its real consumer is the
+  M5 UI that wants to flash the offending cell red, which is also the first host that can
+  do anything with the answer. -> **M5**.
+- **Occupancy as a load-time store invariant.** `assertEntityStoreInvariants` rejects an
+  out-of-bounds placement at load but NOT two rooms in one cell. That is not an oversight:
+  occupancy is CONTENT-DEPENDENT (a cell is occupied when a *room* stands on it, so an item
+  inside a room can share its cells at M2), and that function has no content. The
+  alternative — a per-commit cell-uniqueness scan — is O(n) on every tick with entity churn,
+  paid to police a world the simulation cannot produce, in the goal immediately before G-010
+  measures tick cost. -> revisit only if `assertWorldShape` ever gains content.
+- **Starting capital as a scenario parameter.** A world opens with a balance of zero, so
+  the first build is refused for insufficient funds until revenue arrives. That is what puts
+  the refusal path inside the exit criterion for free, and it is coherent for a scenario that
+  starts with an inherited hotel — but a hotel with NO rooms could never build its first one.
+  -> **M4**, with the demand model, where "how does a run start" becomes a real question.
+- **Demolish refund or fee as a content rate.** Demolition is free: any fraction is a
+  designer's number, therefore content, therefore pricing, therefore M4. Zero is the only
+  value here that is not a balance decision. -> **M4**.
+- **A derived cell -> entity index.** `roomAt` scans the placements, O(entities) PER BUILD
+  COMMAND — not per tick, and builds are rare by construction. If it ever measures slow it
+  is DERIVED state: rebuilt on load, never saved, never authoritative. Same wording as the
+  room -> occupant index, for the same reason. -> **G-010**, if measurement asks for it.
+- **`assertGuestOutcomes` and `assertGuestStoreInvariants` still run on EVERY tick** and
+  still allocate. G-008 fixed its own instance of this — `assertBuildOutcomes` ran per tick
+  and cost 0.28 us/tick, ~22% of the whole tick, because its unknown-key sweep allocated an
+  `Object.keys` array; it is now conditional on the value having changed. **The guest pair
+  has the same shape and was left alone deliberately**, because it is already parked out of
+  G-004 with a measurement (~7.24 us/tick at 96 guests) and belongs to whoever does that
+  work. -> **G-010**, alongside the room -> occupant index.
+- **Room variety and per-type construction costs as a balance lever.** One room type at
+  250,000p. The interesting decisions (a cheap room that earns little against an expensive
+  one that earns more) need more than one row in the table. -> **M6**.
+- **A `--build`/`--demolish` schedule that names a CELL or an ID** rather than a cadence.
+  The CLI's flags are a workload knob for sweeps; scripting an exact build order is what a
+  UI does. -> **M5**.
+- **A fast `--build` cadence runs out of PLOT before it runs out of run** (critique round
+  1). The schedule is pre-generated, so its walk cannot observe a refusal and must advance
+  on every attempt; the plot is 1,680 cells from the ground up, so `--build 5` over 30 days
+  stops scheduling builds on day ~5.8 with 1,677 attempts spent. Since this fix the runner
+  simply STOPS there rather than emitting commands it can prove are off-plot, so nothing is
+  misreported — but a sweep at a very fast cadence measures a shorter build window than its
+  `--days` suggests. Pacing attempts to affordability would put the sim's pricing rule in
+  the host; the honest fix is a schedule the host can revise as the run goes. -> **M4**,
+  with the demand model, alongside starting capital.

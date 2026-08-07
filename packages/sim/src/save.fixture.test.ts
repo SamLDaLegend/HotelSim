@@ -60,20 +60,21 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v3', () => {
+  it('is a v1 blob, and this build now writes v4', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
-    // G-007. Both times the answer was a migration in `save.ts` — never a regenerated
-    // fixture. v1 remains the oldest version this build accepts, which is what keeps
-    // these bytes loadable at all, and the walk is now 1 -> 2 -> 3.
-    expect(SAVE_SCHEMA_VERSION).toBe(3);
+    // G-007, and a third time at G-008. Every time the answer was a migration in
+    // `save.ts` — never a regenerated fixture. v1 remains the oldest version this build
+    // accepts, which is what keeps these bytes loadable at all, and the walk is now
+    // 1 -> 2 -> 3 -> 4.
+    expect(SAVE_SCHEMA_VERSION).toBe(4);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
   it('is written back with its v1 half untouched, under the new version stamp', () => {
     // Writer stability, restated for a save that has now been migrated twice. It is not
-    // byte-identical — it cannot be, the world has three more fields — so the claim is
+    // byte-identical — it cannot be, the world has four more fields — so the claim is
     // the stronger and more specific one: every v1 field comes back exactly as it went
     // in, and nothing is quietly rewritten on the way past. The exact v2 bytes are
     // pinned in `guest.save.test.ts` and the v3 bytes in `grid.save.test.ts`.
@@ -93,7 +94,10 @@ describe('I6 stored v1 save fixture', () => {
       }
       expect(after[key]).toEqual(before[key]);
     }
-    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 3);
+    // Four fields added across three migrations: `guests` and `guestOutcomes` (1 -> 2),
+    // `grid` (2 -> 3), `buildOutcomes` (3 -> 4). Counted rather than named, so a
+    // migration that quietly added a fifth would fail here even if it added it correctly.
+    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 4);
   });
 
   it('continues to simulate from where it was saved', () => {

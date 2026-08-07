@@ -428,3 +428,68 @@ is doing real work: keeping gates out of builder hands is what makes "an invaria
 has been modified to make a test pass" (§9) a check worth having, and it has cost
 nothing — every one of the four was found and fixed anyway, just in a commit where it
 could be seen.
+
+---
+
+## 2026-08-07 — G-008 — Build and demolish with construction cost (3/3 rounds)
+
+The game is playable. A player command places a room and charges for it; another removes
+it; illegal placements are refused deterministically. **One rule, two doors, and the door
+decides who is at fault**: G-007's structural primitives throw (a caller ignoring the plot
+it holds is a bug), the player commands record a refusal (a player clicking a full cell is
+a move). `spawnEntity` gained the occupied-cell throw so there is one definition of a
+legal world rather than a laxer one every test reaches.
+
+The design decision I most want kept: **no conservation law was invented.** `built −
+demolished` is not the population of anything, since the store also changes through
+`spawnEntity` and through migration — and rather than write a plausible identity that
+would hold for the wrong reason, the builder said so and supplied two laws that can fail.
+Both were seen red under mutation while 408 other tests stayed green, which is what makes
+them the *only* witnesses rather than merely present ones.
+
+**The builder contradicted its own plan by measuring.** It had claimed — and I approved on
+that basis — that a tick with no build command pays nothing. A git-stashed paired
+measurement found a **34% regression, 1.306 → 1.752 µs/tick**, arriving in the goal
+immediately before G-010 measures scaling, where it would have poisoned the very number
+G-010 exists to produce. Fixed, re-measured, and the improvement *not* claimed because it
+was inside noise. Third goal running where a builder declined a flattering number.
+
+**Round 1** caught a diagnostic that lied. The CLI's build schedule reached 420 of the
+plot's 1,840 cells and advanced its index on refused commands, so past 417 commands every
+refusal was blamed on geometry when the constraint was cash. What made it MAJOR rather
+than cosmetic: `balance-critic` reviews next, its mandate is parameter sweeps, and it
+would have concluded the build loop was plot-limited when it was cash-limited — a wrong
+conclusion handed to the next review by the tool that review is required to use.
+
+**Round 2 was the best critique of the project**, and the first non-vacuous sweep: five
+MAJORs, two MINORs, and a **107-million-penny spread** across build strategies where the
+previous two sweeps had produced twelve identical rows. Two findings were G-008's and were
+fixed. The sharper one: `nightlyUpkeepPence` and `constructionCostPence` were both
+optional, so a room type omitting them was **free to build and free to keep — strictly
+dominant on every axis, one forgotten JSON key away, with `check:content` and `pnpm
+verify` both green.** 1,680 rooms built from a balance of zero. That is the
+dominant-strategy failure in its literal form, and G-008 opened it by adding construction
+cost as optional. Now required on disk, still optional in the sim's own type, so the
+frozen fixture — which never passes through zod — is untouched.
+
+Three findings were real and **not G-008's**, and saying so is the job as much as fixing
+is. ADR-0009: the refusal predicate tests affordability, not wisdom, because refusing a
+build the player can *afford* would be the simulation playing the game for them —
+overbuilding is meant to be possible and meant to hurt; the missing piece is a
+consequence, which is M4's. ADR-0010: `nightlyRatePence` is charged per completed *stay*,
+not per night, so a room bills three times a night and the margin is 10.2:1 rather than
+the 3.4:1 the field names imply — documented rather than renamed, because renaming would
+change `SAVE_V1_CONTENT`'s shape and turn the permanent fixture into a husk, undoing
+G-004's best decision for a field name.
+
+The balance signal worth carrying to M4: **a slower build cadence is worse.** Cash accrues
+between attempts so more attempts pass the affordability test, and the hotel overshoots
+further. `--build 10080` ends 36M behind `--build 120`, falling −23,000p/day with no
+floor. Nobody would guess that; it should be tested against, not rediscovered.
+
+And a fifth gate defect reported rather than touched — this time in config, not a gate:
+vitest's default 5,000ms timeout against subprocess-spawning tests measured at 4,844ms
+under load, so `pnpm verify` could go red at I4 for reasons unrelated to the code. Fixed
+separately in `f2d1e4d`. The reasoning matters more than the fix: §9's stop condition is
+only worth having while a red gate means something, and **a gate that cries wolf under
+load does the same damage as one that never fires.**

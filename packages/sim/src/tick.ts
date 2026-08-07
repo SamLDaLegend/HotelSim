@@ -53,6 +53,12 @@
 // is no array of cells to iterate — a cell's contents are derived from the placements on
 // the entities. A placement costs one field on one spawn, so the idle tick stays O(1)
 // and `commitEntityDraft` still returns its base store by reference on a clean tick.
+//
+// G-008 DOES NOT CHANGE THAT, and the distinction matters for I5. A build command scans
+// the placements once to answer "is this cell occupied" — O(entities) PER BUILD COMMAND,
+// not per tick. A tick with no build command scans nothing, folds no balance and
+// allocates no world. Builds are rare by construction: they arrive from a player, or from
+// a schedule the host wrote. The parked per-tick costs that G-010 owns are untouched here.
 // An unplaced room is still a usable provider and still pays upkeep here: making
 // placement a precondition of usefulness is G-009's validity rule, and doing it in this
 // goal would silently change what a migrated pre-grid world means.
@@ -81,12 +87,23 @@
 //     `entitiesInOrder` and nowhere else.
 //   - depend on a phase that runs later in the same tick.
 
+import {
+  applyBuildRoom,
+  applyDemolishRoom,
+  assertBuildOutcomes,
+  describeOccupied,
+  roomAt,
+  totalBuildOutcomes,
+} from './build.js';
+import type { BuildInput, BuildOutcomes } from './build.js';
 import type { Command, ScheduledCommand } from './commands.js';
 import { firstNeedType, hasContentId } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
 import { assertGuestOutcomes, assertGuestStoreInvariants, stepGuests } from './guests.js';
+import { balanceOf } from './ledger.js';
+import type { Transaction } from './ledger.js';
 import { nextUint32 } from './rng.js';
 import { isSettlementTick, settleNight } from './settlement.js';
 import { assertContentMatches } from './world.js';
@@ -204,11 +221,67 @@ export function beginTick(world: World, content: BoundContent, commands: readonl
   };
 }
 
-/** Applies one command, returning how many guests it put in the lobby (0 or 1). */
-function applyCommand(entities: EntityDraft, command: Command, content: BoundContent): number {
+/**
+ * Everything one pass over the command log accumulates.
+ *
+ * TICK-LOCAL AND MUTABLE, exactly like `EntityDraft`: created by `applyCommands`,
+ * consumed by `applyCommands`, never stored on a `World` and never handed to a caller.
+ * Mutation here is local and never escapes, which is the only kind the sim allows.
+ */
+type CommandAccumulator = {
+  /** Guests put in the lobby by `guestArrives`, consumed by `runGuests`. */
+  arrivingGuests: number;
+  ledger: readonly Transaction[];
+  outcomes: BuildOutcomes;
+  /**
+   * Cash available to the next build. I4: NEVER STORED — folded from the ledger once,
+   * lazily, on the first build-family command of this tick, then decremented locally by
+   * each successful build so a second build sees what the first spent. Discarded when
+   * the tick ends; a tick with no build command folds nothing and pays nothing.
+   */
+  balance: number;
+  balanceFolded: boolean;
+  /** How many build-family commands this log contained. The left side of the per-tick law. */
+  buildCommands: number;
+};
+
+/** The one place the balance is folded, and the one place it is folded only once. */
+function cashOnHand(accumulator: CommandAccumulator): number {
+  if (!accumulator.balanceFolded) {
+    accumulator.balance = balanceOf(accumulator.ledger);
+    accumulator.balanceFolded = true;
+  }
+  return accumulator.balance;
+}
+
+/** Assemble the input one build-family command reads, from the tick's accumulator. */
+function buildInput(
+  state: TickState,
+  entities: EntityDraft,
+  accumulator: CommandAccumulator,
+): BuildInput {
+  return {
+    tick: state.world.tick,
+    bounds: state.world.grid,
+    entities,
+    content: state.content,
+    ledger: accumulator.ledger,
+    outcomes: accumulator.outcomes,
+    balance: cashOnHand(accumulator),
+  };
+}
+
+/** Applies one command, mutating the tick-local accumulator. */
+function applyCommand(
+  state: TickState,
+  entities: EntityDraft,
+  command: Command,
+  accumulator: CommandAccumulator,
+): void {
+  const content = state.content;
   switch (command.kind) {
     case 'noop':
-      return 0;
+      return;
     case 'spawnEntity':
       // The one place the simulation reads injected content today. Without it,
       // "the host injects content into the sim" would be a claim no test could
@@ -223,14 +296,52 @@ function applyCommand(entities: EntityDraft, command: Command, content: BoundCon
           `applyCommands: unknown entity kind "${command.entityKind}" — it is not defined in the injected content`,
         );
       }
+      // OCCUPANCY IS POLICED HERE TOO, AND IT THROWS (G-008). G-007 deliberately left
+      // overlap open and pinned the gap with a test so closing it would be a visible
+      // decision; this is that decision. `roomAt` is the ONE definition of "occupied" and
+      // both doors consult it — what differs is the response. A caller stacking two rooms
+      // on one square is holding the world it just ignored, exactly like a caller passing
+      // a cell off the plot, so it fails the same way. If this were permissive instead,
+      // there would be two definitions of a legal world: one the player can reach through
+      // `buildRoom`, and a laxer one every test and the determinism harness reach.
+      //
+      // Checked BEFORE `draftSpawn` so a refused spawn consumes no id.
+      {
+        const sitting = roomAt(entities, content, command.at);
+        if (sitting !== undefined) {
+          throw new Error(
+            `applyCommands: cannot spawn "${command.entityKind}" — ${describeOccupied(command.at, sitting, state.world.grid)}. ` +
+              'A player-facing build records this as a refusal instead; see buildRoom.',
+          );
+        }
+      }
       // The cell is validated by `draftSpawn` against the draft's own bounds, which are
       // this world's plot. Out of bounds throws, for the same reason an unknown kind
       // does: the caller is holding the world whose plot it just ignored.
       draftSpawn(entities, command.entityKind, command.at);
-      return 0;
+      return;
     case 'despawnEntity':
       draftDespawn(entities, command.id);
-      return 0;
+      return;
+    case 'buildRoom': {
+      // THE PLAYER ACTS. Everything refusable is refused and recorded rather than thrown
+      // — the exit criterion made structural. All of the behaviour is in `build.ts`;
+      // this is the plumbing, the same split `runGuests` has over `stepGuests`.
+      accumulator.buildCommands += 1;
+      const result = applyBuildRoom(buildInput(state, entities, accumulator), command.roomType, command.at);
+      accumulator.ledger = result.ledger;
+      accumulator.outcomes = result.outcomes;
+      accumulator.balance = result.balance;
+      return;
+    }
+    case 'demolishRoom': {
+      accumulator.buildCommands += 1;
+      const result = applyDemolishRoom(buildInput(state, entities, accumulator), command.id);
+      accumulator.ledger = result.ledger;
+      accumulator.outcomes = result.outcomes;
+      accumulator.balance = result.balance;
+      return;
+    }
     case 'guestArrives':
       // Checked here rather than in the guest system, alongside `spawnEntity`'s
       // unknown-kind check and for the same reason: a guest that could form no need is
@@ -243,7 +354,8 @@ function applyCommand(entities: EntityDraft, command: Command, content: BoundCon
           'applyCommands: a guest arrived, but the injected content defines no need type for one to form',
         );
       }
-      return 1;
+      accumulator.arrivingGuests += 1;
+      return;
     default: {
       const exhaustive: never = command;
       throw new Error(`applyCommand: unhandled command ${JSON.stringify(exhaustive)}`);
@@ -253,6 +365,14 @@ function applyCommand(entities: EntityDraft, command: Command, content: BoundCon
 
 /**
  * Phase 1 of 5. The one point at which external intent enters the world.
+ *
+ * G-008 gave this phase money and outcomes to carry: a `buildRoom` charges the ledger and
+ * a refusal increments a counter, both of which live on `World` rather than on the draft.
+ * It is still not a system and still gets no `xRun` flag — A BUILD IS INTENT, NOT A
+ * WORLD-DRIVEN SYSTEM. `runGuests` and `runSettlement` need flags because they act on
+ * every tick whether or not anything asked them to, so a dropped phase is invisible;
+ * there is nothing for a build phase to do on a tick with no build command, and the
+ * per-tick law below is what notices if this phase ever stops recording.
  *
  * Precondition: no draft is open and nothing has been committed this tick.
  */
@@ -264,14 +384,77 @@ export function applyCommands(state: TickState): TickState {
     throw new Error('applyCommands: entities were already committed this tick; commands may not arrive after the boundary');
   }
   const entities = beginEntityDraft(state.world.entities, state.world.grid);
-  let arrivingGuests = 0;
-  for (const command of state.commands) {
-    arrivingGuests += applyCommand(entities, command, state.content);
+  // An empty batch stages nothing, charges nothing and records nothing, so it allocates
+  // nothing either — not even the accumulator. Most ticks of a 365-day run are this one
+  // (the bench sees a command every 120 ticks), and the same idle-tick reasoning already
+  // governs `commitEntityDraft`, `stepGuests` and `settleNight`. Nothing is skipped that
+  // could have failed: the per-tick law below asks whether the outcomes object was
+  // touched, and with no command there is no code that could have touched it.
+  if (state.commands.length === 0) {
+    return { ...state, entities, arrivingGuests: 0, commands: NO_COMMANDS };
   }
+  const accumulator: CommandAccumulator = {
+    arrivingGuests: 0,
+    ledger: state.world.ledger,
+    outcomes: state.world.buildOutcomes,
+    balance: 0,
+    balanceFolded: false,
+    buildCommands: 0,
+  };
+  for (const command of state.commands) {
+    applyCommand(state, entities, command, accumulator);
+  }
+
+  // THE PER-TICK LAW: every build-family command produced exactly one recorded outcome.
+  //
+  // This is what stands in for the conservation law `GuestOutcomes` has and
+  // `BuildOutcomes` cannot (see build.ts): the entity store changes through the
+  // structural door and through migration too, so `built - demolished` is not the
+  // population of anything. This compares two numbers computed by different code — the
+  // commands this phase was handed, and the outcomes it recorded — so a branch that acts
+  // without recording, or records twice, fails on the very next tick that uses it.
+  //
+  // TWO FORMS, BECAUSE THE CHEAP ONE IS STRICTLY STRONGER ON A QUIET TICK. With no
+  // build-family command, "no outcome was recorded" is an IDENTITY question — the
+  // accumulator must still be holding the very object it started with.
+  //
+  // Identity-unchanged implies totals-unchanged; the converse does not hold. That is the
+  // whole reason to prefer it: the identity form fires on strictly more inputs, and the
+  // input it catches that the arithmetic form cannot see is a stray write that REPLACES
+  // the outcomes with a DIFFERENT OBJECT OF EQUAL VALUE — a reallocation whose difference
+  // of totals is 0. (A stray build plus a stray demolish is not such a case, and the
+  // comment that used to claim it was wrong: every counter here is monotonic and only ever
+  // moves by +1, so that pair moves the total by 2 and the arithmetic form would catch it
+  // too.) It also costs one pointer compare instead of two folds, which is what keeps a
+  // tick nobody built on free (I5).
+  if (accumulator.buildCommands === 0) {
+    if (accumulator.outcomes !== state.world.buildOutcomes) {
+      throw new Error(
+        `applyCommands: tick ${state.world.tick} recorded a build outcome with no build command to explain it`,
+      );
+    }
+  } else {
+    const recorded = totalBuildOutcomes(accumulator.outcomes) - totalBuildOutcomes(state.world.buildOutcomes);
+    if (recorded !== accumulator.buildCommands) {
+      throw new Error(
+        `applyCommands: tick ${state.world.tick} applied ${accumulator.buildCommands} build command(s) but recorded ${recorded} outcome(s); ` +
+          'every build or demolish is either done or refused, and exactly one outcome is recorded either way',
+      );
+    }
+  }
+
+  // An untouched build path returns the world by reference, so the idle-tick guarantee
+  // the rest of the sim keeps is unchanged: a tick with no build command allocates no
+  // world here, and `commitEntityDraft` still returns its base store by reference.
+  const world =
+    accumulator.ledger === state.world.ledger && accumulator.outcomes === state.world.buildOutcomes
+      ? state.world
+      : { ...state.world, ledger: accumulator.ledger, buildOutcomes: accumulator.outcomes };
+
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
   // in the tick" stops being a rule a later phase could break and becomes a fact about
   // what is in scope: there is nothing left to read.
-  return { ...state, entities, arrivingGuests, commands: NO_COMMANDS };
+  return { ...state, world, entities, arrivingGuests: accumulator.arrivingGuests, commands: NO_COMMANDS };
 }
 
 /**
@@ -479,6 +662,21 @@ export function stepTick(world: World, content: BoundContent, commands: readonly
   // postcondition those phases promise, and it fires if that ever stops being true.
   assertGuestStoreInvariants(state.world.guests, state.world.entities);
   assertGuestOutcomes(state.world.guestOutcomes, state.world.guests);
+  // And the build counters are still counters (G-008). The same function `assertWorldShape`
+  // calls at load, so "valid build outcomes" has one definition rather than two that
+  // drift. Deliberately NOT a claim about the entity store: there is no such law, and
+  // asserting one would be a check that holds for the wrong reason (see build.ts).
+  //
+  // ONLY WHEN THE VALUE CHANGED, and the identity compare is the whole guard. This is the
+  // `commitEntityDraft` argument applied to a postcondition: a value nobody wrote cannot
+  // have become invalid, and re-validating it 1,439 times a simulated day is the shape of
+  // per-tick cost G-010 exists to remove — measured here at 0.28 µs/tick, ~22% of the
+  // whole tick, because the sweep allocates an `Object.keys` array every time. It is NOT
+  // a weakening: every world this build produces passes through here on the tick it was
+  // produced, and every world it LOADS is checked unconditionally by `assertWorldShape`.
+  if (state.world.buildOutcomes !== world.buildOutcomes) {
+    assertBuildOutcomes(state.world.buildOutcomes);
+  }
   // And the tick ran under the content it was given. Identity, not equality: a phase
   // that rebuilt an equal-looking registry would still be a phase deciding what the
   // rest of the tick means, which is not a phase's job.

@@ -8,7 +8,15 @@
 // are total functions of the summary alone.
 
 import { describe, expect, it } from 'vitest';
-import { createWorld, firstNeedType, maxGuestLifetimeTicks, NO_ENTITY, run, TICKS_PER_DAY } from '@hotelsim/sim';
+import {
+  createWorld,
+  firstNeedType,
+  isWithinBounds,
+  maxGuestLifetimeTicks,
+  NO_ENTITY,
+  run,
+  TICKS_PER_DAY,
+} from '@hotelsim/sim';
 import type { Guest, Transaction, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import {
@@ -20,6 +28,7 @@ import {
   renderJson,
   renderQuiet,
   renderText,
+  roomCell,
   schedule,
   SUMMARY_SCHEMA_VERSION,
   TICKS_BETWEEN_ARRIVALS,
@@ -30,6 +39,9 @@ import {
 
 const content = loadContent();
 
+/** The plot every test here lays out on: the one a world created by this build carries. */
+const PLOT = createWorld(42, content).grid;
+
 /** One in-process day under the default workload, for buildSummary tests. */
 function defaultRun(days: number, seed = 42): { world: ReturnType<typeof run>; options: Options } {
   const options = parseArgs(['--days', String(days), '--seed', String(seed)]);
@@ -37,7 +49,7 @@ function defaultRun(days: number, seed = 42): { world: ReturnType<typeof run>; o
     createWorld(options.seed, content),
     content,
     options.ticks,
-    schedule(options.ticks, content, options.rooms, options.arrivalEveryTicks),
+    schedule(options.ticks, content, PLOT, options.rooms, options.arrivalEveryTicks),
   );
   return { world, options };
 }
@@ -102,7 +114,7 @@ describe('parseArgs', () => {
 
 describe('schedule', () => {
   it('spawns exactly `rooms` rooms at tick 0 and arrivals on the cadence', () => {
-    const commands = schedule(500, content, 4, 100);
+    const commands = schedule(500, content, PLOT, 4, 100);
     const spawns = commands.filter((c) => c.command.kind === 'spawnEntity');
     const arrivals = commands.filter((c) => c.command.kind === 'guestArrives');
     expect(spawns).toHaveLength(4);
@@ -114,10 +126,11 @@ describe('schedule', () => {
     // Explicit defaults are not a third code path: the flagged call and the flagless
     // call must produce the same command log, which is what the process-level
     // Buffer.equals test then proves end to end.
-    const flagless = schedule(TICKS_PER_DAY, content, HOTEL_ROOMS, TICKS_BETWEEN_ARRIVALS);
+    const flagless = schedule(TICKS_PER_DAY, content, PLOT, HOTEL_ROOMS, TICKS_BETWEEN_ARRIVALS);
     const explicit = schedule(
       TICKS_PER_DAY,
       content,
+      PLOT,
       parseArgs(['--days', '1', '--rooms', '3', '--arrivals', '120']).rooms,
       parseArgs(['--days', '1', '--rooms', '3', '--arrivals', '120']).arrivalEveryTicks,
     );
@@ -125,10 +138,83 @@ describe('schedule', () => {
   });
 
   it('schedules no arrivals when the cadence is longer than the run', () => {
-    const commands = schedule(100, content, 1, 500);
+    const commands = schedule(100, content, PLOT, 1, 500);
     expect(commands.filter((c) => c.command.kind === 'guestArrives')).toEqual([
       { tick: 1, command: { kind: 'guestArrives' } },
     ]);
+  });
+});
+
+// THE BUILD WALK (G-008 critique round 1). The defect these pin: `roomCell` used a hard
+// 20 columns, so the walk left the plot after 420 cells of 1,840 and — because the index
+// advances on every attempt, refused or not — every later command was refused
+// `outOfBounds` no matter how much cash the hotel had. At `--build 5` that was 8,223
+// off-plot refusals against 417 for funds and ZERO rooms built: a diagnostic that told
+// the next reader the build loop was plot-limited when it was cash-limited.
+describe('the build walk stays on the plot', () => {
+  it('walks the full width of the plot, and its first cells are the golden run\'s', () => {
+    // The first three cells are the DEFAULT RUN's three seeded rooms. They are a literal
+    // here because the committed golden output and `pnpm sim:bench` are pinned to the
+    // state hash they produce: widening the walk had to leave them where they were.
+    expect(roomCell(0, PLOT)).toEqual({ floor: 0, column: 0 });
+    expect(roomCell(1, PLOT)).toEqual({ floor: 0, column: 1 });
+    expect(roomCell(2, PLOT)).toEqual({ floor: 0, column: 2 });
+    // The width is the plot's width, not a constant of the runner's own: the last cell of
+    // the ground floor is the plot's right-hand edge, and the next index starts floor 1.
+    const width = PLOT.maxColumn - PLOT.minColumn + 1;
+    expect(roomCell(width - 1, PLOT)).toEqual({ floor: 0, column: PLOT.maxColumn });
+    expect(roomCell(width, PLOT)).toEqual({ floor: 1, column: PLOT.minColumn });
+    // Injective, so no built room can land on another (the sim throws on a spawn into an
+    // occupied cell, and refuses a build into one).
+    const seen = new Set<string>();
+    for (let i = 0; i < width * 4; i += 1) {
+      const cell = roomCell(i, PLOT);
+      seen.add(`${cell.floor}:${cell.column}`);
+    }
+    expect(seen.size).toBe(width * 4);
+  });
+
+  it('stops scheduling builds at the edge of the plot instead of emitting refusals', () => {
+    // A cadence of 1 over far more ticks than the plot has cells: the schedule must run
+    // out of PLOT, not out of ticks, and every command it emitted must be on the plot.
+    const cells = (PLOT.maxFloor + 1) * (PLOT.maxColumn - PLOT.minColumn + 1); // ground upward
+    const commands = schedule(cells * 3, content, PLOT, HOTEL_ROOMS, TICKS_PER_DAY, 1);
+    const builds = commands.filter((c) => c.command.kind === 'buildRoom');
+    expect(builds).toHaveLength(cells - HOTEL_ROOMS); // continues from where --rooms stopped
+    for (const { command } of builds) {
+      if (command.kind !== 'buildRoom') throw new Error('filtered to buildRoom');
+      expect(isWithinBounds(command.at, PLOT)).toBe(true);
+    }
+  });
+
+  it('SWEEP: no cadence blames the plot for what money is doing', () => {
+    // ADR-0007: the claim in schedule()'s comment — "a refusal in a default-plot run is
+    // about money, not about the runner walking off its own plot" — is measured here, on
+    // real runs, at three cadences an operator would plausibly try. One assertion is the
+    // whole point of the test; the second is what makes it non-vacuous, because a schedule
+    // that emitted NO build commands would also report zero off-plot refusals.
+    for (const cadence of [TICKS_PER_DAY, 60, 5]) {
+      const options = parseArgs(['--days', '30', '--seed', '42', '--build', String(cadence)]);
+      const initial = createWorld(options.seed, content);
+      const world = run(
+        initial,
+        content,
+        options.ticks,
+        schedule(
+          options.ticks,
+          content,
+          initial.grid,
+          options.rooms,
+          options.arrivalEveryTicks,
+          options.buildEveryTicks,
+        ),
+      );
+      const { summary, violations } = buildSummary(world, content, options);
+      expect(violations).toEqual([]);
+      expect(summary.build.refused.outOfBounds).toBe(0);
+      expect(summary.build.constructionTransactions).toBeGreaterThan(0);
+      expect(summary.build.refused.insufficientFunds).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -156,7 +242,7 @@ describe('buildSummary', () => {
       createWorld(options.seed, content),
       content,
       options.ticks,
-      schedule(options.ticks, content, options.rooms, options.arrivalEveryTicks),
+      schedule(options.ticks, content, PLOT, options.rooms, options.arrivalEveryTicks),
     );
     const { summary, violations } = buildSummary(world, content, options);
     expect(violations).toEqual([]);
@@ -185,11 +271,25 @@ describe('assertIntegerLeaves', () => {
 // the wrong field produces a visible mismatch rather than a coincidental pass.
 // Module scope: the emitReport tests reuse it as the summary of a forged BuiltReport.
 const distinct: RunSummary = {
-    schema: 1,
-    input: { seed: 101, ticks: 102, rooms: 103, arrivalEveryTicks: 104 },
-    world: { tick: 105, days: 106, roomTypes: 107, needTypes: 108, entities: 109, stateHash: 'cafe0000feed1111' },
+  schema: 1,
+  input: { seed: 101, ticks: 102, rooms: 103, arrivalEveryTicks: 104, buildEveryTicks: 123, demolishEveryTicks: 124 },
+  world: { tick: 105, days: 106, roomTypes: 107, needTypes: 108, entities: 109, stateHash: 'cafe0000feed1111' },
   guests: { arrived: 110, satisfied: 111, unsatisfied: 112, evicted: 113, inHotel: 114, stuck: 115, orphanedReservations: 116 },
-  money: { transactions: 117, revenuePennies: 118, upkeepPennies: -119, settlements: 120, nights: 121, balancePennies: 122 },
+  money: {
+    transactions: 117,
+    revenuePennies: 118,
+    upkeepPennies: -119,
+    constructionPennies: -125,
+    settlements: 120,
+    nights: 121,
+    balancePennies: 122,
+  },
+  build: {
+    built: 126,
+    demolished: 127,
+    refused: { insufficientFunds: 128, noSuchRoom: 129, occupied: 130, outOfBounds: 131 },
+    constructionTransactions: 126,
+  },
 };
 
 describe('renderers', () => {
@@ -212,6 +312,10 @@ describe('renderers', () => {
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',
+        'built       126',
+        'demolished  127',
+        'refused     128 funds, 130 occupied, 131 off plot, 129 no room',
+        'building    -125p',
         'settlements 120',
         'balance     122p',
         'state hash  cafe0000feed1111',
@@ -340,6 +444,8 @@ describe('emitReport (print THEN fail — the contract\'s second clause)', () =>
     json: false,
     rooms: HOTEL_ROOMS,
     arrivalEveryTicks: TICKS_BETWEEN_ARRIVALS,
+    buildEveryTicks: 0,
+    demolishEveryTicks: 0,
     contentDir: undefined,
     ...overrides,
   });

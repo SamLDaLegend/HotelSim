@@ -4,6 +4,21 @@
 // the filesystem or the network. Enforced by `pnpm check:purity` and by this
 // package's tsconfig, which has neither the "DOM" lib nor @types/node.
 
+export type { BuildInput, BuildOutcomes, BuildRefusalReason, BuildResult } from './build.js';
+export {
+  applyBuildRoom,
+  applyDemolishRoom,
+  assertBuildOutcomes,
+  BUILD_REFUSAL_REASONS,
+  constructionCostOf,
+  countConstructionTransactions,
+  createBuildOutcomes,
+  describeOccupied,
+  isBuildRefusalReason,
+  roomAt,
+  totalBuildOutcomes,
+  totalRefusals,
+} from './build.js';
 export type { Command, ScheduledCommand } from './commands.js';
 export type { BoundContent, NeedTypeData, RoomTypeData, SimContent } from './content.js';
 export {

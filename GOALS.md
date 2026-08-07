@@ -287,7 +287,7 @@ Critique rounds used: 1/3
   chain walk itself is load-bearing.
 
 ## G-008 — Build and demolish commands with construction cost
-Status: pending
+Status: done
 Milestone: M1
 Owner pair: sim-engineer / sim-critic
 Statement: A host command places a room on the grid and charges its construction cost to
@@ -301,7 +301,34 @@ Exit criteria:
   - all §2 invariant gates green (pnpm verify)
 Out of scope: any UI (M5); demand responding to capacity (M4); room variety (M6)
   (-> PARKING.md)
-Critique rounds used: 0/3
+Critique rounds used: 3/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  88 build tests and 519 total green across 24 files · all six gates green, I2
+  4c90a16dd5203969 · SAVE_V1_CONTENT unmoved at 8e09fe4f0fa162a3 and the fixture ticks
+  20,000 further ticks · the free-room content is rejected at load, exit 1, stdout 0
+  bytes, both missing keys named · the build sweep reports 0 off-plot refusals at every
+  cadence (1440/60/5) with construction transactions non-zero · fixture zero-line diff ·
+  no gate, CI or config file in this commit.
+
+  ROUND 1 (sim-critic), 1 MAJOR + 1 MINOR: the CLI build schedule reached only 420 of
+  1,840 cells and advanced its index on refused commands, so past 417 commands every
+  refusal was blamed on geometry when the constraint was cash. It would have lied to the
+  very next reviewer. Fixed by walking the full plot and stopping at its edge via the
+  sim's own isWithinBounds on the world's own grid; the claim is now a test.
+
+  ROUND 2 (balance-critic), 5 MAJOR + 2 MINOR — the first non-vacuous sweep in the
+  project, 107M penny spread across build strategies. Fixed here: required prices on
+  disk (optional upkeep + construction made a free room strictly dominant with every
+  gate green), and a false schema comment. Deferred with reasons: ADR-0009 (the refusal
+  predicate tests affordability, not wisdom — the missing terminator is M4's), ADR-0010
+  (nightlyRatePence is per completed stay; documented, not renamed), and PARKING.md for
+  the rest.
+
+  FOR THE HUMAN AT M1 SIGN-OFF: a zero-rooms / zero-balance world is an absorbing state
+  with no exit and no notification, reachable in three legal commands from the shipped
+  default. Closing it is a design call — starting capital, a demolition refund, or a
+  loan — and all three are M4 territory.
 
   Construction cost is content (I3/ADR-0003), integer pence (ADR-0002), and lands in the
   ledger through a new `TransactionReason` member — the union and its choke point already

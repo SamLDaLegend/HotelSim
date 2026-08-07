@@ -1,11 +1,20 @@
-// G-007 — THE STRUCTURAL GUARD BEHIND THE 2 -> 3 MIGRATION'S FROZEN PLOT.
+// G-007/G-008 — THE STRUCTURAL GUARD BEHIND EVERY MIGRATION'S FROZEN CONSTANTS.
 //
 // `migrateV2ToV3` must write the four grid bounds as a LITERAL frozen at the moment v3
-// was defined, never by calling `createGridBounds()`. A migration's output has to be a
-// pure function of its input bytes and its own era; one that read today's constants
-// would turn the same v2 bytes into a different v3 world the moment anyone edits the
-// default plot, so history would drift with the build and the pinned hash of the
-// migrated fixture would become a tripwire on an unrelated change.
+// was defined, never by calling `createGridBounds()`. `migrateV3ToV4` must write its
+// build counters the same way, never by calling `createBuildOutcomes()`. A migration's
+// output has to be a pure function of its input bytes and its own era; one that read
+// today's constants would turn the same old bytes into a different new world the moment
+// anyone edits the default plot or adds a refusal reason, so history would drift with the
+// build and the pinned hash of the migrated fixture would become a tripwire on an
+// unrelated change.
+//
+// THE v4 CASE IS THE ONE THAT WILL ACTUALLY BITE. `V3_MIGRATION_BOUNDS` guards against
+// somebody editing the plot, which may never happen. `V4_MIGRATION_BUILD_OUTCOMES` guards
+// against `BuildRefusalReason` GAINING A MEMBER — and G-009's validity rules are the
+// obvious next one. On that day a migration that called `createBuildOutcomes()` would
+// start writing a counter for a refusal that did not exist when those bytes were written,
+// silently, and the only symptom would be a moved fixture hash on an unrelated change.
 //
 // WHY A SOURCE SCAN AND NOT AN ASSERTION ABOUT VALUES. `V3_MIGRATION_BOUNDS` (save.ts)
 // and `createGridBounds()` (grid.ts) hold the same four integers today, and they are
@@ -41,11 +50,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const SAVE_TS = join(ROOT, 'packages/sim/src/save.ts');
 
 /**
- * Every identifier that would make the migration read the CURRENT default plot.
+ * Every identifier that would make a migration read a CURRENT value.
  *
- * `createGridBounds` is the function; the `DEFAULT_*` constants are the back door — a
- * contributor who could not import the function could still assemble the same object
- * from the four exported numbers, and that is the same defect wearing a different hat.
+ * `createGridBounds` and `createBuildOutcomes` are the functions; the `DEFAULT_*`
+ * constants and `BUILD_REFUSAL_REASONS` are the back doors — a contributor who could not
+ * import the function could still assemble the same object from the exported numbers, or
+ * build the refusal bag by folding the live reason list, and that is the same defect
+ * wearing a different hat.
  */
 const FORBIDDEN_IN_SAVE_TS = [
   'createGridBounds',
@@ -53,6 +64,8 @@ const FORBIDDEN_IN_SAVE_TS = [
   'DEFAULT_MAX_FLOOR',
   'DEFAULT_MIN_COLUMN',
   'DEFAULT_MAX_COLUMN',
+  'createBuildOutcomes',
+  'BUILD_REFUSAL_REASONS',
 ] as const;
 
 /**
@@ -98,6 +111,8 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(source.length).toBeGreaterThan(1_000);
     expect(source).toContain('migrateV2ToV3');
     expect(source).toContain('V3_MIGRATION_BOUNDS');
+    expect(source).toContain('migrateV3ToV4');
+    expect(source).toContain('V4_MIGRATION_BUILD_OUTCOMES');
   });
 
   it('names none of the current-plot identifiers in executable code', () => {
@@ -111,6 +126,23 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     // was deleted or the scan has quietly started reading comments as code.
     expect(saveSource()).toContain('createGridBounds');
     expect(scan(saveSource())).toEqual([]);
+  });
+
+  it('freezes the build counters as literals rather than a derived value', () => {
+    // The positive half for v4, and the one that carries the real risk: deleting
+    // `V4_MIGRATION_BUILD_OUTCOMES` and calling `createBuildOutcomes()` would make the
+    // scan pass by removing its subject, so the shape is asserted here too. Every refusal
+    // reason is spelled out as its own literal `0` — which is exactly what makes this
+    // break loudly on the day a fifth reason is added to the union but not to history.
+    const code = stripComments(saveSource());
+    const declaration = /V4_MIGRATION_BUILD_OUTCOMES[\s\S]{0,600}?\}\)/.exec(code)?.[0] ?? '';
+    expect(declaration).toContain('built: 0');
+    expect(declaration).toContain('demolished: 0');
+    expect(declaration).toContain('insufficientFunds: 0');
+    expect(declaration).toContain('noSuchRoom: 0');
+    expect(declaration).toContain('occupied: 0');
+    expect(declaration).toContain('outOfBounds: 0');
+    expect(declaration).toContain('Object.freeze');
   });
 
   it('freezes the plot as four integer literals rather than a derived value', () => {
@@ -135,6 +167,22 @@ describe('the scan itself can fail', () => {
   it('catches a direct call to createGridBounds', () => {
     const bad = 'function migrateV2ToV3(w) {\n  return { ...w, grid: createGridBounds() };\n}';
     expect(scan(bad)).toEqual([{ name: 'createGridBounds', line: 2 }]);
+  });
+
+  it('catches a direct call to createBuildOutcomes', () => {
+    // The G-008 case, and the tempting one: `createBuildOutcomes()` returns exactly what
+    // `V4_MIGRATION_BUILD_OUTCOMES` holds today, so deduplicating them looks free and
+    // costs nothing until the union grows.
+    const bad = 'function migrateV3ToV4(w) {\n  return { ...w, buildOutcomes: createBuildOutcomes() };\n}';
+    expect(scan(bad)).toEqual([{ name: 'createBuildOutcomes', line: 2 }]);
+  });
+
+  it('catches the back door: folding the live refusal list into a counter bag', () => {
+    const bad = [
+      'const refused = {};',
+      'for (const reason of BUILD_REFUSAL_REASONS) refused[reason] = 0;',
+    ].join('\n');
+    expect(scan(bad)).toEqual([{ name: 'BUILD_REFUSAL_REASONS', line: 2 }]);
   });
 
   it('catches the back door: assembling the plot from the exported constants', () => {

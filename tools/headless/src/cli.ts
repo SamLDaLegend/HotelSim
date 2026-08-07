@@ -4,7 +4,15 @@
 //   pnpm --silent sim:run --days 30 --seed 42 --json        (machine-readable summary)
 //   pnpm --silent sim:run --ticks 100000 --seed 7 --quiet   (prints only the state hash)
 //   pnpm sim:run --days 30 --rooms 5 --arrivals 60          (workload flags for sweeps)
+//   pnpm sim:run --days 30 --seed 7 --build 2880            (the player expands, G-008)
+//   pnpm sim:run --days 30 --build 2880 --demolish 5760     (and knocks rooms down again)
 //   pnpm sim:run --days 1 --content ./my-content            (alternative content directory)
+//
+// `--rooms` is the hotel the scenario STARTS with, placed free through the structural
+// `spawnEntity`. `--build` is the PLAYER acting, through `buildRoom`: it costs the room
+// type's construction cost, and an occupied cell, a cell off the plot or an empty wallet
+// is a recorded refusal rather than a crash. Both default to the pre-G-008 behaviour —
+// `--build` and `--demolish` off — so `pnpm sim:bench` measures the workload it always has.
 //
 // THE `--silent` ON THE MACHINE-CONSUMED MODES IS LOAD-BEARING: pnpm prints its own
 // script banner to stdout before this process starts, and without `--silent` the
@@ -34,11 +42,24 @@ function main(): void {
   // document. The catch below prints the message alone — ContentError's message is
   // already formatted for a human.
   const content = loadContent(options.contentDir);
+  // The world is created BEFORE the schedule so the schedule can be laid out on that
+  // world's own plot (`world.grid`). The runner must not emit a build command it can
+  // already prove is off the plot, and the only way to know the plot without keeping a
+  // second copy of it is to ask the world that will be asked to run the command.
+  const initial = createWorld(options.seed, content);
   const world = run(
-    createWorld(options.seed, content),
+    initial,
     content,
     options.ticks,
-    schedule(options.ticks, content, options.rooms, options.arrivalEveryTicks),
+    schedule(
+      options.ticks,
+      content,
+      initial.grid,
+      options.rooms,
+      options.arrivalEveryTicks,
+      options.buildEveryTicks,
+      options.demolishEveryTicks,
+    ),
   );
   // Print the report, THEN fail if the run violated an invariant. The ordering — and
   // the fact that the violations are computed from the same summary the renderers

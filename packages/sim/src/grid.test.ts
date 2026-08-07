@@ -169,17 +169,36 @@ describe('placement', () => {
     );
   });
 
-  it('does NOT police overlap at G-007 — that is G-008\'s rule', () => {
-    // Pinned so that changing it is a visible decision rather than a silent discovery.
-    // The real answer is not simply "no": an item inside a room (M2) shares that room's
-    // cells on purpose, so a blanket ban written here would be a decision made in the
-    // wrong goal with the wrong information.
+  it('DOES police overlap since G-008 — the decision G-007 left open, made', () => {
+    // WHAT THIS TEST USED TO SAY, AND WHY IT SAYS THE OPPOSITE NOW.
+    //
+    // At G-007 this test was titled "does NOT police overlap at G-007 — that is G-008's
+    // rule". It spawned two entities onto (0,0) and asserted both survived, both standing
+    // on the same cell. That was not an oversight: G-007 pinned its own permissiveness
+    // so that changing it would be A VISIBLE DECISION RATHER THAN A SILENT DISCOVERY.
+    //
+    // G-008 made the decision. A cell is OCCUPIED when a live entity whose kind names a
+    // ROOM TYPE stands on it, and `spawnEntity` — the structural door — throws rather than
+    // stacking, because a caller stacking rooms is holding the world it just ignored.
+    //
+    // G-007's caveat survived intact and is why occupancy is room-scoped rather than
+    // entity-scoped: an item inside a room (M2) shares that room's cells ON PURPOSE, so a
+    // blanket "two entities may not share a cell" would still be the wrong rule. See
+    // `build.test.ts` for `roomAt` ignoring a non-room entity, and for the player-facing
+    // half where the identical rule produces a recorded refusal instead of a throw.
+    expect(() =>
+      stepTick(createWorld(1, content), content, [spawnAt('alpha', cell(0, 0)), spawnAt('beta', cell(0, 0))]),
+    ).toThrow(/floor 0, column 0 is already occupied/);
+
+    // And the positive half, so "refuses everything" is not a way to pass: two rooms one
+    // column apart are fine, and both keep the cell they were given.
     const world = stepTick(createWorld(1, content), content, [
       spawnAt('alpha', cell(0, 0)),
-      spawnAt('beta', cell(0, 0)),
+      spawnAt('beta', cell(0, 1)),
     ]);
     expect(entitiesInOrder(world.entities)).toHaveLength(2);
-    expect(entitiesInOrder(world.entities).every((entity) => cellsEqual(entity.at!, cell(0, 0)))).toBe(true);
+    expect(cellsEqual(entitiesInOrder(world.entities)[0]!.at!, cell(0, 0))).toBe(true);
+    expect(cellsEqual(entitiesInOrder(world.entities)[1]!.at!, cell(0, 1))).toBe(true);
   });
 });
 
