@@ -41,3 +41,33 @@ Format: one line, with the goal or session it came out of and where it belongs.
 - **`packageManager` / corepack** — pnpm was installed globally via npm because corepack
   could not write shims into `C:\Program Files\nodejs`. CI pins pnpm explicitly, so this
   only affects local dev on this machine.
+
+## Deferred out of G-001 (2026-08-07)
+
+Raised by `sim-engineer` at PLAN and deliberately kept out of the diff.
+
+- **Typed component data on entities** — position, occupancy, need vectors. `Entity` is
+  `{id, kind}` and nothing more at G-001. -> G-002 / G-004.
+- **A system registry / ordered `runSystems` phase** — the slot between `applyCommands`
+  and `commitEntities` is documented in a comment in `tick.ts`. Deliberately not written
+  as an empty phase named after a feature that does not exist. -> the first goal that
+  needs a second system.
+- **Command acknowledgements** — the host learning which id a `spawnEntity` produced.
+  Predictable today because ids are monotonic, but brittle to rely on. -> whenever a
+  host actually needs it.
+- **Validating `Entity.kind` against injected content at spawn time** — needs the content
+  pipeline to exist. -> G-002.
+- **`assertWorldShape` rejecting unknown top-level keys** — real hardening, belongs with
+  the migration work rather than ahead of it. -> G-003.
+- **Secondary indices (`kind -> EntityId[]`)** for O(1) queries by kind. Would be derived,
+  rebuilt on load, never hashed. Not needed until a query is measurably slow. -> M2/M3.
+- **Entity generation counters** for stale-handle detection. Monotonic non-reused ids
+  already make a stale handle *fail* rather than *alias*, which is the property that
+  matters. -> only if handles start being held across saves.
+- **`spawnedAt` on `Entity`** — would make phase ordering directly observable in state.
+  Probably useful, but G-004 may want `Entity` shaped differently. -> G-004.
+- **`sim:bench` (I5) does not exercise the entity store** — the CLI runs with no command
+  schedule, so 365 days simulate zero entities and the bench says nothing about tick cost
+  under load. Fixing it means giving the CLI a real workload, which is G-006's day cycle.
+  -> **G-006, treat as a dependency**. This sharpens the earlier parked item about
+  benchmarking tick cost against agent count.

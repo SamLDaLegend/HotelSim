@@ -1,5 +1,3 @@
-// SCAFFOLD — bootstrap substrate, owned by sim-engineer from G-003 onward.
-//
 // I6: serialise -> deserialise -> re-hash must reproduce the original state hash, and
 // every save carries a schema version with a migration path forward.
 //
@@ -7,6 +5,8 @@
 // `assertWorldShape` too. A field that round-trips by accident today will be the
 // field that is silently missing from someone's save tomorrow.
 
+import { assertEntityStoreInvariants } from './entities.js';
+import type { Entity, EntityStore } from './entities.js';
 import type { Transaction } from './ledger.js';
 import type { World } from './world.js';
 
@@ -75,6 +75,18 @@ function assertTransaction(value: unknown, index: number): asserts value is Tran
   }
 }
 
+function assertEntity(value: unknown, index: number): asserts value is Entity {
+  if (!isRecord(value)) {
+    throw new Error(`Save is corrupt: world.entities.list[${index}] is not an object`);
+  }
+  if (typeof value['id'] !== 'number') {
+    throw new Error(`Save is corrupt: world.entities.list[${index}].id is not a number`);
+  }
+  if (typeof value['kind'] !== 'string') {
+    throw new Error(`Save is corrupt: world.entities.list[${index}].kind is not a string`);
+  }
+}
+
 /**
  * Structural check over EVERY field of World. Add new fields here when you add them
  * to the World type — this function is the round-trip contract.
@@ -100,6 +112,24 @@ export function assertWorldShape(value: unknown): asserts value is World {
     throw new Error('Save is corrupt: world.ledger is missing or not an array');
   }
   ledger.forEach(assertTransaction);
+
+  const entities = value['entities'];
+  if (!isRecord(entities)) {
+    throw new Error('Save is corrupt: world.entities is missing');
+  }
+  if (typeof entities['nextId'] !== 'number') {
+    throw new Error('Save is corrupt: world.entities.nextId is missing or not a number');
+  }
+  const list = entities['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.entities.list is missing or not an array');
+  }
+  list.forEach(assertEntity);
+  // Shape alone is not enough. A save whose ids are out of order, or whose nextId
+  // would collide with a live entity, loads fine and then diverges silently — exactly
+  // the failure I6 exists to catch. The check is the SAME function the tick uses when
+  // it commits, so "a valid store" has one definition rather than two that drift.
+  assertEntityStoreInvariants(entities as unknown as EntityStore);
 }
 
 export function serialise(world: World): string {

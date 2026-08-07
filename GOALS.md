@@ -25,20 +25,37 @@ sim itself is a deliberate stub — `packages/sim/src/*.ts` files marked
 ---
 
 ## G-001 — Tick scheduler and world entity model
-Status: pending
+Status: done
 Milestone: M0
 Owner pair: sim-engineer / sim-critic
 Statement: The world holds entities in a deterministic, stable store; the tick runs in
   named phases with a documented order; commands are applied at one defined point in
   the tick rather than wherever they arrive.
 Exit criteria:
-  - pnpm test -- world  (all green)
+  - pnpm exec vitest run world  (all green)
   - pnpm test:determinism  (green — 100k ticks, 3 processes, seed-sensitive)
   - pnpm sim:run --ticks 100000 --seed 42 --quiet  produces the same hash on two runs
+  - reordering the tick phases must fail a test  (see ADR-0005)
   - all §2 invariant gates green (pnpm verify)
 Out of scope: multi-floor grid, build/demolish commands, room validity rules (M1);
-  pathfinding (M2)  (-> PARKING.md)
-Critique rounds used: 0/3
+  pathfinding (M2); spawnedAt on Entity (G-004)  (-> PARKING.md)
+Critique rounds used: 2/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  59 tests green across 3 world files · I2 hash 66a57bf64021275a · sim:run twice
+  02fa94c1f4eb7095 · all three non-canonical phase orders fail both the suite and the
+  I2 gate · all six gates green · no gate, CI or config file modified.
+
+  Criterion amended mid-goal (2026-08-07, round 1): was `pnpm test -- world`, which
+  is NOT a single command — in PowerShell pnpm binds the filter (3 files), in Git Bash
+  it forwards a literal `--` and vitest discards all positional filters, so
+  `pnpm test -- zzznotafile` runs the whole suite GREEN. A criterion that passes on a
+  filter matching nothing is not a measurement. `pnpm exec vitest run world` behaves
+  identically in both shells and fails on a bad filter. Both forms were already green;
+  this removes ambiguity rather than lowering a bar. Found by sim-critic.
+
+  Criterion added mid-goal (2026-08-07, round 1): the phase-order pin. The goal's
+  headline claim was unfalsifiable — see ADR-0005.
 
 ## G-002 — Content pipeline and one room type
 Status: pending

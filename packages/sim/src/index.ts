@@ -5,6 +5,21 @@
 // package's tsconfig, which has neither the "DOM" lib nor @types/node.
 
 export type { Command, ScheduledCommand } from './commands.js';
+export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
+export {
+  assertEntityStoreInvariants,
+  beginEntityDraft,
+  commitEntityDraft,
+  createEntityStore,
+  draftDespawn,
+  draftGet,
+  draftSpawn,
+  entitiesInOrder,
+  entityCount,
+  getEntity,
+  hasEntity,
+  NO_ENTITY,
+} from './entities.js';
 export type { JsonValue } from './hash.js';
 export { canonicalise, hashJson } from './hash.js';
 export type { Transaction } from './ledger.js';
@@ -21,5 +36,15 @@ export {
   SAVE_SCHEMA_VERSION,
   serialise,
 } from './save.js';
+export type { TickPhase, TickPhaseFn, TickState } from './tick.js';
+export {
+  advanceTime,
+  applyCommands,
+  beginTick,
+  commitEntities,
+  run,
+  stepTick,
+  TICK_PHASES,
+} from './tick.js';
 export type { World } from './world.js';
-export { createWorld, dayOf, hashState, run, stepTick, TICKS_PER_DAY, worldToJson } from './world.js';
+export { createWorld, dayOf, hashState, TICKS_PER_DAY, worldToJson } from './world.js';

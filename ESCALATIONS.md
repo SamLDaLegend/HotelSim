@@ -17,7 +17,12 @@ Format: date, trigger, what was tried, what is being asked of the human. Mark en
 
 ---
 
-## 2026-08-07 — OPEN — Bootstrap complete, awaiting sign-off
+## 2026-08-07 — RESOLVED — Bootstrap complete, awaiting sign-off
+
+**Resolution (2026-08-07):** Human signed off. Loop entered §5 SELECT at G-001. The
+three bootstrap design calls (ADR-0001 content injection, ADR-0002 integer money,
+ADR-0003 snake_case content IDs) were surfaced at sign-off and stand unchallenged.
+
 
 **Trigger:** Human instruction — stop after `HOTELSIM.md` §10 and show `pnpm verify`
 green against the empty scaffold before any simulation logic is written.

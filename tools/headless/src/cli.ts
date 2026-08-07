@@ -7,7 +7,7 @@
 // determinism gate spawns, so its output must be a pure function of its arguments:
 // no timestamps, no durations, nothing wall-clock on stdout.
 
-import { createWorld, dayOf, hashState, run, TICKS_PER_DAY } from '@hotelsim/sim';
+import { createWorld, dayOf, entityCount, hashState, run, TICKS_PER_DAY } from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 
 type Options = {
@@ -63,6 +63,7 @@ function report(world: World, options: Options): string {
     `seed        ${options.seed}`,
     `ticks       ${world.tick}`,
     `days        ${dayOf(world)}`,
+    `entities    ${entityCount(world.entities)}`,
     `ledger      ${world.ledger.length} transactions`,
     `state hash  ${hashState(world)}`,
   ].join('\n');

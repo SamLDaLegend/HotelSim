@@ -27,11 +27,28 @@ function parse(argv: readonly string[]): { seed: number; ticks: number } {
   return { seed, ticks };
 }
 
-/** A fixed command log. Same seed + same log => same hash, forever (I2). */
+/**
+ * A fixed command log. Same seed + same log => same hash, forever (I2).
+ *
+ * It spawns and despawns entities, not just noops, so the 100,000-tick determinism
+ * proof actually covers the entity store rather than only the tick counter and the
+ * RNG. The three passes are appended in separate loops on purpose: the resulting
+ * schedule is NOT sorted by tick, which also exercises `run`'s bucketing.
+ */
 function commandLog(ticks: number): readonly ScheduledCommand[] {
   const schedule: ScheduledCommand[] = [];
   for (let tick = 0; tick < ticks; tick += 997) {
     schedule.push({ tick, command: { kind: 'noop' } });
+  }
+  // Ids are handed out from a monotonic counter, so the nth spawn always has id n.
+  for (let tick = 13; tick < ticks; tick += 1009) {
+    schedule.push({ tick, command: { kind: 'spawnEntity', entityKind: 'harnessEntity' } });
+  }
+  // Some of these target ids that are not live yet, or are already gone. That is
+  // deliberate: a despawn of an unknown id must be a deterministic no-op.
+  for (let tick = 2_003; tick < ticks; tick += 4_001) {
+    const id = Math.floor((tick - 2_003) / 4_001) * 3 + 1;
+    schedule.push({ tick, command: { kind: 'despawnEntity', id } });
   }
   return schedule;
 }

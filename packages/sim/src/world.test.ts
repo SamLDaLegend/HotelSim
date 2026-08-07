@@ -1,9 +1,11 @@
 // In-process half of I2. The cross-process half lives in `pnpm test:determinism`.
 
 import { describe, expect, it } from 'vitest';
+import type { Command } from './commands.js';
 import { canonicalise, hashJson } from './hash.js';
 import { createRng, nextIntBelow, nextUint32 } from './rng.js';
-import { createWorld, dayOf, hashState, run, stepTick, TICKS_PER_DAY } from './world.js';
+import { run, stepTick } from './tick.js';
+import { createWorld, dayOf, hashState, TICKS_PER_DAY, worldToJson } from './world.js';
 
 describe('rng', () => {
   it('is a pure function of its state', () => {
@@ -90,6 +92,21 @@ describe('I2 determinism, in-process', () => {
     const before = hashState(world);
     run(world, 100);
     expect(hashState(world)).toBe(before);
+  });
+});
+
+describe('state hash covers the whole world', () => {
+  it('changes when an entity is added, so the store cannot hide from I2', () => {
+    const world = createWorld(6);
+    const spawn: Command = { kind: 'spawnEntity', entityKind: 'alpha' };
+    expect(hashState(stepTick(world, [spawn]))).not.toBe(hashState(stepTick(world)));
+  });
+
+  it('projects the world to JSON without dropping or reordering a field', () => {
+    // worldToJson is an identity cast, which is only safe while every field of World
+    // is plain JSON. A Set, a Map or a class instance here would hash as `{}`.
+    const world = stepTick(createWorld(6), [{ kind: 'spawnEntity', entityKind: 'alpha' }]);
+    expect(JSON.parse(JSON.stringify(worldToJson(world)))).toEqual(world);
   });
 });
 
