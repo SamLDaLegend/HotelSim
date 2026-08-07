@@ -89,9 +89,25 @@ for (const file of collectFiles(SIM_SRC, isTsSource)) {
     const spec = imp.specifier;
     const at = `${where}:${imp.line}`;
 
+    // Node builtins are banned in packages/sim INCLUDING its tests.
+    //
+    // This used to read `&& !isTest`, intending to let test harnesses touch the host.
+    // That exemption never worked: a test importing `node:fs` fell through to the
+    // external-package catch-all below and was rejected anyway — with the wrong message,
+    // calling a builtin an "external package". Reported by ai-engineer at G-007.
+    //
+    // The behaviour was right and the code was lying about it, so the fix is to delete
+    // the dead exemption rather than to make it work. A sim test that needs the
+    // filesystem is a test that belongs in tools/headless, which is exactly where
+    // G-007's migration source-scan ended up.
     const builtin = spec.startsWith('node:') ? spec.slice(5) : spec;
-    if (NODE_BUILTINS.has(builtin) && !isTest) {
-      violations.push({ where: at, what: `imports Node builtin "${spec}". packages/sim is host-agnostic (I1).` });
+    if (NODE_BUILTINS.has(builtin)) {
+      violations.push({
+        where: at,
+        what:
+          `imports Node builtin "${spec}". packages/sim is host-agnostic (I1), and its\n` +
+          '    tests are too — a test needing the host belongs in tools/headless.',
+      });
       continue;
     }
     if (BANNED_PACKAGES.some((re) => re.test(spec))) {
