@@ -32,9 +32,18 @@
 // 2, sharing the same draft. There is no such system yet, so there is no such phase
 // yet — an empty phase named after an unbuilt feature is scaffolding, not design.
 //
+// Injected content (G-002) rides in `TickState` alongside `committed`: tick-local,
+// never hashed, never saved. It is NOT a parameter of a phase — the phase signature
+// stays `(TickState) => TickState`, which is what lets `stepTick` fold over the table
+// at all (ADR-0005). Only the fingerprint of that content lives in `World`.
+//
 // What a phase may NOT do:
 //   - read a wall clock, call an unseeded random source, or take a `dt`. Time is the
 //     tick counter. `dt` is not a parameter here and never will be.
+//   - replace `state.content`. Every phase sees the same content the caller injected,
+//     and `stepTick` checks the object identity after the fold — a phase that swapped
+//     content mid-tick would produce a world whose `contentHash` no longer described
+//     what actually ran.
 //   - read `state.commands` outside `applyCommands`. This is structural rather than a
 //     rule: `applyCommands` blanks the log on its way out, so by the time any later
 //     phase runs there is nothing left to read. A later phase that peeked and acted
@@ -48,9 +57,12 @@
 //   - depend on a phase that runs later in the same tick.
 
 import type { Command, ScheduledCommand } from './commands.js';
+import { hasContentId } from './content.js';
+import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
 import { nextUint32 } from './rng.js';
+import { assertContentMatches } from './world.js';
 import type { World } from './world.js';
 
 /**
@@ -80,6 +92,11 @@ const NO_COMMANDS: readonly Command[] = Object.freeze([]);
  */
 export type TickState = {
   readonly world: World;
+  /**
+   * The content this tick runs under. Read-only for every phase, identical for every
+   * phase, never hashed and never saved — `World.contentHash` is the saved half.
+   */
+  readonly content: BoundContent;
   /** This tick's commands. Only `applyCommands` may read them. */
   readonly commands: readonly Command[];
   /** The open entity draft, or null when no draft is open. */
@@ -90,15 +107,35 @@ export type TickState = {
 /** Every phase has this shape, which is what lets `stepTick` fold over the table. */
 export type TickPhaseFn = (state: TickState) => TickState;
 
-export function beginTick(world: World, commands: readonly Command[] = []): TickState {
-  return { world, commands, entities: null, committed: false };
+/**
+ * Open a tick.
+ *
+ * The content check happens here rather than in `stepTick`, so it covers every entry
+ * point including a host that composes the phases itself. It is one string comparison.
+ */
+export function beginTick(world: World, content: BoundContent, commands: readonly Command[] = []): TickState {
+  assertContentMatches(world, content);
+  return { world, content, commands, entities: null, committed: false };
 }
 
-function applyCommand(entities: EntityDraft, command: Command): void {
+function applyCommand(entities: EntityDraft, command: Command, content: BoundContent): void {
   switch (command.kind) {
     case 'noop':
       return;
     case 'spawnEntity':
+      // The one place the simulation reads injected content today. Without it,
+      // "the host injects content into the sim" would be a claim no test could
+      // refute — the content could be replaced with an empty registry and every
+      // test would still pass. An unknown kind is a caller bug rather than a
+      // replay hazard: `beginTick` has already established that this world and
+      // this content belong together, so the id cannot merely be from a different
+      // content version. Contrast `despawnEntity`, where an unknown id IS a replay
+      // artefact and is therefore a deterministic no-op.
+      if (!hasContentId(content, command.entityKind)) {
+        throw new Error(
+          `applyCommands: unknown entity kind "${command.entityKind}" — it is not defined in the injected content`,
+        );
+      }
       draftSpawn(entities, command.entityKind);
       return;
     case 'despawnEntity':
@@ -125,7 +162,7 @@ export function applyCommands(state: TickState): TickState {
   }
   const entities = beginEntityDraft(state.world.entities);
   for (const command of state.commands) {
-    applyCommand(entities, command);
+    applyCommand(entities, command, state.content);
   }
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
   // in the tick" stops being a rule a later phase could break and becomes a fact about
@@ -186,8 +223,8 @@ const TICK_PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
  * `dt` is not a parameter and never will be: the tick IS the unit of time. Taking a
  * delta from the caller is how wall-clock time leaks into the sim and breaks I2.
  */
-export function stepTick(world: World, commands: readonly Command[] = []): World {
-  let state = beginTick(world, commands);
+export function stepTick(world: World, content: BoundContent, commands: readonly Command[] = []): World {
+  let state = beginTick(world, content, commands);
   for (const phase of TICK_PHASES) {
     state = TICK_PHASE_FNS[phase](state);
   }
@@ -197,12 +234,19 @@ export function stepTick(world: World, commands: readonly Command[] = []): World
   if (state.entities !== null || !state.committed || state.world.tick !== world.tick + 1) {
     throw new Error('stepTick: the phase table did not run a whole tick');
   }
+  // And the tick ran under the content it was given. Identity, not equality: a phase
+  // that rebuilt an equal-looking registry would still be a phase deciding what the
+  // rest of the tick means, which is not a phase's job.
+  if (state.content !== content) {
+    throw new Error('stepTick: a phase replaced the injected content mid-tick');
+  }
   return state.world;
 }
 
 /** Run `ticks` ticks, applying any scheduled commands at their tick. */
 export function run(
   world: World,
+  content: BoundContent,
   ticks: number,
   schedule: readonly ScheduledCommand[] = [],
 ): World {
@@ -221,7 +265,7 @@ export function run(
 
   let current = world;
   for (let i = 0; i < ticks; i += 1) {
-    current = stepTick(current, byTick.get(current.tick) ?? []);
+    current = stepTick(current, content, byTick.get(current.tick) ?? []);
   }
   return current;
 }

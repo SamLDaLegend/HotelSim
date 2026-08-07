@@ -8,6 +8,7 @@
 // The tick itself lives in `tick.ts`, so this module has no dependency on commands and
 // the module graph stays a DAG.
 
+import type { BoundContent } from './content.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
 import { hashJson } from './hash.js';
@@ -24,15 +25,48 @@ export type World = {
   readonly rng: RngState;
   readonly ledger: readonly Transaction[];
   readonly entities: EntityStore;
+  /**
+   * Fingerprint of the content this world was created under (G-002).
+   *
+   * The content itself is NOT here: it is injected per call and rides in `TickState`,
+   * so a save does not carry a copy of the game's definitions and a content update
+   * cannot silently change what an old save meant. What is here is the one bit of
+   * content that world state genuinely needs — which content this run is of.
+   *
+   * It is hashed and saved like every other field, so a run under a different content
+   * file has a different state hash from tick 0, loudly, rather than diverging at tick
+   * 40,000 for reasons nobody can reconstruct. And `assertContentMatches` refuses to
+   * tick a world under content it was not created from, which is what makes a save
+   * either reproducible or rejected, never quietly wrong.
+   */
+  readonly contentHash: string;
 };
 
-export function createWorld(seed: number): World {
+export function createWorld(seed: number, content: BoundContent): World {
   return {
     tick: 0,
     rng: createRng(seed),
     ledger: [],
     entities: createEntityStore(),
+    contentHash: content.fingerprint,
   };
+}
+
+/**
+ * Throws unless `content` is the content this world was created under.
+ *
+ * Called once per tick from `beginTick` — an O(1) comparison of two 16-character
+ * strings, which is the price of the guarantee being structural rather than a startup
+ * ritual a caller can skip. Hosts loading a save should also call it directly, to fail
+ * at load time with a legible message instead of on the first tick.
+ */
+export function assertContentMatches(world: World, content: BoundContent): void {
+  if (world.contentHash !== content.fingerprint) {
+    throw new Error(
+      `Content mismatch: this world was created under content ${world.contentHash} but ${content.fingerprint} was injected. ` +
+        'A run is only reproducible against the content it was made with; loading it under edited content would diverge silently.',
+    );
+  }
 }
 
 /** Day index derived from the tick, never stored. Storing it would be a second source of truth. */

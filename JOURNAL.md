@@ -77,3 +77,51 @@ world`, which means one thing in both shells. Lesson for future goals: an exit c
 that passes on a filter matching nothing is not a measurement.
 
 Parked nine items out of PLAN, none built. Rounds used 2 of 3; no BLOCKER at any point.
+
+---
+
+## 2026-08-07 — G-002 — Content pipeline and one room type (1/3 rounds)
+
+One room type as JSON, a Zod schema in `packages/content`, loaded and validated by the
+host and injected. `packages/sim` still has zero runtime dependencies and no import of
+`@hotelsim/content` of any kind — not even type-only, so there is nothing for a later
+refactor to promote into a value import.
+
+The design question that mattered was where injected content lives. Data rides in
+`TickState`; only a **fingerprint** lands in `World.contentHash`, computed by the sim from
+the injected data rather than supplied by the host — because a host-supplied version
+number can lie, and the promise a designer forgets is exactly the silent-divergence class
+I2 exists to catch. `beginTick` compares it every tick, so a save reloaded after someone
+edits a price **refuses to tick** with a legible error instead of diverging at tick
+40,000. Verified: one penny moves the fingerprint `ac496e19b27da075` → `ebc34728f1f77984`
+and the day-1 hash `1396cf4968cf7095` → `5d37178b1f347bcf`.
+
+The accepted price, chosen not overlooked: editing content invalidates old saves. Correct
+at M0, where a content edit genuinely is a different simulation. It will not survive M6,
+and the escape route is parked.
+
+The critic's MAJOR: `bindContent`'s freeze was **shallow**. The wrapper, the content object
+and the array were frozen; the room-type records were not, and `[...roomTypes]` copies the
+array rather than the entries, so they stayed the caller's objects. A single property write
+made the sim read a new price while the fingerprint stayed stale — the exact silent
+divergence `contentHash` was added to prevent. It also broke the binary search's sorted
+precondition when an `id` was mutated. What made it MAJOR is that **it defeated the guard
+the builder had already added**: `stepTick` rejects a phase that *replaces* `state.content`,
+but the cheaper mistake — mutating a field in place — passed both the identity check and
+the fingerprint check. The deliberate act was closed, the careless one open. Fixed by
+cloning then freezing each record, deliberately not freezing in place: reaching back into
+the host's objects is a side effect of the same family as mutating them.
+
+Nearly broke nothing else, but two things are worth carrying forward. The builder found a
+real hole in `check:content` — a wrapper-object content file makes the snake_case id check
+silently pass over nothing — and correctly routed it to me under ADR-0004 rather than
+fixing it inside a feature diff. And `git diff` cannot verify any untracked file, which is
+most of this diff; the builder's temporary swap of the data file was confirmed by
+consequence instead, because an imperfect restore would not have reproduced
+`ac496e19b27da075`.
+
+I5 moved 5.7% → 8.8% of budget. It is startup, not tick cost: importing Zod and loading
+content costs ~250ms once, against ~160ms of actual simulation for 365 days. Not a finding,
+but the bench now measures a fixed startup cost that will only grow.
+
+Parked eight items, two of them gate defects for the orchestrator. Rounds used 1 of 3.

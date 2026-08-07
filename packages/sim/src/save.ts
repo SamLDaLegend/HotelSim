@@ -107,6 +107,13 @@ export function assertWorldShape(value: unknown): asserts value is World {
       throw new Error(`Save is corrupt: world.rng.${key} is missing or not a number`);
     }
   }
+  // Which content this world is of (G-002). A save that lost this would load happily
+  // under ANY content and then diverge, which is exactly the class of bug the
+  // fingerprint exists to make loud.
+  const contentHash = value['contentHash'];
+  if (typeof contentHash !== 'string' || contentHash.length === 0) {
+    throw new Error('Save is corrupt: world.contentHash is missing or not a non-empty string');
+  }
   const ledger = value['ledger'];
   if (!Array.isArray(ledger)) {
     throw new Error('Save is corrupt: world.ledger is missing or not an array');

@@ -4,3 +4,8 @@ coverage/
 *.tsbuildinfo
 .tmp/
 .DS_Store
+
+# Probe files written into packages/sim/src by tools/headless/src/content-gate.test.ts
+# to prove the I3 gate actually bites. They are removed in a `finally`; this pattern is
+# the second line of defence, so a probe that survives a hard kill cannot be committed.
+*.gate-probe.ts

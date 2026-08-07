@@ -5,6 +5,8 @@
 // package's tsconfig, which has neither the "DOM" lib nor @types/node.
 
 export type { Command, ScheduledCommand } from './commands.js';
+export type { BoundContent, RoomTypeData, SimContent } from './content.js';
+export { bindContent, findRoomType, hasContentId } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {
   assertEntityStoreInvariants,
@@ -47,4 +49,4 @@ export {
   TICK_PHASES,
 } from './tick.js';
 export type { World } from './world.js';
-export { createWorld, dayOf, hashState, TICKS_PER_DAY, worldToJson } from './world.js';
+export { assertContentMatches, createWorld, dayOf, hashState, TICKS_PER_DAY, worldToJson } from './world.js';

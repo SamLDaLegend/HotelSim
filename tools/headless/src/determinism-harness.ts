@@ -12,7 +12,8 @@
 // Output must be a pure function of the arguments. Nothing wall-clock on stdout.
 
 import { createWorld, hashState, run } from '@hotelsim/sim';
-import type { ScheduledCommand } from '@hotelsim/sim';
+import type { BoundContent, ScheduledCommand } from '@hotelsim/sim';
+import { loadContent } from './content-loader.js';
 
 function parse(argv: readonly string[]): { seed: number; ticks: number } {
   let seed = 42;
@@ -35,14 +36,21 @@ function parse(argv: readonly string[]): { seed: number; ticks: number } {
  * RNG. The three passes are appended in separate loops on purpose: the resulting
  * schedule is NOT sorted by tick, which also exercises `run`'s bucketing.
  */
-function commandLog(ticks: number): readonly ScheduledCommand[] {
+function commandLog(ticks: number, content: BoundContent): readonly ScheduledCommand[] {
+  // The kind comes from the LOADED CONTENT, not from a literal. So the 100,000-tick
+  // determinism proof now covers the content path end to end: if the loader broke, or
+  // if the injected registry were empty, this harness would not produce a hash at all.
+  const entityKind = content.content.roomTypes[0]?.id;
+  if (entityKind === undefined) {
+    throw new Error('determinism harness: the injected content defines no room type to spawn');
+  }
   const schedule: ScheduledCommand[] = [];
   for (let tick = 0; tick < ticks; tick += 997) {
     schedule.push({ tick, command: { kind: 'noop' } });
   }
   // Ids are handed out from a monotonic counter, so the nth spawn always has id n.
   for (let tick = 13; tick < ticks; tick += 1009) {
-    schedule.push({ tick, command: { kind: 'spawnEntity', entityKind: 'harnessEntity' } });
+    schedule.push({ tick, command: { kind: 'spawnEntity', entityKind } });
   }
   // Some of these target ids that are not live yet, or are already gone. That is
   // deliberate: a despawn of an unknown id must be a deterministic no-op.
@@ -54,9 +62,10 @@ function commandLog(ticks: number): readonly ScheduledCommand[] {
 }
 
 const { seed, ticks } = parse(process.argv.slice(2));
-const schedule = commandLog(ticks);
+const content = loadContent();
+const schedule = commandLog(ticks, content);
 
-const first = hashState(run(createWorld(seed), ticks, schedule));
-const second = hashState(run(createWorld(seed), ticks, schedule));
+const first = hashState(run(createWorld(seed, content), content, ticks, schedule));
+const second = hashState(run(createWorld(seed, content), content, ticks, schedule));
 
 process.stdout.write(`run1 ${first}\nrun2 ${second}\n`);

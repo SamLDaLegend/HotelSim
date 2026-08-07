@@ -17,7 +17,19 @@ import {
   TICK_PHASES,
 } from './tick.js';
 import type { TickPhase, TickPhaseFn, TickState } from './tick.js';
+import { bindContent } from './content.js';
+import type { RoomTypeData } from './content.js';
 import { createWorld, hashState } from './world.js';
+
+/**
+ * Injected content covering every kind these tests spawn. camelCase ids: a snake_case
+ * literal in packages/sim is a leaked content ID (ADR-0003) and check:content scans
+ * test files too.
+ */
+const roomType = (id: string): RoomTypeData => ({ id, name: id, capacity: 2, nightlyRatePence: 8_500 });
+const content = bindContent({
+  roomTypes: ['alpha', 'beta', 'gamma', 'delta'].map(roomType),
+});
 
 const spawn = (entityKind: string): Command => ({ kind: 'spawnEntity', entityKind });
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
@@ -31,7 +43,7 @@ const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
 };
 
 function runPhases(world: ReturnType<typeof createWorld>, order: readonly TickPhase[], commands: readonly Command[] = []): TickState {
-  let state = beginTick(world, commands);
+  let state = beginTick(world, content, commands);
   for (const phase of order) state = PHASE_FNS[phase](state);
   return state;
 }
@@ -62,32 +74,32 @@ describe('tick phases', () => {
     // Not a rule a later phase could break — there is nothing left for one to read.
     // A system that peeked and acted would double-apply intent applyCommands already
     // staged, and that replay bug hashes perfectly on the machine that wrote it.
-    const world = createWorld(3);
+    const world = createWorld(3, content);
     const commands = [spawn('alpha'), spawn('beta')];
 
-    const applied = applyCommands(beginTick(world, commands));
+    const applied = applyCommands(beginTick(world, content, commands));
     expect(applied.commands).toEqual([]);
     expect(commitEntities(applied).commands).toEqual([]);
     expect(runPhases(world, TICK_PHASES, commands).commands).toEqual([]);
     // The caller's own array is not touched on the way past.
     expect(commands).toHaveLength(2);
-    expect(beginTick(world, commands).commands).toBe(commands);
+    expect(beginTick(world, content, commands).commands).toBe(commands);
   });
 
   it('composes stepTick out of TICK_PHASES itself, not out of a second copy of the order', () => {
     // This walks TICK_PHASES, so reordering that array reorders this test too — and
     // the phase preconditions then reject the run. There is one order, in one place.
-    const world = createWorld(3);
+    const world = createWorld(3, content);
     const commands = [spawn('alpha'), spawn('beta'), despawn(1)];
     const folded = runPhases(world, TICK_PHASES, commands);
-    expect(hashState(folded.world)).toBe(hashState(stepTick(world, commands)));
+    expect(hashState(folded.world)).toBe(hashState(stepTick(world, content, commands)));
   });
 
   it('refuses every ordering of the phases except the documented one', () => {
     // The order used to be unfalsifiable: with no preconditions, running advanceTime
     // FIRST produced a byte-identical hash, because nothing reads world.tick during a
     // phase yet. Each phase now states its precondition, so a wrong order throws.
-    const world = createWorld(4);
+    const world = createWorld(4, content);
     const orders = permutations([...TICK_PHASES]);
     expect(orders).toHaveLength(6);
 
@@ -105,20 +117,20 @@ describe('tick phases', () => {
   });
 
   it('refuses a repeated phase', () => {
-    const world = createWorld(4);
+    const world = createWorld(4, content);
     expect(() => runPhases(world, ['applyCommands', 'applyCommands'])).toThrow(/already open/);
     expect(() => runPhases(world, ['applyCommands', 'commitEntities', 'commitEntities'])).toThrow(/no entity draft/);
   });
 
   it('names the phase that was missing when an order is rejected', () => {
-    const world = createWorld(4);
+    const world = createWorld(4, content);
     expect(() => runPhases(world, ['commitEntities'])).toThrow(/applyCommands must run before it/);
     expect(() => runPhases(world, ['advanceTime'])).toThrow(/commitEntities must run before it/);
     expect(() => runPhases(world, ['applyCommands', 'advanceTime'])).toThrow(/draft is still open/);
   });
 
   it('applyCommands touches neither the tick counter nor the RNG', () => {
-    const world = createWorld(3);
+    const world = createWorld(3, content);
     const state = runPhases(world, ['applyCommands'], [spawn('alpha')]);
     expect(state.world.tick).toBe(world.tick);
     expect(state.world.rng).toEqual(world.rng);
@@ -127,7 +139,7 @@ describe('tick phases', () => {
   });
 
   it('commitEntities touches neither the tick counter nor the RNG', () => {
-    const world = createWorld(3);
+    const world = createWorld(3, content);
     const state = runPhases(world, ['applyCommands', 'commitEntities'], [spawn('alpha')]);
     expect(state.world.tick).toBe(world.tick);
     expect(state.world.rng).toEqual(world.rng);
@@ -137,7 +149,7 @@ describe('tick phases', () => {
   });
 
   it('advanceTime increments the tick by one and advances the RNG by exactly one draw', () => {
-    const world = createWorld(3);
+    const world = createWorld(3, content);
     const state = runPhases(world, TICK_PHASES);
     expect(state.world.tick).toBe(world.tick + 1);
     expect(state.world.rng).toEqual(nextUint32(world.rng)[0]);
@@ -145,20 +157,20 @@ describe('tick phases', () => {
   });
 
   it('leaves the entity store object identical on a tick that changes nothing', () => {
-    const world = stepTick(createWorld(3), [spawn('alpha')]);
-    expect(stepTick(world).entities).toBe(world.entities);
+    const world = stepTick(createWorld(3, content), content, [spawn('alpha')]);
+    expect(stepTick(world, content).entities).toBe(world.entities);
   });
 });
 
 describe('command application', () => {
   it('applies a command during its scheduled tick, and its effect is in the world that tick returns', () => {
-    const world = stepTick(createWorld(1), [spawn('alpha')]);
+    const world = stepTick(createWorld(1, content), content, [spawn('alpha')]);
     expect(world.tick).toBe(1);
     expect(entitiesInOrder(world.entities).map((entity) => entity.kind)).toEqual(['alpha']);
   });
 
   it('applies commands scheduled at the same tick in schedule order', () => {
-    const world = stepTick(createWorld(1), [spawn('alpha'), spawn('beta')]);
+    const world = stepTick(createWorld(1, content), content, [spawn('alpha'), spawn('beta')]);
     const ids = entitiesInOrder(world.entities);
     expect(ids.map((entity) => entity.kind)).toEqual(['alpha', 'beta']);
     expect(ids[0]!.id).toBeLessThan(ids[1]!.id);
@@ -167,39 +179,41 @@ describe('command application', () => {
   it('does not require the schedule to be sorted by tick', () => {
     const shuffled = [at(5, spawn('gamma')), at(1, spawn('alpha')), at(3, spawn('beta'))];
     const sorted = [at(1, spawn('alpha')), at(3, spawn('beta')), at(5, spawn('gamma'))];
-    expect(hashState(run(createWorld(9), 10, shuffled))).toBe(hashState(run(createWorld(9), 10, sorted)));
+    expect(hashState(run(createWorld(9, content), content, 10, shuffled))).toBe(
+      hashState(run(createWorld(9, content), content, 10, sorted)),
+    );
   });
 
   it('never applies a command scheduled beyond the end of the run', () => {
-    const withLate = run(createWorld(9), 5, [at(50, spawn('alpha'))]);
-    const without = run(createWorld(9), 5, []);
+    const withLate = run(createWorld(9, content), content, 5, [at(50, spawn('alpha'))]);
+    const without = run(createWorld(9, content), content, 5, []);
     expect(hashState(withLate)).toBe(hashState(without));
     expect(entityCount(withLate.entities)).toBe(0);
   });
 
   it('lets one batch despawn what an earlier command in the same batch spawned', () => {
-    const world = stepTick(createWorld(1), [spawn('alpha'), spawn('beta'), despawn(1)]);
+    const world = stepTick(createWorld(1, content), content, [spawn('alpha'), spawn('beta'), despawn(1)]);
     expect(entitiesInOrder(world.entities).map((entity) => entity.kind)).toEqual(['beta']);
     // The despawned id is still spent — the store never hands it out again.
     expect(world.entities.nextId).toBe(3);
   });
 
   it('ignores a despawn of an id that does not exist rather than throwing on replay', () => {
-    const world = stepTick(createWorld(1), [despawn(4242)]);
+    const world = stepTick(createWorld(1, content), content, [despawn(4242)]);
     expect(entityCount(world.entities)).toBe(0);
-    expect(hashState(world)).toBe(hashState(stepTick(createWorld(1))));
+    expect(hashState(world)).toBe(hashState(stepTick(createWorld(1, content), content)));
   });
 
   it('throws on an unknown command kind rather than silently ignoring it', () => {
     const rogue = { kind: 'bogus' } as unknown as Command;
-    expect(() => stepTick(createWorld(1), [rogue])).toThrow(/unhandled command/);
+    expect(() => stepTick(createWorld(1, content), content, [rogue])).toThrow(/unhandled command/);
   });
 
   it('never mutates the world it was given, even when commands spawn and despawn', () => {
-    const world = stepTick(createWorld(2), [spawn('alpha'), spawn('beta')]);
+    const world = stepTick(createWorld(2, content), content, [spawn('alpha'), spawn('beta')]);
     const before = hashState(world);
-    stepTick(world, [spawn('gamma'), despawn(1)]);
-    run(world, 50, [at(world.tick + 1, spawn('delta'))]);
+    stepTick(world, content, [spawn('gamma'), despawn(1)]);
+    run(world, content, 50, [at(world.tick + 1, spawn('delta'))]);
     expect(hashState(world)).toBe(before);
   });
 });
@@ -216,37 +230,37 @@ describe('tick determinism over the entity store', () => {
   ];
 
   it('reaches the same state whether run in one call or one tick at a time', () => {
-    const oneGo = run(createWorld(5), 40, schedule());
-    let piecewise = createWorld(5);
+    const oneGo = run(createWorld(5, content), content, 40, schedule());
+    let piecewise = createWorld(5, content);
     const byTick = schedule();
     for (let i = 0; i < 40; i += 1) {
       const commands = byTick.filter((entry) => entry.tick === piecewise.tick).map((entry) => entry.command);
-      piecewise = stepTick(piecewise, commands);
+      piecewise = stepTick(piecewise, content, commands);
     }
     expect(hashState(piecewise)).toBe(hashState(oneGo));
   });
 
   it('reproduces the same hash from the same seed and command log', () => {
-    expect(hashState(run(createWorld(42), 5_000, schedule()))).toBe(
-      hashState(run(createWorld(42), 5_000, schedule())),
+    expect(hashState(run(createWorld(42, content), content, 5_000, schedule()))).toBe(
+      hashState(run(createWorld(42, content), content, 5_000, schedule())),
     );
   });
 
   it('produces a different hash from a different seed with the same command log', () => {
-    expect(hashState(run(createWorld(42), 5_000, schedule()))).not.toBe(
-      hashState(run(createWorld(43), 5_000, schedule())),
+    expect(hashState(run(createWorld(42, content), content, 5_000, schedule()))).not.toBe(
+      hashState(run(createWorld(43, content), content, 5_000, schedule())),
     );
   });
 
   it('produces a different hash from a different command log with the same seed', () => {
     const withoutSpawn = schedule().filter((entry) => entry.command.kind !== 'spawnEntity');
-    expect(hashState(run(createWorld(42), 5_000, schedule()))).not.toBe(
-      hashState(run(createWorld(42), 5_000, withoutSpawn)),
+    expect(hashState(run(createWorld(42, content), content, 5_000, schedule()))).not.toBe(
+      hashState(run(createWorld(42, content), content, 5_000, withoutSpawn)),
     );
   });
 
   it('keeps every surviving entity addressable after a long run', () => {
-    const world = run(createWorld(42), 5_000, schedule());
+    const world = run(createWorld(42, content), content, 5_000, schedule());
     for (const entity of entitiesInOrder(world.entities)) {
       expect(getEntity(world.entities, entity.id)).toBe(entity);
     }

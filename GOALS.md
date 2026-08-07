@@ -6,6 +6,12 @@ Exit criteria are commands, not adjectives. Rules in `HOTELSIM.md` §4 and §5.
 **Exactly one goal is `in-progress` at a time.** Anything discovered mid-goal that is
 not in the goal goes to `PARKING.md`.
 
+**Write test criteria as `pnpm exec vitest run <filter>`, never `pnpm test -- <filter>`.**
+The latter is not one command: PowerShell binds the filter, Git Bash forwards a literal
+`--` and vitest discards all positional filters, so `pnpm test -- zzznotafile` runs the
+whole suite green. A criterion that passes on a filter matching nothing is not a
+measurement. Found during G-001; applied to every goal below.
+
 ---
 
 ## M0 — Walking skeleton
@@ -58,20 +64,29 @@ Critique rounds used: 2/3
   headline claim was unfalsifiable — see ADR-0005.
 
 ## G-002 — Content pipeline and one room type
-Status: pending
+Status: done
 Milestone: M0
 Owner pair: sim-engineer / sim-critic
 Statement: packages/content defines exactly one room type as JSON validated by a Zod
   schema; the host loads and validates it and injects it into the sim; packages/sim
   contains no content literal.
 Exit criteria:
-  - pnpm test -- content  (all green, including a test that invalid JSON is rejected)
+  - pnpm exec vitest run content  (all green, including a test that invalid JSON is rejected)
   - pnpm check:content  (green)
   - pnpm sim:run --days 1 --seed 1  loads content and exits 0
   - all §2 invariant gates green (pnpm verify)
 Out of scope: room variety, items, staff roles, guest archetypes (M6); construction
-  cost (M1)  (-> PARKING.md)
-Critique rounds used: 0/3
+  cost (M1); rooms as spatial entities (M1)  (-> PARKING.md)
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  64 content tests green across 4 files · check:content green · sim:run --days 1 --seed 1
+  exits 0 reporting one room type · I2 hash 71cc87bd9d1c8089 · shipped fingerprint
+  ac496e19b27da075, +1 penny ebc34728f1f77984, day-1 hashes 1396cf4968cf7095 vs
+  5d37178b1f347bcf · a world made under shipped content refuses to tick under edited
+  content · all four content-mutation attempts throw TypeError and the host's own object
+  is neither frozen nor connected · all six gates green · no gate, CI or config file
+  modified; no probe residue.
 
 ## G-003 — Save and load the real world model
 Status: pending
@@ -93,7 +108,7 @@ Owner pair: ai-engineer / ai-critic
 Statement: A guest arrives, occupies the one room type, forms one need, has it met or
   not before patience runs out, pays, and leaves with a recorded outcome.
 Exit criteria:
-  - pnpm test -- guest  (all green)
+  - pnpm exec vitest run guest  (all green)
   - pnpm sim:run --days 30 --seed 7  reports at least one guest arrived, at least one
     satisfied, and zero guests stuck in a non-terminal state at end of run
   - pnpm sim:run --days 30 --seed 7  reports zero guests holding a reservation after despawn
@@ -109,7 +124,7 @@ Owner pair: economy-engineer / balance-critic
 Statement: Room revenue is recorded when a guest pays, upkeep is charged at nightly
   settlement, and the cash balance is derived by folding the transaction log.
 Exit criteria:
-  - pnpm test -- ledger  and  pnpm test -- settlement  (all green)
+  - pnpm exec vitest run ledger  and  pnpm exec vitest run settlement  (all green)
   - pnpm sim:run --days 30 --seed 3  reports a balance equal to the fold of its own
     transaction log, and one settlement transaction per simulated night
   - every transaction in a 30-day run carries a non-empty reason

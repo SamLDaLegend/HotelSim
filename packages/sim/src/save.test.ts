@@ -9,6 +9,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Command, ScheduledCommand } from './commands.js';
+import { bindContent } from './content.js';
+import type { RoomTypeData } from './content.js';
 import { entitiesInOrder, entityCount } from './entities.js';
 import { appendTransaction } from './ledger.js';
 import {
@@ -29,10 +31,19 @@ import type { World } from './world.js';
  * violation. This list turns "remember to update save.ts" from a convention into a
  * failing test.
  */
-const WORLD_KEYS = ['entities', 'ledger', 'rng', 'tick'] as const;
+const WORLD_KEYS = ['contentHash', 'entities', 'ledger', 'rng', 'tick'] as const;
 
 const spawn = (entityKind: string): Command => ({ kind: 'spawnEntity', entityKind });
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
+
+/**
+ * Injected content for these tests. Kinds are camelCase because a snake_case literal
+ * in packages/sim is a leaked content ID (ADR-0003) and `check:content` scans tests too.
+ */
+const roomType = (id: string): RoomTypeData => ({ id, name: id, capacity: 2, nightlyRatePence: 8_500 });
+const content = bindContent({
+  roomTypes: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'].map(roomType),
+});
 
 /**
  * A world that has actually been somewhere: ticks advanced, RNG stepped, ledger
@@ -49,7 +60,7 @@ function livedInWorld(): World {
     { tick: 3_000, command: spawn('epsilon') },
     { tick: 3_000, command: despawn(4) },
   ];
-  const world = run(createWorld(4242), 5_000, schedule);
+  const world = run(createWorld(4242, content), content, 5_000, schedule);
   return { ...world, ledger: appendTransaction(world.ledger, { tick: 10, amount: -2_500, reason: 'test' }) };
 }
 
@@ -65,7 +76,7 @@ describe('I6 save round-trip', () => {
   });
 
   it('round-trips an untouched world too', () => {
-    const world = createWorld(1);
+    const world = createWorld(1, content);
     expect(hashState(deserialise(serialise(world)))).toBe(hashState(world));
   });
 
@@ -80,7 +91,7 @@ describe('I6 save round-trip', () => {
   it('has exactly the top-level keys this suite knows how to round-trip', () => {
     // If this fails you have added a field to World. Add it to WORLD_KEYS and to
     // `assertWorldShape` in save.ts, in this change, not the next one (I6).
-    expect(Object.keys(createWorld(1)).sort()).toEqual([...WORLD_KEYS]);
+    expect(Object.keys(createWorld(1, content)).sort()).toEqual([...WORLD_KEYS]);
     expect(Object.keys(livedInWorld()).sort()).toEqual([...WORLD_KEYS]);
   });
 
@@ -92,7 +103,7 @@ describe('I6 save round-trip', () => {
   });
 
   it('stamps the blob with a schema version', () => {
-    const blob: unknown = JSON.parse(serialise(createWorld(7)));
+    const blob: unknown = JSON.parse(serialise(createWorld(7, content)));
     expect(blob).toMatchObject({ schemaVersion: SAVE_SCHEMA_VERSION });
     expect(Number.isInteger(SAVE_SCHEMA_VERSION)).toBe(true);
   });
@@ -103,26 +114,42 @@ describe('I6 save round-trip', () => {
   });
 
   it('refuses a save from a newer build rather than silently mangling it', () => {
-    const blob = JSON.stringify({ schemaVersion: SAVE_SCHEMA_VERSION + 1, world: createWorld(1) });
+    const blob = JSON.stringify({ schemaVersion: SAVE_SCHEMA_VERSION + 1, world: createWorld(1, content) });
     expect(() => deserialise(blob)).toThrow(/newer than this build/);
   });
 
   it('refuses a save with no schema version', () => {
-    expect(() => deserialise(JSON.stringify({ world: createWorld(1) }))).toThrow(/schemaVersion/);
+    expect(() => deserialise(JSON.stringify({ world: createWorld(1, content) }))).toThrow(/schemaVersion/);
   });
 
   it('refuses a structurally corrupt save rather than loading a half-world', () => {
-    const world = createWorld(1) as unknown as Record<string, unknown>;
+    const world = createWorld(1, content) as unknown as Record<string, unknown>;
     const { rng: _dropped, ...missingRng } = world;
     const blob = JSON.stringify({ schemaVersion: SAVE_SCHEMA_VERSION, world: missingRng });
     expect(() => deserialise(blob)).toThrow(/rng/);
+  });
+
+  it('refuses a save whose contentHash is missing or empty', () => {
+    // Losing this field would produce a save that loads under ANY content and then
+    // diverges silently — which is the whole reason the fingerprint exists (G-002).
+    const withoutHash = blobOf(livedInWorld());
+    delete (withoutHash['world'] as Record<string, unknown>)['contentHash'];
+    expect(() => deserialise(JSON.stringify(withoutHash))).toThrow(/contentHash/);
+
+    const blankHash = blobOf(livedInWorld());
+    (blankHash['world'] as Record<string, unknown>)['contentHash'] = '';
+    expect(() => deserialise(JSON.stringify(blankHash))).toThrow(/contentHash/);
+  });
+
+  it('carries the content fingerprint through the round trip', () => {
+    expect(deserialise(serialise(livedInWorld())).contentHash).toBe(content.fingerprint);
   });
 
   it('restores a world that continues to simulate identically', () => {
     const world = livedInWorld();
     const restored = deserialise(serialise(world));
     // A save that loads but then diverges is worse than one that fails to load.
-    expect(hashState(run(restored, 1_000))).toBe(hashState(run(world, 1_000)));
+    expect(hashState(run(restored, content, 1_000))).toBe(hashState(run(world, content, 1_000)));
   });
 });
 
@@ -141,7 +168,7 @@ describe('I6 save round-trip — the entity store', () => {
     // nextId is saved state, so the counter does not reset differently after a load.
     const world = livedInWorld();
     const restored = deserialise(serialise(world));
-    const grown = stepTick(restored, [spawn('zeta')]);
+    const grown = stepTick(restored, content, [spawn('zeta')]);
     const ids = entitiesInOrder(grown.entities).map((entity) => entity.id);
     const fresh = ids[ids.length - 1]!;
     expect(fresh).toBe(world.entities.nextId);

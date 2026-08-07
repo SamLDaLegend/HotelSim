@@ -2,10 +2,16 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Command } from './commands.js';
+import { bindContent } from './content.js';
 import { canonicalise, hashJson } from './hash.js';
 import { createRng, nextIntBelow, nextUint32 } from './rng.js';
 import { run, stepTick } from './tick.js';
 import { createWorld, dayOf, hashState, TICKS_PER_DAY, worldToJson } from './world.js';
+
+/** Injected content. camelCase ids: a snake_case literal here fails check:content. */
+const content = bindContent({
+  roomTypes: [{ id: 'alpha', name: 'alpha', capacity: 2, nightlyRatePence: 8_500 }],
+});
 
 describe('rng', () => {
   it('is a pure function of its state', () => {
@@ -68,52 +74,52 @@ describe('hash', () => {
 
 describe('I2 determinism, in-process', () => {
   it('reproduces the same hash from the same seed', () => {
-    expect(hashState(run(createWorld(42), 10_000))).toBe(hashState(run(createWorld(42), 10_000)));
+    expect(hashState(run(createWorld(42, content), content, 10_000))).toBe(hashState(run(createWorld(42, content), content, 10_000)));
   });
 
   it('produces a different hash from a different seed', () => {
     // Without this, every determinism check above would pass on a constant hash.
-    expect(hashState(run(createWorld(42), 10_000))).not.toBe(hashState(run(createWorld(43), 10_000)));
+    expect(hashState(run(createWorld(42, content), content, 10_000))).not.toBe(hashState(run(createWorld(43, content), content, 10_000)));
   });
 
   it('produces a different hash at a different tick', () => {
-    expect(hashState(run(createWorld(42), 10_000))).not.toBe(hashState(run(createWorld(42), 10_001)));
+    expect(hashState(run(createWorld(42, content), content, 10_000))).not.toBe(hashState(run(createWorld(42, content), content, 10_001)));
   });
 
   it('reaches the same state whether run in one call or many', () => {
-    const oneGo = run(createWorld(5), 300);
-    let piecewise = createWorld(5);
-    for (let i = 0; i < 300; i += 1) piecewise = stepTick(piecewise);
+    const oneGo = run(createWorld(5, content), content, 300);
+    let piecewise = createWorld(5, content);
+    for (let i = 0; i < 300; i += 1) piecewise = stepTick(piecewise, content);
     expect(hashState(piecewise)).toBe(hashState(oneGo));
   });
 
   it('never mutates the world it is given', () => {
-    const world = createWorld(8);
+    const world = createWorld(8, content);
     const before = hashState(world);
-    run(world, 100);
+    run(world, content, 100);
     expect(hashState(world)).toBe(before);
   });
 });
 
 describe('state hash covers the whole world', () => {
   it('changes when an entity is added, so the store cannot hide from I2', () => {
-    const world = createWorld(6);
+    const world = createWorld(6, content);
     const spawn: Command = { kind: 'spawnEntity', entityKind: 'alpha' };
-    expect(hashState(stepTick(world, [spawn]))).not.toBe(hashState(stepTick(world)));
+    expect(hashState(stepTick(world, content, [spawn]))).not.toBe(hashState(stepTick(world, content)));
   });
 
   it('projects the world to JSON without dropping or reordering a field', () => {
     // worldToJson is an identity cast, which is only safe while every field of World
     // is plain JSON. A Set, a Map or a class instance here would hash as `{}`.
-    const world = stepTick(createWorld(6), [{ kind: 'spawnEntity', entityKind: 'alpha' }]);
+    const world = stepTick(createWorld(6, content), content, [{ kind: 'spawnEntity', entityKind: 'alpha' }]);
     expect(JSON.parse(JSON.stringify(worldToJson(world)))).toEqual(world);
   });
 });
 
 describe('time', () => {
   it('derives the day from the tick rather than storing it', () => {
-    expect(Object.keys(createWorld(1))).not.toContain('day');
-    expect(dayOf(run(createWorld(1), TICKS_PER_DAY * 3))).toBe(3);
-    expect(dayOf(run(createWorld(1), TICKS_PER_DAY * 3 - 1))).toBe(2);
+    expect(Object.keys(createWorld(1, content))).not.toContain('day');
+    expect(dayOf(run(createWorld(1, content), content, TICKS_PER_DAY * 3))).toBe(3);
+    expect(dayOf(run(createWorld(1, content), content, TICKS_PER_DAY * 3 - 1))).toBe(2);
   });
 });

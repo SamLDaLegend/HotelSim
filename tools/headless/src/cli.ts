@@ -8,7 +8,8 @@
 // no timestamps, no durations, nothing wall-clock on stdout.
 
 import { createWorld, dayOf, entityCount, hashState, run, TICKS_PER_DAY } from '@hotelsim/sim';
-import type { World } from '@hotelsim/sim';
+import type { BoundContent, World } from '@hotelsim/sim';
+import { loadContent } from './content-loader.js';
 
 type Options = {
   readonly seed: number;
@@ -57,12 +58,13 @@ function parseArgs(argv: readonly string[]): Options {
   return { seed, ticks, quiet };
 }
 
-function report(world: World, options: Options): string {
+function report(world: World, content: BoundContent, options: Options): string {
   if (options.quiet) return hashState(world);
   return [
     `seed        ${options.seed}`,
     `ticks       ${world.tick}`,
     `days        ${dayOf(world)}`,
+    `room types  ${content.content.roomTypes.length}`,
     `entities    ${entityCount(world.entities)}`,
     `ledger      ${world.ledger.length} transactions`,
     `state hash  ${hashState(world)}`,
@@ -71,8 +73,13 @@ function report(world: World, options: Options): string {
 
 function main(): void {
   const options = parseArgs(process.argv.slice(2));
-  const world = run(createWorld(options.seed), options.ticks);
-  process.stdout.write(`${report(world, options)}\n`);
+  // Content is loaded and validated BEFORE the world exists. A content file that does
+  // not parse therefore exits non-zero having simulated nothing, rather than starting
+  // a run against a half-loaded registry. The catch below prints the message alone —
+  // ContentError's message is already formatted for a human.
+  const content = loadContent();
+  const world = run(createWorld(options.seed, content), content, options.ticks);
+  process.stdout.write(`${report(world, content, options)}\n`);
 }
 
 try {

@@ -5,7 +5,12 @@
 import { describe, expect, it } from 'vitest';
 import { appendTransaction, balanceOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
+import { bindContent } from './content.js';
 import { createWorld } from './world.js';
+
+const content = bindContent({
+  roomTypes: [{ id: 'alpha', name: 'alpha', capacity: 2, nightlyRatePence: 8_500 }],
+});
 
 const tx = (amount: number, tick = 0): Transaction => ({ tick, amount, reason: 'test' });
 
@@ -36,7 +41,7 @@ describe('I4 ledger', () => {
   });
 
   it('stores no balance on the world — the only way to know it is to fold', () => {
-    const world = createWorld(1);
+    const world = createWorld(1, content);
     // If this fails, someone has cached the balance in state. That is the exact
     // failure I4 exists to prevent: a stored balance drifts from its log silently.
     expect(Object.keys(world)).not.toContain('balance');

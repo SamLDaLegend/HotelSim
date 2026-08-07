@@ -1,0 +1,8 @@
+[
+  {
+    "id": "standard_room",
+    "name": "Standard Room",
+    "capacity": 2,
+    "nightlyRatePence": 8500
+  }
+]

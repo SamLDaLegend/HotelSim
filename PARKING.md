@@ -71,3 +71,36 @@ Raised by `sim-engineer` at PLAN and deliberately kept out of the diff.
   under load. Fixing it means giving the CLI a real workload, which is G-006's day cycle.
   -> **G-006, treat as a dependency**. This sharpens the earlier parked item about
   benchmarking tick cost against agent count.
+
+## Deferred out of G-002 (2026-08-07)
+
+Raised by `sim-engineer` at PLAN. The first two are **gate defects** — gates are
+orchestrator-owned (ADR-0004), so they are fixed in their own labelled commit rather
+than inside a feature diff.
+
+- **GATE DEFECT — `check:content` skips wrapper objects.** `check-content.mjs` does
+  `Array.isArray(parsed) ? parsed : Object.values(parsed)` and then reads `entry.id`.
+  A content file shaped `{"roomTypes":[...]}` yields `[[...]]`, every `entry.id` is
+  `undefined`, and the snake_case id check **silently passes over nothing**. G-002 works
+  around it by shipping a top-level array, but the hole stays open for the next content
+  file. -> orchestrator, own commit, after G-002.
+- **GATE DEFECT — the snake_case pattern is written twice.** Once in
+  `tools/gates/check-content.mjs` and once in `contentIdSchema` in
+  `packages/content/src/schema.ts`. They cannot share a module: the gate is plain ESM by
+  design and the schema is TS + Zod. Real drift risk. Single-sourcing needs a shared
+  `.json` or `.mjs` constant. -> orchestrator, same commit as above.
+- **A `--content <path>` flag for `sim:run`** so a host can inject alternative content,
+  and so the CLI's non-zero exit on bad content is testable without a temp repo.
+  -> G-006, or whenever the balance sweeps need it.
+- **Projecting the content fingerprint to sim-visible fields only** — today *any*
+  injected field moves the fingerprint, including display-only text, so a typo fix in a
+  room's `name` invalidates saves. Conservative direction (false alarm, never silent
+  divergence), deliberately chosen at G-002. -> revisit when content churn makes it hurt.
+- **Migrating saves across a content change** — today the answer is "refuse to load, with
+  a legible error". Accepted for M0, where a content edit genuinely is a different
+  simulation. It will not survive M6, where content churn is constant. -> M5/M6.
+- **Rooms as spatial entities** — grid position, enclosure, doors. G-002 gives the sim a
+  room *type*, not a room. -> M1.
+- **Room variety, items, staff roles, guest archetypes** (M6) and **construction cost**
+  (M1). The schema is deliberately one table with four fields.
+- **`apps/game` loading content** -> M5, and not before M0 sign-off (§9).
