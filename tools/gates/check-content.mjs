@@ -26,12 +26,15 @@ import {
   stringLiterals,
   stripComments,
 } from './lib/scan.mjs';
+import { contentIdRegExp } from './lib/content-id.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CODE_ROOTS = [join(ROOT, 'packages/sim/src'), join(ROOT, 'apps/game/src')];
 const CONTENT_DATA = join(ROOT, 'packages/content/data');
 
-const CONTENT_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
+// Single source of truth, shared with packages/content's Zod schema via a live
+// cross-check test. See tools/gates/lib/content-id.mjs.
+const CONTENT_ID = contentIdRegExp();
 
 /** Snake_case literals that are provably not content. Each needs a reason. */
 const ALLOWED = new Map([
@@ -41,6 +44,28 @@ const ALLOWED = new Map([
 /** Content tables must not be declared in code at all, whatever they are called. */
 const CONTENT_TABLE_IDENTIFIER =
   /\b(ROOM_TYPES|ROOM_DEFS|ITEM_TYPES|ITEM_DEFS|STAFF_ROLES|GUEST_ARCHETYPES|ARCHETYPES)\b/g;
+
+/**
+ * Every string `id` in a JSON document, at any depth, with a JSON-path breadcrumb.
+ *
+ * Depth-first and shape-agnostic on purpose: content files are arrays today, but the
+ * gate must not go quiet the first time someone wraps one in an object.
+ */
+function collectIds(node, path = '$') {
+  const found = [];
+  if (Array.isArray(node)) {
+    node.forEach((child, i) => found.push(...collectIds(child, `${path}[${i}]`)));
+    return found;
+  }
+  if (node !== null && typeof node === 'object') {
+    if (typeof node['id'] === 'string') found.push({ id: node['id'], path });
+    for (const [key, child] of Object.entries(node)) {
+      if (key === 'id') continue;
+      found.push(...collectIds(child, `${path}.${key}`));
+    }
+  }
+  return found;
+}
 
 const violations = [];
 
@@ -84,11 +109,38 @@ for (const file of collectFiles(CONTENT_DATA, (p) => p.endsWith('.json'))) {
     violations.push({ where, what: `is not valid JSON: ${error.message}` });
     continue;
   }
-  const entries = Array.isArray(parsed) ? parsed : Object.values(parsed);
-  for (const entry of entries) {
-    if (entry && typeof entry === 'object' && typeof entry.id === 'string' && !CONTENT_ID.test(entry.id)) {
-      violations.push({ where, what: `content id "${entry.id}" is not snake_case (I3 convention).` });
+  // Walk the WHOLE document, at any depth. The previous version did
+  // `Array.isArray(parsed) ? parsed : Object.values(parsed)` and read `entry.id` one
+  // level down, so a file shaped {"roomTypes":[...]} produced [[...]], every `entry.id`
+  // was undefined, and the check passed over nothing at all. A gate that silently
+  // inspects zero things is worse than no gate, because it reports "ok".
+  const ids = collectIds(parsed);
+
+  for (const { id, path } of ids) {
+    if (!CONTENT_ID.test(id)) {
+      violations.push({ where: `${where} (${path})`, what: `content id "${id}" is not snake_case (I3 convention).` });
     }
+  }
+
+  // A content file the gate cannot find a single id in is a file whose shape the gate
+  // does not understand. Fail loudly rather than pass vacuously.
+  if (ids.length === 0) {
+    violations.push({
+      where,
+      what:
+        'contains no `id` field at any depth, so the snake_case check inspected nothing (I3).\n' +
+        '    Either this file is not content, or its shape is one this gate cannot read.\n' +
+        '    Suggested direction: give every content entry a snake_case `id`.',
+    });
+  }
+
+  // Two entries with the same id make lookup order-dependent, which is an I2 hazard as
+  // well as an I3 one.
+  const seen = new Map();
+  for (const { id, path } of ids) {
+    const first = seen.get(id);
+    if (first === undefined) seen.set(id, path);
+    else violations.push({ where, what: `duplicate content id "${id}" at ${first} and ${path} (I3).` });
   }
 }
 
