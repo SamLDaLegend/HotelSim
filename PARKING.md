@@ -186,6 +186,25 @@ Raised by `economy-engineer` at PLAN.
 - **The M4 rounding rule** — round half up, once, at settlement. G-005 needs no rounding
   at all (integer sums and products only); the rule is stated in `settlement.ts`'s header
   so M4 inherits a decision rather than an accident. -> M4.
+
+## Deferred out of G-006 (2026-08-07)
+
+Raised by `sim-engineer` at PLAN.
+
+- **Per-day time series in `--json`.** Balance sweeps will want trajectories, not
+  endpoints. The M4 sweep tooling is the consumer; `SUMMARY_SCHEMA_VERSION` exists so
+  the shape change is a detected version bump, not a misparse. -> M4.
+- **A multi-seed sweep driver** (`--runs N` or similar). Until M4's demand model, seeds
+  are one anecdote — the balance-critic can shell-loop. -> M4.
+- **A JSON Schema document for `RunSummary`.** Only if a consumer outside this repo ever
+  appears. -> never, unless.
+- **`--ticks` + `--json` partial-day semantics** — a partial-day run reports
+  `nights < days` because `dayOf` floors. Correct; noted in `report.ts`'s header; nothing
+  built. -> if a consumer ever trips on it.
+- **The seed-honesty test is designed to go red at M4.** `cli.stdout.test.ts` asserts
+  seeds 42 and 43 differ only in the seed and state-hash lines. When the demand model
+  makes arrivals seed-dependent, that test fails BY DESIGN and is retired deliberately —
+  it is the parked seed caveat written as an assertion. -> M4, as a planned retirement.
 - **Turn-away at the door.** A guest who finds the hotel full waits in the lobby and
   gives up when its patience runs out; there is no "saw the queue and left" path,
   because that is a demand behaviour. -> M4.

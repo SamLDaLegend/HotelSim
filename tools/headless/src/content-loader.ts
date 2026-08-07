@@ -13,6 +13,7 @@
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { ContentError, parseContentJson, parseNeedTypesJson } from '@hotelsim/content';
 import type { ContentRegistry, NeedType } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
@@ -58,7 +59,14 @@ function readContentFile(path: string): string {
 }
 
 /**
- * Load the shipped content and bind it for injection.
+ * Load content and bind it for injection.
+ *
+ * By default the SHIPPED content, resolved through the package's exports map. With
+ * `contentDir` (the CLI's `--content` flag, G-006), the same two file names are read
+ * from that directory instead — same parser, same validation, same all-or-nothing
+ * discipline, so alternative content earns no laxer path into the sim than the
+ * shipped kind. This is also what makes the CLI's bad-content exit contract testable
+ * without mutating the repo's own content files.
  *
  * The assignment below is load-bearing rather than decorative: this is the one module
  * in the workspace where both `@hotelsim/content`'s `RoomType` and `@hotelsim/sim`'s
@@ -67,10 +75,12 @@ function readContentFile(path: string): string {
  * HERE, at compile time. If a required field is added to one and not the other, this
  * line stops compiling.
  */
-export function loadContent(): BoundContent {
+export function loadContent(contentDir?: string): BoundContent {
+  const roomTypesPath = contentDir === undefined ? ROOM_TYPES_PATH : join(contentDir, 'room-types.json');
+  const needTypesPath = contentDir === undefined ? NEED_TYPES_PATH : join(contentDir, 'need-types.json');
   const registry: ContentRegistry = {
-    ...loadContentFrom(ROOM_TYPES_PATH),
-    needTypes: loadNeedTypesFrom(NEED_TYPES_PATH),
+    ...loadContentFrom(roomTypesPath),
+    needTypes: loadNeedTypesFrom(needTypesPath),
   };
   const injected: SimContent = registry;
   // `bindContent` rejects content whose needs no room type provides, so a designer who

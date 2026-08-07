@@ -292,3 +292,42 @@ and deliberately kept, with the restructure trigger (~15k appends/run) parked to
 changing the hashed ledger shape now would owe a migration for a problem M0 does not have.
 
 Parked four items. One goal left in M0.
+
+---
+
+## 2026-08-07 — G-006 — Day cycle and headless reporting (1/3 rounds)
+
+The last M0 goal, and deliberately a restructuring goal: the sim already counted
+everything, but `cli.ts` computed report lines, invariant checks and quiet mode from
+three separate reaches into the world. Now one `buildSummary` computes every number once
+— violations included — and three renderers take only the summary, so recomputation is
+impossible rather than avoided. `--json` (schema 1, integer pennies, seed grouped under
+`input` as an echo not an outcome), `--rooms`/`--arrivals`/`--content`, a golden pinned
+against hand-derived closed forms, and the seed caveat written as an assertion that goes
+red at M4 by design.
+
+The critique's two MAJORs were both edges the suite structurally could not see. First:
+the documented invocation `pnpm sim:run --json` produced INVALID JSON, because pnpm
+writes its banner to stdout — and every automated consumer spawns node directly, so the
+contract was proven for a path the docs never show and unproven for the one they do.
+Fixed with `--silent` in the docs plus a test that spawns through pnpm itself. Second:
+the violations output path had never executed — G-004 closed stuck and orphans by
+construction, the typed reasons closed the partition, unconditional settlement closed
+the cadence, so no real run can violate anything and the failure clause of the consumer
+contract was code that had never run. Fixed with forged-world tests and an
+injected-write hook proving report-then-throw. Both are the ADR-0007 wiring shape, found
+in the goal whose whole subject was wiring numbers to outputs.
+
+The critic also decomposed the I5 number for sign-off: of the bench's ~12.5%, ~585ms is
+fixed process startup (node, tsx, zod, content load) and ~640ms is 365 days of actual
+simulation — 1.2 µs/tick. The headline is roughly half a constant that does not scale
+with --days.
+
+A verification note for the record: PowerShell pipelines re-encode piped output and add
+a BOM, which makes `pnpm --silent ... --json | ...` LOOK broken when the bytes are
+clean. The builder hit it, named it, and left the warning in the test comment; my VERIFY
+used direct byte comparison and Git Bash accordingly.
+
+M0's six goals are done. All six invariant gates green, 361 tests across 18 files, the
+guest loop and money loop both running end to end, headless, deterministic, saved and
+reloaded. Escalating for milestone sign-off per §5.4.

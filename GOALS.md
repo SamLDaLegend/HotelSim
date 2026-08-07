@@ -189,7 +189,7 @@ Critique rounds used: 1/3
   (demolish-before-midnight upkeep dodge) is unprofitable: -1,774,500p net over 100 days.
 
 ## G-006 — Day cycle and headless reporting
-Status: pending
+Status: done
 Milestone: M0
 Owner pair: sim-engineer / sim-critic
 Statement: The CLI runs whole days end to end and reports the M0 loop — guests in,
@@ -201,7 +201,23 @@ Exit criteria:
   - two runs of the same command produce byte-identical stdout
   - all §2 invariant gates green (pnpm verify)
 Out of scope: any renderer, any UI, speed controls (M5)  (-> PARKING.md)
-Critique rounds used: 0/3
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-07, every command run rather than reported:
+  the documented invocation `pnpm --silent sim:run --json` produces valid JSON (schema 1,
+  parsed and field-checked) with 0 stderr bytes · --quiet through pnpm prints exactly the
+  hash · two runs byte-identical in BOTH modes (cmp on raw bytes, 329-byte text report) ·
+  the 30-day seed-42 report prints arrivals/satisfied/unsatisfied/revenue/upkeep/balance,
+  state hash 69304c0f3a4fda83 · full suite 361/361 across 18 files · all six gates green,
+  I2 unchanged at be508c487d49fd6c, I5 at 12.5% · packages/sim and tools/gates untouched
+  by the entire goal.
+
+  Round 1 findings (2 MAJOR, 1 MINOR, all fixed): the documented pnpm invocation
+  prepended the pnpm banner to the JSON document — docs now carry --silent and a test
+  spawns through pnpm itself, so the documented and tested paths are one circuit; the
+  violations output path had never executed — now driven by five forged-world tests plus
+  an injected-write ordering hook proving report-then-throw in all three modes; an error
+  message read the flag name instead of its value.
 
 ---
 

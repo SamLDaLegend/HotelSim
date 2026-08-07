@@ -35,3 +35,31 @@ roster, goal ledger and CI are in place. `packages/sim` is an empty stub marked
 **Asked of the human:** Sign off the bootstrap. On sign-off the loop enters §5 SELECT
 at G-001 and works M0 to completion, with the M0 exit itself returning here for a
 second sign-off before M1.
+
+---
+
+## 2026-08-07 — OPEN — M0 walking skeleton complete, awaiting milestone sign-off
+
+**Trigger:** §5.4 — a milestone's exit criteria are met and need human sign-off.
+
+**State:** All six M0 goals done (G-001..G-006), each verified by the orchestrator
+running every exit command directly. All six §2 invariant gates green: I2 hash
+`be508c487d49fd6c` across 3 processes, I5 at 12.5% of budget, 361 tests across 18
+files. The M0 statement is met end to end, headless: one room type, one guest, one
+need, one day cycle, money in and money out — `pnpm sim:run --days 30 --seed 42`
+reports 360 arrived / 267 satisfied / 89 unsatisfied / 0 stuck / 0 orphans, revenue
+2,269,500p against upkeep 225,000p, byte-identical across runs, machine-readable via
+`pnpm --silent sim:run --json`. Saves round-trip at schema v2 with a real migration
+behind them and a permanent v1 fixture. Total: 8 commits, 12 critique rounds used of
+18 budgeted, 6 MAJOR + 3 MINOR findings, zero BLOCKERs, zero round budgets exceeded.
+
+**Known debts, deliberately carried and recorded:** free-room lookup breaks I5 above
+~50 rooms (-> M1, measured, in PARKING.md) · ledger append-copy breaks past ~15k
+appends/run (-> M4, measured) · seed does not influence guest behaviour until M4
+demand (the seed-honesty test retires by design) · balance-critic's seed-sweep
+mandate is vacuous until M4.
+
+**Asked of the human:** Sign off M0. On sign-off the loop selects the first M1 goal
+(structure: multi-floor grid, build/demolish, room validity, construction cost). Per
+§9, no render work starts before this sign-off; M5 remains shut regardless until its
+own milestone.
