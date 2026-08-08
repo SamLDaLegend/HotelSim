@@ -22,7 +22,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 6;
+export const SAVE_SCHEMA_VERSION = 7;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -430,6 +430,99 @@ function migrateV5ToV6(world: unknown): unknown {
 }
 
 /**
+ * v6 -> v7: a world in which only ROOMS could provide anything (G-013).
+ *
+ * ADR-0006 fires for the sixth time, and the permanent v1 fixture now walks a SIX-step
+ * chain: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7. It is migrated, never regenerated.
+ *
+ * WHAT THIS STEP ADDS, AND WHY BOTH DEFAULTS ARE STATEMENTS OF FACT RATHER THAN GUESSES.
+ * G-013 makes an item a provider, so a satisfaction now has to say what delivered it —
+ * `metBy` on each need, `metByItem` on each tally row. A v6 world predates that entirely,
+ * and the honest question (the one G-004 and G-007 both had to answer) is *what was true
+ * of the era these bytes come from*:
+ *
+ *   metBy      = 'room' for a MET need, null otherwise. In the v6 era nothing but a room
+ *                could serve a need, so every satisfaction recorded in these bytes WAS a
+ *                room's. This is not a default standing in for missing information — it is
+ *                the only value the era admits, and it is derived from the bytes
+ *                (`progressRemaining === 0`) rather than from content.
+ *   metByItem  = 0. For the same reason: no item ever delivered anything in a v6 world.
+ *
+ * ADR-0008 holds throughout: this reads no content and no live constant, so the same v6
+ * bytes produce the same v7 world however the shipped table changes afterwards.
+ *
+ * IT IS NOT TESTED BY THE FIXTURE ALONE, DELIBERATELY. The permanent v1 fixture carries no
+ * guests and no tally rows, so this step would run over two empty arrays and prove nothing
+ * — ADR-0007's exact shape, a check succeeding while inspecting nothing. `provider.save.test.ts`
+ * drives a synthetic v6 world with a met need, a pending need and a populated tally, and
+ * watches the values come out.
+ */
+function migrateV6ToV7(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its needs cannot be attributed');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const attributed: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    const needs = guest['needs'];
+    if (!Array.isArray(needs)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].needs is missing or not an array`);
+    }
+    return {
+      ...guest,
+      needs: needs.map((need, at) => {
+        if (!isRecord(need)) {
+          throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${at}] is not an object`);
+        }
+        // The one way this step could destroy data — overwriting an attribution somebody
+        // already made — is the one thing it refuses to do, exactly as all five earlier
+        // steps refuse. `Object.keys().includes` rather than `in`, because `JSON.parse`
+        // makes `__proto__` an own key (G-003).
+        if (Object.keys(need).includes('metBy')) {
+          throw new Error(
+            `world.guests.list[${index}].needs[${at}] already has a "metBy" field, so it is not a v6 need; migrating it would overwrite a real attribution`,
+          );
+        }
+        const progressRemaining = need['progressRemaining'];
+        if (typeof progressRemaining !== 'number') {
+          throw new Error(
+            `Save is corrupt: world.guests.list[${index}].needs[${at}].progressRemaining is missing, so it cannot be told whether the need was met`,
+          );
+        }
+        return { ...need, metBy: progressRemaining === 0 ? 'room' : null };
+      }),
+    };
+  });
+
+  const needOutcomes = world['needOutcomes'];
+  if (!Array.isArray(needOutcomes)) {
+    throw new Error('Save is corrupt: world.needOutcomes is missing or not an array');
+  }
+  const split: unknown[] = needOutcomes.map((row, index) => {
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.needOutcomes[${index}] is not an object`);
+    }
+    if (Object.keys(row).includes('metByItem')) {
+      throw new Error(
+        `world.needOutcomes[${index}] already has a "metByItem" field, so it is not a v6 row; migrating it would overwrite a real count`,
+      );
+    }
+    return { ...row, metByItem: 0 };
+  });
+
+  return { ...world, guests: { ...guests, list: attributed }, needOutcomes: split };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -443,6 +536,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 3, to: 4, migrate: migrateV3ToV4 }),
   Object.freeze({ from: 4, to: 5, migrate: migrateV4ToV5 }),
   Object.freeze({ from: 5, to: 6, migrate: migrateV5ToV6 }),
+  Object.freeze({ from: 6, to: 7, migrate: migrateV6ToV7 }),
 ]);
 
 /**

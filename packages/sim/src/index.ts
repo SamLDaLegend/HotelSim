@@ -40,11 +40,14 @@ export {
   firstRoomTypeProviding,
   hasContentId,
   isRoomKind,
+  itemTypeProvides,
   lodgingNeedOf,
   minConstructionCostOf,
   needTypesInOrder,
+  providesOf,
   requiredItemsOf,
   roomTypeProvides,
+  roomTypeServes,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {
@@ -113,7 +116,7 @@ export {
   NO_GUEST,
   stepGuests,
 } from './guests.js';
-export type { NeedOutcome, NeedState } from './needs.js';
+export type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 export {
   advanceNeeds,
   assertNeedOutcomes,
@@ -202,8 +205,10 @@ export {
   createValidityContext,
   describeRoomInvalidity,
   draftEntities,
+  isProviding,
   isRoomInvalidityReason,
   isValidRoom,
+  providersFor,
   roomCellsOf,
   roomInvalidity,
   ROOM_INVALIDITY_REASONS,

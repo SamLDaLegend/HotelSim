@@ -13,16 +13,30 @@
 //
 // At `--rooms 6` the hotel can serve eighteen stays a day against twelve arrivals, so
 // every guest gets a bed: `night_rest` is 356 met and ZERO unmet, and no implementation of
-// this goal could make it otherwise without breaking the hotel. The criterion is carried
-// by `guest_entertainment` and `guest_nourishment`, both of which are genuinely
-// oversubscribed — one games room serving one guest for 150 ticks against twelve guests a
-// day, one café at 180 — so both are met for some guests and missed by others in the same
-// run. `guest_comfort` is the control: a lounge at 60 ticks is NOT oversubscribed, so it is
-// met for everybody, and a table where all three engagement needs looked alike would be a
-// table with one row wearing three hats.
+// this goal could make it otherwise without breaking the hotel. So two ENGAGEMENT needs
+// must carry it, one is the control that is met for everybody, and a table where all three
+// looked alike would be a table with one row wearing three hats.
 //
-// That prediction was written at PLAN, before the numbers existed. It is asserted below
-// rather than described, so if content tuning ever makes it false, this says so.
+// WHICH TWO THEY ARE CHANGED AT G-013, AND THE OLD ANSWER IS LEFT HERE BECAUSE THE REASON
+// IS THE INTERESTING PART.
+//
+//   at G-012:  entertainment 213/143 and nourishment 214/142 carried it;
+//              comfort was 356/0 — the control.
+//   at G-013:  comfort 178/178 and entertainment 179/177 carry it;
+//              nourishment is 356/0 — the control.
+//
+// They swapped because of ONE change and its correction. NOURISHMENT gained a second
+// provider — the café is a room and the vending machine in the games room is an item — so
+// the hotel can feed twice as many guests, and the need stopped being able to fail. That
+// left only ONE need type straddling, which THIS CRITERION requires two of. COMFORT's
+// `satisfyTicks` went 60 -> 150 to restore the second row, and that is the entire reason:
+// compensation for G-013's registry work, not a balance decision with a sweep behind it.
+// See `needTypeSchema` for the measured before/after and for what is owed to M4.
+//
+// The assertions below are STRUCTURAL rather than by id — "two engagement needs, neither of
+// them the lodging one, and at least one control" — which is why they survived the swap
+// unedited. This comment did not, and correcting it rather than leaving it is the G-009
+// lesson about comments that claim more than the code does.
 // ================================================================================
 
 import { spawnSync } from 'node:child_process';
@@ -190,7 +204,7 @@ describe('the same invocation through a real process', () => {
     // different line that also begins with "need".
     const needLines = result.stdout.split('\n').filter((line) => /^need (L| ) /.test(line));
     expect(needLines).toHaveLength((content.content.needTypes ?? []).length);
-    for (const line of needLines) expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet$/);
+    for (const line of needLines) expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\)$/);
     // Exactly one row is marked as the lodging need.
     expect(needLines.filter((line) => line.startsWith('need L'))).toHaveLength(1);
   }, 60_000);

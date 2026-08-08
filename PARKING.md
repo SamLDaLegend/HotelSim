@@ -2,22 +2,24 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08. ~110 items across 14 goals. Still growing, so §9's stop condition is
-not firing.*
+*As of 2026-08-08, after G-013. ~120 items across 15 goals. Still growing, so §9's stop
+condition is not firing.*
 
-- **PROMOTED OUT — no longer parked**: scenario capital is now a **hard prerequisite of
-  the first M4 goal** (ADR-0013 §5). Until it lands, every balance figure in this repo was
-  taken with `--rooms N` silently seeding 75% extra opening capital.
-- **The costed lever, pinned and deliberately unpulled**: sampling the guest-store
-  invariant scan every 8th tick recovers **18.4%** of I5. Gating on change detection is
-  **dead and measured** — reference-unchanged on 1 of 525,600 ticks. Do not re-argue it.
-  What sampling surrenders is a one-tick double-booking, which **nobody could see until
-  G-017** — that untestability is part of why ADR-0013 was written.
-- **Heaviest clusters**: M3 owes movement, queues with capacity, and distance as a score
-  term (four goals lean on "there is no movement yet"). M6 owes `placeItem`, item cost and
-  quality, archetypes, and party size. M5 owes everything visual that is not the viewer.
-- **Watch for**: privacy as a room-type property — content can put a provider inside a
-  bedroom today and a stranger walks in. Shipped content avoids it by luck, not by rule.
+- **PROMOTED OUT — no longer parked**: scenario capital is a **hard prerequisite of the
+  first M4 goal** (ADR-0013 §5). Every balance figure to date was taken with `--rooms N`
+  silently seeding ~75% extra opening capital.
+- **The costed lever, pinned and deliberately unpulled**: sampling the guest-store scan
+  every 8th tick recovers **18.4%** of I5. Gating on change detection is **dead and
+  measured** — reference-unchanged on 1 of 525,600 ticks. Do not re-argue it. What sampling
+  surrenders is a one-tick double-booking, invisible until G-017 exists.
+- **New from G-013**: `placeItem` **relaxes** the reachability rule rather than deleting it
+  (M6) · an item in a **private room is publicly usable** — shipped content avoids it by
+  choice, not by rule (M3/M6) · **an item provider costs nothing to place or keep**, an
+  unpriced strategy (M4) · `guest_comfort.satisfyTicks` is an unswept dial owed to M4, and
+  the "engagement vector sums to the lodging budget" idea is parked as a **hypothesis with
+  a stated experiment**, not a derivation.
+- **Heaviest clusters**: M3 owes movement, queues with capacity, distance as a score term.
+  M6 owes `placeItem`, item cost and quality, archetypes, party size.
 - **No linter is still configured.** Parked since bootstrap; the six gates do the work.
 
 ---
@@ -751,3 +753,118 @@ Raised by `ai-engineer` at BUILD, and deliberately kept out of the diff.
   this project used that flag, so `balance-critic`'s entire accumulated evidence base was
   measured in a world with 75% more effective opening capital than the shipped figure.
   Harmless while nothing is tuned against it. Not harmless at M4.
+
+## Deferred out of G-013 (2026-08-08)
+
+Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff.
+
+- **`placeItem` / `removeItem`, AND THE RULE THEY RELAX RATHER THAN DELETE.**
+  `assertNeedsAreSatisfiable` now demands a need have a REACHABLE provider, where an item is
+  reachable only if some room type `requires` it — because `buildRoom` furnishes what it
+  places and that is the only door. When `placeItem` lands, **every** item type becomes
+  reachable and the clause becomes the pre-M6 statement it always was. It should be relaxed
+  deliberately, with the shipped content re-checked, rather than discovered by somebody
+  wondering why a rule stopped firing. -> **M6**.
+- **AN ITEM INSIDE A PRIVATE ROOM IS PUBLICLY USABLE, and the shipped content only avoids it
+  by choice.** A provider is an entity, and nothing asks whose room it stands in — so an
+  item required by `standard_room` that provided a need would let a stranger walk into a
+  guest's bedroom to use it. `single_bed` provides `[]`, so it cannot happen today, and
+  `bindContent` would not object if it could. Privacy is a property of the ROOM TYPE and the
+  fix belongs with whoever gives circulation an identity. -> **M3/M6**.
+- **A PROVIDER STILL SERVES EXACTLY ONE GUEST, and `capacity: 8` now contradicts the
+  simulation in two places rather than one.** An amenity room says 8 and an item in it says
+  nothing at all; both serve one. Do not "fix" it by editing the 8 — that states the opposite
+  design. It becomes true when a provider is a queue with capacity. -> **M3**.
+- **AN ITEM'S PROVISION IS BORROWED WHOLE, WITH NO REASON OF ITS OWN.** `isProviding` answers
+  yes/no; it cannot say "the chair is fine, the room has no floor". `RoomInvalidityReason` is
+  a closed union for rooms and an item has no equivalent, so a UI wanting to explain why a
+  guest is not being served has one bit. Deliberate — a second tally keyed on the same facts
+  is the drift this codebase closes by construction five times over — but it is a real limit
+  for the notification M5 will want. -> **M5**.
+- **`metBy` RECORDS A KIND, NOT A PROVIDER.** It says "a room" or "an item", not WHICH one
+  and not which room the item stood in. That is all criterion 2 needs and all that can be
+  stored for one integer's worth of hashed state; a UI that wants "you were fed at the café
+  on floor 2" needs provenance, which is a bigger field and a bigger migration. -> **M5/M6**.
+- **THE ENGAGEMENT BUDGET IS A BALANCE LEVER NOBODY HAS SWEPT.** `sum(engagement
+  satisfyTicks)` against `night_rest.satisfyTicks` decides whether a guest can have
+  everything; it is now exactly 480 = 480, which makes contention the deciding factor. Raising
+  it makes the vector unsatisfiable by construction and lowering it makes amenities free. It
+  is a designer's dial with no sweep behind it, and it interacts with provider COUNT — adding
+  a provider makes a need cheap, which is what happened to `guest_nourishment` here.
+  -> **M4**, with demand.
+- **THE `--amenities` FLAG IS NOW A DENSITY KNOB AND THE BENCH RUNS IT AT 1.** The scaling
+  arm measures 20; the I5 bench measures 1, which is the starved hotel. So I5 still describes
+  a hotel with four providers, and a player who builds twenty amenities is not represented in
+  any gate. Same shape as G-010's finding that `--rooms 60` measures a 20-room hotel.
+  -> whichever milestone next touches I5's shape (**G-018** is re-deriving its budget and
+  should know this).
+- **THE DENSITY RATIO COMPRESSES UNDER LOAD, so the new scaling criterion is weaker in CI
+  than in isolation.** Measured 1.274-1.411 in an isolated process, 1.094-1.243 with the file
+  alone, 1.003-1.172 under the full parallel suite — contention adds the same ABSOLUTE cost to
+  both arms and pulls every ratio towards 1. The bound is therefore flake-proof (load can only
+  push the reading down) and the criterion is LESS sensitive under load. Recorded rather than
+  glossed; a reader seeing only the isolated numbers would over-read a green tick. The general
+  problem — timing criteria that measure less in the environment they run in — has no fix in
+  this diff. -> **a gate goal**, when one exists.
+- **`release` AT STEP 2 OF `stepGuests` IS UNOBSERVABLE, AND WILL STOP BEING SO.** Deleting it
+  leaves the whole suite green, because that site fires exactly when the provider has stopped
+  providing: `freed` is null, so nothing is un-marked, and the id it removes from `held` is one
+  no candidate list contains. It is kept as a POSTCONDITION (ADR-0007's amendment) so that
+  "every reservation that ends goes through `release`" stays a property of one function.
+  **M3's queues and M6's `placeItem` both make a still-usable provider reachable at that site**,
+  and on that day it becomes load-bearing and needs a witness. Recorded so nobody deletes it
+  for coverage in the meantime.
+- **AMENITIES STILL EARN NOTHING AND NOW COST MORE.** G-012 recorded that an amenity is pure
+  upkeep; this goal adds provider ITEMS to two of them, which are free to place and free to
+  keep, so the direction is unchanged but the shipped hotel has two more entities and the same
+  revenue. Still M4's, with demand response — but note the new asymmetry a balance sweep will
+  find: an item provider costs NOTHING at all, so the cheapest way to serve a need is now an
+  item in a room the player already wanted. That is a real strategy and it is unpriced.
+  -> **M4/M6**, with item cost.
+
+## Deferred out of G-013 critique round 1 (2026-08-08)
+
+- **G-012's CRITERION PINS A PROPERTY OF THE CONTENT TABLE, AND ANY FUTURE PROVIDER CAN FLIP
+  IT. THIS IS THE STRUCTURAL FINDING OF THE ROUND AND NEITHER BUILDER NOR CRITIC NAMED IT
+  FIRST — the orchestrator did.** "At least TWO different need types have a non-zero met
+  count AND a non-zero unmet count" is a statement about how many rows of the shipped table
+  straddle met-and-unmet at `--days 30 --seed 7 --rooms 6`. Adding a provider to a need makes
+  that need cheap and can push it to `met/0`, removing a straddling row — which is exactly
+  what G-013 did to `guest_nourishment` (356/0), leaving one row where the criterion needs
+  two, and why `guest_comfort.satisfyTicks` went 60 -> 150 as compensation. **G-014 and G-015
+  both touch this table.** A goal that adds a provider, an archetype that varies which needs a
+  guest forms, or a review model that changes stay length can each silently falsify a
+  previous milestone's signed-off criterion, and the failure looks like an unrelated red test
+  two goals later. Either the criterion should be restated as a property of the SIMULATION
+  rather than of one content table, or every goal touching the table should re-run G-012's
+  invocation deliberately. -> **G-014, as a check to run at PLAN**, and a candidate for a
+  charter note if it happens twice.
+- **THE ENGAGEMENT BUDGET AS A DESIGN RULE — A HYPOTHESIS FOR M4'S SWEEP, IN THOSE WORDS.**
+  `sum(engagement satisfyTicks)` against `night_rest.satisfyTicks` is currently 480 = 480
+  exactly, so a guest can have everything only if it never waits and contention decides the
+  rest. That is an interesting property and it may be a real rule — but it appeared for the
+  first time in the same commit as the number it was used to justify, which is choosing and
+  then justifying (`HOTELSIM.md` §2.1), and it is withdrawn as a derivation. It is worth
+  TESTING: sweep the ratio (well under 1, exactly 1, well over 1) against satisfaction spread
+  and review means, and see whether a rule falls out. If one does, it is a stated requirement
+  and numbers may then be derived from it. -> **M4**, with the demand sweep.
+- ~~**NOTHING IN THE REPORT WITNESSES CORRECT ATTRIBUTION.**~~ **WITHDRAWN AT CRITIQUE ROUND
+  2 — IT WAS FALSE, AND LEAVING IT WOULD HAND M4 A FALSE STATEMENT ABOUT ITS OWN TOOLING.**
+  Round 1 removed a vacuous `metByRoom + metByItem === met` violation, and I concluded from
+  that that no report-level check was possible, because "the code attributes correctly" is a
+  property of the code. `ai-critic` found the counter-example in the function I had just
+  edited: `buildSummary` holds CONTENT, and content pins the attribution outright wherever a
+  need has a single KIND of provider — no room type provides it, so by-room must be 0; no
+  item type provides it, so by-item must be 0. Neither is an identity over the two stored
+  numbers; each cross-references the tally against a separate input, which is exactly what
+  the deleted check lacked. It ships, it fires in both directions, and three of the four
+  shipped rows are pinned by it.
+  **WHAT IS STILL TRUE, AND IS NOW THE ONLY REMAINING GAP:** a need that BOTH kinds provide
+  — `guest_nourishment` today — cannot be checked this way, because nothing in content
+  decides its split. Its witnesses are the by-item total, the negative control, and the two
+  committed bench hashes. -> **M4's sweep tooling**, if it ever needs more than that.
+  **THE GENERAL LESSON IS NOT PARKED — IT IS `ADR-0007`'s G-013 AMENDMENT.** "Deleting a bad
+  check is not evidence that no good one exists" is a rule about how to respond to a vacuity
+  finding, so it belongs beside the rule that produces them, not in a file of deferred work
+  attached to a struck-through entry a reader is meant to skip. Ruled by `ai-critic` at
+  round 3 and filed by the orchestrator. This entry stays as history and points there.

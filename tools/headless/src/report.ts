@@ -64,11 +64,13 @@ import {
   hashState,
   isWithinBounds,
   lodgingNeedOf,
+  itemTypeProvides,
   needOutcomeOf,
   needTypesInOrder,
   outstandingDebtOf,
   requiredItemsOf,
   roomTypeProvides,
+  roomTypeServes,
   stockValueOf,
   sumByReason,
   TICKS_PER_DAY,
@@ -365,21 +367,38 @@ export function lodgingRoomTypeOf(content: BoundContent): RoomTypeData {
 /**
  * The room types that are NOT lodging: one per engagement need, in ascending id order.
  *
- * Derived from what each room type provides rather than from a list of names, so adding
+ * Derived from what each room type SERVES rather than from a list of names, so adding
  * an amenity to `room-types.json` adds it to every scenario this runner builds and no
- * snake_case id is needed here. A room type that provides nothing at all is not an
+ * snake_case id is needed here. A room type that serves nothing at all is not an
  * amenity — it would give a guest nowhere to go — so it is left out rather than seeded.
+ *
+ * ---------------------------------------------------------------------------
+ * `roomTypeServes`, NOT `roomTypeProvides` (G-013), AND THE DIFFERENCE COST A WHOLE NEED
+ * THE FIRST TIME IT WAS RUN.
+ *
+ * Since items provide, a room type can serve a need without providing it: `hotel_lounge`
+ * provides NOTHING and requires an `arm_chair` that provides `guest_comfort`. Asking
+ * `roomTypeProvides` therefore dropped the lounge out of every scenario this runner builds
+ * — measured, before the fix: `--days 30 --seed 7 --rooms 6` reported **guest_comfort 0
+ * met, 356 unmet**, a need every guest formed and no run could ever satisfy.
+ *
+ * AND `bindContent` CANNOT CATCH THIS, WHICH IS THE PART WORTH REMEMBERING. Its
+ * reachability rule says a PLAYER COULD build a lounge and get a chair with it, which is
+ * true. Whether this HOST actually seeds one is a different question with a different
+ * owner, and the answer to it lives here. A guaranteed-unhappiness bug can therefore be
+ * introduced by a host layout decision while the content check is perfectly correct.
+ * ---------------------------------------------------------------------------
  */
 export function amenityRoomTypesOf(content: BoundContent): readonly RoomTypeData[] {
   const lodging = lodgingRoomTypeOf(content);
   const amenities: RoomTypeData[] = [];
   for (const roomType of content.content.roomTypes) {
     if (roomType.id === lodging.id) continue;
-    let providesSomething = false;
+    let servesSomething = false;
     for (const needType of needTypesInOrder(content)) {
-      if (roomTypeProvides(content, roomType.id, needType.id)) providesSomething = true;
+      if (roomTypeServes(content, roomType.id, needType.id)) servesSomething = true;
     }
-    if (providesSomething) amenities.push(roomType);
+    if (servesSomething) amenities.push(roomType);
   }
   return amenities;
 }
@@ -748,6 +767,27 @@ export type RunSummary = {
     readonly lodging: boolean;
     readonly met: number;
     readonly unmet: number;
+    /**
+     * How many of `met` were delivered BY AN ITEM rather than by a room type (G-013).
+     *
+     * THIS IS THE ONLY PLACE THE REGISTRY IS VISIBLE FROM OUTSIDE THE SIMULATION, and it is
+     * what makes "a provider is a room type or an item type" a measurement rather than a
+     * sentence.
+     *
+     * ONE NUMBER, AND BY-ROOM IS NOT HERE. It was, for one critique round, as a `metByRoom`
+     * field computed twelve lines above the violation that checked `metByRoom + metByItem
+     * === met` — an ALGEBRAIC IDENTITY over safe integers, asserted as though it were a
+     * conservation law and described in a comment as "the only place that would say so".
+     * `ai-critic` reproduced the emptiness: making the sim attribute every satisfaction
+     * wrongly left `violations` empty and the run exiting 0. That is ADR-0007's vacuous
+     * case in new code, so the field is gone rather than the check being strengthened —
+     * a derived value carried beside its source invites exactly that law. `renderText`
+     * subtracts at print time; nothing stores the difference.
+     *
+     * An additive field, so `SUMMARY_SCHEMA_VERSION` does not move (the policy on that
+     * constant), and `metByRoom` never shipped, so removing it owes nothing either.
+     */
+    readonly metByItem: number;
   }[];
   /**
    * The state of the building itself (G-009).
@@ -945,6 +985,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       lodging: needType.id === lodgingNeed?.id,
       met: row?.met ?? 0,
       unmet: row?.unmet ?? 0,
+      metByItem: row?.metByItem ?? 0,
     };
   });
 
@@ -1106,12 +1147,64 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // that cannot arise here. A need instance dropped on an exit path, or counted twice,
   // moves one side and not the other; without this, a departure path that forgot to record
   // would leave every other number in this report perfectly consistent.
+  // AND THE ATTRIBUTION IS CHECKED AGAINST CONTENT (G-013, critique round 2). READ THIS
+  // BESIDE THE ROUND-1 HISTORY, BECAUSE THE TWO CHECKS LOOK ALIKE AND ARE NOT.
+  //
+  // Round 1 shipped `metByRoom + metByItem === met` and it was VACUOUS: `metByRoom` was
+  // computed as `met - metByItem` a few lines above, so the check compared two stored
+  // numbers against their own difference — an algebraic identity over safe integers. It was
+  // deleted, and I wrote that no report-level check of attribution was possible because
+  // "the code attributes correctly" is a property of the code. THAT WAS WRONG, and the
+  // counter-example was in this function all along: `buildSummary` holds `content`.
+  //
+  // Content pins the attribution outright for any need with a single KIND of provider:
+  //
+  //     no room type provides it  =>  met - metByItem MUST be 0
+  //     no item type provides it  =>  metByItem       MUST be 0
+  //
+  // Neither is an identity over the two stored numbers. Each cross-references the tally
+  // against a SEPARATE INPUT — `roomTypeProvides` / `itemTypeProvides` — which is exactly
+  // what the deleted check lacked, and it is the same shape as the law nine lines above:
+  // `met + unmet === departed` is equally "a property of the code" and is checked anyway,
+  // because a departure path that forgot to record would leave every other number here
+  // perfectly consistent.
+  //
+  // IT FIRES IN BOTH DIRECTIONS, measured on the shipped table: attributing everything to a
+  // room names `guest_comfort` (item-only), attributing everything to an item names
+  // `guest_entertainment` and `night_rest` (room-only). Three of the four shipped rows are
+  // pinned; `guest_nourishment` has both kinds of provider and is the one this cannot
+  // speak for, which is honest rather than a gap — nothing in content decides its split.
+  //
+  // WHY IT CANNOT FIRE ON A LEGITIMATELY MIGRATED WORLD. A v6 save's `metBy` is all
+  // `'room'`, and v6-era content had no `provides` on any item — so its content fingerprint
+  // differs from any content that has one, and `beginTick` refuses to tick such a world at
+  // all (G-002). A world that can run under this content was attributed under this content.
+  const providedByAnyRoomType = (needId: string): boolean =>
+    content.content.roomTypes.some((roomType) => roomTypeProvides(content, roomType.id, needId));
+  const providedByAnyItemType = (needId: string): boolean =>
+    (content.content.itemTypes ?? []).some((itemType) => itemTypeProvides(content, itemType.id, needId));
+
   for (const row of needs) {
     if (row.met + row.unmet !== departed) {
       violations.push(
         `Need accounting broken at tick ${world.tick}: need "${row.needId}" records ${row.met} met and ` +
           `${row.unmet} unmet, which is ${row.met + row.unmet} instances against ${departed} departed guest(s). ` +
           'Every guest forms one instance of every need and resolves it exactly once, on the way out (G-012).',
+      );
+    }
+    const metByRoom = row.met - row.metByItem;
+    if (metByRoom > 0 && !providedByAnyRoomType(row.needId)) {
+      violations.push(
+        `Need attribution broken at tick ${world.tick}: need "${row.needId}" records ${metByRoom} satisfaction(s) ` +
+          'delivered by a room, but NO ROOM TYPE in this content provides it — only an item can have served it ' +
+          '(G-013).',
+      );
+    }
+    if (row.metByItem > 0 && !providedByAnyItemType(row.needId)) {
+      violations.push(
+        `Need attribution broken at tick ${world.tick}: need "${row.needId}" records ${row.metByItem} ` +
+          'satisfaction(s) delivered by an item, but NO ITEM TYPE in this content provides it — only a room can ' +
+          'have served it (G-013).',
       );
     }
   }
@@ -1173,8 +1266,12 @@ export function renderText(summary: RunSummary): string {
     // ONE LINE PER NEED TYPE (G-012), ascending by id, whether or not anything happened to
     // it. `L` marks the lodging need — the one the stay is — so a reader can tell at a
     // glance which row is the booking and which are the holiday.
+    // By-room is SUBTRACTED HERE and stored nowhere (G-013 critique round 1). A reader
+    // wants both columns; the report needs only one number to print them.
     ...summary.needs.map(
-      (need) => `need ${need.lodging ? 'L' : ' '}     ${need.needId} ${need.met} met, ${need.unmet} unmet`,
+      (need) =>
+        `need ${need.lodging ? 'L' : ' '}     ${need.needId} ${need.met} met, ${need.unmet} unmet ` +
+        `(${need.met - need.metByItem} by room, ${need.metByItem} by item)`,
     ),
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,

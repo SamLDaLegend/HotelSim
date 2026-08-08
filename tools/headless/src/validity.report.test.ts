@@ -180,7 +180,7 @@ describe('the zero CAN be non-zero', () => {
             arrivedTick: 0,
             roomEntityId: 1,
             engagement: null,
-            needs: [{ needId: needType.id, patienceRemaining: 5, progressRemaining: 5 }],
+            needs: [{ needId: needType.id, patienceRemaining: 5, progressRemaining: 5, metBy: null }],
           },
         ],
       },

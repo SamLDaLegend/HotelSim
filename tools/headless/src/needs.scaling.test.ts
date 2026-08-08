@@ -34,7 +34,7 @@
 // an idle world of the same length.
 
 import { describe, expect, it } from 'vitest';
-import { bindContent, createWorld, run } from '@hotelsim/sim';
+import { bindContent, createWorld, needOutcomeOf, needTypesInOrder, run } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { schedule } from './report.js';
@@ -60,7 +60,14 @@ function lodgingOnly(bound: BoundContent): BoundContent {
       ...roomType,
       provides: (roomType.provides ?? []).filter((id) => kept.includes(id)),
     }));
-  return bindContent({ ...bound.content, roomTypes, needTypes } satisfies SimContent);
+  // AND THE ITEM TABLE IS CUT WITH THEM (G-013), for the reason the room types are: an item
+  // that provides a need this arm has removed makes `bindContent` refuse the arm outright.
+  // Their `requires` links are untouched, so the rooms kept above stay furnishable and valid.
+  const itemTypes = (bound.content.itemTypes ?? []).map((itemType) => ({
+    ...itemType,
+    provides: (itemType.provides ?? []).filter((id) => kept.includes(id)),
+  }));
+  return bindContent({ ...bound.content, roomTypes, needTypes, itemTypes } satisfies SimContent);
 }
 
 const ONE_NEED = lodgingOnly(FULL);
@@ -72,10 +79,20 @@ const SAMPLES = 5;
 const ROOMS = 60;
 const ARRIVAL_EVERY_TICKS = 32;
 
+/** How many of EACH amenity the dense arm seeds. See `DENSITY_BOUND` for where it comes from. */
+const DENSE_AMENITIES = 20;
+/** What the other arms seed — the shipped default, and the hotel the I5 bench measures. */
+const SPARSE_AMENITIES = 1;
+
 /** The state hash is ignored; this is a stopwatch. Cost per tick, in microseconds. */
-function microsecondsPerTick(content: BoundContent, rooms: number, arrivalEveryTicks: number): number {
+function microsecondsPerTick(
+  content: BoundContent,
+  rooms: number,
+  arrivalEveryTicks: number,
+  amenities: number,
+): number {
   const world = createWorld(42, content);
-  const commands = schedule(TICKS, content, world.grid, rooms, arrivalEveryTicks, 0, 0);
+  const commands = schedule(TICKS, content, world.grid, rooms, arrivalEveryTicks, 0, 0, 0, amenities);
   const started = process.hrtime.bigint();
   run(world, content, TICKS, commands);
   return Number(process.hrtime.bigint() - started) / 1e3 / TICKS;
@@ -86,16 +103,17 @@ type Arm = {
   readonly content: BoundContent;
   readonly rooms: number;
   readonly arrivals: number;
+  readonly amenities: number;
 };
 
 /** Time every arm `SAMPLES` times, INTERLEAVED, and return the median for each. */
 function medianMicrosecondsPerTick(arms: readonly Arm[]): ReadonlyMap<string, number> {
-  for (const arm of arms) microsecondsPerTick(arm.content, arm.rooms, arm.arrivals); // warm-up
+  for (const arm of arms) microsecondsPerTick(arm.content, arm.rooms, arm.arrivals, arm.amenities); // warm-up
   const samples = new Map<string, number[]>();
   for (let i = 0; i < SAMPLES; i += 1) {
     for (const arm of arms) {
       const taken = samples.get(arm.name) ?? [];
-      taken.push(microsecondsPerTick(arm.content, arm.rooms, arm.arrivals));
+      taken.push(microsecondsPerTick(arm.content, arm.rooms, arm.arrivals, arm.amenities));
       samples.set(arm.name, taken);
     }
   }
@@ -145,20 +163,20 @@ const NEEDS = (FULL.content.needTypes ?? []).length;
  * quotient. That is exactly what the device is for, and it is why this file quotes a ratio
  * where the goal's other evidence had to be re-derived.
  *
- * WHAT THESE ARMS DO **NOT** HOLD STILL, AND THE GOAL THAT WILL BREAK IT.
- * They fix need count and concurrent guests. They do NOT fix PROVIDER DENSITY: the shipped
- * hotel has one of each amenity against ~15 concurrent guests, so the engagement needs are
- * oversubscribed on nearly every tick and most per-need work short-circuits through
- * `findFreeRoom`'s `exhausted` set without ever walking a candidate list. That is the real
- * bench hotel, so 1.74x is a real number for the hotel we ship — but it is a number for a
- * STARVED hotel.
+ * WHAT THESE TWO ARMS DO **NOT** HOLD STILL — AND THE THIRD ARM THAT NOW DOES (G-013).
+ * They fix need count and concurrent guests. They do NOT fix PROVIDER DENSITY: both run the
+ * shipped hotel at one of each amenity against ~15 concurrent guests, so the engagement
+ * needs are oversubscribed on nearly every tick and most per-need work short-circuits
+ * through `findFreeRoom`'s `exhausted` set without ever walking a candidate list. That is
+ * the real bench hotel, so 1.74x is a real number for the hotel we ship — but it is a
+ * number for a STARVED hotel, and BOTH arms are starved, so the quotient cannot see it.
  *
- * **G-013 TURNS ITEMS INTO PROVIDERS.** That multiplies provider density without touching
- * need count, so the short-circuit stops firing, per-need work starts actually scanning, and
- * THIS CRITERION WILL NOT SEE ANY OF IT — both arms would move together and the ratio could
- * sit still while the absolute cost climbed. Do not read 1.74x against 2.5x as headroom for
- * G-013. When providers multiply, this file needs a third arm that varies provider density
- * at fixed need count, or the criterion silently stops measuring the thing it is named for.
+ * G-016 predicted precisely what would happen next: "G-013 turns items into providers.
+ * That multiplies provider density without touching need count ... THIS CRITERION WILL NOT
+ * SEE ANY OF IT — both arms would move together and the ratio could sit still while the
+ * absolute cost climbed." That is why 1.74x against 2.5x was never headroom for this goal,
+ * and why `dense-providers` below exists. See `DENSITY_BOUND` for what it varies and what
+ * its bound is derived from.
  *
  * IT IS DELIBERATELY WELL UNDER LINEAR (4x), because that is what the measurement supports
  * and a bound loose enough to admit linear per-need cost would not notice the regression
@@ -166,6 +184,61 @@ const NEEDS = (FULL.content.needTypes ?? []).length;
  * tick would clear 2.5x and fail here.
  */
 const BOUND = 2.5;
+
+/**
+ * THE PROVIDER-DENSITY BOUND, DERIVED RATHER THAN PICKED (`HOTELSIM.md` §2.1).
+ *
+ * THE ARM THIS FILE OWED, AND WHY IT WAS OWED. The two arms above hold need count and
+ * concurrent guests still. They do NOT hold PROVIDER DENSITY still — and G-016's own note
+ * predicted exactly what would happen when it moved: "G-013 turns items into providers.
+ * That multiplies provider density without touching need count, so the short-circuit stops
+ * firing, per-need work starts actually scanning, and THIS CRITERION WILL NOT SEE ANY OF
+ * IT — both arms would move together and the ratio could sit still while the absolute cost
+ * climbed." Both existing arms run at one amenity of each kind, so both would have moved
+ * together and 1.74x would have stayed 1.74x while the guest loop got slower.
+ *
+ * WHAT THE ARM VARIES, AND NOTHING ELSE. `dense-providers` is `full-vector` with
+ * `--amenities 20` instead of 1: same content, same four needs per guest, same 60 rooms,
+ * same arrival cadence and therefore the same guest population. Under the shipped table
+ * that is 4 providers against roughly 80 — three amenity room types plus the arm chair and
+ * vending machine inside two of them — so `findFreeRoom`'s `exhausted` short-circuit stops
+ * firing and the candidate lists are genuinely walked.
+ *
+ * THE MEASUREMENT. Paired and interleaved in one sitting, medians of 7, six independent
+ * processes (`CLAUDE.md` §measuring — the ratio is the finding, the absolute is not):
+ *
+ *     1.274  1.278  1.280  1.283  1.286  1.411        median 1.281, worst 1.411
+ *
+ * THE BOUND. G-010's rule is "measured x 1.5, then held at or below; a round number is
+ * not". 1.281 x 1.5 = 1.92, and the worst run observed in ANY environment is 1.411 — so
+ * 1.92 leaves that reading at 73% of the bound, the same margin `BOUND` above was set with.
+ * Held at 1.9, marginally tighter than the rule rather than looser.
+ *
+ * AND THE ENVIRONMENT MATTERS IN ONE DIRECTION ONLY, WHICH IS WHY THE BOUND IS SAFE AND THE
+ * CRITERION IS WEAKER THAN IT LOOKS. Measured in all three environments this runs in:
+ *
+ *     isolated process       1.274 .. 1.411    (the readings above; the true signal)
+ *     this file alone        1.094 .. 1.243
+ *     the whole suite        1.003 .. 1.172
+ *
+ * Contention adds roughly the same ABSOLUTE cost to both arms — the same 4,320 ticks cost
+ * ~10 us/tick isolated and ~56 us/tick under a full parallel suite — so load pulls any
+ * ratio towards 1. That makes the bound flake-proof (load can only push the reading down,
+ * never up) and it makes the criterion LESS sensitive under load, not more. A regression
+ * has to be large to clear 1.9 from a compressed baseline. Stated rather than glossed,
+ * because a reader who saw only the isolated numbers would over-read what a green tick
+ * here proves.
+ *
+ * WHAT WOULD FAIL IT. Provider selection that walked the candidate list per need per guest
+ * per tick without the per-need partition — the pre-G-012 shape — grows with the number of
+ * providers, and at 20x density would clear 1.9 comfortably. What the arm measures is that
+ * `providersFor` is computed once per need per ENTITY SET and cached, not once per scan.
+ *
+ * IF THIS EVER GOES RED, READ THE RATIO IN THE FAILURE BEFORE RE-RUNNING: anything up to
+ * ~1.45 is this spread and the machine; well past it is a real per-provider regression.
+ * Re-running a red without looking is the habit f2d1e4d cost us.
+ */
+const DENSITY_BOUND = 1.9;
 
 /** The idle arm must be this much cheaper for the ratio to mean anything. */
 const NOT_OVERHEAD_DOMINATED = 2;
@@ -175,9 +248,13 @@ describe('tick cost scales with the guest population, not with the size of the n
   // so the ratio and the floor are provably the same measurements rather than separate runs
   // that could disagree about how fast the machine is.
   const medians = medianMicrosecondsPerTick([
-    { name: 'idle', content: FULL, rooms: 0, arrivals: 999_999 },
-    { name: 'one-need', content: ONE_NEED, rooms: ROOMS, arrivals: ARRIVAL_EVERY_TICKS },
-    { name: 'full-vector', content: FULL, rooms: ROOMS, arrivals: ARRIVAL_EVERY_TICKS },
+    { name: 'idle', content: FULL, rooms: 0, arrivals: 999_999, amenities: SPARSE_AMENITIES },
+    { name: 'one-need', content: ONE_NEED, rooms: ROOMS, arrivals: ARRIVAL_EVERY_TICKS, amenities: SPARSE_AMENITIES },
+    { name: 'full-vector', content: FULL, rooms: ROOMS, arrivals: ARRIVAL_EVERY_TICKS, amenities: SPARSE_AMENITIES },
+    // THE G-013 ARM. Identical to `full-vector` in every respect but one — same content,
+    // same need count, same rooms, same arrival cadence, therefore the same guest
+    // population — with `DENSE_AMENITIES` of each amenity instead of one.
+    { name: 'dense-providers', content: FULL, rooms: ROOMS, arrivals: ARRIVAL_EVERY_TICKS, amenities: DENSE_AMENITIES },
   ]);
 
   it('THE EXIT CRITERION: the full need vector costs under 2.5x one need, at fixed guests', () => {
@@ -211,4 +288,46 @@ describe('tick cost scales with the guest population, not with the size of the n
     // which would mean the arms were not what this file claims they are.
     expect(cost(medians, 'full-vector')).toBeGreaterThan(cost(medians, 'one-need'));
   });
+
+  it('THE G-013 EXIT CRITERION: 20x the providers costs under 1.9x, at fixed need count', () => {
+    const ratio = cost(medians, 'dense-providers') / cost(medians, 'full-vector');
+    expect(ratio).toBeLessThan(DENSITY_BOUND);
+  });
+
+  it('ANTI-VACUITY: the dense arm really has more providers, and really uses them', () => {
+    // A timing ratio between two arms that behave identically measures nothing, and this is
+    // the arm most at risk of it: `--amenities` is a host flag, and a host that silently
+    // ignored it would leave the ratio at a comfortable 1.0 forever. So the difference is
+    // asserted BEHAVIOURALLY rather than by trusting the flag.
+    //
+    // The dense hotel must deliver materially more satisfactions than the sparse one — which
+    // is the same statement as "the short-circuit stopped firing", said in a unit a reader
+    // can check. Run once each, outside the timing loop, because correctness assertions and
+    // stopwatch readings should not share a measurement.
+    const served = (amenities: number): number => {
+      const world = createWorld(42, FULL);
+      const finished = run(
+        world,
+        FULL,
+        TICKS,
+        schedule(TICKS, FULL, world.grid, ROOMS, ARRIVAL_EVERY_TICKS, 0, 0, 0, amenities),
+      );
+      let met = 0;
+      for (const needType of needTypesInOrder(FULL)) met += needOutcomeOf(finished.needOutcomes, needType.id)?.met ?? 0;
+      return met;
+    };
+    const sparse = served(SPARSE_AMENITIES);
+    const dense = served(DENSE_AMENITIES);
+    expect(sparse).toBeGreaterThan(0);
+    expect(dense).toBeGreaterThan(sparse);
+  });
+
+  // THERE IS DELIBERATELY NO "the dense arm is the more expensive one" TIMING ASSERTION,
+  // and the reason is measured rather than assumed. The density signal is ~1.28x in an
+  // isolated process but compresses to as little as 1.003 when the whole suite runs in
+  // parallel workers — contention adds roughly the same absolute cost to both arms, which
+  // pulls any ratio towards 1. A direction assertion on that signal fails under load, and
+  // a timing test that goes red for reasons unrelated to the code does the same damage as
+  // one that never fires (f2d1e4d). The anti-vacuity above is BEHAVIOURAL instead, which
+  // is stronger anyway: it does not depend on a stopwatch at all.
 });

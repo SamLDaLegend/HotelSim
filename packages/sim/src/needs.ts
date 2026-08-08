@@ -56,9 +56,20 @@ import type { BoundContent, NeedTypeData } from './content.js';
 import type { ContentId } from './entities.js';
 
 /**
+ * What KIND of thing served a need (G-013).
+ *
+ * A CLOSED UNION IN CODE, with the assignment in JSON — the `NeedRole`, `TransactionReason`
+ * and `RoomInvalidityReason` precedent. Which item or room provides what is content; that
+ * "a room" and "an item" are the two kinds of provider the simulation treats differently
+ * is a fact about the simulation (a guest LODGES in one and only ever ENGAGES the other).
+ * Neither member is a content id — neither is snake_case — so ADR-0003 is untouched.
+ */
+export type ProviderKind = 'room' | 'item';
+
+/**
  * One need a guest has formed, and how far it has got.
  *
- * Both fields count DOWN, and both are exactly the fields a pre-G-012 guest carried
+ * The two countdowns are exactly the fields a pre-G-012 guest carried
  * (`patienceRemaining` and `restRemaining`) — see the header for why that is the
  * migration's shape rather than a coincidence.
  */
@@ -74,6 +85,27 @@ export type NeedState = {
   readonly patienceRemaining: number;
   /** Ticks of provision still owed. Drains only while a provider serves it. Zero means met. */
   readonly progressRemaining: number;
+  /**
+   * What kind of provider finished this need, or `null` while it is not finished (G-013).
+   *
+   * NON-NULL IF AND ONLY IF `progressRemaining === 0`, checked at every commit and every
+   * load by `assertNeedVector`. It is written on the one tick the countdown reaches zero
+   * and never touched again — a met need is terminal, so `advanceNeeds` returns it by
+   * reference from then on and it costs nothing further.
+   *
+   * WHY IT IS STORED AT ALL, WHICH IS THE QUESTION TO ASK OF ANY NEW STATE. G-013's
+   * criterion asks a run to report satisfactions delivered by an item and by a room, and
+   * that is NOT derivable from final state: the engagement is released on the very tick
+   * the need resolves, so by the time the guest departs and the tally moves, nothing
+   * anywhere remembers what served it. The alternative — counting deliveries as they
+   * happen, needing no field — was rejected because its migration cannot be made exactly
+   * true: a v6 world's past deliveries are unrecoverable from its bytes.
+   *
+   * THE v6 -> v7 DEFAULT IS ARGUED FROM THE ERA, NOT CHOSEN (ADR-0008): in a v6 world items
+   * were not providers, so every satisfaction recorded there WAS a room's, and a met need
+   * migrates to `'room'` exactly rather than approximately.
+   */
+  readonly metBy: ProviderKind | null;
 };
 
 /**
@@ -100,6 +132,16 @@ export type NeedOutcome = {
   readonly met: number;
   /** Instances that did not: failed on patience, or still pending at departure. */
   readonly unmet: number;
+  /**
+   * How many of `met` were delivered BY AN ITEM (G-013).
+   *
+   * ONE NUMBER, NOT TWO, AND BY-ROOM IS DERIVED — `met - metByItem`. Two stored counters
+   * that must sum to a third is two chances for a departure path to move one and not the
+   * other, and the failure would be silent because each would still look like a plausible
+   * count. This is the same call `balanceOf` makes about cash (I4) and `urgencyOf` makes
+   * about urgency, one scale down: keep one record, derive the rest.
+   */
+  readonly metByItem: number;
 };
 
 /**
@@ -157,6 +199,9 @@ export function formNeedVector(content: BoundContent): readonly NeedState[] {
       needId: needType.id,
       patienceRemaining: needType.patienceTicks,
       progressRemaining: needType.satisfyTicks,
+      // Nothing has served it yet. `satisfyTicks` is at least 1 on disk, so this is
+      // consistent with `assertNeedVector`'s "non-null iff met" from the first tick.
+      metBy: null,
     });
   }
   return needs;
@@ -303,6 +348,7 @@ export function advanceNeeds(
   needs: readonly NeedState[],
   servedA: ContentId | null,
   servedB: ContentId | null,
+  servedByKind: ProviderKind,
 ): readonly NeedState[] {
   const needTypes = needTypesInOrder(content);
   // A vector of a different length cannot be positionally aligned with the table at all, so
@@ -317,7 +363,14 @@ export function advanceNeeds(
       positional !== undefined && positional.id === need.needId
         ? positional
         : findNeedType(content, need.needId);
-    const moved = advanceNeed(needType, need, need.needId === servedA || need.needId === servedB);
+    // `servedA` is the LODGING room, so it is a room by construction — a guest holds a room
+    // for the whole stay and nothing else can serve that need (`bindContent` refuses an item
+    // that provides it). `servedB` is the engagement, and its kind is whatever the guest is
+    // engaged with. A scalar rather than a pair or a closure: this runs for every need of
+    // every guest on every tick, and an allocation here is the shape G-010 spent a goal
+    // removing.
+    const servedBy = need.needId === servedA ? 'room' : need.needId === servedB ? servedByKind : null;
+    const moved = advanceNeed(needType, need, servedBy);
     if (moved !== need && next === null) {
       next = needs.slice(0, i);
     }
@@ -334,25 +387,38 @@ export function advanceNeeds(
  * still means "this content does not define the need", exactly as `findNeedType` returning
  * undefined always did, and the cap below still holds patience still rather than guessing.
  */
-function advanceNeed(needType: NeedTypeData | undefined, need: NeedState, served: boolean): NeedState {
+function advanceNeed(
+  needType: NeedTypeData | undefined,
+  need: NeedState,
+  servedBy: ProviderKind | null,
+): NeedState {
   // Terminal. A met or failed need is not pursued, not served and does not decay — so it
-  // is also the entry `advanceNeeds` gets to reuse rather than reallocate.
+  // is also the entry `advanceNeeds` gets to reuse rather than reallocate. `metBy` is
+  // therefore written exactly once, on the tick below where progress reaches zero, and is
+  // never revisited.
   if (!isNeedPending(need)) return need;
-  if (!served) {
+  if (servedBy === null) {
     return {
       needId: need.needId,
       patienceRemaining: need.patienceRemaining - 1,
       progressRemaining: need.progressRemaining,
+      metBy: null,
     };
   }
   // Relief is capped at the patience the need started with: being served restores what
   // waiting spent, and never more. Content that does not define the need cannot say what
   // that cap is, so patience holds still rather than growing without bound.
   const cap = needType?.patienceTicks ?? need.patienceRemaining;
+  const progressRemaining = need.progressRemaining - 1;
   return {
     needId: need.needId,
     patienceRemaining: need.patienceRemaining < cap ? need.patienceRemaining + 1 : need.patienceRemaining,
-    progressRemaining: need.progressRemaining - 1,
+    progressRemaining,
+    // THE ONE WRITE. `metBy` records who finished the job, so it is set on the transition to
+    // zero and nowhere else — a need served for one tick out of sixty is not "met by" anybody
+    // yet, and a guest that eats half its dinner at a vending machine and the rest at the
+    // café is recorded against the café, which is the honest answer to "what delivered it".
+    metBy: progressRemaining === 0 ? servedBy : null,
   };
 }
 
@@ -385,7 +451,12 @@ export function recordNeedsAtDeparture(
       continue;
     }
     if (row === undefined || row.needId > need.needId) {
-      merged.push({ needId: need.needId, met: isNeedMet(need) ? 1 : 0, unmet: isNeedMet(need) ? 0 : 1 });
+      merged.push({
+        needId: need.needId,
+        met: isNeedMet(need) ? 1 : 0,
+        unmet: isNeedMet(need) ? 0 : 1,
+        metByItem: byItem(need),
+      });
       j += 1;
       continue;
     }
@@ -398,11 +469,24 @@ export function recordNeedsAtDeparture(
       needId: row.needId,
       met: row.met + (isNeedMet(need) ? 1 : 0),
       unmet: row.unmet + (isNeedMet(need) ? 0 : 1),
+      metByItem: row.metByItem + byItem(need),
     });
     i += 1;
     j += 1;
   }
   return merged;
+}
+
+/**
+ * 1 when an ITEM delivered this need, 0 otherwise (G-013).
+ *
+ * Reads `metBy` rather than re-deriving anything, and `assertNeedVector` has already
+ * established that `metBy` is non-null if and only if the need is met — so a need counted
+ * into `met` here and a need counted into `metByItem` cannot disagree about whether it was
+ * finished.
+ */
+function byItem(need: NeedState): number {
+  return need.metBy === 'item' ? 1 : 0;
 }
 
 /**
@@ -490,6 +574,39 @@ export function assertNeedVector(needs: unknown, guestId: number): asserts needs
         `Guest store is invalid: ${describeGuest} has a negative or non-integer progressRemaining on need "${entry.needId}"`,
       );
     }
+    // `metBy` IS NON-NULL IF AND ONLY IF THE NEED IS MET (G-013), and both halves matter.
+    // A met need with no provider kind is a satisfaction the tally could not attribute, so
+    // `metByItem` would silently under-count; a pending need that names one is a save
+    // claiming something finished a job it is still doing. Neither is reachable through the
+    // tick — `advanceNeed` writes the field on the transition and nowhere else — which is
+    // exactly why it is checked here, on the path that faces bytes this build did not write.
+    // Typed wider than the field for the reason `engagement` is: at LOAD an absent key and
+    // a null are different statements, and `canonicalise` throws on undefined.
+    const metBy: ProviderKind | null | undefined = entry.metBy;
+    if (metBy === undefined) {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} has no metBy field on need "${entry.needId}". A need that nothing ` +
+          'has finished carries null, so the key is always present (it is hashed state).',
+      );
+    }
+    if (metBy !== null && metBy !== 'room' && metBy !== 'item') {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} has metBy "${String(metBy)}" on need "${entry.needId}"; a need is ` +
+          'finished by a room or by an item, or by nothing yet.',
+      );
+    }
+    if (metBy === null && entry.progressRemaining === 0) {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} has met need "${entry.needId}" but records nothing that delivered ` +
+          'it. Every satisfaction is attributed to a room or an item on the tick it completes.',
+      );
+    }
+    if (metBy !== null && entry.progressRemaining > 0) {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} records need "${entry.needId}" as delivered by a ${metBy}, but it ` +
+          `still owes ${entry.progressRemaining} tick(s) of provision.`,
+      );
+    }
   }
 }
 
@@ -527,15 +644,21 @@ export function assertNeedOutcomes(outcomes: readonly NeedOutcome[], departed: n
       );
     }
     previous = row.needId;
-    for (const [field, value] of [
-      ['met', row.met],
-      ['unmet', row.unmet],
-    ] as const) {
-      if (!Number.isSafeInteger(value) || value < 0) {
-        throw new Error(
-          `Need outcomes are invalid: ${field} for "${row.needId}" must be a non-negative safe integer, got ${String(value)}`,
-        );
-      }
+    // Written out rather than looped over a literal table — the `assertNeedVector` and
+    // `assertGuestOutcomes` discipline: the loop form allocates one array per ROW on every
+    // load and every report.
+    assertTallyCounter('met', row.needId, row.met);
+    assertTallyCounter('unmet', row.needId, row.unmet);
+    assertTallyCounter('metByItem', row.needId, row.metByItem);
+    // AND THE ITEM SHARE CANNOT EXCEED THE WHOLE (G-013). By-room is DERIVED as
+    // `met - metByItem`, so this is the clause that keeps the derived number from going
+    // negative — a row claiming more item deliveries than satisfactions would make the
+    // report print a negative count rather than fail.
+    if (row.metByItem > row.met) {
+      throw new Error(
+        `Need outcomes are invalid: need "${row.needId}" records ${row.metByItem} instance(s) delivered by an item ` +
+          `but only ${row.met} met. By-room is derived as met - metByItem, so this would report a negative count.`,
+      );
     }
     if (row.met + row.unmet > departed) {
       throw new Error(
@@ -543,5 +666,14 @@ export function assertNeedOutcomes(outcomes: readonly NeedOutcome[], departed: n
           `${departed} guest(s) have departed. A need is counted once, when the guest that formed it leaves.`,
       );
     }
+  }
+}
+
+/** One tally counter is a non-negative safe integer. Named so the message says which. */
+function assertTallyCounter(field: string, needId: ContentId, value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(
+      `Need outcomes are invalid: ${field} for "${needId}" must be a non-negative safe integer, got ${String(value)}`,
+    );
   }
 }

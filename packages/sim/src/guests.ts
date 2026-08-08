@@ -39,7 +39,7 @@
 // demand, and demand is M4; today the host issues one `guestArrives` command per
 // arrival, so the command log fully describes who turned up and when (I2).
 
-import { findNeedType, findRoomType, isRoomKind, lodgingNeedOf } from './content.js';
+import { findNeedType, findRoomType, isRoomKind, lodgingNeedOf, providesOf } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftGet, getEntity, NO_ENTITY } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
@@ -56,8 +56,15 @@ import {
   isNeedPending,
   recordNeedsAtDeparture,
 } from './needs.js';
-import type { NeedOutcome, NeedState } from './needs.js';
-import { createValidityContext, isValidRoom, storeEntities, validRoomsProviding } from './validity.js';
+import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
+import {
+  createValidityContext,
+  isProviding,
+  isValidRoom,
+  providersFor,
+  storeEntities,
+  validRoomsProviding,
+} from './validity.js';
 import type { ValidityContext } from './validity.js';
 
 /**
@@ -365,22 +372,38 @@ export function countGuestsInInvalidRooms(
   let count = 0;
   let validity: ValidityContext | null = null;
   for (const guest of guests.list) {
-    for (const id of [guest.roomEntityId, guest.engagement?.entityId ?? NO_ENTITY]) {
-      if (id === NO_ENTITY) continue;
-      const room = getEntity(entities, id);
+    // THE TWO FIELDS ASK DIFFERENT QUESTIONS SINCE G-013, and folding them into one loop
+    // over `[room, engagement]` — which is what this was — would now be wrong in both
+    // directions: it would call a legitimately engaged ARM CHAIR an invalidity, and it
+    // would accept an ITEM as somewhere to sleep.
+    if (guest.roomEntityId !== NO_ENTITY) {
+      const room = getEntity(entities, guest.roomEntityId);
       // A reservation on a room that does not exist is a DIFFERENT failure, counted by
       // `countOrphanedReservations`. Counting it here too would make one leak look like two.
-      if (room === undefined) continue;
-      // Only rooms have validity. A guest holding an item is not a shape the tick can
-      // produce, and calling `roomInvalidity` on one would throw rather than report.
-      if (!isRoomKind(content, room.kind)) {
-        count += 1;
-        continue;
+      if (room !== undefined) {
+        // A guest lodges in a ROOM. An item in this field is not a shape the tick can
+        // produce — `findFreeRoom` searches `validRoomsProviding`, which is rooms only —
+        // and calling `roomInvalidity` on one would throw rather than report.
+        if (!isRoomKind(content, room.kind)) count += 1;
+        else {
+          // Allocated only once a guest is actually holding something, so an empty hotel
+          // pays nothing — the `assertGuestStoreInvariants` discipline.
+          validity ??= createValidityContext(content, bounds, storeEntities(entities));
+          if (!isValidRoom(validity, room)) count += 1;
+        }
       }
-      // Allocated only once a guest is actually holding something, so an empty hotel pays
-      // nothing — the `assertGuestStoreInvariants` discipline.
-      validity ??= createValidityContext(content, bounds, storeEntities(entities));
-      if (!isValidRoom(validity, room)) count += 1;
+    }
+    const engagement = guest.engagement;
+    if (engagement !== null) {
+      const provider = getEntity(entities, engagement.entityId);
+      if (provider !== undefined) {
+        // ROOMS AND ITEMS ALIKE, through the one predicate the tick uses (G-013). A guest
+        // being served by an item whose room has lost its floor is the same defect as a
+        // guest sleeping in that room, and the tick releases both on the same tick for the
+        // same reason.
+        validity ??= createValidityContext(content, bounds, storeEntities(entities));
+        if (!isProviding(validity, provider)) count += 1;
+      }
     }
   }
   return count;
@@ -637,15 +660,19 @@ function payForStay(
  * anything unstable would.
  *
  * ONE FUNCTION FOR BOTH RESERVATIONS (G-012). A bedroom and an amenity are found the same
- * way — the lowest-id valid room that provides the need and nobody holds — because `held`
- * carries both kinds of claim. That is what makes "a room is either somebody's bedroom or
+ * way — the lowest-id provider that offers the need and nobody holds — because `held`
+ * carries both kinds of claim. That is what makes "a thing is either somebody's bedroom or
  * a free amenity, never both" true by construction rather than by a second rule.
+ *
+ * WHAT DIFFERS SINCE G-013 IS THE CANDIDATE LIST, NOT THE RULE (`forLodging`). A guest
+ * lodges in a room and engages a provider, which may be an item. Both lists are in the
+ * same canonical ascending-id order, so "lowest id wins" is one sentence with one meaning.
  *
  * "AN INVALID ROOM IS NOT A PROVIDER" IS STILL THIS FUNCTION'S CLAUSE (G-009), but it is
  * asked once per entity set rather than once per candidate per tick: the candidates come
  * from `validRoomsOf`, which IS the invalid rooms already filtered out.
  */
-function findFreeRoom(search: RoomSearch, needId: ContentId): EntityId {
+function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean): EntityId {
   // THE SHORT-CIRCUIT (G-010, sharpened by G-012). If a scan for this need already came up
   // empty and NOTHING THAT PROVIDES IT HAS BEEN RELEASED SINCE, the answer is still empty
   // and the scan is skipped.
@@ -671,10 +698,21 @@ function findFreeRoom(search: RoomSearch, needId: ContentId): EntityId {
   const exhausted = search.exhausted;
   if (exhausted !== null && exhausted.has(needId)) return NO_ENTITY;
 
-  // The one canonical ascending-id order, filtered to rooms that work AND to rooms that
-  // offer this — see `validRoomsProviding` for why that is the same choice the old
-  // every-valid-room scan made, and what it cost to make it before this was a list.
-  for (const room of validRoomsProviding(search.input.validity, needId)) {
+  // ONE EXHAUSTED SET FOR BOTH SEARCHES, AND THAT IS SOUND BECAUSE THEY PARTITION THE NEED
+  // SPACE (G-013). The lodging search is only ever asked for the lodging need, and the
+  // engagement pass in `reserve` explicitly skips it — so no need id is ever asked of both
+  // candidate lists, and one memo cannot answer for the other. `bindContent` is what makes
+  // that a fact rather than a habit: an item may not provide the lodging need, so the two
+  // lists could not disagree about it even if something did ask twice.
+  //
+  // The one canonical ascending-id order, filtered to things that work AND that offer this.
+  // A guest LODGES in a room and ENGAGES a provider, so the lodging search sees rooms only
+  // (`payForStay` charges a room type's rate; there is no rate on a chair) while the
+  // engagement search sees rooms and items alike.
+  const candidates = forLodging
+    ? validRoomsProviding(search.input.validity, needId)
+    : providersFor(search.input.validity, needId);
+  for (const room of candidates) {
     if (search.held.has(room.id)) continue;
     return room.id;
   }
@@ -733,10 +771,12 @@ function release(search: RoomSearch, id: EntityId, freed: Entity | null, content
   search.held.delete(id);
   const exhausted = search.exhausted;
   if (exhausted === null || freed === null) return;
-  // Un-exhaust exactly what this room can serve. `provides` is a short frozen list on the
-  // room type, so this is a content lookup and a couple of deletes.
-  const roomType = findRoomType(content, freed.kind);
-  for (const needId of roomType?.provides ?? []) exhausted.delete(needId);
+  // Un-exhaust exactly what this provider can serve. `providesOf` answers for a room type
+  // OR an item type (G-013) — it was `findRoomType(...).provides`, which silently answered
+  // `[]` for every item and would have left a freed vending machine invisible to every
+  // guest for the rest of the tick. `provides` is a short frozen list, so this is a content
+  // lookup and a couple of deletes.
+  for (const needId of providesOf(content, freed.kind)) exhausted.delete(needId);
 }
 
 /**
@@ -835,23 +875,31 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     let lodgingRoom: Entity | null = null;
     let engagedRoom: Entity | null = null;
 
-    // 1. IS EACH THING IT HOLDS STILL A USABLE ROOM? Both questions are asked BEFORE
+    // 1. IS EACH THING IT HOLDS STILL SERVING IT? Both questions are asked BEFORE
     //    either is acted on, and that ordering is load-bearing rather than tidy.
     //
     //    A guest evicted mid-meal gives its CAFÉ back, and the café is usually still a
-    //    perfectly good café. `release` un-exhausts the needs of a room that is still
+    //    perfectly good café. `release` un-exhausts the needs of a provider that is still
     //    usable and nothing when it is not (see `release`), so departing without having
     //    resolved the provider first would free the café while leaving its need marked
     //    "nothing available" for the rest of the tick — a guest standing in the lobby
     //    beside an empty table, which is §6.1's "correct but reads as stupid" in the
     //    literal form G-010 spent a critique round on.
+    //
+    //    TWO PREDICATES, NOT ONE (G-013). The lodging room must be a VALID ROOM. The
+    //    engagement must be PROVIDING, which for an item means its own room is valid —
+    //    and asking `isValidRoom` of an arm chair would throw rather than answer. That
+    //    single substitution is where all three of the new release causes arrive:
+    //    the host room was demolished (the item went with it, so `draftGet` is undefined),
+    //    the host room stopped being valid (the item stands but serves nobody), or the
+    //    item itself was despawned. One site, three causes, no fourth branch.
     if (guest.roomEntityId !== NO_ENTITY) {
       const room = draftGet(input.entities, guest.roomEntityId);
       if (room !== undefined && isValidRoom(input.validity, room)) lodgingRoom = room;
     }
     if (guest.engagement !== null) {
       const provider = draftGet(input.entities, guest.engagement.entityId);
-      if (provider !== undefined && isValidRoom(input.validity, provider)) engagedRoom = provider;
+      if (provider !== undefined && isProviding(input.validity, provider)) engagedRoom = provider;
     }
 
     // 2. THE PROVIDER STOPPED BEING A PROVIDER: the engagement is released, the need stays
@@ -879,8 +927,21 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    serving, which gain a tick of progress and a tick of relief. The lodging room
     //    serves the lodging need for as long as the guest holds it; the engagement serves
     //    exactly one other. See `needs.ts` for the closed form.
+    //    AND WHO DELIVERED IT IS RECORDED ON THE TICK IT COMPLETES (G-013), because
+    //    nothing remembers afterwards: step 5 releases the provider the moment the need
+    //    resolves. The lodging room is a room by construction; the engagement is whatever
+    //    the guest walked to. `engagedRoom` is the entity when it is still providing, so
+    //    the kind is read from the thing itself rather than from the reservation.
     const servedByRoom = guest.roomEntityId === NO_ENTITY ? null : lodgingNeed?.id ?? null;
-    const needs = advanceNeeds(content, guest.needs, servedByRoom, guest.engagement?.needId ?? null);
+    const engagedKind: ProviderKind =
+      engagedRoom !== null && !isRoomKind(content, engagedRoom.kind) ? 'item' : 'room';
+    const needs = advanceNeeds(
+      content,
+      guest.needs,
+      servedByRoom,
+      guest.engagement?.needId ?? null,
+      engagedKind,
+    );
     if (needs !== guest.needs) guest = { ...guest, needs };
 
     // 5. HAS THE ENGAGEMENT FINISHED? Released the moment the need it serves resolves, so
@@ -995,7 +1056,7 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
   if (result.roomEntityId === NO_ENTITY && lodgingNeedId !== undefined) {
     const lodging = findNeedState(result.needs, lodgingNeedId);
     if (lodging !== undefined && isNeedPending(lodging)) {
-      const room = findFreeRoom(search, lodgingNeedId);
+      const room = findFreeRoom(search, lodgingNeedId, true);
       if (room !== NO_ENTITY) {
         search.held.add(room);
         result = { ...result, roomEntityId: room };
@@ -1026,7 +1087,7 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
     // guest does not book a second bedroom to sleep in.
     if (need.needId === lodgingNeedId) continue;
     if (bestNeed !== undefined && compareNeedPriority(search.input.content, need, bestNeed) >= 0) continue;
-    const provider = findFreeRoom(search, need.needId);
+    const provider = findFreeRoom(search, need.needId, false);
     if (provider === NO_ENTITY) continue;
     bestNeed = need;
     bestProvider = provider;

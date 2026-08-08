@@ -41,9 +41,11 @@
 // file, and `packages/sim` cannot: its tsconfig sets `types: []` (no @types/node) and
 // `check-purity.mjs` rejects every non-relative import in the sim except `vitest`, so
 // `node:fs` there would fail I1 twice over. The filename carries BOTH `grid` and `save`
-// so `pnpm exec vitest run grid` and `pnpm exec vitest run save` — the two exit criteria
-// this guard belongs to — each pick it up alongside the migration tests themselves, and
-// `grid.save.test.ts` points here at the assertion it backs.
+// so `pnpm exec vitest run grid` and `pnpm exec vitest run save` — the exit criteria this
+// guard belongs to — each pick it up alongside the migration tests themselves, and
+// `grid.save.test.ts` points here at the assertion it backs. G-013 added `provider` to the
+// name for the same reason: `migrateV6ToV7` is guarded here now, and that goal's exit
+// criterion is `pnpm exec vitest run provider`.
 //
 // This is a scan in the spirit of `check-purity.mjs`'s import scan, deliberately NOT a
 // dependency-cruiser rule: `.dependency-cruiser.cjs` is gate territory and gates are
@@ -83,6 +85,26 @@ const FORBIDDEN_IN_SAVE_TS = [
   // which is the thing a migration must never do.
   'createNeedOutcomes',
   'formNeedVector',
+  // G-013. `migrateV6ToV7` decides `metBy` from `progressRemaining` and NOTHING ELSE — in
+  // the v6 era only rooms could provide, so a met need was a room's, and that is a fact
+  // about the ERA readable from the bytes. The tempting "improvement" is to look up what
+  // the need's providers actually are and attribute more precisely, which would make the
+  // same v6 bytes migrate DIFFERENTLY after a designer edits `room-types.json` — history
+  // drifting with the build, which is the whole of ADR-0008. Every content lookup the sim
+  // exports is listed, not just the obvious one, because the back doors are the point:
+  // `providesOf` is how you would ask, `findItemType`/`findRoomType` are how you would
+  // ask by hand, and `needTypesInOrder`/`lodgingNeedOf` are how you would decide which
+  // need mattered.
+  'providesOf',
+  'itemTypeProvides',
+  'roomTypeProvides',
+  'roomTypeServes',
+  'isRoomKind',
+  'findItemType',
+  'findRoomType',
+  'findNeedType',
+  'needTypesInOrder',
+  'lodgingNeedOf',
 ] as const;
 
 /**
@@ -132,6 +154,8 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(source).toContain('V4_MIGRATION_BUILD_OUTCOMES');
     expect(source).toContain('migrateV4ToV5');
     expect(source).toContain('V5_MIGRATION_LOAN_OUTCOMES');
+    expect(source).toContain('migrateV5ToV6');
+    expect(source).toContain('migrateV6ToV7');
   });
 
   it('names none of the current-plot identifiers in executable code', () => {

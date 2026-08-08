@@ -239,7 +239,7 @@ describe('the need is satisfiable — content that could only disappoint is refu
     // check above it passes on real content, and here it is failing.
     expect(() =>
       bindContent({ roomTypes: [roomType('roomA', [])], needTypes: [needType('rest')] }),
-    ).toThrow(/need "rest" is provided by no room type/);
+    ).toThrow(/need "rest" has no provider a player can reach/);
   });
 
   it('rejects a room type that provides a need this content does not define', () => {

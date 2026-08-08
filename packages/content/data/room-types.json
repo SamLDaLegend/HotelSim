@@ -18,8 +18,8 @@
     "nightlyUpkeepPence": 1500,
     "constructionCostPence": 250000,
     "demolitionRefundBasisPoints": 5000,
-    "provides": ["guest_comfort"],
-    "requires": []
+    "provides": [],
+    "requires": ["arm_chair"]
   },
   {
     "id": "games_room",
@@ -30,7 +30,7 @@
     "constructionCostPence": 250000,
     "demolitionRefundBasisPoints": 5000,
     "provides": ["guest_entertainment"],
-    "requires": []
+    "requires": ["vending_machine"]
   },
   {
     "id": "hotel_cafe",

@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ContentError } from '@hotelsim/content';
-import { bindContent, createWorld, entitiesInOrder, findRoomType, hashState, run, stepTick } from '@hotelsim/sim';
+import { bindContent, createWorld, entitiesInOrder, findRoomType, hashState, roomTypeServes, run, stepTick } from '@hotelsim/sim';
 import {
   ITEM_TYPES_PATH,
   loadContent,
@@ -90,16 +90,37 @@ describe('the shipped content file', () => {
     expect(needTypes.filter((need) => need.role === 'engagement').length).toBeGreaterThanOrEqual(3);
   });
 
-  it('ships a room type that actually provides the need it ships', () => {
-    // The shipped content, checked against the shipped content. A need nothing provides
+  it('ships a room type that actually SERVES every need it ships', () => {
+    // The shipped content, checked against the shipped content. A need nothing serves
     // is guaranteed unhappiness (§6.1), and `bindContent` would refuse it — but a gate
     // that only fires on someone else's mistake is not evidence about ours.
+    //
+    // `roomTypeServes`, NOT `provides` (G-013): since items provide, a room type can serve
+    // a need through an item it requires — `hotel_lounge` provides nothing and its
+    // `arm_chair` provides `guest_comfort`. Asked the narrower question this test went red
+    // on correct content, which is the same trap that silently dropped the lounge out of
+    // `amenityRoomTypesOf` and cost `guest_comfort` its entire coverage.
     const content = loadContent();
     const needs = content.content.needTypes ?? [];
     expect(needs.length).toBeGreaterThan(0);
     for (const need of needs) {
-      const providers = content.content.roomTypes.filter((room) => (room.provides ?? []).includes(need.id));
-      expect(providers.length).toBeGreaterThan(0);
+      const servers = content.content.roomTypes.filter((room) => roomTypeServes(content, room.id, need.id));
+      expect(servers.length, need.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('and every need an ITEM provides is reachable: some room type requires that item', () => {
+    // The shipped half of criterion 3. `bindContent` enforces it for any content, and this
+    // asserts the SHIPPED table depends on it — delete `hotel_lounge`'s `requires` and the
+    // game stops loading. A rule the shipped content does not exercise is a rule nobody
+    // would notice breaking.
+    const content = loadContent();
+    const items = content.content.itemTypes ?? [];
+    const providing = items.filter((item) => (item.provides ?? []).length > 0);
+    expect(providing.length).toBeGreaterThan(0);
+    for (const item of providing) {
+      const hosts = content.content.roomTypes.filter((room) => (room.requires ?? []).includes(item.id));
+      expect(hosts.length, item.id).toBeGreaterThan(0);
     }
   });
 

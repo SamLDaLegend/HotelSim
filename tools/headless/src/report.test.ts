@@ -395,8 +395,12 @@ const distinct: RunSummary = {
     inInvalidRooms: 132,
   },
   needs: [
-    { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141 },
-    { needId: 'betaNeed', lodging: false, met: 142, unmet: 143 },
+    // DISTINCT SENTINELS: this test exists to catch a field printed in the wrong place, so
+    // no two numbers here may coincide. The by-room column the renderer prints is
+    // `met - metByItem`, computed at print time and stored nowhere (G-013 round 1), so the
+    // expected lines below carry 140-134=6 and 142-136=6 rather than a third sentinel.
+    { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141, metByItem: 134 },
+    { needId: 'betaNeed', lodging: false, met: 142, unmet: 143, metByItem: 136 },
   ],
   rooms: {
     valid: 133,
@@ -452,8 +456,8 @@ describe('renderers', () => {
         'stuck       115',
         'orphan res  116',
         'in bad room 132',
-        'need L     alphaNeed 140 met, 141 unmet',
-        'need       betaNeed 142 met, 143 unmet',
+        'need L     alphaNeed 140 met, 141 unmet (6 by room, 134 by item)',
+        'need       betaNeed 142 met, 143 unmet (6 by room, 136 by item)',
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',
@@ -513,7 +517,7 @@ describe('buildSummary violations (forged worlds)', () => {
       arrivedTick: world.tick, // age 0 — cannot read as stuck, so the orphan branch is isolated
       roomEntityId: 999_999, // no such entity
       engagement: null,
-      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1 }],
+      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.orphanedReservations).toBe(1);
@@ -530,7 +534,7 @@ describe('buildSummary violations (forged worlds)', () => {
       arrivedTick: world.tick - limit - 1, // one tick past the oldest a live guest can be
       roomEntityId: NO_ENTITY, // waiting, not orphaned — isolates the stuck branch
       engagement: null,
-      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1 }],
+      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.stuck).toBe(1);
@@ -572,7 +576,7 @@ describe('buildSummary violations (forged worlds)', () => {
         arrivedTick: world.tick,
         roomEntityId: 999_999,
         engagement: null,
-        needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1 }],
+        needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null }],
       }),
       ledger: [...world.ledger.filter((_, i) => i !== firstSettlement), foreign],
     };

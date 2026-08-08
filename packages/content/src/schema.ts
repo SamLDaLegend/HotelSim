@@ -246,6 +246,41 @@ export const needRoleSchema = z.enum(['lodging', 'engagement']);
  * knob per need rather than a separate decay rate: a need that should press harder is a
  * need with less patience. See `needs.ts` in `packages/sim` for the closed form.
  *
+ * ---------------------------------------------------------------------------
+ * `guest_comfort.satisfyTicks` WENT 60 -> 150 AT G-013, AND IT IS COMPENSATION FOR THAT
+ * GOAL'S OWN REGISTRY WORK RATHER THAN AN INDEPENDENT BALANCE DECISION. READ THIS BEFORE
+ * TREATING IT AS A TUNED NUMBER.
+ *
+ * G-013 made items providers, and `guest_nourishment` gained a second one: the café is a
+ * room and the vending machine in the games room is an item. That doubled the hotel's
+ * capacity to feed people, and the need stopped being able to fail. Measured on
+ * `--days 30 --seed 7 --rooms 6`, which is G-012's own criterion invocation:
+ *
+ *                        comfort      entertainment   nourishment   rows with BOTH non-zero
+ *   comfort at  60      356 /   0      285 /  71      356 /   0             1
+ *   comfort at 150      178 / 178      179 / 177      356 /   0             2
+ *
+ * G-012's signed-off criterion is "at least TWO different need types have a non-zero met
+ * count AND a non-zero unmet count". At 60 only entertainment straddles, so shipping the
+ * registry without touching anything would have retroactively falsified a committed
+ * criterion of the previous goal. Raising comfort's budget restores the second straddling
+ * row. That is the whole of the reason.
+ *
+ * WHAT THIS NUMBER IS NOT. It is not derived from a requirement (`HOTELSIM.md` §2.1), and
+ * an earlier version of this comment argued that it was — via "the engagement needs sum to
+ * the lodging budget", a rule that appeared for the first time in the same commit as the
+ * number it justified. `ai-critic` grepped four ledgers and found no prior statement of it.
+ * That is choosing a number and then writing its justification, which is the pattern §2.1
+ * exists to name, and the framing is withdrawn rather than defended. **THIS DIAL HAS NO
+ * SWEEP BEHIND IT AND IS OWED TO M4**, alongside the demand model — the same diff that
+ * moved it parks it as unswept work, and those two facts belong in the same sentence.
+ *
+ * THE GENERAL HAZARD, WHICH IS WORTH MORE THAN THE NUMBER: G-012's criterion pins a
+ * property of the CONTENT TABLE — how many need types straddle met-and-unmet — and ANY
+ * future goal that adds a provider can flip it. G-014 and G-015 both add to this table.
+ * See `PARKING.md`.
+ * ---------------------------------------------------------------------------
+ *
  * `satisfyTicks` IS AN ECONOMIC NUMBER, not only a pacing one, and it is the file's
  * biggest surprise. A room bills `nightlyRatePence` once per COMPLETED stay, and this
  * is how long a stay is — so effective revenue per room-day is
@@ -255,10 +290,12 @@ export const needRoleSchema = z.enum(['lodging', 'engagement']);
  * the long note on `nightlyRatePence` in `roomTypeSchema` above before changing it.
  *
  * WHICH provider satisfies this need is not recorded here. It is recorded on the
- * provider, as `roomType.provides`, so a new provider can claim an existing need
- * without editing the need. `bindContent` in packages/sim rejects a need that no
- * provider claims — a need nothing can satisfy is guaranteed unhappiness, which is a
- * bug rather than difficulty (HOTELSIM.md §6.1).
+ * provider — as `roomType.provides` or, since G-013, as `itemType.provides` — so a new
+ * provider can claim an existing need without editing the need. `bindContent` in
+ * packages/sim rejects a need that no REACHABLE provider claims: a need nothing can
+ * satisfy is guaranteed unhappiness, which is a bug rather than difficulty
+ * (HOTELSIM.md §6.1). "Reachable" is the G-013 strengthening and it is not a synonym for
+ * "declared" — see `itemTypeSchema`.
  */
 export const needTypeSchema = z.strictObject({
   id: contentIdSchema,
@@ -280,21 +317,48 @@ export const needTypeSchema = z.strictObject({
 export const roomTypesSchema = z.array(roomTypeSchema).min(1);
 
 /**
- * One item a room can require (G-009).
+ * One item a room can require, and — since G-013 — one thing that can serve a need.
  *
- * TWO FIELDS, DELIBERATELY. An item is the smallest thing the validity rule can inspect:
- * a room is furnished when an entity of this kind stands in it. Item variety — what an
- * item costs, what need it provides, how it decays, how a player places one — is M6, and
- * every one of those is a field added here later rather than a shape changed.
+ * THREE FIELDS. An item is still the smallest thing the validity rule can inspect (a room
+ * is furnished when an entity of this kind stands in it), and it is now also a PROVIDER: a
+ * guest engages the arm chair, not the lounge it stands in. Item cost, quality and decay
+ * are still M6, and each is a field added here later rather than a shape changed.
  *
  * An item type nobody requires is NOT an error, and that asymmetry is deliberate. A need
- * no room provides is guaranteed unhappiness (`bindContent` rejects it); an item no room
+ * no provider offers is guaranteed unhappiness (`bindContent` rejects it); an item no room
  * requires is simply furniture nothing needs yet, which is what M6's table will be full
  * of on its first day.
+ *
+ * ---------------------------------------------------------------------------
+ * `provides` IS REQUIRED HERE AND OPTIONAL IN THE SIM (G-013), for the third time and the
+ * same reason as `requires` and both prices.
+ *
+ * It names the needs a guest can satisfy AT one of these, and `[]` is the deliberate
+ * statement "this is furniture, not an amenity" — which is what `single_bed` says. Silence
+ * on disk is a designer's oversight; silence in HISTORY is a document written before items
+ * could provide anything, which is why `ItemTypeData` in `packages/sim/src/content.ts`
+ * keeps the key optional and the frozen v1 fixture keeps its `8e09fe4f0fa162a3`
+ * fingerprint.
+ *
+ * TWO THINGS `bindContent` REFUSES THAT NO SCHEMA HERE CAN SEE, both cross-references:
+ *
+ *   - A NEED WHOSE ONLY PROVIDER IS AN ITEM NO ROOM TYPE REQUIRES. `buildRoom` furnishes
+ *     the room it places, and there is no `placeItem` command until M6, so nothing a
+ *     player can do would ever put that item in the world. The need would be formed by
+ *     every guest and met by none — guaranteed unhappiness with every gate green, which is
+ *     what the check exists to catch. **The shipped table depends on this being enforced:
+ *     `guest_comfort` is provided only by `arm_chair`, which is reachable only because
+ *     `hotel_lounge` requires it. Delete that requirement and the game stops loading, by
+ *     design.**
+ *   - AN ITEM THAT PROVIDES THE LODGING NEED. A guest lodges in a ROOM — it holds it for
+ *     the whole stay and `payForStay` charges for the room type — so nothing can sleep in
+ *     a vending machine. Such an item is a declared provider that could never deliver.
+ * ---------------------------------------------------------------------------
  */
 export const itemTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
+  provides: z.array(contentIdSchema),
 });
 
 /** The whole `need-types.json` document. A top-level array, for the same reason. */

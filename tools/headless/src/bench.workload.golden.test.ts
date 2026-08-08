@@ -75,7 +75,12 @@ describe('the I5 bench workload hashes to a committed literal', () => {
   const plain = runWorkload(0, 0);
 
   it('PLAIN: the exact workload pnpm sim:bench runs', () => {
-    expect(hashState(plain)).toBe('eb2855a89abd539c');
+    // MOVED AT G-013, deliberately and for two independent reasons, both of which change
+    // what this workload IS rather than how it is computed: the shipped content gained
+    // provider items (so the fingerprint `World.contentHash` records moves, and the bench
+    // hotel carries two more entities per amenity set), and guests now engage those items.
+    // Was `eb2855a89abd539c` at G-016.
+    expect(hashState(plain)).toBe('958d60390c5e019d');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -103,7 +108,8 @@ describe('the same workload with the player churning the building', () => {
   const churn = runWorkload(240, 360);
 
   it('CHURN: hashes to a committed literal', () => {
-    expect(hashState(churn)).toBe('a3622b36bb17436a');
+    // Moved at G-013 for the reasons the plain hash did. Was `a3622b36bb17436a` at G-016.
+    expect(hashState(churn)).toBe('847daaaa084b1ae6');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

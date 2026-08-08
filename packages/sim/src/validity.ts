@@ -66,7 +66,7 @@
 // and not `world.ts`. `countGuestsInInvalidRooms` lives in `guests.ts` for exactly that
 // reason: putting it here would close a cycle.
 
-import { findRoomType, isRoomKind, requiredItemsOf, roomTypeProvides } from './content.js';
+import { findRoomType, isRoomKind, providesOf, requiredItemsOf, roomTypeProvides } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
@@ -191,10 +191,23 @@ export type ValidityContext = {
    * Valid rooms partitioned by the need they provide (G-012). Null until first asked, then
    * filled one need at a time. LOOKUP ONLY — never iterated, never ordered (I2).
    *
-   * See `validRoomsProviding` for why this is derived-and-cacheable rather than a second
-   * source of truth about what a room offers.
+   * ROOMS ONLY, and since G-013 that is the point rather than an accident: this backs the
+   * LODGING search, and a guest lodges in a room. See `validRoomsProviding`.
    */
   providers: Map<ContentId, readonly Entity[]> | null;
+  /**
+   * Every entity that is CURRENTLY PROVISIONING — a valid room, or an item standing in
+   * one — and whose kind provides at least one need (G-013). Ascending entity id. Null
+   * until first asked.
+   *
+   * The engagement search's candidate pool. See `provisioningEntities`.
+   */
+  provisioning: readonly Entity[] | null;
+  /**
+   * `provisioning` partitioned by need (G-013). Null until first asked, then filled one
+   * need at a time. LOOKUP ONLY — never iterated, never ordered (I2).
+   */
+  engagementProviders: Map<ContentId, readonly Entity[]> | null;
 };
 
 /**
@@ -310,7 +323,18 @@ export function createValidityContext(
   bounds: GridBounds,
   forEach: EntityVisitor,
 ): ValidityContext {
-  return { content, bounds, forEach, index: null, grounded: null, memo: null, validRooms: null, providers: null };
+  return {
+    content,
+    bounds,
+    forEach,
+    index: null,
+    grounded: null,
+    memo: null,
+    validRooms: null,
+    providers: null,
+    provisioning: null,
+    engagementProviders: null,
+  };
 }
 
 /**
@@ -642,8 +666,114 @@ export function validRoomsOf(ctx: ValidityContext): readonly Entity[] {
 }
 
 /**
+ * THE ROOM AN ITEM STANDS IN, or undefined (G-013).
+ *
+ * An item's provision is entirely borrowed: it has no validity of its own — the rules in
+ * this file apply to rooms and `roomInvalidity` throws for anything else — so the question
+ * "is this chair usable" is really "is the room it is in a room". One lookup into the
+ * placement index that is already built.
+ *
+ * An UNPLACED item has no host, which is why `isProviding` answers false for one rather
+ * than asking about a cell that does not exist.
+ */
+function hostRoomOf(ctx: ValidityContext, item: Entity): Entity | undefined {
+  return item.at === null ? undefined : roomAtCell(ctx, item.at);
+}
+
+/**
+ * Whether this entity is SERVING ANYBODY RIGHT NOW — the one predicate the guest loop asks
+ * of a thing it is engaged with (G-013).
+ *
+ *   a ROOM  ->  it is a valid room. Unchanged; this is `isValidRoom`.
+ *   an ITEM ->  it stands inside a room, and that room is valid.
+ *
+ * IT REPLACES `isValidRoom` AT EXACTLY ONE CALL SITE — the engagement in `stepGuests` —
+ * and the reason it had to is not subtle: `roomInvalidity` THROWS for an entity that is
+ * not a room type, so the first guest to engage an arm chair would have killed the tick.
+ * The lodging call site keeps `isValidRoom`, deliberately: a guest lodges in a room.
+ *
+ * WHY BORROWED VALIDITY IS THE WHOLE RULE, and why the alternatives were not taken. An
+ * item could have carried its own reasons — "unhosted", "in a broken room" — but every one
+ * of them would be a restatement of the host's, and a second tally keyed on the same facts
+ * is the drift this file already refuses for validity itself. A chair in a room with no
+ * floor is not a broken chair; it is a chair nobody can get to.
+ *
+ * The consequence a reader should hold on to: **an item's provision changes when its ROOM
+ * changes**, so the release conditions for an engagement grew from one to three at G-013 —
+ * the room was demolished (the item goes with it), the room stopped being valid (the item
+ * survives and stops serving), or the item itself went. All three arrive at the same
+ * release site in `stepGuests`, because all three make this predicate false.
+ */
+export function isProviding(ctx: ValidityContext, entity: Entity): boolean {
+  if (isRoomKind(ctx.content, entity.kind)) return isValidRoom(ctx, entity);
+  const host = hostRoomOf(ctx, entity);
+  return host !== undefined && isValidRoom(ctx, host);
+}
+
+/**
+ * Every entity that is provisioning AND offers at least one need, ascending by entity id
+ * (G-013).
+ *
+ * THE CANDIDATE POOL FOR ENGAGEMENTS, and it is built once per entity set rather than once
+ * per need: the alternative — walking every entity for every need — is the O(entities x
+ * needs) scan G-012 measured and G-010 spent a goal removing. Rooms that provide nothing
+ * (`hotel_lounge` in the shipped table) and furniture that provides nothing (`single_bed`)
+ * are dropped here, so they are never walked again.
+ *
+ * THE ORDER IS THE ENTITY ORDER, for the reason `validRoomsOf` states: `forEach` walks
+ * ascending id, which is the order the guest loop has always chosen by, and the placement
+ * index's cell order would make a guest take the provider lowest on the plot instead.
+ * Rooms and items are interleaved by id — a chair spawned before a café outranks it —
+ * which is arbitrary and STABLE, and stability is the property I2 needs. It becomes
+ * nearest-by-path at M3.
+ */
+function provisioningEntities(ctx: ValidityContext): readonly Entity[] {
+  const existing = ctx.provisioning;
+  if (existing !== null) return existing;
+  const providers: Entity[] = [];
+  ctx.forEach((entity) => {
+    if (providesOf(ctx.content, entity.kind).length === 0) return;
+    if (isProviding(ctx, entity)) providers.push(entity);
+  });
+  ctx.provisioning = providers;
+  return providers;
+}
+
+/**
+ * Every provider a guest could ENGAGE for `needId` — rooms and items alike — in the
+ * canonical ascending-id entity order (G-013).
+ *
+ * The engagement half of the registry, and the counterpart of `validRoomsProviding`, which
+ * stays rooms-only because it backs the LODGING search. Cached per need exactly as that
+ * one is, and allowed to be cached for the same reason: within a tick, entity membership
+ * is frozen, so validity is frozen, so this list is fixed; across ticks the `ValidityCache`
+ * predicate establishes that the entity set AND the content identity are both unchanged,
+ * and `provides` is content.
+ *
+ * That fixedness is also what keeps `findFreeRoom`'s exhausted-set short-circuit exact:
+ * between two scans for one need the candidate list cannot grow, so a set that was empty
+ * cannot have become non-empty except through a `release`, which un-marks exactly what the
+ * freed entity provides.
+ */
+export function providersFor(ctx: ValidityContext, needId: ContentId): readonly Entity[] {
+  const byNeed = (ctx.engagementProviders ??= new Map<ContentId, readonly Entity[]>());
+  const existing = byNeed.get(needId);
+  if (existing !== undefined) return existing;
+  const providers: Entity[] = [];
+  for (const entity of provisioningEntities(ctx)) {
+    if (providesOf(ctx.content, entity.kind).includes(needId)) providers.push(entity);
+  }
+  byNeed.set(needId, providers);
+  return providers;
+}
+
+/**
  * Every valid room that PROVIDES `needId`, in the canonical ascending-id entity order
  * (G-012).
+ *
+ * ROOMS ONLY. Since G-013 this backs the LODGING search alone — a guest lodges in a room,
+ * and `payForStay` charges that room type's rate, so an item must never be returned here.
+ * `providersFor` above is the engagement search, and it is the one that includes items.
  *
  * `validRoomsOf` filtered by one content question, computed once per need per entity set
  * and then reused. Same order, same set, so the guest loop's "lowest id wins" is preserved

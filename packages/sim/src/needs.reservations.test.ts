@@ -279,9 +279,23 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     arrivedTick: 0,
     roomEntityId: room,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'food' },
+    // `metBy` follows the countdown (G-013): a need this helper forges as ALREADY MET has
+    // to say what delivered it, or `assertNeedVector` refuses the world before the case
+    // under test can run. Attributed to a room, which is what these hand-built worlds are
+    // about — the item cases live in `provider.release.test.ts`.
     needs: [
-      { needId: 'food', patienceRemaining: 400, progressRemaining: over.food ?? MEAL },
-      { needId: 'rest', patienceRemaining: over.patience ?? 400, progressRemaining: over.rest ?? STAY },
+      {
+        needId: 'food',
+        patienceRemaining: 400,
+        progressRemaining: over.food ?? MEAL,
+        metBy: (over.food ?? MEAL) === 0 ? 'room' : null,
+      },
+      {
+        needId: 'rest',
+        patienceRemaining: over.patience ?? 400,
+        progressRemaining: over.rest ?? STAY,
+        metBy: (over.rest ?? STAY) === 0 ? 'room' : null,
+      },
     ],
   });
 
@@ -432,10 +446,18 @@ describe('exit path — save and load', () => {
   it('refuses a save whose guest is engaged for a need that is already resolved', () => {
     const world = run(hotel(1, 1), content, 3, [at(1, arrive)]);
     const blob = JSON.parse(serialise(world)) as {
-      world: { guests: { list: { needs: { needId: string; progressRemaining: number }[] }[] } };
+      world: {
+        guests: { list: { needs: { needId: string; progressRemaining: number; metBy: string | null }[] }[] };
+      };
     };
     const food = blob.world.guests.list[0]!.needs.find((entry) => entry.needId === 'food');
     food!.progressRemaining = 0;
+    // AND ITS ATTRIBUTION IS FORGED TO MATCH (G-013), deliberately, so this case still tests
+    // the rule it is named for. `assertNeedVector` now refuses a met need that records
+    // nothing that delivered it, and that check runs FIRST — leaving `metBy` null here
+    // would make this test pass on the wrong error, which is a test that no longer covers
+    // its subject. `provider.save.test.ts` covers the metBy rule on its own.
+    food!.metBy = 'room';
     expect(() => deserialise(JSON.stringify(blob))).toThrow(/which is already resolved/);
   });
 });

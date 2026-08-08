@@ -10,7 +10,7 @@
     "id": "guest_comfort",
     "name": "Comfort",
     "role": "engagement",
-    "satisfyTicks": 60,
+    "satisfyTicks": 150,
     "patienceTicks": 300
   },
   {

@@ -2,23 +2,21 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08, HEAD `aa30218`. 13 goals done, M0 and M1 signed off, M2 a third built.*
+*As of 2026-08-08, G-013 done. 14 goals; M0 and M1 signed off; M2 half built.*
 
-- **State**: save v6 · summary v1 · 1,000 tests / 51 files · all six gates green ·
-  I2 `6c3e1baa8b87d2f6` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` · I5 61–63% of a budget
-  that is about to be re-derived (G-018), so quote the ratio and not the percentage.
-- **The recurring defect this project actually produces**: checks that succeed while
-  inspecting nothing. Seven instances now — decorative `TICK_PHASES`, `check:content`
-  inspecting zero ids, `deserialise` never calling its own gap detector, the guest-loop
-  RAN flag, the never-executed violations path, G-010's unwitnessed release counter,
-  G-012's counter tested at one of four sites. Plus five *exit criteria* of the same shape.
-- **The measurement lesson (G-016)**: the ratio survived and every absolute did not. Same
-  build, 3,087ms and 1,740ms hours apart. Measure paired and interleaved in one sitting;
-  withdraw what cannot be re-measured rather than restating it.
-- **Newest turn**: the human ruled (ADR-0013) that the charter had been asking agents to
-  verify things nobody can observe. A replay viewer, a WATCH step, DRY/FIXED closes.
-- **Open obligation**: G-013's WATCH is owed retroactively at G-017. No WATCH entry
-  exists yet in this file — the first one is the point of the whole ruling.
+- **State**: save **v7** · summary v1 · 1,095 tests / 58 files · six gates green ·
+  I2 `4b8db9b1ac36cb35` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` · I5 78–83% against a budget
+  G-018 is about to source. Quote ratios, not percentages.
+- **The defect this project produces**: checks that succeed while inspecting nothing.
+  **G-013 alone produced nine** — but three were self-caught, so the count is not
+  like-for-like against the earlier seven across thirteen goals. Detection sensitivity
+  rose. Cite the confound whenever a defect count is cited (ADR-0007).
+- **G-013's real lesson is about prose, not code.** One comment block was wrong three
+  times in three mechanisms; the qualitative claim survived all three and only the numbers
+  rotted. Rule now: *prose that cannot be verified may describe, but it may not measure.*
+- **The measurement rule (G-016) still holds**: the ratio survives, absolutes do not.
+- **Open obligation**: **no WATCH entry exists in this file yet.** G-013 owes one, G-017
+  discharges it, and that first entry is the point of the entire ADR-0013 ruling.
 
 ---
 
@@ -818,3 +816,49 @@ G-017's first subject — a fresh behaviour change is a better first subject tha
 Order for the rest of M2: **G-013 → G-018 → G-017 → G-014 → G-015 → exit.** G-018 ahead of
 G-017 is my call, not the human's: it changes no simulation code, and every goal after it
 quotes an I5 percentage that is currently unsourced.
+
+---
+
+## 2026-08-08 — G-013 — The item-based provider registry (3 sweeps + 1 verification)
+
+A provider is now an **entity**, not a room type. Lodging stays rooms-only — nothing sleeps
+in a vending machine, and `payForStay` charges a room type's rate — while engagement walks
+rooms and items in one ascending-id list. All three new release causes (host demolished,
+host went invalid, item despawned) arrive at the **existing** site, so there is no fifth
+release path. Save schema **v7**: `NeedState.metBy` and `NeedOutcome.metByItem`, with
+by-room derived. The migration's defaults are argued from the era rather than chosen — in
+the v6 era items were not providers, so every recorded satisfaction *was* a room's.
+
+**Criterion 3 is the thing worth keeping.** Content whose only provider for a need is an
+item no room type requires is refused at load, because until `placeItem` (M6) no player
+command could put it in the world. The shipped table exercises its own rule: delete
+`hotel_lounge.requires` and the game stops loading, naming `guest_comfort`.
+
+**The goal ran 3/3 and escalated.** Round 1 found a conservation law that was a tautology
+over a field derived nine lines earlier. Round 2 found the **over-correction** — builder and
+orchestrator had both concluded no such check was possible, and the counter-example was in
+the same function, since `buildSummary` holds content and content pins attribution. Round 3
+found the determinism log's justifying comment describing a world the code does not build.
+The unbudgeted verification then found the *replacement* prose wrong twice more.
+
+**Three things this goal changed about how the project runs.** §7.1 got three closing states
+(DRY / OPEN / UNSWEPT) because its round-3 critic wrote *"the reason I am not DRY is the open
+MAJOR, not unswept surface"* — a distinction the two-state close could not express, whose
+remedy would have split a goal that did not need it. §5.5 and §5.6 came from the seam: the
+builder named it at PLAN, the orchestrator declined in one line with no cost recorded, and
+the cost was nine instances and three sweeps that exhausted only at the last round. And
+ADR-0007 gained the prose rule after the same paragraph failed a third time.
+
+**Two agent behaviours worth recording.** The builder retracted its own claims four times,
+including one the orchestrator had accepted in writing, and it wrote the rule for its own
+error. The round-3 critic, asked to classify a finding where one reading escalated its goal
+and the other did not, said it *"would not pick the one that is cheaper for me"*.
+
+**And the human drew the line neither agent did**: the guard fired correctly, but that was
+evidence about a paragraph, not about a goal whose code never needed a correctness fix.
+Getting a procedural call right and attaching its consequence to the wrong subject is its
+own failure mode.
+
+Parked: ten entries including `placeItem` relaxing rather than deleting the reachability
+rule, an item in a private room being publicly usable, and an item provider costing nothing
+to place or keep — an unpriced strategy for M4. **WATCH debt outstanding, by design.**

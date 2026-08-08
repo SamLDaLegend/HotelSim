@@ -149,7 +149,7 @@ describe('the v1 fixture, through the real migration', () => {
     // G-007 bumped this to 3, G-008 to 4, G-011 to 5, G-012 to 6. The fixture did not
     // move; the schema did, five times, and each time a migration carried these same bytes
     // forward.
-    expect(SAVE_SCHEMA_VERSION).toBe(6);
+    expect(SAVE_SCHEMA_VERSION).toBe(7);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 

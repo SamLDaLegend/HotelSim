@@ -2,23 +2,24 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08. 14 ADRs. Three are human decisions: ADR-0011, ADR-0012, ADR-0013/0014.*
+*As of 2026-08-08, after G-013. 14 ADRs. Human decisions: ADR-0011, 0012, 0013, 0014.*
 
-- **Load-bearing everywhere**: ADR-0001 content is injected, never value-imported ·
-  ADR-0002 money is integer pence · ADR-0003 a snake_case literal is a content ID ·
-  ADR-0006 the v1 fixture is permanent and the next `World` field owes a migration.
-- **The one cited most**: **ADR-0007** — a check that can succeed while inspecting
-  nothing is not a check. Three amendments: vacuous ≠ unreachable; a goal promoted by a
-  threshold must exit on a threshold; **a threshold must itself be derivable from a stated
-  requirement**. It has caught more real defects here than anything in §6.1.
-- **Newest**: **ADR-0013** (human) — a perceptual criterion needs a perceptual check.
-  Adds the replay viewer, the WATCH loop step, DRY/FIXED critic closes, ledger digests,
-  an I5 re-derivation, and the M4 scenario-capital prerequisite. **ADR-0014** (human) —
-  the first playable build ships placeholder art; M5 neither relitigates nor waits.
-- **Bounded by their own text**: ADR-0013 does not open `apps/game`, does not weaken any
-  invariant, does not reopen M0/M1 sign-off, does not make the viewer a deliverable.
-- **Open contradiction**: none outstanding. The ADR-0007 amendment that spent a day filed
-  under ADR-0011 has been moved, with a note left at the scene.
+- **Load-bearing everywhere**: ADR-0001 content injected, never value-imported · ADR-0002
+  integer pence · ADR-0003 snake_case literal = content ID · ADR-0006 the v1 fixture is
+  permanent and the next `World` field owes a migration (G-013 paid it: save **v7**).
+- **The one cited most, and now five amendments deep**: **ADR-0007** — a check that can
+  succeed while inspecting nothing is not a check. Vacuous ≠ unreachable · a goal promoted
+  by a threshold must exit on one · a threshold must itself be derivable · **deleting a bad
+  check is not evidence that no good one exists** (G-013, written by the builder that made
+  the error) · **a comment offered as evidence may not carry a figure no test pins**.
+- **How to read a defect count** (ADR-0007, human): a 3/3 goal is a near miss, not comfort;
+  and raw counts across eras are not like-for-like, because detection sensitivity rises.
+- **ADR-0013** (human) — a perceptual criterion needs a perceptual check. Viewer, WATCH,
+  three-state critic close, digests, I5 re-derivation, M4 scenario-capital prerequisite.
+  Bounded by its own text: no `apps/game`, no weakened invariant, no reopened sign-off.
+- **ADR-0014** (human) — first playable build ships placeholder art; M5 neither waits nor
+  relitigates.
+- **Open contradictions**: none outstanding.
 
 ---
 

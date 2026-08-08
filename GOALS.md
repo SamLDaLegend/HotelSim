@@ -2,20 +2,22 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08, after ADR-0013 / ADR-0014 and before G-013 BUILD.*
+*As of 2026-08-08, G-013 done. 14 goals complete; M0 and M1 signed off; M2 half built.*
 
-- **Schema versions**: save **v6** (v7 owed by G-013) · summary **v1** (v2 owed by G-015).
-- **Gates**: all six green at `aa30218`. I5 **61–63% of budget** — but the budget is
-  unsourced and is being re-derived at **G-018**; do not quote a percentage until it is.
-  I2 `6c3e1baa8b87d2f6` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` · 1,000 tests / 51 files.
-- **Order**: G-013 → **G-018** (re-derive I5) → **G-017** (replay viewer) → G-014 → G-015.
-- **Obligations owed by future goals**: G-013 owes a v7 migration, a provider-density
-  scaling arm, and a **retroactive WATCH** once G-017 lands. G-015 owes summary v2, a
-  second critic from another pair (last-in-milestone), and M2's "visibly" discharged by a
-  WATCH observation. **M4 does not start** until scenario capital lands (ADR-0013 §5).
-- **Open contradictions**: G-016's exit criterion could not fail — recorded, not rescoped,
-  and the reason G-018 exists. `--rooms N` contaminates every balance sweep to date.
-  Sampling the guest-store scan recovers 18.4% and is deliberately unpulled.
+- **Schema versions**: save **v7** · summary **v1** (v2 owed by G-015).
+- **Gates**: all six green. I2 `4b8db9b1ac36cb35` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3`
+  · 1,095 tests / 58 files. **I5 reads 78–83% and its budget is unsourced** — G-018
+  re-derives it; quote the ratio, not the percentage, until it does.
+- **Order**: **G-018** (derive I5) → **G-017** (viewer) → G-014 → G-015 → G-019 → M2 exit.
+- **Obligations owed by future goals**: G-013's **WATCH is undischarged** and is G-017's
+  first subject. G-018 must strike `bench.mjs`'s stale `45% <- what ships`. G-014 runs the
+  §5.5 seam question first. G-015 owes summary v2 and a conservation law that is **not** an
+  identity over its own inputs. G-019 is last-in-milestone: second critic, and M2's
+  "visibly". **M4 does not start** until scenario capital lands (ADR-0013 §5).
+- **Open contradictions**: G-012's criterion pins a content property that any provider
+  addition can flip — G-014 and G-015 both touch it. `--rooms N` contaminates every balance
+  sweep to date. Sampling the guest-store scan recovers 18.4%, deliberately unpulled.
+- **On trial**: §7.1's conversion guard has fired once, on prose, on its own author.
 
 ---
 
@@ -677,7 +679,28 @@ Critique rounds used: 0/3
   one whose extra needs were omitted, it is one in which those needs did not exist.
 
 ## G-013 — The item-based provider registry
-Status: in-progress
+Status: **done** — 3 critique rounds (3 MAJOR + 5 MINOR across sweeps, 2 MAJOR on the
+  unbudgeted verification) + 1 verification pass. **ESCALATED at 3/3 and resolved by the
+  human: land it, do not split.** Verified by the orchestrator: all six gates green, I5
+  78.4%, I2 `4b8db9b1ac36cb35`, `SAVE_V1_CONTENT` unmoved at `8e09fe4f0fa162a3`, fixture
+  zero-line diff, 1,095 tests across 58 files, no gate/CI/config file touched.
+  Save schema **v7**. `SUMMARY_SCHEMA_VERSION` stays 1.
+
+  **WATCH DEBT OUTSTANDING — discharged at G-017, not here.** This goal changes guest
+  behaviour and the viewer does not exist yet (`HOTELSIM.md` §5, ADR-0013). It is G-017's
+  first subject.
+
+  **NINE INSTANCES OF ONE DEFECT CLASS, AND THE COUNT NEEDS ITS CONFOUND STATED**
+  (ADR-0007 as amended): three were self-caught by the builder before any critique, which
+  is discipline that did not exist for most of the first thirteen goals. Detection
+  sensitivity has risen, so this is not like-for-like against the project's earlier seven.
+  **And the sweep reached exhaustion only at round 3** — read 3/3 as a near miss, not as
+  comfort.
+
+  **THE SEAM WAS OFFERED AT PLAN AND I DECLINED IT IN ONE LINE WITH NO COST RECORDED.**
+  That is the case that produced §5.5 and §5.6. Written as a prediction it would have read
+  "expected cost: more checkable surface than one critic pass can vet", and would have been
+  legibly wrong. G-014 runs the seam question first.
 
   INHERITED FROM G-016's critique: `needs.scaling.test.ts` holds need count and
   concurrent guests still but NOT provider density — the shipped hotel is starved (one

@@ -99,15 +99,20 @@ describe('a guest forms one instance of EVERY need the content defines', () => {
 
   it('starts each one at its own full patience and its own full stay', () => {
     const guest = only(stepTick(hotel(), content, [arrive]));
+    // `metBy: null` on both (G-013): a freshly formed need has not been delivered by
+    // anything. Written out rather than omitted, because `toEqual` over the WHOLE object is
+    // what makes a silently added field a visible decision.
     expect(findNeedState(guest.needs, 'food')).toEqual({
       needId: 'food',
       patienceRemaining: 200,
       progressRemaining: 8,
+      metBy: null,
     });
     expect(findNeedState(guest.needs, 'rest')).toEqual({
       needId: 'rest',
       patienceRemaining: 100,
       progressRemaining: 60,
+      metBy: null,
     });
   });
 
@@ -153,9 +158,9 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     // and it is the whole subject of the goal.
     const world = run(noAmenities(), content, 200, [at(1, arrive)]);
     expect(world.guestOutcomes.satisfied).toBe(1);
-    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 1, unmet: 0 });
-    expect(needOutcomeOf(world.needOutcomes, 'food')).toEqual({ needId: 'food', met: 0, unmet: 1 });
-    expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({ needId: 'fun', met: 0, unmet: 1 });
+    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 1, unmet: 0, metByItem: 0 });
+    expect(needOutcomeOf(world.needOutcomes, 'food')).toEqual({ needId: 'food', met: 0, unmet: 1, metByItem: 0 });
+    expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({ needId: 'fun', met: 0, unmet: 1, metByItem: 0 });
   });
 
   it('marks it failed rather than merely pending, so nothing tries to serve it again', () => {
@@ -183,7 +188,7 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     const world = run(hotel([]), content, 120, [at(1, arrive)]);
     expect(world.guestOutcomes.unsatisfied).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 0, unmet: 1 });
+    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 0, unmet: 1, metByItem: 0 });
   });
 });
 
@@ -202,7 +207,7 @@ describe('met, failed and pending are a TOTAL and EXCLUSIVE classification', () 
     let seen = 0;
     for (const patienceRemaining of values) {
       for (const progressRemaining of values) {
-        const need: NeedState = { needId: 'rest', patienceRemaining, progressRemaining };
+        const need: NeedState = { needId: 'rest', patienceRemaining, progressRemaining, metBy: null };
         const arms = [isNeedMet(need), isNeedFailed(need), isNeedPending(need)].filter(Boolean);
         expect(arms, `patience ${patienceRemaining}, progress ${progressRemaining}`).toHaveLength(1);
         seen += 1;
@@ -214,12 +219,12 @@ describe('met, failed and pending are a TOTAL and EXCLUSIVE classification', () 
   });
 
   it('and each arm is reachable, so none of them is a branch nothing takes', () => {
-    expect(isNeedMet({ needId: 'rest', patienceRemaining: 5, progressRemaining: 0 })).toBe(true);
-    expect(isNeedFailed({ needId: 'rest', patienceRemaining: 0, progressRemaining: 5 })).toBe(true);
-    expect(isNeedPending({ needId: 'rest', patienceRemaining: 5, progressRemaining: 5 })).toBe(true);
+    expect(isNeedMet({ needId: 'rest', patienceRemaining: 5, progressRemaining: 0, metBy: 'room' })).toBe(true);
+    expect(isNeedFailed({ needId: 'rest', patienceRemaining: 0, progressRemaining: 5, metBy: null })).toBe(true);
+    expect(isNeedPending({ needId: 'rest', patienceRemaining: 5, progressRemaining: 5, metBy: null })).toBe(true);
     // The corrupt corner: both countdowns spent. MET wins, and it must, because a need that
     // was completed is not also a need that ran out of waiting.
-    const both: NeedState = { needId: 'rest', patienceRemaining: 0, progressRemaining: 0 };
+    const both: NeedState = { needId: 'rest', patienceRemaining: 0, progressRemaining: 0, metBy: 'room' };
     expect(isNeedMet(both)).toBe(true);
     expect(isNeedFailed(both)).toBe(false);
     expect(isNeedPending(both)).toBe(false);
@@ -248,18 +253,18 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     const needs = formNeedVector(content).map((n) =>
       n.needId === 'rest' ? { ...n, patienceRemaining: 99 } : n,
     );
-    const advanced = advanceNeeds(content, needs, 'rest', null);
+    const advanced = advanceNeeds(content, needs, 'rest', null, 'room');
     expect(findNeedState(advanced, 'rest')?.patienceRemaining).toBe(100);
     // And it does not go past the cap on the next tick.
-    expect(findNeedState(advanceNeeds(content, advanced, 'rest', null), 'rest')?.patienceRemaining).toBe(100);
+    expect(findNeedState(advanceNeeds(content, advanced, 'rest', null, 'room'), 'rest')?.patienceRemaining).toBe(100);
   });
 
   it('SHORTER VECTOR (the migrated guest): falls back to the search and still finds the type', () => {
     // One need where the content defines three — lengths differ, so the positional path is
     // skipped entirely. Without a working fallback the cap would be unknown and patience
     // would hold at 99 instead of being restored to 100.
-    const migrated: readonly NeedState[] = [{ needId: 'rest', patienceRemaining: 99, progressRemaining: 5 }];
-    const advanced = advanceNeeds(content, migrated, 'rest', null);
+    const migrated: readonly NeedState[] = [{ needId: 'rest', patienceRemaining: 99, progressRemaining: 5, metBy: null }];
+    const advanced = advanceNeeds(content, migrated, 'rest', null, 'room');
     expect(advanced[0]?.patienceRemaining).toBe(100);
     expect(advanced[0]?.progressRemaining).toBe(4);
   });
@@ -269,11 +274,11 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // `fun` where the table holds `food`. `fun` is capped at 400 and `food` at 200; reading
     // the type positionally would cap this at 200 and the assertion below would fail.
     const shifted: readonly NeedState[] = [
-      { needId: 'fun', patienceRemaining: 399, progressRemaining: 5 },
-      { needId: 'rest', patienceRemaining: 50, progressRemaining: 5 },
-      { needId: 'zzz', patienceRemaining: 10, progressRemaining: 5 },
+      { needId: 'fun', patienceRemaining: 399, progressRemaining: 5, metBy: null },
+      { needId: 'rest', patienceRemaining: 50, progressRemaining: 5, metBy: null },
+      { needId: 'zzz', patienceRemaining: 10, progressRemaining: 5, metBy: null },
     ];
-    const advanced = advanceNeeds(content, shifted, 'fun', null);
+    const advanced = advanceNeeds(content, shifted, 'fun', null, 'room');
     expect(advanced[0]?.patienceRemaining).toBe(400);
     // And a need this content does not define at all still decays without a type, rather
     // than throwing or growing without bound — the `findNeedType` undefined contract.
@@ -286,11 +291,11 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // this is where it would show, rather than in a state hash nobody can attribute.
     let aligned = formNeedVector(content);
     let misaligned: readonly NeedState[] = [...aligned, {
-      needId: 'zzz', patienceRemaining: 500, progressRemaining: 500,
+      needId: 'zzz', patienceRemaining: 500, progressRemaining: 500, metBy: null,
     }];
     for (let tick = 0; tick < 100; tick += 1) {
-      aligned = advanceNeeds(content, aligned, 'rest', 'food');
-      misaligned = advanceNeeds(content, misaligned, 'rest', 'food');
+      aligned = advanceNeeds(content, aligned, 'rest', 'food', 'room');
+      misaligned = advanceNeeds(content, misaligned, 'rest', 'food', 'room');
       // The extra entry is the only difference; the three shared needs must match exactly.
       expect(misaligned.slice(0, 3)).toEqual(aligned);
     }
@@ -319,16 +324,16 @@ describe('a bad need vector is still refused, and the message still names the gu
     ['not an array', 42],
     ['empty', []],
     ['a hole', [null]],
-    ['an empty needId', [{ needId: '', patienceRemaining: 1, progressRemaining: 1 }]],
+    ['an empty needId', [{ needId: '', patienceRemaining: 1, progressRemaining: 1, metBy: null }]],
     [
       'out of order',
       [
-        { needId: 'rest', patienceRemaining: 1, progressRemaining: 1 },
-        { needId: 'food', patienceRemaining: 1, progressRemaining: 1 },
+        { needId: 'rest', patienceRemaining: 1, progressRemaining: 1, metBy: null },
+        { needId: 'food', patienceRemaining: 1, progressRemaining: 1, metBy: null },
       ],
     ],
-    ['a negative patience', [{ needId: 'rest', patienceRemaining: -1, progressRemaining: 1 }]],
-    ['a fractional progress', [{ needId: 'rest', patienceRemaining: 1, progressRemaining: 0.5 }]],
+    ['a negative patience', [{ needId: 'rest', patienceRemaining: -1, progressRemaining: 1, metBy: null }]],
+    ['a fractional progress', [{ needId: 'rest', patienceRemaining: 1, progressRemaining: 0.5, metBy: null }]],
   ];
 
   it.each(badVectors)('refuses %s, naming the guest', (_label, vector) => {
@@ -352,7 +357,7 @@ describe('a bad need vector is still refused, and the message still names the gu
 
   it('and a good vector is accepted, so the guard is not simply always throwing', () => {
     expect(() =>
-      assertNeedVector([{ needId: 'rest', patienceRemaining: 3, progressRemaining: 4 }], 41),
+      assertNeedVector([{ needId: 'rest', patienceRemaining: 3, progressRemaining: 4, metBy: null }], 41),
     ).not.toThrow();
   });
 });
@@ -392,15 +397,16 @@ describe('the per-need tally', () => {
       needId,
       patienceRemaining: met ? 5 : 0,
       progressRemaining: met ? 0 : 5,
+      metBy: met ? 'room' : null,
     });
     let tally = createNeedOutcomes();
     tally = recordNeedsAtDeparture(tally, [state('zeta', true)]);
     tally = recordNeedsAtDeparture(tally, [state('alpha', false), state('zeta', false)]);
     tally = recordNeedsAtDeparture(tally, [state('mid', true)]);
     expect(tally).toEqual([
-      { needId: 'alpha', met: 0, unmet: 1 },
-      { needId: 'mid', met: 1, unmet: 0 },
-      { needId: 'zeta', met: 1, unmet: 1 },
+      { needId: 'alpha', met: 0, unmet: 1, metByItem: 0 },
+      { needId: 'mid', met: 1, unmet: 0, metByItem: 0 },
+      { needId: 'zeta', met: 1, unmet: 1, metByItem: 0 },
     ]);
   });
 
@@ -420,8 +426,8 @@ describe('a guest pursues the need that has burned through most of its own patie
     // `food` has 200 ticks of patience and `fun` has 400. Both have waited 100 ticks, so
     // their raw urgency is equal — but `food` is half gone and `fun` is a quarter gone, and
     // ranking by raw urgency would have called them equal and picked by id.
-    const food: NeedState = { needId: 'food', patienceRemaining: 100, progressRemaining: 8 };
-    const fun: NeedState = { needId: 'fun', patienceRemaining: 300, progressRemaining: 8 };
+    const food: NeedState = { needId: 'food', patienceRemaining: 100, progressRemaining: 8, metBy: null };
+    const fun: NeedState = { needId: 'fun', patienceRemaining: 300, progressRemaining: 8, metBy: null };
     expect(urgencyOf(content, food)).toBe(urgencyOf(content, fun));
     expect(priority(food, fun)).toBeLessThan(0);
     expect(priority(fun, food)).toBeGreaterThan(0);
@@ -430,8 +436,8 @@ describe('a guest pursues the need that has burned through most of its own patie
   it('breaks an exact tie on the LOWER need id, in both argument orders', () => {
     // A stable, explicit rule — never the order an array happened to be built in (I2).
     // Both orders, because one order cannot tell "lowest id" from "whichever came first".
-    const food: NeedState = { needId: 'food', patienceRemaining: 200, progressRemaining: 8 };
-    const fun: NeedState = { needId: 'fun', patienceRemaining: 400, progressRemaining: 8 };
+    const food: NeedState = { needId: 'food', patienceRemaining: 200, progressRemaining: 8, metBy: null };
+    const fun: NeedState = { needId: 'fun', patienceRemaining: 400, progressRemaining: 8, metBy: null };
     expect(urgencyOf(content, food)).toBe(0);
     expect(urgencyOf(content, fun)).toBe(0);
     expect(priority(food, fun)).toBeLessThan(0);
@@ -443,8 +449,8 @@ describe('a guest pursues the need that has burned through most of its own patie
     // with it to state the ordering the guest loop obeys — and does it from two different
     // input orders, because one order cannot tell an order from an accident.
     const needs: readonly NeedState[] = [
-      { needId: 'food', patienceRemaining: 100, progressRemaining: 8 }, // half spent
-      { needId: 'fun', patienceRemaining: 100, progressRemaining: 8 }, // three quarters spent
+      { needId: 'food', patienceRemaining: 100, progressRemaining: 8, metBy: null }, // half spent
+      { needId: 'fun', patienceRemaining: 100, progressRemaining: 8, metBy: null }, // three quarters spent
     ];
     const ranked = (list: readonly NeedState[]): readonly string[] =>
       [...list].sort((a, b) => priority(a, b)).map((entry) => entry.needId);
@@ -552,7 +558,7 @@ describe('every need this content defines has somewhere to be met', () => {
         roomTypes: [roomType('bedroom', ['rest'])],
         needTypes: [need('rest', 10, 20, 'lodging'), need('food', 8, 20, 'engagement')],
       }),
-    ).toThrow(/need "food" is provided by no room type/);
+    ).toThrow(/need "food" has no provider a player can reach/);
   });
 
   it('and the shipped-shape content this file runs on satisfies it', () => {

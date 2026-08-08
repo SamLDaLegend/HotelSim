@@ -1,6 +1,17 @@
 [
   {
     "id": "single_bed",
-    "name": "Single Bed"
+    "name": "Single Bed",
+    "provides": []
+  },
+  {
+    "id": "arm_chair",
+    "name": "Arm Chair",
+    "provides": ["guest_comfort"]
+  },
+  {
+    "id": "vending_machine",
+    "name": "Vending Machine",
+    "provides": ["guest_nourishment"]
   }
 ]

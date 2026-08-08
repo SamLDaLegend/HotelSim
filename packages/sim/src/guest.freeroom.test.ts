@@ -82,6 +82,7 @@ function guest(id: number, over: GuestOver = {}): Guest {
         needId: 'rest',
         patienceRemaining: over.patienceRemaining ?? 50,
         progressRemaining: over.restRemaining ?? 2,
+        metBy: (over.restRemaining ?? 2) === 0 ? 'room' : null,
       },
     ],
   };

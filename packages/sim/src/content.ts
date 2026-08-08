@@ -173,19 +173,37 @@ export type EconomyData = {
 };
 
 /**
- * One item a room can require (G-009).
+ * One item a room can require, and one thing that can serve a need (G-009, G-013).
  *
  * Structurally identical to `ItemType` in `@hotelsim/content` and deliberately not
  * imported from it (ADR-0001), exactly as `RoomTypeData` and `NeedTypeData` are.
  *
- * TWO FIELDS. An item is the smallest thing a validity rule can inspect: a room is
- * furnished when an entity of this kind stands in it. What an item costs, what need it
- * provides, how it decays and how a player places one are all M6, and all of them are
- * fields added here later rather than a shape changed.
+ * What an item costs, how it decays and how a player places one are still M6, and each is
+ * a field added here later rather than a shape changed.
  */
 export type ItemTypeData = {
   readonly id: ContentId;
   readonly name: string;
+  /**
+   * Which needs a guest can satisfy AT one of these (G-013).
+   *
+   * THE GUEST ENGAGES THE ITEM, NOT THE ROOM IT STANDS IN. An arm chair in a lounge is the
+   * provider; the lounge is the place it stands, and it may provide nothing itself. What
+   * ties the two together is `isProviding` in `validity.ts`: an item provides only while it
+   * stands inside a VALID room, so a chair in a room that lost its floor serves nobody.
+   *
+   * OPTIONAL, and absence is not emptiness — the `RoomTypeData.provides` contract exactly.
+   * A content set written before items could provide anything omits the key, fingerprints
+   * as it always did, and provides nothing; that is what keeps the permanent v1 save
+   * fixture a world that still ticks (ADR-0006). `[]` is the different statement: this is
+   * furniture, deliberately — which is what `single_bed` says.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK, for the reason every other such field is. See
+   * `itemTypeSchema` in `packages/content`, and `assertNeedsAreSatisfiable` below for the
+   * two cross-references it cannot see: an item that provides the LODGING need, and a need
+   * whose only provider is an item NO ROOM TYPE REQUIRES.
+   */
+  readonly provides?: readonly ContentId[] | undefined;
 };
 
 /**
@@ -346,18 +364,22 @@ function normaliseTable<T extends { readonly id: ContentId }>(
 }
 
 /**
- * Copy, validate, sort and freeze one list of content ids on a room type.
+ * Copy, validate, sort and freeze one list of content ids on a room type or an item type.
  *
  * The list is copied, sorted and frozen for the same three reasons the record is: the
  * simulation reads its own immutable data, the fingerprint must not depend on the order
  * a designer happened to type the ids in, and a duplicate entry would be a content
  * mistake that reads as an intent.
  *
- * Shared by `provides` and `requires` so the two cannot drift into different rules about
- * what a list of ids is — the `normaliseTable` discipline one level down.
+ * Shared by `roomType.provides`, `roomType.requires` and `itemType.provides` so the three
+ * cannot drift into different rules about what a list of ids is — the `normaliseTable`
+ * discipline one level down. `owner` names the TABLE ("room type", "item type") so the
+ * message says which document to open; it was hard-coded to rooms until items gained a
+ * list of their own (G-013).
  */
 function cloneIdList(
-  roomTypeId: ContentId,
+  owner: string,
+  ownerId: ContentId,
   verb: string,
   noun: string,
   raw: readonly ContentId[],
@@ -365,13 +387,13 @@ function cloneIdList(
   const list = [...raw];
   for (const id of list) {
     if (typeof id !== 'string' || id.length === 0) {
-      throw new Error(`bindContent: room type "${roomTypeId}" ${verb} an empty ${noun} id`);
+      throw new Error(`bindContent: ${owner} "${ownerId}" ${verb} an empty ${noun} id`);
     }
   }
   list.sort(compareIds);
   for (let i = 1; i < list.length; i += 1) {
     if (list[i] === list[i - 1]) {
-      throw new Error(`bindContent: room type "${roomTypeId}" lists ${noun} "${String(list[i])}" twice`);
+      throw new Error(`bindContent: ${owner} "${ownerId}" lists ${noun} "${String(list[i])}" twice`);
     }
   }
   return Object.freeze(list);
@@ -437,10 +459,23 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
   const base: RoomTypeData =
     rawProvides === undefined
       ? withRefund
-      : { ...withRefund, provides: cloneIdList(roomType.id, 'provides', 'need', rawProvides) };
+      : { ...withRefund, provides: cloneIdList('room type', roomType.id, 'provides', 'need', rawProvides) };
   return rawRequires === undefined
     ? base
-    : { ...base, requires: cloneIdList(roomType.id, 'requires', 'item', rawRequires) };
+    : { ...base, requires: cloneIdList('room type', roomType.id, 'requires', 'item', rawRequires) };
+}
+
+/**
+ * Clone an item type, normalising its `provides` list (G-013).
+ *
+ * The `cloneRoomType` discipline exactly, including the stripped-when-absent key: an
+ * absent key and a key holding `undefined` are different documents to the fingerprint, and
+ * only the absent form is the "predates providing items" statement.
+ */
+function cloneItemType(itemType: ItemTypeData): ItemTypeData {
+  const { provides: rawProvides, ...rest } = itemType;
+  if (rawProvides === undefined) return { ...rest };
+  return { ...rest, provides: cloneIdList('item type', itemType.id, 'provides', 'need', rawProvides) };
 }
 
 /**
@@ -509,8 +544,8 @@ function cloneEconomy(economy: EconomyData): EconomyData {
 }
 
 /**
- * Throws if any need in this content could never be satisfied, or if any provider
- * claims a need that does not exist.
+ * Throws if any need in this content could never be satisfied BY A PROVIDER A PLAYER CAN
+ * REACH, or if any provider claims a need that does not exist.
  *
  * This is the check HOTELSIM.md §6.1 puts FIRST in `ai-critic`'s catalogue: "needs that
  * can never be satisfied, producing guaranteed unhappiness ... If none exists, that is a
@@ -519,10 +554,45 @@ function cloneEconomy(economy: EconomyData): EconomyData {
  * apart from a hotel that is merely full. So it is rejected at the boundary, before a
  * world exists, on the one path every host goes through.
  *
- * Both directions, because each catches a different mistake: a need nobody provides is
- * a designer adding a need and forgetting the room, and a `provides` naming no need is
- * a typo in a cross-reference — which `pnpm check:content` cannot see, since it reads
- * `id` fields and not references between them.
+ * ---------------------------------------------------------------------------
+ * DECLARED IS NOT REACHABLE, AND THAT DISTINCTION IS THE WHOLE OF G-013's CRITERION 3.
+ *
+ * Until items could provide anything, "some room type's `provides` names this need" was
+ * both, because every room type is buildable: `buildRoom` takes any room type in the
+ * table. Extending that sentence naively to items would accept content in which a need's
+ * only provider is an item **that no room type requires** — and nothing a player can do
+ * would put such an item in the world, because `buildRoom` furnishes only what the room
+ * type it places `requires`, and `placeItem` is M6. Every guest would form the need, none
+ * would ever meet it, and `pnpm verify` would be green. A check that succeeds while
+ * inspecting nothing a player can reach is ADR-0007's shape exactly.
+ *
+ * So a provider is REACHABLE iff:
+ *
+ *     a ROOM TYPE   — always. Any room type in the table can be built.
+ *     an ITEM TYPE  — iff at least one room type `requires` it, because that is the only
+ *                     door: `buildRoom` places the room and its required items together.
+ *
+ * WHEN `placeItem` LANDS AT M6 THIS RULE RELAXES rather than being deleted — every item
+ * type becomes reachable, and this function becomes the pre-M6 statement it always was.
+ * Recorded in `PARKING.md` so the relaxation is a decision rather than a discovery.
+ *
+ * THE ASYMMETRY WITH `assertRequiredItemsExist` IS UNCHANGED AND STILL DELIBERATE (G-009):
+ * an item type no room requires is still NOT rejected on its own. It is furniture waiting
+ * for a room, which is what M6's table will be full of on its first day. Only a NEED left
+ * with no reachable provider is a violation. The subject of this check is needs.
+ * ---------------------------------------------------------------------------
+ *
+ * AND AN ITEM MAY NOT PROVIDE THE LODGING NEED. A guest lodges in a ROOM — it holds that
+ * room for the whole stay, `findFreeRoom` searches rooms for it, and `payForStay` charges
+ * that room type's rate — so nothing can sleep in a vending machine. Such an item is a
+ * declared provider that could never deliver, and without this clause the failure would be
+ * silent: the item would simply never be chosen, and the need would look merely
+ * oversubscribed. This is D1 of G-013's plan made mechanical instead of documented.
+ *
+ * Every direction is here because each catches a different mistake: a need nobody provides
+ * is a designer adding a need and forgetting the amenity; a `provides` naming no need is a
+ * typo in a cross-reference — which `pnpm check:content` cannot see, since it reads `id`
+ * fields and not references between them.
  *
  * Zero needs is not a violation: content that defines no needs is content in which no
  * guest forms one, which is the v1-era case and is coherent.
@@ -530,12 +600,30 @@ function cloneEconomy(economy: EconomyData): EconomyData {
 function assertNeedsAreSatisfiable(
   roomTypes: readonly RoomTypeData[],
   needTypes: readonly NeedTypeData[],
+  itemTypes: readonly ItemTypeData[],
+  lodgingNeedId: ContentId | undefined,
 ): void {
   for (const roomType of roomTypes) {
     for (const needId of roomType.provides ?? []) {
       if (indexOfId(needTypes, needId) === -1) {
         throw new Error(
           `bindContent: room type "${roomType.id}" provides need "${needId}", which this content does not define`,
+        );
+      }
+    }
+  }
+  for (const itemType of itemTypes) {
+    for (const needId of itemType.provides ?? []) {
+      if (indexOfId(needTypes, needId) === -1) {
+        throw new Error(
+          `bindContent: item type "${itemType.id}" provides need "${needId}", which this content does not define`,
+        );
+      }
+      if (needId === lodgingNeedId) {
+        throw new Error(
+          `bindContent: item type "${itemType.id}" provides the LODGING need "${needId}". A guest books a ROOM for ` +
+            'the lodging need and holds it for the whole stay, so nothing can lodge in an item; such an item is a ' +
+            'provider that could never serve anybody. Make a room type provide it, or mark the need "engagement".',
         );
       }
     }
@@ -549,12 +637,31 @@ function assertNeedsAreSatisfiable(
       }
     }
     if (!provided) {
+      // Only an item some room type REQUIRES counts — see the long note above.
+      for (const itemType of itemTypes) {
+        if (!(itemType.provides ?? []).includes(needType.id)) continue;
+        if (!isItemRequiredBySomeRoomType(roomTypes, itemType.id)) continue;
+        provided = true;
+        break;
+      }
+    }
+    if (!provided) {
       throw new Error(
-        `bindContent: need "${needType.id}" is provided by no room type. A guest forming it could never have it met, ` +
-          'which is guaranteed unhappiness rather than difficulty.',
+        `bindContent: need "${needType.id}" has no provider a player can reach. No room type provides it, and no ` +
+          'item type that provides it is REQUIRED by any room type — so no player command could ever put such an ' +
+          'item in the world (`buildRoom` furnishes only what a room type requires, and there is no placeItem until ' +
+          'M6). A guest forming it could never have it met, which is guaranteed unhappiness rather than difficulty.',
       );
     }
   }
+}
+
+/** Whether any room type in this content lists `itemId` in its `requires`. */
+function isItemRequiredBySomeRoomType(roomTypes: readonly RoomTypeData[], itemId: ContentId): boolean {
+  for (const roomType of roomTypes) {
+    if ((roomType.requires ?? []).includes(itemId)) return true;
+  }
+  return false;
 }
 
 /**
@@ -796,14 +903,18 @@ export function bindContent(content: SimContent): BoundContent {
   const itemTypes =
     content.itemTypes === undefined
       ? undefined
-      : normaliseTable(content.itemTypes, 'item type', (itemType) => ({ ...itemType }));
+      : normaliseTable(content.itemTypes, 'item type', cloneItemType);
   const economy =
     content.economy === undefined
       ? undefined
       : normaliseTable(content.economy, 'economy', cloneEconomy);
 
-  assertNeedsAreSatisfiable(roomTypes, needTypes ?? []);
+  // ROLES ARE SETTLED FIRST (G-013), and the order is load-bearing rather than tidy:
+  // `assertNeedsAreSatisfiable` refuses an ITEM that provides the lodging need, so it has
+  // to know which need that is — and `lodgingNeedIn`'s answer only means anything once
+  // this has established that the table does not name two lodging needs or none.
   assertLodgingNeedIsUnambiguous(needTypes ?? []);
+  assertNeedsAreSatisfiable(roomTypes, needTypes ?? [], itemTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   assertRequiredItemsExist(roomTypes, itemTypes ?? []);
   // THE TWO CROSS-FIELD MONEY CHECKS (G-011), and they bound the refund from opposite
   // sides of the same fact. The upper bound reads only room types, so it applies to
@@ -910,7 +1021,18 @@ const EMPTY_NEED_TYPES: readonly NeedTypeData[] = Object.freeze([]);
  */
 export function lodgingNeedOf(bound: BoundContent): NeedTypeData | undefined {
   const needTypes = bound.content.needTypes;
-  if (needTypes === undefined) return undefined;
+  return needTypes === undefined ? undefined : lodgingNeedIn(needTypes);
+}
+
+/**
+ * The same question asked of a raw table, so `bindContent` can ask it BEFORE a
+ * `BoundContent` exists (G-013).
+ *
+ * One definition rather than two: `assertNeedsAreSatisfiable` needs the lodging need to
+ * refuse an item that provides it, and a second copy of this rule inside the validator is
+ * exactly the drift ADR-0005 is about.
+ */
+function lodgingNeedIn(needTypes: readonly NeedTypeData[]): NeedTypeData | undefined {
   let anyDeclared = false;
   for (const needType of needTypes) {
     if (needType.role === undefined) continue;
@@ -1008,6 +1130,57 @@ export function roomTypeProvides(bound: BoundContent, roomTypeId: ContentId, nee
   const roomType = findRoomType(bound, roomTypeId);
   if (roomType === undefined) return false;
   return (roomType.provides ?? []).includes(needId);
+}
+
+/** Whether using an item of `itemTypeId` satisfies `needId` (G-013). The item half of the
+ *  provider link, and the exact mirror of `roomTypeProvides`. */
+export function itemTypeProvides(bound: BoundContent, itemTypeId: ContentId, needId: ContentId): boolean {
+  const itemType = findItemType(bound, itemTypeId);
+  if (itemType === undefined) return false;
+  return (itemType.provides ?? []).includes(needId);
+}
+
+/**
+ * What an entity of this KIND provides, whatever kind of thing it is (G-013).
+ *
+ * THE ONE PLACE THE TWO TABLES ARE UNIFIED, and it exists for `release` in `guests.ts`:
+ * when a provider goes back into the pool, the needs it can serve have to be un-marked in
+ * `findFreeRoom`'s exhausted set, and that call site holds an ENTITY rather than a table.
+ * Written once so a room and an item cannot acquire different rules about what "provides"
+ * means — the drift `roomAt`/`roomAtCell` were written once to avoid.
+ *
+ * `[]` for a kind this content does not define, the `requiredItemsOf` contract: a caller
+ * that cares about the difference has already asked `findRoomType` or `findItemType`.
+ */
+export function providesOf(bound: BoundContent, kind: ContentId): readonly ContentId[] {
+  const roomType = findRoomType(bound, kind);
+  if (roomType !== undefined) return roomType.provides ?? EMPTY_IDS;
+  return findItemType(bound, kind)?.provides ?? EMPTY_IDS;
+}
+
+/**
+ * Whether a room of this type SERVES `needId` — itself, or through an item it requires
+ * (G-013).
+ *
+ * NOT A SIMULATION PREDICATE. The simulation never asks it: a guest engages the ARM CHAIR,
+ * not the lounge it stands in, so provider selection reads `providesOf` on the entity.
+ * This answers a different question, and it is one only a HOST asks: *if I place one of
+ * these, does anything in it serve that need?* `tools/headless` seeds a hotel from the
+ * content table and used to pick amenities by "does the room type provide something" —
+ * which silently drops `hotel_lounge` the moment the lounge provides nothing itself and
+ * its arm chair provides everything. Every guest would then form `guest_comfort` and no
+ * CLI run would ever satisfy one, with `bindContent` perfectly happy, because reachability
+ * says a player COULD build it and says nothing about whether this host DID.
+ *
+ * It is the same fold `assertNeedsAreSatisfiable` performs, exported so the host and the
+ * check cannot disagree about what a room type offers.
+ */
+export function roomTypeServes(bound: BoundContent, roomTypeId: ContentId, needId: ContentId): boolean {
+  if (roomTypeProvides(bound, roomTypeId, needId)) return true;
+  for (const itemId of requiredItemsOf(bound, roomTypeId)) {
+    if (itemTypeProvides(bound, itemId, needId)) return true;
+  }
+  return false;
 }
 
 /**

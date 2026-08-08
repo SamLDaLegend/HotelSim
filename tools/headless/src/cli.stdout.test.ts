@@ -48,11 +48,12 @@
 // future widening of it could trip over fixture data.
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { itemTypesSchema, roomTypesSchema } from '@hotelsim/content';
 import { ECONOMY_PATH, ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -93,8 +94,14 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     days: 2,
     roomTypes: 4,
     needTypes: 4,
-    entities: 9,
-    stateHash: '0dc63018abda9764',
+    // 11 rather than 9 since G-013, and the two are ITEMS THAT PROVIDE: an `arm_chair` in
+    // the lounge and a `vending_machine` in the games room. Both arrive because their room
+    // types `require` them and `seedRoom` furnishes what it seeds — the same one door
+    // `buildRoom` uses, which is exactly what makes those items REACHABLE and therefore
+    // what makes `guest_comfort` legal content at all (`assertNeedsAreSatisfiable`).
+    // Derivation: 3 bedrooms + 3 beds + 3 amenity rooms + 2 provider items.
+    entities: 11,
+    stateHash: '9e0c6704b1411ec8',
   },
   guests: {
     arrived: 24,
@@ -106,21 +113,42 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     orphanedReservations: 0,
     inInvalidRooms: 0,
   },
-  // THE NEED VECTOR, PER NEED TYPE (G-012). Every row sums to the 20 guests that have
-  // departed — 15 satisfied plus 5 unsatisfied — which is the conservation law the report
-  // checks and the reason this block is worth reading rather than glancing at.
+  // THE NEED VECTOR, PER NEED TYPE (G-012), NOW CARRYING WHAT DELIVERED IT (G-013). Every
+  // row sums to the 20 guests that have departed — 15 satisfied plus 5 unsatisfied — which
+  // is the conservation law the report checks, and is the reason this block is worth
+  // reading rather than glancing at.
   //
-  // The three engagement needs tell three different stories from ONE hotel, which is what
-  // makes them a vector rather than a longer type: comfort is met for everybody (a lounge
-  // seats one guest for an hour, and twelve guests a day cannot fill it), while
-  // entertainment and nourishment are oversubscribed and split exactly down the middle.
-  // `night_rest` is 15 met and 5 unmet, matching the stay outcomes above it exactly,
-  // because the lodging need IS the stay.
+  // `metByItem` IS THE ONLY ATTRIBUTION FIELD, and by-room is a subtraction the renderer
+  // performs. A `metByRoom` field shipped for one critique round and was removed: carried
+  // beside its own source it invited a report violation asserting `metByRoom + metByItem
+  // === met`, which is an algebraic identity and could not fail.
+  //
+  // READ THE `by room` / `by item` COLUMNS: THEY ARE THE WHOLE OF G-013 IN FOUR LINES.
+  //
+  //   guest_comfort        0 by room (11 - 11), 11 by item — an ITEM-ONLY need. The lounge provides
+  //                        nothing; the arm chair in it provides everything. If items had
+  //                        stopped providing, this row would read 0 met.
+  //   guest_entertainment  10 by room, 0 by item — a ROOM-ONLY need, unchanged in kind
+  //                        since G-012.
+  //   guest_nourishment    6 by room, 9 by item — THE INTERESTING ONE. The café is a room
+  //                        and the vending machine in the games room is an item, and guests
+  //                        use both. A registry that had quietly become "rooms, plus a
+  //                        special case" could not produce this row.
+  //   night_rest           15 by room, 0 by item — and it can never be anything else: a
+  //                        guest lodges in a ROOM, and `bindContent` refuses content in
+  //                        which an item provides the lodging need.
+  //
+  // THE MET/UNMET SPLIT MOVED SINCE G-012, FOR TWO LINKED REASONS. Nourishment gained a
+  // second provider (the vending machine), so it is met more often — and that pushed it to
+  // met-with-nothing-unmet on G-012's own criterion invocation, leaving only ONE need type
+  // straddling where that criterion requires two. `guest_comfort.satisfyTicks` rose 60 ->
+  // 150 to restore the second. It is compensation for this goal's registry work, not an
+  // independent balance decision, and it has no sweep behind it; see `needTypeSchema`.
   needs: [
-    { needId: 'guest_comfort', lodging: false, met: 20, unmet: 0 },
-    { needId: 'guest_entertainment', lodging: false, met: 10, unmet: 10 },
-    { needId: 'guest_nourishment', lodging: false, met: 10, unmet: 10 },
-    { needId: 'night_rest', lodging: true, met: 15, unmet: 5 },
+    { needId: 'guest_comfort', lodging: false, met: 11, unmet: 9, metByItem: 11 },
+    { needId: 'guest_entertainment', lodging: false, met: 10, unmet: 10, metByItem: 0 },
+    { needId: 'guest_nourishment', lodging: false, met: 15, unmet: 5, metByItem: 9 },
+    { needId: 'night_rest', lodging: true, met: 15, unmet: 5, metByItem: 0 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
   // beside it, each standing on the ground. Zero invalid rooms here is the assertion that
@@ -186,7 +214,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'days        2',
     'room types  4',
     'need types  4',
-    'entities    9',
+    'entities    11',
     'rooms ok    6',
     'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no item',
     'arrived     24',
@@ -197,10 +225,10 @@ const GOLDEN_2_DAYS_SEED_42 =
     'stuck       0',
     'orphan res  0',
     'in bad room 0',
-    'need       guest_comfort 20 met, 0 unmet',
-    'need       guest_entertainment 10 met, 10 unmet',
-    'need       guest_nourishment 10 met, 10 unmet',
-    'need L     night_rest 15 met, 5 unmet',
+    'need       guest_comfort 11 met, 9 unmet (0 by room, 11 by item)',
+    'need       guest_entertainment 10 met, 10 unmet (10 by room, 0 by item)',
+    'need       guest_nourishment 15 met, 5 unmet (6 by room, 9 by item)',
+    'need L     night_rest 15 met, 5 unmet (15 by room, 0 by item)',
     'ledger      18 transactions',
     'revenue     127500p',
     'upkeep      -24000p',
@@ -216,7 +244,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     603500p',
-    'state hash  0dc63018abda9764',
+    'state hash  9e0c6704b1411ec8',
   ].join('\n') + '\n';
 
 /**
@@ -373,7 +401,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  0dc63018abda9764']);
+    expect(differing).toEqual(['seed        42', 'state hash  9e0c6704b1411ec8']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -408,6 +436,109 @@ describe('the --content contract', () => {
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
+  });
+
+  // ==========================================================================
+  // G-013 CRITERION 3, AS A REAL CONTENT FIXTURE RATHER THAN AN INSPECTION.
+  //
+  //   "content declaring a need whose only provider is an item that NO room type requires
+  //   is REFUSED at bindContent, naming the need"
+  //
+  // Both halves are real JSON on disk, through the real loader, the real zod schema and the
+  // real CLI — the shipped files with ONE FACT changed. `provider.content.test.ts` drives
+  // the same rule at the unit level; this is the one that proves a designer editing files
+  // gets the refusal, with exit 1 and empty stdout, rather than a hotel that quietly
+  // disappoints every guest forever.
+  //
+  // THE PAIR IS THE POINT. The refusal alone would also pass against a validator that
+  // rejected everything; the accepting half differs from it by a single `requires` entry.
+  // ==========================================================================
+  /** The shipped four files, copied into a scratch directory the caller may then edit. */
+  const shippedCopy = (): string => {
+    const dir = makeTempDir();
+    copyFileSync(ROOM_TYPES_PATH, join(dir, 'room-types.json'));
+    copyFileSync(NEED_TYPES_PATH, join(dir, 'need-types.json'));
+    copyFileSync(ITEM_TYPES_PATH, join(dir, 'item-types.json'));
+    copyFileSync(ECONOMY_PATH, join(dir, 'economy.json'));
+    return dir;
+  };
+
+  /**
+   * The shipped content with the arm chair's host stripped of its `requires`, so the chair
+   * — the only thing that provides `guest_comfort` — becomes unreachable.
+   *
+   * Nothing is invented: this is the shipped table minus one array entry. The lounge's
+   * `requires` is exactly what makes `guest_comfort` legal content today, which is why
+   * removing it is the smallest possible statement of the defect.
+   */
+  const unreachableProviderContent = (): { dir: string; needId: string; itemId: string } => {
+    const dir = shippedCopy();
+    const items = JSON.parse(readFileSync(join(dir, 'item-types.json'), 'utf8')) as {
+      id: string;
+      provides: string[];
+    }[];
+    const rooms = JSON.parse(readFileSync(join(dir, 'room-types.json'), 'utf8')) as {
+      id: string;
+      provides?: string[];
+      requires: string[];
+    }[];
+    // The item whose need NOTHING ELSE provides — found rather than named, so this file
+    // carries no snake_case content id (ADR-0003) and a content rename cannot silently
+    // retire the case.
+    const soleProvider = items.find(
+      (item) =>
+        item.provides.length > 0 &&
+        item.provides.every((needId) => !rooms.some((room) => (room.provides ?? []).includes(needId))),
+    );
+    if (soleProvider === undefined) throw new Error('the shipped content no longer has an item-only need');
+    const host = rooms.find((room) => room.requires.includes(soleProvider.id));
+    if (host === undefined) throw new Error('the shipped content no longer requires that item anywhere');
+    writeFileSync(
+      join(dir, 'room-types.json'),
+      JSON.stringify(
+        rooms.map((room) =>
+          room.id === host.id ? { ...room, requires: room.requires.filter((id) => id !== soleProvider.id) } : room,
+        ),
+        null,
+        2,
+      ),
+      'utf8',
+    );
+    return { dir, needId: soleProvider.provides[0]!, itemId: soleProvider.id };
+  };
+
+  it('REFUSES content whose only provider for a need is an item no room requires, naming the need', () => {
+    const { dir, needId } = unreachableProviderContent();
+    const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
+    expect(result.status).toBe(1);
+    // The no-run half of the consumer contract: nothing was simulated, so nothing is on
+    // stdout. A half-report here would be worse than the refusal it is reporting.
+    expect(result.stdout.length).toBe(0);
+    const stderr = result.stderr.toString('utf8');
+    expect(stderr).toContain(needId);
+    expect(stderr).toContain('no provider a player can reach');
+  });
+
+  it('ACCEPTS the shipped content it was derived from — the pair, one array entry apart', () => {
+    // Without this, the refusal above would be satisfied by a loader that refused
+    // everything. The only difference between the two directories is one `requires` entry.
+    const dir = shippedCopy();
+    const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
+    expect(result.status).toBe(0);
+    expect(result.stdout.equals(default2Day().stdout)).toBe(true);
+  });
+
+  it('and the refused content is otherwise VALID: it passes the schema that guards the files', () => {
+    // The point of the fixture. This content is well-formed JSON, every id is snake_case,
+    // every price is an integer, `check:content` is happy with it and `roomTypeSchema`
+    // parses it — everything a file-level gate can see is fine. The only thing wrong with
+    // it is a cross-reference between two files, which is precisely what `bindContent` was
+    // strengthened to catch and what nothing else in the toolchain can.
+    const { dir } = unreachableProviderContent();
+    const rooms = JSON.parse(readFileSync(join(dir, 'room-types.json'), 'utf8')) as unknown;
+    const items = JSON.parse(readFileSync(join(dir, 'item-types.json'), 'utf8')) as unknown;
+    expect(() => roomTypesSchema.parse(rooms)).not.toThrow();
+    expect(() => itemTypesSchema.parse(items)).not.toThrow();
   });
 
   it('garbage content exits 1 with EMPTY stdout and one legible line on stderr (text mode)', () => {
@@ -550,9 +681,12 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     expect(s.money.loanDrawPennies).toBe(0);
     expect(s.build.built * -250_000).toBe(s.money.constructionPennies);
     // Thirteen rooms and thirteen beds since G-009 — a built room arrives furnished, and a
-    // bed is an entity — plus three amenities, which require no furniture (G-012).
-    // `rooms.valid` is the number a reader wants, and it is neither 13 nor 29.
-    expect(s.world.entities).toBe((3 + 10) * 2 + 3);
+    // bed is an entity — plus three amenity rooms, TWO OF WHICH NOW CARRY A PROVIDER ITEM
+    // (G-013): the lounge's arm chair and the games room's vending machine. The café
+    // requires nothing, so the amenities contribute 3 rooms + 2 items rather than 3 + 0.
+    // `rooms.valid` is the number a reader wants, and it is neither 13 nor 31.
+    expect(s.world.entities).toBe((3 + 10) * 2 + 3 + 2);
+    expect(s.world.entities).toBe(31);
     // AND EIGHT OF THE TEN ROOMS THE PLAYER BUILT DO NOT WORK. The player's walk packs
     // rooms onto the floor above, over the corridors of the hotel below, so most of them
     // have nothing underneath — and with ten built rather than nine, two are now adjacent

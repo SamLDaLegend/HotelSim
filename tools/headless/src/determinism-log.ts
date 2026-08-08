@@ -15,12 +15,13 @@ import {
   constructionCostOf,
   demolitionRefundOf,
   firstEconomy,
+  findItemType,
   firstRoomTypeProviding,
   lodgingNeedOf,
   minConstructionCostOf,
   needTypesInOrder,
   requiredItemsOf,
-  roomTypeProvides,
+  roomTypeServes,
 } from '@hotelsim/sim';
 import type { BoundContent, ScheduledCommand } from '@hotelsim/sim';
 
@@ -300,12 +301,17 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   let amenityEntities = 0;
   for (const roomType of content.content.roomTypes) {
     if (roomType.id === entityKind) continue;
-    let providesEngagement = false;
+    // `roomTypeServes`, NOT `roomTypeProvides` (G-013): a room type can serve a need
+    // through an item it requires without providing anything itself, and asking the
+    // narrower question silently drops such a room type out of this log — which is exactly
+    // what it did to `hotel_lounge` the first time this ran, taking `guest_comfort`'s whole
+    // coverage with it. Same trap, same fix, as `amenityRoomTypesOf` in `report.ts`.
+    let servesEngagement = false;
     for (const needType of needTypesInOrder(content)) {
       if (needType.id === lodgingNeed?.id) continue;
-      if (roomTypeProvides(content, roomType.id, needType.id)) providesEngagement = true;
+      if (roomTypeServes(content, roomType.id, needType.id)) servesEngagement = true;
     }
-    if (!providesEngagement) continue;
+    if (!servesEngagement) continue;
     const at = { floor: 0, column: amenityColumn };
     amenityColumn += 2;
     schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind: roomType.id, at } });
@@ -314,6 +320,143 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
       schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind: itemId, at } });
       amenityEntities += 1;
     }
+  }
+  // ============================================================================
+  // AN ITEM THAT OUTLIVES THE ROOM IT SERVES IN (G-013) — MEASURED TO BE MISSING, THEN ADDED.
+  //
+  // An engagement with an ITEM can end three ways: its room is demolished (the item goes
+  // with it), the ITEM is despawned, or THE ROOM STOPS BEING VALID WHILE THE ITEM STANDS
+  // THERE. The first two are the old shapes wearing new clothes; the third is the one this
+  // goal introduced, because an item's provision is borrowed from its host.
+  //
+  // Before this pass existed, a replay of this log classified every engagement that ended
+  // and found the first two causes present and THE THIRD ABSENT — not rare, absent. So the
+  // 100,000-tick proof covered every release cause except the one the goal introduced. That
+  // is the G-009 sky-tower situation exactly — a rule the gate could not see — and it is
+  // fixed the same way: give the log a world in which the state occurs.
+  //
+  // THE COUNTS THAT ESTABLISHED THAT ARE NOT REPEATED HERE, AND THAT IS A RULE RATHER THAN
+  // AN OMISSION (ADR-0007, G-013): a comment offered as evidence may not carry a figure no
+  // test pins. Prose may describe; it may not measure. This paragraph carried figures three
+  // times and was wrong three times, in three different ways — a world the code does not
+  // build, a denominator spanning a window in which the event was impossible, and a
+  // retraction whose stated cause did not reproduce. The qualitative claims survived every
+  // one of those corrections. What pins the coverage now is `provider.determinism.test.ts`,
+  // which counts the causes and asserts them.
+  //
+  // ONE THING WORTH RECORDING, BECAUSE IT POINTS THE OTHER WAY. The last correction — the
+  // one that found the wrong denominator — made the gap between the two waves WIDER, not
+  // narrower: the thin one is thinner than the bad figure said and the robust one is closer
+  // to always-in-use. A retraction that strengthens the claim it corrects is unusual, and it
+  // is mild evidence that the underlying reading was sound and only the framing was broken.
+  // Which is the argument for deleting the figures rather than the conclusion.
+  //
+  // HOW IT IS REACHED, WITHOUT DESPAWNING ANYTHING. A second copy of an amenity room stands
+  // at (0, 30), carrying the item its type requires; later, rooms are placed either side of
+  // it, so it loses its DOOR and becomes invalid while every entity in it is untouched. The
+  // item is still live, still placed, still in the same cell — and serves nobody. No id
+  // arithmetic is involved, which is why this pass cannot drift when another one is
+  // inserted before it.
+  //
+  // WHICH ROOM AND WHICH ITEM — READ THIS, BECAUSE AN EARLIER VERSION OF THIS PARAGRAPH GOT
+  // IT WRONG AND WAS BELIEVED. `secondHost` below is a `find` over `roomTypes` in ASCENDING
+  // ID ORDER, so on the shipped table it resolves to `games_room` carrying a
+  // `vending_machine` — NOT to the lounge and its arm chair, which is what this comment
+  // claimed for a critique round while citing figures for a need the pass does not touch.
+  // The item that actually gets stranded serves `guest_nourishment`. Nothing about the code
+  // was wrong; the evidence written beside it was, and this paragraph is the evidence
+  // round 2's fix rests on.
+  //
+  // THE CONTENT PROPERTY THIS PASS DEPENDS ON, WHICH IS THE SENTENCE A FUTURE GOAL NEEDS:
+  //
+  //     the need served by the sealed ITEM must stay oversubscribed in THIS log's hotel,
+  //     so that a second-choice provider is actually in use when the door closes.
+  //
+  // Today that need is `guest_nourishment`, and `PARKING.md` records that G-014 and G-015
+  // both touch this table. It is NOT `guest_comfort`, and the distinction matters: comfort's
+  // `satisfyTicks` is the one dial parked as unswept and owed to M4, so the number most
+  // likely to move is the one the old comment falsely marked as load-bearing.
+  //
+  // AND THE SELECTION IS ORDER-DEPENDENT, which is the other thing to know. Add a room type
+  // whose id sorts below `games_room` and which requires a providing item, and this pass
+  // silently moves to it. `provider.determinism.test.ts` counts the cause and goes red if it
+  // stops firing — that is the guard, and it is a loud failure rather than a quiet one
+  // because none of this draws randomness.
+  //
+  // THE CELLS ARE CHOSEN, NOT INCIDENTAL, and every pass they have to miss is in this file:
+  // the spawn diagonal walks `spawnIndex % 21` against `spawnIndex % 80` and so touches
+  // floor 0 only at columns 0, 4, 21, 42 and 63; the first-set amenities hold 10, 12 and 14;
+  // the terraces are below ground; the builds are floors 5..19 and 900; the tower is column
+  // 79 and the churn is floor 20. Columns 29-31 and 34-36 are touched by none of them.
+  //
+  // AND THAT CLAIM IS PINNED BY CONSTRUCTION RATHER THAN BY A COUNT: `spawnEntity` THROWS on
+  // an occupied cell rather than refusing, so a collision produces no hash at all and the
+  // I2 gate goes red. That is the strongest shape a witness can have, and it is why no
+  // measurement belongs in this paragraph.
+  const secondHost = content.content.roomTypes.find(
+    (roomType) =>
+      roomType.id !== entityKind &&
+      requiredItemsOf(content, roomType.id).some((itemId) => (findItemType(content, itemId)?.provides ?? []).length > 0),
+  );
+  //
+  // IT COMES IN TWO WAVES, AND THE SECOND IS NOT PADDING — IT IS THE TERRACE PASS'S OWN
+  // ARGUMENT, A HUNDRED LINES ABOVE, APPLIED AGAIN. That pass says it plainly: "a reason
+  // that is reachable for the first third of the run and gone by the end is a reason the
+  // gate's FINAL hash says nothing about." A door closes once, so each sealing yields one
+  // release; and the early room is later taken away by the despawn pass, so the state it
+  // produced is gone before the horizon the gate compares.
+  //
+  //   wave 1  spawn at tick 47,     seal at  7,001   EARLY, while the hotel is busiest, and
+  //                                                  the THIN one: its item is idle far more
+  //                                                  often than not before its door closes,
+  //                                                  so the seal fires without much margin.
+  //   wave 2  spawn at tick 20,011, seal at 60,013   LATE, with ids above anything the
+  //                                                  despawn (1, 4, 7 …), demolish (2, 7,
+  //                                                  12 …) and `underfoot` walks reach. The
+  //                                                  ROBUST one: its item is in use for the
+  //                                                  great majority of its pre-seal life,
+  //                                                  and the sealed room and its stranded
+  //                                                  item are both still standing at the end
+  //                                                  of the run.
+  //
+  // Wave 2 is what puts the state into the FINAL hash; wave 1 is what reaches it while the
+  // hotel is busiest. If a future change silences either, `provider.determinism.test.ts`
+  // goes red — none of this draws randomness, so the failure is loud rather than flaky, and
+  // that test rather than this comment is what holds the coverage.
+  if (secondHost !== undefined) {
+    const seal = (host: number, spawnTick: number, sealTick: number): void => {
+      const at = { floor: 0, column: host };
+      schedule.push({ tick: spawnTick, command: { kind: 'spawnEntity', entityKind: secondHost.id, at } });
+      // Only entities that exist BEFORE the `underfoot` walk starts at tick 1,601 are ones
+      // that walk has to step over, so wave 2 contributes nothing to the offset.
+      if (spawnTick < 1_601) amenityEntities += 1;
+      for (const itemId of requiredItemsOf(content, secondHost.id)) {
+        schedule.push({ tick: spawnTick, command: { kind: 'spawnEntity', entityKind: itemId, at } });
+        if (spawnTick < 1_601) amenityEntities += 1;
+      }
+      // Two lodging rooms hard against its sides take its DOOR away. Nothing is despawned:
+      // the item stands untouched in a room that has stopped working, which is the whole of
+      // cause (b). Furnished, so the blockers are valid rooms rather than a second kind of
+      // broken thing.
+      for (const column of [host - 1, host + 1]) {
+        const beside = { floor: 0, column };
+        schedule.push({ tick: sealTick, command: { kind: 'spawnEntity', entityKind, at: beside } });
+        furnish(sealTick, beside, schedule);
+      }
+    };
+    // WAVE 1 — EARLY, AND THE THIN ONE. This host stands from tick 47 until the despawn pass
+    // reaches its id, and its item is idle far more often than it is in use across that
+    // window, so the seal fires without much margin. THE SEALING TICK HAS TO LAND WHILE THE
+    // ROOM IS ALIVE AND ITS ITEM IS BEING USED — a fact about this log, not something the
+    // code can assert. A first attempt sealed much later and produced nothing at all,
+    // because by then the despawn pass had already taken the room: the pass looked right and
+    // covered nothing.
+    seal(30, 47, 7_001);
+    // WAVE 2 — LATE, AND THE ROBUST ONE. Its item is in use for the great majority of its
+    // pre-seal life, so this seal lands on a guest with room to spare, and both the sealed
+    // room and its stranded item are still standing at the end of the run — which is what
+    // puts the state into the hash the gate actually compares.
+    seal(35, 20_011, 60_013);
   }
   // Some of these target ids that are not live yet, or are already gone. That is
   // deliberate: a despawn of an unknown id must be a deterministic no-op.
