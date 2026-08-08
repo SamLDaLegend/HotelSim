@@ -19,10 +19,20 @@ I1	Sim purity. packages/sim imports nothing from the render layer, no DOM, no en
 I2	Determinism. Same seed plus same command log produces a byte-identical state hash after 100,000 ticks, on every run and every platform. No Math.random, no Date.now, no Set/Map iteration-order dependence inside packages/sim. All randomness comes from an injected seeded PRNG.	pnpm test:determinism
 I3	Content is data. No room type, item, staff role or guest archetype defined in code. All of it lives in packages/content as JSON validated against a schema.	pnpm check:content — fails if a new type literal appears outside packages/content.
 I4	Ledger is append-only. Cash balance is derived by folding transactions, never stored and mutated.	pnpm test — unit test asserts balance is a pure function of the transaction log.
-I5	Headless. pnpm sim:run --days 365 --seed 42 completes in Node with no window and no renderer, in under 10 seconds.	pnpm sim:bench
+I5	Headless. pnpm sim:run --days 365 --seed 42 completes in Node with no window and no renderer, inside the budget. **The budget is DERIVED, not chosen** — see §2.1. The original "under 10 seconds" was invented at bootstrap with no basis and is being replaced at G-018 (ADR-0013 §4).	pnpm sim:bench
 I6	Save round-trip. Serialise then deserialise then re-hash produces an identical state hash. Save files carry a schema version and a migration path.	pnpm test:save
 
 I2 is load-bearing beyond determinism. If someone leaks render state or wall-clock time into the simulation, the determinism test breaks immediately. It is the tripwire for the whole design. Do not weaken it, do not add tolerance, do not skip it "just for this goal".
+
+2.1 A gate threshold must be derivable from a stated requirement
+
+(Added 2026-08-08 by human ruling — ADR-0013 §4, generalising ADR-0007.)
+
+Every number a gate compares against must trace to a requirement someone wrote down. A number nobody can source is not a gate, it is a superstition with CI access. It will still fail builds, still promote goals, and still be defended — with nothing behind it.
+
+I5's ten seconds was invented at bootstrap and then promoted G-016 into existence. Its replacement is derived from what the game needs: a 60-room hotel at the fastest intended play speed sustaining real-time on a mid-range laptop, times a stated headroom multiple for the systems M3, M4 and M6 will add. The derivation is written down and every recorded I5 figure is re-baselined against it.
+
+This applies to every bound in the repo, not just I5 — scaling ratios, patience caps, review means. G-010's "measured × 1.5, then held at or below" is the right shape. A round number is not.
 
 3. Stack — fixed, do not relitigate
 Language: TypeScript, strict mode, noUncheckedIndexedAccess on.
@@ -31,6 +41,7 @@ packages/sim — the headless simulation. Zero runtime dependencies. No DOM type
 packages/content — JSON definitions plus Zod schemas.
 apps/game — Pixi.js render layer and UI. Reads sim state, dispatches commands.
 tools/headless — CLI runner, determinism harness, balance simulator.
+tools/viewer — (added 2026-08-08, ADR-0013 §1) disposable replay viewer. Consumes recorded frames from a completed run. Not the renderer, not apps/game, not a deliverable. May be thrown away at M5 and should be deleted rather than defended if it starts growing features.
 Tests: Vitest. Sim package targets high coverage; render layer is not unit tested, it is playtested.
 Persistence: JSON save blobs, versioned, with migrations from v1 onward.
 
@@ -60,9 +71,18 @@ Rules:
 Exit criteria must be commands, not adjectives. "Feels responsive" is not an exit criterion. "p95 lift wait under 90 ticks across 30 simulated days" is.
 Exactly one goal is in-progress at a time. No parallel goals.
 Anything discovered mid-goal that is not in the goal goes to PARKING.md. It does not get built now.
+A criterion that uses a perceptual word — visibly, reads as, looks — needs a perceptual check, or the word must come out (ADR-0013). Since 2026-08-08 the perceptual check exists: record a run and watch it (§5 WATCH).
+
+4.1 Ledger digests
+
+(Added 2026-08-08 by human ruling — ADR-0013 §7.)
+
+Each of GOALS.md, DECISIONS.md, JOURNAL.md and PARKING.md carries a rolling digest at the top under a fixed heading. Fifteen lines maximum. It is REWRITTEN at every REFLECT and never appended to. It carries: current schema version, current gate readings, live obligations owed by future goals, and open contradictions. The append-only history stays exactly as it is beneath it.
+
+The reason: the four ledgers passed 2,800 lines and JOURNAL.md — which calls itself the memory that survives compaction — is a quarter of that. An ADR amendment has already spent a day filed under the wrong ADR.
 5. The goal loop
 5.1 State machine
-SELECT -> PLAN -> BUILD -> CRITIQUE -> RESPOND -> VERIFY -> COMMIT -> REFLECT -> SELECT
+SELECT -> PLAN -> BUILD -> CRITIQUE -> RESPOND -> VERIFY -> WATCH -> COMMIT -> REFLECT -> SELECT
                     ^                                 |
                     +------------ (failures) ---------+
 
@@ -78,13 +98,17 @@ RESPOND — Builder receives the findings and must answer every BLOCKER and MAJO
 
 VERIFY — You, the orchestrator, run every exit command and every §2 gate yourself. You do not accept an agent's report that tests pass. Run them.
 
+WATCH — (Added 2026-08-08 by human ruling, ADR-0013 §2.) For any goal that changes guest, room or economy behaviour, record a run and watch it. Append to JOURNAL.md what looked wrong, or that nothing did. A goal that changes behaviour and produces no visual observation has skipped a step. The instrument is the replay viewer (G-017); until it lands, a goal that owes a WATCH records the debt in its block and discharges it retroactively once the viewer exists.
+
 COMMIT — Conventional commit referencing the goal ID. One goal, one commit (or one squashed branch).
 
-REFLECT — Append to JOURNAL.md: what changed, what the critic caught, what got parked, whether any invariant nearly broke. Two or three lines. Then update GOALS.md and select the next goal.
+REFLECT — Append to JOURNAL.md: what changed, what the critic caught, what got parked, whether any invariant nearly broke. Two or three lines. Then rewrite the digest at the top of each of the four ledgers (§4.1), update GOALS.md, and select the next goal.
 
 5.2 Round budget
 
 Maximum 3 critique rounds per goal. If a BLOCKER survives round 3, stop. Do not keep grinding.
+
+A goal may only close on a DRY critic report (§7). A FIXED report consumes a round and the critic goes again. This costs rounds and is meant to.
 
 5.3 Anti-ping-pong
 
@@ -145,6 +169,8 @@ sim-critic — render or engine types leaking into packages/sim; wall-clock time
 
 ai-critic — needs that can never be satisfied, producing guaranteed unhappiness; agents thrashing between two providers; reservation leaks where a facility is held by a despawned guest; pathfinding that silently falls back to teleporting; livelock at lifts; behaviour that is correct but reads as stupid to a watching player, which is a real defect in this genre.
 
+(Amended 2026-08-08, ADR-0013 §3.) The "reads as stupid to a watching player" finding now REQUIRES a frame reference: a recording, a tick number, and what it shows. From bootstrap to G-013 there was no watching player and no way to become one, so that mandate was unfalsifiable — the exact defect class ADR-0007 names, sitting inside the critic prompt meant to hunt it. From G-017 it is a finding like any other and subject to §7's citation rule. If you cannot cite a frame, you do not have this finding; say so and stop.
+
 balance-critic — dominant strategies (one room type strictly better than all others); degenerate pricing exploits; runaway or unrecoverable economies; nothing meaningful to spend money on past hour two. This critic has a standing mandate to run pnpm sim:run --days 1000 across a spread of seeds and report the distribution of outcomes, not a single run.
 
 render-critic — render code holding authoritative state instead of reading it; input handlers mutating the sim directly rather than dispatching commands; frame-rate-dependent movement; UI that cannot express a state the sim can reach.
@@ -174,6 +200,21 @@ NIT — style and naming. Do not spend a round on these.
 
 Every finding must cite file:line and, where possible, a reproduction command. A finding without a location is not a finding.
 
+7.1 How a critic closes — DRY or FIXED
+
+(Added 2026-08-08 by human ruling — ADR-0013 §6.)
+
+Every critic's final report must close with exactly one of these, stated explicitly:
+
+DRY — "I have no further findings at any severity in this diff."
+FIXED — "My findings are resolved; I have not exhausted this diff."
+
+A goal may only close on DRY. A FIXED close consumes a round and the critic goes again.
+
+Why: thirteen goals ran mostly at 1/3 rounds with zero BLOCKERs, and the one goal that ran to 3/3 produced the best critique in the project. "I fixed what I found" and "there is nothing left to find" are different claims, and the loop has been treating them as the same one.
+
+Additionally: any goal that is the LAST IN A MILESTONE gets a second critic from a different pair in its final round. Precedent — G-008 ran sim-critic then balance-critic, and the second pass found the 107-million-penny sweep.
+
 8. Milestones
 
 Do not start a milestone until the previous one's gates are green and the human has signed off.
@@ -182,13 +223,15 @@ M0 — Walking skeleton. One room type, one guest, one need, one day cycle, mone
 
 M1 — Structure. Multi-floor grid, build and demolish commands, room validity rules (enclosed, has a door, has required items), construction cost.
 
-M2 — Needs. Full need vector, item-based provider registry, utility scoring, satisfaction over ticks, patience drain, reviews. Guests visibly succeed and fail.
+M2 — Needs. Full need vector, item-based provider registry, utility scoring, satisfaction over ticks, patience drain, reviews. Guests visibly succeed and fail. ("Visibly" is discharged by G-017's replay viewer and a WATCH observation in JOURNAL.md, not by the review distribution alone — ADR-0013.)
 
 M3 — Circulation. Stairs and lifts as queued shared resources. Vertical pathing. Wait time as a first-class satisfaction input. This is where the genre's difficulty actually lives.
 
 M4 — Economy. Nightly settlement, staff hiring and wages, upkeep and decay, reputation feeding demand, room pricing. Balance critic runs long simulations and the results are reviewed.
 
-M5 — Render. Pixi cross-section view, camera, build tools, HUD, speed controls, save/load UI. Coloured rectangles are an acceptable shipping state for this milestone. Art is a separate concern.
+M4 HARD PREREQUISITE (ADR-0013 §5): the scenario-capital mechanism lands before the first M4 goal starts. --rooms N seeds stock that is cash at the refund rate — --rooms 3 carries 375,000p against a 500,000p starting constant — and every balance sweep in this project used that flag. Tuning demand and pricing against a 75%-inflated opening balance is how a whole milestone's evidence base goes bad quietly.
+
+M5 — Render. Pixi cross-section view, camera, build tools, HUD, speed controls, save/load UI. The first playable build ships PLACEHOLDER ART — flat coloured shapes with clear silhouettes — and real art is a separate track that replaces them without touching the simulation (ADR-0014, decided 2026-08-08 so M5 neither relitigates it nor waits on it).
 
 M6 — Content and feel. Room and item variety, guest archetypes, notifications, sound hooks, tutorial. Driven by playtest findings rather than a feature list.
 
@@ -203,6 +246,9 @@ Test coverage is being added to satisfy a number rather than to pin behaviour.
 PARKING.md has stopped growing. That means scope is leaking into goals instead of being deferred.
 Work has started on the render layer before M0 is signed off.
 A goal has exceeded its round budget twice under different framings — the goal is wrong, not the implementation.
+A criterion is being verified by an agent's judgement of something nobody can observe. (ADR-0013.)
+The replay viewer is acquiring features, a public API, or defenders. Delete it rather than defend it.
+A gate threshold is being cited that nobody can trace to a stated requirement (§2.1).
 10. Bootstrap
 
 First session, in order:

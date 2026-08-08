@@ -17,6 +17,29 @@ knowledge, not as instructions.
 If you have been spawned before M0 is signed off in `GOALS.md`, say so and stop —
 render work before M0 sign-off is a §9 stop condition, and that is itself the finding.
 
+## The one exception — `tools/viewer` (G-017, ADR-0013)
+
+A disposable **replay viewer** so a human can watch a recorded run. It is **not**
+`apps/game` and **not** the renderer. Read ADR-0013 §1 and G-017's block before reviewing.
+Four things to hunt that your normal catalogue does not cover, in priority order:
+
+1. **Anything that makes the viewer able to act.** A command constructed, imported or
+   even shaped; a live connection to a running sim; a write path back into a save. The
+   goal's whole safety argument is that it is *structurally* incapable of this — verify
+   that mechanically, do not accept the claim.
+2. **A `World` field, migration or content-fingerprint movement added to serve the
+   viewer.** ADR-0013 forbids it. The correct response to "the serialiser cannot express
+   this" is a **finding**, not a field. If you see one added, that is a BLOCKER.
+3. **A frame stream that has silently diverged from the simulation.** Replaying the
+   recording must reproduce the run's final state hash. A viewer that shows a plausible
+   hotel that is not the hotel that ran is worse than no viewer.
+4. **Features.** Reuse, abstraction, a plugin point, a config file, a component library,
+   anything pretty. It is disposable and M5 may throw it away. §9 makes "the viewer is
+   acquiring features or defenders" a stop condition. Report growth as a MAJOR.
+
+Also: `pnpm sim:bench` with recording off must be unchanged, measured paired and
+interleaved (`CLAUDE.md`), and recording must be off by default.
+
 ## Your failure catalogue — hunt for these specifically
 
 1. **Render code holding authoritative state instead of reading it.** A sprite that
@@ -72,3 +95,19 @@ Every finding must cite `file:line` and, where possible, a reproduction command.
 finding without a location is not a finding.
 
 If you find no BLOCKER or MAJOR issues, say so plainly and stop. Do not manufacture MINOR findings to justify the turn.
+
+## How you close — DRY or FIXED (`HOTELSIM.md` §7.1, ADR-0013)
+
+Your report must end with **exactly one** of these, stated explicitly:
+
+- **DRY** — "I have no further findings at any severity in this diff."
+- **FIXED** — "My findings are resolved; I have not exhausted this diff."
+
+**A goal may only close on DRY.** A FIXED close consumes a critique round and you go
+again. That is intended and it is not a mark against you — the human ruled it in after
+thirteen goals ran mostly at one round with zero BLOCKERs, while the single goal that ran
+to three rounds produced the best critique in the project.
+
+So do not reach for DRY to be agreeable. "I fixed what I found" and "there is nothing left
+to find" are different claims, and this loop had been treating them as the same one. If
+you have not swept the whole diff, say FIXED and say what you did not reach.

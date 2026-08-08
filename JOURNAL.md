@@ -1,5 +1,27 @@
 # JOURNAL
 
+## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
+
+*As of 2026-08-08, HEAD `aa30218`. 13 goals done, M0 and M1 signed off, M2 a third built.*
+
+- **State**: save v6 · summary v1 · 1,000 tests / 51 files · all six gates green ·
+  I2 `6c3e1baa8b87d2f6` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` · I5 61–63% of a budget
+  that is about to be re-derived (G-018), so quote the ratio and not the percentage.
+- **The recurring defect this project actually produces**: checks that succeed while
+  inspecting nothing. Seven instances now — decorative `TICK_PHASES`, `check:content`
+  inspecting zero ids, `deserialise` never calling its own gap detector, the guest-loop
+  RAN flag, the never-executed violations path, G-010's unwitnessed release counter,
+  G-012's counter tested at one of four sites. Plus five *exit criteria* of the same shape.
+- **The measurement lesson (G-016)**: the ratio survived and every absolute did not. Same
+  build, 3,087ms and 1,740ms hours apart. Measure paired and interleaved in one sitting;
+  withdraw what cannot be re-measured rather than restating it.
+- **Newest turn**: the human ruled (ADR-0013) that the charter had been asking agents to
+  verify things nobody can observe. A replay viewer, a WATCH step, DRY/FIXED closes.
+- **Open obligation**: G-013's WATCH is owed retroactively at G-017. No WATCH entry
+  exists yet in this file — the first one is the point of the whole ruling.
+
+---
+
 Two or three lines per goal, appended at REFLECT (`HOTELSIM.md` §5): what changed,
 what the critic caught, what got parked, and whether any invariant nearly broke.
 
@@ -751,3 +773,48 @@ already at 68%. The real subject was headroom and no criterion named a headroom 
 Signed off with the mismatch recorded rather than re-scoped, and generalised into
 ADR-0007: **when a goal is promoted by a threshold, its exit criterion must name a
 threshold.**
+
+---
+
+## 2026-08-08 — The observability ruling (ADR-0013 / ADR-0014). No code changed.
+
+**The human stopped the loop before G-014 and said the charter had been asking agents to
+verify things nobody can observe.** Three instances, all already sitting in these ledgers
+and none of them noticed by me:
+
+- **§6.1 told `ai-critic` to hunt behaviour that "reads as stupid to a watching player".
+  There is no watching player.** Thirteen goals of a mandate that could succeed while
+  inspecting nothing — the ADR-0007 class, inside the prompt written to hunt that class.
+- **M2's statement is "guests visibly succeed and fail"**, and G-015 discharges that word
+  with a review distribution. Good criteria. Not what the word says.
+- **G-016 rested an 18.4% performance decision on a "player-visible" one-tick
+  double-booking** that neither side could test, because nobody can see it.
+
+Two defects that WERE caught underline it: 55 rooms floating in mid-air (G-009) and a
+hotel that would have been made entirely of cafés with every gate green (G-012) were both
+expensive to find and would have been obvious on sight.
+
+**What changed.** A disposable replay viewer (G-017, `tools/viewer`, `apps/game` stays
+shut) fed by a `--record` flag through the existing serialiser; a **WATCH** step between
+VERIFY and COMMIT; "reads as stupid" now requires a frame reference; critics must close
+**DRY** or **FIXED** and a goal may only close on DRY; ledger digests at the top of the
+four files, rewritten not appended; I5's ten seconds to be re-derived from a requirement
+(G-018) because it was invented at bootstrap and has been promoting goals ever since;
+scenario capital promoted to a hard M4 prerequisite, because `--rooms N` seeds 375,000p of
+hidden capital against a 500,000p constant and every balance sweep in this project used it.
+Separately, ADR-0014: the first playable build ships placeholder art, decided now so M5
+neither relitigates it nor waits on it.
+
+**The uncomfortable part, recorded because that is what this file is for.** The ruling is
+mostly this project's own defect class, turned back on the charter, by the person who
+could not see the game. I have been applying ADR-0007 to asserts and to exit criteria for
+thirteen goals and never once to the critic prompts or to a milestone statement. Nor did I
+question the ten seconds while treating a goal it promoted as legitimate.
+
+**G-013 owes a retroactive WATCH.** It is planned but not built; it changes guest
+behaviour; the viewer does not exist yet. It commits with the debt recorded and becomes
+G-017's first subject — a fresh behaviour change is a better first subject than an old one.
+
+Order for the rest of M2: **G-013 → G-018 → G-017 → G-014 → G-015 → exit.** G-018 ahead of
+G-017 is my call, not the human's: it changes no simulation code, and every goal after it
+quotes an I5 percentage that is currently unsourced.

@@ -1,5 +1,24 @@
 # GOALS
 
+## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
+
+*As of 2026-08-08, after ADR-0013 / ADR-0014 and before G-013 BUILD.*
+
+- **Schema versions**: save **v6** (v7 owed by G-013) · summary **v1** (v2 owed by G-015).
+- **Gates**: all six green at `aa30218`. I5 **61–63% of budget** — but the budget is
+  unsourced and is being re-derived at **G-018**; do not quote a percentage until it is.
+  I2 `6c3e1baa8b87d2f6` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` · 1,000 tests / 51 files.
+- **Order**: G-013 → **G-018** (re-derive I5) → **G-017** (replay viewer) → G-014 → G-015.
+- **Obligations owed by future goals**: G-013 owes a v7 migration, a provider-density
+  scaling arm, and a **retroactive WATCH** once G-017 lands. G-015 owes summary v2, a
+  second critic from another pair (last-in-milestone), and M2's "visibly" discharged by a
+  WATCH observation. **M4 does not start** until scenario capital lands (ADR-0013 §5).
+- **Open contradictions**: G-016's exit criterion could not fail — recorded, not rescoped,
+  and the reason G-018 exists. `--rooms N` contaminates every balance sweep to date.
+  Sampling the guest-store scan recovers 18.4% and is deliberately unpulled.
+
+---
+
 The goal ledger. One block per goal, worked one at a time, top unblocked goal first.
 Exit criteria are commands, not adjectives. Rules in `HOTELSIM.md` §4 and §5.
 
@@ -574,6 +593,25 @@ Breakdown proposed by `ai-engineer` and adjudicated by the orchestrator, 2026-08
 Order: G-012 → G-013 → G-014 → G-015, with G-016 contingent on a number.
 `apps/game` stays shut until M5 (§9).
 
+**RE-PLANNED 2026-08-08 after the human's observability ruling (ADR-0013).** G-016 fired
+and is done. Two goals are inserted ahead of G-014:
+
+> **G-012 ✓ → G-016 ✓ → G-013 → G-018 → G-017 → G-014 → G-015 → M2 exit**
+
+- **G-018 first, and this is my call rather than the human's** — the ruling says the
+  viewer goes "before G-014" and does not order these two against each other. G-018
+  changes no simulation code, so it cannot destabilise anything, and every goal after it
+  quotes an I5 percentage. Putting it last means three more goals record readings against
+  a number we have already agreed is invented. It also gives G-017's "`sim:bench`
+  unchanged" criterion a stable budget to be measured against rather than one that moves
+  underneath it. Reversible if the human would rather see the viewer sooner.
+- **G-017 after G-013, which the ruling already implies** ("stop at the end of the current
+  goal") and which is independently right: the viewer reads recorded frames through the
+  save serialiser, and G-013 takes that serialiser to v7. Built before G-013 it would be
+  built against v6 and immediately need rewriting.
+- M2's statement contains the word **"visibly"**. It is no longer discharged by the review
+  distribution alone — M2 exit now requires WATCH observations in `JOURNAL.md`.
+
 **The single biggest vacuity risk in M2**: G-012 must ship a **second need type with a
 second room-type provider**, or the "vector" has length one and every criterion
 downstream inspects nothing. That is why the vector goal carries the second need rather
@@ -632,7 +670,15 @@ Critique rounds used: 0/3
   one whose extra needs were omitted, it is one in which those needs did not exist.
 
 ## G-013 — The item-based provider registry
-Status: pending
+Status: in-progress
+
+  INHERITED FROM G-016's critique: `needs.scaling.test.ts` holds need count and
+  concurrent guests still but NOT provider density — the shipped hotel is starved (one
+  of each amenity against ~15 guests) so most per-need work short-circuits through
+  `exhausted` without walking a candidate list. **This goal multiplies provider density
+  without touching need count, so both existing arms move together and the ratio can sit
+  still while absolute cost climbs.** Do not read 1.74x against the 2.5x bound as
+  headroom. A third arm varying density at fixed need count is owed here.
 Milestone: M2
 Owner pair: ai-engineer / ai-critic
 Statement: A need is satisfied by a provider, and a provider is a room type or an item
@@ -641,8 +687,14 @@ Statement: A need is satisfied by a provider, and a provider is a room type or a
   need has no provider a player can actually reach.
 Exit criteria:
   - pnpm exec vitest run provider  (all green)
-  - pnpm sim:run --days 30 --seed 7 --rooms 6  reports, per need type, satisfactions
-    delivered BY AN ITEM and BY A ROOM, and both are non-zero
+  - pnpm sim:run --days 30 --seed 7 --rooms 6  reports satisfactions delivered BY AN ITEM
+    and BY A ROOM: the by-item TOTAL is non-zero, the by-room TOTAL is non-zero, and AT
+    LEAST ONE need type has both non-zero — with a NEGATIVE CONTROL (the same invocation
+    against content in which no item provides anything reports by-item zero), so the
+    positive number is a measurement and not a constant.  [REWRITTEN AT PLAN — see below]
+  - pnpm exec vitest run scaling  green, with a PROVIDER-DENSITY arm at fixed need count
+    and fixed concurrent guests, its bound fixed at BUILD by paired interleaved
+    measurement (`CLAUDE.md` §measuring; the bound must be sourced — `HOTELSIM.md` §2.1)
   - content declaring a need whose only provider is an item that NO room type requires
     is REFUSED at bindContent, naming the need — because until placeItem exists (M6) no
     player command can put that item in the world
@@ -660,9 +712,155 @@ Critique rounds used: 0/3
   while inspecting nothing a player can reach, with pnpm verify green. It must be
   strengthened from DECLARED to REACHABLE.
 
-  No migration owed — the engagement field arrives with G-012, an item is already an
-  Entity, and the registry is content plus lookup. The content fingerprint moves, which
-  invalidates saves; that price was accepted at G-002.
+  ~~No migration owed~~ — **WRONG, corrected at PLAN. A v7 migration IS owed.** The
+  seeding note reasoned about the *registry* (content plus lookup, an item is already an
+  Entity) and never looked at **criterion 2**, which cannot be derived from final state:
+  the engagement is released the moment a need resolves, so by departure nothing remembers
+  who served it. `NeedState` gains `metBy: 'room' | 'item' | null` and the outcome row
+  gains `metByItem` (by-room stays DERIVED as `met - metByItem`, so it cannot drift).
+  `SAVE_SCHEMA_VERSION` 6 → 7; the fixture walks 1→2→3→4→5→6→7 with a zero-line diff.
+  The migration's defaults are ARGUED FROM THE ERA, not chosen (ADR-0008): in the v6 era
+  items were not providers, so every recorded satisfaction *was* a room's — `metBy` is
+  `'room'` for a met need and `metByItem` is 0. Exactly true, not a guess.
+  **And it must not be tested by the fixture alone** — the v1 fixture has zero guests and
+  no tally rows, so v6→v7 would run over nothing (ADR-0007's exact shape). A synthetic v6
+  world with a met need and a populated tally is watched through the step.
+  The rejected alternative is recorded so it is not re-proposed: counting deliveries at
+  the moment of satisfaction needs no per-tick field, but its migration cannot be made
+  exactly true — a v6 world's past deliveries are unrecoverable from its bytes, so a
+  migrated save would report a violated law.
+  The content fingerprint moves, which invalidates saves; that price was accepted at G-002.
+  `SUMMARY_SCHEMA_VERSION` stays 1 — the need rows gain fields and none is renamed or
+  removed. G-015 owns the bump.
+
+  ---
+  RULED AT PLAN, 2026-08-08 — three questions `ai-engineer` raised before writing a line.
+
+  1. **Criterion 2 was unmeetable as written, and is rewritten above.** "Per need type,
+     both non-zero" cannot hold: the lodging need is room-served by construction (nothing
+     can sleep in a vending machine), so no correct implementation could ever satisfy it.
+     **Fifth criterion in this project of the class ADR-0007 names** — after `pnpm test --
+     world` (G-001), "balance equals the fold" (G-005), "zero guests served by an invalid
+     room" (G-009), and `--rooms 3 --demolish 1` with no `--build` (G-011). This one was
+     caught BEFORE the build rather than after, by the builder, which is the first time
+     that has happened. The replacement is strictly harder than a total-only form because
+     of the negative control.
+  2. **The scaling arm now has an exit criterion** (added above). The debt was inherited
+     from G-016's critique and no criterion named it, so it could have been skipped with
+     every gate green — the same class again, one level up.
+  3. **The migration is owed** — see the correction above.
+
+  ALSO RULED: this goal stays WHOLE despite being fat. The clean seam is criterion 2's
+  reporting, but splitting it puts a v7 migration in a goal with no behaviour to migrate,
+  and the bulk here is test surface rather than mechanism.
+
+  **WATCH DEBT (`HOTELSIM.md` §5, ADR-0013).** This goal changes guest behaviour and the
+  viewer does not exist yet. It commits with the debt recorded and is the FIRST subject of
+  G-017's viewer — which is a better first subject than an old goal, because the behaviour
+  will be fresh. The debt is discharged by a WATCH entry in `JOURNAL.md` at G-017, not by
+  a green tick here.
+  ADR-0013's "no new `World` field, no migration, no fingerprint movement" binds **G-017**,
+  not this goal. The viewer must not CAUSE one; it does not forbid one that already exists.
+
+## G-018 — I5's budget, derived from a requirement instead of invented
+Status: pending
+Milestone: M2 (charter maintenance — inserted by ADR-0013 §4)
+Owner pair: sim-engineer / sim-critic
+Statement: The I5 budget is derived from what the game needs — a 60-room hotel at the
+  fastest intended play speed sustaining real-time on a mid-range laptop, times a stated
+  headroom multiple for the systems M3, M4 and M6 will add. The derivation is written
+  down, the resulting budget replaces the invented ten seconds, and every recorded I5
+  figure in the ledgers is re-baselined against it.
+Exit criteria:
+  - the derivation is written into `HOTELSIM.md` §2.1 as arithmetic a reader can check:
+    ticks per simulated day × days × the play-speed multiple → a tick budget in
+    nanoseconds → a 365-day wall-clock budget, with the headroom multiple STATED AND
+    JUSTIFIED rather than rounded to a nice number
+  - `tools/gates/bench.mjs` reads the budget from ONE named constant with the derivation
+    cited beside it; `pnpm sim:bench` green
+  - every I5 figure recorded in `GOALS.md`, `JOURNAL.md` and `PARKING.md` is restated as a
+    percentage of the NEW budget, or struck through where it cannot be re-measured
+    (`CLAUDE.md`: withdraw rather than restate — the G-016 lesson)
+  - **`git diff --stat` touches no file under `packages/`** — this commit changes no
+    simulation code, and that is mechanically checkable, not a promise
+  - the I2 state hash is unmoved
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: any optimisation (the sampling lever stays pinned and unpulled — G-016);
+  changing any other gate's threshold in the same commit; a per-platform budget
+Critique rounds used: 0/3
+
+  THE HUMAN'S OWN WORDS: *"Ten seconds for 365 simulated days was invented at bootstrap
+  with no basis, and it is now promoting goals."* G-016 exists solely because of it.
+
+  **THE HONEST OUTCOME MAY BE "NO CHANGE", AND THAT IS A PASS.** If the derivation lands
+  near ten seconds, say so and move on — the value of this goal is the derivation, not a
+  different number. If it says the budget was always too tight or too loose, that is worth
+  knowing BEFORE M3 adds pathfinding and M4 adds staff.
+  **A DIRECTION THE BUILDER MUST NOT TAKE:** deriving a budget that happens to make the
+  current reading comfortable. The derivation is written from the requirement first and
+  the current reading is compared to it afterwards. If those two steps happen in the other
+  order this goal has produced a second superstition with better paperwork.
+  No WATCH owed — this goal changes no behaviour, which is also criterion 4.
+
+## G-017 — The replay viewer: a run that can be watched
+Status: pending
+Milestone: M2 (inserted by human ruling ADR-0013 §1)
+Owner pair: **render-engineer / render-critic** — idle for the whole project, which the
+  human named as its own small warning
+Statement: A run can be recorded and watched. A human can scrub a simulated month of
+  hotel and see rooms, guests, and what each guest is doing.
+Exit criteria:
+  - a recorded 30-day run at `--rooms 6` can be scrubbed FRAME BY FRAME in a browser,
+    showing rooms, guests, and what each guest is doing
+  - `pnpm sim:run --days 30 --seed 7 --rooms 6 --record <path>` writes a frame stream, and
+    **replaying that stream reproduces the run's final state hash** — a frame stream that
+    has silently diverged from the simulation is loud rather than decorative
+  - a test asserts `tools/viewer` imports nothing from `packages/sim` at runtime AND
+    contains no command construction — "it cannot act" made mechanical, not promised
+  - `pnpm sim:bench` with recording disabled is UNCHANGED from its current figure, paired
+    and interleaved in one sitting (`CLAUDE.md` §measuring)
+  - recording is off by default: the byte-for-byte stdout of every existing pinned
+    invocation is unchanged, and the I2 state hash is unmoved
+  - a WATCH entry in `JOURNAL.md` for G-013, discharging its debt, saying what looked
+    wrong or that nothing did
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: anything in `apps/game` (M5, still shut); dispatching commands; a live
+  connection to a running sim; sprites, art, animation, tweening; a UI framework; sound;
+  editing or authoring; making it reusable  (-> PARKING.md)
+Critique rounds used: 0/3
+
+  **THE CONSTRAINTS ARE WHAT MAKE THIS SAFE AND THEY ARE NOT NEGOTIABLE** (ADR-0013 §1):
+  - It lives in `tools/viewer`. `apps/game` stays shut. **This is not the renderer.**
+  - It is a REPLAY viewer. It consumes recorded frames from a COMPLETED run and has no
+    live connection to a simulation. **That makes read-only STRUCTURAL rather than
+    promised — it cannot send a command because there is nothing to send one to.**
+  - Frames go through the **existing** save serialiser. **If the serialiser cannot express
+    something the viewer needs, that is a FINDING TO REPORT, not a licence to add a field.**
+  - No new `World` field, no migration, no content-fingerprint movement caused by this
+    goal. If the viewer wants state that does not exist, it goes to `PARKING.md`.
+  - Recording off by default; `sim:bench` runs without it; **I5 must not move.**
+  - **It is explicitly disposable.** M5 may throw all of it away. Do not build for reuse,
+    do not make it pretty, do not let it grow features. Coloured rectangles, labels, a
+    scrubber, a speed control. That is the whole scope. §9 now lists "the viewer is
+    acquiring features or defenders" as a stop condition — delete it rather than defend it.
+
+  **WHAT IT IS EXPECTED TO FIND, STATED UP FRONT SO THE GOAL IS FALSIFIABLE** — the
+  human's own framing: *"I expect watching a month to surface at least one behaviour that
+  every current test calls correct and a human calls wrong. If it finds nothing, record
+  that honestly — that is a real result and it retires my concern."*
+  Two candidates already on record and neither observable today: G-016's one-tick
+  double-booking (two guests in one bed for a minute), which is the class sampling would
+  surrender and on which an 18.4% lever currently rests untestable; and whether guests
+  thrash between providers, which G-014 is about to make possible.
+  Precedent that this is cheap signal rather than a luxury: **55 rooms floating in mid-air
+  (G-009) and a hotel that would have been made entirely of cafés with every gate green
+  (G-012)** would both have been obvious on sight.
+
+  **IT ALSO ANSWERS A DESIGN QUESTION (ADR-0014).** This is the cheapest possible test of
+  whether a side-on cross-section reads clearly AT ALL, and of the placeholder vocabulary
+  M5 will ship — shape and colour alone, no art. If a room type or a guest state cannot be
+  told apart that way, that is a finding about the whole visual direction, and it is worth
+  having before M5 is built on the assumption that it does.
 
 ## G-014 — Utility scoring, and a guest that commits
 Status: pending
@@ -690,6 +888,15 @@ Critique rounds used: 0/3
   I2 CANNOT WITNESS THRASHING. The gate holds no reference hash (G-010's finding), and a
   scorer that thrashes identically every run passes it. The counter is the witness, not
   the gate.
+
+  **AND NEITHER THE GATE NOR THE COUNTER CAN SEE WHAT THRASHING LOOKS LIKE.** By the time
+  this goal runs, G-017 exists, so this is the first goal to owe a LIVE WATCH rather than
+  a retroactive one (`HOTELSIM.md` §5): record a run, watch a guest choose, and say in
+  `JOURNAL.md` whether the hysteresis margin looks like commitment or like dithering. A
+  margin tuned to a counter alone is tuned to the only thing that can be measured, which
+  is exactly the trap ADR-0013 was written about. `ai-critic` may now raise "reads as
+  stupid" here, WITH a frame reference (§6.1 as amended) — this is the goal that mandate
+  was written for.
   Migration owed only if the abandonment counter cannot be derived. If the builder finds
   a way to derive it, the migration is dropped and that is a win worth recording.
 
@@ -716,6 +923,16 @@ Exit criteria:
 Out of scope: reputation as a stateful aggregate; reviews feeding demand, pricing or
   arrival rate (ALL M4); review text (M5/M6)
 Critique rounds used: 0/3
+
+  **LAST GOAL IN M2 → §7.1 NOW REQUIRES the second critic from a different pair that this
+  block already chose.** The G-008 precedent has been generalised into the charter by
+  ADR-0013 §6, so the ruling below is no longer a one-off. Both rounds must close **DRY**
+  — "no further findings at any severity in this diff". A **FIXED** close consumes a round
+  and the critic goes again.
+  **THIS GOAL DISCHARGES M2's "VISIBLY".** §8's M2 statement is "guests visibly succeed
+  and fail"; the review distribution and outcome table are good criteria and are not what
+  that word says. A WATCH observation in `JOURNAL.md` — a recorded run in which a human saw
+  a guest succeed and a guest fail — is required before M2 exit is written.
 
   RULED AT SEEDING — balance-critic takes round 2. §6 pairs one critic per builder, but
   G-008 ran sim-critic then balance-critic and that second round was the best critique in
@@ -837,5 +1054,23 @@ Exit criteria:
 
 ## M2 exit — human sign-off required
 
-When G-012 to G-015 are `done` (and G-016 if triggered), that is a §5.4 escalation.
-Write it to `ESCALATIONS.md` and stop.
+When G-012 to G-018 are `done`, that is a §5.4 escalation. Write it to `ESCALATIONS.md`
+and stop.
+
+**M2 exit additionally requires, per ADR-0013:**
+- **WATCH observations in `JOURNAL.md` for G-013, G-014 and G-015** — what looked wrong,
+  or that nothing did. M2's statement contains the word "visibly" and that is how it is
+  discharged. G-017's own falsifiable claim is answered here too: at least one behaviour
+  every test calls correct and a human calls wrong, **or an honest record that a month of
+  hotel was watched and nothing looked wrong**, which retires the concern.
+- **A sourced I5 budget** (G-018), so the milestone hands M3 a number rather than a
+  superstition.
+- **Every critique in M2 closed DRY**, not FIXED (§7.1).
+
+**M3 AND M4 GATING, recorded here so it is not rediscovered at the milestone boundary:**
+M4 does not start until the scenario-capital mechanism lands (ADR-0013 §5). `--rooms N`
+seeds stock that is cash at the refund rate — `--rooms 3` carries 375,000p against a
+500,000p starting constant — and every balance sweep and every bench in this project used
+that flag, so `balance-critic`'s whole accumulated evidence base was taken in a world with
+**75% more effective opening capital than the shipped figure**. Harmless until M4 tunes
+demand curves and pricing against exactly those sweeps.

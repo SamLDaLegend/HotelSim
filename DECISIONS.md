@@ -1,5 +1,27 @@
 # DECISIONS
 
+## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
+
+*As of 2026-08-08. 14 ADRs. Three are human decisions: ADR-0011, ADR-0012, ADR-0013/0014.*
+
+- **Load-bearing everywhere**: ADR-0001 content is injected, never value-imported ·
+  ADR-0002 money is integer pence · ADR-0003 a snake_case literal is a content ID ·
+  ADR-0006 the v1 fixture is permanent and the next `World` field owes a migration.
+- **The one cited most**: **ADR-0007** — a check that can succeed while inspecting
+  nothing is not a check. Three amendments: vacuous ≠ unreachable; a goal promoted by a
+  threshold must exit on a threshold; **a threshold must itself be derivable from a stated
+  requirement**. It has caught more real defects here than anything in §6.1.
+- **Newest**: **ADR-0013** (human) — a perceptual criterion needs a perceptual check.
+  Adds the replay viewer, the WATCH loop step, DRY/FIXED critic closes, ledger digests,
+  an I5 re-derivation, and the M4 scenario-capital prerequisite. **ADR-0014** (human) —
+  the first playable build ships placeholder art; M5 neither relitigates nor waits.
+- **Bounded by their own text**: ADR-0013 does not open `apps/game`, does not weaken any
+  invariant, does not reopen M0/M1 sign-off, does not make the viewer a deliverable.
+- **Open contradiction**: none outstanding. The ADR-0007 amendment that spent a day filed
+  under ADR-0011 has been moved, with a note left at the scene.
+
+---
+
 Design decisions that are settled, with the reasoning that settled them. Two kinds go
 here: an adjudication when builder and critic disagree twice on the same point
 (`HOTELSIM.md` §5.3), and a critique finding a builder rejected rather than fixed
@@ -212,6 +234,14 @@ headroom number. Signed off with the mismatch recorded rather than re-scoped, so
 goal inherits a number instead of a green tick. **When a goal is promoted by a threshold,
 its exit criterion must name a threshold** — not merely the absence of failure.
 
+**Amendment (ADR-0013) — a threshold must be derivable from a stated requirement.**
+The amendment above says a goal promoted by a threshold must exit on a threshold. The
+human went one level further: **the threshold itself must be sourceable.** I5's ten
+seconds was invented at bootstrap with no basis and then promoted a goal. *"A number
+nobody can source is not a gate, it is a superstition with CI access."* Applies to every
+bound in the repo — the scaling ratios, the patience caps, the review means — and is why
+G-010's "measured × 1.5, then held" is the right shape and a round number is not.
+
 **Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
 As first written this ADR could be read as condemning defensive asserts. It does not.
 `sim-critic` drew the line, and it is the right one:
@@ -401,3 +431,133 @@ nourishment are *engagement* needs met during the stay, which maps exactly onto 
 lodging/engagement split already approved at M2 seeding. But that is an inference, not the
 ruling, and renaming or removing `night_rest` would move the content fingerprint and cost
 the permanent fixture its ability to tick (ADR-0010's lesson).
+
+---
+
+## ADR-0013 — A perceptual criterion needs a perceptual check
+Date: 2026-08-08 · Context: M2, before G-014 · Decided by: **the human**
+
+**Decision.** *"A criterion that uses a perceptual word needs a perceptual check, or the
+word must come out."* Nobody has seen this game run. The charter has nonetheless been
+asking agents to verify things that are structurally unobservable in this build, and has
+been doing so since §6.1 was written. Six changes follow, all ruled together.
+
+**The three instances, all already in the ledgers before this ruling:**
+
+- **§6.1 tells `ai-critic` to hunt behaviour that "reads as stupid to a watching player".
+  There is no watching player and no way to become one.** That mandate has been vacuous
+  for thirteen goals — precisely the defect class [ADR-0007](#adr-0007) exists to name: a
+  check that succeeds while inspecting nothing, relied on as evidence.
+- **M2's own statement in §8 is "guests visibly succeed and fail".** G-015 discharges that
+  word with a review distribution and an outcome table. Those are good criteria. They are
+  not what the word says.
+- **G-016 pinned a one-tick double-booking — two guests in one bed for a minute — as the
+  class sampling would surrender, and called it "player-visible".** Nobody can see it. The
+  argument for and against pulling an 18.4% lever therefore rests on a claim neither side
+  can test.
+
+And several defects that *were* caught would have been obvious on sight rather than
+expensive to find: 55 rooms floating in mid-air (G-009), and a content sort order that
+would have made the whole hotel cafés with every gate green (G-012).
+
+**1. A replay viewer, built now, ahead of G-014.** New goal G-017, owned by
+`render-engineer` / `render-critic` — the pair that has been idle for the whole project,
+which is its own small warning. A run can be recorded and watched; a human can scrub a
+simulated month and see rooms, guests, and what each guest is doing. The constraints are
+what make it safe and are **not negotiable**: it lives in `tools/viewer` and `apps/game`
+stays shut; it is a **replay** viewer that consumes recorded frames from a completed run,
+so "it cannot act" is structural rather than promised — there is nothing to send a command
+to; its input comes from a new `--record <path>` flag on `sim:run` emitting frames through
+the **existing** save serialiser, and a serialiser that cannot express what the viewer
+needs is a **finding to report, not a licence to add a field**; no new `World` field, no
+migration, no content-fingerprint movement; recording is off by default and `sim:bench`
+runs without it, so I5 must not move. **It is explicitly disposable** — coloured
+rectangles, labels, a scrubber, a speed control, and if it starts acquiring features it
+should be deleted rather than defended.
+
+**2. WATCH becomes a step in the loop.** §5's state machine gains a step between VERIFY
+and COMMIT: for any goal that changes guest, room or economy behaviour, record a run and
+watch it, then append to `JOURNAL.md` what looked wrong — or that nothing did. A goal that
+changes behaviour and produces no visual observation has skipped a step.
+
+**3. §6.1's "reads as stupid" finding now requires a frame reference** — a recording, a
+tick number, and what it shows. Until this ruling it was unfalsifiable; from here it is a
+finding like any other and subject to §7's citation rule.
+
+**4. I5's ten seconds was invented at bootstrap with no basis, and is now promoting
+goals.** G-016 exists solely because of it, and its exit criterion could not fail
+(ADR-0007's amendment). It is replaced by a derivation from what the game needs — a
+60-room hotel at the fastest intended play speed sustaining real-time on a mid-range
+laptop, times a stated headroom multiple for M3, M4 and M6 — written down, with every
+recorded I5 figure re-baselined in **one commit that changes no simulation code** (G-018).
+If the honest derivation says 61–63% is comfortable, that is a real answer; if it says the
+budget was always too tight or too loose, that is worth knowing before M3 adds
+pathfinding. **Standing rule, generalising ADR-0007's amendment: a gate threshold must be
+derivable from a stated requirement. A number nobody can source is not a gate, it is a
+superstition with CI access.**
+
+**5. The `--rooms N` capital contaminant is a hard prerequisite of M4.** `--rooms 3`
+carries 375,000p of hidden capital against a 500,000p starting constant, because seeded
+stock is seeded cash at the refund rate — and every balance sweep and every bench in this
+project uses that flag. `balance-critic`'s entire accumulated evidence base was measured
+in a world with **75% more effective opening capital than the shipped figure**. Harmless
+now; not harmless when M4 tunes demand curves and pricing against exactly those sweeps.
+The scenario-capital mechanism in `PARKING.md` is promoted to a hard prerequisite of the
+first M4 goal. **M4 does not start until it lands.**
+
+**6. Critics must close DRY or FIXED, and a goal may only close on DRY.** Thirteen goals,
+mostly 1/3 rounds, zero BLOCKERs; the one goal that ran to 3/3 produced the best critique
+in the project. Every critic's final report now ends with one of two statements
+explicitly: **DRY** — "I have no further findings at any severity in this diff" — or
+**FIXED** — "my findings are resolved; I have not exhausted this diff". A FIXED close
+consumes a round and the critic goes again. **This costs rounds and is meant to.**
+Additionally, any goal that is the **last in a milestone** gets a second critic from a
+different pair in its final round, per the G-008 precedent that produced the 107M-penny
+sweep and the G-015 ruling that already followed it.
+
+**7. Ledger digests.** The four ledgers are 2,836 lines and `JOURNAL.md` — which calls
+itself the memory that survives compaction — is 753 of them. An ADR amendment has already
+spent a day filed under the wrong ADR. Each of the four gains a **rolling digest** at the
+top under a fixed heading, **rewritten every REFLECT and never appended to**, fifteen
+lines maximum, carrying: current schema version, current gate readings, live obligations
+owed by future goals, and open contradictions. The append-only history stays exactly as it
+is beneath it.
+
+**What this ruling does NOT do, stated so both sides know it is bounded:**
+
+- It does **not** open `apps/game`. M5 is unchanged. The viewer is not the renderer.
+- It does **not** weaken I1, I2 or any other invariant. If any part of it appears to
+  require weakening one, **stop and escalate** instead. (I5's *threshold* is being
+  re-derived from a requirement, which is the opposite of weakening it — §4 above.)
+- It does **not** reopen M0 or M1 sign-off.
+- It does **not** make the viewer a deliverable. It is a disposable instrument.
+
+**What it must find, stated up front so the goal is falsifiable.** The human expects
+watching a month to surface at least one behaviour that every current test calls correct
+and a human calls wrong. **If it finds nothing, that is recorded honestly as a real result
+that retires the concern** — not as a failure of the goal.
+
+---
+
+## ADR-0014 — The first playable build ships placeholder art
+Date: 2026-08-08 · Context: M2, answered outside the loop · Decided by: **the human**
+
+**Decision.** The game ships its first playable build with **placeholder art** — flat
+coloured shapes with clear silhouettes. Real art is a **separate track** that can replace
+them at any point without touching the simulation. M5 does not relitigate this and does
+not wait on it.
+
+**Why it is decided now rather than at M5.** Deciding it at M5 is deciding it too late,
+because the answer changes what M5 *is*. §8 already says "coloured rectangles are an
+acceptable shipping state for this milestone"; this converts an allowance into the plan,
+and makes the art track's absence a non-blocker rather than an open question.
+
+**Where the vocabulary gets established: G-017's viewer.** It is the cheapest possible
+test of whether a side-on cross-section reads clearly *at all* — which is a question about
+the whole visual direction, and one worth answering before M5 is built on the assumption
+that it does. The viewer is disposable ([ADR-0013](#adr-0013)); the finding about
+legibility is not.
+
+**Consequence.** Art is never on a goal's critical path. If a room type or a guest state
+cannot be told apart by shape and colour alone, that is a **design** finding about the
+cross-section, reportable at M5 by `render-critic` — not a request for a sprite.

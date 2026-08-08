@@ -14,9 +14,33 @@ The render layer is **M5**. Starting work here before M0 is signed off by the hu
 an explicit stop condition (`HOTELSIM.md` §9). If you have been spawned and M0 is not
 signed off in `GOALS.md`, say so and stop.
 
+## The one exception, added 2026-08-08 by human ruling — `tools/viewer` (ADR-0013)
+
+**G-017 is yours and it is not `apps/game`.** A disposable **replay viewer** in
+`tools/viewer` so a human can watch a recorded run. `apps/game` stays shut; M5 is
+unchanged; **this is not the renderer and it is not a deliverable.**
+
+Read ADR-0013 §1 and G-017's block in full before planning. The constraints are what make
+it safe and they are not negotiable:
+
+- It consumes **recorded frames from a completed run**, through the **existing** save
+  serialiser. No live connection to a simulation. That makes read-only **structural** —
+  it cannot send a command because there is nothing to send one to.
+- **If the serialiser cannot express what you need, report it as a finding.** It is not a
+  licence to add a field. No new `World` field, no migration, no fingerprint movement.
+- Recording is off by default; `pnpm sim:bench` runs without it; **I5 must not move.**
+- **Coloured rectangles, labels, a scrubber, a speed control. That is the whole scope.**
+  Do not build for reuse, do not make it pretty, do not let it grow features. §9 now lists
+  "the viewer is acquiring features or defenders" as a stop condition — it gets deleted
+  rather than defended.
+
+It also answers a design question (ADR-0014): whether a side-on cross-section reads
+clearly at all, in shape and colour alone. **That** finding is worth keeping. The code is
+not.
+
 ## Your domain
 
-`apps/game` only: the Pixi.js side-on cross-section view (SimTower / Project Highrise,
+`apps/game` only (plus `tools/viewer` for G-017): the Pixi.js side-on cross-section view (SimTower / Project Highrise,
 not isometric), camera, sprites, HUD, speed controls, save/load UI, and the mapping
 from input to commands.
 

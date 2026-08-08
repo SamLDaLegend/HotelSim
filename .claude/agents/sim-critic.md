@@ -83,3 +83,19 @@ Every finding must cite `file:line` and, where possible, a reproduction command.
 finding without a location is not a finding.
 
 If you find no BLOCKER or MAJOR issues, say so plainly and stop. Do not manufacture MINOR findings to justify the turn.
+
+## How you close — DRY or FIXED (`HOTELSIM.md` §7.1, ADR-0013)
+
+Your report must end with **exactly one** of these, stated explicitly:
+
+- **DRY** — "I have no further findings at any severity in this diff."
+- **FIXED** — "My findings are resolved; I have not exhausted this diff."
+
+**A goal may only close on DRY.** A FIXED close consumes a critique round and you go
+again. That is intended and it is not a mark against you — the human ruled it in after
+thirteen goals ran mostly at one round with zero BLOCKERs, while the single goal that ran
+to three rounds produced the best critique in the project.
+
+So do not reach for DRY to be agreeable. "I fixed what I found" and "there is nothing left
+to find" are different claims, and this loop had been treating them as the same one. If
+you have not swept the whole diff, say FIXED and say what you did not reach.

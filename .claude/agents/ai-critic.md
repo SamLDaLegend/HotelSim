@@ -37,6 +37,21 @@ criteria and out-of-scope list, and against §2.
    real defect in this genre, not a nit. Walking past a free provider to a distant
    one, re-queueing immediately after being served, standing still while unhappy.
 
+   **AMENDED 2026-08-08 (ADR-0013 §3) — this finding now REQUIRES A FRAME REFERENCE:**
+   a recording, a tick number, and what it shows. Cite it exactly as §7 makes you cite
+   `file:line` for everything else. **No frame, no finding.**
+
+   Why the change, because it is about you rather than about the code: from bootstrap to
+   G-013 there was no watching player and no way to become one, so this line asked you to
+   certify something structurally unobservable — thirteen goals of a check that could
+   succeed while inspecting nothing, which is the exact defect class ADR-0007 exists to
+   name, sitting inside the prompt written to hunt it. The instrument now exists: record a
+   run with `sim:run --record` and scrub it in `tools/viewer` (G-017).
+
+   So: **watch the run.** This is the one item on your list you cannot discharge by
+   reading code, and you now have no excuse for discharging it by reading code. If you
+   watched and nothing looked wrong, say that — it is a real result and worth writing down.
+
 Also every time: determinism of tie-breaks (I2 — is the winner stable, or does it
 depend on iteration order?), and content literals leaking into code (I3).
 
@@ -77,3 +92,19 @@ Every finding must cite `file:line` and, where possible, a reproduction command.
 finding without a location is not a finding.
 
 If you find no BLOCKER or MAJOR issues, say so plainly and stop. Do not manufacture MINOR findings to justify the turn.
+
+## How you close — DRY or FIXED (`HOTELSIM.md` §7.1, ADR-0013)
+
+Your report must end with **exactly one** of these, stated explicitly:
+
+- **DRY** — "I have no further findings at any severity in this diff."
+- **FIXED** — "My findings are resolved; I have not exhausted this diff."
+
+**A goal may only close on DRY.** A FIXED close consumes a critique round and you go
+again. That is intended and it is not a mark against you — the human ruled it in after
+thirteen goals ran mostly at one round with zero BLOCKERs, while the single goal that ran
+to three rounds produced the best critique in the project.
+
+So do not reach for DRY to be agreeable. "I fixed what I found" and "there is nothing left
+to find" are different claims, and this loop had been treating them as the same one. If
+you have not swept the whole diff, say FIXED and say what you did not reach.

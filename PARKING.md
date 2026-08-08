@@ -1,5 +1,27 @@
 # PARKING
 
+## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
+
+*As of 2026-08-08. ~110 items across 14 goals. Still growing, so §9's stop condition is
+not firing.*
+
+- **PROMOTED OUT — no longer parked**: scenario capital is now a **hard prerequisite of
+  the first M4 goal** (ADR-0013 §5). Until it lands, every balance figure in this repo was
+  taken with `--rooms N` silently seeding 75% extra opening capital.
+- **The costed lever, pinned and deliberately unpulled**: sampling the guest-store
+  invariant scan every 8th tick recovers **18.4%** of I5. Gating on change detection is
+  **dead and measured** — reference-unchanged on 1 of 525,600 ticks. Do not re-argue it.
+  What sampling surrenders is a one-tick double-booking, which **nobody could see until
+  G-017** — that untestability is part of why ADR-0013 was written.
+- **Heaviest clusters**: M3 owes movement, queues with capacity, and distance as a score
+  term (four goals lean on "there is no movement yet"). M6 owes `placeItem`, item cost and
+  quality, archetypes, and party size. M5 owes everything visual that is not the viewer.
+- **Watch for**: privacy as a room-type property — content can put a provider inside a
+  bedroom today and a stranger walks in. Shipped content avoids it by luck, not by rule.
+- **No linter is still configured.** Parked since bootstrap; the six gates do the work.
+
+---
+
 Everything discovered mid-goal that is not in the goal. It gets written down here and
 it does not get built now (`HOTELSIM.md` §4).
 
@@ -681,3 +703,51 @@ Raised by `ai-engineer` at BUILD, and deliberately kept out of the diff.
   general fix is a scan or a lint** — "no template literal, array literal or object literal
   evaluated on a non-throwing path inside a per-tick loop" — which is a `tools/gates` change
   and therefore explicitly out of this goal's scope. -> **a gate goal**, when one exists.
+
+---
+
+## Deferred at G-013 PLAN and by the observability ruling (2026-08-08)
+
+- **`placeItem` / `removeItem`** — the player command that puts an item in a room. Its
+  arrival is what relaxes G-013's reachability rule from "required by a room type" to
+  "placeable", so this parked item and that check are the same decision seen twice.
+  -> **M6**.
+
+- **Item cost, quality and decay.** An item type at G-013 is `{id, name, provides}` and
+  nothing else. -> **M6**, with upkeep.
+
+- **A provider serving more than one guest at once.** That is a queue with capacity, and
+  M3's statement is literally "queued shared resources". -> **M3**.
+
+- **Travel to a provider, and distance as a score term.** Until there is movement, provider
+  choice is tie-broken by lowest entity id. Fourth goal to lean on "there is no movement
+  yet". -> **M3**.
+
+- **AN ITEM IN A PRIVATE ROOM IS PUBLICLY USABLE.** Content can put a provider inside a
+  bedroom and a stranger will walk in to use it. Shipped content avoids this by luck
+  (`single_bed` provides nothing), not by rule. Privacy is a room-type property that does
+  not exist yet — and this is §6.1's "reads as stupid to a watching player" in its most
+  literal form, which from G-017 is a thing someone can actually see. -> **M3/M6**.
+
+- **Item-provided lodging — a sleeping pod.** G-013 refuses it at load, on the grounds that
+  a guest lodges in a room and engages a provider, and `payForStay` looks up a room type.
+  Making it work is a change to the lodging model, not to the registry. -> **M6**.
+
+- **Reachability does not ask whether the host room type can ever BE valid.** Guaranteed
+  today by `assertRequiredItemsExist`; worth re-checking when room types grow constraints.
+  -> **M6**.
+
+- **Delivery provenance richer than a kind.** G-013 records *room* or *item*, not which
+  entity or which room. M5's notifications will want the entity. -> **M5**.
+
+- **A general "no allocation on a per-tick non-throwing path" scan** now has a fifth
+  instance to justify it (see the cluster above). -> **a gate goal**.
+
+- **PROMOTED OUT OF PARKING, RECORDED HERE SO THE TRAIL SURVIVES: scenario capital.** It
+  was parked at G-011 as "closing it properly needs a scenario-capital mechanism". ADR-0013
+  §5 makes it a **hard prerequisite of the first M4 goal** — M4 does not start until it
+  lands. The reason it stopped being a nice-to-have: `--rooms 3` carries 375,000p of hidden
+  capital against a 500,000p starting constant, and every balance sweep and every bench in
+  this project used that flag, so `balance-critic`'s entire accumulated evidence base was
+  measured in a world with 75% more effective opening capital than the shipped figure.
+  Harmless while nothing is tuned against it. Not harmless at M4.

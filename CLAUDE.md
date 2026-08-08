@@ -60,13 +60,20 @@ The stack is fixed. Do not relitigate it. If the human later wants Godot, only
 - Money is **integer minor units** (pennies). Never a float (ADR-0002).
 - A **snake_case string literal is a content ID**, and must not appear in
   `packages/sim` or `apps/game` (ADR-0003).
+- **A perceptual criterion needs a perceptual check, or the word comes out** (ADR-0013,
+  human). See "Watching the game" below — this one changed the loop.
+- **A gate threshold must be derivable from a stated requirement.** A number nobody can
+  source is not a gate, it is a superstition with CI access (ADR-0013 §4, §2.1).
+- The first playable build ships **placeholder art** — flat coloured shapes, clear
+  silhouettes. Real art is a separate track. M5 does not wait on it (ADR-0014, human).
 
 ## How work happens
 
 `GOALS.md` is the ledger. **Exactly one goal is `in-progress` at a time.** Exit
 criteria are commands, not adjectives.
 
-The loop (§5): SELECT → PLAN → BUILD → CRITIQUE → RESPOND → VERIFY → COMMIT → REFLECT.
+The loop (§5): SELECT → PLAN → BUILD → CRITIQUE → RESPOND → VERIFY → **WATCH** → COMMIT
+→ REFLECT.
 
 - Feature code is written by the `.claude/agents/` builder agents, matched to a critic.
   **Critics have no write tools** — that is the enforcement mechanism, not decoration.
@@ -87,7 +94,72 @@ The loop (§5): SELECT → PLAN → BUILD → CRITIQUE → RESPOND → VERIFY �
 - A goal has exceeded its round budget twice under different framings — the goal is
   wrong, not the implementation.
 
+## Measuring performance — read before quoting any number
+
+**G-016 burned roughly three goals' budget on numbers that were wrong**, because the
+machine changed speed mid-session and every absolute taken against a baseline from
+another moment was inflated. The same build measured 3,087ms early and 1,740ms later.
+Two claims had to be publicly retracted, one of them after the orchestrator had already
+ruled on it, and the retraction itself then had to be swept a second time because it
+stopped at the test files.
+
+**The rule, and it is cheap:**
+
+1. **Measure paired and interleaved, in one sitting.** Arms alternated, warm-up
+   discarded, medians of ≥5. Never arm A now and arm B an hour later.
+2. **The ratio is the finding. The absolute is not.** Three independent measurements of
+   G-012 against HEAD — 2.41×, 2.37×, 2.32× — agreed within noise across hours in which
+   absolutes moved by nearly 2×.
+3. **Never compare an absolute against a figure recorded in another session**, including
+   ones in `GOALS.md`, `PARKING.md` or a code comment. If you need to, re-measure both.
+4. **Cite the workload with the number.** A figure without its workload is not a
+   measurement — two parked figures have been corrected for exactly that (G-009's
+   scaling reading, G-010's ledger trigger).
+5. **A number you cannot re-measure paired is withdrawn, not restated.** If the change
+   still stands on an argument that needs no stopwatch, say that instead.
+
+## How many critique rounds
+
+**One by default**, but a goal may only close on a **DRY** report (§7.1, ADR-0013). Every
+critic ends with exactly one of:
+
+- **DRY** — "I have no further findings at any severity in this diff."
+- **FIXED** — "My findings are resolved; I have not exhausted this diff."
+
+A FIXED close **consumes a round and the critic goes again**. This costs rounds and is
+meant to: thirteen goals ran mostly at 1/3 with zero BLOCKERs, and the one goal that ran
+to 3/3 produced the best critique in the project.
+
+A second critic from a **different pair** is required in the final round of the **last
+goal in a milestone** (G-008's precedent: the second pass found the 107M-penny sweep).
+Do not skip the first round — the two times it was nearly skipped, at G-010 and G-016, it
+found MAJORs that were defects in the *evidence* rather than the code.
+
+## Watching the game (§5 WATCH, ADR-0013 — human ruling)
+
+Nobody has seen this game run. Until 2026-08-08 the charter asked `ai-critic` to hunt
+behaviour that "reads as stupid to a watching player" — for thirteen goals, with no
+watching player and no way to become one. That is the ADR-0007 defect class sitting
+inside the prompt meant to hunt it.
+
+- **Any goal that changes guest, room or economy behaviour records a run and watches it**,
+  then appends to `JOURNAL.md` what looked wrong, or that nothing did. No observation
+  means a step was skipped.
+- The instrument is **G-017's replay viewer** in `tools/viewer`. It is a **replay** viewer
+  that reads recorded frames through the existing save serialiser, so "it cannot act" is
+  structural. `apps/game` stays shut; **this is not the renderer**.
+- **It is disposable.** Coloured rectangles, labels, a scrubber, a speed control. If it
+  acquires features or defenders, delete it rather than defend it (§9).
+- A "reads as stupid" finding now **requires a frame reference** — recording, tick number,
+  what it shows. No frame, no finding.
+
 ## The other ledgers
 
 `DECISIONS.md` settled calls · `JOURNAL.md` what happened, per goal ·
 `PARKING.md` deferred, deliberately · `ESCALATIONS.md` open human calls, loop stopped
+
+**Read the digest first.** Each of the four carries a rolling digest at the top under a
+fixed heading — schema versions, gate readings, obligations owed by future goals, open
+contradictions. Fifteen lines, **rewritten every REFLECT, never appended to** (§4.1). The
+append-only history lives beneath it. The four ledgers passed 2,800 lines, and an ADR
+amendment has already spent a day filed under the wrong ADR.
