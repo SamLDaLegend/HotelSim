@@ -489,4 +489,176 @@ Critique rounds used: 0/3
 > Full need vector, item-based provider registry, utility scoring, satisfaction over
 > ticks, patience drain, reviews. Guests visibly succeed and fail. — `HOTELSIM.md` §8
 
-Goals seeded after G-011 lands. `apps/game` stays shut until M5 (§9).
+Breakdown proposed by `ai-engineer` and adjudicated by the orchestrator, 2026-08-08.
+Order: G-012 → G-013 → G-014 → G-015, with G-016 contingent on a number.
+`apps/game` stays shut until M5 (§9).
+
+**The single biggest vacuity risk in M2**: G-012 must ship a **second need type with a
+second room-type provider**, or the "vector" has length one and every criterion
+downstream inspects nothing. That is why the vector goal carries the second need rather
+than the registry goal.
+
+## G-012 — The need vector and its decay
+Status: pending
+Milestone: M2
+Owner pair: ai-engineer / ai-critic
+Statement: A guest forms one instance of every need type the content defines, each with
+  its own integer urgency that rises every tick and falls only while a provider serves
+  it. A need that runs out of patience fails on its own and is recorded; it does not end
+  the stay. A guest holds its lodging room for the whole stay and engages one provider
+  at a time.
+Exit criteria:
+  - pnpm exec vitest run needs  (all green)
+  - pnpm sim:run --days 30 --seed 7 --rooms 6  prints a per-need-type table in which at
+    least TWO DIFFERENT need types have a non-zero met count AND a non-zero unmet count
+  - a case stepping one guest 100,000 ticks asserts its urgency equals a stated closed
+    form EXACTLY (integer arithmetic — a float or a repeated non-integer add fails it)
+  - the run reports zero stuck guests and zero orphaned reservations, where
+    countOrphanedReservations inspects BOTH reservation fields and a test constructs a
+    leak of each shape and watches it return 1
+  - pnpm sim:bench green, reading recorded in this block
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: utility scoring and hysteresis (G-014); items as providers (G-013);
+  reviews and the outcome table (G-015); archetypes choosing WHICH needs (M6); party
+  size (M6); movement between providers (M3)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+  RULED AT SEEDING — the lodging/engagement split is APPROVED, with a condition.
+  Without it a guest that leaves its room to satisfy a second need loses the room to the
+  next arrival and can never finish its stay: a starvation bug introduced BY the vector,
+  so it belongs to the vector's goal. It re-opens the reservation-leak class G-004 closed
+  by construction, which is the price.
+  **CONDITION: both reservations stay FIELDS OF THE GUEST. No back-pointer from a room
+  or an item to a guest, ever.** That is what preserves "a despawned guest cannot hold
+  anything because it no longer exists", and it is the property, not the field count,
+  that closed the class. Criterion 4 makes the re-opening loud.
+  Payment stays at payForStay on the lodging room (ADR-0010); M2 does not touch money.
+  Progress is retained, not reset, when a guest stops being served.
+
+  THIS IS THE FATTEST GOAL YET — vector, decay, per-need patience, per-need outcome, and
+  the split. Accepted on the argument that splitting it ships "a vector of length one
+  wearing a longer type". If PLAN comes back oversized, I will split it then.
+
+  MIGRATION OWED (ADR-0006). Defaults are argued, not chosen: a v-previous world is not
+  one whose extra needs were omitted, it is one in which those needs did not exist.
+
+## G-013 — The item-based provider registry
+Status: pending
+Milestone: M2
+Owner pair: ai-engineer / ai-critic
+Statement: A need is satisfied by a provider, and a provider is a room type or an item
+  type. An item provides only while it stands inside a valid room. Content declares
+  which provider satisfies which need; the simulation refuses to load content in which a
+  need has no provider a player can actually reach.
+Exit criteria:
+  - pnpm exec vitest run provider  (all green)
+  - pnpm sim:run --days 30 --seed 7 --rooms 6  reports, per need type, satisfactions
+    delivered BY AN ITEM and BY A ROOM, and both are non-zero
+  - content declaring a need whose only provider is an item that NO room type requires
+    is REFUSED at bindContent, naming the need — because until placeItem exists (M6) no
+    player command can put that item in the world
+  - demolishing the room an engaged item stands in releases the engagement, proven by a
+    test that constructs that world and watches the count go to zero
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: placeItem / removeItem (M6); item cost, quality, decay (M6); a provider
+  serving more than one guest at once (M3 — that is a queue with capacity 2, and M3's
+  statement is literally queued shared resources); travel to a provider (M3)
+Critique rounds used: 0/3
+
+  Criterion 3 is the most valuable line in the M2 proposal. bindContent today asks "does
+  some room type's provides name this need". Extended naively to items it would accept a
+  need whose only provider is an item nothing puts in the world — a check succeeding
+  while inspecting nothing a player can reach, with pnpm verify green. It must be
+  strengthened from DECLARED to REACHABLE.
+
+  No migration owed — the engagement field arrives with G-012, an item is already an
+  Entity, and the registry is content plus lookup. The content fingerprint moves, which
+  invalidates saves; that price was accepted at G-002.
+
+## G-014 — Utility scoring, and a guest that commits
+Status: pending
+Milestone: M2
+Owner pair: ai-engineer / ai-critic
+Statement: A guest chooses which need to pursue and which provider to use by a score
+  over urgency and provider fit, tie-broken by lowest entity id. A guest that has
+  committed does not abandon unless an alternative beats it by a content-defined margin,
+  and abandonments are a reported outcome.
+Exit criteria:
+  - pnpm exec vitest run utility  (all green)
+  - pnpm sim:run --days 30 --seed 7 <flags fixed at BUILD>  reports abandonments per
+    guest below <n>, IN A RUN THAT PROVABLY CONTAINS AT LEAST TWO PROVIDERS OF THE SAME
+    NEED SCORING WITHIN THE MARGIN OF EACH OTHER (same invocation pinned in a test)
+  - setting the hysteresis margin to zero turns a named test RED, and that test is the
+    ONLY one that goes red (verified by mutation — the G-010 bar)
+  - two providers scoring EXACTLY equal choose the lower entity id, asserted on TWO
+    different insertion orders (one order cannot distinguish "lowest id" from "first found")
+  - the same run reports zero stuck guests
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: distance or travel time as a score term (M3 — there is no movement yet);
+  reputation or price as terms (M4); archetype-varying weights (M6)
+Critique rounds used: 0/3
+
+  I2 CANNOT WITNESS THRASHING. The gate holds no reference hash (G-010's finding), and a
+  scorer that thrashes identically every run passes it. The counter is the witness, not
+  the gate.
+  Migration owed only if the abandonment counter cannot be derived. If the builder finds
+  a way to derive it, the migration is dropped and that is a win worth recording.
+
+## G-015 — Reviews and the outcome table
+Status: pending
+Milestone: M2
+Owner pair: ai-engineer / ai-critic (round 1) · ai-engineer / balance-critic (round 2)
+Statement: A departing guest leaves an integer review derived from its own recorded
+  experience: which needs were met, how long it waited against its patience, and whether
+  its stay was cut short. The four outcome counters become a table by reason. The review
+  is recorded and reported; nothing reads it.
+Exit criteria:
+  - pnpm exec vitest run review  (all green)
+  - pnpm sim:run --days 30 --seed 7 --rooms 6  prints a review distribution with at
+    least THREE distinct scores non-zero, and an outcome table with at least FOUR
+    distinct reasons non-zero
+  - --rooms 1 and --rooms 12 produce review distributions whose means differ by more
+    than <n>, COMPUTED BY THE TEST rather than asserted — a hotel that serves nobody
+    must not review the same as one that serves everybody
+  - the outcome table's total still equals arrived - live, and a test deletes one row
+    and watches the conservation law throw
+  - no sim module reads the review store — the boundary made mechanical, not documented
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: reputation as a stateful aggregate; reviews feeding demand, pricing or
+  arrival rate (ALL M4); review text (M5/M6)
+Critique rounds used: 0/3
+
+  RULED AT SEEDING — balance-critic takes round 2. §6 pairs one critic per builder, but
+  G-008 ran sim-critic then balance-critic and that second round was the best critique in
+  the project. A review scale that saturates for any hotel that opens the door is a
+  dominant-strategy failure wearing a guest-loop costume, and ai-critic's catalogue does
+  not hunt it. The differential criterion (1 room vs 12) is the one that cannot be faked
+  and is the answer to "guests visibly succeed and fail" not being a command.
+  Migration owed; SUMMARY_SCHEMA_VERSION bumps to 2 — the outcome table REPLACES four
+  counters, which is the breaking kind of change, not the additive kind report.ts permits.
+
+## G-016 — Guest-loop cost under a need vector
+Status: parked — CONTINGENT, triggered by a number
+Milestone: M2
+Owner pair: ai-engineer / ai-critic
+Statement: The guest loop's per-tick cost stays inside the I5 budget when every guest
+  carries the full need vector and every need has competing providers.
+Exit criteria:
+  - pnpm sim:bench green with the shipped M2 content
+  - pnpm exec vitest run scaling  asserts cost at N needs per guest is under <k>x cost
+    at 1 need, AT FIXED CONCURRENT GUEST COUNT (the honest axis — G-010 made tick cost
+    O(guests), and --rooms 20/60/120 all cost the same)
+  - the optimisation does not move the I2 state hash (the G-010 acceptance bar)
+  - all §2 invariant gates green (pnpm verify)
+
+  TRIGGER: promote to pending if, after G-014, pnpm sim:bench exceeds 70% of the I5
+  budget or the needs-scaling ratio exceeds its bound. Otherwise it stays parked and the
+  readings go in PARKING.md. Per G-004: optimising against a gate that is not failing is
+  speculative work.
+
+---
+
+## M2 exit — human sign-off required
+
+When G-012 to G-015 are `done` (and G-016 if triggered), that is a §5.4 escalation.
+Write it to `ESCALATIONS.md` and stop.

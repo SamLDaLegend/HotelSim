@@ -276,8 +276,12 @@ deferrals, each with the reason it is not G-008's.
 - **`capacity` is read by nothing.** A room earns the same whether capacity is 1, 2 or 4,
   and one guest occupies one room. The v1 fixture already prices against it
   (`fixtureSuite`, capacity 4 at 19,900p), so somebody has already reasoned from a number
-  the simulation ignores. It does enter the content fingerprint, so it is not free. -> M2,
-  with party sizes.
+  the simulation ignores. It does enter the content fingerprint, so it is not free.
+  ~~-> M2, with party sizes.~~ **MILESTONE TAG CORRECTED 2026-08-08 -> M6.** Party size is
+  parked to M1/M6 in the G-004 block, so this entry pointed at a milestone that does not
+  own the work it depends on. M2 gives a guest several *needs*, not several *guests*.
+  Caught by `ai-engineer` while collecting parked items for the M2 breakdown — a parking
+  note is only useful if its destination is real.
 - **A demolition refund reopens the G-005 upkeep dodge above 247,500p** — 99% of
   construction cost. Now recorded in `build.ts`'s header, because it is the number a future
   designer needs and the threshold moves with upkeep's share of build cost. -> M4.
