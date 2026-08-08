@@ -97,11 +97,17 @@ import {
 } from './build.js';
 import type { BuildInput, BuildOutcomes } from './build.js';
 import type { Command, ScheduledCommand } from './commands.js';
-import { firstNeedType, hasContentId, isRoomKind } from './content.js';
+import { hasContentId, isRoomKind, lodgingNeedOf } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
-import { assertGuestOutcomes, assertGuestStoreInvariants, stepGuests } from './guests.js';
+import {
+  assertGuestOutcomes,
+  assertGuestStoreInvariants,
+  departedGuests,
+  stepGuests,
+} from './guests.js';
+import { assertNeedOutcomes } from './needs.js';
 import { balanceOf, outstandingDebtOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { applyDrawLoan, assertLoanOutcomes, totalLoanOutcomes } from './loan.js';
@@ -412,7 +418,7 @@ function applyCommand(
       // the intent entered rather than three lines into a system. `bindContent` has
       // already established that every need this content DOES define has a provider, so
       // past this point a guest's need is always one something can satisfy.
-      if (firstNeedType(content) === undefined) {
+      if (lodgingNeedOf(content) === undefined) {
         throw new Error(
           'applyCommands: a guest arrived, but the injected content defines no need type for one to form',
         );
@@ -589,6 +595,7 @@ export function runGuests(state: TickState): TickState {
     tick: state.world.tick,
     guests: state.world.guests,
     outcomes: state.world.guestOutcomes,
+    needOutcomes: state.world.needOutcomes,
     ledger: state.world.ledger,
     entities: state.entities,
     content: state.content,
@@ -614,9 +621,16 @@ export function runGuests(state: TickState): TickState {
   const world =
     result.guests === state.world.guests &&
     result.outcomes === state.world.guestOutcomes &&
+    result.needOutcomes === state.world.needOutcomes &&
     result.ledger === state.world.ledger
       ? state.world
-      : { ...state.world, guests: result.guests, guestOutcomes: result.outcomes, ledger: result.ledger };
+      : {
+          ...state.world,
+          guests: result.guests,
+          guestOutcomes: result.outcomes,
+          needOutcomes: result.needOutcomes,
+          ledger: result.ledger,
+        };
   return { ...state, world, arrivingGuests: 0, guestsRun: true };
 }
 
@@ -840,6 +854,15 @@ export function stepTick(
   // postcondition those phases promise, and it fires if that ever stops being true.
   assertGuestStoreInvariants(state.world.guests, state.world.entities);
   assertGuestOutcomes(state.world.guestOutcomes, state.world.guests);
+  // And the per-need tally still describes those departures (G-012). Same function
+  // `assertWorldShape` calls at load, so "a valid tally" has one definition rather than
+  // two that drift, and the identity guard is `assertBuildOutcomes`'s argument exactly: a
+  // value nobody wrote cannot have become invalid, and only a DEPARTURE writes this one —
+  // so on the vast majority of ticks this costs one pointer compare. Every world this
+  // build LOADS is checked unconditionally.
+  if (state.world.needOutcomes !== world.needOutcomes) {
+    assertNeedOutcomes(state.world.needOutcomes, departedGuests(state.world.guestOutcomes));
+  }
   // And the build counters are still counters (G-008). The same function `assertWorldShape`
   // calls at load, so "valid build outcomes" has one definition rather than two that
   // drift. Deliberately NOT a claim about the entity store: there is no such law, and

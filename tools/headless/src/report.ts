@@ -46,6 +46,7 @@ import {
   assertBuildOutcomes,
   assertGuestOutcomes,
   assertLoanOutcomes,
+  assertNeedOutcomes,
   balanceOf,
   countConstructionTransactions,
   countDemolitionRefundTransactions,
@@ -56,12 +57,18 @@ import {
   countSettlementTransactions,
   countStuckGuests,
   dayOf,
+  departedGuests,
   entityCount,
+  firstRoomTypeProviding,
   guestCount,
   hashState,
   isWithinBounds,
+  lodgingNeedOf,
+  needOutcomeOf,
+  needTypesInOrder,
   outstandingDebtOf,
   requiredItemsOf,
+  roomTypeProvides,
   stockValueOf,
   sumByReason,
   TICKS_PER_DAY,
@@ -69,7 +76,7 @@ import {
   TRANSACTION_REASONS,
 } from '@hotelsim/sim';
 import { entitiesInOrder, GROUND_FLOOR, isRoomKind } from '@hotelsim/sim';
-import type { BoundContent, Cell, GridBounds, ScheduledCommand, World } from '@hotelsim/sim';
+import type { BoundContent, Cell, GridBounds, RoomTypeData, ScheduledCommand, World } from '@hotelsim/sim';
 
 /**
  * The hotel this runner simulates, until there is a way to build one.
@@ -91,6 +98,22 @@ import type { BoundContent, Cell, GridBounds, ScheduledCommand, World } from '@h
  */
 export const HOTEL_ROOMS = 3;
 export const TICKS_BETWEEN_ARRIVALS = 120;
+
+/**
+ * How many of EACH amenity room type the scenario inherits (G-012).
+ *
+ * A hotel with no amenities is a hotel in which every engagement need fails, so the
+ * default is one of each rather than zero: `--rooms 6` must describe a hotel where the
+ * need vector can be both met and missed, or the exit criterion measures a building
+ * nobody could satisfy anything in. `--amenities 0` is the deliberate opposite and is
+ * what the "every engagement need fails" case is tested with.
+ *
+ * ONE OF EACH IS ALSO THE INTERESTING NUMBER. Twelve guests a day against one café that
+ * serves one guest at a time is genuinely oversubscribed, so nourishment and
+ * entertainment are both met and missed in the same run — which is what criterion 2 asks
+ * for and what a hotel with an amenity per guest would never show.
+ */
+export const HOTEL_AMENITIES = 1;
 
 /**
  * `--build` and `--demolish` are OFF by default, and that is load-bearing (G-008).
@@ -246,6 +269,41 @@ export function builtRoomStartFloor(rooms: number): number {
   return rooms > 0 ? GROUND_FLOOR + 1 : GROUND_FLOOR;
 }
 
+/**
+ * Where the nth AMENITY stands: along the first basement, left to right, then down (G-012).
+ *
+ * A THIRD LAYOUT, AND IT IS IN THE BASEMENT FOR A REASON THAT COST A BROKEN CRITERION TO
+ * FIND. Seeding amenities on the ground floor — the obvious choice, and the first one
+ * tried — put them in the middle of the player's own building space, and G-011's criterion
+ * A went red: with `--rooms 0` the player builds packed from column 0, so its first two
+ * rooms landed at columns 1 and 3, SEALED BETWEEN two amenities each and therefore invalid.
+ * No valid room means no revenue, and 500,000p of capital buys exactly two rooms, so the
+ * run ended with 0 satisfied guests where it used to recover. A host layout decision took
+ * another goal's exit criterion down.
+ *
+ * The basement has none of that:
+ *
+ *   - it cannot collide with `roomCell` (floor 0 and up) or `builtRoomCell` (floor 0 or 1
+ *     and up) FOR ANY `--rooms`, so `spawnEntity`'s occupied-cell throw is unreachable and
+ *     the bench's `--rooms 60` is unaffected;
+ *   - a room at or below ground is grounded by the earth (G-009), so an amenity is
+ *     supported without needing anything built under it;
+ *   - the stride of two is the corridor that gives each one a door, exactly as `roomCell`;
+ *   - and it leaves the player's plot exactly as it was, so every build-schedule
+ *     measurement taken before this goal is comparing like with like.
+ *
+ * It wraps DOWNWARD when a basement fills, which for the default `--amenities 1` never
+ * happens; an absurd `--amenities` eventually walks off the plot and the sim throws, which
+ * is the same honest failure `--rooms 99999` gets.
+ */
+export function amenityCell(index: number, bounds: GridBounds): Cell {
+  const perFloor = Math.max(1, Math.floor((bounds.maxColumn - bounds.minColumn + 1) / COLUMNS_PER_ROOM));
+  return {
+    floor: GROUND_FLOOR - 1 - Math.floor(index / perFloor),
+    column: bounds.minColumn + (index % perFloor) * COLUMNS_PER_ROOM,
+  };
+}
+
 export function roomCell(index: number, bounds: GridBounds): Cell {
   // At least 1: `assertGridBounds` guarantees `minColumn <= maxColumn`, so the plot is at
   // least one column wide, and a room is one column. The goal that widens a room (G-009,
@@ -278,12 +336,62 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
  */
 export const SUMMARY_SCHEMA_VERSION = 1;
 
+/**
+ * The room type guests stay in: the lowest-id room type that provides the LODGING need.
+ *
+ * NOT `roomTypes[0]`, AND THAT IS THIS GOAL'S SHARPEST TRAP RATHER THAN A TIDY-UP. Until
+ * G-012 there was one room type, so "the lowest id" and "the room guests sleep in" were
+ * the same room by accident. G-012 adds amenities, and `games_room` and `hotel_cafe` both
+ * sort BELOW `standard_room`: every hotel this runner builds would silently have become a
+ * hotel of cafés, `--rooms 6` would mean six cafés, no guest would ever be served — and
+ * the report would still be internally consistent. Asking for the room by WHAT IT
+ * PROVIDES keeps `--rooms N` meaning the same thing whatever ids arrive later.
+ *
+ * Throws rather than defaulting: a content set with no lodging room is a content set this
+ * runner cannot build a hotel from, and guessing would be the silent fallback §6.1 warns
+ * about in a host instead of in a pathfinder.
+ */
+export function lodgingRoomTypeOf(content: BoundContent): RoomTypeData {
+  const lodging = lodgingNeedOf(content);
+  const roomType = lodging === undefined ? undefined : firstRoomTypeProviding(content, lodging.id);
+  if (roomType === undefined) {
+    throw new Error(
+      'The injected content defines no room type that provides its lodging need, so there is no hotel to run',
+    );
+  }
+  return roomType;
+}
+
+/**
+ * The room types that are NOT lodging: one per engagement need, in ascending id order.
+ *
+ * Derived from what each room type provides rather than from a list of names, so adding
+ * an amenity to `room-types.json` adds it to every scenario this runner builds and no
+ * snake_case id is needed here. A room type that provides nothing at all is not an
+ * amenity — it would give a guest nowhere to go — so it is left out rather than seeded.
+ */
+export function amenityRoomTypesOf(content: BoundContent): readonly RoomTypeData[] {
+  const lodging = lodgingRoomTypeOf(content);
+  const amenities: RoomTypeData[] = [];
+  for (const roomType of content.content.roomTypes) {
+    if (roomType.id === lodging.id) continue;
+    let providesSomething = false;
+    for (const needType of needTypesInOrder(content)) {
+      if (roomTypeProvides(content, roomType.id, needType.id)) providesSomething = true;
+    }
+    if (providesSomething) amenities.push(roomType);
+  }
+  return amenities;
+}
+
 export type Options = {
   readonly seed: number;
   readonly ticks: number;
   readonly quiet: boolean;
   readonly json: boolean;
   readonly rooms: number;
+  /** How many of EACH amenity room type the hotel is seeded with (G-012). */
+  readonly amenities: number;
   readonly arrivalEveryTicks: number;
   /** Ticks between player build attempts. `BUILD_OFF` (0) means the player never builds. */
   readonly buildEveryTicks: number;
@@ -300,6 +408,7 @@ export function parseArgs(argv: readonly string[]): Options {
   let quiet = false;
   let json = false;
   let rooms = HOTEL_ROOMS;
+  let amenities = HOTEL_AMENITIES;
   let arrivalEveryTicks = TICKS_BETWEEN_ARRIVALS;
   let buildEveryTicks = BUILD_OFF;
   let demolishEveryTicks = BUILD_OFF;
@@ -334,6 +443,13 @@ export function parseArgs(argv: readonly string[]): Options {
         // 0 is legal: an empty hotel runs, settles, and books amount-0 upkeep —
         // G-005's settlement tests pin exactly that.
         rooms = requireNumber('--rooms', argv[i + 1]);
+        i += 1;
+        break;
+      case '--amenities':
+        // 0 is legal and is the deliberate "this hotel offers nothing but a bed" case:
+        // every engagement need then fails, which is a real hotel a player can build and
+        // is what `needs.report.test.ts` measures the default against.
+        amenities = requireNumber('--amenities', argv[i + 1]);
         i += 1;
         break;
       case '--arrivals':
@@ -392,6 +508,7 @@ export function parseArgs(argv: readonly string[]): Options {
     quiet,
     json,
     rooms,
+    amenities,
     arrivalEveryTicks,
     buildEveryTicks,
     demolishEveryTicks,
@@ -422,30 +539,65 @@ export function schedule(
   buildEveryTicks: number = BUILD_OFF,
   demolishEveryTicks: number = BUILD_OFF,
   loanEveryTicks: number = BUILD_OFF,
+  amenities: number = HOTEL_AMENITIES,
 ): readonly ScheduledCommand[] {
-  const entityKind = content.content.roomTypes[0]?.id;
-  if (entityKind === undefined) {
-    throw new Error('The injected content defines no room type, so there is no hotel to run');
-  }
-  // What the seeded rooms must be furnished with (G-009). Read from the injected
-  // content, never from a literal (I3): a room type that requires nothing seeds nothing.
-  const furniture = requiredItemsOf(content, entityKind);
+  // The room guests SLEEP in, chosen by what it provides rather than by its position in
+  // the table — see `lodgingRoomTypeOf` for the trap that closes.
+  const entityKind = lodgingRoomTypeOf(content).id;
   const commands: ScheduledCommand[] = [];
-  for (let i = 0; i < rooms; i += 1) {
+  /**
+   * The seeded hotel walks ONE index space (G-012): lodging rooms first, then the
+   * amenities, so no two seeded rooms can ever land on the same cell. `roomCell` is
+   * injective, and `spawnEntity` THROWS on an occupied cell rather than refusing — a
+   * second walk would have had to prove it never crossed the first, and at `--rooms 60`
+   * (the bench) it would have.
+   */
+  let seeded = 0;
+  let seededAmenities = 0;
+  /**
+   * The entity id of every seeded ROOM, in the order they are spawned.
+   *
+   * Ids come from a monotonic counter in command order, so the host can compute them
+   * exactly. It used to assume a fixed stride — one room plus its furniture, the same for
+   * every room — and G-012 breaks that assumption: a lodging room carries a bed and an
+   * amenity carries nothing, so a stride of 2 would aim a third of the demolitions at a
+   * BED and record `noSuchRoom` refusals. Recording the ids as they are handed out is
+   * exact instead of nearly right, and it cannot drift from the seeding loop because it
+   * IS the seeding loop.
+   */
+  const seededRoomIds: number[] = [];
+  let nextEntityId = 1;
+  const seedRoom = (kind: string, amenity: boolean): void => {
     // Each room gets its own cell (G-007). A cell off the plot throws inside the sim,
     // which is the right failure for `--rooms 99999`: the plot is finite and the runner
-    // should say so rather than stack every room on one square. Since G-008 a cell that
-    // is already occupied throws too, which `roomCell` cannot produce — it is injective.
-    const at = roomCell(i, bounds);
-    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind, at } });
+    // should say so rather than stack every room on one square. Amenities walk the
+    // BASEMENT and everything else walks the hotel above it — two index spaces that can
+    // never meet, which is what makes a collision unreachable rather than unlikely.
+    const at = amenity ? amenityCell(seededAmenities, bounds) : roomCell(seeded, bounds);
+    if (amenity) seededAmenities += 1;
+    else seeded += 1;
+    seededRoomIds.push(nextEntityId);
+    nextEntityId += 1;
+    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind: kind, at } });
     // AND ITS FURNITURE. `--rooms` is the hotel the scenario STARTS with, placed through
     // the structural door, and a scenario that seeds unfurnished rooms is a scenario
     // whose hotel does not work — every guest would leave unsatisfied and the report
     // would be about a broken building rather than about the loop. `buildRoom` furnishes
     // what the PLAYER builds; this is the host doing the same job for what it inherits.
-    for (const itemId of furniture) {
+    // Read from the injected content, never from a literal (I3), and PER ROOM TYPE: an
+    // amenity that requires nothing seeds nothing.
+    for (const itemId of requiredItemsOf(content, kind)) {
+      nextEntityId += 1;
       commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind: itemId, at } });
     }
+  };
+  for (let i = 0; i < rooms; i += 1) seedRoom(entityKind, false);
+  // AND SOMEWHERE TO EAT (G-012). Without an amenity every engagement need a guest forms
+  // fails on patience, so a run would report a full vector and satisfy none of it — a
+  // hotel that could only disappoint, which is the shape §6.1 puts first. One of each by
+  // default; `--amenities 0` is how the disappointing hotel is deliberately measured.
+  for (const amenity of amenityRoomTypesOf(content)) {
+    for (let i = 0; i < amenities; i += 1) seedRoom(amenity.id, true);
   }
   for (let tick = 1; tick < ticks; tick += arrivalEveryTicks) {
     commands.push({ tick, command: { kind: 'guestArrives' } });
@@ -488,19 +640,25 @@ export function schedule(
   // demolishes the inherited rooms before anything it built, which is what puts a guest
   // in a room that stops existing and makes `evicted` a number a real run can produce.
   //
-  // THE STRIDE SKIPS THE FURNITURE (G-009). Ids are handed out room-then-items, both by
-  // the seeding loop above and by `buildRoom`, so walking 1, 2, 3 would aim two
-  // demolitions in three at a BED and record `noSuchRoom` refusals — the room tool
-  // refuses an item, correctly. A schedule that mostly gets refused measures the wrong
-  // constraint, which is G-008 round 1's lesson; the stride is what keeps it aimed at
-  // rooms. It is derived from the same content the seeding used, so there is no second
-  // copy of the layout to drift.
+  // IT SKIPS THE FURNITURE (G-009). Ids are handed out room-then-items, both by the
+  // seeding loop above and by `buildRoom`, so walking 1, 2, 3 would aim two demolitions in
+  // three at a BED and record `noSuchRoom` refusals — the room tool refuses an item,
+  // correctly. A schedule that mostly gets refused measures the wrong constraint, which is
+  // G-008 round 1's lesson.
+  //
+  // IT USED TO BE A FIXED STRIDE, AND G-012 BROKE THAT (see `seededRoomIds`): with rooms
+  // of different types the ids-per-room is no longer one number. The seeded prefix is
+  // therefore exact, and only past it — where every room is one the PLAYER built, and a
+  // player builds one room type — does a stride apply again.
   if (demolishEveryTicks > BUILD_OFF) {
-    const idsPerRoom = 1 + furniture.length;
-    let id = 1;
+    const idsPerBuiltRoom = 1 + requiredItemsOf(content, entityKind).length;
+    let index = 0;
     for (let tick = BUILD_START_TICK; tick < ticks; tick += demolishEveryTicks) {
+      const seededId = seededRoomIds[index];
+      const id =
+        seededId ?? nextEntityId + (index - seededRoomIds.length) * idsPerBuiltRoom;
       commands.push({ tick, command: { kind: 'demolishRoom', id } });
-      id += idsPerRoom;
+      index += 1;
     }
   }
   // AND THE PLAYER BORROWS (G-011), on a blind cadence, which is safe for a reason worth
@@ -537,6 +695,7 @@ export type RunSummary = {
     readonly seed: number;
     readonly ticks: number;
     readonly rooms: number;
+    readonly amenities: number;
     readonly arrivalEveryTicks: number;
     readonly buildEveryTicks: number;
     readonly demolishEveryTicks: number;
@@ -569,6 +728,27 @@ export type RunSummary = {
      */
     readonly inInvalidRooms: number;
   };
+  /**
+   * WHAT BECAME OF EVERY NEED, PER NEED TYPE (G-012). The table the exit criterion asks
+   * for, and the only place the need vector is visible from outside the simulation.
+   *
+   * ONE ROW PER NEED TYPE THE CONTENT DEFINES, in ascending id order, whether or not
+   * anything has resolved one — read from CONTENT and filled in from the world's tally,
+   * not read off the tally alone. A table that only listed needs something had happened
+   * to would go quiet in exactly the case worth seeing: a need type nobody can satisfy
+   * would be ABSENT rather than showing a column of zeroes.
+   *
+   * `met + unmet` equals the number of guests that have departed, for every row, and
+   * `buildSummary` checks it — see the violation below for why that identity is exact
+   * here and only an inequality inside the sim.
+   */
+  readonly needs: readonly {
+    readonly needId: string;
+    /** Whether this is the need guests book a room for. Exactly one row is true. */
+    readonly lodging: boolean;
+    readonly met: number;
+    readonly unmet: number;
+  }[];
   /**
    * The state of the building itself (G-009).
    *
@@ -720,6 +900,8 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   assertBuildOutcomes(world.buildOutcomes);
   // And the loan counters (G-011), for the same reason and through the same function.
   assertLoanOutcomes(world.loanOutcomes);
+  // And the per-need tally (G-012), against the departures those counters record.
+  assertNeedOutcomes(world.needOutcomes, departedGuests(world.guestOutcomes));
 
   const stuck = countStuckGuests(world.tick, world.guests, content);
   const orphans = countOrphanedReservations(world.guests, world.entities);
@@ -752,12 +934,27 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   }
   const validRooms = roomCount - totalInvalidRooms(invalidRooms);
 
+  // THE NEED TABLE (G-012), built from CONTENT and filled in from the world, so a need
+  // type nothing has resolved shows a row of zeroes rather than vanishing.
+  const lodgingNeed = lodgingNeedOf(content);
+  const departed = departedGuests(world.guestOutcomes);
+  const needs = needTypesInOrder(content).map((needType) => {
+    const row = needOutcomeOf(world.needOutcomes, needType.id);
+    return {
+      needId: needType.id,
+      lodging: needType.id === lodgingNeed?.id,
+      met: row?.met ?? 0,
+      unmet: row?.unmet ?? 0,
+    };
+  });
+
   const summary: RunSummary = {
     schema: SUMMARY_SCHEMA_VERSION,
     input: {
       seed: options.seed,
       ticks: options.ticks,
       rooms: options.rooms,
+      amenities: options.amenities,
       arrivalEveryTicks: options.arrivalEveryTicks,
       buildEveryTicks: options.buildEveryTicks,
       demolishEveryTicks: options.demolishEveryTicks,
@@ -781,6 +978,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       orphanedReservations: orphans,
       inInvalidRooms: guestsInInvalidRooms,
     },
+    needs,
     rooms: {
       valid: validRooms,
       invalid: {
@@ -895,6 +1093,28 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         'debt (G-011).',
     );
   }
+  // THE NEED TALLY CLOSES EXACTLY (G-012), and this is the strongest form of that law
+  // available anywhere — stronger than the one the sim itself can assert.
+  //
+  // Every guest this runner creates forms one instance of EVERY need type, because it
+  // creates them all under one content set and never loads a save. So for every row:
+  //
+  //     met + unmet === satisfied + unsatisfied + evicted
+  //
+  // exactly. Inside the sim the same law is an inequality, because a world MIGRATED from
+  // v5 carries guests that formed a single need and resolve one row on departure — a case
+  // that cannot arise here. A need instance dropped on an exit path, or counted twice,
+  // moves one side and not the other; without this, a departure path that forgot to record
+  // would leave every other number in this report perfectly consistent.
+  for (const row of needs) {
+    if (row.met + row.unmet !== departed) {
+      violations.push(
+        `Need accounting broken at tick ${world.tick}: need "${row.needId}" records ${row.met} met and ` +
+          `${row.unmet} unmet, which is ${row.met + row.unmet} instances against ${departed} departed guest(s). ` +
+          'Every guest forms one instance of every need and resolves it exactly once, on the way out (G-012).',
+      );
+    }
+  }
   // VALIDITY — the exit criterion, as a check the run makes on itself (G-009).
   //
   // WHAT THIS NUMBER IS, EXACTLY: a count taken ONCE, over the FINAL world of the run. It
@@ -950,6 +1170,12 @@ export function renderText(summary: RunSummary): string {
     `stuck       ${summary.guests.stuck}`,
     `orphan res  ${summary.guests.orphanedReservations}`,
     `in bad room ${summary.guests.inInvalidRooms}`,
+    // ONE LINE PER NEED TYPE (G-012), ascending by id, whether or not anything happened to
+    // it. `L` marks the lodging need — the one the stay is — so a reader can tell at a
+    // glance which row is the booking and which are the holiday.
+    ...summary.needs.map(
+      (need) => `need ${need.lodging ? 'L' : ' '}     ${need.needId} ${need.met} met, ${need.unmet} unmet`,
+    ),
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,
     `upkeep      ${summary.money.upkeepPennies}p`,

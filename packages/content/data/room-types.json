@@ -9,5 +9,38 @@
     "demolitionRefundBasisPoints": 5000,
     "provides": ["night_rest"],
     "requires": ["single_bed"]
+  },
+  {
+    "id": "hotel_lounge",
+    "name": "Lounge",
+    "capacity": 8,
+    "nightlyRatePence": 0,
+    "nightlyUpkeepPence": 1500,
+    "constructionCostPence": 250000,
+    "demolitionRefundBasisPoints": 5000,
+    "provides": ["guest_comfort"],
+    "requires": []
+  },
+  {
+    "id": "games_room",
+    "name": "Games Room",
+    "capacity": 8,
+    "nightlyRatePence": 0,
+    "nightlyUpkeepPence": 1500,
+    "constructionCostPence": 250000,
+    "demolitionRefundBasisPoints": 5000,
+    "provides": ["guest_entertainment"],
+    "requires": []
+  },
+  {
+    "id": "hotel_cafe",
+    "name": "Cafe",
+    "capacity": 8,
+    "nightlyRatePence": 0,
+    "nightlyUpkeepPence": 1500,
+    "constructionCostPence": 250000,
+    "demolitionRefundBasisPoints": 5000,
+    "provides": ["guest_nourishment"],
+    "requires": []
   }
 ]

@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createWorld,
-  firstNeedType,
+  lodgingNeedOf,
   GROUND_FLOOR,
   isRoomKind,
   isWithinBounds,
@@ -23,13 +23,16 @@ import {
 import type { Guest, Transaction, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import {
+  amenityRoomTypesOf,
   assertIntegerLeaves,
   buildSummary,
   builtRoomCell,
   builtRoomStartFloor,
   COLUMNS_PER_ROOM,
   emitReport,
+  HOTEL_AMENITIES,
   HOTEL_ROOMS,
+  lodgingRoomTypeOf,
   parseArgs,
   renderJson,
   renderQuiet,
@@ -124,16 +127,23 @@ describe('schedule', () => {
     // is not a provider and a scenario that inherits a broken hotel is a scenario about
     // the wrong thing. The count is derived from the CONTENT rather than written as a
     // literal, so adding a second required item does not silently make this test wrong.
-    const perRoom = 1 + requiredItemsOf(content, content.content.roomTypes[0]!.id).length;
+    const lodgingKind = lodgingRoomTypeOf(content).id;
+    const perRoom = 1 + requiredItemsOf(content, lodgingKind).length;
+    // G-012: the seeded hotel is `rooms` bedrooms PLUS `amenities` of every amenity room
+    // type, each with whatever IT requires. Derived from the content on both counts, so a
+    // fourth room type or a second required item does not silently make this wrong.
+    const amenityKinds = amenityRoomTypesOf(content);
+    const perAmenity = amenityKinds.reduce((total, kind) => total + 1 + requiredItemsOf(content, kind.id).length, 0);
     const commands = schedule(500, content, PLOT, 4, 100);
     const spawns = commands.filter((c) => c.command.kind === 'spawnEntity');
     const arrivals = commands.filter((c) => c.command.kind === 'guestArrives');
     expect(perRoom).toBeGreaterThan(1); // the shipped room type does require something
-    expect(spawns).toHaveLength(4 * perRoom);
+    expect(amenityKinds.length).toBeGreaterThan(0); // and there is somewhere to eat
+    expect(spawns).toHaveLength(4 * perRoom + HOTEL_AMENITIES * perAmenity);
     expect(spawns.every((c) => c.tick === 0)).toBe(true);
     // Every item stands in a room's cell, and every room has its items.
     const rooms = spawns.filter((c) => c.command.kind === 'spawnEntity' && isRoomKind(content, c.command.entityKind));
-    expect(rooms).toHaveLength(4);
+    expect(rooms).toHaveLength(4 + HOTEL_AMENITIES * amenityKinds.length);
     expect(arrivals.map((c) => c.tick)).toEqual([1, 101, 201, 301, 401]);
   });
 
@@ -330,8 +340,16 @@ describe('buildSummary', () => {
     // One room AND its bed since G-009 — `entities` counts everything that stands in the
     // building, which is why `rooms.valid` exists beside it and is the number a reader
     // wants. Derived from the content, not a literal, for the reason above.
-    expect(summary.world.entities).toBe(1 + requiredItemsOf(content, content.content.roomTypes[0]!.id).length);
-    expect(summary.rooms.valid).toBe(1);
+    // One bedroom AND its bed, plus one of each amenity (G-012) — `entities` counts
+    // everything that stands in the building, which is why `rooms.valid` exists beside it.
+    const amenityEntities = amenityRoomTypesOf(content).reduce(
+      (total, kind) => total + 1 + requiredItemsOf(content, kind.id).length,
+      0,
+    );
+    expect(summary.world.entities).toBe(
+      1 + requiredItemsOf(content, lodgingRoomTypeOf(content).id).length + amenityEntities,
+    );
+    expect(summary.rooms.valid).toBe(1 + amenityRoomTypesOf(content).length);
     expect(summary.guests.arrived).toBe(3); // ticks 1, 701, 1401 — the cadence echoed above
   });
 });
@@ -359,6 +377,7 @@ const distinct: RunSummary = {
     seed: 101,
     ticks: 102,
     rooms: 103,
+    amenities: 139,
     arrivalEveryTicks: 104,
     buildEveryTicks: 123,
     demolishEveryTicks: 124,
@@ -375,6 +394,10 @@ const distinct: RunSummary = {
     orphanedReservations: 116,
     inInvalidRooms: 132,
   },
+  needs: [
+    { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141 },
+    { needId: 'betaNeed', lodging: false, met: 142, unmet: 143 },
+  ],
   rooms: {
     valid: 133,
     invalid: { missingItem: 134, noDoor: 135, unplaced: 136, unsupported: 137 },
@@ -429,6 +452,8 @@ describe('renderers', () => {
         'stuck       115',
         'orphan res  116',
         'in bad room 132',
+        'need L     alphaNeed 140 met, 141 unmet',
+        'need       betaNeed 142 met, 143 unmet',
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',
@@ -467,8 +492,8 @@ describe('renderers', () => {
 // buildSummary, or it is code that has never run. No CLI backdoor forges state; the
 // forging happens here, below the CLI, against the same function the CLI calls.
 describe('buildSummary violations (forged worlds)', () => {
-  const needType = firstNeedType(content);
-  if (needType === undefined) throw new Error('shipped content defines no need type');
+  const needType = lodgingNeedOf(content);
+  if (needType === undefined) throw new Error('shipped content defines no lodging need');
 
   /** A guest appended to a real world's store, with outcomes kept conserved. */
   function withForgedGuest(world: World, guest: Omit<Guest, 'id'>): World {
@@ -486,10 +511,9 @@ describe('buildSummary violations (forged worlds)', () => {
     const { world, options } = defaultRun(2);
     const forged = withForgedGuest(world, {
       arrivedTick: world.tick, // age 0 — cannot read as stuck, so the orphan branch is isolated
-      needId: needType.id,
       roomEntityId: 999_999, // no such entity
-      patienceRemaining: 1,
-      restRemaining: 0,
+      engagement: null,
+      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.orphanedReservations).toBe(1);
@@ -504,10 +528,9 @@ describe('buildSummary violations (forged worlds)', () => {
     const limit = maxGuestLifetimeTicks(content, needType.id);
     const forged = withForgedGuest(world, {
       arrivedTick: world.tick - limit - 1, // one tick past the oldest a live guest can be
-      needId: needType.id,
       roomEntityId: NO_ENTITY, // waiting, not orphaned — isolates the stuck branch
-      patienceRemaining: 1,
-      restRemaining: 0,
+      engagement: null,
+      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.stuck).toBe(1);
@@ -547,10 +570,9 @@ describe('buildSummary violations (forged worlds)', () => {
     const forged: World = {
       ...withForgedGuest(world, {
         arrivedTick: world.tick,
-        needId: needType.id,
         roomEntityId: 999_999,
-        patienceRemaining: 1,
-        restRemaining: 0,
+        engagement: null,
+        needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1 }],
       }),
       ledger: [...world.ledger.filter((_, i) => i !== firstSettlement), foreign],
     };
@@ -569,6 +591,7 @@ describe('emitReport (print THEN fail — the contract\'s second clause)', () =>
     quiet: false,
     json: false,
     rooms: HOTEL_ROOMS,
+    amenities: HOTEL_AMENITIES,
     arrivalEveryTicks: TICKS_BETWEEN_ARRIVALS,
     buildEveryTicks: 0,
     demolishEveryTicks: 0,

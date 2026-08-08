@@ -15,8 +15,12 @@ import {
   constructionCostOf,
   demolitionRefundOf,
   firstEconomy,
+  firstRoomTypeProviding,
+  lodgingNeedOf,
   minConstructionCostOf,
+  needTypesInOrder,
   requiredItemsOf,
+  roomTypeProvides,
 } from '@hotelsim/sim';
 import type { BoundContent, ScheduledCommand } from '@hotelsim/sim';
 
@@ -80,9 +84,18 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // The kind comes from the LOADED CONTENT, not from a literal. So the 100,000-tick
   // determinism proof now covers the content path end to end: if the loader broke, or
   // if the injected registry were empty, this harness would not produce a hash at all.
-  const entityKind = content.content.roomTypes[0]?.id;
+  //
+  // IT IS THE LODGING ROOM, NOT `roomTypes[0]` (G-012). That expression was "the lowest
+  // id", which was the room guests sleep in only while there was exactly one room type.
+  // The amenities this goal adds sort BELOW it — `games_room` and `hotel_cafe` both come
+  // before `standard_room` — so this whole log would have become a hotel of cafés: no
+  // guest served, every claim in the comments below quietly false, AND THE I2 GATE STILL
+  // GREEN, because it compares runs to each other and holds no reference hash. Asking for
+  // the room by what it provides is what keeps this log about the thing it says it is.
+  const lodgingNeed = lodgingNeedOf(content);
+  const entityKind = lodgingNeed === undefined ? undefined : firstRoomTypeProviding(content, lodgingNeed.id)?.id;
   if (entityKind === undefined) {
-    throw new Error('determinism harness: the injected content defines no room type to spawn');
+    throw new Error('determinism harness: the injected content defines no room type guests can stay in');
   }
   // What a room of this kind needs to work, from the room type's own `requires` — never
   // from a literal (I3, ADR-0003).
@@ -252,6 +265,56 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind, at } });
     furnish(47, at, schedule);
   }
+  // ============================================================================
+  // SOMEWHERE TO EAT, SIT AND PLAY (G-012) — one room per ENGAGEMENT need.
+  //
+  // The need vector is the third feature in this file whose coverage does not follow from
+  // the passes above, and the reason is the G-009 reason rather than the G-005 one.
+  // Settlement was free to cover because it is UNCONDITIONAL. An engagement need is
+  // conditional twice over: a guest only pursues it if a provider EXISTS, and the tally it
+  // moves is written only when that guest departs. A log whose hotel is all bedrooms
+  // produces guests that form four needs, satisfy one, and fail three every single time —
+  // so `needOutcomes` would be hashed state carrying nothing but a constant, and the 100k
+  // proof would say nothing about engagement, reservation or release.
+  //
+  // With these three the log covers, over 100,000 ticks: engagements taken and released,
+  // needs MET and needs UNMET for the same need type, urgency ordering deciding which
+  // provider a guest walks to first, and the second reservation field round-tripping
+  // through every hash. `needs.determinism.test.ts` replays this log and asserts it rather
+  // than trusting this comment (ADR-0007).
+  //
+  // FLOOR 0, COLUMNS 10/12/14, AND NONE OF THAT IS INCIDENTAL. Floor 0 is the earth, so
+  // they are grounded and stay valid for the whole run; the odd columns between them are
+  // the doors. No other pass can reach these cells: the spawn diagonal touches floor 0
+  // only at columns 0, 4, 21, 42 and 63 (`spawnIndex % 21` and `% 80` over ~99 spawns),
+  // the build rotation's occupied branch needs `buildIndex % 21 === 0` AND
+  // `buildIndex % 3 === 1`, which no integer satisfies, and the terraces are below ground.
+  // `spawnEntity` THROWS on an occupied cell, so a collision would fail the gate loudly.
+  //
+  // THEY SPAWN AT TICK 47, WITH THE TOWER AND BEFORE THE FIRST GUEST AT TICK 101, and they
+  // therefore SHIFT EVERY LATER ID — which is exactly what G-010's warning and G-011's
+  // churn pass are about. `underfoot` below adds their entity count, derived rather than
+  // written down.
+  // ============================================================================
+  let amenityColumn = 10;
+  let amenityEntities = 0;
+  for (const roomType of content.content.roomTypes) {
+    if (roomType.id === entityKind) continue;
+    let providesEngagement = false;
+    for (const needType of needTypesInOrder(content)) {
+      if (needType.id === lodgingNeed?.id) continue;
+      if (roomTypeProvides(content, roomType.id, needType.id)) providesEngagement = true;
+    }
+    if (!providesEngagement) continue;
+    const at = { floor: 0, column: amenityColumn };
+    amenityColumn += 2;
+    schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind: roomType.id, at } });
+    amenityEntities += 1;
+    for (const itemId of requiredItemsOf(content, roomType.id)) {
+      schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind: itemId, at } });
+      amenityEntities += 1;
+    }
+  }
   // Some of these target ids that are not live yet, or are already gone. That is
   // deliberate: a despawn of an unknown id must be a deterministic no-op.
   for (let tick = 2_003; tick < ticks; tick += 4_001) {
@@ -353,8 +416,13 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // G-011 INSERTED EXACTLY SUCH A PASS, and this is the line that pays for it: the churn
   // above consumes `churnEntities` ids before tick 13, so the walk starts that much higher.
   // Derived from the same computation that produced them, so the two cannot drift.
+  //
+  // G-012 INSERTED ANOTHER SUCH PASS, and this line pays for it too: the amenities spawn
+  // at tick 47 alongside the tower, so their ids sit between the tower and the first
+  // terrace. Derived from the same loop that produced them, so the two cannot drift — and
+  // if they ever do, it is the sky-tower test and the amenity test that say so.
   const perFurnishedRoom = 1 + furniture.length;
-  let underfoot = churnEntities + 5 * perFurnishedRoom + 1;
+  let underfoot = churnEntities + 5 * perFurnishedRoom + amenityEntities + 1;
   for (let tick = 1_601; tick < ticks; tick += 1_261) {
     schedule.push({ tick, command: { kind: 'guestArrives' } });
     schedule.push({ tick, command: { kind: 'demolishRoom', id: underfoot } });

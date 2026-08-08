@@ -202,17 +202,49 @@ export const roomTypeSchema = z.strictObject({
 });
 
 /**
- * One need a guest can form (G-004).
+ * What a need is FOR (G-012, ADR-0012).
  *
- * M0 has exactly one need and one provider for it. The full need vector, decay, and
- * utility scoring across many providers are M2 — this table is deliberately two
- * integers and a name.
+ *   lodging     the reason a guest books at all. A guest reserves a room for it and
+ *               HOLDS THAT ROOM FOR THE WHOLE STAY; meeting it ends the stay, is what
+ *               `payForStay` charges for, and failing to get a room for it is what
+ *               makes a guest leave unsatisfied. Exactly one need may be lodging.
+ *   engagement  a want met DURING the stay, at a provider the guest engages one at a
+ *               time. It never ends the stay: it is met, or it runs out of patience
+ *               and fails on its own, and either way it is recorded.
  *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `requires` and price contract exactly, and
+ * for the same hazard in mirror image. A new need type that forgets to say what it is
+ * for would become a SECOND lodging need under the sim's historical fallback, and a
+ * second reason-to-book is not a thing the simulation can act on. Silence in HISTORY is
+ * a different statement: a document written before roles existed had one need and it was
+ * the lodging one, which is why `NeedTypeData` in `packages/sim/src/content.ts` keeps the
+ * key optional. The rule there, in full: if NO need declares a role, the lowest-id need
+ * is the lodging one (the pre-M2 reading); if ANY need declares one, exactly one must
+ * declare `lodging` or `bindContent` throws. There is no case where the sim silently
+ * disagrees with a role a designer wrote down.
+ */
+export const needRoleSchema = z.enum(['lodging', 'engagement']);
+
+/**
+ * One need a guest can form (G-004, G-012).
+ *
+ * A guest forms ONE INSTANCE OF EVERY NEED IN THIS TABLE on arrival (G-012), so a row
+ * added here is a want every guest in the game acquires — and `bindContent` refuses
+ * content in which some room type does not provide it, because a need nothing can
+ * satisfy is guaranteed unhappiness rather than difficulty (HOTELSIM.md §6.1).
+ *
+ *   role           what the need is for — see `needRoleSchema`
  *   satisfyTicks   ticks of uninterrupted provision that MEET the need
  *   patienceTicks  ticks a guest will wait for a provider before giving up
  *
  * Both are ticks, never seconds and never a wall-clock duration: one tick is one
  * in-game minute (I2).
+ *
+ * `patienceTicks` IS ALSO THE CEILING ON URGENCY (G-012). A guest's urgency for a need
+ * rises by one a tick while nothing is serving it and falls by one a tick while
+ * something is, and the need FAILS when urgency reaches this number. So there is one
+ * knob per need rather than a separate decay rate: a need that should press harder is a
+ * need with less patience. See `needs.ts` in `packages/sim` for the closed form.
  *
  * `satisfyTicks` IS AN ECONOMIC NUMBER, not only a pacing one, and it is the file's
  * biggest surprise. A room bills `nightlyRatePence` once per COMPLETED stay, and this
@@ -231,6 +263,7 @@ export const roomTypeSchema = z.strictObject({
 export const needTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
+  role: needRoleSchema,
   satisfyTicks: z.int().min(1),
   patienceTicks: z.int().min(1),
 });
@@ -364,5 +397,6 @@ export const economiesSchema = z.array(economySchema).min(1);
 
 export type RoomType = z.infer<typeof roomTypeSchema>;
 export type NeedType = z.infer<typeof needTypeSchema>;
+export type NeedRole = z.infer<typeof needRoleSchema>;
 export type ItemType = z.infer<typeof itemTypeSchema>;
 export type Economy = z.infer<typeof economySchema>;

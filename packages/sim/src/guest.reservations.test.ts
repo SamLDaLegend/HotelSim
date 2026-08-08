@@ -179,7 +179,7 @@ describe('exit path — save and load', () => {
     const world = run(hotel(1), content, 3, [at(1, arrive)]);
     const blob = JSON.parse(serialise(world)) as { world: { guests: { list: { roomEntityId: number }[] } } };
     blob.world.guests.list[0]!.roomEntityId = 999;
-    expect(() => deserialise(JSON.stringify(blob))).toThrow(/holds a reservation on entity 999, which does not exist/);
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/lodges in entity 999, which does not exist/);
   });
 
   it('refuses a save that books two guests into one room', () => {

@@ -501,4 +501,183 @@ Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the dif
 - **The two CLI layouts are a host decision that will not survive M5.** `roomCell` leaves a
   corridor (the inherited hotel) and `builtRoomCell` packs tight on the floor above (the
   player). Both exist to give a sweep a workload; when a UI dispatches builds, the layout is
-  the player's and both go. -> **M5**.
+  the player's and both go. -> **M5**. **G-012 UPDATE: there are now THREE**, the new one
+  being `amenityCell` (the basement). It is in the basement because putting amenities on the
+  ground floor took G-011's criterion A down — see the note in `report.ts`.
+
+## Deferred out of G-012 (2026-08-08)
+
+Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff.
+
+- **G-016 IS TRIGGERED. THE NEED VECTOR COSTS 2.41x HEAD's TICK COST**, against the 70%
+  promotion line in its own goal block. The two fixes below are in the diff because a red
+  gate is not shippable and both were mistakes rather than missing optimisations: the
+  engagement selector was O(needs²) comparisons with two binary searches each, paid by every
+  unengaged guest every tick (~~27.7% of tick self-time~~ — WITHDRAWN, see below), and
+  `assertNeedVector` allocated a literal table per need per guest per tick — the exact
+  allocation shape G-010 spent a goal removing from `assertGuestStoreInvariants`, copied back
+  in by copying its shape. A third, `isNeedPending` derived from the other two predicates
+  rather than written out, cost ~~a further 11%~~ — **2.2%, re-measured at G-016**. All three
+  were verified behaviour-preserving against G-010's bar: the golden state hash
+  `0dc63018abda9764` is unmoved by any of them.
+
+  **EVERY PERCENTAGE IN THIS ENTRY WAS TAKEN INSIDE A MACHINE-DRIFT WINDOW AND IS NOT
+  RELIABLE.** G-016 re-measured them paired and interleaved: the 11% is 2.2%, and the 27.7%
+  and 4.7% were never re-measured at all and are withdrawn rather than restated. The three
+  changes are all still correct and all still shipped — two of them rest on a complexity or
+  allocation argument that needs no stopwatch — but **do not cite a number from this entry.**
+  See the G-016 section at the end of this file.
+
+  **REPORT THE RATIO, NOT THE ABSOLUTE, AND HERE IS WHY.** This machine drifted ~30% slower
+  over the session — HEAD itself, unchanged, measures **4,618ms now against the 3,510ms
+  recorded at G-011** — so an absolute reading taken today says whatever the thermal state
+  says. Paired and INTERLEAVED (stash between arms, three rounds, medians):
+
+  | | HEAD | G-012 |
+  |---|---|---|
+  | 365 days, `--rooms 60 --arrivals 32` | **4,618ms** | **11,151ms** |
+
+  **Ratio 2.41x.** Normalised onto the project's recorded HEAD figure that is **8,476ms,
+  84.8% of budget** — which independently agrees with `ai-critic`'s 84.3%, measured hours
+  apart. Absolute readings on this machine today range 8.0s to 11.2s and DO fail the gate at
+  the top of that range. Whoever takes G-016 should re-measure HEAD alongside rather than
+  trusting any single number in this file (the G-010 lesson, third time recorded).
+
+  **WHAT IS LEFT IS INHERENT AND IS G-016's**, and the profile is flat rather than
+  dominated: `stepGuests` 19.5%, `advanceNeeds` 11.7%, `assertGuestStoreInvariants` 7.9%
+  plus `claimEntity` 5.5%, GC 3.5%. The vector multiplies per-guest work by need count and
+  there are now two reservations per guest for the invariant scan to check, so the honest
+  next moves are the ones G-016 names — a flat positional need array, or sampling the
+  per-tick invariant scan. **Do not size that work from this note alone: profile first**
+  (the G-010 lesson, twice recorded).
+
+  **AND G-016 MUST SAY WHICH OF TWO THINGS IT IS OPTIMISING**, because `ai-critic` measured
+  a split the profile above understates. No-opping the body of `assertGuestStoreInvariants`
+  takes the run from 8.22s to 6.66s: **1.56s, 19% of the whole run, against ~0.4s at HEAD —
+  a ~4x growth in per-tick RE-VALIDATION of state the tick has just produced.** That is
+  VALIDATION POLICY, not guest-loop cost, and it is a different question with a different
+  answer (sample it, or gate it on a changed store) from "the vector costs N times more per
+  guest". Inheriting a fifth of the I5 budget as though it were structural simulation cost
+  is how a scaling goal ends up optimising the wrong thing. Not acted on here.
+
+- **AN AMENITY EARNS NOTHING AND COSTS UPKEEP, so a rational player builds none.**
+  `payForStay` charges for the LODGING room only (ADR-0010), so the three amenity room
+  types this goal ships are pure cost: measured on the 2-day golden, upkeep went -15,000p
+  -> -24,000p and nothing came back. That is not a defect of this goal — it is the money
+  loop having no channel for "guests were happier" until reviews (G-015) feed reputation
+  and demand (M4) — but it means a balance sweep run today will conclude amenities are a
+  mistake, and it will be right. -> **M4**, with demand response.
+
+- **A CHEAP ROOM TYPE WEAKENS `canDrawLoan`, AND CONTENT ALONE CAN REOPEN ADR-0011'S DEAD
+  STATE.** `minConstructionCostOf` is the cheapest build across ALL room types, and
+  eligibility is `balance + liquidation < cheapest`. Ship an amenity cheaper than a bedroom
+  and a hotel that can afford a café but not a bedroom stops being "stuck" — while earning
+  nothing, because only a bedroom earns. Contained here by pricing every amenity at the
+  bedroom's `constructionCostPence` (250,000p), so `minConstructionCostOf` is unmoved and no
+  economy code changed. The general fix is to make it the cheapest room that can EARN, which
+  is economy's call and not this goal's. -> **M4**, with bankruptcy and demand.
+
+- **ENGAGEMENT DOES NOT SUSPEND REST**, so a guest is served by its bedroom and by one
+  amenity at the same time. Considered and rejected at PLAN for three reasons, the strongest
+  being that suspending rest lengthens every stay and therefore MOVES REVENUE inside a goal
+  ruled not to touch money. The honest version of exclusivity is travel time, and the guest
+  statement itself separates the two ("holds its lodging room for the whole stay AND engages
+  one provider at a time"). -> **M3**, with circulation.
+
+- **`unmet` IS ONE NUMBER COVERING TWO FATES** — a need that ran out of patience, and one
+  still pending when its guest left. Splitting it is the same change that turns the four
+  guest outcome counters into a table by reason, already parked out of G-010. -> **G-015**.
+
+- **THE DETERMINISM LOG EATS TWO OF ITS THREE AMENITIES.** Its despawn pass (ids 1, 4, 7…)
+  and demolish pass (ids 2, 7, 12…) walk upward through the id space, and the amenities
+  spawn at tick 47 with low ids. One survives to tick 100,000, which is enough for
+  engagement coverage to continue to the end — `needs.determinism.test.ts` asserts the
+  coverage rather than the survival, because the coverage is the thing that matters. If a
+  future pass takes the last one, that test goes red. -> only if it does.
+
+- **AMENITY ROOM TYPES REQUIRE NO ITEMS (`requires: []`).** Deliberate: an item type whose
+  only consumer is code written to consume it is decorative, and G-013 is the goal that
+  makes items providers. On that day a café's coffee machine becomes the thing that provides
+  `guest_nourishment`, and the room becomes the place it stands. -> **G-013**.
+
+- **`capacity` IS STILL READ BY NOTHING, AND ON AN AMENITY IT NOW CONTRADICTS THE
+  SIMULATION EIGHTFOLD.** The three amenity room types set `capacity: 8`, which reads as
+  "eight guests can use this at once" — and a provider serves exactly ONE, with
+  `countOrphanedReservations` counting a second as a LEAK. Dead content was already true of
+  `standard_room`, where 2 versus 1 was merely unused; 8 versus 1 reads as a design
+  statement. The number becomes true when M3 makes a provider a queue with capacity, and
+  `capacity` itself is parked to M6 with party size. -> **M6** / **M3**, whichever lands
+  first; do not "fix" it by editing the 8 to a 1, because that states the opposite design.
+
+- **A GUEST STARTS ENGAGEMENTS IT CANNOT FINISH, AND THIS IS G-014's BASELINE.** Measured on
+  the criterion run (`--days 30 --seed 7 --rooms 6`): **72 of 356 departures — 20% — leave
+  mid-engagement**, and **~10% of all amenity service time is spent on engagements that end
+  unmet**, holding the only café against a guest who could have finished. The guest has no
+  notion of whether it has TIME to finish: `compareNeedPriority` scores pressure and nothing
+  else. A time-remaining term is exactly what G-014's utility scoring is for — "a score over
+  urgency and provider fit" — and it is the term that turns this from waste into a decision.
+  Checked by `ai-critic` and NOT a measurement artefact: it does not prop up criterion 2,
+  because entertainment and nourishment are honestly oversubscribed either way. -> **G-014**,
+  as a number to improve against rather than a defect to rediscover.
+
+## Deferred out of G-016 (2026-08-08)
+
+Raised by `ai-engineer` at BUILD, and deliberately kept out of the diff.
+
+- **CORRECTION TO THE G-012 ENTRY ABOVE — "MAKE IT CHEAPER, NOT RARER" IS *NOT* VINDICATED,
+  AND THE PER-TICK INVARIANT SCAN IS STILL 20% OF THE RUN.** G-012's entry asked G-016 to
+  say whether it was optimising guest-loop cost or validation policy, and warned that gating
+  the scan would need its own argument. Mid-goal I reported that no such argument was needed,
+  because an ablation appeared to show that no-opping `assertGuestStoreInvariants` entirely
+  was SLOWER than making it cheaper. **That measurement was wrong and the conclusion with
+  it.** Re-measured paired and interleaved on the shipped build:
+
+  | | 365-day bench |
+  |---|---|
+  | G-016 with the scan | **6,348ms** |
+  | G-016 with the scan body no-opped | **5,030ms** |
+
+  **The scan costs ~20% of the run, and G-016's changes recovered almost none of it.**
+  Whether to gate or sample it is therefore STILL OPEN, still needs its own argument, and
+  still needs an explicit record of what coverage is surrendered and how a reservation leak
+  would still be caught. `assertNeedVector`'s header carries the same correction so nobody
+  reads the vindication out of the code. -> **an explicit human/orchestrator ruling**, not a
+  builder's choice.
+
+- **THE MACHINE DRIFTED ~2x FASTER ACROSS ONE SESSION, AND IT INVALIDATED FOUR OF THIS
+  GOAL'S FIVE HEADLINE NUMBERS.** The identical G-012 build measured **3,087ms** early and
+  **1,740ms** later on the same 120-day workload; HEAD measured **2,898ms** against the
+  3,510ms recorded at G-011, so this machine is now FASTER than the record rather than the
+  ~30% slower that G-012's entry reports. Every lever timed against a baseline captured at a
+  different moment was inflated — the `depart` hoist was reported at 14% and is 9.5%, and
+  the lazy assertion message was reported at 34% and is ~0%. **The only readings that
+  survived were the ones taken paired and interleaved in the same minutes, and the one ratio
+  that never needed correcting was `needs.scaling.test.ts`'s, because interleaving is
+  built into it.** PARKING.md has now recorded this lesson three times (G-009, G-010, G-012);
+  this is the fourth and the most expensive. **Do not accept an absolute reading in this
+  repository that was not taken against a same-session paired control.**
+
+- **`appendTransaction` COPIES THE WHOLE LEDGER ON EVERY APPEND, AND IT IS NOW 9% OF THE
+  BENCH.** `[...log, transaction]` is O(ledger) per append, so a run's ledger cost is
+  quadratic in its length: at 365 days the log reaches ~16,400 entries and `payForStay`
+  copies all of it on every completed stay — **519ms of a 5,667ms run**, and rising with run
+  length. Pre-existing at HEAD and untouched by this goal. It is `ledger.ts`, so it is the
+  economy pair's, and the fix is a persistent-list or chunked append that keeps `balanceOf`
+  a pure fold (I4). -> **M4**, with the economy pass.
+
+- **`stepTick` ALLOCATES ONE `TickState` PER PHASE PER TICK.** Five `{...state}` spreads plus
+  `beginTick`'s object, so ~6 objects per tick whatever the tick does — ~125ms per 120 days
+  when it was last profiled. It is the tick scheduler, so it is `sim-engineer`'s, and the
+  shape of the fix (a mutable tick-local carrier, exactly as `EntityDraft` and `RoomSearch`
+  already are) is one the codebase already uses everywhere else. -> **whoever next owns a
+  tick-cost goal**.
+
+- **EAGER WORK FOR A MESSAGE OR A TABLE NOBODY READS — THE SHAPE, NAMED, BECAUSE IT IS NOW
+  THE FOURTH INSTANCE.** G-010 removed a literal table allocated per guest per tick from
+  `assertGuestStoreInvariants`; G-012 reintroduced the same shape in `assertNeedVector` and
+  caught it; G-012 also found `isNeedPending` derived rather than written out; G-016 found a
+  template literal built per guest per tick for a throw message. Each was invisible in a flat
+  profile and each was in an assertion or a predicate rather than in simulation logic. **The
+  general fix is a scan or a lint** — "no template literal, array literal or object literal
+  evaluated on a non-throwing path inside a per-tick loop" — which is a `tools/gates` change
+  and therefore explicitly out of this goal's scope. -> **a gate goal**, when one exists.

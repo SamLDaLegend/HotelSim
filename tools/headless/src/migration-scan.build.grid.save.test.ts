@@ -2,8 +2,9 @@
 //
 // `migrateV2ToV3` must write the four grid bounds as a LITERAL frozen at the moment v3
 // was defined, never by calling `createGridBounds()`. `migrateV3ToV4` must write its
-// build counters the same way, never by calling `createBuildOutcomes()`, and
-// `migrateV4ToV5` its loan counters, never by calling `createLoanOutcomes()`. A migration's
+// build counters the same way, never by calling `createBuildOutcomes()`, `migrateV4ToV5`
+// its loan counters, never by calling `createLoanOutcomes()`, and `migrateV5ToV6` its empty
+// need tally, never by calling `createNeedOutcomes()`. A migration's
 // output has to be a pure function of its input bytes and its own era; one that read
 // today's constants would turn the same old bytes into a different new world the moment
 // anyone edits the default plot or adds a refusal reason, so history would drift with the
@@ -75,6 +76,13 @@ const FORBIDDEN_IN_SAVE_TS = [
   'BUILD_REFUSAL_REASONS',
   'createLoanOutcomes',
   'LOAN_REFUSAL_REASONS',
+  // G-012. `createNeedOutcomes()` returns `[]` today and `V6_MIGRATION_NEED_OUTCOMES` is
+  // `[]`, so no assertion can tell the two implementations apart — which is exactly the
+  // case ADR-0008 (3) says must be guarded structurally instead. `formNeedVector` is the
+  // back door: a step that built a row per need type would have to read the content table,
+  // which is the thing a migration must never do.
+  'createNeedOutcomes',
+  'formNeedVector',
 ] as const;
 
 /**

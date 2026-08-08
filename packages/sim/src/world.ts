@@ -18,6 +18,8 @@ import { createGridBounds } from './grid.js';
 import type { GridBounds } from './grid.js';
 import { createGuestOutcomes, createGuestStore } from './guests.js';
 import type { GuestOutcomes, GuestStore } from './guests.js';
+import { createNeedOutcomes } from './needs.js';
+import type { NeedOutcome } from './needs.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
 import { appendTransaction } from './ledger.js';
@@ -65,6 +67,20 @@ export type World = {
    * the two cannot drift apart unnoticed.
    */
   readonly guestOutcomes: GuestOutcomes;
+  /**
+   * What became of every NEED INSTANCE a departed guest formed, counted per need type
+   * (G-012). Strictly ascending by need id; rows appear on first use.
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, for the reason `guestOutcomes` is not: a departed
+   * guest leaves no trace, and its needs leave less than that. It is also not derivable
+   * from `guestOutcomes`, which counts STAYS — a guest can leave satisfied having failed
+   * two of its engagement needs, and that difference is the whole subject of this goal.
+   *
+   * Bound to `guestOutcomes` by `assertNeedOutcomes`: no row can have resolved more
+   * instances than guests have departed. See `needs.ts` for why that is an inequality
+   * here and an exact identity in the report.
+   */
+  readonly needOutcomes: readonly NeedOutcome[];
   /**
    * The plot this hotel is built on (G-007): the four edges of the coordinate space.
    *
@@ -138,6 +154,7 @@ const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   guests: true,
   ledger: true,
   loanOutcomes: true,
+  needOutcomes: true,
   rng: true,
   tick: true,
 };
@@ -193,6 +210,12 @@ export function createWorld(seed: number, content: BoundContent): World {
     contentHash: content.fingerprint,
     guests: createGuestStore(),
     guestOutcomes: createGuestOutcomes(),
+    // Empty rather than one row per need type, and deliberately not a function of the
+    // injected content: rows appear when a guest departs having formed one. That is what
+    // lets the v5 -> v6 migration default to the same value honestly, having no content to
+    // read (ADR-0008), and it means a world's tally never claims a need existed before
+    // anybody wanted it.
+    needOutcomes: createNeedOutcomes(),
     grid: createGridBounds(),
     buildOutcomes: createBuildOutcomes(),
     loanOutcomes: createLoanOutcomes(),

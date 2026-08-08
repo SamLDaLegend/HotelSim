@@ -580,7 +580,15 @@ downstream inspects nothing. That is why the vector goal carries the second need
 than the registry goal.
 
 ## G-012 — The need vector and its decay
-Status: pending
+Status: done — unblocked by G-016. 1 critique round (2 MAJOR + 5 MINOR, all resolved).
+  Verified by the orchestrator: all six gates green, I5 61-63%, I2 6c3e1baa8b87d2f6,
+  SAVE_V1_CONTENT unmoved, fixture zero-line diff, 1,000 tests across 51 files.
+
+  HUMAN RULING, ADR-0012: the vector is **at least Comfort, Entertainment and
+  Nourishment**. That settles M2's biggest vacuity risk by decision rather than by a
+  builder choosing how hard its own criteria are — and it FORCES provider content in this
+  goal, because bindContent refuses a need with no provider and items do not become
+  providers until G-013.
 Milestone: M2
 Owner pair: ai-engineer / ai-critic
 Statement: A guest forms one instance of every need type the content defines, each with
@@ -719,7 +727,95 @@ Critique rounds used: 0/3
   counters, which is the breaking kind of change, not the additive kind report.ts permits.
 
 ## G-016 — Guest-loop cost under a need vector
-Status: parked — CONTINGENT, triggered by a number
+Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discharged;
+  I5 61-63% raw. Signed off WITH its criterion mismatch recorded, not re-scoped.
+
+  G-012 is `blocked` on this goal. Its work is complete, correct and critiqued; I5 is
+  red. §2 is explicit that no goal is done while any gate is red, so G-012 does not
+  commit until this lands. The builder refused to report ready rather than shipping a
+  red gate, which is the rule working.
+
+  THE NUMBERS — CORRECTED 2026-08-08, AND THE CORRECTION IS THE LESSON.
+  This block first recorded HEAD at 4,618ms, G-012 at 11,151ms, and "this machine is
+  ~30% slower than when the project's figures were taken". **The ratio survived; the
+  absolutes and even the DIRECTION of the drift did not.** Later paired measurement put
+  HEAD at 2,898ms (builder) and 2,939ms (sim-critic) against G-011's recorded 3,510ms —
+  so the machine was *faster* than the record, not slower. The same G-012 build measured
+  3,087ms early in the session and 1,740ms later on one workload.
+
+  **WHAT IS TRUSTWORTHY: THE RATIO. WHAT IS NOT: ANY ABSOLUTE COMPARED ACROSS SESSIONS.**
+  Three independent measurements of G-012 against HEAD — 2.41x, 2.37x, 2.32x — agree
+  within noise across hours of drift. Every figure in this project taken as an absolute
+  against a baseline captured at a different moment should be read with that in mind;
+  two such figures have now had to be retracted (this one, and the ledger-append trigger
+  corrected at G-010).
+
+  The trigger fired on a real reading: five consecutive orchestrator runs were 11.3s to
+  12.7s, consistently red, and G-012 measured 2.3-2.4x HEAD by every method tried.
+
+  SCOPE QUESTION G-016 MUST ANSWER RATHER THAN INHERIT (ai-critic, G-012 round 1):
+  `assertGuestStoreInvariants` is **1.56s of an 8.22s run — 19%** — measured by
+  no-opping its body. At HEAD the same function was ~0.4s, so a per-tick re-validation
+  of state the tick just produced grew **~4x** and is now a fifth of the run. **That is
+  VALIDATION POLICY, not guest-loop cost.** G-016 must say which of the two it is
+  optimising. It must NOT simply delete the scans: they are what makes a reservation
+  leak loud, they run at load as well as per tick, and G-010's builder refused to gate
+  them on the grounds that "the honest fix is to make the check cheaper, not rarer".
+  Gating or sampling is a real decision that needs its own argument and its own record
+  of what coverage is surrendered.
+
+  What the profile says is NOT the problem: no superlinearity (scaling ratios 3.74x and
+  3.72x against the 6x bound), cost flat in amenity count, `stepGuests` 21.3% and
+  `advanceNeeds` 11.4%.
+
+  ---
+  CRITERION 1 COULD NOT FAIL IN THE STATE THAT CREATED THIS GOAL, and I am signing it
+  off with the mismatch recorded rather than re-scoping it, on sim-critic's advice.
+  The TRIGGER is "sim:bench exceeds 70% of budget"; the EXIT CRITERION is "sim:bench
+  green", which is "under 100%". The pre-G-016 build was already green at 68% raw, so
+  criterion 1 was satisfied before a line was written, and criterion 4 restates it. The
+  goal STATEMENT was likewise already true at BUILD start. **The real subject was
+  HEADROOM, and no criterion names a headroom number.** Third criterion in the project
+  with this class (`pnpm test -- world` G-001, "zero guests served by an invalid room"
+  G-009). Criteria 2 and 3 are honest and were verified independently.
+  The point of recording it rather than rewriting it: the next goal inherits a NUMBER
+  rather than a green tick.
+
+  MEASURED OUTCOME (sim-critic, paired and interleaved, all arms hash-identical):
+  HEAD 2,939ms · pre-G-016 6,812ms (2.32x) · **G-016 6,081ms (2.07x)** · real cut
+  **10.7%** · I5 raw **61.5%**, normalised onto G-011's baseline **74%**.
+  Per lever: L1 `depart` hoist 7.8% · L2 lazy message -0.4% · L3a lockstep 1.6% ·
+  L3b and L3c dropped for paying under 2%.
+
+  THE COSTED LEVER, PINNED SO THE NEXT RED GATE PULLS IT INSTEAD OF REDISCOVERING IT:
+
+  | option | 365-day bench | recovers |
+  |---|---|---|
+  | as shipped | 6,154ms (61.5%) | — |
+  | gate the scan on guests/entities identity | 6,071ms | **1.3%** |
+  | sample the scan every 8th tick | 5,024ms | **18.4%** |
+  | no-op the scan body (ceiling) | 4,971ms | 19.2% |
+
+  **GATING IS DEAD, AND IT IS NOW MEASURED RATHER THAN ARGUED.** Over 525,600 bench
+  ticks the guest store is reference-unchanged on **exactly one**. G-010's builder said
+  change detection buys nothing here; that is now a number. **Take it off the table
+  permanently — do not re-argue it at G-013.**
+
+  SAMPLING IS LEFT UNPULLED, DELIBERATELY. It recovers 18.4% of the available 19.2%, so
+  this is a real 19%-against-coverage trade with no third option — "make it cheaper" is
+  largely spent at ~20ns per need over 31.5M need-ticks. But I5 sits at 61.5% with 38%
+  headroom and G-004's rule stands: optimising against a gate that is not failing is
+  speculative work.
+  **WHAT SAMPLING WOULD SURRENDER, stated correctly** — the orchestrator's first
+  argument ("a leak persists by definition, so sampling only misses one that
+  self-heals") was WRONG. It surrenders a **one-tick double-booking: two guests in one
+  bed for a minute.** Player-visible, §6.1's "reads as stupid" literally, and this scan
+  is the only thing in the build that would catch it. Unexpressible today (one `held`
+  set per tick) — but **M3 makes a provider a queue with capacity and M6 adds
+  `placeItem`, and both weaken that construction argument.**
+  When it is pulled: sample on the TICK COUNTER, never on change detection; keep
+  `save.ts`'s call unconditional; and record the transient double-book as the surrendered
+  class, not merely a self-healing leak.
 Milestone: M2
 Owner pair: ai-engineer / ai-critic
 Statement: The guest loop's per-tick cost stays inside the I5 budget when every guest

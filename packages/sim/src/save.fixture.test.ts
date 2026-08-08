@@ -60,15 +60,15 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v5', () => {
+  it('is a v1 blob, and this build now writes v6', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
-    // G-007, a third time at G-008, and a fourth at G-011. Every time the answer was a
-    // migration in `save.ts` — never a regenerated fixture. v1 remains the oldest version
-    // this build accepts, which is what keeps these bytes loadable at all, and the walk is
-    // now 1 -> 2 -> 3 -> 4 -> 5.
-    expect(SAVE_SCHEMA_VERSION).toBe(5);
+    // G-007, a third time at G-008, a fourth at G-011 and a fifth at G-012. Every time the
+    // answer was a migration in `save.ts` — never a regenerated fixture. v1 remains the
+    // oldest version this build accepts, which is what keeps these bytes loadable at all,
+    // and the walk is now 1 -> 2 -> 3 -> 4 -> 5 -> 6.
+    expect(SAVE_SCHEMA_VERSION).toBe(6);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -94,11 +94,11 @@ describe('I6 stored v1 save fixture', () => {
       }
       expect(after[key]).toEqual(before[key]);
     }
-    // Five fields added across four migrations: `guests` and `guestOutcomes` (1 -> 2),
-    // `grid` (2 -> 3), `buildOutcomes` (3 -> 4), `loanOutcomes` (4 -> 5). Counted rather
-    // than named, so a migration that quietly added a sixth would fail here even if it
-    // added it correctly.
-    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 5);
+    // Six fields added across five migrations: `guests` and `guestOutcomes` (1 -> 2),
+    // `grid` (2 -> 3), `buildOutcomes` (3 -> 4), `loanOutcomes` (4 -> 5), `needOutcomes`
+    // (5 -> 6). Counted rather than named, so a migration that quietly added a seventh
+    // would fail here even if it added it correctly.
+    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 6);
   });
 
   it('continues to simulate from where it was saved', () => {

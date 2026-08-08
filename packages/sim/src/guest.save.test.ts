@@ -146,9 +146,10 @@ describe('the v1 fixture, through the real migration', () => {
 
   it('is still a v1 blob, and v1 is still the oldest version this build accepts', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
-    // G-007 bumped this to 3, G-008 to 4, G-011 to 5. The fixture did not move; the
-    // schema did, four times, and each time a migration carried these same bytes forward.
-    expect(SAVE_SCHEMA_VERSION).toBe(5);
+    // G-007 bumped this to 3, G-008 to 4, G-011 to 5, G-012 to 6. The fixture did not
+    // move; the schema did, five times, and each time a migration carried these same bytes
+    // forward.
+    expect(SAVE_SCHEMA_VERSION).toBe(6);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -292,10 +293,14 @@ describe('a v2 world with guests in it', () => {
   });
 
   it('refuses a save with a negative countdown', () => {
+    // G-012 moved the countdowns into the need vector; the claim is unchanged, and the
+    // check is still the one the TICK uses rather than a second definition at the door.
     const world = lived();
-    const blob = JSON.parse(serialise(world)) as { world: { guests: { list: { restRemaining: number }[] } } };
-    blob.world.guests.list[0]!.restRemaining = -1;
-    expect(() => deserialise(JSON.stringify(blob))).toThrow(/negative or non-integer restRemaining/);
+    const blob = JSON.parse(serialise(world)) as {
+      world: { guests: { list: { needs: { progressRemaining: number }[] }[] } };
+    };
+    blob.world.guests.list[0]!.needs[0]!.progressRemaining = -1;
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/negative or non-integer progressRemaining/);
   });
 
   it('refuses a save whose outcomes do not account for everybody', () => {
@@ -313,8 +318,16 @@ describe('a v2 world with guests in it', () => {
       mutate(blob.world.guests.list[0]!);
       return (): World => deserialise(JSON.stringify(blob));
     };
-    expect(corrupt((guest) => { guest['needId'] = 7; })).toThrow(/needId is not a string/);
     expect(corrupt((guest) => { delete guest['arrivedTick']; })).toThrow(/arrivedTick is not a number/);
     expect(corrupt((guest) => { guest['roomEntityId'] = null; })).toThrow(/roomEntityId is not a number/);
+    // The vector and the engagement (G-012), through the same door.
+    expect(corrupt((guest) => { (guest['needs'] as { needId: unknown }[])[0]!.needId = 7; })).toThrow(
+      /needs\[0\]\.needId is not a string/,
+    );
+    expect(corrupt((guest) => { delete guest['needs']; })).toThrow(/needs is missing or not an array/);
+    expect(corrupt((guest) => { delete guest['engagement']; })).toThrow(/engagement is missing/);
+    expect(corrupt((guest) => { guest['engagement'] = { entityId: 'one', needId: 'rest' }; })).toThrow(
+      /engagement\.entityId is not a number/,
+    );
   });
 });

@@ -189,7 +189,18 @@ export type ItemTypeData = {
 };
 
 /**
- * One need a guest can form (G-004).
+ * What a need is for (G-012, ADR-0012).
+ *
+ * A CLOSED UNION IN CODE, with the assignment in JSON — the `TransactionReason` and
+ * `RoomInvalidityReason` precedent. Which need is the lodging one is content; that
+ * "lodging" and "engagement" are the two kinds a simulation can act on differently is a
+ * fact about the simulation. Neither member is a content id (they are not snake_case), so
+ * ADR-0003 is untouched.
+ */
+export type NeedRole = 'lodging' | 'engagement';
+
+/**
+ * One need a guest can form (G-004, G-012).
  *
  * Structurally identical to `NeedType` in `@hotelsim/content` and deliberately not
  * imported from it (ADR-0001), exactly as `RoomTypeData` is.
@@ -197,9 +208,28 @@ export type ItemTypeData = {
 export type NeedTypeData = {
   readonly id: ContentId;
   readonly name: string;
+  /**
+   * Whether this is the need a guest BOOKS for or one it satisfies during the stay
+   * (G-012). See `lodgingNeedOf` for what the simulation does with the answer.
+   *
+   * OPTIONAL, and absence is not emptiness — the `provides` contract exactly. A content
+   * set written before roles existed had one need and it was the reason a guest booked,
+   * so such a document omits the key, fingerprints as it always did, and is read as
+   * lodging by `lodgingNeedOf`'s historical fallback.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK. `needTypeSchema` in `packages/content` demands it of
+   * every document it validates, for the reason the prices and `requires` are demanded: a
+   * new need type that forgets to say what it is for would silently become a SECOND
+   * reason-to-book, and only the schema knows the bytes came off disk today rather than
+   * out of history.
+   */
+  readonly role?: NeedRole | undefined;
   /** Ticks of provision that meet the need. */
   readonly satisfyTicks: number;
-  /** Ticks a guest waits for a provider before giving up. */
+  /**
+   * Ticks a guest waits for a provider before giving up — and, since G-012, the ceiling
+   * on this need's urgency. See the header of `needs.ts` for the closed form.
+   */
   readonly patienceTicks: number;
 };
 
@@ -414,6 +444,27 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
 }
 
 /**
+ * Clone a need type, validating its role at the boundary (G-012).
+ *
+ * The `cloneRoomType` discipline: a raw host — one that did not come through the zod
+ * schema — offering a role the simulation has no branch for dies here, at bind time, with
+ * the need named, rather than being silently read as "not lodging" by every later
+ * comparison. The key is STRIPPED when absent rather than carried as `undefined`, because
+ * an absent key and a key holding `undefined` are different documents to the fingerprint
+ * and only the absent form is the "predates roles" statement.
+ */
+function cloneNeedType(needType: NeedTypeData): NeedTypeData {
+  const { role, ...rest } = needType;
+  if (role === undefined) return { ...rest };
+  if (role !== 'lodging' && role !== 'engagement') {
+    throw new Error(
+      `bindContent: need type "${needType.id}" has role "${String(role)}"; a need is either "lodging" (the reason a guest books) or "engagement" (met during the stay)`,
+    );
+  }
+  return { ...rest, role };
+}
+
+/**
  * Clone an economy record, validating every number at the boundary (G-011).
  *
  * The `cloneRoomType` discipline exactly: a float or a negative from a raw host — one
@@ -503,6 +554,57 @@ function assertNeedsAreSatisfiable(
           'which is guaranteed unhappiness rather than difficulty.',
       );
     }
+  }
+}
+
+/**
+ * Throws if this content cannot say which need a guest books a room for (G-012).
+ *
+ * THE RULE, IN FULL, BECAUSE THE FALLBACK IS THE INTERESTING HALF:
+ *
+ *   no need declares a role  ->  the LOWEST-ID need is the lodging one. This is the
+ *                                pre-M2 reading and it is a historical statement, not a
+ *                                default: such a document had one need, a guest formed
+ *                                it, booked a room for it and paid on the way out. Every
+ *                                content set written before this field means exactly what
+ *                                it always meant, and no test of that era changes.
+ *   some need declares one   ->  EXACTLY ONE must declare `lodging`, or this throws.
+ *
+ * The second clause is what stops the fallback lying. Without it, content that marked
+ * every need `engagement` and forgot the lodging one would fall back to the lowest id —
+ * a need the designer explicitly said was NOT the reason to book — and the simulation
+ * would quietly contradict the file. Two lodging needs is the mirror mistake: a guest
+ * would have two reasons to book and one room, and nothing could say which stay it was
+ * paying for.
+ *
+ * Zero needs is not a violation, for the reason `assertNeedsAreSatisfiable` says so:
+ * content that defines no needs is content in which no guest forms one.
+ */
+function assertLodgingNeedIsUnambiguous(needTypes: readonly NeedTypeData[]): void {
+  let declared = 0;
+  let lodging = 0;
+  let first: ContentId | undefined;
+  let second: ContentId | undefined;
+  for (const needType of needTypes) {
+    if (needType.role === undefined) continue;
+    declared += 1;
+    if (needType.role !== 'lodging') continue;
+    lodging += 1;
+    if (first === undefined) first = needType.id;
+    else if (second === undefined) second = needType.id;
+  }
+  if (declared === 0) return;
+  if (lodging === 0) {
+    throw new Error(
+      'bindContent: this content declares need roles but none of them is the lodging need. ' +
+        'One need must be the reason a guest books a room, or no guest could ever check in.',
+    );
+  }
+  if (lodging > 1) {
+    throw new Error(
+      `bindContent: needs "${String(first)}" and "${String(second)}" are both the lodging need. ` +
+        'A guest books one room for one reason, so exactly one need may be lodging; the rest are engagement.',
+    );
   }
 }
 
@@ -690,7 +792,7 @@ export function bindContent(content: SimContent): BoundContent {
   const needTypes =
     content.needTypes === undefined
       ? undefined
-      : normaliseTable(content.needTypes, 'need type', (needType) => ({ ...needType }));
+      : normaliseTable(content.needTypes, 'need type', cloneNeedType);
   const itemTypes =
     content.itemTypes === undefined
       ? undefined
@@ -701,6 +803,7 @@ export function bindContent(content: SimContent): BoundContent {
       : normaliseTable(content.economy, 'economy', cloneEconomy);
 
   assertNeedsAreSatisfiable(roomTypes, needTypes ?? []);
+  assertLodgingNeedIsUnambiguous(needTypes ?? []);
   assertRequiredItemsExist(roomTypes, itemTypes ?? []);
   // THE TWO CROSS-FIELD MONEY CHECKS (G-011), and they bound the refund from opposite
   // sides of the same fact. The upper bound reads only room types, so it applies to
@@ -778,17 +881,68 @@ export function findNeedType(bound: BoundContent, id: ContentId): NeedTypeData |
   return index === -1 ? undefined : needTypes[index];
 }
 
+/** Every need a guest forms, ascending by id. The order `formNeedVector` builds in. */
+export function needTypesInOrder(bound: BoundContent): readonly NeedTypeData[] {
+  return bound.content.needTypes ?? EMPTY_NEED_TYPES;
+}
+
+/** Shared empty table, so `needTypesInOrder` allocates nothing. Frozen: callers hold it. */
+const EMPTY_NEED_TYPES: readonly NeedTypeData[] = Object.freeze([]);
+
 /**
- * The need a guest forms on arrival: the lowest-id need this content defines, or
- * undefined if it defines none.
+ * THE NEED A GUEST BOOKS A ROOM FOR, or undefined if this content defines no needs.
  *
- * Lowest id rather than "the first one in the file" — the table is normalised, so this
- * does not depend on the order a designer typed them in (I2). One need is all M0 has;
- * M2 replaces this with a need vector and utility scoring, and the CHOICE POINT already
- * being content-driven is why nothing in the sim will need to learn a need's name.
+ * It is the one need whose satisfaction IS the stay: the guest holds a room for it from
+ * check-in to check-out, meeting it is what `payForStay` charges for, and failing to find
+ * a room for it before patience runs out is what makes a guest leave unsatisfied. Every
+ * other need is an engagement need, met at a provider the guest engages one at a time and
+ * never ending the stay (G-012).
+ *
+ * Reached through the ROLE rather than by position, which is what keeps the snake_case id
+ * that names it out of `packages/sim` (ADR-0003) while still letting a designer move it.
+ * The fallback for content that declares no role at all — the lowest id — is the pre-M2
+ * reading and is the same answer `firstNeedType` gave; `assertLodgingNeedIsUnambiguous`
+ * has already established that the fallback cannot contradict a role somebody wrote down.
+ *
+ * This replaced `firstNeedType`, whose contract was "the lowest-id need". Keeping both
+ * would have been two answers to one question, and the day they disagreed would be the day
+ * a designer added a need whose id sorts below the lodging one.
  */
-export function firstNeedType(bound: BoundContent): NeedTypeData | undefined {
-  return bound.content.needTypes?.[0];
+export function lodgingNeedOf(bound: BoundContent): NeedTypeData | undefined {
+  const needTypes = bound.content.needTypes;
+  if (needTypes === undefined) return undefined;
+  let anyDeclared = false;
+  for (const needType of needTypes) {
+    if (needType.role === undefined) continue;
+    anyDeclared = true;
+    if (needType.role === 'lodging') return needType;
+  }
+  // No need declares a role: the historical document, whose lowest id is the lodging need.
+  // The other branch is unreachable past `bindContent` — a table that declares roles and
+  // names no lodging need is refused there — and returns undefined rather than guessing.
+  return anyDeclared ? undefined : needTypes[0];
+}
+
+/**
+ * The lowest-id room type that provides `needId`, or undefined if none does.
+ *
+ * EXISTS FOR THE HOSTS, and it closes a real trap rather than adding a convenience. Both
+ * `tools/headless` runners used to take `content.content.roomTypes[0].id` as "the room the
+ * hotel is made of" — the lowest id after normalisation, which was the only room type
+ * there was. G-012 adds amenity room types, and `games_room` and `hotel_cafe` both sort
+ * BELOW `standard_room`: the CLI's hotel and the whole 100,000-tick determinism log would
+ * silently have become a hotel of cafés, with guests never served and the I2 gate still
+ * green, because that gate holds no reference hash and cannot see a consistently wrong
+ * result. Asking for a room type BY WHAT IT PROVIDES is the fix, and it keeps `--rooms N`
+ * meaning "N rooms guests can stay in" whatever ids arrive later.
+ *
+ * Lowest id, so the answer does not depend on the order a designer typed the table in (I2).
+ */
+export function firstRoomTypeProviding(bound: BoundContent, needId: ContentId): RoomTypeData | undefined {
+  for (const roomType of bound.content.roomTypes) {
+    if ((roomType.provides ?? []).includes(needId)) return roomType;
+  }
+  return undefined;
 }
 
 /**

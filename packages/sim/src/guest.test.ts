@@ -26,6 +26,7 @@ import {
   isResting,
 } from './guests.js';
 import type { Guest } from './guests.js';
+import { findNeedState } from './needs.js';
 import { nextUint32 } from './rng.js';
 import {
   advanceTime,
@@ -108,6 +109,16 @@ function hotel(rooms: number, seed = 1): World {
   return stepTick(createWorld(seed, content), content, Array.from({ length: rooms }, (_, i) => spawnRoom(i)));
 }
 
+/**
+ * The two countdowns on the one need this content defines (G-012).
+ *
+ * `Guest.patienceRemaining` and `Guest.restRemaining` moved into the need vector, where
+ * every need has its own pair. These read them back out, so every claim below is the
+ * claim it always was.
+ */
+const patienceOf = (guest: Guest): number => findNeedState(guest.needs, 'rest')?.patienceRemaining ?? -1;
+const restOf = (guest: Guest): number => findNeedState(guest.needs, 'rest')?.progressRemaining ?? -1;
+
 const onlyGuest = (world: World): Guest => {
   const guests = guestsInOrder(world.guests);
   expect(guests).toHaveLength(1);
@@ -122,9 +133,12 @@ describe('a guest arrives', () => {
     const guest = onlyGuest(world);
     expect(guest.id).toBe(1);
     expect(guest.arrivedTick).toBe(1);
-    expect(guest.needId).toBe('rest');
-    expect(guest.patienceRemaining).toBe(PATIENCE);
-    expect(guest.restRemaining).toBe(SATISFY);
+    // One instance of every need this content defines (G-012). It defines one, so the
+    // vector has one entry, and its two countdowns are what `Guest` used to carry flat.
+    expect(guest.needs.map((need) => need.needId)).toEqual(['rest']);
+    expect(patienceOf(guest)).toBe(PATIENCE);
+    expect(restOf(guest)).toBe(SATISFY);
+    expect(guest.engagement).toBeNull();
     expect(world.guestOutcomes.arrived).toBe(1);
   });
 
@@ -142,7 +156,7 @@ describe('a guest arrives', () => {
     expect(second!.roomEntityId).toBe(NO_ENTITY);
     // Full patience: it has been here for no ticks yet. Patience is time SPENT
     // waiting, so it starts draining on the tick after the one it walked in on.
-    expect(second!.patienceRemaining).toBe(PATIENCE);
+    expect(patienceOf(second!)).toBe(PATIENCE);
   });
 
   it('gives every guest a distinct id, never reused after one leaves', () => {
@@ -314,7 +328,7 @@ describe('a guest does not change its mind', () => {
     world = stepTick(world, content, [arrive]);
     const resident = guestsInOrder(world.guests)[0]!;
     // Two ticks of rest across three ticks: the arrival tick is check-in, not a stay.
-    expect(resident.restRemaining).toBe(SATISFY - 2);
+    expect(restOf(resident)).toBe(SATISFY - 2);
   });
 });
 

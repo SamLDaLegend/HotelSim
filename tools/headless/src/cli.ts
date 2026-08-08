@@ -63,6 +63,7 @@ function main(): void {
       options.buildEveryTicks,
       options.demolishEveryTicks,
       options.loanEveryTicks,
+      options.amenities,
     ),
   );
   // Print the report, THEN fail if the run violated an invariant. The ordering — and

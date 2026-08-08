@@ -10,10 +10,15 @@
 // migration. `fixtures/save-v1.ts` HAS A ZERO-LINE DIFF in this change; the migration is
 // what carries it. The walk is 1 -> 2 -> 3 -> 4 -> 5.
 //
-// This file owns the CURRENT era. What a v2, v3 and v4 world were is pinned in
-// `guest.save.test.ts`, `grid.save.test.ts` and `build.save.test.ts` respectively, each
-// against frozen literals through truncated chains (ADR-0008). When v6 arrives, the
-// assertions here move the same way and the pins below must not.
+// THIS FILE NOW OWNS THE v5 ERA, WHICH IS OVER (G-012). It owned the current one until
+// `World` gained `needOutcomes` and the chain grew to 1 -> 2 -> 3 -> 4 -> 5 -> 6; the
+// current era is `needs.save.test.ts`'s. The prediction three lines above — "when v6
+// arrives, the assertions here move the same way and the pins below must not" — is exactly
+// what happened, and it cost one edit: every v5 claim now runs through the TRUNCATED chain
+// `TO_V5` instead of through `deserialise`, and `MIGRATED_V5_BYTES` and
+// `MIGRATED_V5_STATE_HASH` are untouched. ADR-0008 (2): an artefact describing an era that
+// is over is a frozen literal. What a v2, v3 and v4 world were is pinned the same way in
+// `guest.save.test.ts`, `grid.save.test.ts` and `build.save.test.ts`.
 //
 // THE THING THIS BUMP DID NOT DO IS THE MOST IMPORTANT THING IN THE FILE. G-011 gives a
 // world three new kinds of money, and a migrated world receives NONE of them: no opening
@@ -45,7 +50,6 @@ import {
   MIGRATIONS,
   migrateSaveWorld,
   MIN_SUPPORTED_SCHEMA_VERSION,
-  SAVE_SCHEMA_VERSION,
   serialise,
 } from './save.js';
 import type { SaveSchema } from './save.js';
@@ -85,19 +89,31 @@ const TO_V4: SaveSchema = {
 };
 /** The chain as it stood BEFORE this goal, so the fixture can be shown failing without it. */
 const WITHOUT_V5: SaveSchema = TO_V4;
+/**
+ * The chain as it stood when v5 WAS the current version.
+ *
+ * Written from `MIGRATIONS` by INDEX rather than from `SAVE_SCHEMA_VERSION`, which tracks
+ * the present and would drag this file forward with it — the discipline
+ * `build.save.test.ts` adopted one version earlier for the same reason (ADR-0008).
+ */
+const TO_V5: SaveSchema = {
+  migrations: [MIGRATIONS[0]!, MIGRATIONS[1]!, MIGRATIONS[2]!, MIGRATIONS[3]!],
+  minVersion: 1,
+  currentVersion: 5,
+};
 
 describe('the chain walks 1 -> 2 -> 3 -> 4 -> 5, and every link is still observed', () => {
-  it('ships exactly four steps, each going exactly one version', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(5);
+  it('still ships the four steps that reach v5, each going exactly one version', () => {
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(MIGRATIONS).toHaveLength(4);
-    expect(MIGRATIONS.map((step) => [step.from, step.to])).toEqual([
+    expect(MIGRATIONS.slice(0, 4).map((step) => [step.from, step.to])).toEqual([
       [1, 2],
       [2, 3],
       [3, 4],
       [4, 5],
     ]);
-    // G-003's anti-vacuity device, now reading "4 required, 4 present".
+    // G-003's anti-vacuity device, over the truncated chain that ends at v5: "4 required,
+    // 4 present". The CURRENT chain's count is `needs.save.test.ts`'s to assert.
+    expect(() => assertMigrationPathComplete(TO_V5)).not.toThrow();
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
@@ -114,12 +130,12 @@ describe('the chain walks 1 -> 2 -> 3 -> 4 -> 5, and every link is still observe
   });
 
   it('reaches v5 and its own pinned hash, distinct from every earlier link', () => {
-    const world = deserialise(SAVE_V1_BYTES);
-    expect(hashState(world)).toBe(MIGRATED_V5_STATE_HASH);
-    expect(hashState(world)).not.toBe(MIGRATED_V4_STATE_HASH);
-    expect(hashState(world)).not.toBe(MIGRATED_V3_STATE_HASH);
-    expect(hashState(world)).not.toBe(MIGRATED_V2_STATE_HASH);
-    expect(hashState(world)).not.toBe(SAVE_V1_STATE_HASH);
+    const world = migrateSaveWorld(v1World(), 1, TO_V5);
+    expect(hashJson(world as JsonValue)).toBe(MIGRATED_V5_STATE_HASH);
+    expect(hashJson(world as JsonValue)).not.toBe(MIGRATED_V4_STATE_HASH);
+    expect(hashJson(world as JsonValue)).not.toBe(MIGRATED_V3_STATE_HASH);
+    expect(hashJson(world as JsonValue)).not.toBe(MIGRATED_V2_STATE_HASH);
+    expect(hashJson(world as JsonValue)).not.toBe(SAVE_V1_STATE_HASH);
   });
 
   it('keeps every earlier link alive rather than retiring it as the chain grows', () => {
@@ -139,13 +155,23 @@ describe('the chain walks 1 -> 2 -> 3 -> 4 -> 5, and every link is still observe
       };
       expect(hashJson(migrateSaveWorld(v1World(), 1, truncated) as JsonValue)).toBe(pinned);
     }
-    expect(hashState(deserialise(SAVE_V1_BYTES))).toBe(MIGRATED_V5_STATE_HASH);
+    expect(hashJson(migrateSaveWorld(v1World(), 1, TO_V5) as JsonValue)).toBe(MIGRATED_V5_STATE_HASH);
   });
 
-  it('is written back as a v5 blob, and is stable from there on', () => {
-    const rewritten = serialise(deserialise(SAVE_V1_BYTES));
-    expect(rewritten).toBe(MIGRATED_V5_BYTES);
-    expect(serialise(deserialise(rewritten))).toBe(rewritten);
+  it('is the v5 blob, byte for byte, when the chain stops there', () => {
+    // The writer's stamp is the CURRENT version, so `serialise` no longer produces these
+    // bytes — that is what a schema bump means. The document is reconstructed at its own
+    // era instead, exactly as `build.save.test.ts` did for v4 when v5 landed.
+    const world = migrateSaveWorld(v1World(), 1, TO_V5);
+    expect(JSON.stringify({ schemaVersion: 5, world })).toBe(MIGRATED_V5_BYTES);
+  });
+
+  it('and a real v5 blob still loads today, which is what MIN_SUPPORTED promises', () => {
+    // The other half: these frozen bytes are not merely a hash oracle, they are a save
+    // somebody could still have on disk. `deserialise` must carry them the last step.
+    const loaded = deserialise(MIGRATED_V5_BYTES);
+    expect(loaded.tick).toBe(SAVE_V1_TICK);
+    expect(serialise(loaded)).toBe(serialise(deserialise(SAVE_V1_BYTES)));
   });
 
   it('still has every top-level key the CURRENT World declares', () => {
@@ -189,7 +215,7 @@ describe('the 4 -> 5 step invents no history, and INVENTS NO MONEY', () => {
 
   it('carries every v4 field through value for value, adding exactly one key', () => {
     const before = migrateSaveWorld(v1World(), 1, TO_V4) as Record<string, unknown>;
-    const after = deserialise(SAVE_V1_BYTES) as unknown as Record<string, unknown>;
+    const after = migrateSaveWorld(v1World(), 1, TO_V5) as Record<string, unknown>;
     for (const key of Object.keys(before)) {
       expect(after[key]).toEqual(before[key]);
     }

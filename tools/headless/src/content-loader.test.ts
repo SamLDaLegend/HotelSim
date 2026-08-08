@@ -46,16 +46,21 @@ describe('the shipped content file', () => {
     expect(ROOM_TYPES_PATH).toMatch(/room-types\.json$/);
   });
 
-  it('defines exactly one room type, with a snake_case id', () => {
-    // The goal's headline claim, against the real bytes: "packages/content defines
-    // exactly one room type as JSON validated by a Zod schema".
+  it('defines a room type per need, each with a snake_case id', () => {
+    // G-002's headline claim was "exactly one room type"; ADR-0012 ended that era by
+    // ruling the need vector must be at least three needs, and `bindContent` refuses a
+    // need no room provides — so the shipped table now carries a provider for every need.
+    // The claim that survives, and the one worth checking against the real bytes, is that
+    // every row is well formed and that there are at least as many rooms as needs.
     const registry = loadContentFrom(ROOM_TYPES_PATH);
-    expect(registry.roomTypes).toHaveLength(1);
-    const roomType = registry.roomTypes[0]!;
-    expect(roomType.id).toMatch(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/);
-    expect(roomType.name.length).toBeGreaterThan(0);
-    expect(Number.isInteger(roomType.nightlyRatePence)).toBe(true);
-    expect(roomType.capacity).toBeGreaterThanOrEqual(1);
+    const needTypes = loadNeedTypesFrom(NEED_TYPES_PATH);
+    expect(registry.roomTypes.length).toBeGreaterThanOrEqual(needTypes.length);
+    for (const roomType of registry.roomTypes) {
+      expect(roomType.id).toMatch(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/);
+      expect(roomType.name.length).toBeGreaterThan(0);
+      expect(Number.isInteger(roomType.nightlyRatePence)).toBe(true);
+      expect(roomType.capacity).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it('binds to content the simulation can look up by id', () => {
@@ -65,13 +70,24 @@ describe('the shipped content file', () => {
     expect(content.fingerprint).toMatch(/^[0-9a-f]{16}$/);
   });
 
-  it('defines exactly one need, with a snake_case id and whole-tick durations (G-004)', () => {
+  it('defines the need vector ADR-0012 ruled, each with a role and whole-tick durations', () => {
+    // The human's ruling, checked against the real bytes rather than against the schema:
+    // at least Comfort, Entertainment and Nourishment, plus the lodging need that predates
+    // them. Counted rather than named, because naming them here would put four content ids
+    // in a host — and the ROLES are what the simulation actually acts on.
     const needTypes = loadNeedTypesFrom(NEED_TYPES_PATH);
-    expect(needTypes).toHaveLength(1);
-    const need = needTypes[0]!;
-    expect(need.id).toMatch(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/);
-    expect(Number.isInteger(need.satisfyTicks)).toBe(true);
-    expect(Number.isInteger(need.patienceTicks)).toBe(true);
+    expect(needTypes.length).toBeGreaterThanOrEqual(4);
+    for (const need of needTypes) {
+      expect(need.id).toMatch(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/);
+      expect(Number.isInteger(need.satisfyTicks)).toBe(true);
+      expect(Number.isInteger(need.patienceTicks)).toBe(true);
+      expect(['lodging', 'engagement']).toContain(need.role);
+    }
+    // EXACTLY ONE lodging need. Two would give a guest two reasons to book one room, and
+    // `bindContent` refuses it — but a guard that only fires on someone else's content is
+    // not evidence about ours.
+    expect(needTypes.filter((need) => need.role === 'lodging')).toHaveLength(1);
+    expect(needTypes.filter((need) => need.role === 'engagement').length).toBeGreaterThanOrEqual(3);
   });
 
   it('ships a room type that actually provides the need it ships', () => {

@@ -676,3 +676,78 @@ reporting ten identical rows as a distribution, and produced the spread that is 
 across 48 strategy configurations, **doing nothing beats six of the eight active build
 cadences.** ADR-0009's anti-correlation, now with a positive floor under passivity that
 did not exist before this goal.
+
+---
+
+## 2026-08-08 — G-012 + G-016 — The need vector, and the cost of carrying it
+
+Committed together because G-012 was **blocked** on G-016: its work was complete and
+critiqued, and I5 was red. §2 says no goal is done while a gate is red, and the builder
+refused to report ready rather than shipping one. The rule working.
+
+**The human ruled the vector** (ADR-0012: Comfort, Entertainment, Nourishment), which
+settled what would otherwise have been a builder choosing how hard its own criteria are.
+`night_rest` became the *lodging* need — why a guest books — and the three are
+*engagement* needs met during the stay, so a guest keeps its room while it goes to eat.
+Thirty days at six rooms: entertainment 213/143, nourishment 214/142, and `night_rest`
+**cannot** carry the criterion at that size because 18 stays/day of capacity against 12
+arrivals means it never fails. "Just add rooms" cannot satisfy it.
+
+**G-012's builder refused a premise I put in its brief and checked instead.** I told it
+renaming `night_rest` would move the permanent fixture's content fingerprint. The fixture
+has **no `needTypes` key at all**. A constraint from the orchestrator is still a claim.
+
+It also found that both the CLI and the 100,000-tick determinism log took `roomTypes[0]`
+as *the* room the hotel is made of — the lowest id after sorting. `cafe` sorts before
+`standard_room`, so the first amenity would silently have made both a hotel of cafés,
+**with the gate still green**. Third time an assumption held "by construction" until a
+feature arrived.
+
+`ai-critic` then found the G-010 defect class recurring in the same file one goal later:
+the builder had found the evicted-mid-meal bug itself, fixed it, and written a
+mutation-verified test — for **one of four** release sites. Breaking the common exit left
+971 tests green and moved the state hash on four workloads including the bench.
+
+---
+
+**G-016 is the most instructive goal in the project, because almost every number in it
+was wrong the first time and the corrections came from the people who made them.**
+
+The builder reported a 44% cut and told me no-opping the invariant scan was *slower* than
+optimising it — which I called the strongest possible resolution and used to rule that no
+gating decision was needed. **It retracted both.** Machine drift: the same build measured
+3,087ms early and 1,740ms later. Re-measured paired, the real cut was **10.4%**, the scan
+really does cost **~20%**, and G-010's "cheaper, not rarer" is **not** vindicated by
+measurement. It corrected the code comments and `PARKING.md` so nobody could read the
+vindication out of the source.
+
+`sim-critic` verified the retraction — every corrected figure reproduced — and then found
+**the retraction had stopped at the test files**, where three drift-window numbers
+survived *as fact*, one of them directly contradicting a "that was WRONG" note in the same
+diff. A half-applied retraction is worse than none, because the survivor carries the
+authority of a correction made everywhere else. The builder's second pass drew the right
+distinction: a number it could re-measure paired was **corrected**; a number it could not
+was **withdrawn rather than restated**, with the change left standing on an argument that
+needs no stopwatch.
+
+Then it caught that **my own ledger** still carried drift-window absolutes and, worse, the
+wrong *direction* of the drift. The lesson is now recorded where the numbers were: **the
+ratio survived and every absolute did not.** Three independent measurements of G-012
+against HEAD — 2.41x, 2.37x, 2.32x — agree within noise across hours in which absolutes
+moved by nearly 2x.
+
+**The gating question was settled with numbers rather than principle.** Gating is dead:
+over 525,600 ticks the guest store is reference-unchanged on **exactly one**. Sampling
+works — 18.4% of the available 19.2% — but I5 sits at 61% with 38% headroom, and G-004's
+rule holds. It is pinned as a costed lever so the next red gate pulls it instead of
+rediscovering it. And `sim-critic` corrected my reasoning about what sampling surrenders:
+not merely a self-healing leak, but a **one-tick double-booking — two guests in one bed
+for a minute**, player-visible, with this scan the only thing that would catch it. The
+trade gets *worse* over M3 and M6, not better.
+
+**And G-016's own criterion could not fail in the state that created the goal** —
+promoted by "exceeds 70%", exited by "green" meaning "under 100%", with the pre-work build
+already at 68%. The real subject was headroom and no criterion named a headroom number.
+Signed off with the mismatch recorded rather than re-scoped, and generalised into
+ADR-0007: **when a goal is promoted by a threshold, its exit criterion must name a
+threshold.**

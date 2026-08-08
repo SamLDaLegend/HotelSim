@@ -11,16 +11,18 @@ import { assertEntityStoreInvariants } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
 import { assertGridBounds } from './grid.js';
 import type { GridBounds } from './grid.js';
-import { assertGuestOutcomes, assertGuestStoreInvariants } from './guests.js';
+import { assertGuestOutcomes, assertGuestStoreInvariants, departedGuests } from './guests.js';
 import type { Guest, GuestOutcomes, GuestStore } from './guests.js';
 import type { Transaction } from './ledger.js';
 import { assertLoanOutcomes } from './loan.js';
 import type { LoanOutcomes } from './loan.js';
+import { assertNeedOutcomes } from './needs.js';
+import type { NeedOutcome } from './needs.js';
 import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 5;
+export const SAVE_SCHEMA_VERSION = 6;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -318,6 +320,116 @@ function migrateV4ToV5(world: unknown): unknown {
 }
 
 /**
+ * THE NEED TALLY A v5 WORLD IS CARRIED ONTO, FROZEN AT THE MOMENT v6 WAS DEFINED.
+ *
+ * A LITERAL, and it must stay one. `createNeedOutcomes()` in `needs.ts` returns the same
+ * value today and the two are allowed to diverge later — that divergence is correct, not a
+ * bug to repair (ADR-0008). The source scan in
+ * `tools/headless/src/migration-scan.build.grid.save.test.ts` forbids this file from naming
+ * it in executable code, because the two values coincide and no assertion could tell the
+ * implementations apart.
+ *
+ * EMPTY IS THE TRUE COUNT AND NOT A PLACEHOLDER, and here the argument is unusually clean.
+ * A v5 world is not a world whose need tally was left out of the file: it is a world in
+ * which a guest formed ONE need and nothing counted what became of it, so no instance of
+ * any need type had ever been resolved and recorded. Zero rows is what that world had.
+ *
+ * IT IS ALSO THE ONLY VALUE THIS STEP COULD HONESTLY WRITE, which is the deeper point. A
+ * tally with one row per need type would require knowing what need types exist, and need
+ * types are CONTENT — which a migration may not read, because its output must be a pure
+ * function of its input bytes and its own era. That constraint is why `NeedOutcome` rows
+ * are created lazily at all: the shape of the state was chosen so this step could be
+ * honest.
+ */
+const V6_MIGRATION_NEED_OUTCOMES: readonly NeedOutcome[] = Object.freeze([]);
+
+/**
+ * v5 -> v6: a world whose guests formed ONE need each, with no vector and no engagement
+ * (G-012).
+ *
+ * ADR-0006 fires for the fifth time, and the permanent v1 fixture now walks a FIVE-step
+ * chain, 1 -> 2 -> 3 -> 4 -> 5 -> 6. It is not regenerated; this is what carries it.
+ *
+ * THIS IS THE FIRST STEP THAT RESHAPES A GUEST RATHER THAN ADDING A FIELD, and every value
+ * it writes comes out of the bytes it was given:
+ *
+ *   needId, patienceRemaining, restRemaining   ->  a ONE-ENTRY need vector, with
+ *                                                  `progressRemaining` carrying
+ *                                                  `restRemaining` verbatim.
+ *   engagement: null                           ->  it engaged nothing, because engagement
+ *                                                  did not exist.
+ *
+ * NOTHING IS INVENTED, AND THAT IS WHY URGENCY IS DERIVED RATHER THAN STORED. Had the
+ * vector carried an `urgency` field, this step would have had to compute
+ * `patienceTicks - patienceRemaining` — and `patienceTicks` is content, which is exactly
+ * what a migration may not read (ADR-0008). It would have had to write 0 instead, silently
+ * handing every migrated guest a fresh full patience. The state shape avoids the question.
+ *
+ * A ONE-ENTRY VECTOR IS A TRUE STATEMENT ABOUT SUCH A GUEST, not a gap. It formed one
+ * need, under content that defined one; it did not form three others and lose them. The
+ * consequence is real and is accounted for rather than hidden: when it departs it resolves
+ * one row and not the rest, which is why `assertNeedOutcomes` bounds the tally with `<=`
+ * instead of the identity that holds for every world `createWorld` produced.
+ *
+ * No other field is renamed, dropped or reinterpreted, so the fixture still ticks.
+ */
+function migrateV5ToV6(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way this step could destroy data — spreading over real state — is the one
+  // thing it refuses to do, exactly as all four earlier steps refuse.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an
+  // own key (G-003).
+  if (Object.keys(world).includes('needOutcomes')) {
+    throw new Error(
+      'world already has a "needOutcomes" field, so it is not a v5 world; migrating it would overwrite a real tally',
+    );
+  }
+
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its needs cannot be carried onto a vector');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const vectored: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    // Same refusal, one level down: a guest that already carries a vector did not come
+    // from a world that predates one.
+    if (Object.keys(guest).includes('needs')) {
+      throw new Error(
+        `world.guests.list[${index}] already has a "needs" field, so it is not a v5 guest; migrating it would overwrite a real need vector`,
+      );
+    }
+    const { needId, patienceRemaining, restRemaining, ...rest } = guest;
+    if (typeof needId !== 'string' || needId.length === 0) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].needId is missing or not a need id`);
+    }
+    if (typeof patienceRemaining !== 'number' || typeof restRemaining !== 'number') {
+      throw new Error(
+        `Save is corrupt: world.guests.list[${index}] is missing patienceRemaining or restRemaining, so its one need cannot be carried`,
+      );
+    }
+    return {
+      ...rest,
+      engagement: null,
+      needs: [{ needId, patienceRemaining, progressRemaining: restRemaining }],
+    };
+  });
+
+  return {
+    ...world,
+    guests: { ...guests, list: vectored },
+    needOutcomes: [...V6_MIGRATION_NEED_OUTCOMES],
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -330,6 +442,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 2, to: 3, migrate: migrateV2ToV3 }),
   Object.freeze({ from: 3, to: 4, migrate: migrateV3ToV4 }),
   Object.freeze({ from: 4, to: 5, migrate: migrateV4ToV5 }),
+  Object.freeze({ from: 5, to: 6, migrate: migrateV5ToV6 }),
 ]);
 
 /**
@@ -547,13 +660,50 @@ function assertGuest(value: unknown, index: number): asserts value is Guest {
   if (!isRecord(value)) {
     throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
   }
-  for (const key of ['id', 'arrivedTick', 'roomEntityId', 'patienceRemaining', 'restRemaining'] as const) {
+  for (const key of ['id', 'arrivedTick', 'roomEntityId'] as const) {
     if (typeof value[key] !== 'number') {
       throw new Error(`Save is corrupt: world.guests.list[${index}].${key} is not a number`);
     }
   }
-  if (typeof value['needId'] !== 'string') {
-    throw new Error(`Save is corrupt: world.guests.list[${index}].needId is not a string`);
+  // The need vector (G-012). Shape only here — that it is an array of records with the
+  // right primitive types — because `assertGuestStoreInvariants` below owns what a VALID
+  // vector is, and that definition is shared with the tick rather than written twice.
+  const needs = value['needs'];
+  if (!Array.isArray(needs)) {
+    throw new Error(`Save is corrupt: world.guests.list[${index}].needs is missing or not an array`);
+  }
+  needs.forEach((need: unknown, needIndex: number) => {
+    if (!isRecord(need)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${needIndex}] is not an object`);
+    }
+    if (typeof need['needId'] !== 'string') {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${needIndex}].needId is not a string`);
+    }
+    for (const key of ['patienceRemaining', 'progressRemaining'] as const) {
+      if (typeof need[key] !== 'number') {
+        throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${needIndex}].${key} is not a number`);
+      }
+    }
+  });
+  // PRESENT, and either null or an engagement (G-012) — the `Entity.at` contract exactly.
+  // A missing key is rejected rather than read as "engaged with nothing": `null` is a
+  // statement the writer made, an absent key is a save this build did not write, and the
+  // difference is what the v5 -> v6 migration exists to settle. `Object.keys().includes`
+  // rather than `in`, for the `__proto__` reason above.
+  if (!Object.keys(value).includes('engagement')) {
+    throw new Error(`Save is corrupt: world.guests.list[${index}].engagement is missing`);
+  }
+  const engagement = value['engagement'];
+  if (engagement !== null) {
+    if (!isRecord(engagement)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].engagement is neither null nor an engagement`);
+    }
+    if (typeof engagement['entityId'] !== 'number') {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].engagement.entityId is not a number`);
+    }
+    if (typeof engagement['needId'] !== 'string') {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].engagement.needId is not a string`);
+    }
   }
 }
 
@@ -674,6 +824,32 @@ export function assertWorldShape(value: unknown): asserts value is World {
   // guest store" has one definition.
   assertGuestStoreInvariants(guests as unknown as GuestStore, entities as unknown as EntityStore);
   assertGuestOutcomes(guestOutcomes as unknown as GuestOutcomes, guests as unknown as GuestStore);
+
+  // The per-need tally (G-012). Same function the tick calls at its own boundary, so "a
+  // valid need tally" has one definition rather than two that drift. Checked AFTER the
+  // guest outcomes, because its own law is stated against the departure count those
+  // counters carry — a tally can only be judged against the guests it claims to describe.
+  const needOutcomes = value['needOutcomes'];
+  if (!Array.isArray(needOutcomes)) {
+    throw new Error('Save is corrupt: world.needOutcomes is missing or not an array');
+  }
+  needOutcomes.forEach((row: unknown, index: number) => {
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.needOutcomes[${index}] is not an object`);
+    }
+    if (typeof row['needId'] !== 'string') {
+      throw new Error(`Save is corrupt: world.needOutcomes[${index}].needId is not a string`);
+    }
+    for (const key of ['met', 'unmet'] as const) {
+      if (typeof row[key] !== 'number') {
+        throw new Error(`Save is corrupt: world.needOutcomes[${index}].${key} is not a number`);
+      }
+    }
+  });
+  assertNeedOutcomes(
+    needOutcomes as unknown as readonly NeedOutcome[],
+    departedGuests(guestOutcomes as unknown as GuestOutcomes),
+  );
 
   // The build counters (G-008). Same function the tick calls at its own boundary, so
   // "valid build outcomes" has one definition rather than two that drift. It checks every

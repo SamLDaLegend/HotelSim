@@ -202,6 +202,16 @@ table beats a comment describing the order.
 **Consequence.** Critics should hunt this class explicitly; it is not in §6.1 by name but
 it has produced more real defects here than anything that is.
 
+**Amendment (G-016) — a criterion that cannot fail in the state that created its goal.**
+The class also applies one level up, to goals themselves. G-016 was promoted by a trigger
+("`sim:bench` exceeds 70% of budget") whose exit criterion was "`sim:bench` green" — i.e.
+under 100%. The pre-G-016 build was already green at 68% raw, so **criterion 1 was
+satisfied before a line of the goal was written**, and the goal's own statement was
+already true at BUILD start. The real subject was *headroom*, and no criterion named a
+headroom number. Signed off with the mismatch recorded rather than re-scoped, so the next
+goal inherits a number instead of a green tick. **When a goal is promoted by a threshold,
+its exit criterion must name a threshold** — not merely the absence of failure.
+
 **Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
 As first written this ADR could be read as condemning defensive asserts. It does not.
 `sim-critic` drew the line, and it is the right one:
@@ -362,3 +372,32 @@ Interest-rate tuning, bankruptcy as a game-over state, and demand response remai
 are correct, do not agonise over choosing one*. I2 is untouched and all three mechanisms
 are deterministic. Recorded here because a misread of that sentence would have been the
 single most damaging thing this project could do to itself.
+
+---
+
+## ADR-0012 — The need vector is at least Comfort, Entertainment and Nourishment
+Date: 2026-08-08 · Context: M2 start · Decided by: **the human**
+
+**Decision.** *"It must have multiple needs for certain. Comfort, Entertainment,
+Nourishment being at least 3."* G-012 ships at least those three named need types.
+
+**Why it was worth a human call.** M2's seeding already recorded that the vector having
+length one is the milestone's biggest vacuity risk — every criterion in G-013, G-014 and
+G-015 measures nothing without a second need. That made "how many needs" a question the
+goal could not answer for itself, because a builder choosing the number would be choosing
+how hard its own criteria are.
+
+**The consequence the ruling forces, which is the interesting part.** `bindContent`
+refuses content in which a need has no provider — G-002's guard, strengthened at G-013 to
+mean *reachable* rather than merely declared. Items do not become providers until G-013.
+Therefore **every need G-012 ships must be provided by a room type at G-012**, or the
+content will not load. G-012 must ship provider content alongside the needs, and that is
+not scope creep — it is the satisfiability guard doing its job one goal early.
+
+**Not settled here, for G-012's PLAN to propose and the orchestrator to adjudicate:** how
+the existing `night_rest` relates to the three. The natural reading is that rest is the
+*lodging* need — the reason a guest books at all — and comfort, entertainment and
+nourishment are *engagement* needs met during the stay, which maps exactly onto the
+lodging/engagement split already approved at M2 seeding. But that is an inference, not the
+ruling, and renaming or removing `night_rest` would move the content fingerprint and cost
+the permanent fixture its ability to tick (ADR-0010's lesson).

@@ -88,6 +88,7 @@ describe('validity adds nothing to the save', () => {
       'guests',
       'ledger',
       'loanOutcomes',
+      'needOutcomes',
       'rng',
       'tick',
     ]);

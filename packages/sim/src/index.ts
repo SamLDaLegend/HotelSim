@@ -25,6 +25,7 @@ export type {
   BoundContent,
   EconomyData,
   ItemTypeData,
+  NeedRole,
   NeedTypeData,
   RoomTypeData,
   SimContent,
@@ -36,10 +37,12 @@ export {
   findNeedType,
   findRoomType,
   firstEconomy,
-  firstNeedType,
+  firstRoomTypeProviding,
   hasContentId,
   isRoomKind,
+  lodgingNeedOf,
   minConstructionCostOf,
+  needTypesInOrder,
   requiredItemsOf,
   roomTypeProvides,
 } from './content.js';
@@ -82,7 +85,15 @@ export {
   GROUND_FLOOR,
   isWithinBounds,
 } from './grid.js';
-export type { Guest, GuestId, GuestOutcomes, GuestStore, GuestTickInput, GuestTickResult } from './guests.js';
+export type {
+  Engagement,
+  Guest,
+  GuestId,
+  GuestOutcomes,
+  GuestStore,
+  GuestTickInput,
+  GuestTickResult,
+} from './guests.js';
 export {
   assertGuestOutcomes,
   assertGuestStoreInvariants,
@@ -91,14 +102,33 @@ export {
   countStuckGuests,
   createGuestOutcomes,
   createGuestStore,
+  departedGuests,
   getGuest,
   guestCount,
   guestsInOrder,
+  isEngaged,
   isResting,
+  lodgingNeedStateOf,
   maxGuestLifetimeTicks,
   NO_GUEST,
   stepGuests,
 } from './guests.js';
+export type { NeedOutcome, NeedState } from './needs.js';
+export {
+  advanceNeeds,
+  assertNeedOutcomes,
+  assertNeedVector,
+  compareNeedPriority,
+  createNeedOutcomes,
+  findNeedState,
+  formNeedVector,
+  isNeedFailed,
+  isNeedMet,
+  isNeedPending,
+  needOutcomeOf,
+  recordNeedsAtDeparture,
+  urgencyOf,
+} from './needs.js';
 export type { JsonValue } from './hash.js';
 export { canonicalise, hashJson } from './hash.js';
 export type { Transaction, TransactionReason } from './ledger.js';
@@ -182,6 +212,7 @@ export {
   tickValidityContext,
   totalInvalidRooms,
   validRoomsOf,
+  validRoomsProviding,
 } from './validity.js';
 export type { World } from './world.js';
 export {

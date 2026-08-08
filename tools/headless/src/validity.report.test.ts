@@ -23,10 +23,10 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createWorld, run } from '@hotelsim/sim';
+import { createWorld, firstRoomTypeProviding, lodgingNeedOf, run } from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { buildSummary, emitReport, parseArgs, schedule } from './report.js';
+import { amenityRoomTypesOf, buildSummary, emitReport, parseArgs, schedule } from './report.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -63,6 +63,8 @@ function runInProcess(argv: readonly string[]): ReturnType<typeof buildSummary> 
       options.arrivalEveryTicks,
       options.buildEveryTicks,
       options.demolishEveryTicks,
+      options.loanEveryTicks,
+      options.amenities,
     ),
   );
   return buildSummary(world, content, options);
@@ -132,13 +134,18 @@ describe('the shipped hotel still works', () => {
     // packed rooms shoulder to shoulder, this is where it would show.
     const { summary, violations } = runInProcess(['--days', '30', '--seed', '42']);
     expect(summary.rooms.invalid).toEqual({ missingItem: 0, noDoor: 0, unplaced: 0, unsupported: 0 });
-    expect(summary.rooms.valid).toBe(3);
+    // Three bedrooms and one of each amenity since G-012 — the amenities are in the
+    // basement, which is grounded by the earth, corridored, and requires no furniture, so
+    // they are valid on the same terms as the bedrooms above them.
+    expect(summary.rooms.valid).toBe(3 + amenityRoomTypesOf(content).length);
     expect(summary.guests.satisfied).toBe(267);
     expect(violations).toEqual([]);
   });
 
   it('reports zero invalid rooms for an empty hotel without dividing by anything', () => {
-    const { summary } = runInProcess(['--days', '1', '--rooms', '0']);
+    // `--amenities 0` as well as `--rooms 0`: an EMPTY hotel is the subject, and since
+    // G-012 `--rooms 0` alone still inherits one of each amenity.
+    const { summary } = runInProcess(['--days', '1', '--rooms', '0', '--amenities', '0']);
     expect(summary.rooms.valid).toBe(0);
     expect(summary.rooms.invalid.unsupported).toBe(0);
     expect(summary.guests.inInvalidRooms).toBe(0);
@@ -152,8 +159,11 @@ describe('the zero CAN be non-zero', () => {
   // the violations output. A counter that could only ever read zero proves nothing.
 
   function forgedWorld(): World {
-    const roomType = content.content.roomTypes[0];
-    const needType = content.content.needTypes?.[0];
+    // The room guests SLEEP in, and the need they book it for — by what it provides
+    // rather than by its position in the table, which stopped meaning the same thing when
+    // G-012 added amenity room types that sort below it.
+    const needType = lodgingNeedOf(content);
+    const roomType = needType === undefined ? undefined : firstRoomTypeProviding(content, needType.id);
     if (roomType === undefined || needType === undefined) throw new Error('shipped content is missing');
     return {
       ...createWorld(1, content),
@@ -168,10 +178,9 @@ describe('the zero CAN be non-zero', () => {
           {
             id: 1,
             arrivedTick: 0,
-            needId: needType.id,
             roomEntityId: 1,
-            patienceRemaining: 5,
-            restRemaining: 5,
+            engagement: null,
+            needs: [{ needId: needType.id, patienceRemaining: 5, progressRemaining: 5 }],
           },
         ],
       },

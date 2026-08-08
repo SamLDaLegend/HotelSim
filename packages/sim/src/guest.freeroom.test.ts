@@ -22,6 +22,7 @@ import type { Cell } from './grid.js';
 import { isResting, stepGuests } from './guests.js';
 import type { Guest, GuestStore } from './guests.js';
 import { createGuestOutcomes } from './guests.js';
+import { createNeedOutcomes, findNeedState } from './needs.js';
 import { tickValidityContext } from './validity.js';
 
 const BOUNDS = createGridBounds();
@@ -57,17 +58,37 @@ function oneRoomHotel(): EntityStore {
   };
 }
 
-function guest(id: number, over: Partial<Guest> = {}): Guest {
+/**
+ * A guest with the one need this content defines.
+ *
+ * G-012 moved patience and rest INTO the need vector, so this builder takes the same two
+ * numbers and puts them where they now live. The tests below are unchanged in what they
+ * claim: the short-circuit is about finding rooms, and one need is all it takes to arm it.
+ */
+type GuestOver = {
+  readonly roomEntityId?: number;
+  readonly patienceRemaining?: number;
+  readonly restRemaining?: number;
+};
+
+function guest(id: number, over: GuestOver = {}): Guest {
   return {
     id,
     arrivedTick: 0,
-    needId: 'rest',
-    roomEntityId: 0,
-    patienceRemaining: 50,
-    restRemaining: 2,
-    ...over,
+    roomEntityId: over.roomEntityId ?? 0,
+    engagement: null,
+    needs: [
+      {
+        needId: 'rest',
+        patienceRemaining: over.patienceRemaining ?? 50,
+        progressRemaining: over.restRemaining ?? 2,
+      },
+    ],
   };
 }
+
+/** Patience left on the one need. What `guest.patienceRemaining` used to be. */
+const patienceOf = (g: Guest): number => findNeedState(g.needs, 'rest')?.patienceRemaining ?? -1;
 
 /** One tick of the guest loop over a hand-built store, with no cache. */
 function tick(guests: GuestStore, entities: EntityStore, arriving = 0) {
@@ -76,6 +97,7 @@ function tick(guests: GuestStore, entities: EntityStore, arriving = 0) {
     tick: 1,
     guests,
     outcomes: { ...createGuestOutcomes(), arrived: guests.list.length },
+    needOutcomes: createNeedOutcomes(),
     ledger: [],
     entities: draft,
     content,
@@ -126,7 +148,7 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
       [3, 1],
     ]);
     // And guest 1 was really processed rather than skipped: it lost exactly one patience.
-    expect((result.guests.list[0] as Guest).patienceRemaining).toBe(49);
+    expect(patienceOf(result.guests.list[0] as Guest)).toBe(49);
   });
 
   it('guest 2 takes the room guest 1 vacates, though guest 1 is visited first', () => {
@@ -180,7 +202,7 @@ describe('and when nothing is released, the answer really is nothing', () => {
     // so the short-circuit skipped the SCAN, not the guest.
     const waiting = result.guests.list.filter((g) => !isResting(g));
     expect(waiting.map((g) => g.id)).toEqual([2, 3, 4]);
-    expect(waiting.map((g) => g.patienceRemaining)).toEqual([9, 9, 9]);
+    expect(waiting.map(patienceOf)).toEqual([9, 9, 9]);
   });
 
   it('a guest whose patience runs out in a full hotel still leaves unsatisfied', () => {

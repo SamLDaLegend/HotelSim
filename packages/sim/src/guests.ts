@@ -1,7 +1,8 @@
-// Guests (G-004).
+// Guests (G-004, G-012).
 //
-//   A guest arrives, occupies the one room type, forms one need, has it met or not
-//   before patience runs out, pays, and leaves with a recorded outcome.
+//   A guest arrives, forms one instance of every need the content defines, holds a
+//   lodging room for the whole stay, engages one provider at a time for everything
+//   else, pays, and leaves with a recorded outcome.
 //
 // A GUEST IS NOT AN ENTITY. `Entity.kind` is a content id validated against injected
 // content, and the only content that could name a guest is a guest ARCHETYPE — which is
@@ -14,35 +15,49 @@
 // `isValidRoom` — and knows nothing about what makes a room valid; the context it asks is
 // built by the `runGuests` phase in `tick.ts`. That is the seam on purpose: `validity.ts`
 // owns what a room is, this module owns what a guest does about it, and neither file has
-// to be opened to change the other.
+// to be opened to change the other. `needs.ts` is the same seam on the other side: it
+// owns what a need is and how it decays, and this file owns what a guest does about that.
 //
-// A RESERVATION IS A FIELD OF THE GUEST AND NOTHING ELSE. There is no room -> occupant
-// back-pointer, so the two directions cannot drift apart, and a despawned guest cannot
-// hold a reservation because it no longer exists. That closes §6.1's reservation-leak
-// class BY CONSTRUCTION rather than by cleanup code. Occupancy is derived by asking the
-// guests, exactly as the cash balance is derived by folding the ledger (I4). If lookup
-// ever gets slow, the answer is a room -> occupant INDEX, which is derived state:
-// rebuilt on load, never saved, never authoritative.
+// BOTH RESERVATIONS ARE FIELDS OF THE GUEST AND EXIST NOWHERE ELSE (G-012, ruled at
+// seeding). There is no room -> occupant back-pointer and no item -> user back-pointer,
+// so the directions cannot drift apart, and a despawned guest cannot hold anything
+// because it no longer exists. That is what closed §6.1's reservation-leak class BY
+// CONSTRUCTION at G-004, and adding a second reservation does not weaken it: it is the
+// PROPERTY that matters, not the field count. Occupancy is derived by asking the guests,
+// exactly as the cash balance is derived by folding the ledger (I4). If lookup ever gets
+// slow, the answer is a room -> occupant INDEX, which is derived state: rebuilt on load,
+// never saved, never authoritative.
 //
-// This module imports `entities.ts` and `content.ts` and NOTHING ELSE from the sim. In
-// particular it does not import `world.ts` or `tick.ts`: `world.ts` needs the types
-// here, and `tick.ts` needs the phase, so importing either back would be a cycle. The
-// tick phase in `tick.ts` is a dozen lines of plumbing around `stepGuests`, and all of
-// the behaviour is here.
+// This module imports `entities.ts`, `content.ts`, `needs.ts` and `validity.ts` and
+// NOTHING ELSE from the sim. In particular it does not import `world.ts` or `tick.ts`:
+// `world.ts` needs the types here, and `tick.ts` needs the phase, so importing either
+// back would be a cycle. The tick phase in `tick.ts` is a dozen lines of plumbing around
+// `stepGuests`, and all of the behaviour is here.
 //
 // No randomness. `stepGuests` is a pure function of world state, injected content and
 // the number of guests arriving — no RNG draw, no wall clock, no `dt`. Arrival RATE is
 // demand, and demand is M4; today the host issues one `guestArrives` command per
 // arrival, so the command log fully describes who turned up and when (I2).
 
-import { findNeedType, findRoomType, firstNeedType, isRoomKind, roomTypeProvides } from './content.js';
+import { findNeedType, findRoomType, isRoomKind, lodgingNeedOf } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftGet, getEntity, NO_ENTITY } from './entities.js';
-import type { ContentId, EntityDraft, EntityId, EntityStore } from './entities.js';
+import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 import type { GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
-import { createValidityContext, isValidRoom, storeEntities, validRoomsOf } from './validity.js';
+import {
+  advanceNeeds,
+  assertNeedVector,
+  compareNeedPriority,
+  findNeedState,
+  formNeedVector,
+  isNeedMet,
+  isNeedPending,
+  recordNeedsAtDeparture,
+} from './needs.js';
+import type { NeedOutcome, NeedState } from './needs.js';
+import { createValidityContext, isValidRoom, storeEntities, validRoomsProviding } from './validity.js';
 import type { ValidityContext } from './validity.js';
 
 /**
@@ -58,6 +73,22 @@ export type GuestId = number;
 /** Reserved. Means "no guest". Never allocated — allocation starts at 1. */
 export const NO_GUEST: GuestId = 0;
 
+/**
+ * A provider a guest is currently using, and what for (G-012).
+ *
+ * ONE OBJECT RATHER THAN TWO FIELDS, so the pair cannot half-exist. An entity id with no
+ * need, or a need with no entity, is not a state the simulation has any reading of, and
+ * two flat fields would make it expressible. `Entity.at` is the same shape for the same
+ * reason: a required key with a `null` "nothing" value beats an optional one, because
+ * `canonicalise` throws on `undefined` and hashed state must not depend on the difference
+ * between an absent key and a present undefined one.
+ */
+export type Engagement = {
+  readonly entityId: EntityId;
+  /** The need being served. Always a need in this guest's own vector, and always pending. */
+  readonly needId: ContentId;
+};
+
 export type Guest = {
   readonly id: GuestId;
   /**
@@ -69,20 +100,32 @@ export type Guest = {
    * simulation has forgotten about.
    */
   readonly arrivedTick: number;
-  /** The need this guest formed on arrival, from content. */
-  readonly needId: ContentId;
   /**
-   * The room entity this guest occupies, or `NO_ENTITY` while it is still waiting.
+   * The room entity this guest lodges in, or `NO_ENTITY` while it is still waiting.
    *
-   * THE ONLY RECORD OF A RESERVATION ANYWHERE. A guest is resting if and only if this
-   * is set, which is why there is no separate `activity` field to fall out of step
-   * with it.
+   * THE LODGING RESERVATION, held from check-in to check-out — the whole stay, so a guest
+   * that leaves the room to satisfy something else does not lose it to the next arrival.
+   * A guest is resting if and only if this is set, which is why there is no separate
+   * `activity` field to fall out of step with it.
    */
   readonly roomEntityId: EntityId;
-  /** Ticks of patience left. Drains only while waiting. */
-  readonly patienceRemaining: number;
-  /** Ticks of provision still owed. Drains only while resting. */
-  readonly restRemaining: number;
+  /**
+   * The provider this guest is engaged with, or `null`.
+   *
+   * THE ENGAGEMENT RESERVATION — one at a time, ever. Held while an engagement need is
+   * being served and released the moment it is met, the provider stops being valid, or
+   * the guest leaves. Progress is RETAINED, not reset, when it is released: a guest
+   * interrupted halfway through dinner has had half a dinner.
+   */
+  readonly engagement: Engagement | null;
+  /**
+   * One instance of every need type the content defined when this guest arrived,
+   * strictly ascending by need id (G-012).
+   *
+   * A guest MIGRATED from v5 carries exactly one — the need it formed under content that
+   * had no vector — and that is a true statement about it rather than a gap to fill in.
+   */
+  readonly needs: readonly NeedState[];
 };
 
 export type GuestStore = {
@@ -106,15 +149,20 @@ export type GuestStore = {
  *
  * so a guest that is dropped, double-counted or silently resurrected fails loudly
  * instead of quietly changing what the report means.
+ *
+ * WHAT IS DELIBERATELY NOT HERE IS THE PER-NEED TALLY. These four are about STAYS, and a
+ * stay has exactly one outcome; a guest can leave satisfied having failed two of its
+ * engagement needs. `World.needOutcomes` counts need instances and is bound to these
+ * counters by its own law (`assertNeedOutcomes`).
  */
 export type GuestOutcomes = {
   /** Guests created since the world began. Never decreases. */
   readonly arrived: number;
-  /** Left with the need met, having paid. */
+  /** Left with the lodging need met, having paid. */
   readonly satisfied: number;
-  /** Gave up: patience ran out before any provider was free. Paid nothing. */
+  /** Gave up: patience for a room ran out before one was free. Paid nothing. */
   readonly unsatisfied: number;
-  /** The room being occupied stopped existing, so the stay ended early. Paid nothing. */
+  /** The lodging room stopped existing or stopped working, so the stay ended early. Paid nothing. */
   readonly evicted: number;
 };
 
@@ -126,9 +174,30 @@ export function createGuestOutcomes(): GuestOutcomes {
   return { arrived: 0, satisfied: 0, unsatisfied: 0, evicted: 0 };
 }
 
-/** True when this guest holds a room. The one definition of "resting". */
+/** True when this guest holds a lodging room. The one definition of "resting". */
 export function isResting(guest: Guest): boolean {
   return guest.roomEntityId !== NO_ENTITY;
+}
+
+/**
+ * True when this guest is using a provider for an engagement need (G-012).
+ *
+ * The pair of `isResting`, and named for the same reason: "holds something" is asked in
+ * enough places that spelling it as a field comparison would be four chances to compare
+ * against the wrong sentinel. Read by the tests and by whatever draws a guest at M5.
+ */
+export function isEngaged(guest: Guest): boolean {
+  return guest.engagement !== null;
+}
+
+/**
+ * How many guests have departed. The right-hand side of the need tally's law.
+ *
+ * Written here rather than at each call site because three of them exist — the tick, the
+ * load path and the report — and "departed" must mean the same thing in all three.
+ */
+export function departedGuests(outcomes: GuestOutcomes): number {
+  return outcomes.satisfied + outcomes.unsatisfied + outcomes.evicted;
 }
 
 export function guestCount(store: GuestStore): number {
@@ -162,8 +231,27 @@ export function getGuest(store: GuestStore, id: GuestId): Guest | undefined {
 }
 
 /**
- * The longest a guest of this need can legitimately exist: it waits out its patience,
- * or it waits some of it and then completes a stay.
+ * This guest's lodging need — the one whose satisfaction is the stay — or undefined if
+ * it formed none of that kind.
+ *
+ * Asked of the guest's OWN vector rather than of content alone, because the two can
+ * legitimately disagree: a guest migrated from v5 carries one need, and if a designer
+ * later marks a different need as lodging, that old guest still has only what it formed.
+ * Undefined there means the stay can no longer be progressed, which `countStuckGuests`
+ * reports rather than hiding.
+ */
+export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedState | undefined {
+  const lodging = lodgingNeedOf(content);
+  if (lodging === undefined) return undefined;
+  return findNeedState(guest.needs, lodging.id);
+}
+
+/**
+ * The longest a guest can legitimately exist: it waits out its patience for a room, or
+ * waits some of it and then completes a stay.
+ *
+ * ENGAGEMENT NEEDS DO NOT EXTEND IT. They are satisfied during the stay and never end it,
+ * so the bound is the lodging need's exactly as it was at G-004.
  *
  * The `+ 1` is the arrival tick itself, on which a guest is created and may already
  * reserve a room. Anything older than this has not been progressed by the simulation.
@@ -193,11 +281,18 @@ export function countStuckGuests(
   guests: GuestStore,
   content: BoundContent,
 ): number {
+  const lodging = lodgingNeedOf(content);
+  const limit = lodging === undefined ? 0 : maxGuestLifetimeTicks(content, lodging.id);
   let stuck = 0;
   for (const guest of guests.list) {
-    const limit = maxGuestLifetimeTicks(content, guest.needId);
-    // A need this content does not define gives a limit of 0, and such a guest can
-    // never be progressed at all — correctly stuck rather than silently ignored.
+    // A guest carrying no instance of this content's lodging need can never check out, so
+    // it is counted as stuck rather than silently ignored — asked through
+    // `lodgingNeedStateOf`, which is the one definition of "this guest's reason for being
+    // here" and is where the guest-versus-content distinction is explained.
+    if (lodgingNeedStateOf(content, guest) === undefined) {
+      stuck += 1;
+      continue;
+    }
     if (tick - guest.arrivedTick > limit) stuck += 1;
   }
   return stuck;
@@ -207,34 +302,42 @@ export function countStuckGuests(
  * Reservations that no longer describe reality — the exit criterion's "guests holding a
  * reservation after despawn".
  *
- * Two shapes, because the single-source-of-truth design leaves exactly two ways a
- * reservation can be wrong, and neither is reachable through the tick:
+ * IT INSPECTS BOTH FIELDS (G-012, criterion 4). The lodging/engagement split re-opens the
+ * leak class G-004 closed by construction, and this is what makes the re-opening loud.
+ * Five shapes are reachable, and `needs.reservations.test.ts` builds one of each and
+ * watches this return 1:
  *
- *   1. DANGLING — a guest holds a room entity that is not live. The tick evicts such a
- *      guest on the tick the room goes away, so reaching this means either the eviction
- *      path broke or the world came from outside the simulation (a hand-built or corrupt
- *      save, which is why `assertGuestStoreInvariants` refuses to load one).
- *   2. DOUBLE-BOOKED — two guests holding the same room. A room is taken by at most one
- *      party at M0 (`capacity` is the size of the party, not a count of bookings).
+ *   1. DANGLING LODGING     — a guest holds a room entity that is not live.
+ *   2. DANGLING ENGAGEMENT  — a guest is engaged with an entity that is not live.
+ *   3. DOUBLE-BOOKED ROOM   — two guests lodging in one room.
+ *   4. DOUBLE-ENGAGED       — two guests using one provider. A provider serves one guest
+ *                             at a time; a queue with capacity is M3's.
+ *   5. CROSSED              — one guest's lodging room is another's engagement provider.
+ *                             A bedroom is somebody's, so it is not a shared amenity.
  *
- * This returns a count rather than throwing so a host can REPORT it every run. It is
- * not a check that inspects nothing: `guest.reservations.test.ts` builds a world of
- * each shape and watches this return 1.
+ * None is reachable through the tick — every exit path releases both — so reaching one
+ * means either a release path broke or the world came from outside the simulation (a
+ * hand-built or corrupt save, which is why `assertGuestStoreInvariants` refuses to load
+ * one). This returns a count rather than throwing so a host can REPORT it every run.
  */
 export function countOrphanedReservations(guests: GuestStore, entities: EntityStore): number {
   let orphaned = 0;
   // Membership only. Never iterated, so nothing here can affect an order (I2) — and the
-  // total is the same whatever order the guests are visited in.
+  // total is the same whatever order the guests are visited in. ONE set for both kinds of
+  // reservation, which is what makes shape 5 above visible at all: an entity that is
+  // somebody's bedroom and somebody else's amenity is claimed twice.
   let held: Set<EntityId> | null = null;
   for (const guest of guests.list) {
-    if (guest.roomEntityId === NO_ENTITY) continue;
-    if (indexOfEntity(entities, guest.roomEntityId) === -1) {
-      orphaned += 1;
-      continue;
+    for (const id of [guest.roomEntityId, guest.engagement?.entityId ?? NO_ENTITY]) {
+      if (id === NO_ENTITY) continue;
+      if (indexOfEntity(entities, id) === -1) {
+        orphaned += 1;
+        continue;
+      }
+      held ??= new Set<EntityId>();
+      if (held.has(id)) orphaned += 1;
+      else held.add(id);
     }
-    held ??= new Set<EntityId>();
-    if (held.has(guest.roomEntityId)) orphaned += 1;
-    else held.add(guest.roomEntityId);
   }
   return orphaned;
 }
@@ -249,8 +352,9 @@ export function countOrphanedReservations(guests: GuestStore, entities: EntitySt
  * asserting the rule. It CAN be non-zero: a hand-built or corrupt save can carry one,
  * and `validity.guest.test.ts` builds exactly that world and watches this return 1.
  *
- * Counted rather than thrown so a host can REPORT it every run, the same contract
- * `countOrphanedReservations` has.
+ * IT COUNTS ENGAGEMENTS TOO (G-012). A guest being served by an invalid amenity is the
+ * same defect as a guest sleeping in one, and the tick releases both on the same tick for
+ * the same reason. Counted rather than thrown so a host can REPORT it every run.
  */
 export function countGuestsInInvalidRooms(
   guests: GuestStore,
@@ -261,21 +365,23 @@ export function countGuestsInInvalidRooms(
   let count = 0;
   let validity: ValidityContext | null = null;
   for (const guest of guests.list) {
-    if (guest.roomEntityId === NO_ENTITY) continue;
-    const room = getEntity(entities, guest.roomEntityId);
-    // A reservation on a room that does not exist is a DIFFERENT failure, counted by
-    // `countOrphanedReservations`. Counting it here too would make one leak look like two.
-    if (room === undefined) continue;
-    // Only rooms have validity. A guest holding an item is not a shape the tick can
-    // produce, and calling `roomInvalidity` on one would throw rather than report.
-    if (!isRoomKind(content, room.kind)) {
-      count += 1;
-      continue;
+    for (const id of [guest.roomEntityId, guest.engagement?.entityId ?? NO_ENTITY]) {
+      if (id === NO_ENTITY) continue;
+      const room = getEntity(entities, id);
+      // A reservation on a room that does not exist is a DIFFERENT failure, counted by
+      // `countOrphanedReservations`. Counting it here too would make one leak look like two.
+      if (room === undefined) continue;
+      // Only rooms have validity. A guest holding an item is not a shape the tick can
+      // produce, and calling `roomInvalidity` on one would throw rather than report.
+      if (!isRoomKind(content, room.kind)) {
+        count += 1;
+        continue;
+      }
+      // Allocated only once a guest is actually holding something, so an empty hotel pays
+      // nothing — the `assertGuestStoreInvariants` discipline.
+      validity ??= createValidityContext(content, bounds, storeEntities(entities));
+      if (!isValidRoom(validity, room)) count += 1;
     }
-    // Allocated only once a guest is actually holding something, so an empty hotel pays
-    // nothing — the `assertGuestStoreInvariants` discipline.
-    validity ??= createValidityContext(content, bounds, storeEntities(entities));
-    if (!isValidRoom(validity, room)) count += 1;
   }
   return count;
 }
@@ -304,13 +410,20 @@ function indexOfEntity(entities: EntityStore, id: EntityId): number {
  * `assertEntityStoreInvariants` has. The reservation half is the load-time defence
  * against a save carrying a leak: such a world would load fine, report a healthy zero,
  * and be wrong.
+ *
+ * CONTENT-FREE, deliberately and as always: `assertWorldShape` has no content, so every
+ * check here is a fact about the world's own shape. "This guest's engagement names a need
+ * it actually formed" is such a fact; "that need is one this content defines" is not, and
+ * belongs to `bindContent`.
  */
 export function assertGuestStoreInvariants(guests: GuestStore, entities: EntityStore): void {
   if (!Number.isSafeInteger(guests.nextId) || guests.nextId < 1) {
     throw new Error(`Guest store is invalid: nextId must be a positive safe integer, got ${String(guests.nextId)}`);
   }
   // Allocated only if a reservation is actually seen. This runs at the end of EVERY
-  // tick, and an empty hotel is most of a 365-day run (I5).
+  // tick, and an empty hotel is most of a 365-day run (I5). ONE set for both kinds, so a
+  // room that is one guest's bedroom and another's amenity is caught by the same clause
+  // that catches two guests in one bed.
   let held: Set<EntityId> | null = null;
   let previous = 0;
   for (let i = 0; i < guests.list.length; i += 1) {
@@ -333,45 +446,88 @@ export function assertGuestStoreInvariants(guests: GuestStore, entities: EntityS
     }
     previous = guest.id;
 
-    if (typeof guest.needId !== 'string' || guest.needId.length === 0) {
-      throw new Error(`Guest store is invalid: guest ${guest.id} has an empty needId`);
-    }
     if (!Number.isSafeInteger(guest.arrivedTick) || guest.arrivedTick < 0) {
       throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer arrivedTick`);
     }
-    // WRITTEN OUT RATHER THAN LOOPED OVER A LITERAL TABLE (G-010). The `for (const [field,
-    // value] of [[...], [...]] as const)` form this replaces allocated THREE ARRAYS PER
-    // GUEST PER TICK — ~31 million of them across the 60-room bench — and this function
-    // runs on every tick and at every load. The check is unchanged in what it inspects and
-    // in what it says; only the allocation is gone. NOT sampled and NOT gated: the honest
-    // fix for a check that costs too much is to make it cheaper, not rarer, and gating on
-    // a changed guest store would buy almost nothing here because a busy hotel produces a
-    // new store on nearly every tick.
-    if (!Number.isSafeInteger(guest.patienceRemaining) || guest.patienceRemaining < 0) {
-      throw new Error(`Guest store is invalid: guest ${guest.id} has a negative or non-integer patienceRemaining`);
-    }
-    if (!Number.isSafeInteger(guest.restRemaining) || guest.restRemaining < 0) {
-      throw new Error(`Guest store is invalid: guest ${guest.id} has a negative or non-integer restRemaining`);
+    // The need vector: non-empty, ascending, integer countdowns. `needs.ts` owns what a
+    // valid vector is, for the reason `validity.ts` owns what a valid room is.
+    assertNeedVector(guest.needs, guest.id);
+
+    if (guest.roomEntityId !== NO_ENTITY) {
+      if (!Number.isSafeInteger(guest.roomEntityId) || guest.roomEntityId < 0) {
+        throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer roomEntityId`);
+      }
+      held = claimEntity(held, entities, guest, guest.roomEntityId, 'lodges in');
     }
 
-    if (guest.roomEntityId === NO_ENTITY) continue;
-    if (!Number.isSafeInteger(guest.roomEntityId) || guest.roomEntityId < 0) {
-      throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer roomEntityId`);
-    }
-    if (indexOfEntity(entities, guest.roomEntityId) === -1) {
+    // Typed wider than the field, because this runs at LOAD against bytes nobody in this
+    // build wrote: an absent key is a save that predates the field, and `null` is a
+    // statement the writer made. The two must not be conflated, for the reason `Entity.at`
+    // gives — `canonicalise` throws on `undefined`, so an absent key in hashed state is a
+    // live hazard rather than a stylistic one.
+    const engagement: Engagement | null | undefined = guest.engagement;
+    if (engagement === undefined) {
       throw new Error(
-        `Guest store is invalid: guest ${guest.id} holds a reservation on entity ${guest.roomEntityId}, which does not exist. ` +
-          'A reservation held against a room that is gone is the leak §6.1 names; the tick evicts such a guest instead.',
+        `Guest store is invalid: guest ${guest.id} has no engagement field. A guest engaging nothing carries null, so the key is always present (it is hashed state).`,
       );
     }
-    held ??= new Set<EntityId>();
-    if (held.has(guest.roomEntityId)) {
+    if (engagement === null) continue;
+    if (typeof engagement !== 'object') {
+      throw new Error(`Guest store is invalid: guest ${guest.id} has an engagement that is not an object`);
+    }
+    if (!Number.isSafeInteger(engagement.entityId) || engagement.entityId < 1) {
       throw new Error(
-        `Guest store is invalid: entity ${guest.roomEntityId} is held by more than one guest, most recently ${guest.id}`,
+        `Guest store is invalid: guest ${guest.id} is engaged with entity ${String(engagement.entityId)}, which is not a live entity id`,
       );
     }
-    held.add(guest.roomEntityId);
+    // The engagement names a need this guest actually formed. Without this, a save could
+    // carry a guest occupying a provider for a need it does not have — a reservation the
+    // simulation could never release, because nothing would ever satisfy it.
+    const served = findNeedState(guest.needs, engagement.needId);
+    if (served === undefined) {
+      throw new Error(
+        `Guest store is invalid: guest ${guest.id} is engaged for need "${String(engagement.needId)}", which it never formed. ` +
+          'An engagement is always for one of the guest\'s own needs; otherwise nothing could ever end it.',
+      );
+    }
+    if (!isNeedPending(served)) {
+      throw new Error(
+        `Guest store is invalid: guest ${guest.id} is engaged for need "${engagement.needId}", which is already resolved. ` +
+          'A provider is released on the tick the need it serves is met or fails.',
+      );
+    }
+    held = claimEntity(held, entities, guest, engagement.entityId, 'is engaged with');
   }
+}
+
+/**
+ * One entity claimed by one guest. Throws if it is not live, or if somebody already has it.
+ *
+ * BOTH RESERVATIONS GO THROUGH HERE, which is what makes "a bedroom is not a shared
+ * amenity" a checked fact rather than a convention: the set does not care which field the
+ * claim came from, so a room claimed twice fails however it was claimed.
+ */
+function claimEntity(
+  held: Set<EntityId> | null,
+  entities: EntityStore,
+  guest: Guest,
+  id: EntityId,
+  verb: string,
+): Set<EntityId> {
+  if (indexOfEntity(entities, id) === -1) {
+    throw new Error(
+      `Guest store is invalid: guest ${guest.id} ${verb} entity ${id}, which does not exist. ` +
+        'A reservation held against a room that is gone is the leak §6.1 names; the tick releases such a guest instead.',
+    );
+  }
+  const claimed = held ?? new Set<EntityId>();
+  if (claimed.has(id)) {
+    throw new Error(
+      `Guest store is invalid: entity ${id} is held by more than one guest, most recently ${guest.id}`,
+    );
+  }
+  claimed.add(id);
+  return claimed;
 }
 
 /**
@@ -392,7 +548,7 @@ export function assertGuestOutcomes(outcomes: GuestOutcomes, guests: GuestStore)
   assertCounter('satisfied', outcomes.satisfied);
   assertCounter('unsatisfied', outcomes.unsatisfied);
   assertCounter('evicted', outcomes.evicted);
-  const departed = outcomes.satisfied + outcomes.unsatisfied + outcomes.evicted;
+  const departed = departedGuests(outcomes);
   if (outcomes.arrived !== departed + guests.list.length) {
     throw new Error(
       `Guest outcomes are invalid: ${outcomes.arrived} arrived but ${departed} departed and ${guests.list.length} are still here. ` +
@@ -414,6 +570,8 @@ export type GuestTickInput = {
   readonly tick: number;
   readonly guests: GuestStore;
   readonly outcomes: GuestOutcomes;
+  /** The per-need tally (G-012). Moved only by a departure. */
+  readonly needOutcomes: readonly NeedOutcome[];
   readonly ledger: readonly Transaction[];
   /** The open entity draft: spawns staged this tick are visible, despawns are not. */
   readonly entities: EntityDraft;
@@ -434,16 +592,17 @@ export type GuestTickInput = {
 export type GuestTickResult = {
   readonly guests: GuestStore;
   readonly outcomes: GuestOutcomes;
+  readonly needOutcomes: readonly NeedOutcome[];
   readonly ledger: readonly Transaction[];
 };
 
 /**
- * What a satisfied guest pays: one night at the rate of the room type it occupied.
+ * What a satisfied guest pays: one night at the rate of the room type it lodged in.
  *
- * THE SEAM FOR G-005. Pricing, demand, per-night proration, upkeep and nightly
- * settlement are that goal's, and this is the single call site they will replace. What
- * G-004 owes the money loop is that a met need produces revenue at all, in integer
- * pence (ADR-0002), through the append-only ledger (I4) — not a pricing model.
+ * THE SEAM FOR M4. Pricing, demand, per-night proration and nightly settlement are that
+ * milestone's, and this is the single call site they will replace. ADR-0010 records what
+ * this actually charges — once per COMPLETED STAY, not once per night — and G-012 does not
+ * touch it: engagement needs are free, because charging for them is pricing.
  *
  * A guest that gave up or was evicted pays nothing, which is not a balance decision so
  * much as the only honest one: it never had what it came for.
@@ -477,46 +636,52 @@ function payForStay(
  * §6.1 warns about. Choosing by id today does not create that behaviour; choosing by
  * anything unstable would.
  *
- * "AN INVALID ROOM IS NOT A PROVIDER" IS STILL THIS FUNCTION'S CLAUSE (G-009), but it is
- * now asked once per entity set rather than once per candidate per tick: the candidates
- * come from `validRoomsOf`, which IS the invalid rooms already filtered out. A room with no
- * floor under it, no way in, or no bed in it is skipped exactly as a room that is already
- * taken is — the guest waits, and gives up if nothing valid frees up before its patience
- * runs out.
+ * ONE FUNCTION FOR BOTH RESERVATIONS (G-012). A bedroom and an amenity are found the same
+ * way — the lowest-id valid room that provides the need and nobody holds — because `held`
+ * carries both kinds of claim. That is what makes "a room is either somebody's bedroom or
+ * a free amenity, never both" true by construction rather than by a second rule.
  *
- * G-010 changed HOW the same room is found, and nothing about WHICH room it is. The old
- * form scanned every live entity per waiting guest per tick and asked three questions of
- * each; since G-009 every room carries a bed, so half of that scan was furniture that could
- * never satisfy `roomTypeProvides`. Same canonical order, same conjunction, same answer.
+ * "AN INVALID ROOM IS NOT A PROVIDER" IS STILL THIS FUNCTION'S CLAUSE (G-009), but it is
+ * asked once per entity set rather than once per candidate per tick: the candidates come
+ * from `validRoomsOf`, which IS the invalid rooms already filtered out.
  */
 function findFreeRoom(search: RoomSearch, needId: ContentId): EntityId {
-  // THE SHORT-CIRCUIT (G-010). If a scan for this need already came up empty and NOTHING
-  // HAS BEEN RELEASED SINCE, the answer is still empty and the scan is skipped.
+  // THE SHORT-CIRCUIT (G-010, sharpened by G-012). If a scan for this need already came up
+  // empty and NOTHING THAT PROVIDES IT HAS BEEN RELEASED SINCE, the answer is still empty
+  // and the scan is skipped.
   //
   // Why that is exact rather than an approximation: within one tick, entity membership is
   // frozen, so `validRoomsOf` is a fixed list; `roomTypeProvides` is a fact about content;
   // and the only other input is `held`, which this loop can only ADD to — except at the
-  // three release sites, every one of which goes through `search.release` and bumps the
-  // counter. So between two scans with an unchanged counter the candidate set can only
-  // have shrunk, and a set that was empty cannot have become non-empty.
+  // release sites, every one of which goes through `release` and un-exhausts exactly the
+  // needs the freed room provides. So between two scans with this need still marked, the
+  // candidate set can only have shrunk, and a set that was empty cannot have become
+  // non-empty.
   //
-  // This is what stops a FULL hotel being O(waiting x rooms) per tick. A saturated hotel is
-  // exactly where every waiting guest used to walk every room to learn what the guest before
-  // it had just learned.
+  // WHY IT IS PER NEED RATHER THAN A GLOBAL RELEASE COUNTER, and this is a measured change
+  // rather than a tidier one. G-010 keyed the memo by need but compared it against ONE
+  // counter of all releases, so any release anywhere re-armed every need. With one need per
+  // guest that was free. With four it is not: in a hotel that has bedrooms and no amenities
+  // — a real hotel, and the one `--amenities 0` describes — three needs per waiting guest
+  // have no provider at all, and every stay that ended re-armed all three, so each waiting
+  // guest rescanned every valid room three times a tick. `vitest run scaling` measured 6.65x
+  // for 4x the rooms against its 6x bound, in the goal after the one that spent itself
+  // making tick cost linear. Releasing a bedroom cannot make a CAFÉ appear, and saying so
+  // exactly costs one content lookup at the release site.
   const exhausted = search.exhausted;
-  if (exhausted !== null && exhausted.get(needId) === search.releases) return NO_ENTITY;
+  if (exhausted !== null && exhausted.has(needId)) return NO_ENTITY;
 
-  // The one canonical ascending-id order, filtered to rooms that work — see `validRoomsOf`
-  // for why that is the same choice the old every-entity scan made.
-  for (const room of validRoomsOf(search.input.validity)) {
+  // The one canonical ascending-id order, filtered to rooms that work AND to rooms that
+  // offer this — see `validRoomsProviding` for why that is the same choice the old
+  // every-valid-room scan made, and what it cost to make it before this was a list.
+  for (const room of validRoomsProviding(search.input.validity, needId)) {
     if (search.held.has(room.id)) continue;
-    if (!roomTypeProvides(search.input.content, room.kind, needId)) continue;
     return room.id;
   }
   // Allocated only when a scan actually fails, so a hotel that is never full pays nothing —
   // the `assertGuestStoreInvariants` discipline. Lookup only: never iterated, never
   // ordered, never hashed (I2).
-  (search.exhausted ??= new Map<ContentId, number>()).set(needId, search.releases);
+  (search.exhausted ??= new Set<ContentId>()).add(needId);
   return NO_ENTITY;
 }
 
@@ -529,37 +694,88 @@ function findFreeRoom(search: RoomSearch, needId: ContentId): EntityId {
 type RoomSearch = {
   readonly input: GuestTickInput;
   /**
-   * Rooms currently held. Membership only: never iterated, never ordered, never hashed
-   * (I2), exactly like `EntityDraft.removed`.
+   * Rooms currently held, as bedrooms OR as engagements. Membership only: never iterated,
+   * never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
    */
   readonly held: Set<EntityId>;
-  /** How many rooms have been given back this tick. Only `release` moves it. */
-  releases: number;
   /**
-   * Per need: the release count at which a scan last found nothing. LOOKUP ONLY (I2).
-   *
-   * Keyed by need because "nothing is free" is a statement about a NEED, not about the
-   * hotel: a tick can exhaust one need's providers while another's sit empty. M2 gives a
-   * guest a need vector and this keeps working unchanged.
+   * Needs a scan has already found no free provider for, this tick. LOOKUP ONLY (I2):
+   * never iterated, never ordered, never hashed.
    */
-  exhausted: Map<ContentId, number> | null;
+  exhausted: Set<ContentId> | null;
+  /**
+   * The per-need tally, threaded through the tick (G-016).
+   *
+   * It lives here rather than in a `let` inside `stepGuests` because `depart` is the only
+   * thing that moves it and `depart` is no longer a closure — see the note on `depart`.
+   * Tick-local and mutable exactly like `held` and `exhausted`: it is handed back out
+   * through `GuestTickResult` and is never itself hashed or saved.
+   */
+  needOutcomes: readonly NeedOutcome[];
 };
 
 /**
  * A room goes back into the pool. THE ONE PLACE `held` SHRINKS.
  *
  * Every release must come through here, because `findFreeRoom`'s short-circuit is only
- * sound while the counter sees them all. A `held.delete` written anywhere else would make
- * a room invisible to every guest for the rest of the tick — a guest standing in the lobby
- * beside an empty room, which is §6.1's "correct but reads as stupid" in its literal form.
+ * sound while it sees them all. A `held.delete` written anywhere else would make a room
+ * invisible to every guest for the rest of the tick — a guest standing in the lobby beside
+ * an empty room, which is §6.1's "correct but reads as stupid" in its literal form.
  *
- * Deliberately bumps the counter even when the room is GONE rather than merely vacated (the
- * eviction paths below). That is conservative in the safe direction: it can only cause a
- * scan that was avoidable, never skip one that was not.
+ * `freed` IS THE ROOM ITSELF WHEN IT IS STILL USABLE, and `null` when the caller knows it
+ * is not — gone, or no longer a valid room. That is not an optimisation detail, it is the
+ * whole soundness argument in one parameter: a room that is still a valid room becomes
+ * available to whatever it provides, and a room that has ceased to exist becomes available
+ * to nobody. Every call site knows which case it is in, so there is no third "unknown"
+ * branch to be conservative about.
  */
-function release(search: RoomSearch, id: EntityId): void {
+function release(search: RoomSearch, id: EntityId, freed: Entity | null, content: BoundContent): void {
   search.held.delete(id);
-  search.releases += 1;
+  const exhausted = search.exhausted;
+  if (exhausted === null || freed === null) return;
+  // Un-exhaust exactly what this room can serve. `provides` is a short frozen list on the
+  // room type, so this is a content lookup and a couple of deletes.
+  const roomType = findRoomType(content, freed.kind);
+  for (const needId of roomType?.provides ?? []) exhausted.delete(needId);
+}
+
+/**
+ * A guest leaves. THE ONE PLACE both reservations are given back and needs are counted.
+ *
+ * The two entities are passed in rather than looked up, because only the caller knows
+ * whether each is still a usable room — see `release`.
+ *
+ * A TOP-LEVEL FUNCTION RATHER THAN A CLOSURE INSIDE `stepGuests`, AND IT IS THE LARGEST
+ * SINGLE SAVING G-016 FOUND: **9.5% of the 365-day bench**, 6,914ms -> 6,260ms, paired and
+ * interleaved against the unchanged build in the same minutes, with the state hash unmoved.
+ *
+ * WHY IT COSTS ANYTHING AT ALL — STATED AS A HYPOTHESIS, BECAUSE IT WAS NOT ISOLATED. It was
+ * a closure capturing five mutable locals (`needOutcomes`, `search`, `content` and the
+ * counters), and a closure over mutable locals makes V8 heap-allocate a context object for
+ * the enclosing function, so every read of every local in the hottest loop here becomes a
+ * context slot load. Under `tsx` (esbuild with `keepNames`) it also cost one
+ * `Object.defineProperty` per tick. Both are plausible and neither was measured on its own;
+ * what IS measured is the 9.5% above. Do not repeat the mechanism as though it were the
+ * finding.
+ *
+ * AND A WARNING ABOUT HOW THIS NUMBER WAS NEARLY GOT WRONG, WHICH IS WORTH MORE THAN THE
+ * NUMBER. The first measurement of this change said 14%, and a sibling change said 34%; both
+ * were inflated, because the machine drifted nearly 2x FASTER across the session and each
+ * arm had been timed against a baseline captured at a different moment. The same G-012 build
+ * measured 3,087ms and later 1,740ms on the identical workload. ONLY PAIRED, INTERLEAVED
+ * MEASUREMENTS TAKEN IN THE SAME MINUTES MEAN ANYTHING HERE — PARKING.md has now recorded
+ * that lesson three times, and this is the goal that learned it the expensive way.
+ */
+function depart(
+  search: RoomSearch,
+  content: BoundContent,
+  guest: Guest,
+  lodgingRoom: Entity | null,
+  engagedRoom: Entity | null,
+): void {
+  if (guest.roomEntityId !== NO_ENTITY) release(search, guest.roomEntityId, lodgingRoom, content);
+  if (guest.engagement !== null) release(search, guest.engagement.entityId, engagedRoom, content);
+  search.needOutcomes = recordNeedsAtDeparture(search.needOutcomes, guest.needs);
 }
 
 /**
@@ -578,18 +794,15 @@ function release(search: RoomSearch, id: EntityId): void {
  *   past the existing queue they try to reserve immediately, so a guest walking into an
  *   empty hotel starts its stay at once rather than standing in the lobby for a minute.
  *
- *   A room vacated by a guest with a HIGHER id than someone waiting stays empty until
- *   the next tick, because the waiting guest was visited before it was released. That
- *   is one in-game minute of turnaround, and it is the price of never letting a
- *   later-arriving guest overtake an earlier one. The alternative — a second pass over
- *   the queue after every release — buys a minute and costs the property that makes the
- *   order legible.
+ *   Within one guest: DECAY FIRST, then departure, then reservations. So a guest reserves
+ *   on the tick it arrives but is not served on it — check-in is not a night's sleep —
+ *   which is exactly the timing G-004 shipped, now applied to every need rather than one.
  *
- * COMMITMENT IS TOTAL. A guest that holds a room never re-evaluates the choice: there
- * is no per-tick utility score here to oscillate, so the thrashing §6.1 hunts for is
- * not merely unlikely, it is unexpressible. M2 adds scoring across many providers and
- * will need a margin to switch; it inherits a guest that commits rather than one that
- * twitches.
+ * COMMITMENT IS TOTAL, for both reservations. A guest that holds a room never
+ * re-evaluates, and a guest that is engaged never abandons: there is no per-tick score
+ * here to oscillate, so the thrashing §6.1 hunts for is not merely unlikely, it is
+ * unexpressible. G-014 adds a score over providers and a content-defined margin to
+ * abandon one, and it inherits a guest that commits rather than one that twitches.
  */
 export function stepGuests(input: GuestTickInput): GuestTickResult {
   const { tick, guests, outcomes, content, arriving } = input;
@@ -597,14 +810,16 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   // O(1) idle tick. An empty hotel costs nothing, which is what keeps a 365-day run
   // inside the I5 budget while it waits for the interesting part.
   if (guests.list.length === 0 && arriving === 0) {
-    return { guests, outcomes, ledger: input.ledger };
+    return { guests, outcomes, needOutcomes: input.needOutcomes, ledger: input.ledger };
   }
 
   const held = new Set<EntityId>();
   for (const guest of guests.list) {
     if (guest.roomEntityId !== NO_ENTITY) held.add(guest.roomEntityId);
+    if (guest.engagement !== null) held.add(guest.engagement.entityId);
   }
-  const search: RoomSearch = { input, held, releases: 0, exhausted: null };
+  const search: RoomSearch = { input, held, exhausted: null, needOutcomes: input.needOutcomes };
+  const lodgingNeed = lodgingNeedOf(content);
 
   const next: Guest[] = [];
   let ledger = input.ledger;
@@ -612,94 +827,123 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   let unsatisfied = 0;
   let evicted = 0;
 
-  for (const guest of guests.list) {
-    if (isResting(guest)) {
+  for (const existing of guests.list) {
+    let guest = existing;
+    // The two rooms this guest holds, as they stand THIS tick: the entity when it is still
+    // a valid room, null when it is not. Every release below reads them, so "is this room
+    // still usable" is answered once per guest per tick rather than at each release site.
+    let lodgingRoom: Entity | null = null;
+    let engagedRoom: Entity | null = null;
+
+    // 1. IS EACH THING IT HOLDS STILL A USABLE ROOM? Both questions are asked BEFORE
+    //    either is acted on, and that ordering is load-bearing rather than tidy.
+    //
+    //    A guest evicted mid-meal gives its CAFÉ back, and the café is usually still a
+    //    perfectly good café. `release` un-exhausts the needs of a room that is still
+    //    usable and nothing when it is not (see `release`), so departing without having
+    //    resolved the provider first would free the café while leaving its need marked
+    //    "nothing available" for the rest of the tick — a guest standing in the lobby
+    //    beside an empty table, which is §6.1's "correct but reads as stupid" in the
+    //    literal form G-010 spent a critique round on.
+    if (guest.roomEntityId !== NO_ENTITY) {
       const room = draftGet(input.entities, guest.roomEntityId);
-      if (room === undefined) {
-        // The room stopped existing under them. The stay ends visibly — an outcome is
-        // recorded and the guest leaves — rather than the guest continuing to rest in a
-        // room that is gone, which is the silent-fallback failure §6.1 names for
-        // pathfinding and which has exactly the same shape here.
-        release(search, guest.roomEntityId);
-        evicted += 1;
-        continue;
-      }
-      if (!isValidRoom(input.validity, room)) {
-        // The room stopped being a ROOM under them (G-009): the storey below was
-        // demolished, or something was built against its only free side. The same event
-        // as far as the guest is concerned — the thing it was paying for is gone — so it
-        // takes the same path and is counted the same way.
-        //
-        // WHY IT IS EVICTION AND NOT A GRANDFATHERED STAY. "Zero guests served by an
-        // invalid room" is this goal's exit criterion; letting a stay run on inside a
-        // room hanging in mid-air would make that number non-zero on any honest reading
-        // of it. Splitting `evicted` into demolished-versus-invalidated is parked to M2,
-        // where the outcome tally becomes a table (PARKING.md).
-        release(search, guest.roomEntityId);
-        evicted += 1;
-        continue;
-      }
-      const restRemaining = guest.restRemaining - 1;
-      if (restRemaining > 0) {
-        next.push({ ...guest, restRemaining });
-        continue;
-      }
-      // The need is met. Pay, release, leave. THE ROOM IS FREE FROM HERE ON IN THIS TICK —
-      // a guest visited later in this same loop can take it, even though it arrived later,
-      // because the room genuinely is empty now. That is today's behaviour and the
-      // short-circuit in `findFreeRoom` must not swallow it, which is why this goes through
-      // `release` rather than touching `held` directly.
-      ledger = payForStay(ledger, tick, room.kind, content);
-      release(search, guest.roomEntityId);
-      satisfied += 1;
+      if (room !== undefined && isValidRoom(input.validity, room)) lodgingRoom = room;
+    }
+    if (guest.engagement !== null) {
+      const provider = draftGet(input.entities, guest.engagement.entityId);
+      if (provider !== undefined && isValidRoom(input.validity, provider)) engagedRoom = provider;
+    }
+
+    // 2. THE PROVIDER STOPPED BEING A PROVIDER: the engagement is released, the need stays
+    //    pending, AND ITS PROGRESS IS RETAINED — a guest interrupted halfway through
+    //    dinner has had half a dinner (ruled at seeding). Losing an amenity does not end a
+    //    stay, which is the whole difference between the two reservations.
+    if (guest.engagement !== null && engagedRoom === null) {
+      release(search, guest.engagement.entityId, null, content);
+      guest = { ...guest, engagement: null };
+    }
+
+    // 3. THE LODGING ROOM STOPPED BEING A ROOM: gone, or no longer valid — the storey below
+    //    was demolished, or something was built against its only free side. Both are the
+    //    same event from the guest's point of view: the thing it was paying for is gone.
+    //    The stay ends VISIBLY, with an outcome recorded, rather than the guest carrying on
+    //    in a room that is not there — the silent-fallback failure §6.1 names for
+    //    pathfinding, which has exactly the same shape here.
+    if (guest.roomEntityId !== NO_ENTITY && lodgingRoom === null) {
+      depart(search, content, guest, null, engagedRoom);
+      evicted += 1;
       continue;
     }
 
-    const room = findFreeRoom(search, guest.needId);
-    if (room !== NO_ENTITY) {
-      held.add(room);
-      next.push({ ...guest, roomEntityId: room });
+    // 4. DECAY. Every pending need loses a tick of patience, except the ones something is
+    //    serving, which gain a tick of progress and a tick of relief. The lodging room
+    //    serves the lodging need for as long as the guest holds it; the engagement serves
+    //    exactly one other. See `needs.ts` for the closed form.
+    const servedByRoom = guest.roomEntityId === NO_ENTITY ? null : lodgingNeed?.id ?? null;
+    const needs = advanceNeeds(content, guest.needs, servedByRoom, guest.engagement?.needId ?? null);
+    if (needs !== guest.needs) guest = { ...guest, needs };
+
+    // 5. HAS THE ENGAGEMENT FINISHED? Released the moment the need it serves resolves, so
+    //    the amenity is free for somebody else from here on in THIS tick — through
+    //    `release`, so the short-circuit in `findFreeRoom` cannot swallow it.
+    const engagement = guest.engagement;
+    if (engagement !== null) {
+      const served = findNeedState(guest.needs, engagement.needId);
+      if (served === undefined || !isNeedPending(served)) {
+        release(search, engagement.entityId, engagedRoom, content);
+        engagedRoom = null;
+        guest = { ...guest, engagement: null };
+      }
+    }
+
+    // 6. DOES THE STAY END? Only the lodging need can end it. An engagement need that runs
+    //    out of patience has already failed on its own, in step 4, and is recorded on the
+    //    way out; the guest stays and gets on with the rest of its holiday.
+    const lodging = lodgingNeed === undefined ? undefined : findNeedState(guest.needs, lodgingNeed.id);
+    if (lodging !== undefined && isNeedMet(lodging)) {
+      // Met. Pay, release, leave. THE ROOM IS FREE FROM HERE ON IN THIS TICK — a guest
+      // visited later in this same loop can take it, even though it arrived later, because
+      // the room genuinely is empty now.
+      if (lodgingRoom !== null) ledger = payForStay(ledger, tick, lodgingRoom.kind, content);
+      depart(search, content, guest, lodgingRoom, engagedRoom);
+      satisfied += 1;
       continue;
     }
-    const patienceRemaining = guest.patienceRemaining - 1;
-    if (patienceRemaining > 0) {
-      next.push({ ...guest, patienceRemaining });
+    if (lodging !== undefined && !isNeedPending(lodging)) {
+      // Waited it out and never got a room. It pays nothing and leaves with that recorded.
+      depart(search, content, guest, lodgingRoom, engagedRoom);
+      unsatisfied += 1;
       continue;
     }
-    // Waited it out and got nothing. It pays nothing and leaves with that recorded.
-    unsatisfied += 1;
+
+    // 7. RESERVE WHAT IT CAN. A room first — that is the stay, and the thing it is here
+    //    for — then one provider for the most pressing engagement need that has one free.
+    guest = reserve(search, guest, lodgingNeed?.id);
+    next.push(guest);
   }
 
   let nextId = guests.nextId;
   for (let i = 0; i < arriving; i += 1) {
-    // Through `firstNeedType`, so "which need does a guest form" has one definition and
-    // is answered by content rather than by an index into an array in two places.
-    const needType = firstNeedType(content);
-    if (needType === undefined) {
-      // Unreachable from the tick: `applyCommands` rejects a `guestArrives` under
-      // content that defines no need, so a guest is never created without one.
-      throw new Error('stepGuests: a guest arrived under content that defines no need type');
+    if (lodgingNeed === undefined) {
+      // Unreachable from the tick: `applyCommands` rejects a `guestArrives` under content
+      // that defines no need, so a guest is never created without a reason to book.
+      throw new Error('stepGuests: a guest arrived under content that defines no lodging need');
     }
     const id = nextId;
     if (!Number.isSafeInteger(id + 1)) {
       throw new Error(`stepGuests: guest ids are exhausted at ${id}; the next id would not be a safe integer`);
     }
     nextId = id + 1;
+    // ONE INSTANCE OF EVERY NEED THE CONTENT DEFINES (G-012). Which needs a guest forms is
+    // an archetype's business at M6; today every guest wants everything.
     const arrived: Guest = {
       id,
       arrivedTick: tick,
-      needId: needType.id,
       roomEntityId: NO_ENTITY,
-      patienceRemaining: needType.patienceTicks,
-      restRemaining: needType.satisfyTicks,
+      engagement: null,
+      needs: formNeedVector(content),
     };
-    const room = findFreeRoom(search, arrived.needId);
-    if (room === NO_ENTITY) {
-      next.push(arrived);
-      continue;
-    }
-    held.add(room);
-    next.push({ ...arrived, roomEntityId: room });
+    next.push(reserve(search, arrived, lodgingNeed.id));
   }
 
   // Ids came from a counter, existing guests were visited in ascending order and
@@ -712,5 +956,82 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     unsatisfied: outcomes.unsatisfied + unsatisfied,
     evicted: outcomes.evicted + evicted,
   };
-  return { guests: nextGuests, outcomes: nextOutcomes, ledger };
+  return { guests: nextGuests, outcomes: nextOutcomes, needOutcomes: search.needOutcomes, ledger };
+}
+
+/**
+ * Take a room if one is free, and engage a provider if one is — at most one of each, and
+ * at most once per tick.
+ *
+ * THE ENGAGEMENT PASS IS THE ONLY PLACE URGENCY IS ACTED ON. Among the pending engagement
+ * needs that have a free provider, the guest takes the one that has burned through most of
+ * its own patience (`compareNeedPriority`). So a guest whose dinner is nearly desperate
+ * does not sit in the games room instead — and if the café is busy it does the next most
+ * pressing thing rather than standing still, which is the difference between a queue and a
+ * stupid-looking guest (§6.1).
+ *
+ * THERE IS NO TURNAROUND DELAY, and an earlier draft of this comment claimed there was.
+ * A guest whose engagement ends in step 5 has `engagement: null` by the time this runs, so
+ * it engages its next provider ON THE SAME TICK — it finishes dinner and goes straight to
+ * the games room. That is the better behaviour and it is what the code does; the comment
+ * was describing a design that was considered and not built. The turnaround that DOES
+ * exist is a different one: a room released by a guest visited earlier in this loop is
+ * available immediately, but a guest visited EARLIER than the release has already had its
+ * turn and waits for the next tick. That is the price of never letting a later arrival
+ * overtake an earlier one, and it is G-004's rule unchanged.
+ */
+function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | undefined): Guest {
+  // TWO SPREADS RATHER THAN ONE, AND THE COLLAPSE WAS TRIED AND DROPPED (G-016). Deciding
+  // both reservations before writing either — so a guest that takes a room AND engages a
+  // provider on one tick allocates one `Guest` instead of two — was implemented and
+  // measured NO BETTER than this, and possibly worse; fewer allocations of a wider object
+  // literal, reached through a branchier path, did not pay. The state hash was unmoved
+  // either way, so this is a performance call and not a correctness one.
+  //
+  // Treat that as "not worth it" rather than as a number: it was measured during the same
+  // session in which the machine drifted nearly 2x, and only the levers that survived a
+  // PAIRED, INTERLEAVED re-measurement carry figures in this codebase. See `depart`.
+  let result = guest;
+  if (result.roomEntityId === NO_ENTITY && lodgingNeedId !== undefined) {
+    const lodging = findNeedState(result.needs, lodgingNeedId);
+    if (lodging !== undefined && isNeedPending(lodging)) {
+      const room = findFreeRoom(search, lodgingNeedId);
+      if (room !== NO_ENTITY) {
+        search.held.add(room);
+        result = { ...result, roomEntityId: room };
+      }
+    }
+  }
+  if (result.engagement !== null) return result;
+  // ONE PASS, and the answer is the same one a descending walk gives: the most pressing
+  // pending need that has a free provider.
+  //
+  // IT WAS A DESCENDING WALK, AND REPEATED SELECTION IS O(needs^2) COMPARISONS with two
+  // binary searches into the content table each, paid by every unengaged guest on every
+  // tick. The set of needs considered, the rule that ranks them and the room chosen are all
+  // unchanged; only the number of times the question is asked is different.
+  //
+  // The 27.7%-of-tick-self-time figure this comment used to carry came from G-012's drift
+  // window and is WITHDRAWN rather than restated — it was never re-measured paired, and
+  // G-016 found every un-paired reading in this milestone inflated. The change is kept on
+  // its complexity argument, which needs no stopwatch: one pass instead of O(n^2).
+  //
+  // The provider is only looked up for a need that would BEAT the best so far, so a
+  // hopeless need costs one comparison rather than a scan.
+  let bestNeed: NeedState | undefined;
+  let bestProvider: EntityId = NO_ENTITY;
+  for (const need of result.needs) {
+    if (!isNeedPending(need)) continue;
+    // The lodging need is served by the room the guest holds, never by an engagement: a
+    // guest does not book a second bedroom to sleep in.
+    if (need.needId === lodgingNeedId) continue;
+    if (bestNeed !== undefined && compareNeedPriority(search.input.content, need, bestNeed) >= 0) continue;
+    const provider = findFreeRoom(search, need.needId);
+    if (provider === NO_ENTITY) continue;
+    bestNeed = need;
+    bestProvider = provider;
+  }
+  if (bestNeed === undefined) return result;
+  search.held.add(bestProvider);
+  return { ...result, engagement: { entityId: bestProvider, needId: bestNeed.needId } };
 }

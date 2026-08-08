@@ -29,18 +29,19 @@
 // ZERO commands rather than three.
 // ================================================================================
 //
-// THE BASELINES ARE PART OF THE EVIDENCE, and they are recorded below as literals. All
-// three were measured on the build immediately before this goal, and every one of them is
-// the absorbing state: a player trying to build every single day for a thousand simulated
-// days, refused every single time. A criterion whose failing baseline is written down
-// cannot quietly become vacuous later (ADR-0007).
+// THE BASELINES ARE PART OF THE EVIDENCE, and SINCE G-012 THEY ARE RUN RATHER THAN
+// RECALLED. They used to be literals copied from a build that no longer existed; they are
+// now the same four invocations executed under content with none of ADR-0011's three
+// closures, which is the absorbing state reconstructed inside this build. A criterion
+// whose failing baseline is written down cannot quietly become vacuous later (ADR-0007) —
+// and one whose failing baseline is re-measured every run cannot quietly become wrong.
 
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createWorld, run, TICKS_PER_DAY } from '@hotelsim/sim';
-import type { World } from '@hotelsim/sim';
+import { bindContent, createWorld, run, TICKS_PER_DAY } from '@hotelsim/sim';
+import type { BoundContent, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { buildSummary, parseArgs, schedule } from './report.js';
 
@@ -49,13 +50,37 @@ const CLI = join(ROOT, 'tools/headless/src/cli.ts');
 const content = loadContent();
 
 /**
+ * ============================================================================
+ * WHY BOTH CRITERIA CARRY AN EXPLICIT `--amenities 0` SINCE G-012.
+ *
+ * These criteria are about the ECONOMY: a hotel with NOTHING must be able to return to
+ * play. `--rooms 0` used to say exactly that, and G-012 quietly stopped it meaning that —
+ * `--amenities` defaults to one of every amenity room type, seeded free through
+ * `spawnEntity` and refundable at 50%, so every scenario silently acquired 375,000p of
+ * liquidation value that `canDrawLoan` counts as the player's own resources.
+ *
+ * The effect was real and measured. The demolition walk scraps the inherited amenities
+ * FIRST, so for three days the player is selling somebody else's furniture while its own
+ * rooms pile up; on day four it holds 125,000p and three rooms worth 375,000p, is
+ * therefore judged able to act, and its build is refused. Criterion B went from 120 built
+ * and 0 funds refusals to 117 and 3. That is the lender's brake working correctly — but it
+ * was engaging because of a HOST LAYOUT DEFAULT rather than because of the economy, and a
+ * criterion whose numbers a later goal's seeding default determines is not measuring what
+ * it names.
+ *
+ * With the flag explicit, every number below is G-011's again, to the unit. The default
+ * hotel keeps its amenities; these two runs are about money and say so.
+ * ============================================================================
+ *
  * CRITERION A — RECOVERY IS REAL.
  *
  * A hotel with no rooms and (before this goal) no cash. The player tries to build once a
  * day and to borrow once a day. It must end with a room that WORKS and a guest who was
  * served — not merely with an entity standing somewhere.
  */
-const CRITERION_A = ['--days', '1000', '--seed', '7', '--rooms', '0', '--build', '1440', '--loan', '1440'];
+const CRITERION_A = [
+  '--days', '1000', '--seed', '7', '--rooms', '0', '--amenities', '0', '--build', '1440', '--loan', '1440',
+];
 
 /**
  * CRITERION B — THE STATE IS NOT ABSORBING.
@@ -75,6 +100,10 @@ const CRITERION_B = [
   '--seed',
   '7',
   '--rooms',
+  '0',
+  // See the block above CRITERION_A: explicit, so this measures the economy rather than
+  // G-012's seeding default.
+  '--amenities',
   '0',
   '--build',
   '1440',
@@ -98,6 +127,12 @@ const CRITERION_B = [
  * length once. The full-length numbers are recorded beside each claim, so the two can be
  * compared rather than merely trusted:
  *
+ * RE-MEASURED AT G-012 UNDER THE PINNED `--amenities 0` INVOCATION, and every figure came
+ * back to the unit — which is the evidence for the paragraph above CRITERION_A. The table
+ * DID move while the flag was implicit (A: 24 valid / 11,789 satisfied / 961 refusals;
+ * B: 997 built / 496 drawn / 3 refusals), and that is the number a seeding default was
+ * quietly setting. All eight below were re-run, not carried over:
+ *
  *              1,000 days                          120 days
  *   A          23 valid rooms, 11,831 satisfied     22 valid rooms, 1,271 satisfied
  *              959 funds refusals, 0 loans drawn    93 funds refusals, 0 loans drawn
@@ -118,44 +153,111 @@ const CRITERION_B = [
 const REPLAY_DAYS = '120';
 const atReplayHorizon = (argv: readonly string[]): string[] => ['--days', REPLAY_DAYS, ...argv.slice(2)];
 
-/** What each criterion produced on the build BEFORE this goal. Every field is a zero. */
-const BASELINE_BEFORE_G011 = {
-  'rooms 3, demolish 1 (the goal block\'s own words)': { built: 0, satisfied: 0, valid: 0, entities: 0 },
-  'rooms 3, demolish 1, build 1440': { built: 0, satisfied: 0, valid: 0, entities: 0 },
-  'rooms 0, build 1440 (criterion A)': { built: 0, satisfied: 0, valid: 0, entities: 0 },
-  'rooms 0, build 1440, demolish 1440 (criterion B)': { built: 0, satisfied: 0, valid: 0, entities: 0 },
+/**
+ * The four baseline invocations. The absorbing state is every field zero.
+ *
+ * RE-MEASURED AT G-012, AND NOW EXECUTABLE — a strict improvement on what was here. These
+ * were literals copied from a build that no longer exists ("not executable here, the code
+ * that produced them is gone"), so a reader had to take them on trust and nothing would
+ * have noticed if they rotted. The negative control is available INSIDE this build
+ * instead: run the same commands under CONTENT WITH NO ECONOMY TABLE. That is precisely
+ * the world ADR-0011 closed — no starting capital, no loan, and a refund with no lender to
+ * be ineligible for — and its absence is a true historical statement rather than a
+ * mutilation of the content (`assertStockIsAReserve` only applies when an economy exists).
+ *
+ * So the baseline stopped being a claim about the past and became a claim this suite
+ * re-checks every run: WITHOUT the economy the player is refused forever; WITH it, the
+ * identical commands recover. One difference, two halves, both measured.
+ */
+const BASELINE_INVOCATIONS = {
+  // `--amenities 0` on every one of them, for the reason the block above CRITERION_A
+  // gives: the baseline is "the player starts with nothing", and a seeded amenity is
+  // stock — free to place and refundable at 50% — which is the opposite of nothing.
+  'rooms 3, demolish 1 (the goal block\'s own words)': ['--rooms', '3', '--amenities', '0', '--demolish', '1'],
+  'rooms 3, demolish 1, build 1440': [
+    '--rooms', '3', '--amenities', '0', '--demolish', '1', '--build', '1440',
+  ],
+  'rooms 0, build 1440 (criterion A)': ['--rooms', '0', '--amenities', '0', '--build', '1440'],
+  'rooms 0, build 1440, demolish 1440 (criterion B)': [
+    '--rooms', '0', '--amenities', '0', '--build', '1440', '--demolish', '1440',
+  ],
 } as const;
 
-function worldFor(argv: readonly string[]): { world: World; summary: ReturnType<typeof buildSummary> } {
+/**
+ * The shipped content with ALL THREE OF ADR-0011'S CLOSURES REMOVED — the world as it was
+ * before G-011: no starting capital, no loan on offer, and nothing back for a scrapped
+ * room.
+ *
+ * Derived from the real content by DELETING OPTIONAL KEYS rather than hand-written, so the
+ * baseline and the criteria differ in exactly the thing under test and in nothing else.
+ * Every one of those keys is optional in the sim precisely because its absence is a true
+ * statement about that era (see `RoomTypeData`), which is what makes this a reconstruction
+ * rather than a mutilation.
+ *
+ * THE REFUND HAS TO GO TOO, and the first draft of this missed it: `demolitionRefundBasisPoints`
+ * lives on the ROOM TYPE, not in the economy table, so dropping the economy alone left a
+ * player who could scrap the inherited hotel for 750,000p and build twice — `built: 2`
+ * where the recorded baseline says 0. The measurement caught it, which is the argument for
+ * making the baseline executable in the first place.
+ */
+const contentBeforeRecovery = bindContent({
+  roomTypes: content.content.roomTypes.map(({ demolitionRefundBasisPoints: _refund, ...rest }) => rest),
+  ...(content.content.needTypes === undefined ? {} : { needTypes: content.content.needTypes }),
+  ...(content.content.itemTypes === undefined ? {} : { itemTypes: content.content.itemTypes }),
+});
+
+function worldFor(
+  argv: readonly string[],
+  injected: BoundContent = content,
+): { world: World; summary: ReturnType<typeof buildSummary> } {
   const options = parseArgs([...argv]);
-  const initial = createWorld(options.seed, content);
+  const initial = createWorld(options.seed, injected);
   const world = run(
     initial,
-    content,
+    injected,
     options.ticks,
     schedule(
       options.ticks,
-      content,
+      injected,
       initial.grid,
       options.rooms,
       options.arrivalEveryTicks,
       options.buildEveryTicks,
       options.demolishEveryTicks,
       options.loanEveryTicks,
+      options.amenities,
     ),
   );
-  return { world, summary: buildSummary(world, content, options) };
+  return { world, summary: buildSummary(world, injected, options) };
 }
 
 describe('the baselines these criteria discriminate against', () => {
-  it('were all zero before this goal — the absorbing state, measured', () => {
-    // Not executable here (the code that produced them is gone), so it is recorded as
-    // data. What IS executable is everything below: each criterion now produces non-zero
-    // values for the very fields that were zero, which is the discrimination.
-    for (const [invocation, numbers] of Object.entries(BASELINE_BEFORE_G011)) {
-      expect(numbers, invocation).toEqual({ built: 0, satisfied: 0, valid: 0, entities: 0 });
+  it('are all still zero without the economy — the absorbing state, RUN rather than recalled', () => {
+    // Under content with none of the three closures the player builds nothing, serves
+    // nobody and ends holding nothing, having tried to build every day for the whole run.
+    // The identical commands under the shipped content recover, which is what everything
+    // below measures.
+    //
+    // Re-measured at G-012 because the content moved — a need vector and three amenity
+    // room types. The numbers did not move: zero is zero for exactly the reason it was,
+    // and the suite now demonstrates that rather than citing it.
+    for (const [invocation, argv] of Object.entries(BASELINE_INVOCATIONS)) {
+      const { summary } = worldFor(['--days', REPLAY_DAYS, '--seed', '7', ...argv], contentBeforeRecovery);
+      // ALL FOUR FIELDS, as they always were. These invocations carry `--amenities 0`, so
+      // the scenario really is handed nothing and `rooms.valid` and `entities` are the
+      // player's own achievement rather than stock it was given — see the note above
+      // CRITERION_A for why that flag is now written down rather than assumed.
+      expect(
+        {
+          built: summary.summary.build.built,
+          satisfied: summary.summary.guests.satisfied,
+          valid: summary.summary.rooms.valid,
+          entities: summary.summary.world.entities,
+        },
+        invocation,
+      ).toEqual({ built: 0, satisfied: 0, valid: 0, entities: 0 });
     }
-  });
+  }, 60_000);
 });
 
 describe('CRITERION A: a hotel with nothing returns to a hotel that works', () => {
@@ -237,6 +339,12 @@ describe('CRITERION B: the dead state is not absorbing, to the end of the run', 
     const lateBuilds = world.ledger.filter((t) => t.reason === 'construction' && t.tick >= lastTenDays);
     expect(lateBuilds.length).toBeGreaterThan(0);
     // And not a single build in the whole run was refused for want of money.
+    //
+    // THIS BRIEFLY READ 3 DURING G-012 AND THE FLAG IS WHY IT READS 0 AGAIN. With the
+    // amenities G-012 seeds by default, the demolition walk scraps those first and their
+    // scrap value made the hotel ineligible for a loan for three days — the lender's brake
+    // working correctly, but engaging because of a host layout default rather than because
+    // of the economy. `--amenities 0` puts this run back to measuring what it names.
     expect(report.build.refused.insufficientFunds).toBe(0);
     // One successful build per scheduled attempt, for the whole run.
     expect(report.build.built).toBe(Number(REPLAY_DAYS));

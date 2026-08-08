@@ -66,7 +66,7 @@
 // and not `world.ts`. `countGuestsInInvalidRooms` lives in `guests.ts` for exactly that
 // reason: putting it here would close a cycle.
 
-import { findRoomType, isRoomKind, requiredItemsOf } from './content.js';
+import { findRoomType, isRoomKind, requiredItemsOf, roomTypeProvides } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
@@ -187,6 +187,14 @@ export type ValidityContext = {
    * in the canonical order rather than any order this file finds convenient.
    */
   validRooms: readonly Entity[] | null;
+  /**
+   * Valid rooms partitioned by the need they provide (G-012). Null until first asked, then
+   * filled one need at a time. LOOKUP ONLY — never iterated, never ordered (I2).
+   *
+   * See `validRoomsProviding` for why this is derived-and-cacheable rather than a second
+   * source of truth about what a room offers.
+   */
+  providers: Map<ContentId, readonly Entity[]> | null;
 };
 
 /**
@@ -302,7 +310,7 @@ export function createValidityContext(
   bounds: GridBounds,
   forEach: EntityVisitor,
 ): ValidityContext {
-  return { content, bounds, forEach, index: null, grounded: null, memo: null, validRooms: null };
+  return { content, bounds, forEach, index: null, grounded: null, memo: null, validRooms: null, providers: null };
 }
 
 /**
@@ -630,6 +638,46 @@ export function validRoomsOf(ctx: ValidityContext): readonly Entity[] {
     if (roomInvalidity(ctx, entity) === null) rooms.push(entity);
   });
   ctx.validRooms = rooms;
+  return rooms;
+}
+
+/**
+ * Every valid room that PROVIDES `needId`, in the canonical ascending-id entity order
+ * (G-012).
+ *
+ * `validRoomsOf` filtered by one content question, computed once per need per entity set
+ * and then reused. Same order, same set, so the guest loop's "lowest id wins" is preserved
+ * exactly — this is a narrower list to walk, never a different answer.
+ *
+ * WHY IT EXISTS, MEASURED. The guest loop used to walk every valid room and ask
+ * `roomTypeProvides` of each. With one need and one room type that was the whole hotel and
+ * the answer was usually yes. With a need VECTOR it is a scan per pending need per
+ * unengaged guest, and the amenities a guest is looking for are seeded AFTER the bedrooms
+ * — so they carry the highest ids, and every search for a café walked past a hundred
+ * bedrooms to reach it. `vitest run scaling` measured the consequence directly: 6.17x cost
+ * for 4x the rooms against its 6x bound, the criterion G-010 exists to hold. Partitioning
+ * the list makes an engagement search proportional to the number of PROVIDERS of that
+ * need, which is what a player would expect it to be.
+ *
+ * IT IS CACHED EXACTLY AS `validRooms` IS, and for the same reason it is allowed to be:
+ * membership is frozen inside a tick, and across ticks the `ValidityCache` predicate
+ * establishes that the entity set and the CONTENT IDENTITY are both unchanged — and
+ * `provides` is content. So there is no input to this that the cache does not already
+ * police.
+ *
+ * The Map is LOOKUP ONLY — never iterated, never ordered, never hashed (I2). The lists
+ * inside it are built by walking `validRoomsOf` in its one canonical order, so iterating
+ * one is iterating an ascending-id array, not a hash table.
+ */
+export function validRoomsProviding(ctx: ValidityContext, needId: ContentId): readonly Entity[] {
+  const byNeed = (ctx.providers ??= new Map<ContentId, readonly Entity[]>());
+  const existing = byNeed.get(needId);
+  if (existing !== undefined) return existing;
+  const rooms: Entity[] = [];
+  for (const room of validRoomsOf(ctx)) {
+    if (roomTypeProvides(ctx.content, room.kind, needId)) rooms.push(room);
+  }
+  byNeed.set(needId, rooms);
   return rooms;
 }
 
