@@ -302,6 +302,46 @@ misdirects the person balancing the game is worse than no comment.
 `constructionCostPence` a real decision: at 1,440-tick nights the margin is 5,957.5p/day
 and 250,000p is a 42-day payback rather than an 11-day one.
 
+---
+
+## ADR-0011 — The hotel can always recover: capital, a loan, and a refund
+Date: 2026-08-08 · Context: M1 sign-off · Decided by: **the human**
+
+**Decision.** All three closures to the absorbing dead state are approved and all three
+are to be built: **starting capital**, a **loan**, and a **balanced demolition refund**.
+Not a choice between them.
+
+**The defect this closes.** A world with zero rooms and a zero balance could not recover:
+no rooms means no revenue, no revenue means the balance never moves, and every build is
+refused forever. Reachable in three legal commands from the shipped default —
+`--rooms 3 --demolish 1` scraps the inherited rooms before any revenue arrives — after
+which 1,000 days report 12,000 guests arrived, 11,999 unsatisfied, every player action
+refused, and no notification. Found by `balance-critic` at G-008 and escalated at M1
+sign-off because "starting capital is parked to M4" and "the game has a reachable dead
+state with no exit" are different claims.
+
+**Why all three rather than the cheapest one.** They close different failures. Starting
+capital stops the *opening* being the most fragile moment in the game. A refund makes
+stock convertible back into buildable cash, so a hotel that overbuilt is not stranded. A
+loan covers the case where neither applies — no stock left and no capital remaining. Any
+one alone leaves a reachable hole.
+
+**The constraint that binds the refund, and it is a number.** `balance-critic` priced the
+demolish-before-midnight upkeep dodge at G-005 and re-priced it at G-008 at 102.4:1
+against the player. A refund above **247,500p** — 99% of construction cost — reopens it
+exactly, because the dodge then costs `constructionCost − refund` and saves
+`nightlyUpkeep`. The refund must sit meaningfully below that, and G-011 must *price* the
+dodge rather than assert it is closed.
+
+**Scheduled as G-011**, pulled forward from M4 by this ruling, ahead of M2's needs work —
+because M2 and M3 would otherwise be built on top of a reachable unrecoverable state.
+Interest-rate tuning, bankruptcy as a game-over state, and demand response remain M4's.
+
+**On determinism.** The human's "we don't need to be deterministic" was read as *all three
+are correct, do not agonise over choosing one*. I2 is untouched and all three mechanisms
+are deterministic. Recorded here because a misread of that sentence would have been the
+single most damaging thing this project could do to itself.
+
 **Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
 As first written this ADR could be read as condemning defensive asserts. It does not.
 `sim-critic` drew the line, and it is the right one:

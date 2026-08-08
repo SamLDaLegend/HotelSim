@@ -445,4 +445,48 @@ M2 not started; `apps/game` untouched.
 removes it, illegal placements are refused deterministically, invalid rooms serve nobody,
 and the whole thing runs 60 rooms for a simulated year in under 4 seconds.
 
-See `ESCALATIONS.md` for the sign-off request and the one design call outstanding.
+**SIGNED OFF by the human, 2026-08-08.** The dead-state design call was ruled at the same
+time: all three closures approved (ADR-0011), scheduled as G-011 below.
+
+---
+
+# G-011 — The hotel can always recover
+
+> Pulled forward from M4 by human ruling at M1 sign-off (ADR-0011). It sits ahead of M2
+> because a reachable unrecoverable state is not something to build two milestones on top
+> of. Economy work, so the economy pair owns it.
+
+## G-011 — Starting capital, a loan, and a balanced demolition refund
+Status: in-progress
+Milestone: M1.5 (bridge)
+Owner pair: economy-engineer / balance-critic
+Statement: A hotel with no rooms and no cash can always return to play. The hotel opens
+  with capital; demolishing a room returns a balanced fraction of its construction cost;
+  and a loan is available when neither capital nor stock remains.
+Exit criteria:
+  - pnpm exec vitest run recovery  (all green)
+  - pnpm sim:run --days 1000 --seed 7 --rooms 3 --demolish 1  ends with at least one
+    room standing and at least one guest satisfied — i.e. the state ADR-0011 names as
+    unrecoverable is provably no longer absorbing
+  - the demolish-before-midnight upkeep dodge is PRICED and still unprofitable, by a
+    test that computes it rather than asserts it (refund must sit meaningfully below the
+    247,500p threshold that reopens it)
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: bankruptcy / game-over as a state (M4); interest-rate tuning as a balance
+  exercise (M4); demand response (M4); reviews (M2)  (-> PARKING.md)
+Critique rounds used: 0/3
+
+  Every monetary value here is content (I3/ADR-0003) and integer pence (ADR-0002). Each
+  new money movement needs its own `TransactionReason` member — the closed union and its
+  choke point make that structural. If `World` gains a field (a loan balance almost
+  certainly is one), ADR-0006 applies: SAVE_SCHEMA_VERSION 5 and the permanent v1 fixture
+  walking 1->2->3->4->5, never regenerated.
+
+---
+
+# M2 — Needs
+
+> Full need vector, item-based provider registry, utility scoring, satisfaction over
+> ticks, patience drain, reviews. Guests visibly succeed and fail. — `HOTELSIM.md` §8
+
+Goals seeded after G-011 lands. `apps/game` stays shut until M5 (§9).

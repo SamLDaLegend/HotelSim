@@ -62,7 +62,23 @@ do properly.
 
 ---
 
-## 2026-08-08 — OPEN — M1 Structure complete, awaiting milestone sign-off
+## 2026-08-08 — RESOLVED — M1 Structure complete, awaiting milestone sign-off
+
+**Resolution (2026-08-08):** Human signed off M1 and ruled on the dead state: **all three
+closures are approved — starting capital, a loan, and a balanced demolition refund.** Not
+one of them; all three. Recorded as ADR-0011 and scheduled as **G-011**, pulled forward
+from M4 by that ruling because the dead state is a live playability defect that M2 and M3
+would otherwise ship on top of.
+
+The human added "we don't need to be deterministic", which the orchestrator read as *all
+three are correct, do not agonise over choosing one* — **not** as licence to weaken I2.
+All three mechanisms are deterministic anyway. Flagged back explicitly, so that if the
+invariant was meant, it becomes the stated human decision §9 requires rather than an
+inference.
+
+---
+
+## 2026-08-08 — SUPERSEDED — M1 Structure complete, awaiting milestone sign-off
 
 **Trigger:** §5.4 — a milestone's exit criteria are met and need human sign-off.
 
