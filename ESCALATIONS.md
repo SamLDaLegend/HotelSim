@@ -146,3 +146,78 @@ mandate is vacuous until M4.
 (structure: multi-floor grid, build/demolish, room validity, construction cost). Per
 §9, no render work starts before this sign-off; M5 remains shut regardless until its
 own milestone.
+
+---
+
+## 2026-08-08 — G-013: the round budget is spent, and the rule fired on its own author
+
+**The loop is stopped.** `HOTELSIM.md` §7.1's conversion guard — written earlier today by
+human ruling — has fired for the first time, on the goal that produced it.
+
+**Status of the work: complete and independently verified.** All six gates green
+(`typecheck`, I1, I3, I4, I2 `4b8db9b1ac36cb35`, I6, I5 **83.0%**). 1,095 tests. Every exit
+criterion run by the orchestrator, not taken on report: `vitest run provider` 102 green ·
+`vitest run scaling` 10 green · criterion 2 by-item **356**, by-room **713**,
+`guest_nourishment` **178/178**, and its **negative control** returns by-item 0 on every row ·
+criterion 3 refuses naming `guest_comfort` with **exit 1** and its paired positive loads
+with **exit 0** · criterion 4's 11 release tests green · fixture zero-line diff ·
+`SAVE_V1_CONTENT` unmoved · no gate, CI or config file touched.
+
+**What is outstanding is two numbers in one comment block.** Not the registry, which has
+needed no correctness fix since before the first critique.
+
+### Why it escalated rather than being waved through
+
+Three sweeps were spent (3/3). Round 3 closed **OPEN** with one MAJOR: the block justifying
+this goal's new I2 coverage described `hotel_lounge` / `arm_chair` / `guest_comfort` when
+the code builds `games_room` / `vending_machine` / `guest_nourishment`, with stale figures
+on top. The builder fixed the prose, kept the code, and **self-reported a second stale
+figure nobody had caught.**
+
+The verification pass (unbudgeted, per §7.1) found the *replacement prose* wrong twice more:
+
+1. **Both surviving percentages use lifetime denominators that include the post-seal window
+   in which engagement is impossible by construction.** Every engagement tick for both items
+   lies before the seal. Pre-seal: **777 of 6,954 (11.2%)** and **38,829 of 40,002 (97.1%)** —
+   not 5.5% and 49%. *The conclusion survives and widens*, so "wave 1 thin, wave 2 robust"
+   is right and `itemSurvived >= 2` holds.
+2. **The retraction's stated cause does not reproduce.** "It counted every entity in the
+   cell" yields **5,486**, not 11,268; two other natural readings give 22,823 and 48,915.
+   The qualitative half is right — the cell was busy (79%) while the item was not (11.2%),
+   which is exactly what produced the round-2 belief — but the arithmetic does not stand.
+
+**That paragraph has now been wrong three times in three different ways, and the third was
+in the replacement for the second.** §7.1's guard exists for exactly that signal: *if the
+builder's fixes keep spawning findings, the budget burns and it escalates properly.*
+
+**The classification was close and the critic refused to take the cheaper side**, saying it
+would not argue hard against the escalating reading and would not pick the one that costs
+it less. Finding 2 is plainly a restatement. Finding 1 — "wrong denominator" against round
+3's "stale figures" — is arguably new ground. The orchestrator took the escalating reading
+**because the alternative is relabelling a fix-verify loop as verification in the same
+session the guard against that was written.**
+
+### Recommendation — the charter already prescribes the remedy
+
+**Authorise the narrow fix: delete the percentages, assert the property.**
+
+ADR-0007's newest amendment (yours, today) says a comment offered as evidence is subject to
+the same rule as an assertion — *write the assertion, or do not make the claim.* Three
+failed attempts at this claim is strong evidence it should not be prose. The coverage is
+already asserted mechanically: `itemSurvived >= 2` at ticks 7,002 and 60,014, plus an
+assertion that an item is placed, provides something, and is not providing at the horizon.
+The percentages are decoration that has been wrong three times and load-bearing zero times.
+
+`CLAUDE.md` says the same for finding 2: **a number you cannot re-measure is withdrawn, not
+restated.**
+
+If you prefer, the alternative is a 4th sweep — but the diff is otherwise swept and
+verified, and a fourth pass over 27 files to re-check two sentences is the expensive way to
+reach the same place.
+
+**Not recommended: splitting.** You already ruled on that, and this is OPEN rather than
+UNSWEPT — the state whose remedy is splitting.
+
+**Asked of the human:** authorise the narrow fix (delete the two percentages and the
+unreproducible causal claim; keep the mechanical assertions), or grant a 4th sweep, or
+overrule the conversion and accept the verification as a verification.
