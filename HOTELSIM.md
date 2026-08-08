@@ -211,6 +211,8 @@ FIXED — "My findings are resolved; I have not exhausted this diff."
 
 A goal may only close on DRY. A FIXED close consumes a round and the critic goes again.
 
+Interaction with §5.2's round budget, settled by the orchestrator rather than left open: if round 3 also closes FIXED, the goal cannot close and the loop STOPS. Write it to ESCALATIONS.md as a §5.4 escalation. That is the honest outcome — a diff a critic cannot exhaust in three passes is too big, and the answer is to split the goal, not to accept a FIXED close as though it were DRY.
+
 Why: thirteen goals ran mostly at 1/3 rounds with zero BLOCKERs, and the one goal that ran to 3/3 produced the best critique in the project. "I fixed what I found" and "there is nothing left to find" are different claims, and the loop has been treating them as the same one.
 
 Additionally: any goal that is the LAST IN A MILESTONE gets a second critic from a different pair in its final round. Precedent — G-008 ran sim-critic then balance-critic, and the second pass found the 107-million-penny sweep.
