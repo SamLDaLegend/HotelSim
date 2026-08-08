@@ -329,6 +329,30 @@ falsely flagged as critical, while the property actually holding the pass up (no
 staying oversubscribed) was written nowhere. **A false evidence comment does not merely
 fail to help; it aims the next maintainer at the wrong variable.**
 
+**THE RULE THIS BECOMES (human, 2026-08-08, after the same paragraph failed a third time):**
+
+> **A comment offered as evidence may not carry a figure that no test pins. Prose that
+> cannot be verified may describe, but it may not measure.**
+
+The escalation that produced it: one paragraph in `determinism-log.ts` was wrong three
+times in three *different* mechanisms — a world the code does not build (round 3); a
+lifetime denominator spanning a window in which the measured event is impossible by
+construction (verification); and a retraction whose stated cause reproduces to 5,486 rather
+than the 11,268 it retracts, with two other natural readings giving 22,823 and 48,915.
+
+**What survived all three failures was the qualitative claim** — wave 1 thin, wave 2
+robust; the cell busy while the item was not. The numbers were the part that kept rotting
+and they were doing no work the conclusion needed. So: state the conclusion, drop the
+figures, and if a figure is load-bearing it becomes an assertion in a test rather than
+prose in a comment. Third demonstration inside a single goal; it stops being a lesson here
+and becomes a rule.
+
+**Recorded because it is unusual and cuts the other way:** the denominator correction
+**widened** the conclusion — 11.2% against 97.1% is a bigger gap than 5.5% against 49%. A
+retraction that *strengthens* what it corrects is rare, and it is mild evidence the
+underlying reading was sound and only the framing was broken, which is the opposite of what
+three failures would normally suggest.
+
 **Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
 As first written this ADR could be read as condemning defensive asserts. It does not.
 `sim-critic` drew the line, and it is the right one:

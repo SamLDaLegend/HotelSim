@@ -221,3 +221,32 @@ UNSWEPT — the state whose remedy is splitting.
 **Asked of the human:** authorise the narrow fix (delete the two percentages and the
 unreproducible causal claim; keep the mechanical assertions), or grant a 4th sweep, or
 overrule the conversion and accept the verification as a verification.
+
+### DISCHARGED 2026-08-08 — human ruling: land it, do not split
+
+*"Escalate, and then land it. Don't split."*
+
+The human upheld the classification — *"you took the reading that cost you more in the
+session the guard was written"* — and then drew the line the orchestrator had not:
+
+> **The guard did its job. But that is evidence about the PARAGRAPH, not about the goal.**
+
+Splitting a goal whose code is correct and whose only defect is two numbers in a comment
+block would fire the remedy at the wrong subject, and would produce the same
+two-uncritiqued-commits outcome already rejected an hour earlier, for less reason.
+
+**Resolution: the paragraph loses its numbers entirely**, and that becomes a rule rather
+than a repair — now in ADR-0007: *a comment offered as evidence may not carry a figure that
+no test pins. Prose that cannot be verified may describe, but it may not measure.* Three
+failures, three distinct mechanisms, and **the qualitative claim survived all three** —
+the numbers were the only part that kept rotting and they did no work the conclusion needed.
+
+**Noted for the record, because it cuts against the pattern:** the denominator correction
+**widened** the gap it corrected (11.2% vs 97.1%, against 5.5% vs 49%). A retraction that
+strengthens what it retracts is unusual and is mild evidence the underlying reading was
+sound while only the framing was broken.
+
+**The guard is now itself on trial** (`HOTELSIM.md` §7.1). It has fired once, on the goal
+that produced it, on prose rather than code. If the next several firings are also prose it
+is a prose-quality instrument in a critique-budget costume and gets renamed and re-scoped.
+Each firing records its subject. Written down now so it can be wrong later.
