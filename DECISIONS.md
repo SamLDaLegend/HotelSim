@@ -242,6 +242,93 @@ nobody can source is not a gate, it is a superstition with CI access."* Applies 
 bound in the repo — the scaling ratios, the patience caps, the review means — and is why
 G-010's "measured × 1.5, then held" is the right shape and a round number is not.
 
+**Amendment (G-013) — deleting a bad check is not evidence that no good one exists.**
+Produced by `ai-engineer`, which made the error, caught it, and wrote the rule:
+
+> *"Deleting a bad check is not evidence that no good one exists. I reached that inference
+> and the orchestrator accepted it in writing, one round after the deletion. The
+> over-correction cost as much as the original defect."*
+
+What happened. G-013's report asserted `metByRoom + metByItem === met` where `metByRoom`
+was computed nine lines earlier as `met - metByItem` — a tautology, with a comment claiming
+it was the only thing that would catch a misattribution. `ai-critic` reproduced it: mutate
+the attribution to always-zero, every satisfaction misfiled, `violations` empty, exit 0.
+Correctly deleted. **Then the builder concluded, and the orchestrator agreed in writing,
+that no such check was possible** — that "the code attributes correctly" is a property of
+the code rather than of the report. Round 2 disproved it in the same function: `buildSummary`
+holds `content`, and content pins the answer. *No room type provides this need ⇒
+`met - metByItem` must be 0. No item type provides it ⇒ `metByItem` must be 0.* Neither is
+an identity over the two stored numbers; each cross-references the tally against a separate
+input, which is exactly what the deleted law lacked.
+
+The tell was nine lines above the deletion the whole time: `met + unmet === departed` is
+equally "a property of the code" and is checked anyway, and its comment gives the
+counter-argument verbatim.
+
+**How to apply.** When a check is found vacuous, the fix has two steps and the second is
+the one that gets skipped: delete it, **then ask what a non-vacuous check here would
+compare against.** A vacuous check compares a number to itself; a real one compares it to a
+*separate input* — content, a frozen literal, an independent accumulation, the filesystem.
+"No check is possible" is a claim that needs the same evidence as any other, and it is
+easier to believe right after deleting one.
+
+**Why this sits with ADR-0007 rather than in `PARKING.md`.** `ai-critic` was asked directly
+and ruled: parking is deferred work, nothing there is owed, and the sentence had been
+attached to a struck-through entry — the one place a reader scanning for live obligations
+is meant to skip. It is a rule about how to *respond* to a vacuity finding, so it belongs
+next to the rule that produces them. Filing it as a parked item would repeat the error §4.1
+records costing a day.
+
+**Amendment (G-013, human) — two corrections to how a defect COUNT is read.** The
+orchestrator recommended against splitting G-013 and was upheld on the cost argument, but
+two steps of the reasoning were wrong and both affect what future goals carry forward.
+
+**1. "The sweep-side failure did not occur" is too clean. It occurred at the boundary.**
+Instances 8 and 9 were found at **round 3**. Rounds 1 and 2 did not reach exhaustion; the
+critic reached a swept diff at the last round the budget permitted. **"The sweep succeeded"
+and "the sweep succeeded with zero headroom" are different facts and only the second is
+true.** A diff needing three full sweeps is itself weak evidence of the condition splitting
+addresses — the budget merely happened to be exactly sufficient. Read a 3/3 goal as a near
+miss, not as a system working comfortably.
+
+**2. Nine against seven is not like-for-like, and this repo already knows why.** The
+orchestrator compared G-013's nine instances of the vacuous-check class against seven
+across the previous thirteen goals. **Instances 1–3 were caught by the builder before any
+critique** — ADR-0007 discipline that did not exist for most of those thirteen goals.
+Detection sensitivity has risen sharply, so part of the spike is **better instrumentation
+rather than worse authoring**. This is G-016's lesson in another register: *the ratio
+survives, the absolutes do not*. **Record the confound whenever a defect count is cited**,
+or the next goal that produces four will read as an improvement when it may only have had
+a thinner sweep.
+
+**Amendment (G-013, human) — a comment offered as EVIDENCE is subject to the same rule as
+an assertion.** This ADR's "prefer making a fact checkable over documenting it" has always
+been read as applying to *code*. It applies to *evidence* too, and G-013 is the fourth time
+the lesson has arrived:
+
+- **G-001** — `TICK_PHASES` documented an order nothing enforced.
+- **G-010** — a comment claimed the gate witnessed something it cannot.
+- **G-013 round 1** — a comment claimed a tautological law was "the only place that would
+  say so". False in both halves.
+- **G-013 round 3** — the determinism log's justification described *a second lounge at
+  (0,30) with its own chair*, kept alive because *comfort* is oversubscribed. `secondHost`
+  resolves by ascending id to `games_room`, so the code builds a games room, a vending
+  machine and a nourishment need. Wrong room, wrong item, wrong need, and the quoted
+  met/unmet figures stale on top.
+
+**The rule.** When a comment is offered as evidence — "measured, not estimated", "this is
+what the gate sees", "the pass is reached because X" — it makes a checkable claim, and it
+is subject to this ADR exactly as an assertion is. *A second lounge stands at (0,30) with a
+chair* is two lines of test against the world the log actually builds. Write the assertion,
+or do not make the claim.
+
+**The trap that makes it worse than a stale comment.** G-013 round 3's text marked
+`guest_comfort` oversubscription as load-bearing. That is the one dial the same diff parked
+as unswept and owed to M4 — so the number a future goal is most likely to move was the one
+falsely flagged as critical, while the property actually holding the pass up (nourishment
+staying oversubscribed) was written nowhere. **A false evidence comment does not merely
+fail to help; it aims the next maintainer at the wrong variable.**
+
 **Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
 As first written this ADR could be read as condemning defensive asserts. It does not.
 `sim-critic` drew the line, and it is the right one:

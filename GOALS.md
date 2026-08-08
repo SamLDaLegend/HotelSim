@@ -596,7 +596,14 @@ Order: G-012 → G-013 → G-014 → G-015, with G-016 contingent on a number.
 **RE-PLANNED 2026-08-08 after the human's observability ruling (ADR-0013).** G-016 fired
 and is done. Two goals are inserted ahead of G-014:
 
-> **G-012 ✓ → G-016 ✓ → G-013 → G-018 → G-017 → G-014 → G-015 → M2 exit**
+> **G-012 ✓ → G-016 ✓ → G-013 → G-018 → G-017 → G-014 → G-015 → G-019 → M2 exit**
+
+**RE-PLANNED AGAIN 2026-08-08 after G-013's escalation.** The old G-015 is split in two
+(G-015 outcome table + schema 2, `sim-critic`; G-019 reviews + differential criterion,
+`balance-critic`) along the seam its own block had drawn without noticing. **G-014 gets
+the §5.5 seam question at PLAN before G-015's does, because it arrives first** — utility
+scoring, a mutation-verified hysteresis margin, id tie-breaking across two insertion
+orders, an abandonment counter and a conditional migration is not obviously thin.
 
 - **G-018 first, and this is my call rather than the human's** — the ruling says the
   viewer goes "before G-014" and does not order these two against each other. G-018
@@ -792,6 +799,18 @@ Critique rounds used: 0/3
   THE HUMAN'S OWN WORDS: *"Ten seconds for 365 simulated days was invented at bootstrap
   with no basis, and it is now promoting goals."* G-016 exists solely because of it.
 
+  **NAMED OBLIGATION INHERITED FROM G-013 ROUND 2 — `bench.mjs`'s COMMENT TABLE IS STALE
+  AND IS LOAD-BEARING FOR ITS OWN ARGUMENT.** It states `--arrivals 32 (~15 concurrent)
+  4580ms 45% <- what ships`, and the file's own text uses that 45% to justify `--arrivals
+  32` "for headroom, not for realism ... a gate that flakes red teaches people to re-run
+  it". `ai-critic` measured 8246/8187/8191/7906 ms in one sitting — **79–82%**. At 80% the
+  headroom argument no longer holds, and this goal is deriving a budget partly from it.
+  **Strike the stale figure rather than replace it** (`CLAUDE.md`: withdraw what cannot be
+  re-measured paired). No regression is claimed and none should be inferred: the paired
+  content-half measurement puts the whole item registry at **~4–8%** of the bench
+  (1.043/1.038/1.075, interleaved, medians of 5), so G-013 is not what moved it.
+  `tools/gates/` is orchestrator-owned (ADR-0004) — this is not the builder's to fix.
+
   **THE HONEST OUTCOME MAY BE "NO CHANGE", AND THAT IS A PASS.** If the derivation lands
   near ten seconds, say so and move on — the value of this goal is the derivation, not a
   different number. If it says the budget was always too tight or too loose, that is worth
@@ -852,6 +871,21 @@ Critique rounds used: 0/3
   double-booking (two guests in one bed for a minute), which is the class sampling would
   surrender and on which an 18.4% lever currently rests untestable; and whether guests
   thrash between providers, which G-014 is about to make possible.
+
+  **A THIRD, PRE-REGISTERED AT G-013 ROUND 2 — POINT THE VIEWER HERE FIRST.** `ai-critic`
+  wrote down the frame it would have watched but could not, which is the first time this
+  project has produced a *prediction* instead of a shrug:
+
+  > At `--amenities 5`, all **716 nourishment satisfactions come from the five vending
+  > machines, and the five cafés serve nobody for sixty days.**
+
+  It is `providersFor`'s documented lowest-id rule meeting seeding order — games rooms and
+  their machines take lower ids than cafés — so it is **correct, tested, and not a defect
+  today**, and M3's nearest-by-path is what changes it. It is exactly the shape ADR-0013
+  was written about: a hotel where a whole room type is furniture, passing every gate.
+  **Watch it and record whether it reads as wrong to a human.** Either answer is a result:
+  if it looks fine, the concern about lowest-id selection shrinks; if it looks stupid,
+  G-014's scorer has a named target on day one rather than a guess.
   Precedent that this is cheap signal rather than a luxury: **55 rooms floating in mid-air
   (G-009) and a hotel that would have been made entirely of cafés with every gate green
   (G-012)** would both have been obvious on sight.
@@ -900,48 +934,83 @@ Critique rounds used: 0/3
   Migration owed only if the abandonment counter cannot be derived. If the builder finds
   a way to derive it, the migration is dropped and that is a win worth recording.
 
-## G-015 — Reviews and the outcome table
+  **RUN THE §5.5 SEAM QUESTION AT THIS GOAL'S PLAN, BEFORE G-015's — it arrives first.**
+  Utility scoring, a hysteresis margin with a mutation-verified check, id tie-breaking
+  across two insertion orders, an abandonment counter and a conditional migration is **not
+  obviously thin**, and G-013 is the cautionary case: its builder named the seam, the
+  orchestrator declined it in one line with no cost recorded, and it cost nine instances of
+  one defect class and three full sweeps that reached exhaustion only at the last round the
+  budget allowed. Either take a seam here, or **write down what declining it is expected to
+  cost — and score that prediction at REFLECT** (§5.5). `ai-critic` also sees this plan
+  before BUILD and may object to its size (§5.6).
+
+## G-015 — The outcome table, and summary schema 2
 Status: pending
 Milestone: M2
-Owner pair: ai-engineer / ai-critic (round 1) · ai-engineer / balance-critic (round 2)
+Owner pair: ai-engineer / **sim-critic**
+Statement: The four outcome counters become a table by reason. `SUMMARY_SCHEMA_VERSION`
+  bumps to 2 and the conservation law holds against it.
+Exit criteria:
+  - pnpm exec vitest run outcome  (all green)
+  - pnpm sim:run --days 30 --seed 7 --rooms 6  prints an outcome table with at least
+    FOUR distinct reasons non-zero
+  - the outcome table's total still equals arrived - live, and a test deletes one row
+    and watches the conservation law throw
+  - the conservation law is NOT an identity over its own inputs — the total is
+    accumulated independently of the rows, or the check compares against a separate
+    input (ADR-0007 as amended at G-013; this diff's law is the same SHAPE as the one
+    G-013 shipped vacuously and had to delete)
+  - `SUMMARY_SCHEMA_VERSION` 2, with a consumer of v1 refusing v2 loudly rather than
+    reading four missing counters as zero
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: reviews and the review distribution (G-019); reputation (M4)
+Critique rounds used: 0/3
+
+  **SPLIT FROM THE OLD G-015 BY HUMAN RULING, 2026-08-08**, along the seam the old block
+  had already drawn without noticing: it named `sim-critic` then `balance-critic` because
+  a saturating review scale is a dominant-strategy failure wearing a guest-loop costume.
+  **That is not one goal with two critics — it is two goals.** This half is structural,
+  schema-breaking and carries a conservation law, which is `sim-critic`'s catalogue exactly.
+  Splitting makes the two-critic arrangement NATIVE rather than bolted onto a fat goal.
+  Migration owed: `SUMMARY_SCHEMA_VERSION` 2 — the table REPLACES four counters, which is
+  the breaking kind of change, not the additive kind `report.ts` permits.
+
+## G-019 — Reviews, and a hotel that reviews differently from a bad one
+Status: pending
+Milestone: M2 — **LAST GOAL IN THE MILESTONE**
+Owner pair: ai-engineer / **balance-critic** · second critic `ai-critic` (§7.1)
 Statement: A departing guest leaves an integer review derived from its own recorded
   experience: which needs were met, how long it waited against its patience, and whether
-  its stay was cut short. The four outcome counters become a table by reason. The review
-  is recorded and reported; nothing reads it.
+  its stay was cut short. The review is recorded and reported; nothing reads it.
 Exit criteria:
   - pnpm exec vitest run review  (all green)
-  - pnpm sim:run --days 30 --seed 7 --rooms 6  prints a review distribution with at
-    least THREE distinct scores non-zero, and an outcome table with at least FOUR
-    distinct reasons non-zero
+  - pnpm sim:run --days 30 --seed 7 --rooms 6  prints a review distribution with at least
+    THREE distinct scores non-zero
   - --rooms 1 and --rooms 12 produce review distributions whose means differ by more
     than <n>, COMPUTED BY THE TEST rather than asserted — a hotel that serves nobody
     must not review the same as one that serves everybody
-  - the outcome table's total still equals arrived - live, and a test deletes one row
-    and watches the conservation law throw
   - no sim module reads the review store — the boundary made mechanical, not documented
+  - a WATCH entry in `JOURNAL.md` from a recorded run in which a human saw a guest
+    succeed and a guest fail
   - all §2 invariant gates green (pnpm verify)
-Out of scope: reputation as a stateful aggregate; reviews feeding demand, pricing or
-  arrival rate (ALL M4); review text (M5/M6)
+Out of scope: the outcome table (G-015); reputation as a stateful aggregate; reviews
+  feeding demand, pricing or arrival rate (ALL M4); review text (M5/M6)
 Critique rounds used: 0/3
 
-  **LAST GOAL IN M2 → §7.1 NOW REQUIRES the second critic from a different pair that this
-  block already chose.** The G-008 precedent has been generalised into the charter by
-  ADR-0013 §6, so the ruling below is no longer a one-off. Both rounds must close **DRY**
-  — "no further findings at any severity in this diff". A **FIXED** close consumes a round
-  and the critic goes again.
-  **THIS GOAL DISCHARGES M2's "VISIBLY".** §8's M2 statement is "guests visibly succeed
-  and fail"; the review distribution and outcome table are good criteria and are not what
-  that word says. A WATCH observation in `JOURNAL.md` — a recorded run in which a human saw
-  a guest succeed and a guest fail — is required before M2 exit is written.
+  **THIS IS THE BEHAVIOURAL HALF, AND IT IS DOMINANT-STRATEGY TERRITORY.** A review scale
+  that saturates for any hotel that opens the door is the failure to hunt, and `ai-critic`'s
+  catalogue does not cover it — which is why `balance-critic` owns this goal rather than
+  taking a bolted-on second round. The differential criterion (1 room vs 12) is the one
+  that cannot be faked.
 
-  RULED AT SEEDING — balance-critic takes round 2. §6 pairs one critic per builder, but
-  G-008 ran sim-critic then balance-critic and that second round was the best critique in
-  the project. A review scale that saturates for any hotel that opens the door is a
-  dominant-strategy failure wearing a guest-loop costume, and ai-critic's catalogue does
-  not hunt it. The differential criterion (1 room vs 12) is the one that cannot be faked
-  and is the answer to "guests visibly succeed and fail" not being a command.
-  Migration owed; SUMMARY_SCHEMA_VERSION bumps to 2 — the outcome table REPLACES four
-  counters, which is the breaking kind of change, not the additive kind report.ts permits.
+  **LAST IN MILESTONE → second critic from a different pair (§7.1).** `ai-critic` takes it,
+  hunting guest-loop mechanics while `balance-critic` hunts the dominant strategy. The
+  split gives that rule **a small diff to work on rather than the largest one in the
+  milestone**, which is the point of splitting rather than a side effect.
+
+  **THIS GOAL DISCHARGES M2's "VISIBLY"** (§8, ADR-0013). The review distribution is a good
+  criterion and it is not what that word says. The WATCH entry is a criterion here, not a
+  courtesy.
 
 ## G-016 — Guest-loop cost under a need vector
 Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discharged;

@@ -120,20 +120,40 @@ stopped at the test files.
 
 ## How many critique rounds
 
-**One by default**, but a goal may only close on a **DRY** report (§7.1, ADR-0013). Every
-critic ends with exactly one of:
+**A goal closes only on DRY** (§7.1). Every critic ends with exactly one of:
 
-- **DRY** — "I have no further findings at any severity in this diff."
-- **FIXED** — "My findings are resolved; I have not exhausted this diff."
+- **DRY** — diff swept, no findings at any severity.
+- **OPEN** — diff swept, findings outstanding.
+- **UNSWEPT** — the critic has not exhausted the diff.
 
-A FIXED close **consumes a round and the critic goes again**. This costs rounds and is
-meant to: thirteen goals ran mostly at 1/3 with zero BLOCKERs, and the one goal that ran
-to 3/3 produced the best critique in the project.
+**Sweeps are budgeted (three). Verifications are not.** A verification pass asks whether a
+specific fix discharges a specific finding and looks at the fix's own diff. **UNSWEPT at
+round 3 escalates and the goal gets split.** The guard against an unbounded verify loop: a
+verification that produces a **new** finding converts to a sweep and consumes budget.
+
+Why three states and not two: thirteen goals ran mostly at 1/3 with zero BLOCKERs, and the
+one goal that ran to 3/3 produced the best critique in the project. Then G-013 showed that
+*"there are findings left"* and *"there is diff left"* are also different claims.
 
 A second critic from a **different pair** is required in the final round of the **last
 goal in a milestone** (G-008's precedent: the second pass found the 107M-penny sweep).
 Do not skip the first round — the two times it was nearly skipped, at G-010 and G-016, it
 found MAJORs that were defects in the *evidence* rather than the code.
+
+## Sizing a goal (§5.5, §5.6)
+
+- **A builder that offers a seam at PLAN gets it taken, or gets a written prediction of
+  what declining it will cost — scored at REFLECT.** An unscored prediction is prose.
+- **The matched critic sees the plan before BUILD** and may object on scope alone: too
+  large to sweep in the budget, and here is the seam. Cheapest moment to split, and the
+  agent that pays for a fat goal finally gets a voice before the code exists.
+- G-013 is the case: the builder named the seam, the orchestrator declined in one line,
+  and it cost nine instances of one defect class and three sweeps that reached exhaustion
+  only at the last round the budget allowed.
+- **Reading a defect count**: a 3/3 goal is a near miss, not comfort. And detection
+  sensitivity rises over time, so a raw count across eras is not like-for-like — G-013's
+  first three instances were self-caught by discipline that did not exist at G-001. The
+  ratio survives; the absolutes do not.
 
 ## Watching the game (§5 WATCH, ADR-0013 — human ruling)
 

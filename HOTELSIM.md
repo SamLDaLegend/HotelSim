@@ -82,13 +82,15 @@ Each of GOALS.md, DECISIONS.md, JOURNAL.md and PARKING.md carries a rolling dige
 The reason: the four ledgers passed 2,800 lines and JOURNAL.md — which calls itself the memory that survives compaction — is a quarter of that. An ADR amendment has already spent a day filed under the wrong ADR.
 5. The goal loop
 5.1 State machine
-SELECT -> PLAN -> BUILD -> CRITIQUE -> RESPOND -> VERIFY -> WATCH -> COMMIT -> REFLECT -> SELECT
-                    ^                                 |
-                    +------------ (failures) ---------+
+SELECT -> PLAN -> [critic sees plan, §5.6] -> BUILD -> CRITIQUE -> RESPOND -> VERIFY -> WATCH -> COMMIT -> REFLECT -> SELECT
+                    ^                                              |
+                    +------------------ (failures) ----------------+
+
+CRITIQUE is a SWEEP and is budgeted (§5.2, three). Verifying that a fix discharges a finding is NOT a sweep and is not budgeted (§7.1).
 
 SELECT — Take the top unblocked goal from GOALS.md. Restate it in one sentence and name its exit commands.
 
-PLAN — Spawn the matching builder agent in plan mode. It produces a short plan: files to touch, data shapes, tests it will write first. You review the plan against §2 and the goal's out-of-scope list. Reject and re-plan if it exceeds scope.
+PLAN — Spawn the matching builder agent in plan mode. It produces a short plan: files to touch, data shapes, tests it will write first. You review the plan against §2 and the goal's out-of-scope list. Reject and re-plan if it exceeds scope. Then §5.6: the matched critic sees the plan and may object to its size before a line is written.
 
 BUILD — Builder implements. Tests first where practical. Builder runs the gates itself before declaring ready.
 
@@ -102,7 +104,25 @@ WATCH — (Added 2026-08-08 by human ruling, ADR-0013 §2.) For any goal that ch
 
 COMMIT — Conventional commit referencing the goal ID. One goal, one commit (or one squashed branch).
 
-REFLECT — Append to JOURNAL.md: what changed, what the critic caught, what got parked, whether any invariant nearly broke. Two or three lines. Then rewrite the digest at the top of each of the four ledgers (§4.1), update GOALS.md, and select the next goal.
+REFLECT — Append to JOURNAL.md: what changed, what the critic caught, what got parked, whether any invariant nearly broke. Two or three lines. Score any seam prediction from §5.5. Then rewrite the digest at the top of each of the four ledgers (§4.1), update GOALS.md, and select the next goal.
+
+5.5 The seam rule — declining a split is a prediction, and it gets scored
+
+(Added 2026-08-08 by human ruling, after G-013.)
+
+When a builder offers a seam at PLAN — "this is a fat goal, here is where it splits" — the orchestrator either takes it, or records in the goal block what not taking it is expected to cost. A reflex is not a decision; a prediction is.
+
+The prediction is DISCHARGED AT REFLECT: did declining the seam cost what you said it would? A prediction that is never scored is prose, and an artefact that accumulates without ever being wrong is worse than no artefact.
+
+G-013 is the case that produced this rule. Its builder wrote "this is the fattest goal yet" and named the seam; the orchestrator ruled it whole in one line with no cost attached. The actual cost was nine instances of one defect class and three full critique rounds. Written as a prediction it would have read "expected cost: more checkable surface than one critic pass can vet" — and would have been legibly wrong.
+
+5.6 The critic sees the plan
+
+(Added 2026-08-08 by human ruling, after G-013.)
+
+The agent that bears the cost of a fat goal is the CRITIC, who has to sweep it — and until now it had no voice until after the code existed. Before BUILD, the matched critic sees the plan and may raise one objection: THIS SCOPE IS TOO LARGE TO SWEEP IN THE ROUND BUDGET, and here is the seam.
+
+Scope only. Not design, not approach, not test strategy — those are the orchestrator's at PLAN review and the critic's after BUILD. This is the cheapest possible moment to split, and it puts the objection where the incentive already is.
 
 5.2 Round budget
 
@@ -200,22 +220,28 @@ NIT — style and naming. Do not spend a round on these.
 
 Every finding must cite file:line and, where possible, a reproduction command. A finding without a location is not a finding.
 
-7.1 How a critic closes — DRY or FIXED
+7.1 How a critic closes — DRY, OPEN or UNSWEPT
 
-(Added 2026-08-08 by human ruling — ADR-0013 §6.)
+(Added 2026-08-08 by human ruling — ADR-0013 §6. Amended the same day, also by human ruling, after the first goal to run the rule exposed the two-state version as wrong.)
 
-Every critic's final report must close with exactly one of these, stated explicitly:
+Every critic's final report must close with exactly one of these three, stated explicitly:
 
-DRY — "I have no further findings at any severity in this diff."
-FIXED — "My findings are resolved; I have not exhausted this diff."
+DRY — the diff is swept and there are no findings at any severity.
+OPEN — the diff is swept and findings are outstanding.
+UNSWEPT — the critic has not exhausted the diff.
 
-A goal may only close on DRY. A FIXED close consumes a round and the critic goes again.
+A goal still closes only on DRY.
 
-Interaction with §5.2's round budget, settled by the orchestrator rather than left open: if round 3 also closes FIXED, the goal cannot close and the loop STOPS. Write it to ESCALATIONS.md as a §5.4 escalation. That is the honest outcome — a diff a critic cannot exhaust in three passes is too big, and the answer is to split the goal, not to accept a FIXED close as though it were DRY.
+UNSWEPT at round 3 escalates, and the answer is still splitting the goal. That consequence is untouched: a diff a critic cannot exhaust in three passes is too big.
 
-Why: thirteen goals ran mostly at 1/3 rounds with zero BLOCKERs, and the one goal that ran to 3/3 produced the best critique in the project. "I fixed what I found" and "there is nothing left to find" are different claims, and the loop has been treating them as the same one.
+SWEEPS ARE BUDGETED. VERIFICATIONS ARE NOT. The two-state version made a round do double duty — it meant both "a sweep of the diff" and "a fix-verify cycle" — and §5.2's budget of 3 was only ever meant to bound the first. A verification pass examines whether a specific fix discharges a specific finding, and looks at the fix's own diff. It does not consume budget.
+
+The guard that stops that becoming an unbounded loop wearing a new label: a verification pass that produces a NEW finding rather than a restatement converts to a sweep and consumes budget. So if a builder's fixes keep spawning findings, the budget burns and the goal escalates properly — which is the signal you would want anyway.
+
+Why the three states: thirteen goals ran mostly at 1/3 rounds with zero BLOCKERs, and the one goal that ran to 3/3 produced the best critique in the project. "I fixed what I found" and "there is nothing left to find" are different claims, and the loop had been treating them as the same one. G-013 then showed that "there are findings left" and "there is diff left" are also different claims — its round-3 critic swept the whole diff and closed with one finding open, which the two-state version could only express as FIXED, whose prescribed remedy (split the goal) would have solved a problem that did not exist.
 
 Additionally: any goal that is the LAST IN A MILESTONE gets a second critic from a different pair in its final round. Precedent — G-008 ran sim-critic then balance-critic, and the second pass found the 107-million-penny sweep.
+
 
 8. Milestones
 

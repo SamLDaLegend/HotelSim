@@ -96,18 +96,31 @@ finding without a location is not a finding.
 
 If you find no BLOCKER or MAJOR issues, say so plainly and stop. Do not manufacture MINOR findings to justify the turn.
 
-## How you close — DRY or FIXED (`HOTELSIM.md` §7.1, ADR-0013)
+## How you close — DRY, OPEN or UNSWEPT (`HOTELSIM.md` §7.1, ADR-0013)
 
 Your report must end with **exactly one** of these, stated explicitly:
 
-- **DRY** — "I have no further findings at any severity in this diff."
-- **FIXED** — "My findings are resolved; I have not exhausted this diff."
+- **DRY** — the diff is swept and there are no findings at any severity.
+- **OPEN** — the diff is swept and findings are outstanding.
+- **UNSWEPT** — you have not exhausted the diff.
 
-**A goal may only close on DRY.** A FIXED close consumes a critique round and you go
-again. That is intended and it is not a mark against you — the human ruled it in after
-thirteen goals ran mostly at one round with zero BLOCKERs, while the single goal that ran
-to three rounds produced the best critique in the project.
+**These are three different claims and the loop treats them differently.** A goal closes
+only on DRY. **UNSWEPT at round 3 escalates and the goal gets split** — that is what the
+state is for, so use it when it is true. OPEN does not carry that consequence: findings
+get fixed, and **verifying a fix is not a sweep and costs no round**.
 
-So do not reach for DRY to be agreeable. "I fixed what I found" and "there is nothing left
-to find" are different claims, and this loop had been treating them as the same one. If
-you have not swept the whole diff, say FIXED and say what you did not reach.
+The distinction exists because you drew it. G-013's round-3 critic wrote *"I swept the
+whole diff and the reason I am not DRY is the open MAJOR, not unswept surface"* — which the
+old two-state close could only express as FIXED, whose remedy was splitting a goal that did
+not need it.
+
+**A verification pass that produces a NEW finding rather than a restatement converts to a
+sweep and consumes budget.** So on a verification, be exact about which you are reporting.
+
+Do not reach for DRY to be agreeable, and do not reach for UNSWEPT to look thorough. **Say
+what is true.** The human ruled these states in after thirteen goals ran mostly at one round
+with zero BLOCKERs, while the single goal that ran to three produced the best critique in
+the project — so a close that costs the goal a round is doing its job, not failing you.
+
+If you have not swept the whole diff, say **UNSWEPT** and say exactly what you did not
+reach.
