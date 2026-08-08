@@ -2,16 +2,22 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08, after G-013. ~120 items across 15 goals. Still growing, so §9's stop
-condition is not firing.*
+*As of 2026-08-09, G-018 in progress. ~123 items across 16 goals, plus three inherited
+onto G-020's block. Still growing, so §9's stop condition is not firing.*
 
 - **PROMOTED OUT — no longer parked**: scenario capital is a **hard prerequisite of the
   first M4 goal** (ADR-0013 §5). Every balance figure to date was taken with `--rooms N`
   silently seeding ~75% extra opening capital.
 - **The costed lever, pinned and deliberately unpulled**: sampling the guest-store scan
-  every 8th tick recovers **18.4%** of I5. Gating on change detection is **dead and
+  every 8th tick recovers **18.4% of the bench's RUNTIME** (a ratio, so G-018 leaves it
+  standing; it was never a fraction of the budget). Gating on change detection is **dead and
   measured** — reference-unchanged on 1 of 525,600 ticks. Do not re-argue it. What sampling
   surrenders is a one-tick double-booking, invisible until G-017 exists.
+- **New from G-018**: I5's budget is **derived, 389,333ms**, and the bench reads ~2% of it.
+  Every percentage-of-budget in this file is **struck, not restated**. The one trigger phrased
+  as "70% of the I5 budget" is **dead with no replacement, deliberately**; two `packages/sim`
+  comments cite the old constant and are **deleted, not restated**, when a goal next opens
+  those files.
 - **New from G-013**: `placeItem` **relaxes** the reachability rule rather than deleting it
   (M6) · an item in a **private room is publicly usable** — shipped content avoids it by
   choice, not by rule (M3/M6) · **an item provider costs nothing to place or keep**, an
@@ -139,24 +145,31 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
 - **`--rooms` and `--arrivals` flags for `sim:run`.** The CLI seeds a fixed 3 rooms and
   one arrival every 120 ticks, as named constants. Tuning them from the command line is
   useful for balance sweeps. -> **G-006**, with `--json` and `--content`.
-- **A room -> occupant index. MEASURED THRESHOLD: I5 FAILS ABOVE ~50 ROOMS. -> M1, not
-  M2/M3.** Finding a free room is O(rooms) per waiting guest per tick, so the guest loop
-  is O(waiting x rooms). `ai-critic` measured it at G-004, balanced hotel, 365 days
-  against the 10s budget:
+- **A room -> occupant index. ~~MEASURED THRESHOLD: I5 FAILS ABOVE ~50 ROOMS.~~ -> M1,
+  not M2/M3.** Finding a free room is O(rooms) per waiting guest per tick, so the guest
+  loop is O(waiting x rooms). `ai-critic` measured it at G-004, balanced hotel, 365 days.
 
-  | rooms | guests | µs/tick | 365-day projection |
-  |---|---|---|---|
-  | 3 | 3 | 1.01 | 0.5s — what ships today |
-  | 25 | 34 | 8.10 | 4.3s |
-  | 50 | 48 | 10.15 | 5.3s |
-  | 75 | 105 | 52.67 | **27.7s — I5 fails** |
+  **THE THRESHOLD, ITS TABLE AND THE CONCLUSION THEY SUPPORTED ARE ALL WITHDRAWN AT
+  G-018.** Four rows of absolutes and a 365-day projection against the invented 10s
+  budget, taken in a session nobody can re-enter (`CLAUDE.md` rule 5). "I5 fails above
+  ~50 rooms" was a statement about that budget and not about this simulation: taken at
+  face value, the worst row's 27.7s is **~7% of the derived budget**, so the conclusion
+  reverses whether or not you trust the number. What survives needs no stopwatch, and it
+  is why the item was right for reasons the threshold was not carrying:
 
-  Isolated: 1000 rooms with 0 guests costs 0.58 µs, 1 room with 5 guests costs 1.45 µs —
-  neither term alone matters, the product does. **M1 is the milestone that hands room
-  count to the player**, so it meets this as a known cost, the way ADR-0006 made G-004
-  meet the save fixture. Deliberately NOT optimised at G-004: I5 is green at 10.5% and
-  stays green through M0, because the bench runs 3 rooms and neither G-005 nor G-006 adds
-  any. Optimising against a gate that is not failing is speculative work.
+  - **The shape.** Per-tick cost rose ~52x between the 3-room and 75-room arms of one
+    sitting, for 25x the rooms and 35x the guests — superlinear in the product.
+  - **The isolation.** 1,000 rooms with 0 guests, and 1 room with 5 guests, were both
+    cheap in that same sitting: neither term alone matters, the product does.
+
+  **The routing stands on those grounds rather than on the withdrawn threshold** — and it
+  was executed. **M1 is the milestone that hands room count to the player**, so it met
+  this as a known cost, the way ADR-0006 made G-004 meet the save fixture; G-010 then
+  removed the product term with a candidate-list scan and a release-counter short-circuit
+  rather than with the index below. Deliberately NOT optimised at G-004, because the
+  bench ran 3 rooms and neither G-005 nor G-006 added any: **optimising against a gate
+  that is not failing is speculative work.** That argument never depended on where the
+  gate sat, which is the one part of this entry the re-derivation leaves untouched.
 
   If it is ever built it is DERIVED state — rebuilt on load, never saved, never
   authoritative — because the single source of truth for a reservation is the field on
@@ -193,15 +206,24 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
 
 - **I5 CAN NO LONGER BE SIZED BY ROOM COUNT, and that is the goal's own success.**
   G-010 made tick cost **O(guests), not O(rooms)** — idle rooms are free. Measured at
-  365 days with arrivals held constant: `--rooms 20` 6,643ms · `--rooms 60` 6,653ms ·
-  `--rooms 120` 6,877ms. So the bench's `--rooms 60` meets G-010's criterion by its
+  365 days with arrivals held constant, ~~`--rooms 20` 6,643ms · `--rooms 60` 6,653ms ·
+  `--rooms 120` 6,877ms~~ — the absolutes are withdrawn at G-018, and the ratio that
+  carried the point survives them: **20, 60 and 120 rooms all landed within 4% of each
+  other in one sitting.** So the bench's `--rooms 60` meets G-010's criterion by its
   letter while measuring roughly what a 20-room hotel would. The honest axis is
   **concurrent guests** (`--arrivals`). Recorded in `bench.mjs` itself so the next
   person sizing that gate meets it. -> whichever milestone next touches I5's shape.
-- **A busy 60-room hotel does not fit in the 10s budget**, and that is about the guest
-  path and the ledger rather than the gate: `--arrivals 16` (~30 concurrent) takes
-  10,849ms, 108%. The gate ships at `--arrivals 32` (~15 concurrent, 45%) for headroom,
-  not realism. -> M3/M4, when circulation and wages make the guest path heavier anyway.
+- ~~**A busy 60-room hotel does not fit in the 10s budget.**~~ **WITHDRAWN AT G-018 —
+  BOTH THE FIGURES AND THE CLAIM.** It rested on `--arrivals 16` (~30 concurrent) at
+  10,849ms and "108%", and on the shipped arm's "45%", all absolutes against the invented
+  budget and none re-measurable paired. Against the derived budget a busy 60-room hotel
+  fits several times over, so the claim is simply false now, and the "headroom, not
+  realism" justification for `--arrivals 32` dies with it — `bench.mjs` has been rewritten
+  to rest that choice on comparability with the pinned goldens instead.
+  **What survives, and it is the part that was always worth parking:** occupancy, not
+  room count, is what makes the guest path expensive, and the gate's workload is a
+  quarter-occupied 60-room shell rather than the busy hotel the requirement names.
+  -> M3/M4, when circulation and wages make the guest path heavier anyway.
 - **`assertGuestStoreInvariants` is now 14.7% of tick self-time** (was 5.3%), because
   everything around it got faster. Its allocations are gone; what remains is a binary
   search per resting guest, **linear in guests, not rooms**. Deliberately neither gated
@@ -354,7 +376,12 @@ Raised by `sim-engineer` at PLAN. G-007 builds the coordinate substrate only.
   could be. Recorded so the choice is deliberate rather than an oversight.
 - **`sim:bench` now does real work.** The 365-day run simulates 4,380 arrivals and 3,282
   paid stays instead of zero entities, which is most of the parked G-001 item about the
-  bench exercising nothing. I5 moved 8.8% -> ~16% of budget for that reason. What is
+  bench exercising nothing. ~~I5 moved 8.8% -> ~16% of budget for that reason.~~ Both
+  percentages are withdrawn at G-018, **and no ratio is offered in their place**: they were
+  taken in different goals and therefore different sittings, so dividing one by the other
+  would be the cross-session comparison `CLAUDE.md` rule 3 forbids. The surviving statement
+  is qualitative and needs no stopwatch — the bench went from simulating zero entities to
+  simulating thousands, and got materially dearer for that reason. What is
   still missing is tick cost measured AGAINST agent count rather than in total. -> M3.
 
 ## Deferred out of G-008 (2026-08-07)
@@ -470,17 +497,21 @@ Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the dif
   before G-010 measures tick cost. **The seam to know about:** the pass folds over
   `roomCellsOf`, so a multi-cell footprint needs every cell either at the earth or over a
   grounded room, and that case needs no change here when width lands at M6.
-- **I5 IS AT 28% OF BUDGET, UP FROM ~14.7%. MEASURED, PAIRED, NOT ESTIMATED.**
-  `pnpm sim:bench`, median of 5, same machine, `git stash` between: **1,474ms -> 2,579ms**,
-  a +75% regression on a gate that stays green; **2,773ms after transitive support**, which
+- ~~**I5 IS AT 28% OF BUDGET, UP FROM ~14.7%.**~~ **THIS COST +75%, MEASURED, PAIRED, NOT
+  ESTIMATED** — the percentages of the invented budget are withdrawn at G-018 and the
+  paired ratio is exactly what survives them (`CLAUDE.md` rule 2).
+  `pnpm sim:bench`, median of 5, same machine, `git stash` between: **1.75x**, a
+  regression on a gate that stayed green; **a further +8% after transitive support**, which
   adds one bounded pass per tick and does not change the shape of the cost. Decomposed by
   running the same 365 days
   under a content set whose room type requires nothing (3 entities instead of 6), direct
-  spawn, median of 5: **~503ms of it is the FURNITURE** — the bench's entity count doubled,
-  and `findFreeRoom` scans every entity per waiting guest per tick — and **~600ms is the
-  VALIDITY machinery** itself (one sorted index per tick that has guests, plus a memoised
-  check per candidate room). Deliberately not optimised here: it is under the 40% the plan
-  set as the escalation line, and optimising it is G-010's goal, not this one. **What G-010
+  spawn, median of 5: **roughly a fifth of the run was the FURNITURE** — the bench's entity
+  count doubled, and `findFreeRoom` scans every entity per waiting guest per tick — and
+  **roughly a quarter was the VALIDITY machinery** itself (one sorted index per tick that
+  has guests, plus a memoised check per candidate room). Deliberately not optimised here:
+  ~~it is under the 40% the plan set as the escalation line~~ (that line was a fraction of
+  the invented budget and is withdrawn with it), and optimising it is G-010's goal, not
+  this one. **What G-010
   should know:** the furniture half is fixed by a room-scoped scan (items can never satisfy
   `roomTypeProvides`, so they are pure overhead in that loop), and the validity half is
   fixed by making the index survive a tick in which entity membership did not change.
@@ -503,8 +534,12 @@ Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the dif
 
   Under the honest workload the margin is **78% of G-010's limit and superlinear at the
   top end**, so the goal has real work to do rather than a number that is already inside
-  its bound. Also worth knowing before designing the bench: **`--rooms 100 --arrivals 5`
-  takes 109s for 365 days — 10.9x the entire I5 budget.**
+  its bound. Also worth knowing before designing the bench: ~~`--rooms 100 --arrivals 5`
+  takes 109s for 365 days — 10.9x the entire I5 budget.~~ **Withdrawn at G-018** — an
+  absolute compared against the invented budget, which it beat by 10.9x and the derived one
+  by not at all (~28%). The surviving statement is the 4.70x row above: a fully occupied
+  100-room hotel is a different workload from the bench's, and it is the workload that
+  scales badly.
 
   Caught by `sim-critic` at G-009 round 1, checking a number the *next* goal depends on.
 - **An invalid room is charged full upkeep and the player is not told.** Validity gates
@@ -534,7 +569,9 @@ Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the dif
 Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff.
 
 - **G-016 IS TRIGGERED. THE NEED VECTOR COSTS 2.41x HEAD's TICK COST**, against the 70%
-  promotion line in its own goal block. The two fixes below are in the diff because a red
+  promotion line in its own goal block — **a line that no longer exists: G-018 derived the
+  budget, and a trigger phrased as a percentage of it can no longer fire.** The 2.41x is a
+  paired ratio and is untouched; what is gone is the mechanism that promoted a goal from it. The two fixes below are in the diff because a red
   gate is not shippable and both were mistakes rather than missing optimisations: the
   engagement selector was O(needs²) comparisons with two binary searches each, paid by every
   unengaged guest every tick (~~27.7% of tick self-time~~ — WITHDRAWN, see below), and
@@ -561,10 +598,14 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   |---|---|---|
   | 365 days, `--rooms 60 --arrivals 32` | **4,618ms** | **11,151ms** |
 
-  **Ratio 2.41x.** Normalised onto the project's recorded HEAD figure that is **8,476ms,
-  84.8% of budget** — which independently agrees with `ai-critic`'s 84.3%, measured hours
-  apart. Absolute readings on this machine today range 8.0s to 11.2s and DO fail the gate at
-  the top of that range. Whoever takes G-016 should re-measure HEAD alongside rather than
+  **Ratio 2.41x, and the ratio is the whole finding.** ~~Normalised onto the project's
+  recorded HEAD figure that is 8,476ms, 84.8% of budget — which independently agrees with
+  `ai-critic`'s 84.3%, measured hours apart. Absolute readings on this machine today range
+  8.0s to 11.2s and DO fail the gate at the top of that range.~~ **All of that is withdrawn
+  at G-018**, and the last sentence is the one to notice: those readings failed a budget
+  that was ~39x tighter than any stated requirement, so "DO fail the gate" described the
+  gate and not the simulation. Against the derived budget the same range is ~2-3%.
+  Whoever takes G-016 should re-measure HEAD alongside rather than
   trusting any single number in this file (the G-010 lesson, third time recorded).
 
   **WHAT IS LEFT IS INHERENT AND IS G-016's**, and the profile is flat rather than
@@ -581,8 +622,11 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   a ~4x growth in per-tick RE-VALIDATION of state the tick has just produced.** That is
   VALIDATION POLICY, not guest-loop cost, and it is a different question with a different
   answer (sample it, or gate it on a changed store) from "the vector costs N times more per
-  guest". Inheriting a fifth of the I5 budget as though it were structural simulation cost
+  guest". Inheriting a fifth of the RUN as though it were structural simulation cost
   is how a scaling goal ends up optimising the wrong thing. Not acted on here.
+  (G-018: "a fifth of the I5 budget" as this read before was a coincidence of the invented
+  budget sitting near the run's own length. The proportion of the run is what was meant and
+  is what survives; the two stopped being interchangeable when the budget was derived.)
 
 - **AN AMENITY EARNS NOTHING AND COSTS UPKEEP, so a rational player builds none.**
   `payForStay` charges for the LODGING room only (ADR-0010), so the three amenity room
@@ -798,6 +842,15 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   any gate. Same shape as G-010's finding that `--rooms 60` measures a 20-room hotel.
   -> whichever milestone next touches I5's shape (**G-018** is re-deriving its budget and
   should know this).
+
+  **G-018 KNEW, AND DELIBERATELY CHANGED NOTHING.** It re-derived the BUDGET and left the
+  WORKLOAD alone, so this item is untouched and now has a second half: the requirement the
+  budget is derived from says a 60-room HOTEL, and the bench runs a 60-room SHELL at roughly
+  a quarter occupancy with four providers. The gap is between the gate's workload and the
+  requirement's, not between the gate's workload and its budget, so no number here needs
+  re-measuring — but the first goal to re-size this workload should close both halves at
+  once, and should expect the reading to rise several-fold when it does. Recorded in
+  `HOTELSIM.md` §2.1.3 and in `bench.mjs` so it cannot be discovered a third time.
 - **THE DENSITY RATIO COMPRESSES UNDER LOAD, so the new scaling criterion is weaker in CI
   than in isolation.** Measured 1.274-1.411 in an isolated process, 1.094-1.243 with the file
   alone, 1.003-1.172 under the full parallel suite — contention adds the same ABSOLUTE cost to
@@ -868,3 +921,54 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   finding, so it belongs beside the rule that produces them, not in a file of deferred work
   attached to a struck-through entry a reader is meant to skip. Ruled by `ai-critic` at
   round 3 and filed by the orchestrator. This entry stays as history and points there.
+
+## Deferred out of G-018 (2026-08-08)
+
+Raised by `sim-engineer` while re-deriving I5's budget. Nothing here was built: the goal
+changed one constant, its derivation, and the records that quoted it.
+
+- **A REGRESSION TRIPWIRE, WHICH I5 IS NOT AND NEVER WAS.** The derived budget is a sanity
+  ceiling — 389,333ms against a run that measures ~7.7s — so it catches a catastrophe and
+  nothing smaller. The instrument this project has actually used for eighteen goals is a
+  **paired ratio against a same-sitting baseline**: arms interleaved, warm-up discarded,
+  medians of >=5, ratio quoted and absolute discarded (`CLAUDE.md`, "Measuring
+  performance"). It found G-012's 2.41x and corrected G-016's retracted figures, and it
+  exists only as a discipline in a prose file. Making it a command is a real goal with real
+  design questions — what baseline, committed where, and how it avoids becoming the
+  machine-drift generator that CLAUDE.md's rules exist to survive. **Explicitly NOT built here:**
+  G-018 was ruled to change one number and add no gate, and a tripwire invented in the same
+  commit as the ceiling it replaces would inherit the ceiling's whole problem.
+  **-> PROMOTED OUT WHILE THIS ENTRY WAS BEING WRITTEN: it is G-020, a hard prerequisite of
+  M3**, seeded by the orchestrator as the human's own consequence of widening the ceiling.
+  The G-013 density-ratio item points at the same slot and should be read beside it.
+- **THE PROMOTION MECHANISM IS DEAD AND HAS NO REPLACEMENT. THAT IS THE POINT, NOT A GAP.**
+  **ONE** parked trigger is phrased as "`sim:bench` exceeds 70% of the I5 budget": the
+  needs-scaling successor recorded inside G-016's block. Against a derived budget it can
+  never fire. (Round 1 correction: this entry originally said TWO and named G-019 as owning
+  one. **G-019 has no trigger and never had one** — a coverage claim that inspected nothing,
+  inside the entry whose whole job is to record which triggers are dead. Established by
+  `grep -rn "70%" --include=*.md --exclude-dir=node_modules .`, which returns TEN lines
+  (thirteen without the exclusion — three are dependency readmes): one live trigger, FOUR
+  historical mentions of G-016's own discharged trigger — `DECISIONS.md`, `GOALS.md`,
+  `JOURNAL.md` and this file — and five lines of G-018's own commentary on them. The
+  subordinate count read "three" until round 2, inside the sentence that claims to report
+  what the grep returns.) The
+  human's complaint was that a made-up constant was promoting goals; a sourced ceiling
+  promotes nothing, and G-018 deliberately invented no replacement threshold — doing so
+  inside this goal would have minted the second superstition in the goal that exists to
+  delete the first. A replacement must be a ratio against a paired baseline — **G-020**,
+  now seeded, whose own bound owes the derivation §2.1 requires of it. Until it lands,
+  **a performance goal is promoted by a measured ratio quoted in a critique, which is how
+  every one of them has actually been promoted so far.**
+- **TWO COMMENTS IN `packages/sim` CITE RATIOS AGAINST A CONSTANT THAT HAS MOVED.**
+  `loan.ts:279` ("235% of the whole I5 budget") and `tick.ts:686-687` ("5.3x the I5 budget
+  before this branch existed"). Both are now false — against the derived budget they are
+  ~6% and ~14% — and G-018's exit criterion forbids it touching `packages/`, correctly:
+  a goal about a number in `tools/gates` has no business editing simulation files.
+  **WHEN A GOAL NEXT LEGITIMATELY OPENS EITHER FILE, THESE ARE DELETED, NOT RESTATED.**
+  Both are instances of `ADR-0007`'s amendment — a comment offered as evidence may not
+  carry a figure no test pins — so restating them against the new budget would re-commit
+  the original error with fresh arithmetic. What each comment is really claiming survives
+  without any figure: the loan path was catastrophically expensive before it was fixed, and
+  the branch in `tick.ts` skips work that once dominated the run. Say that, cite the goal,
+  and stop. -> **the next goal to touch `loan.ts` or `tick.ts` for its own reasons.**

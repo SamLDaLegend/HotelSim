@@ -2,22 +2,26 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08, G-013 done. 14 goals complete; M0 and M1 signed off; M2 half built.*
+*As of 2026-08-09, G-018 done. 15 goals complete; M0 and M1 signed off; M2 half built.*
 
 - **Schema versions**: save **v7** · summary **v1** (v2 owed by G-015).
 - **Gates**: all six green. I2 `4b8db9b1ac36cb35` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3`
-  · 1,095 tests / 58 files. **I5 reads 78–83% and its budget is unsourced** — G-018
-  re-derives it; quote the ratio, not the percentage, until it does.
-- **Order**: **G-018** (derive I5) → **G-017** (viewer) → G-014 → G-015 → G-019 → M2 exit.
-- **Obligations owed by future goals**: G-013's **WATCH is undischarged** and is G-017's
-  first subject. G-018 must strike `bench.mjs`'s stale `45% <- what ships`. G-014 runs the
-  §5.5 seam question first. G-015 owes summary v2 and a conservation law that is **not** an
-  identity over its own inputs. G-019 is last-in-milestone: second critic, and M2's
-  "visibly". **M4 does not start** until scenario capital lands (ADR-0013 §5).
-- **Open contradictions**: G-012's criterion pins a content property that any provider
-  addition can flip — G-014 and G-015 both touch it. `--rooms N` contaminates every balance
-  sweep to date. Sampling the guest-store scan recovers 18.4%, deliberately unpulled.
-- **On trial**: §7.1's conversion guard has fired once, on prose, on its own author.
+  · 1,109 tests / 59 files. **I5's budget is DERIVED: 389,333 ms** (`HOTELSIM.md` §2.1.2),
+  bench reads **~2%** — the invented ten seconds was **~39x tighter** than any requirement.
+- **Order**: G-018 done -> **G-017** (viewer) -> G-014 -> G-015 -> G-019 -> **G-020**
+  (tripwire, hard prerequisite of M3) -> **G-021** (speed ladder as content) -> M2 exit.
+  **G-020 and G-021 are in the M2 exit list; skipping them defeats a human ruling.**
+- **Obligations owed**: G-013's **WATCH is undischarged** — G-017's first subject, with a
+  pre-registered target (`--amenities 5`: all nourishment from vending machines, five cafes
+  serving nobody for sixty days). G-014 runs the §5.5 seam question first. G-015 owes
+  summary v2 and a conservation law that is **not** an identity over its own inputs. G-019
+  is last-in-milestone: second critic, and M2's "visibly". G-020 inherits the unpinned bench
+  workload and the copy-the-gate proof-of-bite technique. **M4 does not start** until
+  scenario capital lands (ADR-0013 §5).
+- **Open contradictions**: G-012's criterion pins a content property any provider addition
+  can flip. `--rooms N` contaminates every balance sweep to date. **The speed ladder's 30
+  ticks/s is PROVISIONAL** — G-017 discharges it, G-021 makes it content.
+- **On trial**: §7.1's conversion guard — **two firings, both on prose**, none on code.
 
 ---
 
@@ -216,7 +220,8 @@ Owner pair: sim-engineer / sim-critic
 Statement: The CLI runs whole days end to end and reports the M0 loop — guests in,
   needs met and missed, money in and out — as a stable, machine-readable summary.
 Exit criteria:
-  - pnpm sim:run --days 365 --seed 42  completes in under 10s (pnpm sim:bench green)
+  - pnpm sim:run --days 365 --seed 42  completes ~~in under 10s~~ inside the budget
+    (pnpm sim:bench green; the 10s was invented and was re-derived at G-018)
   - pnpm sim:run --days 30 --seed 42  prints arrivals, satisfied, unsatisfied, revenue,
     upkeep and closing balance
   - two runs of the same command produce byte-identical stdout
@@ -230,7 +235,7 @@ Critique rounds used: 1/3
   hash · two runs byte-identical in BOTH modes (cmp on raw bytes, 329-byte text report) ·
   the 30-day seed-42 report prints arrivals/satisfied/unsatisfied/revenue/upkeep/balance,
   state hash 69304c0f3a4fda83 · full suite 361/361 across 18 files · all six gates green,
-  I2 unchanged at be508c487d49fd6c, I5 at 12.5% · packages/sim and tools/gates untouched
+  I2 unchanged at be508c487d49fd6c, I5 at ~~12.5%~~ (withdrawn G-018) · packages/sim and tools/gates untouched
   by the entire goal.
 
   Round 1 findings (2 MAJOR, 1 MINOR, all fixed): the documented pnpm invocation
@@ -246,7 +251,7 @@ Critique rounds used: 1/3
 
 All six goals done. 9 commits, 12 critique rounds of 18 budgeted, 6 MAJOR + 3 MINOR
 findings, zero BLOCKERs, zero budgets exceeded. All six gates green: I2
-`be508c487d49fd6c`, I5 12.5%, 361 tests across 18 files.
+`be508c487d49fd6c`, I5 ~~12.5%~~ (withdrawn G-018), 361 tests across 18 files.
 
 Signed off with the explicit understanding that **M0 is not playable and cannot be as
 scoped** — build and demolish are M1, pricing is M4, so no player decision exists yet.
@@ -283,7 +288,7 @@ Critique rounds used: 1/3
 
   Verified by the orchestrator on 2026-08-07, every command run rather than reported:
   grid 57 tests / save 116 tests green · all six gates green, I2 964a195df576d979,
-  I5 16.0% · SAVE_V1_CONTENT fingerprint unmoved at 8e09fe4f0fa162a3, so the plot did
+  I5 ~~16.0%~~ (withdrawn G-018) · SAVE_V1_CONTENT fingerprint unmoved at 8e09fe4f0fa162a3, so the plot did
   not leak into content · the fixture has a zero-line diff and walks 1->2->3 to
   ba7441406ce995bc, chain now 2 steps · one column moves the state hash · an idle tick
   still returns the same EntityStore AND grid by reference after two signature changes ·
@@ -384,7 +389,7 @@ Critique rounds used: 1/3
 
   Verified by the orchestrator on 2026-08-08, every command run rather than reported:
   validity 124 tests across 7 files green, 645 total · all six gates green, I2
-  1b5fcd4cca759510, I5 27.4% · the sharpened criterion exits 0 with 22 unsupported and
+  1b5fcd4cca759510, I5 ~~27.4%~~ (withdrawn G-018) · the sharpened criterion exits 0 with 22 unsupported and
   7 no-door rooms against 12 working ones, and `in bad room 0` · the sky tower is
   rejected transitively — 5 rooms built over nothing report 5 unsupported, where the
   local rule would have reported 1 · fixture zero-line diff, SAVE_V1_CONTENT unmoved,
@@ -422,8 +427,8 @@ Out of scope: threading; spatial partitioning beyond what the measurement requir
 Critique rounds used: 1/3
 
   Verified by the orchestrator on 2026-08-08, every command run rather than reported:
-  all six gates green · I5 at the new 60-room workload 36.6-41.9% of budget (was 28.1%
-  at three rooms BEFORE the optimisation) · scaling test green · 671 tests across 35
+  all six gates green · I5 at the new 60-room workload ~~36.6-41.9% of budget (was 28.1%
+  at three rooms BEFORE the optimisation)~~ (withdrawn G-018) · scaling test green · 671 tests across 35
   files · I2 f8e9e51864851494 · SAVE_V1_CONTENT unmoved, fixture zero-line diff, no
   World field, no migration.
 
@@ -442,15 +447,22 @@ Critique rounds used: 1/3
   day is 33% occupancy, not 100%), and I had accepted that derivation. It then ran the
   falsification test I had not asked for and found room count does not drive the bench's
   cost AT ALL — 20/60/120 rooms all cost the same — because the goal's own success made
-  tick cost O(guests) rather than O(rooms). A busy 60-room hotel does not fit in 10s at
-  any occupancy. Recorded in bench.mjs and PARKING.md rather than hidden; the
+  tick cost O(guests) rather than O(rooms). ~~A busy 60-room hotel does not fit in 10s at
+  any occupancy.~~ (G-018: true of the invented budget, false of the derived one — a busy
+  60-room hotel fits it several times over.) Recorded in bench.mjs and PARKING.md rather than hidden; the
   room-scaling property the bench cannot see is measured by `vitest run scaling`, which
   ties arrivals to rooms so occupancy is constant.
 
   This is the parked I5 debt coming due, and it is scheduled inside M1 deliberately:
   M1 is the milestone that hands room count to the player, and `ai-critic` measured I5
-  failing between 50 and 75 rooms (27.7s projected at 75). The bench being a three-room
-  toy is why the gate is green while the game would be unplayable — fixing the workload
+  ~~failing between 50 and 75 rooms (27.7s projected at 75)~~ (withdrawn G-018 — that
+  projection failed the invented budget and is ~7% of the derived one). The bench being a
+  three-room toy is why the gate is green ~~while the game would be unplayable~~ — and
+  **G-018 refutes that second clause outright**: 27.7s per 365 SIMULATED days is 52.7us per
+  tick, which at 30 ticks/s is 1.58ms of work per real second — **0.158% of one core** at
+  the fastest play speed, so the game was never unplayable there.
+  The gate and the game had come apart in the opposite direction from the one this block
+  assumed, which is the whole reason the budget was re-derived. Fixing the workload
   is half the goal. Any room -> occupant index built here is DERIVED state: rebuilt on
   load, never saved, never authoritative (see PARKING.md for why).
 
@@ -505,7 +517,7 @@ Critique rounds used: 1/3
   rather than replayed short: A -> 23 valid rooms, 11,831 satisfied, 100,563,500p revenue.
   B -> 1,000 built, 1,000 demolished, 499 loans drawn, 125,000,000p refunded, and ZERO
   insufficientFunds refusals across the entire run, so builds still succeed at the end.
-  All six gates green, I2 331604a67c725a7a, I5 35.1%. The refund-0 credit line is refused
+  All six gates green, I2 331604a67c725a7a, I5 ~~35.1%~~ (withdrawn G-018). The refund-0 credit line is refused
   at load, exit 1, stdout empty. Fixture zero-line diff, SAVE_V1_CONTENT unmoved.
 
   ROUND 1 (balance-critic): 3 MAJOR, 3 MINOR, all fixed.
@@ -517,8 +529,9 @@ Critique rounds used: 1/3
     from one changed content field. Now bounded both ways by assertStockIsAReserve
     against a new `liquidationRoomsMax`, stated in the units a designer thinks in.
   - A QUADRATIC FOLD, of the class G-010 spent a goal removing and this goal's own I5 fix
-    removed from settlement earlier in the same build. --loan 1 at 365 days cost 23,534ms,
-    235% of budget. Worse than diagnosed: removing the ledger re-fold only halved it, and
+    removed from settlement earlier in the same build. --loan 1 at 365 days cost 23,534ms, ~~235%
+    of budget~~ — 6.6x the same build's own paired 3,552ms, which is the ratio that
+    carried the finding and the form G-018 leaves standing. Worse than diagnosed: removing the ledger re-fold only halved it, and
     the residue was G-008's once-per-tick balance fold, accepted on "builds are rare by
     construction" — TRUE UNTIL A LOAN, which has no position and so nothing to run out of.
     Fixed by memoising the fold outside state (the one concession I4 names), verified
@@ -628,7 +641,7 @@ than the registry goal.
 
 ## G-012 — The need vector and its decay
 Status: done — unblocked by G-016. 1 critique round (2 MAJOR + 5 MINOR, all resolved).
-  Verified by the orchestrator: all six gates green, I5 61-63%, I2 6c3e1baa8b87d2f6,
+  Verified by the orchestrator: all six gates green, I5 ~~61-63%~~ (withdrawn G-018), I2 6c3e1baa8b87d2f6,
   SAVE_V1_CONTENT unmoved, fixture zero-line diff, 1,000 tests across 51 files.
 
   HUMAN RULING, ADR-0012: the vector is **at least Comfort, Entertainment and
@@ -682,7 +695,7 @@ Critique rounds used: 0/3
 Status: **done** — 3 critique rounds (3 MAJOR + 5 MINOR across sweeps, 2 MAJOR on the
   unbudgeted verification) + 1 verification pass. **ESCALATED at 3/3 and resolved by the
   human: land it, do not split.** Verified by the orchestrator: all six gates green, I5
-  78.4%, I2 `4b8db9b1ac36cb35`, `SAVE_V1_CONTENT` unmoved at `8e09fe4f0fa162a3`, fixture
+  ~~78.4%~~ (withdrawn G-018), I2 `4b8db9b1ac36cb35`, `SAVE_V1_CONTENT` unmoved at `8e09fe4f0fa162a3`, fixture
   zero-line diff, 1,095 tests across 58 files, no gate/CI/config file touched.
   Save schema **v7**. `SUMMARY_SCHEMA_VERSION` stays 1.
 
@@ -793,7 +806,17 @@ Critique rounds used: 0/3
   not this goal. The viewer must not CAUSE one; it does not forbid one that already exists.
 
 ## G-018 — I5's budget, derived from a requirement instead of invented
-Status: pending
+Status: **done** — 3 sweeps + 2 verification passes, one of which converted and escalated;
+  resolved by the human ("go for it"). 2 MAJOR + 3 MINOR, then 2 MAJOR + 4 MINOR + 1 NIT,
+  then 2 MAJOR + 4 MINOR, then 1 MAJOR + 2 MINOR. Zero BLOCKERs.
+  Verified by the orchestrator: six gates green; I2 `4b8db9b1ac36cb35`; 1,109 tests / 59
+  files; `git diff HEAD --name-only` touches **0 files under `packages/`**; the derivation
+  recomputed independently — `525,600 x 0.10 / (30 x 4.5) = 389.33s`, and `budget.mjs`
+  exports `389333.33`; the gate prints `2.0% of the derived 389333ms budget`.
+
+  **EVERY ONE OF THE FOUR ROUNDS FOUND A DEFECT IN THE EVIDENCE RATHER THAN THE CODE, AND
+  THREE WERE INSIDE THE FIX FOR THE PREVIOUS ONE.** That is the honest headline of this
+  goal, more than the number is.
 Milestone: M2 (charter maintenance — inserted by ADR-0013 §4)
 Owner pair: sim-engineer / sim-critic
 Statement: The I5 budget is derived from what the game needs — a 60-room hotel at the
@@ -817,10 +840,87 @@ Exit criteria:
   - all §2 invariant gates green (pnpm verify)
 Out of scope: any optimisation (the sampling lever stays pinned and unpulled — G-016);
   changing any other gate's threshold in the same commit; a per-platform budget
-Critique rounds used: 0/3
+Critique rounds used: 3/3
 
   THE HUMAN'S OWN WORDS: *"Ten seconds for 365 simulated days was invented at bootstrap
   with no basis, and it is now promoting goals."* G-016 exists solely because of it.
+
+  **THE ANSWER: 389,333ms, AND THE TEN SECONDS WAS ~39x TIGHTER THAN ANYTHING THE GAME
+  NEEDS.** Derivation in `HOTELSIM.md` §2.1.2, executed rather than quoted by
+  `tools/gates/budget.mjs` (which `bench.mjs` imports) and pinned by
+  `pnpm exec vitest run bench.budget`. The bench
+  measures **7,697ms — 1.98% of the derived budget** (median of 5 after a discarded
+  warm-up, one sitting, `--rooms 60 --arrivals 32 --amenities 1`, this machine).
+
+  **THE ORDER OF OPERATIONS WAS THE POINT, AND IT IS AUDITABLE.** §2.1.2 and the constant
+  were written and committed to before `pnpm sim:bench` was run once in this goal; the
+  derivation's inputs are 1440, 365, 30 ticks/s, a CPU share and a headroom multiple, and
+  not one of them is a measurement of this build. The builder's expectation was recorded
+  in the plan BEFORE the arithmetic — "~2% of the derived budget, the ten seconds ~39x
+  tighter than any requirement" — and both held.
+
+  **THE PLAY-SPEED LADDER IS PROVISIONAL, NOT MINTED, AND M5 DOES NOT INHERIT IT AS
+  SETTLED** (§2.1.1): 30x is 30 ticks per real second, a simulated day in 48 real seconds.
+  Nothing in the repo had fixed it and this goal proposed fixing it; **the human declined
+  to ratify.** The reasoning is better than the builder's and is recorded in §2.1.1: the
+  tell is the BOTTOM rung, not the top — 24 real minutes per simulated day at 1x means
+  nobody will ever play at 1x, and a ladder whose lowest rung is dead is one speed with
+  decoration below it. "One tick is one in-game minute" is sound and is the charter's;
+  mapping that minute onto a real SECOND is a separate choice that inherited its
+  justification by adjacency, which is aesthetic tidiness rather than a design finding.
+  The ladder's home is **content** (I3) and it is **G-021's**, before M5; **G-017's viewer
+  is where 48s is confirmed or moved**, being the first question a watching human can
+  actually answer. **The budget is not provisional because the ladder is** — though it IS
+  inversely proportional to it, so G-021 re-derives the constant: 389.3 / 12 = 32.4s, so a
+  ladder change within ~12x keeps the budget at least 2.5x the ten seconds. That is a
+  division, not a reading off the sensitivity table, which varies S and H rather than the
+  ladder and reaches only 5x from the shipped cell. **The rejected
+  alternative is recorded beside it**
+  because it is the one that would have validated the incumbent: "30x = 30 ticks per
+  rendered FRAME" yields 1800 ticks/s and a budget of ~13.5s, within a rounding error of
+  the ten seconds. It is refused because a per-frame speed is the defect §6.1 already
+  names ("runs faster on a 144Hz monitor"), and because 0.8 seconds per simulated day is
+  a fast-forward button rather than a speed at which a hotel can be watched.
+
+  **WHAT THIS MAKES I5** (§2.1.3): the load-bearing word is HEADLESS, and the time bound
+  is a **sanity ceiling, not a regression tripwire**. The tripwire this project has
+  actually used for eighteen goals is a paired ratio against a same-sitting baseline;
+  **no gate was added here**, and the human's consequence of widening the ceiling is that
+  the practice becomes a gate at **G-020**, a hard prerequisite of M3.
+  **THE BUDGET IS INVERSELY PROPORTIONAL TO THE LADDER** — 525,600 x S / (speed x H) — so
+  G-021 re-derives it rather than leaving it alone; what survives a ladder change within
+  ~12x is the conclusion, not the constant, and it survives by division (389.3 / 12 =
+  32.4s = 3.24x the ten seconds) rather than by the sensitivity table. Two drafts got this
+  wrong in opposite ways and both are recorded in §2.1.2.
+
+  **THE PROMOTION MECHANISM IS DEAD, DELIBERATELY, WITH NO REPLACEMENT INVENTED.**
+  **Exactly ONE** parked trigger reads "`sim:bench` exceeds 70% of the I5 budget" — in the
+  parked successor recorded inside G-016's block — and it can never fire
+  again. That is the human's complaint discharged rather than a gap: a sourced ceiling
+  promotes nothing. Inventing a substitute threshold inside this goal would have minted
+  the second superstition in the goal that exists to delete the first. The replacement is
+  **G-020**, seeded by the orchestrator with a bound that owes a derivation of its own.
+  (Round 1: an earlier draft said TWO triggers and named G-019 as owning one. G-019 has no
+  trigger and never did. `grep -rn "70%" --include=*.md --exclude-dir=node_modules .`
+  returns TEN lines (thirteen without the exclusion — three are dependency readmes): one live
+  trigger, FOUR historical mentions of G-016's own discharged trigger (`DECISIONS.md`,
+  `GOALS.md`, `JOURNAL.md`, `PARKING.md`), and five lines of this goal's own commentary on
+  them. The subordinate count read "three" until round 2 — a miscount inside the sentence
+  claiming to report a grep, which is the defect it corrects, in miniature.)
+
+  **REPORTED, NOT FIXED — three things this goal deliberately did not touch:**
+  1. **The workload does not match the requirement's.** The requirement says a 60-room
+     HOTEL; the bench runs a 60-room SHELL at ~25% occupancy with `--amenities 1`, four
+     providers, where `vitest run scaling` uses twenty. No workload constant was changed.
+     It does not affect the budget, which is a property of the play speed. -> `PARKING.md`.
+  2. **`packages/sim/src/loan.ts:279` and `tick.ts:686` cite ratios against the moved
+     constant** and are now false. Exit criterion 4 forbids touching `packages/`, so they
+     are parked to be **deleted, not restated** — both are instances of ADR-0007's
+     amendment, a comment offered as evidence carrying a figure no test pins.
+  3. ~~**`CLAUDE.md`'s I5 row still says "under 10s".**~~ **DISCHARGED IN THIS TREE** —
+     out of a builder's reach, handed to the orchestrator, and corrected by it during
+     round 1. `bench.budget.test.ts` now asserts that row carries the derived figure, so
+     the copy meant to survive compaction is pinned rather than trusted.
 
   **NAMED OBLIGATION INHERITED FROM G-013 ROUND 2 — `bench.mjs`'s COMMENT TABLE IS STALE
   AND IS LOAD-BEARING FOR ITS OWN ARGUMENT.** It states `--arrivals 32 (~15 concurrent)
@@ -1037,10 +1137,13 @@ Critique rounds used: 0/3
 
 ## G-016 — Guest-loop cost under a need vector
 Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discharged;
-  I5 61-63% raw. Signed off WITH its criterion mismatch recorded, not re-scoped.
+  I5 ~~61-63% raw~~ (withdrawn G-018). Signed off WITH its criterion mismatch recorded, not re-scoped.
 
   G-012 is `blocked` on this goal. Its work is complete, correct and critiqued; I5 is
-  red. §2 is explicit that no goal is done while any gate is red, so G-012 does not
+  red — **against the invented budget, which G-018 has since shown was ~39x tighter than
+  any stated requirement. The blockage was real, its cause was a number nobody could
+  source, and this is what "a made-up constant is promoting goals" looks like from
+  inside.** §2 is explicit that no goal is done while any gate is red, so G-012 does not
   commit until this lands. The builder refused to report ready rather than shipping a
   red gate, which is the rule working.
 
@@ -1081,8 +1184,15 @@ Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discha
   CRITERION 1 COULD NOT FAIL IN THE STATE THAT CREATED THIS GOAL, and I am signing it
   off with the mismatch recorded rather than re-scoping it, on sim-critic's advice.
   The TRIGGER is "sim:bench exceeds 70% of budget"; the EXIT CRITERION is "sim:bench
-  green", which is "under 100%". The pre-G-016 build was already green at 68% raw, so
-  criterion 1 was satisfied before a line was written, and criterion 4 restates it. The
+  green", which is "under 100%". The pre-G-016 build was already green at ~~68% raw~~
+  (withdrawn G-018), so
+  criterion 1 was satisfied before a line was written, and criterion 4 restates it.
+  **G-018 MAKES THIS WORSE, AND SAYS SO HERE BECAUSE THIS IS WHERE IT WAS DIAGNOSED.**
+  Both the trigger and the exit criterion were percentages of a budget that was itself
+  invented and ~39x tighter than any stated requirement. So criterion 1 could not fail for
+  a second, deeper reason than the one recorded above: there was no requirement behind the
+  number it compared against. This block is the evidence for ADR-0013 §4 and for the goal
+  that acted on it. The
   goal STATEMENT was likewise already true at BUILD start. **The real subject was
   HEADROOM, and no criterion names a headroom number.** Third criterion in the project
   with this class (`pnpm test -- world` G-001, "zero guests served by an invalid room"
@@ -1092,7 +1202,10 @@ Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discha
 
   MEASURED OUTCOME (sim-critic, paired and interleaved, all arms hash-identical):
   HEAD 2,939ms · pre-G-016 6,812ms (2.32x) · **G-016 6,081ms (2.07x)** · real cut
-  **10.7%** · I5 raw **61.5%**, normalised onto G-011's baseline **74%**.
+  **10.7%** · ~~I5 raw 61.5%, normalised onto G-011's baseline 74%~~ (withdrawn G-018).
+  The paired ratios and the 10.7% cut are exactly what survives a budget change — a
+  percentage of the budget was never the finding here, and the normalisation onto another
+  session's baseline is the practice `CLAUDE.md` rule 3 now forbids.
   Per lever: L1 `depart` hoist 7.8% · L2 lazy message -0.4% · L3a lockstep 1.6% ·
   L3b and L3c dropped for paying under 2%.
 
@@ -1100,7 +1213,7 @@ Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discha
 
   | option | 365-day bench | recovers |
   |---|---|---|
-  | as shipped | 6,154ms (61.5%) | — |
+  | as shipped | 6,154ms ~~(61.5%)~~ | — |
   | gate the scan on guests/entities identity | 6,071ms | **1.3%** |
   | sample the scan every 8th tick | 5,024ms | **18.4%** |
   | no-op the scan body (ceiling) | 4,971ms | 19.2% |
@@ -1112,9 +1225,10 @@ Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discha
 
   SAMPLING IS LEFT UNPULLED, DELIBERATELY. It recovers 18.4% of the available 19.2%, so
   this is a real 19%-against-coverage trade with no third option — "make it cheaper" is
-  largely spent at ~20ns per need over 31.5M need-ticks. But I5 sits at 61.5% with 38%
-  headroom and G-004's rule stands: optimising against a gate that is not failing is
-  speculative work.
+  largely spent at ~20ns per need over 31.5M need-ticks. ~~But I5 sits at 61.5% with 38%
+  headroom~~ (withdrawn G-018 — and the headroom is now ~98%, which strengthens this
+  paragraph rather than weakening it) and G-004's rule stands: optimising against a gate
+  that is not failing is speculative work.
   **WHAT SAMPLING WOULD SURRENDER, stated correctly** — the orchestrator's first
   argument ("a leak persists by definition, so sampling only misses one that
   self-heals") was WRONG. It surrenders a **one-tick double-booking: two guests in one
@@ -1127,35 +1241,205 @@ Status: done — 2 critique rounds (3 MAJOR + 2 MINOR). Trigger fired and discha
   class, not merely a self-healing leak.
 Milestone: M2
 Owner pair: ai-engineer / ai-critic
-Statement: The guest loop's per-tick cost stays inside the I5 budget when every guest
-  carries the full need vector and every need has competing providers.
+Statement: ~~The guest loop's per-tick cost stays inside the I5 budget~~ **RESTATED AT
+  G-018 ROUND 3:** the guest loop's per-tick cost stays inside its stated SCALING BOUND
+  when every guest carries the full need vector and every need has competing providers.
 Exit criteria:
-  - pnpm sim:bench green with the shipped M2 content
+  - ~~pnpm sim:bench green with the shipped M2 content~~ **RESTATED:** `pnpm exec vitest
+    run scaling` green, with `pnpm sim:bench` green as a floor rather than as the measure
   - pnpm exec vitest run scaling  asserts cost at N needs per guest is under <k>x cost
     at 1 need, AT FIXED CONCURRENT GUEST COUNT (the honest axis — G-010 made tick cost
     O(guests), and --rooms 20/60/120 all cost the same)
   - the optimisation does not move the I2 state hash (the G-010 acceptance bar)
   - all §2 invariant gates green (pnpm verify)
 
-  TRIGGER: promote to pending if, after G-014, pnpm sim:bench exceeds 70% of the I5
-  budget or the needs-scaling ratio exceeds its bound. Otherwise it stays parked and the
+  ~~TRIGGER: promote to pending if, after G-014, pnpm sim:bench exceeds 70% of the I5
+  budget~~ **— DEAD AS OF G-018 AND NOT REPLACED, DELIBERATELY.** The budget is derived
+  and the bench reads ~2% of it, so that half of the trigger can never fire again. No
+  substitute threshold was invented here: doing it inside the goal that deleted the first
+  unsourced number would have minted the second. **What still promotes this goal: the
+  needs-scaling ratio exceeding its bound** — which is a ratio, has a stated derivation,
+  and is the half that was always doing the work. A budget-shaped replacement, if one is
+  ever wanted, is a paired ratio against a committed baseline (`PARKING.md`, out of
+  G-018). Otherwise it stays parked and the
   readings go in PARKING.md. Per G-004: optimising against a gate that is not failing is
   speculative work.
+
+  **ROUND 3 — THE STATEMENT AND CRITERION 1 ABOVE ARE RESTATED, AND G-018 SHOULD HAVE DONE
+  IT WHEN IT STRUCK THE TRIGGER.** Striking the trigger and leaving them was half a fix:
+  "per-tick cost stays inside the I5 budget" and "`pnpm sim:bench` green" are now satisfied
+  at ~2% — **by a build 50x slower than the one that motivated this goal** — so the goal
+  could be promoted by a live path and then exit on criteria that could not fail. That is
+  ADR-0007's amendment exactly, and this diff spends three paragraphs applying it to this
+  very block while re-creating it two lines above. Both now rest on the SCALING RATIO,
+  which the paragraph above already identifies as "the half that was always doing the
+  work". `sim:bench` stays as a floor: it can still catch a catastrophe, which is all a
+  sanity ceiling claims (`HOTELSIM.md` §2.1.3).
+
+---
+
+## G-020 — The tick-cost tripwire, because I5 stopped being one
+Status: pending — **HARD PREREQUISITE OF M3. M2 does not exit without it.**
+Milestone: M2
+Owner pair: sim-engineer / sim-critic
+Statement: A paired ratio against the previous commit, at fixed workload, with a stated
+  bound, run as a gate. The thing that has actually guarded tick cost for eighteen goals
+  becomes a mechanism instead of a practice.
+Exit criteria:
+  - a gate command measures HEAD against the previous commit **paired and interleaved in
+    one sitting**, medians of ≥5, warm-up discarded, at a fixed workload it names
+  - its bound is derived and stated (`HOTELSIM.md` §2.1) — G-010's "measured × 1.5, then
+    held at or below" is the shape; a round number is not
+  - a deliberately inserted O(n²) in the guest loop turns it **red**, proven by mutation,
+    and that mutation turns nothing else red
+  - it reports the **ratio**, never an absolute against a figure from another session
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: pulling any optimisation (the sampling lever stays pinned); changing I5;
+  changing any other gate's threshold
+Critique rounds used: 0/3
+
+  **INHERITED FROM G-018 — NOTHING TIES A GATE'S WORKLOAD TO ANYTHING, AND YOU ARE ABOUT
+  TO BUILD A GATE WITH A WORKLOAD.** `sim-critic` found that mutating `bench.mjs`'s
+  `ROOMS 60 → 3` or `ARRIVAL_EVERY_TICKS 32 → 3200` leaves every test green:
+  `bench.workload.golden.test.ts` **declares its own copies of those constants at lines
+  53-55 and never reads `bench.mjs`**, so the golden pins a workload nothing connects to
+  the workload that runs. G-018 fixed the budget half and left this deliberately — it is
+  the workload half, which G-018 said at PLAN it would report rather than change.
+  **This goal ships a gate whose whole meaning is "at a fixed workload", so it inherits
+  the question.** Whatever ties your ratio to its workload should tie `bench.mjs`'s to
+  its own, or say why not. The shape to avoid is G-018's MAJOR 1 one level out: a test
+  that pins a re-declared copy rather than the value the gate uses.
+
+  **HUMAN RULING, 2026-08-08 — UNPARKED, over the orchestrator's recommendation to park
+  it.** G-018 widened I5's ceiling by ~39×, which is correct, *"and the honest consequence
+  is that I5 now protects against approximately nothing. Meanwhile the thing that has
+  genuinely guarded tick cost for eighteen goals is a paired ratio that exists as practice
+  rather than as a gate."*
+
+  **Why it lands before M3 and not "eventually":** M3 is pathfinding and queued shared
+  resources — *"the single most likely place in this entire project for a quadratic to
+  appear. This repo has already found two, one of which reappeared two files away from
+  where it was removed. Retiring the only working brake immediately before the milestone
+  most likely to need it is the one move here I'd argue against."*
+
+  I recommended parking this and was wrong: I read "I5 is a sanity ceiling, not a
+  regression tripwire" as a description and stopped, when it was a gap.
+
+  **INHERITED FROM G-018 ROUND 2 — "DOES THIS GATE ACTUALLY GATE?", WHICH IS YOUR OWN
+  QUESTION ONE FILE OVER.** `sim-critic` mutation-tested I5 while G-018 was pinning its
+  budget, and three holes are yours rather than G-018's, because closing them is building
+  a gate rather than sourcing a number:
+  - ~~**NO TEST HAS EVER WITNESSED I5 GO RED.**~~ **DISCHARGED AT G-018 ROUND 3 — ONE
+    DOES NOW**, and the parking above was wrong on its facts. It asserted a
+    dichotomy — "a six-minute run or an injectable budget" — and `sim-critic` refuted it by
+    building the third option: **copy the shipped `bench.mjs` and `budget.mjs` to a temp
+    dir, rewrite only `ROOT`, set `DAYS = 1` and `BUDGET_MS = 0` IN THE COPY, and spawn
+    it.** Nothing under `tools/gates` changes, so no env var, flag or CI lever exists to
+    pull; the loosening lives in a throwaway file the test wrote. It runs in ~700ms and
+    prints `FAIL  I5 headless — 1 days took 617ms, budget is 0ms (I5)` with **exit code
+    1**. It ships in `bench.budget.test.ts`. **G-020 inherits the TECHNIQUE, not the
+    debt**: a gate's failing path can be witnessed by copying the gate rather than by
+    making it configurable, and "it would take too long" deserves one attempt at a third
+    option before it becomes a parked item.
+    Context worth keeping, and stated so that it needs no count: `HOTELSIM.md` §10 asks
+    only that the gates "pass trivially against an empty sim", so proving a gate BITES was
+    never a charter requirement. The bootstrap records say each gate was deliberately
+    broken and observed red (`ESCALATIONS.md`, `JOURNAL.md`, commit `b92a815`), and this
+    goal has no evidence against them and does not touch them. **What is true regardless:
+    no record distinguishes WHICH gates were proven red or HOW, and no committed test
+    pinned I5's failing path until this one.** A one-off manual probe is not a test — it
+    leaves nothing behind for a later change to trip over, which is the whole difference
+    between the bootstrap ritual and your third criterion.
+    **G-018 asserted "five of the six" here and it was withdrawn at round 4.** It was an
+    inference made in the session, not a record of the event, and it is the exact class
+    this goal exists to delete: a number in prose, offered as evidence, that nothing pins.
+    It arrived inside the fix for the previous count error. **Do not replace a withdrawn
+    count with a better-sounding one — say the weaker thing that needs no evidence.**
+  - **`bench.mjs`'s OTHER TWO ERROR PATHS ARE STILL UNPINNED, AND THEY ARE CHEAP.** A
+    non-zero CLI exit and a stdout missing the `days N` line both `process.exit(1)` before
+    the budget is ever compared, and no test fires either. G-018 listed this as unreached
+    and guessed it was expensive; **it is not — `sim-critic` fired both in under a second
+    using the copy-and-run technique already in `bench.budget.test.ts`.** The cost is a
+    second `replace()` call on the copied source, not a six-minute run. Cheap enough that
+    "unreached" was the wrong disposition and the estimate was the error, not the work.
+  - **THE BENCH'S WORKLOAD IS PINNED BY NOTHING.** `ROOMS 60 -> 3` and
+    `ARRIVAL_EVERY_TICKS 32 -> 3200` leave every assertion in `bench.budget.test.ts` green
+    and every other gate green. G-018 said at PLAN it would report the workload and not
+    change it, and it did not.
+  - **AND THE GOLDEN THAT LOOKS LIKE IT PINS THE WORKLOAD DOES NOT.**
+    `tools/headless/src/bench.workload.golden.test.ts:53-55` declares its OWN `ROOMS` and
+    `ARRIVAL_EVERY_TICKS` with a comment saying they are "`bench.mjs`'s own figures, so
+    this pin and that gate describe the same building" — and never reads `bench.mjs`. It
+    is the duplicated-constant shape G-018 removed from the budget by extracting
+    `budget.mjs`, still live one file over, with a comment asserting the property it
+    lacks. Same fix, same reason.
+
+## G-021 — The speed ladder is content
+Status: pending — **before M5 tunes anything against it**
+Milestone: M2
+Owner pair: sim-engineer / sim-critic
+Statement: The play-speed ladder — ticks per real second at each rung — is JSON in
+  `packages/content` validated by a schema, not a constant in code.
+Exit criteria:
+  - `pnpm check:content` green with the ladder as content; no ticks-per-second literal in
+    `packages/sim` or `tools/`
+  - `tools/gates/bench.mjs` derives I5's budget from the content ladder rather than a
+    local constant, and `bench.budget.test.ts` still ties the two together
+  - changing a rung in JSON changes the derived budget with **no code edit**, proven by a
+    test that loads an alternative ladder
+  - all §2 invariant gates green (pnpm verify)
+Out of scope: choosing the final rung values (that is a balance question the viewer
+  informs); speed-control UI (M5)
+Critique rounds used: 0/3
+
+  **HUMAN RULING, 2026-08-08.** G-018 needed *a* top speed to derive I5's budget and used
+  30 ticks/s — a simulated day in 48 real seconds. **That figure is PROVISIONAL and was
+  explicitly not ratified as a design fact.** The human's objection is about the bottom of
+  the ladder, not the top: at this mapping **1× is 24 real minutes per simulated day, so
+  nobody will ever play at 1×. A ladder whose lowest rung is dead is one speed with
+  decoration below it** — and you would find that out the first time someone used the
+  viewer.
+  *"1 tick = 1 real second is aesthetic tidiness, not a design finding. I chose 1 tick =
+  1 in-game minute in the charter and that's sound. Mapping it 1:1 onto real seconds is a
+  separate choice that inherited its justification from the first one by adjacency."*
+
+  **Making it content dissolves the "cheaper now than after M5" problem entirely** — the
+  ladder becomes a JSON edit at any point, including after the first person watches a
+  hotel. I3 already says this kind of balance number is data.
+  **The only thing that would make it expensive is animation timing tuned against the
+  constant, and the M5 block is forbidden from doing that** (see M5's note).
+  **Discharge point for the 48 s figure: G-017's viewer** — the first question a watching
+  human can actually answer, and the cheapest possible use of the instrument.
+  The derived budget is not safe against this moving — it is **inversely proportional** to
+  the top rung, so **changing a rung in JSON re-derives I5's constant, which is what this
+  goal's own exit criteria require.** What is safe is the CONCLUSION: 389.3 / 12 = 32.4s,
+  so any ladder change within ~12× leaves the budget at least 2.5× the old ten seconds.
+  Establish that by division. G-018's sensitivity table varies S and H, not the ladder,
+  and reaches only 5× from the shipped cell — do not cite it for this.
 
 ---
 
 ## M2 exit — human sign-off required
 
-When G-012 to G-018 are `done`, that is a §5.4 escalation. Write it to `ESCALATIONS.md`
-and stop.
+When **G-012 to G-021** are `done`, that is a §5.4 escalation. Write it to
+`ESCALATIONS.md` and stop.
 
 **M2 exit additionally requires, per ADR-0013:**
+- **G-020 — THE TICK-COST TRIPWIRE — IS DONE.** Hard prerequisite of M3, by human ruling.
+  This bullet exists because `sim-critic` found G-020 seeded with "M2 does not exit without
+  it" while **neither this block nor the digest order mentioned it** — two of the three
+  places the loop consults at a milestone boundary would have let M2 escalate for sign-off
+  without the tripwire, defeating the ruling in the same edit that recorded it. An
+  orchestrator error, found by a critic reading the post-state rather than the diff.
+- **G-021 — the speed ladder is content** — is `done`, so the provisional 30 ticks/s is a
+  JSON value rather than a constant before M5 can tune anything against it.
 - **WATCH observations in `JOURNAL.md` for G-013, G-014 and G-015** — what looked wrong,
   or that nothing did. M2's statement contains the word "visibly" and that is how it is
   discharged. G-017's own falsifiable claim is answered here too: at least one behaviour
   every test calls correct and a human calls wrong, **or an honest record that a month of
   hotel was watched and nothing looked wrong**, which retires the concern.
-- **A sourced I5 budget** (G-018), so the milestone hands M3 a number rather than a
+- **A sourced I5 budget** (G-018 — **DONE**: 389,333ms, derived in `HOTELSIM.md` §2.1.2),
+  so the milestone hands M3 a number rather than a
   superstition.
 - **Every critique in M2 closed DRY**, not FIXED (§7.1).
 

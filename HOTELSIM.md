@@ -19,7 +19,7 @@ I1	Sim purity. packages/sim imports nothing from the render layer, no DOM, no en
 I2	Determinism. Same seed plus same command log produces a byte-identical state hash after 100,000 ticks, on every run and every platform. No Math.random, no Date.now, no Set/Map iteration-order dependence inside packages/sim. All randomness comes from an injected seeded PRNG.	pnpm test:determinism
 I3	Content is data. No room type, item, staff role or guest archetype defined in code. All of it lives in packages/content as JSON validated against a schema.	pnpm check:content — fails if a new type literal appears outside packages/content.
 I4	Ledger is append-only. Cash balance is derived by folding transactions, never stored and mutated.	pnpm test — unit test asserts balance is a pure function of the transaction log.
-I5	Headless. pnpm sim:run --days 365 --seed 42 completes in Node with no window and no renderer, inside the budget. **The budget is DERIVED, not chosen** — see §2.1. The original "under 10 seconds" was invented at bootstrap with no basis and is being replaced at G-018 (ADR-0013 §4).	pnpm sim:bench
+I5	Headless. pnpm sim:run --days 365 --seed 42 completes in Node with no window and no renderer, inside the budget. **The budget is DERIVED, not chosen** — 389,333ms, from a 60-room hotel at 30x sustaining real time; the arithmetic is in §2.1.2 and tools/gates/budget.mjs executes it. The 30x is a PROVISIONAL working figure, not a ratified one — the speed ladder belongs in content and is G-021's (§2.1.1) — and this budget is INVERSELY PROPORTIONAL to it, so retuning the ladder RE-DERIVES this number (§2.1.2). What holds across a ladder change within ~12x is the conclusion, not the constant. The original "under 10 seconds" was invented at bootstrap with no basis and was replaced at G-018 (ADR-0013 §4). The word doing the work is HEADLESS; the time bound is a sanity ceiling, not a regression tripwire (§2.1.3).	pnpm sim:bench
 I6	Save round-trip. Serialise then deserialise then re-hash produces an identical state hash. Save files carry a schema version and a migration path.	pnpm test:save
 
 I2 is load-bearing beyond determinism. If someone leaks render state or wall-clock time into the simulation, the determinism test breaks immediately. It is the tripwire for the whole design. Do not weaken it, do not add tolerance, do not skip it "just for this goal".
@@ -30,9 +30,107 @@ I2 is load-bearing beyond determinism. If someone leaks render state or wall-clo
 
 Every number a gate compares against must trace to a requirement someone wrote down. A number nobody can source is not a gate, it is a superstition with CI access. It will still fail builds, still promote goals, and still be defended — with nothing behind it.
 
-I5's ten seconds was invented at bootstrap and then promoted G-016 into existence. Its replacement is derived from what the game needs: a 60-room hotel at the fastest intended play speed sustaining real-time on a mid-range laptop, times a stated headroom multiple for the systems M3, M4 and M6 will add. The derivation is written down and every recorded I5 figure is re-baselined against it.
+I5's ten seconds was invented at bootstrap and then promoted G-016 into existence. Its replacement is derived below (G-018) from what the game needs: a 60-room hotel at the fastest intended play speed sustaining real-time on a mid-range laptop, times a stated headroom multiple for the systems M3, M4 and M6 will add. Every recorded I5 figure has been re-baselined against it or struck.
 
 This applies to every bound in the repo, not just I5 — scaling ratios, patience caps, review means. G-010's "measured × 1.5, then held at or below" is the right shape. A round number is not.
+
+2.1.1 The play-speed ladder — a PROVISIONAL WORKING FIGURE, not a minted fact (G-018)
+
+A tick is one in-game minute and 1440 ticks make a day (packages/sim/src/world.ts:33). Nothing in this repo had ever fixed what a speed MULTIPLE means, and I5's budget cannot be derived without one, so §2.1.2 below uses this mapping:
+
+  1x  = 1 tick per REAL SECOND — the in-game clock at one minute per second, a
+        simulated day in 24 real minutes.
+  30x = the fastest intended play speed = 30 ticks per real second, a simulated
+        day in 48 REAL SECONDS.
+
+IT IS PROVISIONAL, AND M5 DOES NOT INHERIT IT AS SETTLED. G-018 proposed it as a design fact and the human declined to ratify it (2026-08-08). It stands as a working figure for the arithmetic below and for nothing else.
+
+THE DIAGNOSTIC, RECORDED HERE BECAUSE IT ARGUES AGAINST THE FIGURE THIS SECTION USES. The tell is not the top speed, which is plausible; it is the bottom. Twenty-four real minutes per simulated day at 1x means **nobody will ever play at 1x**, and a ladder whose lowest rung is dead is not a ladder — it is a single speed with decoration below it. That is the kind of defect discovered the first time a human uses the viewer, which is exactly where it is sent.
+
+WHY IT LOOKED SOUND AND WAS NOT, because the error is reusable. "One tick is one in-game minute" is a charter decision and it is sound. Mapping that minute 1:1 onto a real SECOND is a SEPARATE choice, and at G-018 it inherited its justification from the first one by adjacency: it is aesthetic tidiness, not a design finding. Two decisions that look like one because they share a unit is a shape worth recognising elsewhere.
+
+WHAT THE LADDER SHOULD ACTUALLY BE ANCHORED ON: NIGHTLY SETTLEMENT, because that is when the money loop resolves. A management sim wants the player to watch several settlements land while turning over one decision. At 48s per simulated day that is a couple of minutes per decision cycle — on the sluggish side of the genre without being absurd, which is why the figure is usable as a working number and still wrong to mint.
+
+ITS HOME IS CONTENT (I3). A set of ticks-per-second figures is a balance number, and I3 says balance numbers are data rather than code. **It is not built at G-018**, whose exit criterion forbids touching packages/ and whose teeth are the point. Seeded as **G-021 — The speed ladder is content**, before M5.
+
+DISCHARGE POINT: **G-017's viewer.** Whether 48s per simulated day reads as fast, slow or dead is the first question a watching human can actually answer, and it is the cheapest possible use of the instrument.
+
+Speed is expressed in ticks per real SECOND and never in ticks per rendered FRAME. That part is not provisional. §6.1's render-critic catalogue already lists frame-rate-dependent advance as a defect — "animation that runs faster on a 144Hz monitor" — so a speed control defined as "N ticks per frame" IS that defect. The render-engineer craft note ("speed controls change how many ticks are run per frame") holds only in the sense that a frame consumes the ticks the wall clock has earned; the count a second earns must not depend on the refresh rate.
+
+THE REJECTED READING, RECORDED BECAUSE IT WOULD HAVE FLATTERED THE INCUMBENT. Read "30x" as 30 ticks per rendered frame at 60fps and you get 1800 ticks/s, which yields a 365-day budget of roughly 13.5s — within a rounding error of the ten seconds this section exists to replace. It was computed, and it is refused on two grounds: it is defined per frame, which the paragraph above forbids; and it means a simulated day passes in 0.8 seconds, at which nobody can watch a guest arrive, form a need and fail it. That is a fast-forward button, not a play speed, in a game whose M5 ships a scrubber and a speed control in order to be WATCHED. A reader who wants the incumbent number back should argue with these two grounds rather than with the arithmetic below.
+
+2.1.2 I5's budget, derived (G-018)
+
+REQUIREMENT (the human, 2026-08-08): a 60-room hotel at the fastest intended play speed sustains real time on a mid-range laptop, times a stated headroom multiple for what M3, M4 and M6 will add.
+
+The requirement's two halves land in different places. "60-room hotel" sizes the WORKLOAD the gate runs; "30x" sizes the BUDGET it compares against. Only the budget is derived here.
+
+INPUTS, each with its source:
+
+  1  a tick is one in-game minute              packages/sim/src/world.ts:32
+  2  1440 ticks per simulated day              packages/sim/src/world.ts:33 TICKS_PER_DAY
+  3  365 days = 525,600 ticks                  I5's own wording; tools/gates/budget.mjs
+  4  fastest play speed = 30 ticks/second      §2.1.1 above (PROVISIONAL - proposed at
+                                               G-018, NOT ratified; see §2.1.1)
+  5  sim's share of one core, S = 0.10         ASSUMPTION, justified below
+  6  headroom for M3+M4+M6, H = 4.5            estimated below from measured ratios
+
+S IS AN ASSUMPTION AND IS LABELLED ONE. At M5 the sim shares a thread with Pixi, the UI and the GC, and no render cost has ever been measured because M5 is unbuilt. A tenth of one core is chosen rather than a quarter because a SMALLER share makes the derived budget TIGHTER — it makes this section's conclusion harder to reach, not easier. The sensitivity table below is there so the conclusion does not rest on the choice.
+
+H IS DECOMPOSED, NOT ROUNDED. Each factor cites something this project measured:
+  M3 circulation  x2.40  the only milestone-sized behaviour system ever measured here
+                         is M2's need vector, at 2.41/2.37/2.32x (CLAUDE.md, measuring).
+                         §8 calls M3 "where the genre's difficulty actually lives", so it
+                         gets a full need-vector's worth rather than a discount.
+  M4 economy      x1.50  staff are agents but fewer than guests; settlement is nightly and
+                         already exists; upkeep is per-room per-night.
+  M6 content      x1.25  content BREADTH is cheap here: the whole item registry measures
+                         ~4-8% of the bench (1.043/1.038/1.075, interleaved, medians of 5).
+                         Archetypes multiply per-guest scoring, not per-tick passes.
+  product         x4.50  H is the weakest input in this derivation. Its error is absorbed
+                         by the result being loose by two orders of magnitude either way.
+
+THE ARITHMETIC, which tools/gates/budget.mjs executes rather than quotes (and which
+tools/gates/bench.mjs imports rather than restates):
+
+  real time available per tick at 30x     1s / 30            = 33,333,333 ns
+  x sim's share of one core (S = 0.10)                       =  3,333,333 ns
+  / headroom for M3, M4, M6 (H = 4.5)  -> per-tick budget    =    740,741 ns
+  x 525,600 ticks (365 x 1440)         -> I5 BUDGET          =    389,333 ms
+
+  = 389.3 seconds, about six and a half minutes. The measured figure includes fixed
+  process startup (node, tsx, Zod, content load), which at this budget is noise.
+
+SENSITIVITY, so the answer is not an artefact of S and H:
+
+              H = 4.5      H = 13.8 (all three milestones as dear as M2's need vector)
+  S = 0.25      973s        317s
+  S = 0.10      389s        127s          <- shipped
+  S = 0.02       78s         25s
+
+Every cell is at least 2.5x the invented ten seconds and most are 10-100x. Only the reading §2.1.1 rejects lands near it.
+
+WHAT A PROVISIONAL TOP SPEED DOES TO THIS BUDGET, STATED CORRECTLY. The budget is EXACTLY INVERSELY PROPORTIONAL to the top speed:
+
+  budget_seconds = 525,600 x S / (speed x H)     check: 525,600 x 0.10 / (30 x 4.5) = 389.3
+
+So halving the top rung doubles this constant, and doubling it halves it. **A goal that retunes the ladder in content (G-021) RE-DERIVES this budget; it does not leave it alone**, and bench.mjs says so at the point of use.
+
+WHAT SURVIVES IS THE CONCLUSION, AND THE FORMULA ALONE ESTABLISHES IT — no appeal to the table. Divide: a 12x faster ladder gives 389.3 / 12 = 32.4s, still 3.24x the ten seconds; the budget reaches ten seconds only at ~39x. **So the derived budget stays at least 2.5x the ten seconds for any ladder change within ~12x**, and a plausible retune moves this number without disturbing anything this section concludes about it.
+
+TWO DRAFTS OF THIS SECTION CITED THE TABLE ABOVE AS EVIDENCE, AND BOTH WERE WRONG. The first claimed the budget "does not move materially if the ladder moves" — false, it is inversely proportional, and one division falsifies it. The second claimed S's column covers ladder moves to ~12x because it spans 12.5x end to end; but the equivalence that makes a k-fold ladder change identical to an S -> S/k change is anchored at the SHIPPED cell, S = 0.10, and the column reaches only 0.02 — **5x, not 12.5x**. The table is a sensitivity check on S and H, not on the ladder. It is recorded because the same reach-for-the-table happened twice under correction, which is worth more to a later reader than a clean paragraph.
+
+WHAT THIS SAYS ABOUT THE TEN SECONDS — written after the constant was set, and measured afterwards as a separate step, in that order deliberately. The invented budget was roughly 39x TIGHTER than any requirement this project has stated. It failed builds the game had no need to fail, and it promoted G-016 into existence on that basis. The current build sits at about 2% of the derived budget.
+
+2.1.3 What I5 is, now that its number is sourced
+
+I5's load-bearing content is the word HEADLESS: the sim runs 365 days in Node with no window, no renderer and no DOM. THE TIME BOUND IS A SANITY CEILING, NOT A REGRESSION TRIPWIRE. It catches a catastrophe — an accidental quadratic, a per-tick allocation storm — and it is not meant to catch a 20% drift.
+
+The tripwire this project has actually used for eighteen goals is a PAIRED RATIO against a same-sitting baseline (CLAUDE.md, "Measuring performance"): arms interleaved, warm-up discarded, medians of >=5, and the ratio quoted rather than the absolute. That is the instrument that found G-012's 2.4x and corrected G-016's retracted figures. G-018 added no gate; the human's consequence of widening this ceiling is that the practice becomes one — **G-020, a hard prerequisite of M3**, because M3 is the likeliest place in this project for a quadratic to appear.
+
+Consequence, recorded rather than discovered later: any promotion trigger phrased as "sim:bench exceeds N% of the I5 budget" is now dead, because the budget can no longer be approached. That is the point. The human's complaint was that a made-up constant was promoting goals; a sourced ceiling promotes nothing. A replacement trigger must be a ratio against a paired baseline, and writing one is a goal, not a footnote.
+
+THE GATE'S WORKLOAD DOES NOT YET MATCH THE REQUIREMENT'S, and G-018 changed no workload constant. The requirement says a 60-room hotel; the bench runs a 60-room shell at roughly a quarter occupancy (--arrivals 32, ~15 concurrent) with --amenities 1, which is four providers, while the scaling arm runs twenty. The gap is recorded in PARKING.md. It does not affect the budget derived above, which is a property of the play speed and not of the building.
 
 3. Stack — fixed, do not relitigate
 Language: TypeScript, strict mode, noUncheckedIndexedAccess on.

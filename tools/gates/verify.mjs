@@ -19,7 +19,7 @@ const GATES = [
   ['I4', 'test', 'unit tests, including the append-only ledger fold'],
   ['I2', 'test:determinism', 'same seed + log => identical hash after 100k ticks'],
   ['I6', 'test:save', 'serialise -> deserialise -> re-hash is identical'],
-  ['I5', 'sim:bench', '365 days headless in under 10s'],
+  ['I5', 'sim:bench', '365 days headless, inside the derived budget (§2.1.2)'],
 ];
 
 const results = [];

@@ -1,12 +1,42 @@
 // I5 — HEADLESS.
 //
 //   `pnpm sim:run --days 365 --seed 42` completes in Node with no window and no
-//   renderer, in under 10 seconds.
+//   renderer, inside the budget.
 //
-// The 10s ceiling is set at its real value now, while the sim is empty and finishes
-// in a fraction of a second. That headroom is the budget for M1–M4. When this gate
-// starts to hurt, the answer is a faster tick, not a bigger number here.
+// THE WORD DOING THE WORK IS "HEADLESS". The time bound is a SANITY CEILING — it
+// catches a catastrophe, an accidental quadratic or a per-tick allocation storm. It
+// is not a regression tripwire and must not be used as one; the instrument for that
+// is a paired ratio against a same-sitting baseline (`CLAUDE.md`, "Measuring
+// performance") — G-020, a hard prerequisite of M3. See HOTELSIM.md §2.1.3.
 //
+// ---------------------------------------------------------------------------------
+// THE BUDGET IS DERIVED, and it lives in `./budget.mjs` — one source, evaluated by the
+// test that pins it, so this file cannot hold a second copy. Sources: HOTELSIM.md
+// §2.1.2. In short:
+//
+//   a 60-room hotel at the fastest intended play speed (30x = 30 ticks per real
+//   second, HOTELSIM.md §2.1.1) must sustain real time on a mid-range laptop, with
+//   stated headroom for what M3, M4 and M6 will add.
+//
+// THE 30x IS A PROVISIONAL WORKING FIGURE, NOT A RATIFIED ONE. The speed ladder belongs
+// in content and is G-021's; §2.1.1 records why the mapping it rests on is weaker than
+// it looks, and G-017's viewer is where 48s per simulated day is confirmed or moved.
+// THE BUDGET MOVES WITH IT, IN INVERSE PROPORTION — budget_seconds = 525,600 ticks x S /
+// (speed x H) — so a k-fold faster top rung divides this constant by k. A goal that
+// retunes the ladder therefore RE-DERIVES this constant; it does not leave it alone. What
+// survives such a move is the CONCLUSION rather than the number, and by division rather
+// than by any table: 389.3 / 12 = 32.4s, so the budget stays at least 2.5x the old ten
+// seconds for any ladder change within ~12x, and reaches ten seconds only past ~39x.
+//
+// G-018 replaced the previous 10,000ms, which was invented at bootstrap with no basis
+// and had promoted a goal (G-016) into existence. It was roughly 39x TIGHTER than any
+// requirement this project has stated. If you want it back, the argument to beat is
+// §2.1.1's rejected per-frame reading of "30x" — not the arithmetic in `budget.mjs`.
+//
+// The ten seconds also carried a POLICY, "when this gate starts to hurt, the answer is
+// a faster tick, not a bigger number here". THAT POLICY IS WITHDRAWN with the number
+// that motivated it. Its replacement: this number moves only when one of §2.1.2's six
+// inputs is shown to be wrong, and it moves by re-deriving, never by nudging.
 // ---------------------------------------------------------------------------------
 // G-010 raised the workload from a THREE-ROOM TOY to a 60-room hotel. Read the
 // limitation below before sizing this gate again — it is not what you would expect.
@@ -14,26 +44,30 @@
 // ROOM COUNT DOES NOT DRIVE THIS BENCH'S COST, AND CANNOT.
 //
 // G-010's optimisation made tick cost O(guests), not O(rooms): idle rooms are free.
-// Measured on the orchestrator's machine, 365 days, `--arrivals 32` held constant:
-//
-//     --rooms  20  ->  6643ms      --rooms  60  ->  6653ms      --rooms 120  ->  6877ms
-//
+// Held at `--arrivals 32`, 20, 60 and 120 rooms all measured within 4% of each other.
 // So `--rooms 60` satisfies G-010's exit criterion by its letter while measuring
 // roughly what a 20-room hotel would. That is the SAME defect PARKING.md has now
 // corrected twice — a measurement taken where the thing being scaled does not drive
 // the cost — and it is recorded rather than hidden because the honest axis for this
 // gate is now CONCURRENT GUESTS, which is what `--arrivals` sets.
 //
-// Why not simply raise occupancy until rooms matter? Because a 60-room hotel at
-// realistic occupancy does not fit in 10s at all, and that is a fact about the guest
-// path and the ledger rather than about this gate:
+// WHY `--arrivals 32`, NOW THAT ITS ORIGINAL JUSTIFICATION IS GONE. It used to be
+// "chosen for headroom, not for realism", resting on a table of absolutes measured in
+// a session nobody can re-enter — 45% for what ships, 108% at `--arrivals 16`. Those
+// figures are WITHDRAWN, not restated (G-018; `CLAUDE.md` rule 5), and the headroom
+// argument dies with them: against a derived budget this workload is not close to any
+// ceiling, so no gate flakes red and nobody is taught to re-run it. What survives is
+// STRUCTURAL and needs no stopwatch: occupancy is the axis, `--arrivals` sets it, and
+// this value is what every pinned golden and every recorded reading was taken at
+// (`tools/headless/src/bench.workload.golden.test.ts`). Changing it invalidates that
+// comparability, so it stays until a goal deliberately re-sizes the workload.
 //
-//     --arrivals 32 (~15 concurrent)  4580ms   45%   <- what ships
-//     --arrivals 24 (~20 concurrent)  6831ms   68%
-//     --arrivals 16 (~30 concurrent) 10849ms  108%   <- fails
+// THE WORKLOAD DOES NOT MATCH THE REQUIREMENT'S, AND G-018 DID NOT CHANGE IT. The
+// requirement says a 60-room HOTEL; this runs a 60-room SHELL at roughly a quarter
+// occupancy with `--amenities 1` — four providers, where `vitest run scaling` uses
+// twenty. Recorded in PARKING.md; it does not affect the budget, which is a property
+// of the play speed rather than of the building.
 //
-// `--arrivals 32` is chosen for headroom, not for realism: CI runners are slower than
-// a dev machine, and a gate that flakes red teaches people to re-run it (see f2d1e4d).
 // The room-count-scaling property this gate cannot see is measured instead by
 // `pnpm exec vitest run scaling`, which ties arrival rate to room count so that
 // occupancy is constant and room count is the only variable.
@@ -43,10 +77,12 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
+// THE BUDGET IS NOT DECLARED HERE, DELIBERATELY. One source, evaluated by the test that
+// pins it (`budget.mjs`, and the note at its head for why this is not paranoia).
+import { BUDGET_MS, DAYS } from './budget.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
-const BUDGET_MS = 10_000;
-const DAYS = 365;
 const SEED = 42;
 /** G-010: a real hotel rather than a three-room toy. See the note above before changing. */
 const ROOMS = 60;
@@ -81,12 +117,19 @@ if (!stdout.includes(`days        ${DAYS}`)) {
 
 if (elapsedMs > BUDGET_MS) {
   process.stderr.write(
-    `\nFAIL  I5 headless — ${DAYS} days took ${elapsedMs.toFixed(0)}ms, budget is ${BUDGET_MS}ms (I5)\n` +
-      '\n  Do not raise the budget. Make the tick cheaper, and check whether tick cost has\n' +
-      '  grown worse than linear in agent count (§6.1 sim-critic).\n\n',
+    `\nFAIL  I5 headless — ${DAYS} days took ${elapsedMs.toFixed(0)}ms, budget is ${BUDGET_MS.toFixed(0)}ms (I5)\n` +
+      '\n  This is a SANITY CEILING, so passing it means something large is wrong: an\n' +
+      '  accidental quadratic, or a per-tick allocation storm. Check whether tick cost has\n' +
+      '  grown worse than linear in agent count (§6.1 sim-critic).\n' +
+      '\n  Do not raise the budget by nudging it. It is derived (HOTELSIM.md §2.1.2, and\n' +
+      '  ./budget.mjs executes it) and it moves only when one of its six inputs is shown\n' +
+      '  to be wrong, by re-deriving.\n\n',
   );
   process.exit(1);
 }
 
 const pct = ((elapsedMs / BUDGET_MS) * 100).toFixed(1);
-process.stdout.write(`  ok  I5 headless (${DAYS} days in ${elapsedMs.toFixed(0)}ms — ${pct}% of the 10s budget)\n`);
+process.stdout.write(
+  `  ok  I5 headless (${DAYS} days in ${elapsedMs.toFixed(0)}ms — ${pct}% of the derived ` +
+    `${BUDGET_MS.toFixed(0)}ms budget, HOTELSIM.md §2.1.2)\n`,
+);

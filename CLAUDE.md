@@ -27,7 +27,7 @@ Run all of them with **`pnpm verify`**. No goal is done while any is red.
 | **I2** | Same seed + same command log ⇒ byte-identical state hash after 100,000 ticks, every run, every platform. No `Math.random`, no `Date.now`, no Set/Map iteration-order dependence in `packages/sim`. All randomness from the injected seeded PRNG. | `pnpm test:determinism` |
 | **I3** | No room type, item, staff role or guest archetype defined in code. All of it is JSON in `packages/content`, validated by a schema. | `pnpm check:content` |
 | **I4** | Ledger is append-only. Cash balance is derived by folding transactions, never stored and mutated. | `pnpm test` |
-| **I5** | `pnpm sim:run --days 365 --seed 42` completes in Node with no window and no renderer, under 10s. | `pnpm sim:bench` |
+| **I5** | `pnpm sim:run --days 365 --seed 42` completes in Node with no window and no renderer, **inside a DERIVED budget** — 389,333ms, from a 60-room hotel at top speed sustaining real time (`HOTELSIM.md` §2.1.2). The word doing the work is **headless**; the time bound is a sanity ceiling, **not** a regression tripwire — that is G-020. | `pnpm sim:bench` |
 | **I6** | Serialise → deserialise → re-hash is identical. Saves carry a schema version and a migration path. | `pnpm test:save` |
 
 **I2 is load-bearing beyond determinism.** It is the tripwire for the whole design: if

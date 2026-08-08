@@ -2,21 +2,22 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08, G-013 done. 14 goals; M0 and M1 signed off; M2 half built.*
+*As of 2026-08-09, G-018 done. 15 goals; M0 and M1 signed off; M2 half built.*
 
-- **State**: save **v7** · summary v1 · 1,095 tests / 58 files · six gates green ·
-  I2 `4b8db9b1ac36cb35` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` · I5 78–83% against a budget
-  G-018 is about to source. Quote ratios, not percentages.
-- **The defect this project produces**: checks that succeed while inspecting nothing.
-  **G-013 alone produced nine** — but three were self-caught, so the count is not
-  like-for-like against the earlier seven across thirteen goals. Detection sensitivity
-  rose. Cite the confound whenever a defect count is cited (ADR-0007).
-- **G-013's real lesson is about prose, not code.** One comment block was wrong three
-  times in three mechanisms; the qualitative claim survived all three and only the numbers
-  rotted. Rule now: *prose that cannot be verified may describe, but it may not measure.*
-- **The measurement rule (G-016) still holds**: the ratio survives, absolutes do not.
+- **State**: save **v7** · summary v1 · 1,109 tests / 59 files · six gates green ·
+  I2 `4b8db9b1ac36cb35` · **I5's budget DERIVED at 389,333 ms, bench ~2%** — the invented
+  ten seconds was ~39x tighter than any stated requirement.
+- **The defect this project produces**: checks and claims that succeed while inspecting
+  nothing. G-013 produced nine; **G-018 produced four in four rounds, every one in the
+  EVIDENCE rather than the code, three inside the fix for the previous one.** Cite the
+  confound whenever a count is quoted — detection sensitivity has risen (ADR-0007).
+- **Newest rules**: prose that cannot be verified may describe, but it may not measure; and
+  do not replace a withdrawn count with a better-sounding one — say the weaker thing that
+  needs no evidence.
+- **I5 has been seen red for the first time** — by copying the shipped gate to a temp dir
+  rather than making it configurable. The technique transfers to G-020; the test does not.
 - **Open obligation**: **no WATCH entry exists in this file yet.** G-013 owes one, G-017
-  discharges it, and that first entry is the point of the entire ADR-0013 ruling.
+  discharges it, and that first entry is the point of the whole ADR-0013 ruling.
 
 ---
 
@@ -140,9 +141,11 @@ most of this diff; the builder's temporary swap of the data file was confirmed b
 consequence instead, because an imperfect restore would not have reproduced
 `ac496e19b27da075`.
 
-I5 moved 5.7% → 8.8% of budget. It is startup, not tick cost: importing Zod and loading
+~~I5 moved 5.7% → 8.8% of budget.~~ (Withdrawn G-018; the decomposition beside it is a
+same-sitting split and survives.) It is startup, not tick cost: importing Zod and loading
 content costs ~250ms once, against ~160ms of actual simulation for 365 days. Not a finding,
-but the bench now measures a fixed startup cost that will only grow.
+but the bench now measures a fixed startup cost that will only grow — which G-018 notes is
+noise against a budget of 389,333ms, where once it was several percent of one.
 
 Parked eight items, two of them gate defects for the orchestrator. Rounds used 1 of 3.
 
@@ -257,18 +260,23 @@ keeping: **one boolean per system phase, never a `ranPhases` list**, because a l
 reintroduces the order written down twice, which is the exact thing ADR-0005 prevents.
 G-005 puts settlement in this same slot and now inherits the pattern instead of the gap.
 
-Two lessons about measurement. The builder reported I5 at 16%; the critic measured 10.5%
-and I measured 11.4% — the first figure was noise, and the builder said so plainly when
-told. And my own first survivor search reported two survivors and a regression; my
+Two lessons about measurement. The builder reported I5 at ~~16%~~; the critic measured
+~~10.5%~~ and I measured ~~11.4%~~ — the first figure was noise, and the builder said so
+plainly when told. (All three withdrawn at G-018 as percentages of the invented budget.
+The LESSON is untouched, and it does not need the numbers: three readings of one build
+disagreed by 50%.) And my own first survivor search reported two survivors and a regression; my
 predicate had omitted the new flag. **The probe was wrong, not the code.** Worth
 remembering that a verification tool needs verifying too, especially one written to check
 somebody else's work.
 
-The second MAJOR was mine, not the builder's: I5 breaks between 50 and 75 rooms, and the
-parked index targeted M2/M3 when **M1** is the milestone that hands room count to the
-player. Threshold and measurements now recorded in `PARKING.md` so M1 meets it as a known
-cost. Deliberately not optimised here — I5 is green and stays green through M0, and
-optimising against a gate that is not failing is speculative work.
+The second MAJOR was mine, not the builder's: ~~I5 breaks between 50 and 75 rooms~~, and
+the parked index targeted M2/M3 when **M1** is the milestone that hands room count to the
+player. ~~Threshold~~ and measurements now recorded in `PARKING.md` so M1 meets it as a
+known cost. **G-018 withdrew that threshold**: it was a statement about a budget nobody
+could source, the routing to M1 stands on the superlinear shape instead, and G-010 did the
+work there anyway. Deliberately not optimised here — I5 is green and stays green through
+M0, and optimising against a gate that is not failing is speculative work, which is the
+sentence in this paragraph that never needed a number.
 
 ---
 
@@ -338,7 +346,8 @@ contract was code that had never run. Fixed with forged-world tests and an
 injected-write hook proving report-then-throw. Both are the ADR-0007 wiring shape, found
 in the goal whose whole subject was wiring numbers to outputs.
 
-The critic also decomposed the I5 number for sign-off: of the bench's ~12.5%, ~585ms is
+The critic also decomposed the I5 number for sign-off: of the bench's ~~~12.5%~~ run
+(percentage withdrawn G-018), ~585ms is
 fixed process startup (node, tsx, zod, content load) and ~640ms is 365 days of actual
 simulation — 1.2 µs/tick. The headline is roughly half a constant that does not scale
 with --days.
@@ -377,9 +386,11 @@ duplicate what M1's build commands do properly. Agreed and recorded.
 M1 seeded with four thin goals: G-007 grid, G-008 build/demolish with construction cost,
 G-009 validity rules, G-010 the bench measuring a real hotel. That last one is the parked
 I5 debt deliberately scheduled inside the milestone that causes it — M1 hands room count
-to the player, and I5 was measured failing between 50 and 75 rooms while the gate stayed
-green on a three-room bench. A gate that is green because it measures a toy is the same
-family as everything ADR-0007 catalogues.
+to the player, and ~~I5 was measured failing between 50 and 75 rooms~~ (withdrawn G-018)
+while the gate stayed green on a three-room bench. A gate that is green because it
+measures a toy is the same family as everything ADR-0007 catalogues — **and G-018 found
+that gate's OTHER end was the same family: the budget it was green against had no source
+either.** The workload was fixed at G-010 and the number at G-018, two milestones apart.
 
 G-007 also inherits the first **multi-step** migration: the permanent v1 fixture will
 have to walk 1 -> 2 -> 3. The chain walk has been tested against synthetic gaps since
@@ -535,7 +546,9 @@ forging: 95 rooms reported ok, **55 of which never reached the earth**, and a wh
 floating six-storey block printed as "1 unsupported, 5 ok" — failing the provider clause
 and the legibility clause at once. Fixed as transitive support in one ascending-floor
 pass over an index already sorted by `compareCells`, so every dependency is resolved when
-reached: O(n log n), no recursion, in a goal already at 26% of the I5 budget.
+reached: O(n log n), no recursion, in a goal already at ~~26% of the I5 budget~~
+(withdrawn G-018 — the point stands without it: the goal had already added cost, so an
+O(n x height) chain walk was not affordable on top).
 
 **The fix exposed a better finding than the fix.** After making support transitive, the
 I2 hash **did not move** — every room in the determinism log either stood on the earth or
@@ -552,8 +565,10 @@ reading of 2.08x cost for 4x rooms, comfortably inside G-010's "under 6x" bound.
 taken with `--arrivals` at default, so guest load — the dominant cost driver — was held
 constant while rooms quadrupled and 96 of 100 rooms sat empty all year. Under a workload
 where occupancy tracks room count it is **4.70x, superlinear at the top (50->100 alone is
-2.97x), 78% of G-010's limit**, and `--rooms 100 --arrivals 5` takes **109s for 365 days,
-10.9x the whole I5 budget**. G-010 would have started from a measurement taken where its
+2.97x), 78% of G-010's limit**, and `--rooms 100 --arrivals 5` takes ~~**109s for 365
+days, 10.9x the whole I5 budget**~~ (withdrawn G-018; against the derived budget the same
+run is ~28% of it, so the alarm in that clause belonged to the budget rather than to the
+workload — the 4.70x scaling ratio beside it is the finding and is untouched). G-010 would have started from a measurement taken where its
 own criterion cannot bite. Corrected in `PARKING.md` with both readings and their
 workloads — the record is mine, so the correction was too.
 
@@ -577,8 +592,10 @@ The first goal in the project that was engineering rather than design, and the b
 **profiled before deciding**. The profile overturned two entries in this very file.
 
 **The ledger was not the problem.** Its copy-per-append had crossed `PARKING.md`'s
-~15k-append trigger at 22,245 and was predicted at ~16% of budget. Measured in the real
-run: **0.7%**. The knee is real but arrives roughly an order of magnitude later — 13.1%
+~15k-append trigger at 22,245 and was predicted at ~~~16% of budget~~ ~16% of the RUN
+(G-018: read as a share of the run, which is what the 0.7% beside it measures — the two
+were interchangeable only while the budget happened to sit near the run's length).
+Measured in the real run: **0.7%**. The knee is real but arrives roughly an order of magnitude later — 13.1%
 at 43,800 appends. Trigger corrected to ~40k. **Second parked measurement in two goals
 taken where the thing it measured was not the thing that drives cost**, and a standalone
 benchmark of one function is not a measurement of a system.
@@ -669,7 +686,9 @@ So the right layer was the definition of stock, not the eligibility rule.
 
 *A quadratic fold, of exactly the class G-010 spent a goal removing* — and which this
 goal's own I5 fix had removed from `runSettlement` earlier in the same build, reappearing
-two files away. `--loan 1` at 365 days cost 235% of the I5 budget. It was worse than the
+two files away. `--loan 1` at 365 days cost ~~235% of the I5 budget~~ **6.6x the same
+build's own paired run** (3,552ms against 23,534ms — the ratio survives G-018's
+re-derivation, the percentage does not). It was worse than the
 diagnosis: removing the redundant re-fold only halved it, and the residue was **G-008's
 once-per-tick balance fold, accepted on "builds are rare by construction"** — an
 assumption that was true until a command with no position and therefore nothing to run out
@@ -703,7 +722,10 @@ did not exist before this goal.
 
 Committed together because G-012 was **blocked** on G-016: its work was complete and
 critiqued, and I5 was red. §2 says no goal is done while a gate is red, and the builder
-refused to report ready rather than shipping one. The rule working.
+refused to report ready rather than shipping one. The rule working. **G-018's postscript:
+the gate was red against a budget ~39x tighter than any stated requirement. The rule still
+worked — a red gate must stop a goal — but the thing it was enforcing was not a
+requirement, and that is exactly the cost the human named.**
 
 **The human ruled the vector** (ADR-0012: Comfort, Entertainment, Nourishment), which
 settled what would otherwise have been a builder choosing how hard its own criteria are.
@@ -758,8 +780,9 @@ moved by nearly 2x.
 
 **The gating question was settled with numbers rather than principle.** Gating is dead:
 over 525,600 ticks the guest store is reference-unchanged on **exactly one**. Sampling
-works — 18.4% of the available 19.2% — but I5 sits at 61% with 38% headroom, and G-004's
-rule holds. It is pinned as a costed lever so the next red gate pulls it instead of
+works — 18.4% of the available 19.2% — but ~~I5 sits at 61% with 38% headroom~~
+(withdrawn G-018; the headroom is ~98% against the derived budget, which only strengthens
+the decision not to pull the lever), and G-004's rule holds. It is pinned as a costed lever so the next red gate pulls it instead of
 rediscovering it. And `sim-critic` corrected my reasoning about what sampling surrenders:
 not merely a self-healing leak, but a **one-tick double-booking — two guests in one bed
 for a minute**, player-visible, with this scan the only thing that would catch it. The
@@ -767,7 +790,8 @@ trade gets *worse* over M3 and M6, not better.
 
 **And G-016's own criterion could not fail in the state that created the goal** —
 promoted by "exceeds 70%", exited by "green" meaning "under 100%", with the pre-work build
-already at 68%. The real subject was headroom and no criterion named a headroom number.
+already green ~~at 68%~~ (withdrawn G-018 — a percentage of the invented budget, and one of
+three that survived the first sweep of it). The real subject was headroom and no criterion named a headroom number.
 Signed off with the mismatch recorded rather than re-scoped, and generalised into
 ADR-0007: **when a goal is promoted by a threshold, its exit criterion must name a
 threshold.**
@@ -815,7 +839,8 @@ G-017's first subject — a fresh behaviour change is a better first subject tha
 
 Order for the rest of M2: **G-013 → G-018 → G-017 → G-014 → G-015 → exit.** G-018 ahead of
 G-017 is my call, not the human's: it changes no simulation code, and every goal after it
-quotes an I5 percentage that is currently unsourced.
+quotes an I5 percentage that is currently unsourced. (Discharged: the budget is derived,
+389,333ms, and the goals after it quote a sourced number.)
 
 ---
 
@@ -862,3 +887,50 @@ own failure mode.
 Parked: ten entries including `placeItem` relaxing rather than deleting the reachability
 rule, an item in a private room being publicly usable, and an item provider costing nothing
 to place or keep — an unpriced strategy for M4. **WATCH debt outstanding, by design.**
+
+---
+
+## 2026-08-09 — G-018 — I5's budget, derived instead of invented (3 sweeps + 2 verifications)
+
+**The ten seconds was ~39× tighter than anything the game needs.** Derived from the human's
+anchor — a 60-room hotel at top speed sustaining real time, times a headroom multiple —
+`525,600 ticks × S / (speed × H)` gives **389,333 ms**, and the shipped build reads **~2%**
+of it. The arithmetic lives in `tools/gates/budget.mjs` and is executed, not quoted. Every
+historical I5 figure across five files is struck or re-baselined; a percentage of the
+invented budget is **struck, never restated**, because restating would launder it, while a
+**ratio survives untouched** — the distinction `CLAUDE.md` exists to teach, applied visibly.
+
+**The builder computed the reading that would have vindicated the incumbent and rejected
+it.** "30×" read as ticks per *frame* gives 1800 ticks/s and a budget of ~13.5 s — within a
+rounding error of the number this goal replaces. Refused on the charter's own frame-rate
+failure catalogue, and recorded so a reader can argue with the grounds rather than the
+arithmetic.
+
+**Four rounds, four defects, every one in the EVIDENCE rather than the code, three of them
+inside the fix for the previous one.** A test that pinned a re-derivation against *prose*
+while never comparing the gate's real `BUDGET_MS` (setting it to 5,000,000 left the suite
+green). Then a test that pinned one `if` line while `process.exit(0)` in the branch left
+the gate always passing. Then three more mutations outside the branch. Then a count in a
+ledger sentence that three contemporaneous records deny.
+
+**I5's failing path is now witnessed by a test, and the technique is the transferable
+part.** The builder argued it needed either a six-minute run or an injectable budget, and
+rejected the injectable budget rightly — it hands CI a lever for loosening a gate.
+`sim-critic` accepted the rejection and refused the dichotomy: **copy the shipped gate to a
+temp dir, set `BUDGET_MS = 0` in the copy, spawn it.** 620 ms, exit 1, nothing in
+`tools/gates` touched. It then proved the new test is not vacuous in turn by breaking
+`bench.mjs` in two ways unrelated to the budget — both exit 1 and print the same first line,
+so only the `budget is 0ms` assertion discriminates, and it does.
+
+**Four of the errors were the orchestrator's**, including the one that escalated: a §10
+"break each gate" ritual that does not exist, corrected into a "five of six" count that
+three records deny, asserted as fact and reported to the human as the goal's headline. The
+resolution was to **drop the count rather than replace it** — no evidence exists either way,
+and minting a second count to fix the first is the whole failure again. What survives needs
+no evidence: **no committed test pinned I5's failing path until this one.**
+
+**I5 is now a requirement gate, not a regression tripwire**, and the human unparked the
+successor over the orchestrator's recommendation: G-020, a paired ratio, **hard prerequisite
+of M3**, because M3 is the likeliest place in this project for a quadratic. The dead 70%
+promotion trigger is struck with no replacement invented — doing that inside the goal that
+deleted the first unsourced number would have minted the second.

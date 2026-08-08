@@ -83,8 +83,9 @@ inference.
 **Trigger:** §5.4 — a milestone's exit criteria are met and need human sign-off.
 
 **State.** G-007 to G-010 done, each verified by the orchestrator running every exit
-command directly. All six §2 gates green: I2 `f8e9e51864851494`, I5 **37.4%** of budget
-at a **60-room** hotel (it was 28% at three rooms before G-010's optimisation), 672 tests
+command directly. All six §2 gates green: I2 `f8e9e51864851494`, I5 ~~**37.4%** of budget
+at a **60-room** hotel (it was 28% at three rooms before G-010's optimisation)~~ — both
+percentages withdrawn at G-018, which derived the budget they were fractions of — 672 tests
 across 35 files. Saves are at schema v4 and the permanent v1 fixture walks 1->2->3->4 with
 a zero-line diff.
 
@@ -119,15 +120,17 @@ in a goal.
 terminator, and a *slower* build cadence is worse (M4) · `nightlyRatePence` is charged per
 completed stay, not per night, so the margin is 10.2:1 rather than the 3.4:1 the field
 names imply (ADR-0010; documented, not renamed, because renaming would turn the permanent
-fixture into a husk) · a busy 60-room hotel does not fit the 10s budget at realistic
-occupancy, and the bench can no longer be sized by room count because tick cost is now
-O(guests) · `missingItem` is not player-reachable until M6 gives items their own commands.
+fixture into a husk) · ~~a busy 60-room hotel does not fit the 10s budget at realistic
+occupancy~~ — **withdrawn at G-018: false against the derived budget, which a busy 60-room
+hotel fits several times over. What survives is that the bench's workload is a
+quarter-occupied shell, which is a workload debt and not a performance one** — and the bench can
+no longer be sized by room count because tick cost is now O(guests) · `missingItem` is not player-reachable until M6 gives items their own commands.
 
 **Trigger:** §5.4 — a milestone's exit criteria are met and need human sign-off.
 
 **State:** All six M0 goals done (G-001..G-006), each verified by the orchestrator
 running every exit command directly. All six §2 invariant gates green: I2 hash
-`be508c487d49fd6c` across 3 processes, I5 at 12.5% of budget, 361 tests across 18
+`be508c487d49fd6c` across 3 processes, I5 at ~~12.5% of budget~~ (withdrawn G-018), 361 tests across 18
 files. The M0 statement is met end to end, headless: one room type, one guest, one
 need, one day cycle, money in and money out — `pnpm sim:run --days 30 --seed 42`
 reports 360 arrived / 267 satisfied / 89 unsatisfied / 0 stuck / 0 orphans, revenue
@@ -136,8 +139,10 @@ reports 360 arrived / 267 satisfied / 89 unsatisfied / 0 stuck / 0 orphans, reve
 behind them and a permanent v1 fixture. Total: 8 commits, 12 critique rounds used of
 18 budgeted, 6 MAJOR + 3 MINOR findings, zero BLOCKERs, zero round budgets exceeded.
 
-**Known debts, deliberately carried and recorded:** free-room lookup breaks I5 above
-~50 rooms (-> M1, measured, in PARKING.md) · ledger append-copy breaks past ~15k
+**Known debts, deliberately carried and recorded:** ~~free-room lookup breaks I5 above
+~50 rooms~~ (-> M1, measured, in PARKING.md; **the threshold is withdrawn at G-018 — it
+described the invented budget. The superlinear shape behind it is real, was the actual
+debt, and was paid at G-010**) · ledger append-copy breaks past ~15k
 appends/run (-> M4, measured) · seed does not influence guest behaviour until M4
 demand (the seed-honesty test retires by design) · balance-critic's seed-sweep
 mandate is vacuous until M4.
@@ -155,7 +160,8 @@ own milestone.
 human ruling — has fired for the first time, on the goal that produced it.
 
 **Status of the work: complete and independently verified.** All six gates green
-(`typecheck`, I1, I3, I4, I2 `4b8db9b1ac36cb35`, I6, I5 **83.0%**). 1,095 tests. Every exit
+(`typecheck`, I1, I3, I4, I2 `4b8db9b1ac36cb35`, I6, I5 ~~**83.0%**~~ — withdrawn at
+G-018; the same build reads **~2%** of the derived budget). 1,095 tests. Every exit
 criterion run by the orchestrator, not taken on report: `vitest run provider` 102 green ·
 `vitest run scaling` 10 green · criterion 2 by-item **356**, by-room **713**,
 `guest_nourishment` **178/178**, and its **negative control** returns by-item 0 on every row ·
@@ -250,3 +256,93 @@ sound while only the framing was broken.
 that produced it, on prose rather than code. If the next several firings are also prose it
 is a prose-quality instrument in a critique-budget costume and gets renamed and re-scoped.
 Each firing records its subject. Written down now so it can be wrong later.
+
+---
+
+## 2026-08-09 — G-018: the guard fired a second time, on an orchestrator claim
+
+**Raised and discharged in the same breath by the human — *"Go for it."*** Recorded because
+§7.1's guard converting a verification into a sweep with the budget spent is a §5.4
+escalation whether or not the outcome is "carry on", and a rule that only gets written down
+when it stops work is a rule nobody can audit.
+
+**What fired it.** G-018's verification pass produced a **new** MAJOR, so §7.1 converted it
+to a sweep; sweeps were already 3/3.
+
+**What the finding was, and whose.** The orchestrator rewrote a `HOTELSIM.md` §10 citation
+to read *"the bootstrap proved five of the six gates bite … and I5 was the one never proven
+red."* **Three contemporaneous records deny it** — `ESCALATIONS.md:30`, `JOURNAL.md:181`,
+and commit `b92a815`, all saying *each* gate was deliberately broken and observed red.
+
+The sequence is the point. The original citation invoked a §10 "break each gate" ritual
+**that does not exist** (§10 says only that the gates should pass trivially against an empty
+sim). Corrected — and the correction introduced **a second unsourced claim in the opposite
+direction**, asserted as fact and reported to the human as this goal's headline. *A number
+in prose, offered as evidence, that nothing pins* — the exact class G-018 exists to delete,
+in G-018's own ledger entry, as the fix for the previous instance of itself. Fourth
+count-or-attribution error in the goal.
+
+**Resolution: drop the count rather than replace it.** No evidence exists in either
+direction, and minting a second count to correct the first would be the whole failure again.
+What survives without evidence, and is the claim G-020 actually needs: **no committed test
+pinned I5's failing path until this one.** A one-off manual probe leaves nothing behind that
+a later change can trip over.
+
+**What the goal delivered, none of it in question.** I5's budget derived from a stated
+requirement (389,333 ms; the invented ten seconds was ~39× tighter than anything the game
+needs); the arithmetic executable in `budget.mjs` rather than a literal; every historical
+I5 figure struck or re-baselined; **and I5's failing path witnessed by a test for the first
+time** — by copying the shipped gate to a temp dir rather than making the gate configurable,
+so no CI lever exists to pull.
+
+**The technique G-020 inherits, which is worth more than the test:** a gate's failing path
+can be witnessed by *copying* the gate, and *"it would take too long"* deserves one attempt
+at a third option before it becomes a parked item.
+
+**Guard scorecard** (`HOTELSIM.md` §7.1 keeps this): **two firings, two on prose.** G-013 on
+a determinism-log comment, G-018 on a ledger citation. Neither has yet fired on code. If the
+next several are also prose it is a prose-quality instrument in a critique-budget costume
+and gets renamed and re-scoped.
+
+---
+
+## 2026-08-09 — STANDING AUTHORISATION: unattended run to M2 completion
+
+**Human, 2026-08-09:** *"Proceed as far as possible to M2 completion, if escalations arise
+handle them sensibly and park them as I won't be available for 10 hours."*
+
+This suspends §5.4's "write it here and **stop**" for the duration of one unattended run.
+Escalations get **decided and recorded**, not queued. Recorded here rather than assumed,
+because a loop that quietly stops halting is worse than one that halts too often.
+
+**What I will decide myself and carry on:**
+- A §7.1 conversion with the sweep budget spent — decide, record, land.
+- A surviving MAJOR whose fix is bounded and whose evidence I can verify myself.
+- Goal sizing, seam calls (§5.5), and adjudications between builder and critic (§5.3).
+- Re-scoping or splitting a goal that is going badly, rather than grinding it.
+
+**What I will NOT decide, and will park instead — the loop continues past them:**
+- **Anything that would weaken I1–I6.** ADR-0013's own bounding clause says that if a
+  ruling appears to require weakening an invariant, **stop and escalate**. The standing
+  authorisation does not touch that. A goal that cannot be done without it gets parked and
+  the next goal is selected.
+- **A fun-critical or design call** (§5.4's last clause) — the speed ladder's rung values,
+  a review scale's feel, what "reads as stupid" means. These are the human's by charter.
+- **Anything that reopens M0, M1 or a signed-off ruling.**
+- **M2 exit itself**, which is a §5.4 sign-off and stays the human's.
+
+**Discipline that does not relax because nobody is watching**, and is the reason to write
+this down at all:
+- VERIFY is still run by the orchestrator, every exit command and every gate, every goal.
+- A goal still closes only on **DRY** (§7.1).
+- A critic still sees the plan before BUILD (§5.6), and a declined seam is still a written
+  prediction scored at REFLECT (§5.5).
+- No number gets reported that was not measured in this session, paired where it is a
+  comparison (`CLAUDE.md`).
+- **The four count-or-attribution errors in G-018 were all mine, all made while moving
+  quickly.** Unattended is exactly when that gets worse. Anything I cannot verify from the
+  repo in front of me gets stated as unverified or not stated.
+
+**On waking, the human should read:** this file's newest entries, then `JOURNAL.md`'s
+digest, then `GOALS.md`'s digest. Every decision taken under this authorisation is recorded
+in one of the three and marked as taken unattended.

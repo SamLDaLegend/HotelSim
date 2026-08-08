@@ -228,7 +228,8 @@ it has produced more real defects here than anything that is.
 **Amendment (G-016) — a criterion that cannot fail in the state that created its goal.**
 The class also applies one level up, to goals themselves. G-016 was promoted by a trigger
 ("`sim:bench` exceeds 70% of budget") whose exit criterion was "`sim:bench` green" — i.e.
-under 100%. The pre-G-016 build was already green at 68% raw, so **criterion 1 was
+under 100%. The pre-G-016 build was already green ~~at 68% raw~~ (percentage withdrawn at
+G-018, which derived the budget it was a fraction of), so **criterion 1 was
 satisfied before a line of the goal was written**, and the goal's own statement was
 already true at BUILD start. The real subject was *headroom*, and no criterion named a
 headroom number. Signed off with the mismatch recorded rather than re-scoped, so the next
@@ -607,6 +608,20 @@ budget was always too tight or too loose, that is worth knowing before M3 adds
 pathfinding. **Standing rule, generalising ADR-0007's amendment: a gate threshold must be
 derivable from a stated requirement. A number nobody can source is not a gate, it is a
 superstition with CI access.**
+
+> **ANSWERED BY G-018, appended rather than edited into the ruling above** — the ruling is
+> a record of what the human said and rewriting it would falsify that record. The `61–63%`
+> in it is one of the readings G-018 struck (recorded against the invented budget, not
+> re-measurable paired). **The derivation says neither "comfortable" nor "too tight": it
+> says the budget was ~39× TIGHTER than any stated requirement.** Derived budget
+> **389,333 ms**; the same build reads **~2%** of it. So the third branch the ruling did
+> not offer is the true one — *the number was not calibrated at all*, which is exactly why
+> it could promote G-016.
+> **The consequence the human then drew, and which this ADR did not anticipate:** widening
+> the ceiling 39× leaves I5 protecting against approximately nothing, so the paired-ratio
+> tripwire that has guarded tick cost as *practice* for eighteen goals becomes a gate —
+> **G-020, a hard prerequisite of M3**, because M3 is the likeliest place in this project
+> for a quadratic to appear.
 
 **5. The `--rooms N` capital contaminant is a hard prerequisite of M4.** `--rooms 3`
 carries 375,000p of hidden capital against a 500,000p starting constant, because seeded
