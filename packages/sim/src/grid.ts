@@ -123,6 +123,25 @@ export function cellsEqual(a: Cell, b: Cell): boolean {
 }
 
 /**
+ * Value equality on a plot. The `cellsEqual` contract one level up (G-010).
+ *
+ * Exists for the cross-tick validity cache, which may only reuse a derived index when the
+ * plot it was derived under is the same plot. Nothing in a tick may change the bounds, so
+ * this can only be false across worlds — a host stepping two worlds with one cache, or a
+ * save carrying its own plot (see `GridBounds`). It is a value comparison rather than
+ * `===` for the same reason `cellsEqual` is: a plot is four integers, and two objects
+ * carrying the same four integers are the same plot.
+ */
+export function boundsEqual(a: GridBounds, b: GridBounds): boolean {
+  return (
+    a.minFloor === b.minFloor &&
+    a.maxFloor === b.maxFloor &&
+    a.minColumn === b.minColumn &&
+    a.maxColumn === b.maxColumn
+  );
+}
+
+/**
  * Total order on cells: floor first, then column. Explicit and locale-free.
  *
  * DELIBERATELY NOT WRITTEN AT G-007, because nothing sorted cells then and "a comparator

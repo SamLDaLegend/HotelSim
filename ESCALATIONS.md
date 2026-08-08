@@ -60,6 +60,53 @@ the penny. M1's build commands are what make that reachable by a player.
 scope smuggled into a signed-off milestone, and it duplicates work M1's build commands
 do properly.
 
+---
+
+## 2026-08-08 — OPEN — M1 Structure complete, awaiting milestone sign-off
+
+**Trigger:** §5.4 — a milestone's exit criteria are met and need human sign-off.
+
+**State.** G-007 to G-010 done, each verified by the orchestrator running every exit
+command directly. All six §2 gates green: I2 `f8e9e51864851494`, I5 **37.4%** of budget
+at a **60-room** hotel (it was 28% at three rooms before G-010's optimisation), 672 tests
+across 35 files. Saves are at schema v4 and the permanent v1 fixture walks 1->2->3->4 with
+a zero-line diff.
+
+**M1's own statement is met and the game is playable.** A host command places a room on
+the grid and charges construction cost to the ledger; another removes it; builds on an
+occupied cell, off the plot, or without the cash are refused as recorded outcomes rather
+than throws. A room is valid only if it is supported (transitively — to the earth), has a
+door, and holds its required items; an invalid room serves nobody and says why.
+
+**Total: 6 goals in M0, 4 in M1, 14 commits, 5 gate/config defects found by agents and
+fixed in their own labelled commits, 0 BLOCKERs, 0 round budgets exceeded.**
+
+**Asked of the human — two things.**
+
+**1. Sign off M1.** On sign-off the loop selects M2 (Needs: full need vector, item-based
+provider registry, utility scoring, satisfaction over ticks, patience drain, reviews).
+Per §9, `apps/game` stays shut until M5 regardless.
+
+**2. Rule on the absorbing dead state, outstanding since G-008.** A world with zero rooms
+and a zero balance cannot recover: no rooms means no revenue, no revenue means the balance
+never moves, and every build is refused forever. It is reachable in three legal commands
+from the shipped default — `--rooms 3 --demolish 1` scraps the inherited rooms before any
+revenue arrives — and 1,000 days later the report reads 12,000 guests arrived, 11,999
+unsatisfied, every player action refused, with no notification. "Starting capital is
+parked to M4" and "the game has a reachable dead state with no exit" are different claims,
+and the second is what shipped. Candidate closures, all M4 territory: starting capital, a
+demolition refund (but note a refund above 247,500p reopens the G-005 upkeep dodge), or a
+loan. **This is a design call, not a test failure**, which is why it is here rather than
+in a goal.
+
+**Known debts carried deliberately, all measured and parked.** The overbuild spiral has no
+terminator, and a *slower* build cadence is worse (M4) · `nightlyRatePence` is charged per
+completed stay, not per night, so the margin is 10.2:1 rather than the 3.4:1 the field
+names imply (ADR-0010; documented, not renamed, because renaming would turn the permanent
+fixture into a husk) · a busy 60-room hotel does not fit the 10s budget at realistic
+occupancy, and the bench can no longer be sized by room count because tick cost is now
+O(guests) · `missingItem` is not player-reachable until M6 gives items their own commands.
+
 **Trigger:** §5.4 — a milestone's exit criteria are met and need human sign-off.
 
 **State:** All six M0 goals done (G-001..G-006), each verified by the orchestrator

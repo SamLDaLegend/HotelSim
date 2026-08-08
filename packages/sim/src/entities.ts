@@ -265,6 +265,25 @@ export function draftDespawn(draft: EntityDraft, id: EntityId): boolean {
 }
 
 /**
+ * Whether this draft has staged no membership change at all (G-010).
+ *
+ * THE ONE DEFINITION OF "MEMBERSHIP IS STILL THAT OF `draft.base`". `commitEntityDraft`
+ * already answers the same question, and its answer is what makes an idle tick return the
+ * base store BY REFERENCE — so a caller that needs to know whether the draft still
+ * describes `base` asks here rather than reaching into `added` and `removed` itself. Two
+ * hand-written copies of this predicate would eventually disagree, and the way that shows
+ * up is a cache reused across a tick that spawned something.
+ *
+ * Deliberately does NOT consider `nextId`. `commitEntityDraft` checks it because a moved
+ * counter must reach the committed store; but an id counter is not membership, and no
+ * derived index is a function of it. (Nothing can move `nextId` without also pushing to
+ * `added` in any case — `draftSpawn` does both.)
+ */
+export function draftIsClean(draft: EntityDraft): boolean {
+  return draft.added.length === 0 && draft.removed.size === 0;
+}
+
+/**
  * The first live entity in the draft, in canonical ascending-id order, that `match`
  * accepts — or undefined.
  *

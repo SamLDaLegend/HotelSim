@@ -386,7 +386,7 @@ Critique rounds used: 1/3
   caught by the builder before a line was written.
 
 ## G-010 — The bench simulates a real hotel, and tick cost stays linear
-Status: pending
+Status: done
 Milestone: M1
 Owner pair: sim-engineer / sim-critic
 Statement: `sim:bench` measures a hotel of realistic size rather than a three-room toy,
@@ -398,7 +398,33 @@ Exit criteria:
   - all §2 invariant gates green (pnpm verify)
 Out of scope: threading; spatial partitioning beyond what the measurement requires
   (-> PARKING.md)
-Critique rounds used: 0/3
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-08, every command run rather than reported:
+  all six gates green · I5 at the new 60-room workload 36.6-41.9% of budget (was 28.1%
+  at three rooms BEFORE the optimisation) · scaling test green · 671 tests across 35
+  files · I2 f8e9e51864851494 · SAVE_V1_CONTENT unmoved, fixture zero-line diff, no
+  World field, no migration.
+
+  The optimisation alone did NOT move the I2 hash (1b5fcd4cca759510 before and after) —
+  the builder's own acceptance bar, and the strongest available proof that a performance
+  change is behaviour-preserving. The hash moved only afterwards, deliberately, when the
+  determinism log was strengthened to witness a cache-invalidation clause.
+
+  Profile: validity was 58.9% of tick self-time and is now ABSENT from the profile;
+  60 rooms x 120 days fell 6.39s -> 1.65s (3.9x). Scaling ratio 25->100 rooms: 5.49x
+  pre-fix, 5.36x after the cache alone, 4.20x after the candidate-list work.
+
+  CRITERION 1 IS MET BY ITS LETTER AND MEASURES LESS THAN IT APPEARS TO. The builder
+  flagged this itself, before shipping: its own PLAN derivation of --arrivals 24 was
+  arithmetically wrong (a 480-tick stay is a THIRD of a day, so one guest per room per
+  day is 33% occupancy, not 100%), and I had accepted that derivation. It then ran the
+  falsification test I had not asked for and found room count does not drive the bench's
+  cost AT ALL — 20/60/120 rooms all cost the same — because the goal's own success made
+  tick cost O(guests) rather than O(rooms). A busy 60-room hotel does not fit in 10s at
+  any occupancy. Recorded in bench.mjs and PARKING.md rather than hidden; the
+  room-scaling property the bench cannot see is measured by `vitest run scaling`, which
+  ties arrivals to rooms so occupancy is constant.
 
   This is the parked I5 debt coming due, and it is scheduled inside M1 deliberately:
   M1 is the milestone that hands room count to the player, and `ai-critic` measured I5
@@ -409,7 +435,14 @@ Critique rounds used: 0/3
 
 ---
 
-## M1 exit — human sign-off required
+## M1 exit — ESCALATED 2026-08-08, awaiting human sign-off
 
-When G-007 to G-010 are all `done`, that is a §5.4 escalation. Write it to
-`ESCALATIONS.md` and stop. Do not start M2, and do not open `apps/game`.
+All four goals done. G-007 grid · G-008 build/demolish with construction cost ·
+G-009 validity rules · G-010 the bench measures a real hotel. Loop stopped per §5.4;
+M2 not started; `apps/game` untouched.
+
+**The game is playable.** A player command places a room and charges for it, another
+removes it, illegal placements are refused deterministically, invalid rooms serve nobody,
+and the whole thing runs 60 rooms for a simulated year in under 4 seconds.
+
+See `ESCALATIONS.md` for the sign-off request and the one design call outstanding.

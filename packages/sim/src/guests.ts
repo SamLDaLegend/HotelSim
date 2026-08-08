@@ -37,12 +37,12 @@
 
 import { findNeedType, findRoomType, firstNeedType, isRoomKind, roomTypeProvides } from './content.js';
 import type { BoundContent } from './content.js';
-import { draftFindEntity, draftGet, getEntity, NO_ENTITY } from './entities.js';
+import { draftGet, getEntity, NO_ENTITY } from './entities.js';
 import type { ContentId, EntityDraft, EntityId, EntityStore } from './entities.js';
 import type { GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
-import { createValidityContext, isValidRoom, storeEntities } from './validity.js';
+import { createValidityContext, isValidRoom, storeEntities, validRoomsOf } from './validity.js';
 import type { ValidityContext } from './validity.js';
 
 /**
@@ -339,13 +339,19 @@ export function assertGuestStoreInvariants(guests: GuestStore, entities: EntityS
     if (!Number.isSafeInteger(guest.arrivedTick) || guest.arrivedTick < 0) {
       throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer arrivedTick`);
     }
-    for (const [field, value] of [
-      ['patienceRemaining', guest.patienceRemaining],
-      ['restRemaining', guest.restRemaining],
-    ] as const) {
-      if (!Number.isSafeInteger(value) || value < 0) {
-        throw new Error(`Guest store is invalid: guest ${guest.id} has a negative or non-integer ${field}`);
-      }
+    // WRITTEN OUT RATHER THAN LOOPED OVER A LITERAL TABLE (G-010). The `for (const [field,
+    // value] of [[...], [...]] as const)` form this replaces allocated THREE ARRAYS PER
+    // GUEST PER TICK — ~31 million of them across the 60-room bench — and this function
+    // runs on every tick and at every load. The check is unchanged in what it inspects and
+    // in what it says; only the allocation is gone. NOT sampled and NOT gated: the honest
+    // fix for a check that costs too much is to make it cheaper, not rarer, and gating on
+    // a changed guest store would buy almost nothing here because a busy hotel produces a
+    // new store on nearly every tick.
+    if (!Number.isSafeInteger(guest.patienceRemaining) || guest.patienceRemaining < 0) {
+      throw new Error(`Guest store is invalid: guest ${guest.id} has a negative or non-integer patienceRemaining`);
+    }
+    if (!Number.isSafeInteger(guest.restRemaining) || guest.restRemaining < 0) {
+      throw new Error(`Guest store is invalid: guest ${guest.id} has a negative or non-integer restRemaining`);
     }
 
     if (guest.roomEntityId === NO_ENTITY) continue;
@@ -379,22 +385,26 @@ export function assertGuestStoreInvariants(guests: GuestStore, entities: EntityS
  * makes the CLI's "guests arrived" line evidence rather than decoration.
  */
 export function assertGuestOutcomes(outcomes: GuestOutcomes, guests: GuestStore): void {
-  for (const [field, value] of [
-    ['arrived', outcomes.arrived],
-    ['satisfied', outcomes.satisfied],
-    ['unsatisfied', outcomes.unsatisfied],
-    ['evicted', outcomes.evicted],
-  ] as const) {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new Error(`Guest outcomes are invalid: ${field} must be a non-negative safe integer, got ${String(value)}`);
-    }
-  }
+  // Written out rather than looped over a literal table, for the reason given in
+  // `assertGuestStoreInvariants`: the loop form allocated five arrays on every tick of
+  // every run. Same four fields, same messages, no allocation.
+  assertCounter('arrived', outcomes.arrived);
+  assertCounter('satisfied', outcomes.satisfied);
+  assertCounter('unsatisfied', outcomes.unsatisfied);
+  assertCounter('evicted', outcomes.evicted);
   const departed = outcomes.satisfied + outcomes.unsatisfied + outcomes.evicted;
   if (outcomes.arrived !== departed + guests.list.length) {
     throw new Error(
       `Guest outcomes are invalid: ${outcomes.arrived} arrived but ${departed} departed and ${guests.list.length} are still here. ` +
         'Every guest is either still in the hotel or has exactly one recorded outcome.',
     );
+  }
+}
+
+/** One outcome counter is a non-negative safe integer. Named so the message says which. */
+function assertCounter(field: string, value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Guest outcomes are invalid: ${field} must be a non-negative safe integer, got ${String(value)}`);
   }
 }
 
@@ -467,26 +477,89 @@ function payForStay(
  * §6.1 warns about. Choosing by id today does not create that behaviour; choosing by
  * anything unstable would.
  *
- * "AN INVALID ROOM IS NOT A PROVIDER" IS THIS ONE CLAUSE (G-009). A room with no floor
- * under it, no way in, or no bed in it is skipped exactly as a room that is already taken
- * is: the guest waits, and gives up if nothing valid frees up before its patience runs
- * out. The predicate order is deliberate — `held` is a Set lookup, `roomTypeProvides` is
- * a binary search, and validity is asked LAST and only of rooms that could otherwise
- * serve, so an item or a room for another need never costs a validity computation.
+ * "AN INVALID ROOM IS NOT A PROVIDER" IS STILL THIS FUNCTION'S CLAUSE (G-009), but it is
+ * now asked once per entity set rather than once per candidate per tick: the candidates
+ * come from `validRoomsOf`, which IS the invalid rooms already filtered out. A room with no
+ * floor under it, no way in, or no bed in it is skipped exactly as a room that is already
+ * taken is — the guest waits, and gives up if nothing valid frees up before its patience
+ * runs out.
+ *
+ * G-010 changed HOW the same room is found, and nothing about WHICH room it is. The old
+ * form scanned every live entity per waiting guest per tick and asked three questions of
+ * each; since G-009 every room carries a bed, so half of that scan was furniture that could
+ * never satisfy `roomTypeProvides`. Same canonical order, same conjunction, same answer.
  */
-function findFreeRoom(
-  input: GuestTickInput,
-  held: ReadonlySet<EntityId>,
-  needId: ContentId,
-): EntityId {
-  const room = draftFindEntity(
-    input.entities,
-    (entity) =>
-      !held.has(entity.id) &&
-      roomTypeProvides(input.content, entity.kind, needId) &&
-      isValidRoom(input.validity, entity),
-  );
-  return room === undefined ? NO_ENTITY : room.id;
+function findFreeRoom(search: RoomSearch, needId: ContentId): EntityId {
+  // THE SHORT-CIRCUIT (G-010). If a scan for this need already came up empty and NOTHING
+  // HAS BEEN RELEASED SINCE, the answer is still empty and the scan is skipped.
+  //
+  // Why that is exact rather than an approximation: within one tick, entity membership is
+  // frozen, so `validRoomsOf` is a fixed list; `roomTypeProvides` is a fact about content;
+  // and the only other input is `held`, which this loop can only ADD to — except at the
+  // three release sites, every one of which goes through `search.release` and bumps the
+  // counter. So between two scans with an unchanged counter the candidate set can only
+  // have shrunk, and a set that was empty cannot have become non-empty.
+  //
+  // This is what stops a FULL hotel being O(waiting x rooms) per tick. A saturated hotel is
+  // exactly where every waiting guest used to walk every room to learn what the guest before
+  // it had just learned.
+  const exhausted = search.exhausted;
+  if (exhausted !== null && exhausted.get(needId) === search.releases) return NO_ENTITY;
+
+  // The one canonical ascending-id order, filtered to rooms that work — see `validRoomsOf`
+  // for why that is the same choice the old every-entity scan made.
+  for (const room of validRoomsOf(search.input.validity)) {
+    if (search.held.has(room.id)) continue;
+    if (!roomTypeProvides(search.input.content, room.kind, needId)) continue;
+    return room.id;
+  }
+  // Allocated only when a scan actually fails, so a hotel that is never full pays nothing —
+  // the `assertGuestStoreInvariants` discipline. Lookup only: never iterated, never
+  // ordered, never hashed (I2).
+  (search.exhausted ??= new Map<ContentId, number>()).set(needId, search.releases);
+  return NO_ENTITY;
+}
+
+/**
+ * The tick-local state of looking for a room: who holds what, and what has been given back.
+ *
+ * TICK-LOCAL AND MUTABLE, exactly like `EntityDraft` and `CommandAccumulator`. It never
+ * escapes `stepGuests` and nothing here is hashed or saved.
+ */
+type RoomSearch = {
+  readonly input: GuestTickInput;
+  /**
+   * Rooms currently held. Membership only: never iterated, never ordered, never hashed
+   * (I2), exactly like `EntityDraft.removed`.
+   */
+  readonly held: Set<EntityId>;
+  /** How many rooms have been given back this tick. Only `release` moves it. */
+  releases: number;
+  /**
+   * Per need: the release count at which a scan last found nothing. LOOKUP ONLY (I2).
+   *
+   * Keyed by need because "nothing is free" is a statement about a NEED, not about the
+   * hotel: a tick can exhaust one need's providers while another's sit empty. M2 gives a
+   * guest a need vector and this keeps working unchanged.
+   */
+  exhausted: Map<ContentId, number> | null;
+};
+
+/**
+ * A room goes back into the pool. THE ONE PLACE `held` SHRINKS.
+ *
+ * Every release must come through here, because `findFreeRoom`'s short-circuit is only
+ * sound while the counter sees them all. A `held.delete` written anywhere else would make
+ * a room invisible to every guest for the rest of the tick — a guest standing in the lobby
+ * beside an empty room, which is §6.1's "correct but reads as stupid" in its literal form.
+ *
+ * Deliberately bumps the counter even when the room is GONE rather than merely vacated (the
+ * eviction paths below). That is conservative in the safe direction: it can only cause a
+ * scan that was avoidable, never skip one that was not.
+ */
+function release(search: RoomSearch, id: EntityId): void {
+  search.held.delete(id);
+  search.releases += 1;
 }
 
 /**
@@ -527,12 +600,11 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     return { guests, outcomes, ledger: input.ledger };
   }
 
-  // Rooms currently held. Membership only: never iterated, never ordered, never hashed
-  // (I2), exactly like `EntityDraft.removed`.
   const held = new Set<EntityId>();
   for (const guest of guests.list) {
     if (guest.roomEntityId !== NO_ENTITY) held.add(guest.roomEntityId);
   }
+  const search: RoomSearch = { input, held, releases: 0, exhausted: null };
 
   const next: Guest[] = [];
   let ledger = input.ledger;
@@ -548,7 +620,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
         // recorded and the guest leaves — rather than the guest continuing to rest in a
         // room that is gone, which is the silent-fallback failure §6.1 names for
         // pathfinding and which has exactly the same shape here.
-        held.delete(guest.roomEntityId);
+        release(search, guest.roomEntityId);
         evicted += 1;
         continue;
       }
@@ -563,7 +635,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
         // room hanging in mid-air would make that number non-zero on any honest reading
         // of it. Splitting `evicted` into demolished-versus-invalidated is parked to M2,
         // where the outcome tally becomes a table (PARKING.md).
-        held.delete(guest.roomEntityId);
+        release(search, guest.roomEntityId);
         evicted += 1;
         continue;
       }
@@ -572,14 +644,18 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
         next.push({ ...guest, restRemaining });
         continue;
       }
-      // The need is met. Pay, release, leave.
+      // The need is met. Pay, release, leave. THE ROOM IS FREE FROM HERE ON IN THIS TICK —
+      // a guest visited later in this same loop can take it, even though it arrived later,
+      // because the room genuinely is empty now. That is today's behaviour and the
+      // short-circuit in `findFreeRoom` must not swallow it, which is why this goes through
+      // `release` rather than touching `held` directly.
       ledger = payForStay(ledger, tick, room.kind, content);
-      held.delete(guest.roomEntityId);
+      release(search, guest.roomEntityId);
       satisfied += 1;
       continue;
     }
 
-    const room = findFreeRoom(input, held, guest.needId);
+    const room = findFreeRoom(search, guest.needId);
     if (room !== NO_ENTITY) {
       held.add(room);
       next.push({ ...guest, roomEntityId: room });
@@ -617,7 +693,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       patienceRemaining: needType.patienceTicks,
       restRemaining: needType.satisfyTicks,
     };
-    const room = findFreeRoom(input, held, arrived.needId);
+    const room = findFreeRoom(search, arrived.needId);
     if (room === NO_ENTITY) {
       next.push(arrived);
       continue;

@@ -106,7 +106,8 @@ import { balanceOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { nextUint32 } from './rng.js';
 import { isSettlementTick, settleNight } from './settlement.js';
-import { createValidityContext, draftEntities } from './validity.js';
+import { createValidityCache, tickValidityContext } from './validity.js';
+import type { ValidityCache } from './validity.js';
 import { assertContentMatches } from './world.js';
 import type { World } from './world.js';
 
@@ -197,6 +198,24 @@ export type TickState = {
    */
   readonly settlementRun: boolean;
   readonly committed: boolean;
+  /**
+   * The caller's derived-index cache, or null to derive everything fresh (G-010).
+   *
+   * THE ONE THING IN A TICK THAT DELIBERATELY OUTLIVES IT, and the only one — so it is
+   * worth saying exactly what it is and is not. It is not state: `World` has no field for
+   * it, nothing hashes it, nothing saves it, and a run with `null` here produces a
+   * byte-identical state hash to a run with a cache. It holds one thing, a `ValidityContext`
+   * that is provably still a description of the current entity set; `tickValidityContext`
+   * owns the proof and `validity.ts` documents it.
+   *
+   * IT IS A PARAMETER RATHER THAN A MODULE-LEVEL MAP on purpose. A hidden memo would be
+   * unswitchable, and a cache that cannot be turned off cannot be checked by comparison —
+   * the ADR-0007 shape. `run` makes exactly one per call, so nothing leaks between runs in
+   * a process, which is what the determinism harness's two-runs-in-one-process check hunts.
+   *
+   * Only `runGuests` reads it and only `tickValidityContext` writes it.
+   */
+  readonly cache: ValidityCache | null;
 };
 
 /** Every phase has this shape, which is what lets `stepTick` fold over the table. */
@@ -208,7 +227,12 @@ export type TickPhaseFn = (state: TickState) => TickState;
  * The content check happens here rather than in `stepTick`, so it covers every entry
  * point including a host that composes the phases itself. It is one string comparison.
  */
-export function beginTick(world: World, content: BoundContent, commands: readonly Command[] = []): TickState {
+export function beginTick(
+  world: World,
+  content: BoundContent,
+  commands: readonly Command[] = [],
+  cache: ValidityCache | null = null,
+): TickState {
   assertContentMatches(world, content);
   return {
     world,
@@ -219,6 +243,7 @@ export function beginTick(world: World, content: BoundContent, commands: readonl
     guestsRun: false,
     settlementRun: false,
     committed: false,
+    cache,
   };
 }
 
@@ -505,18 +530,21 @@ export function runGuests(state: TickState): TickState {
     ledger: state.world.ledger,
     entities: state.entities,
     content: state.content,
-    // The validity rules, over this tick's draft (G-009). Created HERE rather than in
+    // The validity rules, over this tick's draft (G-009). Resolved HERE rather than in
     // `guests.ts` so the guest loop asks a predicate and never touches a placement index.
     //
-    // TICK-LOCAL AND CREATED PER TICK, which is what makes it safe: it caches an index
-    // and per-room answers derived from entity membership, and membership is frozen from
-    // the moment `applyCommands` returns until `commitEntities` runs. A context that
-    // outlived that window would answer from a building that no longer exists.
+    // IT IS SAFE BECAUSE MEMBERSHIP IS FROZEN FROM THE MOMENT `applyCommands` RETURNS UNTIL
+    // `commitEntities` RUNS. A context that outlived a change to the entity set would answer
+    // from a building that no longer exists — which is precisely why `tickValidityContext`
+    // may hand back a context built on an EARLIER tick only when it can show the set has not
+    // changed since. That predicate, and the argument that it is complete, live in
+    // `validity.ts` beside `ValidityCache`.
     //
-    // Creating it costs nothing on a quiet tick: the index is built on the first question
-    // asked, and `stepGuests` returns before asking any if the hotel is empty — the same
-    // lazy contract `cashOnHand` has for the balance fold (I4, I5).
-    validity: createValidityContext(state.content, state.world.grid, draftEntities(state.entities)),
+    // With no cache this is exactly the pre-G-010 behaviour: a fresh context per tick.
+    // Either way it costs nothing on a quiet tick, because the index is built on the first
+    // question asked and `stepGuests` returns before asking any if the hotel is empty — the
+    // same lazy contract `cashOnHand` has for the balance fold (I4, I5).
+    validity: tickValidityContext(state.cache, state.content, state.world.grid, state.entities),
     arriving: state.arrivingGuests,
   });
   // An untouched guest loop returns its inputs by reference, so an idle tick allocates
@@ -640,8 +668,13 @@ const TICK_PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
  * `dt` is not a parameter and never will be: the tick IS the unit of time. Taking a
  * delta from the caller is how wall-clock time leaks into the sim and breaks I2.
  */
-export function stepTick(world: World, content: BoundContent, commands: readonly Command[] = []): World {
-  let state = beginTick(world, content, commands);
+export function stepTick(
+  world: World,
+  content: BoundContent,
+  commands: readonly Command[] = [],
+  cache: ValidityCache | null = null,
+): World {
+  let state = beginTick(world, content, commands, cache);
   for (const phase of TICK_PHASES) {
     state = TICK_PHASE_FNS[phase](state);
   }
@@ -707,7 +740,15 @@ export function stepTick(world: World, content: BoundContent, commands: readonly
   return state.world;
 }
 
-/** Run `ticks` ticks, applying any scheduled commands at their tick. */
+/**
+ * Run `ticks` ticks, applying any scheduled commands at their tick.
+ *
+ * ONE DERIVED-INDEX CACHE PER CALL (G-010), created here and dropped when the loop ends.
+ * Nothing survives a `run`, so two runs in one process share nothing — the property the
+ * determinism harness runs twice in one process to check. The cache changes no result; it
+ * is the same simulation with the placement index derived when the building changes rather
+ * than 1,440 times a simulated day.
+ */
 export function run(
   world: World,
   content: BoundContent,
@@ -727,9 +768,10 @@ export function run(
     }
   }
 
+  const cache = createValidityCache();
   let current = world;
   for (let i = 0; i < ticks; i += 1) {
-    current = stepTick(current, content, byTick.get(current.tick) ?? []);
+    current = stepTick(current, content, byTick.get(current.tick) ?? [], cache);
   }
   return current;
 }

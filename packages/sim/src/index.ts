@@ -42,6 +42,7 @@ export {
   draftFindEntity,
   draftForEach,
   draftGet,
+  draftIsClean,
   draftSpawn,
   entitiesInOrder,
   entityCount,
@@ -54,6 +55,7 @@ export type { Cell, GridBounds } from './grid.js';
 export {
   assertCell,
   assertGridBounds,
+  boundsEqual,
   cellBelow,
   cellLeft,
   cellRight,
@@ -133,10 +135,12 @@ export type {
   EntityVisitor,
   RoomInvalidityReason,
   RoomInvalidityTally,
+  ValidityCache,
   ValidityContext,
 } from './validity.js';
 export {
   countInvalidRooms,
+  createValidityCache,
   createValidityContext,
   describeRoomInvalidity,
   draftEntities,
@@ -147,7 +151,9 @@ export {
   ROOM_INVALIDITY_REASONS,
   standsInRoom,
   storeEntities,
+  tickValidityContext,
   totalInvalidRooms,
+  validRoomsOf,
 } from './validity.js';
 export type { World } from './world.js';
 export {

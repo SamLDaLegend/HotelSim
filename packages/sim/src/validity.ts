@@ -39,11 +39,18 @@
 // closed for occupancy. It is closed here the same way: there is one record of where
 // everything is, and validity is a question asked of it.
 //
-// WHAT IT COSTS. One tick-local placement index, built LAZILY on the first question of a
-// tick and thrown away at the end of it — the `cashOnHand` contract exactly. Building it
-// is O(n log n) once per tick that anything asks; each question after that is O(log n),
-// and the answer per room is memoised for the tick. Nothing here is stored on `World`,
+// WHAT IT COSTS. One placement index, built LAZILY on the first question that needs it —
+// the `cashOnHand` contract exactly. Building it is O(n log n); each question after that
+// is O(log n), and the answer per room is memoised. Nothing here is stored on `World`,
 // nothing is hashed, nothing is saved, and no migration is owed.
+//
+// AND SINCE G-010 IT SURVIVES A TICK IN WHICH ENTITY MEMBERSHIP DID NOT CHANGE. Rebuilding
+// it every tick was 58.9% of tick self-time in a profiled 60-room, 365-day run — a sort of
+// every placed entity plus a full `groundedRooms` pass, 525,600 times, for a building that
+// changed twice. See `ValidityCache` below for what that costs in risk and exactly what
+// invalidates it. The cache is DERIVED: rebuilt on demand, never saved, never authoritative,
+// never hashed, and a run with no cache at all produces a byte-identical state hash — which
+// is the property `stepTick`'s optional cache parameter exists to keep testable.
 //
 // I2 notes:
 //   - the index is a SORTED ARRAY with an explicit comparator (`compareCells`, then id).
@@ -61,9 +68,9 @@
 
 import { findRoomType, isRoomKind, requiredItemsOf } from './content.js';
 import type { BoundContent } from './content.js';
-import { draftForEach, entitiesInOrder, isPlaced } from './entities.js';
+import { draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
-import { cellBelow, cellLeft, cellRight, cellsEqual, compareCells, describeCell, GROUND_FLOOR, isWithinBounds } from './grid.js';
+import { boundsEqual, cellBelow, cellLeft, cellRight, cellsEqual, compareCells, describeCell, GROUND_FLOOR, isWithinBounds } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 
 /**
@@ -145,18 +152,19 @@ export function draftEntities(draft: EntityDraft): EntityVisitor {
 }
 
 /**
- * Everything the validity rules read, for exactly one tick.
+ * Everything the validity rules read, for one FIXED entity set.
  *
- * TICK-LOCAL AND MUTABLE, exactly like `EntityDraft` and `CommandAccumulator`: created by
- * a phase, consumed by that phase, never stored on a `World` and never handed anywhere it
- * could outlive the tick. Mutation here is local and never escapes, which is the only
- * kind of mutation the sim allows.
+ * MUTABLE, exactly like `EntityDraft` and `CommandAccumulator`: created by a phase,
+ * consumed by that phase, never stored on a `World`. Mutation here is local and never
+ * escapes into hashed state.
  *
- * IT IS ONLY VALID WHILE ENTITY MEMBERSHIP IS FROZEN. The index and the memo are both
- * built from the entity set as it stood when the first question was asked, so a context
- * must not outlive a change to that set. `runGuests` creates one and uses it within the
- * phase; commands have already been applied by then and nothing after it spawns or
- * despawns until the commit boundary.
+ * IT IS ONLY VALID WHILE ENTITY MEMBERSHIP IS FROZEN. The index, the grounded set, the
+ * memo and the valid-room list are all built from the entity set as it stood when the
+ * first question was asked, so a context must not outlive a change to that set. Within a
+ * tick that is structural: `runGuests` gets its context after `applyCommands` has returned,
+ * and nothing between there and `commitEntities` spawns or despawns. ACROSS ticks it is
+ * `ValidityCache`'s reuse predicate that establishes it, and that predicate is the one
+ * thing in this file worth reading twice.
  */
 export type ValidityContext = {
   readonly content: BoundContent;
@@ -169,9 +177,120 @@ export type ValidityContext = {
    * ascending-floor pass. LOOKUP ONLY — never iterated, never ordered (I2).
    */
   grounded: Set<EntityId> | null;
-  /** Answers already computed this tick. LOOKUP ONLY — never iterated (I2). */
+  /** Answers already computed. LOOKUP ONLY — never iterated (I2). */
   memo: Map<EntityId, RoomInvalidityReason | null> | null;
+  /**
+   * Every VALID room, in the canonical ascending-id entity order. Null until first asked.
+   *
+   * The guest loop's candidate list (G-010). See `validRoomsOf` for why this is the same
+   * answer `findFreeRoom` used to compute by scanning every entity, and why it must stay
+   * in the canonical order rather than any order this file finds convenient.
+   */
+  validRooms: readonly Entity[] | null;
 };
+
+/**
+ * A derived index that may outlive a tick. NEVER SAVED, NEVER HASHED, NEVER AUTHORITATIVE.
+ *
+ * WHY THIS EXISTS. Rebuilding the placement index and the grounded set on every tick was
+ * 58.9% of tick self-time in a profiled 60-room, 365-day run: 525,600 sorts of a building
+ * that changed twice. G-009 parked exactly this ("making them survive between ticks is the
+ * same DERIVED-state discipline as the room -> occupant index") and G-010 is the goal that
+ * measured it.
+ *
+ * WHY IT IS A PARAMETER AND NOT A MODULE-LEVEL MAP. A module-level memo keyed on the store
+ * would work and would be invisible: it is exactly the "memoisation keyed on the wrong
+ * thing" the two-runs-in-one-process determinism harness exists to catch, and there would
+ * be no way to run the simulation WITHOUT it. A cache you cannot turn off is a cache whose
+ * correctness cannot be tested by comparison, which is the ADR-0007 shape. So it is an
+ * explicit, caller-owned object, `stepTick` takes it optionally, `run` makes one per call,
+ * and `validity.cache.test.ts` asserts that a run with one and a run without one produce
+ * the same state hash.
+ *
+ * WHAT INVALIDATES IT — the whole rule, in one place:
+ *
+ *   REUSE IFF  the context exists
+ *          AND `builtFrom === draft.base`      (committed membership is the same OBJECT)
+ *          AND `draftIsClean(draft)`           (this tick has staged no spawn or despawn)
+ *          AND `context.content === content`   (identity, the rule `stepTick` already keeps)
+ *          AND `boundsEqual(context.bounds, bounds)`
+ *
+ * and it is stored ONLY when the draft is clean, so what a cache holds is always exactly
+ * "the context of `builtFrom`" and never a context of a half-staged world.
+ *
+ * WHY THAT IS COMPLETE. Entity membership changes through exactly two doors: `draft.added`
+ * / `draft.removed` inside a tick, and a NEW `EntityStore` object out of `commitEntityDraft`
+ * between ticks (an idle tick returns `base` by reference, which is what makes reuse safe
+ * at all). The predicate reads both. A committed `EntityStore` is never mutated, so there
+ * is no third door. That is the structural argument; the empirical one is that each of the
+ * five clauses above has a case in `validity.cache.test.ts` that goes red when that clause
+ * alone is deleted. A cache nothing witnesses is worse than no cache.
+ *
+ * WHAT THE I2 GATE DOES AND DOES NOT ADD — stated exactly, because it is easy to overclaim
+ * and this comment used to. `tools/gates/determinism.mjs` compares runs TO EACH OTHER and
+ * holds no reference hash, so a mutation that changes the hash CONSISTENTLY leaves the gate
+ * GREEN. Measured, clause by clause: deleting clause 1 or clause 2 moves the hash, and the
+ * gate passes anyway. Deleting clause 3 makes a guest reserve a room that is despawned at
+ * the commit boundary, so `assertGuestStoreInvariants` throws and the harness emits no hash
+ * at all — that one, and only that one, reddens the gate. Clauses 4 and 5 are unreachable
+ * there by construction: a harness run uses one content and one plot, and `run` builds a
+ * fresh cache per call.
+ *
+ * So the unit tests witness all five, `cache.determinism.test.ts` witnesses the three the
+ * real command log can reach, and the gate is a backstop for exactly one. That is a smaller
+ * claim than "the gate catches this", and it is the true one.
+ *
+ * ON LOAD: a save carries no cache and cannot. A host reusing a cache across a load meets a
+ * different `EntityStore` object, misses, and rebuilds. Nothing to migrate.
+ */
+export type ValidityCache = {
+  /** The committed store the cached context describes, or null while empty. */
+  builtFrom: EntityStore | null;
+  context: ValidityContext | null;
+};
+
+/** O(1). Builds nothing — a cache is empty until a tick fills it. */
+export function createValidityCache(): ValidityCache {
+  return { builtFrom: null, context: null };
+}
+
+/**
+ * The validity context for this tick: the cached one when it provably still describes the
+ * world, a fresh one otherwise.
+ *
+ * `cache` may be null, and then this is exactly `createValidityContext(...)` over the
+ * draft — the pre-G-010 behaviour, kept reachable on purpose so the two can be compared.
+ */
+export function tickValidityContext(
+  cache: ValidityCache | null,
+  content: BoundContent,
+  bounds: GridBounds,
+  draft: EntityDraft,
+): ValidityContext {
+  const clean = draftIsClean(draft);
+  if (cache !== null) {
+    const cached = cache.context;
+    if (
+      cached !== null &&
+      cache.builtFrom === draft.base &&
+      clean &&
+      cached.content === content &&
+      boundsEqual(cached.bounds, bounds)
+    ) {
+      return cached;
+    }
+  }
+  const fresh = createValidityContext(content, bounds, draftEntities(draft));
+  // Kept only when it describes `draft.base` exactly. On a tick that staged a spawn or a
+  // despawn the fresh context describes the DRAFT, which no later tick will ever see —
+  // `commitEntityDraft` will hand the next tick a new store object — so caching it would
+  // store an answer about a world that never existed at a commit boundary.
+  if (cache !== null && clean) {
+    cache.builtFrom = draft.base;
+    cache.context = fresh;
+  }
+  return fresh;
+}
 
 /** An entity that is somewhere. The index holds only these, so no lookup has to remember
  *  to skip the unplaced. */
@@ -183,7 +302,7 @@ export function createValidityContext(
   bounds: GridBounds,
   forEach: EntityVisitor,
 ): ValidityContext {
-  return { content, bounds, forEach, index: null, grounded: null, memo: null };
+  return { content, bounds, forEach, index: null, grounded: null, memo: null, validRooms: null };
 }
 
 /**
@@ -396,15 +515,22 @@ export function standsInRoom(content: BoundContent, room: Entity, entity: Entity
  * second would put beds in the CLI's invalid-room tally.
  */
 export function roomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidityReason | null {
+  // THE MEMO IS CONSULTED FIRST, and the not-a-room guard second (G-010). Only a room ever
+  // reaches `memo.set` below, so a hit establishes room-ness by construction — an item can
+  // no more produce one than it can today. The order matters because this is the hottest
+  // question in the simulation: it is asked of every resting guest's room on every tick,
+  // and `findRoomType` is a binary search plus an array walk paid before the answer that
+  // was already known. This is a reordering, not a weakening: an entity that is not a room
+  // still throws, on the same line, with the same message.
+  const memo = (ctx.memo ??= new Map<EntityId, RoomInvalidityReason | null>());
+  const remembered = memo.get(room.id);
+  if (remembered !== undefined) return remembered;
   if (findRoomType(ctx.content, room.kind) === undefined) {
     throw new Error(
       `roomInvalidity: entity ${room.id} ("${room.kind}") is not a room type in the injected content, ` +
         'and validity is a property of rooms',
     );
   }
-  const memo = (ctx.memo ??= new Map<EntityId, RoomInvalidityReason | null>());
-  const remembered = memo.get(room.id);
-  if (remembered !== undefined) return remembered;
   const reason = computeRoomInvalidity(ctx, room);
   memo.set(room.id, reason);
   return reason;
@@ -469,6 +595,42 @@ function coversCell(content: BoundContent, room: Entity, cell: Cell): boolean {
 /** Whether this room works. The predicate the guest loop asks before reserving. */
 export function isValidRoom(ctx: ValidityContext, room: Entity): boolean {
   return roomInvalidity(ctx, room) === null;
+}
+
+/**
+ * Every VALID room, in the canonical ascending-id entity order (G-010).
+ *
+ * WHAT IT REPLACES, AND WHY IT IS THE SAME ANSWER. `findFreeRoom` used to scan EVERY live
+ * entity and ask three questions of each: is it held, does it provide, is it valid. Since
+ * G-009 every room carries a bed, so half of that scan was items — and an item can never
+ * satisfy `roomTypeProvides`, so it was pure overhead (PARKING.md). This walks the same
+ * one canonical order and keeps the same entities that the old predicate would have
+ * accepted, so the guest loop's "lowest id wins" is preserved EXACTLY: same set, same
+ * order, therefore the same room, therefore the same state hash.
+ *
+ * THE ORDER IS THE ENTITY ORDER, NOT THE PLACEMENT INDEX'S. `placementIndex` is sorted by
+ * CELL, and a guest choosing from it would take the room lowest on the plot rather than
+ * the room that has been standing longest — a different simulation. `forEach` walks
+ * ascending id (`EntityStore.list`, or the draft's `base` then `added`), which is the order
+ * the guest loop has always used.
+ *
+ * Lazy, like the index: a tick where nobody looks for a room pays nothing. Computed once
+ * per entity set, so under a `ValidityCache` it survives every tick that changed nothing —
+ * which is what turns the guest loop's per-tick scan from O(entities) into a walk over a
+ * list that was already built.
+ */
+export function validRoomsOf(ctx: ValidityContext): readonly Entity[] {
+  const existing = ctx.validRooms;
+  if (existing !== null) return existing;
+  const rooms: Entity[] = [];
+  ctx.forEach((entity) => {
+    // Room-ness is asked FIRST and directly: `roomInvalidity` throws for anything that is
+    // not a room, and an item standing in a hotel is not an error.
+    if (!isRoomKind(ctx.content, entity.kind)) return;
+    if (roomInvalidity(ctx, entity) === null) rooms.push(entity);
+  });
+  ctx.validRooms = rooms;
+  return rooms;
 }
 
 /**

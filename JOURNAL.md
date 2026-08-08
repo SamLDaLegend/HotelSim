@@ -548,3 +548,64 @@ three: `spawnEntity` does not furnish (only `buildRoom` does), items share a roo
 so they counted as rooms, and a legitimately grounded room sat at the tower's column. A
 probe is a tool and a tool needs checking — the same lesson as G-004, where my survivor
 search reported a regression that turned out to be my predicate omitting a field.
+
+---
+
+## 2026-08-08 — G-010 — The bench measures a real hotel (1/3 rounds). M1 COMPLETE.
+
+The first goal in the project that was engineering rather than design, and the builder
+**profiled before deciding**. The profile overturned two entries in this very file.
+
+**The ledger was not the problem.** Its copy-per-append had crossed `PARKING.md`'s
+~15k-append trigger at 22,245 and was predicted at ~16% of budget. Measured in the real
+run: **0.7%**. The knee is real but arrives roughly an order of magnitude later — 13.1%
+at 43,800 appends. Trigger corrected to ~40k. **Second parked measurement in two goals
+taken where the thing it measured was not the thing that drives cost**, and a standalone
+benchmark of one function is not a measurement of a system.
+
+The actual cost was **validity at 58.9%** — the context rebuilt 525,600 times for a
+building that changed twice. Caching it (derived, caller-owned, never on `World`) plus a
+candidate-list scan and a release-counter short-circuit took 60 rooms x 120 days from
+6.39s to 1.65s, and validity is now **absent from the profile entirely**.
+
+**The acceptance bar was the builder's own and it is the right one for any optimisation:
+a pure optimisation must not move the I2 hash.** It did not — `1b5fcd4cca759510` before
+and after — and the hash moved only afterwards, deliberately, when the determinism log
+was strengthened. `sim-critic` reproduced that separation independently by replaying the
+*pre-G-010* log through the optimised sim and getting the old hash exactly.
+
+**Then the critique found two MAJORs, and both were defects in the EVIDENCE rather than
+the code — which is worse, because they were about to be recorded as proof.**
+
+The first: `search.releases += 1` is the entire soundness argument for the short-circuit,
+and **deleting it left all 508 tests green and the I2 gate green with an unchanged hash.**
+The pin that claimed to cover it ordered the *resting* guest first in every case, so the
+release always preceded any failed scan and the skip branch was never once taken. The bug
+it would have missed is a guest standing in the lobby beside a room freed earlier in the
+same tick — deterministic, so I2 structurally cannot see it, and §6.1's "correct but reads
+as stupid" in literal form. Fixed with one case whose *list order* is its whole content;
+verified by mutation that it is now the only case that catches the deletion.
+
+The second was mine as much as the builder's. The code claimed the I2 gate witnesses the
+cache-invalidation clauses; measured, it witnesses **one of five**. Clauses 1 and 2 move
+the hash to a *different constant*, and **the gate has no reference hash** — it compares
+runs to each other, so a consistently-changed hash passes every check it makes. The
+builder had written exactly this into `PARKING.md` two files away in the same goal, and I
+repeated the overclaim to the human without checking it. *Moving the hash is not the gate
+witnessing it.*
+
+**I almost skipped this critique.** The builder's self-critique had been unusually
+good — it caught its own wrong ratio prediction, its own wrong occupancy arithmetic, and
+a hole in its own harness — and I wrote "no critique round was needed" into `GOALS.md`
+before reversing myself. A builder cannot witness its own unwitnessed test. That is the
+single most useful thing this goal produced.
+
+**And the goal's success broke its own exit criterion.** Tick cost is now O(guests), not
+O(rooms): 20, 60 and 120 rooms all cost the same. So "the bench at 60 rooms" is met by its
+letter while measuring roughly a 20-room hotel — the same defect corrected twice already,
+reappearing in a gate. The builder found this by running a falsification test nobody asked
+for, after noticing its own `--arrivals` derivation was arithmetically wrong. Recorded in
+`bench.mjs` itself rather than hidden; the room-scaling property the bench cannot see is
+measured by `vitest run scaling`, which ties arrivals to rooms so occupancy is constant.
+
+M1 complete. Escalating for human sign-off, with one design call outstanding since G-008.

@@ -151,9 +151,47 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   benchmark (median of 5): 3,650 appends (365 days) 19ms · 12,000 (1000-day sweep) 299ms
   · 24,000 (~2x M4 density) 3.1s · 120,000 did not finish in 120s — allocation is ~n²/2
   elements and GC dominates. Restructuring now would change the hashed shape of
-  `World.ledger` and owe a migration for a problem M0 does not have. **Trigger: any goal
-  that pushes past ~15k appends per run (M4 wages-per-staff-per-night is the likely
-  one).** -> M4, with a real migration when it happens.
+  `World.ledger` and owe a migration for a problem M0 does not have. ~~Trigger: ~15k
+  appends per run.~~
+
+  **CORRECTED AT G-010 — the trigger was off by ~3x and the standalone benchmark
+  over-predicted in-run cost by an order of magnitude.** G-010 profiled the *real run*
+  with `node --cpu-prof` and measured this at **0.7% of self-time at 22,245 appends** —
+  past the old trigger and immaterial. The knee does arrive, roughly an order of
+  magnitude later than the microbenchmark implied: **13.1% at 43,800 appends**.
+  **Corrected trigger: ~40k appends per run.** The shape of the concern was right; its
+  location was not. This is the **second parked measurement in two goals** taken where
+  the thing it measured was not the thing that drives cost — a standalone benchmark of
+  one function is not a measurement of a system, and this record should not carry
+  another one without a profile beside it. -> M4.
+
+## Deferred out of G-010 (2026-08-08)
+
+- **I5 CAN NO LONGER BE SIZED BY ROOM COUNT, and that is the goal's own success.**
+  G-010 made tick cost **O(guests), not O(rooms)** — idle rooms are free. Measured at
+  365 days with arrivals held constant: `--rooms 20` 6,643ms · `--rooms 60` 6,653ms ·
+  `--rooms 120` 6,877ms. So the bench's `--rooms 60` meets G-010's criterion by its
+  letter while measuring roughly what a 20-room hotel would. The honest axis is
+  **concurrent guests** (`--arrivals`). Recorded in `bench.mjs` itself so the next
+  person sizing that gate meets it. -> whichever milestone next touches I5's shape.
+- **A busy 60-room hotel does not fit in the 10s budget**, and that is about the guest
+  path and the ledger rather than the gate: `--arrivals 16` (~30 concurrent) takes
+  10,849ms, 108%. The gate ships at `--arrivals 32` (~15 concurrent, 45%) for headroom,
+  not realism. -> M3/M4, when circulation and wages make the guest path heavier anyway.
+- **`assertGuestStoreInvariants` is now 14.7% of tick self-time** (was 5.3%), because
+  everything around it got faster. Its allocations are gone; what remains is a binary
+  search per resting guest, **linear in guests, not rooms**. Deliberately neither gated
+  nor sampled — it is what makes a reservation leak loud, and it runs at load too.
+  -> revisit only with a number.
+- **Guest-object churn** — one allocation per resting guest per tick, inherent to the
+  immutable design. -> only if a profile puts it above the invariant scan.
+- **The I2 gate has no reference hash**, so it compares runs to each other and can never
+  catch a *consistently* wrong result. A stale cache that is stale identically every run
+  passes it. This is correct for what I2 is — a determinism gate, not a correctness one —
+  but it means cache-invalidation clauses 4 and 5 (content identity, bounds equality)
+  **cannot be witnessed at the gate by construction**, because the harness runs one
+  content and one plot per run. Their witnesses are unit tests, and the reachable case is
+  a host stepping two worlds with one cache. Recorded so nobody assumes I2 covers it.
 - **Splitting the outcome tally by reason.** `unsatisfied` is "gave up waiting" and
   `evicted` is "the room stopped existing"; when guests can fail for more reasons than
   that, the tally wants to become a table rather than four counters. -> M2, with reviews.

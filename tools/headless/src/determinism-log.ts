@@ -236,5 +236,51 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     const id = Math.floor((tick - 3_701) / 2_609) * 5 + 2;
     schedule.push({ tick, command: { kind: 'demolishRoom', id } });
   }
+  // A DEMOLITION UNDER THE NOSE OF AN ARRIVING GUEST (G-010), and the reason is the sky
+  // tower's reason one goal later.
+  //
+  // G-010 lets the derived placement index SURVIVE a tick in which entity membership did
+  // not change. The predicate that decides "did not change" has five clauses, and each was
+  // deleted in turn to see what noticed.
+  //
+  // BEFORE THIS PASS, NONE OF THEM REDDENED THE GATE — and the reason is worth stating,
+  // because the tempting weaker version of it is false. Deleting two of the clauses MOVES
+  // the state hash, which looks like a witness and is not: `determinism.mjs` compares runs
+  // to each other and holds no reference hash, so a hash that changes CONSISTENTLY passes
+  // every check it makes. A moved hash is a witness only to a human who happens to be
+  // comparing against a number written down in GOALS.md.
+  //
+  // The clause `draft.removed.size === 0` is the one that can do better, because breaking it
+  // does not merely change an answer — it makes the simulation THROW. The log demolishes
+  // plenty already, but never on a tick where the demolished room was the very room the next
+  // guest through the door would have taken, so a stale index was never actually READ for a
+  // room that had just gone. The gate was blind to it exactly as it was blind to the
+  // floating tower at G-009.
+  //
+  // The failure it now exposes is loud rather than subtle: a guest reserves a room that is
+  // despawned at the commit boundary, and `assertGuestStoreInvariants` throws on the same
+  // tick — the harness produces no hash at all, which IS something the gate can see. That is
+  // the strongest shape a witness can have, and it is the cache's only gate-level witness of
+  // any kind. It is reachable only because the ARRIVAL and the DEMOLITION land together.
+  // An arrival is pushed explicitly rather than relying on the 97-tick cadence to coincide,
+  // because "these two series happen to share a tick sometimes" is not a guarantee.
+  //
+  // THE WALK STARTS ABOVE THE SKY TOWER, AND THAT IS NOT A DETAIL. Aimed from id 1 it ate
+  // ids 3..10 — which ARE the tower — and G-009's "the gate can see that support is
+  // transitive" went red. A witness for this goal that quietly deletes the witness for the
+  // last one is a bad trade, and the only reason it was not made is that the earlier goal
+  // left a test which failed loudly.
+  //
+  // The offset is DERIVED from the same `furniture` the rest of this file uses, not written
+  // as a literal: the tick-13 pass emits one furnished room and the tick-47 tower emits
+  // four, so the first five furnished spawns are the ones to step over. A pass inserted
+  // before tick 47 would move that, and the sky-tower test is what would say so.
+  const perFurnishedRoom = 1 + furniture.length;
+  let underfoot = 5 * perFurnishedRoom + 1;
+  for (let tick = 1_601; tick < ticks; tick += 1_261) {
+    schedule.push({ tick, command: { kind: 'guestArrives' } });
+    schedule.push({ tick, command: { kind: 'demolishRoom', id: underfoot } });
+    underfoot += 1;
+  }
   return schedule;
 }
