@@ -19,6 +19,10 @@ const roomType = (overrides: Record<string, unknown> = {}): Record<string, unkno
   nightlyRatePence: 8_500,
   nightlyUpkeepPence: 2_500,
   constructionCostPence: 250_000,
+  // Required on disk since G-009, for the same dominance reason both prices are: a room
+  // type that requires nothing is strictly easier to make valid than one that does.
+  // `[]` is the sayable version of "no furniture".
+  requires: ['single_bed'],
   ...overrides,
 });
 
@@ -42,6 +46,7 @@ describe('parseContent — the happy path', () => {
       nightlyRatePence: 8_500,
       nightlyUpkeepPence: 2_500,
       constructionCostPence: 250_000,
+      requires: ['single_bed'],
     });
   });
 
@@ -193,6 +198,15 @@ describe('new content on disk must state both of its prices (G-008)', () => {
     // `0` and an absent key were always different statements. This keeps the deliberate
     // one available: a designer who means "free to build" writes the number and owns it.
     expect(() => parseOne({ nightlyUpkeepPence: 0, constructionCostPence: 0 })).not.toThrow();
+  });
+
+  it('rejects a room type that omits requires, and accepts one that says [] (G-009)', () => {
+    // The same argument as the two prices, one goal later: silence on disk is a
+    // designer's oversight and `[]` is a designer's statement. A room needing no
+    // furniture is a real thing — a corridor at M3, a broom cupboard — and it says so.
+    expect(() => parseContent([roomTypeWithout('requires')])).toThrow(ContentError);
+    expect(() => parseContent([roomTypeWithout('requires')])).toThrow(/requires/);
+    expect(() => parseOne({ requires: [] })).not.toThrow();
   });
 });
 

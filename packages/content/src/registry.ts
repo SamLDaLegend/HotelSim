@@ -10,8 +10,8 @@
 // next caller to trip over — there is no registry to half-populate.
 
 import { z } from 'zod';
-import { needTypesSchema, roomTypesSchema } from './schema.js';
-import type { NeedType, RoomType } from './schema.js';
+import { itemTypesSchema, needTypesSchema, roomTypesSchema } from './schema.js';
+import type { ItemType, NeedType, RoomType } from './schema.js';
 
 /**
  * Every content table, validated.
@@ -31,6 +31,9 @@ import type { NeedType, RoomType } from './schema.js';
 export type ContentRegistry = {
   readonly roomTypes: readonly RoomType[];
   readonly needTypes?: readonly NeedType[];
+  /** Items a room can require to be a valid provider (G-009). Optional for the same
+   *  absence-is-not-emptiness reason `needTypes` is. */
+  readonly itemTypes?: readonly ItemType[];
 };
 
 /**
@@ -97,6 +100,31 @@ export function parseNeedTypes(raw: unknown, sourceLabel = 'content'): readonly 
   }
   assertUniqueIds(result.data, 'need type');
   return result.data;
+}
+
+/**
+ * Validate an already-parsed item-type document (G-009). Same all-or-nothing discipline
+ * as `parseNeedTypes`, and a table rather than a registry for the same reason: one file
+ * is one table, and the host assembles the registry.
+ */
+export function parseItemTypes(raw: unknown, sourceLabel = 'content'): readonly ItemType[] {
+  const result = itemTypesSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:\n${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'item type');
+  return result.data;
+}
+
+/** Validate an item-type JSON document. "Not JSON" and "not content" stay apart. */
+export function parseItemTypesJson(text: string, sourceLabel = 'content'): readonly ItemType[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseItemTypes(raw, sourceLabel);
 }
 
 /** Validate a need-type JSON document. "Not JSON" and "not content" stay apart. */

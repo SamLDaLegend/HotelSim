@@ -10,6 +10,12 @@
 // monotonic counter and are never reused, `list` is strictly ascending by construction,
 // and there is no Set or Map in any of it (I2, I6).
 //
+// G-009: an invalid room is not a provider. This module asks ONE predicate —
+// `isValidRoom` — and knows nothing about what makes a room valid; the context it asks is
+// built by the `runGuests` phase in `tick.ts`. That is the seam on purpose: `validity.ts`
+// owns what a room is, this module owns what a guest does about it, and neither file has
+// to be opened to change the other.
+//
 // A RESERVATION IS A FIELD OF THE GUEST AND NOTHING ELSE. There is no room -> occupant
 // back-pointer, so the two directions cannot drift apart, and a despawned guest cannot
 // hold a reservation because it no longer exists. That closes §6.1's reservation-leak
@@ -29,12 +35,15 @@
 // demand, and demand is M4; today the host issues one `guestArrives` command per
 // arrival, so the command log fully describes who turned up and when (I2).
 
-import { findNeedType, findRoomType, firstNeedType, roomTypeProvides } from './content.js';
+import { findNeedType, findRoomType, firstNeedType, isRoomKind, roomTypeProvides } from './content.js';
 import type { BoundContent } from './content.js';
-import { draftFindEntity, draftGet, NO_ENTITY } from './entities.js';
+import { draftFindEntity, draftGet, getEntity, NO_ENTITY } from './entities.js';
 import type { ContentId, EntityDraft, EntityId, EntityStore } from './entities.js';
+import type { GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
+import { createValidityContext, isValidRoom, storeEntities } from './validity.js';
+import type { ValidityContext } from './validity.js';
 
 /**
  * Opaque guest handle. Monotonic, never reused, within a run or across a save — the
@@ -230,6 +239,47 @@ export function countOrphanedReservations(guests: GuestStore, entities: EntitySt
   return orphaned;
 }
 
+/**
+ * Guests resting in a room that is not a valid room — the exit criterion's "guests served
+ * by an invalid room" (G-009).
+ *
+ * THIS IS WHAT MAKES THE CLI'S ZERO A MEASUREMENT. The tick evicts a guest on the tick
+ * its room stops being valid, so a healthy run reports zero — but a number that could
+ * only ever be zero proves nothing, which is why this counts real state rather than
+ * asserting the rule. It CAN be non-zero: a hand-built or corrupt save can carry one,
+ * and `validity.guest.test.ts` builds exactly that world and watches this return 1.
+ *
+ * Counted rather than thrown so a host can REPORT it every run, the same contract
+ * `countOrphanedReservations` has.
+ */
+export function countGuestsInInvalidRooms(
+  guests: GuestStore,
+  entities: EntityStore,
+  bounds: GridBounds,
+  content: BoundContent,
+): number {
+  let count = 0;
+  let validity: ValidityContext | null = null;
+  for (const guest of guests.list) {
+    if (guest.roomEntityId === NO_ENTITY) continue;
+    const room = getEntity(entities, guest.roomEntityId);
+    // A reservation on a room that does not exist is a DIFFERENT failure, counted by
+    // `countOrphanedReservations`. Counting it here too would make one leak look like two.
+    if (room === undefined) continue;
+    // Only rooms have validity. A guest holding an item is not a shape the tick can
+    // produce, and calling `roomInvalidity` on one would throw rather than report.
+    if (!isRoomKind(content, room.kind)) {
+      count += 1;
+      continue;
+    }
+    // Allocated only once a guest is actually holding something, so an empty hotel pays
+    // nothing — the `assertGuestStoreInvariants` discipline.
+    validity ??= createValidityContext(content, bounds, storeEntities(entities));
+    if (!isValidRoom(validity, room)) count += 1;
+  }
+  return count;
+}
+
 /** Whether a live entity with this id exists. Local, so this module owns no store copy. */
 function indexOfEntity(entities: EntityStore, id: EntityId): number {
   let low = 0;
@@ -358,6 +408,15 @@ export type GuestTickInput = {
   /** The open entity draft: spawns staged this tick are visible, despawns are not. */
   readonly entities: EntityDraft;
   readonly content: BoundContent;
+  /**
+   * The validity rules, over the same draft (G-009).
+   *
+   * BUILT BY THE PHASE, NOT BY THIS MODULE. `runGuests` in `tick.ts` constructs it, so
+   * the guest loop never sees a placement index, never sorts a cell and never learns what
+   * "enclosed" means. It asks one predicate. That is the seam: `validity.ts` owns what
+   * makes a room a room, and this module owns what a guest does about it.
+   */
+  readonly validity: ValidityContext;
   /** Guests arriving this tick, from `guestArrives` commands. */
   readonly arriving: number;
 };
@@ -399,7 +458,7 @@ function payForStay(
 }
 
 /**
- * The lowest-id free room that provides `needId`, or `NO_ENTITY`.
+ * The lowest-id free VALID room that provides `needId`, or `NO_ENTITY`.
  *
  * LOWEST ID, not "whichever we find first in some map": the choice must be the same on
  * every machine and every replay (I2). It is arbitrary while nothing has a position —
@@ -407,6 +466,13 @@ function payForStay(
  * free room to reach a distant one is exactly the "correct but reads as stupid" defect
  * §6.1 warns about. Choosing by id today does not create that behaviour; choosing by
  * anything unstable would.
+ *
+ * "AN INVALID ROOM IS NOT A PROVIDER" IS THIS ONE CLAUSE (G-009). A room with no floor
+ * under it, no way in, or no bed in it is skipped exactly as a room that is already taken
+ * is: the guest waits, and gives up if nothing valid frees up before its patience runs
+ * out. The predicate order is deliberate — `held` is a Set lookup, `roomTypeProvides` is
+ * a binary search, and validity is asked LAST and only of rooms that could otherwise
+ * serve, so an item or a room for another need never costs a validity computation.
  */
 function findFreeRoom(
   input: GuestTickInput,
@@ -415,7 +481,10 @@ function findFreeRoom(
 ): EntityId {
   const room = draftFindEntity(
     input.entities,
-    (entity) => !held.has(entity.id) && roomTypeProvides(input.content, entity.kind, needId),
+    (entity) =>
+      !held.has(entity.id) &&
+      roomTypeProvides(input.content, entity.kind, needId) &&
+      isValidRoom(input.validity, entity),
   );
   return room === undefined ? NO_ENTITY : room.id;
 }
@@ -479,6 +548,21 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
         // recorded and the guest leaves — rather than the guest continuing to rest in a
         // room that is gone, which is the silent-fallback failure §6.1 names for
         // pathfinding and which has exactly the same shape here.
+        held.delete(guest.roomEntityId);
+        evicted += 1;
+        continue;
+      }
+      if (!isValidRoom(input.validity, room)) {
+        // The room stopped being a ROOM under them (G-009): the storey below was
+        // demolished, or something was built against its only free side. The same event
+        // as far as the guest is concerned — the thing it was paying for is gone — so it
+        // takes the same path and is counted the same way.
+        //
+        // WHY IT IS EVICTION AND NOT A GRANDFATHERED STAY. "Zero guests served by an
+        // invalid room" is this goal's exit criterion; letting a stay run on inside a
+        // room hanging in mid-air would make that number non-zero on any honest reading
+        // of it. Splitting `evicted` into demolished-versus-invalidated is parked to M2,
+        // where the outcome tally becomes a table (PARKING.md).
         held.delete(guest.roomEntityId);
         evicted += 1;
         continue;

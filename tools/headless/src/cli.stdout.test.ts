@@ -53,7 +53,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
+import { ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -84,8 +84,8 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     days: 2,
     roomTypes: 1,
     needTypes: 1,
-    entities: 3,
-    stateHash: '40be459fe3a7083b',
+    entities: 6,
+    stateHash: 'e5553c9805f8d2bc',
   },
   guests: {
     arrived: 24,
@@ -95,6 +95,16 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     inHotel: 4,
     stuck: 0,
     orphanedReservations: 0,
+    inInvalidRooms: 0,
+  },
+  // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
+  // beside it, each standing on the ground. Zero invalid rooms here is the assertion that
+  // the shipped content and the runner's layout still make a hotel — if `requires` named
+  // an item the seeding did not place, or the layout packed rooms shoulder to shoulder,
+  // this block is where it would show, and `satisfied` above would collapse with it.
+  rooms: {
+    valid: 3,
+    invalid: { missingItem: 0, noDoor: 0, unplaced: 0, unsupported: 0 },
   },
   money: {
     transactions: 17,
@@ -123,7 +133,9 @@ const GOLDEN_2_DAYS_SEED_42 =
     'days        2',
     'room types  1',
     'need types  1',
-    'entities    3',
+    'entities    6',
+    'rooms ok    3',
+    'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no item',
     'arrived     24',
     'satisfied   15',
     'unsatisfied 5',
@@ -131,6 +143,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'in hotel    4',
     'stuck       0',
     'orphan res  0',
+    'in bad room 0',
     'ledger      17 transactions',
     'revenue     127500p',
     'upkeep      -15000p',
@@ -140,7 +153,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'building    0p',
     'settlements 2',
     'balance     112500p',
-    'state hash  40be459fe3a7083b',
+    'state hash  e5553c9805f8d2bc',
   ].join('\n') + '\n';
 
 /**
@@ -159,6 +172,23 @@ const GOLDEN_2_DAYS_SEED_42 =
  *
  * The three new lines read 0 because the flags default off. `building 0p` is the sum of a
  * reason with no transactions, not an absent field.
+ *
+ * WHY IT MOVED AGAIN AT G-009, AND WHY THE SAME NUMBERS STILL DID NOT.
+ *
+ * `state hash` moved for the same two kinds of reason: the shipped content gained
+ * `requires` and an `item-types.json`, which moves the fingerprint `World.contentHash`
+ * records, and the seeded hotel is now laid out with a corridor between its rooms
+ * (columns 0, 2, 4 rather than 0, 1, 2) because a room with a neighbour hard against both
+ * sides has no door. `entities` moved 3 -> 6: each room now stands beside its bed, and a
+ * bed is an entity.
+ *
+ * AND EVERY GUEST AND MONEY NUMBER IS AGAIN UNCHANGED, character for character: 24
+ * arrived, 15 satisfied, 5 unsatisfied, 17 transactions, 127500p revenue, -15000p upkeep,
+ * 112500p balance. THAT is the check worth making. Room validity is a rule about which
+ * rooms are providers, and the shipped hotel's rooms are all providers, so a hotel that
+ * worked before must do exactly as much business now. If `satisfied` had fallen here, the
+ * rule would have broken the shipped content rather than described it — which is the one
+ * way this goal could have gone quietly wrong.
  */
 
 describe('byte-identical stdout across runs (G-006 exit criterion, verbatim)', () => {
@@ -235,7 +265,7 @@ describe('the DOCUMENTED invocation, through pnpm itself', () => {
   it('pnpm --silent sim:run --quiet yields the state hash alone', () => {
     const result = runPnpm(['--silent', 'sim:run', '--days', '2', '--seed', '42', '--quiet']);
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe('40be459fe3a7083b\n');
+    expect(result.stdout).toBe('e5553c9805f8d2bc\n');
   });
 });
 
@@ -258,7 +288,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  40be459fe3a7083b']);
+    expect(differing).toEqual(['seed        42', 'state hash  e5553c9805f8d2bc']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -286,6 +316,9 @@ describe('the --content contract', () => {
     const dir = makeTempDir();
     copyFileSync(ROOM_TYPES_PATH, join(dir, 'room-types.json'));
     copyFileSync(NEED_TYPES_PATH, join(dir, 'need-types.json'));
+    // Three files since G-009. A `--content` directory missing `item-types.json` is a
+    // content set the loader refuses, which the next test but one pins.
+    copyFileSync(ITEM_TYPES_PATH, join(dir, 'item-types.json'));
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
@@ -358,6 +391,11 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
       inHotel: number;
       stuck: number;
       orphanedReservations: number;
+      inInvalidRooms: number;
+    };
+    rooms: {
+      valid: number;
+      invalid: { missingItem: number; noDoor: number; unplaced: number; unsupported: number };
     };
     money: {
       revenuePennies: number;
@@ -398,7 +436,19 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     expect(s.money.revenuePennies).toBe(2_932_500);
     expect(s.money.upkeepPennies).toBe(212 * -2_500);
     expect(s.build.built * -250_000).toBe(s.money.constructionPennies);
-    expect(s.world.entities).toBe(3 + 9);
+    // Twelve rooms and twelve beds since G-009: a built room arrives furnished, and a bed
+    // is an entity. `rooms.valid` is the number a reader wants, and it is not 12.
+    expect(s.world.entities).toBe((3 + 9) * 2);
+    // AND SEVEN OF THE NINE ROOMS THE PLAYER BUILT DO NOT WORK. The player's walk packs
+    // rooms onto the floor above, over the corridors of the hotel below, so most of them
+    // have nothing underneath. Every guest number above is nevertheless IDENTICAL to
+    // G-008's — 345 satisfied, 2,932,500p — because demand saturates at about five rooms
+    // and the five that work are enough. That is the trap ADR-0009 describes, now with a
+    // second way to fall into it: the player paid 250,000p apiece for seven rooms that
+    // house nobody and still cost 2,500p a night each.
+    expect(s.rooms.invalid.unsupported).toBe(7);
+    expect(s.rooms.valid).toBe(5);
+    expect(s.guests.inInvalidRooms).toBe(0);
   });
 
   it('reports a balance equal to the fold of its own log', () => {

@@ -47,6 +47,8 @@ import {
   assertGuestOutcomes,
   balanceOf,
   countConstructionTransactions,
+  countGuestsInInvalidRooms,
+  countInvalidRooms,
   countOrphanedReservations,
   countSettlementTransactions,
   countStuckGuests,
@@ -55,10 +57,13 @@ import {
   guestCount,
   hashState,
   isWithinBounds,
+  requiredItemsOf,
   sumByReason,
   TICKS_PER_DAY,
+  totalInvalidRooms,
   TRANSACTION_REASONS,
 } from '@hotelsim/sim';
+import { entitiesInOrder, GROUND_FLOOR, isRoomKind } from '@hotelsim/sim';
 import type { BoundContent, Cell, GridBounds, ScheduledCommand, World } from '@hotelsim/sim';
 
 /**
@@ -109,21 +114,33 @@ export const BUILD_OFF = 0;
  */
 export const BUILD_START_TICK = 1;
 
-/**
- * The storey the walk starts on. Ground is 0 and basements are negative (`grid.ts`), and
- * the walk goes UP from here: the basements the plot allows are left empty because
- * nothing in M1 has a reason to be down there yet.
- */
-const GROUND_FLOOR = 0;
+// The storey the walk starts on is `GROUND_FLOOR`, imported from the sim rather than
+// redeclared here since G-009: the enclosure rule reads the same constant to decide what
+// the earth carries, and a host with its own copy of "where the ground is" could lay a
+// hotel out on a floor the simulation thinks is in mid-air. The walk goes UP from there;
+// the basements the plot allows are left empty because nothing in M1 has a reason to be
+// down there yet.
 
 /**
- * One room, one column. A HOST DECISION about layout, not a rule of the simulation.
+ * One room, then the cell its door opens into. A HOST DECISION about layout, not a rule
+ * of the simulation.
  *
  * The sim knows only that an entity stands at a cell; how a hotel is laid out is the
  * player's business at M5 and this runner's business until then. Room footprints are
  * content, so when a room occupies four columns this is the line that changes.
+ *
+ * IT IS 2 BECAUSE OF THE DOOR RULE (G-009). A room needs at least one free cell beside
+ * it on its own floor, so rooms packed shoulder to shoulder seal each other in and the
+ * ones in the middle house nobody. The empty column between them IS the corridor until
+ * M3 gives corridors an identity of their own. This runner therefore lays out a hotel
+ * that WORKS; a player is free to lay out one that does not, and finds out why.
+ *
+ * The cost, and it is real: the plot holds ~840 rooms instead of ~1,680, so a fast
+ * `--build` cadence exhausts the walk in half the attempts it used to. That is expected
+ * arithmetic rather than a defect — the walk still stops at the plot's own edge using the
+ * sim's own predicate, so no command is emitted that could be refused off-plot.
  */
-const COLUMNS_PER_ROOM = 1;
+export const COLUMNS_PER_ROOM = 2;
 
 /**
  * Where the nth room this runner places stands: left to right along a floor, then up.
@@ -138,6 +155,42 @@ const COLUMNS_PER_ROOM = 1;
  * The width now comes from the bounds the sim will check the cell against, so "off the
  * plot" means the same thing on both sides of the call.
  */
+/**
+ * Where the nth room THE PLAYER BUILDS stands: packed shoulder to shoulder, along the
+ * floor above the inherited hotel, then up.
+ *
+ * A SECOND LAYOUT, and the difference between it and `roomCell` is the point (G-009).
+ * `--rooms` is the hotel the scenario inherited, and it is laid out by somebody who knew
+ * what they were doing: a corridor between every pair of rooms. `--build` is the PLAYER,
+ * and this is what a player does — packs rooms in tight, on a new floor, over whatever
+ * happens to be underneath.
+ *
+ * It is not a trap laid for the player by the runner. It is the two mistakes the validity
+ * rules exist to teach, arising from one plausible workload:
+ *
+ *   - rooms hard against each other, so the ones in the middle have no door;
+ *   - rooms over the gaps in the floor below, so they have nothing to stand on.
+ *
+ * WHY THE CLI NEEDS THIS AT ALL. Before it, every room a CLI run could produce was either
+ * valid or `unsupported`, so "zero guests served by an invalid room" was measured against
+ * a run that could only ever go wrong in one way. A reason no run can produce is a reason
+ * the exit criterion never tests (ADR-0007). `unplaced` remains unreachable here by
+ * construction — only a migration makes one — and `missingItem` remains unreachable
+ * because `buildRoom` furnishes what it places; both are covered by tests that construct
+ * them, and PARKING.md records that `placeItem` at M6 is what would change the second.
+ *
+ * FLOOR 1 UPWARD, so a packed floor never collides with the inherited hotel below it.
+ * With `--rooms` above one floor's worth the two walks can meet, and that is a recorded
+ * `occupied` refusal rather than a throw, because this is the player's door.
+ */
+export function builtRoomCell(index: number, bounds: GridBounds): Cell {
+  const perFloor = bounds.maxColumn - bounds.minColumn + 1; // packed: one room, one column
+  return {
+    floor: GROUND_FLOOR + 1 + Math.floor(index / perFloor),
+    column: bounds.minColumn + (index % perFloor),
+  };
+}
+
 export function roomCell(index: number, bounds: GridBounds): Cell {
   // At least 1: `assertGridBounds` guarantees `minColumn <= maxColumn`, so the plot is at
   // least one column wide, and a room is one column. The goal that widens a room (G-009,
@@ -307,13 +360,25 @@ export function schedule(
   if (entityKind === undefined) {
     throw new Error('The injected content defines no room type, so there is no hotel to run');
   }
+  // What the seeded rooms must be furnished with (G-009). Read from the injected
+  // content, never from a literal (I3): a room type that requires nothing seeds nothing.
+  const furniture = requiredItemsOf(content, entityKind);
   const commands: ScheduledCommand[] = [];
   for (let i = 0; i < rooms; i += 1) {
     // Each room gets its own cell (G-007). A cell off the plot throws inside the sim,
     // which is the right failure for `--rooms 99999`: the plot is finite and the runner
     // should say so rather than stack every room on one square. Since G-008 a cell that
     // is already occupied throws too, which `roomCell` cannot produce — it is injective.
-    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind, at: roomCell(i, bounds) } });
+    const at = roomCell(i, bounds);
+    commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind, at } });
+    // AND ITS FURNITURE. `--rooms` is the hotel the scenario STARTS with, placed through
+    // the structural door, and a scenario that seeds unfurnished rooms is a scenario
+    // whose hotel does not work — every guest would leave unsatisfied and the report
+    // would be about a broken building rather than about the loop. `buildRoom` furnishes
+    // what the PLAYER builds; this is the host doing the same job for what it inherits.
+    for (const itemId of furniture) {
+      commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind: itemId, at } });
+    }
   }
   for (let tick = 1; tick < ticks; tick += arrivalEveryTicks) {
     commands.push({ tick, command: { kind: 'guestArrives' } });
@@ -334,9 +399,12 @@ export function schedule(
   // interleaved, an occupied cell) — `refused.outOfBounds` is 0, which report.test.ts
   // sweeps across cadences rather than leaving as a claim in this comment (ADR-0007).
   if (buildEveryTicks > BUILD_OFF) {
-    let index = rooms;
+    // From zero, on ITS OWN walk (`builtRoomCell`, G-009) rather than continuing the
+    // inherited hotel's: the player packs rooms in above, and the two layouts say
+    // different things about who laid them out. See `builtRoomCell`.
+    let index = 0;
     for (let tick = BUILD_START_TICK; tick < ticks; tick += buildEveryTicks) {
-      const at = roomCell(index, bounds);
+      const at = builtRoomCell(index, bounds);
       // The SIM's own bounds predicate, not a copy of it, so the runner and the simulation
       // cannot disagree about where the plot ends.
       if (!isWithinBounds(at, bounds)) break;
@@ -347,11 +415,20 @@ export function schedule(
   // AND THE PLAYER DEMOLISHES. Oldest first, by id, starting at 1 — so the schedule
   // demolishes the inherited rooms before anything it built, which is what puts a guest
   // in a room that stops existing and makes `evicted` a number a real run can produce.
+  //
+  // THE STRIDE SKIPS THE FURNITURE (G-009). Ids are handed out room-then-items, both by
+  // the seeding loop above and by `buildRoom`, so walking 1, 2, 3 would aim two
+  // demolitions in three at a BED and record `noSuchRoom` refusals — the room tool
+  // refuses an item, correctly. A schedule that mostly gets refused measures the wrong
+  // constraint, which is G-008 round 1's lesson; the stride is what keeps it aimed at
+  // rooms. It is derived from the same content the seeding used, so there is no second
+  // copy of the layout to drift.
   if (demolishEveryTicks > BUILD_OFF) {
+    const idsPerRoom = 1 + furniture.length;
     let id = 1;
     for (let tick = BUILD_START_TICK; tick < ticks; tick += demolishEveryTicks) {
       commands.push({ tick, command: { kind: 'demolishRoom', id } });
-      id += 1;
+      id += idsPerRoom;
     }
   }
   return commands;
@@ -393,6 +470,34 @@ export type RunSummary = {
     readonly inHotel: number;
     readonly stuck: number;
     readonly orphanedReservations: number;
+    /**
+     * Guests resting in a room that is not a valid room (G-009). MUST BE ZERO.
+     *
+     * The exit criterion's "guests served by an invalid room". The tick evicts such a
+     * guest on the tick its room goes invalid, so a healthy run reports zero — but a
+     * zero is only a measurement if the run had invalid rooms to be wrong about, which
+     * is what `rooms.invalid` beside it is for, and if the number CAN be non-zero, which
+     * `validity.guest.test.ts` proves against a forged world.
+     */
+    readonly inInvalidRooms: number;
+  };
+  /**
+   * The state of the building itself (G-009).
+   *
+   * Nested and keyed by reason, mirroring the sim's own tally rather than flattening it:
+   * the reasons are a closed union there, and a report that renamed them on the way out
+   * would be a second place to keep in step. Additive, so `SUMMARY_SCHEMA_VERSION` does
+   * not move — see the policy note on that constant.
+   */
+  readonly rooms: {
+    /** Rooms that work: placed, supported, doored and furnished. */
+    readonly valid: number;
+    readonly invalid: {
+      readonly missingItem: number;
+      readonly noDoor: number;
+      readonly unplaced: number;
+      readonly unsupported: number;
+    };
   };
   readonly money: {
     readonly transactions: number;
@@ -487,6 +592,23 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   const settlements = countSettlementTransactions(world.ledger);
   const constructions = countConstructionTransactions(world.ledger);
   const nights = dayOf(world);
+  // The building, as the sim itself judges it (G-009). Counted by the sim against the
+  // world's OWN plot — `world.grid`, not this build's default — so a save carrying a
+  // different plot is reported against the plot it was played on.
+  const invalidRooms = countInvalidRooms(world.entities, world.grid, content);
+  const guestsInInvalidRooms = countGuestsInInvalidRooms(
+    world.guests,
+    world.entities,
+    world.grid,
+    content,
+  );
+  // Rooms, not entities: the furniture is not a room, and counting it as one would make
+  // `valid + invalid` disagree with what a player sees.
+  let roomCount = 0;
+  for (const entity of entitiesInOrder(world.entities)) {
+    if (isRoomKind(content, entity.kind)) roomCount += 1;
+  }
+  const validRooms = roomCount - totalInvalidRooms(invalidRooms);
 
   const summary: RunSummary = {
     schema: SUMMARY_SCHEMA_VERSION,
@@ -514,6 +636,16 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       inHotel: guestCount(world.guests),
       stuck,
       orphanedReservations: orphans,
+      inInvalidRooms: guestsInInvalidRooms,
+    },
+    rooms: {
+      valid: validRooms,
+      invalid: {
+        missingItem: invalidRooms.missingItem,
+        noDoor: invalidRooms.noDoor,
+        unplaced: invalidRooms.unplaced,
+        unsupported: invalidRooms.unsupported,
+      },
     },
     money: {
       transactions: world.ledger.length,
@@ -572,6 +704,33 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         'once and is counted exactly once (G-008).',
     );
   }
+  // VALIDITY — the exit criterion, as a check the run makes on itself (G-009).
+  //
+  // WHAT THIS NUMBER IS, EXACTLY: a count taken ONCE, over the FINAL world of the run. It
+  // is not a per-tick audit and must not be read as one. The per-tick guarantee comes from
+  // somewhere else entirely — the eviction branch in `stepGuests`, which removes a guest
+  // on the tick its room stops being valid — and this is the end-of-run witness that the
+  // branch did its job. The run's positive evidence that it FIRED is `guests.evicted`,
+  // which the pinned criterion invocation asserts is non-zero.
+  //
+  // Zero here is unreachable through a real run by construction, which is why the
+  // non-zero case is driven through this same code with a forged world in
+  // `validity.report.test.ts` rather than trusted to be a meaningful zero (ADR-0007).
+  if (guestsInInvalidRooms > 0) {
+    violations.push(
+      `Validity invariant broken at tick ${world.tick}: ${guestsInInvalidRooms} guest(s) are in a room that ` +
+        'is not a valid room. An invalid room is not a provider, and a guest in one is evicted on the tick ' +
+        'it stops being valid (G-009).',
+    );
+  }
+  // And the tally accounts for every room, so `valid` cannot be a number nothing checks.
+  if (validRooms < 0 || validRooms + totalInvalidRooms(invalidRooms) !== roomCount) {
+    violations.push(
+      `Room accounting broken at tick ${world.tick}: ${validRooms} valid plus ` +
+        `${totalInvalidRooms(invalidRooms)} invalid does not make ${roomCount} room(s). Every room is ` +
+        'either valid or invalid for exactly one reason (G-009).',
+    );
+  }
 
   return { summary, violations };
 }
@@ -589,6 +748,9 @@ export function renderText(summary: RunSummary): string {
     `room types  ${summary.world.roomTypes}`,
     `need types  ${summary.world.needTypes}`,
     `entities    ${summary.world.entities}`,
+    `rooms ok    ${summary.rooms.valid}`,
+    `rooms bad   ${summary.rooms.invalid.unplaced} unplaced, ${summary.rooms.invalid.unsupported} unsupported, ` +
+      `${summary.rooms.invalid.noDoor} no door, ${summary.rooms.invalid.missingItem} no item`,
     `arrived     ${summary.guests.arrived}`,
     `satisfied   ${summary.guests.satisfied}`,
     `unsatisfied ${summary.guests.unsatisfied}`,
@@ -596,6 +758,7 @@ export function renderText(summary: RunSummary): string {
     `in hotel    ${summary.guests.inHotel}`,
     `stuck       ${summary.guests.stuck}`,
     `orphan res  ${summary.guests.orphanedReservations}`,
+    `in bad room ${summary.guests.inInvalidRooms}`,
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,
     `upkeep      ${summary.money.upkeepPennies}p`,

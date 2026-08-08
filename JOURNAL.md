@@ -493,3 +493,58 @@ under load, so `pnpm verify` could go red at I4 for reasons unrelated to the cod
 separately in `f2d1e4d`. The reasoning matters more than the fix: §9's stop condition is
 only worth having while a red gate means something, and **a gate that cries wolf under
 load does the same damage as one that never fires.**
+
+---
+
+## 2026-08-08 — G-009 — Room validity rules (1/3 rounds)
+
+A room is valid when it is placed, supported, doored and furnished; an invalid room is
+not a provider; the reason is legible. **Enclosure is support**, derived from what
+already exists rather than from an invented wall entity: *the only piece of a room's
+shell that another entity must provide is the floor beneath it.* Validity is derived,
+never stored, argued on **non-locality** — a stored flag would need invalidating on
+every build, demolish, spawn, despawn and migration, and a missed invalidation gives a
+world whose flag and geometry disagree **while hashing perfectly**. Fifth goal to close
+that drift class by construction.
+
+**The hotel could float, and that was my miss.** The rule I approved at PLAN asked only
+whether *a room* stood in the cell below — never whether that room was itself supported.
+One sacrificial invalid room therefore bought an arbitrarily tall tower of **valid**
+providers in mid-air, serving guests. `sim-critic` reproduced it from the CLI with no
+forging: 95 rooms reported ok, **55 of which never reached the earth**, and a wholly
+floating six-storey block printed as "1 unsupported, 5 ok" — failing the provider clause
+and the legibility clause at once. Fixed as transitive support in one ascending-floor
+pass over an index already sorted by `compareCells`, so every dependency is resolved when
+reached: O(n log n), no recursion, in a goal already at 26% of the I5 budget.
+
+**The fix exposed a better finding than the fix.** After making support transitive, the
+I2 hash **did not move** — every room in the determinism log either stood on the earth or
+had nothing directly below, so the local and transitive rules agreed everywhere. *The
+gate had been blind to the defect and was equally blind to its correction.* The builder
+added a tower to the harness — and found that placing it late still changed nothing,
+because guests take the lowest-id valid free room and the harness is almost never short
+of one, so a high-id tower is never reached. Spawning it at tick 47 fixed that, and the
+whole thing was verified by mutation rather than assumed: reverting to the local rule now
+moves the hash `1b5fcd4cca759510` -> `5bf86be21f2d1ade`. ADR-0007 at the gate level.
+
+**And a scaling number that could not see what it measured.** The builder left G-010 a
+reading of 2.08x cost for 4x rooms, comfortably inside G-010's "under 6x" bound. It was
+taken with `--arrivals` at default, so guest load — the dominant cost driver — was held
+constant while rooms quadrupled and 96 of 100 rooms sat empty all year. Under a workload
+where occupancy tracks room count it is **4.70x, superlinear at the top (50->100 alone is
+2.97x), 78% of G-010's limit**, and `--rooms 100 --arrivals 5` takes **109s for 365 days,
+10.9x the whole I5 budget**. G-010 would have started from a measurement taken where its
+own criterion cannot bite. Corrected in `PARKING.md` with both readings and their
+workloads — the record is mine, so the correction was too.
+
+Two smaller catches worth keeping. `nightlyUpkeepOf` walked every entity and threw for
+any non-room kind, so **the first bed would have killed the sim at midnight** — a trap
+G-005 left that was invisible until a goal introduced a non-room entity. And three MINORs
+were all comments claiming more than the code does, including one in the single file
+whose stated purpose is that claims about the harness are checkable.
+
+My own verification failed three times before succeeding, and the code was right on all
+three: `spawnEntity` does not furnish (only `buildRoom` does), items share a room's cell
+so they counted as rooms, and a legitimately grounded room sat at the tower's column. A
+probe is a tool and a tool needs checking — the same lesson as G-004, where my survivor
+search reported a regression that turned out to be my predicate omitting a field.

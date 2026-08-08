@@ -97,7 +97,7 @@ import {
 } from './build.js';
 import type { BuildInput, BuildOutcomes } from './build.js';
 import type { Command, ScheduledCommand } from './commands.js';
-import { firstNeedType, hasContentId } from './content.js';
+import { firstNeedType, hasContentId, isRoomKind } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
@@ -106,6 +106,7 @@ import { balanceOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { nextUint32 } from './rng.js';
 import { isSettlementTick, settleNight } from './settlement.js';
+import { createValidityContext, draftEntities } from './validity.js';
 import { assertContentMatches } from './world.js';
 import type { World } from './world.js';
 
@@ -306,7 +307,15 @@ function applyCommand(
       // `buildRoom`, and a laxer one every test and the determinism harness reach.
       //
       // Checked BEFORE `draftSpawn` so a refused spawn consumes no id.
-      {
+      //
+      // ONLY WHEN A ROOM IS BEING SPAWNED (G-009). `roomAt` is room-scoped by design —
+      // "an item inside a room shares that room's cells ON PURPOSE" — but this call site
+      // asked it regardless of WHAT was being spawned, so the first host to place an item
+      // inside a room would have been refused by a rule about rooms. Nothing could reach
+      // that branch at G-008 because every spawnable kind was a room; items make it
+      // reachable, which is the only reason it was ever findable. Two rooms on one cell
+      // still throws.
+      if (isRoomKind(content, command.entityKind)) {
         const sitting = roomAt(entities, content, command.at);
         if (sitting !== undefined) {
           throw new Error(
@@ -496,6 +505,18 @@ export function runGuests(state: TickState): TickState {
     ledger: state.world.ledger,
     entities: state.entities,
     content: state.content,
+    // The validity rules, over this tick's draft (G-009). Created HERE rather than in
+    // `guests.ts` so the guest loop asks a predicate and never touches a placement index.
+    //
+    // TICK-LOCAL AND CREATED PER TICK, which is what makes it safe: it caches an index
+    // and per-room answers derived from entity membership, and membership is frozen from
+    // the moment `applyCommands` returns until `commitEntities` runs. A context that
+    // outlived that window would answer from a building that no longer exists.
+    //
+    // Creating it costs nothing on a quiet tick: the index is built on the first question
+    // asked, and `stepGuests` returns before asking any if the hotel is empty — the same
+    // lazy contract `cashOnHand` has for the balance fold (I4, I5).
+    validity: createValidityContext(state.content, state.world.grid, draftEntities(state.entities)),
     arriving: state.arrivingGuests,
   });
   // An untouched guest loop returns its inputs by reference, so an idle tick allocates

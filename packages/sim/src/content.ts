@@ -90,6 +90,40 @@ export type RoomTypeData = {
    * exceptions, is what makes the count a countable fact.
    */
   readonly constructionCostPence?: number | undefined;
+  /**
+   * Which items must stand inside a room of this type for it to work (G-009).
+   *
+   * A room missing one of these is INVALID and therefore not a provider — it houses
+   * nobody, while still costing upkeep. `buildRoom` places these items along with the
+   * room it builds, so a room the player builds is furnished by construction.
+   *
+   * OPTIONAL, and absence is not emptiness — the `provides`, `nightlyUpkeepPence` and
+   * `constructionCostPence` contract exactly. A room type that predates items omits the
+   * key, fingerprints as it always did, and requires nothing; that is what keeps the
+   * permanent v1 save fixture a world that still ticks (ADR-0006). `[]` is the different
+   * statement: this room type deliberately needs no furniture.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK, for the reason set out on `nightlyUpkeepPence`. A
+   * room type requiring nothing is strictly easier to make valid than one that does, so
+   * silence on disk would be the dominant-strategy shape G-008 closed for prices.
+   */
+  readonly requires?: readonly ContentId[] | undefined;
+};
+
+/**
+ * One item a room can require (G-009).
+ *
+ * Structurally identical to `ItemType` in `@hotelsim/content` and deliberately not
+ * imported from it (ADR-0001), exactly as `RoomTypeData` and `NeedTypeData` are.
+ *
+ * TWO FIELDS. An item is the smallest thing a validity rule can inspect: a room is
+ * furnished when an entity of this kind stands in it. What an item costs, what need it
+ * provides, how it decays and how a player places one are all M6, and all of them are
+ * fields added here later rather than a shape changed.
+ */
+export type ItemTypeData = {
+  readonly id: ContentId;
+  readonly name: string;
 };
 
 /**
@@ -122,6 +156,8 @@ export type NeedTypeData = {
 export type SimContent = {
   readonly roomTypes: readonly RoomTypeData[];
   readonly needTypes?: readonly NeedTypeData[] | undefined;
+  /** Items rooms can require (G-009). Optional for the reason `needTypes` is. */
+  readonly itemTypes?: readonly ItemTypeData[] | undefined;
 };
 
 /**
@@ -207,14 +243,43 @@ function normaliseTable<T extends { readonly id: ContentId }>(
 }
 
 /**
- * Clone a room type, including its `provides` list.
+ * Copy, validate, sort and freeze one list of content ids on a room type.
  *
  * The list is copied, sorted and frozen for the same three reasons the record is: the
  * simulation reads its own immutable data, the fingerprint must not depend on the order
- * a designer happened to type the needs in, and a duplicate entry would be a content
- * mistake that reads as an intent. `provides` is spread conditionally rather than
- * assigned `undefined`, because `exactOptionalPropertyTypes` is on and, more to the
- * point, an absent key and a key holding `undefined` are different documents.
+ * a designer happened to type the ids in, and a duplicate entry would be a content
+ * mistake that reads as an intent.
+ *
+ * Shared by `provides` and `requires` so the two cannot drift into different rules about
+ * what a list of ids is — the `normaliseTable` discipline one level down.
+ */
+function cloneIdList(
+  roomTypeId: ContentId,
+  verb: string,
+  noun: string,
+  raw: readonly ContentId[],
+): readonly ContentId[] {
+  const list = [...raw];
+  for (const id of list) {
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error(`bindContent: room type "${roomTypeId}" ${verb} an empty ${noun} id`);
+    }
+  }
+  list.sort(compareIds);
+  for (let i = 1; i < list.length; i += 1) {
+    if (list[i] === list[i - 1]) {
+      throw new Error(`bindContent: room type "${roomTypeId}" lists ${noun} "${String(list[i])}" twice`);
+    }
+  }
+  return Object.freeze(list);
+}
+
+/**
+ * Clone a room type, including its `provides` and `requires` lists.
+ *
+ * Both lists are spread conditionally rather than assigned `undefined`, because
+ * `exactOptionalPropertyTypes` is on and, more to the point, an absent key and a key
+ * holding `undefined` are different documents to the fingerprint.
  */
 function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
   // Money is validated at the boundary, like everything else about content: a float
@@ -243,28 +308,20 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
   // only the absent form is the "predates this field" statement (see the field docs).
   const {
     provides: rawProvides,
+    requires: rawRequires,
     nightlyUpkeepPence: _rawUpkeep,
     constructionCostPence: _rawCost,
     ...rest
   } = roomType;
   const withUpkeep: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
-  const base: RoomTypeData = cost === undefined ? withUpkeep : { ...withUpkeep, constructionCostPence: cost };
-  if (rawProvides === undefined) {
-    return base;
-  }
-  const provides = [...rawProvides];
-  for (const needId of provides) {
-    if (typeof needId !== 'string' || needId.length === 0) {
-      throw new Error(`bindContent: room type "${roomType.id}" provides an empty need id`);
-    }
-  }
-  provides.sort(compareIds);
-  for (let i = 1; i < provides.length; i += 1) {
-    if (provides[i] === provides[i - 1]) {
-      throw new Error(`bindContent: room type "${roomType.id}" lists need "${String(provides[i])}" twice`);
-    }
-  }
-  return { ...base, provides: Object.freeze(provides) };
+  const withCost: RoomTypeData = cost === undefined ? withUpkeep : { ...withUpkeep, constructionCostPence: cost };
+  const base: RoomTypeData =
+    rawProvides === undefined
+      ? withCost
+      : { ...withCost, provides: cloneIdList(roomType.id, 'provides', 'need', rawProvides) };
+  return rawRequires === undefined
+    ? base
+    : { ...base, requires: cloneIdList(roomType.id, 'requires', 'item', rawRequires) };
 }
 
 /**
@@ -317,6 +374,35 @@ function assertNeedsAreSatisfiable(
 }
 
 /**
+ * Throws if any room type requires an item this content does not define (G-009).
+ *
+ * ONE DIRECTION ONLY, and the asymmetry is the point. A `requires` naming an item that
+ * does not exist is a room type that can NEVER be valid — every one ever built is a
+ * silent pure loss, which is the same class of defect as an unsatisfiable need and is
+ * caught here for the same reason: `pnpm check:content` reads `id` fields and cannot see
+ * a cross-reference between two files.
+ *
+ * The reverse is NOT a violation. An item type no room requires is furniture nothing
+ * needs yet, which is what M6's table will be full of on its first day. Rejecting it
+ * would make adding an item before the room that uses it impossible.
+ */
+function assertRequiredItemsExist(
+  roomTypes: readonly RoomTypeData[],
+  itemTypes: readonly ItemTypeData[],
+): void {
+  for (const roomType of roomTypes) {
+    for (const itemId of roomType.requires ?? []) {
+      if (indexOfId(itemTypes, itemId) === -1) {
+        throw new Error(
+          `bindContent: room type "${roomType.id}" requires item "${itemId}", which this content does not define. ` +
+            'A room that requires an item nothing can supply could never be valid, so every one built would be a silent loss.',
+        );
+      }
+    }
+  }
+}
+
+/**
  * Normalise injected content and fingerprint it.
  *
  * Sorting rather than asserting-sorted is the deliberate choice: it puts the one
@@ -351,8 +437,13 @@ export function bindContent(content: SimContent): BoundContent {
     content.needTypes === undefined
       ? undefined
       : normaliseTable(content.needTypes, 'need type', (needType) => ({ ...needType }));
+  const itemTypes =
+    content.itemTypes === undefined
+      ? undefined
+      : normaliseTable(content.itemTypes, 'item type', (itemType) => ({ ...itemType }));
 
   assertNeedsAreSatisfiable(roomTypes, needTypes ?? []);
+  assertRequiredItemsExist(roomTypes, itemTypes ?? []);
 
   // ABSENCE IS NOT EMPTINESS. Content that does not define need types produces the same
   // document — and therefore the same fingerprint — that it produced before need types
@@ -361,7 +452,8 @@ export function bindContent(content: SimContent): BoundContent {
   // those saves for a change that said nothing about them. `[]` remains available to a
   // designer who means "this content deliberately defines no needs", and that IS a
   // different document.
-  const normalised: SimContent = needTypes === undefined ? { roomTypes } : { roomTypes, needTypes };
+  const withNeeds: SimContent = needTypes === undefined ? { roomTypes } : { roomTypes, needTypes };
+  const normalised: SimContent = itemTypes === undefined ? withNeeds : { ...withNeeds, itemTypes };
   return Object.freeze({
     content: Object.freeze(normalised),
     fingerprint: hashJson(normalised as unknown as JsonValue),
@@ -373,6 +465,44 @@ export function findRoomType(bound: BoundContent, id: ContentId): RoomTypeData |
   const index = indexOfId(bound.content.roomTypes, id);
   return index === -1 ? undefined : bound.content.roomTypes[index];
 }
+
+/**
+ * Whether `kind` names a ROOM TYPE in this content.
+ *
+ * The one definition of "this entity is a room", consulted by `roomAt` (which decides
+ * what occupies a cell), by `applyCommand`'s spawn check, and by the validity rules
+ * (which apply to rooms and to nothing else). Written down once so those three cannot
+ * drift into different answers, which they did before G-009: the spawn check asked
+ * `roomAt` regardless of what was being spawned, so an ITEM placed inside a room was
+ * refused by a rule about rooms.
+ */
+export function isRoomKind(bound: BoundContent, kind: ContentId): boolean {
+  return findRoomType(bound, kind) !== undefined;
+}
+
+/** O(log n). Returns the injected item, or undefined if this content has no such id. */
+export function findItemType(bound: BoundContent, id: ContentId): ItemTypeData | undefined {
+  const itemTypes = bound.content.itemTypes;
+  if (itemTypes === undefined) return undefined;
+  const index = indexOfId(itemTypes, id);
+  return index === -1 ? undefined : itemTypes[index];
+}
+
+/**
+ * Which items must stand in a room of this type for it to work (G-009).
+ *
+ * `[]` for a room type that requires nothing AND for one this content does not define —
+ * the caller that cares about the difference has already asked `findRoomType`. Absence
+ * is not emptiness in the DOCUMENT (see `RoomTypeData.requires`); by the time a rule
+ * asks this question, the two have the same consequence: nothing to look for.
+ */
+export function requiredItemsOf(bound: BoundContent, roomTypeId: ContentId): readonly ContentId[] {
+  return findRoomType(bound, roomTypeId)?.requires ?? EMPTY_IDS;
+}
+
+/** Shared empty list, so `requiredItemsOf` allocates nothing on the hot path. Frozen
+ *  because it is handed to callers. */
+const EMPTY_IDS: readonly ContentId[] = Object.freeze([]);
 
 /** O(log n). Returns the injected need, or undefined if this content has no such id. */
 export function findNeedType(bound: BoundContent, id: ContentId): NeedTypeData | undefined {
@@ -405,13 +535,19 @@ export function roomTypeProvides(bound: BoundContent, roomTypeId: ContentId, nee
 /**
  * Whether `id` names anything the simulation may SPAWN AN ENTITY OF.
  *
- * The one question the tick asks of content today, and it searches room types because
- * an entity is a room at M0. It deliberately does NOT search need types: a need is not
- * a thing that stands in a hotel, and answering true for one would let a command spawn
- * an entity whose kind is a need. When items arrive (M2) they are entities and belong
- * here; when guest archetypes arrive (M6) they are not, because a guest is not an
- * entity (`guests.ts`).
+ * Room types and, since G-009, ITEM TYPES — exactly as this comment predicted: "when
+ * items arrive they are entities and belong here". An item is a thing that stands in a
+ * hotel and occupies a cell, so it is an entity; what distinguishes it from a room is
+ * that it does not OCCUPY that cell for building purposes (`roomAt` is room-scoped) and
+ * that the validity rules do not apply to it.
+ *
+ * It still deliberately does NOT search need types: a need is not a thing that stands in
+ * a hotel, and answering true for one would let a command spawn an entity whose kind is
+ * a need. Guest archetypes (M6) are not here either, because a guest is not an entity
+ * (`guests.ts`).
  */
 export function hasContentId(bound: BoundContent, id: ContentId): boolean {
-  return indexOfId(bound.content.roomTypes, id) !== -1;
+  if (indexOfId(bound.content.roomTypes, id) !== -1) return true;
+  const itemTypes = bound.content.itemTypes;
+  return itemTypes !== undefined && indexOfId(itemTypes, id) !== -1;
 }

@@ -20,8 +20,17 @@
 //   costs money              no                          yes, one `construction` tx
 //   insufficient cash        n/a                         refused, recorded
 //   non-integer cell         throws                      throws — see `applyBuildRoom`
+//   places required items    no, one entity per command  yes, in the same command (G-009)
 //   who reaches for it       tests, the determinism      A HOST ACTING FOR A PLAYER.
 //                            harness, scenario setup     This is the one a UI dispatches.
+//
+// WHAT THIS FILE DELIBERATELY DOES NOT REFUSE (G-009). A room that will be INVALID —
+// floating above nothing, sealed in by its neighbours — is built without complaint. That
+// is not an oversight and it is not ADR-0009's affordability argument either: it is what
+// keeps validity from collapsing into a placement check. If every buildable room were
+// valid by construction, "an invalid room is not a provider" would inspect nothing and
+// the rule would be unfalsifiable (ADR-0007). The player is allowed to build a bad room,
+// finds out that it houses nobody while still costing upkeep, and is told why.
 //
 // What is shared is the RULE about what a legal placement is — `roomAt` below is the one
 // definition, consulted by both doors. What differs is the RESPONSE, and it differs by
@@ -58,14 +67,15 @@
 // `settlement.ts` have, for the same cycle reason. No randomness: every function here is
 // a pure function of world state, injected content and the command's own arguments.
 
-import { findRoomType } from './content.js';
+import { findRoomType, isRoomKind, requiredItemsOf } from './content.js';
 import type { BoundContent } from './content.js';
-import { draftDespawn, draftFindEntity, draftSpawn, isPlaced } from './entities.js';
+import { draftDespawn, draftFindEntity, draftForEach, draftSpawn, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId } from './entities.js';
 import { assertCell, cellsEqual, describeBounds, describeCell, isWithinBounds } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
+import { standsInRoom } from './validity.js';
 
 /**
  * Why a player's build or demolish was refused. A CLOSED UNION, not free text — the
@@ -410,6 +420,23 @@ export function applyBuildRoom(input: BuildInput, roomType: ContentId, at: Cell)
   }
 
   draftSpawn(input.entities, roomType, at);
+  // AND ITS FURNITURE (G-009). A room the player builds arrives with the items its type
+  // requires, standing in it, so it is a valid provider the moment it exists.
+  //
+  // WHY FURNISHING BELONGS TO THIS COMMAND. At M1 the player buys a ROOM; choosing what
+  // goes in it is item variety, which is M6, and it needs a `placeItem` command that does
+  // not exist. The alternative — building a room that is invalid until furnished, with no
+  // way to furnish it — is a build command whose every result is useless. The honest cost
+  // of this choice is recorded rather than hidden: `missingItem` is NOT reachable by a
+  // player at M1, only by a host scenario or a save, and M6's `placeItem` is what changes
+  // that (PARKING.md).
+  //
+  // NO EXTRA CHARGE. One `construction` transaction per build, unconditionally, is what
+  // keeps `countConstructionTransactions === built` exact; what an item costs is a
+  // designer's number and therefore content, and therefore M6's to introduce.
+  for (const itemId of requiredItemsOf(input.content, roomType)) {
+    draftSpawn(input.entities, itemId, at);
+  }
   return {
     // ONE TRANSACTION PER SUCCESSFUL BUILD, UNCONDITIONALLY — including a free room type,
     // which books amount 0. The settlement precedent: "one per build, no exceptions" is
@@ -476,11 +503,34 @@ export function applyDemolishRoom(input: BuildInput, id: EntityId): BuildResult 
   if (room === undefined) {
     return refuse(input, 'noSuchRoom');
   }
+  // THE FURNITURE GOES WITH IT (G-009). Everything standing in the room that is not
+  // itself a room — its items — is removed in the same command.
+  //
+  // This is not tidiness. A bed left standing in an empty cell would furnish the NEXT
+  // room built there for free, so a player could demolish and rebuild to dodge the cost
+  // of furniture, and `missingItem` would become even harder to reach than it already is.
+  // It is also the only way "a room holds its required items" stays a fact about the
+  // room rather than about the cell's history.
+  //
+  // Collected BEFORE anything is despawned, because `standsInRoom` reads the room's own
+  // position and a scan that removed as it walked would be reasoning about a draft it was
+  // changing. O(entities) per demolish command — the same cost `roomAt` already pays per
+  // build, and builds and demolitions are rare by construction (they arrive from a
+  // player), so this is not in the per-tick budget G-010 owns.
+  const furniture: EntityId[] = [];
+  draftForEach(input.entities, (entity) => {
+    if (entity.id === room.id) return;
+    if (isRoomKind(input.content, entity.kind)) return;
+    if (standsInRoom(input.content, room, entity)) furniture.push(entity.id);
+  });
   // Cannot return false: `draftFindEntity` just found it live in this same draft. Kept as
   // the postcondition of that search rather than as evidence anything was checked — the
   // `payForStay` discipline (ADR-0008's amendment: unreachable is not vacuous).
   if (!draftDespawn(input.entities, id)) {
     throw new Error(`demolishRoom: entity ${id} was found live and then refused removal`);
+  }
+  for (const itemId of furniture) {
+    draftDespawn(input.entities, itemId);
   }
   return {
     ledger: input.ledger,

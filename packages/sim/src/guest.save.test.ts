@@ -234,10 +234,12 @@ describe('a v2 world with guests in it', () => {
   const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 };
   const content = bindContent({ roomTypes: [roomType('roomA', ['rest'])], needTypes: [needType] });
   // A function of the column since G-008: `spawnEntity` onto an occupied cell throws.
-  const spawnRoom = (column: number): Command => ({
+  // Stride two since G-009: adjacent rooms seal each other in, and a sealed room is not
+  // a provider, so a hotel leaves a corridor between its rooms.
+  const spawnRoom = (index: number): Command => ({
     kind: 'spawnEntity',
     entityKind: 'roomA',
-    at: { floor: 0, column },
+    at: { floor: 0, column: index * 2 },
   });
   const arrive: Command = { kind: 'guestArrives' };
 

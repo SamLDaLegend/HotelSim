@@ -40,7 +40,7 @@ export const penceSchema = z.int();
  * silently ignored becomes "the balance is slightly wrong" three goals later, with
  * nothing pointing at the content file that caused it.
  *
- * Seven fields (HOTELSIM.md §8 — "one room type, one guest, one need, one day cycle,
+ * Eight fields (HOTELSIM.md §8 — "one room type, one guest, one need, one day cycle,
  * money in and money out"):
  *   id                    identity, and the value the sim receives as an entity kind
  *   name                  the human handle; display is the render layer's job at M5
@@ -49,6 +49,7 @@ export const penceSchema = z.int();
  *   nightlyUpkeepPence    upkeep, money out                       -> G-005
  *   constructionCostPence the build-loop sink, charged once       -> G-008
  *   provides              which needs a stay here satisfies       -> G-004
+ *   requires              which items must stand in it to work    -> G-009
  *
  * `capacity` is the size of the party a room holds, NOT a count of unrelated bookings.
  * A party is one guest at M0. Two strangers sharing a room is not what this number
@@ -115,6 +116,28 @@ export const penceSchema = z.int();
  * the field is barred because it would move `SAVE_V1_CONTENT`'s shape and its
  * fingerprint `8e09fe4f0fa162a3` (ADR-0006).
  * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * `requires` IS REQUIRED HERE AND OPTIONAL IN THE SIM (G-009), for the same reason
+ * both prices are.
+ *
+ * It names the items that must stand inside a room of this type for it to be a valid
+ * provider. `[]` is the deliberate statement "this room type needs no furniture" — a
+ * corridor at M3, a broom cupboard — and is different from silence.
+ *
+ * Why required rather than optional: a room type that requires nothing is STRICTLY
+ * EASIER TO MAKE WORK than one that does, so silence on disk hands the designer a
+ * dominant room type the same way a missing `constructionCostPence` handed them a free
+ * one at G-008. Silence in HISTORY is a different statement — a document written before
+ * items existed — which is why `RoomTypeData` in `packages/sim/src/content.ts` keeps the
+ * key optional and the frozen v1 fixture, which never passes through this schema, keeps
+ * its `8e09fe4f0fa162a3` fingerprint.
+ *
+ * The ids here name entries in `item-types.json`. `check:content` cannot see a
+ * cross-reference — it reads `id` fields, not references between them — so `bindContent`
+ * in packages/sim rejects a `requires` naming an item this content does not define, on
+ * every host start, exactly as it does for `provides`.
+ * ---------------------------------------------------------------------------
  */
 export const roomTypeSchema = z.strictObject({
   id: contentIdSchema,
@@ -124,6 +147,7 @@ export const roomTypeSchema = z.strictObject({
   nightlyUpkeepPence: penceSchema.min(0),
   constructionCostPence: penceSchema.min(0),
   provides: z.array(contentIdSchema).optional(),
+  requires: z.array(contentIdSchema),
 });
 
 /**
@@ -171,8 +195,30 @@ export const needTypeSchema = z.strictObject({
  */
 export const roomTypesSchema = z.array(roomTypeSchema).min(1);
 
+/**
+ * One item a room can require (G-009).
+ *
+ * TWO FIELDS, DELIBERATELY. An item is the smallest thing the validity rule can inspect:
+ * a room is furnished when an entity of this kind stands in it. Item variety — what an
+ * item costs, what need it provides, how it decays, how a player places one — is M6, and
+ * every one of those is a field added here later rather than a shape changed.
+ *
+ * An item type nobody requires is NOT an error, and that asymmetry is deliberate. A need
+ * no room provides is guaranteed unhappiness (`bindContent` rejects it); an item no room
+ * requires is simply furniture nothing needs yet, which is what M6's table will be full
+ * of on its first day.
+ */
+export const itemTypeSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+});
+
 /** The whole `need-types.json` document. A top-level array, for the same reason. */
 export const needTypesSchema = z.array(needTypeSchema).min(1);
 
+/** The whole `item-types.json` document. A top-level array, for the same reason. */
+export const itemTypesSchema = z.array(itemTypeSchema).min(1);
+
 export type RoomType = z.infer<typeof roomTypeSchema>;
 export type NeedType = z.infer<typeof needTypeSchema>;
+export type ItemType = z.infer<typeof itemTypeSchema>;

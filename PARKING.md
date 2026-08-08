@@ -348,4 +348,115 @@ Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the dif
   misreported — but a sweep at a very fast cadence measures a shorter build window than its
   `--days` suggests. Pacing attempts to affordability would put the sim's pricing rule in
   the host; the honest fix is a schedule the host can revise as the run goes. -> **M4**,
-  with the demand model, alongside starting capital.
+  with the demand model, alongside starting capital. **G-009 UPDATE:** the player's walk
+  now packs one room per column but starts on floor 1, so it is 1,600 cells rather than
+  1,680, and the inherited hotel's walk is 840 rather than 1,680 because it leaves a
+  corridor. The window moves with those numbers; the arithmetic is derived in
+  `report.test.ts` rather than written down as a literal.
+
+## Deferred out of G-009 (2026-08-08)
+
+Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the diff.
+
+- **Multi-cell footprints (`widthCells`), re-parked a third time — now to M6, with the
+  argument that finally settles it.** G-008 sent them here on the grounds that "G-009 is
+  the first goal that genuinely needs a room to have EXTENT". It turned out not to, and the
+  reason is worth keeping: the enclosure rule is **per cell** — every cell of a footprint
+  needs a floor beneath it — so a one-cell room is not vacuous, it can fail and it can
+  *become* false. Extent adds exactly one case, the PARTIALLY supported wide room, which
+  refines a rule that already bites rather than supplying its substance. `roomCellsOf` in
+  `validity.ts` is written and named as the single seam: every rule iterates it, so landing
+  width later is one function body plus a content field, and the stored shape stays one
+  origin cell per entity, so it still owes **no migration**. -> **M6**, with room variety.
+- **`placeItem` / `removeItem` as player commands — AND THE LIMITATION THEY WOULD FIX,
+  STATED PLAINLY: `missingItem` IS NOT PLAYER-REACHABLE AT M1.** `buildRoom` furnishes the
+  room it places and `demolishRoom` takes the furniture with it, so no sequence of player
+  commands can produce a room that is missing an item it requires. The reason is only
+  reachable from a host scenario (`spawnEntity`), from a save, or from a test that
+  constructs it — which is enough for the exit criterion and is how `unplaced` has always
+  been reached, but it is a real limit and a reader would otherwise assume it away. M6's
+  item variety is what makes furnishing a player DECISION, and on that day this reason
+  becomes reachable the way the other three already are. -> **M6**.
+- **Item cost, item quality, item decay, items that provide needs of their own.** An item
+  type is `{id, name}` and nothing else, and a built room's furniture is free. Every one of
+  those is a field added to `itemTypeSchema` later rather than a shape changed. -> **M6**.
+- **Corridors, and what they do to the door rule.** "A door is a free cell beside the room
+  on its floor" is the honest reading while an empty cell is the only thing a corridor
+  could be. When M3 gives circulation an identity the predicate NARROWS — from "a free
+  cell" to "a corridor cell" — and `computeRoomInvalidity` is the one place it changes.
+  Vertical circulation then makes "reachable from the entrance" a further condition, which
+  is a THIRD thing and not this one. -> **M3**.
+- **Splitting `evicted` by reason.** A guest whose room was demolished and a guest whose
+  room stopped being valid are both `evicted`, because they are the same event from the
+  guest's point of view: the thing it was paying for is gone. When the outcome tally becomes
+  a table this is one of the rows. -> **M2**, with reviews (it sharpens the item already
+  parked out of G-004).
+- **Validity cached across ticks.** The placement index and the per-room answers are
+  tick-local and rebuilt on the first question of every tick. Making them survive between
+  ticks is the same DERIVED-state discipline as the room -> occupant index: rebuilt on load,
+  never saved, never authoritative. Measured cost below. -> **G-010**, which owns tick cost.
+- **Support is transitive, and the one-pass computation is what keeps it affordable.**
+  Critique round 1 found that "the cell below holds a room" said nothing about whether THAT
+  room was supported, so one sacrificial room in mid-air carried an arbitrarily tall tower
+  of valid providers. Fixed by resolving the whole building in a single ascending-floor
+  pass over the index that was already being sorted (`groundedRooms`), which is O(n log n)
+  with no recursion — a per-room chain walk would have been O(n x height) in the goal
+  before G-010 measures tick cost. **The seam to know about:** the pass folds over
+  `roomCellsOf`, so a multi-cell footprint needs every cell either at the earth or over a
+  grounded room, and that case needs no change here when width lands at M6.
+- **I5 IS AT 28% OF BUDGET, UP FROM ~14.7%. MEASURED, PAIRED, NOT ESTIMATED.**
+  `pnpm sim:bench`, median of 5, same machine, `git stash` between: **1,474ms -> 2,579ms**,
+  a +75% regression on a gate that stays green; **2,773ms after transitive support**, which
+  adds one bounded pass per tick and does not change the shape of the cost. Decomposed by
+  running the same 365 days
+  under a content set whose room type requires nothing (3 entities instead of 6), direct
+  spawn, median of 5: **~503ms of it is the FURNITURE** — the bench's entity count doubled,
+  and `findFreeRoom` scans every entity per waiting guest per tick — and **~600ms is the
+  VALIDITY machinery** itself (one sorted index per tick that has guests, plus a memoised
+  check per candidate room). Deliberately not optimised here: it is under the 40% the plan
+  set as the escalation line, and optimising it is G-010's goal, not this one. **What G-010
+  should know:** the furniture half is fixed by a room-scoped scan (items can never satisfy
+  `roomTypeProvides`, so they are pure overhead in that loop), and the validity half is
+  fixed by making the index survive a tick in which entity membership did not change.
+- **Scaling spot readings, for G-010 to start from rather than rediscover. READ BOTH ROWS —
+  THE FIRST ONE CANNOT SEE WHAT G-010 IS MEASURING.**
+
+  | workload | 25 -> 100 rooms | note |
+  |---|---|---|
+  | `--arrivals` at default (guest load held constant) | **2.17x** | 96 of the 100 rooms sit empty all year |
+  | occupancy tracking room count (`--arrivals 19 / 10 / 5`) | **4.70x** | 25->50 is 1.58x, **50->100 is 2.97x** — superlinear at the top |
+
+  The first row is the reading G-009's builder recorded (5.9 -> 12.3 µs/tick, 2.08x,
+  reproduced by `sim-critic` at 2.17x). **It was taken with the guest load — the dominant
+  cost driver — held constant while rooms quadrupled**, so almost every added room was
+  never occupied and the measurement could not see room-count scaling at all. G-010's own
+  criterion is "tick cost at 100 rooms under 6x that at 25", and its sibling criterion
+  requires a bench workload at 60+ rooms, which implies the *opposite* workload. Starting
+  from the first row would be ADR-0007's shape one level up: a measurement that inspects
+  nothing, handed to the goal whose whole purpose is to measure.
+
+  Under the honest workload the margin is **78% of G-010's limit and superlinear at the
+  top end**, so the goal has real work to do rather than a number that is already inside
+  its bound. Also worth knowing before designing the bench: **`--rooms 100 --arrivals 5`
+  takes 109s for 365 days — 10.9x the entire I5 budget.**
+
+  Caught by `sim-critic` at G-009 round 1, checking a number the *next* goal depends on.
+- **An invalid room is charged full upkeep and the player is not told.** Validity gates
+  provision and nothing else, so a badly built room is a pure loss — deliberately, and
+  consistent with the reading G-007 gave unplaced rooms and with ADR-0009's trap. The CLI
+  now REPORTS the tally by reason, but a player has no notification. -> **M5** for the
+  notification, **M4** for whether the loss should have a floor.
+- **An item type no room requires is not validated.** `bindContent` rejects a `requires`
+  naming an item that does not exist, but not an item nothing requires — because M6's table
+  will be full of those on its first day, and rejecting them would make adding an item
+  before the room that uses it impossible. The asymmetry with `assertNeedsAreSatisfiable`
+  is deliberate: an unprovided NEED is guaranteed unhappiness, an unrequired ITEM is
+  furniture waiting for a room. -> revisit only if dead content becomes a real problem.
+- **`entityAt(world, cell)` as a general query — deliberately NOT written.** Only the
+  lookups with callers exist (`roomAtCell`, `kindAtCell`, both private to `validity.ts`).
+  Same reasoning that kept `compareCells` unwritten until G-009 gave it a caller: a query
+  with no consumer is a thing to get wrong for free. -> whenever something needs it.
+- **The two CLI layouts are a host decision that will not survive M5.** `roomCell` leaves a
+  corridor (the inherited hotel) and `builtRoomCell` packs tight on the floor above (the
+  player). Both exist to give a sweep a workload; when a UI dispatches builds, the layout is
+  the player's and both go. -> **M5**.

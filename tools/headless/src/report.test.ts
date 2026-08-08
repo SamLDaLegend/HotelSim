@@ -11,9 +11,11 @@ import { describe, expect, it } from 'vitest';
 import {
   createWorld,
   firstNeedType,
+  isRoomKind,
   isWithinBounds,
   maxGuestLifetimeTicks,
   NO_ENTITY,
+  requiredItemsOf,
   run,
   TICKS_PER_DAY,
 } from '@hotelsim/sim';
@@ -22,6 +24,8 @@ import { loadContent } from './content-loader.js';
 import {
   assertIntegerLeaves,
   buildSummary,
+  builtRoomCell,
+  COLUMNS_PER_ROOM,
   emitReport,
   HOTEL_ROOMS,
   parseArgs,
@@ -113,12 +117,21 @@ describe('parseArgs', () => {
 });
 
 describe('schedule', () => {
-  it('spawns exactly `rooms` rooms at tick 0 and arrivals on the cadence', () => {
+  it('spawns exactly `rooms` rooms AND their furniture at tick 0, and arrivals on the cadence', () => {
+    // G-009: a seeded room arrives furnished, because a room missing an item it requires
+    // is not a provider and a scenario that inherits a broken hotel is a scenario about
+    // the wrong thing. The count is derived from the CONTENT rather than written as a
+    // literal, so adding a second required item does not silently make this test wrong.
+    const perRoom = 1 + requiredItemsOf(content, content.content.roomTypes[0]!.id).length;
     const commands = schedule(500, content, PLOT, 4, 100);
     const spawns = commands.filter((c) => c.command.kind === 'spawnEntity');
     const arrivals = commands.filter((c) => c.command.kind === 'guestArrives');
-    expect(spawns).toHaveLength(4);
+    expect(perRoom).toBeGreaterThan(1); // the shipped room type does require something
+    expect(spawns).toHaveLength(4 * perRoom);
     expect(spawns.every((c) => c.tick === 0)).toBe(true);
+    // Every item stands in a room's cell, and every room has its items.
+    const rooms = spawns.filter((c) => c.command.kind === 'spawnEntity' && isRoomKind(content, c.command.entityKind));
+    expect(rooms).toHaveLength(4);
     expect(arrivals.map((c) => c.tick)).toEqual([1, 101, 201, 301, 401]);
   });
 
@@ -152,35 +165,64 @@ describe('schedule', () => {
 // off-plot refusals against 417 for funds and ZERO rooms built: a diagnostic that told
 // the next reader the build loop was plot-limited when it was cash-limited.
 describe('the build walk stays on the plot', () => {
-  it('walks the full width of the plot, and its first cells are the golden run\'s', () => {
-    // The first three cells are the DEFAULT RUN's three seeded rooms. They are a literal
-    // here because the committed golden output and `pnpm sim:bench` are pinned to the
-    // state hash they produce: widening the walk had to leave them where they were.
+  it('leaves a corridor beside every inherited room, and walks the full width of the plot', () => {
+    // G-009 CHANGED THESE NUMBERS, and the arithmetic is the subject rather than the
+    // literals: a room needs a free cell beside it on its floor or it has no door, so the
+    // inherited hotel is laid out one room, one corridor. The stride is imported rather
+    // than copied, so the test cannot disagree with the runner about what it is.
+    expect(COLUMNS_PER_ROOM).toBe(2);
     expect(roomCell(0, PLOT)).toEqual({ floor: 0, column: 0 });
-    expect(roomCell(1, PLOT)).toEqual({ floor: 0, column: 1 });
-    expect(roomCell(2, PLOT)).toEqual({ floor: 0, column: 2 });
-    // The width is the plot's width, not a constant of the runner's own: the last cell of
-    // the ground floor is the plot's right-hand edge, and the next index starts floor 1.
-    const width = PLOT.maxColumn - PLOT.minColumn + 1;
-    expect(roomCell(width - 1, PLOT)).toEqual({ floor: 0, column: PLOT.maxColumn });
-    expect(roomCell(width, PLOT)).toEqual({ floor: 1, column: PLOT.minColumn });
-    // Injective, so no built room can land on another (the sim throws on a spawn into an
+    expect(roomCell(1, PLOT)).toEqual({ floor: 0, column: 2 });
+    expect(roomCell(2, PLOT)).toEqual({ floor: 0, column: 4 });
+    // No two inherited rooms are ever neighbours, which is the property that makes them
+    // valid. Checked against the sim's own rule in the golden run, not only here.
+    for (let i = 1; i < 40; i += 1) {
+      expect(Math.abs(roomCell(i, PLOT).column - roomCell(i - 1, PLOT).column)).toBeGreaterThan(1);
+    }
+    // The width is the plot's width divided by the stride, not a constant of the runner's
+    // own: the last room of the ground floor is the last one that FITS, and the next index
+    // starts floor 1.
+    const perFloor = Math.floor((PLOT.maxColumn - PLOT.minColumn + 1) / COLUMNS_PER_ROOM);
+    expect(perFloor).toBe(40);
+    expect(roomCell(perFloor - 1, PLOT)).toEqual({ floor: 0, column: PLOT.maxColumn - 1 });
+    expect(roomCell(perFloor, PLOT)).toEqual({ floor: 1, column: PLOT.minColumn });
+    // Injective, so no seeded room can land on another (the sim throws on a spawn into an
     // occupied cell, and refuses a build into one).
     const seen = new Set<string>();
-    for (let i = 0; i < width * 4; i += 1) {
+    for (let i = 0; i < perFloor * 4; i += 1) {
       const cell = roomCell(i, PLOT);
       seen.add(`${cell.floor}:${cell.column}`);
     }
-    expect(seen.size).toBe(width * 4);
+    expect(seen.size).toBe(perFloor * 4);
+  });
+
+  it('packs the PLAYER\'s builds tight, on its own floors, and never onto the inherited hotel', () => {
+    // The second layout (G-009). The player packs rooms in; the inherited hotel had
+    // corridors. That is what lets a CLI run produce `noDoor` as well as `unsupported`,
+    // and therefore what makes "zero guests served by an invalid room" a measurement
+    // against a run that can go wrong in more than one way.
+    expect(builtRoomCell(0, PLOT)).toEqual({ floor: 1, column: 0 });
+    expect(builtRoomCell(1, PLOT)).toEqual({ floor: 1, column: 1 });
+    const perFloor = PLOT.maxColumn - PLOT.minColumn + 1;
+    expect(builtRoomCell(perFloor - 1, PLOT)).toEqual({ floor: 1, column: PLOT.maxColumn });
+    expect(builtRoomCell(perFloor, PLOT)).toEqual({ floor: 2, column: PLOT.minColumn });
+    // Never floor 0, so it cannot collide with the inherited hotel for any `--rooms` that
+    // fits on one floor.
+    for (let i = 0; i < perFloor * 3; i += 1) expect(builtRoomCell(i, PLOT).floor).toBeGreaterThan(0);
   });
 
   it('stops scheduling builds at the edge of the plot instead of emitting refusals', () => {
     // A cadence of 1 over far more ticks than the plot has cells: the schedule must run
     // out of PLOT, not out of ticks, and every command it emitted must be on the plot.
-    const cells = (PLOT.maxFloor + 1) * (PLOT.maxColumn - PLOT.minColumn + 1); // ground upward
+    //
+    // The count moved at G-009 and the arithmetic is why: the player's walk packs one room
+    // per column (so the full width) but starts on floor 1 (so one storey fewer). Derived
+    // from the plot rather than written down, so the next change to either is not a magic
+    // number somebody has to remember to edit.
+    const cells = PLOT.maxFloor * (PLOT.maxColumn - PLOT.minColumn + 1); // floor 1 upward
     const commands = schedule(cells * 3, content, PLOT, HOTEL_ROOMS, TICKS_PER_DAY, 1);
     const builds = commands.filter((c) => c.command.kind === 'buildRoom');
-    expect(builds).toHaveLength(cells - HOTEL_ROOMS); // continues from where --rooms stopped
+    expect(builds).toHaveLength(cells); // the player's walk starts from its own zero
     for (const { command } of builds) {
       if (command.kind !== 'buildRoom') throw new Error('filtered to buildRoom');
       expect(isWithinBounds(command.at, PLOT)).toBe(true);
@@ -248,7 +290,11 @@ describe('buildSummary', () => {
     expect(violations).toEqual([]);
     expect(summary.input.rooms).toBe(1);
     expect(summary.input.arrivalEveryTicks).toBe(700);
-    expect(summary.world.entities).toBe(1);
+    // One room AND its bed since G-009 — `entities` counts everything that stands in the
+    // building, which is why `rooms.valid` exists beside it and is the number a reader
+    // wants. Derived from the content, not a literal, for the reason above.
+    expect(summary.world.entities).toBe(1 + requiredItemsOf(content, content.content.roomTypes[0]!.id).length);
+    expect(summary.rooms.valid).toBe(1);
     expect(summary.guests.arrived).toBe(3); // ticks 1, 701, 1401 — the cadence echoed above
   });
 });
@@ -274,7 +320,20 @@ const distinct: RunSummary = {
   schema: 1,
   input: { seed: 101, ticks: 102, rooms: 103, arrivalEveryTicks: 104, buildEveryTicks: 123, demolishEveryTicks: 124 },
   world: { tick: 105, days: 106, roomTypes: 107, needTypes: 108, entities: 109, stateHash: 'cafe0000feed1111' },
-  guests: { arrived: 110, satisfied: 111, unsatisfied: 112, evicted: 113, inHotel: 114, stuck: 115, orphanedReservations: 116 },
+  guests: {
+    arrived: 110,
+    satisfied: 111,
+    unsatisfied: 112,
+    evicted: 113,
+    inHotel: 114,
+    stuck: 115,
+    orphanedReservations: 116,
+    inInvalidRooms: 132,
+  },
+  rooms: {
+    valid: 133,
+    invalid: { missingItem: 134, noDoor: 135, unplaced: 136, unsupported: 137 },
+  },
   money: {
     transactions: 117,
     revenuePennies: 118,
@@ -302,6 +361,8 @@ describe('renderers', () => {
         'room types  107',
         'need types  108',
         'entities    109',
+        'rooms ok    133',
+        'rooms bad   136 unplaced, 137 unsupported, 135 no door, 134 no item',
         'arrived     110',
         'satisfied   111',
         'unsatisfied 112',
@@ -309,6 +370,7 @@ describe('renderers', () => {
         'in hotel    114',
         'stuck       115',
         'orphan res  116',
+        'in bad room 132',
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',

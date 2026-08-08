@@ -106,9 +106,62 @@ export function createGridBounds(): GridBounds {
   };
 }
 
+/**
+ * The storey the earth stops at. Ground is 0 and basements are negative, so a room at
+ * or below this floor is carried by the ground itself and one above it is not.
+ *
+ * CODE, NOT CONTENT, for the reason the plot constants are: the sign of a floor number
+ * IS the above/below-ground question (see `Cell.floor`), so this names a fact about the
+ * coordinate system rather than a designer's number. G-009's enclosure rule is the first
+ * thing to read it.
+ */
+export const GROUND_FLOOR = 0;
+
 /** Value equality. The one way cells are compared; never `===` on the object. */
 export function cellsEqual(a: Cell, b: Cell): boolean {
   return a.floor === b.floor && a.column === b.column;
+}
+
+/**
+ * Total order on cells: floor first, then column. Explicit and locale-free.
+ *
+ * DELIBERATELY NOT WRITTEN AT G-007, because nothing sorted cells then and "a comparator
+ * with no caller is a thing to get wrong for free". G-009 gives it one: the tick-local
+ * placement index in `validity.ts` is a sorted array, because the alternative — asking a
+ * Map or a Set which entity is at a cell — is an iteration order that would decide which
+ * room a guest gets (I2).
+ *
+ * `<`/`>` on the raw numbers, never `localeCompare` and never a subtraction that could
+ * overflow, matching `compareIds` in `content.ts` for the same reason: an order that
+ * happens to be right is not an order.
+ */
+export function compareCells(a: Cell, b: Cell): number {
+  if (a.floor < b.floor) return -1;
+  if (a.floor > b.floor) return 1;
+  if (a.column < b.column) return -1;
+  if (a.column > b.column) return 1;
+  return 0;
+}
+
+/**
+ * The cell one storey down. Pure coordinates — it says nothing about what stands there,
+ * and it may name a cell off the plot, which is the caller's question to ask.
+ *
+ * The enclosure rule reads it: what a room needs from the rest of the building is a
+ * floor beneath it, and this is where that floor would be.
+ */
+export function cellBelow(cell: Cell): Cell {
+  return { floor: cell.floor - 1, column: cell.column };
+}
+
+/** The cell one column to the left, on the same storey. */
+export function cellLeft(cell: Cell): Cell {
+  return { floor: cell.floor, column: cell.column - 1 };
+}
+
+/** The cell one column to the right, on the same storey. */
+export function cellRight(cell: Cell): Cell {
+  return { floor: cell.floor, column: cell.column + 1 };
 }
 
 /** Human-readable, for error messages only. Never parsed, never hashed, never an id. */

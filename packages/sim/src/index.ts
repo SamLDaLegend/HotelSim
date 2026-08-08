@@ -20,13 +20,16 @@ export {
   totalRefusals,
 } from './build.js';
 export type { Command, ScheduledCommand } from './commands.js';
-export type { BoundContent, NeedTypeData, RoomTypeData, SimContent } from './content.js';
+export type { BoundContent, ItemTypeData, NeedTypeData, RoomTypeData, SimContent } from './content.js';
 export {
   bindContent,
+  findItemType,
   findNeedType,
   findRoomType,
   firstNeedType,
   hasContentId,
+  isRoomKind,
+  requiredItemsOf,
   roomTypeProvides,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
@@ -51,7 +54,11 @@ export type { Cell, GridBounds } from './grid.js';
 export {
   assertCell,
   assertGridBounds,
+  cellBelow,
+  cellLeft,
+  cellRight,
   cellsEqual,
+  compareCells,
   createGridBounds,
   DEFAULT_MAX_COLUMN,
   DEFAULT_MAX_FLOOR,
@@ -59,12 +66,14 @@ export {
   DEFAULT_MIN_FLOOR,
   describeBounds,
   describeCell,
+  GROUND_FLOOR,
   isWithinBounds,
 } from './grid.js';
 export type { Guest, GuestId, GuestOutcomes, GuestStore, GuestTickInput, GuestTickResult } from './guests.js';
 export {
   assertGuestOutcomes,
   assertGuestStoreInvariants,
+  countGuestsInInvalidRooms,
   countOrphanedReservations,
   countStuckGuests,
   createGuestOutcomes,
@@ -120,6 +129,26 @@ export {
   stepTick,
   TICK_PHASES,
 } from './tick.js';
+export type {
+  EntityVisitor,
+  RoomInvalidityReason,
+  RoomInvalidityTally,
+  ValidityContext,
+} from './validity.js';
+export {
+  countInvalidRooms,
+  createValidityContext,
+  describeRoomInvalidity,
+  draftEntities,
+  isRoomInvalidityReason,
+  isValidRoom,
+  roomCellsOf,
+  roomInvalidity,
+  ROOM_INVALIDITY_REASONS,
+  standsInRoom,
+  storeEntities,
+  totalInvalidRooms,
+} from './validity.js';
 export type { World } from './world.js';
 export {
   assertContentMatches,

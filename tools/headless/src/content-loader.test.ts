@@ -14,8 +14,10 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { ContentError } from '@hotelsim/content';
 import { bindContent, createWorld, entitiesInOrder, findRoomType, hashState, run, stepTick } from '@hotelsim/sim';
 import {
+  ITEM_TYPES_PATH,
   loadContent,
   loadContentFrom,
+  loadItemTypesFrom,
   loadNeedTypesFrom,
   NEED_TYPES_PATH,
   ROOM_TYPES_PATH,
@@ -166,6 +168,12 @@ describe('injection into a real simulation', () => {
     const edited = bindContent({
       ...loadContentFrom(fileWith('dearer.json', JSON.stringify(dearer))),
       needTypes: loadNeedTypesFrom(NEED_TYPES_PATH),
+      // The item table comes along too since G-009: `bindContent` refuses content whose
+      // rooms require an item nothing defines, so assembling a registry by hand has to
+      // assemble a WHOLE one. That refusal is the point — it is the check
+      // `check:content` cannot make — and it fired here first, on the one test that
+      // builds a partial registry.
+      itemTypes: loadItemTypesFrom(ITEM_TYPES_PATH),
     });
     const original = loadContent();
 

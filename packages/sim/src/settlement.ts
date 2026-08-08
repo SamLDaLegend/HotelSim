@@ -42,7 +42,7 @@
 // `runGuests` is plumbing around `stepGuests`. No randomness anywhere: settlement is
 // a pure function of the tick counter, the draft and the injected content (I2).
 
-import { findRoomType } from './content.js';
+import { findRoomType, hasContentId } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftForEach } from './entities.js';
 import type { EntityDraft } from './entities.js';
@@ -69,6 +69,18 @@ export function isSettlementTick(tick: number): boolean {
  * content, including the permanent v1 fixture's) charges nothing, which is what keeps
  * that fixture a world that still ticks (ADR-0006, the G-004 `provides` precedent).
  *
+ * AN INVALID ROOM IS CHARGED IN FULL (G-009). A room with no floor beneath it, no door
+ * or no bed houses nobody and still costs every penny of its upkeep, which is the whole
+ * shape of the trap: the player who builds badly pays for it. It is also the reading
+ * G-007 already chose for the unplaced rooms a migrated save carries — "still paying
+ * nightly upkeep, deliberately, so the migration changes no economics" — so validity
+ * gates PROVISION and nothing else, and this function never asks about it.
+ *
+ * ITEMS ARE NOT CHARGED (G-009). An item is an entity but not a room, and what furniture
+ * costs to keep is a designer's number, therefore content, therefore M6's to introduce.
+ * The unknown-kind throw below is narrowed to match rather than deleted: a kind in NO
+ * content table is still the loud failure it was.
+ *
  * Reads the DRAFT, not the committed store: settlement shares the systems slot with
  * the guest loop, so a room built by a command this tick is charged tonight and a
  * room demolished this tick already costs nothing — the same visibility rule guests
@@ -79,6 +91,8 @@ export function nightlyUpkeepOf(entities: EntityDraft, content: BoundContent): n
   draftForEach(entities, (entity) => {
     const roomType = findRoomType(content, entity.kind);
     if (roomType === undefined) {
+      // An item: a real entity with no upkeep of its own (see above).
+      if (hasContentId(content, entity.kind)) return;
       // Unreachable through the tick: spawn validates the kind against injected
       // content, and beginTick has established this world and content belong
       // together. Kept as the postcondition of those checks — the payForStay

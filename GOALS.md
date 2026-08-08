@@ -343,19 +343,47 @@ Critique rounds used: 3/3
   refusal, and refusal as a recorded outcome rather than a throw).
 
 ## G-009 — Room validity rules
-Status: pending
+Status: done
 Milestone: M1
 Owner pair: sim-engineer / sim-critic
 Statement: A room is valid only if it is enclosed, has a door, and holds its required
   items. An invalid room is not a provider, and the reason it is invalid is legible.
 Exit criteria:
   - pnpm exec vitest run validity  (all green)
-  - pnpm sim:run --days 30 --seed 7 reports zero guests served by an invalid room
+  - pnpm sim:run --days 30 --seed 7 --build <n> --demolish <m>  reports zero guests
+    served by an invalid room, IN A RUN THAT PROVABLY CONTAINS INVALID ROOMS OF AT
+    LEAST TWO REASONS  (flags fixed at BUILD; the same invocation is pinned in
+    validity.report.test.ts so it runs under pnpm test whatever anyone types)
   - every invalidity reason is reachable by a test that constructs it
   - all §2 invariant gates green (pnpm verify)
-Out of scope: item variety and item content beyond what a room requires (M6); staff (M4)
-  (-> PARKING.md)
-Critique rounds used: 0/3
+Out of scope: item variety and item content beyond what a room requires (M6); staff (M4);
+  multi-cell footprints (re-parked to M6 — the enclosure rule is per-cell, so extent
+  refines a rule that already bites rather than supplying its substance)  (-> PARKING.md)
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-08, every command run rather than reported:
+  validity 124 tests across 7 files green, 645 total · all six gates green, I2
+  1b5fcd4cca759510, I5 27.4% · the sharpened criterion exits 0 with 22 unsupported and
+  7 no-door rooms against 12 working ones, and `in bad room 0` · the sky tower is
+  rejected transitively — 5 rooms built over nothing report 5 unsupported, where the
+  local rule would have reported 1 · fixture zero-line diff, SAVE_V1_CONTENT unmoved,
+  SAVE_SCHEMA_VERSION still 4, no migration owed.
+
+  ROUND 1 (sim-critic), 2 MAJOR + 3 MINOR. The first MAJOR was mine as much as the
+  builder's: the enclosure rule I approved at PLAN asked only whether A ROOM stood in
+  the cell below, never whether that room was itself supported — so one sacrificial
+  invalid room bought an arbitrarily tall tower of VALID providers floating in mid-air.
+  Reproduced from the CLI: 95 rooms reported ok, 55 of which never reached the earth.
+  Fixed as transitive support in one ascending-floor pass. The second MAJOR was a
+  measurement, corrected in PARKING.md, not code.
+
+  Criterion sharpened at PLAN (2026-08-07), on sim-engineer's own flag: the bare
+  `--days 30 --seed 7` hotel is entirely valid, so "zero guests served by an invalid
+  room" would have measured NOTHING — it is arithmetically true in a world containing no
+  invalid rooms. The run must now contain them. This is the third criterion in the
+  project to need sharpening for the same reason (`pnpm test -- world` at G-001, "balance
+  equals the fold" at G-005); each was caught earlier than the last, and this one was
+  caught by the builder before a line was written.
 
 ## G-010 — The bench simulates a real hotel, and tick cost stays linear
 Status: pending

@@ -59,11 +59,15 @@ const content = bindContent({
  * column: `spawnEntity` onto a cell where a room already stands now THROWS, so a hotel
  * is a row rather than a stack. G-007 pinned that permissiveness deliberately so closing
  * it would be a visible decision; this is what visible looks like.
+ *
+ * G-009 spread the row out: a room needs a free cell beside it on its floor to have a
+ * door, so rooms in adjacent columns seal each other in. The stride of two is the
+ * corridor between them.
  */
-const spawnRoom = (column: number): Command => ({
+const spawnRoom = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'roomA',
-  at: { floor: 0, column },
+  at: { floor: 0, column: index * 2 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });

@@ -84,11 +84,20 @@ const content = bindContent(simContent);
  *
  * Nothing else about these tests changes: the guest loop chooses by lowest id, not by
  * position, and will keep doing so until M3 makes it nearest-by-path.
+ *
+ * G-009 SPREAD THE ROW OUT. A room needs a free cell beside it on its floor to have a
+ * door, so a terrace of rooms in columns 0, 1, 2 seals in everything but the right-hand
+ * end — and a room at column 0 is sealed by its neighbour alone, because the void beyond
+ * the plot edge is not a door. The stride of two puts a corridor between them. `roomA`
+ * requires no items (absence is not emptiness), so nothing else is needed to make these
+ * rooms work, and every claim in this file is again about the guest loop rather than
+ * about the building.
  */
-const spawnRoom = (column: number): Command => ({
+const ROOM_STRIDE = 2;
+const spawnRoom = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'roomA',
-  at: { floor: 0, column },
+  at: { floor: 0, column: index * ROOM_STRIDE },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
