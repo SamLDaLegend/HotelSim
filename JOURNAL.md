@@ -609,3 +609,70 @@ for, after noticing its own `--arrivals` derivation was arithmetically wrong. Re
 measured by `vitest run scaling`, which ties arrivals to rooms so occupancy is constant.
 
 M1 complete. Escalating for human sign-off, with one design call outstanding since G-008.
+
+---
+
+## 2026-08-08 — G-011 — The hotel can always recover (1/3 rounds)
+
+The first goal built on a **human** decision (ADR-0011) rather than an adjudicated one.
+The dead state is closed and measured at full length: from zero rooms and zero cash,
+1,000 days ends with 23 valid rooms and 11,831 satisfied guests; with demolition churn
+added, 1,000 built, 499 loans drawn and **zero** funds refusals across the entire run.
+The negative control matters more than the result — `--loan 0` locks at 125,000p and no
+rooms **on day 4** and stays there for 996 days. One flag, one difference.
+
+**I wrote an exit criterion that could not pass on any implementation** — `--rooms 3
+--demolish 1` issues no build command, so no room could ever be placed. Fourth occurrence
+of that shape, written three inches below the G-009 block where I recorded sharpening the
+third. The builder found it before writing a line. A criterion is a claim about a command,
+and I did not run the command.
+
+**And the goal destroyed its own defining reproduction.** `--rooms 3 --demolish 1` was the
+three legal commands ADR-0011 named as reaching the dead state; seeded rooms are spawned
+free but refunded at 50%, so it now ends at 875,000p. I rewrote the criterion for the
+*first* reason and never noticed the second. `balance-critic` did. A dead state we can no
+longer demonstrate is one we cannot prove we closed, so both reasons are now in the block
+with the measured baselines standing in its place.
+
+**The critique was the best in the project.** Three MAJORs:
+
+*The dodge guard was one-sided.* I asked whether content could **dodge** and still load,
+and approved a guard bounding the refund from above. Nobody asked the mirror question —
+and the refund turns out to be the loan's only brake, since eligibility rests on
+liquidation value. At a refund of 0, documented as a legal designer choice, `drawLoan`
+became an unbounded credit line: **1,602 loans and 480,600,000p in five simulated days**
+from one changed content field. The shipped table was safe by coincidence of one number.
+The builder's fix is better than my suggested alternative and it said why: eligibility
+resting on liquidation value is *correct* — that is what "stock" means in ADR-0011 — and
+the defect was that a refund of zero made stock worthless while still calling it stock.
+So the right layer was the definition of stock, not the eligibility rule.
+
+*A quadratic fold, of exactly the class G-010 spent a goal removing* — and which this
+goal's own I5 fix had removed from `runSettlement` earlier in the same build, reappearing
+two files away. `--loan 1` at 365 days cost 235% of the I5 budget. It was worse than the
+diagnosis: removing the redundant re-fold only halved it, and the residue was **G-008's
+once-per-tick balance fold, accepted on "builds are rare by construction"** — an
+assumption that was true until a command with no position and therefore nothing to run out
+of. Fixed by memoising outside state, which is the one concession I4 names explicitly, and
+verified against G-010's bar: memo off and memo on hash identically. The tests pin
+agreement at *every prefix*, because an incremental memo can be right at the end and wrong
+in the middle.
+
+*And the containment argument for the money-minting was a comment, not a mechanism.* No
+player path exists today so it holds, but it is not free: `--rooms 3` — the flag every
+sweep and bench uses — silently carried 375,000p of hidden capital against the 500,000p
+starting capital this goal exists to size.
+
+**My ruling on that third one was wrong, and the builder measured it rather than forcing
+it**, which is exactly what I asked for. Seeding `--rooms` through `buildRoom` needs
+capital to cover it, but capital is one content constant while `--rooms` is per-invocation:
+at 500,000p every N collapses to two rooms, which would undo G-010's entire goal at the
+60-room bench. It shipped the honest half instead — the hidden capital is now printed as
+`scrap value` beside `capital`, and it is exactly the term the loan's eligibility test
+adds, so a refusal can be checked by hand.
+
+`balance-critic` declared its seed mandate vacuous for the second time rather than
+reporting ten identical rows as a distribution, and produced the spread that is real:
+across 48 strategy configurations, **doing nothing beats six of the eight active build
+cadences.** ADR-0009's anti-correlation, now with a positive floor under passivity that
+did not exist before this goal.

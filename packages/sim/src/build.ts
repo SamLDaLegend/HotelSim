@@ -67,7 +67,7 @@
 // `settlement.ts` have, for the same cycle reason. No randomness: every function here is
 // a pure function of world state, injected content and the command's own arguments.
 
-import { findRoomType, isRoomKind, requiredItemsOf } from './content.js';
+import { demolitionRefundOf, findRoomType, isRoomKind, requiredItemsOf } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftDespawn, draftFindEntity, draftForEach, draftSpawn, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId } from './entities.js';
@@ -460,25 +460,54 @@ export function applyBuildRoom(input: BuildInput, roomType: ContentId, at: Cell)
  * multi-cell footprints (G-009) share cells. A host holding a cell goes cell -> id
  * through `roomAt`, which is a derived query and not a second record of anything.
  *
- * NO REFUND AND NO FEE. Zero is the only number here that is not a balance decision: any
- * fraction is a designer's number, therefore content, therefore M4's pricing goal. Zero
- * is also safe in the direction that matters — `balance-critic` priced the
- * demolish-before-midnight upkeep dodge at G-005 and found it unprofitable when
- * rebuilding was FREE; rebuilding now costs `constructionCostPence`, so each dodged night
- * trades a full construction charge for one night of upkeep. `build.test.ts` pins the
- * arithmetic rather than asserting the conclusion.
+ * IT REFUNDS PART OF WHAT THE ROOM COST (G-011). The fraction is
+ * `demolitionRefundBasisPoints` on the room type — a designer's number, therefore content
+ * (I3) — and it is one third of ADR-0011's guarantee that a hotel can always return to
+ * play: it makes the building itself a reserve, so a player who overbuilt is not stranded
+ * with capacity they cannot convert back into cash.
  *
- * THE NUMBER M4 NEEDS, WRITTEN DOWN NOW. A refund is not free to price. The dodge costs
- * `constructionCostPence - refund` and saves `nightlyUpkeepPence`, so it turns profitable
- * the moment `refund > constructionCostPence - nightlyUpkeepPence`. At the shipped
- * numbers that threshold is 250,000 - 2,500 = 247,500p — 99% of construction cost. Any
- * refund at or below 99% keeps demolish-before-midnight a loss; above it, G-005's upkeep
- * dodge reopens exactly. Whoever prices the refund at M4 owes that inequality a test, and
- * note it moves with upkeep: a room whose upkeep is a larger share of its build cost
- * makes the dodge viable at a smaller refund.
+ * THE INEQUALITY THAT BINDS IT, AND IT IS NOW ENFORCED RATHER THAN DOCUMENTED. The
+ * demolish-before-midnight upkeep dodge costs `constructionCostPence - refund` and saves
+ * `nightlyUpkeepPence`, so it turns profitable the moment
  *
- * Demolish therefore writes NO transaction. A `demolition` transaction of amount 0 would
- * be a money log recording that money did not move, which is what `demolished` is for.
+ *     refund  >  constructionCostPence - nightlyUpkeepPence
+ *
+ * At the shipped numbers that threshold is 250,000 - 2,500 = **247,500p**, 99% of
+ * construction cost. Until G-011 that sentence was a comment here and nothing checked it;
+ * `bindContent` now REJECTS content that crosses it, per room type, from that room type's
+ * own numbers, on every host start — so 247,500p loads and 247,501p throws. The shipped
+ * refund is 5,000 basis points (125,000p), half the threshold, leaving the dodge 50 : 1
+ * against the player. `recovery.dodge.test.ts` COMPUTES all of that rather than asserting
+ * the conclusion, including a 100-night A/B through the real tick.
+ *
+ * ONE `demolitionRefund` TRANSACTION PER SUCCESSFUL DEMOLITION, UNCONDITIONALLY —
+ * including a zero refund. The `construction` precedent exactly: "one per demolition, no
+ * exceptions" is what makes the count a countable fact and keeps the cross-subsystem law
+ * exact, where a conditional append would hold on every hotel somebody watched and fail on
+ * exactly the no-refund worlds where nothing else would notice (ADR-0007). This reverses
+ * G-008's reasoning for writing no transaction at all, and it should: at G-008 demolition
+ * moved no money, so a transaction would have recorded that money did not move. It moves
+ * money now.
+ *
+ * THE REFUND IS SPENDABLE IN THE SAME TICK. It is added to the tick-local balance and
+ * threaded back out, so demolish-then-build in one tick succeeds where the build alone
+ * would be refused — the same threading a second build in one tick already relies on, and
+ * the concrete shape of "stock is convertible back into buildable cash".
+ *
+ * A CONSEQUENCE A HOST CAN REACH AND A PLAYER CANNOT, WRITTEN DOWN RATHER THAN DISCOVERED.
+ * `spawnEntity` places a room FREE — it is the structural door, for tests, the determinism
+ * harness and scenario setup — and this command refunds a fraction of a construction cost
+ * that nobody was charged. So a host that seeds rooms and then demolishes them MINTS
+ * MONEY. The CLI does exactly that: `--rooms 3 --demolish 1` hands the player 375,000p for
+ * three rooms they never paid for, and the I2 harness collects 7,125,000p the same way
+ * over 100,000 ticks.
+ *
+ * It is not an exploit, because a player cannot spawn: the only door a player has is
+ * `buildRoom`, which charges. It is a host DECISION — "the hotel you inherited is worth
+ * something if you scrap it" — and a coherent one. But it means a scenario's seeded stock
+ * is also seeded CASH, at the refund rate, and a designer sizing starting capital needs to
+ * count it. Recorded here rather than in a commit message because the next person to add a
+ * seeded-hotel scenario will not otherwise know.
  *
  * AN ID THAT IS NOT A LIVE ROOM IS A RECORDED REFUSAL, not a silent no-op. `despawnEntity`
  * keeps its no-op contract — a command log replayed against a slightly different world
@@ -532,11 +561,42 @@ export function applyDemolishRoom(input: BuildInput, id: EntityId): BuildResult 
   for (const itemId of furniture) {
     draftDespawn(input.entities, itemId);
   }
+  // THE REFUND (G-011). Rounded once, in `applyBasisPoints`, from the room type's own
+  // unrounded construction cost — never from a previously rounded value, which is how a
+  // penny appears from nowhere. The FURNITURE refunds nothing: what an item costs is a
+  // designer's number and M6's to introduce, and `buildRoom` charged nothing for it.
+  const refund = demolitionRefundOf(input.content, room.kind);
   return {
-    ledger: input.ledger,
+    ledger: appendTransaction(input.ledger, {
+      tick: input.tick,
+      amount: refund,
+      reason: 'demolitionRefund',
+    }),
     outcomes: { ...input.outcomes, demolished: input.outcomes.demolished + 1 },
-    balance: input.balance,
+    balance: input.balance + refund,
   };
+}
+
+/**
+ * How many demolition refunds this log records (G-011).
+ *
+ * Counted BY THE SIM, the `countConstructionTransactions` pattern. For any world ticked
+ * from 0 under this build the law is
+ *
+ *   countDemolitionRefundTransactions(world.ledger) === world.buildOutcomes.demolished
+ *
+ * exactly, and it is the demolition half of the cross-subsystem evidence: the counter is
+ * incremented by `applyDemolishRoom` and the transaction is appended a line later, by
+ * different code for different reasons. The CLI reports it and exits non-zero when they
+ * disagree. Deliberately NOT asserted at load: a save that predates G-011 has demolitions
+ * and no refunds, legitimately.
+ */
+export function countDemolitionRefundTransactions(log: readonly Transaction[]): number {
+  let count = 0;
+  for (const transaction of log) {
+    if (transaction.reason === 'demolitionRefund') count += 1;
+  }
+  return count;
 }
 
 /**

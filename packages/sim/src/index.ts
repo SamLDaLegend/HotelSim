@@ -12,6 +12,7 @@ export {
   BUILD_REFUSAL_REASONS,
   constructionCostOf,
   countConstructionTransactions,
+  countDemolitionRefundTransactions,
   createBuildOutcomes,
   describeOccupied,
   isBuildRefusalReason,
@@ -20,15 +21,25 @@ export {
   totalRefusals,
 } from './build.js';
 export type { Command, ScheduledCommand } from './commands.js';
-export type { BoundContent, ItemTypeData, NeedTypeData, RoomTypeData, SimContent } from './content.js';
+export type {
+  BoundContent,
+  EconomyData,
+  ItemTypeData,
+  NeedTypeData,
+  RoomTypeData,
+  SimContent,
+} from './content.js';
 export {
   bindContent,
+  demolitionRefundOf,
   findItemType,
   findNeedType,
   findRoomType,
+  firstEconomy,
   firstNeedType,
   hasContentId,
   isRoomKind,
+  minConstructionCostOf,
   requiredItemsOf,
   roomTypeProvides,
 } from './content.js';
@@ -93,11 +104,28 @@ export { canonicalise, hashJson } from './hash.js';
 export type { Transaction, TransactionReason } from './ledger.js';
 export {
   appendTransaction,
+  applyBasisPoints,
   balanceOf,
   isTransactionReason,
+  outstandingDebtOf,
   sumByReason,
   TRANSACTION_REASONS,
 } from './ledger.js';
+export type { LoanInput, LoanOutcomes, LoanRefusalReason, LoanResult } from './loan.js';
+export {
+  applyDrawLoan,
+  assertLoanOutcomes,
+  canDrawLoan,
+  countLoanDrawTransactions,
+  createLoanOutcomes,
+  isLoanRefusalReason,
+  liquidationValueOf,
+  LOAN_REFUSAL_REASONS,
+  repayLoan,
+  stockValueOf,
+  totalLoanOutcomes,
+  totalLoanRefusals,
+} from './loan.js';
 export type { SettlementInput } from './settlement.js';
 export {
   countSettlementTransactions,

@@ -34,13 +34,30 @@ export const contentIdSchema = z
 export const penceSchema = z.int();
 
 /**
+ * A fraction, as an integer count of hundredths of a percent (G-011).
+ *
+ * 10,000 basis points is 100%; 5,000 is a half. A fraction has to be expressed as an
+ * integer for the same reason money does (ADR-0002): a `0.5` in a content file reaches
+ * `constructionCostPence * fraction` and produces a value whose last penny depends on
+ * the platform's floating-point rounding, which is an I2 divergence with no tolerance
+ * to absorb it.
+ *
+ * The multiplication and its ONE rounding rule live in `applyBasisPoints` in
+ * `packages/sim/src/ledger.ts` — round half up, at the moment the charge is computed,
+ * in exactly one function. Every product of a basis-point rate and a pence amount the
+ * schemas below admit is exact in a double (10,000 x the largest sane price is far
+ * inside 2^53), so the rounding is a decision about halves and never about drift.
+ */
+export const basisPointsSchema = z.int().min(0).max(10_000);
+
+/**
  * One room type, as written ON DISK.
  *
  * `strictObject`, not `object`: an unrecognised key is a typo, and a typo that is
  * silently ignored becomes "the balance is slightly wrong" three goals later, with
  * nothing pointing at the content file that caused it.
  *
- * Eight fields (HOTELSIM.md §8 — "one room type, one guest, one need, one day cycle,
+ * Nine fields (HOTELSIM.md §8 — "one room type, one guest, one need, one day cycle,
  * money in and money out"):
  *   id                    identity, and the value the sim receives as an entity kind
  *   name                  the human handle; display is the render layer's job at M5
@@ -48,6 +65,7 @@ export const penceSchema = z.int();
  *   nightlyRatePence      room revenue, money in — see below      -> G-005
  *   nightlyUpkeepPence    upkeep, money out                       -> G-005
  *   constructionCostPence the build-loop sink, charged once       -> G-008
+ *   demolitionRefundBasisPoints  what scrapping one returns       -> G-011
  *   provides              which needs a stay here satisfies       -> G-004
  *   requires              which items must stand in it to work    -> G-009
  *
@@ -138,6 +156,38 @@ export const penceSchema = z.int();
  * in packages/sim rejects a `requires` naming an item this content does not define, on
  * every host start, exactly as it does for `provides`.
  * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * `demolitionRefundBasisPoints` IS BOUNDED BY THIS ROOM TYPE'S OWN NUMBERS, AND THE
+ * BOUND IS NOT WRITTEN HERE (G-011). READ THIS BEFORE RAISING IT.
+ *
+ * It is the fraction of `constructionCostPence` returned when a player demolishes one of
+ * these. 5,000 is half. It is what makes stock convertible back into buildable cash, and
+ * it is one third of ADR-0011's guarantee that a hotel can always return to play.
+ *
+ * A refund is not free to price, and the number that binds it is:
+ *
+ *     refund  >  constructionCostPence - nightlyUpkeepPence   REOPENS THE UPKEEP DODGE
+ *
+ * because demolishing before midnight and rebuilding after costs `cost - refund` and
+ * saves one night's `nightlyUpkeepPence`. `balance-critic` priced that dodge at G-005
+ * (-1,774,500p over 100 days, when rebuilding was free) and again at G-008 (102.4 : 1
+ * against the player). At the shipped numbers the threshold is 250,000 - 2,500 =
+ * **247,500p**, 99% of construction cost.
+ *
+ * The bound is NOT a `max()` on this field, because it is a relationship between three
+ * fields and moves with all of them — a room whose upkeep is a larger share of its build
+ * cost makes the dodge viable at a smaller refund. `bindContent` in `packages/sim`
+ * therefore REJECTS content that crosses it, per room type, from that room type's own
+ * numbers, on every host start. Under the shipped table 247,500p loads and 247,501p
+ * throws. The threshold stopped being a comment at G-011 and became a live boundary.
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM, for a hazard that is the mirror of the price
+ * fields' above. A missing price ships a room that is free — strictly dominant. A missing
+ * refund ships a room that can never be liquidated, which silently re-opens half of the
+ * dead state ADR-0011 exists to close, with every gate green. `0` remains the deliberate
+ * statement "scrapping this returns nothing".
+ * ---------------------------------------------------------------------------
  */
 export const roomTypeSchema = z.strictObject({
   id: contentIdSchema,
@@ -146,6 +196,7 @@ export const roomTypeSchema = z.strictObject({
   nightlyRatePence: penceSchema.min(0),
   nightlyUpkeepPence: penceSchema.min(0),
   constructionCostPence: penceSchema.min(0),
+  demolitionRefundBasisPoints: basisPointsSchema,
   provides: z.array(contentIdSchema).optional(),
   requires: z.array(contentIdSchema),
 });
@@ -219,6 +270,99 @@ export const needTypesSchema = z.array(needTypeSchema).min(1);
 /** The whole `item-types.json` document. A top-level array, for the same reason. */
 export const itemTypesSchema = z.array(itemTypeSchema).min(1);
 
+/**
+ * The house rules of the money loop (G-011): what a hotel opens with, and what it can
+ * borrow when it has nothing left.
+ *
+ * WHY THIS IS CONTENT AND `grid.ts`'s PLOT IS NOT. G-007 put the plot's bounds in code
+ * on the argument "the board, not a piece", and that argument does not reach here. Every
+ * number below is MONEY, and ADR-0002 already places prices, wages and upkeep in this
+ * package; if they were constants in `packages/sim`, every future balance pass would be
+ * a diff in the simulation, which is the exact outcome I3 exists to prevent.
+ *
+ * The fact that separates the two cases is optionality. Bounds could not be optional — a
+ * world must have a plot — so making them content would have moved every content
+ * fingerprint and left the permanent v1 save fixture a husk that loads and can never
+ * tick (ADR-0006). This table CAN be absent, and its absence is a TRUE HISTORICAL
+ * STATEMENT: a world from before G-011 had no starting capital, no refund and no loan.
+ * So `SAVE_V1_CONTENT`'s fingerprint `8e09fe4f0fa162a3` does not move, and a save taken
+ * under content that predates this table still loads and still ticks.
+ *
+ * A TOP-LEVEL ARRAY WITH AN `id`, like every other table here, for two reasons that are
+ * both mechanical rather than stylistic. `check:content` fails a content file in which it
+ * can find no `id` at any depth — a gate that inspects nothing reports success — so a
+ * bare object would be a violation. And the sim reaches this through `firstEconomy`,
+ * which takes the LOWEST id after normalisation (the `firstNeedType` precedent), so no
+ * snake_case literal ever enters `packages/sim` (ADR-0003). Per-scenario economies — an
+ * easy table and a hard one — are the shape this grows into at M6, and it costs nothing
+ * to be that shape now.
+ *
+ *   startingCapitalPence        what the hotel opens with, booked as ONE `startingCapital`
+ *                               transaction at tick 0. There is no `balance` field to set
+ *                               (I4), so an opening balance can only exist as a
+ *                               transaction — which is also why it is explained.
+ *   loanPrincipalPence          cash a draw provides. Deliberately ABOVE one room's
+ *                               construction cost, or a loan drawn by a stuck player
+ *                               leaves them still stuck.
+ *   loanFeeBasisPoints          charged as real money at the moment of the draw, so the
+ *                               loan's whole price is in the ledger rather than hidden
+ *                               inside a principal. Interest-rate TUNING is M4's; the
+ *                               mechanism exists here so there is something to tune.
+ *   loanRepaymentPerNightPence  taken at nightly settlement while a debt is outstanding,
+ *                               CAPPED BY AVAILABLE CASH — a loan never drives the balance
+ *                               below zero on its own, which is what lets a hotel that
+ *                               never repays keep ticking without a bankruptcy state (M4).
+ *   liquidationRoomsMax         THE LENDER'S BRAKE — see below.
+ *
+ * The outstanding debt itself is NOT here and is not stored anywhere: it is a fold over
+ * the ledger, `sum(loanDraw) + sum(loanRepayment)`, which is I4's argument applied past
+ * cash. See `outstandingDebtOf` in `packages/sim/src/ledger.ts`.
+ *
+ * ---------------------------------------------------------------------------
+ * `liquidationRoomsMax` IS WHAT STOPS THE LOAN BEING AN UNBOUNDED CREDIT LINE, AND IT IS
+ * THE MIRROR OF THE REFUND'S UPPER BOUND. READ BOTH TOGETHER.
+ *
+ * A loan is granted when the hotel cannot act — `balance + what every room would refund <
+ * the cheapest room it could build`. The only thing that ever makes a hotel INELIGIBLE
+ * through its own resources is therefore the refund: stock is the reserve, and the lender
+ * is the backstop behind it.
+ *
+ * So a refund that is too SMALL is a lender's hole exactly as a refund above
+ * `constructionCostPence - nightlyUpkeepPence` is a dodger's hole. At a refund of ZERO —
+ * a legal, deliberate designer statement meaning "scrapping this returns nothing" —
+ * liquidation value is zero however much you own, eligibility collapses to
+ * `balance < cheapest room`, and every broke hotel qualifies forever. Measured, with that
+ * ONE content field changed and nothing else:
+ *
+ *     --days 5 --rooms 0 --build 1 --loan 1    refund 0     1,602 loans, 480,600,000p
+ *                                              refund 5000  0 loans, 2 rooms
+ *     --days 200 --build 1440 --loan 1440      refund 0     197 loans, 57,110,000p debt
+ *
+ * This number closes it, and says what it means in the units a designer thinks in: THE
+ * MOST ROOMS A PLAYER MAY EVER HAVE TO SCRAP TO AFFORD ONE. `bindContent` rejects any room
+ * type whose refund cannot clear the cheapest build in that many rooms, so a hotel holding
+ * that many is never eligible and the lender can never be the whole economy.
+ *
+ * It lives HERE, beside the loan terms, rather than on the room type, because it is a
+ * property of the LENDER's patience and not of any one room. And the check only applies
+ * when an economy is defined at all: content with no lender needs no brake on its refunds,
+ * which is exactly why a v1-era content set still loads.
+ * ---------------------------------------------------------------------------
+ */
+export const economySchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  startingCapitalPence: penceSchema.min(0),
+  loanPrincipalPence: penceSchema.min(0),
+  loanFeeBasisPoints: basisPointsSchema,
+  loanRepaymentPerNightPence: penceSchema.min(0),
+  liquidationRoomsMax: z.int().min(1),
+});
+
+/** The whole `economy.json` document. A top-level array, for the same reason. */
+export const economiesSchema = z.array(economySchema).min(1);
+
 export type RoomType = z.infer<typeof roomTypeSchema>;
 export type NeedType = z.infer<typeof needTypeSchema>;
 export type ItemType = z.infer<typeof itemTypeSchema>;
+export type Economy = z.infer<typeof economySchema>;

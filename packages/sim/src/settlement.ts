@@ -25,11 +25,23 @@
 // of zero is `-0`, which is the same money but not the same value, and
 // `appendTransaction` rejects it at the choke point.
 //
-// ROUNDING HAPPENS ZERO TIMES. Every amount here is a sum of integer content rates
-// (ADR-0002); no operation can produce a fraction, so there is no rounding rule to
-// apply — yet. M4 introduces division (prorated stays, percentage fees); the rule it
-// must adopt is: round half up, once, at the point of settlement, in exactly one
-// place. Stated now so it is inherited as a decision rather than improvised.
+// SETTLEMENT NOW HAS A SECOND CHARGE, AND ITS ORDER IS A DECISION (G-011). While a loan
+// is outstanding, a repayment is taken after upkeep. Upkeep first, because it is the
+// charge the hotel cannot decline and must never be displaced by a repayment; the
+// repayment then comes out of whatever cash survives the night's bills, and is CAPPED BY
+// THAT CASH so a loan can never drive the balance below zero on its own. The cap is what
+// lets this goal stop short of M4's bankruptcy state and still leave a playable world —
+// see the header of `loan.ts`. A repayment is settlement's business rather than a
+// command's for the reason upkeep is: `build.ts`'s rule that settlement is a charge the
+// world imposes on you and a build is a charge you choose.
+//
+// ROUNDING HAPPENS ZERO TIMES HERE, and the rule this header has promised since G-005 has
+// now been written down and implemented exactly once: `applyBasisPoints` in `ledger.ts` —
+// ROUND HALF UP, AT THE MOMENT THE CHARGE IS COMPUTED, IN ONE FUNCTION. Every amount in
+// this file is still a sum of integer content rates (ADR-0002) and no operation here can
+// produce a fraction; G-011's two fractions (the demolition refund and the loan fee) are
+// both computed at their own moment, through that one function, from unrounded content
+// integers. Nothing is ever rounded twice.
 //
 // A NEGATIVE BALANCE IS ALLOWED. `balanceOf` is a signed fold and nothing reads it to
 // gate behaviour, so upkeep with no revenue drives it below zero and the simulation
@@ -48,6 +60,7 @@ import { draftForEach } from './entities.js';
 import type { EntityDraft } from './entities.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
+import { repayLoan } from './loan.js';
 import { TICKS_PER_DAY } from './world.js';
 
 /**
@@ -119,20 +132,28 @@ export type SettlementInput = {
 /**
  * One tick of settlement. Pure: same input, same output, on every machine.
  *
- * On a settlement tick, appends exactly one `upkeep` transaction and returns the new
- * log; on every other tick, returns the input log BY REFERENCE, so the 1,439 quiet
- * minutes of a day allocate nothing (the idle-tick guarantee the rest of the sim
- * keeps).
+ * On a settlement tick, appends exactly one `upkeep` transaction — and then, only while a
+ * loan is outstanding and there is cash to pay it with, one `loanRepayment` (G-011). On
+ * every other tick, returns the input log BY REFERENCE, so the 1,439 quiet minutes of a
+ * day allocate nothing (the idle-tick guarantee the rest of the sim keeps).
+ *
+ * The upkeep append is UNCONDITIONAL and the repayment is not, and the asymmetry is the
+ * point: "one settlement per night, no exceptions" is a cadence somebody counts
+ * (`countSettlementTransactions === dayOf(world)`, exactly), whereas a repayment is an
+ * event that either happened or did not. `runSettlement` checks both halves against the
+ * INPUT rather than against the code that appended them.
  */
 export function settleNight(input: SettlementInput): readonly Transaction[] {
   if (!isSettlementTick(input.tick)) return input.ledger;
   const upkeep = nightlyUpkeepOf(input.entities, input.content);
-  return appendTransaction(input.ledger, {
+  const settled = appendTransaction(input.ledger, {
     tick: input.tick,
     // `0 - upkeep`, never `-upkeep`: negating a zero-upkeep night would record `-0`.
     amount: 0 - upkeep,
     reason: 'upkeep',
   });
+  // AFTER upkeep, and out of what survives it. See the header.
+  return repayLoan(settled, input.tick, input.content);
 }
 
 /**

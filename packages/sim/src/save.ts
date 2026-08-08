@@ -14,11 +14,13 @@ import type { GridBounds } from './grid.js';
 import { assertGuestOutcomes, assertGuestStoreInvariants } from './guests.js';
 import type { Guest, GuestOutcomes, GuestStore } from './guests.js';
 import type { Transaction } from './ledger.js';
+import { assertLoanOutcomes } from './loan.js';
+import type { LoanOutcomes } from './loan.js';
 import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -247,6 +249,75 @@ function migrateV3ToV4(world: unknown): unknown {
 }
 
 /**
+ * THE LOAN COUNTERS A v4 WORLD IS CARRIED ONTO, FROZEN AT THE MOMENT v5 WAS DEFINED.
+ *
+ * A LITERAL, and it must stay one. `createLoanOutcomes()` in `loan.ts` returns the same
+ * shape today and the two are allowed to diverge later — that divergence is correct, not
+ * a bug to repair (ADR-0008).
+ *
+ * The risk here is the v4 case's exactly: `LoanRefusalReason` is a union that WILL grow —
+ * "the plot is full", "the debt is at its ceiling" and M4's bankruptcy state are all
+ * plausible members. If this step called `createLoanOutcomes()`, the day one lands the
+ * same v4 bytes would start producing a v5 world carrying a counter for a refusal that did
+ * not exist when those bytes were written, and the only symptom would be the pinned hash
+ * of the migrated fixture moving on an unrelated change.
+ *
+ * The guard is structural rather than a value assertion, because the two agree today and
+ * no assertion can tell the implementations apart: the source scan in
+ * `tools/headless/src/migration-scan.build.grid.save.test.ts` forbids this file from
+ * naming `createLoanOutcomes` or `LOAN_REFUSAL_REASONS` in executable code.
+ */
+const V5_MIGRATION_LOAN_OUTCOMES: LoanOutcomes = Object.freeze({
+  drawn: 0,
+  refused: Object.freeze({ noLoanOffered: 0, notEligible: 0 }),
+});
+
+/**
+ * v4 -> v5: a world that predates the loan (G-011).
+ *
+ * ADR-0006 fires for the fourth time, and the permanent v1 fixture now walks a FOUR-step
+ * chain, 1 -> 2 -> 3 -> 4 -> 5. It is not regenerated; this is what carries it.
+ *
+ * WHY ZEROS ARE THE TRUE COUNT AND NOT A CONVENIENT DEFAULT — the v3 -> v4 argument
+ * exactly, and just as strong. A v4 world is not a world whose loan counters were left out
+ * of the file. It is a world in which no loan could be drawn at all: the command did not
+ * exist, so none was granted and none was refused. Nothing here is unknown.
+ *
+ * WHAT THIS STEP DELIBERATELY DOES NOT DO IS TOUCH THE LEDGER, and that is the whole of
+ * its restraint. G-011 gives a world three new kinds of money — starting capital, a
+ * demolition refund, and a loan — and a migrated world receives NONE of them
+ * retrospectively. Its opening capital was zero because it opened before capital existed;
+ * its past demolitions refunded nothing because they refunded nothing; it owes nothing
+ * because it never borrowed. Booking any of them now would invent money in a world that
+ * never had it, and — worse than inventing a counter — the simulation would then ACT on it,
+ * which is the line the v2 -> v3 step drew about invented positions. `outstandingDebtOf`
+ * folds a v5-migrated ledger to exactly 0, because it contains no `loanDraw`.
+ *
+ * No other field is renamed, dropped or reinterpreted, so the fixture still ticks.
+ */
+function migrateV4ToV5(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way this step could destroy data — spreading over real state — is the one
+  // thing it refuses to do, exactly as all three earlier steps refuse.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an
+  // own key (G-003).
+  if (Object.keys(world).includes('loanOutcomes')) {
+    throw new Error(
+      'world already has a "loanOutcomes" field, so it is not a v4 world; migrating it would overwrite real counters',
+    );
+  }
+  return {
+    ...world,
+    loanOutcomes: {
+      ...V5_MIGRATION_LOAN_OUTCOMES,
+      refused: { ...V5_MIGRATION_LOAN_OUTCOMES.refused },
+    },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -258,6 +329,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 1, to: 2, migrate: migrateV1ToV2 }),
   Object.freeze({ from: 2, to: 3, migrate: migrateV2ToV3 }),
   Object.freeze({ from: 3, to: 4, migrate: migrateV3ToV4 }),
+  Object.freeze({ from: 4, to: 5, migrate: migrateV4ToV5 }),
 ]);
 
 /**
@@ -621,6 +693,23 @@ export function assertWorldShape(value: unknown): asserts value is World {
     throw new Error('Save is corrupt: world.buildOutcomes.refused is missing');
   }
   assertBuildOutcomes(buildOutcomes as unknown as BuildOutcomes);
+
+  // The loan counters (G-011). Same function the tick calls at its own boundary, so
+  // "valid loan outcomes" has one definition rather than two that drift. Note what is
+  // NOT here: the outstanding debt. It is a fold over the ledger (`outstandingDebtOf`),
+  // so there is no stored debt for a save to carry a wrong value of — I4's argument
+  // applied past cash, and the reason this block is three fields rather than four.
+  const loanOutcomes = value['loanOutcomes'];
+  if (!isRecord(loanOutcomes)) {
+    throw new Error('Save is corrupt: world.loanOutcomes is missing');
+  }
+  if (typeof loanOutcomes['drawn'] !== 'number') {
+    throw new Error('Save is corrupt: world.loanOutcomes.drawn is missing or not a number');
+  }
+  if (!isRecord(loanOutcomes['refused'])) {
+    throw new Error('Save is corrupt: world.loanOutcomes.refused is missing');
+  }
+  assertLoanOutcomes(loanOutcomes as unknown as LoanOutcomes);
 }
 
 export function serialise(world: World): string {

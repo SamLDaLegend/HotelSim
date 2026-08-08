@@ -23,6 +23,7 @@
 import type { ContentId } from './entities.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
+import { applyBasisPoints } from './ledger.js';
 
 /**
  * One room type as the simulation sees it.
@@ -108,6 +109,67 @@ export type RoomTypeData = {
    * silence on disk would be the dominant-strategy shape G-008 closed for prices.
    */
   readonly requires?: readonly ContentId[] | undefined;
+  /**
+   * What fraction of `constructionCostPence` comes back when this room is scrapped, in
+   * basis points — 10,000 is all of it, 5,000 is half (G-011).
+   *
+   * It is what makes stock convertible back into buildable cash, which is one third of
+   * ADR-0011's guarantee that a hotel can always return to play: a player who overbuilt
+   * is not stranded, because the building itself is a reserve.
+   *
+   * BOUNDED BY THIS ROOM TYPE'S OWN NUMBERS, and the bound is enforced in `bindContent`
+   * rather than written as a constant: a refund above
+   * `constructionCostPence - nightlyUpkeepPence` reopens the demolish-before-midnight
+   * upkeep dodge exactly, because the dodge then costs less than the night of upkeep it
+   * saves. See `assertRefundsCannotReopenTheDodge`.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `nightlyUpkeepPence` contract exactly, but for
+   * the mirror-image hazard. A missing PRICE ships a room that is free and therefore
+   * dominant; a missing REFUND ships a room that can never be liquidated, which silently
+   * re-opens half of the dead state this goal closed. Absence is still not emptiness:
+   * content that predates the refund omits the key, fingerprints as it always did, and
+   * refunds nothing — which is what keeps the permanent v1 save fixture a world that
+   * still ticks (ADR-0006). `0` is the different, deliberate statement.
+   */
+  readonly demolitionRefundBasisPoints?: number | undefined;
+};
+
+/**
+ * The house rules of the money loop (G-011): what a hotel opens with, and what it can
+ * borrow when it has nothing left.
+ *
+ * Structurally identical to `Economy` in `@hotelsim/content` and deliberately not
+ * imported from it (ADR-0001), exactly as `RoomTypeData` is.
+ *
+ * WHY THESE NUMBERS ARE CONTENT. They are money, and ADR-0002 already places money in
+ * `packages/content`; constants in the sim would make every future balance pass a diff in
+ * `packages/sim`, which is what I3 exists to prevent. G-007's "the board, not a piece"
+ * ruling for the grid's bounds does not reach them, and the fact that separates the cases
+ * is optionality: bounds could not be optional, so making them content would have moved
+ * every fingerprint and husked the v1 fixture, whereas this table's ABSENCE is a true
+ * statement about a world that predates it.
+ */
+export type EconomyData = {
+  readonly id: ContentId;
+  readonly name: string;
+  /** Booked as one `startingCapital` transaction at tick 0 by `createWorld`. */
+  readonly startingCapitalPence: number;
+  /** Cash one loan draw provides, and — because the fee is charged as money — the debt it incurs. */
+  readonly loanPrincipalPence: number;
+  /** What the draw costs, charged once as a `loanFee`, so the loan's price is in the ledger. */
+  readonly loanFeeBasisPoints: number;
+  /** Taken nightly while a debt is outstanding, CAPPED BY AVAILABLE CASH. */
+  readonly loanRepaymentPerNightPence: number;
+  /**
+   * The most rooms a player may ever have to scrap to afford one — THE LENDER'S BRAKE.
+   *
+   * The mirror of the refund's upper bound. Eligibility is `balance + liquidation value <
+   * cheapest build`, so the refund is the ONLY thing that ever makes a hotel ineligible
+   * through its own resources; a refund too small to matter turns the loan into an
+   * unbounded credit line. `assertStockIsAReserve` enforces it. See the long note in
+   * `economySchema`, which carries the measurements.
+   */
+  readonly liquidationRoomsMax: number;
 };
 
 /**
@@ -158,6 +220,17 @@ export type SimContent = {
   readonly needTypes?: readonly NeedTypeData[] | undefined;
   /** Items rooms can require (G-009). Optional for the reason `needTypes` is. */
   readonly itemTypes?: readonly ItemTypeData[] | undefined;
+  /**
+   * Opening capital and loan terms (G-011). Optional for the reason `needTypes` is, and
+   * here the absence is unusually clean: content without this table describes a world
+   * with no capital, no loan and no refund, which is what such a world had.
+   *
+   * A LIST WITH ONE ENTRY TODAY, reached through `firstEconomy` — the lowest id after
+   * normalisation, the `firstNeedType` precedent. That is what keeps `packages/sim` free
+   * of the snake_case literal that would name it (ADR-0003), and it is the shape M6's
+   * per-scenario economies want anyway.
+   */
+  readonly economy?: readonly EconomyData[] | undefined;
 };
 
 /**
@@ -303,6 +376,19 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
       `bindContent: room type "${roomType.id}" has a non-integer or negative constructionCostPence (${String(cost)}); money is integer pence (ADR-0002)`,
     );
   }
+  // The demolition refund, same discipline (G-011). A basis-point rate is an integer for
+  // the reason money is (ADR-0002): `cost * 0.5` from a raw host would put a float into
+  // `applyBasisPoints`, which rejects it — at the moment a player clicked demolish,
+  // rather than here, with the room type named. The upper bound is 10,000 (100%) because
+  // a refund above the price paid is a money pump on its own, before the upkeep dodge is
+  // even considered; the tighter, content-dependent bound is
+  // `assertRefundsCannotReopenTheDodge` below.
+  const refund = roomType.demolitionRefundBasisPoints;
+  if (refund !== undefined && (!Number.isInteger(refund) || refund < 0 || refund > 10_000)) {
+    throw new Error(
+      `bindContent: room type "${roomType.id}" has a demolitionRefundBasisPoints of ${String(refund)}; it must be an integer in 0..10000 (10000 is 100%)`,
+    );
+  }
   // Every optional key is STRIPPED when it holds undefined, not carried: an absent
   // key and a key holding `undefined` are different documents to the fingerprint, and
   // only the absent form is the "predates this field" statement (see the field docs).
@@ -311,17 +397,64 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
     requires: rawRequires,
     nightlyUpkeepPence: _rawUpkeep,
     constructionCostPence: _rawCost,
+    demolitionRefundBasisPoints: _rawRefund,
     ...rest
   } = roomType;
   const withUpkeep: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
   const withCost: RoomTypeData = cost === undefined ? withUpkeep : { ...withUpkeep, constructionCostPence: cost };
+  const withRefund: RoomTypeData =
+    refund === undefined ? withCost : { ...withCost, demolitionRefundBasisPoints: refund };
   const base: RoomTypeData =
     rawProvides === undefined
-      ? withCost
-      : { ...withCost, provides: cloneIdList(roomType.id, 'provides', 'need', rawProvides) };
+      ? withRefund
+      : { ...withRefund, provides: cloneIdList(roomType.id, 'provides', 'need', rawProvides) };
   return rawRequires === undefined
     ? base
     : { ...base, requires: cloneIdList(roomType.id, 'requires', 'item', rawRequires) };
+}
+
+/**
+ * Clone an economy record, validating every number at the boundary (G-011).
+ *
+ * The `cloneRoomType` discipline exactly: a float or a negative from a raw host — one
+ * that did not come through the zod schema — dies here, at bind time, with the table
+ * named, rather than three subsystems away inside `appendTransaction` on the night a
+ * loan was repaid.
+ */
+function cloneEconomy(economy: EconomyData): EconomyData {
+  for (const [field, value] of [
+    ['startingCapitalPence', economy.startingCapitalPence],
+    ['loanPrincipalPence', economy.loanPrincipalPence],
+    ['loanRepaymentPerNightPence', economy.loanRepaymentPerNightPence],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 0 || !Number.isSafeInteger(value)) {
+      throw new Error(
+        `bindContent: economy "${economy.id}" has a non-integer or negative ${field} (${String(value)}); money is integer pence (ADR-0002)`,
+      );
+    }
+  }
+  const fee = economy.loanFeeBasisPoints;
+  if (!Number.isInteger(fee) || fee < 0 || fee > 10_000) {
+    throw new Error(
+      `bindContent: economy "${economy.id}" has a loanFeeBasisPoints of ${String(fee)}; it must be an integer in 0..10000 (10000 is 100%)`,
+    );
+  }
+  const most = economy.liquidationRoomsMax;
+  if (!Number.isSafeInteger(most) || most < 1) {
+    throw new Error(
+      `bindContent: economy "${economy.id}" has a liquidationRoomsMax of ${String(most)}; it must be a positive integer — the most rooms a player may ever have to scrap to afford one`,
+    );
+  }
+  // AND THE PRODUCT THE FEE WILL BE COMPUTED FROM MUST STAY EXACT (ADR-0002). This is the
+  // check `cloneRoomType` gets for free from `assertRefundsCannotReopenTheDodge`, which
+  // calls `applyBasisPoints` on every room type at bind time and so trips its overflow
+  // guard here rather than in a tick. Nothing calls it for the loan until a player draws
+  // one, and `applyDrawLoan`'s header promises it NEVER THROWS — so without this, content
+  // with an absurd principal loads happily and the simulation dies mid-tick, three
+  // subsystems from the cause. Driving the real function is deliberate: one definition of
+  // "exact", not a second copy of the bound.
+  applyBasisPoints(economy.loanPrincipalPence, fee);
+  return { ...economy };
 }
 
 /**
@@ -403,6 +536,127 @@ function assertRequiredItemsExist(
 }
 
 /**
+ * Throws if any room type's demolition refund would reopen the upkeep dodge (G-011).
+ *
+ * THE INEQUALITY, AND IT IS THE WHOLE POINT OF THIS FUNCTION:
+ *
+ *     refund  >  constructionCostPence - nightlyUpkeepPence      REOPENS IT
+ *
+ * A player can demolish every room just before midnight and rebuild just after. Upkeep
+ * is charged per LIVE room at settlement and settlement reads the draft, so the dodged
+ * night genuinely costs nothing — that mechanism is deliberate and stays. What stops the
+ * dodge being worth doing is the price of the round trip: it costs
+ * `constructionCostPence - refund` and saves `nightlyUpkeepPence`. `balance-critic`
+ * priced it at G-005 (-1,774,500p over 100 days, when rebuilding was free) and again at
+ * G-008 (102.4 : 1 against the player). Introducing a refund is the one change that can
+ * turn it profitable, and ADR-0011 made pricing it a condition of the goal.
+ *
+ * WHY THIS IS A REJECTION AND NOT A TEST. A test pins the SHIPPED numbers. This is a
+ * property of every content set any host can ever inject, including one a designer edits
+ * at M6 and one a balance sweep generates — and the threshold is not a constant, it MOVES
+ * with upkeep's share of build cost, so a room whose upkeep is a larger fraction of its
+ * price reopens the dodge at a smaller refund. A `max()` in the zod schema cannot express
+ * a relationship between three fields, and a number written in a comment is what this
+ * repo has repeatedly found rots. So the guard is computed, per room type, from that
+ * room type's own numbers, on the one path every host goes through — beside
+ * `assertNeedsAreSatisfiable`, which is here for exactly the same reason.
+ *
+ * `>` and not `>=`, because `>` is the literal inequality ADR-0011 states: at
+ * `cost - upkeep` exactly the round trip costs precisely what it saves, which is not
+ * profitable and not worth a designer's time. Under the shipped table that boundary is
+ * 250,000 - 2,500 = 247,500p, so 247,500 loads and 247,501 throws, and
+ * `recovery.dodge.test.ts` pins both sides.
+ *
+ * ABSENCE IS NOT EMPTINESS, here as everywhere: a room type with no refund key refunds
+ * nothing and can never cross the threshold, which is why a v1-era content set passes.
+ */
+function assertRefundsCannotReopenTheDodge(roomTypes: readonly RoomTypeData[]): void {
+  for (const roomType of roomTypes) {
+    const basisPoints = roomType.demolitionRefundBasisPoints;
+    if (basisPoints === undefined) continue;
+    const cost = roomType.constructionCostPence ?? 0;
+    const upkeep = roomType.nightlyUpkeepPence ?? 0;
+    // The same function that computes the real charge, so the guard and the payment
+    // cannot disagree about what a refund is.
+    const refund = applyBasisPoints(cost, basisPoints);
+    const threshold = cost - upkeep;
+    if (refund > threshold) {
+      throw new Error(
+        `bindContent: room type "${roomType.id}" refunds ${refund}p of a ${cost}p build, which is above the ${threshold}p ` +
+          `threshold (constructionCostPence ${cost} - nightlyUpkeepPence ${upkeep}). Above it, demolishing every room ` +
+          'before midnight and rebuilding after COSTS LESS than the night of upkeep it dodges, so the exploit pays. ' +
+          'Lower demolitionRefundBasisPoints, or raise constructionCostPence, or LOWER nightlyUpkeepPence — ' +
+          'raising upkeep lowers this threshold and makes it worse.',
+      );
+    }
+  }
+}
+
+/**
+ * Throws if a room type's refund is so small that owning them is not a reserve (G-011).
+ *
+ * THE MIRROR OF `assertRefundsCannotReopenTheDodge`, AND THE REASON BOTH ARE NEEDED.
+ * `canDrawLoan` grants a loan when `balance + what every room would refund < the cheapest
+ * room this content can build`. The refund is therefore the ONLY quantity that ever makes
+ * a hotel ineligible through its own resources — stock is the reserve, the lender is the
+ * backstop behind it — so the refund is bounded from BOTH sides by the same fact:
+ *
+ *     too HIGH  ->  scrapping and rebuilding beats keeping        (a dodger's hole)
+ *     too LOW   ->  stock is worth nothing, so everyone qualifies (a lender's hole)
+ *
+ * Measured on this build with a refund of 0 and nothing else changed, `--days 5 --rooms 0
+ * --build 1 --loan 1` drew 1,602 loans and 480,600,000p in FIVE SIMULATED DAYS. Zero is a
+ * legal and deliberate designer statement — "scrapping this returns nothing" — which is
+ * exactly what made it dangerous: nothing objected.
+ *
+ * THE BOUND IS EXPRESSED IN THE UNITS A DESIGNER THINKS IN. `liquidationRoomsMax` is the
+ * most rooms a player may ever have to scrap to afford one; a room type whose refund
+ * cannot clear the cheapest build in that many rooms is rejected. A hotel holding that
+ * many is then never eligible, so the lender can never become the whole economy however
+ * the rest of the table is tuned.
+ *
+ * IT ONLY APPLIES WHEN AN ECONOMY IS DEFINED, and that is the honest scoping rather than a
+ * convenience: with no lender there is no credit line to bound, and a v1-era content set
+ * that predates all of this must keep loading (ADR-0006).
+ *
+ * A FREE ROOM TYPE SUSPENDS IT. If the cheapest build costs nothing, nobody is ever stuck
+ * and no loan is ever granted (`canDrawLoan`), so there is nothing for a reserve to do.
+ */
+function assertStockIsAReserve(
+  roomTypes: readonly RoomTypeData[],
+  economy: readonly EconomyData[],
+): void {
+  const rules = economy[0];
+  if (rules === undefined) return;
+  let cheapest = Number.POSITIVE_INFINITY;
+  for (const roomType of roomTypes) {
+    const cost = roomType.constructionCostPence ?? 0;
+    if (cost < cheapest) cheapest = cost;
+  }
+  // Nobody can ever be stuck, so no loan is ever granted and no reserve is needed.
+  if (!Number.isFinite(cheapest) || cheapest <= 0) return;
+  const most = rules.liquidationRoomsMax;
+  for (const roomType of roomTypes) {
+    const basisPoints = roomType.demolitionRefundBasisPoints;
+    // Content that predates refunds is not content this economy was written for; the
+    // absence is a historical statement and the check has nothing to say about it.
+    if (basisPoints === undefined) continue;
+    const refund = applyBasisPoints(roomType.constructionCostPence ?? 0, basisPoints);
+    if (refund * most < cheapest) {
+      const needed = refund === 0 ? 'no number of them ever' : `${Math.ceil(cheapest / refund)} of them`;
+      throw new Error(
+        `bindContent: room type "${roomType.id}" refunds ${refund}p, so ${needed} would pay for the cheapest ` +
+          `room this content can build (${cheapest}p) — but economy "${rules.id}" says a player should never have ` +
+          `to scrap more than ${most} (liquidationRoomsMax). A refund this small makes owning rooms worth nothing ` +
+          'to the eligibility test, so every broke hotel qualifies for a loan forever and the lender becomes the ' +
+          'whole economy. Raise demolitionRefundBasisPoints, lower constructionCostPence, or raise ' +
+          'liquidationRoomsMax if that really is the game you mean.',
+      );
+    }
+  }
+}
+
+/**
  * Normalise injected content and fingerprint it.
  *
  * Sorting rather than asserting-sorted is the deliberate choice: it puts the one
@@ -441,9 +695,20 @@ export function bindContent(content: SimContent): BoundContent {
     content.itemTypes === undefined
       ? undefined
       : normaliseTable(content.itemTypes, 'item type', (itemType) => ({ ...itemType }));
+  const economy =
+    content.economy === undefined
+      ? undefined
+      : normaliseTable(content.economy, 'economy', cloneEconomy);
 
   assertNeedsAreSatisfiable(roomTypes, needTypes ?? []);
   assertRequiredItemsExist(roomTypes, itemTypes ?? []);
+  // THE TWO CROSS-FIELD MONEY CHECKS (G-011), and they bound the refund from opposite
+  // sides of the same fact. The upper bound reads only room types, so it applies to
+  // content that defines no economy at all — a room that refunds more than the dodge
+  // threshold is exploitable whether or not anybody can borrow. The lower bound needs the
+  // economy, because it is the LENDER that a worthless refund lets loose.
+  assertRefundsCannotReopenTheDodge(roomTypes);
+  assertStockIsAReserve(roomTypes, economy ?? []);
 
   // ABSENCE IS NOT EMPTINESS. Content that does not define need types produces the same
   // document — and therefore the same fingerprint — that it produced before need types
@@ -453,7 +718,8 @@ export function bindContent(content: SimContent): BoundContent {
   // designer who means "this content deliberately defines no needs", and that IS a
   // different document.
   const withNeeds: SimContent = needTypes === undefined ? { roomTypes } : { roomTypes, needTypes };
-  const normalised: SimContent = itemTypes === undefined ? withNeeds : { ...withNeeds, itemTypes };
+  const withItems: SimContent = itemTypes === undefined ? withNeeds : { ...withNeeds, itemTypes };
+  const normalised: SimContent = economy === undefined ? withItems : { ...withItems, economy };
   return Object.freeze({
     content: Object.freeze(normalised),
     fingerprint: hashJson(normalised as unknown as JsonValue),
@@ -523,6 +789,64 @@ export function findNeedType(bound: BoundContent, id: ContentId): NeedTypeData |
  */
 export function firstNeedType(bound: BoundContent): NeedTypeData | undefined {
   return bound.content.needTypes?.[0];
+}
+
+/**
+ * The house rules this run plays under, or undefined if the content defines none (G-011).
+ *
+ * The LOWEST id after normalisation, not "the first line of the file" — the
+ * `firstNeedType` contract exactly, and for the same two reasons: the table is
+ * normalised so the answer does not depend on the order a designer typed the entries in
+ * (I2), and reaching the record by position rather than by name is what keeps the
+ * snake_case id that names it out of `packages/sim` (ADR-0003).
+ *
+ * `undefined` is the pre-G-011 world: no opening capital, no loan on offer. Every caller
+ * handles it as a real case rather than a default, because a save taken under such
+ * content must keep meaning what it meant.
+ */
+export function firstEconomy(bound: BoundContent): EconomyData | undefined {
+  return bound.content.economy?.[0];
+}
+
+/**
+ * What scrapping a room of this type returns, in integer pence (G-011).
+ *
+ * Rounded ONCE, here, through the single rule in `applyBasisPoints`. Absent means zero —
+ * the absence-is-not-emptiness contract every other money field on a room type has — and
+ * an unknown kind returns 0 for the same reason `requiredItemsOf` returns `[]`: the
+ * caller that cares about the difference has already asked `findRoomType`.
+ *
+ * `bindContent` has already established that this cannot exceed
+ * `constructionCostPence - nightlyUpkeepPence`, so no call site has to re-check it.
+ */
+export function demolitionRefundOf(bound: BoundContent, roomTypeId: ContentId): number {
+  const roomType = findRoomType(bound, roomTypeId);
+  if (roomType === undefined) return 0;
+  const basisPoints = roomType.demolitionRefundBasisPoints;
+  if (basisPoints === undefined) return 0;
+  return applyBasisPoints(roomType.constructionCostPence ?? 0, basisPoints);
+}
+
+/**
+ * The cheapest room this content lets anybody build, in integer pence (G-011).
+ *
+ * THE PRICE OF BEING ABLE TO ACT AT ALL, which is what makes it the yardstick for whether
+ * a player is stuck (`canDrawLoan` in `loan.ts`). If any room type is free to build, this
+ * is 0 and nobody is ever stuck — correctly, because a player who can always build never
+ * needs a loan.
+ *
+ * Content with no room types returns `Infinity` — "there is no cheapest" — rather than 0,
+ * because 0 would say the opposite. `roomTypesSchema` requires at least one on disk, so
+ * this is reachable only from a hand-built registry, and it is the conservative direction:
+ * a hotel that can build nothing is stuck at every balance.
+ */
+export function minConstructionCostOf(bound: BoundContent): number {
+  let cheapest = Number.POSITIVE_INFINITY;
+  for (const roomType of bound.content.roomTypes) {
+    const cost = roomType.constructionCostPence ?? 0;
+    if (cost < cheapest) cheapest = cost;
+  }
+  return cheapest;
 }
 
 /** Whether a stay in `roomTypeId` satisfies `needId`. The provider link, from content. */

@@ -457,7 +457,7 @@ time: all three closures approved (ADR-0011), scheduled as G-011 below.
 > of. Economy work, so the economy pair owns it.
 
 ## G-011 — Starting capital, a loan, and a balanced demolition refund
-Status: in-progress
+Status: done
 Milestone: M1.5 (bridge)
 Owner pair: economy-engineer / balance-critic
 Statement: A hotel with no rooms and no cash can always return to play. The hotel opens
@@ -465,22 +465,103 @@ Statement: A hotel with no rooms and no cash can always return to play. The hote
   and a loan is available when neither capital nor stock remains.
 Exit criteria:
   - pnpm exec vitest run recovery  (all green)
-  - pnpm sim:run --days 1000 --seed 7 --rooms 3 --demolish 1  ends with at least one
-    room standing and at least one guest satisfied — i.e. the state ADR-0011 names as
-    unrecoverable is provably no longer absorbing
+  - A, recovery is real:  pnpm sim:run --days 1000 --seed 7 --rooms 0 --build 1440
+    --loan 1440  ends with rooms.valid >= 1 AND guests.satisfied >= 1 AND revenue > 0
+  - B, the state is not absorbing:  the same plus --demolish 1440  ends with built > 0,
+    demolitionRefund > 0, loans.drawn > 0, AND builds still succeeding IN THE FINAL TEN
+    DAYS — the player can still act at tick 1,440,000 having repeatedly returned to zero
+    rooms and zero cash
+    (exact cadences fixed at BUILD by measurement; both pinned in recovery.report.test.ts)
   - the demolish-before-midnight upkeep dodge is PRICED and still unprofitable, by a
     test that computes it rather than asserts it (refund must sit meaningfully below the
     247,500p threshold that reopens it)
   - all §2 invariant gates green (pnpm verify)
 Out of scope: bankruptcy / game-over as a state (M4); interest-rate tuning as a balance
   exercise (M4); demand response (M4); reviews (M2)  (-> PARKING.md)
-Critique rounds used: 0/3
+Critique rounds used: 1/3
+
+  Verified by the orchestrator on 2026-08-08, both 1,000-day criteria run at full length
+  rather than replayed short: A -> 23 valid rooms, 11,831 satisfied, 100,563,500p revenue.
+  B -> 1,000 built, 1,000 demolished, 499 loans drawn, 125,000,000p refunded, and ZERO
+  insufficientFunds refusals across the entire run, so builds still succeed at the end.
+  All six gates green, I2 331604a67c725a7a, I5 35.1%. The refund-0 credit line is refused
+  at load, exit 1, stdout empty. Fixture zero-line diff, SAVE_V1_CONTENT unmoved.
+
+  ROUND 1 (balance-critic): 3 MAJOR, 3 MINOR, all fixed.
+  - THE DODGE GUARD WAS ONE-SIDED. I asked whether content could dodge and still load,
+    and approved a guard bounding the refund from ABOVE. Nobody asked the mirror
+    question — and the refund is the loan's ONLY brake, because eligibility rests on
+    liquidation value. At a refund of 0 (a documented legal designer choice) drawLoan
+    became an unbounded credit line: 1,602 loans and 480,600,000p in FIVE simulated days
+    from one changed content field. Now bounded both ways by assertStockIsAReserve
+    against a new `liquidationRoomsMax`, stated in the units a designer thinks in.
+  - A QUADRATIC FOLD, of the class G-010 spent a goal removing and this goal's own I5 fix
+    removed from settlement earlier in the same build. --loan 1 at 365 days cost 23,534ms,
+    235% of budget. Worse than diagnosed: removing the ledger re-fold only halved it, and
+    the residue was G-008's once-per-tick balance fold, accepted on "builds are rare by
+    construction" — TRUE UNTIL A LOAN, which has no position and so nothing to run out of.
+    Fixed by memoising the fold outside state (the one concession I4 names), verified
+    against G-010's bar: memo off and memo on hash identically.
+  - THE MONEY-MINTING CONTAINMENT ARGUMENT WAS A COMMENT, NOT A MECHANISM. No player path
+    exists today, so it holds — but it is not free. See the note below.
+
+  ADR-0011'S ORIGINAL REPRODUCTION NO LONGER REPRODUCES, FOR TWO REASONS, AND BOTH ARE
+  RECORDED HERE BECAUSE A DEAD STATE WE CANNOT DEMONSTRATE IS ONE WE CANNOT PROVE WE
+  CLOSED. First, `--rooms 3 --demolish 1` issues no build command, so no room could ever
+  be placed under it — the criterion was unreachable by ANY implementation, and I wrote it
+  while explicitly warning about that shape three goals running. Second, the goal itself
+  invalidated it: seeded rooms are spawned free but refunded at 50%, so that invocation now
+  ends at 875,000p rather than 0p. The three measured HEAD baselines stand in its place.
+
+  MY RULING ON THE MINTING FIX WAS WRONG AND THE BUILDER MEASURED IT RATHER THAN FORCING
+  IT. Seeding `--rooms` through buildRoom needs capital to cover it, but capital is one
+  content constant while --rooms is per-invocation: at 500,000p every N collapses to 2
+  rooms, which would undo G-010's entire goal at the 60-room bench. Shipped instead: the
+  hidden capital is now visible as `scrap value` beside `capital` in the report, and it is
+  exactly the term canDrawLoan adds. Closing it properly needs a scenario-capital
+  mechanism -> PARKING.md.
 
   Every monetary value here is content (I3/ADR-0003) and integer pence (ADR-0002). Each
   new money movement needs its own `TransactionReason` member — the closed union and its
   choke point make that structural. If `World` gains a field (a loan balance almost
   certainly is one), ADR-0006 applies: SAVE_SCHEMA_VERSION 5 and the permanent v1 fixture
   walking 1->2->3->4->5, never regenerated.
+
+  ### ADR-0011's ORIGINAL REPRODUCTION NO LONGER REPRODUCES, FOR TWO REASONS
+
+  Recorded because a dead state we can no longer demonstrate is a dead state we cannot
+  prove we closed. `--days 1000 --seed 7 --rooms 3 --demolish 1` was the three legal
+  commands from the shipped default that reached the absorbing state — 12,000 guests
+  arrived, 11,999 unsatisfied, every player action refused, balance 0p. It fails as a
+  repro today for two INDEPENDENT reasons, and only the first was in the criterion rewrite:
+
+  1. **It contains no `--build`.** `schedule()` emits build commands only under
+     `buildEveryTicks > BUILD_OFF`, so no command in that run can ever place a room. It
+     was unmeetable by a correct implementation, a broken one, and any other — which is
+     why criteria A and B replaced it. Found by `economy-engineer` at PLAN.
+
+  2. **THE GOAL INVALIDATED IT.** The same invocation now ends with **875,000p** in the
+     bank: 500,000p of opening capital plus 375,000p of refunds for the three inherited
+     rooms it scraps. There is no longer a zero-cash zero-room state at the end of it to
+     be absorbed by. Found by `balance-critic` at critique round 1; it is the goal working,
+     but it means the original evidence cannot be re-run to show the contrast.
+
+  **What stands in its place.** Three HEAD baselines, measured on the build immediately
+  before this goal and pinned as literals in `recovery.report.test.ts`: `--rooms 3
+  --demolish 1`, `--rooms 3 --demolish 1 --build 1440`, and `--rooms 0 --build 1440`, all
+  four fields zero — 0 built, 0 satisfied, 0 valid rooms, 0 entities — with a player
+  trying to build every day for a thousand simulated days and being refused every time.
+  Those are the absorbing state, and criteria A and B are what they discriminate against.
+
+  **The second reason also carries a live cost, and it is not fixed.** `--rooms N` seeds
+  its hotel through `spawnEntity`, which is free, so seeded stock is seeded CASH at the
+  refund rate. `--rooms 3` carries 375,000p of it against a `startingCapitalPence` of
+  500,000p. Seeding through `buildRoom` instead was measured and does not work: capital is
+  one content constant while `--rooms` is a per-invocation variable, so `--rooms 60` (the
+  I5 bench) would need 15,000,000p and collapses to 2 rooms at the shipped figure —
+  undoing G-010. The report now PRINTS the scrap value beside the capital
+  (`money.liquidationValuePennies`) so nobody sizes one without seeing the other.
+  Closing it properly needs a scenario-capital mechanism. -> `PARKING.md`.
 
 ---
 

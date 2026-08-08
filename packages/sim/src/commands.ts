@@ -51,8 +51,12 @@ export type Command =
    */
   | { readonly kind: 'buildRoom'; readonly roomType: ContentId; readonly at: Cell }
   /**
-   * THE PLAYER DEMOLISHES A ROOM (G-008). Free — no refund and no fee, because any
-   * fraction is a designer's number and that is M4's pricing goal.
+   * THE PLAYER DEMOLISHES A ROOM (G-008), AND GETS PART OF THE BUILD COST BACK (G-011).
+   *
+   * The refund is `demolitionRefundBasisPoints` of the room type's construction cost — a
+   * designer's number, therefore content — and it is spendable in the same tick, so
+   * demolish-then-build is a real move. `bindContent` refuses content whose refund would
+   * make demolishing before midnight a way to dodge upkeep; see `build.ts`.
    *
    * BY ENTITY ID, not by cell: the id is the simulation's own handle, and a cell does not
    * identify an entity uniquely once items (M2) or footprints (G-009) share cells. An id
@@ -76,7 +80,23 @@ export type Command =
    * command log fully describes who arrived and when (I2), and a test can put a guest
    * in the lobby on an exact tick without a demand model to argue with.
    */
-  | { readonly kind: 'guestArrives' };
+  | { readonly kind: 'guestArrives' }
+  /**
+   * THE PLAYER BORROWS (G-011). The last exit from the dead state ADR-0011 closes.
+   *
+   * NO PAYLOAD. How much a loan is and what it costs are the economy's numbers, in
+   * content, not the caller's choice — the same division `guestArrives` uses.
+   *
+   * REFUSED, RECORDED IN `World.loanOutcomes`, NEVER THROWN, when this content offers no
+   * loan or when the hotel is not stuck — "stuck" being `balance + what every room would
+   * refund < the cheapest room this content can build". A host may therefore issue this on
+   * a blind cadence: it is refused harmlessly on every tick except the ones where it is
+   * actually needed, which is what makes a schedule that cannot observe the balance safe.
+   *
+   * Deliberately available WHILE A DEBT IS OUTSTANDING. See the header of `loan.ts`: a
+   * one-loan-at-a-time rule re-opens the absorbing state this goal exists to close.
+   */
+  | { readonly kind: 'drawLoan' };
 
 export type ScheduledCommand = {
   /** Tick at which this command is applied. */

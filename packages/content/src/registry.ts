@@ -10,8 +10,8 @@
 // next caller to trip over — there is no registry to half-populate.
 
 import { z } from 'zod';
-import { itemTypesSchema, needTypesSchema, roomTypesSchema } from './schema.js';
-import type { ItemType, NeedType, RoomType } from './schema.js';
+import { economiesSchema, itemTypesSchema, needTypesSchema, roomTypesSchema } from './schema.js';
+import type { Economy, ItemType, NeedType, RoomType } from './schema.js';
 
 /**
  * Every content table, validated.
@@ -34,6 +34,16 @@ export type ContentRegistry = {
   /** Items a room can require to be a valid provider (G-009). Optional for the same
    *  absence-is-not-emptiness reason `needTypes` is. */
   readonly itemTypes?: readonly ItemType[];
+  /**
+   * The house rules of the money loop (G-011): opening capital and loan terms.
+   *
+   * Optional for the same absence-is-not-emptiness reason, and here the absence is an
+   * unusually clean historical statement: content that predates this table describes a
+   * world with no starting capital, no loan and no refund, which is exactly what such a
+   * world had. That is what keeps the permanent v1 save fixture's content fingerprint
+   * `8e09fe4f0fa162a3` unmoved (ADR-0006).
+   */
+  readonly economy?: readonly Economy[];
 };
 
 /**
@@ -114,6 +124,36 @@ export function parseItemTypes(raw: unknown, sourceLabel = 'content'): readonly 
   }
   assertUniqueIds(result.data, 'item type');
   return result.data;
+}
+
+/**
+ * Validate an already-parsed economy document (G-011). Same all-or-nothing discipline,
+ * and a table rather than a registry for the same reason: one file is one table.
+ *
+ * What it does NOT check is the one thing that matters most about these numbers — that a
+ * room type's `demolitionRefundBasisPoints` does not reopen the upkeep dodge. That is a
+ * relationship between three fields across two files, so it lives in `bindContent` in
+ * `packages/sim`, the one path every host goes through, beside the other cross-table
+ * checks. Two definitions of "coherent content" would drift.
+ */
+export function parseEconomies(raw: unknown, sourceLabel = 'content'): readonly Economy[] {
+  const result = economiesSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:\n${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'economy');
+  return result.data;
+}
+
+/** Validate an economy JSON document. "Not JSON" and "not content" stay apart. */
+export function parseEconomiesJson(text: string, sourceLabel = 'content'): readonly Economy[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseEconomies(raw, sourceLabel);
 }
 
 /** Validate an item-type JSON document. "Not JSON" and "not content" stay apart. */

@@ -7,12 +7,15 @@
 //   pnpm sim:run --days 30 --seed 7 --build 2880            (the player expands, G-008)
 //   pnpm sim:run --days 30 --build 2880 --demolish 5760     (and knocks rooms down again)
 //   pnpm sim:run --days 1 --content ./my-content            (alternative content directory)
+//   pnpm sim:run --days 1000 --rooms 0 --build 1440 --loan 1440   (from nothing, G-011)
 //
 // `--rooms` is the hotel the scenario STARTS with, placed free through the structural
 // `spawnEntity`. `--build` is the PLAYER acting, through `buildRoom`: it costs the room
 // type's construction cost, and an occupied cell, a cell off the plot or an empty wallet
-// is a recorded refusal rather than a crash. Both default to the pre-G-008 behaviour —
-// `--build` and `--demolish` off — so `pnpm sim:bench` measures the workload it always has.
+// is a recorded refusal rather than a crash. `--loan` is the player borrowing when it has
+// neither cash nor stock (G-011); it is refused and recorded on every tick where the hotel
+// does not need it, which is what makes a blind cadence safe. All three default to the
+// pre-G-008 behaviour — off — so `pnpm sim:bench` measures the workload it always has.
 //
 // THE `--silent` ON THE MACHINE-CONSUMED MODES IS LOAD-BEARING: pnpm prints its own
 // script banner to stdout before this process starts, and without `--silent` the
@@ -59,6 +62,7 @@ function main(): void {
       options.arrivalEveryTicks,
       options.buildEveryTicks,
       options.demolishEveryTicks,
+      options.loanEveryTicks,
     ),
   );
   // Print the report, THEN fail if the run violated an invariant. The ordering — and

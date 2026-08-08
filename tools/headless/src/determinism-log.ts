@@ -11,7 +11,13 @@
 // resulting world. One circuit: the gate and the test drive the same log, and there is no
 // second copy to drift.
 
-import { requiredItemsOf } from '@hotelsim/sim';
+import {
+  constructionCostOf,
+  demolitionRefundOf,
+  firstEconomy,
+  minConstructionCostOf,
+  requiredItemsOf,
+} from '@hotelsim/sim';
 import type { BoundContent, ScheduledCommand } from '@hotelsim/sim';
 
 /**
@@ -90,6 +96,74 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   const schedule: ScheduledCommand[] = [];
   for (let tick = 0; tick < ticks; tick += 997) {
     schedule.push({ tick, command: { kind: 'noop' } });
+  }
+
+  // ============================================================================
+  // THE HOTEL CHURNS ITS CAPITAL AWAY AND HAS TO BORROW (G-011).
+  //
+  // Loans are the inverse of settlement and the same shape as builds: settlement was free
+  // to cover because it is UNCONDITIONAL, whereas a loan happens only if commanded AND
+  // only if the hotel is stuck. A harness that issues no draw proves nothing about draws,
+  // and — this is the part that needed engineering — a harness that issues draws while
+  // solvent proves only that they are refused. Measured on this log before this pass: the
+  // hotel is never once eligible, because it opens with capital and then accumulates rooms
+  // whose refund value alone keeps it able to act.
+  //
+  // So the log deliberately does what a player would have to do to get stuck: build a room
+  // and immediately scrap it, over and over. Each cycle burns exactly
+  // `constructionCost - refund`, which is the arithmetic the demolition refund is bounded
+  // by, so this pass is also the upkeep dodge's economics running inside the I2 gate.
+  //
+  // THE NUMBER OF CYCLES IS DERIVED FROM CONTENT, NOT WRITTEN DOWN. Reserves start at the
+  // opening capital and fall by the round-trip loss each cycle; the hotel is stuck once
+  // they drop below the cheapest room it could build (`canDrawLoan`). Deriving it means a
+  // designer who changes the capital, the price or the refund gets a harness that still
+  // reaches the state — and `recovery.determinism.test.ts` asserts a draw was actually
+  // GRANTED, so if this ever stops working it fails loudly rather than going quiet.
+  //
+  // ITS CELL IS floor 20, column 0, AND THAT IS NOT INCIDENTAL. The spawn diagonal reaches
+  // it only at `spawnIndex` 1,280 (this log reaches ~99 in 100,000 ticks); the build
+  // rotation is floors 5..19 and 900; the terraces are floors -1 and -2; the tower is
+  // column 79. `buildRoom` would RECORD an occupied collision rather than throw, but a
+  // collision would still muddy what this pass is for.
+  //
+  // IT RUNS FIRST, SO IT SHIFTS EVERY LATER ENTITY ID, and G-010 left a warning saying
+  // exactly that would happen ("a pass inserted before tick 47 would move that, and the
+  // sky-tower test is what would say so"). `churnEntities` below is added into the
+  // `underfoot` walk's offset for that reason — derived, never a literal.
+  // ============================================================================
+  const economy = firstEconomy(content);
+  const roundTripLoss = constructionCostOf(content, entityKind) - demolitionRefundOf(content, entityKind);
+  const cheapestRoom = minConstructionCostOf(content);
+  const churnCycles =
+    economy === undefined || roundTripLoss <= 0 || !Number.isFinite(cheapestRoom)
+      ? 0
+      : Math.max(0, Math.ceil((economy.startingCapitalPence - cheapestRoom + 1) / roundTripLoss));
+  let churnTick = 1;
+  let churnRoomId = 1;
+  for (let cycle = 0; cycle < churnCycles; cycle += 1) {
+    const at = { floor: 20, column: 0 };
+    schedule.push({ tick: churnTick, command: { kind: 'buildRoom', roomType: entityKind, at } });
+    schedule.push({ tick: churnTick + 1, command: { kind: 'demolishRoom', id: churnRoomId } });
+    churnTick += 2;
+    // One room plus its furniture per cycle; `buildRoom` furnishes what it places (G-009).
+    churnRoomId += 1 + furniture.length;
+  }
+  const churnEntities = churnCycles * (1 + furniture.length);
+  // The draw that is GRANTED, on the first tick after the churn. Everything above has
+  // reduced the hotel to no rooms and less cash than the cheapest one costs, which is the
+  // state ADR-0011 calls unrecoverable — so this command is the exit from it, exercised
+  // inside the 100,000-tick determinism proof rather than only in a unit test.
+  if (churnCycles > 0) {
+    schedule.push({ tick: churnTick, command: { kind: 'drawLoan' } });
+  }
+  // AND DRAWS THAT ARE REFUSED. Once the spawn passes below have given the hotel rooms,
+  // its liquidation value alone keeps it able to act, so every one of these is a recorded
+  // `notEligible` — which is what proves INSIDE THE I2 GATE that an ineligible draw is a
+  // recorded outcome and not a throw. If it threw, this harness would produce no hash at
+  // all, and that is something the gate can genuinely see.
+  for (let tick = 4_111; tick < ticks; tick += 4_111) {
+    schedule.push({ tick, command: { kind: 'drawLoan' } });
   }
   // Ids are handed out from a monotonic counter, so the nth spawn always has id n.
   //
@@ -275,8 +349,12 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // as a literal: the tick-13 pass emits one furnished room and the tick-47 tower emits
   // four, so the first five furnished spawns are the ones to step over. A pass inserted
   // before tick 47 would move that, and the sky-tower test is what would say so.
+  //
+  // G-011 INSERTED EXACTLY SUCH A PASS, and this is the line that pays for it: the churn
+  // above consumes `churnEntities` ids before tick 13, so the walk starts that much higher.
+  // Derived from the same computation that produced them, so the two cannot drift.
   const perFurnishedRoom = 1 + furniture.length;
-  let underfoot = 5 * perFurnishedRoom + 1;
+  let underfoot = churnEntities + 5 * perFurnishedRoom + 1;
   for (let tick = 1_601; tick < ticks; tick += 1_261) {
     schedule.push({ tick, command: { kind: 'guestArrives' } });
     schedule.push({ tick, command: { kind: 'demolishRoom', id: underfoot } });

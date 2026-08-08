@@ -202,6 +202,27 @@ table beats a comment describing the order.
 **Consequence.** Critics should hunt this class explicitly; it is not in §6.1 by name but
 it has produced more real defects here than anything that is.
 
+**Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
+As first written this ADR could be read as condemning defensive asserts. It does not.
+`sim-critic` drew the line, and it is the right one:
+
+- **Vacuous** — succeeds while inspecting nothing, *and is relied on as evidence*. This
+  is the defect. All three cases above share it: each told a reader that something had
+  been verified when nothing had.
+- **Unreachable** — cannot fail given the checks above it, and establishes a fact those
+  checks already establish. This is what a correct postcondition looks like. It cannot
+  mislead anyone, and it fires if a check above it is ever weakened.
+
+The test is not "can this branch be reached" but **"does anything rely on this as proof
+that a thing was checked?"** The terminal `version !== currentVersion` check in
+`assertMigrationPathComplete` is unreachable — verified across 47,988 chain/span
+combinations, reached zero times — and is kept deliberately. Deleting it would trade a
+real backstop for a coverage percentage, which §9 already names as an anti-pattern.
+
+*(This amendment sat under ADR-0011 from 2026-08-08 until `economy-engineer` reported it
+at G-011 PLAN — an editing slip that made the human's dead-state ruling read as though it
+had also settled a question about defensive asserts. Moved to where it belongs.)*
+
 ---
 
 ## ADR-0008 — Things that describe the past must not track the present
@@ -341,20 +362,3 @@ Interest-rate tuning, bankruptcy as a game-over state, and demand response remai
 are correct, do not agonise over choosing one*. I2 is untouched and all three mechanisms
 are deterministic. Recorded here because a misread of that sentence would have been the
 single most damaging thing this project could do to itself.
-
-**Amendment (G-003 critique) — vacuous and unreachable are opposites, not synonyms.**
-As first written this ADR could be read as condemning defensive asserts. It does not.
-`sim-critic` drew the line, and it is the right one:
-
-- **Vacuous** — succeeds while inspecting nothing, *and is relied on as evidence*. This
-  is the defect. All three cases above share it: each told a reader that something had
-  been verified when nothing had.
-- **Unreachable** — cannot fail given the checks above it, and establishes a fact those
-  checks already establish. This is what a correct postcondition looks like. It cannot
-  mislead anyone, and it fires if a check above it is ever weakened.
-
-The test is not "can this branch be reached" but **"does anything rely on this as proof
-that a thing was checked?"** The terminal `version !== currentVersion` check in
-`assertMigrationPathComplete` is unreachable — verified across 47,988 chain/span
-combinations, reached zero times — and is kept deliberately. Deleting it would trade a
-real backstop for a coverage percentage, which §9 already names as an anti-pattern.

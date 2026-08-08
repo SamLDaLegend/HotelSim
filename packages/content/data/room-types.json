@@ -6,6 +6,7 @@
     "nightlyRatePence": 8500,
     "nightlyUpkeepPence": 2500,
     "constructionCostPence": 250000,
+    "demolitionRefundBasisPoints": 5000,
     "provides": ["night_rest"],
     "requires": ["single_bed"]
   }

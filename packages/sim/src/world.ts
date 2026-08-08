@@ -10,6 +10,7 @@
 
 import { createBuildOutcomes } from './build.js';
 import type { BuildOutcomes } from './build.js';
+import { firstEconomy } from './content.js';
 import type { BoundContent } from './content.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
@@ -19,7 +20,10 @@ import { createGuestOutcomes, createGuestStore } from './guests.js';
 import type { GuestOutcomes, GuestStore } from './guests.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
+import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
+import { createLoanOutcomes } from './loan.js';
+import type { LoanOutcomes } from './loan.js';
 import { createRng } from './rng.js';
 import type { RngState } from './rng.js';
 
@@ -90,6 +94,27 @@ export type World = {
    * binding it to the entity store, and what is checked instead.
    */
   readonly buildOutcomes: BuildOutcomes;
+  /**
+   * What the player's loan commands have done, counted (G-011).
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, for the reason `buildOutcomes` is not: a refused
+   * draw leaves no trace anywhere — no transaction, no entity, no id consumed — so
+   * "refusal is a recorded outcome rather than a throw" is only true if the record lives
+   * here. A host issuing `drawLoan` on a blind cadence learns how often it was actually
+   * needed only from these counters.
+   *
+   * WHAT IS DELIBERATELY NOT HERE IS THE DEBT. The outstanding loan balance is
+   * `outstandingDebtOf(world.ledger)`, a fold over `loanDraw` and `loanRepayment` — I4's
+   * argument applied past cash. A stored debt would be a second money value that can
+   * drift from the log explaining it, and a drift that hashes perfectly is the one class
+   * of bug I2 cannot see. This field holds counters, never money.
+   *
+   * A SEPARATE FIELD RATHER THAN TWO MORE KEYS ON `buildOutcomes`: see the note on
+   * `LoanOutcomes` in `loan.ts`. Sharing the bag would make `applyCommands`'s per-tick
+   * law compare a mixed count against a build count, and both laws would stop being able
+   * to fail independently.
+   */
+  readonly loanOutcomes: LoanOutcomes;
 };
 
 /**
@@ -112,6 +137,7 @@ const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   guestOutcomes: true,
   guests: true,
   ledger: true,
+  loanOutcomes: true,
   rng: true,
   tick: true,
 };
@@ -128,17 +154,48 @@ export const WORLD_KEYS: readonly (keyof World)[] = Object.freeze(
   (Object.keys(WORLD_KEY_SET) as (keyof World)[]).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
 );
 
+/**
+ * A new world, opened under `content`.
+ *
+ * IT OPENS WITH CAPITAL, AND THE CAPITAL IS A TRANSACTION (G-011). There is no `balance`
+ * field to set — I4 forbids one — so the only way a hotel can start with money is for
+ * that money to be a line in the ledger, which is also why it is EXPLAINED rather than
+ * appearing from nowhere. `startingCapitalPence` is content, so what a hotel opens with is
+ * a data edit and never a diff here.
+ *
+ * The append is conditional on the content DEFINING an economy, and unconditional within
+ * that: a table saying `0` books a zero-amount transaction, deliberately, exactly as a
+ * free room type still books a `construction` of 0. Absence is the pre-G-011 world and
+ * books nothing at all, so a world created under content that predates this table has the
+ * empty ledger it always had — which is what keeps the permanent v1 save fixture and every
+ * test written against that era meaning what they meant. `recovery.capital.test.ts` pins
+ * all three branches, so none of them is a path nobody has walked.
+ *
+ * ADR-0011 calls this the closure for the OPENING: without it the first moment of the game
+ * is its most fragile, because a hotel with no rooms has no revenue and therefore can never
+ * afford its first room.
+ */
 export function createWorld(seed: number, content: BoundContent): World {
+  const economy = firstEconomy(content);
+  const ledger: readonly Transaction[] =
+    economy === undefined
+      ? []
+      : appendTransaction([], {
+          tick: 0,
+          amount: economy.startingCapitalPence,
+          reason: 'startingCapital',
+        });
   return {
     tick: 0,
     rng: createRng(seed),
-    ledger: [],
+    ledger,
     entities: createEntityStore(),
     contentHash: content.fingerprint,
     guests: createGuestStore(),
     guestOutcomes: createGuestOutcomes(),
     grid: createGridBounds(),
     buildOutcomes: createBuildOutcomes(),
+    loanOutcomes: createLoanOutcomes(),
   };
 }
 

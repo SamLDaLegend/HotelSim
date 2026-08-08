@@ -188,13 +188,23 @@ describe('the two laws that bind the counters to something outside themselves', 
 });
 
 describe('demolish', () => {
-  it('removes the room, charges nothing, and appends no transaction', () => {
+  it('removes the room and books a refund transaction, of nothing, under this content', () => {
+    // G-008 wrote NO transaction here, on the grounds that demolition moved no money. It
+    // moves money since G-011, so it books one per demolition unconditionally — the
+    // `construction` law, which is what keeps
+    // `countDemolitionRefundTransactions === demolished` exact.
+    //
+    // THE AMOUNT IS ZERO IN THIS FILE and that is deliberate: these room types omit
+    // `demolitionRefundBasisPoints` entirely, which is the "predates the field" statement,
+    // so every G-008 number below is unchanged by G-011. What the SHIPPED refund does to
+    // the economy is priced in `recovery.dodge.test.ts` against content that has one.
     const built = stepTick(worldWithCash(COST), content, [build('priced', cell(2, 2))]);
     const id = entitiesInOrder(built.entities)[0]!.id;
     const before = built.ledger.length;
     const razed = stepTick(built, content, [demolish(id)]);
     expect(entitiesInOrder(razed.entities)).toHaveLength(0);
-    expect(razed.ledger).toHaveLength(before);
+    expect(razed.ledger).toHaveLength(before + 1);
+    expect(razed.ledger[before]).toEqual({ tick: 1, amount: 0, reason: 'demolitionRefund' });
     expect(razed.buildOutcomes.demolished).toBe(1);
     expect(balanceOf(razed.ledger)).toBe(balanceOf(built.ledger));
   });
@@ -260,6 +270,11 @@ describe('demolish', () => {
   });
 });
 
+// G-011 NOTE. Everything below is measured against content that omits
+// `demolitionRefundBasisPoints`, i.e. a refund of zero — the G-008 world, preserved. The
+// SHIPPED refund makes the dodge cheaper but still a loss, and `recovery.dodge.test.ts`
+// prices that three ways, including a `bindContent` guard that refuses any content where
+// `refund > constructionCostPence - nightlyUpkeepPence`. The two files bracket the range.
 describe('what demolish costs the player, priced rather than argued', () => {
   it('makes the demolish-before-midnight upkeep dodge 100x worse than at G-005', () => {
     // `balance-critic` tested this exploit at G-005 and found it unprofitable when

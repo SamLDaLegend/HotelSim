@@ -14,8 +14,14 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { ContentError, parseContentJson, parseItemTypesJson, parseNeedTypesJson } from '@hotelsim/content';
-import type { ContentRegistry, ItemType, NeedType } from '@hotelsim/content';
+import {
+  ContentError,
+  parseContentJson,
+  parseEconomiesJson,
+  parseItemTypesJson,
+  parseNeedTypesJson,
+} from '@hotelsim/content';
+import type { ContentRegistry, Economy, ItemType, NeedType } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
 
@@ -32,6 +38,7 @@ const resolveContent = createRequire(import.meta.url).resolve;
 export const ROOM_TYPES_PATH = resolveContent('@hotelsim/content/data/room-types.json');
 export const NEED_TYPES_PATH = resolveContent('@hotelsim/content/data/need-types.json');
 export const ITEM_TYPES_PATH = resolveContent('@hotelsim/content/data/item-types.json');
+export const ECONOMY_PATH = resolveContent('@hotelsim/content/data/economy.json');
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -54,6 +61,11 @@ export function loadNeedTypesFrom(path: string): readonly NeedType[] {
 /** Read and validate one item-type file (G-009). Same all-or-nothing discipline. */
 export function loadItemTypesFrom(path: string): readonly ItemType[] {
   return parseItemTypesJson(readContentFile(path), path);
+}
+
+/** Read and validate one economy file (G-011). Same all-or-nothing discipline. */
+export function loadEconomyFrom(path: string): readonly Economy[] {
+  return parseEconomiesJson(readContentFile(path), path);
 }
 
 function readContentFile(path: string): string {
@@ -85,17 +97,21 @@ export function loadContent(contentDir?: string): BoundContent {
   const roomTypesPath = contentDir === undefined ? ROOM_TYPES_PATH : join(contentDir, 'room-types.json');
   const needTypesPath = contentDir === undefined ? NEED_TYPES_PATH : join(contentDir, 'need-types.json');
   const itemTypesPath = contentDir === undefined ? ITEM_TYPES_PATH : join(contentDir, 'item-types.json');
+  const economyPath = contentDir === undefined ? ECONOMY_PATH : join(contentDir, 'economy.json');
   const registry: ContentRegistry = {
     ...loadContentFrom(roomTypesPath),
     needTypes: loadNeedTypesFrom(needTypesPath),
     itemTypes: loadItemTypesFrom(itemTypesPath),
+    economy: loadEconomyFrom(economyPath),
   };
   const injected: SimContent = registry;
-  // `bindContent` rejects content whose needs no room type provides, and content whose
-  // rooms require an item nothing defines (G-009), so a designer who adds a need and
-  // forgets the room — or requires a bed that is not in the item table — finds out here,
-  // at startup, with the id named, rather than by watching every guest leave unhappy or
-  // every room sit empty. Both are checks `check:content` cannot make, because a
-  // cross-reference between two files is not an `id` field.
+  // `bindContent` rejects content whose needs no room type provides, content whose rooms
+  // require an item nothing defines (G-009), and content whose demolition refund would
+  // reopen the upkeep dodge (G-011), so a designer who adds a need and forgets the room —
+  // or requires a bed that is not in the item table, or refunds 99% of a build — finds out
+  // here, at startup, with the id named, rather than by watching every guest leave unhappy
+  // or by shipping an exploit. None of the three is a check `check:content` could make: a
+  // cross-reference between two files is not an `id` field, and neither is an inequality
+  // between three numbers.
   return bindContent(injected);
 }

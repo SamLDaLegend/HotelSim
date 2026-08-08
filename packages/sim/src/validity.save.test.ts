@@ -34,6 +34,7 @@ import {
   assertWorldShape,
   deserialise,
   MIGRATIONS,
+  MIN_SUPPORTED_SCHEMA_VERSION,
   SAVE_SCHEMA_VERSION,
   serialise,
 } from './save.js';
@@ -86,23 +87,27 @@ describe('validity adds nothing to the save', () => {
       'guestOutcomes',
       'guests',
       'ledger',
+      'loanOutcomes',
       'rng',
       'tick',
     ]);
   });
 
-  it('leaves the schema version and the migration chain where G-008 left them', () => {
-    // ADR-0006 has fired three times. It does NOT fire here, and that is the point: a
-    // derived property owes no migration. The scan in
+  it('adds no migration of its own, whatever the chain has grown to since', () => {
+    // ADR-0006 has fired four times. It does NOT fire for VALIDITY, and that is the point:
+    // a derived property owes no migration. The scan in
     // `tools/headless/src/migration-scan.build.grid.save.test.ts` predicted that G-009
     // would add a `BuildRefusalReason` and move `V4_MIGRATION_BUILD_OUTCOMES`; it does
     // not, because build refuses nothing on validity grounds.
-    expect(SAVE_SCHEMA_VERSION).toBe(4);
-    expect(MIGRATIONS.map((migration) => `${migration.from}->${migration.to}`)).toEqual([
-      '1->2',
-      '2->3',
-      '3->4',
-    ]);
+    //
+    // Written as a RELATIONSHIP rather than as the literal `4` it used to hold. This file's
+    // subject is "validity added nothing", and pinning the current version number here made
+    // it go red at G-011 for a reason that had nothing to do with validity — the shape
+    // ADR-0008 warns about, pointed at the present instead of the past.
+    expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
+    expect(MIGRATIONS.map((migration) => `${migration.from}->${migration.to}`)).toEqual(
+      MIGRATIONS.map((_, index) => `${index + MIN_SUPPORTED_SCHEMA_VERSION}->${index + MIN_SUPPORTED_SCHEMA_VERSION + 1}`),
+    );
   });
 
   it('writes no validity field into the bytes', () => {

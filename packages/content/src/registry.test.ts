@@ -10,7 +10,13 @@
 // which is the module that owns the filesystem.
 
 import { describe, expect, it } from 'vitest';
-import { ContentError, parseContent, parseContentJson } from './registry.js';
+import {
+  ContentError,
+  parseContent,
+  parseContentJson,
+  parseEconomies,
+  parseEconomiesJson,
+} from './registry.js';
 
 const roomType = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   id: 'standard_room',
@@ -19,6 +25,11 @@ const roomType = (overrides: Record<string, unknown> = {}): Record<string, unkno
   nightlyRatePence: 8_500,
   nightlyUpkeepPence: 2_500,
   constructionCostPence: 250_000,
+  // Required on disk since G-011, for the MIRROR of the dominance reason the prices are: a
+  // missing price ships a room that is free, a missing refund ships one that can never be
+  // liquidated — which silently re-opens half of the dead state ADR-0011 closed. `0` is
+  // the sayable version of "scrapping this returns nothing".
+  demolitionRefundBasisPoints: 5_000,
   // Required on disk since G-009, for the same dominance reason both prices are: a room
   // type that requires nothing is strictly easier to make valid than one that does.
   // `[]` is the sayable version of "no furniture".
@@ -46,6 +57,7 @@ describe('parseContent — the happy path', () => {
       nightlyRatePence: 8_500,
       nightlyUpkeepPence: 2_500,
       constructionCostPence: 250_000,
+      demolitionRefundBasisPoints: 5_000,
       requires: ['single_bed'],
     });
   });
@@ -207,6 +219,113 @@ describe('new content on disk must state both of its prices (G-008)', () => {
     expect(() => parseContent([roomTypeWithout('requires')])).toThrow(ContentError);
     expect(() => parseContent([roomTypeWithout('requires')])).toThrow(/requires/);
     expect(() => parseOne({ requires: [] })).not.toThrow();
+  });
+
+  it('rejects a room type that omits demolitionRefundBasisPoints, and accepts 0 (G-011)', () => {
+    // The same argument again, for the MIRROR hazard. A missing price makes a room
+    // strictly better than every priced one; a missing refund makes it impossible to
+    // liquidate, which quietly re-opens half of the absorbing state ADR-0011 closed —
+    // with every gate green, because nothing else in the pipeline can see it.
+    expect(() => parseContent([roomTypeWithout('demolitionRefundBasisPoints')])).toThrow(ContentError);
+    expect(() => parseContent([roomTypeWithout('demolitionRefundBasisPoints')])).toThrow(
+      /demolitionRefundBasisPoints/,
+    );
+    expect(() => parseOne({ demolitionRefundBasisPoints: 0 })).not.toThrow();
+  });
+
+  it('bounds the refund rate to 0..10000 basis points, and demands an integer', () => {
+    // A fraction is an integer for the same reason money is (ADR-0002): `0.5` on disk
+    // would reach `constructionCostPence * fraction` and produce a last penny that depends
+    // on the platform. 10,000bp is 100%; there is no such thing as refunding 150%.
+    for (const bad of [-1, 10_001, 5_000.5, '5000']) {
+      expect(() => parseOne({ demolitionRefundBasisPoints: bad })).toThrow(
+        /demolitionRefundBasisPoints/,
+      );
+    }
+    for (const good of [0, 1, 5_000, 10_000]) {
+      expect(() => parseOne({ demolitionRefundBasisPoints: good })).not.toThrow();
+    }
+  });
+});
+
+describe('the economy table (G-011)', () => {
+  const economy = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'house_rules',
+    name: 'House Rules',
+    startingCapitalPence: 500_000,
+    loanPrincipalPence: 300_000,
+    loanFeeBasisPoints: 1_000,
+    loanRepaymentPerNightPence: 10_000,
+    liquidationRoomsMax: 4,
+    ...overrides,
+  });
+  const parseOneEconomy = (overrides: Record<string, unknown> = {}): unknown =>
+    parseEconomies([economy(overrides)]);
+
+  it('accepts the shipped shape and returns it verbatim', () => {
+    expect(parseEconomies([economy()])).toEqual([economy()]);
+  });
+
+  it('demands every field, because there is no sensible default for a house rule', () => {
+    for (const key of [
+      'id',
+      'name',
+      'startingCapitalPence',
+      'loanPrincipalPence',
+      'loanFeeBasisPoints',
+      'loanRepaymentPerNightPence',
+      'liquidationRoomsMax',
+    ]) {
+      const entry = economy();
+      delete entry[key];
+      expect(() => parseEconomies([entry])).toThrow(ContentError);
+    }
+  });
+
+  it('demands integer pence and rejects a float, a negative and a string (ADR-0002)', () => {
+    for (const key of ['startingCapitalPence', 'loanPrincipalPence', 'loanRepaymentPerNightPence']) {
+      for (const bad of [1.5, -1, '500']) {
+        expect(() => parseOneEconomy({ [key]: bad })).toThrow(new RegExp(key));
+      }
+    }
+  });
+
+  it('bounds the loan fee to 0..10000 basis points', () => {
+    for (const bad of [-1, 10_001, 1_000.5]) {
+      expect(() => parseOneEconomy({ loanFeeBasisPoints: bad })).toThrow(/loanFeeBasisPoints/);
+    }
+    expect(() => parseOneEconomy({ loanFeeBasisPoints: 0 })).not.toThrow();
+    expect(() => parseOneEconomy({ loanFeeBasisPoints: 10_000 })).not.toThrow();
+  });
+
+  it('demands a positive integer liquidationRoomsMax — the lender brake (G-011)', () => {
+    // The mirror of the refund's upper bound: it is what stops a refund of zero turning
+    // the loan into an unbounded credit line. "Rooms" is a count, so 0, a negative and a
+    // fraction are all meaningless, and the schema says so before `bindContent` has to.
+    for (const bad of [0, -1, 2.5, '4']) {
+      expect(() => parseOneEconomy({ liquidationRoomsMax: bad })).toThrow(/liquidationRoomsMax/);
+    }
+    for (const good of [1, 2, 4, 1_000]) {
+      expect(() => parseOneEconomy({ liquidationRoomsMax: good })).not.toThrow();
+    }
+  });
+
+  it('rejects an unknown key, because a typo that is ignored becomes a balance mystery', () => {
+    expect(() => parseOneEconomy({ loanInterestBasisPoints: 500 })).toThrow(ContentError);
+  });
+
+  it('rejects an empty document and duplicate ids', () => {
+    expect(() => parseEconomies([])).toThrow(ContentError);
+    expect(() => parseEconomies([economy(), economy()])).toThrow(/duplicate economy id/);
+  });
+
+  it('demands a snake_case id, like every other content table (ADR-0003)', () => {
+    expect(() => parseOneEconomy({ id: 'houseRules' })).toThrow(/snake_case/);
+  });
+
+  it('keeps "not JSON" and "not content" apart, like every other parser here', () => {
+    expect(() => parseEconomiesJson('[{"id":', 'economy.json')).toThrow(/economy\.json is not valid JSON/);
+    expect(() => parseEconomiesJson('[]', 'economy.json')).toThrow(/economy\.json is not valid content/);
   });
 });
 

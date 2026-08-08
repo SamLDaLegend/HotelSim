@@ -2,19 +2,26 @@
 //
 // `migrateV2ToV3` must write the four grid bounds as a LITERAL frozen at the moment v3
 // was defined, never by calling `createGridBounds()`. `migrateV3ToV4` must write its
-// build counters the same way, never by calling `createBuildOutcomes()`. A migration's
+// build counters the same way, never by calling `createBuildOutcomes()`, and
+// `migrateV4ToV5` its loan counters, never by calling `createLoanOutcomes()`. A migration's
 // output has to be a pure function of its input bytes and its own era; one that read
 // today's constants would turn the same old bytes into a different new world the moment
 // anyone edits the default plot or adds a refusal reason, so history would drift with the
 // build and the pinned hash of the migrated fixture would become a tripwire on an
 // unrelated change.
 //
-// THE v4 CASE IS THE ONE THAT WILL ACTUALLY BITE. `V3_MIGRATION_BOUNDS` guards against
-// somebody editing the plot, which may never happen. `V4_MIGRATION_BUILD_OUTCOMES` guards
-// against `BuildRefusalReason` GAINING A MEMBER — and G-009's validity rules are the
-// obvious next one. On that day a migration that called `createBuildOutcomes()` would
-// start writing a counter for a refusal that did not exist when those bytes were written,
-// silently, and the only symptom would be a moved fixture hash on an unrelated change.
+// THE COUNTER CASES ARE THE ONES THAT WILL ACTUALLY BITE. `V3_MIGRATION_BOUNDS` guards
+// against somebody editing the plot, which may never happen. `V4_MIGRATION_BUILD_OUTCOMES`
+// and `V5_MIGRATION_LOAN_OUTCOMES` guard against their refusal unions GAINING A MEMBER —
+// and both unions are young. On that day a migration that called the live constructor
+// would start writing a counter for a refusal that did not exist when those bytes were
+// written, silently, and the only symptom would be a moved fixture hash on an unrelated
+// change.
+//
+// (G-009 was predicted here as the goal that would add a `BuildRefusalReason` and did not:
+// build refuses nothing on validity grounds. G-011 was the goal that finally grew a
+// refusal union — a whole second one, `LoanRefusalReason` — which is why this file now
+// guards three constants rather than two.)
 //
 // WHY A SOURCE SCAN AND NOT AN ASSERTION ABOUT VALUES. `V3_MIGRATION_BOUNDS` (save.ts)
 // and `createGridBounds()` (grid.ts) hold the same four integers today, and they are
@@ -66,6 +73,8 @@ const FORBIDDEN_IN_SAVE_TS = [
   'DEFAULT_MAX_COLUMN',
   'createBuildOutcomes',
   'BUILD_REFUSAL_REASONS',
+  'createLoanOutcomes',
+  'LOAN_REFUSAL_REASONS',
 ] as const;
 
 /**
@@ -113,6 +122,8 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(source).toContain('V3_MIGRATION_BOUNDS');
     expect(source).toContain('migrateV3ToV4');
     expect(source).toContain('V4_MIGRATION_BUILD_OUTCOMES');
+    expect(source).toContain('migrateV4ToV5');
+    expect(source).toContain('V5_MIGRATION_LOAN_OUTCOMES');
   });
 
   it('names none of the current-plot identifiers in executable code', () => {
@@ -142,6 +153,19 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(declaration).toContain('noSuchRoom: 0');
     expect(declaration).toContain('occupied: 0');
     expect(declaration).toContain('outOfBounds: 0');
+    expect(declaration).toContain('Object.freeze');
+  });
+
+  it('freezes the loan counters as literals rather than a derived value', () => {
+    // The v5 half, and the one carrying the newest risk: `LoanRefusalReason` has exactly
+    // two members today and M4's bankruptcy state is the obvious third. Every reason is
+    // spelled out as its own literal `0`, which is what makes this break loudly on the day
+    // a third is added to the union but not to history.
+    const code = stripComments(saveSource());
+    const declaration = /V5_MIGRATION_LOAN_OUTCOMES[\s\S]{0,600}?\}\)/.exec(code)?.[0] ?? '';
+    expect(declaration).toContain('drawn: 0');
+    expect(declaration).toContain('noLoanOffered: 0');
+    expect(declaration).toContain('notEligible: 0');
     expect(declaration).toContain('Object.freeze');
   });
 

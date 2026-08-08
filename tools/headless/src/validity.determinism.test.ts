@@ -158,14 +158,32 @@ describe('the replay is the thing the gate runs', () => {
   });
 
   it('still records every build outcome the G-008 log was written for', () => {
-    // G-009 edited this log. These are G-008's claims about it, re-asserted so the edit
-    // cannot have quietly cost them.
+    // G-009 edited this log, and G-011 edited it again. These are G-008's claims about it,
+    // re-asserted so neither edit can have quietly cost them.
     const world = replay(TICKS);
     expect(world.buildOutcomes.built).toBeGreaterThan(0);
     expect(world.buildOutcomes.demolished).toBeGreaterThan(0);
-    expect(world.buildOutcomes.refused.insufficientFunds).toBeGreaterThan(0);
     expect(world.buildOutcomes.refused.occupied).toBeGreaterThan(0);
     expect(world.buildOutcomes.refused.outOfBounds).toBeGreaterThan(0);
     expect(world.buildOutcomes.refused.noSuchRoom).toBeGreaterThan(0);
+  });
+
+  it('AND the funds refusal, which G-011 pushed out to the gate\'s own horizon', () => {
+    // MEASURED CHANGE, RECORDED RATHER THAN PAPERED OVER. `insufficientFunds` used to be
+    // non-zero by tick 40,000 and now is not, because G-011 made this harness RICHER: its
+    // demolish and despawn passes now return a refund on every room they remove, worth
+    // 2,750,000p by tick 40,000. The hotel simply does not run out of money that early any
+    // more.
+    //
+    // So the claim moves to 100,000 ticks — which is not a weakening but a sharpening, because
+    // 100,000 is the horizon `pnpm test:determinism` actually runs. The 40,000-tick figure
+    // was always a suite-speed compromise standing in for the gate's number.
+    //
+    // (The reason the harness got rich is worth knowing and is parked: `spawnEntity` seeds
+    // rooms FREE, and demolishing one still pays a refund on a construction nobody was
+    // charged for. A player cannot reach that — spawning is the structural door, not a
+    // player action — but a HOST can, and this log is a host.)
+    const world = replay(100_000);
+    expect(world.buildOutcomes.refused.insufficientFunds).toBeGreaterThan(0);
   });
 });

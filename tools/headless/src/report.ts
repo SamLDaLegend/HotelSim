@@ -45,10 +45,13 @@
 import {
   assertBuildOutcomes,
   assertGuestOutcomes,
+  assertLoanOutcomes,
   balanceOf,
   countConstructionTransactions,
+  countDemolitionRefundTransactions,
   countGuestsInInvalidRooms,
   countInvalidRooms,
+  countLoanDrawTransactions,
   countOrphanedReservations,
   countSettlementTransactions,
   countStuckGuests,
@@ -57,7 +60,9 @@ import {
   guestCount,
   hashState,
   isWithinBounds,
+  outstandingDebtOf,
   requiredItemsOf,
+  stockValueOf,
   sumByReason,
   TICKS_PER_DAY,
   totalInvalidRooms,
@@ -98,6 +103,16 @@ export const TICKS_BETWEEN_ARRIVALS = 120;
 export const BUILD_OFF = 0;
 
 /**
+ * `--loan` is OFF by default too (G-011), for the reason `--build` is: the default run is
+ * pinned byte-for-byte by the golden test and timed by `pnpm sim:bench`.
+ *
+ * A `drawLoan` on a blind cadence is SAFE, which is the property that makes a
+ * pre-generated schedule able to use one at all. The schedule cannot observe the balance,
+ * so it cannot know when the hotel is stuck; it does not have to, because the sim refuses
+ * a draw the hotel does not need and records the refusal. Most attempts in any healthy run
+ * are `notEligible`, and that is the correct shape rather than noise to suppress.
+ */
+/**
  * WHY THE SEEDED ROOMS ARE FREE AND THE BUILT ONES ARE NOT.
  *
  * `--rooms` is the hotel the scenario STARTS with — the one the player inherited — and it
@@ -105,12 +120,18 @@ export const BUILD_OFF = 0;
  * host asks for something impossible. `--build` is the player ACTING, through `buildRoom`:
  * charged, refusable, recorded.
  *
- * The consequence is deliberate and it is what makes the exit criterion worth running.
- * A world starts with a balance of ZERO, so the first scheduled build is REFUSED for
- * insufficient funds; revenue accrues from the inherited rooms; later builds succeed. The
- * refusal path is therefore exercised by the real CLI on a real run, not only by a unit
- * test (ADR-0007), and it costs nothing to arrange because it is simply what being broke
- * means. Starting capital as a scenario parameter is parked to M4, with demand.
+ * SINCE G-011 THE WORLD OPENS WITH CAPITAL, so the opening is no longer the moment the
+ * refusal path is exercised. It used to be: a world started at a balance of zero, the
+ * first scheduled build was refused for insufficient funds, and the refusal path was
+ * therefore driven by a real CLI run for free. That was a happy accident of the hotel
+ * being broke, and ADR-0011 closed it deliberately — a game whose opening position is its
+ * most fragile is a game with a reachable dead state one command in.
+ *
+ * The refusal path is still driven by real runs, and now for a better reason than poverty
+ * at tick 1: capital buys two rooms, revenue is capped by ARRIVALS rather than by rooms
+ * (see `validity.report.test.ts`), and upkeep grows with every room, so any sustained
+ * `--build` cadence outruns its income and starts being refused. `report.test.ts` sweeps
+ * cadences and asserts that rather than leaving it as a claim here (ADR-0007).
  */
 export const BUILD_START_TICK = 1;
 
@@ -182,13 +203,47 @@ export const COLUMNS_PER_ROOM = 2;
  * FLOOR 1 UPWARD, so a packed floor never collides with the inherited hotel below it.
  * With `--rooms` above one floor's worth the two walks can meet, and that is a recorded
  * `occupied` refusal rather than a throw, because this is the player's door.
+ *
+ * ---------------------------------------------------------------------------
+ * UNLESS THE GROUND IS EMPTY, IN WHICH CASE THE PLAYER BUILDS ON IT (G-011).
+ *
+ * `startFloor` is passed by `schedule` as `GROUND_FLOOR + (rooms > 0 ? 1 : 0)`: *the
+ * player builds on the ground unless the ground is already spoken for.* That is the
+ * paragraph above extended to the case it did not cover, and it exists because of a
+ * defect G-011 tripped over rather than caused.
+ *
+ * WHAT WAS WRONG. With a hard `GROUND_FLOOR + 1`, a `--rooms 0` run — or any run whose
+ * inherited hotel is demolished — puts every room the player builds in MID-AIR. G-009's
+ * support rule is transitive and terminates at the earth, so every one of them is
+ * `unsupported`, is therefore not a provider, and houses nobody FOREVER. Measured on the
+ * build before this change: `--days 1000 --seed 7 --rooms 0 --build 1440` ends with 0
+ * rooms and 0 satisfied guests even with money in the bank. **A player who builds from
+ * nothing through this CLI could never make a room that works.** That is a host layout
+ * limitation, not an economy one, and it would have made G-011's exit criterion
+ * unmeetable by a correct implementation.
+ *
+ * WHY IT IS A PARAMETER AND NOT A NEW LAYOUT. G-009's pinned criterion invocation
+ * (`--rooms 20 --arrivals 20 --build 1440 --demolish 5760`) depends on this walk landing
+ * above a corridored hotel: that is what produces `unsupported` AND `noDoor` in one run,
+ * which is what makes "zero guests in an invalid room" a measurement rather than a
+ * tautology. Conditioning on `rooms > 0` leaves every such invocation byte-identical and
+ * changes only the case nobody could previously play.
+ * ---------------------------------------------------------------------------
  */
-export function builtRoomCell(index: number, bounds: GridBounds): Cell {
+export function builtRoomCell(index: number, bounds: GridBounds, startFloor: number): Cell {
   const perFloor = bounds.maxColumn - bounds.minColumn + 1; // packed: one room, one column
   return {
-    floor: GROUND_FLOOR + 1 + Math.floor(index / perFloor),
+    floor: startFloor + Math.floor(index / perFloor),
     column: bounds.minColumn + (index % perFloor),
   };
+}
+
+/**
+ * Where the player's walk starts: the ground, unless the scenario inherited a hotel
+ * standing on it (G-011). See `builtRoomCell`.
+ */
+export function builtRoomStartFloor(rooms: number): number {
+  return rooms > 0 ? GROUND_FLOOR + 1 : GROUND_FLOOR;
 }
 
 export function roomCell(index: number, bounds: GridBounds): Cell {
@@ -234,6 +289,8 @@ export type Options = {
   readonly buildEveryTicks: number;
   /** Ticks between player demolitions. `BUILD_OFF` (0) means the player never demolishes. */
   readonly demolishEveryTicks: number;
+  /** Ticks between player loan attempts (G-011). `BUILD_OFF` (0) means the player never borrows. */
+  readonly loanEveryTicks: number;
   readonly contentDir: string | undefined;
 };
 
@@ -246,6 +303,7 @@ export function parseArgs(argv: readonly string[]): Options {
   let arrivalEveryTicks = TICKS_BETWEEN_ARRIVALS;
   let buildEveryTicks = BUILD_OFF;
   let demolishEveryTicks = BUILD_OFF;
+  let loanEveryTicks = BUILD_OFF;
   let contentDir: string | undefined;
 
   const requireNumber = (flag: string, raw: string | undefined): number => {
@@ -299,6 +357,13 @@ export function parseArgs(argv: readonly string[]): Options {
         demolishEveryTicks = requireNumber('--demolish', argv[i + 1]);
         i += 1;
         break;
+      case '--loan':
+        // 0 is legal and means "the player never borrows", which is the default and the
+        // shape every run before G-011 had. A schedule loop with a step of 0 would not
+        // terminate, so `schedule` treats 0 as off rather than as a cadence.
+        loanEveryTicks = requireNumber('--loan', argv[i + 1]);
+        i += 1;
+        break;
       case '--content': {
         const raw = argv[i + 1];
         if (raw === undefined) throw new Error('--content requires a directory path');
@@ -330,6 +395,7 @@ export function parseArgs(argv: readonly string[]): Options {
     arrivalEveryTicks,
     buildEveryTicks,
     demolishEveryTicks,
+    loanEveryTicks,
     contentDir,
   };
 }
@@ -355,6 +421,7 @@ export function schedule(
   arrivalEveryTicks: number,
   buildEveryTicks: number = BUILD_OFF,
   demolishEveryTicks: number = BUILD_OFF,
+  loanEveryTicks: number = BUILD_OFF,
 ): readonly ScheduledCommand[] {
   const entityKind = content.content.roomTypes[0]?.id;
   if (entityKind === undefined) {
@@ -402,9 +469,14 @@ export function schedule(
     // From zero, on ITS OWN walk (`builtRoomCell`, G-009) rather than continuing the
     // inherited hotel's: the player packs rooms in above, and the two layouts say
     // different things about who laid them out. See `builtRoomCell`.
+    //
+    // The walk's start floor depends on whether this scenario inherited a hotel (G-011):
+    // on the ground when it did not, so that a player building from nothing can build
+    // something that actually stands up.
+    const startFloor = builtRoomStartFloor(rooms);
     let index = 0;
     for (let tick = BUILD_START_TICK; tick < ticks; tick += buildEveryTicks) {
-      const at = builtRoomCell(index, bounds);
+      const at = builtRoomCell(index, bounds, startFloor);
       // The SIM's own bounds predicate, not a copy of it, so the runner and the simulation
       // cannot disagree about where the plot ends.
       if (!isWithinBounds(at, bounds)) break;
@@ -431,6 +503,21 @@ export function schedule(
       id += idsPerRoom;
     }
   }
+  // AND THE PLAYER BORROWS (G-011), on a blind cadence, which is safe for a reason worth
+  // stating rather than assuming. This schedule is generated before the run and cannot
+  // observe the balance, so it cannot know when the hotel is stuck — and it does not need
+  // to: the sim refuses a draw the hotel does not need (`notEligible`) and records the
+  // refusal, so an attempt on a tick where the hotel is solvent costs a counter and
+  // nothing else. Most attempts in a healthy run are refused, and that IS the measurement:
+  // `loans.drawn` is how often recovery was actually needed.
+  //
+  // No walk and no index: a loan has no payload and no position, so unlike a build there
+  // is nothing here that could run out.
+  if (loanEveryTicks > BUILD_OFF) {
+    for (let tick = BUILD_START_TICK; tick < ticks; tick += loanEveryTicks) {
+      commands.push({ tick, command: { kind: 'drawLoan' } });
+    }
+  }
   return commands;
 }
 
@@ -453,6 +540,7 @@ export type RunSummary = {
     readonly arrivalEveryTicks: number;
     readonly buildEveryTicks: number;
     readonly demolishEveryTicks: number;
+    readonly loanEveryTicks: number;
   };
   readonly world: {
     readonly tick: number;
@@ -505,6 +593,35 @@ export type RunSummary = {
     readonly upkeepPennies: number;
     /** Negative: construction is money out. One transaction per successful build. */
     readonly constructionPennies: number;
+    /** Positive: what the hotel opened with (G-011). One transaction, at tick 0. */
+    readonly startingCapitalPennies: number;
+    /** Positive: what scrapping rooms returned (G-011). One transaction per demolition. */
+    readonly demolitionRefundPennies: number;
+    /** Positive: cash borrowed (G-011). Also the money side of the debt fold. */
+    readonly loanDrawPennies: number;
+    /** Negative: what borrowing cost (G-011), charged once per draw. */
+    readonly loanFeePennies: number;
+    /** Negative: repaid at settlement (G-011). The other side of the debt fold. */
+    readonly loanRepaymentPennies: number;
+    /**
+     * What every room STANDING AT THE END would return if it were scrapped (G-011).
+     *
+     * Reported because it was invisible and being invisible was the problem.
+     * `--rooms N` seeds its hotel through `spawnEntity`, which is FREE, so seeded stock is
+     * also seeded cash at the refund rate: the default `--rooms 3` carries 375,000p of it
+     * beside a 500,000p `startingCapitalPence`. Anyone sizing that content number against
+     * seeded-hotel runs was sizing it against 875,000p and had no way to know. It is also
+     * the exact quantity `canDrawLoan` adds to the balance, so a reader can now check a
+     * loan refusal by hand.
+     */
+    readonly liquidationValuePennies: number;
+    /**
+     * What is still owed (G-011). DERIVED — `loanDraw + loanRepayment` — never stored.
+     *
+     * Reported because a player cannot see it any other way, and because it is the one
+     * number that says whether a recovered hotel recovered or merely borrowed.
+     */
+    readonly outstandingDebtPennies: number;
     readonly settlements: number;
     readonly nights: number;
     readonly balancePennies: number;
@@ -527,6 +644,26 @@ export type RunSummary = {
     };
     /** One construction transaction per successful build. Must equal `built`. */
     readonly constructionTransactions: number;
+    /** One refund transaction per successful demolition (G-011). Must equal `demolished`. */
+    readonly refundTransactions: number;
+  };
+  /**
+   * What the player's loan commands did (G-011).
+   *
+   * `drawn` is the headline of ADR-0011: how many times the hotel had to be rescued from
+   * a state it could not act in. `refused.notEligible` beside it is the healthy case — a
+   * host issues `drawLoan` on a blind cadence and the sim refuses it whenever it is not
+   * needed — so a run where `drawn` is small and `notEligible` is enormous is a run that
+   * mostly stood on its own feet.
+   */
+  readonly loans: {
+    readonly drawn: number;
+    readonly refused: {
+      readonly noLoanOffered: number;
+      readonly notEligible: number;
+    };
+    /** One loan-draw transaction per successful draw. Must equal `drawn`. */
+    readonly drawTransactions: number;
   };
 };
 
@@ -581,6 +718,8 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // And that the build counters are still counters. Same function the tick and the load
   // path call, so "valid build outcomes" has one definition in the codebase.
   assertBuildOutcomes(world.buildOutcomes);
+  // And the loan counters (G-011), for the same reason and through the same function.
+  assertLoanOutcomes(world.loanOutcomes);
 
   const stuck = countStuckGuests(world.tick, world.guests, content);
   const orphans = countOrphanedReservations(world.guests, world.entities);
@@ -591,6 +730,9 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   }
   const settlements = countSettlementTransactions(world.ledger);
   const constructions = countConstructionTransactions(world.ledger);
+  const refunds = countDemolitionRefundTransactions(world.ledger);
+  const loanDraws = countLoanDrawTransactions(world.ledger);
+  const debt = outstandingDebtOf(world.ledger);
   const nights = dayOf(world);
   // The building, as the sim itself judges it (G-009). Counted by the sim against the
   // world's OWN plot — `world.grid`, not this build's default — so a save carrying a
@@ -619,6 +761,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       arrivalEveryTicks: options.arrivalEveryTicks,
       buildEveryTicks: options.buildEveryTicks,
       demolishEveryTicks: options.demolishEveryTicks,
+      loanEveryTicks: options.loanEveryTicks,
     },
     world: {
       tick: world.tick,
@@ -652,6 +795,13 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       revenuePennies: sumByReason(world.ledger, 'roomRevenue'),
       upkeepPennies: sumByReason(world.ledger, 'upkeep'),
       constructionPennies: sumByReason(world.ledger, 'construction'),
+      startingCapitalPennies: sumByReason(world.ledger, 'startingCapital'),
+      demolitionRefundPennies: sumByReason(world.ledger, 'demolitionRefund'),
+      loanDrawPennies: sumByReason(world.ledger, 'loanDraw'),
+      loanFeePennies: sumByReason(world.ledger, 'loanFee'),
+      loanRepaymentPennies: sumByReason(world.ledger, 'loanRepayment'),
+      liquidationValuePennies: stockValueOf(world.entities, content),
+      outstandingDebtPennies: debt,
       settlements,
       nights,
       balancePennies: balance,
@@ -666,6 +816,15 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         outOfBounds: world.buildOutcomes.refused.outOfBounds,
       },
       constructionTransactions: constructions,
+      refundTransactions: refunds,
+    },
+    loans: {
+      drawn: world.loanOutcomes.drawn,
+      refused: {
+        noLoanOffered: world.loanOutcomes.refused.noLoanOffered,
+        notEligible: world.loanOutcomes.refused.notEligible,
+      },
+      drawTransactions: loanDraws,
     },
   };
   assertIntegerLeaves(summary, '');
@@ -702,6 +861,38 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       `Construction invariant broken at tick ${world.tick}: ${constructions} construction transaction(s) ` +
         `against ${summary.build.built} room(s) recorded as built. Every successful build charges exactly ` +
         'once and is counted exactly once (G-008).',
+    );
+  }
+  // THE REFUND AND THE LOAN, the same cross-subsystem shape one goal later (G-011). Each
+  // counter is incremented by the command and each transaction is appended a line later,
+  // by different code for different reasons, so they agree only if every successful action
+  // did both. Without these, a demolition that refunded nothing and a draw that granted no
+  // cash would both leave a balance that folds perfectly.
+  if (refunds !== summary.build.demolished) {
+    violations.push(
+      `Refund invariant broken at tick ${world.tick}: ${refunds} demolition refund transaction(s) ` +
+        `against ${summary.build.demolished} room(s) recorded as demolished. Every successful demolition ` +
+        'refunds exactly once and is counted exactly once (G-011).',
+    );
+  }
+  if (loanDraws !== summary.loans.drawn) {
+    violations.push(
+      `Loan invariant broken at tick ${world.tick}: ${loanDraws} loan draw transaction(s) against ` +
+        `${summary.loans.drawn} loan(s) recorded as drawn. Every granted loan pays out exactly once and ` +
+        'is counted exactly once (G-011).',
+    );
+  }
+  // AND THE DEBT IS A FOLD THAT CANNOT GO NEGATIVE. `outstandingDebtOf` sums `loanDraw`
+  // and `loanRepayment`; repayment is capped at the outstanding amount, so a negative
+  // total means the cap failed and the hotel repaid money it never borrowed. Unreachable
+  // through the tick — `runSettlement` asserts the same thing per night — and here for
+  // the reason `stuck` and `orphans` are: it is measured over the whole run rather than
+  // assumed, and it is the only place a LOADED save's ledger is checked for it.
+  if (debt < 0) {
+    violations.push(
+      `Debt invariant broken at tick ${world.tick}: the outstanding loan balance folds to ${debt}p, ` +
+        'which is money repaid that was never borrowed. Every repayment is capped at the outstanding ' +
+        'debt (G-011).',
     );
   }
   // VALIDITY — the exit criterion, as a check the run makes on itself (G-009).
@@ -767,6 +958,14 @@ export function renderText(summary: RunSummary): string {
     `refused     ${summary.build.refused.insufficientFunds} funds, ${summary.build.refused.occupied} occupied, ` +
       `${summary.build.refused.outOfBounds} off plot, ${summary.build.refused.noSuchRoom} no room`,
     `building    ${summary.money.constructionPennies}p`,
+    `capital     ${summary.money.startingCapitalPennies}p`,
+    `refunds     ${summary.money.demolitionRefundPennies}p`,
+    `loans       ${summary.loans.drawn} drawn, ${summary.loans.refused.notEligible} not needed, ` +
+      `${summary.loans.refused.noLoanOffered} not offered`,
+    `borrowed    ${summary.money.loanDrawPennies}p, fees ${summary.money.loanFeePennies}p, ` +
+      `repaid ${summary.money.loanRepaymentPennies}p`,
+    `scrap value ${summary.money.liquidationValuePennies}p`,
+    `debt        ${summary.money.outstandingDebtPennies}p`,
     `settlements ${summary.money.settlements}`,
     `balance     ${summary.money.balancePennies}p`,
     `state hash  ${summary.world.stateHash}`,

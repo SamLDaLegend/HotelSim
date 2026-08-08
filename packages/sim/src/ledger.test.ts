@@ -138,3 +138,77 @@ describe('the balance partitions by reason (G-005)', () => {
     expect(balanceOf(legacy) - classified).toBe(-999);
   });
 });
+
+describe('the balance fold is memoised OUTSIDE state, and answers identically (G-011)', () => {
+  // I4 allows exactly this and no more: "if the fold becomes a performance problem,
+  // memoise it outside state — do not cache it inside state." It became one at G-011,
+  // because `--loan` is the first flag that can put a player command on every tick of a
+  // run and `applyCommands` folds the balance once per such tick. Measured, delta over the
+  // same run without loans: 100d 1,799ms · 200d 5,121 · 400d 14,269 · 800d 58,804 before,
+  // and 1,212 · 2,268 · 4,540 · 9,805 after — 3-4x per doubling became 2x, which is the
+  // difference between quadratic and linear.
+  //
+  // The bar for any optimisation is G-010's: IT MUST NOT MOVE THE I2 HASH. Verified by
+  // disabling the memo's read path and re-running the gate — `331604a67c725a7a` both ways,
+  // over 100,000 ticks in three processes. These tests are the unit-level half.
+
+  const grow = (n: number): readonly Transaction[] => {
+    let log: readonly Transaction[] = [];
+    for (let i = 0; i < n; i += 1) {
+      log = appendTransaction(log, tx(i % 2 === 0 ? 8_500 : -2_500, i, i % 2 === 0 ? 'roomRevenue' : 'upkeep'));
+    }
+    return log;
+  };
+
+  it('a warm log and a cold copy of the same log fold to the same number', () => {
+    const warm = grow(500);
+    // A structurally identical array the memo has never seen: same transactions, different
+    // object, so it takes the full fold. If the two ever disagreed, the memo would be
+    // returning something other than the fold — the one thing it must never do.
+    const cold: readonly Transaction[] = [...warm];
+    expect(balanceOf(cold)).toBe(balanceOf(warm));
+    expect(balanceOf(warm)).toBe(250 * 8_500 + 250 * -2_500);
+  });
+
+  it('agrees with a hand-rolled fold at every prefix length, not just at the end', () => {
+    // An incremental memo can be wrong in a way an end-state check cannot see: right total,
+    // wrong intermediate. So every prefix is compared against a fold computed here.
+    let log: readonly Transaction[] = [];
+    let expected = 0;
+    for (let i = 0; i < 200; i += 1) {
+      const amount = i % 3 === 0 ? 8_500 : -2_500;
+      log = appendTransaction(log, tx(amount, i, amount > 0 ? 'roomRevenue' : 'upkeep'));
+      expected += amount;
+      expect(balanceOf(log)).toBe(expected);
+    }
+  });
+
+  it('is not state: the log is unchanged and carries no balance of its own', () => {
+    // The I4 line. Nothing the memo does may be visible in the value that gets hashed and
+    // saved — if it were, it would be a stored balance wearing a WeakMap.
+    const log = grow(50);
+    balanceOf(log);
+    expect(JSON.parse(JSON.stringify(log))).toEqual([...log]);
+    for (const transaction of log) {
+      expect(Object.keys(transaction).sort()).toEqual(['amount', 'reason', 'tick']);
+    }
+  });
+
+  it('appending to a log nobody has priced stays exactly as cheap as it was', () => {
+    // The memo carries a total forward; it never COMPUTES one. So a caller that only ever
+    // appends pays nothing for a feature it does not use, and the first `balanceOf` of a
+    // freshly loaded save is the same O(n) fold it always was.
+    const cold = grow(100);
+    expect(balanceOf(cold)).toBe(50 * 8_500 + 50 * -2_500);
+  });
+
+  it('a hand-built log — a loaded save — folds correctly and then stays correct', () => {
+    // The `deserialise` path: an array this module never produced. It must fold from cold
+    // and then accept appends on top without drifting.
+    const loaded: readonly Transaction[] = [tx(500_000, 0, 'startingCapital'), tx(-2_500, 1, 'upkeep')];
+    expect(balanceOf(loaded)).toBe(497_500);
+    const extended = appendTransaction(loaded, tx(8_500, 2));
+    expect(balanceOf(extended)).toBe(506_000);
+    expect(balanceOf([...extended])).toBe(506_000);
+  });
+});

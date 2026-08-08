@@ -9,10 +9,14 @@
 // migration. `fixtures/save-v1.ts` HAS A ZERO-LINE DIFF in this change; the migration is
 // what carries it. The walk is 1 -> 2 -> 3 -> 4.
 //
-// This file owns the CURRENT era. What a v2 world was is pinned in `guest.save.test.ts`
-// and what a v3 world was in `grid.save.test.ts`, both against frozen literals through
-// truncated chains — ADR-0008 (2). When v5 arrives, the assertions here move the same way,
-// and the pins below must not.
+// THIS FILE NOW OWNS THE v4 ERA, WHICH IS OVER (G-011). It owned the current one until
+// `World` gained `loanOutcomes` and the chain grew to 1 -> 2 -> 3 -> 4 -> 5; the current
+// era is `recovery.save.test.ts`'s. The prediction three lines above — "when v5 arrives,
+// the assertions here move the same way, and the pins below must not" — is exactly what
+// happened, and it is worth noting that it cost one afternoon rather than an argument:
+// every v4 claim now runs through the TRUNCATED chain `TO_V4` instead of through
+// `deserialise`, and `MIGRATED_V4_BYTES` and `MIGRATED_V4_STATE_HASH` are untouched.
+// ADR-0008 (2): an artefact describing an era that is over is a frozen literal.
 
 import { describe, expect, it } from 'vitest';
 import { BUILD_REFUSAL_REASONS, createBuildOutcomes, totalBuildOutcomes } from './build.js';
@@ -37,7 +41,6 @@ import {
   MIGRATIONS,
   migrateSaveWorld,
   MIN_SUPPORTED_SCHEMA_VERSION,
-  SAVE_SCHEMA_VERSION,
   serialise,
 } from './save.js';
 import type { SaveSchema } from './save.js';
@@ -71,22 +74,34 @@ const v1World = (): Record<string, unknown> =>
 
 const TO_V2: SaveSchema = { migrations: [MIGRATIONS[0]!], minVersion: 1, currentVersion: 2 };
 const TO_V3: SaveSchema = { migrations: [MIGRATIONS[0]!, MIGRATIONS[1]!], minVersion: 1, currentVersion: 3 };
+/**
+ * The chain as it stood when v4 WAS the current version.
+ *
+ * Written from `MIGRATIONS` by INDEX rather than from `SAVE_SCHEMA_VERSION`, which tracks
+ * the present and would drag this file forward with it — the discipline `grid.save.test.ts`
+ * adopted for the same reason one version earlier (ADR-0008).
+ */
+const TO_V4: SaveSchema = {
+  migrations: [MIGRATIONS[0]!, MIGRATIONS[1]!, MIGRATIONS[2]!],
+  minVersion: 1,
+  currentVersion: 4,
+};
 /** The chain as it stood BEFORE this goal, so the fixture can be shown failing without it. */
 const WITHOUT_V4: SaveSchema = TO_V3;
 
 describe('the chain walks 1 -> 2 -> 3 -> 4, and every link is still observed', () => {
-  it('ships exactly three steps, each going exactly one version', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(4);
+  it('still ships the three steps that reach v4, each going exactly one version', () => {
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(MIGRATIONS).toHaveLength(3);
-    expect(MIGRATIONS.map((step) => [step.from, step.to])).toEqual([
+    expect(MIGRATIONS.slice(0, 3).map((step) => [step.from, step.to])).toEqual([
       [1, 2],
       [2, 3],
       [3, 4],
     ]);
-    // G-003's anti-vacuity device, now reading "3 required, 3 present". It was written
-    // against an empty chain where it could only assert "0 required, 0 present"; G-007
-    // gave it a real number and it caught the real failure FIRST. This is the third.
+    // G-003's anti-vacuity device, over the truncated chain that ends at v4: "3 required,
+    // 3 present". It was written against an empty chain where it could only assert "0
+    // required, 0 present"; G-007 gave it a real number and it caught the real failure
+    // FIRST. The CURRENT chain's count is `recovery.save.test.ts`'s to assert.
+    expect(() => assertMigrationPathComplete(TO_V4)).not.toThrow();
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
@@ -110,27 +125,38 @@ describe('the chain walks 1 -> 2 -> 3 -> 4, and every link is still observed', (
   });
 
   it('reaches v4 and its own pinned hash, distinct from every earlier link', () => {
-    const world = deserialise(SAVE_V1_BYTES);
-    expect(hashState(world)).toBe(MIGRATED_V4_STATE_HASH);
-    expect(hashState(world)).not.toBe(MIGRATED_V3_STATE_HASH);
-    expect(hashState(world)).not.toBe(MIGRATED_V2_STATE_HASH);
-    expect(hashState(world)).not.toBe(SAVE_V1_STATE_HASH);
+    const world = migrateSaveWorld(v1World(), 1, TO_V4);
+    expect(hashJson(world as JsonValue)).toBe(MIGRATED_V4_STATE_HASH);
+    expect(hashJson(world as JsonValue)).not.toBe(MIGRATED_V3_STATE_HASH);
+    expect(hashJson(world as JsonValue)).not.toBe(MIGRATED_V2_STATE_HASH);
+    expect(hashJson(world as JsonValue)).not.toBe(SAVE_V1_STATE_HASH);
   });
 
   it('keeps every earlier link alive rather than retiring it as the chain grows', () => {
     // G-007's discipline: a pin is not retired because a later version passed it. Each
     // link is re-observed through its own truncated chain, so a 1 -> 2 step that silently
-    // changed and a later step that compensated could not look like a correct chain.
+    // changed and a later step that compensated could not look like a correct chain. This
+    // is the second time the chain has grown past this file, and every link still holds.
     expect(hashJson(v1World() as JsonValue)).toBe(SAVE_V1_STATE_HASH);
     expect(hashJson(migrateSaveWorld(v1World(), 1, TO_V2) as JsonValue)).toBe(MIGRATED_V2_STATE_HASH);
     expect(hashJson(migrateSaveWorld(v1World(), 1, TO_V3) as JsonValue)).toBe(MIGRATED_V3_STATE_HASH);
-    expect(hashState(deserialise(SAVE_V1_BYTES))).toBe(MIGRATED_V4_STATE_HASH);
+    expect(hashJson(migrateSaveWorld(v1World(), 1, TO_V4) as JsonValue)).toBe(MIGRATED_V4_STATE_HASH);
   });
 
-  it('is written back as a v4 blob, and is stable from there on', () => {
-    const rewritten = serialise(deserialise(SAVE_V1_BYTES));
-    expect(rewritten).toBe(MIGRATED_V4_BYTES);
-    expect(serialise(deserialise(rewritten))).toBe(rewritten);
+  it('is the v4 blob, byte for byte, when the chain stops there', () => {
+    // The writer's stamp is the CURRENT version, so `serialise` no longer produces these
+    // bytes — that is what a schema bump means. The document is reconstructed at its own
+    // era instead, which is exactly what `grid.save.test.ts` did for v3 when v4 landed.
+    const world = migrateSaveWorld(v1World(), 1, TO_V4);
+    expect(JSON.stringify({ schemaVersion: 4, world })).toBe(MIGRATED_V4_BYTES);
+  });
+
+  it('and a real v4 blob still loads today, which is what MIN_SUPPORTED promises', () => {
+    // The other half: these frozen bytes are not merely a hash oracle, they are a save
+    // somebody could still have on disk. `deserialise` must carry them the last step.
+    const loaded = deserialise(MIGRATED_V4_BYTES);
+    expect(loaded.tick).toBe(SAVE_V1_TICK);
+    expect(serialise(loaded)).toBe(serialise(deserialise(SAVE_V1_BYTES)));
   });
 
   it('still has every top-level key the CURRENT World declares', () => {
@@ -163,8 +189,12 @@ describe('the 3 -> 4 step invents no history', () => {
   });
 
   it('carries every v3 field through value for value, adding exactly one key', () => {
+    // Both sides are taken at their own era through truncated chains. Reading `after` from
+    // `deserialise` would compare v3 against whatever the CURRENT version is, so the "adds
+    // exactly one key" claim would grow by one on every future bump and stop being a
+    // statement about the 3 -> 4 step at all.
     const before = migrateSaveWorld(v1World(), 1, TO_V3) as Record<string, unknown>;
-    const after = deserialise(SAVE_V1_BYTES) as unknown as Record<string, unknown>;
+    const after = migrateSaveWorld(v1World(), 1, TO_V4) as Record<string, unknown>;
     for (const key of Object.keys(before)) {
       expect(after[key]).toEqual(before[key]);
     }

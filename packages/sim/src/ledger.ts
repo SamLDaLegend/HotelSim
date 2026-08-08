@@ -9,7 +9,10 @@
 // DECISIONS.md ADR-0002. The copy-per-append cost was measured at G-005 (19 ms across
 // a 365-day run, ~300 ms across 1,000 days) and deliberately kept: restructuring would
 // change the hashed shape of `World.ledger` and owe a save migration. The trigger for
-// revisiting is in PARKING.md (~15k appends per run, which is M4 wage density).
+// revisiting is in PARKING.md — CORRECTED AT G-010 to ~40k appends per run, after a
+// profile of a real run measured this at 0.7% of self-time at 22,245 appends where the
+// standalone benchmark had predicted ~16%. The old figure (~15k) is still quoted in
+// places; it was an order of magnitude early.
 
 /**
  * Why money moved. A CLOSED UNION, not free text.
@@ -28,7 +31,37 @@
  * them in a migration would invent semantics for bytes that never meant them. The load
  * path therefore requires only a non-empty string (`assertTransaction` in save.ts).
  */
-export type TransactionReason = 'construction' | 'roomRevenue' | 'upkeep';
+export type TransactionReason =
+  /** A room was built. Negative: the build-loop sink (G-008). */
+  | 'construction'
+  /**
+   * A room was scrapped and part of its construction cost came back (G-011). Positive.
+   *
+   * NOT a positive `construction`, and the reason is a law rather than taste: G-008's
+   * cross-subsystem check is `countConstructionTransactions(ledger) === buildOutcomes.built`
+   * exactly, and refunds sharing that reason would break it on every demolition. It is
+   * also simply a different event — "a ledger you cannot explain is a ledger you cannot
+   * balance".
+   */
+  | 'demolitionRefund'
+  /** Cash a loan provided (G-011). Positive. Half of what `outstandingDebtOf` folds. */
+  | 'loanDraw'
+  /** What the loan cost to take out (G-011). Negative, charged once, at the draw. */
+  | 'loanFee'
+  /** A night's repayment of an outstanding loan (G-011). Negative. The other half of the fold. */
+  | 'loanRepayment'
+  /** A guest paid for a completed stay (G-005). Positive. */
+  | 'roomRevenue'
+  /**
+   * What the hotel opened with (G-011). Positive, appended once by `createWorld`.
+   *
+   * There is no `balance` field to set (I4), so an opening balance can only exist as a
+   * transaction — which is why the money a hotel starts with is explained in the ledger
+   * rather than appearing from nowhere.
+   */
+  | 'startingCapital'
+  /** One night of keeping the rooms (G-005). Negative. */
+  | 'upkeep';
 
 /**
  * The reasons, written down exactly once as a mapped type — the `WORLD_KEY_SET`
@@ -37,7 +70,12 @@ export type TransactionReason = 'construction' | 'roomRevenue' | 'upkeep';
  */
 const TRANSACTION_REASON_SET: Readonly<Record<TransactionReason, true>> = Object.freeze({
   construction: true,
+  demolitionRefund: true,
+  loanDraw: true,
+  loanFee: true,
+  loanRepayment: true,
   roomRevenue: true,
+  startingCapital: true,
   upkeep: true,
 });
 
@@ -75,6 +113,38 @@ export type Transaction = {
  * have to know that), and a reason from the union (which is also how "non-empty" is
  * enforced — every member is non-empty, and a test pins that).
  */
+/**
+ * THE BALANCE FOLD, MEMOISED *OUTSIDE* STATE — the one concession I4 explicitly allows.
+ *
+ * I4 forbids a stored balance: "if the fold becomes a performance problem, memoise it
+ * outside state — do not cache it inside state". This is that memoisation, and it is the
+ * first time the fold has actually been a performance problem.
+ *
+ * WHY IT BECAME ONE. `applyCommands` folds the balance once per tick that carries a player
+ * command (`cashOnHand`), and G-008 accepted that cost on the grounds that "builds are rare
+ * by construction" — which was true, and is reinforced by the build schedule stopping at
+ * the edge of the plot, so `--build 1` emits ~1,680 commands over a whole run and measures
+ * FLAT. G-011's `--loan` is the first flag that can emit a command on EVERY TICK for the
+ * length of a run, because a loan has no position and therefore nothing to run out of. One
+ * O(ledger) fold per tick over a growing ledger is O(n^2) per run. Measured before this
+ * memo, `--rooms 60 --arrivals 32 --loan 1`, delta over the same run without it:
+ * 100d 1,799ms · 200d 5,121 · 400d 14,269 · 800d 58,804 — still ~3-4x per doubling.
+ *
+ * HOW IT STAYS HONEST. Nothing here is state: `World` has no balance field, nothing is
+ * hashed, nothing is saved, and a cold `balanceOf` computes the identical number by the
+ * identical left-to-right integer sum. The memo is a `WeakMap` keyed on the log ARRAY
+ * ITSELF, so it cannot be iterated (I2's Set/Map hazard is about ORDER, and a WeakMap has
+ * no order to depend on — the `EntityDraft.removed` contract) and it cannot leak, because
+ * an unreachable log takes its entry with it.
+ *
+ * It is incremental rather than a cache of one value: every array `appendTransaction`
+ * produces inherits its parent's total plus one amount, in O(1). So the first fold of a
+ * loaded save is O(n) and every append after it is free. `ledger.test.ts` pins that a
+ * warm and a cold fold agree, and the I2 hash is unmoved by the whole change — which is
+ * the acceptance bar G-010 set for any optimisation.
+ */
+const BALANCE_MEMO = new WeakMap<readonly Transaction[], number>();
+
 export function appendTransaction(
   log: readonly Transaction[],
   transaction: Transaction,
@@ -94,15 +164,30 @@ export function appendTransaction(
       `appendTransaction: unknown reason "${String(transaction.reason)}"; every transaction carries a reason from [${TRANSACTION_REASONS.join(', ')}]`,
     );
   }
-  return [...log, transaction];
+  const next = [...log, transaction];
+  // Carry the running total forward when the parent's is already known. Never COMPUTES a
+  // total — a cold append stays cold, so appending to a log nobody has asked the balance
+  // of costs exactly what it always did.
+  const parent = BALANCE_MEMO.get(log);
+  if (parent !== undefined) BALANCE_MEMO.set(next, parent + transaction.amount);
+  return next;
 }
 
-/** The ONLY way to learn the cash balance: a pure fold over the whole log. */
+/**
+ * The ONLY way to learn the cash balance: a fold over the whole log.
+ *
+ * Pure, and pure in the strong sense — same log, same number, every time, on every
+ * machine. The memo above changes only how long it takes: a warm log answers in O(1), a
+ * cold one is folded left to right exactly as it always was and becomes warm.
+ */
 export function balanceOf(log: readonly Transaction[]): number {
+  const memoised = BALANCE_MEMO.get(log);
+  if (memoised !== undefined) return memoised;
   let total = 0;
   for (const transaction of log) {
     total += transaction.amount;
   }
+  BALANCE_MEMO.set(log, total);
   return total;
 }
 
@@ -121,4 +206,74 @@ export function sumByReason(log: readonly Transaction[], reason: TransactionReas
     if (transaction.reason === reason) total += transaction.amount;
   }
   return total;
+}
+
+/**
+ * THE ROUNDING RULE, WRITTEN DOWN ONCE AND IMPLEMENTED ONCE (G-011).
+ *
+ *   ROUND HALF UP, AT THE MOMENT THE CHARGE IS COMPUTED, IN EXACTLY ONE FUNCTION.
+ *
+ * `settlement.ts`'s header has promised this rule since G-005 and deferred it to M4
+ * because nothing then divided. G-011 introduces the first two fractions in the money
+ * path — the demolition refund and the loan fee — so the promise comes due here rather
+ * than being inherited as an accident.
+ *
+ * WHY ONE FUNCTION AND NOT TWO CALL SITES DOING THE SAME ARITHMETIC. Rounding twice is
+ * how a penny appears from nowhere: refund a rounded value, then charge a fraction of
+ * THAT, and the two halves no longer sum to the whole. Both call sites here take their
+ * input from an UNROUNDED content integer (`constructionCostPence`,
+ * `loanPrincipalPence`), so no result of this function is ever fed back into it.
+ *
+ * `Math.floor((amount * bp + 5000) / 10000)` rather than `Math.round`, deliberately:
+ * `Math.round(-0.5)` is `-0`, and `-0` is the same money but not the same value — it
+ * would reach `appendTransaction`, which rejects it at the choke point. Every input this
+ * takes is non-negative (both schemas are `.min(0)`), so half-up and
+ * half-away-from-zero agree and the sign question cannot arise; the guard below makes
+ * that a checked precondition rather than a comment.
+ *
+ * EXACT, NOT MERELY CLOSE. `amount * bp` is an integer product; at the largest values
+ * the schemas admit it is far inside 2^53, so there is no float drift for the rounding
+ * to disguise (ADR-0002, I2). The guard rejects anything that would leave that range.
+ */
+export function applyBasisPoints(amount: number, basisPoints: number): number {
+  if (!Number.isInteger(amount) || amount < 0) {
+    throw new Error(
+      `applyBasisPoints: amount must be a non-negative integer in minor units, got ${String(amount)}`,
+    );
+  }
+  if (!Number.isInteger(basisPoints) || basisPoints < 0 || basisPoints > 10_000) {
+    throw new Error(
+      `applyBasisPoints: basis points must be an integer in 0..10000, got ${String(basisPoints)}`,
+    );
+  }
+  const product = amount * basisPoints;
+  if (!Number.isSafeInteger(product)) {
+    throw new Error(
+      `applyBasisPoints: ${amount} x ${basisPoints} basis points overflows exact integer arithmetic; money must stay exact (ADR-0002)`,
+    );
+  }
+  return Math.floor((product + 5_000) / 10_000);
+}
+
+/**
+ * What the hotel still owes, DERIVED BY FOLDING THE LEDGER — never stored (G-011).
+ *
+ * This is I4's argument applied past cash. `World` has no `debt` field for the same
+ * reason it has no `balance` field: a second stored money value is a second thing that
+ * can drift from the log that explains it, and a drift that hashes perfectly is the one
+ * class of bug I2 cannot see. Debt is a question asked of the ledger, exactly like the
+ * balance, occupancy, validity and a guest's reservation.
+ *
+ * The fold works because the loan's PRICE is charged as money at the draw (`loanFee`)
+ * rather than folded into a principal. So a `loanDraw` is both the cash received and the
+ * amount owed, `loanRepayment` is negative, and their sum is what is left:
+ *
+ *   outstandingDebt = sum(loanDraw) + sum(loanRepayment)
+ *
+ * It cannot go negative, because `repayLoan` caps every repayment at the outstanding
+ * amount — an unreachable postcondition rather than a vacuous check, and `loan.ts` pins
+ * both halves.
+ */
+export function outstandingDebtOf(log: readonly Transaction[]): number {
+  return sumByReason(log, 'loanDraw') + sumByReason(log, 'loanRepayment');
 }

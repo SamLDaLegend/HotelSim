@@ -53,7 +53,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
+import { ECONOMY_PATH, ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -78,14 +78,22 @@ function default2Day(): CliResult {
 /** The --json document for the same run, shared by the direct-spawn and through-pnpm tests. */
 const GOLDEN_2_DAYS_SEED_42_JSON = {
   schema: 1,
-  input: { seed: 42, ticks: 2880, rooms: 3, arrivalEveryTicks: 120, buildEveryTicks: 0, demolishEveryTicks: 0 },
+  input: {
+    seed: 42,
+    ticks: 2880,
+    rooms: 3,
+    arrivalEveryTicks: 120,
+    buildEveryTicks: 0,
+    demolishEveryTicks: 0,
+    loanEveryTicks: 0,
+  },
   world: {
     tick: 2880,
     days: 2,
     roomTypes: 1,
     needTypes: 1,
     entities: 6,
-    stateHash: 'e5553c9805f8d2bc',
+    stateHash: '105acfe9198d00bd',
   },
   guests: {
     arrived: 24,
@@ -107,13 +115,28 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     invalid: { missingItem: 0, noDoor: 0, unplaced: 0, unsupported: 0 },
   },
   money: {
-    transactions: 17,
+    // 18 rather than 17 since G-011, and the one extra is the opening capital. A hotel
+    // cannot start with money unless the money is a transaction — there is no balance
+    // field to put it in (I4) — so the capital is a line in the ledger like everything
+    // else, and the balance below is the fold that includes it.
+    transactions: 18,
     revenuePennies: 127500,
     upkeepPennies: -15000,
     constructionPennies: 0,
+    startingCapitalPennies: 500000,
+    demolitionRefundPennies: 0,
+    loanDrawPennies: 0,
+    loanFeePennies: 0,
+    loanRepaymentPennies: 0,
+    // The seeded hotel's scrap value, printed rather than hidden (G-011 critique round
+    // 1): three rooms placed free by `spawnEntity` are still worth 375,000p if scrapped,
+    // beside the 500,000p of opening capital. Both numbers now appear in the report a
+    // designer tunes `startingCapitalPence` against.
+    liquidationValuePennies: 375000,
+    outstandingDebtPennies: 0,
     settlements: 2,
     nights: 2,
-    balancePennies: 112500,
+    balancePennies: 612500,
   },
   // The default run builds nothing: `--build` and `--demolish` are off unless asked for
   // (G-008), which is what keeps this golden and `pnpm sim:bench` measuring the same
@@ -123,6 +146,15 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     demolished: 0,
     refused: { insufficientFunds: 0, noSuchRoom: 0, occupied: 0, outOfBounds: 0 },
     constructionTransactions: 0,
+    refundTransactions: 0,
+  },
+  // And the player never borrows unless asked to: `--loan` defaults off exactly as
+  // `--build` and `--demolish` do (G-011), so this golden and `pnpm sim:bench` keep
+  // measuring the workload they always have.
+  loans: {
+    drawn: 0,
+    refused: { noLoanOffered: 0, notEligible: 0 },
+    drawTransactions: 0,
   },
 };
 
@@ -144,16 +176,22 @@ const GOLDEN_2_DAYS_SEED_42 =
     'stuck       0',
     'orphan res  0',
     'in bad room 0',
-    'ledger      17 transactions',
+    'ledger      18 transactions',
     'revenue     127500p',
     'upkeep      -15000p',
     'built       0',
     'demolished  0',
     'refused     0 funds, 0 occupied, 0 off plot, 0 no room',
     'building    0p',
+    'capital     500000p',
+    'refunds     0p',
+    'loans       0 drawn, 0 not needed, 0 not offered',
+    'borrowed    0p, fees 0p, repaid 0p',
+    'scrap value 375000p',
+    'debt        0p',
     'settlements 2',
-    'balance     112500p',
-    'state hash  e5553c9805f8d2bc',
+    'balance     612500p',
+    'state hash  105acfe9198d00bd',
   ].join('\n') + '\n';
 
 /**
@@ -189,6 +227,26 @@ const GOLDEN_2_DAYS_SEED_42 =
  * worked before must do exactly as much business now. If `satisfied` had fallen here, the
  * rule would have broken the shipped content rather than described it — which is the one
  * way this goal could have gone quietly wrong.
+ *
+ * WHY IT MOVED AGAIN AT G-011, AND WHAT DID AND DID NOT MOVE WITH IT.
+ *
+ * `state hash` moved for both kinds of reason at once: the shipped content gained
+ * `demolitionRefundBasisPoints` and a whole `economy.json`, which moves the fingerprint
+ * `World.contentHash` records, and `World` gained `loanOutcomes`.
+ *
+ * THE MONEY MOVED, DELIBERATELY, AND IT IS THE ONLY THING THAT DID. `ledger` 17 -> 18 and
+ * `balance` 112500p -> 612500p, both accounted for by one transaction: the 500,000p of
+ * opening capital ADR-0011 gives every hotel. Nothing else in the money loop fired,
+ * because the default run builds nothing, demolishes nothing and borrows nothing — the
+ * five new money lines are all 0p, and `loans 0 drawn` is the assertion that `--loan`
+ * defaults off.
+ *
+ * AND EVERY GUEST NUMBER IS AGAIN UNCHANGED, CHARACTER FOR CHARACTER: 24 arrived, 15
+ * satisfied, 5 unsatisfied, 0 evicted, 4 in hotel, 127500p revenue, -15000p upkeep. THAT
+ * is the check worth making for a goal that gives the player money: capital, a refund and
+ * a loan must change what a player CAN DO and not what the hotel DOES when nobody uses
+ * them. If `satisfied` had moved here, the money loop would have leaked into the guest
+ * loop, and this is the line where it would show.
  */
 
 describe('byte-identical stdout across runs (G-006 exit criterion, verbatim)', () => {
@@ -265,7 +323,7 @@ describe('the DOCUMENTED invocation, through pnpm itself', () => {
   it('pnpm --silent sim:run --quiet yields the state hash alone', () => {
     const result = runPnpm(['--silent', 'sim:run', '--days', '2', '--seed', '42', '--quiet']);
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe('e5553c9805f8d2bc\n');
+    expect(result.stdout).toBe('105acfe9198d00bd\n');
   });
 });
 
@@ -288,7 +346,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  e5553c9805f8d2bc']);
+    expect(differing).toEqual(['seed        42', 'state hash  105acfe9198d00bd']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -316,9 +374,10 @@ describe('the --content contract', () => {
     const dir = makeTempDir();
     copyFileSync(ROOM_TYPES_PATH, join(dir, 'room-types.json'));
     copyFileSync(NEED_TYPES_PATH, join(dir, 'need-types.json'));
-    // Three files since G-009. A `--content` directory missing `item-types.json` is a
-    // content set the loader refuses, which the next test but one pins.
+    // Three files since G-009, four since G-011. A `--content` directory missing any of
+    // them is a content set the loader refuses, which the next test but one pins.
     copyFileSync(ITEM_TYPES_PATH, join(dir, 'item-types.json'));
+    copyFileSync(ECONOMY_PATH, join(dir, 'economy.json'));
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
@@ -365,21 +424,32 @@ describe('mode exclusivity', () => {
 // Every number below is HAND-DERIVED from a closed form and then compared against the
 // real process, never captured on faith (the G-006 discipline). The derivation:
 //
+//   CAPITAL    500,000p, booked once at tick 0 (G-011). The hotel no longer opens broke.
 //   ATTEMPTS   `--build 2880` fires at ticks 1 + 2880k for k = 0..14 -> 15 attempts.
-//   OUTCOMES   9 succeed, 6 are refused for funds. They INTERLEAVE rather than failing
-//              first and succeeding after: the hotel opens broke, saves up, spends the
-//              lot on a room, and is broke again. Each refusal is a player who could not
-//              afford the thing at that moment, which is the mechanic working.
-//   BUILDING   9 x 250,000p = 2,250,000p, one `construction` transaction each.
-//   REVENUE    345 satisfied x 8,500p = 2,932,500p.
+//   OUTCOMES   10 succeed, 5 are refused for funds. They INTERLEAVE rather than failing
+//              first and succeeding after: the hotel spends what it has on a room, is
+//              broke, saves up, spends again. Each refusal is a player who could not
+//              afford the thing at that moment, which is the mechanic working — and the
+//              FIRST attempt now SUCCEEDS, at tick 1, because of the capital.
+//   BUILDING   10 x 250,000p = 2,500,000p, one `construction` transaction each.
+//   REVENUE    350 satisfied x 8,500p = 2,975,000p.
 //   UPKEEP     rooms live at the 30 settlement ticks are
-//              3,3,3,3,4,4,4,4,5,5,6,6,6,6,7,7,8,8,8,8,9,9,10,10,10,10,11,11,12,12
-//              = 212 room-nights x 2,500p = 530,000p.
-//   BALANCE    2,932,500 - 530,000 - 2,250,000 = 152,500p.
-//   ENTITIES   3 inherited + 9 built = 12.
+//              4,4,5,5,6,6,6,6,7,7,8,8,8,8,9,9,10,10,10,10,11,11,11,11,12,12,13,13,13,13
+//              = 266 room-nights x 2,500p = 665,000p.
+//   BALANCE    500,000 + 2,975,000 - 665,000 - 2,500,000 = 310,000p.
+//   ENTITIES   (3 inherited + 10 built) x 2, a bed apiece = 26.
 //
 // The point of the arithmetic is that a reader with a calculator and no access to the
 // simulation can check it.
+//
+// WHAT G-011 MOVED HERE, AND WHY EVERY MOVEMENT IS THE CAPITAL. Ten builds rather than
+// nine, five refusals rather than six, one more room-night sequence entry at every step:
+// all of it is 500,000p of opening capital buying the first room at tick 1 and shifting
+// the whole savings cycle two builds earlier. Nothing about the refusal MECHANIC changed —
+// `built + refused` is still exactly 15, one recorded outcome per attempt — and the
+// balance still folds from its own published reasons. The refusal path is still driven by
+// a real run, which was G-008's reason for leaving the hotel broke; it is now driven by
+// the hotel outrunning its income rather than by never having had any.
 describe('G-008 exit criterion: a build schedule, and a balance that folds', () => {
   type Summary = {
     world: { entities: number };
@@ -401,6 +471,9 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
       revenuePennies: number;
       upkeepPennies: number;
       constructionPennies: number;
+      startingCapitalPennies: number;
+      demolitionRefundPennies: number;
+      loanDrawPennies: number;
       balancePennies: number;
     };
     build: {
@@ -425,28 +498,37 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     const result = runCli([...BUILD_ARGS, '--json']);
     expect(result.status).toBe(0);
     expect(result.stderr.length).toBe(0);
-    expect(summary().build.built).toBe(9);
-    expect(summary().build.constructionTransactions).toBe(9);
-    expect(summary().money.constructionPennies).toBe(-2_250_000);
+    expect(summary().build.built).toBe(10);
+    expect(summary().build.constructionTransactions).toBe(10);
+    expect(summary().money.constructionPennies).toBe(-2_500_000);
   });
 
   it('matches the hand-derived closed form, penny for penny', () => {
     const s = summary();
     expect(s.guests.satisfied * 8_500).toBe(s.money.revenuePennies);
-    expect(s.money.revenuePennies).toBe(2_932_500);
-    expect(s.money.upkeepPennies).toBe(212 * -2_500);
+    expect(s.money.revenuePennies).toBe(2_975_000);
+    expect(s.money.upkeepPennies).toBe(266 * -2_500);
+    // The capital is a transaction like any other, and it is the only one of G-011's new
+    // reasons this run produces: nothing is demolished, so nothing is refunded, and the
+    // hotel is never stuck, so nothing is borrowed.
+    expect(s.money.startingCapitalPennies).toBe(500_000);
+    expect(s.money.demolitionRefundPennies).toBe(0);
+    expect(s.money.loanDrawPennies).toBe(0);
     expect(s.build.built * -250_000).toBe(s.money.constructionPennies);
     // Twelve rooms and twelve beds since G-009: a built room arrives furnished, and a bed
     // is an entity. `rooms.valid` is the number a reader wants, and it is not 12.
-    expect(s.world.entities).toBe((3 + 9) * 2);
-    // AND SEVEN OF THE NINE ROOMS THE PLAYER BUILT DO NOT WORK. The player's walk packs
+    expect(s.world.entities).toBe((3 + 10) * 2);
+    // AND EIGHT OF THE TEN ROOMS THE PLAYER BUILT DO NOT WORK. The player's walk packs
     // rooms onto the floor above, over the corridors of the hotel below, so most of them
-    // have nothing underneath. Every guest number above is nevertheless IDENTICAL to
-    // G-008's — 345 satisfied, 2,932,500p — because demand saturates at about five rooms
-    // and the five that work are enough. That is the trap ADR-0009 describes, now with a
-    // second way to fall into it: the player paid 250,000p apiece for seven rooms that
-    // house nobody and still cost 2,500p a night each.
+    // have nothing underneath — and with ten built rather than nine, two are now adjacent
+    // and one of THOSE is sealed in as well. `rooms.valid` is still 5, and satisfied still
+    // sits just under the ~350 demand saturates at, because the five that work are enough.
+    // That is the trap ADR-0009 describes, and G-011's capital makes it arrive SOONER: the
+    // player now pays 250,000p apiece for eight rooms that house nobody and still cost
+    // 2,500p a night each. Recovery money buys a bigger mistake faster; the terminator for
+    // that spiral is still M4's.
     expect(s.rooms.invalid.unsupported).toBe(7);
+    expect(s.rooms.invalid.noDoor).toBe(1);
     expect(s.rooms.valid).toBe(5);
     expect(s.guests.inInvalidRooms).toBe(0);
   });
@@ -456,9 +538,13 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // prints — a SECOND computation of the same quantity, from published numbers, which is
     // exactly what `balanceOf` against `sumByReason` does inside the sim.
     const s = summary();
-    const folded = s.money.revenuePennies + s.money.upkeepPennies + s.money.constructionPennies;
+    const folded =
+      s.money.startingCapitalPennies +
+      s.money.revenuePennies +
+      s.money.upkeepPennies +
+      s.money.constructionPennies;
     expect(folded).toBe(s.money.balancePennies);
-    expect(folded).toBe(152_500);
+    expect(folded).toBe(310_000);
   });
 
   it('records refusals as OUTCOMES on a real run, without ever exiting non-zero', () => {
@@ -466,7 +552,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // `buildRoom` that threw on an unaffordable build would make this exit 1 with a stack
     // trace; one that silently skipped would report 0 here. THIS IS THE EXIT CRITERION'S
     // "refusal is a recorded outcome rather than a throw", measured through the CLI.
-    expect(summary().build.refused.insufficientFunds).toBe(6);
+    expect(summary().build.refused.insufficientFunds).toBe(5);
     expect(summary().build.built + summary().build.refused.insufficientFunds).toBe(15);
     expect(runCli(BUILD_ARGS).status).toBe(0);
   });
@@ -474,7 +560,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
   it('accounts for every guest, with capacity growth visible in the outcome', () => {
     // Conservation still closes with a hotel that changes size underneath it, and the
     // build loop is doing something real: 3 rooms serve 267 guests over this window (the
-    // G-004/G-005 figure), 12 rooms serve 345.
+    // G-004/G-005 figure), 13 rooms serve 350.
     const g = summary().guests;
     expect(g.satisfied + g.unsatisfied + g.evicted + g.inHotel).toBe(g.arrived);
     expect(g.arrived).toBe(360);
@@ -530,8 +616,28 @@ describe('G-008: --demolish, and the eviction path a real run can finally reach'
   });
 
   it('records a demolish of a room that is not there rather than crashing on it', () => {
-    expect(summary().build.refused.noSuchRoom).toBeGreaterThan(0);
+    // A FASTER CADENCE THAN THE BLOCK'S, AND G-011 IS WHY. At `--demolish 5760` this run
+    // used to walk past the end of the hotel and record `noSuchRoom`; with 500,000p of
+    // opening capital the hotel is bigger sooner, every one of those eight attempts now
+    // finds a real room, and the counter is 0. That is the hotel being healthier, not the
+    // refusal path disappearing — so the claim is re-pointed at a walk that still outruns
+    // the building rather than being quietly dropped or asserted at a horizon where it is
+    // vacuous (ADR-0007).
+    //
+    // `--demolish 1440` fires 30 times against ids 1, 3, 5, ... 59, and the hotel never
+    // reaches 59 entities, so 23 of them name nothing. `buildRoom`'s sibling refusal is
+    // still recorded rather than thrown, which is what this measures: a throw would make
+    // the process exit non-zero with a stack trace, and it exits 0.
+    const fast = JSON.parse(
+      runCli(['--days', '30', '--seed', '7', '--build', '2880', '--demolish', '1440', '--json'])
+        .stdout.toString('utf8'),
+    ) as DemolishSummary;
+    expect(fast.build.refused.noSuchRoom).toBeGreaterThan(0);
+    expect(fast.build.demolished).toBeGreaterThan(0);
     expect(runCli(DEMOLISH_ARGS).status).toBe(0);
+    // And the original invocation still demolishes real rooms — it simply no longer misses.
+    expect(summary().build.demolished).toBeGreaterThan(0);
+    expect(summary().build.refused.noSuchRoom).toBe(0);
   });
 
   it('leaves the default run untouched: the flags are OFF unless asked for', () => {

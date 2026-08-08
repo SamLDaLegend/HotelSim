@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createWorld,
   firstNeedType,
+  GROUND_FLOOR,
   isRoomKind,
   isWithinBounds,
   maxGuestLifetimeTicks,
@@ -25,6 +26,7 @@ import {
   assertIntegerLeaves,
   buildSummary,
   builtRoomCell,
+  builtRoomStartFloor,
   COLUMNS_PER_ROOM,
   emitReport,
   HOTEL_ROOMS,
@@ -201,14 +203,38 @@ describe('the build walk stays on the plot', () => {
     // corridors. That is what lets a CLI run produce `noDoor` as well as `unsupported`,
     // and therefore what makes "zero guests served by an invalid room" a measurement
     // against a run that can go wrong in more than one way.
-    expect(builtRoomCell(0, PLOT)).toEqual({ floor: 1, column: 0 });
-    expect(builtRoomCell(1, PLOT)).toEqual({ floor: 1, column: 1 });
+    const above = builtRoomStartFloor(HOTEL_ROOMS);
+    expect(above).toBe(GROUND_FLOOR + 1);
+    expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: 0 });
+    expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: 1 });
     const perFloor = PLOT.maxColumn - PLOT.minColumn + 1;
-    expect(builtRoomCell(perFloor - 1, PLOT)).toEqual({ floor: 1, column: PLOT.maxColumn });
-    expect(builtRoomCell(perFloor, PLOT)).toEqual({ floor: 2, column: PLOT.minColumn });
+    expect(builtRoomCell(perFloor - 1, PLOT, above)).toEqual({ floor: 1, column: PLOT.maxColumn });
+    expect(builtRoomCell(perFloor, PLOT, above)).toEqual({ floor: 2, column: PLOT.minColumn });
     // Never floor 0, so it cannot collide with the inherited hotel for any `--rooms` that
     // fits on one floor.
-    for (let i = 0; i < perFloor * 3; i += 1) expect(builtRoomCell(i, PLOT).floor).toBeGreaterThan(0);
+    for (let i = 0; i < perFloor * 3; i += 1) {
+      expect(builtRoomCell(i, PLOT, above).floor).toBeGreaterThan(0);
+    }
+  });
+
+  it('BUT STARTS ON THE GROUND WHEN NOTHING WAS INHERITED (G-011)', () => {
+    // The one-line host fix G-011 needed, and the reason it needed it: with a hard
+    // `GROUND_FLOOR + 1`, a `--rooms 0` run puts every room the player builds in mid-air,
+    // where G-009's transitive support rule makes it `unsupported` and therefore not a
+    // provider — FOREVER. Measured before the fix: `--days 1000 --rooms 0 --build 1440`
+    // ended with 0 valid rooms and 0 satisfied guests even with money in the bank. A
+    // player who built from nothing through this CLI could never make a room that worked,
+    // which would have made G-011's exit criterion unmeetable by a correct implementation.
+    //
+    // The rule is the existing comment's own reasoning extended to the case it did not
+    // cover: the player builds on the ground unless the ground is already spoken for.
+    expect(builtRoomStartFloor(0)).toBe(GROUND_FLOOR);
+    expect(builtRoomCell(0, PLOT, builtRoomStartFloor(0))).toEqual({ floor: 0, column: 0 });
+    // And every inherited-hotel invocation is untouched, which is what keeps G-009's
+    // pinned criterion byte-identical.
+    for (const rooms of [1, 3, 20, 200]) {
+      expect(builtRoomStartFloor(rooms)).toBe(GROUND_FLOOR + 1);
+    }
   });
 
   it('stops scheduling builds at the edge of the plot instead of emitting refusals', () => {
@@ -268,9 +294,20 @@ describe('buildSummary', () => {
     // Conservation: every guest who arrived is in exactly one bucket.
     const g = summary.guests;
     expect(g.satisfied + g.unsatisfied + g.evicted + g.inHotel).toBe(g.arrived);
-    // The ledger is payments plus settlements and nothing else at M0.
-    expect(summary.money.transactions).toBe(g.satisfied + summary.money.settlements);
-    expect(summary.money.balancePennies).toBe(summary.money.revenuePennies + summary.money.upkeepPennies);
+    // The ledger is the opening capital, plus payments, plus settlements, and nothing else
+    // — the default run builds nothing, demolishes nothing and borrows nothing. The
+    // capital term is G-011's: a hotel cannot open with money unless the money is a
+    // transaction, because there is no balance field to put it in (I4).
+    expect(summary.money.startingCapitalPennies).toBeGreaterThan(0);
+    expect(summary.money.transactions).toBe(1 + g.satisfied + summary.money.settlements);
+    expect(summary.money.balancePennies).toBe(
+      summary.money.startingCapitalPennies + summary.money.revenuePennies + summary.money.upkeepPennies,
+    );
+    // And nothing G-011 added to the money loop has fired on a run that did not ask for it.
+    expect(summary.money.demolitionRefundPennies).toBe(0);
+    expect(summary.money.loanDrawPennies).toBe(0);
+    expect(summary.money.outstandingDebtPennies).toBe(0);
+    expect(summary.loans).toEqual({ drawn: 0, refused: { noLoanOffered: 0, notEligible: 0 }, drawTransactions: 0 });
     expect(summary.money.settlements).toBe(summary.money.nights);
     expect(summary.world.days).toBe(1);
     expect(summary.schema).toBe(SUMMARY_SCHEMA_VERSION);
@@ -318,7 +355,15 @@ describe('assertIntegerLeaves', () => {
 // Module scope: the emitReport tests reuse it as the summary of a forged BuiltReport.
 const distinct: RunSummary = {
   schema: 1,
-  input: { seed: 101, ticks: 102, rooms: 103, arrivalEveryTicks: 104, buildEveryTicks: 123, demolishEveryTicks: 124 },
+  input: {
+    seed: 101,
+    ticks: 102,
+    rooms: 103,
+    arrivalEveryTicks: 104,
+    buildEveryTicks: 123,
+    demolishEveryTicks: 124,
+    loanEveryTicks: 138,
+  },
   world: { tick: 105, days: 106, roomTypes: 107, needTypes: 108, entities: 109, stateHash: 'cafe0000feed1111' },
   guests: {
     arrived: 110,
@@ -339,6 +384,13 @@ const distinct: RunSummary = {
     revenuePennies: 118,
     upkeepPennies: -119,
     constructionPennies: -125,
+    startingCapitalPennies: 139,
+    demolitionRefundPennies: 140,
+    loanDrawPennies: 141,
+    loanFeePennies: -142,
+    loanRepaymentPennies: -143,
+    liquidationValuePennies: 148,
+    outstandingDebtPennies: 144,
     settlements: 120,
     nights: 121,
     balancePennies: 122,
@@ -348,6 +400,12 @@ const distinct: RunSummary = {
     demolished: 127,
     refused: { insufficientFunds: 128, noSuchRoom: 129, occupied: 130, outOfBounds: 131 },
     constructionTransactions: 126,
+    refundTransactions: 127,
+  },
+  loans: {
+    drawn: 145,
+    refused: { noLoanOffered: 146, notEligible: 147 },
+    drawTransactions: 145,
   },
 };
 
@@ -378,6 +436,12 @@ describe('renderers', () => {
         'demolished  127',
         'refused     128 funds, 130 occupied, 131 off plot, 129 no room',
         'building    -125p',
+        'capital     139p',
+        'refunds     140p',
+        'loans       145 drawn, 147 not needed, 146 not offered',
+        'borrowed    141p, fees -142p, repaid -143p',
+        'scrap value 148p',
+        'debt        144p',
         'settlements 120',
         'balance     122p',
         'state hash  cafe0000feed1111',
@@ -508,6 +572,7 @@ describe('emitReport (print THEN fail — the contract\'s second clause)', () =>
     arrivalEveryTicks: TICKS_BETWEEN_ARRIVALS,
     buildEveryTicks: 0,
     demolishEveryTicks: 0,
+    loanEveryTicks: 0,
     contentDir: undefined,
     ...overrides,
   });

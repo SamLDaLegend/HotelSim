@@ -102,8 +102,10 @@ import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
 import { assertGuestOutcomes, assertGuestStoreInvariants, stepGuests } from './guests.js';
-import { balanceOf } from './ledger.js';
+import { balanceOf, outstandingDebtOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
+import { applyDrawLoan, assertLoanOutcomes, totalLoanOutcomes } from './loan.js';
+import type { LoanOutcomes } from './loan.js';
 import { nextUint32 } from './rng.js';
 import { isSettlementTick, settleNight } from './settlement.js';
 import { createValidityCache, tickValidityContext } from './validity.js';
@@ -269,6 +271,11 @@ type CommandAccumulator = {
   balanceFolded: boolean;
   /** How many build-family commands this log contained. The left side of the per-tick law. */
   buildCommands: number;
+  /** The loan counters (G-011). A separate field from `outcomes` so the two laws below
+   *  compare separate quantities; see the note on `LoanOutcomes` in `loan.ts`. */
+  loanOutcomes: LoanOutcomes;
+  /** How many `drawLoan` commands this log contained. The left side of the loan law. */
+  loanCommands: number;
 };
 
 /** The one place the balance is folded, and the one place it is folded only once. */
@@ -376,6 +383,28 @@ function applyCommand(
       accumulator.balance = result.balance;
       return;
     }
+    case 'drawLoan': {
+      // THE PLAYER BORROWS (G-011). Refused and recorded when the hotel is not stuck or
+      // the content offers no loan — never thrown, so a host may issue this on a blind
+      // cadence. All of the behaviour is in `loan.ts`; this is the plumbing, the same
+      // split `buildRoom` has over `applyBuildRoom`.
+      //
+      // The balance is threaded exactly as the build family threads it, which is what
+      // makes a loan drawn this tick spendable by a build later in the same tick.
+      accumulator.loanCommands += 1;
+      const result = applyDrawLoan({
+        tick: state.world.tick,
+        entities,
+        content,
+        ledger: accumulator.ledger,
+        outcomes: accumulator.loanOutcomes,
+        balance: cashOnHand(accumulator),
+      });
+      accumulator.ledger = result.ledger;
+      accumulator.loanOutcomes = result.outcomes;
+      accumulator.balance = result.balance;
+      return;
+    }
     case 'guestArrives':
       // Checked here rather than in the guest system, alongside `spawnEntity`'s
       // unknown-kind check and for the same reason: a guest that could form no need is
@@ -434,6 +463,8 @@ export function applyCommands(state: TickState): TickState {
     balance: 0,
     balanceFolded: false,
     buildCommands: 0,
+    loanOutcomes: state.world.loanOutcomes,
+    loanCommands: 0,
   };
   for (const command of state.commands) {
     applyCommand(state, entities, command, accumulator);
@@ -477,13 +508,44 @@ export function applyCommands(state: TickState): TickState {
     }
   }
 
+  // THE SAME LAW FOR LOANS, ON ITS OWN CIRCUIT (G-011). Two counters and two comparisons
+  // rather than one mixed bag: sharing `BuildOutcomes` would have avoided a `World` field
+  // and a migration, and would have made each law compare a mixed count against a
+  // single-family command count, so neither could fail independently any more. The
+  // identity form on a quiet tick is strictly stronger for the reason set out above — it
+  // catches a stray write that REPLACES the outcomes with a different object of equal
+  // value, which no difference of totals can see.
+  if (accumulator.loanCommands === 0) {
+    if (accumulator.loanOutcomes !== state.world.loanOutcomes) {
+      throw new Error(
+        `applyCommands: tick ${state.world.tick} recorded a loan outcome with no drawLoan command to explain it`,
+      );
+    }
+  } else {
+    const recorded = totalLoanOutcomes(accumulator.loanOutcomes) - totalLoanOutcomes(state.world.loanOutcomes);
+    if (recorded !== accumulator.loanCommands) {
+      throw new Error(
+        `applyCommands: tick ${state.world.tick} applied ${accumulator.loanCommands} drawLoan command(s) but recorded ${recorded} outcome(s); ` +
+          'every draw is either granted or refused, and exactly one outcome is recorded either way',
+      );
+    }
+  }
+
   // An untouched build path returns the world by reference, so the idle-tick guarantee
-  // the rest of the sim keeps is unchanged: a tick with no build command allocates no
-  // world here, and `commitEntityDraft` still returns its base store by reference.
+  // the rest of the sim keeps is unchanged: a tick with no build or loan command
+  // allocates no world here, and `commitEntityDraft` still returns its base store by
+  // reference.
   const world =
-    accumulator.ledger === state.world.ledger && accumulator.outcomes === state.world.buildOutcomes
+    accumulator.ledger === state.world.ledger &&
+    accumulator.outcomes === state.world.buildOutcomes &&
+    accumulator.loanOutcomes === state.world.loanOutcomes
       ? state.world
-      : { ...state.world, ledger: accumulator.ledger, buildOutcomes: accumulator.outcomes };
+      : {
+          ...state.world,
+          ledger: accumulator.ledger,
+          buildOutcomes: accumulator.outcomes,
+          loanOutcomes: accumulator.loanOutcomes,
+        };
 
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
   // in the tick" stops being a rule a later phase could break and becomes a fact about
@@ -590,27 +652,89 @@ export function runSettlement(state: TickState): TickState {
   if (state.settlementRun) {
     throw new Error('runSettlement: settlement has already run this tick; the night must not be charged twice');
   }
+  const before = state.world.ledger;
   const ledger = settleNight({
     tick: state.world.tick,
-    ledger: state.world.ledger,
+    ledger: before,
     entities: state.entities,
     content: state.content,
   });
-  // Local postcondition, cheap on every tick: a settlement tick appended exactly one
-  // transaction, any other tick appended nothing. `countSettlementTransactions` over
-  // the whole log is the per-RUN law and lives with the host; this is the per-TICK
-  // half, and it cannot pass while inspecting nothing because one branch or the other
-  // applies to every tick there is.
-  const appended = ledger.length - state.world.ledger.length;
-  if (appended !== (isSettlementTick(state.world.tick) ? 1 : 0)) {
+  // Local postcondition: a settlement tick appended exactly one UPKEEP transaction, any
+  // other tick appended nothing at all. `countSettlementTransactions` over the whole log
+  // is the per-RUN law and lives with the host; this is the per-TICK half, and it cannot
+  // pass while inspecting nothing because one branch or the other applies to every tick.
+  //
+  // THE IDENTITY COMPARE IS THE WHOLE GUARD, AND IT IS NOT A WEAKENING (G-011). A quiet
+  // tick gets `settleNight`'s input back BY REFERENCE, so "nothing was appended" is an
+  // identity question — strictly stronger than a length compare, and free. Everything
+  // below it needs to fold the ledger, and on the 1,439 quiet minutes of a day those
+  // folds would be pure waste: an O(ledger) scan on every tick is precisely the shape of
+  // per-tick cost G-010 spent a goal removing, and measured here it cost 5.3x the I5
+  // budget before this branch existed. Nothing is skipped that could have failed —
+  // `settleNight` returns by reference only when it appended nothing at all.
+  if (ledger === before) {
+    if (isSettlementTick(state.world.tick)) {
+      throw new Error(
+        `runSettlement: tick ${state.world.tick} is a settlement tick and appended nothing; a settlement tick always charges upkeep, even a zero night`,
+      );
+    }
+    return { ...state, world: state.world, settlementRun: true };
+  }
+
+  // COUNTED BY REASON SINCE G-011, because a settlement tick can now append a second
+  // transaction — a loan repayment — and a bare length check would have quietly accepted
+  // two upkeeps. Counting the appended slice by reason keeps the cadence claim exactly as
+  // strong as it was.
+  let appendedUpkeep = 0;
+  let appendedRepayments = 0;
+  for (let i = before.length; i < ledger.length; i += 1) {
+    const transaction = ledger[i];
+    if (transaction === undefined) continue;
+    if (transaction.reason === 'upkeep') appendedUpkeep += 1;
+    else if (transaction.reason === 'loanRepayment') appendedRepayments += 1;
+    else {
+      throw new Error(
+        `runSettlement: tick ${state.world.tick} appended a "${transaction.reason}" transaction; settlement writes upkeep and loan repayments and nothing else`,
+      );
+    }
+  }
+  if (appendedUpkeep !== 1) {
     throw new Error(
-      `runSettlement: tick ${state.world.tick} appended ${appended} settlement transaction(s); a settlement tick appends exactly one and any other tick none`,
+      `runSettlement: tick ${state.world.tick} appended ${appendedUpkeep} upkeep transaction(s); a settlement tick appends exactly one and any other tick none`,
     );
   }
-  // An untouched night returns its input by reference, so a quiet tick allocates no
-  // world either — the same idle-tick guarantee runGuests keeps.
-  const world = ledger === state.world.ledger ? state.world : { ...state.world, ledger };
-  return { ...state, world, settlementRun: true };
+  if (!isSettlementTick(state.world.tick)) {
+    throw new Error(
+      `runSettlement: tick ${state.world.tick} charged upkeep on a tick that is not midnight`,
+    );
+  }
+  // THE REPAYMENT HALF, CHECKED AGAINST THE INPUT rather than against the code that did
+  // it (G-011). `settleNight` decides the amount; this asks two questions the amount
+  // cannot answer for itself, both derived from the ledger as it stood BEFORE the phase:
+  // at most one repayment is taken, and only against a debt that existed. The debt fold
+  // is taken twice over the same log, so the arithmetic law below — debt never grows at
+  // settlement and never folds negative — is a second, independent circuit from the
+  // counting one above. Both are paid once a night, not once a tick.
+  const debtBefore = outstandingDebtOf(before);
+  if (appendedRepayments > 1) {
+    throw new Error(
+      `runSettlement: tick ${state.world.tick} appended ${appendedRepayments} loan repayment(s); at most one is taken, and only at settlement`,
+    );
+  }
+  if (appendedRepayments > 0 && debtBefore <= 0) {
+    throw new Error(
+      `runSettlement: tick ${state.world.tick} repaid a loan with no outstanding debt to repay`,
+    );
+  }
+  const debtAfter = outstandingDebtOf(ledger);
+  if (debtAfter < 0 || debtAfter > debtBefore) {
+    throw new Error(
+      `runSettlement: tick ${state.world.tick} moved the outstanding debt from ${debtBefore}p to ${debtAfter}p; settlement only ever repays, and never past zero`,
+    );
+  }
+  // A night that charged something allocates one world; the untouched case returned above,
+  // by reference, so the idle-tick guarantee `runGuests` keeps is unchanged.
+  return { ...state, world: { ...state.world, ledger }, settlementRun: true };
 }
 
 /**
@@ -730,6 +854,12 @@ export function stepTick(
   // produced, and every world it LOADS is checked unconditionally by `assertWorldShape`.
   if (state.world.buildOutcomes !== world.buildOutcomes) {
     assertBuildOutcomes(state.world.buildOutcomes);
+  }
+  // And the loan counters are still counters (G-011). Same function `assertWorldShape`
+  // calls at load, same identity guard, same argument: a value nobody wrote cannot have
+  // become invalid, and every world this build LOADS is checked unconditionally.
+  if (state.world.loanOutcomes !== world.loanOutcomes) {
+    assertLoanOutcomes(state.world.loanOutcomes);
   }
   // And the tick ran under the content it was given. Identity, not equality: a phase
   // that rebuilt an equal-looking registry would still be a phase deciding what the
