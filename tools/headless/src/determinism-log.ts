@@ -23,7 +23,7 @@ import {
   requiredItemsOf,
   roomTypeServes,
 } from '@hotelsim/sim';
-import type { BoundContent, ScheduledCommand } from '@hotelsim/sim';
+import type { BoundContent, RoomTypeData, ScheduledCommand } from '@hotelsim/sim';
 
 /**
  * A fixed command log. Same seed + same log => same hash, forever (I2).
@@ -358,30 +358,11 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // arithmetic is involved, which is why this pass cannot drift when another one is
   // inserted before it.
   //
-  // WHICH ROOM AND WHICH ITEM — READ THIS, BECAUSE AN EARLIER VERSION OF THIS PARAGRAPH GOT
-  // IT WRONG AND WAS BELIEVED. `secondHost` below is a `find` over `roomTypes` in ASCENDING
-  // ID ORDER, so on the shipped table it resolves to `games_room` carrying a
-  // `vending_machine` — NOT to the lounge and its arm chair, which is what this comment
-  // claimed for a critique round while citing figures for a need the pass does not touch.
-  // The item that actually gets stranded serves `guest_nourishment`. Nothing about the code
-  // was wrong; the evidence written beside it was, and this paragraph is the evidence
-  // round 2's fix rests on.
-  //
-  // THE CONTENT PROPERTY THIS PASS DEPENDS ON, WHICH IS THE SENTENCE A FUTURE GOAL NEEDS:
-  //
-  //     the need served by the sealed ITEM must stay oversubscribed in THIS log's hotel,
-  //     so that a second-choice provider is actually in use when the door closes.
-  //
-  // Today that need is `guest_nourishment`, and `PARKING.md` records that G-014 and G-015
-  // both touch this table. It is NOT `guest_comfort`, and the distinction matters: comfort's
-  // `satisfyTicks` is the one dial parked as unswept and owed to M4, so the number most
-  // likely to move is the one the old comment falsely marked as load-bearing.
-  //
-  // AND THE SELECTION IS ORDER-DEPENDENT, which is the other thing to know. Add a room type
-  // whose id sorts below `games_room` and which requires a providing item, and this pass
-  // silently moves to it. `provider.determinism.test.ts` counts the cause and goes red if it
-  // stops firing — that is the guard, and it is a loud failure rather than a quiet one
-  // because none of this draws randomness.
+  // WHICH ROOM AND WHICH ITEM IS DECIDED BY `secondHost` BELOW, AND ITS RULE AND ITS
+  // DEPENDENCIES ARE STATED THERE RATHER THAN HERE. Two versions of that account have now
+  // been wrong in this spot — one naming the lounge when the code chose the games room, and
+  // one still naming the games room after G-014a moved the choice to the lounge — so it is
+  // written once, beside the `find` that decides it, and nowhere else.
   //
   // THE CELLS ARE CHOSEN, NOT INCIDENTAL, and every pass they have to miss is in this file:
   // the spawn diagonal walks `spawnIndex % 21` against `spawnIndex % 80` and so touches
@@ -393,11 +374,53 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // an occupied cell rather than refusing, so a collision produces no hash at all and the
   // I2 gate goes red. That is the strongest shape a witness can have, and it is why no
   // measurement belongs in this paragraph.
-  const secondHost = content.content.roomTypes.find(
-    (roomType) =>
-      roomType.id !== entityKind &&
-      requiredItemsOf(content, roomType.id).some((itemId) => (findItemType(content, itemId)?.provides ?? []).length > 0),
-  );
+  // WHICH HOST GETS SEALED, AND THE ONE DEPENDENCY THE PASS HAS. THIS IS THE ONLY ACCOUNT OF
+  // IT IN THIS FILE.
+  //
+  // The pass only produces a release if the sealed item is OCCUPIED on the tick its door
+  // closes. Until G-014a the rule was "the lowest-id host whose required item provides
+  // anything" — the games room and its vending machine — and it depended on that item's need
+  // staying oversubscribed so a second-choice provider was in use. G-014a ordered provider
+  // choice by `fitBasisPoints`, the shipped table ranks a café above a vending machine, and
+  // an item that shares its need with a room became a last resort rather than a busy second
+  // choice. One of the two waves stopped catching anybody and `provider.determinism.test.ts`
+  // went red.
+  //
+  // SO THE PASS NOW PREFERS A HOST WHOSE ITEM IS THE SOLE PROVIDER OF ITS NEED, which removes
+  // the dependency rather than re-tuning it: an item nothing else can substitute for is in
+  // use whenever anybody wants that need, whatever any ranking says. On the shipped table
+  // that is `hotel_lounge` carrying an `arm_chair`, the only thing in the game that serves
+  // `guest_comfort`, and the stranded item is therefore a chair.
+  //
+  // THE FALLBACK IS THE OLD RULE, for content in which no such item exists: the lowest-id
+  // host whose required item provides anything. THE ORDER-DEPENDENCE HAZARD LIVES THERE AND
+  // ONLY THERE — add a room type sorting below the current fallback host that requires a
+  // providing item, and the fallback silently moves to it. The preferred branch is chosen by
+  // a PROPERTY rather than by id order, so it does not move for that reason.
+  //
+  // Both branches are guarded by the same test, which counts the release cause and goes red
+  // if it stops firing.
+  const hostsAProvidingItem = (roomType: RoomTypeData): boolean =>
+    roomType.id !== entityKind &&
+    requiredItemsOf(content, roomType.id).some((itemId) => (findItemType(content, itemId)?.provides ?? []).length > 0);
+  // "SOLE PROVIDER" MEANS SOLE, AND BOTH TABLES HAVE TO BE ASKED. An earlier version checked
+  // only that no ROOM TYPE provides the need, which would have called an item sole while a
+  // second item type served the same need — and a second provider is exactly what makes an
+  // item idle at the tick its door closes. Rooms and items are one candidate pool
+  // (`providersFor`), so the question has to be asked of the pool.
+  const soleProviderNeedOf = (roomType: RoomTypeData): boolean =>
+    roomType.id !== entityKind &&
+    requiredItemsOf(content, roomType.id).some((itemId) =>
+      (findItemType(content, itemId)?.provides ?? []).some(
+        (needId) =>
+          !content.content.roomTypes.some((other) => (other.provides ?? []).includes(needId)) &&
+          !(content.content.itemTypes ?? []).some(
+            (other) => other.id !== itemId && (other.provides ?? []).includes(needId),
+          ),
+      ),
+    );
+  const secondHost =
+    content.content.roomTypes.find(soleProviderNeedOf) ?? content.content.roomTypes.find(hostsAProvidingItem);
   //
   // IT COMES IN TWO WAVES, AND THE SECOND IS NOT PADDING — IT IS THE TERRACE PASS'S OWN
   // ARGUMENT, A HUNDRED LINES ABOVE, APPLIED AGAIN. That pass says it plainly: "a reason
@@ -406,23 +429,20 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // release; and the early room is later taken away by the despawn pass, so the state it
   // produced is gone before the horizon the gate compares.
   //
-  //   wave 1  spawn at tick 47,     seal at  7,001   EARLY, while the hotel is busiest, and
-  //                                                  the THIN one: its item is idle far more
-  //                                                  often than not before its door closes,
-  //                                                  so the seal fires without much margin.
-  //   wave 2  spawn at tick 20,011, seal at 60,013   LATE, with ids above anything the
-  //                                                  despawn (1, 4, 7 …), demolish (2, 7,
-  //                                                  12 …) and `underfoot` walks reach. The
-  //                                                  ROBUST one: its item is in use for the
-  //                                                  great majority of its pre-seal life,
-  //                                                  and the sealed room and its stranded
-  //                                                  item are both still standing at the end
-  //                                                  of the run.
+  // WAVE 1 IS EARLY, while the hotel is busiest, and is the THIN one: its host stands only
+  // until the despawn pass reaches its id, so it sees far fewer engagements than wave 2 and
+  // its seal fires without much margin. WAVE 2 IS LATE, with ids above anything the despawn
+  // (1, 4, 7 …), demolish (2, 7, 12 …) and `underfoot` walks reach; its item is in use for
+  // the great majority of its pre-seal life, and the sealed room and its stranded item are
+  // both still standing at the end of the run. So wave 2 is what puts the state into the
+  // FINAL hash, and wave 1 is what reaches it while the hotel is busiest.
   //
-  // Wave 2 is what puts the state into the FINAL hash; wave 1 is what reaches it while the
-  // hotel is busiest. If a future change silences either, `provider.determinism.test.ts`
-  // goes red — none of this draws randomness, so the failure is loud rather than flaky, and
-  // that test rather than this comment is what holds the coverage.
+  // THE FOUR TICKS ARE THE CALL ARGUMENTS BELOW AND ARE WRITTEN NOWHERE ELSE IN THIS FILE.
+  // A table of them here was wrong within one goal of being written — it still named the two
+  // seal ticks that G-014a replaced — and a reader who trusts it re-aims the wrong numbers.
+  // If a future change silences either wave, `provider.determinism.test.ts` goes red; none of
+  // this draws randomness, so the failure is loud rather than flaky, and that test rather
+  // than this comment is what holds the coverage.
   if (secondHost !== undefined) {
     const seal = (host: number, spawnTick: number, sealTick: number): void => {
       const at = { floor: 0, column: host };
@@ -444,19 +464,19 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
         furnish(sealTick, beside, schedule);
       }
     };
-    // WAVE 1 — EARLY, AND THE THIN ONE. This host stands from tick 47 until the despawn pass
-    // reaches its id, and its item is idle far more often than it is in use across that
-    // window, so the seal fires without much margin. THE SEALING TICK HAS TO LAND WHILE THE
-    // ROOM IS ALIVE AND ITS ITEM IS BEING USED — a fact about this log, not something the
-    // code can assert. A first attempt sealed much later and produced nothing at all,
-    // because by then the despawn pass had already taken the room: the pass looked right and
-    // covered nothing.
-    seal(30, 47, 7_001);
-    // WAVE 2 — LATE, AND THE ROBUST ONE. Its item is in use for the great majority of its
-    // pre-seal life, so this seal lands on a guest with room to spare, and both the sealed
-    // room and its stranded item are still standing at the end of the run — which is what
-    // puts the state into the hash the gate actually compares.
-    seal(35, 20_011, 60_013);
+    // BOTH SEALING TICKS MOVED AT G-014a, AND THE REASON IS WORTH MORE THAN THE NUMBERS.
+    // THE SEALING TICK HAS TO LAND WHILE THE ROOM IS ALIVE AND ITS ITEM IS BEING USED — a
+    // fact about this log, not something the code can assert, which is why the census test
+    // measures the outcome rather than trusting this paragraph. G-014a changed which item
+    // gets stranded (see `secondHost` above) and therefore when it is busy, and the two
+    // inherited ticks both landed in gaps: 7,001 sat after the last engagement its host ever
+    // sees, and 60,013 missed a long engagement by ONE TICK. Neither pass was broken; both
+    // were aimed at a schedule that had moved under them. Both ticks below were then chosen
+    // by measuring when each host's item is actually occupied and landing inside a window,
+    // which is what the census test verifies rather than trusts.
+    //
+    seal(30, 47, 6_800); // WAVE 1 — early and thin; see above.
+    seal(35, 20_011, 59_900); // WAVE 2 — late and robust; the one the final hash carries.
   }
   // Some of these target ids that are not live yet, or are already gone. That is
   // deliberate: a despawn of an unknown id must be a deterministic no-op.

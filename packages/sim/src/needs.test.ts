@@ -24,7 +24,6 @@ import type { Guest } from './guests.js';
 import {
   advanceNeeds,
   assertNeedVector,
-  compareNeedPriority,
   createNeedOutcomes,
   findNeedState,
   formNeedVector,
@@ -33,7 +32,6 @@ import {
   isNeedPending,
   needOutcomeOf,
   recordNeedsAtDeparture,
-  urgencyOf,
 } from './needs.js';
 import type { NeedState } from './needs.js';
 import { run, stepTick } from './tick.js';
@@ -417,47 +415,24 @@ describe('the per-need tally', () => {
 });
 
 describe('a guest pursues the need that has burned through most of its own patience', () => {
-  // The one place urgency is ACTED on at G-012. G-014 replaces this with a score over
-  // urgency and provider fit plus a hysteresis margin; what it inherits is a guest whose
-  // choice is deterministic and explicable.
-  const priority = (a: NeedState, b: NeedState): number => compareNeedPriority(content, a, b);
-
-  it('ranks by the FRACTION spent, not by the raw number', () => {
-    // `food` has 200 ticks of patience and `fun` has 400. Both have waited 100 ticks, so
-    // their raw urgency is equal — but `food` is half gone and `fun` is a quarter gone, and
-    // ranking by raw urgency would have called them equal and picked by id.
-    const food: NeedState = { needId: 'food', patienceRemaining: 100, progressRemaining: 8, metBy: null };
-    const fun: NeedState = { needId: 'fun', patienceRemaining: 300, progressRemaining: 8, metBy: null };
-    expect(urgencyOf(content, food)).toBe(urgencyOf(content, fun));
-    expect(priority(food, fun)).toBeLessThan(0);
-    expect(priority(fun, food)).toBeGreaterThan(0);
-  });
-
-  it('breaks an exact tie on the LOWER need id, in both argument orders', () => {
-    // A stable, explicit rule — never the order an array happened to be built in (I2).
-    // Both orders, because one order cannot tell "lowest id" from "whichever came first".
-    const food: NeedState = { needId: 'food', patienceRemaining: 200, progressRemaining: 8, metBy: null };
-    const fun: NeedState = { needId: 'fun', patienceRemaining: 400, progressRemaining: 8, metBy: null };
-    expect(urgencyOf(content, food)).toBe(0);
-    expect(urgencyOf(content, fun)).toBe(0);
-    expect(priority(food, fun)).toBeLessThan(0);
-    expect(priority(fun, food)).toBeGreaterThan(0);
-  });
-
-  it('orders a whole vector, and the order does not depend on how it was written down', () => {
-    // `reserve` picks a maximum under this comparator rather than sorting, so this sorts
-    // with it to state the ordering the guest loop obeys — and does it from two different
-    // input orders, because one order cannot tell an order from an accident.
-    const needs: readonly NeedState[] = [
-      { needId: 'food', patienceRemaining: 100, progressRemaining: 8, metBy: null }, // half spent
-      { needId: 'fun', patienceRemaining: 100, progressRemaining: 8, metBy: null }, // three quarters spent
-    ];
-    const ranked = (list: readonly NeedState[]): readonly string[] =>
-      [...list].sort((a, b) => priority(a, b)).map((entry) => entry.needId);
-    expect(ranked(needs)).toEqual(['fun', 'food']);
-    expect(ranked([...needs].reverse())).toEqual(['fun', 'food']);
-  });
-
+  // THE THREE COMPARATOR UNIT TESTS THAT STOOD HERE WERE RE-DERIVED AT G-014a, NOT DROPPED.
+  // They exercised `compareNeedPriority`, which that goal deleted: a scalar score replaced
+  // the comparator, because "beats it" and "beats it by this much" are different questions
+  // and only the second can carry G-014b's margin. What they pinned now lives as:
+  //
+  //   ranks by the FRACTION spent   -> `utility.test.ts`, on `pressureBasisPoints`
+  //   an exact tie goes to the lower need id
+  //                                 -> the two behavioural tests below, which is a stronger
+  //                                    place for it: the tie is now resolved by `reserve`
+  //                                    walking the vector in ascending id, so a unit test on
+  //                                    a deleted comparator would have pinned nothing the
+  //                                    guest loop actually does
+  //   the ordering is independent of how the vector was written down
+  //                                 -> `formNeedVector`'s ascending order, already asserted
+  //                                    above, plus `utility.test.ts`'s two insertion orders
+  //
+  // The content in this file declares no `fitBasisPoints`, so every provider ties on fit and
+  // pressure alone decides — which is why these two tests read exactly as they did at G-012.
   it('sends the guest to the amenity it needs MOST when it cannot have both', () => {
     // The behaviour the ranking exists for. `food` runs out in 200 ticks and `fun` in 400,
     // so a guest that can only be in one place goes for food first — and a guest that went

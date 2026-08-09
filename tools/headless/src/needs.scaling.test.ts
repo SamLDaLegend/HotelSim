@@ -63,10 +63,14 @@ function lodgingOnly(bound: BoundContent): BoundContent {
   // AND THE ITEM TABLE IS CUT WITH THEM (G-013), for the reason the room types are: an item
   // that provides a need this arm has removed makes `bindContent` refuse the arm outright.
   // Their `requires` links are untouched, so the rooms kept above stay furnishable and valid.
-  const itemTypes = (bound.content.itemTypes ?? []).map((itemType) => ({
-    ...itemType,
-    provides: (itemType.provides ?? []).filter((id) => kept.includes(id)),
-  }));
+  // AND THE FIT GOES WITH THE NEEDS (G-014a). A fit is a ranking of providers OF SOMETHING,
+  // so an item that has just stopped providing anything may not keep one — `bindContent`
+  // refuses a dial nothing can read. Dropping the key rather than zeroing it is the
+  // difference between "this arm has no amenities" and "this arm ranks them all last".
+  const itemTypes = (bound.content.itemTypes ?? []).map((itemType) => {
+    const { fitBasisPoints: _dropped, ...rest } = itemType;
+    return { ...rest, provides: (itemType.provides ?? []).filter((id) => kept.includes(id)) };
+  });
   return bindContent({ ...bound.content, roomTypes, needTypes, itemTypes } satisfies SimContent);
 }
 

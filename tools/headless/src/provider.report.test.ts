@@ -264,23 +264,38 @@ describe('THE NEGATIVE CONTROL: content whose items provide nothing (G-013)', ()
     id: string;
     provides?: string[];
     requires: string[];
+    fitBasisPoints?: number;
   }[];
   const items = JSON.parse(readFileSync(join(dir, 'item-types.json'), 'utf8')) as {
     id: string;
     provides: string[];
+    fitBasisPoints?: number;
   }[];
   const movedTo = new Map<string, string[]>();
+  // THE FIT MOVES WITH THE NEED (G-014a), and it has to: a fit ranks providers OF SOMETHING,
+  // so a room that has just absorbed the arm chair's need must say how well it serves it.
+  // A ROOM THAT ALREADY DECLARES A FIT KEEPS ITS OWN; only a room that had none — the
+  // lounge, which provides nothing of its own — takes the item's. `bindContent` refuses both
+  // halves of getting this wrong: an item keeping a fit it can no longer use, and a room
+  // serving an engagement need silently while its neighbours declare one.
+  const movedFit = new Map<string, number>();
   for (const room of rooms) {
     for (const itemId of room.requires) {
       const item = items.find((entry) => entry.id === itemId);
       if (item === undefined || item.provides.length === 0) continue;
       movedTo.set(room.id, [...(movedTo.get(room.id) ?? []), ...item.provides]);
+      if (item.fitBasisPoints !== undefined) movedFit.set(room.id, item.fitBasisPoints);
     }
   }
   writeFileSync(
     join(dir, 'room-types.json'),
     JSON.stringify(
-      rooms.map((room) => ({ ...room, provides: [...(room.provides ?? []), ...(movedTo.get(room.id) ?? [])] })),
+      rooms.map((room) => {
+        const gained = movedTo.get(room.id) ?? [];
+        const fit = room.fitBasisPoints ?? movedFit.get(room.id);
+        const provides = [...(room.provides ?? []), ...gained];
+        return fit === undefined ? { ...room, provides } : { ...room, provides, fitBasisPoints: fit };
+      }),
       null,
       2,
     ),
@@ -289,7 +304,10 @@ describe('THE NEGATIVE CONTROL: content whose items provide nothing (G-013)', ()
   writeFileSync(
     join(dir, 'item-types.json'),
     JSON.stringify(
-      items.map((item) => ({ ...item, provides: [] })),
+      items.map((item) => {
+        const { fitBasisPoints: _dropped, ...rest } = item;
+        return { ...rest, provides: [] };
+      }),
       null,
       2,
     ),

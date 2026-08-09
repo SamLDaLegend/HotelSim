@@ -7,11 +7,13 @@
   {
     "id": "arm_chair",
     "name": "Arm Chair",
-    "provides": ["guest_comfort"]
+    "provides": ["guest_comfort"],
+    "fitBasisPoints": 2500
   },
   {
     "id": "vending_machine",
     "name": "Vending Machine",
-    "provides": ["guest_nourishment"]
+    "provides": ["guest_nourishment"],
+    "fitBasisPoints": 2500
   }
 ]

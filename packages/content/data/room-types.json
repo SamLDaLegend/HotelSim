@@ -30,7 +30,8 @@
     "constructionCostPence": 250000,
     "demolitionRefundBasisPoints": 5000,
     "provides": ["guest_entertainment"],
-    "requires": ["vending_machine"]
+    "requires": ["vending_machine"],
+    "fitBasisPoints": 7500
   },
   {
     "id": "hotel_cafe",
@@ -41,6 +42,7 @@
     "constructionCostPence": 250000,
     "demolitionRefundBasisPoints": 5000,
     "provides": ["guest_nourishment"],
-    "requires": []
+    "requires": [],
+    "fitBasisPoints": 7500
   }
 ]

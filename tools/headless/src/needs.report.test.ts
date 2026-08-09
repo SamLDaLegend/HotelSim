@@ -117,6 +117,17 @@ describe('the criterion invocation prints a per-need table that measures somethi
   it('has one need type met for EVERYBODY, so the table is three different stories', () => {
     // The control. Without it, "two needs are both met and missed" could describe a table
     // in which every row is the same row.
+    //
+    // THIS CLAUSE WAS BRIEFLY REPLACED AT G-014a AND IS RESTORED UNCHANGED, WHICH IS THE
+    // FINDING WORTH KEEPING. It went red during that goal — but under the build G-014a
+    // ABANDONED, in which provider fit reordered which NEED a guest pursued and the busiest
+    // need stopped saturating. The shipped build settles need order by pressure alone, this
+    // row saturates exactly as it did before, and the red was never re-taken against it.
+    // Replacing a control on the strength of a failure the shipped code does not produce is
+    // `CLAUDE.md`'s "a number you cannot re-measure paired is withdrawn, not restated",
+    // applied to a test outcome; the replacement — three distinct `met` counts — also pinned
+    // a coincidence with a margin of one guest (178, 179), which is weaker than what stood
+    // here. Re-measured on the shipped build: this passes.
     const alwaysMet = summary.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0);
     expect(alwaysMet.length).toBeGreaterThanOrEqual(1);
   });

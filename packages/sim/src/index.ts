@@ -38,10 +38,12 @@ export {
   findRoomType,
   firstEconomy,
   firstRoomTypeProviding,
+  fitOf,
   hasContentId,
   isRoomKind,
   itemTypeProvides,
   lodgingNeedOf,
+  MAX_FIT_BASIS_POINTS,
   minConstructionCostOf,
   needTypesInOrder,
   providesOf,
@@ -121,7 +123,6 @@ export {
   advanceNeeds,
   assertNeedOutcomes,
   assertNeedVector,
-  compareNeedPriority,
   createNeedOutcomes,
   findNeedState,
   formNeedVector,
@@ -219,6 +220,7 @@ export {
   validRoomsOf,
   validRoomsProviding,
 } from './validity.js';
+export { compareProviderPreference, pressureBasisPoints } from './utility.js';
 export type { World } from './world.js';
 export {
   assertContentMatches,

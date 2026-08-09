@@ -346,3 +346,51 @@ this down at all:
 **On waking, the human should read:** this file's newest entries, then `JOURNAL.md`'s
 digest, then `GOALS.md`'s digest. Every decision taken under this authorisation is recorded
 in one of the three and marked as taken unattended.
+
+---
+
+## 2026-08-09 — §7.1's conversion guard: the prediction has fired. PARKED for the human.
+
+**Decided under the standing authorisation: recorded, not acted on.** Renaming a charter
+mechanism is a change to the human's own ruling, and the authorisation explicitly reserves
+those. The loop continues past this.
+
+**The prediction, written into `HOTELSIM.md` §7.1 by human instruction so it could be wrong
+later:**
+
+> It has fired exactly once — on G-013, the goal that produced it, and on **prose** rather
+> than on code. **If the next several firings are also prose, then the guard is a
+> prose-quality instrument wearing a critique-budget costume, and it should be RENAMED AND
+> RE-SCOPED** rather than left to accumulate a reputation it did not earn. Record each
+> firing with its subject: code or prose.
+
+**The scorecard, four firings, four on prose. Not one on code.**
+
+| goal | what converted the pass | subject |
+|---|---|---|
+| G-013 | a determinism-log comment describing a world the code does not build | **prose** |
+| G-018 | a ledger citation asserting a count three records deny | **prose** |
+| G-018 | lifetime denominators, and a retraction whose cause does not reproduce | **prose** |
+| G-014a | corrections **added** above the stale paragraphs they supersede, in the same file | **prose** |
+
+`ai-critic` raised the scoring itself: *"that is now four for four, and the prediction
+recorded in `HOTELSIM.md` §7.1 about renaming and re-scoping the guard is due to be scored."*
+
+**The honest reading, stated for the human rather than decided:**
+
+- The guard **works** — every firing found something real, and three of the four were in
+  evidence the loop was relying on.
+- But it has **never once fired on code**, and its name and its home (a *critique-budget*
+  rule) both imply it guards implementation quality. That is the mismatch the prediction
+  anticipated.
+- The pattern underneath is sharper than the guard's framing: **three of the four are the
+  same file or the same class — a correction that leaves the error it corrects still
+  standing.** G-014a's instance is in the paragraph headed *"READ THIS, BECAUSE AN EARLIER
+  VERSION OF THIS PARAGRAPH GOT IT WRONG AND WAS BELIEVED"*, which is the third time that
+  file has produced it.
+
+**What a re-scope might look like, offered as options and not as a decision:** rename it to
+name its real subject (evidence quality); or move it out of §7.1's budget mechanics into
+ADR-0007, which is where the prose rules already live; or leave it exactly as it is on the
+grounds that a guard which keeps finding real defects has earned its keep whatever it is
+called. **The human's call.**

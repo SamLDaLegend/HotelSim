@@ -972,3 +972,22 @@ changed one constant, its derivation, and the records that quoted it.
   without any figure: the loan path was catastrophically expensive before it was fixed, and
   the branch in `tick.ts` skips work that once dominated the run. Say that, cite the goal,
   and stop. -> **the next goal to touch `loan.ts` or `tick.ts` for its own reasons.**
+
+- **`roomWentBad` COVERAGE IN THE I2 PROOF IS ONE INCIDENTAL EVENT (G-014a).** The census
+  reads `finished 1075 · roomWentBad 1 · itemDisappeared 1 · itemSurvived 2`; it read **3**
+  for `roomWentBad` before G-014a. The two lost events were guests engaged with a sealed
+  **games room**; the sealing pass now targets a **lounge**, which can never produce the
+  cause — `hotel_lounge` has `"provides": []` and `providersFor` only admits entities whose
+  kind provides the need, so it is **structural, not observed**. The survivor is the
+  **despawn walk removing entity id 19 at tick 26,009** (observed at 26,010), a café that
+  happened to have a guest in it. No shipped room type both provides a need and hosts a
+  sole-provider item, so one sealed host cannot cover both causes; a third wave needs free
+  floor-0 columns the log's cell audit has not established. `provider.determinism.test.ts`
+  asserts `> 0` and **deliberately not `=== 1`**, because the survivor is incidental and
+  `=== 1` would go red on any unrelated schedule shift, leaving a future author unable to
+  tell "I broke the cause" from "I moved a tick". -> **a goal that owns the determinism log.**
+
+- **SEEDS ARE INERT UNTIL M4 — do not spend a goal on multi-seed sweeps.** Measured at
+  G-014a across seeds 1/3/7/11/23/99: byte-identical need tables, because arrivals are
+  scheduled by the harness rather than drawn from the PRNG until demand lands. Vary the
+  **hotel shape** instead, which is what found G-014a's result. -> **M4 retires this.**

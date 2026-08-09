@@ -75,12 +75,17 @@ describe('the I5 bench workload hashes to a committed literal', () => {
   const plain = runWorkload(0, 0);
 
   it('PLAIN: the exact workload pnpm sim:bench runs', () => {
-    // MOVED AT G-013, deliberately and for two independent reasons, both of which change
-    // what this workload IS rather than how it is computed: the shipped content gained
-    // provider items (so the fingerprint `World.contentHash` records moves, and the bench
-    // hotel carries two more entities per amenity set), and guests now engage those items.
-    // Was `eb2855a89abd539c` at G-016.
-    expect(hashState(plain)).toBe('958d60390c5e019d');
+    // MOVED AT G-014a, and the reason is the whole of that goal: providers are chosen by
+    // `fitBasisPoints` — a designer's ranking — rather than by lowest entity id, so in a
+    // hotel with a café and a vending machine the guests now eat at the café. The content
+    // fingerprint `World.contentHash` records also moves, because the shipped table gained
+    // the field. Was `958d60390c5e019d` at G-013, `eb2855a89abd539c` at G-016.
+    //
+    // WHAT DID NOT MOVE IS THE EVIDENCE THAT THIS IS A SELECTION CHANGE AND NOT A LOSS: every
+    // hand-checked outcome below is identical to the one G-013 pinned. The same 225 guests
+    // arrive, the same 210 complete a stay, nobody is evicted, and the tally still has four
+    // rows. A change that had broken service would have moved those first.
+    expect(hashState(plain)).toBe('a1e1c0d5360cf999');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -108,8 +113,11 @@ describe('the same workload with the player churning the building', () => {
   const churn = runWorkload(240, 360);
 
   it('CHURN: hashes to a committed literal', () => {
-    // Moved at G-013 for the reasons the plain hash did. Was `a3622b36bb17436a` at G-016.
-    expect(hashState(churn)).toBe('847daaaa084b1ae6');
+    // Moved at G-014a for the reasons the plain hash did, and with the same control: the
+    // eviction count below is unchanged at 19, so the path this arm exists to cover is
+    // reached exactly as often as before. Was `847daaaa084b1ae6` at G-013,
+    // `a3622b36bb17436a` at G-016.
+    expect(hashState(churn)).toBe('9f1c8229e03d71d5');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

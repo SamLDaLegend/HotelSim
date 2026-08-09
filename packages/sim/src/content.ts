@@ -132,6 +132,32 @@ export type RoomTypeData = {
    * still ticks (ADR-0006). `0` is the different, deliberate statement.
    */
   readonly demolitionRefundBasisPoints?: number | undefined;
+  /**
+   * HOW WELL A STAY HERE SERVES WHAT IT PROVIDES, in basis points (G-014a). The ranking a
+   * guest picks a provider by, once pressure has already picked the need; see `utility.ts`.
+   *
+   * IT IS COMPARED ONLY AGAINST OTHER PROVIDERS OF THE SAME NEED. Never across needs — that
+   * was the first build of this goal and it starved a need for every guest in the hotel;
+   * `utility.ts`'s header carries the measurement and the cause.
+   *
+   * ONLY THE ORDER OF THESE VALUES IS OBSERVABLE: an order-preserving relabel of the whole
+   * table produces a byte-identical run (`utility.test.ts`). It is therefore an ordering
+   * rather than a bound, which is what excuses it from §2.1's derivation requirement — and
+   * what will stop excusing it the day something compares a fit against a threshold.
+   *
+   * IT IS ENGAGEMENT-ONLY AND `bindContent` REFUSES THE ALTERNATIVE. A guest lodges through
+   * `validRoomsProviding`, which does not consult this, so a fit on a room type that
+   * provides only the lodging need could never be read — a dial with no effect, which is
+   * ADR-0007's class one level down. See `assertFitIsReadable`.
+   *
+   * OPTIONAL HERE **AND** OPTIONAL ON DISK, which is the one field where the two agree, and
+   * for a reason rather than an oversight: silence cannot ship a dominant room type here.
+   * A table that declares no fit anywhere is content that PREDATES fit — every provider
+   * ties at 0 and the lowest entity id decides, which is exactly the rule G-013 shipped —
+   * so the permanent v1 fixture keeps its `8e09fe4f0fa162a3` fingerprint and still ticks.
+   * What silence must not be is PARTIAL, and that is the half `bindContent` refuses.
+   */
+  readonly fitBasisPoints?: number | undefined;
 };
 
 /**
@@ -204,6 +230,11 @@ export type ItemTypeData = {
    * whose only provider is an item NO ROOM TYPE REQUIRES.
    */
   readonly provides?: readonly ContentId[] | undefined;
+  /**
+   * How well one of these serves what it provides (G-014a). See `RoomTypeData` above for
+   * the whole contract — it is one scale across rooms and items, which is the point of it.
+   */
+  readonly fitBasisPoints?: number | undefined;
 };
 
 /**
@@ -441,6 +472,12 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
       `bindContent: room type "${roomType.id}" has a demolitionRefundBasisPoints of ${String(refund)}; it must be an integer in 0..10000 (10000 is 100%)`,
     );
   }
+  // Provider fit, same discipline (G-014a). A fit is a basis-point fraction, so it is an
+  // integer in 0..10000 for the reason money is an integer (ADR-0002); a value outside that
+  // is a typo rather than a ranking, and a typo that loads silently is a provider nobody
+  // visits with nothing pointing at the file that caused it.
+  const fit = roomType.fitBasisPoints;
+  assertFitValue('room type', roomType.id, fit);
   // Every optional key is STRIPPED when it holds undefined, not carried: an absent
   // key and a key holding `undefined` are different documents to the fingerprint, and
   // only the absent form is the "predates this field" statement (see the field docs).
@@ -450,16 +487,18 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
     nightlyUpkeepPence: _rawUpkeep,
     constructionCostPence: _rawCost,
     demolitionRefundBasisPoints: _rawRefund,
+    fitBasisPoints: _rawFit,
     ...rest
   } = roomType;
   const withUpkeep: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
   const withCost: RoomTypeData = cost === undefined ? withUpkeep : { ...withUpkeep, constructionCostPence: cost };
   const withRefund: RoomTypeData =
     refund === undefined ? withCost : { ...withCost, demolitionRefundBasisPoints: refund };
+  const withFit: RoomTypeData = fit === undefined ? withRefund : { ...withRefund, fitBasisPoints: fit };
   const base: RoomTypeData =
     rawProvides === undefined
-      ? withRefund
-      : { ...withRefund, provides: cloneIdList('room type', roomType.id, 'provides', 'need', rawProvides) };
+      ? withFit
+      : { ...withFit, provides: cloneIdList('room type', roomType.id, 'provides', 'need', rawProvides) };
   return rawRequires === undefined
     ? base
     : { ...base, requires: cloneIdList('room type', roomType.id, 'requires', 'item', rawRequires) };
@@ -473,9 +512,33 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
  * only the absent form is the "predates providing items" statement.
  */
 function cloneItemType(itemType: ItemTypeData): ItemTypeData {
-  const { provides: rawProvides, ...rest } = itemType;
-  if (rawProvides === undefined) return { ...rest };
-  return { ...rest, provides: cloneIdList('item type', itemType.id, 'provides', 'need', rawProvides) };
+  const fit = itemType.fitBasisPoints;
+  assertFitValue('item type', itemType.id, fit);
+  const { provides: rawProvides, fitBasisPoints: _rawFit, ...rest } = itemType;
+  const withFit: ItemTypeData = fit === undefined ? { ...rest } : { ...rest, fitBasisPoints: fit };
+  if (rawProvides === undefined) return withFit;
+  return { ...withFit, provides: cloneIdList('item type', itemType.id, 'provides', 'need', rawProvides) };
+}
+
+/**
+ * A declared fit is an integer in 0..MAX_FIT_BASIS_POINTS, or absent.
+ *
+ * A FIT IS A FRACTION, and 10,000 basis points is one whole — the `basisPointsSchema`
+ * contract, and ADR-0002's argument for integer fractions. A value outside it is not a
+ * ranking, it is a typo, and a typo that loads silently becomes a provider nobody visits
+ * three goals later with nothing pointing at the content file that caused it. Rejected at
+ * bind time, with the type named, on the one path every host goes through.
+ */
+function assertFitValue(owner: string, ownerId: ContentId, fit: number | undefined): void {
+  if (fit === undefined) return;
+  if (!Number.isInteger(fit) || fit < 0 || fit > MAX_FIT_BASIS_POINTS) {
+    throw new Error(
+      `bindContent: ${owner} "${ownerId}" has a fitBasisPoints of ${String(fit)}; it must be an integer in ` +
+        `0..${MAX_FIT_BASIS_POINTS}. A fit is a FRACTION in basis points — ${MAX_FIT_BASIS_POINTS} is one whole — ` +
+        'and it ranks the providers of one need against each other. It is never compared across needs, so a ' +
+        'value outside the range is a typo rather than a stronger preference.',
+    );
+  }
 }
 
 /**
@@ -716,6 +779,75 @@ function assertLodgingNeedIsUnambiguous(needTypes: readonly NeedTypeData[]): voi
 }
 
 /**
+ * Throws if a declared fit could never be read, or if only half the table declares one
+ * (G-014a).
+ *
+ * TWO REFUSALS, AND THEY CLOSE THE SAME HOLE FROM OPPOSITE SIDES:
+ *
+ *   AN UNREADABLE FIT — declared by a type that provides no ENGAGEMENT need. A guest
+ *   lodges through `validRoomsProviding`, which does not consult fit, and the engagement
+ *   pass skips the lodging need entirely; a type that provides nothing never enters the
+ *   candidate pool at all. So a fit on `standard_room`, on a lounge or on a bed is a field
+ *   with no effect that reads exactly like a dial — ADR-0007's class one level down,
+ *   refused rather than documented.
+ *
+ *   A HALF-DECLARED TABLE — some engagement providers speak and others are silent. The
+ *   silent one scores 0 and loses every comparison it is in, which is indistinguishable
+ *   from a designer ranking it last. Silence must mean "this content predates fit", and
+ *   that is only true when it is the whole table's silence.
+ *
+ * WHY IT IS A REJECTION AND NOT A TEST: a test pins the shipped table, and this is a
+ * property of every content set any host can inject — including one a designer edits at M6
+ * and one a balance sweep generates. It sits beside `assertNeedsAreSatisfiable` and
+ * `assertRefundsCannotReopenTheDodge`, which are here for exactly the same reason.
+ *
+ * ENGAGEMENT MEANS "not the lodging need", which is the same binary the guest loop acts
+ * on. With no need types at all there is nothing to provide and nothing to check.
+ */
+function assertFitIsReadable(
+  roomTypes: readonly RoomTypeData[],
+  itemTypes: readonly ItemTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  type Provider = { readonly owner: string; readonly id: ContentId; readonly provides: readonly ContentId[]; readonly fit: number | undefined };
+  const providers: Provider[] = [];
+  for (const roomType of roomTypes) {
+    providers.push({ owner: 'room type', id: roomType.id, provides: roomType.provides ?? EMPTY_IDS, fit: roomType.fitBasisPoints });
+  }
+  for (const itemType of itemTypes) {
+    providers.push({ owner: 'item type', id: itemType.id, provides: itemType.provides ?? EMPTY_IDS, fit: itemType.fitBasisPoints });
+  }
+  const servesAnEngagementNeed = (provider: Provider): boolean =>
+    provider.provides.some((needId) => needId !== lodgingNeedId);
+
+  let anyDeclared = false;
+  for (const provider of providers) {
+    if (provider.fit === undefined) continue;
+    anyDeclared = true;
+    if (servesAnEngagementNeed(provider)) continue;
+    const because =
+      provider.provides.length === 0
+        ? 'it provides no need at all'
+        : 'the only need it provides is the lodging need, and a guest chooses where to LODGE without consulting fit';
+    throw new Error(
+      `bindContent: ${provider.owner} "${provider.id}" declares fitBasisPoints, but ${because}. ` +
+        'Nothing would ever read it, so it is a dial with no effect rather than a design statement. Remove the key.',
+    );
+  }
+  // A table that says nothing about fit is content that predates it: every provider ties,
+  // and the lowest entity id decides exactly as it did at G-013.
+  if (!anyDeclared) return;
+  for (const provider of providers) {
+    if (provider.fit !== undefined || !servesAnEngagementNeed(provider)) continue;
+    throw new Error(
+      `bindContent: ${provider.owner} "${provider.id}" serves an engagement need but declares no fitBasisPoints, ` +
+        'while other providers in this content do. A silent provider scores zero and loses every comparison it is ' +
+        'in, which is indistinguishable from ranking it last. Declare a fit for it, or remove them all.',
+    );
+  }
+}
+
+/**
  * Throws if any room type requires an item this content does not define (G-009).
  *
  * ONE DIRECTION ONLY, and the asymmetry is the point. A `requires` naming an item that
@@ -916,6 +1048,10 @@ export function bindContent(content: SimContent): BoundContent {
   assertLodgingNeedIsUnambiguous(needTypes ?? []);
   assertNeedsAreSatisfiable(roomTypes, needTypes ?? [], itemTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   assertRequiredItemsExist(roomTypes, itemTypes ?? []);
+  // FIT IS ENGAGEMENT-ONLY (G-014a), and this needs the lodging need settled above for the
+  // same reason `assertNeedsAreSatisfiable` does — "engagement" is defined as "not that
+  // one", so the answer means nothing until the table is known to name exactly one.
+  assertFitIsReadable(roomTypes, itemTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   // THE TWO CROSS-FIELD MONEY CHECKS (G-011), and they bound the refund from opposite
   // sides of the same fact. The upper bound reads only room types, so it applies to
   // content that defines no economy at all — a room that refunds more than the dodge
@@ -1156,6 +1292,37 @@ export function providesOf(bound: BoundContent, kind: ContentId): readonly Conte
   const roomType = findRoomType(bound, kind);
   if (roomType !== undefined) return roomType.provides ?? EMPTY_IDS;
   return findItemType(bound, kind)?.provides ?? EMPTY_IDS;
+}
+
+/**
+ * The largest fit any content may declare (G-014a).
+ *
+ * IT LIVES HERE, WITH THE CHECK THAT ENFORCES IT, so the bound and the refusal cannot drift
+ * apart — the `liquidationRoomsMax` discipline one scale down.
+ *
+ * 10,000 is not a chosen number: a fit is a basis-point fraction, and 10,000 basis points
+ * is one whole (`basisPointsSchema`, ADR-0002's argument for integer fractions).
+ */
+export const MAX_FIT_BASIS_POINTS = 10_000;
+
+/**
+ * How well an entity of this KIND serves what it provides, in basis points (G-014a).
+ *
+ * THE `providesOf` CONTRACT EXACTLY, and it is unified across the two tables for the same
+ * reason: provider selection holds an ENTITY, not a table, and a room and an item must not
+ * acquire different rules about what fit means — they are ranked against each other in one
+ * list.
+ *
+ * 0 for a kind that declares none, and for a kind this content does not define at all.
+ * Absence is "this content predates fit", which makes every provider tie and hands the
+ * decision to the lowest entity id — the rule that shipped at G-013. `bindContent` refuses
+ * the dangerous middle: a table where some engagement providers speak and others do not
+ * (`assertFitIsReadable`).
+ */
+export function fitOf(bound: BoundContent, kind: ContentId): number {
+  const roomType = findRoomType(bound, kind);
+  if (roomType !== undefined) return roomType.fitBasisPoints ?? 0;
+  return findItemType(bound, kind)?.fitBasisPoints ?? 0;
 }
 
 /**

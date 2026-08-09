@@ -101,7 +101,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // what makes `guest_comfort` legal content at all (`assertNeedsAreSatisfiable`).
     // Derivation: 3 bedrooms + 3 beds + 3 amenity rooms + 2 provider items.
     entities: 11,
-    stateHash: '9e0c6704b1411ec8',
+    stateHash: 'e6a114d0e41934fc',
   },
   guests: {
     arrived: 24,
@@ -130,10 +130,23 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   //                        stopped providing, this row would read 0 met.
   //   guest_entertainment  10 by room, 0 by item — a ROOM-ONLY need, unchanged in kind
   //                        since G-012.
-  //   guest_nourishment    6 by room, 9 by item — THE INTERESTING ONE. The café is a room
+  //   guest_nourishment    9 by room, 6 by item — THE INTERESTING ONE. The café is a room
   //                        and the vending machine in the games room is an item, and guests
   //                        use both. A registry that had quietly become "rooms, plus a
   //                        special case" could not produce this row.
+  //                        THE SPLIT INVERTED AT G-014a (it was 6 by room, 9 by item) and
+  //                        that inversion IS the goal: the shipped table now ranks a café
+  //                        above a vending machine, so guests eat at the café and fall back
+  //                        to the machine when it is busy. WATCH #1 found the opposite —
+  //                        five cafés serving nobody for sixty days while everyone queued at
+  //                        the machines — because nothing in the data had ever said which
+  //                        was the better place to eat.
+  //                        AND NOTHING ELSE IN THIS BLOCK MOVED. Every met and unmet count
+  //                        here is identical to the one G-013 pinned; the only difference in
+  //                        the whole golden is which provider served the same satisfactions
+  //                        and the state hash that follows from it. That is the cleanest
+  //                        available evidence that G-014a changed WHERE guests go and not
+  //                        whether they are served.
   //   night_rest           15 by room, 0 by item — and it can never be anything else: a
   //                        guest lodges in a ROOM, and `bindContent` refuses content in
   //                        which an item provides the lodging need.
@@ -147,7 +160,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   needs: [
     { needId: 'guest_comfort', lodging: false, met: 11, unmet: 9, metByItem: 11 },
     { needId: 'guest_entertainment', lodging: false, met: 10, unmet: 10, metByItem: 0 },
-    { needId: 'guest_nourishment', lodging: false, met: 15, unmet: 5, metByItem: 9 },
+    { needId: 'guest_nourishment', lodging: false, met: 15, unmet: 5, metByItem: 6 },
     { needId: 'night_rest', lodging: true, met: 15, unmet: 5, metByItem: 0 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -227,7 +240,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'in bad room 0',
     'need       guest_comfort 11 met, 9 unmet (0 by room, 11 by item)',
     'need       guest_entertainment 10 met, 10 unmet (10 by room, 0 by item)',
-    'need       guest_nourishment 15 met, 5 unmet (6 by room, 9 by item)',
+    'need       guest_nourishment 15 met, 5 unmet (9 by room, 6 by item)',
     'need L     night_rest 15 met, 5 unmet (15 by room, 0 by item)',
     'ledger      18 transactions',
     'revenue     127500p',
@@ -244,7 +257,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     603500p',
-    'state hash  9e0c6704b1411ec8',
+    'state hash  e6a114d0e41934fc',
   ].join('\n') + '\n';
 
 /**
@@ -401,7 +414,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  9e0c6704b1411ec8']);
+    expect(differing).toEqual(['seed        42', 'state hash  e6a114d0e41934fc']);
     expect(lines43).toContain('seed        43');
   });
 });

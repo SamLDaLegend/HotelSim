@@ -40,20 +40,45 @@
 // quietly rotting.
 //
 // THE FIRST FIX WAS ONE SEALING AND IT WAS NOT ENOUGH, WHICH IS ROUND 2's FINDING. A door
-// closes once, so one sealing yields exactly ONE release, at tick 7,002 — and by tick
-// 100,000 the despawn pass had taken that room away, so the state was absent from the hash
-// the gate actually compares. A second wave now lands at tick 20,011 and seals at 60,013,
-// late enough that its ids sit above every despawn and demolish walk. Measured after:
-// `finished 1345 · roomWentBad 3 · itemDisappeared 1 · itemSurvived 2` at ticks 7,002 and
-// 60,014, with the sealed room and its item both still standing at the horizon.
+// closes once, so one sealing yields exactly ONE release — and by tick 100,000 the despawn
+// pass had taken that room away, so the state was absent from the hash the gate actually
+// compares. A second wave now lands late, with ids above every despawn and demolish walk.
 //
-// WHAT THE SEALED ITEM ACTUALLY IS, because round 3 found the log's own comment claiming
-// otherwise: `secondHost` resolves by ASCENDING ID to `games_room`, so the stranded item is
-// a `vending_machine` and the need it stops serving is `guest_nourishment` (405 met / 698
-// unmet over this run) — NOT the lounge, its arm chair, and `guest_comfort`. The cases below
-// are written against the CAUSE rather than against any of those names, which is why they
-// were green while the prose beside them was wrong; that is a property to keep, not a
-// defence of the mistake.
+// WHAT THE SEALED ITEM ACTUALLY IS — RE-MEASURED AT G-014a, AND IT IS NOW THE OPPOSITE OF
+// WHAT THIS PARAGRAPH SAID FOR THREE ROUNDS. It used to record that `secondHost` resolves by
+// ascending id to `games_room`, so the stranded item is a `vending_machine` serving
+// `guest_nourishment` — explicitly NOT the lounge, its arm chair and `guest_comfort`. G-014a
+// made provider choice fit-ordered, which turned an item that shares its need with a room
+// into a last resort, and the sealing stopped catching anybody; `determinism-log.ts` now
+// picks a host whose item is the SOLE provider of its need. On the shipped table that is
+// `hotel_lounge` carrying an `arm_chair`, so the stranded item is a chair and the need is
+// `guest_comfort` — the reading round 3 was written to refuse, arrived at deliberately and
+// for a stated reason rather than by drift.
+//
+// THE CENSUS, MEASURED ON THIS BUILD (it was `1345 / 3 / 1 / 2` before G-014a):
+//
+//   finished 1075 · roomWentBad 1 · itemDisappeared 1 · itemSurvived 2
+//   itemSurvived @ tick 6,801  (entity 23,  arm_chair, guest_comfort)
+//   itemSurvived @ tick 59,901 (entity 105, arm_chair, guest_comfort)
+//   roomWentBad  observed @ tick 26,010 (entity 19, hotel_cafe, guest_nourishment), from the
+//                despawn command scheduled at 26,009 — the census reads state after the tick
+//                has run, so the command and the observation are one apart. See below.
+//
+// READ THE `roomWentBad` LINE BEFORE TRUSTING THIS FILE'S COVERAGE. It fell from 3 to 1, and
+// the two events it lost were both guests engaged with a sealed GAMES ROOM — a room that
+// provides a need itself, which a lounge does not. So the `> 0` case below is now ONE EVENT
+// from vacuous, and the survivor is INCIDENTAL: the despawn walk in `determinism-log.ts`
+// removes entity id 19 at tick 26,009 (its ids are 1, 4, 7 … on a 4,001-tick cadence), and
+// that entity happens to be a café with a guest in it. It is not the demolish walk and no
+// pass was written to produce it. That narrowing is recorded here rather than absorbed, and it
+// is a decision for the orchestrator: on the shipped table no room type both provides a need
+// AND hosts a sole-provider item, so covering both causes from one sealed host is not
+// possible, and a third wave would need free floor-0 columns this file's own cell audit has
+// not established.
+//
+// The cases below are written against the CAUSE rather than against any of those names,
+// which is why they were green while the prose beside them was wrong; that is a property to
+// keep, not a defence of the mistake.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -208,6 +233,16 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
   });
 
   it('a ROOM provider goes bad under a guest', () => {
+    // ONE EVENT FROM VACUOUS SINCE G-014a, AND SAYING SO IS THE POINT OF THIS COMMENT. This
+    // read 3 before that goal; two of the three were guests engaged with a sealed GAMES ROOM,
+    // and the sealing pass now targets a lounge instead (see the header). The survivor is
+    // INCIDENTAL: the DESPAWN walk removes entity id 19 at tick 26,009 and that entity is a
+    // café with a guest in it. Not the demolish walk — `determinism-log.ts` runs the two as
+    // different passes on different cadences, so a reader hunting a demolish near 26,010
+    // finds nothing.
+    // The assertion is deliberately left at `> 0` rather than raised to a number this build
+    // happens to hit: tightening it would pin a coincidence, and the honest response to thin
+    // coverage is to widen the log, which is a decision above this file.
     expect(census().roomWentBad).toBeGreaterThan(0);
   });
 
@@ -222,11 +257,17 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
     // survival of any particular entity.
     //
     // TWO, NOT ONE, AND THE SECOND IS THE ONE THAT MATTERS TO THE GATE. A door closes once,
-    // so each sealing yields exactly one release: wave 1 fires at tick 7,002 and wave 2 at
-    // 60,014. Wave 1 alone was the whole coverage for one critique round, and by tick
-    // 100,000 the despawn pass had removed its room entirely — a state reachable in the
-    // first seventh of the run and absent from the final hash, which is exactly what the
-    // terrace pass in `determinism-log.ts` grew a second wave to avoid.
+    // so each sealing yields exactly one release: measured on this build, wave 1 fires at
+    // tick 6,801 and wave 2 at 59,901, both stranding an `arm_chair` mid-`guest_comfort`.
+    // Wave 1 alone was the whole coverage for one critique round, and by tick 100,000 the
+    // despawn pass had removed its room entirely — a state reachable in the first seventh of
+    // the run and absent from the final hash, which is exactly what the terrace pass in
+    // `determinism-log.ts` grew a second wave to avoid.
+    //
+    // BOTH TICKS MOVED AT G-014a AND NEITHER IS ARBITRARY: a seal only produces a release if
+    // the item is OCCUPIED on the tick its door closes, and that goal changed when each host
+    // is busy. The ticks were re-chosen by measuring occupancy and landing inside a live
+    // engagement window; this assertion is what verifies that rather than trusting it.
     expect(census().itemSurvived).toBeGreaterThanOrEqual(2);
   });
 

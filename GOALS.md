@@ -1048,8 +1048,35 @@ Critique rounds used: 0/3
   told apart that way, that is a finding about the whole visual direction, and it is worth
   having before M5 is built on the assumption that it does.
 
-## G-014 — Utility scoring, and a guest that commits
-Status: pending
+## G-014a — Provider fit, and no room type is furniture
+Status: **done** — 2 sweeps (3 MAJOR + 4 MINOR, then 1 MAJOR + 2 MINOR), zero BLOCKERs.
+  **SEAM TAKEN** at PLAN, offered by the builder and adopted (§5.5). Verified by the
+  orchestrator: six gates green; I2 `1400fc79f08b7e55`; 1,162 tests / 64 files;
+  `--days 30 --seed 7 --rooms 6 --amenities 5` hashes `72c20adba35c0817` with **all four
+  needs 356 met / 0 unmet, and nourishment 356 BY ROOM where HEAD served 0**.
+
+  **THE WATCH CAUGHT A DEFECT IN THIS GOAL'S OWN FIRST BUILD, WITH SIX GATES GREEN AND
+  1,133 TESTS PASSING.** The need table read `guest_comfort 0 met, 356 unmet` — one of the
+  three things a guest comes for had stopped happening, for every guest, in every run.
+  Cause: scoring `pressure * FIT_SCALE + fit` as one number is sound for *unequal* pressure
+  and silent about *equal* pressure — **the normal case**, since every need of a new guest
+  starts at zero and comfort and nourishment share `patienceTicks` 300. **Fit was choosing
+  the NEED.** Fixed structurally (fit ranks providers *within* one need, `FIT_SCALE` and
+  `scoreOf` deleted), not by retuning a value.
+
+  **THE JUSTIFICATION FOR THAT FIX WAS ITSELF FALSE, IN FOUR FILES INCLUDING A SCHEMA DOC.**
+  "Exactly one order of pursuit works" ignores that **patience regenerates while a need is
+  served**. Two of six orders complete; the real invariant is **entertainment must be last**,
+  because its 360 patience is the only one surviving a 330-tick wait. The enumeration is now
+  **executed** by `utility.starvation.test.ts` rather than described — it permutes the needs
+  through `advanceNeeds` itself and reads "longest patience" off content.
+
+  **PRE-REGISTERED PREDICTIONS, BOTH SCORED**: cafés fill — CONFIRMED (nourishment 0 → 356
+  by room; amenity rooms involved 4 of 15 → 6 of 15). Concentration is NOT fixed — CONFIRMED,
+  9 of 15 still inert, stated in advance; scoring re-ranks and cannot spread, which needs
+  distance (M3). The orchestrator's regret prediction was **half wrong usefully**: absent at
+  oversupply (0 of 721 frames, against 718 of 721 at HEAD), present under contention at
+  **180 episodes per simulated day, stationary across three days**.
 Milestone: M2
 Owner pair: ai-engineer / ai-critic
 Statement: A guest chooses which need to pursue and which provider to use by a score

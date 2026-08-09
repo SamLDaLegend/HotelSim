@@ -72,6 +72,7 @@ import { draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entitie
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 import { boundsEqual, cellBelow, cellLeft, cellRight, cellsEqual, compareCells, describeCell, GROUND_FLOOR, isWithinBounds } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
+import { compareProviderPreference } from './utility.js';
 
 /**
  * Why a room is not a room. A CLOSED UNION, not free text — the `BuildRefusalReason` and
@@ -724,7 +725,11 @@ export function isProviding(ctx: ValidityContext, entity: Entity): boolean {
  * ascending id, which is the order the guest loop has always chosen by, and the placement
  * index's cell order would make a guest take the provider lowest on the plot instead.
  * Rooms and items are interleaved by id — a chair spawned before a café outranks it —
- * which is arbitrary and STABLE, and stability is the property I2 needs. It becomes
+ * which is arbitrary and STABLE, and stability is the property I2 needs.
+ *
+ * SINCE G-014a THIS IS THE INPUT TO AN ORDER RATHER THAN THE ORDER ITSELF. `providersFor`
+ * sorts each per-need list by (fit descending, id ascending); this list stays in entity
+ * order, so that sort has one canonical input on every machine. It becomes
  * nearest-by-path at M3.
  */
 function provisioningEntities(ctx: ValidityContext): readonly Entity[] {
@@ -754,6 +759,28 @@ function provisioningEntities(ctx: ValidityContext): readonly Entity[] {
  * between two scans for one need the candidate list cannot grow, so a set that was empty
  * cannot have become non-empty except through a `release`, which un-marks exactly what the
  * freed entity provides.
+ *
+ * ---------------------------------------------------------------------------
+ * ORDERED BY PREFERENCE SINCE G-014a: FIT DESCENDING, THEN ENTITY ID ASCENDING.
+ *
+ * This is where WATCH #1's finding is answered. Provider choice was the lowest id that was
+ * free, so with five cafés and five vending machines every guest ate at a machine and the
+ * cafés served nobody for sixty simulated days — correct, tested, and obviously wrong to
+ * anybody looking at it. Nothing in the data said a café was a better place to eat, so the
+ * simulation had nothing to prefer it BY. `fitBasisPoints` is that statement, and this is
+ * the one place it is acted on.
+ *
+ * IT IS SORTED HERE RATHER THAN SCANNED PER GUEST, and that is what keeps the cost where it
+ * was: this list is built once per need per entity set and reused for every guest on every
+ * tick until the entity set changes, so the sort is amortised to nothing, and `findFreeRoom`
+ * keeps its "take the first free candidate" early exit rather than walking every provider to
+ * find a maximum.
+ *
+ * THE COMPARATOR IS TOTAL (`compareProviderPreference`), so this does not lean on
+ * `Array.prototype.sort` being stable. Sort stability is an implementation promise about
+ * EQUAL elements, and "equal" is exactly the case an ordering rule must decide for itself:
+ * leaving it to the engine is the Set-iteration-order dependence I2 forbids, one layer down.
+ * ---------------------------------------------------------------------------
  */
 export function providersFor(ctx: ValidityContext, needId: ContentId): readonly Entity[] {
   const byNeed = (ctx.engagementProviders ??= new Map<ContentId, readonly Entity[]>());
@@ -763,6 +790,7 @@ export function providersFor(ctx: ValidityContext, needId: ContentId): readonly 
   for (const entity of provisioningEntities(ctx)) {
     if (providesOf(ctx.content, entity.kind).includes(needId)) providers.push(entity);
   }
+  providers.sort((a, b) => compareProviderPreference(ctx.content, a, b));
   byNeed.set(needId, providers);
   return providers;
 }

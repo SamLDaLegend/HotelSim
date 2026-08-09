@@ -39,7 +39,14 @@
 // demand, and demand is M4; today the host issues one `guestArrives` command per
 // arrival, so the command log fully describes who turned up and when (I2).
 
-import { findNeedType, findRoomType, isRoomKind, lodgingNeedOf, providesOf } from './content.js';
+import {
+  findNeedType,
+  findRoomType,
+  isRoomKind,
+  lodgingNeedOf,
+  needTypesInOrder,
+  providesOf,
+} from './content.js';
 import type { BoundContent } from './content.js';
 import { draftGet, getEntity, NO_ENTITY } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
@@ -49,7 +56,6 @@ import type { Transaction } from './ledger.js';
 import {
   advanceNeeds,
   assertNeedVector,
-  compareNeedPriority,
   findNeedState,
   formNeedVector,
   isNeedMet,
@@ -66,6 +72,7 @@ import {
   validRoomsProviding,
 } from './validity.js';
 import type { ValidityContext } from './validity.js';
+import { pressureBasisPoints } from './utility.js';
 
 /**
  * Opaque guest handle. Monotonic, never reused, within a run or across a save — the
@@ -650,14 +657,21 @@ function payForStay(
 }
 
 /**
- * The lowest-id free VALID room that provides `needId`, or `NO_ENTITY`.
+ * The most preferred free provider of `needId`, or `null`.
  *
- * LOWEST ID, not "whichever we find first in some map": the choice must be the same on
- * every machine and every replay (I2). It is arbitrary while nothing has a position —
- * at M3, with stairs and lifts, it becomes nearest-by-path, and a guest walking past a
- * free room to reach a distant one is exactly the "correct but reads as stupid" defect
- * §6.1 warns about. Choosing by id today does not create that behaviour; choosing by
- * anything unstable would.
+ * WHAT "MOST PREFERRED" MEANS IS THE CANDIDATE LIST'S BUSINESS, NOT THIS FUNCTION'S, and
+ * that seam is what keeps this an early-exit walk rather than a scan for a maximum. Since
+ * G-014a `providersFor` hands back its list in (fit descending, id ascending) order, so the
+ * first free entry IS the best one; `validRoomsProviding` is still ascending by id, because
+ * a guest chooses where to LODGE without consulting fit (see `reserve`).
+ *
+ * LOWEST ID IS THEREFORE THE TIE-BREAK RATHER THAN THE RULE. Two providers a designer
+ * ranked equally are settled by the lower entity id, which must be the same on every
+ * machine and every replay (I2) — never "whichever we found first in some map". At M3 it
+ * becomes nearest-by-path, and a guest walking past a free room to reach a distant one is
+ * exactly the "correct but reads as stupid" defect §6.1 warns about; ordering by a
+ * designer's ranking does not create that behaviour, and ordering by anything unstable
+ * would.
  *
  * ONE FUNCTION FOR BOTH RESERVATIONS (G-012). A bedroom and an amenity are found the same
  * way — the lowest-id provider that offers the need and nobody holds — because `held`
@@ -672,7 +686,7 @@ function payForStay(
  * asked once per entity set rather than once per candidate per tick: the candidates come
  * from `validRoomsOf`, which IS the invalid rooms already filtered out.
  */
-function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean): EntityId {
+function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean): Entity | null {
   // THE SHORT-CIRCUIT (G-010, sharpened by G-012). If a scan for this need already came up
   // empty and NOTHING THAT PROVIDES IT HAS BEEN RELEASED SINCE, the answer is still empty
   // and the scan is skipped.
@@ -696,7 +710,7 @@ function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean
   // making tick cost linear. Releasing a bedroom cannot make a CAFÉ appear, and saying so
   // exactly costs one content lookup at the release site.
   const exhausted = search.exhausted;
-  if (exhausted !== null && exhausted.has(needId)) return NO_ENTITY;
+  if (exhausted !== null && exhausted.has(needId)) return null;
 
   // ONE EXHAUSTED SET FOR BOTH SEARCHES, AND THAT IS SOUND BECAUSE THEY PARTITION THE NEED
   // SPACE (G-013). The lodging search is only ever asked for the lodging need, and the
@@ -714,13 +728,13 @@ function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean
     : providersFor(search.input.validity, needId);
   for (const room of candidates) {
     if (search.held.has(room.id)) continue;
-    return room.id;
+    return room;
   }
   // Allocated only when a scan actually fails, so a hotel that is never full pays nothing —
   // the `assertGuestStoreInvariants` discipline. Lookup only: never iterated, never
   // ordered, never hashed (I2).
   (search.exhausted ??= new Set<ContentId>()).add(needId);
-  return NO_ENTITY;
+  return null;
 }
 
 /**
@@ -1024,12 +1038,39 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
  * Take a room if one is free, and engage a provider if one is — at most one of each, and
  * at most once per tick.
  *
- * THE ENGAGEMENT PASS IS THE ONLY PLACE URGENCY IS ACTED ON. Among the pending engagement
- * needs that have a free provider, the guest takes the one that has burned through most of
- * its own patience (`compareNeedPriority`). So a guest whose dinner is nearly desperate
- * does not sit in the games room instead — and if the café is busy it does the next most
- * pressing thing rather than standing still, which is the difference between a queue and a
- * stupid-looking guest (§6.1).
+ * THE ENGAGEMENT PASS IS THE ONLY PLACE THE SCORE IS ACTED ON, AND IT IS TWO DECISIONS IN A
+ * FIXED ORDER (G-014a):
+ *
+ *   WHICH NEED   — the pending engagement need with the most pressure that has a free
+ *                  provider; exact ties settled by the lower need id. FIT IS NOT CONSULTED.
+ *   WHICH PROVIDER — the best-fit free provider of that need, which is simply the first free
+ *                  entry of an already fit-ordered list (`providersFor`).
+ *
+ * So a guest whose dinner is nearly desperate does not sit in the games room instead, and
+ * among two places it could eat it takes the one the designer ranked higher. If that one is
+ * busy it takes the next, on the same tick, rather than standing still: the difference
+ * between a queue and a stupid-looking guest (§6.1).
+ *
+ * WHY FIT MAY NOT SETTLE A TIE BETWEEN NEEDS — MEASURED, NOT REASONED (G-014a's WATCH). The
+ * first build of this goal scored `pressure * FIT_SCALE + fit` across needs, so at equal
+ * pressure the nicer amenity won. On the shipped table that reordered a guest's whole stay,
+ * and one engagement need then FAILED FOR EVERY GUEST IN THE HOTEL — `guest_comfort` 0 met,
+ * 356 unmet at `--days 30 --seed 7 --rooms 6 --amenities 5`, where it had been 356 met.
+ * `utility.starvation.test.ts` is that run, kept as a test.
+ *
+ * The cause is worth carrying forward because it belongs to the CONTENT and not to this
+ * code: the three engagement needs sum to exactly the lodging budget (WATCH #1), so the
+ * ORDER of pursuit decides whether a guest can have all three. Two of the six orders do, and
+ * BOTH END IN ENTERTAINMENT — whatever goes last has waited 330 ticks, and entertainment's
+ * patience is the only one long enough to survive that. The combined score produced an
+ * entertainment-FIRST order, which is the class that starves. `utility.starvation.test.ts`
+ * simulates all six rather than asserting this in prose.
+ *
+ * THE LODGING SEARCH DOES NOT CONSULT FIT, and that is a scope line rather than an
+ * oversight. A bedroom's desirability trades against its PRICE, and pricing is M4's; a fit
+ * term with no price term would make the most expensive suite strictly preferred, which is
+ * the dominant-strategy shape `balance-critic` hunts. `bindContent` refuses a fit on a room
+ * type that only lodges, so this is enforced rather than merely intended.
  *
  * THERE IS NO TURNAROUND DELAY, and an earlier draft of this comment claimed there was.
  * A guest whose engagement ends in step 5 has `engagement: null` by the time this runs, so
@@ -1057,42 +1098,72 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
     const lodging = findNeedState(result.needs, lodgingNeedId);
     if (lodging !== undefined && isNeedPending(lodging)) {
       const room = findFreeRoom(search, lodgingNeedId, true);
-      if (room !== NO_ENTITY) {
-        search.held.add(room);
-        result = { ...result, roomEntityId: room };
+      if (room !== null) {
+        search.held.add(room.id);
+        result = { ...result, roomEntityId: room.id };
       }
     }
   }
+  // COMMITMENT IS TOTAL AND THIS IS THE LINE THAT MAKES IT SO. An engaged guest is not
+  // scored again, so the thrashing §6.1 hunts for is unexpressible rather than unlikely —
+  // exactly the property G-012 handed to this goal and this goal hands to G-014b, which
+  // replaces this early return with a re-evaluation and a content-defined margin.
   if (result.engagement !== null) return result;
-  // ONE PASS, and the answer is the same one a descending walk gives: the most pressing
-  // pending need that has a free provider.
+  // ONE PASS over the needs, taking the maximum score.
   //
   // IT WAS A DESCENDING WALK, AND REPEATED SELECTION IS O(needs^2) COMPARISONS with two
   // binary searches into the content table each, paid by every unengaged guest on every
-  // tick. The set of needs considered, the rule that ranks them and the room chosen are all
-  // unchanged; only the number of times the question is asked is different.
+  // tick. G-014a keeps the single pass and changes what is being maximised.
   //
   // The 27.7%-of-tick-self-time figure this comment used to carry came from G-012's drift
   // window and is WITHDRAWN rather than restated — it was never re-measured paired, and
   // G-016 found every un-paired reading in this milestone inflated. The change is kept on
   // its complexity argument, which needs no stopwatch: one pass instead of O(n^2).
   //
-  // The provider is only looked up for a need that would BEAT the best so far, so a
-  // hopeless need costs one comparison rather than a scan.
+  // THE PROVIDER IS ONLY LOOKED UP FOR A NEED THAT WOULD BEAT THE BEST SO FAR, so a
+  // hopeless need costs one comparison rather than a scan — the property G-016 bought and
+  // this goal keeps.
+  const content = search.input.content;
+  // THE NEED TYPE IS RESOLVED BY POSITION WHEN IT CAN BE, exactly as `advanceNeeds` does and
+  // for the same measured reason: `formNeedVector` builds one entry per need type in the
+  // content table's own ascending order, so for a guest that formed its vector under THIS
+  // content `needs[i]` and `needTypesInOrder(content)[i]` are the same need. Scoring needs
+  // the type for every pending need of every unengaged guest on every tick, and a binary
+  // search each is the shape G-016 spent a goal removing. CHECKED per entry by a string
+  // identity compare rather than assumed — a guest migrated from v5 carries one need where
+  // the content defines four, and it falls back to the search.
+  const needTypes = needTypesInOrder(content);
+  const maybeAligned = result.needs.length === needTypes.length;
+  let bestPressure = -1;
   let bestNeed: NeedState | undefined;
-  let bestProvider: EntityId = NO_ENTITY;
-  for (const need of result.needs) {
+  let bestProvider: Entity | null = null;
+  for (let i = 0; i < result.needs.length; i += 1) {
+    const need = result.needs[i];
+    if (need === undefined) continue;
     if (!isNeedPending(need)) continue;
     // The lodging need is served by the room the guest holds, never by an engagement: a
     // guest does not book a second bedroom to sleep in.
     if (need.needId === lodgingNeedId) continue;
-    if (bestNeed !== undefined && compareNeedPriority(search.input.content, need, bestNeed) >= 0) continue;
+    const positional = maybeAligned ? needTypes[i] : undefined;
+    const needType =
+      positional !== undefined && positional.id === need.needId ? positional : findNeedType(content, need.needId);
+    // A need this content does not define cannot be pursued — the `urgencyOf` contract. It
+    // sorted last under the old comparator and is skipped here, which is the same outcome
+    // reached without a special case in the ranking.
+    if (needType === undefined) continue;
+    const pressure = pressureBasisPoints(needType, need);
+    // STRICTLY GREATER, so an exact tie keeps the need already held — and needs are walked
+    // in ascending id, so a tie is settled by the LOWER NEED ID. That is `compareNeedPriority`'s
+    // own tie rule, preserved deliberately rather than inherited: see the header note in
+    // `utility.ts` on why fit is not allowed to settle it.
+    if (pressure <= bestPressure) continue;
     const provider = findFreeRoom(search, need.needId, false);
-    if (provider === NO_ENTITY) continue;
+    if (provider === null) continue;
+    bestPressure = pressure;
     bestNeed = need;
     bestProvider = provider;
   }
-  if (bestNeed === undefined) return result;
-  search.held.add(bestProvider);
-  return { ...result, engagement: { entityId: bestProvider, needId: bestNeed.needId } };
+  if (bestNeed === undefined || bestProvider === null) return result;
+  search.held.add(bestProvider.id);
+  return { ...result, engagement: { entityId: bestProvider.id, needId: bestNeed.needId } };
 }

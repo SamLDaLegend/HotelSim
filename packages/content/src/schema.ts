@@ -51,6 +51,69 @@ export const penceSchema = z.int();
 export const basisPointsSchema = z.int().min(0).max(10_000);
 
 /**
+ * HOW WELL A PROVIDER SERVES WHAT IT PROVIDES (G-014a) — the designer's ranking, and the
+ * reason a guest prefers a café to a vending machine. Declared on a room type and on an
+ * item type alike, because a guest engages either.
+ *
+ * ---------------------------------------------------------------------------
+ * IT RANKS THE PROVIDERS OF ONE NEED AGAINST EACH OTHER. IT IS NEVER COMPARED ACROSS
+ * NEEDS, AND THAT RESTRICTION WAS BOUGHT WITH A DEFECT.
+ *
+ * A guest decides WHICH NEED to pursue by pressure — the fraction of that need's own
+ * patience already spent — and only then decides WHERE, among the providers of that need,
+ * by this number. The first build of G-014a combined the two into one score, so at equal
+ * pressure the higher-fit need won. Equal pressure is the normal case (every need of a
+ * newly arrived guest is at zero), and on the shipped table it reordered the guest's whole
+ * stay: `guest_comfort` went from 356 met to 0 met, 356 unmet, over thirty simulated days.
+ *
+ * WHAT A DESIGNER NEEDS FROM THAT, STATED AS THE RULE IT ACTUALLY IS: the engagement needs
+ * sum to exactly `night_rest.satisfyTicks`, so the ORDER a guest pursues them in decides
+ * whether it can have all three — and since a served need's patience regenerates, whatever
+ * is pursued LAST has waited for the other two. Two of the six orders satisfy all three, and
+ * both end in `guest_entertainment`, whose patience is the only one long enough to survive
+ * the wait. Change a `patienceTicks` or a `satisfyTicks` here and that stops being true
+ * silently. Read the note on `guest_comfort.satisfyTicks` in `needTypeSchema` beside this
+ * one; they are the same fragility seen from two sides.
+ *
+ * ONLY THE ORDER MATTERS. THE MAGNITUDES ARE INERT, AND THAT IS PROVED RATHER THAN
+ * CLAIMED. READ THIS BEFORE "TUNING" ONE. The numbers below are an ORDINAL statement — "a
+ * café is a better place to eat than a vending machine" — and any relabelling that
+ * preserves their order produces a byte-identical run. `utility.test.ts` asserts exactly
+ * that, with an order-CHANGING relabel beside it as the control.
+ *
+ * That is why these are not a bound under `HOTELSIM.md` §2.1 and need no derivation: a
+ * bound is a number a decision is compared against, and no decision here compares against
+ * one. If a future goal makes a magnitude load-bearing — a price term at M4, say — then
+ * it becomes a bound and owes a derivation on that day.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * IT IS ENGAGEMENT-ONLY, AND `bindContent` ENFORCES THAT MECHANICALLY (G-014a ruling).
+ *
+ * A guest LODGES through `validRoomsProviding` and the engagement pass skips the lodging
+ * need entirely, so a fit declared on a room type that only provides `night_rest` is
+ * UNOBSERVABLE — a field with no effect that a designer would read as a dial. That is
+ * ADR-0007's defect class one level down, so it is refused rather than documented.
+ * `bindContent` in `packages/sim` rejects, per content set:
+ *
+ *   - a fit on a type that provides no ENGAGEMENT need (a bedroom, a bed, a lounge);
+ *   - a type that provides one and declares NO fit, when any other type in the same
+ *     content does. Half a table is the dangerous state: the silent provider scores 0 and
+ *     loses every comparison, which reads as a ranking rather than as an omission.
+ *
+ * OPTIONAL HERE, unlike `provides`, `requires` and the prices — and the asymmetry is the
+ * point rather than an inconsistency. Those are required on disk because silence would
+ * ship a strictly dominant room type. Silence here cannot: a table that declares no fit
+ * anywhere is content that PREDATES fit, every provider ties, and the tie-break — the
+ * lowest entity id — is exactly the rule that shipped at G-013. And the rule that decides
+ * whether a given type may speak is a CROSS-REFERENCE into `need-types.json` (which needs
+ * are engagement needs), which no schema in this file can see. So the one check lives in
+ * `bindContent`, where the other cross-references already are, rather than half here.
+ * ---------------------------------------------------------------------------
+ */
+export const fitBasisPointsSchema = basisPointsSchema.optional();
+
+/**
  * One room type, as written ON DISK.
  *
  * `strictObject`, not `object`: an unrecognised key is a typo, and a typo that is
@@ -68,6 +131,7 @@ export const basisPointsSchema = z.int().min(0).max(10_000);
  *   demolitionRefundBasisPoints  what scrapping one returns       -> G-011
  *   provides              which needs a stay here satisfies       -> G-004
  *   requires              which items must stand in it to work    -> G-009
+ *   fitBasisPoints        how well it serves them, as an ORDER    -> G-014a
  *
  * `capacity` is the size of the party a room holds, NOT a count of unrelated bookings.
  * A party is one guest at M0. Two strangers sharing a room is not what this number
@@ -199,6 +263,7 @@ export const roomTypeSchema = z.strictObject({
   demolitionRefundBasisPoints: basisPointsSchema,
   provides: z.array(contentIdSchema).optional(),
   requires: z.array(contentIdSchema),
+  fitBasisPoints: fitBasisPointsSchema,
 });
 
 /**
@@ -319,10 +384,12 @@ export const roomTypesSchema = z.array(roomTypeSchema).min(1);
 /**
  * One item a room can require, and — since G-013 — one thing that can serve a need.
  *
- * THREE FIELDS. An item is still the smallest thing the validity rule can inspect (a room
- * is furnished when an entity of this kind stands in it), and it is now also a PROVIDER: a
- * guest engages the arm chair, not the lounge it stands in. Item cost, quality and decay
- * are still M6, and each is a field added here later rather than a shape changed.
+ * An item is still the smallest thing the validity rule can inspect (a room is furnished
+ * when an entity of this kind stands in it), and it is now also a PROVIDER: a guest
+ * engages the arm chair, not the lounge it stands in. Item cost, quality and decay are
+ * still M6, and each is a field added here later rather than a shape changed. `fitBasisPoints`
+ * (G-014a) is NOT item quality: it is an ordering over providers of a need, it never
+ * changes, and nothing in it says a chair wears out.
  *
  * An item type nobody requires is NOT an error, and that asymmetry is deliberate. A need
  * no provider offers is guaranteed unhappiness (`bindContent` rejects it); an item no room
@@ -359,6 +426,10 @@ export const itemTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
   provides: z.array(contentIdSchema),
+  // FOUR FIELDS SINCE G-014a. A guest engages an item exactly as it engages a room, so an
+  // item ranks on the same scale — see `fitBasisPointsSchema`, which also states why
+  // `single_bed` may not carry one (it provides nothing, so nothing could ever read it).
+  fitBasisPoints: fitBasisPointsSchema,
 });
 
 /** The whole `need-types.json` document. A top-level array, for the same reason. */

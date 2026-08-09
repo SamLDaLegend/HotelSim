@@ -265,61 +265,47 @@ export function urgencyOf(content: BoundContent, need: NeedState): number {
 }
 
 /**
- * Urgency, given the need type the caller has already looked up. THE ONE DEFINITION.
+ * Urgency, given the need type the caller has already looked up.
  *
- * `compareNeedPriority` needs both the urgency and the patience of each side, so it holds
- * the need type anyway; calling `urgencyOf` would look it up a second time. Sharing this
- * one line is what stops "urgency" being computed in two places and drifting — the
- * duplication that would otherwise sit between the quantity the goal statement names and
- * the quantity the guest actually acts on.
+ * IT HAS ONE CALLER — `urgencyOf` above — SINCE G-014a, AND IT IS NOT THE ONE DEFINITION OF
+ * URGENCY IN THE CODEBASE. Both halves of what this comment used to claim were false and are
+ * corrected rather than trimmed, because the false version is the shape ADR-0007's amendment
+ * names: it justified the split by `compareNeedPriority`, which G-014a deleted eleven lines
+ * below, and it claimed sharing the line stops urgency being computed twice — while
+ * `pressureBasisPoints` in `utility.ts` computes `patienceTicks - patienceRemaining` inline
+ * and always has.
+ *
+ * It is kept, rather than folded back into `urgencyOf`, only because it takes the need TYPE
+ * the caller has already resolved. If a future goal gives it no second caller and no reason
+ * to exist, delete it; nothing here argues that it must survive.
  */
 function urgencyIn(needType: NeedTypeData, need: NeedState): number {
   return needType.patienceTicks - need.patienceRemaining;
 }
 
-/**
- * Which of two pending needs a guest pursues first. Negative means `a` goes first.
+/*
+ * `compareNeedPriority` WAS HERE AND WAS DELETED AT G-014a. NAMED, NOT DISCOVERED.
  *
- * BY THE FRACTION OF ITS PATIENCE ALREADY SPENT, not by raw urgency, compared as a
- * CROSS-MULTIPLICATION so it stays exact integer arithmetic (I2) — `a.urgency / a.patience`
- * against `b.urgency / b.patience` with no division and therefore no float. Raw urgency
- * would rank a need by how long its fuse is rather than by how far down it has burned, so
- * the need with the most patience would always be served first, which is precisely
- * backwards.
+ * It ranked two pending needs by the fraction of patience each had spent, as an exact
+ * cross-multiplication — `urgencyA * patienceB` against `urgencyB * patienceA`, integer and
+ * lossless — with ties broken on the lower need id. It was the whole of a guest's choice at
+ * G-012, and it compared needs only: it had nothing to say about WHICH provider.
  *
- * Ties break on the LOWER NEED ID — a stable, explicit rule, never the order an array
- * happened to be built in. Two needs at equal pressure is the common case on the tick a
- * guest arrives (every urgency is 0), so this branch is not a corner.
+ * `pressureBasisPoints` in `utility.ts` replaces it, and the replacement is LOSSY. Flooring
+ * each fraction into basis points can tie where the cross-multiplication separated, so this
+ * is a behaviour change and not a refactor. It is exactly equivalent for content whose
+ * patiences have a least common multiple under 10,000 — which the shipped 300 / 360 / 300
+ * table does, at 1,800 — and `utility.test.ts` asserts that exhaustively, with a
+ * counter-example table beside it so the claim stays a measurement rather than a law.
  *
- * THIS IS THE WHOLE OF THE CHOICE AT G-012, AND IT IS DELIBERATELY THIN. G-014 replaces it
- * with a score over urgency AND provider fit, a content-defined hysteresis margin, and
- * abandonment as a reported outcome. What it inherits from here is a guest that COMMITS:
- * an engaged guest never re-evaluates, so the thrashing §6.1 hunts for is unexpressible
- * rather than merely unlikely — the same property G-004 handed to this goal.
+ * Why a scalar had to replace a comparator: G-014b needs "beats it by a margin", and a
+ * comparator cannot express a margin. `a beats b` and `a beats b by this much` are
+ * different questions, and only the second can carry hysteresis.
+ *
+ * The tie rule survives unchanged. A tie now falls through to the lower need id because
+ * `reserve` walks the vector in ascending id and keeps the incumbent, which is the same
+ * answer this function's last line gave.
  */
-export function compareNeedPriority(content: BoundContent, a: NeedState, b: NeedState): number {
-  const typeA = findNeedType(content, a.needId);
-  const typeB = findNeedType(content, b.needId);
-  // A need this content does not define cannot be pursued, so it sorts last rather than
-  // dividing by a patience that does not exist.
-  if (typeA === undefined || typeB === undefined) {
-    if (typeA === undefined && typeB === undefined) return compareNeedIds(a.needId, b.needId);
-    return typeA === undefined ? 1 : -1;
-  }
-  // Safe integers throughout: patience is bounded by the content table and urgency by
-  // patience, so the product is far inside 2^53 for any sane content.
-  const left = urgencyIn(typeA, a) * typeB.patienceTicks;
-  const right = urgencyIn(typeB, b) * typeA.patienceTicks;
-  if (left !== right) return left > right ? -1 : 1;
-  return compareNeedIds(a.needId, b.needId);
-}
-
-/** Total order on need ids. Locale-free `<`/`>`, matching `compareIds` in `content.ts`. */
-function compareNeedIds(a: ContentId, b: ContentId): number {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}
 
 /**
  * One tick of decay for a whole vector.
