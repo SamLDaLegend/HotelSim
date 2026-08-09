@@ -16,6 +16,7 @@
     "test:save": "vitest run save",
     "sim:run": "tsx tools/headless/src/cli.ts",
     "sim:bench": "node tools/gates/bench.mjs",
+    "viewer": "node tools/viewer/serve.mjs",
     "verify": "node tools/gates/verify.mjs"
   },
   "devDependencies": {

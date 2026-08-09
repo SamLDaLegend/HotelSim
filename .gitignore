@@ -5,6 +5,11 @@ coverage/
 .tmp/
 .DS_Store
 
+# Frame recordings from `sim:run --record` (G-017). The README's own example writes 58 MB
+# of run.ndjson into the repo root, and a recording is a derived artefact of a seed and a
+# command log — it is regenerated in seconds and must never be committed.
+*.ndjson
+
 # Probe files written into packages/sim/src by tools/headless/src/content-gate.test.ts
 # to prove the I3 gate actually bites. They are removed in a `finally`; this pattern is
 # the second line of defence, so a probe that survives a hard kill cannot be committed.

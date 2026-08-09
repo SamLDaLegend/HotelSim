@@ -8,6 +8,24 @@
 //   pnpm sim:run --days 30 --build 2880 --demolish 5760     (and knocks rooms down again)
 //   pnpm sim:run --days 1 --content ./my-content            (alternative content directory)
 //   pnpm sim:run --days 1000 --rooms 0 --build 1440 --loan 1440   (from nothing, G-011)
+//   pnpm sim:run --days 30 --seed 7 --rooms 6 --record run.ndjson --record-every 10
+//                                                           (a run a human can watch, G-017)
+//
+// `--record <path>` writes one `serialise(world)` per line, sampled every
+// `--record-every` ticks (default 1). It is OFF unless a path is given: with no
+// `--record` this program takes the same `run()` call it has always taken, so
+// `pnpm sim:bench` and I5 are unaffected. Frames are read by tools/viewer, which is
+// disposable and is not the renderer.
+//
+// TWO THINGS TO KNOW BEFORE POINTING IT AT ANYTHING, both measured rather than guessed:
+//
+//   1. THE FILE SIZE IS QUADRATIC IN RUN LENGTH. Every frame is a whole world and a
+//      whole world carries the whole ledger. `--days 30 --rooms 6 --record-every 10` is
+//      4,321 frames and 55.7 MB; the SAME SAMPLING AT `--days 365` IS ROUGHLY 8 GB.
+//      **Never point --record at the I5 workload.**
+//   2. MOST OF IT IS LEDGER THE VIEWER NEVER DRAWS — 19,946 of the final frame's 23,598
+//      bytes, 85%. That is the price of emitting frames through the existing save
+//      serialiser (ADR-0013 §1), recorded as a cost rather than routed around.
 //
 // `--rooms` is the hotel the scenario STARTS with, placed free through the structural
 // `spawnEntity`. `--build` is the PLAYER acting, through `buildRoom`: it costs the room
@@ -35,6 +53,7 @@
 
 import { createWorld, run } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
+import { recordRun } from './record.js';
 import { buildSummary, emitReport, parseArgs, schedule } from './report.js';
 
 function main(): void {
@@ -50,22 +69,35 @@ function main(): void {
   // already prove is off the plot, and the only way to know the plot without keeping a
   // second copy of it is to ask the world that will be asked to run the command.
   const initial = createWorld(options.seed, content);
-  const world = run(
-    initial,
-    content,
+  const commands = schedule(
     options.ticks,
-    schedule(
-      options.ticks,
-      content,
-      initial.grid,
-      options.rooms,
-      options.arrivalEveryTicks,
-      options.buildEveryTicks,
-      options.demolishEveryTicks,
-      options.loanEveryTicks,
-      options.amenities,
-    ),
+    content,
+    initial.grid,
+    options.rooms,
+    options.arrivalEveryTicks,
+    options.buildEveryTicks,
+    options.demolishEveryTicks,
+    options.loanEveryTicks,
+    options.amenities,
   );
+  // RECORDING IS OFF BY DEFAULT AND THIS BRANCH IS THE WHOLE MECHANISM (G-017). With no
+  // `--record`, this is the same `run` call, with the same arguments, that shipped before
+  // the flag existed — so `pnpm sim:bench` measures what it always measured and I5 does
+  // not move. With one, the same simulation runs and frames fall out of it on the way
+  // past; the world both branches hand to `buildSummary` is the same world, which is why
+  // stdout is byte-identical either way (proved by two spawned processes in
+  // record.replay.test.ts, not asserted here).
+  const world =
+    options.record === undefined
+      ? run(initial, content, options.ticks, commands)
+      : recordRun(
+          initial,
+          content,
+          options.ticks,
+          commands,
+          options.record,
+          options.recordEveryTicks,
+        );
   // Print the report, THEN fail if the run violated an invariant. The ordering — and
   // the fact that the violations are computed from the same summary the renderers
   // print — lives in emitReport, where report.test.ts drives it with forged worlds

@@ -2,22 +2,22 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-018 done. 15 goals; M0 and M1 signed off; M2 half built.*
+*As of 2026-08-09, G-017 done. 16 goals; M0/M1 signed off; **the game has been watched.***
 
-- **State**: save **v7** · summary v1 · 1,109 tests / 59 files · six gates green ·
-  I2 `4b8db9b1ac36cb35` · **I5's budget DERIVED at 389,333 ms, bench ~2%** — the invented
-  ten seconds was ~39x tighter than any stated requirement.
+- **State**: save **v7** · summary v1 · six gates green · I2 `4b8db9b1ac36cb35` ·
+  I5 **2.0%** of the derived 389,333 ms budget.
+- **WATCH #1 EXISTS** (above) and it is the point of ADR-0013. Two findings invisible to
+  1,109 tests: **11 of 15 amenity rooms inert** because provider choice is lowest-id, and
+  the engagement vector summing to **exactly** `night_rest.satisfyTicks` so a guest is never
+  idle in its room. **G-014 inherits both.**
+- **A parked hypothesis was tested by a goal that did not plan to test it** — G-013 parked
+  "the engagement vector sums to the lodging budget" *with a stated experiment*; G-017's
+  recording was that experiment. Park hypotheses with their experiments.
 - **The defect this project produces**: checks and claims that succeed while inspecting
-  nothing. G-013 produced nine; **G-018 produced four in four rounds, every one in the
-  EVIDENCE rather than the code, three inside the fix for the previous one.** Cite the
-  confound whenever a count is quoted — detection sensitivity has risen (ADR-0007).
-- **Newest rules**: prose that cannot be verified may describe, but it may not measure; and
-  do not replace a withdrawn count with a better-sounding one — say the weaker thing that
-  needs no evidence.
-- **I5 has been seen red for the first time** — by copying the shipped gate to a temp dir
-  rather than making it configurable. The technique transfers to G-020; the test does not.
-- **Open obligation**: **no WATCH entry exists in this file yet.** G-013 owes one, G-017
-  discharges it, and that first entry is the point of the whole ADR-0013 ruling.
+  nothing. Newest instances are both instructive — a guard testing the resulting **value**
+  against a default rather than whether the flag was seen, and a viewer drawing a homeless
+  guest identically to a housed one.
+- **Owed by the human**: `pnpm viewer`, scrub a recording. G-017's criterion 1.
 
 ---
 
@@ -934,3 +934,87 @@ successor over the orchestrator's recommendation: G-020, a paired ratio, **hard 
 of M3**, because M3 is the likeliest place in this project for a quadratic. The dead 70%
 promotion trigger is struck with no replacement invented — doing that inside the goal that
 deleted the first unsourced number would have minted the second.
+
+---
+
+## 2026-08-09 — WATCH #1 (G-017), discharging G-013's debt — *someone looked at the hotel*
+
+**This is the first WATCH entry in the project.** ADR-0013 exists to make it possible. Read
+it before the goal entry below, because the instrument matters less than what it showed.
+
+**Recording**: `sim:run --days 60 --seed 7 --rooms 6 --amenities 5 --record r2.ndjson
+--record-every 60`, replayed in `tools/viewer`. Frame references throughout.
+
+### 1. The pre-registered prediction was confirmed exactly, and it generalises worse
+
+`ai-critic` wrote it down at G-013 round 2, unable to check it: *all nourishment
+satisfactions come from the vending machines; the five cafés serve nobody.*
+
+**`guest_nourishment` 716 met — 0 by room, 716 by item. Five cafés, sixty days, zero
+guests.** And it is not only the cafés: **six entities host every guest in the hotel, two
+of each provider type, and they are the lowest ids** — `#14`/`#16` vending machines (64,709
+and 64,620 guest-ticks), `#13`/`#15` games rooms, `#29`/`#31` arm chairs. **4 of 15 amenity
+rooms are involved at all; 11 of 15 are inert.** On screen: five green cafés in a row,
+empty, beside two orange games rooms with everybody in them. **It reads as wrong instantly.**
+
+*(A first census naming four entities and "12 of 15 furniture" was wrong and is withdrawn —
+it omitted `#14` and `#16`, the two busiest hosts, which were the pair the prediction was
+about. Caught by `render-critic` re-measuring. The corrected figures are above.)*
+
+**This is `providersFor`'s documented lowest-id rule meeting seeding order. Every test calls
+it correct.** M3's nearest-by-path changes it; **G-014's scorer is the goal that inherits
+it**, and it now inherits a picture rather than a hypothesis.
+
+### 2. A guest is in two places at once — and it is DESIGN, with an arithmetic cause
+
+A guest holds its bedroom while engaged elsewhere, and **`night_rest` advances the whole
+time**: at 60 days, `--rooms 6`, seed 7 — **100.0%** of guest-samples at `--amenities 5`
+(344,876 of 344,876) and **68.85%** at `--amenities 1` (237,448 of 344,876), both
+reproduced independently at tick resolution. *(A first draft cited 68.95%, which is the
+**30-day** figure — 118,648 of 172,076 — printed under a 60-day recording line. Corrected
+by `render-critic`. `CLAUDE.md` rule 4, cite the workload with the number, in the entry
+whose two other figures were withdrawn for the same class of error.)* Frame reference `r3.ndjson` tick 3 — guest 1
+holds room `#1` on floor 0 while engaged with `arm_chair #17` in a basement lounge, rest
+480 → 479.
+
+**Not a defect.** The lodging/engagement split is by design (M2 seeding) so a guest that
+leaves to eat does not lose its room, and `guests.ts:115` and `:927-935` say the lodging
+room serves the lodging need for as long as the guest holds it.
+
+**What nobody had written down is why it hits exactly 100%:**
+
+> `guest_comfort 150 + guest_entertainment 150 + guest_nourishment 180 = 480 =
+> night_rest.satisfyTicks`
+
+With five of each amenity a guest is **never once idle in its room** for its whole stay, so
+**the bedroom is a billing token rather than a place.** `PARKING.md` carried *"the engagement
+vector sums to the lodging budget"* as a parked hypothesis **with a stated experiment**
+since G-013. **This run was that experiment and it came back positive.** G-013 parked it,
+G-017 tested it, neither goal planned that. Promoted from hypothesis to measurement.
+
+### 3. What was NOT seen, which is also a result
+
+**G-016's one-tick double-booking did not occur** in 1,440 consecutive ticks at
+tick-resolution, nor in R1 or R4. **That narrows the concern; it does not retire it** — one
+simulated day is a narrow window, and the 18.4% sampling lever still trades against a class
+nobody has now seen.
+
+### 4. The speed ladder, answered by looking (§2.1.1's discharge point)
+
+**At 30 ticks/s a simulated day is 48 s and reads brisk but watchable. At 1 tick/s it is
+dead** — 24 real minutes per day. **The human's diagnostic was right: the bottom rung is
+decoration.** G-021 makes the ladder content; this is the reading it starts from.
+
+### 5. ADR-0014 — the placeholder vocabulary is COLOUR PLUS TEXT, not shape
+
+`render-engineer` predicted it before building and was right: **every room type is a 1×1
+footprint, so a café, a games room, a lounge and a bedroom are the same rectangle in four
+colours.** Colour alone separated them fine at ~90 px cells. **Footprints are what would
+give silhouettes anything to differ in**, and until rooms have widths the cross-section is a
+colour-coded spreadsheet that happens to be laid out spatially. Two things read well: the
+earth line makes grade unambiguous — **a floating room would be obvious**, which is G-009's
+defect made visible — and the basement tint reads as below-ground.
+
+**The caveat, stated so a thin answer is not treated as settled**: the watched scenes are 9
+rooms with 4 concurrent guests, and 21 rooms with 4. **A 60-room hotel with 40 guests has
+still never been drawn by anything.** M5 must not read this as a verdict on the cross-section.

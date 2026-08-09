@@ -2,26 +2,25 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-018 done. 15 goals complete; M0 and M1 signed off; M2 half built.*
+*As of 2026-08-09, G-017 done (criterion 1 OWED). 16 goals; M0/M1 signed off.*
 
 - **Schema versions**: save **v7** · summary **v1** (v2 owed by G-015).
-- **Gates**: all six green. I2 `4b8db9b1ac36cb35` · `SAVE_V1_CONTENT` `8e09fe4f0fa162a3`
-  · 1,109 tests / 59 files. **I5's budget is DERIVED: 389,333 ms** (`HOTELSIM.md` §2.1.2),
-  bench reads **~2%** — the invented ten seconds was **~39x tighter** than any requirement.
-- **Order**: G-018 done -> **G-017** (viewer) -> G-014 -> G-015 -> G-019 -> **G-020**
-  (tripwire, hard prerequisite of M3) -> **G-021** (speed ladder as content) -> M2 exit.
-  **G-020 and G-021 are in the M2 exit list; skipping them defeats a human ruling.**
-- **Obligations owed**: G-013's **WATCH is undischarged** — G-017's first subject, with a
-  pre-registered target (`--amenities 5`: all nourishment from vending machines, five cafes
-  serving nobody for sixty days). G-014 runs the §5.5 seam question first. G-015 owes
-  summary v2 and a conservation law that is **not** an identity over its own inputs. G-019
-  is last-in-milestone: second critic, and M2's "visibly". G-020 inherits the unpinned bench
-  workload and the copy-the-gate proof-of-bite technique. **M4 does not start** until
-  scenario capital lands (ADR-0013 §5).
+- **Gates**: all six green. I2 `4b8db9b1ac36cb35` · I5 **2.0% of the derived 389,333 ms**.
+- **Order**: **G-014** -> G-015 -> G-019 -> **G-020** (tripwire, hard prerequisite of M3)
+  -> **G-021** (speed ladder as content) -> M2 exit. All are in the M2 exit list.
+- **OWED BY THE HUMAN, NOT BY A GOAL**: run `pnpm viewer`, load a recording, scrub it.
+  G-017's criterion 1 is dischargeable no other way, and no agent may substitute for it.
+- **Obligations owed**: G-014 runs the §5.5 seam question first **and inherits WATCH #1's
+  two findings** — lowest-id concentration leaves 11 of 15 amenity rooms inert, and the
+  engagement vector summing to exactly the lodging budget (480 ticks) makes the bedroom a
+  billing token. G-015 owes summary v2 and a conservation law that is **not** an identity
+  over its own inputs. G-019 is last-in-milestone: second critic, and M2's "visibly".
+  G-020 inherits the unpinned bench workload and the copy-the-gate proof-of-bite technique.
+  **M4 does not start** until scenario capital lands (ADR-0013 §5).
 - **Open contradictions**: G-012's criterion pins a content property any provider addition
-  can flip. `--rooms N` contaminates every balance sweep to date. **The speed ladder's 30
-  ticks/s is PROVISIONAL** — G-017 discharges it, G-021 makes it content.
-- **On trial**: §7.1's conversion guard — **two firings, both on prose**, none on code.
+  can flip. `--rooms N` contaminates every balance sweep. The speed ladder is PROVISIONAL —
+  **watched at G-017: 48 s/day reads brisk, 1x is dead** — and G-021 makes it content.
+- **On trial**: §7.1's conversion guard — **three firings, all on prose**, none on code.
 
 ---
 
@@ -945,7 +944,37 @@ Critique rounds used: 3/3
   No WATCH owed — this goal changes no behaviour, which is also criterion 4.
 
 ## G-017 — The replay viewer: a run that can be watched
-Status: pending
+Status: **done, WITH CRITERION 1 OWED** — 2 sweeps + 1 verification that converted.
+  3 MAJOR + 5 MINOR, then 2 MINOR + 1 NIT. Zero BLOCKERs.
+  Verified by the orchestrator: six gates green; I2 `4b8db9b1ac36cb35`; **the last frame of
+  a 4,321-frame / 55.74 MB recording independently re-hashes to `b9f6cfb9ef6fd685`, the
+  run's own hash**; stdout byte-identical with and without `--record`; 24 tests across the
+  two new files; `packages/sim` and `packages/content` untouched.
+
+  **CRITERION 1 IS OWED, NOT MET, AND THIS IS DELIBERATE.** *"A recorded 30-day run can be
+  scrubbed frame by frame in a browser"* is evidenced by nothing in the diff. The builder's
+  harness drove the shipped `viewer.js` through a recording 2D context and rendered to SVG
+  — a sound smoke test of the draw path, and **not** a perceptual check: it never touches
+  the file picker, the scrubber, the play loop, the speed buttons, or Canvas2D text metrics
+  and contrast at real size, which is exactly what ADR-0014 asks. Signing it off would be
+  §9's *"a criterion is being verified by an agent's judgement of something nobody can
+  observe"* — **the stop condition ADR-0013 exists to close, discharged by the same
+  substitution it forbids.** **Dischargeable only by a human running `pnpm viewer`, picking
+  a recording and scrubbing it.** Criteria 2-7 are met.
+
+  **THE GOAL DELIVERED WHAT IT PROMISED TO DELIVER** — see `JOURNAL.md`'s WATCH #1, the
+  first in the project. The pre-registered café prediction confirmed exactly; the lowest-id
+  concentration found to be worse than predicted (**11 of 15 amenity rooms inert**); and a
+  parked hypothesis from G-013 tested and returned positive without either goal planning it.
+
+  **TWO DEFECTS THE TESTS COULD NOT SEE, BOTH FOUND HERE.** A roomless guest was drawn
+  pixel-identical to a housed one — 19,619 roomless guest-ticks all rendering as content
+  eaters while 89 of 120 guests left unsatisfied, §6.1's "UI that cannot express a state the
+  sim can reach", on the instrument whose output is ledger evidence. And `--record-every 1`
+  alone was silently accepted, because the guard tested the resulting **value** against the
+  default rather than whether the flag was seen — **a guard whose condition was unreachable
+  for the one input that could trigger it**, and the existing test passed only because it
+  used a non-default value.
 Milestone: M2 (inserted by human ruling ADR-0013 §1)
 Owner pair: **render-engineer / render-critic** — idle for the whole project, which the
   human named as its own small warning

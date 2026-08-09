@@ -34,6 +34,7 @@ import {
   HOTEL_ROOMS,
   lodgingRoomTypeOf,
   parseArgs,
+  RECORD_EVERY_DEFAULT,
   renderJson,
   renderQuiet,
   renderText,
@@ -601,6 +602,11 @@ describe('emitReport (print THEN fail — the contract\'s second clause)', () =>
     demolishEveryTicks: 0,
     loanEveryTicks: 0,
     contentDir: undefined,
+    // Recording is off (G-017). `emitReport` cannot see either field — they are consumed
+    // in cli.ts and never reach the summary — so this is here to satisfy `Options`, and
+    // its being inert is the point.
+    record: undefined,
+    recordEveryTicks: RECORD_EVERY_DEFAULT,
     ...overrides,
   });
 

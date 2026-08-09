@@ -160,6 +160,30 @@ export const BUILD_OFF = 0;
  */
 export const BUILD_START_TICK = 1;
 
+/**
+ * How many ticks pass between recorded frames when `--record` is given and
+ * `--record-every` is not (G-017). One frame per tick: lossless, and enormous.
+ *
+ * IT IS OPT-IN COARSENESS RATHER THAN AN OPT-IN DEFAULT, because the only sampling
+ * interval that cannot silently lose an event is 1. Everything above it is a trade the
+ * caller makes on purpose — G-016's one-tick double-booking is invisible at every N > 1,
+ * which is precisely why the default must not quietly be 10.
+ *
+ * THE ENVELOPE, MEASURED, AND IT IS QUADRATIC IN RUN LENGTH. A frame is a whole
+ * `serialise(world)`, which carries the WHOLE LEDGER, so the file grows as
+ * O(days^2 / everyTicks). Measured on `--days 30 --seed 7 --rooms 6 --record-every 10`:
+ * 4,321 frames, 55.7 MB, and the final frame is 23,598 bytes of which 19,946 — 85% — is
+ * ledger the viewer never draws. The same sampling at `--days 365` is roughly 8 GB.
+ *
+ * **NEVER POINT `--record` AT THE I5 WORKLOAD.** `pnpm sim:bench` does not pass it and
+ * must not; recording is off unless a path is given, and the run path with no path given
+ * is byte-for-byte the one that shipped before this flag existed.
+ *
+ * The cost is a consequence of ADR-0013 §1's "through the existing save serialiser",
+ * recorded here as a cost rather than smuggled out through a delta format.
+ */
+export const RECORD_EVERY_DEFAULT = 1;
+
 // The storey the walk starts on is `GROUND_FLOOR`, imported from the sim rather than
 // redeclared here since G-009: the enclosure rule reads the same constant to decide what
 // the earth carries, and a host with its own copy of "where the ground is" could lay a
@@ -419,6 +443,21 @@ export type Options = {
   /** Ticks between player loan attempts (G-011). `BUILD_OFF` (0) means the player never borrows. */
   readonly loanEveryTicks: number;
   readonly contentDir: string | undefined;
+  /**
+   * Where to write a frame recording, or `undefined` for no recording at all (G-017).
+   *
+   * RECORDING IS OFF BY DEFAULT AND THIS FIELD IS WHY: `cli.ts` branches on it being
+   * `undefined` and takes the pre-G-017 `run(...)` call, unchanged. Nothing about the
+   * simulation, the schedule or the report differs between the two branches.
+   *
+   * IT IS DELIBERATELY ABSENT FROM `RunSummary.input`. A path on stdout would break the
+   * stability contract at the top of this file — absolute paths are banned there — and
+   * would move every pinned invocation's bytes. Recording changes the filesystem and
+   * nothing else, which `record.replay.test.ts` proves with two spawned processes.
+   */
+  readonly record: string | undefined;
+  /** Ticks between recorded frames. Meaningless, and rejected, without `record`. */
+  readonly recordEveryTicks: number;
 };
 
 export function parseArgs(argv: readonly string[]): Options {
@@ -433,6 +472,10 @@ export function parseArgs(argv: readonly string[]): Options {
   let demolishEveryTicks = BUILD_OFF;
   let loanEveryTicks = BUILD_OFF;
   let contentDir: string | undefined;
+  let record: string | undefined;
+  let recordEveryTicks = RECORD_EVERY_DEFAULT;
+  /** Whether `--record-every` was PASSED, which is not the same question as its value. */
+  let recordEverySeen = false;
 
   const requireNumber = (flag: string, raw: string | undefined): number => {
     if (raw === undefined) throw new Error(`${flag} requires a value`);
@@ -506,6 +549,27 @@ export function parseArgs(argv: readonly string[]): Options {
         i += 1;
         break;
       }
+      case '--record': {
+        // A path, not a number, and not optional: `--record` with nothing after it is a
+        // caller who thinks they are recording and is not (G-017).
+        const raw = argv[i + 1];
+        if (raw === undefined) throw new Error('--record requires a file path');
+        record = raw;
+        i += 1;
+        break;
+      }
+      case '--record-every':
+        // 0 is NOT legal: it is the chunk size of the recording loop, and a chunk of zero
+        // is an infinite loop, not a dense recording. Same reasoning as `--arrivals`.
+        recordEverySeen = true;
+        recordEveryTicks = requireNumber('--record-every', argv[i + 1]);
+        if (recordEveryTicks < 1) {
+          throw new Error(
+            `--record-every requires a positive number of ticks, got "${String(argv[i + 1])}"`,
+          );
+        }
+        i += 1;
+        break;
       case '--quiet':
         quiet = true;
         break;
@@ -521,6 +585,21 @@ export function parseArgs(argv: readonly string[]): Options {
   if (quiet && json) {
     throw new Error('Pass either --quiet or --json, not both: two output modes on one stdout is an ambiguity with no consumer');
   }
+  // A sampling interval with nothing to sample is a caller who forgot `--record` and
+  // would otherwise get a successful run, a normal report, and no file — the quiet
+  // no-op being the failure mode worth refusing (G-017).
+  //
+  // IT TESTS WHETHER THE FLAG WAS SEEN, NOT WHAT IT PRODUCED, and the first version got
+  // that wrong in the one way that made it useless: it compared the resulting VALUE
+  // against `RECORD_EVERY_DEFAULT`, so `--record-every 1` — the default value, passed
+  // explicitly — sailed through and produced exactly the silent no-op this guard exists
+  // to refuse. `--record-every 10` was refused correctly, which is why it looked right.
+  //
+  // The lesson generalises past this line: a guard on "did the caller ask for this?"
+  // cannot be written as a test on the answer, because the default is a legal answer.
+  if (record === undefined && recordEverySeen) {
+    throw new Error('--record-every needs --record: there is nothing to sample without a path to write frames to');
+  }
   return {
     seed,
     ticks,
@@ -533,6 +612,8 @@ export function parseArgs(argv: readonly string[]): Options {
     demolishEveryTicks,
     loanEveryTicks,
     contentDir,
+    record,
+    recordEveryTicks,
   };
 }
 
