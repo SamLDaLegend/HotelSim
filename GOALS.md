@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-015 done. 18 goals; M0/M1 signed off; M2 mostly built.*
+*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
 
 - **Schema versions**: save **v8** · summary **v2**.
 - **Gates**: all six green. I2 `ca54cbb7ae2dc693` · I5 **2.1% of the derived 389,333 ms** ·
@@ -1276,6 +1276,57 @@ Out of scope: the outcome table (G-015); reputation as a stateful aggregate; rev
   feeding demand, pricing or arrival rate (ALL M4); review text (M5/M6)
 Critique rounds used: 0/3
 
+  **THE HEADLINE CRITERION CANNOT DETECT WHAT IT CLAIMS — HUMAN FINDING, 2026-08-09,
+  BEFORE PLAN. Read this before designing the review function.**
+
+  **Departure outcome is currently IDENTICAL to `night_rest`'s outcome — not correlated,
+  identical.** Measured across all three of G-017's recordings:
+
+  | recording | satisfied | night_rest met | gave up | night_rest unmet |
+  |---|---|---|---|---|
+  | crowded | 16 | **16** | 189 | **189** |
+  | amenities | 32 | **32** | 0 | **0** |
+  | ticks | 8 | **8** | 0 | **0** |
+
+  And in the crowded run, of the **16** who departed satisfied, only **2 got comfort and 3
+  got entertainment**. **A guest who met one need of four leaves under the same departure
+  reason as one who met all four.** Comfort, entertainment and nourishment are currently
+  **instrumentation, not mechanics** — recorded, and changing nothing. Giving them
+  consequence is this goal's job.
+
+  **THE PROBLEM: `--rooms 1` vs `--rooms 12` varies `night_rest` satisfaction enormously**,
+  so **a review function that reads ONLY the lodging need produces two wildly different
+  distributions and passes the differential criterion green.** Three-quarters of the need
+  vector could contribute nothing and the criterion advertised as the one that "cannot be
+  faked" would not notice.
+
+  **THE REPAIR — A SECOND AXIS, and it is a criterion, not a suggestion:**
+
+  > **Hold room count FIXED and vary amenity density, and require the review mean to move.**
+
+  The first arm measures whether reviews respond to **lodging**. The second measures whether
+  they respond to **the stay**. The content to build the control already ships — `watch-ticks`
+  and `watch-amenities` have identical entity composition — so this costs an invocation, not
+  a design.
+
+  **This is the ADR-0007 class arriving at a goal BEFORE it is built, which is the cheapest
+  possible moment**, and it is the first time in this project that has happened.
+
+  **A SECOND READING, WORTH TAKING BEFORE M2 EXIT: THERE IS NO MIDDLE.** 36 arrivals → 32
+  satisfied, **zero** gave up. 216 arrivals → 16 satisfied, **189** gave up. **The system is
+  bimodal — flawless or catastrophic, with nothing between.** For a casual management sim the
+  interesting territory is the middle band, where most guests are mostly happy and a few
+  grumble, because that is where a player's decisions register as improvements rather than as
+  flipping a switch. **Whether that is a real defect or an artefact of two deliberate
+  extremes is not decidable from three recordings, and neither of them sits anywhere near the
+  middle.** Record one at roughly **6 rooms and 24 arrivals/day** — the configuration a
+  player would actually be in — before M2 exit.
+
+  **AND ONE GENUINELY GOOD SIGN IN THE SAME DATA, NOBODY WROTE IT:** with cafés plentiful,
+  nourishment is met **32/32 by rooms** and the vending machine goes unused; when starved,
+  **7 of 13** satisfactions come from the machine. **The utility scorer prefers the better
+  provider and falls back under pressure. That is emergent, not designed.**
+
   **THIS IS THE BEHAVIOURAL HALF, AND IT IS DOMINANT-STRATEGY TERRITORY.** A review scale
   that saturates for any hotel that opens the door is the failure to hunt, and `ai-critic`'s
   catalogue does not cover it — which is why `balance-critic` owns this goal rather than
@@ -1434,8 +1485,78 @@ Exit criteria:
 
 ---
 
-## G-020 — The tick-cost tripwire, because I5 stopped being one
+## G-020a — The measurement instrument (`sim:measure`)
+Status: **done** — 1 sweep (**1 BLOCKER** + 4 MAJOR + 3 MINOR + 1 NIT). The project's
+  first BLOCKER, twenty goals in, and it was an **evidence** defect rather than a code one.
+Milestone: M2
+Owner pair: sim-engineer / sim-critic
+Statement: A command that measures the working tree against a baseline revision at a
+  single-sourced workload and **reports a ratio**. No bound, no verdict, no CI gate.
+Exit criteria:
+  - `pnpm sim:measure` prints a ratio, the workload it names, its method, both resolved
+    SHAs and both digests, and exits 0 *(could pass vacuously alone — 2 and 3 are the teeth)*
+  - `pnpm exec vitest run measure` green, **including**: a planted decoy leak → ERROR;
+    empty materialisation → ERROR; `IDENTICAL` textually distinct from `MEASURED`; the null
+    experiment inside its derived tolerance with identical state hashes; `bench.mjs`
+    declares no workload of its own; **`ROOMS 60→3` and `ARRIVAL_EVERY_TICKS 32→3200` each
+    redden the golden**, which before this goal they did not
+  - the readings recorded in `JOURNAL.md`
+  - `pnpm verify` green
+Critique rounds used: 1/3
+
+  **THE SEAM WAS TAKEN, AND THE BLOCKER THAT FORCED IT WAS `sim-critic`'s.** The original
+  G-020 planned a bound of `2.40^(1/7)`, where **N = 7 was a reading, not a derivation** —
+  at commit `9e08d6f` the same method on the same milestones gave N = 5 and a bound of
+  1.191, because **M2 was in flight and grew 5 → 11 while we worked.** Defensible N spans
+  5.5–11 and the bound spans 1.083–1.191. *"A moving quantity nobody committed to, sampled
+  once"* — §2.1's own definition of a superstition, in the goal written to enforce §2.1.
+
+  **THE ORCHESTRATOR'S RULING WAS ALSO REFUTED.** I ruled the tight bound because drift
+  compounds. The answer: **the failure is cumulative and the instrument is per-goal**, and
+  they coincide only if growth is evenly spread — which the repo's own data denies.
+  Worst-case full compliance was `7 × 1.1332 = 2.40×`: **the entire M3 allocation spent with
+  the gate green at every step.** Red on the one shape observed, green on the shape it was
+  built to stop.
+
+  **THE BLOCKER**: two tests named historical revisions by sha while **CI checks out a
+  shallow clone** (`fetch-depth` defaults to 1), so `pnpm test` — the I4 gate — would have
+  gone red on all three platforms the moment this landed, **and worse after COMMIT**, when
+  the tip's parent disappears too. Reproduced in a real `--depth 1` clone by both critic and
+  builder. Fixed with `fetch-depth: 0` **and a test asserting the workflow declares it**, so
+  a later CI tidy-up cannot silently re-shallow the clone and take both proofs with it.
+
+## G-020b — The tick-cost tripwire: a bound, a verdict, and proof of bite
 Status: pending — **HARD PREREQUISITE OF M3. M2 does not exit without it.**
+
+  **INHERITED FROM G-020a AS MEASUREMENT, NOT ASSUMPTION:**
+
+  1. **THE CALIBRATION IS NOT DISCHARGED AND CANNOT BE.** `CLAUDE.md`'s 2.41/2.37/2.32×
+     **is not a commit pair** — it measured G-012's *unoptimised* need vector, a state never
+     committed, and G-012 and G-016 shipped in **one commit**. The shipped pair is 2.07×,
+     and even that is unreachable: `f43699d → aa30218` returns INCOMPARABLE because HEAD's
+     harness calls `roomTypeServes`, added at G-013. **The instrument's reachable history
+     starts at G-013, and the repo's only cross-session-durable ratio is on the wrong side
+     of it.**
+  2. **THE SINGLE-READING FLOOR IS ±10%; a `--repeat 7` median is worth ~±3%.** Five
+     sittings. **The null spread overlaps both real pairs**, so **the 1.13 bound originally
+     ruled is not measurable by one invocation of this tool.** The two ways out are
+     `--repeat` (measured, linear cost) and a longer arm (unmeasured — and it re-derives the
+     instrument's own cross-check but no longer touches the golden).
+  3. **A residual head-slow slot bias of ~1% is not excluded** — the null median sat at or
+     above 1.000 in four of five sittings.
+
+  **AND THE SHAPE THE BOUND PROBABLY WANTS**, from `sim-critic`: on the **running product
+  against a milestone anchor**, not on HEAD~1. That catches 7×1.13, passes
+  1×2.37-then-flat, **needs no N**, and makes *"this goal spent 40% of M3's headroom"* the
+  thing the gate says out loud. Its honest cost: an anchor drifts from the working tree's
+  API, so the INCOMPARABLE rate gets worse the longer a milestone runs. The cheap middle is
+  a per-goal gate **plus a reported running product** — a sum of logs of numbers the gate
+  already has, report-only, which removes the always-green-while-the-allocation-empties hole.
+
+  **INCOMPARABLE IS A VERDICT, NOT AN ERROR** — including when the arms disagree about how
+  much work they did. **The first M3 commit that changes how many guests arrive must not
+  turn the tripwire red**, and M3 is queued shared resources, where a guest who cannot reach
+  a room is the headline case.
 Milestone: M2
 Owner pair: sim-engineer / sim-critic
 Statement: A paired ratio against the previous commit, at fixed workload, with a stated

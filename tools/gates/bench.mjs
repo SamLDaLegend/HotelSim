@@ -62,6 +62,11 @@
 // (`tools/headless/src/bench.workload.golden.test.ts`). Changing it invalidates that
 // comparability, so it stays until a goal deliberately re-sizes the workload.
 //
+// AND SINCE G-020a THAT SENTENCE IS TRUE RATHER THAN ASPIRATIONAL. The golden used to
+// declare its own copies of these numbers and never read this gate, so `ROOMS 60 -> 3`
+// left it green; both now import `./workload.mjs`, and changing a value there moves a
+// committed hash.
+//
 // THE WORKLOAD DOES NOT MATCH THE REQUIREMENT'S, AND G-018 DID NOT CHANGE IT. The
 // requirement says a 60-room HOTEL; this runs a 60-room SHELL at roughly a quarter
 // occupancy with `--amenities 1` — four providers, where `vitest run scaling` uses
@@ -77,17 +82,15 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
-// THE BUDGET IS NOT DECLARED HERE, DELIBERATELY. One source, evaluated by the test that
-// pins it (`budget.mjs`, and the note at its head for why this is not paranoia).
+// NEITHER THE BUDGET NOR THE WORKLOAD IS DECLARED HERE, DELIBERATELY. One source each,
+// evaluated by the tests that pin them (`budget.mjs` and `workload.mjs`, and the notes at
+// their heads for why this is not paranoia). Until G-020a the workload WAS declared here,
+// and `ROOMS 60 -> 3` left every test in the repo green.
 import { BUDGET_MS, DAYS } from './budget.mjs';
+import { ARRIVAL_EVERY_TICKS, ROOMS, SEED } from './workload.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
-const SEED = 42;
-/** G-010: a real hotel rather than a three-room toy. See the note above before changing. */
-const ROOMS = 60;
-/** Sets concurrent guests, which is what this gate actually measures. */
-const ARRIVAL_EVERY_TICKS = 32;
 
 const started = process.hrtime.bigint();
 const result = spawnSync(

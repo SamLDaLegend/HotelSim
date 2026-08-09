@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-08, after G-013. 14 ADRs. Human decisions: ADR-0011, 0012, 0013, 0014.*
+*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
 
 - **Load-bearing everywhere**: ADR-0001 content injected, never value-imported · ADR-0002
   integer pence · ADR-0003 snake_case literal = content ID · ADR-0006 the v1 fixture is

@@ -79,7 +79,15 @@ S IS AN ASSUMPTION AND IS LABELLED ONE. At M5 the sim shares a thread with Pixi,
 
 H IS DECOMPOSED, NOT ROUNDED. Each factor cites something this project measured:
   M3 circulation  x2.40  the only milestone-sized behaviour system ever measured here
-                         is M2's need vector, at 2.41/2.37/2.32x (CLAUDE.md, measuring).
+                         is M2's need vector, at 2.41/2.37/2.32x AS FIRST IMPLEMENTED,
+                         BEFORE G-016's 10.7% cut (CLAUDE.md, measuring). That state was
+                         never committed, so no pair of commits reproduces it; the SHIPPED
+                         pair measures 2.07x (G-016's block). Corrected at G-020a, whose
+                         instrument cannot reach either. The consequence is nil and in the
+                         conservative direction - sourcing this factor to 2.07 would give
+                         H = 3.88 and a LOOSER budget - but a citation naming a state that
+                         does not exist does not belong in the section whose point is that
+                         a gate number must trace to something.
                          §8 calls M3 "where the genre's difficulty actually lives", so it
                          gets a full need-vector's worth rather than a discount.
   M4 economy      x1.50  staff are agents but fewer than guests; settlement is nightly and
@@ -179,6 +187,14 @@ A criterion that uses a perceptual word — visibly, reads as, looks — needs a
 Each of GOALS.md, DECISIONS.md, JOURNAL.md and PARKING.md carries a rolling digest at the top under a fixed heading. Fifteen lines maximum. It is REWRITTEN at every REFLECT and never appended to. It carries: current schema version, current gate readings, live obligations owed by future goals, and open contradictions. The append-only history stays exactly as it is beneath it.
 
 The reason: the four ledgers passed 2,800 lines and JOURNAL.md — which calls itself the memory that survives compaction — is a quarter of that. An ADR amendment has already spent a day filed under the wrong ADR.
+
+AMENDED 2026-08-09, BECAUSE THE MECHANISM EXHIBITED THE FAILURE IT WAS BUILT TO PREVENT. At G-020a the four digests read: GOALS "G-015 done", JOURNAL "G-015 done", DECISIONS "as of 2026-08-08, after G-013" (five goals and two human ADRs stale), PARKING "G-018 in progress". THREE FILES, THREE DIFFERENT ANSWERS TO "WHERE ARE WE" — a reader scanning for live state gets a confident, wrong answer, which is the exact defect §4.1 exists to close.
+
+The cause is precise and worth naming: §4.1 says REWRITTEN EVERY REFLECT, and what was happening was rewritten WHENEVER THAT FILE CHANGED. Those are not the same thing, and the difference is invisible until you read all four side by side.
+
+SO: ALL FOUR DIGESTS CARRY A BYTE-IDENTICAL `*As of …*` LINE, REWRITTEN IN ONE STEP. REFLECT is not complete until they agree. A digest whose as-of line disagrees with another's is a defect of the same standing as a stale figure in a comment — and it is mechanically checkable, so it should be checked rather than trusted. Seeded as an obligation on the next goal that owns a ledger-shaped check; until then the orchestrator re-stamps all four in one edit and says so at REFLECT.
+
+(Recorded because it is instructive: the first attempt at this re-stamp missed PARKING.md, because its as-of line wraps onto a second line and a line-anchored pattern did not match it. The mechanism needed a mechanical check within one minute of being repaired by hand.)
 5. The goal loop
 5.1 State machine
 SELECT -> PLAN -> [critic sees plan, §5.6] -> BUILD -> CRITIQUE -> RESPOND -> VERIFY -> WATCH -> COMMIT -> REFLECT -> SELECT

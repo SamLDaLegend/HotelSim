@@ -2,8 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-018 in progress. ~123 items across 16 goals, plus three inherited
-onto G-020's block. Still growing, so §9's stop condition is not firing.*
+*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
 
 - **PROMOTED OUT — no longer parked**: scenario capital is a **hard prerequisite of the
   first M4 goal** (ADR-0013 §5). Every balance figure to date was taken with `--rooms N`

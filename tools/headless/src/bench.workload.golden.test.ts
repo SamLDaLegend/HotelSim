@@ -35,9 +35,25 @@
 //   conservation   : every departure row summed + still here = arrived, both arms
 //   need rows    4 = one per need type in the shipped content
 //
-// IF A HASH BELOW MOVES, STOP. Either the simulation changed — in which case say what and
-// why, as G-007 and G-008 did for the other golden — or an "optimisation" was not one.
+// AND THE ARRIVAL FIGURE IS NOW DERIVED FROM THE NUMBER THE GATE ACTUALLY USES, not from a
+// second copy of it declared here. See the block below `const GATES`.
+//
+// IF A HASH BELOW MOVES, STOP. There are now THREE causes, and G-020a added the third:
+//
+//   1. the simulation changed — in which case say what and why, as G-007 and G-008 did
+//      for the other golden;
+//   2. an "optimisation" was not one;
+//   3. SOMEBODY RE-SIZED THE GATE'S HOTEL in `tools/gates/workload.mjs`. That is the
+//      reddening this file exists to produce and it is not a regression — before G-020a
+//      this file declared its OWN `ROOMS` and `ARRIVAL_EVERY_TICKS` and the gate's could be
+//      changed with every test in the repo staying green. If cause 3 is why you are here,
+//      the question is whether the workload should have moved, not whether to re-pin.
+//
+// The gate's RUN LENGTH is deliberately not in that list: this file owns its own `DAYS`.
+// See the note on that constant for why sharing it with the instrument was a mistake.
 
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   createWorld,
@@ -50,17 +66,46 @@ import {
 } from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
+import { evaluateGateModule } from './gate-module.js';
 import { schedule } from './report.js';
 
 const content = loadContent();
 
-/** Five simulated days of the I5 bench's hotel. ~100ms per arm, so the suite can afford it. */
+/**
+ * THE GATE'S OWN FIGURES, READ OUT OF THE GATE'S OWN MODULE (G-020a).
+ *
+ * Until G-020a this file declared its own `ROOMS = 60` and `ARRIVAL_EVERY_TICKS = 32`
+ * under a comment saying they were "`bench.mjs`'s own figures, so this pin and that gate
+ * describe the same building" — and never read `bench.mjs`. `sim-critic` showed what that
+ * comment was worth: mutating the GATE's `ROOMS` to 3, or its `ARRIVAL_EVERY_TICKS` to
+ * 3200, left every assertion in this file and every other test in the repo green. The
+ * golden pinned a workload nothing connected to the workload that ran. It was the
+ * duplicated-constant shape G-018 removed from the budget, still live one file over, with
+ * a comment asserting the property it lacked.
+ *
+ * Now there is one copy, in `tools/gates/workload.mjs`, and both the gate and this pin
+ * import it — so changing it moves the hashes below, which is what a pin is for.
+ */
+const GATES = resolve(dirname(fileURLToPath(import.meta.url)), '../../gates');
+const workload = evaluateGateModule(join(GATES, 'workload.mjs'), ['ROOMS', 'ARRIVAL_EVERY_TICKS', 'SEED']);
+
+/**
+ * Five simulated days of the I5 bench's hotel. ~100ms per arm, so the suite can afford it.
+ *
+ * THIS ONE IS DELIBERATELY *NOT* READ FROM THE GATE MODULE, and the distinction is the
+ * point: the HOTEL is shared, the RUN LENGTH is not. A first version took this from
+ * `workload.mjs`'s `MEASURE_DAYS`, which is `sim:measure`'s arm length — so lengthening the
+ * instrument's arm, the likeliest response to its ±10% noise floor, would have moved both
+ * hashes below and every hand-checked count with them. A golden that gets re-pinned
+ * whenever a tool is retuned is not evidence. `measure.instrument.test.ts` witnesses that
+ * the instrument's arm and this pin describe the same history, at whatever length the
+ * instrument uses, by computing the hash rather than by sharing a constant.
+ */
 const DAYS = 5;
 const TICKS = DAYS * 1440;
-const SEED = 42;
-/** `bench.mjs`'s own figures, so this pin and that gate describe the same building. */
-const ROOMS = 60;
-const ARRIVAL_EVERY_TICKS = 32;
+const SEED = workload.SEED;
+const ROOMS = workload.ROOMS;
+const ARRIVAL_EVERY_TICKS = workload.ARRIVAL_EVERY_TICKS;
 
 function runWorkload(buildEveryTicks: number, demolishEveryTicks: number): World {
   const world = createWorld(SEED, content);

@@ -64,10 +64,14 @@
 //
 // WHAT THIS FILE STILL DOES NOT REACH, STATED SO NOBODY READS IT AS MORE THAN IT IS:
 //
-//   - **The WORKLOAD is unpinned.** `ROOMS 60 -> 3` or `ARRIVAL_EVERY_TICKS 32 -> 3200`
-//     leave every assertion here green, and `bench.workload.golden.test.ts` declares its
-//     own copies of both rather than reading these. G-018 said at PLAN that it would
-//     report the workload and not change it, and that holds. -> G-020, same block.
+//   - ~~**The WORKLOAD is unpinned.**~~ **CLOSED AT G-020a.** It used to be true that
+//     `ROOMS 60 -> 3` or `ARRIVAL_EVERY_TICKS 32 -> 3200` left every assertion here green
+//     while `bench.workload.golden.test.ts` declared its own copies rather than reading the
+//     gate's. Both now import `tools/gates/workload.mjs`, and
+//     `measure.instrument.test.ts` witnesses the sensitivity directly: it runs the workload
+//     at `ROOMS = 3` and at `ARRIVAL_EVERY_TICKS = 3200` and asserts each moves the hash the
+//     golden pins. This file still asserts nothing about the workload — that lives one file
+//     over, with the instrument that made it single-sourced.
 //   - **The proof below runs ONE simulated day**, so it witnesses the comparison and the
 //     exit code, not the 365-day workload the shipped gate measures.
 //
@@ -90,6 +94,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const BUDGET_MODULE = join(ROOT, 'tools/gates/budget.mjs');
 const BENCH = readFileSync(join(ROOT, 'tools/gates/bench.mjs'), 'utf8');
 const BUDGET_SOURCE = readFileSync(BUDGET_MODULE, 'utf8');
+const WORKLOAD_SOURCE = readFileSync(join(ROOT, 'tools/gates/workload.mjs'), 'utf8');
 const CHARTER = readFileSync(join(ROOT, 'HOTELSIM.md'), 'utf8');
 const SHORT_FORM = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
 
@@ -247,6 +252,11 @@ describe('I5 GOES RED WHEN IT IS OVER BUDGET — the gate observed failing, not 
 
       writeFileSync(join(dir, 'bench.mjs'), bench);
       writeFileSync(join(dir, 'budget.mjs'), budget);
+      // The gate's WORKLOAD moved into its own module at G-020a, so the copy needs it too
+      // — unmodified, because this probe is about the budget and a copy that also changed
+      // the hotel would be proving two things and witnessing neither. It is copied rather
+      // than imported so that `tools/gates` stays untouched, which is the whole technique.
+      writeFileSync(join(dir, 'workload.mjs'), WORKLOAD_SOURCE);
 
       const run = spawnSync(process.execPath, [join(dir, 'bench.mjs')], {
         cwd: ROOT,

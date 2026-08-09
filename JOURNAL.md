@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-015 done. 18 goals; M0/M1 signed off; **the game has been watched.***
+*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
 
 - **State**: save **v8** · summary **v2** · six gates green · I2 `ca54cbb7ae2dc693` ·
   67 files / 1,235 tests · I5 **2.1%** of the derived 389,333 ms budget.
