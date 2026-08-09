@@ -12,6 +12,10 @@ import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
+// The `—` column is for checks that are NOT §2 invariants. `typecheck` has always been one
+// of those, and `check:measure` (G-020a) is the second: `pnpm sim:measure` is an instrument
+// that renders no verdict, so there is no invariant there to break. The closing line below
+// counts the SIX, and it still says six on purpose.
 const GATES = [
   ['—', 'typecheck', 'strict TypeScript across the workspace'],
   ['I1', 'check:purity', 'sim imports no render layer, DOM, engine, fs or network'],
@@ -20,6 +24,7 @@ const GATES = [
   ['I2', 'test:determinism', 'same seed + log => identical hash after 100k ticks'],
   ['I6', 'test:save', 'serialise -> deserialise -> re-hash is identical'],
   ['I5', 'sim:bench', '365 days headless, inside the derived budget (§2.1.2)'],
+  ['—', 'check:measure', "the tick-cost instrument's own proofs — a check, not an invariant"],
 ];
 
 const results = [];

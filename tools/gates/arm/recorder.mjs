@@ -12,8 +12,8 @@
 // So the digest is taken over THE MODULE GRAPH THE LOADER ACTUALLY RESOLVED. This hook
 // records every `specifier -> resolved url` pair; `measure.mjs` then requires every
 // resolved file to live inside the arm that asked for it, and refuses to time anything
-// when one does not. `measure.instrument.test.ts` plants a decoy import and witnesses the
-// refusal, so the check is wired to the path it protects (ADR-0007).
+// when one does not. `tools/gates/check-measure.mjs` plants a decoy import and witnesses
+// the refusal, so the check is wired to the path it protects (ADR-0007).
 //
 // Hooks run on their own thread, so the log cannot be a shared array — it is a file, named
 // by the environment variable below and read back by the parent once the child exits.

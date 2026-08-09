@@ -97,9 +97,12 @@ const workload = evaluateGateModule(join(GATES, 'workload.mjs'), ['ROOMS', 'ARRI
  * `workload.mjs`'s `MEASURE_DAYS`, which is `sim:measure`'s arm length — so lengthening the
  * instrument's arm, the likeliest response to its ±10% noise floor, would have moved both
  * hashes below and every hand-checked count with them. A golden that gets re-pinned
- * whenever a tool is retuned is not evidence. `measure.instrument.test.ts` witnesses that
- * the instrument's arm and this pin describe the same history, at whatever length the
- * instrument uses, by computing the hash rather than by sharing a constant.
+ * whenever a tool is retuned is not evidence. `pnpm check:measure`
+ * (`tools/gates/check-measure.mjs`, a standalone gate — not part of `pnpm test`) witnesses
+ * that the instrument's arm and this pin describe the same history, at whatever length the
+ * instrument uses, by computing the hash rather than by sharing a constant. It reads this
+ * constant and the hashes below OUT OF THIS FILE, so re-pinning here cannot leave the two
+ * describing different histories while both stay green.
  */
 const DAYS = 5;
 const TICKS = DAYS * 1440;

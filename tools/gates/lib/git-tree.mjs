@@ -34,7 +34,7 @@ import { dirname, join, posix } from 'node:path';
  * above them, tsx transpiles the arm's `.ts` files to CJS; the deep graph is then pulled in
  * by `require`, which does not go through ESM loader hooks. The recorder in `arm/` saw SIX
  * resolutions for a run that loads the whole simulation, the graph digest attested to
- * `index.ts` alone, and the planted decoy in `measure.instrument.test.ts` — an arm pointed
+ * `index.ts` alone, and the planted decoy in `check-measure.mjs` — an arm pointed
  * at the REPO's simulation — was not detected. Taking the revision's own `package.json`
  * makes the arm load the way the simulation really loads, and the attestation covers the
  * graph rather than its first node.

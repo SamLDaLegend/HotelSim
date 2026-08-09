@@ -173,6 +173,30 @@ inside the prompt meant to hunt it.
 - A "reads as stupid" finding now **requires a frame reference** — recording, tick number,
   what it shows. No frame, no finding.
 
+## Mutation testing — the recipe, because four agents reached for the wrong tool
+
+Mutation is a recurring technique here: proof-of-bite, deliberate gate-breaking at bootstrap,
+criterion falsification. **It requires a revert mechanism, and nobody was ever told which
+one**, so four independent agents reached for `git checkout --` and it silently discarded
+unreviewed work each time.
+
+**The procedure:**
+
+```bash
+git stash push -u -m "mutation probe"   # -u so untracked work is included
+# mutate, run the check, assert it goes RED
+git stash pop                            # restore
+# run again, assert GREEN
+```
+
+**`git stash` is recoverable. `git checkout --` is not** — and that is the only property that
+matters when the thing being discarded is an agent's unreviewed work. Prefer copying to a
+scratch directory over mutating the repo at all; where that is impossible, capture a
+`sha256` first and compare after, which is how three of the four incidents were caught.
+
+**This is not a prohibition, it is a recipe.** When several careful actors independently make
+the same error, the rule is missing rather than being broken.
+
 ## Parking (§4)
 
 **Park a hypothesis with its falsification test attached** (human ruling, 2026-08-09). If

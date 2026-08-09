@@ -22,6 +22,20 @@ I4	Ledger is append-only. Cash balance is derived by folding transactions, never
 I5	Headless. pnpm sim:run --days 365 --seed 42 completes in Node with no window and no renderer, inside the budget. **The budget is DERIVED, not chosen** — 389,333ms, from a 60-room hotel at 30x sustaining real time; the arithmetic is in §2.1.2 and tools/gates/budget.mjs executes it. The 30x is a PROVISIONAL working figure, not a ratified one — the speed ladder belongs in content and is G-021's (§2.1.1) — and this budget is INVERSELY PROPORTIONAL to it, so retuning the ladder RE-DERIVES this number (§2.1.2). What holds across a ladder change within ~12x is the conclusion, not the constant. The original "under 10 seconds" was invented at bootstrap with no basis and was replaced at G-018 (ADR-0013 §4). The word doing the work is HEADLESS; the time bound is a sanity ceiling, not a regression tripwire (§2.1.3).	pnpm sim:bench
 I6	Save round-trip. Serialise then deserialise then re-hash produces an identical state hash. Save files carry a schema version and a migration path.	pnpm test:save
 
+2.0 RED MEANS REPRODUCIBLE. AN INTERMITTENT GATE IS NOT RED, IT IS UNRELIABLE.
+
+(Added 2026-08-09 by human ruling, after I4 began failing intermittently and the loop deadlocked on "no goal is done while any gate is red".)
+
+The deadlock came from treating "red" and "unreliable" as the same state. THEY ARE NOT, AND THE DIFFERENCE IS THE WAY OUT.
+
+A gate that fails REPRODUCIBLY is red. It is reporting a fact, and it blocks.
+
+A gate that fails INTERMITTENTLY is not reporting anything. It has stopped being an instrument. YOU CANNOT ROUTE AROUND A RED GATE, BUT YOU ALSO CANNOT TAKE A RESULT FROM A BROKEN ONE — IN EITHER DIRECTION. "Green on the run I took" is unsafe for exactly the same reason "red on the run I took" is: neither reading carries information.
+
+So: §2's "red" means a reproducible failure. AN INTERMITTENT GATE IS ITS OWN ESCALATION WITH ITS OWN REMEDY — REPAIR THE INSTRUMENT, NEVER REINTERPRET THE RESULT.
+
+THE GUARD THAT KEEPS THIS FROM BECOMING AN UNBOUNDED EXEMPTION, and it is load-bearing rather than tidy: THE COUNT OF UNRELIABLE GATES IS CARRIED IN THE DIGEST, BESIDE THE GATE READINGS (§4.1). Two as of 2026-08-09. A THIRD IS A STOP CONDITION, not a third defensible decision — each one is defensible alone, which is exactly how a suite stops being evidence.
+
 I2 is load-bearing beyond determinism. If someone leaks render state or wall-clock time into the simulation, the determinism test breaks immediately. It is the tripwire for the whole design. Do not weaken it, do not add tolerance, do not skip it "just for this goal".
 
 2.1 A gate threshold must be derivable from a stated requirement

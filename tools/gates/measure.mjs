@@ -66,7 +66,7 @@ import {
   writeArm,
 } from './lib/git-tree.mjs';
 
-/** Rewritten by `measure.instrument.test.ts` in a COPY of this file, never here. The
+/** Rewritten by `check-measure.mjs` in a COPY of this file, never here. The
  *  copy-the-gate technique from G-018: no flag, no env var, no lever anyone can pull in
  *  CI, because the only mutable version is a throwaway the test wrote. */
 const GATES = dirname(fileURLToPath(import.meta.url));
@@ -196,6 +196,17 @@ function harnessFor(armDir) {
  */
 function withNullEdit(files) {
   const target = 'packages/sim/src/guests.ts';
+  // A `.map` that matches nothing returns the list unchanged, which would make both arms
+  // byte-identical and `--null` report IDENTICAL — "nothing to measure" — having measured
+  // nothing, silently, because a file was renamed. `lib/git-tree.mjs`'s own standard is that
+  // every failure here is an ERROR and never a skip; this is that standard applied to the
+  // one place in the instrument that was still quietly tolerant.
+  if (!files.some((file) => file.path === target)) {
+    throw new InstrumentError(
+      `--null edits ${target}, which this revision does not contain. Point the null edit at a ` +
+        'file that exists rather than measuring two identical arms and calling it a noise floor.',
+    );
+  }
   return files.map((file) =>
     file.path === target
       ? { path: file.path, bytes: Buffer.concat([file.bytes, Buffer.from('\n// sim:measure --null\n', 'utf8')]) }
@@ -238,7 +249,7 @@ function describeRevision(revision) {
  *
  * A file resolved under the repo's own `packages/` is the G-018 leak — an arm running the
  * repo's simulation while its directory hash says otherwise — and it is an error, not a
- * warning. `measure.instrument.test.ts` plants exactly that and witnesses the refusal.
+ * warning. `check-measure.mjs` plants exactly that and witnesses the refusal.
  */
 function auditResolutions(logPath, arms) {
   const log = readFileSync(logPath, 'utf8');

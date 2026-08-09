@@ -3,6 +3,12 @@
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
 *As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
+*134 items across 17 goals (`^- ` outside this digest). **G-020a added NONE**, and the count
+is unchanged since `16f8044` — the only goal so far to add nothing. It is defensible here and
+only here: the discovered-but-unbuilt material has a NAMED SUCCESSOR, G-020b, and sits in its
+block rather than being lost. **§9's stop condition is not firing, but this is the first
+reading that could start it: a second consecutive goal adding nothing, or any goal adding
+nothing without a named successor, is scope leaking into goals rather than discipline.***
 
 - **PROMOTED OUT — no longer parked**: scenario capital is a **hard prerequisite of the
   first M4 goal** (ADR-0013 §5). Every balance figure to date was taken with `--rooms N`

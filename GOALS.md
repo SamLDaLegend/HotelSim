@@ -10,7 +10,11 @@
   quoted here: a percentage of a fixed budget is a stored absolute, and `CLAUDE.md` rule 3
   forbids quoting an absolute from another sitting** — two runs this session read 2.1% and
   3.8% and neither is comparable to the other.
-- **KNOWINGLY-UNRELIABLE TESTS: 2.** `needs.scaling.test.ts` (named assertion failure,
+- **UNRELIABLE GATES: 1 (§2.0).** `needs.scaling.test.ts` — a **named** assertion failure
+  against hard timing bounds, ~8% isolated / ~33% in-suite, **unrepaired and owed to
+  G-020b**. The worker-starvation defect is **held at bay by a provisional
+  `maxWorkers: 2`**, not repaired — if that cap is removed before the extraction lands, the
+  count returns to 2. **A third is a STOP CONDITION.** Previously counted as one defect: `needs.scaling.test.ts` (named assertion failure,
   hard timing bounds) and the vitest worker RPC timeout (**zero failing tests**, passes at
   `--maxWorkers=2`). **These are TWO DISTINCT DEFECTS, previously counted as one.**
   **A third before G-020b lands is a STOP CONDITION.**
@@ -1538,6 +1542,30 @@ Critique rounds used: 1/3
 
 ## G-020b — The tick-cost tripwire: a bound, a verdict, and proof of bite
 Status: pending — **HARD PREREQUISITE OF M3. M2 does not exit without it.**
+
+  **TWO OBLIGATIONS INHERITED WITH DIAGNOSES ATTACHED — both are pending rulings, and a
+  pending ruling whose urgency has just been reduced is a pending ruling that dies.**
+
+  **1. THE EXTRACTION IS OWED IN FULL, AND `--maxWorkers: 2` IS A STOPGAP WITH AN EXPIRY.**
+  The human ruled (2026-08-09) that the instrument test is *"a gate wearing vitest's
+  clothes"* and belongs in its own script beside `test:determinism`. G-020a began it
+  (`pnpm check:measure`). **The cap in `vitest.config.ts` is provisional, carries a comment
+  saying so, and is REMOVED AND RE-MEASURED when the extraction completes.** It weakens no
+  assertion and every test still runs — **but a concurrency cap applied globally to
+  accommodate one 39-second test is a tax on every future run**, and this repo already
+  holds two examples of a stopgap becoming policy by inertia (the 30s timeout, and
+  `bench.mjs`'s withdrawn "faster tick, not a bigger number").
+
+  **2. `needs.scaling.test.ts` IS THE OTHER I4 DEFECT AND IT IS YOURS.** A **named**
+  assertion failure against hard timing bounds (2.5×, 1.9×) — ~8% isolated, ~33% in-suite —
+  **and G-020a's own measurement explains it: a single timing reading here is worth ±10%.**
+  *A gate built on one timing sample cannot be more reliable than one timing sample.* The
+  repair is the same repair this goal owes its own bound: **repeat, or move the bound onto
+  something a single sample can carry.** `check-measure.mjs` is the pattern for the venue.
+
+  **THE TWO ARE DISTINCT DEFECTS AND WERE ONCE COUNTED AS ONE** — one has zero failing
+  tests and an RPC timeout, the other names a test. **Do not inherit the conflation**;
+  `ESCALATIONS.md` carries both signatures with counts and observers.
 
   **INHERITED FROM G-020a AS MEASUREMENT, NOT ASSUMPTION:**
 

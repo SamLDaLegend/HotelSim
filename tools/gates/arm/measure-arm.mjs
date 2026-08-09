@@ -93,7 +93,7 @@ const WARM_UPS = 2;
  * THE LEVERS THAT DO MOVE IT, for whoever needs a tighter floor than ±10% — and G-020b
  * will, because a drift-scale bound is inside this noise: `--repeat`, which is measured
  * above and costs linear time, and a LONGER ARM, which is not measured and would move the
- * hash `measure.instrument.test.ts` cross-checks.
+ * hash `check-measure.mjs` cross-checks.
  */
 const TIMED_RUNS = 3;
 

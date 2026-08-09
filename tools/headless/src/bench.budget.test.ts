@@ -67,11 +67,13 @@
 //   - ~~**The WORKLOAD is unpinned.**~~ **CLOSED AT G-020a.** It used to be true that
 //     `ROOMS 60 -> 3` or `ARRIVAL_EVERY_TICKS 32 -> 3200` left every assertion here green
 //     while `bench.workload.golden.test.ts` declared its own copies rather than reading the
-//     gate's. Both now import `tools/gates/workload.mjs`, and
-//     `measure.instrument.test.ts` witnesses the sensitivity directly: it runs the workload
-//     at `ROOMS = 3` and at `ARRIVAL_EVERY_TICKS = 3200` and asserts each moves the hash the
-//     golden pins. This file still asserts nothing about the workload — that lives one file
-//     over, with the instrument that made it single-sourced.
+//     gate's. Both now import `tools/gates/workload.mjs`, and the sensitivity is witnessed
+//     directly — the workload is run at `ROOMS = 3` and at `ARRIVAL_EVERY_TICKS = 3200` and
+//     each is asserted to move the hash the golden pins.
+//     **THAT WITNESS IS NOT IN `pnpm test`.** It lives in `pnpm check:measure`
+//     (`tools/gates/check-measure.mjs`), a standalone gate script — so anyone auditing what
+//     I4 covers should not count it here. This file still asserts nothing about the
+//     workload.
 //   - **The proof below runs ONE simulated day**, so it witnesses the comparison and the
 //     exit code, not the 365-day workload the shipped gate measures.
 //

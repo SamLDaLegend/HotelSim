@@ -20,18 +20,20 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      # FULL HISTORY, AND THE I4 GATE DEPENDS ON IT (G-020a).
+      # FULL HISTORY, AND `pnpm check:measure` DEPENDS ON IT (G-020a).
       #
       # `actions/checkout` defaults to `fetch-depth: 1` — a shallow clone with no parent
       # commits. `pnpm sim:measure` materialises a named revision out of the object store,
-      # and `measure.instrument.test.ts` runs it against historical revisions to witness
+      # and `tools/gates/check-measure.mjs` runs it against historical revisions to witness
       # its IDENTICAL and INCOMPARABLE verdicts. In a depth-1 clone `git ls-tree` exits
-      # non-zero, the instrument correctly reports ERROR, and those tests — which are part
-      # of `pnpm test`, the I4 gate — go RED on all three platforms. Not eventually: on the
-      # first push after G-020a lands, because that commit's own parent is not fetched.
+      # non-zero, the instrument correctly reports ERROR, and that check goes RED on all
+      # three platforms. Not eventually: on the first push after G-020a lands, because that
+      # commit's own parent is not fetched.
       #
-      # `measure.instrument.test.ts` asserts that this line is here, so a later tidy-up
-      # cannot re-shallow the clone and take the instrument's proofs with it.
+      # `check-measure.mjs` asserts that this line is here — and asserts it against THIS
+      # job's slice of this file, so pinning it to another job's checkout does not satisfy
+      # it — meaning a later tidy-up cannot re-shallow the clone and take the instrument's
+      # proofs with it.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

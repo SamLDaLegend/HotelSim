@@ -45,9 +45,10 @@ export const SEED = 42;
  *
  * So the golden owns its own run length again, and nothing but `measure.mjs` reads this.
  * The two still describe the same simulated history, and that is now WITNESSED rather than
- * arranged: `measure.instrument.test.ts` computes the expected hash in-process, through the
- * real zod-validated loader, at whatever this value says, and asserts the arms reproduce
- * it. Change this number and that test re-derives; the golden does not move.
+ * arranged: `tools/gates/check-measure.mjs` computes the expected hash by SPAWNING THE
+ * SHIPPED CLI — `sim:run --quiet`, the real zod-validated loader and the real `schedule()`
+ * — at whatever this value says, and asserts the arms reproduce it. Change this number and
+ * that check re-derives; the golden does not move.
  *
  * FIVE DAYS, and not I5's 365: the instrument runs this workload 36 times per measurement
  * (two arms x six samples x three timed runs), so a 365-day arm would cost hours. What the
