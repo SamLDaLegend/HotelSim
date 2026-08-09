@@ -1191,7 +1191,7 @@ Critique rounds used: 0/3
   the breaking kind of change, not the additive kind `report.ts` permits.
 
 ## G-014b — A guest that commits
-Status: pending
+Status: **in-progress** — PLAN dispatched 2026-08-09, after G-020b closed DRY.
 Milestone: M2
 Owner pair: ai-engineer / ai-critic
 Statement: A guest that has committed does not abandon unless an alternative beats it by a
@@ -1263,12 +1263,25 @@ Exit criteria:
   - pnpm exec vitest run review  (all green)
   - pnpm sim:run --days 30 --seed 7 --rooms 6  prints a review distribution with at least
     THREE distinct scores non-zero
-  - --rooms 1 and --rooms 12 produce review distributions whose means differ by more
-    than <n>, COMPUTED BY THE TEST rather than asserted — a hotel that serves nobody
-    must not review the same as one that serves everybody
+  - **AXIS 1 — LODGING.** --rooms 1 and --rooms 12 produce review distributions whose means
+    differ by more than <n>, COMPUTED BY THE TEST rather than asserted — a hotel that serves
+    nobody must not review the same as one that serves everybody
+  - **AXIS 2 — THE STAY. HOLD ROOMS FIXED, VARY AMENITY DENSITY, AND REQUIRE THE REVIEW MEAN
+    TO MOVE** by more than <n>, again COMPUTED BY THE TEST. `watch-ticks` and
+    `watch-amenities` already ship with identical entity composition, so this costs an
+    invocation rather than a design. **Written into the criteria list 2026-08-09 by the
+    orchestrator: the human ruled it a criterion before PLAN and it had been recorded only
+    in the prose below — which is the defect G-020b spent three rounds on, a rule living
+    where nothing executes it. WITHOUT AXIS 2, AXIS 1 PASSES GREEN ON A REVIEW FUNCTION THAT
+    READS ONLY `night_rest`** and three-quarters of the need vector contributes nothing.
   - no sim module reads the review store — the boundary made mechanical, not documented
-  - a WATCH entry in `JOURNAL.md` from a recorded run in which a human saw a guest
-    succeed and a guest fail
+  - **A WATCH ENTRY IN `JOURNAL.md` FROM THE BIMODAL RECORDING, ~6 rooms and ~24
+    arrivals/day** — a human sees a guest succeed AND a guest fail in the same run. This is
+    one criterion doing two jobs deliberately: G-019 needs both outcomes visible, and M2
+    exit separately owes a recording in **the middle band** — 36 arrivals gave 32 satisfied
+    and ZERO gave up; 216 gave 16 satisfied and 189 gave up, and no recording sits anywhere
+    between. **It must be WATCHED, NOT MANUFACTURED** (human): record the run, look at it,
+    and write what you saw — including "nothing looked wrong" if that is the truth.
   - all §2 invariant gates green (pnpm verify)
 Out of scope: the outcome table (G-015); reputation as a stateful aggregate; reviews
   feeding demand, pricing or arrival rate (ALL M4); review text (M5/M6)
