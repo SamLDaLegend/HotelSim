@@ -5,8 +5,15 @@
 *As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
 
 - **Schema versions**: save **v8** · summary **v2**.
-- **Gates**: all six green. I2 `ca54cbb7ae2dc693` · I5 **2.1% of the derived 389,333 ms** ·
-  **67 files / 1,235 tests**.
+- **Gates**: **I4 is INTERMITTENTLY RED under load — see `ESCALATIONS.md`.** Five gates and
+  `check:measure` green on the runs taken. I2 `ca54cbb7ae2dc693`. **No I5 percentage is
+  quoted here: a percentage of a fixed budget is a stored absolute, and `CLAUDE.md` rule 3
+  forbids quoting an absolute from another sitting** — two runs this session read 2.1% and
+  3.8% and neither is comparable to the other.
+- **KNOWINGLY-UNRELIABLE TESTS: 2.** `needs.scaling.test.ts` (named assertion failure,
+  hard timing bounds) and the vitest worker RPC timeout (**zero failing tests**, passes at
+  `--maxWorkers=2`). **These are TWO DISTINCT DEFECTS, previously counted as one.**
+  **A third before G-020b lands is a STOP CONDITION.**
 - **Order remaining**: **G-014b** (hysteresis, save v9) -> **G-019** (reviews,
   last-in-milestone, two critics) -> **G-020** (tripwire, hard prerequisite of M3) ->
   **G-021** (speed ladder as content) -> M2 exit.
@@ -1486,7 +1493,7 @@ Exit criteria:
 ---
 
 ## G-020a — The measurement instrument (`sim:measure`)
-Status: **done** — 1 sweep (**1 BLOCKER** + 4 MAJOR + 3 MINOR + 1 NIT). The project's
+Status: **in-progress** — 2 sweeps (**1 BLOCKER** + 4 MAJOR + 3 MINOR + 1 NIT). The project's
   first BLOCKER, twenty goals in, and it was an **evidence** defect rather than a code one.
 Milestone: M2
 Owner pair: sim-engineer / sim-critic
@@ -1495,7 +1502,11 @@ Statement: A command that measures the working tree against a baseline revision 
 Exit criteria:
   - `pnpm sim:measure` prints a ratio, the workload it names, its method, both resolved
     SHAs and both digests, and exits 0 *(could pass vacuously alone — 2 and 3 are the teeth)*
-  - `pnpm exec vitest run measure` green, **including**: a planted decoy leak → ERROR;
+  - `pnpm check:measure` green, **including**: *(**CORRECTED at round 2 — this read
+    `pnpm exec vitest run measure`, a command THIS GOAL MADE UNMEETABLE by deleting the file
+    it selects. Not failing: unmeetable, §7's own definition, and the block said `done`
+    above it. The proofs moved to a standalone gate by human ruling — "it is a gate wearing
+    vitest's clothes" — and the criterion did not follow them.*) a planted decoy leak → ERROR;
     empty materialisation → ERROR; `IDENTICAL` textually distinct from `MEASURED`; the null
     experiment inside its derived tolerance with identical state hashes; `bench.mjs`
     declares no workload of its own; **`ROOMS 60→3` and `ARRIVAL_EVERY_TICKS 32→3200` each

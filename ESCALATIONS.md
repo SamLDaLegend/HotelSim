@@ -493,3 +493,39 @@ one green run is not evidence that the gate passes** — it is one sample of a c
 such report in `JOURNAL.md` and in the commit messages of G-013, G-018, G-017, G-014a and
 G-015 should be read as *"green on the run I took"*, which is weaker than it sounded.
 Nothing is known to be wrong in those goals; what is wrong is the strength of the claim.
+
+### CORRECTED 2026-08-09 — the entry above conflated TWO defects, and the fix fixed neither
+
+**`sim-critic` found it and I verified it rather than accepting it.** The entry above says
+`check-measure.mjs` is *"the pattern that fixes it"*. **It is not. Measured on this tree,
+with the instrument's vitest file deleted entirely:**
+
+```
+pnpm test  run 1: exit=1   Tests 1235 passed (1235)   Errors 1 error
+pnpm test  run 2: exit=1   Tests 1235 passed (1235)   Errors 1 error
+pnpm test  run 3: exit=0   Tests 1235 passed (1235)
+```
+
+**Every test passes and the gate still exits 1.** So I4's failure survived removing the file
+the entry blamed, and the move accommodated nothing.
+
+**THERE ARE TWO DEFECTS AND THE ENTRY ABOVE COUNTED THEM AS ONE:**
+
+| | signature | rate | passes at `--maxWorkers=2`? |
+|---|---|---|---|
+| **A** — `needs.scaling.test.ts` | **a NAMED assertion failure** against hard timing bounds (`1 failed \| 1252 passed`) | ~8% isolated, ~33% in-suite | untested |
+| **B** — vitest worker starvation | **ZERO failing tests**, unhandled `[vitest-worker]: Timeout calling "onTaskUpdate"` | ~2 of 3 here, 6 of 6 for the builder | **yes, clean** |
+
+**They are not the same failure and they do not have the same repair.** A is a timing test
+that cannot be more reliable than one timing sample — G-020a's ±10% floor explains it. B is
+the runner starving under parallel load and has nothing to do with timing bounds at all.
+
+**G-020b was about to inherit the repair on the strength of that conflation**, which would
+have produced a fix for A that leaves B firing and a gate still red.
+
+**The lesson, and it is the same one this session keeps producing**: both the builder and I
+diagnosed from too few observations and from the *rate* rather than the *signature*. **The
+signature was the discriminator all along and neither of us looked at it** — a named test
+failing and zero tests failing are different events that both read as "I4 red" in a summary
+line. **The count of knowingly-unreliable tests is therefore 2, not 1**, and it is now in
+`GOALS.md`'s digest beside the gate readings as the human required.
