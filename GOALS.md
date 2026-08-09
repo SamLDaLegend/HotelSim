@@ -1727,13 +1727,25 @@ When **G-012 to G-021** are `done`, that is a §5.4 escalation. Write it to
 `ESCALATIONS.md` and stop.
 
 **M2 exit additionally requires, per ADR-0013:**
+- **M2 EXIT IS NOT RIPE AND MUST NOT BE ESCALATED EARLY (human, 2026-08-09).** Four goals
+  outstanding — **G-020b, G-014b, G-019, G-021** — plus two WATCH obligations.
+- **A COUNT OF KNOWINGLY-UNRELIABLE TESTS GOES IN THE DIGEST, BESIDE THE GATE READINGS.**
+  Currently **two**: I4's instrument test (now moved out to `check:measure`) and
+  `needs.scaling.test.ts`. **A THIRD BEFORE G-020b LANDS IS A STOP CONDITION, NOT A THIRD
+  DEFENSIBLE DECISION.** Each one is defensible alone; that is exactly how a suite stops
+  being evidence.
+- **THE BIMODAL RECORDING TAKEN AND WATCHED, NOT MANUFACTURED.** ~6 rooms, 24 arrivals/day.
+  **It should look substantially more alive than the crowded run** — where 18 of 216 guests
+  ever held a room and most of what was watched was people standing still. **If it does not,
+  that is the finding.**
 - **SCORE THE DIGEST EXPERIMENT HONESTLY — human ruling, 2026-08-09.** §4.1's digests are an
   experiment, not a settled mechanism, and **they failed twice in their first day**: four
   files gave three different answers to "where are we", and **the hand repair itself missed
   `PARKING.md`** because its as-of line wraps. *"The mechanism needed a mechanical check
   within a minute of being repaired by hand is as good an argument for DELETING it as for
   automating it."* At M2 exit, say which — kept, automated, or deleted — **and say it against
-  the evidence rather than by preference.**
+  the evidence rather than by preference. ARGUE THE DELETE CASE AS WELL AS THE AUTOMATE
+  CASE**: *"I would rather see the argument than the defence."*
 - **THE NEXT MECHANISM PROPOSED TO MAINTAIN THE LEDGERS MUST ARGUE FOR ITSELF THE WAY A
   FEATURE WOULD** (human, same ruling). At eighteen goals this repo holds **~5,600 lines of
   markdown against 5,210 lines of simulation — near 1:1, with nobody having played the

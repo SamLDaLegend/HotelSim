@@ -1196,3 +1196,90 @@ now known to flake ~33% under load. See `ESCALATIONS.md`. The claims were not fa
 run really was green — but *"the gates pass"* and *"the gates passed on the run I took"* are
 different statements, and I made the stronger one repeatedly while requiring builders to
 distinguish exactly that.
+
+---
+
+## 2026-08-09 — WATCH #3 (human): G-017 criterion 1 DISCHARGED, and `metBy` adjudicated
+
+**Criterion 1 is discharged by watching**, and the human was explicit about provenance:
+the perceptual observation — *"rest doesn't look like it depletes"* — came from scrubbing
+`watch-crowded` in the viewer. The frame counts below are machine-derived **supporting
+evidence, not the discharge.** *"It reads ok: guests move between rooms and carry visible
+needs. The side-on cross-section is legible enough that ADR-0014's placeholder-art
+assumption stands."*
+
+### The finding: `night_rest` never populates `metBy`, in any frame of any recording
+
+| recording | need | frames | `metBy` set | `progress == 0` |
+|---|---|---|---|---|
+| crowded | comfort | 4,610 | 72 | 72 |
+| crowded | entertainment | 4,610 | 111 | 111 |
+| crowded | nourishment | 4,610 | 466 | 466 |
+| crowded | **night_rest** | 4,610 | **0** | **0** |
+| amenities | **night_rest** | 1,656 | **0** | **0** |
+
+### ADJUDICATED: neither (a) nor (b). The field is correct; its completion is unobservable.
+
+`needs.ts:407` — `metBy: progressRemaining === 0 ? servedBy : null` — and `assertNeedVector`
+enforces **non-null if and only if met**. The measured counts match **exactly, for every
+need, in both recordings**: `metBy set` === `progress == 0`, always. So the field obeys its
+contract and the viewer is reading the right source.
+
+**`night_rest` is never zero in a frame because completing it IS the departure condition.**
+The guest is removed in the same tick, so **no frame can ever contain a live guest whose
+lodging need is complete.** Not a viewer bug (a). Not a hole in `metBy` (b). A **structural
+consequence of completion and removal coinciding.**
+
+**And it generalises, which the human's observation surfaced but did not reach**:
+`guest_entertainment` shows **0 of 1,656** in `amenities` despite 32 met — because G-014a
+established that **entertainment must be pursued LAST**, so it completes at ~tick 480 of a
+480-tick stay, at or beside departure. **Any need that completes at departure is invisible
+in a frame stream.**
+
+### Where the real risk is, and the human named it before the adjudication
+
+> *"`metBy` is the field a renderer reaches for to answer 'what is this guest doing right
+> now'. M5 will read it."*
+
+**That is the live issue, and it survives the adjudication.** `metBy` answers *"what
+finished this"*; a renderer wants *"what is serving this now"*. **They are different
+questions and only the first is state** — the second exists only inside the tick, as
+`servedA`/`servedB`. **Routed to M5 as a design note, not to G-020b or G-014b as a defect.**
+Settling it before there is art on top is cheap; after is not.
+
+**No test caught it because every test asserts on outcomes, and the outcomes are correct.**
+ADR-0007's class in a new costume: *a field that is wrong for a use nobody has made yet, in
+a way only a watcher can see.*
+
+### Two more observations from the same watch
+
+- **18 of 216 guests in the crowded run ever hold a room.** The other 198 sit with progress
+  frozen and patience draining. Correct behaviour — but **most of what was watched was
+  people standing still.** This bears directly on the owed bimodal recording: **that one
+  should look substantially more alive, and if it does not, that is the finding.**
+- **No traversal.** Known, M3, deliberately out of scope at G-014. **Recorded as a WATCH
+  observation anyway, as the "before" against which M3's goals will be read.**
+
+---
+
+## 2026-08-09 — The ratio, corrected by the human. My conclusion did not follow from my number.
+
+I reported *"the instrument and gate work is nearly as large as the simulation it
+measures"* from a table that included **G-017 and G-018, which moved zero sim lines** —
+they are **instrument goals, not feature goals**, so counting their tools lines against
+sim lines compares two different things.
+
+**Stripped to the three feature goals: 5,210 sim lines against 2,916 tools lines —
+`0.56 : 1`.** Not "nearly as large". **The conclusion did not follow from the number, and I
+did not notice because the number looked interesting.**
+
+**What survives, and it is the sharper point**: `packages/sim` sits at **1.49** test lines
+per production line and `tools` at **1.50** — near-identical, across two bodies of code with
+very different risk profiles. **That suggests habit rather than calibration.** One line
+here, not a goal.
+
+**And the measurement's own limit, which the human named and I had not**: lines-moved-per-
+commit **does not separate tests ADDED from tests REWRITTEN.** A goal that re-pins thirty
+goldens and a goal that writes thirty new cases look identical in this table, and G-015 was
+substantially the former. **The metric answers a coarser question than the one it appears
+to answer** — which is worth remembering before it gets quoted again, by me.
