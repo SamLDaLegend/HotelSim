@@ -394,3 +394,52 @@ name its real subject (evidence quality); or move it out of §7.1's budget mecha
 ADR-0007, which is where the prose rules already live; or leave it exactly as it is on the
 grounds that a guard which keeps finding real defects has earned its keep whatever it is
 called. **The human's call.**
+
+---
+
+## 2026-08-09 — HANDOVER: where the unattended run stopped, and why here
+
+**Five goals committed this run**: G-013, G-018, G-017, G-014a, G-015, plus three charter
+commits. Working tree clean, all six gates green, nothing half-built.
+
+**Stopped here deliberately rather than starting G-014b or G-019.** Both are substantial —
+G-014b carries save v9, a derived hysteresis margin and two criteria that are broken as
+written; G-019 is last-in-milestone and needs two critics from different pairs. Starting
+either would have left a half-swept diff across the handover, and §4's one-goal-in-progress
+rule exists so that does not happen. A clean stop with the next three goals fully specified
+is worth more than a partial sixth.
+
+### What is owed by the human, and by nobody else
+
+1. **`pnpm viewer`, load a recording, scrub it.** G-017's criterion 1. It is marked **owed,
+   not met**, and no agent may discharge it — the builder's harness never touches the file
+   picker, the scrubber, the play loop or Canvas2D text metrics, and substituting for it
+   would be §9's stop condition discharged by the very substitution ADR-0013 forbids.
+2. **Rule on §7.1's conversion guard.** Four firings, **all on prose, none on code**. The
+   prediction written into the charter says it should then be renamed and re-scoped. Parked
+   above with the scorecard and three options.
+3. **M2 exit itself**, when G-014b, G-019, G-020 and G-021 are done.
+
+### The three things the next session should not re-derive
+
+- **G-014b's criteria 2 and 3 are both broken.** 2 cannot fail (not implementing the
+  feature reports 0, which is below every n). 3 is **inverted** — the goldens go red
+  *precisely because* the margin works, so it is satisfiable only by a broken build. Both
+  repairs are recorded in G-014's block.
+- **Abandonment is a row on `NeedOutcome`, not in G-015's departure table.** A guest departs
+  once but abandons many times; a law summing a subset of rows is the vacuity shape.
+- **Seeds are inert until M4.** Six seeds give byte-identical need tables because arrivals
+  are scheduled rather than drawn. Vary hotel *shape* — that is what found G-014a's result.
+
+### What this run learned about itself, worth one line each
+
+- **Park a hypothesis WITH ITS EXPERIMENT.** G-013 did; G-017's recording turned out to be
+  that experiment; G-014a then hit the knife-edge it described. Three goals chained without
+  any of them planning it.
+- **The WATCH step earns its cost.** It caught a defect in G-014a's own first build — one of
+  three needs never met, for every guest, with six gates green and 1,133 tests passing.
+- **Every one of the orchestrator's errors this run was a number passed on without
+  re-measuring**: a fabricated §10 citation, a "five of six" count three records deny, a
+  12.5% cross-check that was one dataset and its own superset, and a test total that was
+  arithmetic across two moments. **All four were caught by an agent, none by me.** The rule
+  that would have prevented all four is already written: `CLAUDE.md` rule 5.
