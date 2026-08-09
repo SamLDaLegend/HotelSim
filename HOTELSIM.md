@@ -223,6 +223,16 @@ The agent that bears the cost of a fat goal is the CRITIC, who has to sweep it �
 
 Scope only. Not design, not approach, not test strategy — those are the orchestrator's at PLAN review and the critic's after BUILD. This is the cheapest possible moment to split, and it puts the objection where the incentive already is.
 
+5.7 THE ORCHESTRATOR'S OWN CLAIMS ARE IN SCOPE FOR THE GOAL'S CRITIC
+
+(Added 2026-08-09 by human ruling.)
+
+A goal's critic reviews the diff AND the orchestrator's statements about it: the goal block, the exit criteria, the digests, the rulings written into DECISIONS.md, and anything the orchestrator asserted while dispatching. These are not a separate courtesy pass and they are not out of bounds. They are part of the evidence the goal rests on, and a critic that finds one is doing its job rather than exceeding it.
+
+Why it is a rule now: FIVE orchestrator-side errors have been caught by agents doing UNBUDGETED work at nobody's instruction — a fabricated section 10 citation; a "five of six" count three records deny; a 12.5% cross-check that was one dataset and its own superset; a test total that was arithmetic across two moments; and G-020 seeded with "M2 does not exit without it" while neither the exit block nor the digest carried it, found by sim-critic reading outside its assigned diff.
+
+Five catches on goodwill is a mechanism that exists but is not acknowledged. The cheapest thing to do is stop pretending it is luck. A critic may not be blamed for spending a round on an orchestrator claim, and an orchestrator claim that turns out to be wrong is a finding of the same standing as one in the code.
+
 5.2 Round budget
 
 Maximum 3 critique rounds per goal. If a BLOCKER survives round 3, stop. Do not keep grinding.
