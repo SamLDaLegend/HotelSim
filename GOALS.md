@@ -2268,8 +2268,12 @@ When **G-012 to G-021** are `done`, that is a §5.4 escalation. Write it to
 `ESCALATIONS.md` and stop.
 
 **M2 exit additionally requires, per ADR-0013:**
-- **M2 EXIT IS NOT RIPE AND MUST NOT BE ESCALATED EARLY (human, 2026-08-09).** Four goals
-  outstanding — **G-020b, G-014b, G-019, G-021** — plus two WATCH obligations.
+- **M2 EXIT IS NOT RIPE AND MUST NOT BE ESCALATED EARLY (human, 2026-08-09).** As of
+  G-020b closing DRY, **four goals outstanding — G-014b, G-019, G-021, G-020c** — plus the
+  WATCH obligations. (G-020b was on this list and is discharged; G-020c was created during
+  it and joined the list, which is why the count did not fall. **The M2 denominator moved
+  from 12 to 13 goals at that moment and the digests did not notice for a full goal** — see
+  the digest scoring below, where it is the third failure.)
 - **A COUNT OF KNOWINGLY-UNRELIABLE TESTS GOES IN THE DIGEST, BESIDE THE GATE READINGS.**
   Currently **one gate — I4 — carrying two distinct defects**, one unrepaired and one held
   at bay by a stopgap. *(An earlier version named "I4's instrument test (now moved out to
@@ -2289,6 +2293,26 @@ When **G-012 to G-021** are `done`, that is a §5.4 escalation. Write it to
   automating it."* At M2 exit, say which — kept, automated, or deleted — **and say it against
   the evidence rather than by preference. ARGUE THE DELETE CASE AS WELL AS THE AUTOMATE
   CASE**: *"I would rather see the argument than the defence."*
+
+  **EVIDENCE ACCUMULATING FOR THAT SCORING — recorded as it happens rather than
+  reconstructed at the boundary, because reconstructing it is how the last count went
+  wrong.** Failures so far, all within two days of the mechanism existing:
+  1. **Four files, three different answers to "where are we"** (G-020a). The defect §4.1
+     was built to close, exhibited by §4.1.
+  2. **The hand repair missed `PARKING.md`** because its as-of line wraps.
+  3. **G-020b's REFLECT: two of four digests breached the fifteen-line cap** — GOALS at 20,
+     DECISIONS at 17 — and **the M2 denominator had been stale for a whole goal** (12 vs 13)
+     because G-020c was created mid-goal and no step re-counted. Caught only because the
+     orchestrator counted lines by hand, which is not a mechanism.
+
+  **AND THE MECHANICAL CHECK §4.1 SEEDED IS STILL UNASSIGNED.** `HOTELSIM.md:213` says the
+  byte-identical as-of line is *"seeded as an obligation on the next goal that owns a
+  ledger-shaped check; until then the orchestrator re-stamps all four in one edit and says
+  so at REFLECT."* **No goal owns it. It has been hand-verified twice and hand-repaired
+  twice.** That is the delete-vs-automate question in its concrete form, and the honest
+  framing for sign-off is: the mechanism has failed three times, been repaired by hand every
+  time, and the check that would make it self-enforcing has no owner. **Either it gets one,
+  or the fifteen-line cap and the as-of line are aspirations rather than rules.**
 - **THE NEXT MECHANISM PROPOSED TO MAINTAIN THE LEDGERS MUST ARGUE FOR ITSELF THE WAY A
   FEATURE WOULD** (human, same ruling). At eighteen goals this repo holds **~5,600 lines of
   markdown against 5,210 lines of simulation — near 1:1, with nobody having played the
