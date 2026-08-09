@@ -67,8 +67,8 @@ describe('I6 stored v1 save fixture', () => {
     // G-007, a third time at G-008, a fourth at G-011 and a fifth at G-012. Every time the
     // answer was a migration in `save.ts` — never a regenerated fixture. v1 remains the
     // oldest version this build accepts, which is what keeps these bytes loadable at all,
-    // and the walk is now 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7.
-    expect(SAVE_SCHEMA_VERSION).toBe(7);
+    // and the walk is now 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8.
+    expect(SAVE_SCHEMA_VERSION).toBe(8);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 

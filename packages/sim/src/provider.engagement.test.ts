@@ -22,7 +22,11 @@ import type { Command, ScheduledCommand } from './commands.js';
 import { bindContent } from './content.js';
 import type { ItemTypeData, NeedTypeData, RoomTypeData } from './content.js';
 import { entitiesInOrder } from './entities.js';
-import { guestsInOrder, isResting } from './guests.js';
+import {
+  departureCountOf,
+  guestsInOrder,
+  isResting,
+} from './guests.js';
 import type { Guest } from './guests.js';
 import { findNeedState, isNeedMet, needOutcomeOf } from './needs.js';
 import { run, stepTick } from './tick.js';
@@ -120,7 +124,7 @@ describe('a guest is served by an ITEM, and the need records that (G-013)', () =
     const world = machineOnly();
     const after = run(world, content, STAY + 4, [at(world.tick, arrive)]);
     // The guest has departed by now, so the attribution is read from the tally instead.
-    expect(after.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(after.guestOutcomes, 'satisfied')).toBe(1);
     const rest = needOutcomeOf(after.needOutcomes, 'rest')!;
     expect(rest.met).toBe(1);
     expect(rest.metByItem).toBe(0);
@@ -157,7 +161,7 @@ describe('the tally counts by provider kind, and by-room is derived (G-013)', ()
       spawn('machine', 0, 6),
     ]);
     const after = run(world, content, STAY + 6, [at(world.tick, arrive), at(world.tick, arrive)]);
-    expect(after.guestOutcomes.satisfied).toBe(2);
+    expect(departureCountOf(after.guestOutcomes, 'satisfied')).toBe(2);
     const food = needOutcomeOf(after.needOutcomes, 'food')!;
     expect(food.met).toBe(2);
     expect(food.metByItem).toBe(1);

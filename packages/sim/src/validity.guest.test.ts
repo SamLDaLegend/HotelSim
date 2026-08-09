@@ -21,7 +21,14 @@ import { bindContent } from './content.js';
 import { entitiesInOrder, getEntity } from './entities.js';
 import { createGridBounds, GROUND_FLOOR } from './grid.js';
 import type { Cell } from './grid.js';
-import { countGuestsInInvalidRooms, guestsInOrder, isResting } from './guests.js';
+import {
+  countGuestsInInvalidRooms,
+  createGuestOutcomes,
+  departureCountOf,
+  evictedGuests,
+  guestsInOrder,
+  isResting,
+} from './guests.js';
 import { balanceOf, sumByReason } from './ledger.js';
 import { run, stepTick } from './tick.js';
 import { countInvalidRooms } from './validity.js';
@@ -89,8 +96,8 @@ describe('a guest will not take an invalid room', () => {
     expect(countInvalidRooms(world.entities, BOUNDS, content).unsupported).toBe(1);
     expect(guestsInOrder(world.guests)[0]?.roomEntityId).toBe(0);
     world = run(world, content, 20);
-    expect(world.guestOutcomes.unsatisfied).toBe(1);
-    expect(world.guestOutcomes.satisfied).toBe(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(0);
     // And it paid nothing, because it never had what it came for.
     expect(balanceOf(world.ledger)).toBe(0);
   });
@@ -102,7 +109,7 @@ describe('a guest will not take an invalid room', () => {
     ]);
     expect(countInvalidRooms(world.entities, BOUNDS, content).missingItem).toBe(1);
     world = run(world, content, 20);
-    expect(world.guestOutcomes.unsatisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
   });
 
   it('waits, and gives up, when the only room is sealed in by its neighbours', () => {
@@ -114,7 +121,7 @@ describe('a guest will not take an invalid room', () => {
     ]);
     expect(countInvalidRooms(world.entities, BOUNDS, content).noDoor).toBe(1);
     world = run(world, content, 20);
-    expect(world.guestOutcomes.unsatisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
   });
 
   it('IS NOT SERVED IN A SKY TOWER, however many storeys it has', () => {
@@ -136,8 +143,8 @@ describe('a guest will not take an invalid room', () => {
       { tick: world.tick, command: arrive() },
       { tick: world.tick + 1, command: arrive() },
     ]);
-    expect(world.guestOutcomes.satisfied).toBe(0);
-    expect(world.guestOutcomes.unsatisfied).toBe(2);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(2);
     // No stay was paid for. Compared against the seeded cash rather than against zero,
     // because `worldWithCash` books its float under the same reason a stay does.
     expect(sumByReason(world.ledger, 'roomRevenue')).toBe(cash);
@@ -152,7 +159,7 @@ describe('a guest will not take an invalid room', () => {
     let world = stepTick(worldWithCash(cash), content, builds);
     expect(countInvalidRooms(world.entities, BOUNDS, content).unsupported).toBe(0);
     world = run(world, content, 60, [{ tick: world.tick, command: arrive() }]);
-    expect(world.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
   });
 
   it('is evicted from every storey when the foot of the tower is demolished', () => {
@@ -176,7 +183,13 @@ describe('a guest will not take an invalid room', () => {
 
     world = stepTick(world, content, [demolish(groundRoom?.id ?? 0)]);
     // All four: the one whose room went, and the three whose rooms lost the earth.
-    expect(world.guestOutcomes.evicted).toBe(4);
+    expect(evictedGuests(world.guestOutcomes)).toBe(4);
+    // AND SINCE G-015 THE TABLE SAYS WHICH IS WHICH, in the test whose prose said it first.
+    // One room ceased to exist; three are still standing and stopped being rooms. That is
+    // one command producing two genuinely different events, and a single `evicted` counter
+    // could not tell them apart — this is the sentence above, as an assertion.
+    expect(departureCountOf(world.guestOutcomes, 'evictedRoomGone')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'evictedRoomUnusable')).toBe(3);
     expect(countInvalidRooms(world.entities, BOUNDS, content).unsupported).toBe(3);
   });
 
@@ -207,7 +220,7 @@ describe('a guest will not take an invalid room', () => {
     });
     expect(guestsInOrder(world.guests)[0]?.roomEntityId).toBe(2);
     world = run(world, content, 40);
-    expect(world.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
     expect(sumByReason(world.ledger, 'roomRevenue')).toBe(RATE);
   });
 });
@@ -224,11 +237,15 @@ describe('a valid room can go invalid under a guest', () => {
     const guest = guestsInOrder(world.guests)[0];
     expect(guest !== undefined && isResting(guest)).toBe(true);
     expect(guest?.roomEntityId).toBe(2);
-    expect(world.guestOutcomes.evicted).toBe(0);
+    expect(evictedGuests(world.guestOutcomes)).toBe(0);
 
     // Knock the floor out from under it.
     world = stepTick(world, content, [demolish(1)]);
-    expect(world.guestOutcomes.evicted).toBe(1);
+    expect(evictedGuests(world.guestOutcomes)).toBe(1);
+    // The room is still standing (asserted below), so the reason is `evictedRoomUnusable`
+    // and not `evictedRoomGone` — the distinction G-015 records.
+    expect(departureCountOf(world.guestOutcomes, 'evictedRoomUnusable')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'evictedRoomGone')).toBe(0);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     // The room is still there. It is simply no longer a room anybody can use.
     expect(getEntity(world.entities, 2)?.kind).toBe('bedroom');
@@ -248,12 +265,17 @@ describe('a valid room can go invalid under a guest', () => {
     ]);
     world = run(world, content, 5);
     expect(guestsInOrder(world.guests)[0]?.roomEntityId).toBe(1);
-    expect(world.guestOutcomes.evicted).toBe(0);
+    expect(evictedGuests(world.guestOutcomes)).toBe(0);
 
     // Column 5 was the door. Build on it.
     world = stepTick(world, content, [build('cupboard', cell(GROUND_FLOOR, 5))]);
     expect(world.buildOutcomes.built).toBe(1);
-    expect(world.guestOutcomes.evicted).toBe(1);
+    expect(evictedGuests(world.guestOutcomes)).toBe(1);
+    // NOTHING WAS DEMOLISHED HERE, so this eviction cannot be `evictedRoomGone` — the room
+    // is exactly where it was and has stopped working. The reason a player would want to
+    // read, recorded (G-015).
+    expect(departureCountOf(world.guestOutcomes, 'evictedRoomUnusable')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'evictedRoomGone')).toBe(0);
     expect(countInvalidRooms(world.entities, BOUNDS, content).noDoor).toBe(1);
   });
 
@@ -265,9 +287,9 @@ describe('a valid room can go invalid under a guest', () => {
     ]);
     world = run(world, content, 5);
     world = stepTick(world, content, [build('cupboard', cell(GROUND_FLOOR, 20))]);
-    expect(world.guestOutcomes.evicted).toBe(0);
+    expect(evictedGuests(world.guestOutcomes)).toBe(0);
     world = run(world, content, 40);
-    expect(world.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
   });
 });
 
@@ -336,12 +358,12 @@ describe('counting guests in invalid rooms', () => {
           },
         ],
       },
-      guestOutcomes: { arrived: 1, satisfied: 0, unsatisfied: 0, evicted: 0 },
+      guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     };
     expect(countGuestsInInvalidRooms(forged.guests, forged.entities, BOUNDS, content)).toBe(1);
     // And the tick puts it right on the very next minute, rather than leaving it there.
     const after = stepTick(forged, content, []);
-    expect(after.guestOutcomes.evicted).toBe(1);
+    expect(evictedGuests(after.guestOutcomes)).toBe(1);
     expect(countGuestsInInvalidRooms(after.guests, after.entities, BOUNDS, content)).toBe(0);
   });
 
@@ -362,7 +384,7 @@ describe('counting guests in invalid rooms', () => {
           },
         ],
       },
-      guestOutcomes: { arrived: 1, satisfied: 0, unsatisfied: 0, evicted: 0 },
+      guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     };
     expect(countGuestsInInvalidRooms(forged.guests, forged.entities, BOUNDS, content)).toBe(0);
   });

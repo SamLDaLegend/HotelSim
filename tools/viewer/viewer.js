@@ -128,6 +128,13 @@ const initialsOf = (kind) =>
 
 const rec = { lines: [], cache: new Map(), everyTicks: 1, extent: null };
 
+// A RAW `JSON.parse`, AND IT DOES NOT MIGRATE (G-015). `deserialise` lives in the sim and
+// runs the v1->v8 chain; this reads the `world` object straight out of the line. So a
+// recording made by an older build shows whatever fields that build wrote, and the HUD
+// below — which reads the v8 outcome TABLE — will show em-dashes for a pre-v8 recording
+// rather than counts. That is the honest failure and it is not worth fixing: recordings are
+// disposable, the viewer is disposable (§9), and wiring a migration chain into it is the
+// first sentence of the story where this becomes a second renderer.
 function frameAt(i) {
   const hit = rec.cache.get(i);
   if (hit !== undefined) return hit;
@@ -454,6 +461,19 @@ function hud(world, extra) {
   }
 
   const o = world.guestOutcomes;
+  /**
+   * One row of the schema-8 outcome table, or an em-dash.
+   *
+   * NEVER `?? 0`. A recording from before G-015 has no `departures` at all, and a zero here
+   * would read as "nobody was ever satisfied" — a plausible catastrophe rather than a
+   * missing field. The same reasoning `assertSummarySchema` applies to the JSON report.
+   */
+  const left = (outcomes, reason) => {
+    const rows = outcomes.departures;
+    if (!Array.isArray(rows)) return '—';
+    const row = rows.find((r) => r.reason === reason);
+    return row === undefined ? '—' : String(row.count);
+  };
   const idx = Number(el('scrub').value);
   el('hud').innerHTML = row([
     ['frame', `${idx} / ${rec.lines.length - 1}`],
@@ -464,9 +484,15 @@ function hud(world, extra) {
     ['in hotel', String(world.guests.list.length)],
     ['outside', String(extra.outside)],
     ['arrived', String(o.arrived)],
-    ['satisfied', String(o.satisfied)],
-    ['unsatisfied', String(o.unsatisfied)],
-    ['evicted', String(o.evicted)],
+    // FIVE LITERAL ROWS, NOT A LOOP OVER THE TABLE (G-015). A loop would render whatever a
+    // recording happened to contain, which is how a disposable viewer grows a feature; these
+    // are the five reasons this build writes, spelled out, and `left` returns an em-dash for
+    // a recording that predates them rather than a plausible 0.
+    ['satisfied', left(o, 'satisfied')],
+    ['gave up', left(o, 'gaveUpWaiting')],
+    ['room gone', left(o, 'evictedRoomGone')],
+    ['room broke', left(o, 'evictedRoomUnusable')],
+    ['evicted (old save)', left(o, 'evictedCauseUnrecorded')],
   ]);
 
   // Departed-guest tally from the frame, beside what the guests standing here right now

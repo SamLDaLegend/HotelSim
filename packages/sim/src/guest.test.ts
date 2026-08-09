@@ -22,6 +22,8 @@ import {
   assertGuestOutcomes,
   countOrphanedReservations,
   countStuckGuests,
+  departedGuests,
+  departureCountOf,
   guestsInOrder,
   isResting,
 } from './guests.js';
@@ -177,11 +179,11 @@ describe('the need is met', () => {
     let world = stepTick(hotel(1), content, [arrive]);
     for (let i = 1; i < SATISFY; i += 1) {
       world = stepTick(world, content);
-      expect(world.guestOutcomes.satisfied).toBe(0);
+      expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(0);
       expect(guestsInOrder(world.guests)).toHaveLength(1);
     }
     world = stepTick(world, content);
-    expect(world.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
   });
 
@@ -198,8 +200,8 @@ describe('the need is met', () => {
 
   it('records the outcome and leaves, so the room serves the next guest', () => {
     const world = run(hotel(1), content, 2 * SATISFY + 4, [at(1, arrive), at(SATISFY + 2, arrive)]);
-    expect(world.guestOutcomes.satisfied).toBe(2);
-    expect(world.guestOutcomes.unsatisfied).toBe(0);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(2);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(0);
     expect(world.ledger).toHaveLength(2);
   });
 });
@@ -212,10 +214,10 @@ describe('the need is not met', () => {
     let world = stepTick(hotel(0), content, [arrive]);
     for (let i = 1; i < PATIENCE; i += 1) {
       world = stepTick(world, content);
-      expect(world.guestOutcomes.unsatisfied).toBe(0);
+      expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(0);
     }
     world = stepTick(world, content);
-    expect(world.guestOutcomes.unsatisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(world.ledger).toHaveLength(0);
   });
@@ -225,7 +227,7 @@ describe('the need is not met', () => {
     // terminal outcome — not a guest standing in the lobby for the rest of the run.
     const world = run(hotel(0), content, 200, [at(1, arrive), at(5, arrive), at(50, arrive)]);
     expect(world.guestOutcomes.arrived).toBe(3);
-    expect(world.guestOutcomes.unsatisfied).toBe(3);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(3);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(countStuckGuests(world.tick, world.guests, content)).toBe(0);
     expect(() => assertGuestOutcomes(world.guestOutcomes, world.guests)).not.toThrow();
@@ -479,8 +481,8 @@ describe('the exit criteria, over 30 simulated days', () => {
   it('has guests arrive, has some of them satisfied, and leaves none stuck', () => {
     const world = thirtyDays();
     expect(world.guestOutcomes.arrived).toBeGreaterThan(0);
-    expect(world.guestOutcomes.satisfied).toBeGreaterThan(0);
-    expect(world.guestOutcomes.unsatisfied).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
     expect(countStuckGuests(world.tick, world.guests, hotelContent)).toBe(0);
   });
 
@@ -488,8 +490,12 @@ describe('the exit criteria, over 30 simulated days', () => {
     const world = thirtyDays();
     expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
     expect(() => assertGuestOutcomes(world.guestOutcomes, world.guests)).not.toThrow();
-    const { arrived, satisfied, unsatisfied, evicted } = world.guestOutcomes;
-    expect(arrived).toBe(satisfied + unsatisfied + evicted + world.guests.list.length);
+    // The law spelled out over the TABLE (G-015), not over four fields. `departedGuests`
+    // folds the rows — nothing stores the total — so this is three independently
+    // accumulated quantities being compared, not a number against itself.
+    expect(world.guestOutcomes.arrived).toBe(
+      departedGuests(world.guestOutcomes) + world.guests.list.length,
+    );
   });
 
   it('takes money for every satisfied stay and for no other', () => {
@@ -499,8 +505,8 @@ describe('the exit criteria, over 30 simulated days', () => {
     // satisfied stay, and the whole balance is revenue.
     const world = thirtyDays();
     const revenue = world.ledger.filter((transaction) => transaction.reason === 'roomRevenue');
-    expect(revenue).toHaveLength(world.guestOutcomes.satisfied);
-    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(world.guestOutcomes.satisfied * RATE);
-    expect(balanceOf(world.ledger)).toBe(world.guestOutcomes.satisfied * RATE);
+    expect(revenue).toHaveLength(departureCountOf(world.guestOutcomes, 'satisfied'));
+    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(departureCountOf(world.guestOutcomes, 'satisfied') * RATE);
+    expect(balanceOf(world.ledger)).toBe(departureCountOf(world.guestOutcomes, 'satisfied') * RATE);
   });
 });

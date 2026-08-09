@@ -2,22 +2,25 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-017 done. 16 goals; M0/M1 signed off; **the game has been watched.***
+*As of 2026-08-09, G-015 done. 18 goals; M0/M1 signed off; **the game has been watched.***
 
-- **State**: save **v7** · summary v1 · six gates green · I2 `4b8db9b1ac36cb35` ·
-  I5 **2.0%** of the derived 389,333 ms budget.
-- **WATCH #1 EXISTS** (above) and it is the point of ADR-0013. Two findings invisible to
-  1,109 tests: **11 of 15 amenity rooms inert** because provider choice is lowest-id, and
-  the engagement vector summing to **exactly** `night_rest.satisfyTicks` so a guest is never
-  idle in its room. **G-014 inherits both.**
-- **A parked hypothesis was tested by a goal that did not plan to test it** — G-013 parked
-  "the engagement vector sums to the lodging budget" *with a stated experiment*; G-017's
-  recording was that experiment. Park hypotheses with their experiments.
+- **State**: save **v8** · summary **v2** · six gates green · I2 `ca54cbb7ae2dc693` ·
+  67 files / 1,235 tests · I5 **2.1%** of the derived 389,333 ms budget.
+- **WATCH #1 exists** and is the point of ADR-0013. It found what 1,109 tests could not,
+  and **its findings then caught a defect in G-014a's own first build** — comfort 0 met,
+  356 unmet, with six gates green.
+- **Three goals chained without planning it**: G-013 parked a hypothesis *with a stated
+  experiment*, G-017's recording was that experiment, G-014a hit the knife-edge it
+  describes. **Park hypotheses with their experiments.**
 - **The defect this project produces**: checks and claims that succeed while inspecting
-  nothing. Newest instances are both instructive — a guard testing the resulting **value**
-  against a default rather than whether the flag was seen, and a viewer drawing a homeless
-  guest identically to a housed one.
-- **Owed by the human**: `pnpm viewer`, scrub a recording. G-017's criterion 1.
+  nothing. Newest forms — a criterion with **no subject at all** (G-015's v1 consumer), a
+  guard **not wired to its own goal's exit command**, and a doc claiming a law runs at tick
+  time when it runs only in the report.
+- **Prose that cannot be verified may describe, but it may not measure**, and a number that
+  cannot be re-measured is **withdrawn, not restated** — applied to timings, counts, test
+  totals and test *outcomes* this session.
+- **Owed by the human**: `pnpm viewer` + scrub (G-017 criterion 1); a ruling on §7.1's
+  conversion guard, four firings all on prose.
 
 ---
 
@@ -1018,3 +1021,47 @@ defect made visible — and the basement tint reads as below-ground.
 **The caveat, stated so a thin answer is not treated as settled**: the watched scenes are 9
 rooms with 4 concurrent guests, and 21 rooms with 4. **A 60-room hotel with 40 guests has
 still never been drawn by anything.** M5 must not read this as a verdict on the cross-section.
+
+---
+
+## 2026-08-09 — G-015 — The outcome table, and summary schema 2 (1 sweep)
+
+Four departure counters became a **five-row table by reason**. Save **v8**, summary **v2**
+— the breaking kind of change, three keys removed rather than added.
+
+**Two criteria were broken and both were caught before a line was written**, which is the
+first time this project has repaired criteria at PLAN rather than at CRITIQUE. Criterion 2
+named an invocation that **cannot** meet it: `evictedRoomUnusable` is *structurally*
+unreachable at `--rooms 6`, because `roomsPerFloor` is 40 so all six seeded rooms sit on
+the ground floor where nothing can lose its support. **Adding rows to a table cannot
+produce departures that did not happen.** Criterion 5 asked a v1 consumer to refuse v2 —
+and **no consumer of `RunSummary` exists**; `report.ts` says so in its own comment. An
+invented consumer refusing an invented version is ADR-0007's shape in a schema costume.
+
+**The conservation law was designed against a warning aimed at it.** G-013 shipped
+`metByRoom + metByItem === met` where one side was derived from the other. So: **L1** is
+`arrived === Σ rows + live` across three independently accumulated quantities with **no
+stored total**, and **L2** compares the `satisfied` row against the **ledger** — a
+different subsystem — catching a *conserving* misattribution L1 cannot see.
+
+**And the builder deleted a check of its own that could not fire**, having found it by
+driving rather than reasoning: it wrote L1 into `buildSummary` as a violation, then found
+`assertGuestOutcomes` throws on exactly that condition at the top of the same function. The
+replacement test asserts `buildSummary` **throws**.
+
+**`sim-critic` then measured L2's real scope instead of accepting it** — it drove all four
+adjacent misattributions and found **two caught, three not**. Four of five rows have no
+cross-subsystem witness, because no ledger entry exists for an eviction. Not fixable and
+not a defect; the prose claiming otherwise was. It is now a caught/not-caught matrix in the
+source.
+
+**Three numbers were withdrawn rather than restated this goal**, all under `CLAUDE.md`'s
+rule 5 applied past timings: a test total that was arithmetic across two moments (1,326/70
+→ measured **1,235/67**), a doc claiming L2 runs at tick time when it runs only in the
+report, and the orchestrator's own repetition of the first to the human.
+
+**Disclosed against interest, twice**: the builder's first I5 measurement was invalid
+because linked `node_modules` made the HEAD worktree run branch code, and a `rm -rf` of a
+measurement worktree followed a junction and emptied `node_modules`. Both reported, both
+recovered, and `sim-critic` verified the second independently — 42 status entries, **no
+deletions**, lockfile unmodified, `git fsck` clean.

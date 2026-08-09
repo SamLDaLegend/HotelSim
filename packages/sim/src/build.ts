@@ -148,7 +148,7 @@ export function isBuildRefusalReason(value: string): value is BuildRefusalReason
  * because a refusal is a non-event: the question is whether the rule bit and how often.
  *
  * THERE IS NO CONSERVATION LAW HERE, and that is stated rather than papered over.
- * `GuestOutcomes` has one — arrived === satisfied + unsatisfied + evicted + live — because
+ * `GuestOutcomes` has one — arrived === the sum of its departure rows, plus live — because
  * every guest enters through one door. Entities do not: the store also changes through
  * `spawnEntity` and through migration, so `built - demolished` is not the population of
  * anything and any identity written here would hold for the wrong reason. Inventing one

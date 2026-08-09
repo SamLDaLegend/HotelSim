@@ -2,25 +2,25 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-017 done (criterion 1 OWED). 16 goals; M0/M1 signed off.*
+*As of 2026-08-09, G-015 done. 18 goals; M0/M1 signed off; M2 mostly built.*
 
-- **Schema versions**: save **v7** · summary **v1** (v2 owed by G-015).
-- **Gates**: all six green. I2 `4b8db9b1ac36cb35` · I5 **2.0% of the derived 389,333 ms**.
-- **Order**: **G-014** -> G-015 -> G-019 -> **G-020** (tripwire, hard prerequisite of M3)
-  -> **G-021** (speed ladder as content) -> M2 exit. All are in the M2 exit list.
+- **Schema versions**: save **v8** · summary **v2**.
+- **Gates**: all six green. I2 `ca54cbb7ae2dc693` · I5 **2.1% of the derived 389,333 ms** ·
+  **67 files / 1,235 tests**.
+- **Order remaining**: **G-014b** (hysteresis, save v9) -> **G-019** (reviews,
+  last-in-milestone, two critics) -> **G-020** (tripwire, hard prerequisite of M3) ->
+  **G-021** (speed ladder as content) -> M2 exit.
 - **OWED BY THE HUMAN, NOT BY A GOAL**: run `pnpm viewer`, load a recording, scrub it.
-  G-017's criterion 1 is dischargeable no other way, and no agent may substitute for it.
-- **Obligations owed**: G-014 runs the §5.5 seam question first **and inherits WATCH #1's
-  two findings** — lowest-id concentration leaves 11 of 15 amenity rooms inert, and the
-  engagement vector summing to exactly the lodging budget (480 ticks) makes the bedroom a
-  billing token. G-015 owes summary v2 and a conservation law that is **not** an identity
-  over its own inputs. G-019 is last-in-milestone: second critic, and M2's "visibly".
-  G-020 inherits the unpinned bench workload and the copy-the-gate proof-of-bite technique.
-  **M4 does not start** until scenario capital lands (ADR-0013 §5).
-- **Open contradictions**: G-012's criterion pins a content property any provider addition
-  can flip. `--rooms N` contaminates every balance sweep. The speed ladder is PROVISIONAL —
-  **watched at G-017: 48 s/day reads brisk, 1x is dead** — and G-021 makes it content.
-- **On trial**: §7.1's conversion guard — **three firings, all on prose**, none on code.
+  G-017's criterion 1 is dischargeable no other way. And **rule on §7.1's conversion
+  guard** — four firings, all on prose (`ESCALATIONS.md`).
+- **Obligations**: G-014b takes `abandoned` as a row on **`NeedOutcome`**, not in G-015's
+  departure table (a guest departs once but abandons many times, so a law summing a subset
+  is the vacuity shape). Its criteria 2 and 3 are **both broken as written** and repairs are
+  recorded. G-019 owes M2's "visibly" and the second critic. G-020 inherits the unpinned
+  bench workload and the copy-the-gate proof-of-bite technique. **M4 does not start** until
+  scenario capital lands.
+- **Open contradictions**: `--rooms N` contaminates every balance sweep. The speed ladder is
+  PROVISIONAL. Seeds are inert until M4 — do not spend a goal on multi-seed sweeps.
 
 ---
 
@@ -1124,15 +1124,53 @@ Critique rounds used: 0/3
   before BUILD and may object to its size (§5.6).
 
 ## G-015 — The outcome table, and summary schema 2
-Status: pending
+Status: **done** — 1 sweep (1 MAJOR + 4 MINOR + 1 NIT), zero BLOCKERs. `sim-critic`
+  predicted two sweeps conditional on the criteria being repaired at PLAN; they were, and
+  it took one. **The seam was offered and declined with a scored prediction; the prediction
+  held.**
+  Verified by the orchestrator: six gates green; I2 `ca54cbb7ae2dc693`; **67 files / 1,235
+  tests, counted independently**; fixture zero-line diff; `SAVE_V1_CONTENT`
+  `8e09fe4f0fa162a3` intact in the frozen literals; criterion 2's corrected invocation
+  measured at `90 / 263 / 5 / 1`.
+
+  **TWO CRITERIA WERE BROKEN AND BOTH WERE CAUGHT BEFORE A LINE WAS WRITTEN.** Criterion 2
+  named an invocation that **cannot** meet it — `evictedRoomUnusable` is structurally
+  unreachable at `--rooms 6` because all seeded rooms sit on the ground floor. Criterion 5
+  asked a **v1 consumer** to refuse v2, and **no consumer of `RunSummary` exists** — an
+  invented consumer refusing an invented version is ADR-0007's vacuous shape in a schema
+  costume. Replaced with real subjects: a frozen v1 document captured at `a011f38`, and the
+  assertion that the retired keys are **absent rather than zero**.
+
+  **THE BUILDER DELETED A CHECK OF ITS OWN THAT COULD NOT FIRE.** It wrote L1 into
+  `buildSummary` as a violation, then found `assertGuestOutcomes` throws on that exact
+  condition at the top of the same function. Found by driving it, not by reasoning. The
+  replacement test asserts `buildSummary` **throws**.
+
+  **L2 IS THE GOAL'S CENTRE AND ITS SCOPE IS NOW WRITTEN DOWN HONESTLY.** It compares the
+  `satisfied` row against the **ledger** — a different subsystem — so it catches a
+  *conserving* misattribution that L1 cannot see. `sim-critic` drove all four adjacent
+  misattributions: **two caught, three not.** Four of five rows have no cross-subsystem
+  witness, because no ledger entry exists for an eviction. Not fixable, not a defect, and
+  now stated in the source as a matrix rather than implied away.
 Milestone: M2
 Owner pair: ai-engineer / **sim-critic**
 Statement: The four outcome counters become a table by reason. `SUMMARY_SCHEMA_VERSION`
   bumps to 2 and the conservation law holds against it.
 Exit criteria:
   - pnpm exec vitest run outcome  (all green)
-  - pnpm sim:run --days 30 --seed 7 --rooms 6  prints an outcome table with at least
-    FOUR distinct reasons non-zero
+  - `pnpm sim:run --days 30 --seed 7 --rooms 6 --build 720 --demolish 2880` prints an
+    outcome table with at least FOUR distinct reasons non-zero.
+    **CORRECTED AT PLAN, 2026-08-09, and the original invocation is kept here as the
+    lesson:** it read `--days 30 --seed 7 --rooms 6`, which **this goal proved cannot meet
+    it** — that run has exactly ONE non-zero reason (356 satisfied, nothing else), and
+    `evictedRoomUnusable` is *structurally* unreachable there because `roomsPerFloor` is 40,
+    so all six seeded rooms sit on the ground floor where nothing can lose its support.
+    Adding rows to a table cannot produce departures that did not happen. Measured
+    replacement: `satisfied 90 · gaveUpWaiting 263 · evictedRoomGone 5 ·
+    evictedRoomUnusable 1`. **A criterion whose invocation is discovered during BUILD is one
+    the builder tunes until it passes** (ADR-0007's G-016 amendment), so it was settled by
+    measurement before a line was written. `outcome.report.test.ts` pins BOTH — the working
+    invocation, and the old one producing exactly one reason.
   - the outcome table's total still equals arrived - live, and a test deletes one row
     and watches the conservation law throw
   - the conservation law is NOT an identity over its own inputs — the total is

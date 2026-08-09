@@ -47,6 +47,12 @@
 // name for the same reason: `migrateV6ToV7` is guarded here now, and that goal's exit
 // criterion is `pnpm exec vitest run provider`.
 //
+// G-015 ADDED `outcome`, AND THE OMISSION WAS ALMOST THE DEFECT THIS FILE EXISTS TO PREVENT.
+// `migrateV7ToV8` is guarded here, and G-015's exit criterion is `pnpm exec vitest run
+// outcome` — so without the rename, the guard for this goal's migration would not have been
+// run by this goal's own command. A guard wired to a different circuit from the thing it
+// protects is ADR-0007's shape exactly, arriving in the file written to stop it.
+//
 // This is a scan in the spirit of `check-purity.mjs`'s import scan, deliberately NOT a
 // dependency-cruiser rule: `.dependency-cruiser.cjs` is gate territory and gates are
 // orchestrator-owned (ADR-0004).
@@ -55,6 +61,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { GUEST_DEPARTURE_REASONS } from '@hotelsim/sim';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const SAVE_TS = join(ROOT, 'packages/sim/src/save.ts');
@@ -105,6 +112,21 @@ const FORBIDDEN_IN_SAVE_TS = [
   'findNeedType',
   'needTypesInOrder',
   'lodgingNeedOf',
+  // G-015. `createGuestOutcomes()` returns the same five zero rows `V8_MIGRATION_GUEST_OUTCOMES`
+  // holds, so ADR-0008 (3) applies exactly: no value assertion can tell the two apart, and the
+  // freeze only becomes observable on the day `GuestDepartureReason` gains a member. A
+  // departure taxonomy is precisely the union that grows — M3's "gave up waiting for a lift" is
+  // the obvious next one — and on that day a migration that folded the live list would start
+  // writing a row for a reason that did not exist when those v7 bytes were written.
+  // `GUEST_DEPARTURE_REASONS` is the back door: a step that built the table by walking the live
+  // reason list is the same defect wearing a different hat. `departureCountOf` and
+  // `evictedGuests` are listed because they are how you would READ the new shape, and a
+  // migration that read the new shape to decide the old one's meaning has the direction of
+  // history backwards.
+  'createGuestOutcomes',
+  'GUEST_DEPARTURE_REASONS',
+  'departureCountOf',
+  'evictedGuests',
 ] as const;
 
 /**
@@ -156,6 +178,8 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(source).toContain('V5_MIGRATION_LOAN_OUTCOMES');
     expect(source).toContain('migrateV5ToV6');
     expect(source).toContain('migrateV6ToV7');
+    expect(source).toContain('migrateV7ToV8');
+    expect(source).toContain('V8_MIGRATION_GUEST_OUTCOMES');
   });
 
   it('names none of the current-plot identifiers in executable code', () => {
@@ -201,6 +225,37 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(declaration).toContain('Object.freeze');
   });
 
+  it('freezes the outcome table as five rows, each with its own literal 0', () => {
+    // The v8 half, and the one carrying the newest risk: `GuestDepartureReason` has five
+    // members today and M3 will want a sixth. EVERY REASON IS SPELLED OUT WITH ITS OWN `0`,
+    // exactly as `V4_MIGRATION_BUILD_OUTCOMES` is — which is what makes deleting the constant
+    // and calling `createGuestOutcomes()` fail here rather than pass by removing the scan's
+    // subject, and what makes this break loudly on the day a sixth reason is added to the
+    // union but not to history.
+    const code = stripComments(saveSource());
+    const declaration = /V8_MIGRATION_GUEST_OUTCOMES[\s\S]{0,900}?\]\)/.exec(code)?.[0] ?? '';
+    expect(declaration).toContain("reason: 'satisfied', count: 0");
+    expect(declaration).toContain("reason: 'gaveUpWaiting', count: 0");
+    expect(declaration).toContain("reason: 'evictedRoomGone', count: 0");
+    expect(declaration).toContain("reason: 'evictedRoomUnusable', count: 0");
+    expect(declaration).toContain("reason: 'evictedCauseUnrecorded', count: 0");
+    expect(declaration).toContain('Object.freeze');
+  });
+
+  it('and the frozen list is the one the sim actually ships, or the migration is already wrong', () => {
+    // The other direction, and the reason this is not merely a spelling test: the five
+    // reasons above must be exactly the reasons a v8 world may carry TODAY. They are allowed
+    // to diverge LATER — that divergence is the whole point of freezing them — but on the day
+    // the constant is written they have to agree, or every migrated save is born invalid.
+    expect([...GUEST_DEPARTURE_REASONS]).toEqual([
+      'satisfied',
+      'gaveUpWaiting',
+      'evictedRoomGone',
+      'evictedRoomUnusable',
+      'evictedCauseUnrecorded',
+    ]);
+  });
+
   it('freezes the plot as four integer literals rather than a derived value', () => {
     // The positive half. The two tests above say what `save.ts` must NOT do; this says
     // what it must do, so deleting `V3_MIGRATION_BOUNDS` altogether is not a way to make
@@ -231,6 +286,22 @@ describe('the scan itself can fail', () => {
     // costs nothing until the union grows.
     const bad = 'function migrateV3ToV4(w) {\n  return { ...w, buildOutcomes: createBuildOutcomes() };\n}';
     expect(scan(bad)).toEqual([{ name: 'createBuildOutcomes', line: 2 }]);
+  });
+
+  it('catches the back door: folding the live DEPARTURE reason list into a table', () => {
+    // The G-015 case, and the tempting one for the same reason the G-008 case was tempting:
+    // `createGuestOutcomes()` returns exactly what `V8_MIGRATION_GUEST_OUTCOMES` holds today,
+    // so deduplicating them looks free and costs nothing until the union grows.
+    const bad = [
+      'function migrateV7ToV8(w) {',
+      '  const departures = GUEST_DEPARTURE_REASONS.map((reason) => ({ reason, count: 0 }));',
+      '  return { ...w, guestOutcomes: createGuestOutcomes() };',
+      '}',
+    ].join('\n');
+    expect(scan(bad).map((violation) => violation.name).sort()).toEqual([
+      'GUEST_DEPARTURE_REASONS',
+      'createGuestOutcomes',
+    ]);
   });
 
   it('catches the back door: folding the live refusal list into a counter bag', () => {

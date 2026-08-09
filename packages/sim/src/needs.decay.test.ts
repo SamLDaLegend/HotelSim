@@ -36,7 +36,10 @@
 import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData } from './content.js';
-import { guestsInOrder } from './guests.js';
+import {
+  departureCountOf,
+  guestsInOrder,
+} from './guests.js';
 import type { Guest } from './guests.js';
 import { findNeedState, isNeedFailed, isNeedMet, isNeedPending, urgencyOf } from './needs.js';
 import { run, stepTick } from './tick.js';
@@ -184,7 +187,7 @@ describe('the clamp, which is the other half of the form', () => {
   it('a guest whose LODGING need clamps leaves, and does not linger at the ceiling', () => {
     const world = run(createWorld(1, brief), brief, SHORT + 10, [{ tick: 1, command: arrive }]);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(world.guestOutcomes.unsatisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
   });
 });
 

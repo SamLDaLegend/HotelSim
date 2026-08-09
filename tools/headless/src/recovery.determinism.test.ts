@@ -32,6 +32,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   createWorld,
+  departureCountOf,
+  evictedGuests,
   outstandingDebtOf,
   run,
   sumByReason,
@@ -120,8 +122,8 @@ describe('and none of it made the harness stop being a determinism harness', () 
   });
 
   it('still runs a hotel that serves guests, so none of this is failure being deterministic', () => {
-    expect(world.guestOutcomes.satisfied).toBeGreaterThan(0);
-    expect(world.guestOutcomes.unsatisfied).toBeGreaterThan(0);
-    expect(world.guestOutcomes.evicted).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(evictedGuests(world.guestOutcomes)).toBeGreaterThan(0);
   });
 });

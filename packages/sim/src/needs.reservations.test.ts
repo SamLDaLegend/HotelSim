@@ -33,6 +33,9 @@ import {
   countGuestsInInvalidRooms,
   countOrphanedReservations,
   countStuckGuests,
+  createGuestOutcomes,
+  departureCountOf,
+  evictedGuests,
   guestsInOrder,
   isEngaged,
   isResting,
@@ -177,7 +180,7 @@ describe('exit path — the provider stopped existing', () => {
     const guest = only(after);
     expect(guest.engagement).toBeNull();
     expect(isResting(guest)).toBe(true);
-    expect(after.guestOutcomes.evicted).toBe(0); // a lost café is not an eviction
+    expect(evictedGuests(after.guestOutcomes)).toBe(0); // a lost café is not an eviction
     const food = findNeedState(guest.needs, 'food')!;
     expect(food.progressRemaining).toBe(before.progressRemaining);
     expect(isNeedPending(food)).toBe(true);
@@ -210,7 +213,7 @@ describe('exit path — the provider stopped existing', () => {
     expect(isEngaged(only(start))).toBe(true);
 
     const after = stepTick(start, content, [despawn(bedroom)]);
-    expect(after.guestOutcomes.evicted).toBe(1);
+    expect(evictedGuests(after.guestOutcomes)).toBe(1);
     expect(guestsInOrder(after.guests)).toHaveLength(0);
     expect(orphansIn(after)).toBe(0);
     // And the café is free for the next guest, rather than held by a guest who has gone.
@@ -312,7 +315,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
       world: {
         ...start,
         guests: { nextId: 4, list: [guest(1, roomA!, null), middle(ids), guest(3, roomC!, null)] },
-        guestOutcomes: { arrived: 3, satisfied: 0, unsatisfied: 0, evicted: 0 },
+        guestOutcomes: { arrived: 3, departures: createGuestOutcomes().departures },
       },
     };
   };
@@ -346,7 +349,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     // BOTH reservations. 72 of the criterion run's 356 departures take this path.
     const { world, cafe } = staged((ids) => guest(2, ids[1]!, ids[3]!, { rest: 1 }));
     const after = stepTick(world, content, []);
-    expect(after.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(after.guestOutcomes, 'satisfied')).toBe(1);
     expect(guestsInOrder(after.guests).map((entry) => entry.id)).toEqual([1, 3]);
     expectHandedOver(after, cafe);
   });
@@ -357,7 +360,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     // with it.
     const { world, cafe } = staged((ids) => guest(2, NO_ENTITY, ids[3]!, { patience: 1 }));
     const after = stepTick(world, content, []);
-    expect(after.guestOutcomes.unsatisfied).toBe(1);
+    expect(departureCountOf(after.guestOutcomes, 'gaveUpWaiting')).toBe(1);
     expect(guestsInOrder(after.guests).map((entry) => entry.id)).toEqual([1, 3]);
     expectHandedOver(after, cafe);
   });
@@ -369,7 +372,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     const { world, cafe } = staged((ids) => guest(2, ids[1]!, ids[3]!));
     const bedroom = entitiesInOrder(world.entities)[1]!.id;
     const after = stepTick(world, content, [despawn(bedroom)]);
-    expect(after.guestOutcomes.evicted).toBe(1);
+    expect(evictedGuests(after.guestOutcomes)).toBe(1);
     expect(guestsInOrder(after.guests).map((entry) => entry.id)).toEqual([1, 3]);
     expectHandedOver(after, cafe);
   });
@@ -393,10 +396,10 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
           guest(3, NO_ENTITY, null, { food: 0 }),
         ],
       },
-      guestOutcomes: { arrived: 3, satisfied: 0, unsatisfied: 0, evicted: 0 },
+      guestOutcomes: { arrived: 3, departures: createGuestOutcomes().departures },
     };
     const after = stepTick(world, content, []);
-    expect(after.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(after.guestOutcomes, 'satisfied')).toBe(1);
     const survivors = guestsInOrder(after.guests);
     expect(survivors.find((entry) => entry.id === 1)?.roomEntityId).toBe(NO_ENTITY);
     expect(survivors.find((entry) => entry.id === 3)?.roomEntityId).toBe(bedroom);
@@ -418,7 +421,7 @@ describe('exit path — save and load', () => {
     const resumed = run(deserialise(serialise(mid)), content, 60, []);
     const unsaved = run(mid, content, 60, []);
     expect(hashState(resumed)).toBe(hashState(unsaved));
-    expect(resumed.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(resumed.guestOutcomes, 'satisfied')).toBe(1);
   });
 
   it('refuses a save whose guest is engaged with a room the save does not contain', () => {
@@ -578,9 +581,9 @@ describe('thirty days of a hotel where every provider is oversubscribed', () => 
     }
     // And the run really did exercise all of it, rather than reporting zeros about nothing.
     expect(world.guestOutcomes.arrived).toBeGreaterThan(400);
-    expect(world.guestOutcomes.satisfied).toBeGreaterThan(0);
-    expect(world.guestOutcomes.unsatisfied).toBeGreaterThan(0);
-    expect(world.guestOutcomes.evicted).toBe(0); // no bedroom is ever demolished here
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(evictedGuests(world.guestOutcomes)).toBe(0); // no bedroom is ever demolished here
     const food = world.needOutcomes.find((row) => row.needId === 'food');
     expect(food?.met).toBeGreaterThan(0);
     expect(food?.unmet).toBeGreaterThan(0);
@@ -597,7 +600,7 @@ describe('a guest that never gets a bedroom still holds nothing on the way out',
     });
     const start = stepTick(createWorld(1, impatient), impatient, [spawnCafe(0)]);
     const world = run(start, impatient, 10, [at(start.tick, arrive)]);
-    expect(world.guestOutcomes.unsatisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
     // And the café is genuinely free again: a new guest can take it.

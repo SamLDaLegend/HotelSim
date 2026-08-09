@@ -29,6 +29,8 @@ import {
   builtRoomCell,
   builtRoomStartFloor,
   COLUMNS_PER_ROOM,
+  departuresInSummary,
+  departuresOf,
   emitReport,
   HOTEL_AMENITIES,
   HOTEL_ROOMS,
@@ -304,13 +306,15 @@ describe('buildSummary', () => {
     expect(violations).toEqual([]);
     // Conservation: every guest who arrived is in exactly one bucket.
     const g = summary.guests;
-    expect(g.satisfied + g.unsatisfied + g.evicted + g.inHotel).toBe(g.arrived);
+    expect(departuresInSummary(summary) + g.inHotel).toBe(g.arrived);
     // The ledger is the opening capital, plus payments, plus settlements, and nothing else
     // — the default run builds nothing, demolishes nothing and borrows nothing. The
     // capital term is G-011's: a hotel cannot open with money unless the money is a
     // transaction, because there is no balance field to put it in (I4).
     expect(summary.money.startingCapitalPennies).toBeGreaterThan(0);
-    expect(summary.money.transactions).toBe(1 + g.satisfied + summary.money.settlements);
+    expect(summary.money.transactions).toBe(
+      1 + departuresOf(summary, 'satisfied') + summary.money.settlements,
+    );
     expect(summary.money.balancePennies).toBe(
       summary.money.startingCapitalPennies + summary.money.revenuePennies + summary.money.upkeepPennies,
     );
@@ -373,7 +377,7 @@ describe('assertIntegerLeaves', () => {
 // the wrong field produces a visible mismatch rather than a coincidental pass.
 // Module scope: the emitReport tests reuse it as the summary of a forged BuiltReport.
 const distinct: RunSummary = {
-  schema: 1,
+  schema: 2,
   input: {
     seed: 101,
     ticks: 102,
@@ -387,9 +391,15 @@ const distinct: RunSummary = {
   world: { tick: 105, days: 106, roomTypes: 107, needTypes: 108, entities: 109, stateHash: 'cafe0000feed1111' },
   guests: {
     arrived: 110,
-    satisfied: 111,
-    unsatisfied: 112,
-    evicted: 113,
+    // DISTINCT PER ROW, for the reason every other number here is distinct: a renderer that
+    // printed the rows in the wrong order, or printed one row twice, would otherwise pass.
+    departures: [
+      { reason: 'satisfied', count: 111 },
+      { reason: 'gaveUpWaiting', count: 112 },
+      { reason: 'evictedRoomGone', count: 113 },
+      { reason: 'evictedRoomUnusable', count: 140 },
+      { reason: 'evictedCauseUnrecorded', count: 141 },
+    ],
     inHotel: 114,
     stuck: 115,
     orphanedReservations: 116,
@@ -450,9 +460,13 @@ describe('renderers', () => {
         'rooms ok    133',
         'rooms bad   136 unplaced, 137 unsupported, 135 no door, 134 no item',
         'arrived     110',
-        'satisfied   111',
-        'unsatisfied 112',
-        'evicted     113',
+        // One line per row, in table order, each carrying its own distinct sentinel — so a
+        // renderer that printed the rows in the wrong order, or printed one twice, fails here.
+        'left satisfied              111',
+        'left gaveUpWaiting          112',
+        'left evictedRoomGone        113',
+        'left evictedRoomUnusable    140',
+        'left evictedCauseUnrecorded 141',
         'in hotel    114',
         'stuck       115',
         'orphan res  116',

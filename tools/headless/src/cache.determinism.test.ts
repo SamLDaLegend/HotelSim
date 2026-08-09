@@ -15,7 +15,14 @@
 // not do (I1).
 
 import { describe, expect, it } from 'vitest';
-import { createWorld, hashState, run, stepTick } from '@hotelsim/sim';
+import {
+  createWorld,
+  departureCountOf,
+  evictedGuests,
+  hashState,
+  run,
+  stepTick,
+} from '@hotelsim/sim';
 import type { Command, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { commandLog } from './determinism-log.js';
@@ -67,9 +74,9 @@ describe('the cache changes nothing about what the simulation does', () => {
     expect(cached.buildOutcomes.built).toBeGreaterThan(0);
     expect(cached.buildOutcomes.demolished).toBeGreaterThan(0);
     expect(cached.entities.nextId).toBeGreaterThan(50);
-    expect(cached.guestOutcomes.satisfied).toBeGreaterThan(0);
-    expect(cached.guestOutcomes.evicted).toBeGreaterThan(0);
-    expect(cached.guestOutcomes.unsatisfied).toBeGreaterThan(0);
+    expect(departureCountOf(cached.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(evictedGuests(cached.guestOutcomes)).toBeGreaterThan(0);
+    expect(departureCountOf(cached.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
   });
 
   it('is seed-sensitive, so the equality above is not two constants agreeing', () => {

@@ -26,6 +26,7 @@ import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import { beginEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
+import { departureCountOf, evictedGuests } from './guests.js';
 import { createGridBounds, GROUND_FLOOR } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import { stepTick } from './tick.js';
@@ -285,8 +286,8 @@ describe('the acceptance bar: a pure optimisation must not move the state hash',
     expect(hashState(withCache)).toBe(hashState(without));
     // And the run has to have DONE something, or the equality above is two empty worlds
     // agreeing (ADR-0007). Every one of these is a path a stale index could corrupt.
-    expect(withCache.guestOutcomes.satisfied).toBeGreaterThan(0);
-    expect(withCache.guestOutcomes.evicted).toBeGreaterThan(0);
+    expect(departureCountOf(withCache.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(evictedGuests(withCache.guestOutcomes)).toBeGreaterThan(0);
     expect(withCache.buildOutcomes.built).toBeGreaterThan(0);
     expect(withCache.buildOutcomes.demolished).toBeGreaterThan(0);
   });

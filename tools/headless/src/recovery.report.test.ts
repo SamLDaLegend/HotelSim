@@ -43,7 +43,12 @@ import { describe, expect, it } from 'vitest';
 import { bindContent, createWorld, run, TICKS_PER_DAY } from '@hotelsim/sim';
 import type { BoundContent, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { buildSummary, parseArgs, schedule } from './report.js';
+import {
+  buildSummary,
+  departuresOf,
+  parseArgs,
+  schedule,
+} from './report.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -250,7 +255,7 @@ describe('the baselines these criteria discriminate against', () => {
       expect(
         {
           built: summary.summary.build.built,
-          satisfied: summary.summary.guests.satisfied,
+          satisfied: departuresOf(summary.summary, 'satisfied'),
           valid: summary.summary.rooms.valid,
           entities: summary.summary.world.entities,
         },
@@ -273,7 +278,7 @@ describe('CRITERION A: a hotel with nothing returns to a hotel that works', () =
   });
 
   it('and at least one guest satisfied, having started with no rooms at all', () => {
-    expect(report.guests.satisfied).toBeGreaterThan(0);
+    expect(departuresOf(report, 'satisfied')).toBeGreaterThan(0);
     expect(report.money.revenuePennies).toBeGreaterThan(0);
     expect(report.input.rooms).toBe(0);
   });
@@ -320,7 +325,7 @@ describe('CRITERION A: a hotel with nothing returns to a hotel that works', () =
     // stays prose because replaying it here costs 164 seconds — that one is the
     // orchestrator's to confirm at VERIFY, and it is labelled as such.
     expect(report.rooms.valid).toBe(22);
-    expect(report.guests.satisfied).toBe(1_271);
+    expect(departuresOf(report, 'satisfied')).toBe(1_271);
     expect(report.build.refused.insufficientFunds).toBe(93);
     expect(report.loans.drawn).toBe(0);
   });
@@ -437,9 +442,13 @@ describe('the same invocations through a real process, at a shorter horizon', ()
     const { status, json } = spawn(['--days', '60', ...CRITERION_A.slice(2)]);
     expect(status).toBe(0);
     const rooms = json['rooms'] as { valid: number };
-    const guests = json['guests'] as { satisfied: number };
+    // Summary schema 2 (G-015): read the satisfied STAYS off the outcome table, as a
+    // consumer of the document has to. `?? -1` rather than `?? 0` deliberately — a missing
+    // row must fail the assertion below, not read as "nobody was satisfied".
+    const guests = json['guests'] as { departures: { reason: string; count: number }[] };
+    const satisfied = guests.departures.find((row) => row.reason === 'satisfied')?.count ?? -1;
     expect(rooms.valid).toBeGreaterThan(0);
-    expect(guests.satisfied).toBeGreaterThan(0);
+    expect(satisfied).toBeGreaterThan(0);
   });
 
   it('criterion B exits 0 through the real CLI with the player still able to act', () => {

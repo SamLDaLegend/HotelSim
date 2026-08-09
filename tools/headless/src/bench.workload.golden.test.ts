@@ -32,14 +32,22 @@
 //
 //   ticks     7200 = 5 x 1440 (TICKS_PER_DAY)
 //   arrived    225 = arrivals at ticks 1, 33, ... < 7200 = floor((7199 - 1) / 32) + 1
-//   conservation   : satisfied + unsatisfied + evicted + still here = arrived, both arms
+//   conservation   : every departure row summed + still here = arrived, both arms
 //   need rows    4 = one per need type in the shipped content
 //
 // IF A HASH BELOW MOVES, STOP. Either the simulation changed — in which case say what and
 // why, as G-007 and G-008 did for the other golden — or an "optimisation" was not one.
 
 import { describe, expect, it } from 'vitest';
-import { createWorld, guestCount, hashState, run } from '@hotelsim/sim';
+import {
+  createWorld,
+  departedGuests,
+  departureCountOf,
+  evictedGuests,
+  guestCount,
+  hashState,
+  run,
+} from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { schedule } from './report.js';
@@ -85,7 +93,17 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // hand-checked outcome below is identical to the one G-013 pinned. The same 225 guests
     // arrive, the same 210 complete a stay, nobody is evicted, and the tally still has four
     // rows. A change that had broken service would have moved those first.
-    expect(hashState(plain)).toBe('a1e1c0d5360cf999');
+    //
+    // MOVED AGAIN AT G-015, AND FOR A REASON THAT IS NOT A SIMULATION CHANGE AT ALL:
+    // `World.guestOutcomes` stopped being four counters and became a table, so the hashed
+    // document has a different shape carrying the same numbers. Was `a1e1c0d5360cf999` at
+    // G-014a. THE SAME EVIDENCE APPLIES AND IS STRONGER HERE: 225 arrive, 210 complete a
+    // stay, nobody is evicted, four tally rows — every hand-checked figure below is
+    // untouched. And `outcome.save.test.ts` carries the general form of that argument, by
+    // migrating a v7 world forward and asserting it hashes identically to a v8 world that
+    // lived the same history — which is what makes ~30 moved pins in this change evidence
+    // rather than thirty separate acts of faith.
+    expect(hashState(plain)).toBe('cc1fe09f93c19e53');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -94,14 +112,15 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // state that outcomes do not cover; if these move too, the simulation changed.
     expect(plain.guestOutcomes.arrived).toBe(EXPECTED_ARRIVALS);
     expect(plain.guestOutcomes.arrived).toBe(225);
-    expect(plain.guestOutcomes.satisfied).toBe(210);
-    expect(plain.guestOutcomes.evicted).toBe(0);
+    expect(departureCountOf(plain.guestOutcomes, 'satisfied')).toBe(210);
+    expect(evictedGuests(plain.guestOutcomes)).toBe(0);
     expect(plain.needOutcomes).toHaveLength(4);
   });
 
   it('and every guest is accounted for', () => {
-    const { arrived, satisfied, unsatisfied, evicted } = plain.guestOutcomes;
-    expect(satisfied + unsatisfied + evicted + guestCount(plain.guests)).toBe(arrived);
+    expect(departedGuests(plain.guestOutcomes) + guestCount(plain.guests)).toBe(
+      plain.guestOutcomes.arrived,
+    );
   });
 });
 
@@ -116,19 +135,39 @@ describe('the same workload with the player churning the building', () => {
     // Moved at G-014a for the reasons the plain hash did, and with the same control: the
     // eviction count below is unchanged at 19, so the path this arm exists to cover is
     // reached exactly as often as before. Was `847daaaa084b1ae6` at G-013,
-    // `a3622b36bb17436a` at G-016.
-    expect(hashState(churn)).toBe('9f1c8229e03d71d5');
+    // `a3622b36bb17436a` at G-016, `9f1c8229e03d71d5` at G-014a.
+    //
+    // Moved at G-015 with the plain arm, for the shape change described above — and this arm
+    // carries the sharper control: it EVICTS, and the eviction count below is still exactly
+    // 19. G-015 splits eviction into two reasons, so a change that had altered when a guest
+    // is evicted (rather than only what is recorded about it) would move that number.
+    expect(hashState(churn)).toBe('45ad064fabc409cb');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
-    expect(churn.guestOutcomes.evicted).toBeGreaterThan(0);
-    expect(churn.guestOutcomes.evicted).toBe(19);
+    expect(evictedGuests(churn.guestOutcomes)).toBeGreaterThan(0);
+    expect(evictedGuests(churn.guestOutcomes)).toBe(19);
     expect(hashState(churn)).not.toBe(hashState(runWorkload(0, 0)));
   });
 
+  it('and G-015 says WHICH KIND, which this workload could not report before', () => {
+    // NEW INFORMATION FROM AN UNCHANGED RUN, and the point of the whole goal in one
+    // assertion: 19 evictions were 19 evictions until now. ALL NINETEEN ARE THE SAME KIND —
+    // guests whose room was demolished under them — and NONE is a guest left in a room that
+    // stopped working. That is a fact about this workload, and it is worth pinning precisely
+    // because it is invisible without the split: `--build 240` packs the player's rooms on
+    // floor 1 above a 60-room ground floor that `--demolish 360` never eats through in five
+    // days, so nothing here ever loses its support while occupied.
+    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(19);
+    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomUnusable')).toBe(0);
+    // Only a migration writes the third, so a run that never loaded a save must read zero.
+    expect(departureCountOf(churn.guestOutcomes, 'evictedCauseUnrecorded')).toBe(0);
+  });
+
   it('and every guest is still accounted for', () => {
-    const { arrived, satisfied, unsatisfied, evicted } = churn.guestOutcomes;
-    expect(arrived).toBe(EXPECTED_ARRIVALS);
-    expect(satisfied + unsatisfied + evicted + guestCount(churn.guests)).toBe(arrived);
+    expect(churn.guestOutcomes.arrived).toBe(EXPECTED_ARRIVALS);
+    expect(departedGuests(churn.guestOutcomes) + guestCount(churn.guests)).toBe(
+      churn.guestOutcomes.arrived,
+    );
   });
 });

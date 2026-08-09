@@ -31,6 +31,8 @@ import {
   countOrphanedReservations,
   countStuckGuests,
   createWorld,
+  departureCountOf,
+  evictedGuests,
   guestsInOrder,
   hashState,
   isEngaged,
@@ -104,7 +106,7 @@ describe('the determinism log reaches the need vector', () => {
   it('closes the conservation law after 100,000 ticks', () => {
     const world = replayed();
     const departed =
-      world.guestOutcomes.satisfied + world.guestOutcomes.unsatisfied + world.guestOutcomes.evicted;
+      departureCountOf(world.guestOutcomes, 'satisfied') + departureCountOf(world.guestOutcomes, 'gaveUpWaiting') + evictedGuests(world.guestOutcomes);
     for (const needType of needTypesInOrder(content)) {
       const row = needOutcomeOf(world.needOutcomes, needType.id);
       expect(row, needType.id).toBeDefined();

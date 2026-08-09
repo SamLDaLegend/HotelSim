@@ -54,7 +54,13 @@ import {
   run,
 } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { buildSummary, parseArgs, schedule } from './report.js';
+import {
+  buildSummary,
+  departuresOf,
+  evictedInSummary,
+  parseArgs,
+  schedule,
+} from './report.js';
 
 const content = loadContent();
 
@@ -177,8 +183,8 @@ describe('a hotel with five of every amenity serves EVERY want it offers', () =>
   it('and the guests are getting what they came for, not merely being counted', () => {
     // The stay still completes for essentially everybody, so "every need met for somebody"
     // is not being bought by guests who never got a room in the first place.
-    expect(summary.guests.unsatisfied).toBe(0);
-    expect(summary.guests.evicted).toBe(0);
+    expect(departuresOf(summary, 'gaveUpWaiting')).toBe(0);
+    expect(evictedInSummary(summary)).toBe(0);
     expect(summary.guests.stuck).toBe(0);
     expect(summary.guests.orphanedReservations).toBe(0);
   });

@@ -22,7 +22,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 7;
+export const SAVE_SCHEMA_VERSION = 8;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -523,6 +523,113 @@ function migrateV6ToV7(world: unknown): unknown {
 }
 
 /**
+ * THE OUTCOME TABLE A v7 WORLD IS CARRIED ONTO, FROZEN AT THE MOMENT v8 WAS DEFINED.
+ *
+ * A LITERAL, and every reason is spelled out with its own `0` — the
+ * `V4_MIGRATION_BUILD_OUTCOMES` shape, for the identical reason. `createGuestOutcomes()`
+ * in `guests.ts` builds the same five rows today and the two are ALLOWED to diverge later;
+ * that divergence is correct rather than a bug to repair (ADR-0008 (1)). The day
+ * `GuestDepartureReason` gains a member — and a departure taxonomy is exactly the union
+ * that grows, M3's "gave up waiting for a lift" being the obvious next one — a migration
+ * that folded the live list would start writing a row for a reason that did not exist when
+ * these bytes were written, silently, and the only symptom would be a moved fixture hash on
+ * an unrelated change.
+ *
+ * The counts are filled in from the v7 counters below; the ORDER and the MEMBERSHIP are
+ * this literal's, so the row list a v7 save migrates onto is fixed forever.
+ *
+ * ADR-0008 (3): the values coincide with the live constructor today, so no value assertion
+ * can tell the two implementations apart. The structural guard is the source scan in
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.save.test.ts`.
+ */
+const V8_MIGRATION_GUEST_OUTCOMES = Object.freeze([
+  Object.freeze({ reason: 'satisfied', count: 0 }),
+  Object.freeze({ reason: 'gaveUpWaiting', count: 0 }),
+  Object.freeze({ reason: 'evictedRoomGone', count: 0 }),
+  Object.freeze({ reason: 'evictedRoomUnusable', count: 0 }),
+  Object.freeze({ reason: 'evictedCauseUnrecorded', count: 0 }),
+]);
+
+/**
+ * v7 -> v8: a world whose stays ended for reasons nobody wrote down (G-015).
+ *
+ * ADR-0006 fires for the seventh time. `World.guestOutcomes` changes SHAPE rather than
+ * gaining a sibling field, and that owes a migration for the same reason a new field does:
+ * without one, the same old bytes quietly mean something new. The permanent v1 fixture now
+ * walks 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8, migrated and never regenerated.
+ *
+ * WHAT EACH v7 COUNTER MEANS IN v8, ARGUED FROM THE ERA AND NOT FROM CONVENIENCE:
+ *
+ *   arrived      unchanged. It was never an outcome; it is the left-hand side of the law.
+ *   satisfied -> satisfied. The same event under the same name.
+ *   unsatisfied -> gaveUpWaiting. NOT A RENAME MADE UP HERE: v7's own field documented
+ *                itself as "patience for a room ran out before one was free", which is
+ *                that reason stated as a reason. Nothing is lost and nothing is invented.
+ *   evicted   -> evictedCauseUnrecorded, AND THIS IS THE POINT OF THE WHOLE STEP. v8
+ *                distinguishes "the room was demolished" from "the room is still standing
+ *                and stopped being a room". A v7 world recorded neither — it counted the
+ *                event and threw the cause away — so mapping these to either live reason
+ *                would state as fact something these bytes do not say. Both causes really
+ *                occurred in the v7 era (`validity.guest.test.ts` drives one of each), so
+ *                there is not even a majority to appeal to. The honest v8 value is a row
+ *                that means *an eviction from before causes were recorded*, and the tick
+ *                can never write it (`TickDepartureReason` excludes it).
+ *
+ * Reads no content and no live constant, so the same v7 bytes produce the same v8 world
+ * however the shipped reason list changes afterwards (ADR-0008).
+ *
+ * NOT TESTED BY THE FIXTURE ALONE, DELIBERATELY. The permanent v1 fixture reaches this step
+ * with three zero counters, over which any mapping whatsoever would look correct — ADR-0007's
+ * exact shape. `outcome.save.test.ts` drives a synthetic v7 world with all three counters
+ * distinct and non-zero and watches each one land in its own row.
+ */
+function migrateV7ToV8(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const outcomes = world['guestOutcomes'];
+  if (!isRecord(outcomes)) {
+    throw new Error('Save is corrupt: world.guestOutcomes is missing, so its stays cannot be given reasons');
+  }
+  // The one way this step could destroy data — spreading over a table somebody already
+  // has — is the one thing it refuses to do, exactly as all six earlier steps refuse.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an
+  // own key (G-003).
+  if (Object.keys(outcomes).includes('departures')) {
+    throw new Error(
+      'world.guestOutcomes already has a "departures" field, so it is not a v7 world; migrating it would overwrite a real table',
+    );
+  }
+  const counters: Record<string, number> = {};
+  for (const key of ['arrived', 'satisfied', 'unsatisfied', 'evicted'] as const) {
+    const value = outcomes[key];
+    if (typeof value !== 'number') {
+      throw new Error(
+        `Save is corrupt: world.guestOutcomes.${key} is missing or not a number, so this world's stays cannot be counted`,
+      );
+    }
+    counters[key] = value;
+  }
+  // Mapped by POSITION IN THE FROZEN LITERAL, so the shape of a migrated v7 world is this
+  // constant's and the values are the bytes'.
+  const carried: Record<string, number> = {
+    satisfied: counters['satisfied'] ?? 0,
+    gaveUpWaiting: counters['unsatisfied'] ?? 0,
+    evictedCauseUnrecorded: counters['evicted'] ?? 0,
+  };
+  return {
+    ...world,
+    guestOutcomes: {
+      arrived: counters['arrived'] ?? 0,
+      departures: V8_MIGRATION_GUEST_OUTCOMES.map((row) => ({
+        reason: row.reason,
+        count: carried[row.reason] ?? row.count,
+      })),
+    },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -537,6 +644,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 4, to: 5, migrate: migrateV4ToV5 }),
   Object.freeze({ from: 5, to: 6, migrate: migrateV5ToV6 }),
   Object.freeze({ from: 6, to: 7, migrate: migrateV6ToV7 }),
+  Object.freeze({ from: 7, to: 8, migrate: migrateV7ToV8 }),
 ]);
 
 /**
@@ -904,11 +1012,36 @@ export function assertWorldShape(value: unknown): asserts value is World {
   if (!isRecord(guestOutcomes)) {
     throw new Error('Save is corrupt: world.guestOutcomes is missing');
   }
-  for (const key of ['arrived', 'satisfied', 'unsatisfied', 'evicted'] as const) {
-    if (typeof guestOutcomes[key] !== 'number') {
-      throw new Error(`Save is corrupt: world.guestOutcomes.${key} is missing or not a number`);
-    }
+  if (typeof guestOutcomes['arrived'] !== 'number') {
+    throw new Error('Save is corrupt: world.guestOutcomes.arrived is missing or not a number');
   }
+  // THE TABLE (G-015). Shape first, then `assertGuestOutcomes` below for the reasons, the
+  // order and the conservation law — the same function the tick calls at its own boundary,
+  // so "a valid outcome table" has one definition rather than two that drift.
+  const departures = guestOutcomes['departures'];
+  if (!Array.isArray(departures)) {
+    throw new Error('Save is corrupt: world.guestOutcomes.departures is missing or not an array');
+  }
+  departures.forEach((row: unknown, index: number) => {
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.guestOutcomes.departures[${index}] is not an object`);
+    }
+    if (typeof row['reason'] !== 'string') {
+      throw new Error(`Save is corrupt: world.guestOutcomes.departures[${index}].reason is not a string`);
+    }
+    if (typeof row['count'] !== 'number') {
+      throw new Error(`Save is corrupt: world.guestOutcomes.departures[${index}].count is not a number`);
+    }
+    // An extra key would land in the state hash (`worldToJson` is an identity cast) and
+    // make the restored world hash differently from the world it claims to be — the same
+    // reasoning `assertBuildOutcomes` applies to an unknown refusal key.
+    const keys = Object.keys(row);
+    if (keys.length !== 2) {
+      throw new Error(
+        `Save is corrupt: world.guestOutcomes.departures[${index}] carries ${keys.length} key(s) (${keys.join(', ')}); a row is exactly a reason and a count`,
+      );
+    }
+  });
 
   // The cross-field half, and the reason this runs at LOAD time and not only in the
   // tick: a save carrying a reservation on a room that is not in the same save would

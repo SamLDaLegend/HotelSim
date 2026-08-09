@@ -991,3 +991,30 @@ changed one constant, its derivation, and the records that quoted it.
   G-014a across seeds 1/3/7/11/23/99: byte-identical need tables, because arrivals are
   scheduled by the harness rather than drawn from the PRNG until demand lands. Vary the
   **hotel shape** instead, which is what found G-014a's result. -> **M4 retires this.**
+
+- **CRITERION 2'S FOURTH REASON HAS A MARGIN OF ONE (G-015).** The pinned invocation
+  `--days 30 --seed 7 --rooms 6 --build 720 --demolish 2880` produces `satisfied 90 ·
+  gaveUpWaiting 263 · evictedRoomGone 5 · evictedRoomUnusable 1`. **The fourth reason is a
+  single episode**: one guest whose floor-1 room lost its support when the ground-floor room
+  under it was demolished. Any change to the build cadence, the demolish cadence, `--rooms`,
+  the plot walk, the arrival rate or the stay length can stop it happening, and criterion 2
+  then goes red reading "three reasons, expected four" — which looks exactly like a broken
+  eviction split and almost certainly is not. `outcome.report.test.ts` asserts the count is
+  **1** in a test named to be read first, with the diagnostic order written out, so the
+  margin is a fact in the file rather than a surprise. **The right repair is to retune the
+  invocation until a guest is again evicted from a standing room, not to weaken the
+  criterion to three.** Same shape as G-014a's `roomWentBad` survivor above, and note the
+  deliberate difference: there the assertion is `> 0` because the event is incidental to
+  what is being proved; here the count IS the criterion, so it is pinned and its narrowness
+  is documented instead. -> **any goal that changes the CLI schedule or the plot layout.**
+
+- **FOUR OF THE FIVE OUTCOME ROWS HAVE NO CROSS-SUBSYSTEM WITNESS (G-015).** L2
+  (`countRoomRevenueTransactions === the satisfied row`) catches any misfiling that touches
+  `satisfied`. A misfiling between `gaveUpWaiting` and `evictedRoomGone`, or between the two
+  eviction reasons, moves nothing anywhere — an eviction writes no ledger entry, so there is
+  no second input to compare against, and the conservation law is blind to all of them by
+  construction. **This is a gap in evidence, not a defect**: the split is covered at run
+  level by the bench goldens (19/0/0 on the churn arm) and the criterion-2 pin, and inventing
+  a ledger entry for an eviction to make a law possible would be the tail wagging the dog.
+  The honest second input, if one is ever wanted, is a **review** that records why the stay
+  ended — G-019 builds the first thing that reads an outcome. -> **G-019, or M4's sweep.**

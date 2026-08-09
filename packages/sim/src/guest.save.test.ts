@@ -22,7 +22,12 @@ import {
   SAVE_V1_STATE_HASH,
   SAVE_V1_TICK,
 } from './fixtures/save-v1.js';
-import { guestsInOrder } from './guests.js';
+import {
+  createGuestOutcomes,
+  departedGuests,
+  departureCountOf,
+  guestsInOrder,
+} from './guests.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
 import { balanceOf } from './ledger.js';
@@ -81,10 +86,16 @@ describe('the v1 fixture, through the real migration', () => {
     // Checked at v2 — where this step leaves it — and again after the full chain, so
     // neither the step nor anything downstream of it can invent a guest.
     expect(v2World()['guests']).toEqual({ nextId: 1, list: [] });
+    // THE v2 SHAPE, WHICH IS NOT THE CURRENT ONE AND MUST NOT TRACK IT (ADR-0008 (2)). The
+    // 1 -> 2 step writes four counters because that is what a v2 world had; G-015's 7 -> 8
+    // step is what turns them into a table, four steps later. A literal here rather than
+    // `createGuestOutcomes()` for exactly the reason this file's v2 key set is hand-written.
     expect(v2World()['guestOutcomes']).toEqual({ arrived: 0, satisfied: 0, unsatisfied: 0, evicted: 0 });
     const world = deserialise(SAVE_V1_BYTES);
     expect(world.guests).toEqual({ nextId: 1, list: [] });
-    expect(world.guestOutcomes).toEqual({ arrived: 0, satisfied: 0, unsatisfied: 0, evicted: 0 });
+    // And after the WHOLE chain, in the current shape: still nobody, still no outcome.
+    expect(world.guestOutcomes).toEqual(createGuestOutcomes());
+    expect(departedGuests(world.guestOutcomes)).toBe(0);
   });
 
   it('invents no history: every v1 field survives value for value', () => {
@@ -149,7 +160,7 @@ describe('the v1 fixture, through the real migration', () => {
     // G-007 bumped this to 3, G-008 to 4, G-011 to 5, G-012 to 6. The fixture did not
     // move; the schema did, five times, and each time a migration carried these same bytes
     // forward.
-    expect(SAVE_SCHEMA_VERSION).toBe(7);
+    expect(SAVE_SCHEMA_VERSION).toBe(8);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -263,7 +274,7 @@ describe('a v2 world with guests in it', () => {
     // something rather than agreeing about an empty store.
     expect(guestsInOrder(world.guests).length).toBeGreaterThan(2);
     expect(guestsInOrder(world.guests).some((guest) => guest.roomEntityId === 0)).toBe(true);
-    expect(world.guestOutcomes.satisfied).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
     expect(world.guestOutcomes.arrived).toBeGreaterThan(0);
     const restored = deserialise(serialise(world));
     expect(hashState(restored)).toBe(hashState(world));
@@ -307,8 +318,10 @@ describe('a v2 world with guests in it', () => {
     // The conservation law, at load time. Numbers that do not close describe a
     // simulation that did not happen.
     const world = lived();
-    const blob = JSON.parse(serialise(world)) as { world: { guestOutcomes: { satisfied: number } } };
-    blob.world.guestOutcomes.satisfied += 1;
+    const blob = JSON.parse(serialise(world)) as {
+      world: { guestOutcomes: { departures: { reason: string; count: number }[] } };
+    };
+    blob.world.guestOutcomes.departures[0]!.count += 1;
     expect(() => deserialise(JSON.stringify(blob))).toThrow(/Every guest is either still in the hotel/);
   });
 

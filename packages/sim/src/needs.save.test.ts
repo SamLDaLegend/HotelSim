@@ -40,7 +40,11 @@ import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
 import { NO_ENTITY } from './entities.js';
 import { SAVE_V1_BYTES } from './fixtures/save-v1.js';
-import { guestsInOrder } from './guests.js';
+import {
+  createGuestOutcomes,
+  departureCountOf,
+  guestsInOrder,
+} from './guests.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
 import { findNeedState } from './needs.js';
@@ -57,11 +61,15 @@ import {
 import { run } from './tick.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 
-describe('the chain walks 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7, and every link is still observed', () => {
-  it('ships exactly six steps, each going exactly one version', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(7);
+describe('the chain walks 1 -> ... -> 8, and every link is still observed', () => {
+  it('ships one step per version, and the 5 -> 6 step is still the fifth of them', () => {
+    // THE PREDICTION IN THIS FILE'S HEADER, DISCHARGED TWICE NOW. It said "when v7 arrives,
+    // the assertions here move the same way and the pins below must not" — v7 came at G-013
+    // and v8 at G-015, and on both occasions this list grew by one line while every frozen
+    // literal below was untouched. The CURRENT era's chain assertions live in
+    // `outcome.save.test.ts`; what this file still owns is that ITS step is where it was.
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(MIGRATIONS).toHaveLength(6);
+    expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
     expect(MIGRATIONS.map((step) => [step.from, step.to])).toEqual([
       [1, 2],
       [2, 3],
@@ -69,8 +77,9 @@ describe('the chain walks 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7, and every link is sti
       [4, 5],
       [5, 6],
       [6, 7],
+      [7, 8],
     ]);
-    // G-003's anti-vacuity device, now reading "6 required, 6 present".
+    // G-003's anti-vacuity device.
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
@@ -234,7 +243,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
     // rooms 1 and 3 are taken and room 2 is free, so it takes room 2 instead and stays.
     const loaded = deserialise(v5Blob());
     const advanced = run(loaded, v5Content, 2, []);
-    expect(advanced.guestOutcomes.satisfied).toBe(5);
+    expect(departureCountOf(advanced.guestOutcomes, 'satisfied')).toBe(5);
     expect(advanced.ledger.filter((entry) => entry.reason === 'roomRevenue')).toHaveLength(2);
     // And the tally it was given empty now has a row, written by a guest that arrived under
     // content with no vector at all.
@@ -257,7 +266,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
       },
     });
     const world = run(deserialise(blob), v5Content, 12, []);
-    expect(world.guestOutcomes.unsatisfied).toBe(3);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(3);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(world.needOutcomes).toEqual([{ needId: 'rest', met: 0, unmet: 1, metByItem: 0 }]);
   });
@@ -302,7 +311,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
   it('is stable from there on: writing it back and reloading changes nothing', () => {
     const once = serialise(deserialise(v5Blob()));
     expect(serialise(deserialise(once))).toBe(once);
-    expect((JSON.parse(once) as { schemaVersion: number }).schemaVersion).toBe(7);
+    expect((JSON.parse(once) as { schemaVersion: number }).schemaVersion).toBe(8);
   });
 
   it('produces the same world however it is reached — through the runner or through deserialise', () => {
@@ -372,7 +381,7 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
         nextId: 2,
         list: [{ id: 1, arrivedTick: 0, roomEntityId: 0, engagement: null, needs }],
       },
-      guestOutcomes: { arrived: 1, satisfied: 0, unsatisfied: 0, evicted: 0 },
+      guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     });
     expect(() => assertWorldShape(withGuest([]))).toThrow(/has formed no needs/);
     expect(() =>
@@ -401,7 +410,19 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
     // numbers in them are what make the round trip a measurement.
     const world = {
       ...createWorld(1, v5Content),
-      guestOutcomes: { arrived: 9, satisfied: 5, unsatisfied: 3, evicted: 1 },
+      // Spelled out rather than built, because this world is a FORGERY: it exists to give
+      // the need tally nine departures to be judged against, and the rows are what carry
+      // them since G-015.
+      guestOutcomes: {
+        arrived: 9,
+        departures: [
+          { reason: 'satisfied' as const, count: 5 },
+          { reason: 'gaveUpWaiting' as const, count: 3 },
+          { reason: 'evictedRoomGone' as const, count: 1 },
+          { reason: 'evictedRoomUnusable' as const, count: 0 },
+          { reason: 'evictedCauseUnrecorded' as const, count: 0 },
+        ],
+      },
       needOutcomes: [
         { needId: 'alpha', met: 4, unmet: 5, metByItem: 0 },
         { needId: 'rest', met: 7, unmet: 2, metByItem: 0 },

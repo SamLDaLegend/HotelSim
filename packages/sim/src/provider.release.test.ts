@@ -58,6 +58,8 @@ import { entitiesInOrder, getEntity, NO_ENTITY } from './entities.js';
 import {
   countGuestsInInvalidRooms,
   countOrphanedReservations,
+  createGuestOutcomes,
+  evictedGuests,
   guestsInOrder,
   isEngaged,
   isResting,
@@ -192,7 +194,7 @@ describe('(a) THE HOST ROOM IS DEMOLISHED — the exit criterion, literally (G-0
     const after = stepTick(world, content, [demolish(idOf(world, 'lounge'))]);
     const guest = only(after);
     expect(isResting(guest)).toBe(true);
-    expect(after.guestOutcomes.evicted).toBe(0);
+    expect(evictedGuests(after.guestOutcomes)).toBe(0);
     expect(findNeedState(guest.needs, 'comfort')!.progressRemaining).toBeLessThan(SITTING);
     expect(findNeedState(guest.needs, 'comfort')!.progressRemaining).toBe(before);
   });
@@ -322,7 +324,7 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
             guest(3, rooms[2]!, null, SITTING),
           ],
         },
-        guestOutcomes: { arrived: 3, satisfied: 0, unsatisfied: 0, evicted: 0 },
+        guestOutcomes: { arrived: 3, departures: createGuestOutcomes().departures },
       },
     };
   };

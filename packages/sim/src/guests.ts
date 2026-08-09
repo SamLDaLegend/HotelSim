@@ -150,34 +150,116 @@ export type GuestStore = {
 };
 
 /**
- * What happened to every guest that has left, counted.
+ * WHY A STAY ENDED. A closed union, in the canonical order the table is stored in.
+ *
+ * NOT CONTENT (I3, ADR-0003). These are code-level reasons in the same family as
+ * `TRANSACTION_REASONS` and `BUILD_REFUSAL_REASONS`: camelCase, decided by a branch in
+ * this file, and meaningless to a designer editing JSON. A guest ARCHETYPE is content and
+ * would be snake_case; "the room you were in stopped existing" is not a thing anyone
+ * authors.
+ *
+ * EACH REASON IS DECIDED IN EXACTLY ONE PLACE, and the table is only worth the schema
+ * bump because that is true:
+ *
+ *   satisfied             stepGuests step 6, the lodging need is met
+ *   gaveUpWaiting         stepGuests step 6, the lodging need ran out of patience
+ *   evictedRoomGone       stepGuests step 1, the room entity is no longer in the draft
+ *   evictedRoomUnusable   stepGuests step 1, the entity is there and is not a valid room
+ *   evictedCauseUnrecorded  `migrateV7ToV8` ONLY — see below
+ *
+ * `evictedCauseUnrecorded` IS NOT WRITABLE BY THE TICK, AND THAT IS A TYPE RULE RATHER
+ * THAN A PROMISE. v7 carried a single `evicted` counter with no cause, so a migrated v7
+ * world holds evictions whose cause was never recorded, and inventing one for them would
+ * be exactly the history-drift ADR-0008 forbids. The tick records causes, so it must never
+ * write this row: `TickDepartureReason` below excludes it, `stepGuests` accumulates into
+ * that narrower type, and a future branch that tried would not compile.
+ */
+export const GUEST_DEPARTURE_REASONS = Object.freeze([
+  'satisfied',
+  'gaveUpWaiting',
+  'evictedRoomGone',
+  'evictedRoomUnusable',
+  'evictedCauseUnrecorded',
+] as const);
+
+export type GuestDepartureReason = (typeof GUEST_DEPARTURE_REASONS)[number];
+
+/**
+ * The reasons a TICK may record. Everything but the migration-only row.
+ *
+ * ADR-0005's discipline — when a contract can be made structural at no cost, make it
+ * structural. The alternative was a comment asking future authors not to.
+ */
+export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnrecorded'>;
+
+/** One row of the outcome table: a reason, and how many stays ended for it. */
+export type GuestOutcomeRow = {
+  readonly reason: GuestDepartureReason;
+  readonly count: number;
+};
+
+/**
+ * What happened to every guest that has left, counted BY REASON (G-015).
  *
  * Departed guests are NOT kept in the store. A store that only grew would make the
  * per-tick scan cost rise for the whole run and would eventually be the thing that
  * fails I5 — §6.1 asks `sim-critic` to watch for exactly that. Counters keep the cost
  * flat and are the "recorded outcome" the goal statement asks for.
  *
- * The four numbers are bound together by one law, checked every tick and at every load:
+ * ONE ROW PER REASON, ALWAYS ALL OF THEM, IN `GUEST_DEPARTURE_REASONS` ORDER. The same
+ * shape `needOutcomes` uses, so the codebase has one table idiom rather than two. A
+ * missing row, a duplicate row, an unknown reason and a row out of order are all rejected
+ * by `assertGuestOutcomes` — an extra or reordered key would land in the state hash
+ * (`worldToJson` is an identity cast) and make a restored world hash differently from the
+ * world it claims to be.
  *
- *   arrived === satisfied + unsatisfied + evicted + live guests
+ * THE CONSERVATION LAW, checked every tick and at every load:
  *
- * so a guest that is dropped, double-counted or silently resurrected fails loudly
- * instead of quietly changing what the report means.
+ *   arrived === Σ departures[i].count + live guests
  *
- * WHAT IS DELIBERATELY NOT HERE IS THE PER-NEED TALLY. These four are about STAYS, and a
+ * IT IS NOT AN IDENTITY OVER ITS OWN INPUTS, and that sentence is the reason this type
+ * looks the way it does. Three quantities, none derived from another: `arrived` is
+ * incremented by the arrivals loop in `stepGuests`, the rows are incremented at the three
+ * departure sites, and `list.length` is produced by a different data structure entirely.
+ * There is deliberately NO stored total — `departedGuests` folds the rows at the call
+ * site — because a stored total beside the rows that produce it is precisely the vacuous
+ * check G-013 shipped and had to delete (ADR-0007, G-013 amendment).
+ *
+ * WHAT THE LAW CANNOT SEE. A departure filed under the WRONG REASON keeps the total
+ * intact, so the law says nothing about any individual row.
+ *
+ * ONE ROW OF THE FIVE HAS A WITNESS, AND IT IS `satisfied`:
+ * `countRoomRevenueTransactions(ledger) === the satisfied row` — the
+ * `countDemolitionRefundTransactions === demolished` pattern (`build.ts`), asserted **in
+ * the report, and nowhere else**. Not at the tick boundary and not at load: `stepTick`'s
+ * postcondition block never reads the ledger, and a save predating a feature legitimately
+ * lacks its transactions (the policy `build.ts` states for its twin).
+ *
+ * THE OTHER FOUR ROWS HAVE NO CROSS-SUBSYSTEM WITNESS, AND SAYING SO IS CHEAPER THAN
+ * DISCOVERING IT. A misfiling between `gaveUpWaiting` and `evictedRoomGone`, or between the
+ * two eviction reasons, moves nothing anywhere else — an eviction writes no transaction, so
+ * there is no second input to compare against. What covers them instead is coarser and is
+ * named here so nobody mistakes it for a law: the pinned bench goldens (19 / 0 / 0 on the
+ * churn arm) and the criterion-2 invocation, both of which are RUN-LEVEL pins that would
+ * move if the split changed.
+ *
+ * WHAT IS DELIBERATELY NOT HERE IS THE PER-NEED TALLY. These rows are about STAYS, and a
  * stay has exactly one outcome; a guest can leave satisfied having failed two of its
  * engagement needs. `World.needOutcomes` counts need instances and is bound to these
  * counters by its own law (`assertNeedOutcomes`).
+ *
+ * AND NOT AN IN-STAY EVENT COUNT EITHER. A guest abandoning one provider for a better one
+ * (G-014b) is not a stay outcome: it can happen many times to a guest that departs once,
+ * so a row for it would make Σ rows exceed departures and force the law to sum a SUBSET of
+ * the rows. A law that skips rows is the vacuity shape this table exists to avoid — a
+ * mistyped reason would silently drop out of the sum and nothing would fire. That tally
+ * belongs on `NeedOutcome`, per need type, where `metByItem` already is.
  */
 export type GuestOutcomes = {
-  /** Guests created since the world began. Never decreases. */
+  /** Guests created since the world began. Never decreases. Never derived from the rows. */
   readonly arrived: number;
-  /** Left with the lodging need met, having paid. */
-  readonly satisfied: number;
-  /** Gave up: patience for a room ran out before one was free. Paid nothing. */
-  readonly unsatisfied: number;
-  /** The lodging room stopped existing or stopped working, so the stay ended early. Paid nothing. */
-  readonly evicted: number;
+  /** One row per reason in `GUEST_DEPARTURE_REASONS`, in that order, all of them present. */
+  readonly departures: readonly GuestOutcomeRow[];
 };
 
 export function createGuestStore(): GuestStore {
@@ -185,7 +267,77 @@ export function createGuestStore(): GuestStore {
 }
 
 export function createGuestOutcomes(): GuestOutcomes {
-  return { arrived: 0, satisfied: 0, unsatisfied: 0, evicted: 0 };
+  return { arrived: 0, departures: GUEST_DEPARTURE_REASONS.map((reason) => ({ reason, count: 0 })) };
+}
+
+/**
+ * How many stays ended for one reason. A linear walk of a five-row table.
+ *
+ * A READ ACCESSOR, NOT A CACHE. Nothing stores this, so nothing can disagree with the
+ * rows. Returns 0 for a reason the table does not carry, which is not a silent fallback:
+ * `assertGuestOutcomes` has already refused any table that is missing one, so an absent
+ * row cannot survive a tick or a load to reach here.
+ */
+export function departureCountOf(outcomes: GuestOutcomes, reason: GuestDepartureReason): number {
+  for (const row of outcomes.departures) {
+    if (row.reason === reason) return row.count;
+  }
+  return 0;
+}
+
+/**
+ * How many stays ended in an eviction, whatever the cause.
+ *
+ * A FOLD OVER THE EVICTION ROWS, the `totalInvalidRooms` / `totalBuildOutcomes` pattern:
+ * derived at the call site, stored nowhere. It exists because "the stay ended because the
+ * room stopped serving" is a real question — one a player asks — that is now spread over
+ * three rows, and because the alternative is every caller writing the same three-term sum
+ * and one of them forgetting a row when the union grows.
+ *
+ * IT IS NOT WHAT THE CONSERVATION LAW SUMS. That law folds every row through
+ * `departedGuests`; this is a subtotal for readers, and nothing checks one against the
+ * other — a subtotal checked against the rows it is made of is the identity G-013 deleted.
+ */
+export function evictedGuests(outcomes: GuestOutcomes): number {
+  return (
+    departureCountOf(outcomes, 'evictedRoomGone') +
+    departureCountOf(outcomes, 'evictedRoomUnusable') +
+    departureCountOf(outcomes, 'evictedCauseUnrecorded')
+  );
+}
+
+/**
+ * How many `roomRevenue` transactions this log records (G-015).
+ *
+ * Counted BY THE SIM, the `countDemolitionRefundTransactions` pattern, and it is the
+ * ATTRIBUTION half of the outcome table's evidence. For any world ticked from 0 under this
+ * build the law is
+ *
+ *   countRoomRevenueTransactions(world.ledger) === departureCountOf(outcomes, 'satisfied')
+ *
+ * exactly: `payForStay` is the only producer of a `roomRevenue` transaction and it is
+ * called on the satisfied path and nowhere else, while the row is incremented by a
+ * different line for a different reason. A departure misfiled BETWEEN `satisfied` AND ANY
+ * OTHER ROW leaves the conservation law perfectly intact and moves this.
+ *
+ * IT WITNESSES ONE ROW, NOT THE TABLE. A misfiling that does not touch `satisfied` — say
+ * `gaveUpWaiting` into `evictedRoomGone` — moves nothing here and nothing in the
+ * conservation law either. There is no second input to compare the other four rows against,
+ * because an eviction writes no transaction; see `GuestOutcomes` for what covers them
+ * instead, and for why that is a run-level pin rather than a law.
+ *
+ * WHERE IT IS ASSERTED: `buildSummary`, and nowhere else. It is NOT part of `stepTick`'s
+ * postcondition block, which never reads the ledger, and NOT part of the load path —
+ * exactly as `countDemolitionRefundTransactions` is
+ * not: a save predating a feature legitimately lacks its transactions, and a law that
+ * fired on a legal old save would be a tripwire on history rather than on this build.
+ */
+export function countRoomRevenueTransactions(log: readonly Transaction[]): number {
+  let count = 0;
+  for (const transaction of log) {
+    if (transaction.reason === 'roomRevenue') count += 1;
+  }
+  return count;
 }
 
 /** True when this guest holds a lodging room. The one definition of "resting". */
@@ -209,9 +361,16 @@ export function isEngaged(guest: Guest): boolean {
  *
  * Written here rather than at each call site because three of them exist — the tick, the
  * load path and the report — and "departed" must mean the same thing in all three.
+ *
+ * A FOLD, NEVER A FIELD (G-015). The total is not stored anywhere: a stored `departed`
+ * beside the rows that produce it would make `departed === Σ rows` an algebraic identity,
+ * and the conservation law would compare a number against itself. Same reasoning as I4's
+ * "balance is derived by folding the ledger, never stored".
  */
 export function departedGuests(outcomes: GuestOutcomes): number {
-  return outcomes.satisfied + outcomes.unsatisfied + outcomes.evicted;
+  let total = 0;
+  for (const row of outcomes.departures) total += row.count;
+  return total;
 }
 
 export function guestCount(store: GuestStore): number {
@@ -563,27 +722,62 @@ function claimEntity(
 /**
  * Throws unless every guest is accounted for.
  *
- *   arrived === satisfied + unsatisfied + evicted + live
+ *   arrived === Σ departures[i].count + live
  *
  * A guest that vanished without an outcome, an outcome recorded for a guest that never
  * arrived, and a departure counted twice are all the same failure from the report's
  * point of view: the numbers stop describing the simulation. This is the check that
  * makes the CLI's "guests arrived" line evidence rather than decoration.
+ *
+ * THE ORDER OF THE THREE CHECKS IS LOAD-BEARING, not tidiness. Counter sanity first
+ * (a NaN in a row would make the sum meaningless), then the CONSERVATION LAW over
+ * whatever rows are present, then the table's shape. So a table with a non-zero row
+ * DELETED fails on the conservation law by name — which is the failure a reader of a
+ * corrupt save most needs to see, and the one G-015's exit criterion watches. A table
+ * missing a ZERO row conserves correctly and is caught by the shape check below it.
+ *
+ * Allocation-free: index walks, no `map`, no `Object.entries`, no temporary arrays. This
+ * runs on every tick of every run, and `assertGuestStoreInvariants` records what the
+ * convenient form cost the last time somebody wrote one.
  */
 export function assertGuestOutcomes(outcomes: GuestOutcomes, guests: GuestStore): void {
-  // Written out rather than looped over a literal table, for the reason given in
-  // `assertGuestStoreInvariants`: the loop form allocated five arrays on every tick of
-  // every run. Same four fields, same messages, no allocation.
   assertCounter('arrived', outcomes.arrived);
-  assertCounter('satisfied', outcomes.satisfied);
-  assertCounter('unsatisfied', outcomes.unsatisfied);
-  assertCounter('evicted', outcomes.evicted);
-  const departed = departedGuests(outcomes);
+  const rows = outcomes.departures;
+  if (!Array.isArray(rows)) {
+    throw new Error('Guest outcomes are invalid: departures is missing or not an array');
+  }
+  let departed = 0;
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (row === undefined) {
+      throw new Error(`Guest outcomes are invalid: departures[${i}] is missing`);
+    }
+    assertCounter(`departures[${i}] (${String(row.reason)})`, row.count);
+    departed += row.count;
+  }
   if (outcomes.arrived !== departed + guests.list.length) {
     throw new Error(
       `Guest outcomes are invalid: ${outcomes.arrived} arrived but ${departed} departed and ${guests.list.length} are still here. ` +
         'Every guest is either still in the hotel or has exactly one recorded outcome.',
     );
+  }
+  // THE SHAPE. Every reason, exactly once, in the canonical order — so the table cannot
+  // grow a duplicate row that sums correctly, lose a zero row, or reorder itself into a
+  // different state hash for the same history.
+  if (rows.length !== GUEST_DEPARTURE_REASONS.length) {
+    throw new Error(
+      `Guest outcomes are invalid: ${rows.length} departure row(s) against ${GUEST_DEPARTURE_REASONS.length} known reason(s). ` +
+        `Every reason carries a row, in the order ${GUEST_DEPARTURE_REASONS.join(', ')}.`,
+    );
+  }
+  for (let i = 0; i < rows.length; i += 1) {
+    const expected = GUEST_DEPARTURE_REASONS[i];
+    if (rows[i]?.reason !== expected) {
+      throw new Error(
+        `Guest outcomes are invalid: departures[${i}] is "${String(rows[i]?.reason)}" where "${String(expected)}" belongs. ` +
+          'The table carries every reason exactly once, in a fixed order.',
+      );
+    }
   }
 }
 
@@ -877,9 +1071,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
 
   const next: Guest[] = [];
   let ledger = input.ledger;
+  // ONE LOCAL PER REASON, WRITTEN OUT rather than an array indexed by ordinal: the table is
+  // rebuilt once at the end of the tick instead of once per departure, and a tick with no
+  // departures allocates nothing at all (see `addDepartures`).
   let satisfied = 0;
-  let unsatisfied = 0;
-  let evicted = 0;
+  let gaveUpWaiting = 0;
+  let evictedRoomGone = 0;
+  let evictedRoomUnusable = 0;
 
   for (const existing of guests.list) {
     let guest = existing;
@@ -888,6 +1086,16 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // still usable" is answered once per guest per tick rather than at each release site.
     let lodgingRoom: Entity | null = null;
     let engagedRoom: Entity | null = null;
+    /**
+     * Why the lodging room stopped serving this guest, or `null` while it still does.
+     *
+     * THE CAUSE IS KEPT FROM THE BRANCH THAT ALREADY KNEW IT (G-015). Step 1 below has to
+     * distinguish "the entity is gone" from "the entity is there and is not a valid room"
+     * in order to answer the question at all; before this goal it threw that distinction
+     * away and step 3 recorded one undifferentiated `evicted`. Asking again later would be
+     * a second lookup that could disagree with the first.
+     */
+    let lodgingLost: TickDepartureReason | null = null;
 
     // 1. IS EACH THING IT HOLDS STILL SERVING IT? Both questions are asked BEFORE
     //    either is acted on, and that ordering is load-bearing rather than tidy.
@@ -907,9 +1115,16 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    the host room was demolished (the item went with it, so `draftGet` is undefined),
     //    the host room stopped being valid (the item stands but serves nobody), or the
     //    item itself was despawned. One site, three causes, no fourth branch.
+    //
+    //    THE TWO EVICTION CAUSES ARE THIS BRANCH AND THERE IS NO THIRD (G-015). A room
+    //    either left the draft or is still standing and no longer counts as a room; the
+    //    reason recorded downstream is whichever of those two the lookup found, so no
+    //    departure can be filed under a cause nothing observed.
     if (guest.roomEntityId !== NO_ENTITY) {
       const room = draftGet(input.entities, guest.roomEntityId);
-      if (room !== undefined && isValidRoom(input.validity, room)) lodgingRoom = room;
+      if (room === undefined) lodgingLost = 'evictedRoomGone';
+      else if (!isValidRoom(input.validity, room)) lodgingLost = 'evictedRoomUnusable';
+      else lodgingRoom = room;
     }
     if (guest.engagement !== null) {
       const provider = draftGet(input.entities, guest.engagement.entityId);
@@ -931,9 +1146,15 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    The stay ends VISIBLY, with an outcome recorded, rather than the guest carrying on
     //    in a room that is not there — the silent-fallback failure §6.1 names for
     //    pathfinding, which has exactly the same shape here.
-    if (guest.roomEntityId !== NO_ENTITY && lodgingRoom === null) {
+    //
+    //    WHICH of the two it was is recorded rather than flattened (G-015). "Somebody
+    //    knocked your room down" and "your room is still there and stopped working" are
+    //    different events to a player, and a single `evicted` counter could not tell them
+    //    apart — WATCH #1's whole method is looking at a run and asking what happened.
+    if (lodgingLost !== null) {
       depart(search, content, guest, null, engagedRoom);
-      evicted += 1;
+      if (lodgingLost === 'evictedRoomGone') evictedRoomGone += 1;
+      else evictedRoomUnusable += 1;
       continue;
     }
 
@@ -986,8 +1207,12 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     }
     if (lodging !== undefined && !isNeedPending(lodging)) {
       // Waited it out and never got a room. It pays nothing and leaves with that recorded.
+      // `gaveUpWaiting` names what happened rather than how it felt: patience for a room
+      // ran out, which is v7's `unsatisfied` field said as a reason (its own doc comment
+      // read "patience for a room ran out before one was free"), and it is what
+      // `migrateV7ToV8` maps that counter onto.
       depart(search, content, guest, lodgingRoom, engagedRoom);
-      unsatisfied += 1;
+      gaveUpWaiting += 1;
       continue;
     }
 
@@ -1026,12 +1251,69 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   // and no sort exists here to get wrong — the same property `EntityStore.list` has.
   const nextGuests: GuestStore = { nextId, list: next };
   const nextOutcomes: GuestOutcomes = {
+    // ARRIVALS ARE COUNTED HERE AND NOWHERE ELSE, and the rows are counted at the three
+    // departure sites above. Neither is computed from the other, which is what makes the
+    // conservation law in `assertGuestOutcomes` a check rather than an identity.
     arrived: outcomes.arrived + arriving,
-    satisfied: outcomes.satisfied + satisfied,
-    unsatisfied: outcomes.unsatisfied + unsatisfied,
-    evicted: outcomes.evicted + evicted,
+    departures: addDepartures(
+      outcomes.departures,
+      satisfied,
+      gaveUpWaiting,
+      evictedRoomGone,
+      evictedRoomUnusable,
+    ),
   };
   return { guests: nextGuests, outcomes: nextOutcomes, needOutcomes: search.needOutcomes, ledger };
+}
+
+/**
+ * The tick's departures, folded into the table once.
+ *
+ * IDENTITY-RETURNING WHEN NOTHING DEPARTED, which is almost every tick: no allocation, and
+ * the outcome object next to it keeps pointing at the same rows. Rebuilding a five-row
+ * array 525,600 times to add zero to each is exactly the per-tick allocation §6.1 asks
+ * `sim-critic` to watch for.
+ *
+ * It walks the rows it was GIVEN rather than `GUEST_DEPARTURE_REASONS`, so a table that is
+ * somehow malformed comes out malformed and is refused by `assertGuestOutcomes` at the
+ * tick boundary — instead of being silently repaired here, where nothing would report it.
+ */
+function addDepartures(
+  rows: readonly GuestOutcomeRow[],
+  satisfied: number,
+  gaveUpWaiting: number,
+  evictedRoomGone: number,
+  evictedRoomUnusable: number,
+): readonly GuestOutcomeRow[] {
+  if (satisfied === 0 && gaveUpWaiting === 0 && evictedRoomGone === 0 && evictedRoomUnusable === 0) {
+    return rows;
+  }
+  const next: GuestOutcomeRow[] = [];
+  for (const row of rows) {
+    let added = 0;
+    switch (row.reason) {
+      case 'satisfied':
+        added = satisfied;
+        break;
+      case 'gaveUpWaiting':
+        added = gaveUpWaiting;
+        break;
+      case 'evictedRoomGone':
+        added = evictedRoomGone;
+        break;
+      case 'evictedRoomUnusable':
+        added = evictedRoomUnusable;
+        break;
+      // `evictedCauseUnrecorded` is migration-only and takes nothing here. It is not a
+      // default branch: a reason added to the union without a decision about whether the
+      // tick can produce it should be a compile error, not a silent zero.
+      case 'evictedCauseUnrecorded':
+        added = 0;
+        break;
+    }
+    next.push(added === 0 ? row : { reason: row.reason, count: row.count + added });
+  }
+  return next;
 }
 
 /**

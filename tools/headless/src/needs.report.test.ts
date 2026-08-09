@@ -45,7 +45,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { createWorld, lodgingNeedOf, run } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { buildSummary, parseArgs, schedule } from './report.js';
+import {
+  buildSummary,
+  departuresOf,
+  evictedInSummary,
+  parseArgs,
+  schedule,
+} from './report.js';
 import type { RunSummary } from './report.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -111,7 +117,7 @@ describe('the criterion invocation prints a per-need table that measures somethi
     const lodging = summary.needs.find((row) => row.lodging);
     expect(lodging?.met).toBeGreaterThan(0);
     expect(lodging?.unmet).toBe(0);
-    expect(summary.guests.unsatisfied).toBe(0);
+    expect(departuresOf(summary, 'gaveUpWaiting')).toBe(0);
   });
 
   it('has one need type met for EVERYBODY, so the table is three different stories', () => {
@@ -135,7 +141,7 @@ describe('the criterion invocation prints a per-need table that measures somethi
   it('closes exactly: every row sums to the number of guests that have departed', () => {
     // The conservation law, over a real run of thirty simulated days. A need instance
     // dropped on an exit path — or counted twice — moves one side of this and not the other.
-    const departed = summary.guests.satisfied + summary.guests.unsatisfied + summary.guests.evicted;
+    const departed = departuresOf(summary, 'satisfied') + departuresOf(summary, 'gaveUpWaiting') + evictedInSummary(summary);
     expect(departed).toBeGreaterThan(0);
     for (const row of summary.needs) {
       expect(row.met + row.unmet, row.needId).toBe(departed);
@@ -171,14 +177,14 @@ describe('a hotel with nothing to do in it', () => {
   });
 
   it('still serves and charges for every stay — a failed want is not a failed visit', () => {
-    expect(summary.guests.satisfied).toBeGreaterThan(0);
+    expect(departuresOf(summary, 'satisfied')).toBeGreaterThan(0);
     expect(summary.money.revenuePennies).toBeGreaterThan(0);
     expect(summary.guests.stuck).toBe(0);
     expect(violations).toEqual([]);
   });
 
   it('and the table still closes, so "everything failed" is counted rather than skipped', () => {
-    const departed = summary.guests.satisfied + summary.guests.unsatisfied + summary.guests.evicted;
+    const departed = departuresOf(summary, 'satisfied') + departuresOf(summary, 'gaveUpWaiting') + evictedInSummary(summary);
     for (const row of summary.needs) expect(row.met + row.unmet, row.needId).toBe(departed);
   });
 });

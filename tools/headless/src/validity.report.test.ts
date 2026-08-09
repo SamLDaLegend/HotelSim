@@ -23,10 +23,24 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createWorld, firstRoomTypeProviding, lodgingNeedOf, run } from '@hotelsim/sim';
+import {
+  createGuestOutcomes,
+  createWorld,
+  firstRoomTypeProviding,
+  lodgingNeedOf,
+  run,
+} from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { amenityRoomTypesOf, buildSummary, emitReport, parseArgs, schedule } from './report.js';
+import {
+  amenityRoomTypesOf,
+  buildSummary,
+  departuresOf,
+  emitReport,
+  evictedInSummary,
+  parseArgs,
+  schedule,
+} from './report.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -90,7 +104,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
 
   it('is a hotel that still works, so the zero is not the zero of an empty building', () => {
     expect(summary.rooms.valid).toBeGreaterThan(0);
-    expect(summary.guests.satisfied).toBeGreaterThan(0);
+    expect(departuresOf(summary, 'satisfied')).toBeGreaterThan(0);
     expect(summary.money.revenuePennies).toBeGreaterThan(0);
   });
 
@@ -98,7 +112,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // The strongest single number here. A guest was resting in a room, the player took its
     // floor away or built against its door, and the guest left with an outcome. Without
     // the eviction path this would be 0 AND `inInvalidRooms` would be non-zero.
-    expect(summary.guests.evicted).toBeGreaterThan(0);
+    expect(evictedInSummary(summary)).toBeGreaterThan(0);
   });
 
   it('accounts for every room: valid plus invalid, with nothing left over', () => {
@@ -138,7 +152,7 @@ describe('the shipped hotel still works', () => {
     // basement, which is grounded by the earth, corridored, and requires no furniture, so
     // they are valid on the same terms as the bedrooms above them.
     expect(summary.rooms.valid).toBe(3 + amenityRoomTypesOf(content).length);
-    expect(summary.guests.satisfied).toBe(267);
+    expect(departuresOf(summary, 'satisfied')).toBe(267);
     expect(violations).toEqual([]);
   });
 
@@ -184,7 +198,7 @@ describe('the zero CAN be non-zero', () => {
           },
         ],
       },
-      guestOutcomes: { arrived: 1, satisfied: 0, unsatisfied: 0, evicted: 0 },
+      guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     };
   }
 
@@ -218,7 +232,7 @@ describe('the zero CAN be non-zero', () => {
     // violation. Without this, the check could be "any invalid room fails the run", which
     // would make the whole rule unusable — a player is allowed to build badly.
     const world = forgedWorld();
-    const empty: World = { ...world, guests: { nextId: 1, list: [] }, guestOutcomes: { arrived: 0, satisfied: 0, unsatisfied: 0, evicted: 0 } };
+    const empty: World = { ...world, guests: { nextId: 1, list: [] }, guestOutcomes: { arrived: 0, departures: createGuestOutcomes().departures } };
     const { summary, violations } = buildSummary(empty, content, parseArgs(['--days', '1']));
     expect(summary.rooms.invalid.unsupported).toBe(1);
     expect(summary.guests.inInvalidRooms).toBe(0);

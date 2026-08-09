@@ -19,7 +19,12 @@ import { beginEntityDraft } from './entities.js';
 import type { EntityStore } from './entities.js';
 import { createGridBounds, GROUND_FLOOR } from './grid.js';
 import type { Cell } from './grid.js';
-import { isResting, stepGuests } from './guests.js';
+import {
+  departureCountOf,
+  evictedGuests,
+  isResting,
+  stepGuests,
+} from './guests.js';
 import type { Guest, GuestStore } from './guests.js';
 import { createGuestOutcomes } from './guests.js';
 import { createNeedOutcomes, findNeedState } from './needs.js';
@@ -141,7 +146,7 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
     };
     const result = tick(guests, oneRoomHotel());
 
-    expect(result.outcomes.satisfied).toBe(1);
+    expect(departureCountOf(result.outcomes, 'satisfied')).toBe(1);
     // Guest 1 scanned first and correctly found nothing — the room was still guest 2's.
     // Guest 3 scanned after the release and got it. Both are still here; only guest 3 rests.
     expect(result.guests.list.map((g) => [g.id, g.roomEntityId])).toEqual([
@@ -162,7 +167,7 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
     const result = tick(guests, oneRoomHotel());
 
     // Guest 1 left satisfied...
-    expect(result.outcomes.satisfied).toBe(1);
+    expect(departureCountOf(result.outcomes, 'satisfied')).toBe(1);
     expect(result.ledger).toHaveLength(1);
     // ...and guest 2 is the only one still here, holding the room guest 1 gave back.
     expect(result.guests.list.map((g) => g.id)).toEqual([2]);
@@ -179,7 +184,7 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
     const guests: GuestStore = { nextId: 2, list: [guest(1, { roomEntityId: 1, restRemaining: 1 })] };
     const result = tick(guests, oneRoomHotel(), 1);
 
-    expect(result.outcomes.satisfied).toBe(1);
+    expect(departureCountOf(result.outcomes, 'satisfied')).toBe(1);
     expect(result.guests.list.map((g) => g.id)).toEqual([2]);
     expect((result.guests.list[0] as Guest).roomEntityId).toBe(1);
   });
@@ -198,7 +203,7 @@ describe('and when nothing is released, the answer really is nothing', () => {
     };
     const result = tick(guests, oneRoomHotel());
 
-    expect(result.outcomes.satisfied).toBe(0);
+    expect(departureCountOf(result.outcomes, 'satisfied')).toBe(0);
     // Every waiting guest is still waiting, and each lost exactly one tick of patience —
     // so the short-circuit skipped the SCAN, not the guest.
     const waiting = result.guests.list.filter((g) => !isResting(g));
@@ -216,7 +221,7 @@ describe('and when nothing is released, the answer really is nothing', () => {
       ],
     };
     const result = tick(guests, oneRoomHotel());
-    expect(result.outcomes.unsatisfied).toBe(2);
+    expect(departureCountOf(result.outcomes, 'gaveUpWaiting')).toBe(2);
     expect(result.guests.list.map((g) => g.id)).toEqual([1]);
   });
 });
@@ -232,7 +237,7 @@ describe('an eviction is a release too', () => {
       list: [guest(1, { roomEntityId: 1, restRemaining: 5 }), guest(2, { patienceRemaining: 10 })],
     };
     const result = tick(guests, empty);
-    expect(result.outcomes.evicted).toBe(1);
+    expect(evictedGuests(result.outcomes)).toBe(1);
     expect(result.guests.list.map((g) => g.id)).toEqual([2]);
     expect(isResting(result.guests.list[0] as Guest)).toBe(false);
   });

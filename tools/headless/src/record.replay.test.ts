@@ -201,8 +201,18 @@ describe('D — recording is off by default, and turning it on changes nothing b
   it('names no recording flag anywhere in the --json document', () => {
     // The report's stability contract bans absolute paths from stdout, and a path in
     // `input` would move every pinned invocation's bytes.
-    const out = cli(['--json', '--record', join(dir, 'json.ndjson')]).stdout.toString('utf8');
-    expect(out).not.toContain('record');
+    //
+    // WHAT IS TESTED IS THE PATH AND THE FLAG NAMES, NOT THE LETTERS `record`. It used to be
+    // a bare `not.toContain('record')`, which G-015 turned red for a reason that had nothing
+    // to do with recording: the outcome table gained a row named `evictedCauseUnrecorded`.
+    // A substring scan over a whole document is a check whose subject is everything, so it
+    // fails on the next word that happens to contain it — the property here is that no
+    // recording INPUT reaches stdout, and that is what these three assertions say.
+    const path = join(dir, 'json.ndjson');
+    const out = cli(['--json', '--record', path]).stdout.toString('utf8');
+    expect(out).not.toContain(path);
+    expect(out).not.toContain(dir);
+    expect(out).not.toContain('"record');
     expect(Object.keys(JSON.parse(out).input).sort()).toEqual(
       ['amenities', 'arrivalEveryTicks', 'buildEveryTicks', 'demolishEveryTicks', 'loanEveryTicks', 'rooms', 'seed', 'ticks'],
     );

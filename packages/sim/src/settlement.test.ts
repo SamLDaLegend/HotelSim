@@ -17,6 +17,7 @@ import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData } from './content.js';
 import { beginEntityDraft, draftSpawn } from './entities.js';
 import { SAVE_V1_BYTES, SAVE_V1_CONTENT, SAVE_V1_TICK } from './fixtures/save-v1.js';
+import { departureCountOf } from './guests.js';
 import { balanceOf, sumByReason, TRANSACTION_REASONS } from './ledger.js';
 import {
   countSettlementTransactions,
@@ -163,7 +164,7 @@ describe('the books close after the day\'s business', () => {
     // this is the observation. A guest arriving at MIDNIGHT - SATISFY pays exactly at
     // midnight; the night's books close after it has paid.
     const world = run(hotel(1), content, TICKS_PER_DAY, [at(MIDNIGHT - SATISFY, arrive)]);
-    expect(world.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
     expect(world.ledger).toHaveLength(2);
     expect(world.ledger.map((transaction) => transaction.reason)).toEqual(['roomRevenue', 'upkeep']);
     expect(world.ledger.map((transaction) => transaction.tick)).toEqual([MIDNIGHT, MIDNIGHT]);
@@ -214,8 +215,8 @@ describe('the balance is the fold, and the fold is fully explained', () => {
     for (let tick = 1; tick < days * TICKS_PER_DAY; tick += 120) arrivals.push(at(tick, arrive));
     const world = run(hotel(rooms), content, days * TICKS_PER_DAY, arrivals);
 
-    expect(world.guestOutcomes.satisfied).toBeGreaterThan(0);
-    const expected = world.guestOutcomes.satisfied * RATE - days * rooms * UPKEEP;
+    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    const expected = departureCountOf(world.guestOutcomes, 'satisfied') * RATE - days * rooms * UPKEEP;
     expect(balanceOf(world.ledger)).toBe(expected);
 
     // Two independent computations of one number: the blind fold against the sum of
@@ -223,7 +224,7 @@ describe('the balance is the fold, and the fold is fully explained', () => {
     let classified = 0;
     for (const reason of TRANSACTION_REASONS) classified += sumByReason(world.ledger, reason);
     expect(balanceOf(world.ledger)).toBe(classified);
-    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(world.guestOutcomes.satisfied * RATE);
+    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(departureCountOf(world.guestOutcomes, 'satisfied') * RATE);
     expect(sumByReason(world.ledger, 'upkeep')).toBe(-(days * rooms * UPKEEP));
     expect(countSettlementTransactions(world.ledger)).toBe(days);
   });

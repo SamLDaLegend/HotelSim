@@ -22,7 +22,7 @@
 //
 //   ticks       2880    = 2 x 1440 (TICKS_PER_DAY)
 //   arrived     24      = arrivals at ticks 1, 121, ..., 2761 = floor(2878/120) + 1
-//   conservation        : 15 satisfied + 5 unsatisfied + 0 evicted + 4 in hotel = 24
+//   conservation        : 15 satisfied + 5 gave up + 0 evicted + 4 in hotel = 24
 //   revenue     127500p = 15 satisfied stays x 8500p room rate
 //   upkeep      -15000p = 2 nights x 3 rooms x 2500p
 //   settlements 2       = one per completed night, exactly
@@ -78,7 +78,7 @@ function default2Day(): CliResult {
 
 /** The --json document for the same run, shared by the direct-spawn and through-pnpm tests. */
 const GOLDEN_2_DAYS_SEED_42_JSON = {
-  schema: 1,
+  schema: 2,
   input: {
     seed: 42,
     ticks: 2880,
@@ -101,13 +101,21 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // what makes `guest_comfort` legal content at all (`assertNeedsAreSatisfiable`).
     // Derivation: 3 bedrooms + 3 beds + 3 amenity rooms + 2 provider items.
     entities: 11,
-    stateHash: 'e6a114d0e41934fc',
+    stateHash: '8ad5004ab8b1b4a6',
   },
   guests: {
     arrived: 24,
-    satisfied: 15,
-    unsatisfied: 5,
-    evicted: 0,
+    // SUMMARY SCHEMA 2 (G-015). `satisfied`, `unsatisfied` and `evicted` are GONE — not
+    // renamed, not defaulted, absent — and this table stands where they stood. The counts
+    // are the same counts, which is what makes the bump a reshape of the report rather
+    // than a change to the simulation.
+    departures: [
+      { reason: 'satisfied', count: 15 },
+      { reason: 'gaveUpWaiting', count: 5 },
+      { reason: 'evictedRoomGone', count: 0 },
+      { reason: 'evictedRoomUnusable', count: 0 },
+      { reason: 'evictedCauseUnrecorded', count: 0 },
+    ],
     inHotel: 4,
     stuck: 0,
     orphanedReservations: 0,
@@ -231,9 +239,14 @@ const GOLDEN_2_DAYS_SEED_42 =
     'rooms ok    6',
     'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no item',
     'arrived     24',
-    'satisfied   15',
-    'unsatisfied 5',
-    'evicted     0',
+    // G-015: three fixed lines became one per DEPARTURE REASON. Same simulation, same 15
+    // and 5 — the two numbers moved from a counter each into a row each, and the three
+    // zero rows are reasons this run had no occasion to produce.
+    'left satisfied              15',
+    'left gaveUpWaiting          5',
+    'left evictedRoomGone        0',
+    'left evictedRoomUnusable    0',
+    'left evictedCauseUnrecorded 0',
     'in hotel    4',
     'stuck       0',
     'orphan res  0',
@@ -257,7 +270,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     603500p',
-    'state hash  e6a114d0e41934fc',
+    'state hash  8ad5004ab8b1b4a6',
   ].join('\n') + '\n';
 
 /**
@@ -414,7 +427,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  e6a114d0e41934fc']);
+    expect(differing).toEqual(['seed        42', 'state hash  8ad5004ab8b1b4a6']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -621,14 +634,33 @@ describe('mode exclusivity', () => {
 // balance still folds from its own published reasons. The refusal path is still driven by
 // a real run, which was G-008's reason for leaving the hotel broke; it is now driven by
 // the hotel outrunning its income rather than by never having had any.
+/**
+ * Read a schema-2 outcome table the way an EXTERNAL CONSUMER has to: off a parsed JSON
+ * document, by reason string, with no help from the sim's types (G-015).
+ *
+ * `-1` FOR A MISSING ROW, NOT `0`, AND THAT IS THE WHOLE POINT OF THE SCHEMA BUMP. A
+ * consumer that defaults a missing count to zero turns a schema break into a hotel where
+ * nobody was ever satisfied; a negative sentinel makes the same mistake fail the assertion
+ * that reads it. `assertSummarySchema` is the version this file's spawned runs go through.
+ */
+const departures = (guests: { departures: { reason: string; count: number }[] }): number =>
+  guests.departures.reduce((total, row) => total + row.count, 0);
+const left = (
+  guests: { departures: { reason: string; count: number }[] },
+  reason: string,
+): number => guests.departures.find((row) => row.reason === reason)?.count ?? -1;
+const evicted = (guests: { departures: { reason: string; count: number }[] }): number =>
+  guests.departures
+    .filter((row) => row.reason.startsWith('evicted'))
+    .reduce((total, row) => total + row.count, 0);
+
 describe('G-008 exit criterion: a build schedule, and a balance that folds', () => {
   type Summary = {
     world: { entities: number };
     guests: {
       arrived: number;
-      satisfied: number;
-      unsatisfied: number;
-      evicted: number;
+      /** Summary schema 2 (G-015): three counters became a table by reason. */
+      departures: { reason: string; count: number }[];
       inHotel: number;
       stuck: number;
       orphanedReservations: number;
@@ -676,7 +708,8 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
 
   it('matches the hand-derived closed form, penny for penny', () => {
     const s = summary();
-    expect(s.guests.satisfied * 8_500).toBe(s.money.revenuePennies);
+    const satisfied = s.guests.departures.find((row) => row.reason === 'satisfied')?.count ?? -1;
+    expect(satisfied * 8_500).toBe(s.money.revenuePennies);
     expect(s.money.revenuePennies).toBe(2_975_000);
     // TWO ROOM TYPES PAY UPKEEP SINCE G-012, so the closed form has two terms: the
     // bedrooms at 2,500p and the three inherited amenities at 1,500p, standing for all 30
@@ -745,9 +778,9 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // build loop is doing something real: 3 rooms serve 267 guests over this window (the
     // G-004/G-005 figure), 13 rooms serve 350.
     const g = summary().guests;
-    expect(g.satisfied + g.unsatisfied + g.evicted + g.inHotel).toBe(g.arrived);
+    expect(departures(g) + g.inHotel).toBe(g.arrived);
     expect(g.arrived).toBe(360);
-    expect(g.satisfied).toBeGreaterThan(267);
+    expect(left(g, 'satisfied')).toBeGreaterThan(267);
     expect(g.stuck).toBe(0);
     expect(g.orphanedReservations).toBe(0);
   });
@@ -765,9 +798,8 @@ describe('G-008: --demolish, and the eviction path a real run can finally reach'
   type DemolishSummary = {
     guests: {
       arrived: number;
-      satisfied: number;
-      unsatisfied: number;
-      evicted: number;
+      /** Summary schema 2 (G-015): three counters became a table by reason. */
+      departures: { reason: string; count: number }[];
       inHotel: number;
       stuck: number;
       orphanedReservations: number;
@@ -786,7 +818,7 @@ describe('G-008: --demolish, and the eviction path a real run can finally reach'
     // That made it a counter proven only by unit tests. Demolishing under a guest is the
     // player action that reaches it, and the reservation must not leak on the way out.
     expect(runCli(DEMOLISH_ARGS).status).toBe(0);
-    expect(summary().guests.evicted).toBeGreaterThan(0);
+    expect(evicted(summary().guests)).toBeGreaterThan(0);
     expect(summary().guests.orphanedReservations).toBe(0);
     expect(summary().guests.stuck).toBe(0);
     expect(summary().build.demolished).toBeGreaterThan(0);
@@ -794,7 +826,7 @@ describe('G-008: --demolish, and the eviction path a real run can finally reach'
 
   it('closes conservation with rooms disappearing underneath people', () => {
     const g = summary().guests;
-    expect(g.satisfied + g.unsatisfied + g.evicted + g.inHotel).toBe(g.arrived);
+    expect(departures(g) + g.inHotel).toBe(g.arrived);
     expect(g.arrived).toBe(360);
   });
 

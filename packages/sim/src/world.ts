@@ -59,12 +59,13 @@ export type World = {
    */
   readonly guests: GuestStore;
   /**
-   * What happened to every guest that has left, counted.
+   * What happened to every guest that has left, counted BY REASON (G-015).
    *
    * Not derivable from anything else: a departed guest leaves no trace in the store,
    * and the ledger only records the ones who paid. Bound to the store by
-   * `assertGuestOutcomes` — arrived === satisfied + unsatisfied + evicted + live — so
-   * the two cannot drift apart unnoticed.
+   * `assertGuestOutcomes` — arrived === the sum of its departure rows, plus live — so
+   * the two cannot drift apart unnoticed. The total is never stored; it is folded from
+   * the rows, which is what keeps that law a check rather than an identity.
    */
   readonly guestOutcomes: GuestOutcomes;
   /**

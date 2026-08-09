@@ -34,7 +34,10 @@ import type { Command, ScheduledCommand } from './commands.js';
 import { bindContent } from './content.js';
 import type { ItemTypeData, NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { entitiesInOrder } from './entities.js';
-import { guestsInOrder } from './guests.js';
+import {
+  departureCountOf,
+  guestsInOrder,
+} from './guests.js';
 import type { Guest } from './guests.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
@@ -224,7 +227,7 @@ describe('FIT NEVER REORDERS NEEDS — pressure decides which, fit only decides 
     const served = run(opened, content, STAY + 20, [at(opened.tick, arrive)]);
     // The guest has gone home; every need it formed is recorded, and both engagement needs
     // were MET rather than one of them having run out of patience while it sat elsewhere.
-    expect(served.guestOutcomes.satisfied).toBe(1);
+    expect(departureCountOf(served.guestOutcomes, 'satisfied')).toBe(1);
     for (const row of served.needOutcomes) {
       expect(row.met, row.needId).toBe(1);
       expect(row.unmet, row.needId).toBe(0);

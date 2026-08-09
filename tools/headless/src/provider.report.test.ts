@@ -35,7 +35,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { createWorld, itemTypeProvides, lodgingNeedOf, roomTypeProvides, run } from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 import { loadContent, ECONOMY_PATH, ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
-import { buildSummary, parseArgs, schedule } from './report.js';
+import {
+  buildSummary,
+  departuresOf,
+  evictedInSummary,
+  parseArgs,
+  schedule,
+} from './report.js';
 import type { RunSummary } from './report.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -137,7 +143,7 @@ describe('THE CRITERION: the run reports what delivered every satisfaction (G-01
   });
 
   it('and still closes the G-012 law: every row sums to the guests that have departed', () => {
-    const departed = summary.guests.satisfied + summary.guests.unsatisfied + summary.guests.evicted;
+    const departed = departuresOf(summary, 'satisfied') + departuresOf(summary, 'gaveUpWaiting') + evictedInSummary(summary);
     expect(departed).toBeGreaterThan(0);
     for (const row of summary.needs) expect(row.met + row.unmet, row.needId).toBe(departed);
   });
@@ -328,7 +334,7 @@ describe('THE NEGATIVE CONTROL: content whose items provide nothing (G-013)', ()
 
   it('and the hotel still works: guests are still served, by rooms', () => {
     // A control that broke the run would prove only that broken content reports zeroes.
-    expect(summary.guests.satisfied).toBeGreaterThan(0);
+    expect(departuresOf(summary, 'satisfied')).toBeGreaterThan(0);
     expect(totalByRoom(summary.needs)).toBeGreaterThan(0);
     expect(violations).toEqual([]);
   });

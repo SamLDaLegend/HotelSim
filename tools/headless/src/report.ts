@@ -54,17 +54,19 @@ import {
   countInvalidRooms,
   countLoanDrawTransactions,
   countOrphanedReservations,
+  countRoomRevenueTransactions,
   countSettlementTransactions,
   countStuckGuests,
   dayOf,
   departedGuests,
+  departureCountOf,
   entityCount,
   firstRoomTypeProviding,
   guestCount,
   hashState,
   isWithinBounds,
-  lodgingNeedOf,
   itemTypeProvides,
+  lodgingNeedOf,
   needOutcomeOf,
   needTypesInOrder,
   outstandingDebtOf,
@@ -346,9 +348,7 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
  * Version of the `--json` document shape.
  *
  * THE POLICY, WRITTEN DOWN SO IT STOPS BEING RE-ARGUED EVERY GOAL: an ADDITIVE block or
- * field does NOT bump this. A removal, a rename, or a type change DOES. The parked M2
- * change that turns the outcome tally into a per-reason table is the scheduled first bump,
- * because it replaces fields rather than adding them.
+ * field does NOT bump this. A removal, a rename, or a type change DOES.
  *
  * G-008 added a whole `build` block and a `money.constructionPennies` field and did NOT
  * bump, deliberately. A version that moves whenever anything is added stops distinguishing
@@ -356,11 +356,54 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
  * which is exactly the failure the version was bought to prevent. A version that means
  * something is worth more than a version that moves.
  *
+ * **2 (G-015) — THE FIRST BUMP, AND IT IS THE BREAKING KIND.** `guests.satisfied`,
+ * `guests.unsatisfied` and `guests.evicted` are GONE, replaced by `guests.departures`, a
+ * row per reason. This is exactly what the policy above reserves a bump for: three fields
+ * removed, not a fourth added. The scheduled bump named in this comment since G-006.
+ *
  * Same discipline as SAVE_SCHEMA_VERSION, one integer. (Note the difference in kind: a
  * SAVE bump is owed for ANY field, because an old save must still be readable; a REPORT is
  * generated fresh every run and nothing has to read yesterday's.)
  */
-export const SUMMARY_SCHEMA_VERSION = 1;
+export const SUMMARY_SCHEMA_VERSION = 2;
+
+/**
+ * Refuse a summary document that is not the schema this reader was written against.
+ *
+ * **THERE IS NO CONSUMER OF THIS TODAY, AND THIS COMMENT IS NOT GOING TO PRETEND
+ * OTHERWISE.** Nothing in this repo parses a stored `--json` document: `report.ts` builds
+ * summaries, three test files read them in-process, `bench.mjs` string-matches a line of
+ * the TEXT report, and `tools/viewer` reads recorded save frames rather than summaries. The
+ * guard exists for the FIRST consumer that stores one — M4's balance sweep is the named
+ * candidate — and for one property that is worth having in place before then rather than
+ * after.
+ *
+ * THE PROPERTY: at v1 a reader asked `document.guests.satisfied` and got a number. At v2
+ * that key does not exist, so it gets `undefined` — and the single most likely line of code
+ * in any consumer, `doc.guests.satisfied ?? 0`, turns a schema break into a hotel where
+ * nobody was ever satisfied. **A number that quietly becomes zero is worse than a crash**,
+ * because a sweep over a hundred runs reports a plausible catastrophe instead of an error.
+ * One version comparison, made before any field is read, is what converts that into a
+ * refusal that names both versions.
+ *
+ * Exported rather than inlined so the check is the same code in every consumer, and so a
+ * test can prove it accepts a real v1 document and refuses a real v2 one — a guard that
+ * has only ever been handed the version it wants is not a guard (ADR-0007).
+ */
+export function assertSummarySchema(document: unknown, expected: number): void {
+  if (typeof document !== 'object' || document === null) {
+    throw new Error(`Not a run summary: expected an object carrying schema ${expected}`);
+  }
+  const schema = (document as { schema?: unknown }).schema;
+  if (schema !== expected) {
+    throw new Error(
+      `Run summary is schema ${String(schema)}, not the schema ${expected} this consumer reads. ` +
+        'Fields have been removed or renamed between the two; read the version before the fields, ' +
+        'because a missing field reads as undefined and a consumer that defaults it to 0 reports a ' +
+        'run that never happened.',
+    );
+  }
+}
 
 /**
  * The room type guests stay in: the lowest-id room type that provides the LODGING need.
@@ -811,9 +854,22 @@ export type RunSummary = {
   };
   readonly guests: {
     readonly arrived: number;
-    readonly satisfied: number;
-    readonly unsatisfied: number;
-    readonly evicted: number;
+    /**
+     * WHY EVERY STAY ENDED, ONE ROW PER REASON (G-015, summary schema 2).
+     *
+     * REPLACES `satisfied`, `unsatisfied` and `evicted`, which is the breaking change the
+     * schema bump is for. The rows are the sim's own table, in the sim's own order,
+     * mirrored rather than flattened — the reasons are a closed union there, and a report
+     * that renamed them on the way out would be a second place to keep in step. Same
+     * decision as `build.refused` and `rooms.invalid`.
+     *
+     * `arrived - inHotel` equals the sum of these rows, and `buildSummary` checks it. See
+     * the violation for why that is a check rather than an identity.
+     */
+    readonly departures: readonly {
+      readonly reason: string;
+      readonly count: number;
+    }[];
     readonly inHotel: number;
     readonly stuck: number;
     readonly orphanedReservations: number;
@@ -968,6 +1024,55 @@ export type RunSummary = {
   };
 };
 
+/**
+ * How many stays this report records under one reason, and how many in total (G-015).
+ *
+ * The summary-side pair of the sim's `departureCountOf` / `departedGuests`, and derived
+ * for the same reason: nothing stores either number, so nothing can disagree with the
+ * rows. `departuresOf` returns 0 for a reason the table does not carry, which is safe here
+ * and only here — `buildSummary` copies the sim's table wholesale and `assertGuestOutcomes`
+ * has already refused any table that is missing a row.
+ */
+export function departuresOf(summary: RunSummary, reason: string): number {
+  for (const row of summary.guests.departures) {
+    if (row.reason === reason) return row.count;
+  }
+  return 0;
+}
+
+export function departuresInSummary(summary: RunSummary): number {
+  let total = 0;
+  for (const row of summary.guests.departures) total += row.count;
+  return total;
+}
+
+/**
+ * Stays this report records as ending in an eviction, whatever the cause.
+ *
+ * The summary-side `evictedGuests`, and a subtotal for readers exactly as that one is: the
+ * conservation law folds EVERY row and never this. It reads the reasons from the sim's own
+ * list rather than naming three strings here, so a reason added to the union is added to
+ * this subtotal in one place.
+ */
+export function evictedInSummary(summary: RunSummary): number {
+  let total = 0;
+  for (const row of summary.guests.departures) {
+    if (row.reason.startsWith(EVICTION_REASON_PREFIX)) total += row.count;
+  }
+  return total;
+}
+
+/**
+ * What makes a departure reason an eviction, as a string test.
+ *
+ * A PREFIX RATHER THAN A LIST, and it is a deliberate trade with a cost worth naming: the
+ * report reads reasons as strings (that is what a JSON document carries), so the
+ * alternative is a copy of three union members here that a fourth eviction reason would
+ * silently walk past. `outcome.report.test.ts` pins the prefix against the sim's own
+ * exported list, so the naming convention cannot drift without something going red.
+ */
+const EVICTION_REASON_PREFIX = 'evicted';
+
 export type BuiltReport = {
   readonly summary: RunSummary;
   /** Empty on a healthy run. Each entry is a complete sentence bound for stderr. */
@@ -1092,9 +1197,13 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
     },
     guests: {
       arrived: world.guestOutcomes.arrived,
-      satisfied: world.guestOutcomes.satisfied,
-      unsatisfied: world.guestOutcomes.unsatisfied,
-      evicted: world.guestOutcomes.evicted,
+      // The sim's rows, copied one for one. Not filtered to the non-zero ones: a reason
+      // nothing produced is exactly the row a reader needs to see, which is the same
+      // argument the need table makes for listing a need type nothing resolved.
+      departures: world.guestOutcomes.departures.map((row) => ({
+        reason: row.reason,
+        count: row.count,
+      })),
       inHotel: guestCount(world.guests),
       stuck,
       orphanedReservations: orphans,
@@ -1221,7 +1330,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // Every guest this runner creates forms one instance of EVERY need type, because it
   // creates them all under one content set and never loads a save. So for every row:
   //
-  //     met + unmet === satisfied + unsatisfied + evicted
+  //     met + unmet === the sum of every row of the outcome table
   //
   // exactly. Inside the sim the same law is an inequality, because a world MIGRATED from
   // v5 carries guests that formed a single need and resolve one row on departure — a case
@@ -1289,14 +1398,73 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       );
     }
   }
+  // THE OUTCOME TABLE'S ATTRIBUTION, CHECKED AGAINST A SEPARATE INPUT (G-015).
+  //
+  // WHAT IS DELIBERATELY NOT HERE IS THE CONSERVATION LAW, AND FINDING THAT OUT COST A
+  // DELETED CHECK. `arrived === Σ rows + live` was written here first, as a violation
+  // beside the others. It cannot fire: `assertGuestOutcomes` at the top of this function
+  // enforces exactly that law and THROWS, so any world that would violate it never reaches
+  // this line. A test that forged a short table got the sim's exception, not the report's
+  // violation — which is ADR-0007's vacuous check, caught by trying to make it fail rather
+  // than by reasoning about it. The law is not weakened by living in one place; it is
+  // enforced harder there, on every tick and every load rather than once per report.
+  //
+  // (Contrast the need tally below, which IS restated here: inside the sim that law is only
+  // an INEQUALITY, because a migrated world can carry guests that formed a single need. The
+  // report knows something the sim does not, so its version is stronger. Here it would not
+  // be — it would be the same law, one frame later, unreachable.)
+  //
+  // ATTRIBUTION IS A DIFFERENT LAW AND IT DOES FIRE. A departure filed under the WRONG
+  // reason leaves conservation perfectly intact — the total does not move — so without
+  // this, NO row of the table would have a witness outside the table.
+  // `countRoomRevenueTransactions` folds the LEDGER, a different subsystem written by
+  // different code for a different purpose, and `payForStay` is the only producer of a
+  // `roomRevenue` transaction, on the satisfied path and nowhere else. The satisfied row
+  // and the revenue count agree only if every stay that paid was also counted as one. That
+  // is the `countDemolitionRefundTransactions === demolished` shape one subsystem over
+  // (`build.ts`), and it is what the deleted `metByRoom + metByItem === met` lacked: a
+  // comparison against something that is not one of its own inputs.
+  //
+  // IT WITNESSES ONE ROW OF FIVE, AND THE HONEST STATEMENT OF ITS REACH IS THIS:
+  //
+  //   satisfied  <-> anything            CAUGHT (either side of the swap moves this fold)
+  //   gaveUpWaiting <-> evictedRoomGone  NOT CAUGHT
+  //   evictedRoomGone <-> evictedRoomUnusable      NOT CAUGHT
+  //   evictedRoomUnusable <-> evictedCauseUnrecorded  NOT CAUGHT
+  //
+  // An eviction writes no transaction, so no cheap second input exists for the other four
+  // rows and none is invented here. What covers the eviction SPLIT is coarser and belongs in
+  // a different sentence: the pinned bench goldens (19 / 0 / 0 on the churn arm) and the
+  // criterion-2 invocation, which are run-level pins rather than laws. Stated so that a
+  // reader does not take "the table is checked" from a check that reaches one row of it.
+  //
+  // WHERE IT RUNS: HERE, AND NOWHERE ELSE. Not at the tick boundary — `stepTick`'s
+  // postcondition block asserts the guest store, the conservation law, the need tally and
+  // the build and loan counters, and never reads the ledger — and not at load, which is the
+  // policy `build.ts` states for its twin: a save predating a feature legitimately lacks its
+  // transactions. This goal makes that concrete rather than hypothetical — a v7 world's
+  // evictions migrate to `evictedCauseUnrecorded`, and older eras carry ledger reasons this
+  // fold does not count — but the policy is the reason, not the example.
+  const revenueTransactions = countRoomRevenueTransactions(world.ledger);
+  const satisfiedStays = departureCountOf(world.guestOutcomes, 'satisfied');
+  if (revenueTransactions !== satisfiedStays) {
+    violations.push(
+      `Outcome attribution broken at tick ${world.tick}: ${revenueTransactions} room revenue transaction(s) ` +
+        `against ${satisfiedStays} stay(s) recorded as satisfied. A satisfied stay pays exactly once and is ` +
+        'counted under exactly one reason, so a departure filed under the wrong reason moves one and not ' +
+        'the other (G-015).',
+    );
+  }
   // VALIDITY — the exit criterion, as a check the run makes on itself (G-009).
   //
   // WHAT THIS NUMBER IS, EXACTLY: a count taken ONCE, over the FINAL world of the run. It
   // is not a per-tick audit and must not be read as one. The per-tick guarantee comes from
   // somewhere else entirely — the eviction branch in `stepGuests`, which removes a guest
   // on the tick its room stops being valid — and this is the end-of-run witness that the
-  // branch did its job. The run's positive evidence that it FIRED is `guests.evicted`,
-  // which the pinned criterion invocation asserts is non-zero.
+  // branch did its job. The run's positive evidence that it FIRED is the EVICTION ROWS of
+  // `guests.departures`, which the pinned criterion invocation asserts are non-zero
+  // (G-015 — this used to cite `guests.evicted`, a single counter that this goal replaced;
+  // the evidence is now two rows, and the branch above decides which of them moves).
   //
   // Zero here is unreachable through a real run by construction, which is why the
   // non-zero case is driven through this same code with a forged world in
@@ -1337,9 +1505,15 @@ export function renderText(summary: RunSummary): string {
     `rooms bad   ${summary.rooms.invalid.unplaced} unplaced, ${summary.rooms.invalid.unsupported} unsupported, ` +
       `${summary.rooms.invalid.noDoor} no door, ${summary.rooms.invalid.missingItem} no item`,
     `arrived     ${summary.guests.arrived}`,
-    `satisfied   ${summary.guests.satisfied}`,
-    `unsatisfied ${summary.guests.unsatisfied}`,
-    `evicted     ${summary.guests.evicted}`,
+    // ONE LINE PER DEPARTURE REASON (G-015), in the sim's canonical order, whether or not
+    // anything ended that way — the same argument the need table makes for printing a row
+    // of zeroes. Three fixed lines became a table because "evicted 6" cannot say whether
+    // somebody demolished the hotel or the hotel fell down, and to a player watching those
+    // are different events with different causes.
+    // Padded to the longest reason so the counts line up in a column, and carrying the
+    // reason's MACHINE NAME rather than a prettier label: a reader comparing this line with
+    // the `--json` document, or grepping a log for one, must not have to translate.
+    ...summary.guests.departures.map((row) => `left ${row.reason.padEnd(22)} ${row.count}`),
     `in hotel    ${summary.guests.inHotel}`,
     `stuck       ${summary.guests.stuck}`,
     `orphan res  ${summary.guests.orphanedReservations}`,

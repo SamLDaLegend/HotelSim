@@ -30,7 +30,11 @@ import { beginEntityDraft, entitiesInOrder, getEntity } from './entities.js';
 import type { Entity, EntityDraft } from './entities.js';
 import { createGridBounds } from './grid.js';
 import type { Cell } from './grid.js';
-import { countOrphanedReservations, guestsInOrder } from './guests.js';
+import {
+  countOrphanedReservations,
+  evictedGuests,
+  guestsInOrder,
+} from './guests.js';
 import { balanceOf, sumByReason, TRANSACTION_REASONS } from './ledger.js';
 import { run, stepTick } from './tick.js';
 import { createWorld, hashState } from './world.js';
@@ -236,7 +240,7 @@ describe('demolish', () => {
 
     world = stepTick(world, content, [demolish(id)]);
 
-    expect(world.guestOutcomes.evicted).toBe(1);
+    expect(evictedGuests(world.guestOutcomes)).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
     // It never got what it came for, so it pays nothing.
