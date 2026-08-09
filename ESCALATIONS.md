@@ -443,3 +443,53 @@ is worth more than a partial sixth.
   12.5% cross-check that was one dataset and its own superset, and a test total that was
   arithmetic across two moments. **All four were caught by an agent, none by me.** The rule
   that would have prevented all four is already written: `CLAUDE.md` rule 5.
+
+---
+
+## 2026-08-09 — I4 IS INTERMITTENTLY RED, AND HAS BEEN SINCE G-016. Decided and recorded.
+
+**A §2 invariant gate that fails about a third of the time under load is §9's shape
+exactly — *"a gate that flakes red teaches people to re-run it"* — and it has been in the
+suite since G-016 without anyone noticing.** Found only because G-020a's I4 failure forced
+three runs instead of one.
+
+**The culprit is not G-020a. It is `tools/headless/src/needs.scaling.test.ts`**, a paired
+timing-ratio test with hard bounds (2.5×, 1.9×) living inside a parallel runner.
+
+**Measured, and the two accounts disagree, so both are recorded:**
+
+| | isolated | in full suite |
+|---|---|---|
+| `sim-engineer` | 0 fail / 3 | **2 fail / 4** |
+| orchestrator | **1 fail / 9** | 0 fail / 2 |
+| **combined** | **1 fail / 12 (~8%)** | **2 fail / 6 (~33%)** |
+
+**Contention makes it worse. Contention is NOT the cause** — it fails isolated too, which
+refutes the builder's "3/3 isolated, therefore contention" reading **and** my acceptance of
+it. Neither of us had enough runs; the failure rate is low enough that three observations
+cannot distinguish the two stories.
+
+**THE ROOT CAUSE IS NOW MEASURABLE, AND G-020a IS WHAT MEASURED IT.** The instrument built
+this goal established that **a single timing reading on this machine is worth ±10%**, and a
+`--repeat 7` median is worth ~±3%. `needs.scaling.test.ts` takes **single readings** and
+asserts **hard bounds**. *A gate built on one timing sample cannot be more reliable than one
+timing sample.* The instrument built to guard tick cost has explained why the pre-existing
+tick-cost test flakes — which is the most useful thing G-020a has produced.
+
+**Decided under the standing authorisation, and recorded rather than acted on:**
+
+- **Not fixed here.** `needs.scaling.test.ts` belongs to G-016's lineage and rewriting a
+  §2-gate-bearing timing test is not G-020a's scope. Touching it to make my own goal's
+  VERIFY green would be the §9 move.
+- **`check-measure.mjs` is the pattern that fixes it** — a gate-shaped check as a standalone
+  script rather than a passenger in `pnpm test` — and it now exists as precedent.
+- **G-020b inherits it**, since it is the goal that owns tick-cost measurement and already
+  inherits the ±10% floor. The repair is the same repair: repeat, or move the bound onto
+  something a single sample can carry.
+
+**AND A CONSEQUENCE FOR EVERY "ALL SIX GATES GREEN" IN THIS SESSION.** I reported that
+phrase after single `pnpm verify` runs, repeatedly. **On a gate that flakes ~33% under load,
+one green run is not evidence that the gate passes** — it is one sample of a coin. Every
+such report in `JOURNAL.md` and in the commit messages of G-013, G-018, G-017, G-014a and
+G-015 should be read as *"green on the run I took"*, which is weaker than it sounded.
+Nothing is known to be wrong in those goals; what is wrong is the strength of the claim.

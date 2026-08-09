@@ -1174,3 +1174,25 @@ human had recordings to read.** G-019's repair came from noticing that departure
 *identical* to `night_rest`'s outcome across three files — a fact invisible in code, in
 tests and in the ledgers, and legible in thirty seconds of a table built from watching.
 ADR-0013 bought that.
+
+---
+
+## 2026-08-09 — Two orchestrator process errors, recorded because neither was caught by me
+
+**1. `git add -A` swept 1,741 lines of G-020a's uncommitted instrument code into a commit
+titled `docs: G-019's criterion cannot detect what it claims`** (`0af9420`), and 143 more
+lines of its test file into `686ac9d`. **So G-020a's code is in the history before it passed
+VERIFY and before its critique closed**, filed under two documentation commits. Found by
+`sim-engineer` stashing to test a clean HEAD and discovering HEAD had moved under it.
+
+This is the **third** instance of this class in the project — the G-008 slip, one I caught
+mid-session, and this one, which I did not. The pattern is identical every time: a
+path-scoped intent executed with `git add -A` while an agent has work in flight. **The
+lesson is not "be careful"; it is that the orchestrator commits while builders hold
+uncommitted work, so `-A` is never the right flag in this loop.**
+
+**2. Every "all six gates green" reported this session rests on a single run**, and I4 is
+now known to flake ~33% under load. See `ESCALATIONS.md`. The claims were not false — each
+run really was green — but *"the gates pass"* and *"the gates passed on the run I took"* are
+different statements, and I made the stronger one repeatedly while requiring builders to
+distinguish exactly that.
