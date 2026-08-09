@@ -112,9 +112,17 @@ stopped at the test files.
    absolutes moved by nearly 2×.
 3. **Never compare an absolute against a figure recorded in another session**, including
    ones in `GOALS.md`, `PARKING.md` or a code comment. If you need to, re-measure both.
-4. **Cite the workload with the number.** A figure without its workload is not a
-   measurement — two parked figures have been corrected for exactly that (G-009's
-   scaling reading, G-010's ledger trigger).
+4. **A number carries FOUR slots, and a citation missing one is unpinned:**
+   **what it measured · over what workload · at what sample count · aggregated how.**
+   *(Amended 2026-08-09, human. It read "cite the workload with the number" — and
+   **workload is one referent among several**, so the rule pointed at the slot that was
+   already understood. **Three referent errors happened in G-020a alone, across two
+   people, one enforcing this rule outward at the time and one who wrote it**: ±10% read
+   as a single-reading absolute when it was a ratio spread; 2.41/2.37/2.32× cited as a
+   commit pair when it measured a state never committed; and that same ±2% compared
+   against a six-sample invocation when it came from three campaigns resolving a 2.3×
+   effect. **All three were about what the number is a measurement OF.** Four slots is
+   mechanical enough to check at REFLECT and would have caught every one.)*
 5. **A number you cannot re-measure paired is withdrawn, not restated.** If the change
    still stands on an argument that needs no stopwatch, say that instead.
 

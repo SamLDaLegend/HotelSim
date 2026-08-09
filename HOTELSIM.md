@@ -263,6 +263,8 @@ When a fix lands on an instance of a class this project already names — a vacu
 
 That converts a reflex into something falsifiable at REFLECT, exactly as §5.5's seam prediction does.
 
+THE GUARD, BECAUSE "CHECKED, CLEAN" IS ITSELF A CLAIM (human, 2026-08-09): NAME WHERE WAS CHECKED, NOT ONLY THAT IT WAS. A location can be re-inspected; an assurance cannot. If §5.8 starts producing unfalsifiable clean reports it becomes the thing it was built to catch — which is this project's most repeated failure and the reason ADR-0007 carries five amendments: each one repaired a costume rather than the thing wearing it. §5.8 is the first rule here that operates on the class rather than the instance, and that is exactly why it must not be allowed to inspect nothing.
+
 THE CASE THAT PRODUCED IT: at G-020a the orchestrator corrected exit criterion 2 for naming an unmeetable command, and LEFT CRITERION 1 CARRYING THE IDENTICAL DEFECT EIGHT LINES AWAY. It was found two rounds later by the critic. The rule was known and was applied outward and not inward — the same shape as the orchestrator exempting itself from CLAUDE.md rule 5. This rule would have caught it for free, because the twin was eight lines from the fix.
 
 5.7 THE ORCHESTRATOR'S OWN CLAIMS ARE IN SCOPE FOR THE GOAL'S CRITIC

@@ -16,6 +16,12 @@
   G-014b: two repaired criteria, save v9, `abandoned` on `NeedOutcome`. G-019: the second
   axis (vary amenity density at fixed rooms) — its headline criterion cannot otherwise
   detect three-quarters of the need vector. **M4 blocked on scenario capital.**
+- **SCORED PREDICTION, §7.1's subject split (human, 4 messages before it resolved)**:
+  G-020a's final pass returned **1 BLOCKER + 5 MAJOR, all prose**, and the goal **closed
+  clean — no round consumed, no escalation.** Pre-split, those six would have converted,
+  burned the budget and escalated a goal whose **code was correct**: a false positive on the
+  loop's most expensive signal. **The ruling paid for itself with a counterfactual, not an
+  absence.**
 - **Open contradictions**: G-012's criterion pins a content property any provider addition
   can flip · `--rooms N` contaminates every balance sweep · the speed ladder is provisional
   (**30/12/5 + pause**, labels with values, no implied arithmetic) · seeds inert until M4.
