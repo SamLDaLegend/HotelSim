@@ -2,36 +2,23 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
+*As of 2026-08-09, G-020a done. M2: 8 of 12. Unreliable gates: 1 (I4).*
 
-- **Schema versions**: save **v8** · summary **v2**.
-- **Gates**: **I4 is INTERMITTENTLY RED under load — see `ESCALATIONS.md`.** Five gates and
-  `check:measure` green on the runs taken. I2 `ca54cbb7ae2dc693`. **No I5 percentage is
-  quoted here: a percentage of a fixed budget is a stored absolute, and `CLAUDE.md` rule 3
-  forbids quoting an absolute from another sitting** — two runs this session read 2.1% and
-  3.8% and neither is comparable to the other.
-- **UNRELIABLE GATES: 1 (§2.0).** `needs.scaling.test.ts` — a **named** assertion failure
-  against hard timing bounds, ~8% isolated / ~33% in-suite, **unrepaired and owed to
-  G-020b**. The worker-starvation defect is **held at bay by a provisional
-  `maxWorkers: 2`**, not repaired — if that cap is removed before the extraction lands, the
-  count returns to 2. **A third is a STOP CONDITION.** Previously counted as one defect: `needs.scaling.test.ts` (named assertion failure,
-  hard timing bounds) and the vitest worker RPC timeout (**zero failing tests**, passes at
-  `--maxWorkers=2`). **These are TWO DISTINCT DEFECTS, previously counted as one.**
-  **A third before G-020b lands is a STOP CONDITION.**
-- **Order remaining**: **G-014b** (hysteresis, save v9) -> **G-019** (reviews,
-  last-in-milestone, two critics) -> **G-020** (tripwire, hard prerequisite of M3) ->
-  **G-021** (speed ladder as content) -> M2 exit.
-- **OWED BY THE HUMAN, NOT BY A GOAL**: run `pnpm viewer`, load a recording, scrub it.
-  G-017's criterion 1 is dischargeable no other way. And **rule on §7.1's conversion
-  guard** — four firings, all on prose (`ESCALATIONS.md`).
-- **Obligations**: G-014b takes `abandoned` as a row on **`NeedOutcome`**, not in G-015's
-  departure table (a guest departs once but abandons many times, so a law summing a subset
-  is the vacuity shape). Its criteria 2 and 3 are **both broken as written** and repairs are
-  recorded. G-019 owes M2's "visibly" and the second critic. G-020 inherits the unpinned
-  bench workload and the copy-the-gate proof-of-bite technique. **M4 does not start** until
-  scenario capital lands.
-- **Open contradictions**: `--rooms N` contaminates every balance sweep. The speed ladder is
-  PROVISIONAL. Seeds are inert until M4 — do not spend a goal on multi-seed sweeps.
+- **Schemas**: save **v8** · summary **v2**. I2 `ca54cbb7ae2dc693`.
+- **Gates**: **I4 UNRELIABLE (§2.0)** — see `ESCALATIONS.md`; others green on runs taken.
+  **No I5 percentage here**: a stored absolute, and four runs read 2.1/2.3/2.3/3.8%.
+- **Order**: **G-020b** → G-014b → G-019 → G-021 → M2 exit.
+- **Owed by the human**: rule on §7.1's conversion guard (5 firings, 4 prose 1 code);
+  M2 exit sign-off, which needs the digest experiment scored **both ways**, the
+  unreliable count, and the bimodal recording **watched, not manufactured**.
+- **Owed by goals**: G-020b takes the bound (per-goal vs running product), **the instrument
+  extraction** (`maxWorkers: 2` is a stopgap with an expiry) and **`needs.scaling.test.ts`**.
+  G-014b: two repaired criteria, save v9, `abandoned` on `NeedOutcome`. G-019: the second
+  axis (vary amenity density at fixed rooms) — its headline criterion cannot otherwise
+  detect three-quarters of the need vector. **M4 blocked on scenario capital.**
+- **Open contradictions**: G-012's criterion pins a content property any provider addition
+  can flip · `--rooms N` contaminates every balance sweep · the speed ladder is provisional
+  (**30/12/5 + pause**, labels with values, no implied arithmetic) · seeds inert until M4.
 
 ---
 
@@ -112,7 +99,7 @@ Exit criteria:
   - all §2 invariant gates green (pnpm verify)
 Out of scope: room variety, items, staff roles, guest archetypes (M6); construction
   cost (M1); rooms as spatial entities (M1)  (-> PARKING.md)
-Critique rounds used: 1/3
+Critique rounds used: 3/3 (sweeps) + 3 verifications, none of which converted
 
   Verified by the orchestrator on 2026-08-07, every command run rather than reported:
   64 content tests green across 4 files · check:content green · sim:run --days 1 --seed 1
@@ -1497,15 +1484,23 @@ Exit criteria:
 ---
 
 ## G-020a — The measurement instrument (`sim:measure`)
-Status: **in-progress** — 2 sweeps (**1 BLOCKER** + 4 MAJOR + 3 MINOR + 1 NIT). The project's
+Status: **done** — 3 sweeps (**1 BLOCKER** + 4 MAJOR + 3 MINOR + 1 NIT). The project's
   first BLOCKER, twenty goals in, and it was an **evidence** defect rather than a code one.
 Milestone: M2
 Owner pair: sim-engineer / sim-critic
 Statement: A command that measures the working tree against a baseline revision at a
   single-sourced workload and **reports a ratio**. No bound, no verdict, no CI gate.
 Exit criteria:
-  - `pnpm sim:measure` prints a ratio, the workload it names, its method, both resolved
-    SHAs and both digests, and exits 0 *(could pass vacuously alone — 2 and 3 are the teeth)*
+  - `pnpm sim:measure --head <a sim-changing revision>` prints a ratio, the workload it
+    names, its method, both resolved SHAs and both digests, and exits 0
+    *(could pass vacuously alone — 2 and 3 are the teeth)*
+    **CORRECTED A SECOND TIME.** It read `pnpm sim:measure` bare — which **cannot** print a
+    ratio, both SHAs or graph digests **by construction**: the default head is the working
+    tree, which has no SHA (`measure.mjs:239`), and a run that changes no sim file returns
+    at IDENTICAL before the graph audit. **That is correct instrument behaviour and a wrong
+    criterion** — and it is the same defect as the round-2 correction eight lines below,
+    which repaired criterion 2 and left this one carrying it. **The remedy is the criterion,
+    not the instrument.**
   - `pnpm check:measure` green, **including**: *(**CORRECTED at round 2 — this read
     `pnpm exec vitest run measure`, a command THIS GOAL MADE UNMEETABLE by deleting the file
     it selects. Not failing: unmeetable, §7's own definition, and the block said `done`
@@ -1769,8 +1764,10 @@ When **G-012 to G-021** are `done`, that is a §5.4 escalation. Write it to
 - **M2 EXIT IS NOT RIPE AND MUST NOT BE ESCALATED EARLY (human, 2026-08-09).** Four goals
   outstanding — **G-020b, G-014b, G-019, G-021** — plus two WATCH obligations.
 - **A COUNT OF KNOWINGLY-UNRELIABLE TESTS GOES IN THE DIGEST, BESIDE THE GATE READINGS.**
-  Currently **two**: I4's instrument test (now moved out to `check:measure`) and
-  `needs.scaling.test.ts`. **A THIRD BEFORE G-020b LANDS IS A STOP CONDITION, NOT A THIRD
+  Currently **one gate — I4 — carrying two distinct defects**, one unrepaired and one held
+  at bay by a stopgap. *(An earlier version named "I4's instrument test (now moved out to
+  `check:measure`)" as one of two, which is the conflated diagnosis `72ae268` retracted:
+  removing that test fixed neither defect.)* **A THIRD BEFORE G-020b LANDS IS A STOP CONDITION, NOT A THIRD
   DEFENSIBLE DECISION.** Each one is defensible alone; that is exactly how a suite stops
   being evidence.
 - **THE BIMODAL RECORDING TAKEN AND WATCHED, NOT MANUFACTURED.** ~6 rooms, 24 arrivals/day.

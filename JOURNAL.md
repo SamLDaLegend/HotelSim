@@ -2,25 +2,20 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
+*As of 2026-08-09, G-020a done. M2: 8 of 12. Unreliable gates: 1 (I4).*
 
-- **State**: save **v8** · summary **v2** · six gates green · I2 `ca54cbb7ae2dc693` ·
-  67 files / 1,235 tests · I5 **2.1%** of the derived 389,333 ms budget.
-- **WATCH #1 exists** and is the point of ADR-0013. It found what 1,109 tests could not,
-  and **its findings then caught a defect in G-014a's own first build** — comfort 0 met,
-  356 unmet, with six gates green.
-- **Three goals chained without planning it**: G-013 parked a hypothesis *with a stated
-  experiment*, G-017's recording was that experiment, G-014a hit the knife-edge it
-  describes. **Park hypotheses with their experiments.**
-- **The defect this project produces**: checks and claims that succeed while inspecting
-  nothing. Newest forms — a criterion with **no subject at all** (G-015's v1 consumer), a
-  guard **not wired to its own goal's exit command**, and a doc claiming a law runs at tick
-  time when it runs only in the report.
-- **Prose that cannot be verified may describe, but it may not measure**, and a number that
-  cannot be re-measured is **withdrawn, not restated** — applied to timings, counts, test
-  totals and test *outcomes* this session.
-- **Owed by the human**: `pnpm viewer` + scrub (G-017 criterion 1); a ruling on §7.1's
-  conversion guard, four firings all on prose.
+- **State**: save **v8** · summary **v2** · I2 `ca54cbb7ae2dc693` · **I4 unreliable (§2.0)**.
+- **WATCH #1–#3 exist.** The viewer found what 1,109 tests could not, then caught a defect
+  in G-014a's own first build, then the human found G-019's criterion undetectable **before
+  PLAN** — the class's cost curve: after the fact → at PLAN → **before PLAN, from outside**.
+- **Park a hypothesis WITH its experiment**: G-013 parked, G-017 ran it unplanned, G-014a
+  hit the knife-edge it described. Three goals chained; none planned the next.
+- **The defect this repo produces**: checks and claims that inspect nothing. Newest forms —
+  a criterion with **no subject**, a guard not wired to its own exit command, a doc claiming
+  a law runs where it does not, **goldens that redden because the feature works**.
+- **Prose may describe, it may not measure**; a number you cannot re-measure is **withdrawn,
+  not restated** — applied to timings, counts, test totals and test *outcomes*.
+- **When several careful actors make the same error, the rule is missing** — four times.
 
 ---
 
@@ -1283,3 +1278,56 @@ commit **does not separate tests ADDED from tests REWRITTEN.** A goal that re-pi
 goldens and a goal that writes thirty new cases look identical in this table, and G-015 was
 substantially the former. **The metric answers a coarser question than the one it appears
 to answer** — which is worth remembering before it gets quoted again, by me.
+
+---
+
+## 2026-08-09 — G-020a — The measurement instrument (3 sweeps, 3 verifications, 0 conversions)
+
+**The goal set out to build a tripwire and instead established that this repo cannot
+currently measure at the precision a tripwire needs.** That is a better outcome than the
+gate would have been, and it is why the seam was worth taking.
+
+### The readings (exit criterion 3)
+
+- **Single-reading noise floor: ±10%.** A `--repeat 7` median is worth **~±3%**. Null
+  experiment (comment-only diff, identical state hashes), medians across sittings:
+  **1.026 / 0.987 / 1.001 / 1.020**, single-reading spreads **0.884–1.111**.
+- **The null spread overlaps both real pairs** (G-014a 1.065/1.043, G-015 1.001/0.965).
+  **So the 1.13 bound originally ruled is not measurable by one invocation of this tool.**
+- **Residual head-slow slot bias ~1% is not excluded** — the null median sat at or above
+  1.000 in four of five sittings.
+- **Instrument reachability, `aa30218..HEAD`**: namespace rewrite **2 MEASURED / 2
+  INCOMPARABLE / 10 IDENTICAL**; named imports **0 / 4 / 10**. The builder predicted 0
+  incomparable and was wrong; both were `roomTypeServes`.
+- **The calibration could not run and its target was wrong.** `CLAUDE.md`'s 2.41/2.37/2.32×
+  **is not a commit pair** — it measured G-012's *unoptimised* need vector, never committed,
+  and G-012 and G-016 shipped in one commit. The shipped pair is **2.07×**, and even that is
+  unreachable: **the instrument's reachable history starts at G-013.**
+- **Order bias ~0.70.** Two module graphs in one process made the arm *slot* worth 30% —
+  `0.7213 × 0.6925 = 0.4995`, a pure position factor. One arm per process fixed it. The
+  first reading, 0.687, was almost entirely artefact.
+
+### What it cost, and what it found
+
+**The project's first BLOCKER**, twenty goals in, and an evidence defect: tests naming
+historical SHAs against a **shallow CI clone**, which would have reddened I4 on all three
+platforms the moment it landed — **and worse after commit**, when the tip's parent
+disappears too.
+
+**And it explained a two-goal-old intermittent gate failure with its own number.**
+`needs.scaling.test.ts` takes **single timing readings against hard bounds**. *A gate built
+on one timing sample cannot be more reliable than one timing sample.*
+
+**Three self-inflicted defects, each caught by the thing built to catch it**: the arms ran
+as CommonJS so the loader chain was bypassed and **a planted decoy went undetected**; the
+graph digest included a file embedding each arm's own path, so **"digests differ" could
+never fail**; and the new top-level handler was registered *below* the parses it guards and
+caught its own missing symbol within a minute of existing.
+
+### The orchestrator's share, since it is most of the prose findings
+
+Criterion 1 was corrected **twice** — the first correction repaired criterion 2 and left
+criterion 1 carrying the identical defect. The digest claimed "all six green" while `verify`
+said otherwise. The unreliable count was **1 in the authoritative record and 2 in every
+other**, because nobody had picked the noun. And `git add -A` swept **1,741 lines** of this
+goal's code into a commit titled `docs:`.

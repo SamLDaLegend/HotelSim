@@ -2,36 +2,20 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
-*134 items across 17 goals (`^- ` outside this digest). **G-020a added NONE**, and the count
-is unchanged since `16f8044` — the only goal so far to add nothing. It is defensible here and
-only here: the discovered-but-unbuilt material has a NAMED SUCCESSOR, G-020b, and sits in its
-block rather than being lost. **§9's stop condition is not firing, but this is the first
-reading that could start it: a second consecutive goal adding nothing, or any goal adding
-nothing without a named successor, is scope leaking into goals rather than discipline.***
+*As of 2026-08-09, G-020a done. M2: 8 of 12. Unreliable gates: 1 (I4).*
 
-- **PROMOTED OUT — no longer parked**: scenario capital is a **hard prerequisite of the
-  first M4 goal** (ADR-0013 §5). Every balance figure to date was taken with `--rooms N`
-  silently seeding ~75% extra opening capital.
-- **The costed lever, pinned and deliberately unpulled**: sampling the guest-store scan
-  every 8th tick recovers **18.4% of the bench's RUNTIME** (a ratio, so G-018 leaves it
-  standing; it was never a fraction of the budget). Gating on change detection is **dead and
-  measured** — reference-unchanged on 1 of 525,600 ticks. Do not re-argue it. What sampling
-  surrenders is a one-tick double-booking, invisible until G-017 exists.
-- **New from G-018**: I5's budget is **derived, 389,333ms**, and the bench reads ~2% of it.
-  Every percentage-of-budget in this file is **struck, not restated**. The one trigger phrased
-  as "70% of the I5 budget" is **dead with no replacement, deliberately**; two `packages/sim`
-  comments cite the old constant and are **deleted, not restated**, when a goal next opens
-  those files.
-- **New from G-013**: `placeItem` **relaxes** the reachability rule rather than deleting it
-  (M6) · an item in a **private room is publicly usable** — shipped content avoids it by
-  choice, not by rule (M3/M6) · **an item provider costs nothing to place or keep**, an
-  unpriced strategy (M4) · `guest_comfort.satisfyTicks` is an unswept dial owed to M4, and
-  the "engagement vector sums to the lodging budget" idea is parked as a **hypothesis with
-  a stated experiment**, not a derivation.
-- **Heaviest clusters**: M3 owes movement, queues with capacity, distance as a score term.
-  M6 owes `placeItem`, item cost and quality, archetypes, party size.
-- **No linter is still configured.** Parked since bootstrap; the six gates do the work.
+- **134 items across 17 goals.** G-020a added **none** — the only goal so far to add
+  nothing, defensible **only** because G-020b is a named successor holding the material.
+  **A second consecutive goal adding nothing, or any goal adding nothing without a named
+  successor, is scope leaking** (§9).
+- **PROMOTED OUT**: scenario capital is a **hard prerequisite of M4**. Every balance figure
+  to date was taken with `--rooms N` seeding ~75% extra opening capital.
+- **The costed lever, pinned and unpulled**: sampling the guest-store scan recovers
+  **18.4%** of I5. Gating on change detection is **dead and measured** — do not re-argue it.
+- **Heaviest clusters**: M3 owes movement, queues, distance-as-a-score-term (**and the
+  spread that scoring cannot fix**). M6 owes `placeItem`, item cost, archetypes.
+- **Watch for**: privacy as a room-type property — content can put a provider in a bedroom
+  today and a stranger walks in. **No linter is still configured.**
 
 ---
 

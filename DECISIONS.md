@@ -2,24 +2,21 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020a done (instrument only; G-020b pending). M2: 8 of 12.*
+*As of 2026-08-09, G-020a done. M2: 8 of 12. Unreliable gates: 1 (I4).*
 
-- **Load-bearing everywhere**: ADR-0001 content injected, never value-imported · ADR-0002
-  integer pence · ADR-0003 snake_case literal = content ID · ADR-0006 the v1 fixture is
-  permanent and the next `World` field owes a migration (G-013 paid it: save **v7**).
-- **The one cited most, and now five amendments deep**: **ADR-0007** — a check that can
-  succeed while inspecting nothing is not a check. Vacuous ≠ unreachable · a goal promoted
-  by a threshold must exit on one · a threshold must itself be derivable · **deleting a bad
-  check is not evidence that no good one exists** (G-013, written by the builder that made
-  the error) · **a comment offered as evidence may not carry a figure no test pins**.
-- **How to read a defect count** (ADR-0007, human): a 3/3 goal is a near miss, not comfort;
-  and raw counts across eras are not like-for-like, because detection sensitivity rises.
-- **ADR-0013** (human) — a perceptual criterion needs a perceptual check. Viewer, WATCH,
-  three-state critic close, digests, I5 re-derivation, M4 scenario-capital prerequisite.
-  Bounded by its own text: no `apps/game`, no weakened invariant, no reopened sign-off.
-- **ADR-0014** (human) — first playable build ships placeholder art; M5 neither waits nor
-  relitigates.
-- **Open contradictions**: none outstanding.
+- **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
+  snake_case = content ID · ADR-0006 the v1 fixture is permanent (G-013 paid v7; G-015 v8).
+- **Cited most, five amendments deep**: **ADR-0007** — a check that succeeds while
+  inspecting nothing is not a check. Vacuous ≠ unreachable · promoted by a threshold, exit
+  on one · a threshold must itself be derivable · **deleting a bad check is not evidence no
+  good one exists** · **a comment offered as evidence may not carry a figure no test pins**.
+- **Reading a defect count**: 3/3 is a near miss; raw counts across eras are not
+  like-for-like, because detection sensitivity rises.
+- **ADR-0013** (human) — a perceptual criterion needs a perceptual check. **ADR-0014** —
+  placeholder art; M5 neither waits nor relitigates.
+- **Nothing here has changed since G-013.** This digest is a pointer, not a summary of work
+  since; the charter (§2.0, §4.1, §5.5–5.7, §7.1) is where the newer rulings live.
+- **Open contradictions**: three, in `GOALS.md`'s digest. I4 unreliable and escalated.
 
 ---
 

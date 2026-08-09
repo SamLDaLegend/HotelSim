@@ -36,7 +36,9 @@
 //
 //   A. a NAMED assertion failure in `tools/headless/src/needs.scaling.test.ts`, against its
 //      hard timing bounds (2.5x, 1.9x). Observed 2 of 4 `pnpm test` runs here, plus 1 of 3
-//      `pnpm verify` runs. That file passes 3 of 3 in isolation, its tests taking 245-365ms.
+// That file fails ISOLATED too — 1 failure in 12 combined runs, ~8% — so the
+// "3/3 isolated, therefore contention" reading is REFUTED (ESCALATIONS.md). Contention
+// makes it worse; it is not the cause.
 //   B. exit 1 with ZERO failing tests, and an unhandled
 //      `[vitest-worker]: Timeout calling "onTaskUpdate"`. Every test passes and the gate
 //      fails anyway. Observed 2 of 3 runs by the orchestrator; `--maxWorkers=2` passes
