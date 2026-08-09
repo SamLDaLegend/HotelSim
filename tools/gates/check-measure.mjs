@@ -286,6 +286,24 @@ if (measured.status !== 0) {
     reading.head?.arrived === reading.base?.arrived && reading.head?.arrived > 0,
     `the arms did different amounts of work: ${reading.head?.arrived} vs ${reading.base?.arrived}`,
   );
+  // THE PAYLOAD CARRIES WHAT IT MEASURED AND WHICH ARMS IT CHOSE (G-020b). A second process
+  // reads this JSON and renders the verdict; without these fields it would have to re-derive
+  // `chooseArms`' dirty/clean rule for itself, and two independent derivations of "which
+  // commit is the previous one" can disagree — the tree can be dirtied between the two reads.
+  // A gate reporting a bound against arms it did not measure is the defect one level up.
+  check(
+    'tools/gates/measure.mjs',
+    reading.chosen?.head !== undefined && reading.chosen?.baseline !== undefined && reading.chosen?.because !== undefined,
+    'the --json payload no longer names the arms it chose, so a caller must re-derive them and can disagree',
+  );
+  check(
+    'tools/gates/measure.mjs',
+    reading.workload?.rooms === ROOMS &&
+      reading.workload?.arrivalEveryTicks === ARRIVAL_EVERY_TICKS &&
+      reading.workload?.days === MEASURE_DAYS &&
+      Number.isInteger(reading.samplesPerArm),
+    'the --json payload no longer carries the workload it ran and the samples it took — rule 4\'s slots cannot travel with the number',
+  );
   const [head, base] = reading.digests ?? [];
   check(
     'tools/gates/measure.mjs',
@@ -415,12 +433,21 @@ check(
   'the clock no longer starts immediately before run(), so the measurement includes world building or scheduling',
 );
 
-// NO VERDICT AND NO STORED NUMBER. G-020a is the instrument; the bound is G-020b's. If a
-// threshold appears here before then, this is what says the seam was crossed.
+// NO VERDICT AND NO STORED NUMBER. G-020a is the instrument; the bound is G-020b's, and it
+// now exists one file over. THE SEAM IS A PROCESS BOUNDARY: `tripwire.mjs` spawns this file
+// and applies a bound to its JSON, so the judging code cannot reach into the measuring code
+// at all. Both halves are checked here, because "the instrument holds no bound" is only
+// meaningful alongside "and something else does" — otherwise it also passes on a repo that
+// has quietly lost its tripwire.
 check(
   'tools/gates/measure.mjs',
   !/(?:const|let|var)\s+\w*(?:BOUND|THRESHOLD|LIMIT|MAX_RATIO)\w*\s*=/.test(SOURCE),
-  'the instrument has grown a threshold. G-020a renders no verdict; a bound is G-020b, with the readings to choose it',
+  'the instrument has grown a threshold. G-020a renders no verdict; the bound is G-020b\'s, in tripwire.mjs',
+);
+check(
+  'tools/gates/tripwire.mjs',
+  /^const BOUND = [\d.]+;$/m.test(readFileSync(join(GATES, 'tripwire.mjs'), 'utf8')),
+  'the tick-cost tripwire holds no bound, so the instrument\'s verdict-free design guards nothing',
 );
 check(
   'tools/gates/measure.mjs',

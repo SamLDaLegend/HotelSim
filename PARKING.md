@@ -2,12 +2,13 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020a done. M2: 8 of 12. Unreliable gates: 1 (I4).*
+*As of 2026-08-09, G-020b done. M2: 9 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
-- **134 items across 17 goals.** G-020a added **none** — the only goal so far to add
-  nothing, defensible **only** because G-020b is a named successor holding the material.
-  **A second consecutive goal adding nothing, or any goal adding nothing without a named
-  successor, is scope leaking** (§9).
+- **138 items across 18 goals.** G-020b added **four, every one with its falsification test
+  attached** (§4, human 2026-08-09) — the compounding hole in a per-goal bound, the gate's
+  true minimum detectable mutation, a loop-wide pre-G-013 reading, and whether `--repeat`
+  should be the default. **G-020a's zero is therefore discharged rather than repeated**: the
+  named successor did hold the material, and the §9 warning stands unchanged for next time.
 - **PROMOTED OUT**: scenario capital is a **hard prerequisite of M4**. Every balance figure
   to date was taken with `--rooms N` seeding ~75% extra opening capital.
 - **The costed lever, pinned and unpulled**: sampling the guest-store scan recovers
@@ -1007,3 +1008,32 @@ changed one constant, its derivation, and the records that quoted it.
   a ledger entry for an eviction to make a law possible would be the tail wagging the dog.
   The honest second input, if one is ever wanted, is a **review** that records why the stay
   ended — G-019 builds the first thing that reads an outcome. -> **G-019, or M4's sweep.**
+
+## Deferred during G-020b — the tick-cost tripwire (2026-08-09)
+
+- **The running product of tick-cost ratios across a milestone, as a REPORTED number** —
+  `sim-critic`'s shape at PLAN: a per-goal bound of 1.4557 passes seven goals at 1.45 each,
+  which is 15× spent with the gate green every time. The cheap middle shipped instead: the
+  gate prints one `TICKCOST` line carrying all FIVE of rule 4's slots — including the regime,
+  which it reads off the machine rather than leaving to a human to append — and REFLECT already
+  records readings in the goal block, so the product stays computable by hand.
+  **FALSIFICATION TEST, attached per §4**: after three M3 goals, multiply the recorded
+  per-goal ratios. *If the product materially exceeds the largest single reading, the
+  per-goal gate has the compounding hole and the milestone-anchor version earns its cost;
+  if the product tracks the largest single reading, the hole is theoretical and this stays
+  parked.* Its honest cost is already known — an anchor drifts from the working tree's API,
+  so the INCOMPARABLE rate worsens the longer a milestone runs.
+- **The minimum mutation the tripwire can actually detect, as opposed to the bound it
+  states.** G-020b's mutations were sized for a proof that does not flake (M1 quadratic
+  ~2.1–2.5×, M2 constant ~1.76–2.11× at a 3-day probe arm, six runs), not for minimality.
+  **FALSIFICATION TEST**: bisect `CONSTANT(k)` at the shipped 30-day arm until the verdict
+  flips, n≥5 per k. *If the flip lands near 1.4557 the bound and the sensitivity agree; if it
+  lands well above, the gate is less sensitive than its bound claims and the claim comes out.*
+- **A tick-cost reading against a pre-G-013 revision for the whole guest loop**, not only for
+  `needs.scaling.test.ts`'s arm — G-020c takes the arm; the loop-wide question is wider than
+  that goal and needs the instrument's reachable history mapped first.
+- **`--repeat` on the tripwire is forwarded but never used by the gate.** It buys evidence at
+  linear cost and nothing currently calls for it. **FALSIFICATION TEST**: if `check:tickcost`
+  ever produces a disputed reading, run `--repeat 5` and compare the median against the single
+  reading; *if they differ by more than the 2.29% real-pair overshoot, the single reading was
+  not enough and the gate's default should change.*

@@ -2,9 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020a done. M2: 8 of 12. Unreliable gates: 1 (I4).*
+*As of 2026-08-09, G-020b done. M2: 9 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
-- **State**: save **v8** · summary **v2** · I2 `ca54cbb7ae2dc693` · **I4 unreliable (§2.0)**.
+- **State**: save **v8** · summary **v2** · I2 `ca54cbb7ae2dc693` · **I4 unreliable (§2.0)**
+  · `pnpm verify` is ten rows now, three of them `—` and not invariants.
 - **WATCH #1–#3 exist.** The viewer found what 1,109 tests could not, then caught a defect
   in G-014a's own first build, then the human found G-019's criterion undetectable **before
   PLAN** — the class's cost curve: after the fact → at PLAN → **before PLAN, from outside**.
@@ -12,7 +13,9 @@
   hit the knife-edge it described. Three goals chained; none planned the next.
 - **The defect this repo produces**: checks and claims that inspect nothing. Newest forms —
   a criterion with **no subject**, a guard not wired to its own exit command, a doc claiming
-  a law runs where it does not, **goldens that redden because the feature works**.
+  a law runs where it does not, **goldens that redden because the feature works**, and
+  G-020b's own: **a two-halved rule with one half executed and the other admired** — the
+  pooling brake shipped in code at round 3, the REPLACE half still prose at round 4.
 - **Prose may describe, it may not measure**; a number you cannot re-measure is **withdrawn,
   not restated** — applied to timings, counts, test totals and test *outcomes*.
 - **When several careful actors make the same error, the rule is missing** — four times.
@@ -1364,3 +1367,75 @@ was a *multiple* — 2.32×, 235% of budget, two quadratic folds. **None was a 1
 (±10%), attached it to the wrong referent (single readings rather than ratio spread), and
 built a conclusion strong enough to kill a goal. `CLAUDE.md` rule 4 — *cite the workload
 with the number* — exists for exactly this, and I applied it to builders all session.
+
+---
+
+## G-020b — The tick-cost tripwire: a bound, a verdict, and proof of bite
+
+**DONE, DRY at 3/3.** Three sweeps and three verification passes; one verification produced
+a new finding, converted under §7.1, and spent the last sweep. It closed on the round the
+budget allowed and not one after.
+
+**What shipped.** `pnpm check:tickcost` — a paired ratio against the previous commit at the
+shipped 60-room workload, judged against `BOUND = 1.4557 = sqrt(1.0238 noise ceiling × 2.07
+smallest known regression)`, truncated not rounded. `pnpm check:tickcost:proof` watches it go
+red under two mutations. Neither is a §2 invariant; both sit in `verify.mjs`'s `—` column,
+because minting a seventh invariant is a human decision. `MEASURE_DAYS` rose 5 → 30, which is
+what made a bound possible at all: the 30-day arm's null spread is 0.9268..1.0238 against the
+5-day arm's 0.9572..1.0984, at equal n=9.
+
+**The goal's shape, and it is the only thing worth remembering from it: every round found the
+same defect one constant further along.**
+
+- Round 1 — `NOISE_CEILING` was a hand-typed literal, the campaign beside it was a frozen
+  object of display strings nothing read, and the startup check compared three literals
+  against each other. Nudge the ceiling to 1.2000 and the bound to 1.5760 — 8.3% looser — and
+  everything passed. **The goal's headline claim, that the measurement does the work, was
+  false at round 1.**
+- Round 3 — admitting every qualifying reading makes the ceiling a pooled max, which only
+  ever rises. The clause that should have braked it lived in ADR-0015's prose. `sim-critic`
+  shipped a 2.06 ceiling green.
+- Round 4 — **ADR-0015's REPLACE half was still prose.** Set `MEASURE_DAYS` 30 → 3 and the
+  gate ran a 3-day arm under a 30-day bound at exit 0, deriving from readings of a quantity it
+  was no longer measuring. The pooling twin had been fixed one round earlier, in the same
+  file, in the same rule.
+
+Three instances of ADR-0007's class inside the file built to hunt it, in three consecutive
+rounds, each found by the critic and none by the builder. **The lesson is not "write better
+comments" — it is that a rule with two halves gets one of them executed and the other
+admired.**
+
+**What the critic caught that the orchestrator did not.** The ratchet — my own anti-curation
+ruling created a monotone bound with the brake left as prose, which is the defect I had
+spent the goal enforcing outward. And the admitted fourth arm: a reading filed under "which
+arm length to ship" rather than "the bound campaign", same quantity, same instrument, larger
+n, larger excursion. Admitting it moved the bound 1.4550 → 1.4557 — **the first time in this
+project a bound has changed because a reading was admitted rather than because someone edited
+a number.**
+
+**A scored prediction, failed and left failed.** `sim-critic` predicted at PLAN that `--null`
+would understate real-pair noise. On the campaign as first taken it held (null +1.46%, worst
+real pair +2.284%) and the ceiling was the real pair's. On the shipped four arms the admitted
+null is +2.38% and **the ceiling is a null's — the prediction fails.** The rescue available
+was "the null only won because it had more draws", and this same commit forbids it: the
+equal-n argument is `workload.mjs`'s own. It was reinstated as measured fact one paragraph
+after being scored failed, twice, and struck both times.
+
+**The regime became rule 4's fifth slot during this goal**, on three of its own failures: a
+withdrawn "eaten margin" that was contention, a `--null` campaign claiming four slots with no
+load condition, and a claim about `verify.mjs` scheduling standing in for a claim about the
+machine. The `TICKCOST` line now reads its regime off `node:os` rather than asking a later
+goal to hand-transcribe it — which was the manual step this goal removed from the ceiling
+three constants away.
+
+**And the gate's first live run on its own goal is an abstention.** `git diff --stat --
+packages/` is empty, so the arms are byte-identical and the verdict is `IDENTICAL:1`. Correct,
+and the exact case the verdict count exists to make visible.
+
+**Owed forward.** G-020c holds both I4 defects, the CI regime reading (every number in this
+diff is `win32/12cpu`, quiet; a shared 2-vCPU runner is unmeasured and the bound was NOT
+widened to cover it), and the instruction to replace rather than pool if the configuration
+moves. The running product across a milestone is parked with its falsification test.
+
+**No invariant was weakened, and `git diff --stat -- packages/` is empty** — the whole goal
+is gates and ledgers.

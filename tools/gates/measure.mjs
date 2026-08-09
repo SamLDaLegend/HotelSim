@@ -511,12 +511,28 @@ try {
     results.push(measureOnce(options, temp, round));
   }
   if (options.json) {
+    // THE PAYLOAD CARRIES WHAT IT MEASURED AND WHICH ARMS IT CHOSE, because a SECOND PROCESS
+    // reads this (G-020b's tripwire) and the alternative is that it re-derives `chooseArms`'
+    // dirty/clean rule for itself. Two independent derivations of "which commit is the
+    // previous one" can disagree — the tree can be dirtied between the two reads — and the
+    // gate would then report a bound against arms it did not measure. Found by `sim-critic`
+    // at PLAN. The workload travels for the same reason `measure-arm.mjs` reports its own
+    // warm-up count: a caller that restates a method it did not perform is this project's
+    // most repeated defect.
     process.stdout.write(
       `${JSON.stringify(
         results.map((result) => ({
           verdict: result.verdict,
           why: result.why,
           ratio: result.ratio,
+          chosen: {
+            head: result.chosen.head,
+            baseline: options.null ? result.chosen.head : result.chosen.baseline,
+            because: result.chosen.because,
+            null: options.null,
+          },
+          workload: { rooms: ROOMS, arrivalEveryTicks: ARRIVAL_EVERY_TICKS, seed: SEED, days: MEASURE_DAYS, ticks: TICKS },
+          samplesPerArm: SAMPLES,
           head: result.head && {
             median: result.head.median,
             samples: result.head.samples,

@@ -529,3 +529,40 @@ signature was the discriminator all along and neither of us looked at it** — a
 failing and zero tests failing are different events that both read as "I4 red" in a summary
 line. **The count of knowingly-unreliable tests is therefore 2, not 1**, and it is now in
 `GOALS.md`'s digest beside the gate readings as the human required.
+
+### UPDATED 2026-08-09 — both defects reassigned from G-020b to G-020c, and why
+
+**The entry above says "G-020b inherits it". That is no longer true and the record should not
+say it.** At G-020b's PLAN the orchestrator split **both** defects out into **G-020c**:
+
+- **Defect A** (`needs.scaling.test.ts`, a named assertion failure) — the builder proposed
+  relocating it inside G-020b. Declined, on a better reason than the builder's: the
+  discriminating measurement is this arm's ratio at HEAD against a **pre-G-013** revision, and
+  nobody has taken it.
+- **Defect B** (worker RPC starvation, zero failing tests) — the builder's plan was **silent
+  on `vitest.config.ts`'s `maxWorkers: 2`**, and *"silence is how a stopgap becomes policy"*,
+  which that comment names about itself. Removing the cap can re-expose B, and discovering
+  that inside G-020b's VERIFY costs a round.
+
+**They are still two defects with two signatures.** What put them in one goal is that they need
+**the same kind of evidence — repeated runs** — because each fires at a rate no single run can
+measure. That is a scheduling reason, not a re-conflation.
+
+**AND ONE FINDING RAISED AGAINST DEFECT A IS WITHDRAWN.** G-020b's builder measured the need
+ratio at **1.723–2.263, worst at 91% of its 2.5 bound** (6 fresh processes) and reported a
+possible real per-need regression sitting uncaught in the repo; the orchestrator passed it on
+in those terms. `sim-critic` replicated the four arms in **quiet** processes — **1.576 · 1.658
+· 1.740 · 1.759 · 1.773 · 1.782 · 1.788 · 1.790 · 1.913, median 1.77, worst at 76%, none over
+2.0** — indistinguishable from G-016's recorded 1.61–1.95. Five **loaded** processes interleaved
+with quiet ones gave **1.520–2.123**, bracketing the builder's readings **by contention alone**.
+**The builder's figures carried no load condition** — `CLAUDE.md` rule 4's **slot 5**, which the
+human ruled in during this goal, citing this withdrawal as one of the three failures behind it.
+
+**What survives is smaller and still real**: this ratio is **not load-invariant upward**, which
+falsifies `needs.scaling.test.ts`'s own guidance at `:160-162` and `:329-336` in its own words.
+That is G-020c's to repair.
+
+**G-020b therefore does NOT return the unreliable-gate count to zero.** It ships a tick-cost
+tripwire that is deliberately **outside `pnpm test`**, so it adds no new timing bound to I4's
+path — but the two entries above are still open, and §2.0's "a third is a stop condition"
+still stands.

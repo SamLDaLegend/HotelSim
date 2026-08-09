@@ -90,10 +90,30 @@ const WARM_UPS = 2;
  * (~150ms against the ~900ms a process costs to start) and not worse, not because it is
  * the lever.
  *
- * THE LEVERS THAT DO MOVE IT, for whoever needs a tighter floor than ±10% — and G-020b
- * will, because a drift-scale bound is inside this noise: `--repeat`, which is measured
- * above and costs linear time, and a LONGER ARM, which is not measured and would move the
- * hash `check-measure.mjs` cross-checks.
+ * THE LEVERS THAT DO MOVE IT, for whoever needs a tighter floor than ±10%: `--repeat`, which
+ * is measured above and costs linear time, and a LONGER ARM.
+ *
+ * ~~which is not measured and would move the hash `check-measure.mjs` cross-checks~~ —
+ * **BOTH CLAUSES ARE FALSIFIED, BY G-020b, IN THE COMMIT THAT SHIPPED THE ARM.** The longer arm
+ * IS measured — and every figure below carries all FIVE of rule 4's slots, INCLUDING THE
+ * REGIME, because this comment block is one of the locations G-020b's own §5.8 sweep flagged
+ * for omitting it and an earlier fix added fresh regime-less numbers to it:
+ *
+ *   what: the `sim:measure --null` ratio (arms one comment apart, state hashes identical, so
+ *   the true value is 1.000) · workload: 60 rooms, an arrival every 32 ticks, seed 42, arm
+ *   length varied · n=9 per arm, arm lengths interleaved against each other ACROSS TWO
+ *   SITTINGS · min..max · REGIME: quiet, no deliberate concurrent load, 12-core developer
+ *   machine.
+ *
+ * The 30-day arm reads 0.9268 .. 1.0238 against the 5-day arm's 0.9572 .. 1.0984, at 36.5s per
+ * reading against 11.8-13.9s — so it is TIGHTER than `--repeat 7` (~83s) and CHEAPER. And it
+ * moves no committed hash,
+ * because G-020a decoupled the golden's own `DAYS` and made `check-measure.mjs` re-derive by
+ * spawning the shipped CLI. `MEASURE_DAYS` is now 30. See `workload.mjs`.
+ *
+ * (G-020b's §5.8 sweep reached `:74-80` of this same comment block and handed it to G-020c
+ * while missing this sentence twenty lines below, which the same commit falsified — the
+ * "eight lines away" shape §5.8 exists to stop. Found by `sim-critic`.)
  */
 const TIMED_RUNS = 3;
 

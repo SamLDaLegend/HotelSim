@@ -2,21 +2,23 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020a done. M2: 8 of 12. Unreliable gates: 1 (I4).*
+*As of 2026-08-09, G-020b done. M2: 9 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent (G-013 paid v7; G-015 v8).
-- **Cited most, five amendments deep**: **ADR-0007** — a check that succeeds while
-  inspecting nothing is not a check. Vacuous ≠ unreachable · promoted by a threshold, exit
-  on one · a threshold must itself be derivable · **deleting a bad check is not evidence no
-  good one exists** · **a comment offered as evidence may not carry a figure no test pins**.
-- **Reading a defect count**: 3/3 is a near miss; raw counts across eras are not
-  like-for-like, because detection sensitivity rises.
-- **ADR-0013** (human) — a perceptual criterion needs a perceptual check. **ADR-0014** —
-  placeholder art; M5 neither waits nor relitigates.
-- **Nothing here has changed since G-013.** This digest is a pointer, not a summary of work
-  since; the charter (§2.0, §4.1, §5.5–5.7, §7.1) is where the newer rulings live.
-- **Open contradictions**: three, in `GOALS.md`'s digest. I4 unreliable and escalated.
+- **Cited most, five amendments deep**: **ADR-0007** — a check that succeeds while inspecting
+  nothing is not a check. Vacuous ≠ unreachable · promoted by a threshold, exit on one · a
+  threshold must itself be derivable · **deleting a bad check is not evidence a good one
+  exists** · **a comment offered as evidence may not carry a figure no test pins**.
+- **Reading a defect count**: 3/3 is a near miss; counts across eras are not like-for-like.
+- **ADR-0013** (human) a perceptual criterion needs a perceptual check · **ADR-0014**
+  placeholder art, M5 neither waits nor relitigates.
+- **ADR-0015** (G-020b) — the tripwire's bound is `sqrt(noise ceiling × smallest known
+  regression)`, and **POOL within a configuration, REPLACE on a configuration change**. Both
+  halves EXECUTE now; both were prose first, found a round apart. **A rule with two halves
+  gets one of them executed and the other admired.**
+- **The newer rulings live in the charter, not here** — §2.0, §4.1, §5.5–5.8, §7.1.
+- **Open contradictions**: four, in `GOALS.md`'s digest. I4 unreliable and escalated.
 
 ---
 
@@ -685,3 +687,184 @@ legibility is not.
 **Consequence.** Art is never on a goal's critical path. If a room type or a guest state
 cannot be told apart by shape and colour alone, that is a **design** finding about the
 cross-section, reportable at M5 by `render-critic` — not a request for a sprite.
+
+---
+
+## ADR-0015 — A ratio bound is placed by equal multiplicative margin, not by a multiplier
+Date: 2026-08-09 · Context: G-020b, the tick-cost tripwire · Decided by: sim-engineer,
+verified by the orchestrator, after `sim-critic` refuted the first rule at PLAN
+
+**Decision.** A gate that compares a **ratio** against a bound places that bound at the
+**geometric mean of two measured quantities**: the instrument's measured **noise ceiling**
+and the **smallest regression of the class the gate exists to catch**.
+
+```
+BOUND = sqrt(NOISE_CEILING x SMALLEST_KNOWN_REGRESSION)
+```
+
+**Why not G-010's "measured x 1.5, then held at or below".** That rule is right when the
+measured quantity is a **signal** — 4.2x rooms -> 6, 1.281 density -> 1.9, 1.74 needs ->
+2.5. A noise floor is not a signal; it is the thing the gate must never fire on. **The tell
+is that a perfect null of 1.0000 yields 1.5000 too: the multiplier does all the work and
+the measurement almost none.** Found by `sim-critic` at PLAN, on a draft the orchestrator
+had already accepted.
+
+**What the geometric rule buys.**
+1. **The measurement is load-bearing.** noise 1.0000 -> 1.4387 · 1.1000 -> 1.5090 ·
+   1.2064 -> 1.5803. The bound moves with the reading instead of the multiplier carrying it.
+2. **Equal multiplicative margin against both failure modes**, which are both multiplicative:
+   firing on noise, and missing the smallest regression worth catching. At G-020b's readings
+   the geometric mean equalises them EXACTLY, but **truncating the bound to 4dp does not** —
+   at G-020b's shipped figures they are **1.42186x above noise and 1.42200x below the class**,
+   which differ in the fifth place. **Say the two numbers; do not say "equal".** The equality is
+   a property of the untruncated value and "held at or below" requires the truncation, so the
+   rule buys near-equal margins rather than equal ones.
+3. **It degrades legibly.** As the instrument gets noisier the bound rises with it, and when
+   the two margins stop being useful the rule says *the instrument is too noisy to gate*
+   rather than quietly widening. G-020b was told to report exactly that if the bound landed
+   above ~1.6. It landed at 1.4557.
+
+**THE NOISE CEILING CARRIES ITS LOAD REGIME, AND THE REGIME IS NOT A FOOTNOTE.** The same
+`--null` ratio, same 30-day arm, quiet and loaded readings **alternated in one sitting**,
+n=3 per regime, min..max and largest upward overshoot, load = 12 busy processes on 12 cores:
+
+```
+quiet    0.9666 .. 0.9911    no upward overshoot
+loaded   0.9497 .. 1.0973    +9.73%
+```
+
+**Over 4x the quiet figure**, and `sim-critic` measured the same contrast independently at
+n=2 (+7.96% loaded). **A noise figure without its regime is unpinned** — rule 4's **slot 5**,
+ruled in by the human during this goal,
+and the exact omission for which this session withdrew a different G-020b finding.
+
+**THE RULE THAT FOLLOWS, AND IT BINDS FUTURE USES OF THIS ADR:** derive the ceiling from the
+regime the gate actually runs in — **which must be MEASURED on the machine the gate runs on,
+never inferred from how the repository schedules its own work** — but
+**check the bound against every regime the noise has been OBSERVED in**, because the first
+principle is that the gate never fires on noise and an observed excursion counts whatever
+produced it. **A bound whose margin approaches the loaded noise needs the noise re-measured
+under load before the bound is trusted.** At G-020b's figures the margin is 1.4557 / 1.0973 =
+**1.327x**, so the shipped gate is not threatened. **But the rule is general and the margin
+is not**: at a regression class of 1.3x rather than 2.07x, `sqrt(1.0238 x 1.3) = 1.1537`
+against a loaded reading of 1.0973 — **a margin of 1.05x rather than 1.327x.** The gate would
+still not fire on the observed noise, so the CORRECTED claim is about the margin collapsing,
+not about the ordering reversing. **An earlier version of this paragraph said 1.1537 "sits
+below the loaded reading". It does not — it is 1.05x above it** — and the stated consequence
+therefore did not follow from its own figures. At a 1.05x margin the honest response is to
+re-measure under load and refuse to ship the bound, not to widen it by hand; but that is a
+judgement about a margin too thin to trust, not an arithmetic impossibility.
+
+**THE NOISE CEILING IS MEASURED ON REAL PAIRS AS WELL AS NULLS, AND THE SHARPER VERSION OF
+THIS CLAIM HAS BEEN SCORED AND FAILED.** G-020b predicted at PLAN that a real pair would SET
+the ceiling because `--null`'s arms are one comment apart. **On the campaign as first taken it
+did — null +1.46% against a real pair's +2.284%. On the SHIPPED campaign it does not**: the
+admitted fourth arm is a null at +2.38%, so **the shipped ceiling is a null's.** Recorded as
+failed-on-the-shipped-data rather than dropped, because it was on the record as a scored
+prediction. **What survives is the weaker claim that carries the design**: sizing on nulls
+ALONE would be sizing on the easiest measurement the instrument can make, so real pairs stay in
+the campaign. The rescue — "the null only won because n=9 beats n=5" — **is unavailable**, being
+the unequal-n comparison this same commit forbids elsewhere.
+
+**And this is why real pairs stay, stated STRUCTURALLY so it cannot be read as a measurement
+that the shipped data contradicts:** `--null`'s two arms are one comment apart — same code,
+same code path, same JIT shapes — so **whatever its spread turns out to be, it is a lower bound
+on real-pair noise and never an estimate of it.** That argument needs no reading and survives
+any campaign. **The measured form is deliberately NOT restated here**: it was scored failed one
+paragraph above, and repeating "null 1.46% against a real pair's 2.29%" as fact would reinstate
+it — on the shipped four arms the pooled null max is +2.38%, above the pooled real-pair max of
++2.284%, and pair-B sits below the null besides. `tools/gates/tripwire.mjs`'s note is the model
+for how to say this.
+
+**The blind spot is part of the decision, not a defect in it.** Anything between the noise
+ceiling and the bound is invisible. That is affordable **only because the class is a
+multiple**: every performance defect in twenty goals was 2.07x, 3.9x or 6.6x, and not one
+was a 10% creep. **If this project ever produces a drift-scale regression, this rule is the
+thing that has to change** — not the bound inside it.
+
+**AND THE DERIVATION MUST BE EXECUTED, NOT WRITTEN DOWN.** G-020b's first implementation
+stored the campaign as **display strings that nothing read**, beside a hand-typed ceiling, and
+checked the bound against `sqrt(ceiling x smallest)` — **arithmetic between three literals**.
+Nudging the ceiling to 1.2000 and the bound to 1.5760, 8.3% looser, passed every check. So
+"the measurement does the work" was true of the prose and false of the code. **The readings
+must be numbers, the ceiling must be computed from them, and a probe must nudge a reading and
+watch the bound move** — otherwise this ADR describes a rule the repository does not follow.
+The first real run after that fix immediately caught a **round UP** in the transcription
+(1.022840 recorded as 1.0229, putting the bound 0.007% above its own derivation), which is the
+whole argument for removing the transcription step rather than correcting it.
+
+**BUT ONLY ONE OF THE TWO INPUTS CAN BE EXECUTED, AND THAT IS A STATED LIMIT OF THIS ADR
+RATHER THAN A DEFECT IN AN IMPLEMENTATION OF IT.** The noise ceiling is re-derivable on
+demand: run the campaign, recompute. **`SMALLEST_KNOWN_REGRESSION` is not, and this has been
+CHECKED rather than assumed.** The figure is G-012's shipped commit pair, and that pair is
+unreachable by the instrument:
+
+```
+pnpm --silent sim:measure --head aa30218
+  head  aa30218 feat(sim): the need vector and its decay (G-012, G-016)
+  base  f43699d feat(sim): starting capital, a loan, and a balanced refund (G-011)
+  INCOMPARABLE — an arm would not run: head-0: roomTypeServes is not a function
+```
+
+Re-run in G-020b round 2, and already on record at `GOALS.md:1606` and `JOURNAL.md:1304`:
+**the instrument's reachable history starts at G-013**, and the only cross-session-durable
+ratio this project has is on the wrong side of that line.
+
+**So a bound placed by this rule is HALF-EXECUTED BY CONSTRUCTION** — the ceiling moves with a
+re-measurement, the regression class cannot. **A reader re-deriving a bound under this ADR
+needs to know that before they start.** It is here rather than in `PARKING.md` because
+G-020b's first response parked it as a hypothesis with a falsification test, and `sim-critic`
+found the test had already been answered twice, in two files the author had read. **A parked
+test whose answer is already in the ledgers is not a hypothesis — it is an undischarged
+finding.**
+
+**WHAT TO DO WHEN THE REGRESSION CLASS GOES STALE**, since it cannot be re-measured: replace
+it with a **newer** defect of the same class, measured as a commit pair the instrument can
+reach, and cite that. Do not attempt to re-derive 2.07; it is a citation for good.
+
+**THE REGIME A GATE RUNS IN UNDER CI IS NOT THE REGIME ITS BOUND WAS MEASURED IN, AND AT
+G-020b IT IS UNOBSERVED.** The quiet campaign and the +9.73% loaded reading were both taken on
+a **12-core developer machine, load = 12 busy processes**. `pnpm verify` also runs on a
+**three-OS hosted matrix**, where the machine is a shared 2-4 vCPU runner and **the load is a
+neighbouring tenant rather than a sibling gate**. An argument that "our gates run sequentially"
+is a claim about this repository's scheduling and **not about the machine** — the same slot-2
+substitution this project has already withdrawn a finding for, one level out.
+
+**The honest position when the regime cannot be measured before shipping is: SHIP, STATE THE
+REGIME AS UNOBSERVED, AND OWE THE OBSERVATION** — never a wider number nobody can source.
+Widening a bound to cover an unmeasured regime is what the rule above forbids. **The cost of
+being wrong is why it must be written down**: §9 forbids editing a gate to make it pass, so a
+false red on `main` is an escalation, and §2.0 makes a third unreliable gate a stop condition.
+
+**POOL WITHIN A CONFIGURATION; REPLACE ON A CONFIGURATION CHANGE.** Two clauses of this ADR
+were in tension and neither said which governed: "run the campaign, recompute" reads as
+REPLACE, and "every qualifying reading is an arm" reads as POOL. The rule:
+
+- **Readings of the same quantity at the same shipped configuration ACCUMULATE.** That is the
+  anti-curation property and it is the one worth keeping: a reading does not stop counting
+  because it was filed under a different heading.
+- **When the configuration changes — arm length, workload, hotel, instrument method — the
+  campaign is RE-TAKEN AND REPLACES.** The old readings measure a different thing, and pooling
+  them would mix two quantities under one name.
+
+**AND POOLING CREATES A RATCHET, WHICH IS THE PRICE AND MUST BE BRAKED IN CODE.** A pooled max
+is **monotone non-decreasing**, so a pooled ceiling — and therefore the bound — **can only ever
+loosen.** G-020b's own 1.4550 -> 1.4557 is the first instance, and it rose **because more
+readings were pooled, not because the instrument got noisier** — which is not what the
+"degrades legibly" clause above attributes a rise to. Say which it was, every time.
+
+`sim-critic` showed the hole: with the only executed brake being `BOUND < SMALLEST`, a ceiling
+of 2.0600 and a self-consistent bound of 2.0649 **passed every check and shipped green — a 106%
+"noise" figure.** The "too noisy to gate" clause was prose nothing executed.
+
+**SO THE BRAKE MUST EXECUTE, AND ITS LIMIT MUST BE DERIVED.** Both margins equal
+`sqrt(SMALLEST / CEILING)`, and the gate is worth having only while it can absorb one excursion
+of the size the instrument has actually been observed producing — the worst loaded overshoot on
+record. Hence `CEILING <= SMALLEST / (worst loaded overshoot)^2`, which at G-020b's figures is
+`2.07 / 1.0973^2 = 1.7192`; the gate refuses to start above it, naming the instrument rather
+than the bound. **It is a sanity brake and not a tight limit** — the shipped ceiling sits 1.68x
+inside it and `BOUND < SMALLEST` remains the binding constraint in normal operation. What it
+stops is the ratchet running quietly to absurdity.
+
+**Scope.** It governs ratio bounds. It does not govern I5, whose budget is derived from a
+requirement rather than from a measurement (§2.1.2) and therefore has no margin to eat.

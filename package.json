@@ -12,6 +12,8 @@
     "check:purity": "node tools/gates/check-purity.mjs && depcruise --config .dependency-cruiser.cjs packages apps tools",
     "check:content": "node tools/gates/check-content.mjs",
     "check:measure": "node tools/gates/check-measure.mjs",
+    "check:tickcost": "node tools/gates/tripwire.mjs",
+    "check:tickcost:proof": "node tools/gates/check-tripwire.mjs",
     "test": "vitest run",
     "test:determinism": "node tools/gates/determinism.mjs",
     "test:save": "vitest run save",
