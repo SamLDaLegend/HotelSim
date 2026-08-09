@@ -1727,6 +1727,22 @@ When **G-012 to G-021** are `done`, that is a §5.4 escalation. Write it to
 `ESCALATIONS.md` and stop.
 
 **M2 exit additionally requires, per ADR-0013:**
+- **SCORE THE DIGEST EXPERIMENT HONESTLY — human ruling, 2026-08-09.** §4.1's digests are an
+  experiment, not a settled mechanism, and **they failed twice in their first day**: four
+  files gave three different answers to "where are we", and **the hand repair itself missed
+  `PARKING.md`** because its as-of line wraps. *"The mechanism needed a mechanical check
+  within a minute of being repaired by hand is as good an argument for DELETING it as for
+  automating it."* At M2 exit, say which — kept, automated, or deleted — **and say it against
+  the evidence rather than by preference.**
+- **THE NEXT MECHANISM PROPOSED TO MAINTAIN THE LEDGERS MUST ARGUE FOR ITSELF THE WAY A
+  FEATURE WOULD** (human, same ruling). At eighteen goals this repo holds **~5,600 lines of
+  markdown against 5,210 lines of simulation — near 1:1, with nobody having played the
+  game.** The ledgers have earned their keep: the parked-hypothesis chain, the ADR-0007
+  lineage, the digest catching stale state. But **a cycle was just spent repairing the
+  mechanism that maintains the summaries of the record, and then needing a mechanical check
+  for the repair.** That is process requiring process, *"which is the point at which
+  documentation starts consuming the attention it exists to save."* **Not a instruction to
+  write less — an instruction that the next ledger mechanism carries the burden of proof.**
 - **G-020 — THE TICK-COST TRIPWIRE — IS DONE.** Hard prerequisite of M3, by human ruling.
   This bullet exists because `sim-critic` found G-020 seeded with "M2 does not exit without
   it" while **neither this block nor the digest order mentioned it** — two of the three

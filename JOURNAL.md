@@ -1145,3 +1145,32 @@ out wrong is a finding of the same standing as one in the code.
 **And the sign the visibility ruling landed**: G-014b opens with a frame reference rather
 than a hypothesis — 180 regret episodes per simulated day under contention, absent at
 oversupply. Six goals ago that number did not exist and could not have.
+
+---
+
+## 2026-08-09 — The one trend worth tracking: where the unfailable-criterion class gets caught
+
+`ADR-0007`'s class — a criterion that cannot fail, or cannot detect what it claims — has
+been found **nine times** in this project. What has changed is not the rate but **when**:
+
+| goal | caught | by |
+|---|---|---|
+| G-001 | **after the fact** — `pnpm test -- world` filtered nothing and ran the whole suite green | the critic, post-BUILD |
+| G-009 | **at PLAN** — "zero guests served by an invalid room" | the **critic**, reviewing the plan |
+| G-013 | **at PLAN** — criterion 2 unmeetable by any correct build | the **builder**, auditing its own |
+| G-015 | **at PLAN** — a criterion with **no subject at all**, no v1 consumer existing | the critic, at §5.6 |
+| **G-019** | **BEFORE PLAN, from outside the loop** — the differential criterion cannot see three-quarters of the need vector | **the human, reading recordings** |
+
+> after the fact → at PLAN by the critic → at PLAN by the builder → **before PLAN, from
+> outside the loop.**
+
+**That curve is the best evidence this project has that the system is improving rather than
+merely running.** The defect rate is not obviously falling; **the cost of each instance
+is** — G-001's cost a round and a retraction, G-019's cost a paragraph written before a
+line existed.
+
+Worth stating what made the last one possible, because it is not a process change: **the
+human had recordings to read.** G-019's repair came from noticing that departure outcome is
+*identical* to `night_rest`'s outcome across three files — a fact invisible in code, in
+tests and in the ledgers, and legible in thirty seconds of a table built from watching.
+ADR-0013 bought that.

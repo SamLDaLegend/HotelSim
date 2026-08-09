@@ -90,6 +90,53 @@ function measure(args: readonly string[], gate: string = MEASURE) {
 const readingsOf = (stdout: string): readonly Reading[] => JSON.parse(stdout) as readonly Reading[];
 
 /**
+ * Run a COPY of `tools/gates`, with named files patched. Nothing under `tools/gates`
+ * changes, so no env var, flag or CI lever exists to pull — the only mutable version is a
+ * throwaway this file writes. G-018 round 3's technique, generalised here because G-020a
+ * needs it four times.
+ *
+ * `SAMPLES = 1` IS THE COMMONEST PATCH AND IT IS A COST FIX, NOT A WEAKENING. At the
+ * shipped 6, each of these probes spawned 12 node processes that each compile the whole
+ * simulation through tsx. The file reached ~40s and its slowest case 16s, inside a suite
+ * that is already oversubscribed — which made the I4 gate INTERMITTENT rather than red.
+ * `SAMPLES` is a method constant, not a threshold, and none of these probes is a claim
+ * about timing precision: they are claims about which verdict the instrument selects and
+ * whether it refuses. What the patch removes is covered by reading the shipped source
+ * instead — see 'THE SHIPPED METHOD IS WHAT IT CLAIMS TO BE' below.
+ */
+function withGateCopy<T>(patches: readonly { file: string; patch: (source: string) => string }[], use: (gate: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), 'hotelsim-measure-probe-'));
+  try {
+    cpSync(GATES, join(dir, 'gates'), { recursive: true });
+    for (const { file, patch } of patches) {
+      const target = join(dir, 'gates', file);
+      const source = readFileSync(target, 'utf8');
+      const patched = patch(source);
+      expect(patched, `patch to ${file} matched nothing`).not.toBe(source);
+      writeFileSync(target, patched);
+    }
+    // The copy sits outside the repo, so its own `../..` would point at nothing. Both roots
+    // are rewritten to the real ones, exactly as `bench.budget.test.ts` rewrites `ROOT`.
+    const gate = join(dir, 'gates/measure.mjs');
+    writeFileSync(
+      gate,
+      readFileSync(gate, 'utf8')
+        .replace("const REPO_ROOT = resolve(GATES, '../..');", `const REPO_ROOT = ${JSON.stringify(ROOT)};`)
+        .replace('const WORKING_TREE = REPO_ROOT;', `const WORKING_TREE = ${JSON.stringify(ROOT)};`),
+    );
+    return use(gate);
+  } finally {
+    // A directory this test created, containing only files it copied. `cpSync` copies
+    // contents rather than links and `tools/gates` has none anyway — which is what keeps
+    // this from being G-015's `rm -rf` accident.
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** The one patch used by every probe that does not care how precisely the arms are timed. */
+const oneSample = { file: 'measure.mjs', patch: (s: string) => s.replace(/^const SAMPLES = \d+;$/m, 'const SAMPLES = 1;') };
+
+/**
  * The workload run HERE, through the real zod-validated loader and the real `schedule()`.
  *
  * This is the reference the instrument's arms are checked against, and the reason it is a
@@ -149,12 +196,16 @@ describe('THE WORKLOAD IS SINGLE-SOURCED — one copy, and the goldens are taken
 describe('THE INSTRUMENT MEASURES WHAT IT SAYS IT MEASURES', () => {
   let readings: readonly Reading[];
 
-  // ONE RUN, MANY ASSERTIONS. A measurement is ~17s — six samples per arm, each its own
-  // process — so the arms are measured once here and every claim below reads from that one
-  // run rather than paying for its own. `--null` is used because it is the only mode whose
-  // two arms MUST agree on everything except bytes: same revision, one comment apart.
+  // ONE RUN, MANY ASSERTIONS. Every claim below reads from a single measurement rather than
+  // paying for its own. `--null` is used because it is the only mode whose two arms MUST
+  // agree on everything except bytes: same revision, one comment apart — so the state hash
+  // cross-check below is exact rather than approximate.
+  //
+  // At `SAMPLES = 1`, for the reason given on `withGateCopy`: none of these assertions is
+  // about timing precision, and at the shipped 6 this hook alone spawned 12 processes and
+  // cost ~23s under load. The shipped method is pinned by reading it, below.
   beforeAll(() => {
-    const result = measure(['--null', '--json']);
+    const result = withGateCopy([oneSample], (gate) => measure(['--null', '--json'], gate));
     expect(result.status).toBe(0);
     readings = readingsOf(result.stdout);
   }, 120_000);
@@ -214,34 +265,7 @@ describe('THE INSTRUMENT REFUSES — observed, not read', () => {
     breakIt: (source: string) => string,
     assert: (result: ReturnType<typeof measure>) => void,
   ) => {
-    const dir = mkdtempSync(join(tmpdir(), 'hotelsim-measure-probe-'));
-    try {
-      cpSync(GATES, join(dir, 'gates'), { recursive: true });
-      const copy = join(dir, 'gates/measure.mjs');
-      const broken = join(dir, 'gates', file);
-      const source = readFileSync(broken, 'utf8');
-      const mutated = breakIt(source);
-      expect(mutated).not.toBe(source);
-      writeFileSync(broken, mutated);
-      // The copy sits outside the repo, so its own `../..` would point at nothing. Both
-      // roots are rewritten to the real ones, exactly as `bench.budget.test.ts` rewrites
-      // `ROOT` — everything else about the instrument is the shipped file.
-      writeFileSync(
-        copy,
-        readFileSync(copy, 'utf8')
-          .replace(
-            'const REPO_ROOT = resolve(GATES, \'../..\');',
-            `const REPO_ROOT = ${JSON.stringify(ROOT)};`,
-          )
-          .replace('const WORKING_TREE = REPO_ROOT;', `const WORKING_TREE = ${JSON.stringify(ROOT)};`),
-      );
-      assert(measure(['--null', '--json'], copy));
-    } finally {
-      // A directory this test created, containing only files it copied. `cpSync` without
-      // `verbatimSymlinks` copies contents rather than links, and `tools/gates` has none
-      // anyway — which is what keeps this from being G-015's `rm -rf` accident.
-      rmSync(dir, { recursive: true, force: true });
-    }
+    withGateCopy([oneSample, { file, patch: breakIt }], (gate) => assert(measure(['--null', '--json'], gate)));
   };
 
   it('when a module resolves OUTSIDE its arm — the G-018 leak, planted deliberately', () => {
@@ -273,18 +297,13 @@ describe('THE INSTRUMENT REFUSES — observed, not read', () => {
     // resources, so the first commit that changes how many guests arrive must not turn a
     // tick-cost tripwire red for something that is not a regression.
     //
-    // `SAMPLES` is dropped to 1 IN THE COPY. That is a method constant, not a threshold,
-    // and this probe is about which VERDICT the instrument selects rather than about how
-    // precisely it times — so the 13s of sampling would buy the assertion nothing.
     withBrokenCopy(
       'measure.mjs',
       (source) =>
-        source
-          .replace(/^const SAMPLES = \d+;$/m, 'const SAMPLES = 1;')
-          .replace(
-            '      witnesses.set(arm.name, reported);',
-            '      witnesses.set(arm.name, arm.name.startsWith("base") ? { ...reported, arrived: reported.arrived + 1 } : reported);',
-          ),
+        source.replace(
+          '      witnesses.set(arm.name, reported);',
+          '      witnesses.set(arm.name, arm.name.startsWith("base") ? { ...reported, arrived: reported.arrived + 1 } : reported);',
+        ),
       (result) => {
         expect(result.status).toBe(0);
         const [reading] = readingsOf(result.stdout);
@@ -360,6 +379,46 @@ describe('THE OTHER TWO VERDICTS ARE REACHABLE, AND EACH SAYS WHICH IT IS', () =
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('ERROR  sim:measure');
   }, 60_000);
+});
+
+describe('THE SHIPPED METHOD IS WHAT IT CLAIMS TO BE', () => {
+  // THE PROBES ABOVE RUN AT `SAMPLES = 1`, so this block is what covers the method they no
+  // longer exercise. It reads the shipped source rather than running it — which is the
+  // right trade for a set of constants, and the wrong one for a REFUSAL, which is why the
+  // refusals are still executed.
+  const SOURCE = readFileSync(MEASURE, 'utf8');
+  const ARM = readFileSync(join(GATES, 'arm/measure-arm.mjs'), 'utf8');
+
+  const constantIn = (source: string, name: string): number => {
+    const found = new RegExp(`^const ${name} = (\\d+);$`, 'm').exec(source);
+    if (found?.[1] === undefined) throw new Error(`${name} is no longer a plain constant`);
+    return Number(found[1]);
+  };
+
+  it('takes at least 5 samples per arm, which is the criterion\'s own words', () => {
+    expect(constantIn(SOURCE, 'SAMPLES')).toBeGreaterThanOrEqual(5);
+  });
+
+  it('and an EVEN number of them, because the arm order alternates', () => {
+    // Not decoration: the arms alternate which goes first, so an odd count hands one arm an
+    // extra first place. That is the position bias the null experiment measured at ~33%
+    // before the instrument moved to one arm per process.
+    expect(constantIn(SOURCE, 'SAMPLES') % 2).toBe(0);
+    expect(SOURCE).toContain('sample % 2 === 0 ? arms : [...arms].reverse()');
+  });
+
+  it('and discards warm-ups inside each process before the runs it reports', () => {
+    expect(constantIn(ARM, 'WARM_UPS')).toBeGreaterThanOrEqual(1);
+    expect(constantIn(ARM, 'TIMED_RUNS')).toBeGreaterThanOrEqual(1);
+    expect(ARM).toContain('for (let i = 0; i < WARM_UPS; i += 1) once(loaded);');
+  });
+
+  it('and times run() only — not the world build, not the schedule, not the process', () => {
+    // If the clock ever started before `createWorld`, the measurement would include content
+    // binding and command construction, neither of which is tick cost.
+    const timed = ARM.slice(ARM.indexOf('function once('), ARM.indexOf('let report;'));
+    expect(timed).toMatch(/const started = process\.hrtime\.bigint\(\);\s*\n\s*const after = sim\.run\(/);
+  });
 });
 
 describe('IT REPORTS A RATIO AND STORES NO NUMBER FOR ANOTHER SESSION TO COMPARE AGAINST', () => {
