@@ -1538,6 +1538,36 @@ Critique rounds used: 1/3
 ## G-020b — The tick-cost tripwire: a bound, a verdict, and proof of bite
 Status: pending — **HARD PREREQUISITE OF M3. M2 does not exit without it.**
 
+  **G-020b IS BUILDABLE, AND THE ORCHESTRATOR'S CLAIM THAT IT WAS NOT IS WITHDRAWN.**
+
+  I reported that G-020a *"established the repo cannot measure at the precision a tripwire
+  needs"*. **That was wrong, and I derived it from the wrong figure.** Checked in the code
+  rather than the plan:
+
+  > `measure.mjs:330-346` — **six samples per arm, arms INTERLEAVED at the process level
+  > with the first-mover ALTERNATING**, warm-up discarded, medians. `SAMPLES = 6` and *"the
+  > parity is load-bearing"*, because the null experiment showed the second arm in a round
+  > pays ~33% for the first one's garbage and an odd count re-opens that bias.
+
+  **It is a paired interleaved ratio instrument by construction — `CLAUDE.md` rule 2's own
+  method — not an absolute one.** So the human's concern that it might have *"inherited an
+  absolute tripwire by default"* does not apply.
+
+  **What the ±10% actually is**: the spread of **that ratio** across repetitions of a
+  six-sample invocation, near 1.0. It is not a single-reading absolute. **A `--repeat 7`
+  median is ~±3%**, which is within touching distance of the ±2% `CLAUDE.md` records for
+  G-012's three independent campaigns — and those measured a **2.3× effect across hours**,
+  not a 1.0× null in one sitting, so they were never the like-for-like comparison I treated
+  them as.
+
+  **THE QUESTION THAT DECIDES THE BOUND, AND IT IS STILL UNANSWERED — ANSWER IT AT PLAN:**
+  *what class of regression is this for?* **Every performance defect this project has
+  actually produced was a MULTIPLE** — 2.32×, 235% of budget, two quadratic folds. **None
+  was a 10% creep.** If the subject is algorithmic regression, **a ~1.15× bound at ±3%
+  precision is comfortable and the tool's inability to resolve 10% is irrelevant rather
+  than fatal.** If the plan comes back measuring single readings or chasing a drift-scale
+  bound, G-020a's finding has correctly killed the goal and it is re-scoped or closed.
+
   **TWO OBLIGATIONS INHERITED WITH DIAGNOSES ATTACHED — both are pending rulings, and a
   pending ruling whose urgency has just been reduced is a pending ruling that dies.**
 

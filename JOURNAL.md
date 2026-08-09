@@ -1331,3 +1331,36 @@ criterion 1 carrying the identical defect. The digest claimed "all six green" wh
 said otherwise. The unreliable count was **1 in the authoritative record and 2 in every
 other**, because nobody had picked the noun. And `git add -A` swept **1,741 lines** of this
 goal's code into a commit titled `docs:`.
+
+---
+
+## 2026-08-09 — A withdrawal: the instrument was never the absolute one I called it
+
+**I told the human G-020a had "established that this repo cannot measure at the precision a
+tripwire needs", and put it in the commit message. It is withdrawn.**
+
+The human pushed back that the tripwire does not need absolutes — `CLAUDE.md` rule 2 records
+G-012 measured against HEAD three times at **2.41 / 2.37 / 2.32×**, ~±2%, across hours in
+which absolutes moved by nearly 2× — and asked whether G-020b had *inherited an absolute
+tripwire by default*.
+
+**I checked the code rather than the plan, and the answer inverts the question.**
+`measure.mjs:330-346` already takes **six samples per arm, interleaved at the process level,
+with the first-mover alternating** — because the null experiment showed the second arm in a
+round pays ~33% for the first one's garbage. **It is rule 2's own method, in code.**
+
+**So the ±10% is the spread of a paired ratio, not of an absolute** — and my sentence
+implied the tool measures single readings, which it does not. **A `--repeat 7` median is
+~±3%.** And the ±2% I was implicitly comparing against came from **three independent
+campaigns measuring a 2.3× effect**, not one six-sample invocation resolving a 1.0× null:
+never the like-for-like comparison I treated it as.
+
+**The consequence is that G-020b is buildable and I had written it off.** A ~1.15× bound at
+±3% is comfortable. The question that actually decides it is the human's and is still open:
+**what class of regression is this for?** Every performance defect this project has produced
+was a *multiple* — 2.32×, 235% of budget, two quadratic folds. **None was a 10% creep.**
+
+**The shape of my error, since it is the same one twice in one goal**: I took a number
+(±10%), attached it to the wrong referent (single readings rather than ratio spread), and
+built a conclusion strong enough to kill a goal. `CLAUDE.md` rule 4 — *cite the workload
+with the number* — exists for exactly this, and I applied it to builders all session.

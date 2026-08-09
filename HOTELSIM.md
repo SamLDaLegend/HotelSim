@@ -198,6 +198,8 @@ A criterion that uses a perceptual word — visibly, reads as, looks — needs a
 
 (Added 2026-08-08 by human ruling — ADR-0013 §7.)
 
+ANY COUNT IN A DIGEST NAMES ITS UNIT (added 2026-08-09, human). Gates, tests, files and findings are FOUR DIFFERENT DENOMINATORS and the digests have mixed them — the unreliable-gate count read 1 in one record and 2 in another purely because nobody had said which noun it counted. THIS IS THE SECOND TIME A MEASUREMENT DISAGREEMENT HERE RESOLVED TO A DEFINITION RATHER THAN A DEFECT; G-016's absolutes-versus-ratios was the first.
+
 Each of GOALS.md, DECISIONS.md, JOURNAL.md and PARKING.md carries a rolling digest at the top under a fixed heading. Fifteen lines maximum. It is REWRITTEN at every REFLECT and never appended to. It carries: current schema version, current gate readings, live obligations owed by future goals, and open contradictions. The append-only history stays exactly as it is beneath it.
 
 The reason: the four ledgers passed 2,800 lines and JOURNAL.md — which calls itself the memory that survives compaction — is a quarter of that. An ADR amendment has already spent a day filed under the wrong ADR.
@@ -252,6 +254,16 @@ G-013 is the case that produced this rule. Its builder wrote "this is the fattes
 The agent that bears the cost of a fat goal is the CRITIC, who has to sweep it — and until now it had no voice until after the code existed. Before BUILD, the matched critic sees the plan and may raise one objection: THIS SCOPE IS TOO LARGE TO SWEEP IN THE ROUND BUDGET, and here is the seam.
 
 Scope only. Not design, not approach, not test strategy — those are the orchestrator's at PLAN review and the critic's after BUILD. This is the cheapest possible moment to split, and it puts the objection where the incentive already is.
+
+5.8 A FIX ON A KNOWN CLASS MUST STATE WHERE ELSE THAT CLASS LIVES
+
+(Added 2026-08-09 by human ruling.)
+
+When a fix lands on an instance of a class this project already names — a vacuous check, an unsourced number, a claim nothing pins, a criterion that cannot fail — THE SAME COMMIT MUST STATE WHERE ELSE THAT CLASS LIVES AND WHETHER IT WAS CHECKED. Not a promise to check. A STATED RESULT: "criterion 1 checked, clean" or "criterion 1 carries it, fixing".
+
+That converts a reflex into something falsifiable at REFLECT, exactly as §5.5's seam prediction does.
+
+THE CASE THAT PRODUCED IT: at G-020a the orchestrator corrected exit criterion 2 for naming an unmeetable command, and LEFT CRITERION 1 CARRYING THE IDENTICAL DEFECT EIGHT LINES AWAY. It was found two rounds later by the critic. The rule was known and was applied outward and not inward — the same shape as the orchestrator exempting itself from CLAUDE.md rule 5. This rule would have caught it for free, because the twin was eight lines from the fix.
 
 5.7 THE ORCHESTRATOR'S OWN CLAIMS ARE IN SCOPE FOR THE GOAL'S CRITIC
 
@@ -383,7 +395,9 @@ RULED 2026-08-09 (human) — THE TRIGGER IS SPLIT BY SUBJECT, because four firin
 
   A CODE finding on re-examination -> the budget conversion stands EXACTLY as written. That is the original signal — fixes spawning defects — and it is the one that genuinely indicates a diff nobody can hold in one head.
 
-  THE CODE ARM IS A HYPOTHESISED TRIGGER WITH ZERO OBSERVATIONS, and is labelled so deliberately. Four firings, four on prose, none on code. IF IT IS STILL UNFIRED TEN GOALS OUT, RETIRE IT rather than let it accrue a reputation the prose arm earned. That is the same scoring discipline §5.5 applies to seams and §2.1 applies to bounds, turned on a rule of the charter itself.
+  THE CODE ARM IS LIVE, WITH ONE OBSERVATION — G-020a, 2026-08-09 (a workflow-slice check that failed OPEN on a renamed boundary). Five firings: four prose, one code. THE RETIREMENT CLAUSE IS DROPPED, its condition having been met. Small sample; treat the code arm as live rather than proven.
+
+AND THE PROSE ARM WORKED EXACTLY AS RULED, WHICH IS WORTH RECORDING AS MORE THAN "DID NOT BREAK": G-020a's final pass returned a BLOCKER and five MAJORs, ALL PROSE, and the goal CLOSED WITHOUT ESCALATING AND WITHOUT CONSUMING A ROUND. Under the pre-split rule those six findings would have converted, spent the budget and escalated a goal whose code was clean.
 
 THE ORIGINAL PREDICTION, KEPT BECAUSE IT WAS SCORED AND THAT IS THE POINT (human, 2026-08-08). It has fired exactly once — on G-013, the goal that produced it, and on PROSE rather than on code. The registry it was guarding needed no correctness fix at any point. If the next several firings are also prose, then the guard is a prose-quality instrument wearing a critique-budget costume, and it should be RENAMED AND RE-SCOPED rather than left to accumulate a reputation it did not earn. Record each firing with its subject: code or prose. This prediction is written down now so it can be wrong later — an unscored prediction is prose, which is the same rule §5.5 applies to seams.
 
