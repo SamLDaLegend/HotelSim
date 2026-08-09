@@ -1226,6 +1226,31 @@ Exit criteria:
     tie rule of **this goal's** decision: equal-pressure challengers by lower need id, equal
     -fit providers of the challenger by lower entity id, on TWO insertion orders, **with the
     exact boundary driven both ways — `diff = margin - 1` stays, `diff = margin` switches.**
+    **The equal-fit-provider half is ALSO already discharged** (`utility.tiebreak.test.ts`
+    :109 and :141, through the same `findFreeRoom` path) — keep it only as labelled path
+    coverage, never as evidence. *Fourth time this list has needed the same repair.*
+  - **CRITERION 5, NEW — THE MARGIN IS BOUNDED FROM BELOW, BY A TEST THAT COMPUTES THE
+    BOUND FROM CONTENT** (`ai-critic`, §5.6 MAJOR 2). Criterion 2's three terms bound the
+    margin from ABOVE and not from below: **`M = 1` basis point satisfies all three** —
+    abandonments many, fewer than at margin 0, and greater than zero — **while shipping pure
+    thrash.** The only thing forbidding it was the `M >= 6000` derivation, which lived in
+    prose and in nothing that executed. *That is verbatim the defect `abcb497` fixed in
+    G-019 two commits ago and the one G-020b spent three rounds on.* The test reads
+    `min patienceTicks` over **engagement** need types and `max satisfyTicks` off
+    `needTypesInOrder` — **not literals** — and asserts the shipped margin clears the bound.
+    **The same computed bound is a FOURTH condition on the conditional seam trigger**, whose
+    other three are all *more* easily satisfied as M falls toward 0 — so without it a builder
+    tuning M downward discharges the trigger by doing the thing the trigger exists to stop.
+  - **CRITERION 6, NEW — THE WATCH OBLIGATION, WHICH THE G-014 SPLIT LOST** (`ai-critic`,
+    §5.6 MAJOR 3; §5.7 — an orchestrator-side omission). G-014's block carried it verbatim:
+    *"record a run, watch a guest choose, and say in `JOURNAL.md` whether the hysteresis
+    margin looks like commitment or like dithering… a margin tuned to a counter alone is
+    tuned to the only thing that can be measured, which is exactly the trap ADR-0013 was
+    written about."* **When G-014 split, that sentence stayed with G-014a — the half that
+    does not ship a margin — and G-014b's criteria never carried it.** The goal where the
+    counter and the eye can disagree is this one. Recorded at the contended configuration
+    where the margin actually bites, and **a human looks**: the agent may not claim the
+    perceptual half (WATCH #2).
   - the same run reports zero stuck guests
   - all §2 invariant gates green (pnpm verify)
 Out of scope: distance or travel time as a score term (M3); reputation or price (M4);
@@ -1303,6 +1328,44 @@ Critique rounds used: 0/3
   **RUN THE §5.5 SEAM QUESTION AT PLAN.** Taking the seam at G-014a does not bank the
   obligation. §5.6 and §5.7 both apply — the critic sees the plan, and the criteria above are
   the orchestrator's claims and are in scope.
+
+  ---
+
+  **THE MARGIN'S DERIVATION — RULED 2026-08-09 AFTER `ai-critic`'s §5.6 MAJOR 1, AND THE
+  RULING CONTAINS A DESIGN FINDING BIGGER THAN THE GOAL.**
+
+  The plan derived `M >= 6000` from a dwell formula and attached it to the requirement *"a
+  guest can complete its longest engagement."* **The formula computes a REVERSE switch and
+  the requirement is about ANY engagement, and they are not the same quantity.** A served
+  need regenerates patience (`needs.ts:401`) while a waiting one burns it, so the gap swings
+  at the two rates combined; a *first* switch needs the gap to travel only `M`, a *reverse*
+  switch `2M`. Half the dwell.
+
+  **Checked against the shipped table** (`need-types.json`: engagement patience 300/360/300,
+  `satisfyTicks` 150/150/180; `night_rest` is excluded from the scoring loop at
+  `guests.ts:1428`, so `min patienceTicks` means **min over ENGAGEMENT need types = 300**,
+  not 180 — the two readings differ by the whole feature):
+
+  | requirement | required M | verdict |
+  |---|---|---|
+  | complete the LONGEST engagement (180 ticks) | **12000** | **impossible — over the 10000 ceiling** |
+  | complete the SHORTEST engagement (150 ticks) | **10000** | **the saturating margin criterion 2 forbids** |
+  | do not switch BACK within the longest engagement (180) | **6000** | sound, and shipped |
+
+  **SO NO NON-SATURATING MARGIN CAN GUARANTEE A GUEST COMPLETES AN ENGAGEMENT IT STARTS.
+  That is structural, not a tuning failure** — a margin governs the *gap*, and the gap keeps
+  moving while a guest is served. Guaranteeing completion needs a **dwell term** (a minimum
+  engaged duration), which is a different mechanism.
+
+  **RULING.** The requirement is restated to the quantity the formula actually computes —
+  **"a guest that has just switched does not switch back within the longest engagement"** —
+  under which `M >= 6000` is derived rather than chosen, and §2.1 is satisfied. **The
+  stronger property is NOT quietly dropped**: it goes to `PARKING.md` as a dwell term, with
+  its falsification test attached — *count, in a recording at the shipped margin, guests that
+  abandon an engagement with more than half its `satisfyTicks` of progress; if that count is
+  material, the margin alone is insufficient and a dwell term earns its goal.* The worked
+  reachable case is already in hand: two needs at pressure 3333, a provider frees, and at
+  `M = 6000` the guest abandons after 90 ticks carrying 90 of 180 progress.
 
 ## G-019 — Reviews, and a hotel that reviews differently from a bad one
 Status: pending

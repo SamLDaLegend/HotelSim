@@ -1037,3 +1037,35 @@ changed one constant, its derivation, and the records that quoted it.
   ever produces a disputed reading, run `--repeat 5` and compare the median against the single
   reading; *if they differ by more than the 2.29% real-pair overshoot, the single reading was
   not enough and the gate's default should change.*
+
+## Deferred during G-014b — the dwell term (2026-08-09)
+
+- **A DWELL TERM: a minimum engaged duration, distinct from the abandon margin.** Ruled out
+  of G-014b at PLAN after `ai-critic`'s §5.6 MAJOR 1 established that **no non-saturating
+  margin can guarantee a guest completes an engagement it starts.** A margin governs the
+  *gap* between two needs' pressure, and the gap keeps moving while a guest is served —
+  patience regenerates on the served need (`needs.ts:401`) and burns on the waiting one, so
+  the two rates combine. Against the shipped table (engagement patience 300/360/300,
+  `satisfyTicks` 150/150/180): completing the longest engagement needs `M >= 12000`, which is
+  **over the 10000 ceiling**; completing the shortest needs `M >= 10000`, which is the
+  saturating margin that turns the feature off. Only the reverse-switch property is reachable,
+  and that is what G-014b ships at `M >= 6000`.
+  **FALSIFICATION TEST, attached per §4**: in a recording at the shipped margin, count guests
+  that abandon an engagement carrying more than half its `satisfyTicks` of progress. *If that
+  count is material, the margin alone is insufficient and a dwell term earns its own goal; if
+  it is near zero, the reachable case is a corner and this stays parked.* The worked reachable
+  case is already in hand — two needs at pressure 3333, a provider frees, and at `M = 6000` the
+  guest abandons after 90 ticks with 90 of 180 progress. **-> M3, or the first goal that finds
+  the count material.**
+- **PROVIDER-UPGRADING WITHIN ONE NEED.** G-014b rules the within-need choice **totally
+  committed** — a guest never leaves a half-eaten meal to eat the same meal at a nicer table.
+  Fit is ordinal by ruling (`schema.ts:78-88`, and `utility.test.ts` proves an order-preserving
+  relabel is byte-identical), so a margin denominated in fit would make inert magnitudes
+  load-bearing and owe derivations under §2.1 that nobody can supply.
+  **FALSIFICATION TEST**: count, in a recording, switches between two providers of the *same*
+  need per simulated day. *If a future goal wants this, that count is the number it must move;
+  if it is zero under contention, the commitment is already total in practice and the question
+  is closed.* **-> M3, after travel time makes the trade real.**
+- **A `bindContent` REFUSAL OF A TWITCHY MARGIN.** Rejected for G-014b because margin 0 must
+  stay loadable — it is the thrash control arm criterion 3 depends on. Revisit only if a
+  content-authoring path outside the test suite can set it. **-> M6.**
