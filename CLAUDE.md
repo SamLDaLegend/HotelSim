@@ -112,17 +112,28 @@ stopped at the test files.
    absolutes moved by nearly 2×.
 3. **Never compare an absolute against a figure recorded in another session**, including
    ones in `GOALS.md`, `PARKING.md` or a code comment. If you need to, re-measure both.
-4. **A number carries FOUR slots, and a citation missing one is unpinned:**
-   **what it measured · over what workload · at what sample count · aggregated how.**
-   *(Amended 2026-08-09, human. It read "cite the workload with the number" — and
-   **workload is one referent among several**, so the rule pointed at the slot that was
-   already understood. **Three referent errors happened in G-020a alone, across two
-   people, one enforcing this rule outward at the time and one who wrote it**: ±10% read
-   as a single-reading absolute when it was a ratio spread; 2.41/2.37/2.32× cited as a
-   commit pair when it measured a state never committed; and that same ±2% compared
-   against a six-sample invocation when it came from three campaigns resolving a 2.3×
-   effect. **All three were about what the number is a measurement OF.** Four slots is
-   mechanical enough to check at REFLECT and would have caught every one.)*
+4. **A number carries FIVE slots, and a citation missing one is unpinned:**
+   **what it measured · over what workload · at what sample count · aggregated how ·
+   under what REGIME.**
+
+   *Grew twice in one day, both human rulings, both after the rule failed on the slot it
+   did not name.* It began as *"cite the workload with the number"* — and **workload is
+   one referent among several**, so it pointed at the slot already understood. **Three
+   referent errors in G-020a alone, across two people, one enforcing the rule outward and
+   one who wrote it**: ±10% read as a single-reading absolute when it was a ratio spread;
+   2.41/2.37/2.32× cited as a commit pair when it measured a state never committed; and
+   that ±2% compared against a six-sample invocation when it came from three campaigns
+   resolving a 2.3× effect. **All three were about what the number is a measurement OF.**
+
+   *Then* **regime** caused three more in G-020b: `needs.scaling`'s "eaten margin" was
+   contention and was withdrawn; a `--null` campaign claimed all four slots and gave no
+   load condition; and a claim about `verify.mjs` running gates sequentially stood in for
+   a claim about the machine, on a CI matrix nobody has measured. **In every case the
+   number was wrong because nobody said which machine state produced it.**
+
+   **Regime is quiet vs loaded, AND the machine** — a 12-core developer box and a shared
+   2-vCPU runner are different regimes, and a ratio taken on one does not transfer.
+
 5. **A number you cannot re-measure paired is withdrawn, not restated.** If the change
    still stands on an argument that needs no stopwatch, say that instead.
 

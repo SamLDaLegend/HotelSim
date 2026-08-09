@@ -198,6 +198,8 @@ A criterion that uses a perceptual word — visibly, reads as, looks — needs a
 
 (Added 2026-08-08 by human ruling — ADR-0013 §7.)
 
+A NUMBER CARRIES FIVE SLOTS (CLAUDE.md rule 4, fifth added 2026-08-09 by human ruling): what it measured, over what workload, at what sample count, aggregated how, and UNDER WHAT REGIME. Regime caused three findings in G-020 alone and in each the number was wrong because nobody said which machine state produced it.
+
 ANY COUNT IN A DIGEST NAMES ITS UNIT (added 2026-08-09, human). Gates, tests, files and findings are FOUR DIFFERENT DENOMINATORS and the digests have mixed them — the unreliable-gate count read 1 in one record and 2 in another purely because nobody had said which noun it counted. THIS IS THE SECOND TIME A MEASUREMENT DISAGREEMENT HERE RESOLVED TO A DEFINITION RATHER THAN A DEFECT; G-016's absolutes-versus-ratios was the first.
 
 Each of GOALS.md, DECISIONS.md, JOURNAL.md and PARKING.md carries a rolling digest at the top under a fixed heading. Fifteen lines maximum. It is REWRITTEN at every REFLECT and never appended to. It carries: current schema version, current gate readings, live obligations owed by future goals, and open contradictions. The append-only history stays exactly as it is beneath it.
