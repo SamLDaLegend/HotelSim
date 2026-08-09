@@ -169,6 +169,7 @@ Rules:
 Exit criteria must be commands, not adjectives. "Feels responsive" is not an exit criterion. "p95 lift wait under 90 ticks across 30 simulated days" is.
 Exactly one goal is in-progress at a time. No parallel goals.
 Anything discovered mid-goal that is not in the goal goes to PARKING.md. It does not get built now.
+PARK A HYPOTHESIS WITH ITS FALSIFICATION TEST ATTACHED. (Added 2026-08-09 by human ruling.) If the parked item is a guess about how the simulation behaves — not a feature, a belief — write down in the same entry what would confirm or refute it: the invocation, the reading, the comparison. It costs one extra sentence over parking a note, and it is what let G-013, G-017 and G-014a chain without any of them planning the next: G-013 parked "the engagement vector sums to the lodging budget" with its experiment, G-017's recording turned out to BE that experiment and returned positive, and G-014a then hit the knife-edge the hypothesis describes. A parked note is a reminder. A parked hypothesis with its test is a result waiting for a goal that happens to run it.
 A criterion that uses a perceptual word — visibly, reads as, looks — needs a perceptual check, or the word must come out (ADR-0013). Since 2026-08-08 the perceptual check exists: record a run and watch it (§5 WATCH).
 
 4.1 Ledger digests

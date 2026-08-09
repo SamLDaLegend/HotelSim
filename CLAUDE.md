@@ -173,6 +173,19 @@ inside the prompt meant to hunt it.
 - A "reads as stupid" finding now **requires a frame reference** — recording, tick number,
   what it shows. No frame, no finding.
 
+## Parking (§4)
+
+**Park a hypothesis with its falsification test attached** (human ruling, 2026-08-09). If
+the parked item is a *belief* about how the sim behaves rather than a feature, write down
+what would confirm or refute it — the invocation, the reading, the comparison. One extra
+sentence over parking a note.
+
+It is what let three goals chain without any of them planning it: G-013 parked "the
+engagement vector sums to the lodging budget" **with its experiment**, G-017's recording
+turned out to *be* that experiment and came back positive, and G-014a then hit the
+knife-edge the hypothesis describes. **A parked note is a reminder; a parked hypothesis
+with its test is a result waiting for a goal that happens to run it.**
+
 ## The other ledgers
 
 `DECISIONS.md` settled calls · `JOURNAL.md` what happened, per goal ·

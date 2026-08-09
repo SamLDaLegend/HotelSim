@@ -1065,3 +1065,41 @@ because linked `node_modules` made the HEAD worktree run branch code, and a `rm 
 measurement worktree followed a junction and emptied `node_modules`. Both reported, both
 recovered, and `sim-critic` verified the second independently — 42 status entries, **no
 deletions**, lockfile unmodified, `git fsck` clean.
+
+---
+
+## 2026-08-09 — WATCH #2 (G-017 criterion 1, partial) — the orchestrator scrubbed it
+
+**Criterion 1 is now split, honestly, and only half of it is discharged.**
+
+Driven in a real browser against the running `pnpm viewer`, with the recordings served as
+`.json` because `serve.mjs`'s `SAFE = /^[a-z0-9-]+\.(js|json)$/` refuses anything else —
+the bound set at §5.6 scope review holding, and refusing an underscore before it refused an
+extension.
+
+**Discharged — the FUNCTIONAL half.** A recording loads through the viewer's own change
+handler; 433 frames indexed; the scrubber enables and moves; frames render; the HUD reads
+`day 1 19:20 · frame 260/432 · tick 2600 · balance £6,155.00`; the `UNVERIFIED` content
+fingerprint label shows as designed. **It can be scrubbed frame by frame in a browser.**
+
+**NOT discharged — the PERCEPTUAL half, and it is not mine to take.** Whether a side-on
+cross-section *reads clearly* (ADR-0014) and whether behaviour *reads as stupid* (§6.1) are
+questions about a human looking, and a screenshot read by an agent is not a human looking.
+The distinction is real rather than a hedge: I could confirm the pixels exist; I cannot
+confirm they communicate.
+
+**What was visible, at `--amenities 5`, frame 260.** Six blue bedrooms on floor 0, each with
+an occupancy pip. The basement row: five orange games rooms, five green cafés, lounges.
+**Guests in GR13, C23, C24, L30 — and GR15/17/19/21, C25/26/27 and L28 standing empty.**
+G-014a's fix is visible: **the cafés are in use**, where WATCH #1 found all five serving
+nobody for sixty days. The residual concentration is visible too — lowest ids occupied, the
+rest inert — which is the M3 finding, seen rather than inferred.
+
+**What was visible at `--rooms 2 --arrivals 20`, frame 300**, which is the case G-017's
+MAJOR was about. Ground truth: **11 live guests, 2 holding a room, 9 roomless, 4 engaged.**
+So four guests sit in amenity rooms — **two drawn filled, two hollow** — and the OUTSIDE
+strip carries **7**, labelled on the canvas as a viewer convention rather than sim state.
+Before the fix all four rendered identically and a watcher saw a basement of contented
+eaters while 127 of 150 guests gave up waiting. **The state the fix exists for is reachable
+and on screen.** Whether the filled/hollow difference is legible at a glance is the half
+above.
