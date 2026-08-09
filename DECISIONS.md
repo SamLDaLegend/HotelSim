@@ -6,10 +6,11 @@
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent (G-013 paid v7; G-015 v8).
-- **Cited most, five amendments deep**: **ADR-0007** — a check that succeeds while inspecting
+- **Cited most, SIX amendments deep**: **ADR-0007** — a check that succeeds while inspecting
   nothing is not a check. Vacuous ≠ unreachable · promoted by a threshold, exit on one · a
-  threshold must itself be derivable · **deleting a bad check is not evidence a good one
-  exists** · **a comment offered as evidence may not carry a figure no test pins**.
+  threshold must itself be derivable · deleting a bad check is not evidence a good one
+  exists · a comment offered as evidence may not carry a figure no test pins · **a REPAIR of
+  this class is not exempt, and EXIT CRITERIA are where it certifies rather than misses.**
 - **Reading a defect count**: 3/3 is a near miss; counts across eras are not like-for-like.
 - **ADR-0013** (human) a perceptual criterion needs a perceptual check · **ADR-0014**
   placeholder art, M5 neither waits nor relitigates.
@@ -374,6 +375,36 @@ real backstop for a coverage percentage, which §9 already names as an anti-patt
 *(This amendment sat under ADR-0011 from 2026-08-08 until `economy-engineer` reported it
 at G-011 PLAN — an editing slip that made the human's dead-state ruling read as though it
 had also settled a question about defensive asserts. Moved to where it belongs.)*
+
+**AMENDMENT (G-014b PLAN, 2026-08-09) — A REPAIR OF THIS CLASS IS NOT ITSELF EXEMPT, AND
+THREE CONSECUTIVE ONES WERE NOT.**
+
+G-014b's exit criteria were written by the orchestrator *specifically to remove* instances
+of this class from the goal before it was built. `ai-engineer` found at PLAN that **three of
+the four had it anyway**:
+
+- **Criterion 2**, rewritten by the orchestrator as a differential precisely because the
+  original was satisfiable by not shipping the feature, **remained satisfiable by not
+  shipping the feature**: a saturating margin gives `abandoned(shipped) = 0`, and
+  `abandoned(0) > 0` still passes. The two-term form was the defect wearing the repair.
+- **Criterion 3**'s ruled repair was **self-contradictory**: it required margin 0 to
+  reproduce the pre-margin era, when margin 0 is the *opposite* end — maximum thrash. The
+  era that reproduces total commitment is the SATURATING margin.
+- **Criterion 4** was **already discharged verbatim** by a test shipped in the previous
+  goal, so it could be met by writing nothing at all.
+
+**The generalisation, and it is the useful part.** The class is usually described as a
+property of *checks*. These were three instances in **criteria** — the things that decide
+whether a goal is done — and criteria are worse, because a vacuous check fails to catch a
+defect while a vacuous criterion **certifies the goal**. The existing discipline points
+agents at their own assertions; nothing pointed anyone at the acceptance conditions until
+§5.7 made the orchestrator's claims reviewable, and this is that rule's first substantive
+return.
+
+**Consequence.** A goal block's exit criteria are read by the builder at PLAN against this
+ADR, in the same pass that reads the diff, and **finding one there is worth more than
+finding one in code** — it is the cheapest moment in the loop, before a line exists. It
+does not consume critique budget: §7.1's guard splits by subject, and a criterion is prose.
 
 ---
 

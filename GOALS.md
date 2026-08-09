@@ -1198,11 +1198,34 @@ Statement: A guest that has committed does not abandon unless an alternative bea
   content-defined margin, and abandonments are a reported outcome.
 Exit criteria:
   - `pnpm exec vitest run hysteresis`  (all green)
-  - **CRITERION 2, REPAIRED** — the same invocation under margin 0 and under the shipped
-    margin reports **strictly more abandonments under margin 0**. Two-sided and
-    differential, so it **cannot** be met by not implementing the feature.
-  - **CRITERION 3, REPAIRED — AND THE OBVIOUS REPAIR IS THE TRAP.** See below.
-  - two providers scoring EXACTLY equal choose the lower entity id, on TWO insertion orders
+  - **CRITERION 2, REPAIRED TWICE — THREE TERMS, NOT TWO.**
+    `abandoned(margin 0) > abandoned(shipped) > 0` at the criterion invocation.
+    **The two-term version I called "repaired" was still satisfiable by not shipping the
+    feature**: ship a saturating margin and abandonments are 0, margin-0 abandonments are
+    many, `many > 0` passes, and shipped behaviour is byte-identical to G-014a. The
+    mechanism would exist and be off in the game. `ai-engineer` found this at PLAN (F2).
+  - **CRITERION 3, REPAIRED AGAIN — AND MY OWN REPAIR WAS SELF-CONTRADICTORY (F1).**
+    Three arms, not two. **The era that reproduces the pre-margin literals exactly is the
+    SATURATING margin, not margin 0** — margin 0 is *maximum* thrash, the opposite end.
+    - `margin 10000` reproduces every Era-A counter **identically**, `abandoned` is 0 on
+      every row, **and `stateHash`/`contentFingerprint` DIFFER** — both halves asserted:
+      same behaviour, different content document.
+    - `margin 0` is the thrash control.
+    - the shipped margin sits between, and all three numbers are pinned as literals.
+    **Why saturation is unreachable, and pin it AT THE DEFINITION rather than by a grid of
+    constructed pairs** (orchestrator, checked in the code): `isPending` is *defined* as
+    `progressRemaining > 0 && patienceRemaining > 0` (`needs.ts:251`), so a pending need has
+    `patienceRemaining >= 1`, so `urgency < patienceTicks`, so `pressureBasisPoints`'
+    saturating branch (`utility.ts:118`) is **structurally unreachable** and pressure is at
+    most 9999. A grid over `(patienceRemaining, patienceTicks)` would sample that; tying the
+    test to `isPending`'s definition proves it.
+  - **CRITERION 4, REPLACED — THE OLD ONE WAS ALREADY TRUE BEFORE THIS GOAL STARTED (F5).**
+    "Two providers scoring exactly equal choose the lower entity id, on two insertion
+    orders" is discharged verbatim by G-014a's `utility.tiebreak.test.ts`. Nth instance of
+    the ADR-0007 class, in a criterion list I had already repaired twice. Replaced with the
+    tie rule of **this goal's** decision: equal-pressure challengers by lower need id, equal
+    -fit providers of the challenger by lower entity id, on TWO insertion orders, **with the
+    exact boundary driven both ways — `diff = margin - 1` stays, `diff = margin` switches.**
   - the same run reports zero stuck guests
   - all §2 invariant gates green (pnpm verify)
 Out of scope: distance or travel time as a score term (M3); reputation or price (M4);
@@ -1236,11 +1259,40 @@ Critique rounds used: 0/3
   That gives a test which **fails if the margin stops working AND fails if someone quietly
   reverts it.** Regenerating gives neither.
 
-  **IT OPENS WITH A FRAME REFERENCE RATHER THAN A HYPOTHESIS**, which six goals ago was not
-  possible: **180 regret episodes per simulated day under contention, absent at oversupply**
-  (0 of 721 frames at `--amenities 5`, against 718 of 721 at pre-G-014a HEAD). Its margin
-  therefore **has nothing to bite on when supply is plentiful**, and the criterion invocation
-  must be a contended one.
+  **~~IT OPENS WITH A FRAME REFERENCE RATHER THAN A HYPOTHESIS: 180 regret episodes per
+  simulated day under contention, absent at oversupply. Its margin therefore has nothing to
+  bite on when supply is plentiful, and the criterion invocation must be a contended
+  one.~~ WITHDRAWN 2026-08-09, ORCHESTRATOR — AND IT WAS BACKWARDS.**
+
+  **F4 — the 180 figure is unpinned.** It appears in `GOALS.md` and `JOURNAL.md` and nowhere
+  else: no definition, no invocation, no method exists in the repo. `CLAUDE.md` rule 5 says a
+  number you cannot re-measure is **withdrawn, not restated**, so it is struck rather than
+  requoted. On the only reconstruction consistent with its own control (0 of 721 frames at
+  `--amenities 5` against 718 of 721 pre-G-014a), it measured **provider-level regret within
+  ONE need** — which is exactly what G-014a's fit fix removed, and **is not the quantity this
+  goal's margin governs.** `ai-engineer` found this and correctly declined to restate it.
+
+  **F3 — and the instruction I derived from it points the wrong way.** Abandonment
+  structurally requires a **FREE provider** for the challenger need (`guests.ts:1442-1443` —
+  `findFreeRoom` returns null and the need is skipped). **Scarcity SUPPRESSES abandonment; it
+  does not create it.** Measured at PLAN — *abandonment-opportunity guest-ticks per simulated
+  day at margin 0 · `--days 10 --seed 7 --rooms 6`, amenities and arrival gap varied · n=1 per
+  configuration, which is complete rather than thin because this is a DETERMINISTIC count
+  under I2, not a timing · total ÷ 10 simulated days · regime irrelevant by construction,
+  taken quiet on `win32`/12 cores*:
+
+  | invocation | opportunity guest-ticks/day at M=0 |
+  |---|---|
+  | `--arrivals 60 --amenities 1` | **128.4** |
+  | `--arrivals 60 --amenities 3` | **6001.0** |
+
+  **A factor of 47, in the direction opposite to my instruction.** So the criterion invocation
+  is **CHOSEN BY MEASUREMENT over an amenity sweep, not asserted**. The candidate —
+  `--days 30 --seed 7 --rooms 6 --arrivals 60 --amenities 3` — is 24 arrivals/day at 6 rooms,
+  which **is the middle-band configuration G-019 and M2 exit separately owe.** That
+  convergence is convenient rather than load-bearing, and neither goal may lean on the other's
+  run: **G-019's WATCH obligation is a recording a human looked at**, not a criterion
+  invocation that happened to share its flags.
 
   **`abandoned` IS A ROW ON `NeedOutcome`, NOT IN G-015's DEPARTURE TABLE.** A guest departs
   exactly once but abandons zero or many times, so a row in that table would force the
