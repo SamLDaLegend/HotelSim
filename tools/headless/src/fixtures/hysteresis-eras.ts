@@ -98,3 +98,21 @@ export const ERA_A_EXPECTED_DIFFERENCE = 'world.stateHash';
  * would silently stop covering a field the next goal adds.
  */
 export const NEED_KEY_ADDED_AT_G014B = 'abandoned';
+
+/**
+ * The top-level block `RunSummary` gained at G-019, absent from the document above.
+ *
+ * Named here for the reason `NEED_KEY_ADDED_AT_G014B` is: the era comparison says "every
+ * field this document has, plus exactly these" rather than hand-listing what it compares.
+ *
+ * AND IT IS TREATED MORE WEAKLY THAN `abandoned`, DELIBERATELY. That key could be asserted
+ * at ZERO — the only value a total-commitment era can produce — before being removed, which
+ * makes its removal a measurement. THERE IS NO EQUIVALENT CLAIM HERE: this era predates
+ * reviews entirely, so the frozen document says nothing about what its guests would have
+ * thought of the place, and any value asserted for them would be this build's answer
+ * dressed as history. What the comparison asserts instead is that the frozen document has
+ * NO such key (so it really does predate the block) and that the current one CONSERVES
+ * against its own departures. Stated here so the difference in strength is visible rather
+ * than looking like an oversight.
+ */
+export const REPORT_BLOCK_ADDED_AT_G019 = 'reviews';

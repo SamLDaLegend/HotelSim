@@ -20,6 +20,8 @@ import { createGuestOutcomes, createGuestStore } from './guests.js';
 import type { GuestOutcomes, GuestStore } from './guests.js';
 import { createNeedOutcomes } from './needs.js';
 import type { NeedOutcome } from './needs.js';
+import { createReviewOutcomes } from './reviews.js';
+import type { ReviewOutcomeRow } from './reviews.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
 import { appendTransaction } from './ledger.js';
@@ -82,6 +84,22 @@ export type World = {
    * here and an exact identity in the report.
    */
   readonly needOutcomes: readonly NeedOutcome[];
+  /**
+   * WHAT EVERY DEPARTED GUEST THOUGHT OF THE PLACE, counted by score (G-019). Strictly
+   * ascending by score; rows appear on first use.
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, and not from the two tallies above either — which is
+   * the whole reason it is a field rather than a fold. `guestOutcomes` counts stays by
+   * REASON and `needOutcomes` counts need instances by TYPE; a review is a statement about
+   * ONE guest's whole vector, and neither table records which needs the SAME guest met. Two
+   * guests, one meeting all four needs and one meeting none, leave the same marks on both
+   * tables as two guests meeting two each — and different reviews.
+   *
+   * NOTHING IN `packages/sim` READS IT. That is this goal's boundary and it is enforced
+   * mechanically rather than by this sentence — see the header of `reviews.ts` for the two
+   * checks and for why the reasons to read it are M4's.
+   */
+  readonly reviewOutcomes: readonly ReviewOutcomeRow[];
   /**
    * The plot this hotel is built on (G-007): the four edges of the coordinate space.
    *
@@ -156,6 +174,7 @@ const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   ledger: true,
   loanOutcomes: true,
   needOutcomes: true,
+  reviewOutcomes: true,
   rng: true,
   tick: true,
 };
@@ -217,6 +236,11 @@ export function createWorld(seed: number, content: BoundContent): World {
     // read (ADR-0008), and it means a world's tally never claims a need existed before
     // anybody wanted it.
     needOutcomes: createNeedOutcomes(),
+    // Empty for the reason `needOutcomes` is empty, one table over: rows appear when a
+    // guest departs and leaves one. A world that has never had a departure has left no
+    // reviews, whatever content created it — which is what lets the v9 -> v10 migration
+    // default to the same value honestly, having no content and so no scale to read.
+    reviewOutcomes: createReviewOutcomes(),
     grid: createGridBounds(),
     buildOutcomes: createBuildOutcomes(),
     loanOutcomes: createLoanOutcomes(),

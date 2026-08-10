@@ -108,6 +108,7 @@ import {
   stepGuests,
 } from './guests.js';
 import { assertNeedOutcomes } from './needs.js';
+import { assertReviewOutcomes } from './reviews.js';
 import { balanceOf, outstandingDebtOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { applyDrawLoan, assertLoanOutcomes, totalLoanOutcomes } from './loan.js';
@@ -596,6 +597,7 @@ export function runGuests(state: TickState): TickState {
     guests: state.world.guests,
     outcomes: state.world.guestOutcomes,
     needOutcomes: state.world.needOutcomes,
+    reviewOutcomes: state.world.reviewOutcomes,
     ledger: state.world.ledger,
     entities: state.entities,
     content: state.content,
@@ -622,6 +624,7 @@ export function runGuests(state: TickState): TickState {
     result.guests === state.world.guests &&
     result.outcomes === state.world.guestOutcomes &&
     result.needOutcomes === state.world.needOutcomes &&
+    result.reviewOutcomes === state.world.reviewOutcomes &&
     result.ledger === state.world.ledger
       ? state.world
       : {
@@ -629,6 +632,7 @@ export function runGuests(state: TickState): TickState {
           guests: result.guests,
           guestOutcomes: result.outcomes,
           needOutcomes: result.needOutcomes,
+          reviewOutcomes: result.reviewOutcomes,
           ledger: result.ledger,
         };
   return { ...state, world, arrivingGuests: 0, guestsRun: true };
@@ -862,6 +866,13 @@ export function stepTick(
   // build LOADS is checked unconditionally.
   if (state.world.needOutcomes !== world.needOutcomes) {
     assertNeedOutcomes(state.world.needOutcomes, departedGuests(state.world.guestOutcomes));
+  }
+  // And the review distribution still describes those departures (G-019). Same function
+  // `assertWorldShape` calls at load, gated on the same identity compare and for the same
+  // reason: only a DEPARTURE writes this table, so on the vast majority of ticks it costs
+  // one pointer comparison, and every world this build LOADS is checked unconditionally.
+  if (state.world.reviewOutcomes !== world.reviewOutcomes) {
+    assertReviewOutcomes(state.world.reviewOutcomes, departedGuests(state.world.guestOutcomes));
   }
   // And the build counters are still counters (G-008). The same function `assertWorldShape`
   // calls at load, so "valid build outcomes" has one definition rather than two that

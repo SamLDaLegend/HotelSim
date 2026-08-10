@@ -65,6 +65,8 @@ import {
   recordNeedsAtDeparture,
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
+import { recordReview, reviewOf } from './reviews.js';
+import type { ReviewOutcomeRow } from './reviews.js';
 import {
   createValidityContext,
   isProviding,
@@ -193,6 +195,36 @@ export type GuestDepartureReason = (typeof GUEST_DEPARTURE_REASONS)[number];
  * structural. The alternative was a comment asking future authors not to.
  */
 export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnrecorded'>;
+
+/**
+ * Whether this stay was CUT SHORT — ended by the hotel rather than by the guest (G-019).
+ *
+ * AN EXHAUSTIVE SWITCH WITH A `never` FALLTHROUGH, NOT A PREFIX TEST AND NOT A BOOLEAN
+ * DECIDED AT EACH CALL SITE. `evictedInSummary` in the report tests the string prefix
+ * because a JSON document carries reasons as strings and has no union to switch on; here
+ * the union exists, so a sixth reason added to it is a TYPE ERROR at this line rather than
+ * a silent `false` that quietly reviews an eviction as an ordinary stay. `evictedGuests`
+ * above folds the same three rows and is the count; this is the predicate.
+ *
+ * `evictedCauseUnrecorded` is migration-only and can never reach `depart` — see
+ * `GUEST_DEPARTURE_REASONS` — and it is answered anyway, because "the cause was not
+ * recorded" does not make the eviction less of one.
+ */
+export function isCutShort(reason: GuestDepartureReason): boolean {
+  switch (reason) {
+    case 'satisfied':
+    case 'gaveUpWaiting':
+      return false;
+    case 'evictedRoomGone':
+    case 'evictedRoomUnusable':
+    case 'evictedCauseUnrecorded':
+      return true;
+    default: {
+      const unreachable: never = reason;
+      throw new Error(`isCutShort: unknown departure reason ${String(unreachable)}`);
+    }
+  }
+}
 
 /** One row of the outcome table: a reason, and how many stays ended for it. */
 export type GuestOutcomeRow = {
@@ -798,6 +830,8 @@ export type GuestTickInput = {
   readonly outcomes: GuestOutcomes;
   /** The per-need tally (G-012). Moved only by a departure. */
   readonly needOutcomes: readonly NeedOutcome[];
+  /** The review distribution (G-019). Moved only by a departure, and read by nothing. */
+  readonly reviewOutcomes: readonly ReviewOutcomeRow[];
   readonly ledger: readonly Transaction[];
   /** The open entity draft: spawns staged this tick are visible, despawns are not. */
   readonly entities: EntityDraft;
@@ -819,6 +853,7 @@ export type GuestTickResult = {
   readonly guests: GuestStore;
   readonly outcomes: GuestOutcomes;
   readonly needOutcomes: readonly NeedOutcome[];
+  readonly reviewOutcomes: readonly ReviewOutcomeRow[];
   readonly ledger: readonly Transaction[];
 };
 
@@ -960,6 +995,14 @@ type RoomSearch = {
    * through `GuestTickResult` and is never itself hashed or saved.
    */
   needOutcomes: readonly NeedOutcome[];
+  /**
+   * The review distribution, threaded through the tick beside the need tally (G-019).
+   *
+   * Here for the reason `needOutcomes` is here: `depart` is the only thing that moves it
+   * and `depart` is not a closure. Tick-local and mutable, handed back out through
+   * `GuestTickResult`, never itself hashed until it reaches the world.
+   */
+  reviewOutcomes: readonly ReviewOutcomeRow[];
 };
 
 /**
@@ -1022,10 +1065,27 @@ function depart(
   guest: Guest,
   lodgingRoom: Entity | null,
   engagedRoom: Entity | null,
+  reason: TickDepartureReason,
 ): void {
   if (guest.roomEntityId !== NO_ENTITY) release(search, guest.roomEntityId, lodgingRoom, content);
   if (guest.engagement !== null) release(search, guest.engagement.entityId, engagedRoom, content);
   search.needOutcomes = recordNeedsAtDeparture(search.needOutcomes, guest.needs);
+  // THE REVIEW, AND IT IS RECORDED HERE FOR THE REASON THE RESERVATIONS ARE RELEASED HERE
+  // (G-019). This is the ONE exit path — all three departure branches in `stepGuests` go
+  // through it — so "every guest that leaves leaves a review" is structural rather than a
+  // rule three call sites have to remember. It is the same argument G-012 makes for the
+  // reservation release and G-015 makes for the outcome row, and it is why the report can
+  // assert `Σ reviews === departed` exactly rather than approximately.
+  //
+  // `reason` IS TAKEN AS A PARAMETER RATHER THAN INFERRED FROM THE GUEST. Every caller
+  // already knows it — it is the counter it is about to increment — and re-deriving it
+  // here would be a second answer to "why did this stay end" that could disagree with the
+  // one the table records. `lodgingLost` in step 3 is the same discipline one goal older.
+  //
+  // `undefined` under content that declares no review scale, in which case nothing is
+  // recorded and the distribution stays empty — the historical case, not a failure.
+  const score = reviewOf(content, guest.needs, guest.arrivedTick, search.input.tick, isCutShort(reason));
+  if (score !== undefined) search.reviewOutcomes = recordReview(search.reviewOutcomes, score);
 }
 
 /**
@@ -1063,7 +1123,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   // O(1) idle tick. An empty hotel costs nothing, which is what keeps a 365-day run
   // inside the I5 budget while it waits for the interesting part.
   if (guests.list.length === 0 && arriving === 0) {
-    return { guests, outcomes, needOutcomes: input.needOutcomes, ledger: input.ledger };
+    return {
+      guests,
+      outcomes,
+      needOutcomes: input.needOutcomes,
+      reviewOutcomes: input.reviewOutcomes,
+      ledger: input.ledger,
+    };
   }
 
   const held = new Set<EntityId>();
@@ -1071,7 +1137,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     if (guest.roomEntityId !== NO_ENTITY) held.add(guest.roomEntityId);
     if (guest.engagement !== null) held.add(guest.engagement.entityId);
   }
-  const search: RoomSearch = { input, held, exhausted: null, needOutcomes: input.needOutcomes };
+  const search: RoomSearch = {
+    input,
+    held,
+    exhausted: null,
+    needOutcomes: input.needOutcomes,
+    reviewOutcomes: input.reviewOutcomes,
+  };
   const lodgingNeed = lodgingNeedOf(content);
 
   const next: Guest[] = [];
@@ -1157,7 +1229,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    different events to a player, and a single `evicted` counter could not tell them
     //    apart — WATCH #1's whole method is looking at a run and asking what happened.
     if (lodgingLost !== null) {
-      depart(search, content, guest, null, engagedRoom);
+      depart(search, content, guest, null, engagedRoom, lodgingLost);
       if (lodgingLost === 'evictedRoomGone') evictedRoomGone += 1;
       else evictedRoomUnusable += 1;
       continue;
@@ -1206,7 +1278,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       // visited later in this same loop can take it, even though it arrived later, because
       // the room genuinely is empty now.
       if (lodgingRoom !== null) ledger = payForStay(ledger, tick, lodgingRoom.kind, content);
-      depart(search, content, guest, lodgingRoom, engagedRoom);
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'satisfied');
       satisfied += 1;
       continue;
     }
@@ -1216,7 +1288,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       // ran out, which is v7's `unsatisfied` field said as a reason (its own doc comment
       // read "patience for a room ran out before one was free"), and it is what
       // `migrateV7ToV8` maps that counter onto.
-      depart(search, content, guest, lodgingRoom, engagedRoom);
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUpWaiting');
       gaveUpWaiting += 1;
       continue;
     }
@@ -1274,7 +1346,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       evictedRoomUnusable,
     ),
   };
-  return { guests: nextGuests, outcomes: nextOutcomes, needOutcomes: search.needOutcomes, ledger };
+  return {
+    guests: nextGuests,
+    outcomes: nextOutcomes,
+    needOutcomes: search.needOutcomes,
+    reviewOutcomes: search.reviewOutcomes,
+    ledger,
+  };
 }
 
 /**

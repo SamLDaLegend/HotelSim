@@ -542,6 +542,83 @@ export const itemTypesSchema = z.array(itemTypeSchema).min(1);
 export const abandonMarginBasisPointsSchema = basisPointsSchema;
 
 /**
+ * THE REVIEW SCALE (G-019): the lowest and highest integer a departing guest can leave.
+ *
+ * A review is an integer derived from one guest's own recorded experience — which of its
+ * needs were met, how long it waited for a room against its patience, and whether the
+ * hotel cut its stay short. These two numbers say what alphabet that answer is written in.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO FIELDS, AND `bands` IS NOT ONE OF THEM. READ THIS BEFORE ADDING A THIRD.
+ *
+ * The band count is DERIVED in `packages/sim/src/reviews.ts` as `max - min + 1`, and the
+ * reason it is not on disk is a defect `balance-critic` found at §5.6 rather than a
+ * preference. The rule a review scale must satisfy (below) uses THREE symbols and
+ * constrains TWO of them, so a table carrying its own `bands` admits documents where the
+ * three disagree — **`min 1, max 5, bands 8` passes any check written on `bands` and then
+ * scores a top review with half the need vector unmet.** Two integers on disk and one
+ * derivation in code is the shape in which that document cannot be written.
+ * ---------------------------------------------------------------------------
+ *
+ * WHERE THE SIZE COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE — and a
+ * review scale is nothing but thresholds.
+ *
+ * THE REQUIREMENT: **a top review must be unreachable while any need is unmet.** A scale on
+ * which a guest can miss something and still give full marks says nothing about the thing
+ * it missed, which is the whole failure the human found in this goal's headline criterion
+ * before it was built.
+ *
+ * THE INPUTS, both read off tables rather than written here:
+ *
+ *   N   = how many need types the content defines                  4 as shipped
+ *   B   = how many scores this scale admits, `max - min + 1`        5 as shipped
+ *
+ * THE ARITHMETIC. Each need a guest forms carries one equal share of the review (see
+ * `reviews.ts` for why the weight is a COUNT rather than a ranking, and for the
+ * `satisfyTicks` weighting that was measured and rejected). So:
+ *
+ *   best score having missed one need     ONE_WHOLE x (N-1)/N
+ *   the top band begins at                ONE_WHOLE x (B-1)/B
+ *   require the first below the second    (N-1)/N < (B-1)/B   <=>   B > N   <=>   max - min >= N
+ *
+ *   shipped: 5 - 1 = 4 >= 4. EXACTLY ON THE BOUNDARY.
+ *
+ * REFUSED AT LOAD, by `assertReviewScaleIsBoundedByTheNeedTable` in `bindContent`, with the same
+ * standing as a need no reachable provider claims: a hotel whose reviews cannot tell a
+ * perfect stay from a spoiled one is guaranteed-unhappiness in the instrument rather than
+ * in the guest.
+ *
+ * THE CONSEQUENCE OF SITTING ON THE BOUNDARY, SAID OUT LOUD SO M6 DOES NOT DISCOVER IT:
+ * **adding a fifth need type refuses ALL content until this scale widens to 1..6.** That is
+ * the check working. A fifth need on a five-point scale is exactly the case where a guest
+ * could miss one thing and still review at the top.
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `role`, `requires`, price and margin contract, and
+ * for the same hazard in mirror image. Silence in HISTORY is a true statement: content
+ * written before G-019 has no scale because in that era a departing guest left no review at
+ * all, so `GuestRulesData` keeps both fields optional and their absence means "this content
+ * left no reviews" (ADR-0008 — argued from the era, not chosen). Silence on a NEW document is
+ * a designer forgetting a dial. So a document that reaches this schema must say — and must
+ * say BOTH: half a scale is not a historical statement, and `cloneGuestRules` refuses it.
+ *
+ * `z.int()` AND NOT `z.int().min(1)`. Nothing here requires the scale to start at 1 or to be
+ * positive: a designer wanting -2..2 is describing a perfectly good review scale, and the one
+ * property that matters is the SPREAD, which is checked against the need table where the need
+ * table is in hand. A bound invented here would be exactly the superstition §2.1 forbids.
+ *
+ * THAT REASONING IS ABOUT BALANCE AND DOES NOT COVER A RESOURCE CLIFF — a distinction
+ * `balance-critic` had to find rather than read (G-019). With no bound anywhere,
+ * `reviewScoreMin: 0, reviewScoreMax: 5000000` validated here, bound in the sim, and made a
+ * ONE-DAY RUN emit **5,000,001 report rows and 308,891,476 bytes of JSON** in silence,
+ * because the report materialises one row per admitted score. The SPAN is now bounded from
+ * above as well as below, in `assertReviewScaleIsBoundedByTheNeedTable`, by a ceiling DERIVED by
+ * pigeonhole from the number of distinct experiences the need table can produce — see that
+ * function. It stays there rather than moving here for the reason the floor does: both
+ * bounds are relations against the need table, and this schema never sees one.
+ */
+export const reviewScoreSchema = z.int();
+
+/**
  * The rules a guest's own behaviour obeys (G-014b), as opposed to the rules of the money
  * loop (`economySchema`) or of any one room, item or need.
  *
@@ -551,11 +628,24 @@ export const abandonMarginBasisPointsSchema = basisPointsSchema;
  * normalisation, the `firstEconomy` precedent — so no snake_case literal enters
  * `packages/sim` (ADR-0003). Per-archetype rules are the shape this grows into at M6.
  */
-export const guestRulesSchema = z.strictObject({
-  id: contentIdSchema,
-  name: z.string().min(1),
-  abandonMarginBasisPoints: abandonMarginBasisPointsSchema,
-});
+export const guestRulesSchema = z
+  .strictObject({
+    id: contentIdSchema,
+    name: z.string().min(1),
+    abandonMarginBasisPoints: abandonMarginBasisPointsSchema,
+    reviewScoreMin: reviewScoreSchema,
+    reviewScoreMax: reviewScoreSchema,
+  })
+  // The one relation expressible without the need table: a scale of one score, or of none,
+  // cannot separate two stays and so cannot report on either. The relation that actually
+  // decides the design — `max - min >= needTypes.length` — needs a table this schema never
+  // sees, and lives in `bindContent` where both are in hand.
+  .refine((rules) => rules.reviewScoreMax > rules.reviewScoreMin, {
+    message:
+      'reviewScoreMax must be greater than reviewScoreMin: a review scale with one score cannot ' +
+      'say that two stays differed, which is the only thing a review is for',
+    path: ['reviewScoreMax'],
+  });
 
 /** The whole `guest-rules.json` document. A top-level array, for the same reason. */
 export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);

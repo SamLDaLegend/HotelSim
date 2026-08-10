@@ -386,6 +386,10 @@ describe('the guest rules table (G-014b)', () => {
     id: 'house_guest_rules',
     name: 'House Guest Rules',
     abandonMarginBasisPoints: 6_000,
+    // The review scale (G-019). Required on disk for the SAME reason the margin is, and the
+    // two of them are the whole of this table today.
+    reviewScoreMin: 1,
+    reviewScoreMax: 5,
     ...overrides,
   });
   const parseOneRule = (overrides: Record<string, unknown> = {}): unknown => parseGuestRules([rules(overrides)]);
@@ -400,11 +404,29 @@ describe('the guest rules table (G-014b)', () => {
     // content written before G-014b. A document that reaches THIS schema was written today,
     // and a designer who forgets the field would otherwise inherit the historical default and
     // ship a hotel whose guests silently stopped changing their minds.
-    for (const key of ['id', 'name', 'abandonMarginBasisPoints']) {
+    for (const key of ['id', 'name', 'abandonMarginBasisPoints', 'reviewScoreMin', 'reviewScoreMax']) {
       const entry = rules();
       delete entry[key];
       expect(() => parseGuestRules([entry])).toThrow(ContentError);
     }
+  });
+
+  it('DEMANDS BOTH ENDS OF THE REVIEW SCALE, and refuses one that cannot separate two stays', () => {
+    // G-019. The same asymmetry one field over: `GuestRulesData` keeps both optional and
+    // reads their absence as "this content left no reviews", which is exactly true of
+    // anything written before G-019 — and a document reaching THIS schema was written today.
+    //
+    // The relation that decides the design — `max - min >= needTypes.length` — is NOT here,
+    // and cannot be: this schema never sees the need table. It lives in `bindContent`. What
+    // is checkable from one document is that the scale admits more than one score at all.
+    for (const bad of [{ reviewScoreMax: 1 }, { reviewScoreMax: 0 }, { reviewScoreMin: 5, reviewScoreMax: 5 }]) {
+      expect(() => parseOneRule(bad)).toThrow(/reviewScoreMax must be greater than reviewScoreMin/);
+    }
+    for (const bad of [1.5, '5', null]) {
+      expect(() => parseOneRule({ reviewScoreMax: bad })).toThrow(ContentError);
+    }
+    // A scale that does not start at 1 is a perfectly good scale; nothing here requires one.
+    expect(() => parseOneRule({ reviewScoreMin: -2, reviewScoreMax: 2 })).not.toThrow();
   });
 
   it('bounds the margin to 0..10000 basis points, and rejects a float', () => {

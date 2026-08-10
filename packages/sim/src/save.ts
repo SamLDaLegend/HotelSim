@@ -18,11 +18,13 @@ import { assertLoanOutcomes } from './loan.js';
 import type { LoanOutcomes } from './loan.js';
 import { assertNeedOutcomes } from './needs.js';
 import type { NeedOutcome } from './needs.js';
+import { assertReviewOutcomes } from './reviews.js';
+import type { ReviewOutcomeRow } from './reviews.js';
 import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 9;
+export const SAVE_SCHEMA_VERSION = 10;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -717,6 +719,52 @@ function migrateV8ToV9(world: unknown): unknown {
 }
 
 /**
+ * v9 -> v10: the world gains a REVIEW DISTRIBUTION (G-019).
+ *
+ * THE DEFAULT IS ARGUED FROM THE ERA AND IS EXACTLY TRUE, NOT A PLACEHOLDER (ADR-0008):
+ *
+ *   reviewOutcomes = []   In the v9 era a departing guest left no review, because reviews
+ *                         did not exist. Every guest these bytes describe has already
+ *                         departed or has not; either way NONE of them reviewed anything,
+ *                         so an empty distribution is what happened rather than what is
+ *                         unknown. Contrast a per-need `waitedTicks`, which G-019 refused
+ *                         to add for precisely the opposite reason: a v9 guest DID wait,
+ *                         and nothing wrote it down, so any default would be an invention.
+ *
+ * THE CONSEQUENCE IS STATED HERE RATHER THAN DISCOVERED IN THE REPORT. A migrated v9 world
+ * carries departures with no reviews, so `totalReviews < departedGuests` for it — which is
+ * why `assertReviewOutcomes` bounds the table with `<=` and only the report, which never
+ * loads a save, asserts the exact identity. The `needOutcomes` precedent, verbatim.
+ *
+ * Reads no content and no live constant, so the same v9 bytes produce the same v10 world
+ * however the shipped review scale changes afterwards. That matters more here than it did
+ * for the margin: the scale IS content, and a migration that consulted it would make an old
+ * save's meaning depend on today's `guest-rules.json`.
+ *
+ * TESTED BY THE PERMANENT v1 FIXTURE, AND THIS IS THE FIRST STEP IN THREE THAT CAN SAY SO.
+ * `migrateV6ToV7`, `migrateV7ToV8` and `migrateV8ToV9` all reach into a guest list the
+ * fixture does not have, so each carries a paragraph explaining that the fixture proves
+ * nothing for it. This step adds a TOP-LEVEL field, so the fixture walking 1 -> ... -> 10
+ * exercises it for real — and `review.save.test.ts` drives the overwrite guard and a
+ * populated world besides.
+ */
+function migrateV9ToV10(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way this step could destroy data — overwriting a distribution somebody already
+  // made — is the one thing it refuses to do, exactly as all eight earlier steps refuse.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an
+  // own key (G-003).
+  if (Object.keys(world).includes('reviewOutcomes')) {
+    throw new Error(
+      'world already has a "reviewOutcomes" field, so it is not a v9 world; migrating it would overwrite real reviews',
+    );
+  }
+  return { ...world, reviewOutcomes: [] };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -733,6 +781,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 6, to: 7, migrate: migrateV6ToV7 }),
   Object.freeze({ from: 7, to: 8, migrate: migrateV7ToV8 }),
   Object.freeze({ from: 8, to: 9, migrate: migrateV8ToV9 }),
+  Object.freeze({ from: 9, to: 10, migrate: migrateV9ToV10 }),
 ]);
 
 /**
@@ -1163,6 +1212,35 @@ export function assertWorldShape(value: unknown): asserts value is World {
   });
   assertNeedOutcomes(
     needOutcomes as unknown as readonly NeedOutcome[],
+    departedGuests(guestOutcomes as unknown as GuestOutcomes),
+  );
+
+  // The review distribution (G-019). Same function the tick calls at its own boundary, and
+  // checked after the guest outcomes for the reason the need tally is: its law is stated
+  // against the departure count those counters carry.
+  //
+  // CONTENT-FREE, AND THAT IS WHY THE TABLE IS SPARSE. `assertWorldShape` runs at load,
+  // where no content is in hand, so nothing here can ask whether a score lies inside the
+  // scale this save was played under — the report asks that, where content exists. What CAN
+  // be checked from the bytes alone is the shape: integer scores, strictly ascending, counts
+  // of at least one, and no more reviews than there are departures. A fixed-length table
+  // keyed by score would have had no content-free check available to it at all.
+  const reviewOutcomes = value['reviewOutcomes'];
+  if (!Array.isArray(reviewOutcomes)) {
+    throw new Error('Save is corrupt: world.reviewOutcomes is missing or not an array');
+  }
+  reviewOutcomes.forEach((row: unknown, index: number) => {
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.reviewOutcomes[${index}] is not an object`);
+    }
+    for (const key of ['score', 'count'] as const) {
+      if (typeof row[key] !== 'number') {
+        throw new Error(`Save is corrupt: world.reviewOutcomes[${index}].${key} is missing or not a number`);
+      }
+    }
+  });
+  assertReviewOutcomes(
+    reviewOutcomes as unknown as readonly ReviewOutcomeRow[],
     departedGuests(guestOutcomes as unknown as GuestOutcomes),
   );
 

@@ -525,6 +525,55 @@ function hud(world, extra) {
   }
   el('needs').innerHTML = `${html}</table><div style="color:#8b93a1">live = met / pending / failed</div>`;
 
+  /**
+   * WHAT THE DEPARTED GUESTS THOUGHT OF THE PLACE (G-019).
+   *
+   * ADDED BY `ai-critic` AT THE FINAL ROUND, AND THE REASON IS WORTH THE PARAGRAPH. The
+   * field was in every recorded frame from the day it existed — `frameAt` is a raw
+   * `JSON.parse` of the serialised world — and this file drew `guestOutcomes` and
+   * `needOutcomes` and nothing for it. So G-019's WATCH entry asked a human *"does the wait
+   * penalty read as fair?"* and pointed them at an instrument that could not show a single
+   * review. **A perceptual criterion aimed at an instrument blind to its subject** is
+   * ADR-0013 §3's own shape, one level up from the prompt that ruling amended.
+   *
+   * A LOOP HERE, WHERE THE OUTCOME TABLE ABOVE IS FIVE LITERAL ROWS, AND THE DIFFERENCE IS
+   * NOT AN INCONSISTENCY. Those five are a closed union in code, so spelling them out is
+   * what makes a missing one visible. A review SCORE is content — the scale is two integers
+   * in `guest-rules.json` — so there is no fixed set to spell out, and the sim's own table is
+   * sparse. `—` for a recording that predates the field, never `0`, for the reason `left`
+   * gives above: a zero would read as "nobody reviewed", which is a plausible catastrophe
+   * rather than a missing field.
+   *
+   * THE MEAN IS IN HUNDREDTHS, integer, computed here and stored nowhere — the same call
+   * `report.ts` makes, and for the same reason.
+   */
+  const reviews = world.reviewOutcomes;
+  if (!Array.isArray(reviews)) {
+    el('reviews').innerHTML = '<div style="color:#8b93a1">— (recording predates reviews)</div>';
+  } else if (reviews.length === 0) {
+    el('reviews').innerHTML = '<div style="color:#8b93a1">nobody has left yet</div>';
+  } else {
+    let total = 0;
+    let count = 0;
+    for (const r of reviews) {
+      total += r.score * r.count;
+      count += r.count;
+    }
+    const widest = Math.max(...reviews.map((r) => r.count));
+    let rows = '<table>';
+    for (const r of reviews) {
+      // A bar as well as a number: the shape of a distribution is the thing being judged,
+      // and four counts in a column do not have one.
+      const bar = '█'.repeat(Math.max(1, Math.round((r.count / widest) * 12)));
+      rows +=
+        `<tr><td>${r.score}</td><td class="n">${r.count}</td>` +
+        `<td style="color:#6ea8fe">${r.count === 0 ? '' : bar}</td></tr>`;
+    }
+    const mean = Math.round((total * 100) / count);
+    el('reviews').innerHTML =
+      `${rows}</table><div style="color:#8b93a1">mean ${Math.floor(mean / 100)}.${String(mean % 100).padStart(2, '0')} over ${count}</div>`;
+  }
+
   let legend = '<table>';
   for (const [kind, count] of [...byType].sort()) {
     legend += `<tr><td><span class="sw" style="background:${colourOf(kind)}"></span>${nameOf(kind)}</td><td class="n">${count}</td></tr>`;

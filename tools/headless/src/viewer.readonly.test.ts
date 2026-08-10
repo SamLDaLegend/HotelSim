@@ -24,6 +24,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { WORLD_KEYS } from '@hotelsim/sim';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const VIEWER = join(ROOT, 'tools/viewer');
@@ -260,5 +261,115 @@ describe('tools/viewer is disposable by construction', () => {
 
   it('is plain JavaScript — no TypeScript, so there is no build step to keep alive', () => {
     expect(files.filter((f) => f.where.endsWith('.ts'))).toEqual([]);
+  });
+});
+
+// ============================================================================
+//  AND IT SHOWS WHAT THE SIMULATION RECORDS (G-019, `ai-critic`'s final-round MAJOR).
+//
+//  This file checked "cannot act" and "disposable" and never "shows what the sim records",
+//  so `World.reviewOutcomes` was in every recorded frame from the day it existed — `frameAt`
+//  is a raw `JSON.parse` of the serialised world — and the viewer drew `guestOutcomes` and
+//  `needOutcomes` and nothing for it. The consequence was not cosmetic: G-019's WATCH entry
+//  asked a human whether the wait penalty read as fair and pointed them at an instrument
+//  that could not show a single review. **A perceptual criterion aimed at an instrument
+//  blind to its subject** is ADR-0013 §3's shape one level up from the prompt it amended.
+//
+//  THE FIX FOR THE INSTANCE IS A ROW IN THE VIEWER. THIS IS THE FIX FOR THE CLASS, and it is
+//  the allow-list shape rather than a demand that everything be drawn: a field is either
+//  referenced by the viewer or is NAMED HERE as deliberately undrawn, with its reason, and
+//  the two sets must exactly partition `WORLD_KEYS`. The next `World` field is then a
+//  decision somebody writes down rather than a gap nobody notices.
+//
+//  IT IS NOT A FEATURE OF THE VIEWER (§9). It adds nothing to `tools/viewer` and defends
+//  nothing there; it is a check on it, exactly as the scans above are.
+// ============================================================================
+
+const DELIBERATELY_NOT_DRAWN: Readonly<Record<string, string>> = {
+  // The PRNG state is four opaque integers. Drawing them would say nothing a watcher can use,
+  // and `world.tick` beside the scrubber already answers "where am I in the run".
+  rng: 'four opaque integers; nothing a watcher can read',
+  // Player build and loan COMMAND counters. A watcher sees the building itself change; these
+  // are the CLI report's subject, and `sim:run` prints both.
+  buildOutcomes: 'counters for player commands; the building itself is what is drawn',
+  loanOutcomes: 'counters for player commands; the report is where these are read',
+};
+
+describe('the viewer shows what the simulation records, or says why not', () => {
+  /**
+   * `key` as a whole word in any of `sources`.
+   *
+   * `\\w` AND NOT `\w`, AND THIS IS THE THIRD INSTANCE OF THAT MISTAKE IN THREE GOALS. A
+   * template literal turns `\w` into a bare `w`, so the compiled pattern was
+   * `(?<![w$])KEY(?![w$])` — a word boundary that is not a word boundary. `violationsIn`
+   * four lines above this block has the correct spelling, and `review.boundary.test.ts`
+   * documents this file's author catching the identical thing two rounds ago.
+   *
+   * `ai-critic` was straight about the impact and so is this comment: **it changed no answer
+   * today.** Undrawn is `{buildOutcomes, loanOutcomes, rng}` under either pattern, and across
+   * two dozen plausible future key names only one diverges. It is fixed because it is the
+   * predicate the whole partition rests on, and because the bite below is what would have to
+   * notice if it ever did matter.
+   *
+   * Takes the sources as a parameter so the probe can hand it a MUTATED copy rather than
+   * defining a second, subtly different predicate to test the first one with.
+   */
+  const drawnIn = (sources: readonly Scanned[], key: string): boolean =>
+    sources.some((f) => new RegExp(`(?<![\\w$])${key}(?![\\w$])`).test(f.source));
+  const drawn = (key: string): boolean => drawnIn(files, key);
+
+  it('every World key is either referenced by the viewer or named as deliberately undrawn', () => {
+    const undrawn = WORLD_KEYS.filter((key) => !drawn(key));
+    expect([...undrawn].sort()).toEqual(Object.keys(DELIBERATELY_NOT_DRAWN).sort());
+  });
+
+  it('and the exemption list carries nothing the viewer actually draws', () => {
+    // The other direction. An entry for a field that IS drawn is a licence sitting open, and
+    // would let a later removal from the viewer pass unnoticed.
+    for (const key of Object.keys(DELIBERATELY_NOT_DRAWN)) {
+      expect(drawn(key), `${key} is exempted but the viewer references it`).toBe(false);
+    }
+  });
+
+  it('reviewOutcomes is drawn — the field this check was written for', () => {
+    expect(drawn('reviewOutcomes')).toBe(true);
+    expect(WORLD_KEYS).toContain('reviewOutcomes');
+  });
+
+  it('and the check BITES: ONE key goes undrawn and every other drawn key stays drawn', () => {
+    /**
+     * ADR-0007's second half, without mutating the repo — and THE FIRST VERSION OF THIS PROBE
+     * WAS ITSELF THE CLASS IT EXISTS TO CATCH, which `ai-critic` found on verification.
+     *
+     * It dropped every FILE naming `needOutcomes`. `viewer.js` is the only file that draws
+     * anything, so what remained was `index.html` and `serve.mjs` and **all twelve `World`
+     * keys came back undrawn** — both assertions then held for a reason unrelated to the scan
+     * discriminating, and `stillDrawn = () => false` would have passed them. The state it
+     * claimed to reproduce is ONE key undrawn and eleven drawn; what it built was twelve
+     * undrawn.
+     *
+     * The repair is to blank the TOKEN rather than remove the file, so the mutation is the
+     * one whose consequence is being asserted. And the second assertion is the one that makes
+     * it discriminate: every key drawn before must STILL be drawn, so a predicate that has
+     * simply stopped working fails here instead of passing everywhere.
+     */
+    const drawnBefore = WORLD_KEYS.filter((key) => drawn(key));
+    // The pre-round state was nine drawn of twelve; if that ever stops being true this probe
+    // is comparing against a set it did not mean.
+    expect(drawnBefore).toContain('needOutcomes');
+    expect(drawnBefore.length).toBe(WORLD_KEYS.length - Object.keys(DELIBERATELY_NOT_DRAWN).length);
+
+    const blanked = files.map((f) => ({ ...f, source: f.source.replace(/needOutcomes/g, ' ') }));
+    // THE SUBJECT FLIPS...
+    expect(drawnIn(blanked, 'needOutcomes')).toBe(false);
+    expect(WORLD_KEYS.filter((key) => !drawnIn(blanked, key))).toContain('needOutcomes');
+    // ...AND NOTHING ELSE DOES. This is what `stillDrawn = () => false` cannot satisfy.
+    for (const key of drawnBefore) {
+      if (key === 'needOutcomes') continue;
+      expect(drawnIn(blanked, key), `${key} stopped being drawn when only needOutcomes was blanked`).toBe(true);
+    }
+    // And the partition the guard asserts moves by exactly one member, rather than collapsing.
+    const undrawnAfter = WORLD_KEYS.filter((key) => !drawnIn(blanked, key));
+    expect(undrawnAfter.length).toBe(Object.keys(DELIBERATELY_NOT_DRAWN).length + 1);
   });
 });

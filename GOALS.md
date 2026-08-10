@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
+*As of 2026-08-10, G-019 done. M2: 13 of 13 goals — COMPLETE, pending sign-off. Unreliable: 1 gate, 1 defect (I4).*
 
 - **Schemas**: save **v9** · summary **v2** · I2 `10926cc3b569c887`. **`verify` runs ELEVEN
   rows**: six invariants, `typecheck`, and four `—` rows (`check:measure`, **`check:tickcost`**,
@@ -1371,7 +1371,13 @@ Critique rounds used: 0/3
   `M = 6000` the guest abandons after 90 ticks carrying 90 of 180 progress.
 
 ## G-019 — Reviews, and a hotel that reviews differently from a bad one
-Status: **in-progress** — PLAN dispatched 2026-08-10. **LAST GOAL IN M2.**
+Status: **done, DRY at 3/3 FROM BOTH CRITICS.** 3 sweeps (1 BLOCKER + 8 MAJOR + 9 MINOR
+  across two pairs) plus a plan pass that returned **1 BLOCKER + 5 MAJOR before a line was
+  written**, and five verification passes, two of which converted. **THE SECOND CRITIC EARNED
+  ITS RULE**: `ai-critic`, from a different pair, found the viewer blind to the field this
+  goal adds, so criterion 6's own question could not be answered in the instrument the WATCH
+  entry sends the human to. `balance-critic` found the headline criterion discharged by two
+  guests. **LAST GOAL IN M2.**
 Milestone: M2 — **LAST GOAL IN THE MILESTONE**
 Owner pair: ai-engineer / **balance-critic** · second critic `ai-critic` (§7.1)
 Statement: A departing guest leaves an integer review derived from its own recorded

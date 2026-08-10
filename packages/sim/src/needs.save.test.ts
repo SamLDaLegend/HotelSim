@@ -61,25 +61,21 @@ import {
 import { run } from './tick.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 
-describe('the chain walks 1 -> ... -> 8, and every link is still observed', () => {
+describe('the chain still runs 1 -> ... -> today, and the 5 -> 6 step is still the fifth', () => {
   it('ships one step per version, and the 5 -> 6 step is still the fifth of them', () => {
     // THE PREDICTION IN THIS FILE'S HEADER, DISCHARGED TWICE NOW. It said "when v7 arrives,
     // the assertions here move the same way and the pins below must not" — v7 came at G-013
     // and v8 at G-015, and on both occasions this list grew by one line while every frozen
-    // literal below was untouched. The CURRENT era's chain assertions live in
-    // `outcome.save.test.ts`; what this file still owns is that ITS step is where it was.
+    // literal below was untouched. It has now happened FOUR times — v9 at G-014b and v10 at
+    // G-019 — so the list is no longer written out here at all: it is DERIVED, and what this
+    // file asserts is the only part it owns, that the 5 -> 6 step is still the fifth link.
+    // The CURRENT era's chain assertions live in `review.save.test.ts`.
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
     expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
-    expect(MIGRATIONS.map((step) => [step.from, step.to])).toEqual([
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 5],
-      [5, 6],
-      [6, 7],
-      [7, 8],
-      [8, 9],
-    ]);
+    expect(MIGRATIONS.map((step) => [step.from, step.to])).toEqual(
+      MIGRATIONS.map((_, index) => [index + MIN_SUPPORTED_SCHEMA_VERSION, index + MIN_SUPPORTED_SCHEMA_VERSION + 1]),
+    );
+    expect([MIGRATIONS[4]!.from, MIGRATIONS[4]!.to]).toEqual([5, 6]);
     // G-003's anti-vacuity device.
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -312,7 +308,10 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
   it('is stable from there on: writing it back and reloading changes nothing', () => {
     const once = serialise(deserialise(v5Blob()));
     expect(serialise(deserialise(once))).toBe(once);
-    expect((JSON.parse(once) as { schemaVersion: number }).schemaVersion).toBe(9);
+    // Read from the constant rather than retyped: this file does not own the current era —
+    // `review.save.test.ts` does — and an absolute here is a literal that has to be edited
+    // at every bump for no gain. The claim is STABILITY, not which version we happen to be at.
+    expect((JSON.parse(once) as { schemaVersion: number }).schemaVersion).toBe(SAVE_SCHEMA_VERSION);
   });
 
   it('produces the same world however it is reached — through the runner or through deserialise', () => {

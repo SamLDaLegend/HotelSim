@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
+*As of 2026-08-10, G-019 done. M2: 13 of 13 goals — COMPLETE, pending sign-off. Unreliable: 1 gate, 1 defect (I4).*
 
 - **143 items across 19 goals.** G-020b added four, G-014b five, **each with its falsification
   test attached** (§4). **G-020a's zero is discharged**; the §9 warning stands for next time.
@@ -1343,3 +1343,75 @@ changed one constant, its derivation, and the records that quoted it.
   1.0 at larger n, the n=25 reading was a corner of the coverage and there is nothing to chase.*
   **Do NOT reach for a different instrument first** — an earlier draft of the goal block claimed
   one was needed, which was wrong: this one narrows with readings.
+
+---
+
+## From G-019 — reviews
+
+- **THE TOP-BAND SHARE IS NON-MONOTONE IN ROOM COUNT AND PEAKS AT THE SHIPPED DEFAULT, WHILE
+  THE MEAN IS MONOTONE. THIS DECIDES WHICH STATISTIC M4's REPUTATION TERM MAY READ.**
+  `balance-critic`, **1000 days**, seed 7, `--amenities 1`:
+
+  | rooms | five-star share | mean |
+  |---|---|---|
+  | 1 | 25.00% | 2.750 |
+  | **3 — `HOTEL_ROOMS`, the default** | **41.66%** | 3.583 |
+  | 6 | 0.01% | 4.000 |
+  | 12 | 0.01% | 4.000 |
+
+  **Building from 3 rooms to 6 destroys 41.65 points of five-star share while raising the
+  mean.** The SHAPE reproduces at 30 days and is pinned there in `review.report.test.ts`
+  — 24.86% / 41.57% / 0.28% / 0.28%, means 2.75 / 3.59 / 4.00 / 4.00 — but the two tables are
+  **different run lengths and their figures are not interchangeable**: the `--rooms 6` share
+  differs by a factor of 28 between them, because that column is two opening transients
+  diluted over 356 departures or over ~12,000. The 30-day arm is the pinned one because it is
+  the one a test can afford to run; the 1000-day arm is the one that says the effect is not a
+  short-run artefact. The cause is not a defect in the review function: a queueing guest completes its
+  engagement needs while it waits, and below 145 of 180 patience ticks the queue costs it
+  nothing — so a small hotel manufactures perfect stays out of the guests it fails to house.
+  Nothing reads a review today, so nothing is broken; **the constraint is on M4.** A
+  reputation term over the MEAN is safe, because the mean is monotone and building rooms
+  cannot lower it. **A term over share-of-top-reviews INVERTS THE BUILD LOOP at the
+  configuration a player starts in** — the third loop in `HOTELSIM.md` §1 running backwards.
+  **FALSIFICATION TEST**: when M4's demand responds to reputation, run
+  `pnpm sim:run --days 1000 --seed 7 --amenities 1` at `--rooms 1/3/6/12` and read
+  `reviews.distribution`. *If the mean is still monotone in rooms, a mean-based reputation
+  term is safe and this entry closes; if demand feedback breaks even the mean's monotonicity,
+  no summary statistic of this scale is safe and the wait term needs to bite below 145 ticks
+  — which is M3's territory, where wait becomes a first-class satisfaction input.*
+  **-> the first M4 goal that reads a review.**
+- **DOES THE SCALE SATURATE AT A CONFIGURATION A PLAYER CAN AFFORD? — now with its cost side.**
+  At `--rooms 6 --amenities 5` every guest meets every need with no wait and every review is
+  maximal. That is a correct answer to an oversupplied hotel and inventing a term to make a
+  perfect stay review imperfectly is manufactured difficulty (ruling 4), and `balance-critic`
+  does **not** read it as a dominant strategy — it priced it: the top band costs **22,500,000p
+  per 1000 days at `--rooms 6`, 22.1% of room revenue**, against **4,500,000p (4.4%)** for the
+  two bands `--amenities 1` buys. **The last band costs 4x the first two, so the ladder
+  already has diminishing returns priced in.** Demand is a fixed cadence until M4, so
+  "affordable" is not decidable now — and it is not decidable without those pennies either,
+  which is why they are here rather than in a comment. **FALSIFICATION TEST**: when arrivals
+  respond to reputation, re-run the amenity ladder at the density the hotel's own revenue
+  sustains. *If the top score is still modal there, the scale needs a term oversupply cannot
+  buy; if the affordable density lands below it, the ladder is doing its job and this closes.*
+  **-> the first M4 goal that reads a review.**
+- **PER-NEED WAIT IN THE REVIEW.** The review's wait term reads the LODGING wait only, and
+  that is forced rather than chosen: patience regenerates while a need is served, so final
+  need state carries no wait information at all, and a per-need `waitedTicks` field could not
+  be defaulted honestly at v9 -> v10 (a v9 guest waited and nothing recorded it — the
+  invention ADR-0008 forbids). Engagement waiting is visible only as met/unmet.
+  **FALSIFICATION TEST**: add `waitedTicks` per need in a scratch branch and re-run
+  `--days 30 --seed 7 --rooms 6 --arrivals 60`, comparing the review mean. *If it moves by
+  less than one score point the field buys nothing and stays parked; if it moves more, wait is
+  a first-class satisfaction input and belongs in M3's goal, where queueing gives it something
+  to measure.* **-> M3.**
+- **THE §5.8 SWEEP FOUND THE VACUOUS-CRITERION CLASS IN TWO SHIPPED TESTS AND NEITHER IS
+  REPAIRED.** `needs.report.test.ts:108,116,335` asserts that **two** of four need rows
+  straddle met-and-unmet, so a build with two inert needs passes — the human's G-019 finding,
+  one goal earlier, in a closed goal's recorded criterion. `hysteresis.report.test.ts:133,344`
+  sums `abandoned` across rows, so three of four rows at zero satisfies it. Both are mitigated
+  by per-row laws elsewhere (`buildSummary`'s need loop, `hysteresis.report.test.ts:286`), and
+  widening G-019 to repair two earlier goals' criteria is how a fat goal starts.
+  **FALSIFICATION TEST**: make two need types inert in a scratch branch — drop their providers
+  from `room-types.json` — and run both files. *If they stay green, the criteria certify a
+  build with half its need vector dead and are worth a goal; if something else catches it
+  first, name what and close this.* **-> a goal of its own, or M4's sweep.**

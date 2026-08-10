@@ -166,7 +166,21 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //      the goal started with, and it is why the goal's own criterion invocation is a
     //      different, better-supplied hotel: `hysteresis.report.test.ts` owns the era
     //      comparison and pins all three margins at a configuration where the margin bites.
-    expect(hashState(plain)).toBe('f652a2a1901310a5');
+    //
+    // MOVED AGAIN AT G-019, FOR TWO CAUSES AND NEITHER IS A BEHAVIOUR CHANGE. Was
+    // `f652a2a1901310a5` at G-014b.
+    //
+    //   1. THE CONTENT FINGERPRINT, again: `guest-rules.json` gains the review scale, so
+    //      `World.contentHash` moves for every run under the shipped content.
+    //   2. A NEW HASHED FIELD. `World.reviewOutcomes` is part of hashed state, and 210
+    //      completed stays put 210 reviews in it.
+    //
+    // AND THE EVIDENCE THAT THIS IS NOT A SIMULATION CHANGE IS STRONGER THAN AT ANY PREVIOUS
+    // BUMP, because this goal built an instrument for exactly this question: two runs whose
+    // content differs ONLY in the review scale produce identical guests, needs, ledgers and
+    // build counters (`review.boundary.test.ts`). The hand-checked outcomes below are the
+    // local form of the same statement and every one of them is untouched.
+    expect(hashState(plain)).toBe('527c415de4e03d39');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -216,7 +230,12 @@ describe('the same workload with the player churning the building', () => {
     // and is the sharp one: 19 evictions, unchanged, so the release path a guest takes when
     // its room is demolished mid-engagement is reached exactly as often as before, in a goal
     // that added a SECOND way for an engagement to end.
-    expect(hashState(churn)).toBe('6e9b2d38dfa01134');
+    //
+    // Moved at G-019 with the plain arm, for the two causes described there — the review
+    // scale in the content document and the new hashed field. Was `6e9b2d38dfa01134` at
+    // G-014b. The sharp control holds again: 19 evictions, unchanged, in the goal that made
+    // an eviction the one departure the review scale treats differently from every other.
+    expect(hashState(churn)).toBe('8773494528412341');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

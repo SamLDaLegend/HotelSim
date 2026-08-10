@@ -101,7 +101,12 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // what makes `guest_comfort` legal content at all (`assertNeedsAreSatisfiable`).
     // Derivation: 3 bedrooms + 3 beds + 3 amenity rooms + 2 provider items.
     entities: 11,
-    stateHash: '83317dc2ebdad0ae',
+    // MOVED AT G-019 from `83317dc2ebdad0ae`, for two causes and neither is a behaviour
+    // change: `guest-rules.json` gains the review scale (so the content fingerprint moves,
+    // as it does for every content addition) and `World` gains `reviewOutcomes`, which is
+    // hashed state. Every guest, need and money number in this document is UNTOUCHED, which
+    // is the hand-checked evidence; `review.boundary.test.ts` is the general form of it.
+    stateHash: 'd5bf3db9bb6f29ed',
   },
   guests: {
     arrived: 24,
@@ -209,6 +214,21 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   // the shipped content and the runner's layout still make a hotel — if `requires` named
   // an item the seeding did not place, or the layout packed rooms shoulder to shoulder,
   // this block is where it would show, and `satisfied` above would collapse with it.
+  // THE REVIEW DISTRIBUTION (G-019). One row per score the shipped 1..5 scale admits, zeros
+  // included. It conserves against the departure table above — 0 + 5 + 5 + 2 + 8 = 20 = 15
+  // satisfied + 5 who gave up — which `buildSummary` asserts as a violation rather than
+  // leaving to this literal.
+  reviews: {
+    scoreMin: 1,
+    scoreMax: 5,
+    distribution: [
+      { score: 1, count: 0 },
+      { score: 2, count: 5 },
+      { score: 3, count: 5 },
+      { score: 4, count: 2 },
+      { score: 5, count: 8 },
+    ],
+  },
   rooms: {
     valid: 6,
     invalid: { missingItem: 0, noDoor: 0, unplaced: 0, unsupported: 0 },
@@ -288,6 +308,8 @@ const GOLDEN_2_DAYS_SEED_42 =
     'need       guest_entertainment 14 met, 6 unmet (14 by room, 0 by item), 1 abandoned',
     'need       guest_nourishment 16 met, 4 unmet (9 by room, 7 by item), 5 abandoned',
     'need L     night_rest 15 met, 5 unmet (15 by room, 0 by item), 0 abandoned',
+    'reviews     1:0, 2:5, 3:5, 4:2, 5:8',
+    'mean x100   365',
     'ledger      18 transactions',
     'revenue     127500p',
     'upkeep      -24000p',
@@ -303,7 +325,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     603500p',
-    'state hash  83317dc2ebdad0ae',
+    'state hash  d5bf3db9bb6f29ed',
   ].join('\n') + '\n';
 
 /**
@@ -460,7 +482,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  83317dc2ebdad0ae']);
+    expect(differing).toEqual(['seed        42', 'state hash  d5bf3db9bb6f29ed']);
     expect(lines43).toContain('seed        43');
   });
 });

@@ -89,6 +89,10 @@ describe('validity adds nothing to the save', () => {
       'ledger',
       'loanOutcomes',
       'needOutcomes',
+      // G-019. A field a GUEST writes on its way out, not a cached property of the building —
+      // which is what this test is about, and why it is listed here rather than being an
+      // exception to it.
+      'reviewOutcomes',
       'rng',
       'tick',
     ]);

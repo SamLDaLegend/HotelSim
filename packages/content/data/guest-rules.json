@@ -2,6 +2,8 @@
   {
     "id": "house_guest_rules",
     "name": "House Guest Rules",
-    "abandonMarginBasisPoints": 6000
+    "abandonMarginBasisPoints": 6000,
+    "reviewScoreMin": 1,
+    "reviewScoreMax": 5
   }
 ]

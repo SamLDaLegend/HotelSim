@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
+*As of 2026-08-10, G-019 done. M2: 13 of 13 goals — COMPLETE, pending sign-off. Unreliable: 1 gate, 1 defect (I4).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent (G-013 paid v7; G-015 v8).

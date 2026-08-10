@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
+*As of 2026-08-10, G-019 done. M2: 13 of 13 goals — COMPLETE, pending sign-off. Unreliable: 1 gate, 1 defect (I4).*
 
 - **State**: save **v9** · summary **v2** · I2 `10926cc3b569c887` · **I4 unreliable (§2.0)**
   · `pnpm verify` is ten rows now, three of them `—` and not invariants.
@@ -1539,6 +1539,22 @@ reproduced exactly.
 - `watch-eraA.ndjson` is the control: **no stint under 15 ticks anywhere**, because nothing can
   interrupt one.
 
+### THE VIEWER SHOWS REVIEWS NOW, AND UNTIL THE FINAL ROUND IT DID NOT
+
+**This entry asked a human whether the wait penalty reads as fair and pointed them at an
+instrument that could not display a single review.** `World.reviewOutcomes` was in every
+recorded frame from the moment the field existed — `frameAt` is a raw `JSON.parse` of the
+serialised world — and `tools/viewer/viewer.js` drew `guestOutcomes` and `needOutcomes` and
+nothing for it. Every review number above came from the CLI report. `ai-critic` found it in
+the final round, and it is **a perceptual criterion aimed at an instrument blind to its
+subject** — ADR-0013 §3's own shape, one level up from the prompt that ruling amended.
+
+There is now a **REVIEWS** panel: the distribution with a bar per score and the mean, which
+for this recording reads `1:12 2:23 3:24 4:4` and **mean 2.32 over 63**. The fix for the
+class is in `viewer.readonly.test.ts`: every `World` key is either referenced by the viewer
+or named in an exemption list with its reason, and the two sets must partition `WORLD_KEYS` —
+so the next field is a decision somebody writes down rather than a gap nobody notices.
+
 ### THE QUESTION FOR THE HUMAN
 
 Does the shipped arm read as *commitment* or as *dithering*? The counter says 434 abandonments
@@ -1759,3 +1775,203 @@ run — there is no remote**, and that is the human's.
 
 **No invariant weakened.** `pnpm verify` ×2 by the orchestrator, **eleven rows green each**;
 **I4 at 41.6s and 41.9s against ~91s under the cap**; I2 `10926cc3b569c887` unmoved.
+
+---
+
+## 2026-08-10 — G-019 WATCH: the middle band exists, and the wait term is the thing to look at. THE JUDGEMENT IS NOT MADE HERE.
+
+**The criterion obliges a human to look.** `ai-engineer` may record and describe; it may not
+claim the perceptual half (WATCH #2's ruling, and §9's "a criterion verified by an agent's
+judgement of something nobody can observe"). So this is a DESCRIPTION with the verdict left
+open, and the goal is not WATCHed until somebody opens the viewer.
+
+**The recording** (gitignored at the repo root — `*.ndjson` — regenerates in ~25s):
+
+    pnpm sim:run --days 3 --seed 7 --rooms 6 --arrivals 60 \
+      --record watch-middle.ndjson --record-every 5
+    pnpm viewer                                        # then pick the file
+
+**865 frames. 72 arrive, 48 leave satisfied, 15 give up, 9 are still in the hotel.** This is
+the configuration M2 exit asks for and it is not manufactured: it is `--rooms 6` at 24
+arrivals a day, which is the run G-019's replaced criterion 2 also uses.
+
+### IT IS A MIDDLE BAND, AND THE COMPARISON IS THE POINT
+
+The two recordings on record are extremes — 36 arrivals gave 32 satisfied and **zero** gave
+up; 216 arrivals gave 16 satisfied and **189** gave up, with only 18 of 216 ever holding a
+room. This one sits between them, and the shape is legible rather than statistical:
+
+| | value |
+|---|---|
+| concurrent guests | **8–9, steady from tick ~480 onward** |
+| rooms held | **6 of 6, continuously, from tick ~480** |
+| so guests present with no room | **2–3, at all times** |
+| lifetime, satisfied | **481 ticks (6 guests) or 601 (42)** — 480 of rest plus a wait of **1 or 121** |
+| lifetime, gave up | **181 ticks, every single one** = 1 arrival tick + 180 `patienceTicks` |
+
+**The hotel is full and there is always a queue.** That is what a player would be looking at.
+
+### WHAT SUCCESS AND FAILURE LOOK LIKE, WITH FRAMES
+
+*(Every tick below is read from the STRIDE-1 recording, so these are the frames themselves
+rather than the nearest sample.)*
+
+- **Guest 1** (arrives tick 1): room at tick 2, sits in `arm_chair#17` 2→152, moves to
+  `vending_machine#14` 152→332, leaves at 482. Two engagement needs met and a bed.
+- **Guest 13** (arrives 721): **never gets a room.** Engages `vending_machine#14` at 783 and
+  is still there when it leaves at 902. It ate, it never slept, it left.
+- **Guest 53** (arrives 3121): never gets a room either, but completes entertainment at
+  `games_room#13` 3122→3272 before leaving at 3302. **A guest can have a perfectly good time
+  and still leave over a bed** — which is the goal block's axis-1 correction with a face on
+  it, and it is why the review counts the whole vector rather than the stay.
+
+### THE FINDING TO LOOK AT: THE WAIT TERM IS DOING MOST OF THE WORK HERE
+
+Reviews in this run: **1:12, 2:23, 3:24, 4:4, 5:0.** Needs met: **125 across 63 departures**,
+1.98 each. Those two numbers do not agree, and the gap is the whole of the wait term:
+
+    review total without any wait penalty   63 departures + 125 needs met = 188
+    review total actually recorded          12x1 + 23x2 + 24x3 + 4x4       = 146
+    bands removed by queuing                                                 42
+
+**42 bands removed across 63 departures — two thirds of a band per guest.** Both inputs are
+the run's own counters, so that figure is exact and needs no frame walk.
+
+*(The per-guest form — "about 26 guests met three of their four needs and 4 of them left a
+four" — is STRIDE-QUANTISED and is not asserted here. It reconciles to 124 against the need
+table's 125, which is the one need that finished inside a guest's last five ticks. The
+aggregate above is the claim; the per-guest reading is the illustration.)*
+
+Whether that reads as *fair* — you got most of what you came for and were still marked down
+for waiting — **is the question for the human**, and it is sharper than the one this goal
+started with, because `balance-critic` measured this term as **inert at every other
+configuration in the criteria**: zero guests moved at `--rooms 1`, `--rooms 12`,
+`--amenities 0`, `--amenities 1` and `--amenities 5`. This run is the only place it bites.
+
+### AND ONE THING THAT DID NOT LOOK WRONG, MEASURED RATHER THAN ASSERTED
+
+**Zero stranded guest-frames**: no guest ever holds a room, sits engaged with nothing, and
+has a pending need whose provider is standing free. §6.1's literal "reads as stupid" case is
+absent from all 865 frames.
+
+**THAT NUMBER WAS 1,056 ON THE FIRST WALK AND THE FIRST WALK WAS WRONG.** It counted any free
+entity, so an empty `hotel_lounge` whose `arm_chair` was occupied read as a free provider of
+comfort — a room that provides nothing standing in for the item inside it. Re-derived with
+`provides` read from `packages/content/data/*.json` rather than from a list typed into the
+script, it is 0. **The same walk also mis-attributed departure reasons**, assigning whichever
+counter moved in a five-tick interval to every guest that vanished in it: 55/8 against the
+run's own 48/15. Both were caught by cross-checking the walk against the sim's own counters,
+which is now the first thing this script does — and both are the G-014b lesson arriving on
+schedule: *a WATCH entry is a criterion, and it can be vacuous the same way a check can.*
+
+### THE LIFETIMES ABOVE ARE A CORRECTION — THE THIRD TO THIS ENTRY
+
+They read **484 / 604 / 184**, with waits of 4 and 124, until `ai-critic` re-recorded at
+`--record-every 1` and the orchestrator's builder reproduced it independently: **481 (x6),
+601 (x42), 181 (x15)**, waits of **1 and 121**. The attribution is forced rather than
+inferred — 6 + 42 = 48 satisfied and 15 gave up, which is exactly what the run's own
+counters say — and the corrected numbers mean something where the old ones did not:
+**181 is `1 arrival tick + 180 patienceTicks` exactly, and 184 corresponds to nothing in
+content.** A figure that lands on a content constant is a figure that can be checked; one
+that misses it by three is a sampling artefact wearing a measurement's clothes.
+
+**The conclusion is untouched**: 121 and 124 fall on the same side of every band boundary
+(a band needs 145 of 180), so *"42 bands removed by queuing"* — which comes from the run's
+own counters and not from any walk — is unaffected.
+
+**Recorded rather than quietly repaired, because this entry has now been corrected three
+times** (departure attribution, the stranded metric, and these lifetimes) and every one was
+found by someone re-deriving a number rather than reading it. The stride caveat below
+covered this in principle and the table stated the figures without a marker, which is the
+gap: *a caveat that names a hazard is not the same as a number that carries it.*
+
+    pnpm sim:run --days 3 --seed 7 --rooms 6 --arrivals 60       --record watch-stride1.ndjson --record-every 1     # 32 MB, ~40s, state hash b59355e481510558
+
+### CAVEAT ON THE STRIDE, BECAUSE ONE FIGURE ABOVE DEPENDS ON IT
+
+`--record-every 5` means a need finishing in a guest's last five ticks is invisible to the
+walk. Every per-guest figure here is quantised to that, and the per-guest need counts were
+reconciled against the run's own need table (125) rather than trusted. The frame-referenced
+guests above are unaffected: their engagements span 120–180 ticks.
+
+### THE QUESTION FOR THE HUMAN
+
+Three, in order of what the frames suggest is at stake:
+
+1. **Does the queue read as a queue?** Two or three guests are permanently roomless and
+   visible. Is that a hotel under pressure or a bug that looks like one?
+2. **Does the wait penalty read as fair?** Two thirds of a band per guest, removed for
+   queuing, in the one configuration where the term does anything at all.
+3. **Does a guest that eats, plays and then leaves without ever sleeping read as sensible?**
+   Guests 13, 14, 21, 22, 29, 53 and 54 all did exactly that.
+
+---
+
+## G-019 — Reviews, and a hotel that reviews differently from a bad one — REFLECT
+
+**DONE, DRY at 3/3 from BOTH critics. M2 IS COMPLETE, pending human sign-off.**
+
+**THE SECOND-CRITIC RULE EARNED ITS KEEP, WHICH IS THE RESULT WORTH KEEPING FROM THIS GOAL.**
+§7.1 puts a critic from a different pair in the last goal of a milestone, on G-008's precedent
+where the second pass found the 107M-penny sweep. `ai-critic` did it again: **the replay viewer
+rendered `guestOutcomes` and `needOutcomes` and nothing for `reviewOutcomes`** — the data was in
+every frame, so it was a display gap — and the consequence landed on criterion 6. The WATCH entry
+asks the human three questions, and question 2, *"does the wait penalty read as fair?"*, **could
+not be answered in the instrument the entry sends them to.** Every review number in it came from
+the CLI. **A perceptual criterion pointed at an instrument blind to its subject — ADR-0013 §3's
+own defect, one level up from the prompt it amended.**
+
+**And the fix closed the class rather than the instance**: `viewer.readonly.test.ts` now asserts
+every `World` key is either drawn or named in `DELIBERATELY_NOT_DRAWN` with a reason, the two
+sets **exactly partitioning** `WORLD_KEYS`. That is what makes the *next* field visible.
+
+**FOUR OF THE FIVE ORIGINAL CRITERIA WERE SATISFIED BY POINT MASSES**, which is `balance-critic`'s
+framing and better than "the goal is too big". Its BLOCKER: **criterion 2 was discharged by
+exactly two guests.** At `--rooms 6 --amenities 1` the distribution is `3:1, 4:N, 5:1` at 10, 30,
+100, 365 **and 1000 days** — the only 5 is guest #2, the only 3 is guest #9, and **every guest
+from #10 to #12,000 scores exactly 4.** The criterion could not tell this goal's review function
+from one returning a constant after day one.
+
+**AND DELETING THE WAIT TERM WOULD HAVE LEFT EVERY ORIGINAL CRITERION BYTE-IDENTICAL** — zero
+guests moved bands across five configurations at three run lengths. **The only part of the review
+that is not "count the needs" was pinned by nothing.** Both were fixed by one arm the WATCH
+criterion already required, `--rooms 6 --arrivals 60`, which gives a real spread and moves 528 of
+711 bands.
+
+**A DESIGN FINDING THAT OUTLIVES THE GOAL, PARKED WITH ITS TEST.** The top-band share is
+**non-monotone in room count and peaks at the shipped default**: 24.9% five-star at 1 room,
+**41.6% at 3**, 0.28% at 12 — verified in the orchestrator's own run. A queueing guest completes
+its engagement needs while it waits, and the queue costs it nothing below 145 of 180 patience
+ticks. **The mean is monotone, so axis 1 passes and cannot see it.** At M4, any reputation term
+reading share-of-top-reviews makes *"build one room and let a queue form"* the reputation-
+maximising play. **The parked item names which statistic M4 may read.**
+
+**THE THIRD INSTANCE OF ONE ESCAPE, AND IT IS A MISSING RULE RATHER THAN THREE ACCIDENTS.**
+`` `(?<![\w$])` `` inside a template literal loses its backslash and compiles to `(?<![w$])`.
+Three goals, three careful authors, **and the third instance sat four lines below a correct
+spelling in the same file, by an author who had documented catching the other two.** It changed
+no answer today — only `stat` diverges across two dozen candidate names — but it is the predicate
+the class-guard rests on. **`CLAUDE.md` gains the rule** (§"when several careful actors make the
+same error, the rule is missing"), which is the same route that produced the mutation recipe
+after four agents reached for `git checkout --`.
+
+**AND THE ANTI-VACUITY PROBE FOR THE ANTI-VACUITY GUARD WAS ITSELF VACUOUS.** The bite written to
+prove the partition guard works **removed the subject rather than the mention** — it dropped
+every *file* naming `needOutcomes`, and only one file draws anything, so all twelve keys came
+back undrawn and **a predicate hard-coded to `false` satisfied both assertions.** Repaired to
+blank the token, assert the other keys stay drawn, and move the partition by exactly one member;
+`ai-critic` then drove four predicates through it and confirmed the old shape **passes vacuously**
+where the new one reddens three tests.
+
+**Scored predictions (§5.5).** The builder offered **no seam** and argued three cuts rather than
+assuming; both critics tested that and agreed. Its P1 (1–2 sweeps) **failed** — it took 3. P2 (0
+BLOCKERs) **failed** — there was one, in a criterion. **P3 held exactly**: *at least one MAJOR
+lands on the derivation or the evidence rather than the code* — the BLOCKER, the wait term, the
+"tight" over-claim and the viewer gap are all evidence, and **no defect was ever found in
+`reviewOf` itself.** P4 held: tick cost unmoved in kind.
+
+**Verified by the orchestrator, not accepted**: `pnpm verify` ×2, **eleven rows green each**;
+`vitest run review` 112; criterion 2's arm `1:126, 2:316, 3:265, 4:4` and its negative control
+`2:356` alone; both axes across six configurations. **I2 `ece843af1efea843`** (moved, as expected
+— new `World` field and new content); `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` unmoved; the v1
+fixture a zero-line diff through **ten** schema versions.

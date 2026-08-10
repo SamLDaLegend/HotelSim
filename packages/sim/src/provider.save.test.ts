@@ -74,7 +74,12 @@ const step = MIGRATIONS[5]!;
  * expressed in this build's types — which is the whole reason a migration exists.
  */
 const v6World = (): Record<string, unknown> => {
-  const base = createWorld(3, content) as unknown as Record<string, unknown>;
+  // EVERY FIELD LATER THAN v6 COMES OFF THE BASE. `createWorld` builds a world in THIS
+  // build's shape, and a v6 world is one that predates each of them — so leaving one on
+  // hands its migration a value it correctly refuses to overwrite. `reviewOutcomes` is the
+  // first top-level field to be added since this helper was written (G-019), which is why
+  // the strip is only needed now; the earlier steps reshape fields the v6 shape already had.
+  const { reviewOutcomes: _laterThanV6, ...base } = createWorld(3, content) as unknown as Record<string, unknown>;
   return {
     ...base,
     guests: {

@@ -59,6 +59,7 @@ import {
   ERA_A_REVISION,
   ERA_A_TOTAL_COMMITMENT,
   NEED_KEY_ADDED_AT_G014B,
+  REPORT_BLOCK_ADDED_AT_G019,
 } from './fixtures/hysteresis-eras.js';
 import { buildSummary, parseArgs, schedule } from './report.js';
 
@@ -231,6 +232,24 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
       expect(row[NEED_KEY_ADDED_AT_G014B], String(row['needId'])).toBe(0);
       delete row[NEED_KEY_ADDED_AT_G014B];
     }
+
+    // AND THE ONE BLOCK THE REPORT GAINED AT G-019, which this era cannot speak for.
+    //
+    // Unlike `abandoned` above there is no "only value this era can produce" to assert
+    // first: the frozen document predates reviews entirely, so anything claimed for its
+    // guests would be this build's answer wearing a historical costume (see
+    // `REPORT_BLOCK_ADDED_AT_G019`). What IS assertable is that the frozen document really
+    // does predate the block, and that the current one conserves against its own departures
+    // — so the removal below is bounded rather than a hole.
+    expect(Object.keys(frozen)).not.toContain(REPORT_BLOCK_ADDED_AT_G019);
+    const reviews = now[REPORT_BLOCK_ADDED_AT_G019] as {
+      distribution: { score: number; count: number }[];
+    };
+    const departures = (now['guests'] as { departures: { count: number }[] }).departures;
+    expect(reviews.distribution.reduce((total, row) => total + row.count, 0)).toBe(
+      departures.reduce((total, row) => total + row.count, 0),
+    );
+    delete now[REPORT_BLOCK_ADDED_AT_G019];
 
     expect(now).toEqual(frozen);
   });

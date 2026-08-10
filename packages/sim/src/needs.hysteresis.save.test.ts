@@ -49,6 +49,7 @@ import {
   SAVE_SCHEMA_VERSION,
   serialise,
 } from './save.js';
+import { totalReviews } from './reviews.js';
 import { run, stepTick } from './tick.js';
 import { createWorld, hashState } from './world.js';
 import type { World } from './world.js';
@@ -123,21 +124,18 @@ type MigratedWorld = {
   needOutcomes: NeedOutcome[];
 };
 
-describe('the chain walks 1 -> ... -> 9, and every link is still observed', () => {
-  it('ships exactly eight steps, each going exactly one version', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(9);
+describe('the chain still runs 1 -> ... -> today, and the 8 -> 9 step is still the eighth', () => {
+  it('has no gaps, and the 8 -> 9 step is still the eighth of them', () => {
+    // RELATIVE, NOT ABSOLUTE, SINCE G-019. This file owned the CURRENT era when v9 was the
+    // end of the line; v10 moved that to `review.save.test.ts`. What it still owns is that
+    // ITS step is the eighth and that the chain has no gaps — both true at every future
+    // version, which is the `outcome.save.test.ts` convention one bump earlier.
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(MIGRATIONS).toHaveLength(8);
-    expect(MIGRATIONS.map((entry) => [entry.from, entry.to])).toEqual([
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 5],
-      [5, 6],
-      [6, 7],
-      [7, 8],
-      [8, 9],
-    ]);
+    expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
+    expect(MIGRATIONS.map((entry) => [entry.from, entry.to])).toEqual(
+      MIGRATIONS.map((_, index) => [index + MIN_SUPPORTED_SCHEMA_VERSION, index + MIN_SUPPORTED_SCHEMA_VERSION + 1]),
+    );
+    expect([MIGRATIONS[7]!.from, MIGRATIONS[7]!.to]).toEqual([8, 9]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
@@ -249,10 +247,17 @@ describe('a migrated v8 world and a v9 world with the same history are the SAME 
   const asV8Bytes = (world: World): string => {
     const json = JSON.parse(JSON.stringify(world)) as Record<string, unknown>;
     const guests = json['guests'] as { nextId: number; list: Record<string, unknown>[] };
+    // THE v10 FIELD COMES OFF TOO (G-019), for the reason the v9 fields come off below: "the
+    // same world written in the v8 SHAPE" means every field v8 did not have, and leaving
+    // `reviewOutcomes` on would hand `migrateV9ToV10` a value it correctly refuses to
+    // overwrite. The chain then puts it back EMPTY, which is exactly true of a v8 world — so
+    // this identity holds only because the content below declares no review scale, and the
+    // assertion in the test says so rather than leaving it to be rediscovered.
+    const { reviewOutcomes: _noReviews, ...withoutV10 } = json;
     return JSON.stringify({
       schemaVersion: 8,
       world: {
-        ...json,
+        ...withoutV10,
         guests: {
           ...guests,
           list: guests.list.map((guest) => ({
@@ -273,9 +278,16 @@ describe('a migrated v8 world and a v9 world with the same history are the SAME 
     // empty arrays and proves nothing (ADR-0007).
     expect(world.needOutcomes.length).toBeGreaterThan(0);
     expect(world.needOutcomes.reduce((total, row) => total + row.met + row.unmet, 0)).toBeGreaterThan(0);
+    // The era content declares no review scale, so the lived world left no review either and
+    // both sides carry the same empty distribution. Asserted rather than assumed.
+    expect(totalReviews(world.reviewOutcomes)).toBe(0);
     const migrated = deserialise(asV8Bytes(world));
     expect(hashState(migrated)).toBe(hashState(world));
-    expect(serialise(migrated)).toBe(serialise(world));
+    // DEEP EQUALITY RATHER THAN BYTES, for the reason `outcome.save.test.ts` states at the
+    // same assertion: `serialise` preserves insertion order and `hashState` sorts, so a key
+    // the migration appends lands elsewhere than `createWorld` declares it. `toEqual` is
+    // order-independent and structural, and so is stronger than either.
+    expect(migrated).toEqual(world);
   });
 
   it('and the same world at v9 round-trips, which is I6 over the new shape', () => {

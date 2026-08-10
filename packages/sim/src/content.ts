@@ -222,6 +222,26 @@ export type GuestRulesData = {
    * 6,000 and, more importantly, for what a margin CANNOT buy at any value.
    */
   readonly abandonMarginBasisPoints?: number | undefined;
+  /**
+   * The lowest and highest integer a departing guest can leave as a review (G-019).
+   *
+   * TWO FIELDS AND NOT THREE. The band count is DERIVED — `max - min + 1`, in
+   * `reviewScaleOf` — and is deliberately not on disk. The rule a scale must satisfy uses
+   * three symbols and constrains two, so a table carrying its own `bands` admits
+   * `min 1, max 5, bands 8`: a document that passes every check written on `bands` and then
+   * scores a top review with half the need vector unmet (`balance-critic`, §5.6 MAJOR 2).
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `abandonMarginBasisPoints` contract exactly, and
+   * absence carries the same kind of statement. Content written before G-019 declares no
+   * scale because in that era a departing guest left no review; `reviewOf` returns
+   * `undefined` for it and nothing is recorded, so every save and every fingerprint taken
+   * under it still means what it meant (ADR-0008).
+   *
+   * The two move together or not at all: half a scale is not a historical statement, it is
+   * a designer who stopped typing, and `cloneGuestRules` refuses it.
+   */
+  readonly reviewScoreMin?: number | undefined;
+  readonly reviewScoreMax?: number | undefined;
 };
 
 /**
@@ -592,8 +612,9 @@ function assertFitValue(owner: string, ownerId: ContentId, fit: number | undefin
  * of this goal's own evidence unloadable.
  */
 function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
-  const { abandonMarginBasisPoints: margin, ...rest } = rules;
-  if (margin === undefined) return { ...rest };
+  const { abandonMarginBasisPoints: margin, reviewScoreMin: min, reviewScoreMax: max, ...rest } = rules;
+  const withScale = cloneReviewScale(rules.id, rest, min, max);
+  if (margin === undefined) return withScale;
   if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
     throw new Error(
       `bindContent: guest rules "${rules.id}" have an abandonMarginBasisPoints of ${String(margin)}; it must be an ` +
@@ -601,7 +622,166 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
         `${ONE_WHOLE_BASIS_POINTS} is one whole — and it is compared against a pressure, which can never exceed that.`,
     );
   }
-  return { ...rest, abandonMarginBasisPoints: margin };
+  return { ...withScale, abandonMarginBasisPoints: margin };
+}
+
+/**
+ * The review scale half of `cloneGuestRules` (G-019): both fields, or neither.
+ *
+ * ABSENCE IS A HISTORICAL STATEMENT AND HALF-ABSENCE IS NOT. Content with no scale at all
+ * is content from before reviews existed, and it loads exactly as it always did. Content
+ * carrying one of the two is a designer who stopped typing, and the value they would
+ * inherit for the other is invented — so it is refused by name rather than defaulted.
+ *
+ * `max > min` because a scale with one score cannot express a difference between two
+ * stays, which is the entire thing a review is for. The relation to the NEED TABLE — the
+ * one that decides whether a top review is reachable with a need unmet — is not checkable
+ * here, because a room type or a need type may be cloned before or after this one. It
+ * lives in `assertReviewScaleIsBoundedByTheNeedTable`, called from `bindContent` once both tables
+ * are settled.
+ */
+function cloneReviewScale(
+  id: ContentId,
+  rest: GuestRulesData,
+  min: number | undefined,
+  max: number | undefined,
+): GuestRulesData {
+  if (min === undefined && max === undefined) return { ...rest };
+  if (min === undefined || max === undefined) {
+    throw new Error(
+      `bindContent: guest rules "${id}" declare ${min === undefined ? 'reviewScoreMax' : 'reviewScoreMin'} without ` +
+        `${min === undefined ? 'reviewScoreMin' : 'reviewScoreMax'}. A review scale is two integers or none: content ` +
+        'that declares neither is content from before reviews existed and is read that way, but half a scale would ' +
+        'make the simulation invent the other half (ADR-0008).',
+    );
+  }
+  if (!Number.isInteger(min) || !Number.isInteger(max)) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a review scale of ${String(min)}..${String(max)}; both bounds must be ` +
+        'integers. A review is an integer a guest leaves, and a fractional bound would put a float in hashed state (I2).',
+    );
+  }
+  if (max <= min) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a review scale of ${min}..${max}, which admits ${max === min ? 'one score' : 'no scores'}. ` +
+        'A scale that cannot separate two stays cannot report on either of them.',
+    );
+  }
+  return { ...rest, reviewScoreMin: min, reviewScoreMax: max };
+}
+
+/**
+ * Refuses content whose review scale cannot express its own need table (G-019).
+ *
+ * THE ONE INEQUALITY THIS GOAL'S SCALE RESTS ON, and it is derived rather than chosen:
+ *
+ *   A TOP REVIEW MUST BE UNREACHABLE WHILE ANY NEED IS UNMET.
+ *
+ * With one weight per need, the best a guest can score having missed one of `N` needs is
+ * `ONE_WHOLE x (N-1)/N`, and the top band begins at `ONE_WHOLE x (B-1)/B`. The first is
+ * below the second exactly when `B > N` — that is, when `max - min >= N`. So the scale's
+ * size is not a taste: it is the smallest one on which "everything went right" and "one
+ * thing went wrong" are different answers.
+ *
+ * REFUSED AT LOAD, WITH THE SAME STANDING AS A NEED NO PROVIDER CLAIMS. A hotel whose
+ * reviews cannot tell a perfect stay from a spoiled one is the review-scale form of
+ * guaranteed unhappiness, and `assertNeedsAreSatisfiable` two lines up refuses the other
+ * form. Better a content set that will not load than a distribution nobody can read.
+ *
+ * THE SHIPPED SCALE SITS EXACTLY ON THE BOUNDARY — 1..5 against four need types, `5 - 1 = 4`
+ * — AND THAT IS WORTH SAYING OUT LOUD RATHER THAN DISCOVERING AT M6: adding a fifth need
+ * type refuses ALL content until the scale is widened to 1..6. That is the check working,
+ * not a trap; a fifth need on a five-point scale is precisely the case where a guest could
+ * miss something and still review at the top.
+ *
+ * ---------------------------------------------------------------------------
+ * AND A CEILING, ADDED AFTER `balance-critic` FOUND A RESOURCE CLIFF BEHIND THE MISSING ONE.
+ *
+ * `reviewScoreSchema` carries no bound — correct, for the reason stated there: a *balance*
+ * bound on where a scale starts or ends would be the superstition §2.1 forbids. **That
+ * reasoning does not cover a resource cliff, and there was one.** The report materialises
+ * ONE ROW PER ADMITTED SCORE (the need-table idiom, which is safe when content declares four
+ * of something and not when it declares a span), so `reviewScoreMin: 0,
+ * reviewScoreMax: 5000000` bound without complaint and a ONE-DAY RUN emitted **5,000,001
+ * rows and 308,891,476 bytes of JSON**, on one line in the text report, with no diagnostic
+ * anywhere.
+ *
+ * THE CEILING IS DERIVED BY PIGEONHOLE RATHER THAN CHOSEN, which is what lets it be a
+ * refusal instead of a taste:
+ *
+ *   a guest's experience is Σ q over its N needs, each an integer in [0, ONE_WHOLE]
+ *   so the sum cannot take more than N x ONE_WHOLE + 1 distinct values
+ *   -> a scale wider than that admits more scores than the content can ever distinguish
+ *
+ * So `max - min <= N x ONE_WHOLE`. For the shipped four-need table that is 40,001 scores:
+ * absurd content that now LOADS AND IS BOUNDED, rather than absurd content that silently
+ * emits a third of a gigabyte.
+ *
+ * ---------------------------------------------------------------------------
+ * IT IS A NECESSARY CONDITION AND IT IS DELIBERATELY LOOSE. AN EARLIER VERSION OF THIS
+ * PARAGRAPH CALLED IT TIGHT, AND THAT WAS FALSE — INCLUDING FOR THE ARM CHOSEN TO SHOW IT.
+ *
+ * Only the LODGING need can contribute a non-extreme `q`; every other need scores 0 or
+ * `ONE_WHOLE`. And the wait share takes `patienceTicks + 1` values, not `ONE_WHOLE + 1`. So
+ * the reachable count is nothing like the admitted one (`review.scale.test.ts` counts both
+ * by enumeration rather than by this formula):
+ *
+ *   raw(1, 0, 10000), patienceTicks 200      admits 10,001   reaches    201
+ *   the shipped shape (N=4, patience 180)    admits 40,001   reaches    721
+ *   N=1 with patienceTicks = ONE_WHOLE       admits 10,001   reaches 10,001
+ *
+ * The bound is tight ONLY when the lodging need's `patienceTicks` reaches `ONE_WHOLE` —
+ * seven simulated days of patience for a room — and the arm that used to be cited as proof
+ * of tightness is onto for **2.0% of its scale**. `balance-critic` found this at the final
+ * round.
+ *
+ * SO THE CLAIM IS RESTATED TO WHAT IT IS: **a sound necessary condition whose purpose is the
+ * RESOURCE BOUND, not surjectivity.** Nothing correct is refused, which is the property that
+ * matters and is unchanged. What must NOT be said — and the refusal message no longer says
+ * it — is that a document passing this bound has no unreachable scores: `0..40000` binds and
+ * then renders 40,001 rows of which 39,280 are scores no guest can leave. Refusing a
+ * document for a defect that passing documents share is an argument that does not survive
+ * being written down.
+ * ---------------------------------------------------------------------------
+ *
+ * The floor and the ceiling are different KINDS of statement and share a function only
+ * because both are relations against the need table: the floor is exact and load-bearing
+ * (the scale must be able to express one distinction), the ceiling is loose and defensive
+ * (the scale must not be able to exhaust a disk).
+ * ---------------------------------------------------------------------------
+ *
+ * Content that declares no scale is untouched: it left no reviews, so there is nothing for
+ * a scale to fail to express.
+ */
+function assertReviewScaleIsBoundedByTheNeedTable(
+  guestRules: readonly GuestRulesData[],
+  needTypes: readonly NeedTypeData[],
+): void {
+  for (const rules of guestRules) {
+    const min = rules.reviewScoreMin;
+    const max = rules.reviewScoreMax;
+    if (min === undefined || max === undefined) continue;
+    if (max - min < needTypes.length) {
+      throw new Error(
+        `bindContent: guest rules "${rules.id}" declare a review scale of ${min}..${max} — ${max - min + 1} score(s) — ` +
+          `against ${needTypes.length} need type(s). A top review must be unreachable while any need is unmet, which ` +
+          `holds only when the scale has MORE scores than there are needs: max - min >= ${needTypes.length}, so the ` +
+          `narrowest scale this table admits is ${min}..${min + needTypes.length}. As written, a guest that missed a ` +
+          'need would review at the top and the scale would say nothing about it.',
+      );
+    }
+    const ceiling = needTypes.length * ONE_WHOLE_BASIS_POINTS;
+    if (max - min > ceiling) {
+      throw new Error(
+        `bindContent: guest rules "${rules.id}" declare a review scale of ${min}..${max} — ${max - min + 1} score(s) — ` +
+          `against ${needTypes.length} need type(s). A guest's experience is a sum of ${needTypes.length} shares of ` +
+          `${ONE_WHOLE_BASIS_POINTS} basis points, so it cannot take more than ${ceiling + 1} values whatever the rest ` +
+          'of the content says, and the report materialises one row per admitted score. This is a bound on the SIZE of ' +
+          'the scale, not a judgement about which scores are reachable — plenty of narrower scales have unreachable ' +
+          `scores too. The widest scale this table admits is ${min}..${min + ceiling}.`,
+      );
+    }
+  }
 }
 
 /**
@@ -1126,6 +1306,10 @@ export function bindContent(content: SimContent): BoundContent {
   // economy, because it is the LENDER that a worthless refund lets loose.
   assertRefundsCannotReopenTheDodge(roomTypes);
   assertStockIsAReserve(roomTypes, economy ?? []);
+  // THE REVIEW SCALE AGAINST THE NEED TABLE (G-019). Last of the cross-table refusals,
+  // and it needs both tables normalised — which is why it is here and not in
+  // `cloneGuestRules`, where only one of them exists yet.
+  assertReviewScaleIsBoundedByTheNeedTable(guestRules ?? [], needTypes ?? []);
 
   // ABSENCE IS NOT EMPTINESS. Content that does not define need types produces the same
   // document — and therefore the same fingerprint — that it produced before need types

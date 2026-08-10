@@ -415,6 +415,20 @@ const distinct: RunSummary = {
     { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141, metByItem: 134, abandoned: 144 },
     { needId: 'betaNeed', lodging: false, met: 142, unmet: 143, metByItem: 136, abandoned: 145 },
   ],
+  // DISTINCT PER ROW for the reason the departure rows are (G-019), and the SCORES are not
+  // 1..3: a renderer that printed a row's index instead of its score, or the scale bounds
+  // instead of the rows, would pass against a scale that started at 1. The mean the renderer
+  // prints is folded at print time and stored nowhere, so no third sentinel expresses it —
+  // (7x146 + 8x147 + 9x150) / 443 = 8.009..., which the expected line carries as 801.
+  reviews: {
+    scoreMin: 7,
+    scoreMax: 9,
+    distribution: [
+      { score: 7, count: 146 },
+      { score: 8, count: 147 },
+      { score: 9, count: 150 },
+    ],
+  },
   rooms: {
     valid: 133,
     invalid: { missingItem: 134, noDoor: 135, unplaced: 136, unsupported: 137 },
@@ -475,6 +489,11 @@ describe('renderers', () => {
         'in bad room 132',
         'need L     alphaNeed 140 met, 141 unmet (6 by room, 134 by item), 144 abandoned',
         'need       betaNeed 142 met, 143 unmet (6 by room, 136 by item), 145 abandoned',
+        // The review distribution, one column per score the scale admits (G-019), and the
+        // mean in integer HUNDREDTHS — folded at print time and stored nowhere, so no
+        // sentinel above expresses it: (7x146 + 8x147 + 9x150) / 443 = 801 hundredths.
+        'reviews     7:146, 8:147, 9:150',
+        'mean x100   801',
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',

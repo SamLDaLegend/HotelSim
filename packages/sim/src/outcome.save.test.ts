@@ -52,6 +52,7 @@ import {
   serialise,
 } from './save.js';
 import type { SaveSchema } from './save.js';
+import { totalReviews } from './reviews.js';
 import { run, stepTick } from './tick.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
@@ -336,12 +337,17 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     const outcomes = json['guestOutcomes'] as { arrived: number; departures: { reason: string; count: number }[] };
     const count = (reason: string): number =>
       outcomes.departures.find((row) => row.reason === reason)?.count ?? 0;
-    // THE v9 FIELDS COME OFF TOO (G-014b), because "the same world written in the v7 SHAPE"
-    // means every field v7 did not have. Leaving `abandonCount` and `abandoned` on would
-    // hand `migrateV8ToV9` a row it correctly refuses to overwrite, and the identity below
-    // would report a migration failure instead of a shape comparison. Stripping them makes
-    // this a stronger test rather than a weaker one: the chain has to put them BACK, at the
-    // values the tick reached, or the two hashes differ.
+    // THE v9 AND v10 FIELDS COME OFF TOO (G-014b, G-019), because "the same world written in
+    // the v7 SHAPE" means every field v7 did not have. Leaving `abandonCount`, `abandoned` or
+    // `reviewOutcomes` on would hand a later step a value it correctly refuses to overwrite,
+    // and the identity below would report a migration failure instead of a shape comparison.
+    // Stripping them makes this a stronger test rather than a weaker one: the chain has to
+    // put them BACK, at the values the tick reached, or the two hashes differ.
+    //
+    // AND `reviewOutcomes` IS THE INTERESTING ONE, because the chain CANNOT put it back —
+    // v9 -> v10 defaults it to empty, which is exactly true of a world whose guests departed
+    // before reviews existed. So `lived()` below is chosen to have no departures with reviews
+    // to lose; if it ever gains one, this identity fails and it should.
     const guests = json['guests'] as { nextId: number; list: Record<string, unknown>[] };
     const withoutV9 = {
       ...guests,
@@ -353,10 +359,11 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     const tallyWithoutV9 = (json['needOutcomes'] as Record<string, unknown>[]).map(
       ({ abandoned: _drop, ...row }) => row,
     );
+    const { reviewOutcomes: _noReviews, ...withoutV10 } = json;
     return JSON.stringify({
       schemaVersion: 7,
       world: {
-        ...json,
+        ...withoutV10,
         guests: withoutV9,
         needOutcomes: tallyWithoutV9,
         guestOutcomes: {
@@ -373,12 +380,40 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
   };
 
   it('hashes identically, so the migration and the tick agree about the same history', () => {
+    /**
+     * STILL AN IDENTITY AT v10, AND THE REASON IS WORTH A LINE (G-019). A world that departs
+     * a guest normally acquires a REVIEW, and `migrateV9ToV10` cannot invent one for a v7
+     * world — it defaults the distribution to empty, which is exactly true of an era where
+     * reviews did not exist. That would break this identity for content that declares a
+     * review scale.
+     *
+     * `V7_CONTENT` DECLARES NONE, because it is the content of the era it describes: no
+     * `guestRules` table at all. So `reviewOf` returns `undefined`, the lived world records
+     * nothing, and both sides carry the same empty distribution. The identity holds because
+     * the two worlds genuinely agree, not because anything was excluded — and the assertion
+     * below says so rather than leaving it to be rediscovered.
+     */
     const world = lived();
     expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
     expect(evictedGuests(world.guestOutcomes)).toBe(0);
+    expect(totalReviews(world.reviewOutcomes)).toBe(0);
     const migrated = deserialise(asV7Bytes(world));
     expect(hashState(migrated)).toBe(hashState(world));
-    expect(serialise(migrated)).toBe(serialise(world));
+    /**
+     * DEEP EQUALITY RATHER THAN BYTE EQUALITY, AND THE CHANGE IS A CORRECTION (G-019).
+     *
+     * This line read `serialise(migrated) === serialise(world)`, and that asserted more than
+     * the codebase guarantees: `serialise` is `JSON.stringify`, which preserves INSERTION
+     * order, while `hashState` sorts keys and is the stated equality oracle for I2 and I6
+     * (`hash.ts`). `migrateV9ToV10` adds `reviewOutcomes` by spreading, so it lands last,
+     * where `createWorld` declares it in the middle — same world, different byte order, and
+     * nothing in the repo promises otherwise.
+     *
+     * `toEqual` is order-independent and STRUCTURAL, so it is strictly stronger than the hash
+     * for the question this test asks. The weaker byte claim is dropped rather than propped
+     * up by making the migration place a key to satisfy a test.
+     */
+    expect(migrated).toEqual(world);
   });
 
   it('and the same world at v8 round-trips, which is I6 over the new shape', () => {

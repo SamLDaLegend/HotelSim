@@ -73,6 +73,8 @@ import {
   ONE_WHOLE_BASIS_POINTS,
   outstandingDebtOf,
   requiredItemsOf,
+  reviewCountOf,
+  reviewScaleOf,
   roomTypeProvides,
   roomTypeServes,
   stockValueOf,
@@ -946,6 +948,36 @@ export type RunSummary = {
     readonly abandoned: number;
   }[];
   /**
+   * WHAT EVERY DEPARTED GUEST THOUGHT OF THE PLACE (G-019). The distribution, and nothing
+   * derived from it.
+   *
+   * ONE ROW PER SCORE THE CONTENT'S SCALE ADMITS, ascending, whether or not anybody left
+   * it — built from CONTENT and filled in from the world's sparse tally, exactly as the
+   * need table is and for the same reason. A distribution that listed only the scores
+   * somebody gave would go quiet in the case most worth seeing: a hotel nobody ever rates
+   * above 2 would simply have no rows up there, which reads as missing data rather than as
+   * the finding it is. Empty under content that declares no review scale, which is content
+   * from before reviews existed.
+   *
+   * NO MEAN, AND THAT IS THE `metByRoom` RULING APPLIED A SECOND TIME. A stored mean beside
+   * the rows that produce it is a derived value carried next to its source, which is what
+   * invited the tautological law G-013 had to delete — and it would be a float besides,
+   * which this file's stability contract bans outright. `renderText` divides at print time
+   * and the tests fold the rows themselves; nothing stores the answer.
+   *
+   * `scoreMin` / `scoreMax` are an ECHO OF THE CONTENT, not a summary of the rows: they say
+   * what scale the distribution should be read against, which a consumer cannot recover
+   * from a run in which nobody gave the top mark. `null` when the content declares none.
+   */
+  readonly reviews: {
+    readonly scoreMin: number | null;
+    readonly scoreMax: number | null;
+    readonly distribution: readonly {
+      readonly score: number;
+      readonly count: number;
+    }[];
+  };
+  /**
    * The state of the building itself (G-009).
    *
    * Nested and keyed by reason, mirroring the sim's own tally rather than flattening it:
@@ -1195,6 +1227,28 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
     };
   });
 
+  // THE REVIEW DISTRIBUTION (G-019), built from the CONTENT's scale and filled in from the
+  // world's sparse tally — the need table's construction exactly, so a score nobody gave
+  // prints a zero instead of vanishing.
+  //
+  // THIS LOOP IS ONE ROW PER ADMITTED SCORE, AND THAT IS ONLY SAFE BECAUSE THE SPAN IS
+  // BOUNDED AT LOAD. The need-table idiom it copies is safe because content declares four
+  // need types; a SPAN is a different animal, and with no ceiling
+  // `reviewScoreMin: 0, reviewScoreMax: 5000000` bound happily and made a one-day run emit
+  // 5,000,001 rows and 308,891,476 bytes of JSON in silence (`balance-critic`, G-019).
+  // `assertReviewScaleIsBoundedByTheNeedTable` now refuses a scale wider than the need table can
+  // produce distinct experiences for, so the worst case here is
+  // `needTypes x ONE_WHOLE + 1` rows — absurd content, bounded and refusable, rather than
+  // absurd content that fills a disk. The bound is derived there, not chosen; do not
+  // reintroduce a dense loop over a quantity content can make unbounded.
+  const reviewScale = reviewScaleOf(content);
+  const reviewRows: { readonly score: number; readonly count: number }[] = [];
+  if (reviewScale !== undefined) {
+    for (let score = reviewScale.min; score <= reviewScale.max; score += 1) {
+      reviewRows.push({ score, count: reviewCountOf(world.reviewOutcomes, score) });
+    }
+  }
+
   const summary: RunSummary = {
     schema: SUMMARY_SCHEMA_VERSION,
     input: {
@@ -1230,6 +1284,11 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       inInvalidRooms: guestsInInvalidRooms,
     },
     needs,
+    reviews: {
+      scoreMin: reviewScale?.min ?? null,
+      scoreMax: reviewScale?.max ?? null,
+      distribution: reviewRows,
+    },
     rooms: {
       valid: validRooms,
       invalid: {
@@ -1515,6 +1574,91 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         'the other (G-015).',
     );
   }
+  // ============================================================================
+  // THE REVIEW LAWS (G-019). THREE, AND EACH COMPARES THE DISTRIBUTION AGAINST A SEPARATE
+  // ACCUMULATION — never against itself, which is the whole of ADR-0007's G-013 amendment.
+  //
+  // WHY THEY LIVE HERE AND NOT IN THE SIM. Two of the three need CONTENT (the scale), which
+  // `assertWorldShape` does not have at load; and the third is an EQUALITY that is only true
+  // of a world ticked from zero, where the sim can state it as an inequality at best. The
+  // same split, and the same reasons, as the need tally's `met + unmet === departed`.
+  //
+  // WHY THEY CANNOT FIRE ON A LEGITIMATELY MIGRATED WORLD, WHICH IS THE OTHER HALF OF THE
+  // POLICY `build.ts` STATES FOR ITS TWIN — and law B genuinely WOULD misfire without it,
+  // so this is a live limitation rather than a formality. A world migrated from v9 carries
+  // departures, INCLUDING EVICTIONS, that happened before reviews existed: its review table
+  // is empty by construction (`migrateV9ToV10`), so law C would fire on the first row and
+  // law B on any pre-v10 eviction. Neither can happen HERE because this runner creates every
+  // world it reports on and never loads a save — the same sentence that makes law C an
+  // equality is what makes law B safe. A future consumer that DOES load saves must re-derive
+  // all three rather than lifting them across.
+  if (reviewScale !== undefined) {
+    // C — CONSERVATION. A guest leaves exactly one review, on the way out, through the one
+    // exit path. The rows are incremented by `recordReview` inside `depart`; `departed` is
+    // folded from the DEPARTURE TABLE, which a different line increments for a different
+    // reason. A departure path that forgot to review would leave every other number in this
+    // report perfectly consistent.
+    //
+    // IT ALSO CATCHES A SCORE OUTSIDE THE SCALE, which nothing else here can see: the rows
+    // above are built from the scale, so a review recorded at a score the scale does not
+    // admit is silently absent from them and this sum comes up short.
+    let reviews = 0;
+    for (const row of summary.reviews.distribution) reviews += row.count;
+    if (reviews !== departed) {
+      violations.push(
+        `Review accounting broken at tick ${world.tick}: ${reviews} review(s) inside this content's scale ` +
+          `against ${departed} departed guest(s). Every guest leaves exactly one review when it leaves, and ` +
+          'every review lies on the scale, so a departure that recorded none — or one recorded off the scale — ' +
+          'moves this and nothing else (G-019).',
+      );
+    }
+    // A — A TOP REVIEW REQUIRES EVERY NEED MET, checked against the NEED TABLE.
+    //
+    // This is the human's pre-PLAN finding made mechanical. A review function that read only
+    // `night_rest` would, at `--rooms 6 --amenities 0`, emit 356 maximal reviews against a
+    // minimum need row of 0, and the run would exit 1. It is not an identity over the review
+    // rows: `met` is accumulated per need type by `recordNeedsAtDeparture`, and the
+    // top-review count by different code reading a different quantity.
+    //
+    // ITS PREMISE IS THE BIND-TIME RULE rather than an assumption made here: `max - min >= N`
+    // is exactly the condition under which a guest missing any need cannot reach the top band
+    // (`assertReviewScaleIsBoundedByTheNeedTable`). Weaken that rule and this law starts firing on
+    // correct runs, which is the right direction for a wrong change.
+    //
+    // IT BITES, AND AT ONE MEASURED CONFIGURATION IT IS AN EQUALITY: `--rooms 1 --amenities 1
+    // --days 30 --seed 7` gives 89 maximal reviews against a least-met row of exactly 89.
+    let leastMet = Number.POSITIVE_INFINITY;
+    for (const row of needs) leastMet = Math.min(leastMet, row.met);
+    const topReviews = reviewCountOf(world.reviewOutcomes, reviewScale.max);
+    if (needs.length > 0 && topReviews > leastMet) {
+      violations.push(
+        `Review attribution broken at tick ${world.tick}: ${topReviews} guest(s) left the top review of ` +
+          `${reviewScale.max}, but the least-met need was met only ${leastMet} time(s). A top review is ` +
+          'unreachable while any need is unmet — that is what this scale is sized for — so more of them than ' +
+          'that means the review is not reading the whole need vector (G-019).',
+      );
+    }
+    // B — A STAY THE HOTEL CUT SHORT REVIEWS AT THE FLOOR, checked against the DEPARTURE
+    // TABLE. An eviction scores the hotel's conduct rather than the guest's experience, so
+    // every evicted stay is a floor review; other stays may be too, which is why this is an
+    // inequality and not an equality.
+    //
+    // IT INSPECTS NOTHING IN MOST RUNS, WHICH IS WHY THE CRITERIA NAME AN ARM FOR IT.
+    // Evictions are zero in every configuration this project measures by default, so
+    // ADR-0007's second half — a case proving it can fail — is a REAL INVOCATION rather than
+    // a forged world: `--rooms 6 --amenities 5 --arrivals 60 --demolish 900`, five evictions
+    // and five floor reviews, pinned in `review.report.test.ts`.
+    const evicted = evictedInSummary(summary);
+    const floorReviews = reviewCountOf(world.reviewOutcomes, reviewScale.min);
+    if (floorReviews < evicted) {
+      violations.push(
+        `Review attribution broken at tick ${world.tick}: ${evicted} stay(s) ended in an eviction but only ` +
+          `${floorReviews} guest(s) left the floor review of ${reviewScale.min}. A stay the hotel cut short ` +
+          'reviews at the floor whatever else the guest got, so an eviction reviewed as an ordinary stay moves ' +
+          'one of these and not the other (G-019).',
+      );
+    }
+  }
   // VALIDITY — the exit criterion, as a check the run makes on itself (G-009).
   //
   // WHAT THIS NUMBER IS, EXACTLY: a count taken ONCE, over the FINAL world of the run. It
@@ -1546,6 +1690,28 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   }
 
   return { summary, violations };
+}
+
+/**
+ * The mean review, in hundredths of a score, or `null` if nobody has left one (G-019).
+ *
+ * A FOLD OVER THE ROWS THE REPORT ALREADY CARRIES, computed at print time and stored
+ * nowhere — see `RunSummary.reviews` for why. Integer arithmetic with one division and one
+ * explicit rounding rule, so two runs of the same command print the same bytes on every
+ * platform: `Math.round` over values exact in a double, never a float formatted by a locale.
+ *
+ * Exported so the tests fold the same rows this prints rather than keeping a second copy of
+ * the arithmetic — the "one summary, three renderers" contract at the top of this file.
+ */
+export function meanReviewHundredths(summary: RunSummary): number | null {
+  let total = 0;
+  let count = 0;
+  for (const row of summary.reviews.distribution) {
+    total += row.score * row.count;
+    count += row.count;
+  }
+  if (count === 0) return null;
+  return Math.round((total * 100) / count);
 }
 
 /**
@@ -1588,6 +1754,16 @@ export function renderText(summary: RunSummary): string {
         `need ${need.lodging ? 'L' : ' '}     ${need.needId} ${need.met} met, ${need.unmet} unmet ` +
         `(${need.met - need.metByItem} by room, ${need.metByItem} by item), ${need.abandoned} abandoned`,
     ),
+    // THE REVIEW DISTRIBUTION (G-019), one column per score the scale admits, ascending —
+    // zeros included, for the reason the need table prints a row nothing resolved.
+    `reviews     ${summary.reviews.distribution.map((row) => `${row.score}:${row.count}`).join(', ')}`,
+    // AND THE MEAN, COMPUTED HERE AND STORED NOWHERE (G-019). In HUNDREDTHS, as an integer:
+    // this file's stability contract bans floats and locale-aware formatting outright, and a
+    // stored mean would be the derived-value-beside-its-source shape that produced G-013's
+    // deleted law. `renderText` already subtracts `met - metByItem` at print time for the
+    // same reason. `n/a` — not 0 — when nobody has left yet, because a hotel no guest has
+    // finished with has no average, and printing 0 would be a review nobody gave.
+    `mean x100   ${meanReviewHundredths(summary) ?? 'n/a'}`,
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,
     `upkeep      ${summary.money.upkeepPennies}p`,
