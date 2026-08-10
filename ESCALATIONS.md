@@ -743,3 +743,94 @@ worker-count policy, or handling the RPC timeout. **A cap is ruled out by measur
 
 **§2.0's guard is unchanged and worth restating: a THIRD unreliable gate is a stop condition.**
 The count is 1. It has never been 0 since G-016.
+
+---
+
+## OPEN — M2 EXIT. All 13 goals done; §5.4 says this is yours to sign off (2026-08-10)
+
+**G-012 to G-021 are `done`. The loop stops here.** Everything below is either a decision only
+you can take, or a result you asked to be shown before signing.
+
+### 1. What M2 was for, and whether it happened
+
+M2's statement contains the word **"visibly"**, and ADR-0013 is the ruling that a perceptual
+criterion needs a perceptual check. **It has one now**: `tools/viewer` exists, four WATCH entries
+are in `JOURNAL.md`, and the last of them is a recording you can open. **That word is
+discharged** — but the discharge is only as good as the instrument, which is item 4.
+
+### 2. THE THREE THINGS YOU ASKED TO SEE BEFORE SIGNING
+
+**(a) The digest experiment, scored both ways.** You asked for the delete case argued as well as
+the automate case, and said you would rather see the argument than the defence.
+
+*The automate case*: it caught real staleness four times, and the byte-identical `*As of…*` line
+across four files makes "where are we" answerable in one grep.
+
+***The delete case, and it is stronger.*** The mechanism has failed **four times in three days**,
+every failure repaired by hand, and **the fourth was mine, one REFLECT after I recorded the third
+as the argument for automating it** — all four digests over the fifteen-line cap at once, caught
+only by counting lines by hand again. **`HOTELSIM.md:213` seeded a mechanical check and no goal
+ever owned it.** A rule its own author breaches immediately after writing down the breach is not
+being enforced by anything.
+
+**My recommendation: automate the two mechanical parts or delete the cap.** The as-of line and
+the line count are both one small test. If you do not want that test, the honest move is to drop
+the cap and keep the digests as prose, because an unenforced number is a superstition with a
+heading.
+
+**(b) The unreliable-gate count, with its noun.** **One gate, one defect: I4.** Defect A (timing
+bounds in a parallel runner) is repaired and moved to `pnpm check:scaling`. Defect B (worker RPC
+starvation) is **diagnosed and unrepaired** — see item 3.
+
+**(c) The bimodal recording, watched not manufactured.** `--days 3 --seed 7 --rooms 6
+--arrivals 60`: **48 satisfied, 15 gave up** in one run, the middle band you asked for, and it
+exists at HEAD rather than being constructed. Frame-referenced in `JOURNAL.md`. **The entry
+declines to claim the perceptual half and leaves you three questions.**
+
+### 3. THE DECISION I CANNOT TAKE FOR YOU — I4's defect B
+
+**Measured**: ten loaded runs, both arms, **every one signature B with all 1,426 tests passing.**
+The discriminator is **load, not worker count**, so `maxWorkers: 2` was removed as
+measured-ineffective after costing **1.564× on every run** to prevent nothing.
+
+**The count is 1 gate / 1 defect and G-020c refused to report 0**, which was available from its
+quiet arm alone. **Your call:**
+
+- **Accept 1 gate / 1 defect for M2 exit**, with B named, measured, and parked with a
+  falsification test; or
+- **Hold M2 open** until B is repaired, which is its own goal.
+
+**§2.0's guard is unchanged: a THIRD unreliable gate is a stop condition.** The count has never
+been 0 since G-016.
+
+### 4. THE THING I WOULD RAISE EVEN IF YOU DID NOT ASK — CI HAS NEVER RUN
+
+**There is no git remote.** `.github/workflows/verify.yml` has certified nothing since bootstrap.
+It matters more now than it did: **G-020b shipped a timing-dependent bound into `pnpm verify`**,
+and the workflow describes a three-OS matrix on shared 2–4 vCPU runners. **Every reading behind
+that bound came from this 12-core box. No gate in this project has been observed running on any
+other machine.** Adding a remote and pushing is yours; it is the single cheapest way to find out
+whether eleven green rows mean anything off this desk.
+
+### 5. WHAT M2 LEAVES M3 AND M4, AS RESULTS RATHER THAN OBLIGATIONS
+
+- **The dwell term is falsified-positive**, not a hypothesis: **35 of 38 abandonments at the
+  shipped margin leave a need past half its `satisfyTicks`**, and no non-saturating margin can
+  guarantee completion.
+- **The top-band review share is non-monotone in room count and peaks at the default hotel** —
+  24.9% at 1 room, **41.6% at 3**, 0.28% at 12, mean rising throughout. **At M4 a reputation term
+  reading the mean is safe; one reading share-of-top-reviews inverts the build loop.**
+- **M4 is blocked on scenario capital** (ADR-0013 §5): `--rooms N` seeds ~75% extra opening
+  capital, and every balance figure in this project was taken with it.
+- **The "1.74 → 2.08 need-vector regression" was never a multiple.** The quiet interval excludes
+  1.3×; there is a real ~11–25% difference and it is not the class this project produces.
+
+### 6. THE HONEST LEDGER ON MYSELF
+
+Three orchestrator defects this milestone, all caught by agents: I passed you a **conclusion that
+had outlived its numbers** (the sittings-vs-revisions claim); I shipped a **commit message
+describing six rulings its diff did not contain**, and "verified" it with a grep that matched a
+different goal's block; and **three of four exit criteria in one goal, and all three in another,
+were satisfiable without the feature working** — each found by a builder or critic at PLAN, which
+is the cheapest moment, and each now recorded as ADR-0007's sixth amendment: **a vacuous check
+fails to catch a defect; a vacuous criterion certifies the goal.**

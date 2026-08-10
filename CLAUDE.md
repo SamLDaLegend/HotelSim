@@ -216,6 +216,27 @@ scratch directory over mutating the repo at all; where that is impossible, captu
 **This is not a prohibition, it is a recipe.** When several careful actors independently make
 the same error, the rule is missing rather than being broken.
 
+## Regex in a template literal — three goals, three authors, one missing rule
+
+**`` `(?<![\w$])${key}` `` does not do what it looks like.** In a template literal the backslash
+is consumed, so `\w` compiles to a bare `w` and the pattern becomes `(?<![w$])` — a character
+class of two letters instead of a word boundary. **Write `\\w`, or build the pattern from a
+normal string.**
+
+Three instances, in three goals, by three careful authors — the third **four lines below a
+correct spelling in the same file**, written by someone who had just documented catching the
+other two. Every one changed no answer on the day it shipped and every one sat inside a
+*scanner*: the predicate a purity check, a boundary fence or a partition guard rests on. That is
+the worst place for a silent near-miss, because the thing it would break is the thing that would
+otherwise have caught it.
+
+**Check it against the bytes on disk, not against a retyped copy** — read the shipped line back
+out of the file and compile it. Retyping is how this survived three goals: the eye supplies the
+backslash the file does not have.
+
+*(Same route as the mutation recipe above: when several careful actors independently make one
+error, the rule is missing rather than being broken.)*
+
 ## Parking (§4)
 
 **Park a hypothesis with its falsification test attached** (human ruling, 2026-08-09). If
