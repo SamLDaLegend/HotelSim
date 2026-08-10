@@ -21,8 +21,10 @@ import {
   loadGuestRulesFrom,
   loadItemTypesFrom,
   loadNeedTypesFrom,
+  loadSpeedLadderFrom,
   NEED_TYPES_PATH,
   ROOM_TYPES_PATH,
+  SPEED_LADDER_PATH,
 } from './content-loader.js';
 
 const scratch = mkdtempSync(join(tmpdir(), 'hotelsim-content-'));
@@ -193,6 +195,41 @@ describe('loading failures are legible and total', () => {
     );
     const message = messageOf(() => loadGuestRulesFrom(invalid));
     expect(message).toContain('abandonMarginBasisPoints');
+    expect(message).not.toContain('node_modules');
+  });
+
+  // THE SIXTH LOADER GETS THE SAME THREE CASES AS THE OTHER FIVE (G-021). `loadGuestRulesFrom`
+  // shipped with none at G-014b and `ai-critic` raised it as a MAJOR rather than as tidying,
+  // because a loader reached only through `loadContent` fails indistinguishably from any
+  // other file's. This one is reached through NEITHER — it is deliberately outside
+  // `loadContent`, since a wall-clock quantity must not be injected into the simulation
+  // (I2) — so it is the first loader whose only caller is a test and a gate. That makes the
+  // three cases more necessary here, not less.
+  it('reads and validates the shipped speed ladder on its own', () => {
+    const ladder = loadSpeedLadderFrom(SPEED_LADDER_PATH);
+    expect(ladder.length).toBeGreaterThan(0);
+    for (const rung of ladder) {
+      expect(Number.isInteger(rung.ticksPerRealSecond)).toBe(true);
+      expect(rung.name.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('names the path when the speed ladder does not exist', () => {
+    const path = join(scratch, 'no-such-ladder.json');
+    expect(() => loadSpeedLadderFrom(path)).toThrow(ContentError);
+    expect(messageOf(() => loadSpeedLadderFrom(path))).toContain(path);
+  });
+
+  it('keeps "not JSON" and "not content" apart for the ladder too, naming the field', () => {
+    const broken = fileWith('broken-ladder.json', '[{"id":');
+    expect(messageOf(() => loadSpeedLadderFrom(broken))).toContain('not valid JSON');
+    // The speed comes through a parameter rather than a literal, so this file declares no
+    // speed binding of its own — `speed-ladder.scan.test.ts` scans this directory and caught
+    // the first draft of this line, which is the check working on the goal that added it.
+    const rungAt = (ticks: number): unknown => ({ id: 'speed_fast', name: 'Fast', ticksPerRealSecond: ticks });
+    const invalid = fileWith('invalid-ladder.json', JSON.stringify([rungAt(0)]));
+    const message = messageOf(() => loadSpeedLadderFrom(invalid));
+    expect(message).toContain('ticksPerRealSecond');
     expect(message).not.toContain('node_modules');
   });
 });

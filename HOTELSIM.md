@@ -19,7 +19,7 @@ I1	Sim purity. packages/sim imports nothing from the render layer, no DOM, no en
 I2	Determinism. Same seed plus same command log produces a byte-identical state hash after 100,000 ticks, on every run and every platform. No Math.random, no Date.now, no Set/Map iteration-order dependence inside packages/sim. All randomness comes from an injected seeded PRNG.	pnpm test:determinism
 I3	Content is data. No room type, item, staff role or guest archetype defined in code. All of it lives in packages/content as JSON validated against a schema.	pnpm check:content — fails if a new type literal appears outside packages/content.
 I4	Ledger is append-only. Cash balance is derived by folding transactions, never stored and mutated.	pnpm test — unit test asserts balance is a pure function of the transaction log.
-I5	Headless. pnpm sim:run --days 365 --seed 42 completes in Node with no window and no renderer, inside the budget. **The budget is DERIVED, not chosen** — 389,333ms, from a 60-room hotel at 30x sustaining real time; the arithmetic is in §2.1.2 and tools/gates/budget.mjs executes it. The 30x is a PROVISIONAL working figure, not a ratified one — the speed ladder belongs in content and is G-021's (§2.1.1) — and this budget is INVERSELY PROPORTIONAL to it, so retuning the ladder RE-DERIVES this number (§2.1.2). What holds across a ladder change within ~12x is the conclusion, not the constant. The original "under 10 seconds" was invented at bootstrap with no basis and was replaced at G-018 (ADR-0013 §4). The word doing the work is HEADLESS; the time bound is a sanity ceiling, not a regression tripwire (§2.1.3).	pnpm sim:bench
+I5	Headless. pnpm sim:run --days 365 --seed 42 completes in Node with no window and no renderer, inside the budget. **The budget is DERIVED, not chosen** — 389,333ms, from a 60-room hotel at 30x sustaining real time; the arithmetic is in §2.1.2 and tools/gates/budget.mjs executes it. The 30x is the TOP RUNG of the content ladder — packages/content/data/speed-ladder.json, validated by a schema and read by tools/gates/budget.mjs (G-021) — and this budget is INVERSELY PROPORTIONAL to it, so retuning the ladder in JSON RE-DERIVES this number — with no edit to the DERIVATION, which is the part that could go wrong silently; the derived figure is also quoted in four places that bench.budget.test.ts pins, and a retune updates those with it (§2.1.2). What holds across a ladder change within ~12x is the conclusion, not the constant. The original "under 10 seconds" was invented at bootstrap with no basis and was replaced at G-018 (ADR-0013 §4). The word doing the work is HEADLESS; the time bound is a sanity ceiling, not a regression tripwire (§2.1.3).	pnpm sim:bench
 I6	Save round-trip. Serialise then deserialise then re-hash produces an identical state hash. Save files carry a schema version and a migration path.	pnpm test:save
 
 2.0 RED MEANS REPRODUCIBLE. AN INTERMITTENT GATE IS NOT RED, IT IS UNRELIABLE.
@@ -48,26 +48,34 @@ I5's ten seconds was invented at bootstrap and then promoted G-016 into existenc
 
 This applies to every bound in the repo, not just I5 — scaling ratios, patience caps, review means. G-010's "measured × 1.5, then held at or below" is the right shape. A round number is not.
 
-2.1.1 The play-speed ladder — a PROVISIONAL WORKING FIGURE, not a minted fact (G-018)
+2.1.1 The play-speed ladder — CONTENT, and settled by watching (G-021)
 
-A tick is one in-game minute and 1440 ticks make a day (packages/sim/src/world.ts:33). Nothing in this repo had ever fixed what a speed MULTIPLE means, and I5's budget cannot be derived without one, so §2.1.2 below uses this mapping:
+A tick is one in-game minute and 1440 ticks make a day (packages/sim/src/world.ts:33). THE LADDER IS NOW CONTENT — packages/content/data/speed-ladder.json, three rungs, each carrying its own label and its own absolute speed:
 
-  1x  = 1 tick per REAL SECOND — the in-game clock at one minute per second, a
-        simulated day in 24 real minutes.
-  30x = the fastest intended play speed = 30 ticks per real second, a simulated
-        day in 48 REAL SECONDS.
+  Fast     30 ticks per real second — a simulated day in 48 REAL SECONDS. THE TOP
+           RUNG, which is what §2.1.2 below derives I5's budget from.
+  Working  12 ticks per real second.
+  Careful   5 ticks per real second.
+  Pause is BENEATH the ladder and is NOT a rung: it is a transport state, not a rate.
+           M5 must not read this table as the complete set of transport states.
 
-IT IS PROVISIONAL, AND M5 DOES NOT INHERIT IT AS SETTLED. G-018 proposed it as a design fact and the human declined to ratify it (2026-08-08). It stands as a working figure for the arithmetic below and for nothing else.
+30 IS THE ANCHOR, NOT THE CEILING. The rungs below it are spaced by what is playable, not by round multipliers, and 1x is deliberately absent — see the diagnostic below.
 
-THE DIAGNOSTIC, RECORDED HERE BECAUSE IT ARGUES AGAINST THE FIGURE THIS SECTION USES. The tell is not the top speed, which is plausible; it is the bottom. Twenty-four real minutes per simulated day at 1x means **nobody will ever play at 1x**, and a ladder whose lowest rung is dead is not a ladder — it is a single speed with decoration below it. That is the kind of defect discovered the first time a human uses the viewer, which is exactly where it is sent.
+TWO FORMAT RULES, MINTED WITH THE FILE. (1) A rung carries its own name, so labels travel with values. (2) THERE IS NO IMPLIED ARITHMETIC BETWEEN RUNGS — they are not multiples of each other and nothing may compute one from another. Otherwise M5 hardcodes "1x/2x/3x" against content that does not mean that, and the first rebalance produces a UI that lies about itself.
+
+WHAT ENFORCES RULE 2, AND WHAT DOES NOT. The schema is a strictObject with exactly {id, name, ticksPerRealSecond}, so no multiplier, base or ratio field survives parsing; a label that IS a multiple ("2x") is refused, which stops a DESIGNER encoding a relation in a name — it is leaky as a regex and that is stated at the point of use. The only gate consumer takes max, proved by an arm with the fastest rung in the MIDDLE. NONE OF THIS REACHES ARITHMETIC IN RENDER CODE: nothing in packages/content can stop M5 computing ladder[i] / ladder[0]. That instrument is a source scan over apps/game and it is parked with its falsification test, because apps/game may not be opened before M5.
+
+A NEAR-MISS WORTH KEEPING. The obvious enforcement — "no rung may be an integer multiple of another" — WOULD REJECT THIS LADDER: 30 = 6 x 5. Enforcement has to constrain the FORMAT and the CONSUMERS, never the designer's values.
+
+HOW IT GOT SETTLED, kept because the reasoning is reusable. G-018 proposed 30x as a design fact and the human declined to ratify it (2026-08-08). THE TELL WAS NOT THE TOP SPEED, WHICH IS PLAUSIBLE; IT IS THE BOTTOM. Twenty-four real minutes per simulated day at 1x means **nobody will ever play at 1x**, and a ladder whose lowest rung is dead is not a ladder — it is a single speed with decoration below it. That is the kind of defect discovered the first time a human uses the viewer, which is exactly where it is sent.
 
 WHY IT LOOKED SOUND AND WAS NOT, because the error is reusable. "One tick is one in-game minute" is a charter decision and it is sound. Mapping that minute 1:1 onto a real SECOND is a SEPARATE choice, and at G-018 it inherited its justification from the first one by adjacency: it is aesthetic tidiness, not a design finding. Two decisions that look like one because they share a unit is a shape worth recognising elsewhere.
 
 WHAT THE LADDER SHOULD ACTUALLY BE ANCHORED ON: NIGHTLY SETTLEMENT, because that is when the money loop resolves. A management sim wants the player to watch several settlements land while turning over one decision. At 48s per simulated day that is a couple of minutes per decision cycle — on the sluggish side of the genre without being absurd, which is why the figure is usable as a working number and still wrong to mint.
 
-ITS HOME IS CONTENT (I3). A set of ticks-per-second figures is a balance number, and I3 says balance numbers are data rather than code. **It is not built at G-018**, whose exit criterion forbids touching packages/ and whose teeth are the point. Seeded as **G-021 — The speed ladder is content**, before M5.
+ITS HOME IS CONTENT (I3), AND THAT IS WHERE IT NOW LIVES. A set of ticks-per-second figures is a balance number, and I3 says balance numbers are data rather than code. Built at **G-021**; not at G-018, whose exit criterion forbade touching packages/ and whose teeth were the point.
 
-DISCHARGE POINT: **G-017's viewer.** Whether 48s per simulated day reads as fast, slow or dead is the first question a watching human can actually answer, and it is the cheapest possible use of the instrument.
+DISCHARGED BY **G-017's viewer**, and the instrument corrected the person who argued for the instrument. The human predicted 48s per simulated day would read SLUGGISH, reasoned from the settlement heartbeat. Watched, it reads BRISK — a prediction scored and half wrong, recorded by the human as "I derived a feel from arithmetic rather than from watching, which is precisely the move ADR-0013 exists to forbid." **The half that held is the one that mattered: 1x is dead**, and that is what makes this ladder non-linear rather than merely re-scaled.
 
 Speed is expressed in ticks per real SECOND and never in ticks per rendered FRAME. That part is not provisional. §6.1's render-critic catalogue already lists frame-rate-dependent advance as a defect — "animation that runs faster on a 144Hz monitor" — so a speed control defined as "N ticks per frame" IS that defect. The render-engineer craft note ("speed controls change how many ticks are run per frame") holds only in the sense that a frame consumes the ticks the wall clock has earned; the count a second earns must not depend on the refresh rate.
 
@@ -84,8 +92,9 @@ INPUTS, each with its source:
   1  a tick is one in-game minute              packages/sim/src/world.ts:32
   2  1440 ticks per simulated day              packages/sim/src/world.ts:33 TICKS_PER_DAY
   3  365 days = 525,600 ticks                  I5's own wording; tools/gates/budget.mjs
-  4  fastest play speed = 30 ticks/second      §2.1.1 above (PROVISIONAL - proposed at
-                                               G-018, NOT ratified; see §2.1.1)
+  4  fastest play speed = 30 ticks/second      the TOP RUNG of the content ladder,
+                                               packages/content/data/speed-ladder.json
+                                               (G-021, §2.1.1)
   5  sim's share of one core, S = 0.10         ASSUMPTION, justified below
   6  headroom for M3+M4+M6, H = 4.5            estimated below from measured ratios
 
@@ -132,11 +141,13 @@ SENSITIVITY, so the answer is not an artefact of S and H:
 
 Every cell is at least 2.5x the invented ten seconds and most are 10-100x. Only the reading §2.1.1 rejects lands near it.
 
-WHAT A PROVISIONAL TOP SPEED DOES TO THIS BUDGET, STATED CORRECTLY. The budget is EXACTLY INVERSELY PROPORTIONAL to the top speed:
+WHAT A LADDER CHANGE DOES TO THIS BUDGET, STATED CORRECTLY. The budget is EXACTLY INVERSELY PROPORTIONAL to the top speed:
 
   budget_seconds = 525,600 x S / (speed x H)     check: 525,600 x 0.10 / (30 x 4.5) = 389.3
 
-So halving the top rung doubles this constant, and doubling it halves it. **A goal that retunes the ladder in content (G-021) RE-DERIVES this budget; it does not leave it alone**, and bench.mjs says so at the point of use.
+So halving the top rung doubles this constant, and doubling it halves it. **Retuning the ladder in content RE-DERIVES this budget; it does not leave it alone.** The derivation itself needs NO EDIT — tools/headless/src/speed-ladder.budget.test.ts proves that against a byte-identical copy of the gate module, sha256 asserted equal — and bench.mjs says so at the point of use.
+
+SAY THE LIMIT OF THAT CLAIM, BECAUSE THE FIRST VERSION OF THIS PARAGRAPH OVERSTATED IT AND `sim-critic` MEASURED IT FALSE (G-021). "With no code edit" is true of the derivation and FALSE of the repository. A JSON-only retune reddens five assertions in bench.budget.test.ts, one of them budget.mjs's own summary comment — a .mjs file under tools/gates, so fixing it IS a code edit. That is the ADR-0007 machinery working as designed: every quoted copy of the number is pinned, so none of them can drift silently. The honest statement is that a retune requires no change to the ARITHMETIC and does require updating the places that quote its result, all of which a red test names.
 
 WHAT SURVIVES IS THE CONCLUSION, AND THE FORMULA ALONE ESTABLISHES IT — no appeal to the table. Divide: a 12x faster ladder gives 389.3 / 12 = 32.4s, still 3.24x the ten seconds; the budget reaches ten seconds only at ~39x. **So the derived budget stays at least 2.5x the ten seconds for any ladder change within ~12x**, and a plausible retune moves this number without disturbing anything this section concludes about it.
 

@@ -21,8 +21,9 @@ import {
   parseGuestRulesJson,
   parseItemTypesJson,
   parseNeedTypesJson,
+  parseSpeedLadderJson,
 } from '@hotelsim/content';
-import type { ContentRegistry, Economy, GuestRules, ItemType, NeedType } from '@hotelsim/content';
+import type { ContentRegistry, Economy, GuestRules, ItemType, NeedType, SpeedRung } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
 
@@ -41,6 +42,12 @@ export const NEED_TYPES_PATH = resolveContent('@hotelsim/content/data/need-types
 export const ITEM_TYPES_PATH = resolveContent('@hotelsim/content/data/item-types.json');
 export const ECONOMY_PATH = resolveContent('@hotelsim/content/data/economy.json');
 export const GUEST_RULES_PATH = resolveContent('@hotelsim/content/data/guest-rules.json');
+/**
+ * The play-speed ladder (G-021). Resolved here like every other table — and read by
+ * `loadSpeedLadderFrom` below, which `loadContent` deliberately never calls. The reason is
+ * on that function.
+ */
+export const SPEED_LADDER_PATH = resolveContent('@hotelsim/content/data/speed-ladder.json');
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -73,6 +80,33 @@ export function loadEconomyFrom(path: string): readonly Economy[] {
 /** Read and validate one guest-rules file (G-014b). Same all-or-nothing discipline. */
 export function loadGuestRulesFrom(path: string): readonly GuestRules[] {
   return parseGuestRulesJson(readContentFile(path), path);
+}
+
+/**
+ * Read and validate one speed-ladder file (G-021). Same all-or-nothing discipline.
+ *
+ * IT IS NOT CALLED BY `loadContent`, AND THE OMISSION IS THE DESIGN. The other five tables
+ * are assembled into a registry and injected into the simulation; this one is not, because
+ * ticks per REAL SECOND is a wall-clock quantity and I2 says the simulation's time is the
+ * tick counter and never a wall clock. Putting it in the object the tick loop reads would
+ * park a real-second number one field away from the thing I2 exists to catch.
+ *
+ * The consequence is deliberate and worth stating, because G-014b decided the opposite way
+ * for `guest-rules.json`: a `--content <dir>` directory does NOT have to contain a speed
+ * ladder, and the three fixture directories in this repo did not grow a sixth file. G-014b's
+ * argument was that a missing file would hand the designer a silent historical default and a
+ * hotel whose guests behaved differently. It does not reach here: no headless code path
+ * consumes a ladder, so a missing one cannot change what a run does. What DOES consume it —
+ * `tools/gates/budget.mjs` — reads the shipped file by path and refuses to start without it.
+ *
+ * THERE IS NO `loadSpeedLadder(contentDir?)` BESIDE THIS, and there was one for about an
+ * hour. It had no caller and no test, and its `--content <dir>` branch was the very case the
+ * paragraph above argues should not exist — a `--content` directory needs no ladder, because
+ * no headless code path consumes one. Written for M5 on speculation, which is how a loader
+ * acquires a branch nobody ever meant to support. M5 can add it in the line it takes.
+ */
+export function loadSpeedLadderFrom(path: string): readonly SpeedRung[] {
+  return parseSpeedLadderJson(readContentFile(path), path);
 }
 
 function readContentFile(path: string): string {

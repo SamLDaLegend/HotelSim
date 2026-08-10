@@ -2,25 +2,23 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-014b done. M2: 10 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-021 done. M2: 11 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
 - **Schemas**: save **v9** · summary **v2** · I2 `10926cc3b569c887`. **`verify` runs TEN
   rows**: six invariants, `typecheck`, and three `—` rows (`check:measure`, **`check:tickcost`**,
   **`check:tickcost:proof`**) that are **not** invariants — a seventh is a human call. **I4
-  UNRELIABLE (§2.0), 2 defects.** All ten green ×2 at G-014b VERIFY.
-- **Tripwire**: `BOUND 1.4557 = sqrt(1.0238 × 2.07)`, arm **30 days**, ADR-0015. G-014b read
-  **1.0416–1.0977 over nine pairs**, all inside. **Quiet `win32/12cpu`; CI unmeasured** — G-020c's.
-- **Order**: G-021 → G-020c → **G-019 LAST, two critics** → M2 exit. *Reordered at G-014b
-  REFLECT so "last in milestone" stays true — and on merit: G-020c repairs I4 before the
-  final goal runs against it, G-021 makes the ladder content before G-019 watches a run.*
+  UNRELIABLE (§2.0), 2 defects.** Ten green ×2 at G-021 VERIFY. **The ladder is CONTENT**
+  (30/12/5, pause a transport state); `budget.mjs` derives I5's budget from it.
+- **Tripwire**: `BOUND 1.4557 = sqrt(1.0238 × 2.07)`, 30-day arm, ADR-0015; quiet
+  `win32/12cpu`, **CI unmeasured** (G-020c's). **Order**: G-020c → **G-019 LAST, two
+  critics** → M2 exit.
 - **Owed by the human**: M2 exit sign-off — the digest experiment scored **both ways** (four
-  failures logged, newest the worst), the unreliable count **with its noun**, and the bimodal
-  recording **watched, not made** — now G-019's criterion 6, so it lands as a deliverable.
+  failures logged), the unreliable count **with its noun**, the bimodal recording **watched**.
 - **Owed by goals**: G-019 the second axis (amenity density at fixed rooms), without which its
-  headline criterion misses three-quarters of the need vector · G-020c **both I4 defects** +
-  the CI regime reading + replace-don't-pool · **M4 blocked on scenario capital.**
+  headline criterion misses three-quarters of the need vector · G-020c **both I4 defects**, the
+  CI regime reading, replace-don't-pool · **M4 blocked on scenario capital.**
 - **Open contradictions**: G-012's criterion pins a content property any provider can flip ·
-  `--rooms N` contaminates every balance sweep · the ladder is provisional · seeds inert.
+  `--rooms N` contaminates every balance sweep · seeds inert until M4. **Not the ladder — settled.**
 
 ---
 
@@ -2313,7 +2311,10 @@ Critique rounds used: 0/3
   goal retakes it in the same campaign. The two obligations share a measurement.
 
 ## G-021 — The speed ladder is content
-Status: **in-progress** — PLAN dispatched 2026-08-10. **Before M5 tunes anything against it.**
+Status: **done, DRY at 1/3** — 1 sweep (4 MAJOR + 4 MINOR) plus a §5.6 plan pass that returned
+  **1 BLOCKER + 8 MAJOR before a line was written**, and three verification passes, **none of
+  which converted.** Zero BLOCKERs survived into code. The plan pass is where this goal was
+  won: the BLOCKER it caught would have made criterion 5 unmeetable.
 Milestone: M2
 Owner pair: sim-engineer / sim-critic
 Statement: The play-speed ladder — ticks per real second at each rung — is JSON in

@@ -1,0 +1,5 @@
+[
+  { "id": "speed_fast", "name": "Fast", "ticksPerRealSecond": 30 },
+  { "id": "speed_working", "name": "Working", "ticksPerRealSecond": 12 },
+  { "id": "speed_careful", "name": "Careful", "ticksPerRealSecond": 5 }
+]

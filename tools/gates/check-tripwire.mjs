@@ -154,6 +154,17 @@ function mutationPatch(edit) {
   ];
 }
 
+/** Point a copied gate module at the real repository, and fail loudly if it did not take. */
+function repointRepoRoot(target) {
+  const before = readFileSync(target, 'utf8');
+  const after = before.replace(
+    "const REPO_ROOT = resolve(GATES, '../..');",
+    `const REPO_ROOT = ${JSON.stringify(ROOT)};`,
+  );
+  if (after === before) throw new Error(`the proof could not repoint REPO_ROOT in ${target}`);
+  writeFileSync(target, after);
+}
+
 function withGateCopy(patches, use) {
   const dir = mkdtempSync(join(tmpdir(), 'hotelsim-tripwire-proof-'));
   try {
@@ -172,6 +183,10 @@ function withGateCopy(patches, use) {
         .replace("const REPO_ROOT = resolve(GATES, '../..');", `const REPO_ROOT = ${JSON.stringify(ROOT)};`)
         .replace('const WORKING_TREE = REPO_ROOT;', `const WORKING_TREE = ${JSON.stringify(ROOT)};`),
     );
+    // `budget.mjs` reads the speed ladder out of `packages/content` (G-021) and there is no
+    // `packages/` beside this copy. `measure.mjs` imports it statically, so the throw would
+    // be fatal at module load — with a valid shipped ladder. Asserted, not attempted.
+    repointRepoRoot(join(dir, 'gates/budget.mjs'));
     return use(join(dir, 'gates/tripwire.mjs'));
   } finally {
     rmSync(dir, { recursive: true, force: true });

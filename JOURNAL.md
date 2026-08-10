@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-014b done. M2: 10 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-021 done. M2: 11 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
 - **State**: save **v9** · summary **v2** · I2 `10926cc3b569c887` · **I4 unreliable (§2.0)**
   · `pnpm verify` is ten rows now, three of them `—` and not invariants.
@@ -1617,3 +1617,76 @@ confirmed **pre-existing**, not widened here.
 
 **No invariant weakened.** `pnpm verify` x2 by the orchestrator, ten rows green each; I2
 `10926cc3b569c887`; the v1 fixture still a zero-line diff through nine schema versions.
+
+---
+
+## G-021 — The speed ladder is content — REFLECT
+
+**DONE, DRY at 1/3.** One sweep (4 MAJOR + 4 MINOR), three verification passes, none
+converted. **Zero BLOCKERs survived into code — because the only BLOCKER was caught before a
+line was written.**
+
+**The §5.6 plan pass is where this goal was won, and that is the result worth keeping.**
+`sim-critic` returned **1 BLOCKER + 8 MAJOR against a plan**, not a diff. The BLOCKER:
+resolving the ladder relative to `budget.mjs`'s own `import.meta.url` would have broken two
+harnesses nobody had counted — `check-measure.mjs` and `check-tripwire.mjs` both copy the
+gates into a temp dir and run the copy, and `measure.mjs` imports `budget.mjs` **statically**,
+so a top-level throw is fatal at module load **with a perfectly valid shipped ladder.** Two of
+the ten rows would have gone red and criterion 5 could never have been met. Caught at PLAN it
+cost one paragraph; caught at BUILD it would have cost a sweep and a redesign.
+
+**Exit criteria, third goal running, were defective — all three this time.** `check:content`
+was green at HEAD and green if the goal shipped nothing. Criterion 2 named `bench.mjs`, which
+deliberately derives nothing, so following it literally would have **re-inlined the
+`budget.mjs` split `sim-critic` made at G-018 round 1** — my criterion would have undone a
+critique fix. And criterion 1's second clause was **false at HEAD and unobservable**:
+`viewer.js:551` held `const SPEEDS = [1, 5, 30, 120]`, containing the dead 1× the human
+killed, **inside the instrument whose watching produced the ruling**, under a comment naming
+itself that figure's discharge point. Two more died at §5.6: the order arm was unimplementable
+(a permutation has the same `max`) and "RED at HEAD" was satisfiable with **no scan at all**,
+because `vitest run speed-ladder` prints "No test files found, exiting with code 1".
+
+**THE PARAGRAPH THAT WAS WRONG THREE TIMES, IN THREE DIRECTIONS.** `budget.mjs`'s note on the
+blast radius of reading a file at import: the orchestrator overstated it (*"with no code
+edit"* — false; a JSON retune reddens five assertions, one of them a `.mjs` comment, so fixing
+it IS a code edit), the builder undercounted at three rows, the fix undercounted at four. It
+is five. **The builder then declined a fourth attempt and wrote the RULE instead** — *any row
+that evaluates or spawns this module carries it* — citing ADR-0007's amendment: prose that
+cannot be verified may describe, but it may not measure. `sim-critic` then **enumerated every
+reacher** rather than reading the rule and agreeing with it: five rows, the rule names exactly
+those, excludes the rest, and correctly excludes the nearest false positive it could
+construct. **A count dies when a consumer is added; a rule does not.**
+
+**The goal could have been fully green while achieving nothing, and the builder said so before
+building.** `max{30,12,5} = 30` is the incumbent constant, so `BUDGET_MS` stays 389,333ms and
+**no gate reading discriminates a working feature from a decorative one.** Criterion 3's probe
+is the only discriminator, which is why it carries a control arm, both directions, a position
+sweep and a malformed arm. `sim-critic` confirmed it: a retained `= 30` fails two arms, a
+`[0]` reducer fails the position sweep, a non-verbatim copy fails the sha256 assertion, a
+broken mirror fails `not.toContain('Cannot find module')`.
+
+**Two things found on their own work, which is the behaviour that shortens these goals.** The
+builder's first rewrite of the position sweep committed the critic's own finding one level up
+— asserting per-arm that `[0]` is not the answer, false for the arm placing the fastest rung
+first; positional reducers only die **collectively**. And its scan cannot see a literal buried
+in an expression (`= SPEED_LADDER.length > 0 ? 30 : 30` passed silently); the budget arms
+caught that, and the division of labour is now stated rather than implied.
+
+**A near-miss worth keeping.** The obvious enforcement — *no rung may be an integer multiple
+of another* — **would reject the human's own ladder**: 30 = 6 × 5. Enforcement must constrain
+the format and the consumers, never the designer's values.
+
+**Scored prediction (§5.5).** The builder predicted that not splitting the viewer would cost
+*one extra file in the critic's sweep with no new invariant surface*. **Held**: the viewer diff
+is ~30 lines plus ~6 of HTML, added no gate, no schema and no invariant — and produced one real
+defect (`ticksPerSecond = 0`) caught by this goal's own scan rather than by a critic.
+
+**The charter is true again and I wrote it myself**, so it was never false in a committed
+state. `HOTELSIM.md` no longer contains the word PROVISIONAL; §2.1.1 carries the ladder, both
+format rules, the near-miss, **and an explicit statement of what the enforcement does not
+reach** — nothing in `packages/content` can stop M5 computing `ladder[i] / ladder[0]`, and that
+scan is parked with its test because `apps/game` may not be opened yet.
+
+**No WATCH owed**, and the unmoved I2 hash is the evidence rather than my say-so.
+`pnpm verify` ×2 by the orchestrator, ten rows green each; `git diff --stat packages/sim`
+empty; `BUDGET_MS` 389,333ms; `SAVE_V1_CONTENT` unmoved; suite 1,389 → 1,401 tests.

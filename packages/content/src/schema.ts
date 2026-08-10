@@ -652,9 +652,122 @@ export const economySchema = z.strictObject({
 /** The whole `economy.json` document. A top-level array, for the same reason. */
 export const economiesSchema = z.array(economySchema).min(1);
 
+/**
+ * A rung's LABEL, which travels with its value (G-021, human ruling).
+ *
+ * The ruling puts two things in this format beside the numbers, because this goal mints it.
+ * The first is that a rung carries its own name. The second is that there is no implied
+ * arithmetic between rungs — *"otherwise M5 hardcodes 1x/2x/3x against content that does
+ * not mean that, and the first rebalance produces a UI that lies about itself."*
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE MULTIPLIER REFUSAL BELOW ACTUALLY BUYS. READ THIS BEFORE CITING IT.
+ *
+ * IT STOPS A DESIGNER ENCODING A RELATION BETWEEN RUNGS IN A LABEL. `"2x"` as a name is a
+ * claim about a different rung, and the shipped ladder is deliberately not a ramp: 30/12/5,
+ * where 30 is the ANCHOR and the rungs below are spaced by what is playable. A label that
+ * asserts a ratio would be false of this table on the day it was written.
+ *
+ * IT IS LEAKY, AND MEASURED SO. `"x2"`, `"2x speed"` and `"Fast (2x)"` all pass it;
+ * `"2x"`, `"2×"`, `" 30 X "` do not. Tightening it towards "no label may mention a
+ * number" would refuse `"Fast (30 ticks/s)"`, which is a legitimate thing to call a rung.
+ *
+ * AND IT IS NOT THE FAILURE THE RULING NAMES. "M5 hardcodes 1x/2x/3x" is a property of
+ * `apps/game` SOURCE, which no content schema can reach. That half is a source scan —
+ * `tools/headless/src/speed-ladder.scan.test.ts`, whose root set already includes
+ * `apps/game/src` — and the arithmetic-between-rungs half of it is parked with its
+ * falsification test. Three mechanisms carry rule 2, and none of them is this one alone:
+ * the closed key set below, the label refusal here, and a consumer proved to reduce by
+ * `max` rather than by position (`speed-ladder.budget.test.ts`).
+ *
+ * Duplicated in `tools/gates/lib/speed-ladder.mjs`, which the gates read because they
+ * cannot run Zod, and cross-checked against it over a battery of documents — the
+ * `contentIdSchema` / `lib/content-id.mjs` arrangement exactly.
+ * ---------------------------------------------------------------------------
+ */
+export const speedRungNameSchema = z
+  .string()
+  .min(1)
+  .refine((name) => name.trim().length > 0, 'a rung must carry a name (G-021)')
+  .refine(
+    (name) => !/^\s*\d+(?:[.,]\d+)?\s*[x×]\s*$/i.test(name),
+    "a rung's label may not be a bare multiplier — the rungs are not multiples of each other (G-021)",
+  );
+
+/**
+ * One rung of the play-speed ladder: ticks of simulated time per REAL second (G-021).
+ *
+ * `strictObject` with a closed set of three keys is the enforceable half of "there is no
+ * implied arithmetic between rungs". There is no `multiplier`, no `base`, no `relativeTo`
+ * that a document can carry, and — because `ticksPerRealSecond` is REQUIRED — there is no
+ * rung whose value is absent and therefore has to be computed from a neighbour. Every rung
+ * states its own speed absolutely.
+ *
+ * ---------------------------------------------------------------------------
+ * PAUSE IS NOT A RUNG. The human's ruling reads "30 / 12 / 5, WITH PAUSE BENEATH", and
+ * beneath the ladder is where it stays: `ticksPerRealSecond` is `>= 1`, so a zero rung is
+ * refused.
+ *
+ * The reason is that PAUSE IS A TRANSPORT STATE, NOT A RATE. Play/pause is a mode the host
+ * is in; a rung answers "how fast, while playing". An earlier draft of this note argued
+ * instead that a zero rung would make `min(ladder)` zero and invite a division — which is
+ * false: nothing consumes `min`, and `max{0, 5, 12, 30}` is still 30. The decision stands
+ * on the transport-state ground alone. **M5 must therefore not read this table as the
+ * complete set of transport states**; it is the set of speeds, and pause sits outside it.
+ * ---------------------------------------------------------------------------
+ *
+ * INTEGER, for the reason every other number here is (ADR-0002's argument, one domain
+ * over): a fractional ticks-per-second reaches a real-time scheduler at M5 and accumulates
+ * differently. A rung slower than one tick a second is parked with its falsification test.
+ *
+ * A DUPLICATE `ticksPerRealSecond` IS REFUSED by `speedLadderSchema` below — two rungs at
+ * one speed is a control with a dead position, which is the 1x lesson in miniature.
+ *
+ * WHAT THIS TABLE IS NOT: it never reaches `packages/sim`. Ticks per REAL SECOND is a
+ * wall-clock quantity, and I2 says the simulation's time is the tick counter and never a
+ * wall clock. It is host content — the gates derive I5's budget from it (HOTELSIM.md
+ * §2.1.2) and M5's speed control will read it — so it is absent from `SimContent`,
+ * `bindContent` and `World`.
+ */
+export const speedRungSchema = z.strictObject({
+  id: contentIdSchema,
+  name: speedRungNameSchema,
+  ticksPerRealSecond: z.int().min(1),
+});
+
+/**
+ * The whole `speed-ladder.json` document. A top-level array, for the same mechanical reason
+ * every other table here is one: `check:content` fails a content file it can find no `id`
+ * in at any depth, so a wrapper object would be a violation.
+ *
+ * Uniqueness of ids is checked in `parseSpeedLadder` with every other table's; uniqueness
+ * of SPEEDS is checked here, because it is a property of the document rather than of a row.
+ */
+export const speedLadderSchema = z
+  .array(speedRungSchema)
+  .min(1)
+  .superRefine((rungs, ctx) => {
+    const seen = new Map<number, number>();
+    rungs.forEach((rung, index) => {
+      const first = seen.get(rung.ticksPerRealSecond);
+      if (first === undefined) {
+        seen.set(rung.ticksPerRealSecond, index);
+        return;
+      }
+      ctx.addIssue({
+        code: 'custom',
+        path: [index, 'ticksPerRealSecond'],
+        message:
+          `rungs ${first} and ${index} are both ${rung.ticksPerRealSecond} ticks/s — ` +
+          'a duplicate rung is a dead position on the control (G-021)',
+      });
+    });
+  });
+
 export type GuestRules = z.infer<typeof guestRulesSchema>;
 export type RoomType = z.infer<typeof roomTypeSchema>;
 export type NeedType = z.infer<typeof needTypeSchema>;
 export type NeedRole = z.infer<typeof needRoleSchema>;
 export type ItemType = z.infer<typeof itemTypeSchema>;
 export type Economy = z.infer<typeof economySchema>;
+export type SpeedRung = z.infer<typeof speedRungSchema>;

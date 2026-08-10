@@ -85,7 +85,7 @@
 // mechanical rather than promised.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -97,6 +97,7 @@ const BUDGET_MODULE = join(ROOT, 'tools/gates/budget.mjs');
 const BENCH = readFileSync(join(ROOT, 'tools/gates/bench.mjs'), 'utf8');
 const BUDGET_SOURCE = readFileSync(BUDGET_MODULE, 'utf8');
 const WORKLOAD_SOURCE = readFileSync(join(ROOT, 'tools/gates/workload.mjs'), 'utf8');
+const LADDER_PATH = join(ROOT, 'packages/content/data/speed-ladder.json');
 const CHARTER = readFileSync(join(ROOT, 'HOTELSIM.md'), 'utf8');
 const SHORT_FORM = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
 
@@ -179,7 +180,19 @@ describe('THE VALUE THE GATE USES is the value the derivation produces', () => {
   it('bench.mjs takes the budget from that module and declares none of its own', () => {
     expect(BENCH).toMatch(/import \{[^}]*\bBUDGET_MS\b[^}]*\} from '\.\/budget\.mjs';/);
     // The mutation that was invisible before: a second copy, anywhere in the gate.
-    expect(BENCH).not.toMatch(/(?:const|let|var)\s+(?:BUDGET_MS|TICK_BUDGET_NS)\s*=/);
+    // `TOP_SPEED_TICKS_PER_SECOND` joined the list at G-021 — the ladder became content, so
+    // a copy of the top rung in the gate is now the same class of defect the budget was.
+    expect(BENCH).not.toMatch(
+      /(?:const|let|var)\s+(?:BUDGET_MS|TICK_BUDGET_NS|TOP_SPEED_TICKS_PER_SECOND)\s*=/,
+    );
+  });
+
+  it('the top speed comes from the content ladder, not from a literal in the gate', () => {
+    // G-021. `speed-ladder.budget.test.ts` proves the VALUE follows the JSON; this asserts
+    // the declaration's shape, so the two halves of the same claim fail independently.
+    expect(BUDGET_SOURCE).toMatch(/export const TOP_SPEED_TICKS_PER_SECOND = topSpeedTicksPerSecond\(/);
+    expect(BUDGET_SOURCE).not.toMatch(/export const TOP_SPEED_TICKS_PER_SECOND = \d/);
+    expect(BUDGET_SOURCE).toContain("readSpeedLadder(SPEED_LADDER_PATH)");
   });
 
 });
@@ -252,15 +265,30 @@ describe('I5 GOES RED WHEN IT IS OVER BUDGET — the gate observed failing, not 
       expect(budget).toContain('export const DAYS = 1;');
       expect(budget).toContain('export const BUDGET_MS = 0;');
 
-      writeFileSync(join(dir, 'bench.mjs'), bench);
-      writeFileSync(join(dir, 'budget.mjs'), budget);
-      // The gate's WORKLOAD moved into its own module at G-020a, so the copy needs it too
-      // — unmodified, because this probe is about the budget and a copy that also changed
-      // the hotel would be proving two things and witnessing neither. It is copied rather
-      // than imported so that `tools/gates` stays untouched, which is the whole technique.
-      writeFileSync(join(dir, 'workload.mjs'), WORKLOAD_SOURCE);
+      // THE COPY IS A MIRRORED TREE SINCE G-021, NOT A FLAT DIRECTORY. `budget.mjs` reads
+      // the speed ladder out of `packages/content` relative to a repo root it derives from
+      // its own location, so a flat copy would resolve that path into nowhere and throw at
+      // module load — this probe would then witness a broken harness while reporting that
+      // the gate refused, which is the same conflation the `budget is 0ms (I5)` assertion
+      // below exists to prevent. Reproducing the layout costs two `mkdir`s and means the
+      // copied modules need no edit beyond the two this probe is actually about.
+      const gates = join(dir, 'tools/gates');
+      mkdirSync(join(gates, 'lib'), { recursive: true });
+      mkdirSync(join(dir, 'packages/content/data'), { recursive: true });
+      writeFileSync(join(gates, 'bench.mjs'), bench);
+      writeFileSync(join(gates, 'budget.mjs'), budget);
+      // The gate's WORKLOAD moved into its own module at G-020a, and its LADDER READER at
+      // G-021 — the copy needs both, unmodified, because this probe is about the budget and
+      // a copy that also changed the hotel or the ladder would be proving two things and
+      // witnessing neither. They are copied rather than imported so that `tools/gates`
+      // stays untouched, which is the whole technique.
+      writeFileSync(join(gates, 'workload.mjs'), WORKLOAD_SOURCE);
+      for (const lib of ['speed-ladder.mjs', 'content-id.mjs']) {
+        writeFileSync(join(gates, 'lib', lib), readFileSync(join(ROOT, 'tools/gates/lib', lib)));
+      }
+      writeFileSync(join(dir, 'packages/content/data/speed-ladder.json'), readFileSync(LADDER_PATH));
 
-      const run = spawnSync(process.execPath, [join(dir, 'bench.mjs')], {
+      const run = spawnSync(process.execPath, [join(gates, 'bench.mjs')], {
         cwd: ROOT,
         encoding: 'utf8',
         env: { ...process.env, NODE_NO_WARNINGS: '1' },

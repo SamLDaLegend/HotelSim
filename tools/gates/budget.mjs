@@ -19,11 +19,51 @@
 //      value `bench.mjs` will compare against, plus that `bench.mjs` declares no budget of
 //      its own. Both mutations above are red.
 //
-// A NOTE FOR WHOEVER LANDS G-021. When the speed ladder becomes content, this file's
-// TOP_SPEED_TICKS_PER_SECOND stops being the source of truth and must be read from, or
-// pinned to, the content that replaces it — the way TICKS_PER_DAY is pinned to
-// packages/sim today. A gate constant that silently duplicates a source of truth is the
-// defect this file was extracted to remove; do not reintroduce it one input to the left.
+// THAT NOTE IS NOW DISCHARGED (G-021). It read: "when the speed ladder becomes content,
+// this file's TOP_SPEED_TICKS_PER_SECOND stops being the source of truth and must be read
+// from the content that replaces it — a gate constant that silently duplicates a source of
+// truth is the defect this file was extracted to remove". It is read from content below.
+//
+// WHAT THAT COSTS, AND IT IS NOT NOTHING. This module now READS ONE FILE at import, where
+// before it read none, and it THROWS if that file is missing or malformed. So a broken
+// ladder does not fail one gate; it fails every row that reaches this module. THE RULE,
+// rather than a count:
+//
+//   ANY `verify` ROW THAT EVALUATES OR SPAWNS THIS MODULE CARRIES IT — directly, because
+//   `bench.mjs` imports it and the two budget TESTS evaluate it in a child process at module
+//   scope (so they fail at COLLECTION, reporting "no tests"); or transitively, because
+//   `measure.mjs` imports it for TICKS_PER_DAY and is spawned by `tripwire.mjs` and
+//   copied-and-spawned by `check-measure.mjs` and `check-tripwire.mjs`.
+//
+// THE RULE IS HERE INSTEAD OF A NUMBER BECAUSE THE NUMBER WAS WRONG THREE TIMES IN THREE
+// DIFFERENT DIRECTIONS — a paragraph whose subject is blast radius, repeatedly getting its
+// own blast radius wrong. It was first written as "no code edit" (overstated), then "three
+// rows" (omitting `check:tickcost`, which spawns `measure.mjs`), then "four rows" (omitting
+// `test`, which evaluates this module from `bench.budget.test.ts` and
+// `speed-ladder.budget.test.ts`). Each correction was measured and each still missed one.
+// ADR-0007 as amended settles it: *prose that cannot be verified may describe, but it may
+// not measure* — a hand-maintained count that no test pins is exactly the figure that rule
+// bars, and three failures is enough evidence that nobody maintains it correctly. The
+// coupling itself is the intended direction: content that will not validate should stop the
+// build loudly rather than fall back to a number nobody chose.
+//
+// AND IT IS WHY REPO_ROOT BELOW IS SHAPED THE WAY IT IS. `check-measure.mjs` and
+// `check-tripwire.mjs` both `cpSync` the whole of `tools/gates` into a temp directory and
+// run the copy, so a path resolved from `import.meta.url` would point at a `packages/`
+// tree that does not exist there — and, because `measure.mjs` imports this module
+// STATICALLY, the throw would be fatal at module load with a perfectly valid shipped
+// ladder. The constant is therefore byte-identical in shape to `measure.mjs`'s, so the
+// rewrite those two harnesses already perform on the copy reaches this file with one more
+// `.replace` and an assertion that it matched something.
+
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readSpeedLadder, topSpeedTicksPerSecond } from './lib/speed-ladder.mjs';
+
+/** Rewritten by `check-measure.mjs` and `check-tripwire.mjs` in a COPY of this file, never
+ *  here — the same shape and the same technique as `measure.mjs:72`. */
+const GATES = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(GATES, '../..');
 
 /** packages/sim/src/world.ts:33. `bench.budget.test.ts` fails if these two diverge. */
 export const TICKS_PER_DAY = 1440;
@@ -31,12 +71,33 @@ export const TICKS_PER_DAY = 1440;
 /** I5's own wording: `pnpm sim:run --days 365 --seed 42`. */
 export const DAYS = 365;
 
-/** The fastest intended play speed, in ticks per REAL second (HOTELSIM.md §2.1.1).
- *  PROVISIONAL — proposed at G-018, NOT ratified; the ladder belongs in content (G-021)
- *  and G-017's viewer is where 48s per simulated day is confirmed or moved. The budget
- *  below moves in inverse proportion to this number, so a goal that retunes the ladder
- *  RE-DERIVES this constant rather than leaving it alone. */
-export const TOP_SPEED_TICKS_PER_SECOND = 30;
+/** The ladder, as shipped. I3: a play speed is a balance number, so it is data. */
+export const SPEED_LADDER_PATH = join(REPO_ROOT, 'packages/content/data/speed-ladder.json');
+
+/** Every rung, validated by the reader in `lib/speed-ladder.mjs` — which enforces the same
+ *  rules as `packages/content`'s Zod schema and is cross-checked against it. */
+export const SPEED_LADDER = readSpeedLadder(SPEED_LADDER_PATH);
+
+/** The fastest intended play speed, in ticks per REAL second — the MAXIMUM rung, which is
+ *  §2.1.2's requirement in one word. Not `[0]`: array position means nothing in that
+ *  format, and `speed-ladder.budget.test.ts` proves this reducer with a ladder whose
+ *  fastest rung sits in the middle.
+ *
+ *  NO LONGER PROVISIONAL. G-018 proposed 30 and the human declined to ratify it; the shape
+ *  was ruled after WATCHING (2026-08-09) — fast 30 / working 12 / careful 5, with pause
+ *  beneath, and 1x killed as a dead rung.
+ *
+ *  WHAT A RETUNE COSTS, STATED EXACTLY, BECAUSE THE FIRST VERSION OF THIS LINE SAID "with no
+ *  code edit" AND THAT IS FALSE OF THIS REPOSITORY. The budget below moves in inverse
+ *  proportion to this number, and THE ARITHMETIC needs no edit — that much is proved against
+ *  a byte-identical copy of this module. But the derived FIGURE is quoted in four pinned
+ *  places, and a retune to {20,10,4} reddens five assertions in `bench.budget.test.ts`: the
+ *  summary comment nine lines below THIS ONE — which lives in a `.mjs` file, so updating it
+ *  is a code edit — plus HOTELSIM.md §2.1.2's inputs and its worked arithmetic, §2's
+ *  invariant table, and CLAUDE.md's compacted row. Measured, not reasoned. That is the
+ *  ADR-0007 machinery working: "it moves by re-deriving, never by nudging". A RETUNE IS A
+ *  JSON EDIT PLUS FOUR QUOTED COPIES, EVERY ONE NAMED BY A RED TEST. */
+export const TOP_SPEED_TICKS_PER_SECOND = topSpeedTicksPerSecond(SPEED_LADDER);
 
 /** ASSUMPTION, labelled one: the sim's share of one core while Pixi, UI and GC have the
  *  rest. No render cost has ever been measured. A tenth rather than a quarter, because a

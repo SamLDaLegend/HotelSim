@@ -18,12 +18,22 @@
 //   second, HOTELSIM.md §2.1.1) must sustain real time on a mid-range laptop, with
 //   stated headroom for what M3, M4 and M6 will add.
 //
-// THE 30x IS A PROVISIONAL WORKING FIGURE, NOT A RATIFIED ONE. The speed ladder belongs
-// in content and is G-021's; §2.1.1 records why the mapping it rests on is weaker than
-// it looks, and G-017's viewer is where 48s per simulated day is confirmed or moved.
-// THE BUDGET MOVES WITH IT, IN INVERSE PROPORTION — budget_seconds = 525,600 ticks x S /
-// (speed x H) — so a k-fold faster top rung divides this constant by k. A goal that
-// retunes the ladder therefore RE-DERIVES this constant; it does not leave it alone. What
+// THE 30x IS NO LONGER A PROVISIONAL FIGURE, AND IT IS NO LONGER A FIGURE IN THIS REPO'S
+// CODE AT ALL (G-021). The speed ladder is content — `packages/content/data/speed-ladder.json`
+// — and `budget.mjs` reads the FASTEST RUNG out of it. G-018 proposed 30 and the human
+// declined to ratify it; the shape was ruled after WATCHING a recording in G-017's viewer:
+// fast 30 / working 12 / careful 5, with pause beneath, and 1x killed as a dead rung.
+// (The human's own prediction that 48s per simulated day would read "sluggish" was scored
+// and was WRONG — watched, it reads brisk. The instrument corrected the person who argued
+// for the instrument.)
+// THE BUDGET MOVES WITH THE LADDER, IN INVERSE PROPORTION — budget_seconds = 525,600 ticks
+// x S / (speed x H) — so a k-fold faster top rung divides this constant by k. RETUNING THE
+// LADDER IS A JSON EDIT AND IT RE-DERIVES THIS NUMBER WITHOUT TOUCHING THE ARITHMETIC, which
+// is what `tools/headless/src/speed-ladder.budget.test.ts` proves: it runs a byte-identical
+// copy of `budget.mjs` against scaled and re-ordered ladders. It is NOT a JSON edit ALONE —
+// the derived figure is quoted in four pinned places (`budget.mjs`'s summary comment,
+// HOTELSIM.md §2.1.2 and §2, CLAUDE.md), and a retune reddens all four by name in
+// `bench.budget.test.ts`. That is ADR-0007 working, not an obstacle to route around. What
 // survives such a move is the CONCLUSION rather than the number, and by division rather
 // than by any table: 389.3 / 12 = 32.4s, so the budget stays at least 2.5x the old ten
 // seconds for any ladder change within ~12x, and reaches ten seconds only past ~39x.

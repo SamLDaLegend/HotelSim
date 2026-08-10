@@ -215,6 +215,17 @@ function runMeasure(args, gate = MEASURE) {
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
+/** Point a copied gate module at the real repository, and fail loudly if it did not take. */
+function repointRepoRoot(target) {
+  const before = readFileSync(target, 'utf8');
+  const after = before.replace(
+    "const REPO_ROOT = resolve(GATES, '../..');",
+    `const REPO_ROOT = ${JSON.stringify(ROOT)};`,
+  );
+  if (after === before) throw new Error(`the probe could not repoint REPO_ROOT in ${target}`);
+  writeFileSync(target, after);
+}
+
 /**
  * Run a COPY of `tools/gates` with named files patched.
  *
@@ -241,6 +252,15 @@ function withGateCopy(patches, use) {
         .replace("const REPO_ROOT = resolve(GATES, '../..');", `const REPO_ROOT = ${JSON.stringify(ROOT)};`)
         .replace('const WORKING_TREE = REPO_ROOT;', `const WORKING_TREE = ${JSON.stringify(ROOT)};`),
     );
+    // `budget.mjs` READS THE SPEED LADDER OUT OF `packages/content` (G-021), and there is no
+    // `packages/` beside this copy — so without this it throws at module load, and it is
+    // imported STATICALLY by `measure.mjs`, which makes that fatal for every probe below
+    // with a perfectly valid shipped ladder. Same rewrite, same shape, one file over.
+    //
+    // ASSERTED RATHER THAN ATTEMPTED. The two `.replace` calls above are silent if they
+    // match nothing, unlike the `patches` loop; this one is not, because a repoint that
+    // quietly did nothing would leave the whole gate red for a reason nobody could read.
+    repointRepoRoot(join(dir, 'gates/budget.mjs'));
     return use(gate);
   } finally {
     // A directory this process created, containing only files it copied. `cpSync` copies

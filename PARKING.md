@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-014b done. M2: 10 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-021 done. M2: 11 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
 - **143 items across 19 goals.** G-020b added four, G-014b five, **each with its falsification
   test attached** (§4). **G-020a's zero is discharged**; the §9 warning stands for next time.
@@ -1156,3 +1156,96 @@ changed one constant, its derivation, and the records that quoted it.
   starved arm is still worse, the margin wants a term that knows the hotel is full — and the
   honest form of that is queueing, which is M3's own subject; if travel time closes it, this was
   an artefact of every provider being equidistant.* **-> M3.**
+
+---
+
+## Discovered during the G-021 BUILD (2026-08-10)
+
+- **THE ARITHMETIC-BETWEEN-RUNGS BAN IS ENFORCED IN THE FORMAT AND IN THE CONSUMERS, NOT IN
+  `apps/game` — WHICH IS WHERE THE RULING'S OWN FAILURE LIVES.** The human's rule 2 names the
+  failure as *"M5 hardcodes 1x/2x/3x against content that does not mean that"*. Three
+  mechanisms carry it today: the closed key set (`strictObject`, so no `multiplier`/`base` can
+  exist and every rung states its own speed), the label refusal (a rung may not be NAMED "2x"),
+  and a consumer proved to reduce by `max` rather than by position. **None of them can see
+  `ladder[i].ticksPerRealSecond / ladder[0].ticksPerRealSecond` in render code**, because that
+  binds nothing and `apps/game` is shut until M5 (§9). `speed-ladder.scan.test.ts` already has
+  `apps/game/src` in its root set, so the declaration half fires the day it appears.
+  **FALSIFICATION TEST, attached per §4**: at M5, add a synthetic `apps/game` source computing a
+  rung from another rung and assert the scan reports it. *If a syntactic pattern cannot separate
+  that from legitimate arithmetic over speeds — a tick-accumulator dividing by ticksPerSecond is
+  not a violation — then the ban is unenforceable in code and the honest response is to say so
+  in the schema comment rather than to keep implying a check exists.* **-> M5.**
+
+- **A RUNG SLOWER THAN ONE TICK PER REAL SECOND IS CURRENTLY UNEXPRESSIBLE.**
+  `ticksPerRealSecond` is `z.int().min(1)`, for ADR-0002's reason one domain over: a fractional
+  rate reaches a real-time scheduler at M5 and accumulates differently per platform. The ruled
+  ladder does not need one (the careful rung is 5) and 1x was killed as dead, so nothing is
+  blocked today. **FALSIFICATION TEST**: `parseSpeedLadder` on a rung of `0.5` throws, and
+  `speed-ladder.budget.test.ts`'s battery pins that in both validators. *The day a designer
+  wants a slower rung, that throw is the trigger; the fix is a rational rate — ticks per N real
+  seconds as two integers — not a float.* **-> M5 or M6.**
+
+- **THE VIEWER'S REVIEW CONTROL IS A FIXED STRIDE OF FOUR, AND NOBODY MEASURED FOUR.**
+  `REVIEW_FRAME_STRIDE = 4` restores roughly what the deleted hardcoded 120 gave over the
+  30-rung top speed, and it is a scrub over a recording rather than a play speed, so it is not a
+  bound under §2.1 — no decision is compared against it. **FALSIFICATION TEST**: if G-019's
+  watcher reports that reviewing a 30-day recording is still too slow, or that four skips too
+  much to follow, the number is wrong and the honest fix is a second stride rather than a rung.
+  *Nothing else in the repo should ever read it.* **-> G-019's WATCH, or delete with the viewer.**
+
+- **`check-measure.mjs`'s AND `check-tripwire.mjs`'s `REPO_ROOT` REWRITES ARE SILENT IF THEY
+  MATCH NOTHING**, unlike the `patches` loop three lines above them, which throws. G-021 added a
+  third rewrite (`budget.mjs`) and gave that one an assertion, but left the two incumbent
+  `.replace` chains on `measure.mjs` as they were — a repoint that quietly did nothing would
+  leave those gates red for a reason nobody could read. Not repaired here because both files
+  belong to G-020c's open instrument work and this goal had no business widening its diff into
+  them. **FALSIFICATION TEST**: change `const REPO_ROOT = resolve(GATES, '../..');` in
+  `measure.mjs` to any other spelling and run `pnpm check:measure`. *If it fails with a
+  git/materialise error rather than "the probe could not repoint", the silent-replace hazard is
+  real and the fix is two lines.* **-> G-020c.**
+
+- **THE COMMENT-STRIPPER CANNOT SEE A REGEX LITERAL, AND THE COPY THAT MATTERS SITS BEHIND
+  THREE INVARIANT GATES.** A quote inside a character class (`["']`) opens a string it never
+  closes, so every comment for the next several dozen lines survives stripping. It cost this
+  goal one debugging cycle: the new scan reported two violations inside its own explanatory
+  comments. **THE FIRST VERSION OF THIS ENTRY NAMED ONLY THE TWO TEST FILES — the §5.8 sweep
+  stopped at the tests, which is verbatim the shape `CLAUDE.md` records for G-016's
+  retraction, and `sim-critic` found it.** The live locations:
+  - **`tools/gates/lib/scan.mjs:41`** — the identical function with the identical omission,
+    imported by **`check-purity.mjs:19` (I1)**, **`check-content.mjs:28` (I3)** and
+    **`determinism.mjs:22` (I2)**. (`check-measure.mjs:75` and `check-tripwire.mjs:68` import
+    only `finish` and do not carry it.)
+  - `tools/headless/src/viewer.readonly.test.ts` — its own copy, same omission.
+  - `speed-ladder.scan.test.ts` — fixed here, by building the pattern from a string.
+
+  **NOT A BLOCKER, AND THE DIRECTION IS WHY**: an unterminated span is emitted VERBATIM rather
+  than blanked, so comments SURVIVE and the gate false-positives. It fails loud, and nothing is
+  silently removed from what I1, I2 and I3 inspect.
+  **FALSIFICATION TEST**: add a regex literal containing a quote — `/['"]/` — to a file scanned
+  by `check:purity`, put a banned identifier in a comment beneath it, and run the gate. *If the
+  gate reports a violation in that comment, the three-gate copy is confirmed live and the fix is
+  regex-literal handling in `lib/scan.mjs` alone, which all three inherit. If it does not, this
+  entry is wrong about `scan.mjs` and only the two test copies carry it.* **-> whichever goal
+  next touches a source scanner; it is one function.**
+
+## Deferred during G-021 — the speed ladder as content (2026-08-10)
+
+- **A TEST THAT RESOLVES `verify.mjs`'s IMPORT-AND-SPAWN GRAPH** and asserts which of the ten
+  rows reach `tools/gates/budget.mjs`. Offered by `sim-engineer` and **declined by it in the
+  same breath**, correctly: new checkable surface in the last hour of a goal is how the
+  fat-goal defect starts (§5.5). **Why it is worth having**: the paragraph at `budget.mjs:27`
+  documenting that blast radius **was wrong three times in three directions in one goal** —
+  the orchestrator overstated it ("with no code edit"), the builder undercounted at three, the
+  fix undercounted at four; it is five. It now states the RULE rather than a count, which
+  ADR-0007's amendment requires of prose that cannot be verified — but the rule is still prose.
+  **FALSIFICATION TEST, attached per §4**: build the graph resolver, run it against the shipped
+  tree, and compare its row set to the rule's plain reading. *If they agree, the prose was
+  adequate and this stays parked as a nicety; if they differ, the rule joined the count in
+  being wrong and the mechanism has to be code.* **-> G-020c, or the first goal that touches
+  `verify.mjs`'s row list.**
+- **AN M5-ERA SCAN FORBIDDING COMPUTED MULTIPLIERS IN `apps/game`.** The honest limit of this
+  goal's enforcement: nothing in `packages/content` can stop render code computing
+  `ladder[i].ticksPerRealSecond / ladder[0].ticksPerRealSecond`, and that is the failure the
+  ruling actually names. **FALSIFICATION TEST**: when `apps/game` exists, add it to
+  `speed-ladder.scan.test.ts`'s roots; the test that the scan bites is a synthetic source
+  computing that ratio, which must produce a violation. **-> M5.**

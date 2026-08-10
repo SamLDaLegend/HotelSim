@@ -28,6 +28,9 @@
       #scrub { flex: 1; }
       button { background: #232833; color: #d8dbe0; border: 1px solid #3a4150; padding: 3px 9px; font: inherit; cursor: pointer; }
       button.on { background: #3c5a8a; border-color: #5b82c0; }
+      /* The rung's unit, beside the name content gives it. A button reading only "Fast"
+         cannot be checked against HOTELSIM.md §2.1.2 by anyone looking at the screen. */
+      .u { color: #8b93a1; font-size: 11px; }
       #clock { font-size: 15px; color: #fff; }
       #warn { color: #e0a03a; }
     </style>
@@ -41,8 +44,13 @@
 
     <div id="transport">
       <button id="play">play</button>
-      <span>ticks/s</span>
+      <span>speed</span>
       <span id="speeds"></span>
+      <!-- Not a rung, and not in the ladder JSON: a review speed over a RECORDING, where a
+           rung is a play speed over a live simulation (G-021 ruling). The title is written by
+           viewer.js from REVIEW_FRAME_STRIDE — a second copy of that number here would be the
+           duplicated constant this whole goal is about, in the goal that is about it. -->
+      <button id="review">review</button>
       <input type="range" id="scrub" min="0" max="0" value="0" step="1" disabled />
       <span id="clock">—</span>
     </div>

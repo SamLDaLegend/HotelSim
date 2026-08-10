@@ -72,11 +72,13 @@ function colourOf(id) {
 // literals here, so a balance edit cannot leave this file quietly disagreeing with the
 // simulation that produced the recording. Colour does not, for the reason above.
 
-const content = { rooms: new Map(), items: new Map(), needs: new Map(), lodgingNeedId: null };
+const content = { rooms: new Map(), items: new Map(), needs: new Map(), lodgingNeedId: null, speeds: [] };
 
 async function loadContent() {
-  const [rooms, items, needs] = await Promise.all(
-    ['room-types', 'item-types', 'need-types'].map((n) => fetch(`/content/${n}.json`).then((r) => r.json())),
+  const [rooms, items, needs, speeds] = await Promise.all(
+    ['room-types', 'item-types', 'need-types', 'speed-ladder'].map((n) =>
+      fetch(`/content/${n}.json`).then((r) => r.json()),
+    ),
   );
   for (const r of rooms) content.rooms.set(r.id, r);
   for (const i of items) content.items.set(i.id, i);
@@ -84,6 +86,12 @@ async function loadContent() {
     content.needs.set(n.id, n);
     if (n.role === 'lodging') content.lodgingNeedId = n.id;
   }
+  // THE PLAY SPEEDS COME FROM CONTENT (G-021), LABELS AND ALL. This page does not validate
+  // them — `packages/content`'s schema and `tools/gates/lib/speed-ladder.mjs` do that, and
+  // the viewer is disposable. A ladder this cannot read renders no speed buttons, which is
+  // visible rather than silent; a default invented here would be the defect the goal
+  // removed, one directory over.
+  content.speeds = speeds;
 }
 
 /**
@@ -545,13 +553,38 @@ function setFrame(i) {
 // catalogue). The loop accumulates REAL elapsed milliseconds and spends them; a 144Hz
 // monitor and a 60Hz monitor watch the same hotel at the same rate.
 //
-// The ladder is labelled in ticks/s on purpose: §2.1.1's 30 ticks/s is a PROVISIONAL
-// working figure and this is its stated discharge point, so the buttons have to say what
-// they mean rather than "fast".
-const SPEEDS = [1, 5, 30, 120];
-let ticksPerSecond = 30;
+// THE LADDER IS CONTENT NOW (G-021), AND THIS FILE IS WHY THE GOAL SAID SO. It used to hold
+// `const SPEEDS = [1, 5, 30, 120]` with `let ticksPerSecond = 30` one line below — a whole
+// hardcoded ladder, containing the dead 1x the human killed after watching a recording made
+// with THIS viewer, under a comment naming itself the discharge point for the figure. The
+// buttons are now built from `speed-ladder.json`: the label travels with the value, so a
+// rebalance renames the button it moves.
+//
+// The discharge is done: 30 ticks/s was watched and reads brisk (the human's own prediction
+// of "sluggish" was scored and was wrong), and 1x was killed. What survives here is the
+// UNIT — ticks/s, shown beside each label — because a button that says only "Fast" cannot
+// be checked against §2.1.2's arithmetic by anyone reading the screen.
+// `null` until the ladder has been read, and there is deliberately no number here to fall
+// back to. A default in this file would be exactly the constant the goal removed, wearing
+// the word "default" — and `speed-ladder.scan.test.ts` fires on it, which is how the first
+// draft of this line (`= 0`) was caught.
+let ticksPerSecond = null;
 let playing = false;
 let carry = 0;
+
+// REVIEW SPEED IS NOT A PLAY SPEED, AND IT IS NOT A RUNG (G-021 ruling). Removing the old
+// hardcoded 120 would have cost the WATCH instrument its fast scrub — a 30-day recording is
+// 43,200 ticks, minutes of watching at the top rung — and G-019 owes a watched recording,
+// so that cost would have landed on a human two goals from here.
+//
+// It is a different QUANTITY rather than a differently-labelled rung, which is why it can
+// live here without contradicting "the ladder is content": a play speed is simulated ticks
+// per real second over a live simulation, and this is RECORDED FRAMES PER STEP over a
+// finished recording. It advances the scrubber faster; it does not make the hotel run
+// faster, and the clock still reads the frame it lands on. So it is not in the JSON, it
+// takes no rung's name, and it multiplies nothing the ladder declares.
+const REVIEW_FRAME_STRIDE = 4;
+let reviewing = false;
 // The timestamp of the last frame that was allowed to spend time, or `null` for "playback
 // has just started, so there is no elapsed interval yet". The null state is not decoration:
 // without it the first frame after a resume spends the whole time the viewer sat PAUSED,
@@ -562,10 +595,13 @@ let last = null;
 function loop(now) {
   if (playing) {
     const dt = last === null ? 0 : Math.min(Math.max(now - last, 0), 250);
-    carry += (dt / 1000) * ticksPerSecond;
-    const step = Math.floor(carry / rec.everyTicks);
+    carry += (dt / 1000) * (ticksPerSecond ?? 0);
+    // The stride multiplies FRAMES, not ticks/s: the selected rung still means what it says
+    // and `carry` is still spent at that rate. Reviewing skips recorded frames rather than
+    // pretending the simulation ran faster.
+    const step = Math.floor(carry / rec.everyTicks) * (reviewing ? REVIEW_FRAME_STRIDE : 1);
     if (step > 0) {
-      carry -= step * rec.everyTicks;
+      carry -= (step / (reviewing ? REVIEW_FRAME_STRIDE : 1)) * rec.everyTicks;
       if (frame + step >= rec.lines.length - 1) { setFrame(rec.lines.length - 1); setPlaying(false); }
       else setFrame(frame + step);
     }
@@ -582,15 +618,40 @@ function setPlaying(on) {
   el('play').classList.toggle('on', playing);
 }
 
-el('speeds').innerHTML = SPEEDS.map((s) => `<button data-s="${s}">${s}</button>`).join(' ');
-for (const b of el('speeds').querySelectorAll('button')) {
-  b.addEventListener('click', () => {
-    ticksPerSecond = Number(b.dataset.s);
-    carry = 0;
-    for (const o of el('speeds').querySelectorAll('button')) o.classList.toggle('on', o === b);
-  });
-  if (Number(b.dataset.s) === ticksPerSecond) b.classList.add('on');
+/** One button per rung, in the order content declares them, labelled by content. */
+function buildSpeedButtons() {
+  // THE FASTEST RUNG IS THE DEFAULT, AND THAT IS A NEW POLICY RATHER THAN A PRESERVED ONE.
+  // An earlier version of this comment justified it as "the top rung was 30 then and is 30
+  // now" — false, and git says so: the old hardcoded ladder was [1, 5, 30, 120], so its top
+  // rung was 120 and 30 was merely the DEFAULT. What is true is that the default playback
+  // rate is unchanged at 30 ticks/s, which is what matters for comparing recordings watched
+  // before and after this change; it is now reached by a rule ("the fastest rung") rather
+  // than by a constant, and a retune of the ladder will move it.
+
+  ticksPerSecond = content.speeds.reduce((top, r) => Math.max(top, r.ticksPerRealSecond), 0);
+  el('speeds').innerHTML = content.speeds
+    .map((r) => `<button data-s="${r.ticksPerRealSecond}" title="${r.ticksPerRealSecond} ticks/s">${r.name}` +
+      ` <span class="u">${r.ticksPerRealSecond}/s</span></button>`)
+    .join(' ');
+  for (const b of el('speeds').querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      ticksPerSecond = Number(b.dataset.s);
+      carry = 0;
+      for (const o of el('speeds').querySelectorAll('button')) o.classList.toggle('on', o === b);
+    });
+    if (Number(b.dataset.s) === ticksPerSecond) b.classList.add('on');
+  }
 }
+
+// The stride is stated in ONE place and the button's tooltip is written from it. `index.html`
+// used to carry its own copy of the number, which is the duplicated-constant defect this goal
+// exists to remove, inside the goal that removes it.
+el('review').title = `scrub ${REVIEW_FRAME_STRIDE} recorded frames per step — a review speed over the recording, not a play speed`;
+el('review').addEventListener('click', () => {
+  reviewing = !reviewing;
+  carry = 0;
+  el('review').classList.toggle('on', reviewing);
+});
 el('play').addEventListener('click', () => setPlaying(!playing));
 el('scrub').addEventListener('input', () => { setPlaying(false); setFrame(Number(el('scrub').value)); });
 window.addEventListener('keydown', (e) => {
@@ -612,4 +673,6 @@ el('file').addEventListener('change', async (e) => {
 });
 
 await loadContent();
+// After the content, not before it: the speed buttons ARE content now (G-021).
+buildSpeedButtons();
 requestAnimationFrame(loop);

@@ -10,8 +10,15 @@
 // next caller to trip over — there is no registry to half-populate.
 
 import { z } from 'zod';
-import { economiesSchema, guestRulesTableSchema, itemTypesSchema, needTypesSchema, roomTypesSchema } from './schema.js';
-import type { Economy, GuestRules, ItemType, NeedType, RoomType } from './schema.js';
+import {
+  economiesSchema,
+  guestRulesTableSchema,
+  itemTypesSchema,
+  needTypesSchema,
+  roomTypesSchema,
+  speedLadderSchema,
+} from './schema.js';
+import type { Economy, GuestRules, ItemType, NeedType, RoomType, SpeedRung } from './schema.js';
 
 /**
  * Every content table, validated.
@@ -172,6 +179,46 @@ export function parseGuestRules(raw: unknown, sourceLabel = 'content'): readonly
   }
   assertUniqueIds(result.data, 'guest rules');
   return result.data;
+}
+
+/**
+ * Validate an already-parsed speed-ladder document (G-021). Same all-or-nothing discipline,
+ * and a table rather than a registry for the same reason: one file is one table.
+ *
+ * IT IS NOT PART OF `ContentRegistry`, AND THAT IS THE POINT OF IT. Every other table here
+ * is assembled into a registry and injected into `packages/sim`. Ticks per REAL SECOND is a
+ * wall-clock quantity, and I2 says the simulation's time is the tick counter and never a
+ * wall clock — so this table is loaded by whoever needs it (the gates, to derive I5's
+ * budget; M5's speed control) and never reaches `bindContent`, `SimContent` or `World`.
+ *
+ * What it does NOT check is whether the ladder's fastest rung is a play speed anybody would
+ * choose. That is a balance question the viewer answers.
+ *
+ * ANSWERING IT IS A JSON EDIT PLUS FOUR QUOTED COPIES, and the shorter version of that
+ * sentence used to sit here. I5's budget is derived from the top rung (HOTELSIM.md §2.1.2),
+ * so retuning the ladder re-derives a figure that is quoted in `budget.mjs`'s summary
+ * comment, in §2.1.2, in §2's invariant table and in `CLAUDE.md`. None of the four is
+ * optional and every one is pinned by a test that names it — measured, by retuning to
+ * {20,10,4} and counting the reds. The arithmetic itself needs no edit; the copies do.
+ */
+export function parseSpeedLadder(raw: unknown, sourceLabel = 'content'): readonly SpeedRung[] {
+  const result = speedLadderSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:\n${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'speed rung');
+  return result.data;
+}
+
+/** Validate a speed-ladder JSON document. "Not JSON" and "not content" stay apart. */
+export function parseSpeedLadderJson(text: string, sourceLabel = 'content'): readonly SpeedRung[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseSpeedLadder(raw, sourceLabel);
 }
 
 /** Validate a guest-rules JSON document. "Not JSON" and "not content" stay apart. */

@@ -10,7 +10,8 @@
     "./data/need-types.json": "./data/need-types.json",
     "./data/item-types.json": "./data/item-types.json",
     "./data/economy.json": "./data/economy.json",
-    "./data/guest-rules.json": "./data/guest-rules.json"
+    "./data/guest-rules.json": "./data/guest-rules.json",
+    "./data/speed-ladder.json": "./data/speed-ladder.json"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
