@@ -2254,6 +2254,37 @@ Out of scope: optimising anything the discriminating measurement finds — if a 
   regression exists, fixing it is its own goal  (-> PARKING.md)
 Critique rounds used: 0/3
 
+  **ORCHESTRATOR RULINGS AT PLAN, 2026-08-10.**
+
+  1. **SEAM A — the cross-revision instrument — STAYS IN THE GOAL**, which is `sim-engineer`'s
+     own recommendation and the argument is decisive: the recorded pre-G-013 figure
+     (`needs.scaling.test.ts:156`, median 1.74 over six processes) **carries no load
+     condition**, so under rule 4's fifth slot it cannot be compared against anything measured
+     now. **Either both arms are re-measured in one sitting, or the sentence at `:160-162` is
+     withdrawn.** Deferring the instrument means choosing withdrawal by default, and that is a
+     decision worth making deliberately rather than by scheduling. The builder also checked
+     feasibility rather than flinching: `schedule()` at `aa30218` has the identical 9-parameter
+     signature, and the `roomTypeServes` wall blocks an **absolute** cross-revision comparison,
+     not a **ratio of ratios** where each arm uses its own revision's sim, content and harness.
+  2. **SEAM B — a shipped proof-of-bite gate for `check:scaling` — IS TAKEN. Do not build it
+     here.** The builder's reasoning is right and it is the §5.5 rule working as designed: a
+     third ~600-line proof harness is what would make this goal unsweepable, and **G-020b's
+     proof harness took a round to get right and shipped a hand-typed count in the file built
+     to hunt hand-typed counts.** Instead: pin the arithmetic in `scaling.bound.test.ts`, and
+     **witness the bite once at VERIFY** with the `git stash push -u` recipe, re-using G-020b's
+     already-measured M1 quadratic (which reddened `scaling.test.ts` at 13.23 and 9.77 against
+     `BOUND = 6`). **Park the proof gate with its falsification test.**
+  3. **RULE 5 APPLIES TO LIVE CLAIMS, NOT TO HISTORY — and this is a correction to the plan.**
+     Withdrawing the unreproducible `±10%` / `±3%` figures from **code comments** and from
+     **live goal blocks** is right. **`JOURNAL.md` is NOT to be retro-edited**: ADR-0008 says a
+     thing describing the past must not track the present, and a REFLECT entry recording what
+     was believed and measured at G-020a is history. If a journal entry carries a figure now
+     known unreproducible, **the correction goes in the CURRENT entry**, pointing back — never
+     by rewriting the old one. The same holds for `ESCALATIONS.md`'s closed entries.
+  4. **`verify` GOING TO ELEVEN ROWS IS ACCEPTED** and follows from the human's own ruling that
+     a timing bound is "a gate wearing vitest's clothes". The closing line still says six
+     invariants; **minting a seventh remains a human call** (§9).
+
   **WHY BOTH, IN ONE GOAL.** They are distinct defects with distinct signatures — one names a
   failing test, the other has none at all — and `ESCALATIONS.md` carries both. But **they need
   the same kind of evidence**: repeated runs, because each fires at a rate no single run can
