@@ -2378,6 +2378,77 @@ Critique rounds used: 0/3
      enforcement has to constrain the **format and the consumers**, never the designer's
      values.
 
+  **§5.6 RULINGS, 2026-08-10 — `sim-critic` returned PROCEED with 1 BLOCKER + 8 MAJOR.**
+
+  - **BLOCKER, and it made the goal unmeetable as planned. ACCEPTED.** Resolving the ladder
+    relative to `budget.mjs`'s own `import.meta.url` breaks **two more harnesses than the
+    plan accounted for**: `check-measure.mjs:229` and `check-tripwire.mjs:160` both
+    `cpSync` the gates into a temp dir and run the copy, and `measure.mjs:56` imports
+    `budget.mjs` **statically**, so a top-level throw is fatal at module load — with a
+    perfectly valid shipped ladder. `check:measure` and `check:tickcost:proof` would go red
+    and criterion 5 could never be met. Verified by the orchestrator. **Fix: `budget.mjs`
+    gets a repo-root constant of exactly `measure.mjs:73`'s shape** so the existing rewrite
+    at `check-measure.mjs:241` / `check-tripwire.mjs:172` reaches it in one added
+    `.replace` per harness — and both already throw when a patch matches nothing.
+  - **The ORDER arm cannot be implemented as I wrote it. ACCEPTED.** A permutation has the
+    same `max`, so "each arm asserts `TOP_SPEED` moved" is false for it *by construction*;
+    its real assertion is that TOP_SPEED did **not** move. And "fastest written last" only
+    kills `[0]`, not `last`. **Replaced by the fastest rung in the MIDDLE — `[12, 30, 5]`:
+    max 30, first 12, last 5, min 5, sum 47, so one arm kills four wrong reducers** and
+    subsumes the fastest-last arm.
+  - **The MALFORMED arm was satisfiable by the harness breaking. ACCEPTED** — a wrongly
+    assembled mirror also exits non-zero. **Assert the thrown message names the ladder
+    file**, never the status. Precedent: `bench.budget.test.ts:60-67` asserts
+    `budget is 0ms (I5)` for exactly this reason.
+  - **"RED at HEAD" was satisfiable with no scan at all. ACCEPTED.** Verified:
+    `pnpm exec vitest run speed-ladder` at HEAD prints **"No test files found, exiting with
+    code 1"**. An empty file named `speed-ladder.test.ts` turns it green. **Record the
+    scan's own failure message naming the viewer's lines**, not an exit code.
+  - **`viewer.js:552` — `let ticksPerSecond = 30;` — is a SECOND literal one line below the
+    one I named. ACCEPTED, and it is my defect for the third consecutive goal.** A builder
+    implementing to my block would delete `SPEEDS` and leave the default rung hardcoded.
+    Name both lines; the scan's identifier set must cover `ticksPerSecond`, not only
+    `SPEEDS`.
+  - **E2 is real but leaky, and it does not touch the failure the ruling names. ACCEPTED as
+    restated.** Measured against the plan's own regex: `"2x"`, `"2×"`, `" 30 X "`, `"2 x"`
+    refused; **`"×2"`, `"x2"`, `"2x speed"`, `"Fast (2×)"` all admitted.** And "M5 hardcodes
+    1×/2×/3×" is a property of `apps/game` source that no content schema can reach — E4's
+    own admission. **State E2 as what it is: it stops the DESIGNER encoding a relation in a
+    label.** That is worth having and it is not the ruling's failure mode.
+  - **Two validators, and only the weaker one guards the shipped bytes. ACCEPTED.**
+    `strictObject` — the whole of E1 — would be applied to synthetic documents and never to
+    the file that ships. Follow `tools/gates/lib/content-id.mjs` + `content-id-agreement
+    .test.ts`: a **live cross-check** over a battery of documents, plus one test that reads
+    and validates the shipped file, matching `content-loader.test.ts:175`.
+  - **The scan's root set. ACCEPTED both halves.** A single global visited-file count cannot
+    see a dead root — `tools/` alone contributes ~40 files, so a mistyped sim root is
+    invisible. **Count PER ROOT.** And **add `apps/game/src`**, which exists today: M5 is
+    the failure the ruling names, and that root is the only part of the scan still doing
+    work at M5. (Reading `apps/game` is not opening it — §9 forbids *work* there.)
+  - **THE 120 RUNG — RULED, because the goal block was changing the WATCH instrument
+    silently.** Shipping {30,12,5} to the viewer removes its fast-scrub, and a 30-day
+    recording is 43,200 ticks: **~6 minutes of watching at 120 ticks/s, ~24 at 30.** G-019
+    owes a watched recording two goals away and that cost lands on the human. **The viewer
+    keeps a fast REVIEW control, and it is NOT a rung and NOT in the JSON** — review speed
+    over a recording and play speed over a live sim are different quantities, and the ladder
+    is the second. The play buttons come from the ladder; the review control is separate and
+    labelled as such.
+  - **Two justifications in the plan are false and support correct decisions. ACCEPTED —
+    keep the decisions, drop the reasons.** (a) *"a zero rung makes `min` zero"* —
+    `max{0,5,12,30}` is 30 and nothing consumes `min`. The real reason pause is not a rung
+    is that **pause is a transport state, not a rate**; say that, because the human's ruling
+    reads "with pause beneath" and M5 will otherwise take the ladder for the complete set of
+    transport states. (b) *"it would move `SAVE_V1_CONTENT`'s fingerprint"* — not as stated;
+    `content.ts:1137-1140` omits optional keys when undefined precisely so a new table does
+    not. **The I2 ground alone is sufficient and correct**: it is a wall-clock quantity.
+  - **The ÷2 arm as specified would exercise the malformed path. ACCEPTED** — halving
+    {30,12,5} gives {15,6,**2.5**}, which the `int()` schema rejects. Use **{15,6,2}**; the
+    criterion's "÷2" is about the budget's direction, not per-rung division.
+  - **Rung ids need an underscore** (`content-id.mjs:17`): `speed_fast` passes, `fast` would
+    turn I3 **red**. The planned ids are already correct; pin it in a test.
+  - **§5.8's table must land in the goal block or the commit message**, not only in a
+    report — a location can be re-inspected, an assurance cannot (`HOTELSIM.md:268`).
+
   **THE LADDER'S SHAPE, RULED 2026-08-09 AFTER WATCHING — and it is NOT a linear ramp.**
 
   > **30 / 12 / 5, with pause beneath.** A fast, a working and a careful speed, all three of
