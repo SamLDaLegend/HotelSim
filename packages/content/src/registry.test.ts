@@ -16,6 +16,8 @@ import {
   parseContentJson,
   parseEconomies,
   parseEconomiesJson,
+  parseGuestRules,
+  parseGuestRulesJson,
 } from './registry.js';
 
 const roomType = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
@@ -360,5 +362,88 @@ describe('the error a designer actually sees', () => {
   it('is a ContentError, so a host can tell content failure from a bug', () => {
     expect(() => parseContent([])).toThrow(ContentError);
     expect(new ContentError('x').name).toBe('ContentError');
+  });
+});
+
+describe('the guest rules table (G-014b)', () => {
+  // THE VALIDATION BOUNDARY OF THE FILE THIS GOAL ADDED, AND IT SHIPPED WITH NOTHING ON IT.
+  // Every other table in this package has a block like this one; `guest-rules.json` had zero
+  // tests, and `ai-critic` probed all six of its clauses by hand and found every one correct.
+  // "Correct today, pinned by nothing" is ADR-0007's subject exactly, and two of these are
+  // load-bearing rather than routine:
+  //
+  //   the DUPLICATE-ID refusal is what makes `firstGuestRules` — and therefore
+  //   `abandonMarginOf` — order-independent. Two entries sharing an id would make the
+  //   shipped margin depend on which one the normaliser reached first, which is I2's
+  //   Set-iteration hazard arriving through a content file.
+  //
+  //   the MISSING-FIELD refusal is the whole of the ADR-0008 argument
+  //   `abandonMarginBasisPointsSchema` spends thirty lines making: absence in HISTORY means
+  //   total commitment, and absence on a NEW document is a designer forgetting a dial. Only
+  //   the schema knows the bytes came off disk today, so only the schema can tell them apart
+  //   — and until now nothing checked that it did.
+  const rules = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'house_guest_rules',
+    name: 'House Guest Rules',
+    abandonMarginBasisPoints: 6_000,
+    ...overrides,
+  });
+  const parseOneRule = (overrides: Record<string, unknown> = {}): unknown => parseGuestRules([rules(overrides)]);
+
+  it('accepts the shipped shape and returns it verbatim', () => {
+    expect(parseGuestRules([rules()])).toEqual([rules()]);
+  });
+
+  it('DEMANDS THE MARGIN, because silence on a new document is a forgotten dial', () => {
+    // The ADR-0008 asymmetry made mechanical. `GuestRulesData` in `packages/sim` keeps this
+    // key optional and reads its absence as total commitment, which is exactly true of
+    // content written before G-014b. A document that reaches THIS schema was written today,
+    // and a designer who forgets the field would otherwise inherit the historical default and
+    // ship a hotel whose guests silently stopped changing their minds.
+    for (const key of ['id', 'name', 'abandonMarginBasisPoints']) {
+      const entry = rules();
+      delete entry[key];
+      expect(() => parseGuestRules([entry])).toThrow(ContentError);
+    }
+  });
+
+  it('bounds the margin to 0..10000 basis points, and rejects a float', () => {
+    for (const bad of [-1, 10_001, 6_000.5, '6000']) {
+      expect(() => parseOneRule({ abandonMarginBasisPoints: bad })).toThrow(/abandonMarginBasisPoints/);
+    }
+    // BOTH ENDS ARE LEGAL AND BOTH MEAN SOMETHING (G-014b criterion 3): 0 is the thrash
+    // control arm and 10,000 is the era before this goal. A schema that refused either would
+    // make an arm of this goal's own evidence unloadable.
+    for (const good of [0, 1, 6_000, 10_000]) {
+      expect(() => parseOneRule({ abandonMarginBasisPoints: good })).not.toThrow();
+    }
+  });
+
+  it('rejects an unknown key, because a typo that is ignored becomes a behaviour mystery', () => {
+    expect(() => parseOneRule({ abandonMarginBasisPoint: 6_000 })).toThrow(ContentError);
+  });
+
+  it('REJECTS DUPLICATE IDS, which is what keeps the shipped margin independent of file order', () => {
+    expect(() => parseGuestRules([rules(), rules()])).toThrow(/duplicate guest rules id/);
+    // And two DIFFERENT ids are fine: the table is a list because M6 wants per-archetype
+    // rules, and `firstGuestRules` takes the lowest id after normalisation.
+    expect(() => parseGuestRules([rules(), rules({ id: 'strict_guest_rules' })])).not.toThrow();
+  });
+
+  it('rejects an empty document, so a file that parses cannot mean "no rules"', () => {
+    expect(() => parseGuestRules([])).toThrow(ContentError);
+  });
+
+  it('demands a snake_case id, like every other content table (ADR-0003)', () => {
+    expect(() => parseOneRule({ id: 'houseGuestRules' })).toThrow(/snake_case/);
+  });
+
+  it('keeps "not JSON" and "not content" apart, like every other parser here', () => {
+    expect(() => parseGuestRulesJson('[{"id":', 'guest-rules.json')).toThrow(
+      /guest-rules\.json is not valid JSON/,
+    );
+    expect(() => parseGuestRulesJson('[]', 'guest-rules.json')).toThrow(
+      /guest-rules\.json is not valid content/,
+    );
   });
 });

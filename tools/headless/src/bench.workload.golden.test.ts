@@ -151,7 +151,22 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // migrating a v7 world forward and asserting it hashes identically to a v8 world that
     // lived the same history — which is what makes ~30 moved pins in this change evidence
     // rather than thirty separate acts of faith.
-    expect(hashState(plain)).toBe('cc1fe09f93c19e53');
+    //
+    // MOVED AGAIN AT G-014b, FOR TWO CAUSES AT ONCE, AND THEY ARE SEPARATED RATHER THAN
+    // LUMPED. Was `cc1fe09f93c19e53` at G-015.
+    //
+    //   1. THE CONTENT FINGERPRINT. `guest-rules.json` is a fifth content table, so
+    //      `World.contentHash` moves for every run under the shipped content whether or not
+    //      any guest behaves differently. Not a simulation change.
+    //   2. ONE ABANDONMENT — ASSERTED BELOW rather than described here, so this paragraph
+    //      carries no figure that nothing pins (ADR-0007's amendment). One guest, in five
+    //      simulated days, out of 210 that completed a stay. This hotel is STARVED — 60 rooms
+    //      against four providers — and abandonment structurally needs a FREE provider for
+    //      the challenger, so scarcity suppresses it. That is the opposite of the intuition
+    //      the goal started with, and it is why the goal's own criterion invocation is a
+    //      different, better-supplied hotel: `hysteresis.report.test.ts` owns the era
+    //      comparison and pins all three margins at a configuration where the margin bites.
+    expect(hashState(plain)).toBe('f652a2a1901310a5');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -163,6 +178,12 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     expect(departureCountOf(plain.guestOutcomes, 'satisfied')).toBe(210);
     expect(evictedGuests(plain.guestOutcomes)).toBe(0);
     expect(plain.needOutcomes).toHaveLength(4);
+    // AND THE ABANDONMENT COUNT IS HAND-CHECKED TOO (G-014b), because it is now part of what
+    // this hash covers. ONE, in five simulated days over 210 completed stays: this hotel is
+    // starved of providers, and a guest can only abandon towards a FREE one. If this ever
+    // climbs, the hash above moved because guests started changing their minds rather than
+    // because a content table did.
+    expect(plain.needOutcomes.reduce((total, row) => total + row.abandoned, 0)).toBe(1);
   });
 
   it('and every guest is accounted for', () => {
@@ -189,7 +210,13 @@ describe('the same workload with the player churning the building', () => {
     // carries the sharper control: it EVICTS, and the eviction count below is still exactly
     // 19. G-015 splits eviction into two reasons, so a change that had altered when a guest
     // is evicted (rather than only what is recorded about it) would move that number.
-    expect(hashState(churn)).toBe('45ad064fabc409cb');
+    //
+    // Moved at G-014b with the plain arm, for the two causes described there — the fifth
+    // content table and one abandonment. Was `45ad064fabc409cb` at G-015. The control holds
+    // and is the sharp one: 19 evictions, unchanged, so the release path a guest takes when
+    // its room is demolished mid-engagement is reached exactly as often as before, in a goal
+    // that added a SECOND way for an engagement to end.
+    expect(hashState(churn)).toBe('6e9b2d38dfa01134');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

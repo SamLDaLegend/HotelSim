@@ -106,6 +106,35 @@ export type NeedState = {
    * migrates to `'room'` exactly rather than approximately.
    */
   readonly metBy: ProviderKind | null;
+  /**
+   * How many times THIS GUEST has walked out on a provider it had engaged for this need
+   * (G-014b). 0 for a need nobody has ever abandoned.
+   *
+   * ------------------------------------------------------------------------------------
+   * WHY THE COUNTER LIVES ON THE GUEST'S NEED AND NOT ON THE TALLY — MAJOR 4(b), DECIDED.
+   *
+   * `NeedOutcome` is COUNTED AT DEPARTURE, NOT WHEN A NEED RESOLVES (see its own note), and
+   * `recordNeedsAtDeparture` is the only thing that inserts a row. Incrementing an
+   * `abandoned` counter on the TALLY at the moment a guest abandoned something would create
+   * rows before any departure and break that law outright — `met + unmet === departed` per
+   * row is exactly what it buys, and a row conjured mid-stay makes it an inequality nobody
+   * can state. So the abandonment is recorded HERE, on the guest's own need, and folded into
+   * the tally on the way out with everything else. One departure, one fold, one law intact.
+   *
+   * THE COST, STATED RATHER THAN DISCOVERED: it is a SECOND v8 -> v9 default. `NeedState`
+   * gains this field and `NeedOutcome` gains `abandoned`, so the migration argues two values
+   * from the era instead of one — and both are exactly 0, because a v8 guest could not
+   * abandon anything (`reserve` returned early for any engaged guest). Neither is a default
+   * standing in for missing information; see `migrateV8ToV9`.
+   *
+   * IT IS A COUNT AND NOT A FLAG, because a guest can abandon the same need more than once
+   * in a stay. It never decreases and it is never cleared: a need that was abandoned and
+   * later met is a real and interesting history, and flattening it to "was it abandoned"
+   * would lose the difference between a guest that dithered once and one that dithered five
+   * times — which is the whole quantity the margin is tuned against.
+   * ------------------------------------------------------------------------------------
+   */
+  readonly abandonCount: number;
 };
 
 /**
@@ -142,6 +171,43 @@ export type NeedOutcome = {
    * about urgency, one scale down: keep one record, derive the rest.
    */
   readonly metByItem: number;
+  /**
+   * How many times an instance of this need was ABANDONED — a guest walking out on a
+   * provider it had engaged for it, because another need beat it by the content-defined
+   * margin (G-014b).
+   *
+   * NOT A PARTITION OF `met` OR OF `unmet`, AND THAT IS THE FIRST THING TO UNDERSTAND ABOUT
+   * IT. A guest departs exactly once and so resolves each need exactly once, which is what
+   * makes `met + unmet === departed` an identity. It abandons ZERO OR MANY TIMES, so this
+   * counter is unbounded above by anything in this row and belongs to no conservation law.
+   * That asymmetry is why the abandonment is NOT a row in G-015's departure table: a law
+   * that had to skip a row would be the vacuity shape that table exists to prevent.
+   *
+   * WHAT CAN AND CANNOT CATCH A MISFILING HERE — the matrix, in the shape G-015's own
+   * cross-subsystem note was made to carry, because "there is no witness" is a claim that
+   * needs evidence like any other:
+   *
+   *   CAUGHT  a negative, fractional or NaN count, at every commit and every load
+   *           (`assertNeedOutcomes` below, and `assertNeedVector` for the guest-side field).
+   *   CAUGHT  a count that appeared before ANY guest carrying the need departed — the
+   *           `met + unmet === 0` clause below. This is the structural witness for the
+   *           decision above: an implementation that incremented the TALLY mid-stay trips it
+   *           on the first abandonment of the run. It stops witnessing once the first
+   *           departure lands, so it is a real check with a stated blind spot rather than a
+   *           general one.
+   *   CAUGHT  an abandonment counted under content that cannot produce one — a saturating
+   *           margin, or fewer than two engagement need types. Content is the separate input
+   *           (ADR-0007 as amended at G-013), and the law lives in `buildSummary`, where
+   *           content is in hand, beside the `metByItem` attribution laws.
+   *   NOT     an abandonment filed against the CHALLENGER's row instead of the incumbent's.
+   *           It conserves the total, moves no other number, and no second input records who
+   *           was abandoned. Pinned by driving a switch and reading the row
+   *           (`utility.hysteresis.test.ts`), never by a law.
+   *   NOT     an abandonment dropped on an exit path. `depart` is the one route out and
+   *           `recordNeedsAtDeparture` the one fold, so this is structural rather than
+   *           checked — the same argument G-012 makes for the reservation release.
+   */
+  readonly abandoned: number;
 };
 
 /**
@@ -202,6 +268,8 @@ export function formNeedVector(content: BoundContent): readonly NeedState[] {
       // Nothing has served it yet. `satisfyTicks` is at least 1 on disk, so this is
       // consistent with `assertNeedVector`'s "non-null iff met" from the first tick.
       metBy: null,
+      // Nothing has been walked out on yet either (G-014b).
+      abandonCount: 0,
     });
   }
   return needs;
@@ -389,6 +457,10 @@ function advanceNeed(
       patienceRemaining: need.patienceRemaining - 1,
       progressRemaining: need.progressRemaining,
       metBy: null,
+      // Carried, never reset. Decay says nothing about a guest's history of walking out on
+      // this need, and a counter that decay quietly cleared would under-report exactly the
+      // guest the margin is tuned against — one that keeps changing its mind (G-014b).
+      abandonCount: need.abandonCount,
     };
   }
   // Relief is capped at the patience the need started with: being served restores what
@@ -405,7 +477,39 @@ function advanceNeed(
     // yet, and a guest that eats half its dinner at a vending machine and the rest at the
     // café is recorded against the café, which is the honest answer to "what delivered it".
     metBy: progressRemaining === 0 ? servedBy : null,
+    // Carried, for the reason the unserved branch above carries it.
+    abandonCount: need.abandonCount,
   };
+}
+
+/**
+ * A guest walks out on the provider it had engaged for this need (G-014b). THE ONE PLACE
+ * `abandonCount` MOVES.
+ *
+ * PROGRESS AND PATIENCE ARE UNTOUCHED, and both halves are deliberate. Progress is RETAINED
+ * because a guest interrupted halfway through dinner has had half a dinner — the rule G-012
+ * settled at seeding for a provider that stopped providing, and abandoning is the same event
+ * chosen rather than suffered. Patience is untouched because the need reverts to WAITING and
+ * `advanceNeed` will start draining it again on the very next tick; docking it here would
+ * charge the guest twice for one decision.
+ *
+ * IT DOES NOT RELEASE ANYTHING. The reservation lives on the guest and is given back through
+ * `release` in `guests.ts`, which is the one place `held` shrinks; a need module that also
+ * touched the room search would be a second release site and would break the short-circuit
+ * that depends on there being one (see `findFreeRoom`).
+ *
+ * Returns the same object when the need is not pending, so a caller that somehow reached a
+ * terminal need cannot invent a history for it. The tick cannot produce that state — a
+ * resolved need's engagement is released in step 5, before step 7 can abandon anything.
+ */
+export function abandonNeed(needs: readonly NeedState[], needId: ContentId): readonly NeedState[] {
+  const index = indexOfNeed(needs, needId);
+  if (index === -1) return needs;
+  const need = needs[index];
+  if (need === undefined || !isNeedPending(need)) return needs;
+  const next = needs.slice();
+  next[index] = { ...need, abandonCount: need.abandonCount + 1 };
+  return next;
 }
 
 /**
@@ -442,6 +546,7 @@ export function recordNeedsAtDeparture(
         met: isNeedMet(need) ? 1 : 0,
         unmet: isNeedMet(need) ? 0 : 1,
         metByItem: byItem(need),
+        abandoned: need.abandonCount,
       });
       j += 1;
       continue;
@@ -456,6 +561,9 @@ export function recordNeedsAtDeparture(
       met: row.met + (isNeedMet(need) ? 1 : 0),
       unmet: row.unmet + (isNeedMet(need) ? 0 : 1),
       metByItem: row.metByItem + byItem(need),
+      // The guest's whole history of walking out on this need, added once, on the way out —
+      // which is what keeps `met + unmet === departed` true of the same row (G-014b).
+      abandoned: row.abandoned + need.abandonCount,
     });
     i += 1;
     j += 1;
@@ -593,6 +701,24 @@ export function assertNeedVector(needs: unknown, guestId: number): asserts needs
           `still owes ${entry.progressRemaining} tick(s) of provision.`,
       );
     }
+    // `abandonCount` IS HASHED STATE, so the key is always present (G-014b). Typed wider than
+    // the field for the reason `metBy` is: at LOAD an absent key and a 0 are different
+    // statements, and only the check can tell a v9 world from a v8 one that skipped its
+    // migration. There is no cross-field clause here and that is not an omission — see the
+    // matrix on `NeedOutcome.abandoned`: nothing in a need vector's own numbers bounds how
+    // many times its guest changed its mind.
+    const abandonCount: number | undefined = entry.abandonCount;
+    if (abandonCount === undefined) {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} has no abandonCount field on need "${entry.needId}". A need nobody ` +
+          'has walked out on carries 0, so the key is always present (it is hashed state).',
+      );
+    }
+    if (!Number.isSafeInteger(abandonCount) || abandonCount < 0) {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} has a negative or non-integer abandonCount on need "${entry.needId}"`,
+      );
+    }
   }
 }
 
@@ -636,6 +762,7 @@ export function assertNeedOutcomes(outcomes: readonly NeedOutcome[], departed: n
     assertTallyCounter('met', row.needId, row.met);
     assertTallyCounter('unmet', row.needId, row.unmet);
     assertTallyCounter('metByItem', row.needId, row.metByItem);
+    assertTallyCounter('abandoned', row.needId, row.abandoned);
     // AND THE ITEM SHARE CANNOT EXCEED THE WHOLE (G-013). By-room is DERIVED as
     // `met - metByItem`, so this is the clause that keeps the derived number from going
     // negative — a row claiming more item deliveries than satisfactions would make the
@@ -650,6 +777,21 @@ export function assertNeedOutcomes(outcomes: readonly NeedOutcome[], departed: n
       throw new Error(
         `Need outcomes are invalid: need "${row.needId}" records ${row.met + row.unmet} resolved instance(s) but only ` +
           `${departed} guest(s) have departed. A need is counted once, when the guest that formed it leaves.`,
+      );
+    }
+    // AND AN ABANDONMENT CANNOT PRECEDE THE DEPARTURE THAT CARRIED IT (G-014b). This is the
+    // structural witness for counting `abandoned` at departure rather than at the moment a
+    // guest walks out: an implementation that incremented this tally mid-stay would create a
+    // row with `met + unmet === 0` and a non-zero count, and it would do so on the first
+    // abandonment of the run. It is deliberately NOT `abandoned <= departed` — a guest may
+    // abandon the same need many times, so no such bound exists — and it stops witnessing
+    // once the first guest carrying this need has left. A real check with a stated blind
+    // spot; see the matrix on `NeedOutcome.abandoned` for the rest of it.
+    if (row.abandoned > 0 && row.met + row.unmet === 0) {
+      throw new Error(
+        `Need outcomes are invalid: need "${row.needId}" records ${row.abandoned} abandonment(s) but no instance of it ` +
+          'has resolved. Abandonments are folded out of a departing guest\'s own need state, so a row cannot carry ' +
+          'one before a guest that formed the need has left.',
       );
     }
   }

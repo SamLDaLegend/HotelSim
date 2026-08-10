@@ -2,13 +2,15 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020b done. M2: 9 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-014b done. M2: 10 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
-- **138 items across 18 goals.** G-020b added **four, every one with its falsification test
-  attached** (§4, human 2026-08-09) — the compounding hole in a per-goal bound, the gate's
-  true minimum detectable mutation, a loop-wide pre-G-013 reading, and whether `--repeat`
-  should be the default. **G-020a's zero is therefore discharged rather than repeated**: the
-  named successor did hold the material, and the §9 warning stands unchanged for next time.
+- **143 items across 19 goals.** G-020b added four, G-014b five, **each with its falsification
+  test attached** (§4). **G-020a's zero is discharged**; the §9 warning stands for next time.
+- **THE DWELL TERM IS NO LONGER A HYPOTHESIS.** Parked at G-014b PLAN with its test; the same
+  goal's WATCH *was* that test and returned **positive** — 35 of 38 abandonments leave a need
+  past half its `satisfyTicks`. **Fourth parked hypothesis settled by a goal that did not plan
+  to run it; first time the goal that parked it also answered it.** A margin cannot guarantee
+  completion — that needs `M >= 12000`, over the 10000 ceiling.
 - **PROMOTED OUT**: scenario capital is a **hard prerequisite of M4**. Every balance figure
   to date was taken with `--rooms N` seeding ~75% extra opening capital.
 - **The costed lever, pinned and unpulled**: sampling the guest-store scan recovers
@@ -1057,6 +1059,61 @@ changed one constant, its derivation, and the records that quoted it.
   case is already in hand — two needs at pressure 3333, a provider frees, and at `M = 6000` the
   guest abandons after 90 ticks with 90 of 180 progress. **-> M3, or the first goal that finds
   the count material.**
+
+  **THE TEST WAS RUN, IN THE SAME GOAL THAT PARKED IT, AND IT CAME BACK POSITIVE (G-014b BUILD,
+  2026-08-10).** It cost one pass over a recording this goal had already made for its WATCH,
+  which is the §4 hypothesis-with-its-test rule doing exactly what it was written for.
+
+  *What was measured*: abandonments in which the abandoned need already carried more than half
+  its own `satisfyTicks` of progress · *over what workload*: `--days 3 --seed 7 --rooms 6
+  --arrivals 60 --amenities 2`, the criterion configuration, recorded with `--record-every 5` ·
+  *sample count*: **at the shipped margin, all 38 abandonments are individually observable and
+  the arm is complete. At margin 0 they are NOT: 1,616 abandonments occur and only 1,334 are
+  observable at `--record-every 5`**, because 280 sampled transitions carry two increments and
+  one carries three. So the thrash row's statistics are taken over 1,334 and its denominator
+  must be 1,334 · *aggregated how*: count and median of the progress share · *regime*:
+  irrelevant by construction (a deterministic count, not a timing); quiet, `win32`/12 cores.
+
+  | margin | abandonments | observable | carrying > half | median progress share | max |
+  |---|---|---|---|---|---|
+  | 6000 (shipped) | 38 | 38 (all) | **35 (92%)** | 0.650 | 0.956 |
+  | 0 (thrash) | 1,616 | 1,334 | 326 (**24%**) | 0.300 | 0.987 |
+
+  **THE 20% IN THE FIRST VERSION DIVIDED A COUNT TAKEN OVER 1,334 BY A DENOMINATOR OF 1,616**
+  (`ai-critic`, verification pass; both counts re-derived by the orchestrator — summed
+  increments 1,616, per-(guest,need) transitions 1,334, delta histogram 1,053×1 + 280×2 + 1×3).
+  **It is the same class as the "engagement stints" defect fixed forty lines away in the same
+  round** — a frame walk that cannot see everything, asserted as complete — which is exactly
+  what §5.8 asks a fix on a known class to go looking for. The invisible increments are the
+  rapid-succession ones, so the omission biases the thrash median UP and the conclusion is
+  conservative either way: **92% against 24% survives, and the shipped row is unaffected.**
+
+  **92% is material by any reading of the word**, and the shape is the opposite of the
+  intuition: it is the SHIPPED margin, not the thrash arm, whose abandonments land late in an
+  engagement. That follows from the mechanism rather than contradicting it — a wide margin
+  takes a long time to be cleared, and the longer the incumbent has been served the more
+  progress it has. So **the dwell term is no longer a hypothesis with a test attached; it is a
+  result waiting for a goal**, and its own falsification test is discharged.
+
+  **AND THE RETURN VISIT IS THE SYMPTOM, NOT THE MITIGATION** (`ai-critic`, sweep 1). This
+  entry first offered *"the guest returns to the need later if it can"* as a reason the cost is
+  unestablished. It is the opposite: the WATCH recording shows the four highest-progress
+  abandonments in three simulated days are all the same shape — **a guest walks out of a
+  provider it is a few ticks from finishing, spends time elsewhere, and comes back to finish
+  it** — **four of four return and complete.** Guests 9, 17 and 57 leave an arm chair at 95.3%
+  and return **to the same entity**. Guest 63 leaves a café at 95.6%, **the café then stands
+  free for fifty ticks**, and 265 ticks later it finishes the last six ticks of that meal at a
+  **vending machine — fit 2500 against the café's 7500.** Frame references and ticks are in
+  `JOURNAL.md`. A round trip across the hotel to finish something one was already finishing —
+  sometimes at a three-times-worse provider, while the thing abandoned sits empty — is exactly
+  what §6.1 item 6 describes, and it is the strongest argument the dwell term has.
+
+  What remains genuinely UNESTABLISHED is the price in outcomes: progress is retained
+  (`abandonNeed`), and at this configuration the shipped margin still meets 1,604 engagement
+  needs against total commitment's 1,423 — so the round trips are not, on these numbers,
+  costing satisfaction. **The dwell term's case is perceptual before it is numerical, which is
+  why the human's WATCH is the thing that decides it. -> M3, and it now arrives with its
+  evidence rather than with its question.**
 - **PROVIDER-UPGRADING WITHIN ONE NEED.** G-014b rules the within-need choice **totally
   committed** — a guest never leaves a half-eaten meal to eat the same meal at a nicer table.
   Fit is ordinal by ruling (`schema.ts:78-88`, and `utility.test.ts` proves an order-preserving
@@ -1069,3 +1126,33 @@ changed one constant, its derivation, and the records that quoted it.
 - **A `bindContent` REFUSAL OF A TWITCHY MARGIN.** Rejected for G-014b because margin 0 must
   stay loadable — it is the thrash control arm criterion 3 depends on. Revisit only if a
   content-authoring path outside the test suite can set it. **-> M6.**
+
+## Discovered during the G-014b BUILD (2026-08-10)
+
+- **A PROVIDER THAT SERVES BOTH THE INCUMBENT NEED AND THE CHALLENGER NEED IS INVISIBLE TO THE
+  SWITCH.** The price of MAJOR 4(a)'s ordering, stated rather than discovered later. The search
+  that decides the switch runs while the guest still holds its provider, and `findFreeRoom`
+  skips everything in `held` — which is exactly what stops a guest abandoning into nothing and
+  stops it "switching" to the thing it is already at. The consequence is that a guest could walk
+  from a provider that could have served its new need to a second one that also does.
+  **NO SHIPPED CONTENT CAN REACH IT**: no room type or item in `packages/content/data` provides
+  two needs, and `utility.hysteresis.test.ts` drives the case on constructed content and pins
+  the current answer (no switch) so that changing it is a decision rather than a drift.
+  **FALSIFICATION TEST, attached per §4**: in a recording, count switches whose ABANDONED
+  provider also `provides` the challenger need. *If that count is zero — which it must be under
+  any content where no provider serves two needs — the question is closed for that content; the
+  first content table that gives one provider two needs is the goal that owes the answer.*
+  Closing it properly means letting the search consider what the guest already holds as a
+  candidate for another need, which is a different decision from this one. **-> M6, or the first
+  content table with a dual-purpose provider.**
+
+- **THE `--arrivals 1` / STARVED HOTEL MAKES THE MARGIN COST SATISFACTION, AND NOBODY HAS
+  DECIDED WHETHER THAT IS RIGHT.** Measured over the amenity sweep in
+  `hysteresis.report.test.ts`: at `--rooms 6 --arrivals 60 --amenities 1` the shipped margin
+  meets 852 engagement needs where total commitment meets 952 — **11% WORSE**. At `--amenities 2`
+  it is 13% BETTER (1,604 against 1,423) and at `--amenities 3` it is identical. So the margin
+  helps a hotel with some slack, does nothing to a saturated one, and hurts a starved one.
+  **FALSIFICATION TEST**: re-run that sweep after M3 puts travel time in the score. *If the
+  starved arm is still worse, the margin wants a term that knows the hotel is full — and the
+  honest form of that is queueing, which is M3's own subject; if travel time closes it, this was
+  an artefact of every provider being equidistant.* **-> M3.**

@@ -33,7 +33,7 @@ import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData } from './content.js';
 import { assertNeedVector, assertNeedOutcomes } from './needs.js';
-import type { NeedState } from './needs.js';
+import type { NeedOutcome, NeedState } from './needs.js';
 import {
   deserialise,
   MIGRATIONS,
@@ -109,8 +109,9 @@ describe('the chain runs THROUGH v7, and the shape of it is checkable (G-013)', 
   it('ships one step per version, and the 6 -> 7 step is still the sixth of them', () => {
     // The title said "reaches v7" and "six steps" until G-015, which is what a file owning
     // the CURRENT era says. This file stopped owning it when v8 arrived, and the assertions
-    // below already knew: v7 is now a stop on the way rather than the end of the line.
-    expect(SAVE_SCHEMA_VERSION).toBe(8);
+    // below already knew: v7 is now a stop on the way rather than the end of the line. The
+    // absolute went at G-014b (v9) — an era pin in a file that disclaims the era is a line
+    // that has to be edited at every bump and asserts nothing this file is about.
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
     expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
     expect([step.from, step.to]).toEqual([6, 7]);
@@ -143,13 +144,22 @@ describe('v6 -> v7 attributes what the era can attribute, and invents nothing (G
     ]);
   });
 
-  it('and the result satisfies the invariants this build enforces at load', () => {
+  it('and the result satisfies the invariants this build enforces at load — AFTER THE WHOLE CHAIN', () => {
     // The point of the two defaults: a migrated world is not merely well-typed, it passes
     // the same checks a world this build produced would. If `metBy` defaulted to `null` for
     // a met need — the lazier choice — this would throw.
-    const migrated = step.migrate(v6World()) as MigratedWorld;
-    expect(() => assertNeedVector(migrated.guests.list[0]!.needs, 1)).not.toThrow();
-    expect(() => assertNeedOutcomes(migrated.needOutcomes, 3)).not.toThrow();
+    //
+    // IT WALKS EVERY REMAINING STEP, AND UNTIL G-014b IT DID NOT. This assertion used to run
+    // against the v7 INTERMEDIATE and pass, because v7 was the end of the line when it was
+    // written. `assertNeedVector` and `assertNeedOutcomes` describe the CURRENT shape — v9
+    // added `abandonCount` and `abandoned` — so a v7 world correctly fails them, and the old
+    // form was asserting that an intermediate satisfies invariants nothing ever applies to
+    // one. `deserialise` runs the whole chain and then checks; so does this now.
+    let migrated: unknown = step.migrate(v6World());
+    for (const later of MIGRATIONS.filter((entry) => entry.from >= step.to)) migrated = later.migrate(migrated);
+    const walked = migrated as { guests: { list: { needs: NeedState[] }[] }; needOutcomes: readonly NeedOutcome[] };
+    expect(() => assertNeedVector(walked.guests.list[0]!.needs, 1)).not.toThrow();
+    expect(() => assertNeedOutcomes(walked.needOutcomes, 3)).not.toThrow();
   });
 
   it('attributes a need THIS CONTENT DOES NOT DEFINE, because it reads the bytes and not the table', () => {
@@ -169,7 +179,12 @@ describe('v6 -> v7 attributes what the era can attribute, and invents nothing (G
     ];
     const migrated = step.migrate(world) as MigratedWorld;
     expect(migrated.guests.list[0]!.needs.map((entry) => entry.metBy)).toEqual(['room', null]);
-    expect(() => assertNeedVector(migrated.guests.list[0]!.needs, 1)).not.toThrow();
+    // The vector check runs on the END of the chain, not on the v7 intermediate — see the
+    // note on the invariants test above, which had the same correction at G-014b.
+    let walked: unknown = migrated;
+    for (const later of MIGRATIONS.filter((entry) => entry.from >= step.to)) walked = later.migrate(walked);
+    const needs = (walked as { guests: { list: { needs: NeedState[] }[] } }).guests.list[0]!.needs;
+    expect(() => assertNeedVector(needs, 1)).not.toThrow();
   });
 
   it('and the structural guard behind that claim is a SOURCE SCAN, not this file', () => {
@@ -185,7 +200,7 @@ describe('v6 -> v7 attributes what the era can attribute, and invents nothing (G
     // `tools/headless` because it reads a file and `packages/sim` may not (I1), and it
     // carries `provider` in its name so this goal's exit filter runs it. This case exists
     // to point at it, which is the `grid.save.test.ts` precedent.
-    expect(SAVE_SCHEMA_VERSION).toBe(8);
+    expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
   });
 });
 
@@ -226,7 +241,7 @@ describe('v6 -> v7 refuses to destroy what it cannot have written (G-013)', () =
 
 describe('the metBy invariant is enforced at load, in BOTH directions (G-013)', () => {
   const vector = (progressRemaining: number, metBy: unknown): unknown[] => [
-    { needId: 'rest', patienceRemaining: 10, progressRemaining, metBy },
+    { needId: 'rest', patienceRemaining: 10, progressRemaining, metBy, abandonCount: 0 },
   ];
 
   it('refuses a MET need that records nothing that delivered it', () => {
@@ -243,9 +258,9 @@ describe('the metBy invariant is enforced at load, in BOTH directions (G-013)', 
 
   it('refuses an attribution that is neither a room nor an item, and a missing key', () => {
     expect(() => assertNeedVector(vector(0, 'wizard'), 1)).toThrow(/metBy "wizard"/);
-    expect(() => assertNeedVector([{ needId: 'rest', patienceRemaining: 10, progressRemaining: 0 }], 1)).toThrow(
-      /has no metBy field/,
-    );
+    expect(() =>
+      assertNeedVector([{ needId: 'rest', patienceRemaining: 10, progressRemaining: 0, abandonCount: 0 }], 1),
+    ).toThrow(/has no metBy field/);
   });
 
   it('accepts the two shapes the simulation actually produces', () => {
@@ -257,10 +272,10 @@ describe('the metBy invariant is enforced at load, in BOTH directions (G-013)', 
   it('and the tally refuses more item deliveries than satisfactions', () => {
     // By-room is DERIVED as `met - metByItem`, so this is the clause that stops the report
     // printing a negative count.
-    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 3 }], 5)).toThrow(
+    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 3, abandoned: 0 }], 5)).toThrow(
       /but only 2 met/,
     );
-    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 2 }], 5)).not.toThrow();
+    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 2, abandoned: 0 }], 5)).not.toThrow();
   });
 });
 
@@ -274,6 +289,6 @@ describe('a world carrying attributions round-trips (I6)', () => {
     const blob = JSON.stringify({ schemaVersion: 6, world: v6World() });
     const loaded = deserialise(blob);
     expect(hashState(deserialise(serialise(loaded)))).toBe(hashState(loaded));
-    expect((JSON.parse(serialise(loaded)) as { schemaVersion: number }).schemaVersion).toBe(8);
+    expect((JSON.parse(serialise(loaded)) as { schemaVersion: number }).schemaVersion).toBe(SAVE_SCHEMA_VERSION);
   });
 });

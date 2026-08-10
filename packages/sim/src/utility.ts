@@ -80,19 +80,12 @@
 // for — remains UNEXPRESSIBLE rather than merely unlikely. G-014b adds re-evaluation and the
 // content-defined margin that makes abandoning one provider for another deliberate.
 
-import { fitOf } from './content.js';
+import { fitOf, ONE_WHOLE_BASIS_POINTS } from './content.js';
 import type { BoundContent, NeedTypeData } from './content.js';
 import type { Entity } from './entities.js';
 import type { NeedState } from './needs.js';
 
 export { MAX_FIT_BASIS_POINTS } from './content.js';
-
-/**
- * One whole, as an integer count of basis points. A pressure of 10,000 means every tick of
- * patience is spent; the same unit `demolitionRefundBasisPoints` and `fitBasisPoints` use,
- * for the reason ADR-0002 gives about fractions.
- */
-const ONE_WHOLE_BASIS_POINTS = 10_000;
 
 /**
  * How hard a need presses, as the fraction of its OWN patience already spent, in basis
@@ -119,6 +112,50 @@ export function pressureBasisPoints(needType: NeedTypeData, need: NeedState): nu
   // Exact in a double: urgency and patience are far inside 2^53 for any sane content, so
   // the product is exact and the floor is a decision about a remainder, never about drift.
   return Math.floor((urgency * ONE_WHOLE_BASIS_POINTS) / patience);
+}
+
+/**
+ * THE MOST PRESSURE A **PENDING** NEED CAN EVER SHOW, and the reason a margin of
+ * `ONE_WHOLE_BASIS_POINTS` is total commitment rather than merely a large number (G-014b).
+ *
+ * THE PROOF IS A CHAIN OF THREE STEPS AND EVERY LINK IS A DEFINITION IN THIS REPO, so it is
+ * pinned AT the definition rather than sampled by a grid of constructed pairs:
+ *
+ *   1. `isNeedPending` is DEFINED as `progressRemaining > 0 && patienceRemaining > 0`
+ *      (`needs.ts`). So a pending need has `patienceRemaining >= 1`.
+ *   2. `pressureBasisPoints` computes `urgency = patience - patienceRemaining`, so a pending
+ *      need has `urgency <= patience - 1 < patience`, and the `urgency >= patience`
+ *      saturating branch above is STRUCTURALLY UNREACHABLE for it.
+ *   3. The remaining branch is `floor(urgency x 10,000 / patience)`, which at the largest
+ *      pending urgency is `10,000 - ceil(10,000 / patience) <= 10,000 - 1`.
+ *
+ * The guest loop only ever scores PENDING needs (`reserve` skips the rest), so 9,999 is the
+ * ceiling on every number the margin is ever compared against. A challenger must EXCEED the
+ * incumbent by the margin, and the incumbent's pressure is at least 0, so at a margin of
+ * 10,000 the comparison can never be satisfied.
+ *
+ * WHY THAT MATTERS BEYOND TIDINESS: it is what makes "content that predates the margin" and
+ * "content whose margin is 10,000" the same simulation, which is what lets G-014b's Era-A
+ * arm be a CONTENT DOCUMENT rather than a code path nothing on disk can reach.
+ */
+export const MAX_PENDING_PRESSURE_BASIS_POINTS = ONE_WHOLE_BASIS_POINTS - 1;
+
+/**
+ * The lowest pressure a rival need must reach before a guest abandons what it is doing
+ * (G-014b): the incumbent's pressure plus the content-defined margin.
+ *
+ * STRICTLY "REACH", NOT "EXCEED", and the boundary is driven both ways by
+ * `utility.hysteresis.test.ts`: a gap of `margin - 1` keeps the engagement and a gap of
+ * exactly `margin` switches. An off-by-one here is invisible in a counter and would only
+ * ever show up as a margin that is quietly one basis point out.
+ *
+ * NO CLAMP AND NO SATURATION. The sum can reach 19,999 (a pressure of 9,999 plus a margin of
+ * 10,000) and that is correct: it is a threshold no pressure can reach, which is exactly what
+ * total commitment means. Clamping it to `ONE_WHOLE_BASIS_POINTS` would silently turn the
+ * saturating margin back into a live one at the top of the range.
+ */
+export function abandonThresholdBasisPoints(incumbentPressure: number, marginBasisPoints: number): number {
+  return incumbentPressure + marginBasisPoints;
 }
 
 /**

@@ -34,7 +34,14 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createWorld, itemTypeProvides, lodgingNeedOf, roomTypeProvides, run } from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
-import { loadContent, ECONOMY_PATH, ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
+import {
+  loadContent,
+  ECONOMY_PATH,
+  GUEST_RULES_PATH,
+  ITEM_TYPES_PATH,
+  NEED_TYPES_PATH,
+  ROOM_TYPES_PATH,
+} from './content-loader.js';
 import {
   buildSummary,
   departuresOf,
@@ -258,7 +265,7 @@ describe('THE NEGATIVE CONTROL: content whose items provide nothing (G-013)', ()
   const dir = mkdtempSync(join(tmpdir(), 'hotelsim-noitems-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH]) {
+  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, GUEST_RULES_PATH]) {
     copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
   }
 
@@ -367,7 +374,7 @@ describe('the criterion invocation through a real process (G-013)', () => {
     const needLines = text.stdout.split('\n').filter((line) => /^need (L| ) /.test(line));
     expect(needLines).toHaveLength((content.content.needTypes ?? []).length);
     for (const line of needLines) {
-      expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\)$/);
+      expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\), \d+ abandoned$/);
     }
   });
 });

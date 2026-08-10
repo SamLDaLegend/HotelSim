@@ -2,20 +2,20 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020b done. M2: 9 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-014b done. M2: 10 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
-- **State**: save **v8** · summary **v2** · I2 `ca54cbb7ae2dc693` · **I4 unreliable (§2.0)**
+- **State**: save **v9** · summary **v2** · I2 `10926cc3b569c887` · **I4 unreliable (§2.0)**
   · `pnpm verify` is ten rows now, three of them `—` and not invariants.
-- **WATCH #1–#3 exist.** The viewer found what 1,109 tests could not, then caught a defect
-  in G-014a's own first build, then the human found G-019's criterion undetectable **before
-  PLAN** — the class's cost curve: after the fact → at PLAN → **before PLAN, from outside**.
+- **WATCH #1–#4 exist.** The viewer found what 1,109 tests could not, caught a defect in
+  G-014a's first build, and the human found G-019's criterion undetectable **before PLAN**.
+- **A WATCH ENTRY IS A CRITERION AND CAN BE VACUOUS** (G-014b): its exhibit was wrong **twice
+  about the same row**, both times found by *walking the recording*, not reading the table.
 - **Park a hypothesis WITH its experiment**: G-013 parked, G-017 ran it unplanned, G-014a
   hit the knife-edge it described. Three goals chained; none planned the next.
 - **The defect this repo produces**: checks and claims that inspect nothing. Newest forms —
-  a criterion with **no subject**, a guard not wired to its own exit command, a doc claiming
-  a law runs where it does not, **goldens that redden because the feature works**, and
-  G-020b's own: **a two-halved rule with one half executed and the other admired** — the
-  pooling brake shipped in code at round 3, the REPLACE half still prose at round 4.
+  a criterion with **no subject**, **goldens that redden because the feature works**, **a
+  two-halved rule with one half executed and the other admired**, and **exit criteria that
+  certify rather than miss** (ADR-0007's sixth amendment: three of four, in one list).
 - **Prose may describe, it may not measure**; a number you cannot re-measure is **withdrawn,
   not restated** — applied to timings, counts, test totals and test *outcomes*.
 - **When several careful actors make the same error, the rule is missing** — four times.
@@ -1439,3 +1439,181 @@ moves. The running product across a milestone is parked with its falsification t
 
 **No invariant was weakened, and `git diff --stat -- packages/` is empty** — the whole goal
 is gates and ledgers.
+
+## 2026-08-10 — G-014b WATCH: three recordings, and the exhibit a human should look at first. THE JUDGEMENT IS NOT MADE HERE.
+
+**Criterion 6 obliges a human to look.** `ai-engineer` may record and describe; it may not
+claim the perceptual half (the orchestrator's ruling at BUILD, and §9's "a criterion verified
+by an agent's judgement of something nobody can observe"). So this entry is a DESCRIPTION with
+the verdict left open, and the goal is not WATCHed until somebody opens the viewer.
+
+**REWRITTEN AT SWEEP 1, BECAUSE THE FIRST VERSION HANDED THE HUMAN THE WRONG EXHIBIT.** It
+named a five-tick stint as "the frame most likely to read as dithering" and filed the four
+short stints as isolated oddities. `ai-critic` found that three of the four are one far more
+legible shape, and checking it against the recording makes it four of four. That is the
+finding, and it is `HOTELSIM.md` §6.1 item 6 in its literal form.
+
+**The recordings** (gitignored, at the repo root, regenerate in ~20s each):
+
+    pnpm sim:run --days 3 --seed 7 --rooms 6 --arrivals 60 --amenities 2 \
+      --record watch-shipped.ndjson --record-every 5          # the shipped margin, 6000
+    ... --content <margin 10000> --record watch-eraA.ndjson    # total commitment, the era before
+    ... --content <margin 0>     --record watch-thrash.ndjson  # the thrash control
+    pnpm viewer                                                # then pick a file
+
+Same seed, same hotel, same 865 frames in each. **The only difference between the three is one
+integer in `guest-rules.json`**, which is what makes them worth watching side by side.
+
+### THE EXHIBIT: a guest walks out of something it is a few ticks from finishing, and comes back to finish it later
+
+**Every abandonment in the shipped recording at ≥0.90 progress share is this shape, and there
+are four of them in three simulated days. FOUR OF FOUR RETURN AND COMPLETE** — three to the
+identical entity they walked out of, one to a **worse** provider of the same need. Progress
+is quoted at the last engaged sample, tick T−5.
+
+| guest | need | leaves | at tick | progress left | for | finishes at | at tick | met |
+|---|---|---|---|---|---|---|---|---|
+| 9 | comfort | `arm_chair#20` | 810 | 7 of 150 (**95.3%** done) | `games_room#13` | **`arm_chair#20`** | 960 | 965 |
+| 17 | comfort | `arm_chair#22` | 1290 | 7 of 150 (95.3%) | `games_room#13` | **`arm_chair#22`** | 1440 | 1445 |
+| 57 | comfort | `arm_chair#20` | 3690 | 7 of 150 (95.3%) | `games_room#15` | **`arm_chair#20`** | 3840 | 3845 |
+| 63 | **nourishment** | `hotel_cafe#18` | 3905 | 8 of 180 (95.6%) | `arm_chair#20`, then `games_room#15` | **`vending_machine#16`** | 4170 | 4175 |
+
+**Rows 9, 17 and 57: the return is to the SAME ENTITY.** The guest crosses the hotel, spends
+150 ticks elsewhere, comes back to the identical chair and finishes what it left.
+
+**Row 63 is the sharpest one in the exhibit and it was hidden behind three em-dashes in the
+previous version of this table, which said it never came back.** It does. It leaves a café six
+ticks from finishing a meal; **the café it abandoned then stands free for the next fifty
+ticks**; it visits a chair and a games room; and 265 ticks later it finishes those last six
+ticks of the *same meal* at a **vending machine — `fitBasisPoints` 2500 against the café's
+7500.** A round trip across the hotel to complete a meal at a three-times-worse provider is a
+stronger §6.1 item-6 exhibit than three guests returning to their own chair.
+
+**That is what a human should judge**, and it is a sharper question than the one the first
+version asked: not "is five ticks too short a visit" but **"does walking out of something 95%
+finished — and finishing it later, sometimes somewhere worse, while the thing you left stands
+empty — read as triage or as stupidity?"** The mechanism is correct and intended: pressure is
+highest on the need closest to failing, and the abandoned need's progress is retained.
+
+**This row has now been wrong twice, and that is worth recording.** The first version named
+guest 63 and pointed at its five-tick vending-machine stint — the wrong feature of the right
+guest. The second named the café correctly and then asserted no return, which the frames deny.
+**The most interesting row in the exhibit is the one that kept being described incorrectly**,
+and both errors were found by `ai-critic` walking the recording rather than reading the table.
+
+### WHAT THE FRAMES CONTAIN, with every term defined
+
+A **STINT** is a maximal run of consecutive sampled frames in which one guest is engaged with
+one entity id, closed by a change of entity, by disengagement, or by the guest departing.
+Duration is `last sampled tick - first sampled tick + 5`, so it is quantised to the recording
+stride and "≤5t" means "seen on at most two consecutive samples". **Stints still open at the
+final frame are EXCLUDED** — their duration was never observed, and including them would bias
+the distribution downwards. A **MOVE** is a frame-to-frame transition from one non-zero entity
+to a different non-zero entity. **STRANDED** counts guest-frames in which a guest holds a room,
+is engaged with nothing, and has a pending non-lodging need whose provider stands free.
+
+n = every frame of each 865-frame recording; counts, not timings, so deterministic under I2 and
+regime-independent by construction. Taken quiet on `win32`/12 cores.
+
+| | completed stints | median stint | ≤5t | moves | stranded |
+|---|---|---|---|---|---|
+| total commitment | 155 | 150t | **0** | 88 | 0 |
+| **shipped (6000)** | 201 | 150t | **4 (2.0%)** | 115 | **0** |
+| thrash (0) | 1,065 | **20t** | **311 (29.2%)** | 926 | **6** |
+
+**THE STINT COLUMN IS A CORRECTION.** The first version read 138/181/1045 and gave no
+definition, which is rule 4 slot 1 — `ai-critic` reconstructed it, got 155/201/1065, and could
+not tell a definitional difference from a defect. It was a defect: the walk counted transitions
+BETWEEN recorded changes and so dropped every stint that ended at a guest's DEPARTURE, about
+seventeen to twenty per arm. Re-derived above with the definition written down. **No conclusion
+moves** — 2.0% against 29.2%, medians 150 against 20 — and every other figure in this entry
+reproduced exactly.
+
+### WHERE ELSE TO LOOK
+
+- `watch-thrash.ndjson`, **tick 435, guest 1**: holding a room, wanting entertainment and
+  nourishment, with a café standing free. Six such guest-frames, none in the other two arms.
+  They are a one-tick effect of G-004's visit order — a provider released by a guest visited
+  later in the loop is not seen until the next tick — and only margin 0 produces enough churn
+  to make it visible.
+- `watch-eraA.ndjson` is the control: **no stint under 15 ticks anywhere**, because nothing can
+  interrupt one.
+
+### THE QUESTION FOR THE HUMAN
+
+Does the shipped arm read as *commitment* or as *dithering*? The counter says 434 abandonments
+over thirty simulated days at this configuration, and the table says the shipped arm sits far
+nearer total commitment than thrash — but a margin tuned to a counter alone is tuned to the
+only thing that can be measured, which is the trap ADR-0013 was written about. **The four rows
+in the exhibit are where to look first.**
+
+**AND ONE THING THE RECORDING ANSWERED WITHOUT BEING ASKED.** The dwell term parked at PLAN
+carried a falsification test; this recording IS that test, and it came back **positive**: 35 of
+38 abandonments at the shipped margin leave a need carrying more than half its `satisfyTicks`,
+median 65%. Written up in `PARKING.md`. Not this goal's to fix — but the exhibit above is that
+statistic with a face on it, and the entry no longer offers the return visit as a mitigation.
+
+---
+
+## G-014b — A guest that commits — REFLECT
+
+**DONE, DRY at 1/3.** One sweep, three verification passes, none converted. Zero BLOCKERs.
+**After sweep 1 not one line of production code changed** — all six findings, and the two
+raised later, were defects in the *evidence*.
+
+**What shipped.** An engaged guest re-scores its other pending needs each tick and switches
+only if a challenger beats the incumbent by a content-defined margin — `guest-rules.json`,
+`abandonMarginBasisPoints: 6000`, the fifth content table. Save v9 adds `abandonCount` to
+`NeedState` and `abandoned` to `NeedOutcome`, folded at departure so `met + unmet == departed`
+survives untouched. The margin gates *which need a guest pursues*, never which provider within
+a need — that stays total, and the reason is on the record: fit is ordinal by ruling, so a
+margin denominated in it would make inert magnitudes load-bearing.
+
+**Three of my four exit criteria were vacuous, and the builder found them at PLAN.** Criterion
+2 — which I had already rewritten to remove exactly this defect — was still satisfiable by
+shipping a saturating margin. Criterion 3 required margin 0 to reproduce the pre-margin era
+when margin 0 is the *opposite* end. Criterion 4 was discharged verbatim by a test G-014a
+shipped. That is ADR-0007's sixth amendment and the useful half of this goal: **a vacuous
+check fails to catch a defect; a vacuous criterion certifies the goal.** §5.7's first real
+return, at the cheapest possible moment — before a line existed.
+
+**And the derivation I approved was computing the wrong quantity.** `ai-critic`'s §5.6 pass
+established that no non-saturating margin can guarantee a guest finishes what it starts:
+against the shipped table the longest engagement needs `M >= 12000`, over the 10000 ceiling,
+and the shortest needs `M >= 10000`, which is the saturating margin. Only the reverse-switch
+property is reachable. The requirement was restated to match the formula and the stronger one
+was parked as a dwell term.
+
+**The parked dwell term was then falsified by this goal's own WATCH, which is the fourth time
+a parked hypothesis-with-test has been settled by a goal that did not plan to run it — and
+the first time the goal that parked it also answered it.** 35 of 38 abandonments at the
+shipped margin leave a need past half its `satisfyTicks`, median 65%.
+
+**The exhibit was wrong twice, and both times about the same row.** Criterion 6 hands a human
+a recording to judge. The first version pointed at guest 63's five-tick vending-machine stint
+— the wrong feature of the right guest. The second named the café correctly and then asserted
+it never came back, which the frames deny. **The true row is the sharpest in the goal**: a
+guest leaves a café six ticks from finishing a meal, the café then stands free for fifty
+ticks, and 265 ticks later it finishes that meal at a vending machine of one-third the fit.
+Both errors were found by walking the recording rather than reading the table. **A WATCH
+entry is a criterion, and it can be vacuous the same way a check can.**
+
+**§7.1's subject split held the budget at 1/3 twice.** Two verification passes each produced a
+new finding; both were ledger prose, so both routed to pin-or-delete rather than converting.
+Pre-split, this goal would have run to 3/3 on findings that changed no code.
+
+**Scored predictions (§5.5).** The builder pre-registered **2 sweeps, 0 BLOCKERs, and >=1
+MAJOR in the two-era golden apparatus**. Sweeps: **1, better than predicted.** BLOCKERs: **0,
+held.** The era apparatus: **FAILED, and instructively** — it was the *cleanest* part of the
+diff. `ai-critic` materialised the base commit in a scratch worktree and confirmed the frozen
+era fixture byte-identical including its state hash, and discharged its own plan-pass finding
+against it. The MAJORs landed instead on *coverage* — a validation boundary and three
+invariant clauses with correct code and nothing wired to them. P4 (`sim:measure` <= 1.20)
+**held**: nine paired readings, 1.0416..1.0977, median ~1.0765, all inside the 1.4557 bound.
+
+**Owed forward.** The dwell term is now a result waiting for a goal, not a hypothesis. G-020c
+still holds both I4 defects and the CI regime reading. `firstEconomy` has no lowest-id test —
+confirmed **pre-existing**, not widened here.
+
+**No invariant weakened.** `pnpm verify` x2 by the orchestrator, ten rows green each; I2
+`10926cc3b569c887`; the v1 fixture still a zero-line diff through nine schema versions.

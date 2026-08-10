@@ -22,7 +22,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 8;
+export const SAVE_SCHEMA_VERSION = 9;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -630,6 +630,93 @@ function migrateV7ToV8(world: unknown): unknown {
 }
 
 /**
+ * v8 -> v9: a world whose guests could not change their minds (G-014b).
+ *
+ * ADR-0006 fires for the eighth time. Two fields arrive in one step and BOTH defaults are
+ * argued from the era rather than chosen (ADR-0008) — `ai-critic` named the second one at
+ * PLAN, because a migration that only defaults the field you were thinking about is how a
+ * save quietly means something new:
+ *
+ *   guests[].needs[].abandonCount = 0   In the v8 era `reserve` returned early for any
+ *                                       engaged guest, so no guest could abandon an
+ *                                       engagement at all. Every instance of the count these
+ *                                       bytes describe IS zero. Exactly true, not a guess.
+ *   needOutcomes[].abandoned      = 0   The same fact one fold downstream: a tally row in a
+ *                                       v8 world was accumulated from need vectors that had
+ *                                       no abandonment to contribute.
+ *
+ * Reads no content and no live constant, so the same v8 bytes produce the same v9 world
+ * however the shipped margin changes afterwards (ADR-0008). In particular it does NOT
+ * consult `abandonMarginOf`: the margin is a fact about the content a world is run under and
+ * not about the bytes, and a migration that read it would make an old save's meaning depend
+ * on today's `guest-rules.json`.
+ *
+ * NOT TESTED BY THE FIXTURE ALONE, DELIBERATELY. The permanent v1 fixture carries no guests
+ * and no tally rows, so this step would run over two empty arrays and prove nothing —
+ * ADR-0007's exact shape, and the reason `migrateV6ToV7` and `migrateV7ToV8` both carry this
+ * paragraph. `needs.hysteresis.save.test.ts` drives a synthetic v8 world with a met need, a
+ * pending need and a populated tally and watches both zeroes land.
+ */
+function migrateV8ToV9(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its needs cannot carry an abandonment count');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const counted: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    const needs = guest['needs'];
+    if (!Array.isArray(needs)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].needs is missing or not an array`);
+    }
+    return {
+      ...guest,
+      needs: needs.map((need, at) => {
+        if (!isRecord(need)) {
+          throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${at}] is not an object`);
+        }
+        // The one way this step could destroy data — overwriting a count somebody already
+        // made — is the one thing it refuses to do, exactly as all seven earlier steps
+        // refuse. `Object.keys().includes` rather than `in`, because `JSON.parse` makes
+        // `__proto__` an own key (G-003).
+        if (Object.keys(need).includes('abandonCount')) {
+          throw new Error(
+            `world.guests.list[${index}].needs[${at}] already has an "abandonCount" field, so it is not a v8 need; migrating it would overwrite a real count`,
+          );
+        }
+        return { ...need, abandonCount: 0 };
+      }),
+    };
+  });
+
+  const needOutcomes = world['needOutcomes'];
+  if (!Array.isArray(needOutcomes)) {
+    throw new Error('Save is corrupt: world.needOutcomes is missing or not an array');
+  }
+  const tallied: unknown[] = needOutcomes.map((row, index) => {
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.needOutcomes[${index}] is not an object`);
+    }
+    if (Object.keys(row).includes('abandoned')) {
+      throw new Error(
+        `world.needOutcomes[${index}] already has an "abandoned" field, so it is not a v8 row; migrating it would overwrite a real count`,
+      );
+    }
+    return { ...row, abandoned: 0 };
+  });
+
+  return { ...world, guests: { ...guests, list: counted }, needOutcomes: tallied };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -645,6 +732,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 5, to: 6, migrate: migrateV5ToV6 }),
   Object.freeze({ from: 6, to: 7, migrate: migrateV6ToV7 }),
   Object.freeze({ from: 7, to: 8, migrate: migrateV7ToV8 }),
+  Object.freeze({ from: 8, to: 9, migrate: migrateV8ToV9 }),
 ]);
 
 /**

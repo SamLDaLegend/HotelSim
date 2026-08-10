@@ -78,6 +78,7 @@ describe('the chain walks 1 -> ... -> 8, and every link is still observed', () =
       [5, 6],
       [6, 7],
       [7, 8],
+      [8, 9],
     ]);
     // G-003's anti-vacuity device.
     expect(() => assertMigrationPathComplete()).not.toThrow();
@@ -247,7 +248,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
     expect(advanced.ledger.filter((entry) => entry.reason === 'roomRevenue')).toHaveLength(2);
     // And the tally it was given empty now has a row, written by a guest that arrived under
     // content with no vector at all.
-    expect(advanced.needOutcomes).toEqual([{ needId: 'rest', met: 1, unmet: 0, metByItem: 0 }]);
+    expect(advanced.needOutcomes).toEqual([{ needId: 'rest', met: 1, unmet: 0, metByItem: 0, abandoned: 0 }]);
   });
 
   it('and a migrated guest still fails on patience like any other', () => {
@@ -268,7 +269,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
     const world = run(deserialise(blob), v5Content, 12, []);
     expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(3);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(world.needOutcomes).toEqual([{ needId: 'rest', met: 0, unmet: 1, metByItem: 0 }]);
+    expect(world.needOutcomes).toEqual([{ needId: 'rest', met: 0, unmet: 1, metByItem: 0, abandoned: 0 }]);
   });
 
   it('refuses a world that already carries a tally', () => {
@@ -311,7 +312,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
   it('is stable from there on: writing it back and reloading changes nothing', () => {
     const once = serialise(deserialise(v5Blob()));
     expect(serialise(deserialise(once))).toBe(once);
-    expect((JSON.parse(once) as { schemaVersion: number }).schemaVersion).toBe(8);
+    expect((JSON.parse(once) as { schemaVersion: number }).schemaVersion).toBe(9);
   });
 
   it('produces the same world however it is reached — through the runner or through deserialise', () => {
@@ -350,15 +351,15 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
   it('refuses rows that are out of order, duplicated, or negative', () => {
     const rows = (list: unknown): Record<string, unknown> => ({ ...shaped(), needOutcomes: list });
     expect(() =>
-      assertWorldShape(rows([{ needId: 'zeta', met: 0, unmet: 0, metByItem: 0 }, { needId: 'alpha', met: 0, unmet: 0, metByItem: 0 }])),
+      assertWorldShape(rows([{ needId: 'zeta', met: 0, unmet: 0, metByItem: 0, abandoned: 0 }, { needId: 'alpha', met: 0, unmet: 0, metByItem: 0, abandoned: 0 }])),
     ).toThrow(/strictly ascending by needId/);
     expect(() =>
-      assertWorldShape(rows([{ needId: 'rest', met: 0, unmet: 0, metByItem: 0 }, { needId: 'rest', met: 0, unmet: 0, metByItem: 0 }])),
+      assertWorldShape(rows([{ needId: 'rest', met: 0, unmet: 0, metByItem: 0, abandoned: 0 }, { needId: 'rest', met: 0, unmet: 0, metByItem: 0, abandoned: 0 }])),
     ).toThrow(/strictly ascending by needId/);
-    expect(() => assertWorldShape(rows([{ needId: 'rest', met: -1, unmet: 0, metByItem: 0 }]))).toThrow(
+    expect(() => assertWorldShape(rows([{ needId: 'rest', met: -1, unmet: 0, metByItem: 0, abandoned: 0 }]))).toThrow(
       /met for "rest" must be a non-negative safe integer/,
     );
-    expect(() => assertWorldShape(rows([{ needId: 'rest', met: 1.5, unmet: 0, metByItem: 0 }]))).toThrow(
+    expect(() => assertWorldShape(rows([{ needId: 'rest', met: 1.5, unmet: 0, metByItem: 0, abandoned: 0 }]))).toThrow(
       /met for "rest" must be a non-negative safe integer/,
     );
   });
@@ -368,7 +369,7 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
     // it leaves — so a row above the departure count describes a run that did not happen,
     // and it would load happily and report a table nobody could reconcile.
     const world = shaped();
-    world['needOutcomes'] = [{ needId: 'rest', met: 3, unmet: 0, metByItem: 0 }];
+    world['needOutcomes'] = [{ needId: 'rest', met: 3, unmet: 0, metByItem: 0, abandoned: 0 }];
     expect(() => assertWorldShape(world)).toThrow(
       /records 3 resolved instance\(s\) but only 0 guest\(s\) have departed/,
     );
@@ -387,13 +388,13 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
     expect(() =>
       assertWorldShape(
         withGuest([
-          { needId: 'zeta', patienceRemaining: 1, progressRemaining: 1, metBy: null },
-          { needId: 'alpha', patienceRemaining: 1, progressRemaining: 1, metBy: null },
+          { needId: 'zeta', patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 },
+          { needId: 'alpha', patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 },
         ]),
       ),
     ).toThrow(/needs out of order/);
     expect(() =>
-      assertWorldShape(withGuest([{ needId: 'rest', patienceRemaining: -1, progressRemaining: 1, metBy: null }])),
+      assertWorldShape(withGuest([{ needId: 'rest', patienceRemaining: -1, progressRemaining: 1, metBy: null, abandonCount: 0 }])),
     ).toThrow(/negative or non-integer patienceRemaining/);
   });
 
@@ -424,8 +425,8 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
         ],
       },
       needOutcomes: [
-        { needId: 'alpha', met: 4, unmet: 5, metByItem: 0 },
-        { needId: 'rest', met: 7, unmet: 2, metByItem: 0 },
+        { needId: 'alpha', met: 4, unmet: 5, metByItem: 0, abandoned: 0 },
+        { needId: 'rest', met: 7, unmet: 2, metByItem: 0, abandoned: 0 },
       ],
     };
     const restored = deserialise(serialise(world));

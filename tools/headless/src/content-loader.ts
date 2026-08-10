@@ -18,10 +18,11 @@ import {
   ContentError,
   parseContentJson,
   parseEconomiesJson,
+  parseGuestRulesJson,
   parseItemTypesJson,
   parseNeedTypesJson,
 } from '@hotelsim/content';
-import type { ContentRegistry, Economy, ItemType, NeedType } from '@hotelsim/content';
+import type { ContentRegistry, Economy, GuestRules, ItemType, NeedType } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
 
@@ -39,6 +40,7 @@ export const ROOM_TYPES_PATH = resolveContent('@hotelsim/content/data/room-types
 export const NEED_TYPES_PATH = resolveContent('@hotelsim/content/data/need-types.json');
 export const ITEM_TYPES_PATH = resolveContent('@hotelsim/content/data/item-types.json');
 export const ECONOMY_PATH = resolveContent('@hotelsim/content/data/economy.json');
+export const GUEST_RULES_PATH = resolveContent('@hotelsim/content/data/guest-rules.json');
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -66,6 +68,11 @@ export function loadItemTypesFrom(path: string): readonly ItemType[] {
 /** Read and validate one economy file (G-011). Same all-or-nothing discipline. */
 export function loadEconomyFrom(path: string): readonly Economy[] {
   return parseEconomiesJson(readContentFile(path), path);
+}
+
+/** Read and validate one guest-rules file (G-014b). Same all-or-nothing discipline. */
+export function loadGuestRulesFrom(path: string): readonly GuestRules[] {
+  return parseGuestRulesJson(readContentFile(path), path);
 }
 
 function readContentFile(path: string): string {
@@ -98,11 +105,20 @@ export function loadContent(contentDir?: string): BoundContent {
   const needTypesPath = contentDir === undefined ? NEED_TYPES_PATH : join(contentDir, 'need-types.json');
   const itemTypesPath = contentDir === undefined ? ITEM_TYPES_PATH : join(contentDir, 'item-types.json');
   const economyPath = contentDir === undefined ? ECONOMY_PATH : join(contentDir, 'economy.json');
+  const guestRulesPath = contentDir === undefined ? GUEST_RULES_PATH : join(contentDir, 'guest-rules.json');
   const registry: ContentRegistry = {
     ...loadContentFrom(roomTypesPath),
     needTypes: loadNeedTypesFrom(needTypesPath),
     itemTypes: loadItemTypesFrom(itemTypesPath),
     economy: loadEconomyFrom(economyPath),
+    // FIVE FILES SINCE G-014b, AND EVERY ONE IS REQUIRED OF A `--content` DIRECTORY. That is
+    // a real cost — three test fixtures build such directories and every one had to grow a
+    // line — and it is the right side of the trade: `readContentFile` throws on a missing
+    // file, so a designer who forgets this one is told, where a loader that shrugged and
+    // omitted the key would hand them the historical default (total commitment) and a hotel
+    // whose guests silently stopped changing their minds. Absence is a statement about
+    // HISTORY, and a directory somebody assembled today is not history.
+    guestRules: loadGuestRulesFrom(guestRulesPath),
   };
   const injected: SimContent = registry;
   // `bindContent` rejects content whose needs no room type provides, content whose rooms

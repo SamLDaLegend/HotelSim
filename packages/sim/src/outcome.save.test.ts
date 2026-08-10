@@ -56,12 +56,15 @@ import { run, stepTick } from './tick.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
-describe('the chain walks 1 -> ... -> 8, and every link is still observed', () => {
-  it('ships exactly seven steps, each going exactly one version', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(8);
+describe('the chain walks 1 -> ... -> 8 and beyond, and every link is still observed', () => {
+  it('has no gaps, and the 7 -> 8 step is still the seventh of them', () => {
+    // RELATIVE, NOT ABSOLUTE, SINCE G-014b. This file owned the CURRENT era when v8 was the
+    // end of the line; v9 moved that to `needs.hysteresis.save.test.ts`. What this file
+    // still owns is that ITS step is the seventh and that the chain has no gaps — both true
+    // at every future version, which is the `needs.save.test.ts` convention.
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(MIGRATIONS).toHaveLength(7);
-    expect(MIGRATIONS.map((step) => [step.from, step.to])).toEqual([
+    expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
+    expect(MIGRATIONS.slice(0, 7).map((step) => [step.from, step.to])).toEqual([
       [1, 2],
       [2, 3],
       [3, 4],
@@ -70,6 +73,7 @@ describe('the chain walks 1 -> ... -> 8, and every link is still observed', () =
       [6, 7],
       [7, 8],
     ]);
+    expect([MIGRATIONS[6]!.from, MIGRATIONS[6]!.to]).toEqual([7, 8]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
@@ -229,8 +233,13 @@ describe('the 7 -> 8 step maps three counters onto rows and invents nothing', ()
     // forward must differ in `guestOutcomes` and in nothing else. Asserted key by key
     // rather than argued in a comment (ADR-0007's G-013 amendment, applied to my own
     // reasoning).
+    // IT DRIVES THE 7 -> 8 STEP, AND UNTIL G-014b IT DROVE `deserialise`. The claim is about
+    // THIS STEP; running the whole chain made it a claim about every step ever added, and it
+    // went red the moment v9 put two fields on `NeedState` and `NeedOutcome` — correctly, and
+    // for a reason that has nothing to do with what G-015 did. A test whose subject drifts
+    // wider than its sentence reports the wrong goal's change.
     const before = v7World();
-    const after = JSON.parse(JSON.stringify(deserialise(v7Blob()))) as Record<string, unknown>;
+    const after = JSON.parse(JSON.stringify(MIGRATIONS[6]!.migrate(v7World()))) as Record<string, unknown>;
     for (const key of Object.keys(before)) {
       if (key === 'guestOutcomes') continue;
       expect({ key, value: after[key] }).toEqual({ key, value: before[key] });
@@ -327,10 +336,29 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     const outcomes = json['guestOutcomes'] as { arrived: number; departures: { reason: string; count: number }[] };
     const count = (reason: string): number =>
       outcomes.departures.find((row) => row.reason === reason)?.count ?? 0;
+    // THE v9 FIELDS COME OFF TOO (G-014b), because "the same world written in the v7 SHAPE"
+    // means every field v7 did not have. Leaving `abandonCount` and `abandoned` on would
+    // hand `migrateV8ToV9` a row it correctly refuses to overwrite, and the identity below
+    // would report a migration failure instead of a shape comparison. Stripping them makes
+    // this a stronger test rather than a weaker one: the chain has to put them BACK, at the
+    // values the tick reached, or the two hashes differ.
+    const guests = json['guests'] as { nextId: number; list: Record<string, unknown>[] };
+    const withoutV9 = {
+      ...guests,
+      list: guests.list.map((guest) => ({
+        ...guest,
+        needs: (guest['needs'] as Record<string, unknown>[]).map(({ abandonCount: _drop, ...need }) => need),
+      })),
+    };
+    const tallyWithoutV9 = (json['needOutcomes'] as Record<string, unknown>[]).map(
+      ({ abandoned: _drop, ...row }) => row,
+    );
     return JSON.stringify({
       schemaVersion: 7,
       world: {
         ...json,
+        guests: withoutV9,
+        needOutcomes: tallyWithoutV9,
         guestOutcomes: {
           arrived: outcomes.arrived,
           satisfied: count('satisfied'),

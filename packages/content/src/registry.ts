@@ -10,8 +10,8 @@
 // next caller to trip over — there is no registry to half-populate.
 
 import { z } from 'zod';
-import { economiesSchema, itemTypesSchema, needTypesSchema, roomTypesSchema } from './schema.js';
-import type { Economy, ItemType, NeedType, RoomType } from './schema.js';
+import { economiesSchema, guestRulesTableSchema, itemTypesSchema, needTypesSchema, roomTypesSchema } from './schema.js';
+import type { Economy, GuestRules, ItemType, NeedType, RoomType } from './schema.js';
 
 /**
  * Every content table, validated.
@@ -44,6 +44,16 @@ export type ContentRegistry = {
    * `8e09fe4f0fa162a3` unmoved (ADR-0006).
    */
   readonly economy?: readonly Economy[];
+  /**
+   * The rules a guest's own behaviour obeys (G-014b): today, the hysteresis margin that
+   * decides when it abandons what it is doing.
+   *
+   * Optional for the same absence-is-not-emptiness reason, and the historical statement is
+   * as clean as the economy's: content that predates this table describes a world in which
+   * a guest could not abandon an engagement at all, which is exactly what a pre-G-014b
+   * world had. `bindContent` reads the absence as total commitment (ADR-0008).
+   */
+  readonly guestRules?: readonly GuestRules[];
 };
 
 /**
@@ -143,6 +153,36 @@ export function parseEconomies(raw: unknown, sourceLabel = 'content'): readonly 
   }
   assertUniqueIds(result.data, 'economy');
   return result.data;
+}
+
+/**
+ * Validate an already-parsed guest-rules document (G-014b). Same all-or-nothing discipline,
+ * and a table rather than a registry for the same reason: one file is one table.
+ *
+ * What it does NOT check is whether the margin is large enough to be worth having. That is
+ * `M >= maxSatisfyTicks x 10000 / minPatienceTicks` over the ENGAGEMENT need types — a
+ * relationship across two files — so it lives where the other cross-table checks live and
+ * is asserted by `hysteresis.bound` in `tools/headless`, which computes both readings from
+ * content rather than quoting them.
+ */
+export function parseGuestRules(raw: unknown, sourceLabel = 'content'): readonly GuestRules[] {
+  const result = guestRulesTableSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:\n${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'guest rules');
+  return result.data;
+}
+
+/** Validate a guest-rules JSON document. "Not JSON" and "not content" stay apart. */
+export function parseGuestRulesJson(text: string, sourceLabel = 'content'): readonly GuestRules[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseGuestRules(raw, sourceLabel);
 }
 
 /** Validate an economy JSON document. "Not JSON" and "not content" stay apart. */

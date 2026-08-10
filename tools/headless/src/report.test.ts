@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  bindContent,
   createWorld,
   lodgingNeedOf,
   GROUND_FLOOR,
@@ -16,11 +17,12 @@ import {
   isWithinBounds,
   maxGuestLifetimeTicks,
   NO_ENTITY,
+  ONE_WHOLE_BASIS_POINTS,
   requiredItemsOf,
   run,
   TICKS_PER_DAY,
 } from '@hotelsim/sim';
-import type { Guest, Transaction, World } from '@hotelsim/sim';
+import type { BoundContent, Guest, Transaction, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import {
   amenityRoomTypesOf,
@@ -410,8 +412,8 @@ const distinct: RunSummary = {
     // no two numbers here may coincide. The by-room column the renderer prints is
     // `met - metByItem`, computed at print time and stored nowhere (G-013 round 1), so the
     // expected lines below carry 140-134=6 and 142-136=6 rather than a third sentinel.
-    { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141, metByItem: 134 },
-    { needId: 'betaNeed', lodging: false, met: 142, unmet: 143, metByItem: 136 },
+    { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141, metByItem: 134, abandoned: 144 },
+    { needId: 'betaNeed', lodging: false, met: 142, unmet: 143, metByItem: 136, abandoned: 145 },
   ],
   rooms: {
     valid: 133,
@@ -471,8 +473,8 @@ describe('renderers', () => {
         'stuck       115',
         'orphan res  116',
         'in bad room 132',
-        'need L     alphaNeed 140 met, 141 unmet (6 by room, 134 by item)',
-        'need       betaNeed 142 met, 143 unmet (6 by room, 136 by item)',
+        'need L     alphaNeed 140 met, 141 unmet (6 by room, 134 by item), 144 abandoned',
+        'need       betaNeed 142 met, 143 unmet (6 by room, 136 by item), 145 abandoned',
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',
@@ -532,7 +534,7 @@ describe('buildSummary violations (forged worlds)', () => {
       arrivedTick: world.tick, // age 0 — cannot read as stuck, so the orphan branch is isolated
       roomEntityId: 999_999, // no such entity
       engagement: null,
-      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null }],
+      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.orphanedReservations).toBe(1);
@@ -549,7 +551,7 @@ describe('buildSummary violations (forged worlds)', () => {
       arrivedTick: world.tick - limit - 1, // one tick past the oldest a live guest can be
       roomEntityId: NO_ENTITY, // waiting, not orphaned — isolates the stuck branch
       engagement: null,
-      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null }],
+      needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.stuck).toBe(1);
@@ -591,7 +593,7 @@ describe('buildSummary violations (forged worlds)', () => {
         arrivedTick: world.tick,
         roomEntityId: 999_999,
         engagement: null,
-        needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null }],
+        needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 }],
       }),
       ledger: [...world.ledger.filter((_, i) => i !== firstSettlement), foreign],
     };
@@ -600,6 +602,152 @@ describe('buildSummary violations (forged worlds)', () => {
     expect(violations[0]).toMatch(/orphaned reservation/);
     expect(violations[1]).toMatch(/reason outside the union/);
     expect(violations[2]).toMatch(/Settlement invariant broken/);
+  });
+
+  // ==========================================================================
+  //  THE TWO ABANDONMENT VIOLATIONS (G-014b), DRIVEN RATHER THAN ADDED.
+  //
+  //  They shipped in `buildSummary` and were not added to this describe, which drives every
+  //  other violation branch — so both predicates could have been INVERTED and the suite
+  //  stayed green. `ai-critic` raised it, and it matters for this goal's own evidence rather
+  //  than for tidiness: `fixtures/hysteresis-eras.ts` and `report.ts` both argue that the
+  //  Era-A arm is a MEASUREMENT rather than a coincidence *because* the saturating-margin
+  //  violation is live throughout it. That argument was resting on a branch nothing had ever
+  //  been seen to fire.
+  //
+  //  FORGED BELOW THE SIM, like every other case here: neither condition is reachable from a
+  //  correct tick, which is exactly why the operator's lifeline has to be driven now.
+  // ==========================================================================
+  /**
+   * EXACTLY ONE ROW CARRIES A COUNT, and every other is zeroed.
+   *
+   * A real two-day run under the shipped margin already has abandonments on three rows, so
+   * re-binding a saturating margin over it raises three violations — correct, and useless as
+   * an isolation: it could not tell "the branch fires for this row" from "the branch fires".
+   * Zeroing the rest is what makes each case below one branch, one row, one message, which is
+   * this describe's own discipline everywhere else in it.
+   */
+  const onlyAbandonment = (world: World, needId: string, abandoned: number): World => ({
+    ...world,
+    needOutcomes: world.needOutcomes.map((row) => ({ ...row, abandoned: row.needId === needId ? abandoned : 0 })),
+  });
+
+  const marginAt = (basisPoints: number): BoundContent =>
+    bindContent({
+      ...content.content,
+      guestRules: (content.content.guestRules ?? []).map((entry) => ({
+        ...entry,
+        abandonMarginBasisPoints: basisPoints,
+      })),
+    });
+
+  /**
+   * The shipped content cut down to the lodging need and ONE engagement need.
+   *
+   * THE FIT HAS TO GO WITH THE NEED, and `bindContent` is what says so: a type left declaring
+   * a `fitBasisPoints` it no longer provides anything for is a dial with no effect, and a type
+   * that still provides an engagement need while its neighbours have gone silent is the
+   * dangerous half-table. Both are refused (`assertFitIsReadable`), so the fixture has to be
+   * coherent content rather than the shipped table with rows deleted — which is the check
+   * working as a fixture constraint, exactly as `provider.report.test.ts`'s negative control
+   * found at G-013.
+   */
+  const oneEngagementNeed = (keptId: string, margin?: number): BoundContent => {
+    const lodgingId = lodgingNeedOf(content)!.id;
+    const keep = (ids: readonly string[] | undefined): string[] =>
+      (ids ?? []).filter((id) => id === lodgingId || id === keptId);
+    const stillEngages = (ids: readonly string[]): boolean => ids.some((id) => id !== lodgingId);
+    return bindContent({
+      ...content.content,
+      needTypes: (content.content.needTypes ?? []).filter(
+        (needType) => needType.id === lodgingId || needType.id === keptId,
+      ),
+      roomTypes: content.content.roomTypes.map((roomType) => {
+        const provides = keep(roomType.provides);
+        const { fitBasisPoints: _drop, ...rest } = roomType;
+        return stillEngages(provides)
+          ? { ...roomType, provides }
+          : { ...rest, provides };
+      }),
+      itemTypes: (content.content.itemTypes ?? []).map((itemType) => {
+        const provides = keep(itemType.provides);
+        const { fitBasisPoints: _drop, ...rest } = itemType;
+        return stillEngages(provides)
+          ? { ...itemType, provides }
+          : { ...rest, provides };
+      }),
+      ...(margin === undefined
+        ? {}
+        : {
+            guestRules: (content.content.guestRules ?? []).map((entry) => ({
+              ...entry,
+              abandonMarginBasisPoints: margin,
+            })),
+          }),
+    });
+  };
+
+  /** The engagement need this file's fixtures use — found, never named (ADR-0003). */
+  const anEngagementNeed = (): string =>
+    (content.content.needTypes ?? []).find((needType) => needType.id !== lodgingNeedOf(content)!.id)!.id;
+
+  it('a SATURATING margin with an abandonment on the table produces the margin violation', () => {
+    const { world, options } = defaultRun(2);
+    const needId = anEngagementNeed();
+    const forged = onlyAbandonment(world, needId, 3);
+    const { violations } = buildSummary(forged, marginAt(ONE_WHOLE_BASIS_POINTS), options);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatch(/Abandonment broken/);
+    expect(violations[0]).toMatch(/abandon margin is 10000 basis points/);
+    expect(violations[0]).toContain(needId);
+  });
+
+  it('and the SAME forged world under the shipped margin raises NOTHING, so the branch reads content', () => {
+    // The pair. Without it the violation would be satisfied by a check that fired on any
+    // non-zero `abandoned` at all, which is a different and much worse rule.
+    const { world, options } = defaultRun(2);
+    const forged = onlyAbandonment(world, anEngagementNeed(), 3);
+    expect(buildSummary(forged, content, options).violations).toEqual([]);
+  });
+
+  it('CONTENT WITH ONE ENGAGEMENT NEED and an abandonment produces the nothing-to-switch-to violation', () => {
+    // A guest abandons one need FOR ANOTHER. With a single engagement need there is nothing to
+    // move to, and the lodging need is never a candidate — so any count here describes a
+    // switch that could not have happened. The margin is left at the shipped value, so the
+    // other violation cannot be what fires and this branch is isolated.
+    const { world, options } = defaultRun(2);
+    const kept = anEngagementNeed();
+    const { violations } = buildSummary(onlyAbandonment(world, kept, 2), oneEngagementNeed(kept), options);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatch(/Abandonment broken/);
+    expect(violations[0]).toMatch(/defines 1 engagement need type\(s\)/);
+  });
+
+  it('and that same THIN content with no abandonment raises nothing, so the count is the trigger', () => {
+    const { world, options } = defaultRun(2);
+    const kept = anEngagementNeed();
+    expect(buildSummary(onlyAbandonment(world, kept, 0), oneEngagementNeed(kept), options).violations).toEqual(
+      [],
+    );
+  });
+
+  it('and BOTH conditions at once report BOTH, so neither masks the other', () => {
+    const { world, options } = defaultRun(2);
+    const kept = anEngagementNeed();
+    const violations = buildSummary(
+      onlyAbandonment(world, kept, 1),
+      oneEngagementNeed(kept, ONE_WHOLE_BASIS_POINTS),
+      options,
+    ).violations;
+    expect(violations).toHaveLength(2);
+    expect(violations[0]).toMatch(/abandon margin is 10000/);
+    expect(violations[1]).toMatch(/engagement need type\(s\)/);
+  });
+
+  it('and the UNFORGED run raises neither, or all four cases above are inspecting a broken build', () => {
+    const { world, options } = defaultRun(2);
+    expect(buildSummary(world, content, options).violations).toEqual([]);
+    expect(world.needOutcomes.some((row) => row.abandoned > 0)).toBe(true);
   });
 });
 

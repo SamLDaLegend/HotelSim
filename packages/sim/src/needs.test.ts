@@ -104,20 +104,23 @@ describe('a guest forms one instance of EVERY need the content defines', () => {
 
   it('starts each one at its own full patience and its own full stay', () => {
     const guest = only(stepTick(hotel(), content, [arrive]));
-    // `metBy: null` on both (G-013): a freshly formed need has not been delivered by
-    // anything. Written out rather than omitted, because `toEqual` over the WHOLE object is
-    // what makes a silently added field a visible decision.
+    // `metBy: null` on both (G-013) and `abandonCount: 0` on both (G-014b): a freshly
+    // formed need has been delivered by nothing and walked out on by nobody. Written out
+    // rather than omitted, because `toEqual` over the WHOLE object is what makes a silently
+    // added field a visible decision — which is exactly what it did when G-014b added one.
     expect(findNeedState(guest.needs, 'food')).toEqual({
       needId: 'food',
       patienceRemaining: 200,
       progressRemaining: 8,
       metBy: null,
+      abandonCount: 0,
     });
     expect(findNeedState(guest.needs, 'rest')).toEqual({
       needId: 'rest',
       patienceRemaining: 100,
       progressRemaining: 60,
       metBy: null,
+      abandonCount: 0,
     });
   });
 
@@ -163,9 +166,9 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     // and it is the whole subject of the goal.
     const world = run(noAmenities(), content, 200, [at(1, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
-    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 1, unmet: 0, metByItem: 0 });
-    expect(needOutcomeOf(world.needOutcomes, 'food')).toEqual({ needId: 'food', met: 0, unmet: 1, metByItem: 0 });
-    expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({ needId: 'fun', met: 0, unmet: 1, metByItem: 0 });
+    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 1, unmet: 0, metByItem: 0, abandoned: 0 });
+    expect(needOutcomeOf(world.needOutcomes, 'food')).toEqual({ needId: 'food', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
+    expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({ needId: 'fun', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
   });
 
   it('marks it failed rather than merely pending, so nothing tries to serve it again', () => {
@@ -193,7 +196,7 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     const world = run(hotel([]), content, 120, [at(1, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 0, unmet: 1, metByItem: 0 });
+    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
   });
 });
 
@@ -212,7 +215,7 @@ describe('met, failed and pending are a TOTAL and EXCLUSIVE classification', () 
     let seen = 0;
     for (const patienceRemaining of values) {
       for (const progressRemaining of values) {
-        const need: NeedState = { needId: 'rest', patienceRemaining, progressRemaining, metBy: null };
+        const need: NeedState = { needId: 'rest', patienceRemaining, progressRemaining, metBy: null, abandonCount: 0 };
         const arms = [isNeedMet(need), isNeedFailed(need), isNeedPending(need)].filter(Boolean);
         expect(arms, `patience ${patienceRemaining}, progress ${progressRemaining}`).toHaveLength(1);
         seen += 1;
@@ -224,12 +227,12 @@ describe('met, failed and pending are a TOTAL and EXCLUSIVE classification', () 
   });
 
   it('and each arm is reachable, so none of them is a branch nothing takes', () => {
-    expect(isNeedMet({ needId: 'rest', patienceRemaining: 5, progressRemaining: 0, metBy: 'room' })).toBe(true);
-    expect(isNeedFailed({ needId: 'rest', patienceRemaining: 0, progressRemaining: 5, metBy: null })).toBe(true);
-    expect(isNeedPending({ needId: 'rest', patienceRemaining: 5, progressRemaining: 5, metBy: null })).toBe(true);
+    expect(isNeedMet({ needId: 'rest', patienceRemaining: 5, progressRemaining: 0, metBy: 'room', abandonCount: 0 })).toBe(true);
+    expect(isNeedFailed({ needId: 'rest', patienceRemaining: 0, progressRemaining: 5, metBy: null, abandonCount: 0 })).toBe(true);
+    expect(isNeedPending({ needId: 'rest', patienceRemaining: 5, progressRemaining: 5, metBy: null, abandonCount: 0 })).toBe(true);
     // The corrupt corner: both countdowns spent. MET wins, and it must, because a need that
     // was completed is not also a need that ran out of waiting.
-    const both: NeedState = { needId: 'rest', patienceRemaining: 0, progressRemaining: 0, metBy: 'room' };
+    const both: NeedState = { needId: 'rest', patienceRemaining: 0, progressRemaining: 0, metBy: 'room', abandonCount: 0 };
     expect(isNeedMet(both)).toBe(true);
     expect(isNeedFailed(both)).toBe(false);
     expect(isNeedPending(both)).toBe(false);
@@ -268,7 +271,7 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // One need where the content defines three — lengths differ, so the positional path is
     // skipped entirely. Without a working fallback the cap would be unknown and patience
     // would hold at 99 instead of being restored to 100.
-    const migrated: readonly NeedState[] = [{ needId: 'rest', patienceRemaining: 99, progressRemaining: 5, metBy: null }];
+    const migrated: readonly NeedState[] = [{ needId: 'rest', patienceRemaining: 99, progressRemaining: 5, metBy: null, abandonCount: 0 }];
     const advanced = advanceNeeds(content, migrated, 'rest', null, 'room');
     expect(advanced[0]?.patienceRemaining).toBe(100);
     expect(advanced[0]?.progressRemaining).toBe(4);
@@ -279,9 +282,9 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // `fun` where the table holds `food`. `fun` is capped at 400 and `food` at 200; reading
     // the type positionally would cap this at 200 and the assertion below would fail.
     const shifted: readonly NeedState[] = [
-      { needId: 'fun', patienceRemaining: 399, progressRemaining: 5, metBy: null },
-      { needId: 'rest', patienceRemaining: 50, progressRemaining: 5, metBy: null },
-      { needId: 'zzz', patienceRemaining: 10, progressRemaining: 5, metBy: null },
+      { needId: 'fun', patienceRemaining: 399, progressRemaining: 5, metBy: null, abandonCount: 0 },
+      { needId: 'rest', patienceRemaining: 50, progressRemaining: 5, metBy: null, abandonCount: 0 },
+      { needId: 'zzz', patienceRemaining: 10, progressRemaining: 5, metBy: null, abandonCount: 0 },
     ];
     const advanced = advanceNeeds(content, shifted, 'fun', null, 'room');
     expect(advanced[0]?.patienceRemaining).toBe(400);
@@ -296,7 +299,7 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // this is where it would show, rather than in a state hash nobody can attribute.
     let aligned = formNeedVector(content);
     let misaligned: readonly NeedState[] = [...aligned, {
-      needId: 'zzz', patienceRemaining: 500, progressRemaining: 500, metBy: null,
+      needId: 'zzz', patienceRemaining: 500, progressRemaining: 500, metBy: null, abandonCount: 0,
     }];
     for (let tick = 0; tick < 100; tick += 1) {
       aligned = advanceNeeds(content, aligned, 'rest', 'food', 'room');
@@ -362,7 +365,7 @@ describe('a bad need vector is still refused, and the message still names the gu
 
   it('and a good vector is accepted, so the guard is not simply always throwing', () => {
     expect(() =>
-      assertNeedVector([{ needId: 'rest', patienceRemaining: 3, progressRemaining: 4, metBy: null }], 41),
+      assertNeedVector([{ needId: 'rest', patienceRemaining: 3, progressRemaining: 4, metBy: null, abandonCount: 0 }], 41),
     ).not.toThrow();
   });
 });
@@ -398,20 +401,24 @@ describe('the per-need tally', () => {
   it('inserts rows in ascending id order however they arrive', () => {
     // Unit-level, because a run cannot easily produce departures in a chosen order — and
     // the ordering is what makes lookup a binary search and the hash stable (I2).
-    const state = (needId: string, met: boolean): NeedState => ({
+    // `abandonCount` varies per state (G-014b), so this also pins that the fold ADDS the
+    // departing guest's own history into the row rather than overwriting it: `zeta` is
+    // recorded twice, carrying 2 then 3, and comes out at 5.
+    const state = (needId: string, met: boolean, abandonCount = 0): NeedState => ({
       needId,
       patienceRemaining: met ? 5 : 0,
       progressRemaining: met ? 0 : 5,
       metBy: met ? 'room' : null,
+      abandonCount,
     });
     let tally = createNeedOutcomes();
-    tally = recordNeedsAtDeparture(tally, [state('zeta', true)]);
-    tally = recordNeedsAtDeparture(tally, [state('alpha', false), state('zeta', false)]);
+    tally = recordNeedsAtDeparture(tally, [state('zeta', true, 2)]);
+    tally = recordNeedsAtDeparture(tally, [state('alpha', false, 7), state('zeta', false, 3)]);
     tally = recordNeedsAtDeparture(tally, [state('mid', true)]);
     expect(tally).toEqual([
-      { needId: 'alpha', met: 0, unmet: 1, metByItem: 0 },
-      { needId: 'mid', met: 1, unmet: 0, metByItem: 0 },
-      { needId: 'zeta', met: 1, unmet: 1, metByItem: 0 },
+      { needId: 'alpha', met: 0, unmet: 1, metByItem: 0, abandoned: 7 },
+      { needId: 'mid', met: 1, unmet: 0, metByItem: 0, abandoned: 0 },
+      { needId: 'zeta', met: 1, unmet: 1, metByItem: 0, abandoned: 5 },
     ]);
   });
 

@@ -54,7 +54,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { itemTypesSchema, roomTypesSchema } from '@hotelsim/content';
-import { ECONOMY_PATH, ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
+import { ECONOMY_PATH, GUEST_RULES_PATH, ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -101,7 +101,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // what makes `guest_comfort` legal content at all (`assertNeedsAreSatisfiable`).
     // Derivation: 3 bedrooms + 3 beds + 3 amenity rooms + 2 provider items.
     entities: 11,
-    stateHash: '8ad5004ab8b1b4a6',
+    stateHash: '83317dc2ebdad0ae',
   },
   guests: {
     arrived: 24,
@@ -165,11 +165,44 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   // straddling where that criterion requires two. `guest_comfort.satisfyTicks` rose 60 ->
   // 150 to restore the second. It is compensation for this goal's registry work, not an
   // independent balance decision, and it has no sweep behind it; see `needTypeSchema`.
+  //
+  // ============================================================================
+  // AND THE MET/UNMET SPLIT MOVED AGAIN AT G-014b, WHICH IS THE FIRST TIME THIS GOLDEN HAS
+  // RECORDED THE SIMULATION SERVING **MORE** NEEDS. Cause 1 of the three in
+  // `bench.workload.golden.test.ts`'s list — the simulation changed, and here is what and
+  // why, measured at this exact invocation:
+  //
+  //                        G-014a           G-014b     abandoned
+  //   guest_comfort        11 met, 9 unmet  13 / 7         3
+  //   guest_entertainment  10 met, 10 unmet 14 / 6         1
+  //   guest_nourishment    15 met, 5 unmet  16 / 4         5
+  //   night_rest           15 met, 5 unmet  15 / 5         0   <- UNCHANGED
+  //
+  //   36 engagement satisfactions -> 43, over the same 20 departed guests, at the cost of
+  //   9 abandonments between them.
+  //
+  // WHY MORE RATHER THAN FEWER, AND IT IS THE POINT OF THE GOAL RATHER THAN A SURPRISE. A
+  // guest that abandons does so for the need with the MOST pressure — the one closest to
+  // running out of patience — so with three needs sharing one lodging budget the margin buys
+  // triage. Total commitment made a guest finish whatever it started even while another need
+  // burned down; the margin lets it switch once the gap is wide enough to be worth the swap.
+  //
+  // NIGHT_REST IS UNMOVED, AND THAT IS THE CONTROL. The lodging need is never a candidate in
+  // the scoring loop, so a change that had accidentally let a guest abandon its ROOM would
+  // show here and nowhere else. 15/5 is the same 15/5 G-012, G-013 and G-014a all pinned.
+  //
+  // THE SAME CHANGE READS THE OTHER WAY IN A STARVED HOTEL, AND THAT IS ASSERTED ELSEWHERE
+  // RATHER THAN DESCRIBED HERE. `hysteresis.report.test.ts` owns the era comparison and the
+  // amenity sweep; its starved arm asserts that the margin COSTS satisfaction when providers
+  // are scarce, and its saturated arm asserts that it changes nothing when they are
+  // plentiful. No figure from either is restated in this comment, because nothing in this
+  // file pins one.
+  // ============================================================================
   needs: [
-    { needId: 'guest_comfort', lodging: false, met: 11, unmet: 9, metByItem: 11 },
-    { needId: 'guest_entertainment', lodging: false, met: 10, unmet: 10, metByItem: 0 },
-    { needId: 'guest_nourishment', lodging: false, met: 15, unmet: 5, metByItem: 6 },
-    { needId: 'night_rest', lodging: true, met: 15, unmet: 5, metByItem: 0 },
+    { needId: 'guest_comfort', lodging: false, met: 13, unmet: 7, metByItem: 13, abandoned: 3 },
+    { needId: 'guest_entertainment', lodging: false, met: 14, unmet: 6, metByItem: 0, abandoned: 1 },
+    { needId: 'guest_nourishment', lodging: false, met: 16, unmet: 4, metByItem: 7, abandoned: 5 },
+    { needId: 'night_rest', lodging: true, met: 15, unmet: 5, metByItem: 0, abandoned: 0 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
   // beside it, each standing on the ground. Zero invalid rooms here is the assertion that
@@ -251,10 +284,10 @@ const GOLDEN_2_DAYS_SEED_42 =
     'stuck       0',
     'orphan res  0',
     'in bad room 0',
-    'need       guest_comfort 11 met, 9 unmet (0 by room, 11 by item)',
-    'need       guest_entertainment 10 met, 10 unmet (10 by room, 0 by item)',
-    'need       guest_nourishment 15 met, 5 unmet (9 by room, 6 by item)',
-    'need L     night_rest 15 met, 5 unmet (15 by room, 0 by item)',
+    'need       guest_comfort 13 met, 7 unmet (0 by room, 13 by item), 3 abandoned',
+    'need       guest_entertainment 14 met, 6 unmet (14 by room, 0 by item), 1 abandoned',
+    'need       guest_nourishment 16 met, 4 unmet (9 by room, 7 by item), 5 abandoned',
+    'need L     night_rest 15 met, 5 unmet (15 by room, 0 by item), 0 abandoned',
     'ledger      18 transactions',
     'revenue     127500p',
     'upkeep      -24000p',
@@ -270,7 +303,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     603500p',
-    'state hash  8ad5004ab8b1b4a6',
+    'state hash  83317dc2ebdad0ae',
   ].join('\n') + '\n';
 
 /**
@@ -427,7 +460,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  8ad5004ab8b1b4a6']);
+    expect(differing).toEqual(['seed        42', 'state hash  83317dc2ebdad0ae']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -455,10 +488,19 @@ describe('the --content contract', () => {
     const dir = makeTempDir();
     copyFileSync(ROOM_TYPES_PATH, join(dir, 'room-types.json'));
     copyFileSync(NEED_TYPES_PATH, join(dir, 'need-types.json'));
-    // Three files since G-009, four since G-011. A `--content` directory missing any of
-    // them is a content set the loader refuses, which the next test but one pins.
+    // Three files since G-009, four since G-011, FIVE since G-014b. A `--content` directory
+    // missing any of them is a content set the loader refuses.
+    //
+    // THAT CLAIM WAS A COMMENT WITH NOTHING BEHIND IT UNTIL G-014b, AND IT SAID SO IN THE
+    // COMMENT. It read "which the next test but one pins"; the next test but one pins that
+    // GARBAGE content is refused — `room-types.json` containing `not json {{{` — which is a
+    // different fact about a file that is present. Nothing anywhere drove a MISSING file.
+    // ADR-0007's amendment: a comment offered as evidence makes a checkable claim and is
+    // subject to the same rule as an assertion. It is checked now, one describe below, for
+    // every one of the five and by NAME.
     copyFileSync(ITEM_TYPES_PATH, join(dir, 'item-types.json'));
     copyFileSync(ECONOMY_PATH, join(dir, 'economy.json'));
+    copyFileSync(GUEST_RULES_PATH, join(dir, 'guest-rules.json'));
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
@@ -486,6 +528,7 @@ describe('the --content contract', () => {
     copyFileSync(NEED_TYPES_PATH, join(dir, 'need-types.json'));
     copyFileSync(ITEM_TYPES_PATH, join(dir, 'item-types.json'));
     copyFileSync(ECONOMY_PATH, join(dir, 'economy.json'));
+    copyFileSync(GUEST_RULES_PATH, join(dir, 'guest-rules.json'));
     return dir;
   };
 
@@ -587,6 +630,49 @@ describe('the --content contract', () => {
     expect(result.status).toBe(1);
     expect(result.stdout.length).toBe(0);
     expect(result.stderr.length).toBeGreaterThan(0);
+  });
+
+  // ==========================================================================
+  //  EVERY ONE OF THE FIVE FILES IS REQUIRED, AND UNTIL G-014b NOTHING SAID SO.
+  //
+  //  `loadContent` reads five fixed filenames and `readContentFile` throws on a missing
+  //  one, so silence is refused rather than defaulted. That matters most for the file this
+  //  goal added: `guest-rules.json`'s ABSENCE is a true statement about HISTORY — content
+  //  from before the margin, read as total commitment — and a directory somebody assembled
+  //  today is not history. A loader that shrugged would hand a designer who forgot the file
+  //  a hotel whose guests silently stopped changing their minds, with every gate green.
+  //
+  //  DRIVEN ONCE PER FILE, BY DELETING IT FROM AN OTHERWISE COMPLETE DIRECTORY, so the pair
+  //  is the evidence: the same directory loads when the file is there and is refused when it
+  //  is not. A single missing-file case would also pass against a loader that refused
+  //  everything.
+  // ==========================================================================
+  describe('every one of the five content files is required, by name', () => {
+    const FILES = [
+      'room-types.json',
+      'need-types.json',
+      'item-types.json',
+      'economy.json',
+      'guest-rules.json',
+    ] as const;
+
+    it('the complete directory loads, or the refusals below are refusals of nothing', () => {
+      const result = runCli(['--days', '2', '--seed', '42', '--content', shippedCopy()]);
+      expect(result.status).toBe(0);
+    });
+
+    for (const missing of FILES) {
+      it(`refuses a directory with no ${missing}, naming the file`, () => {
+        const dir = shippedCopy();
+        rmSync(join(dir, missing));
+        const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
+        expect(result.status).toBe(1);
+        expect(result.stdout.length).toBe(0);
+        const stderr = result.stderr.toString('utf8');
+        expect(stderr).toContain(missing);
+        expect(stderr).toContain('Could not read content file');
+      });
+    }
   });
 });
 

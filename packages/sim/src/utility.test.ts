@@ -137,6 +137,7 @@ const spent = (needId: string, patienceTicks: number, burned: number): NeedState
   patienceRemaining: patienceTicks - burned,
   progressRemaining: 6,
   metBy: null,
+  abandonCount: 0,
 });
 
 describe('pressure is the fraction of a need\'s OWN patience already spent', () => {

@@ -292,12 +292,14 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
         patienceRemaining: 400,
         progressRemaining: over.food ?? MEAL,
         metBy: (over.food ?? MEAL) === 0 ? 'room' : null,
+        abandonCount: 0,
       },
       {
         needId: 'rest',
         patienceRemaining: over.patience ?? 400,
         progressRemaining: over.rest ?? STAY,
         metBy: (over.rest ?? STAY) === 0 ? 'room' : null,
+        abandonCount: 0,
       },
     ],
   });

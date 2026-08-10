@@ -14,9 +14,11 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { ContentError } from '@hotelsim/content';
 import { bindContent, createWorld, entitiesInOrder, findRoomType, hashState, roomTypeServes, run, stepTick } from '@hotelsim/sim';
 import {
+  GUEST_RULES_PATH,
   ITEM_TYPES_PATH,
   loadContent,
   loadContentFrom,
+  loadGuestRulesFrom,
   loadItemTypesFrom,
   loadNeedTypesFrom,
   NEED_TYPES_PATH,
@@ -164,6 +166,34 @@ describe('loading failures are legible and total', () => {
       JSON.stringify([{ id: 'standardRoom', name: 'Standard Room', capacity: 2, nightlyRatePence: 8_500 }]),
     );
     expect(messageOf(() => loadContentFrom(path))).toContain('snake_case');
+  });
+
+  // THE FIFTH LOADER GETS THE SAME THREE CASES AS THE OTHER FOUR (G-014b). It shipped with
+  // none: `loadGuestRulesFrom` was reached only through `loadContent`, where a failure is
+  // indistinguishable from any other file's. Same shape as the block above, one file over —
+  // ADR-0007's subject, and the reason `ai-critic` raised it as a MAJOR rather than as tidying.
+  it('reads and validates the shipped guest-rules file on its own', () => {
+    const rules = loadGuestRulesFrom(GUEST_RULES_PATH);
+    expect(rules.length).toBeGreaterThan(0);
+    expect(Number.isInteger(rules[0]!.abandonMarginBasisPoints)).toBe(true);
+  });
+
+  it('names the path when the guest-rules file does not exist', () => {
+    const path = join(scratch, 'no-such-guest-rules.json');
+    expect(() => loadGuestRulesFrom(path)).toThrow(ContentError);
+    expect(messageOf(() => loadGuestRulesFrom(path))).toContain(path);
+  });
+
+  it('keeps "not JSON" and "not content" apart for guest rules too, naming the field', () => {
+    const broken = fileWith('broken-rules.json', '[{"id":');
+    expect(messageOf(() => loadGuestRulesFrom(broken))).toContain('not valid JSON');
+    const invalid = fileWith(
+      'invalid-rules.json',
+      JSON.stringify([{ id: 'house_guest_rules', name: 'House Guest Rules', abandonMarginBasisPoints: 10_001 }]),
+    );
+    const message = messageOf(() => loadGuestRulesFrom(invalid));
+    expect(message).toContain('abandonMarginBasisPoints');
+    expect(message).not.toContain('node_modules');
   });
 });
 

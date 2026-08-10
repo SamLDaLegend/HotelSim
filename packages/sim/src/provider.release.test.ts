@@ -299,8 +299,8 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
     roomEntityId: room,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'comfort' },
     needs: [
-      { needId: 'comfort', patienceRemaining: 800, progressRemaining: comfortLeft, metBy: null },
-      { needId: 'rest', patienceRemaining: 800, progressRemaining: STAY, metBy: null },
+      { needId: 'comfort', patienceRemaining: 800, progressRemaining: comfortLeft, metBy: null, abandonCount: 0 },
+      { needId: 'rest', patienceRemaining: 800, progressRemaining: STAY, metBy: null, abandonCount: 0 },
     ],
   });
 

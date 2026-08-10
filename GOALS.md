@@ -2,21 +2,21 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020b done. M2: 9 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-014b done. M2: 10 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
-- **Schemas**: save **v8** · summary **v2** · I2 `ca54cbb7ae2dc693`. **Gates — `verify` runs
-  TEN rows**: six invariants, `typecheck`, and three `—` rows (`check:measure`,
-  **`check:tickcost`**, **`check:tickcost:proof`**) that are **not** invariants; a seventh is
-  a human call. **I4 UNRELIABLE (§2.0), 2 defects.** All ten green ×2.
-- **Tripwire**: `BOUND 1.4557 = sqrt(1.0238 × 2.07)`, arm `MEASURE_DAYS` **30**, ADR-0015.
-  Every reading is **quiet, `win32/12cpu`; the CI regime is unmeasured** — G-020c's.
-- **Order**: G-014b → G-019 → G-021 → G-020c → M2 exit. **G-019 is last — two critics.**
-- **Owed by the human**: M2 exit sign-off — the digest experiment scored **both ways**, the
-  unreliable count **with its noun**, the bimodal recording **watched, not made**.
-- **Owed by goals**: G-014b two repaired criteria + save v9 + `abandoned` on `NeedOutcome` ·
-  G-019 the second axis (amenity density at fixed rooms), without which its headline criterion
-  misses three-quarters of the need vector · G-020c **both I4 defects** + the CI regime
-  reading + replace-don't-pool · **M4 blocked on scenario capital.**
+- **Schemas**: save **v9** · summary **v2** · I2 `10926cc3b569c887`. **`verify` runs TEN
+  rows**: six invariants, `typecheck`, and three `—` rows (`check:measure`, **`check:tickcost`**,
+  **`check:tickcost:proof`**) that are **not** invariants — a seventh is a human call. **I4
+  UNRELIABLE (§2.0), 2 defects.** All ten green ×2 at G-014b VERIFY.
+- **Tripwire**: `BOUND 1.4557 = sqrt(1.0238 × 2.07)`, arm **30 days**, ADR-0015. G-014b read
+  **1.0416–1.0977 over nine pairs**, all inside. **Quiet `win32/12cpu`; CI unmeasured** — G-020c's.
+- **Order**: G-019 → G-021 → G-020c → M2 exit. **G-019 is last — two critics.**
+- **Owed by the human**: M2 exit sign-off — the digest experiment scored **both ways** (four
+  failures logged, newest the worst), the unreliable count **with its noun**, and the bimodal
+  recording **watched, not made** — now G-019's criterion 6, so it lands as a deliverable.
+- **Owed by goals**: G-019 the second axis (amenity density at fixed rooms), without which its
+  headline criterion misses three-quarters of the need vector · G-020c **both I4 defects** +
+  the CI regime reading + replace-don't-pool · **M4 blocked on scenario capital.**
 - **Open contradictions**: G-012's criterion pins a content property any provider can flip ·
   `--rooms N` contaminates every balance sweep · the ladder is provisional · seeds inert.
 
@@ -1191,7 +1191,10 @@ Critique rounds used: 0/3
   the breaking kind of change, not the additive kind `report.ts` permits.
 
 ## G-014b — A guest that commits
-Status: **in-progress** — PLAN dispatched 2026-08-09, after G-020b closed DRY.
+Status: **done, DRY at 1/3** — 1 sweep (3 MAJOR + 3 MINOR) plus 3 verification passes, **none
+  of which converted**: both new findings they produced were PROSE, and §7.1's subject split
+  routed them to the unpinned-claim arm. **The guard held the budget at 1/3 twice in one goal.**
+  Zero BLOCKERs. **No production code changed after sweep 1** — every finding was evidence.
 Milestone: M2
 Owner pair: ai-engineer / ai-critic
 Statement: A guest that has committed does not abandon unless an alternative beats it by a
@@ -2419,6 +2422,13 @@ When **G-012 to G-021** are `done`, that is a §5.4 escalation. Write it to
      DECISIONS at 17 — and **the M2 denominator had been stale for a whole goal** (12 vs 13)
      because G-020c was created mid-goal and no step re-counted. Caught only because the
      orchestrator counted lines by hand, which is not a mechanism.
+  4. **G-014b's REFLECT: ALL FOUR breached the cap — one REFLECT after failure 3 was written
+     down by the same orchestrator, in the same file, as an argument for automating it.**
+     19 / 16 / 18 / 17 against a limit of 15. It took **four** further editing passes to get
+     them back under, and the only thing that caught it was counting by hand again.
+     **This is the strongest single item on the delete side of the ledger**: a rule that its
+     own author breaches immediately after recording the breach is not being enforced by
+     anything, and the labour of hand-enforcing it is now visible and recurring.
 
   **AND THE MECHANICAL CHECK §4.1 SEEDED IS STILL UNASSIGNED.** `HOTELSIM.md:213` says the
   byte-identical as-of line is *"seeded as an obligation on the next goal that owns a

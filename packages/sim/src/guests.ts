@@ -40,6 +40,7 @@
 // arrival, so the command log fully describes who turned up and when (I2).
 
 import {
+  abandonMarginOf,
   findNeedType,
   findRoomType,
   isRoomKind,
@@ -54,6 +55,7 @@ import type { GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import {
+  abandonNeed,
   advanceNeeds,
   assertNeedVector,
   findNeedState,
@@ -72,7 +74,7 @@ import {
   validRoomsProviding,
 } from './validity.js';
 import type { ValidityContext } from './validity.js';
-import { pressureBasisPoints } from './utility.js';
+import { abandonThresholdBasisPoints, pressureBasisPoints } from './utility.js';
 
 /**
  * Opaque guest handle. Monotonic, never reused, within a run or across a save — the
@@ -1046,11 +1048,14 @@ function depart(
  *   on the tick it arrives but is not served on it — check-in is not a night's sleep —
  *   which is exactly the timing G-004 shipped, now applied to every need rather than one.
  *
- * COMMITMENT IS TOTAL, for both reservations. A guest that holds a room never
- * re-evaluates, and a guest that is engaged never abandons: there is no per-tick score
- * here to oscillate, so the thrashing §6.1 hunts for is not merely unlikely, it is
- * unexpressible. G-014 adds a score over providers and a content-defined margin to
- * abandon one, and it inherits a guest that commits rather than one that twitches.
+ * COMMITMENT IS TOTAL FOR THE LODGING ROOM AND CONDITIONAL FOR THE ENGAGEMENT (G-014b). A
+ * guest that holds a room never re-evaluates — the room IS the stay, and there is no
+ * per-tick score for it to oscillate on. A guest that is engaged now re-scores its other
+ * pending needs every tick, and abandons the engagement only when one of them beats it by
+ * the content-defined margin AND has a free provider. The thrashing §6.1 hunts for stopped
+ * being unexpressible at this goal, and the margin is what keeps it rare; `abandoned` in the
+ * need tally is the witness, because I2 cannot be one (a scorer that thrashes identically
+ * every run hashes identically every run).
  */
 export function stepGuests(input: GuestTickInput): GuestTickResult {
   const { tick, guests, outcomes, content, arriving } = input;
@@ -1218,7 +1223,11 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
 
     // 7. RESERVE WHAT IT CAN. A room first — that is the stay, and the thing it is here
     //    for — then one provider for the most pressing engagement need that has one free.
-    guest = reserve(search, guest, lodgingNeed?.id);
+    //    AND, SINCE G-014b, THIS IS ALSO WHERE AN ENGAGED GUEST DECIDES WHETHER TO WALK OUT.
+    //    `engagedRoom` is passed rather than looked up again for the reason every release in
+    //    this loop takes it as a parameter: "is this thing still a provider" is answered once
+    //    per guest per tick, in step 1, and a second lookup could disagree with the first.
+    guest = reserve(search, guest, lodgingNeed?.id, engagedRoom);
     next.push(guest);
   }
 
@@ -1243,7 +1252,9 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       engagement: null,
       needs: formNeedVector(content),
     };
-    next.push(reserve(search, arrived, lodgingNeed.id));
+    // A guest that has just walked in holds nothing, so there is no incumbent provider to
+    // hand over and nothing it could abandon.
+    next.push(reserve(search, arrived, lodgingNeed.id, null));
   }
 
   // Ids came from a counter, existing guests were visited in ascending order and
@@ -1320,11 +1331,18 @@ function addDepartures(
  * Take a room if one is free, and engage a provider if one is — at most one of each, and
  * at most once per tick.
  *
- * THE ENGAGEMENT PASS IS THE ONLY PLACE THE SCORE IS ACTED ON, AND IT IS TWO DECISIONS IN A
- * FIXED ORDER (G-014a):
+ * THE ENGAGEMENT PASS IS THE ONLY PLACE THE SCORE IS ACTED ON, AND IT IS THREE DECISIONS IN
+ * A FIXED ORDER (G-014a, G-014b):
  *
+ *   WHETHER TO MOVE — an UNENGAGED guest engages the best it can find. An ENGAGED one moves
+ *                  only if a rival need's pressure REACHES the incumbent's plus the
+ *                  content-defined margin (`abandonMarginOf`). That is the hysteresis, and
+ *                  without it a scorer re-run every tick oscillates between two nearly-equal
+ *                  options, which is §6.1's second entry.
  *   WHICH NEED   — the pending engagement need with the most pressure that has a free
  *                  provider; exact ties settled by the lower need id. FIT IS NOT CONSULTED.
+ *                  The incumbent's own need is not a candidate: within one need commitment
+ *                  stays total, so no guest ever leaves a half-eaten meal for a nicer table.
  *   WHICH PROVIDER — the best-fit free provider of that need, which is simply the first free
  *                  entry of an already fit-ordered list (`providersFor`).
  *
@@ -1364,7 +1382,12 @@ function addDepartures(
  * turn and waits for the next tick. That is the price of never letting a later arrival
  * overtake an earlier one, and it is G-004's rule unchanged.
  */
-function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | undefined): Guest {
+function reserve(
+  search: RoomSearch,
+  guest: Guest,
+  lodgingNeedId: ContentId | undefined,
+  engagedRoom: Entity | null,
+): Guest {
   // TWO SPREADS RATHER THAN ONE, AND THE COLLAPSE WAS TRIED AND DROPPED (G-016). Deciding
   // both reservations before writing either — so a guest that takes a room AND engages a
   // provider on one tick allocates one `Guest` instead of two — was implemented and
@@ -1386,11 +1409,57 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
       }
     }
   }
-  // COMMITMENT IS TOTAL AND THIS IS THE LINE THAT MAKES IT SO. An engaged guest is not
-  // scored again, so the thrashing §6.1 hunts for is unexpressible rather than unlikely —
-  // exactly the property G-012 handed to this goal and this goal hands to G-014b, which
-  // replaces this early return with a re-evaluation and a content-defined margin.
-  if (result.engagement !== null) return result;
+  const content = search.input.content;
+  // ============================================================================
+  // WHERE COMMITMENT USED TO BE TOTAL (G-014b). Until this goal the line here read
+  // `if (result.engagement !== null) return result;` — an engaged guest was never scored
+  // again, so thrashing was unexpressible rather than unlikely. It is expressible now, and
+  // the content-defined margin is the whole of what keeps it rare.
+  //
+  // THE INCUMBENT SETS A FLOOR ON THE SAME SCORING PASS RATHER THAN GETTING A PASS OF ITS
+  // OWN. A challenger must REACH `incumbent + margin` (`abandonThresholdBasisPoints`), so the
+  // bar the walk below compares against is that minus one — the loop's test is already
+  // "strictly greater than the best so far", and seeding the best with the bar makes the
+  // margin an initial condition instead of a second comparison. Two consequences, both
+  // wanted: a need that could not clear the margin never costs a provider lookup, which is
+  // the property G-016 bought and this goal must not spend; and ties BETWEEN CHALLENGERS
+  // still fall to the lower need id, because the vector is walked in ascending id and the
+  // test stays strict.
+  //
+  // NO FAST PATH FOR A SATURATING MARGIN, DELIBERATELY. `margin === ONE_WHOLE_BASIS_POINTS`
+  // makes the bar unreachable (`MAX_PENDING_PRESSURE_BASIS_POINTS`), so an early return
+  // would be provably behaviour-preserving and would cost content that predates this goal
+  // nothing. It is left out because that content is G-014b's Era-A ARM: skipping the walk
+  // would mean the arm proves the fast path rather than proving that the real re-scoring
+  // never switches. The walk it pays for is a few integer comparisons and no provider
+  // lookups.
+  // ============================================================================
+  const engagement = result.engagement;
+  let bar = -1;
+  if (engagement !== null) {
+    // THE CALLER MUST HAND OVER THE PROVIDER IT ALREADY RESOLVED, and the pairing is checked
+    // rather than assumed. `stepGuests` answers "is this thing still providing" once per
+    // guest per tick (step 1) and nulls the engagement when the answer is no (step 2), so an
+    // engaged guest arriving here always has its provider entity. If that ever stops being
+    // true, `release` below would be handed `null` and would free the provider WITHOUT
+    // un-exhausting what it serves — leaving a guest standing beside an empty café for the
+    // rest of the tick, which is the silent-fallback failure `findFreeRoom`'s short-circuit
+    // is built to avoid. Loud here beats invisible there.
+    if (engagedRoom === null) {
+      throw new Error(
+        `reserve: guest ${guest.id} is engaged with entity ${engagement.entityId} but the caller resolved no provider ` +
+          'for it; an engagement whose provider has stopped providing is released before this point',
+      );
+    }
+    const incumbent = findNeedState(result.needs, engagement.needId);
+    const incumbentType = incumbent === undefined ? undefined : findNeedType(content, engagement.needId);
+    // A guest engaged for a need this content does not define, or for one that is no longer
+    // pending, has no pressure to compare against. It stays committed rather than being
+    // scored against a fabricated zero. The tick cannot reach either state — step 5 releases
+    // the engagement the moment its need resolves — so this is a postcondition, not a case.
+    if (incumbent === undefined || incumbentType === undefined || !isNeedPending(incumbent)) return result;
+    bar = abandonThresholdBasisPoints(pressureBasisPoints(incumbentType, incumbent), abandonMarginOf(content)) - 1;
+  }
   // ONE PASS over the needs, taking the maximum score.
   //
   // IT WAS A DESCENDING WALK, AND REPEATED SELECTION IS O(needs^2) COMPARISONS with two
@@ -1404,8 +1473,9 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
   //
   // THE PROVIDER IS ONLY LOOKED UP FOR A NEED THAT WOULD BEAT THE BEST SO FAR, so a
   // hopeless need costs one comparison rather than a scan — the property G-016 bought and
-  // this goal keeps.
-  const content = search.input.content;
+  // this goal keeps. Since G-014b "the best so far" starts at the incumbent's bar rather
+  // than at -1 for an engaged guest, so the same sentence covers the abandon decision.
+  //
   // THE NEED TYPE IS RESOLVED BY POSITION WHEN IT CAN BE, exactly as `advanceNeeds` does and
   // for the same measured reason: `formNeedVector` builds one entry per need type in the
   // content table's own ascending order, so for a guest that formed its vector under THIS
@@ -1416,7 +1486,7 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
   // the content defines four, and it falls back to the search.
   const needTypes = needTypesInOrder(content);
   const maybeAligned = result.needs.length === needTypes.length;
-  let bestPressure = -1;
+  let bestPressure = bar;
   let bestNeed: NeedState | undefined;
   let bestProvider: Entity | null = null;
   for (let i = 0; i < result.needs.length; i += 1) {
@@ -1426,6 +1496,14 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
     // The lodging need is served by the room the guest holds, never by an engagement: a
     // guest does not book a second bedroom to sleep in.
     if (need.needId === lodgingNeedId) continue;
+    // A GUEST NEVER LEAVES A HALF-EATEN MEAL TO EAT THE SAME MEAL SOMEWHERE NICER (G-014b).
+    // Within one need the commitment stays TOTAL: fit is ordinal by ruling, so a margin
+    // denominated in it would make magnitudes the schema calls inert into load-bearing
+    // numbers owing derivations nobody can supply (`PARKING.md`). Skipping the incumbent
+    // here is what makes that true rather than merely intended — without it the incumbent
+    // would tie with itself at the bar and, needing to EXCEED it, would lose anyway, which
+    // is the same answer reached by accident instead of on purpose.
+    if (engagement !== null && need.needId === engagement.needId) continue;
     const positional = maybeAligned ? needTypes[i] : undefined;
     const needType =
       positional !== undefined && positional.id === need.needId ? positional : findNeedType(content, need.needId);
@@ -1446,6 +1524,32 @@ function reserve(search: RoomSearch, guest: Guest, lodgingNeedId: ContentId | un
     bestProvider = provider;
   }
   if (bestNeed === undefined || bestProvider === null) return result;
+  // ============================================================================
+  // THE SEARCH SUCCEEDS BEFORE ANYTHING IS RELEASED, AND THE ORDER IS THE DECISION (G-014b,
+  // MAJOR 4(a)). Releasing first and searching afterwards would let a guest abandon INTO
+  // NOTHING — a guaranteed unhappiness the margin cannot see, and §6.1's "reads as stupid"
+  // in its literal form: a guest that walks out of the café, finds the games room taken and
+  // stands in the corridor. Worse, `release` un-exhausts the freed provider's needs, so
+  // another guest visited later in this same loop could take it and the abandonment would be
+  // irreversible within the tick.
+  //
+  // Reaching this line means a free provider for a challenger that CLEARS THE MARGIN is in
+  // hand. It cannot be the incumbent's own provider: that entity is in `held` — the guest is
+  // holding it — and `findFreeRoom` skips everything held, so the incumbent cannot
+  // self-select and a "switch" to the thing already engaged is unrepresentable.
+  //
+  // THE PRICE OF THAT ORDERING, STATED RATHER THAN DISCOVERED: a provider that serves BOTH
+  // the incumbent need and the challenger need is invisible to the search that decides the
+  // switch, because the guest is holding it. So a guest could walk from a provider that
+  // could have served the new need to a second one that also does. No shipped content can
+  // reach it — no room type or item in `packages/content/data` provides two needs — and
+  // closing it properly needs the search to consider "what I already hold" as a candidate
+  // for another need, which is a different decision. Parked with its falsification test.
+  // ============================================================================
+  if (engagement !== null) {
+    release(search, engagement.entityId, engagedRoom, content);
+    result = { ...result, needs: abandonNeed(result.needs, engagement.needId), engagement: null };
+  }
   search.held.add(bestProvider.id);
   return { ...result, engagement: { entityId: bestProvider.id, needId: bestNeed.needId } };
 }

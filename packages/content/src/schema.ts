@@ -439,6 +439,128 @@ export const needTypesSchema = z.array(needTypeSchema).min(1);
 export const itemTypesSchema = z.array(itemTypeSchema).min(1);
 
 /**
+ * HOW MUCH BETTER A RIVAL NEED MUST LOOK BEFORE A GUEST WALKS OUT ON WHAT IT IS DOING
+ * (G-014b) — the hysteresis margin, in the same basis points `pressureBasisPoints` speaks.
+ *
+ * A guest engaged with a provider re-scores its other pending needs every tick. It abandons
+ * the engagement only if some other need's PRESSURE exceeds the engaged need's by at least
+ * this many basis points AND that need has a free provider. At 0 the guest re-decides on
+ * every tick and thrashes; at 10,000 it can never abandon and commitment is total, which is
+ * exactly what shipped at G-014a.
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE 6,000 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
+ *
+ * THE REQUIREMENT: **a guest that has just switched does not switch BACK within the
+ * longest engagement.** Nothing here promises the guest FINISHES what it switched to; see
+ * "what this does NOT buy" below, which is the more important half of this note.
+ *
+ * THE INPUTS, each read off `need-types.json` and none of them written here:
+ *
+ *   P   = min `patienceTicks` over the ENGAGEMENT need types           300 as shipped
+ *   L   = max `satisfyTicks`  over the ENGAGEMENT need types           180 as shipped
+ *
+ * BOTH READINGS ARE OVER ENGAGEMENT NEEDS ONLY, AND THE LODGING NEED WOULD CHANGE EVERY
+ * ANSWER. The scoring loop skips the lodging need outright (`reserve` in
+ * `packages/sim/src/guests.ts`), so it is not a need a guest can ever abandon or switch to.
+ * Read `min patienceTicks` over ALL need types and the shipped table gives `night_rest`'s
+ * 180, hence `M >= 10000` — the saturating margin, which turns the feature off. Read
+ * `max satisfyTicks` over all types and it gives `night_rest`'s 480, hence `M >= 16000`,
+ * which is over the 10,000 ceiling and therefore unsatisfiable. The two readings differ by
+ * the whole feature, so `hysteresis.bound.test.ts` in `tools/headless` computes BOTH from
+ * the need's ROLE rather than from the table's extremes: it asserts the shipped margin
+ * clears the engagement-only bound, AND that it does NOT clear the all-need-types
+ * misreading. The second assertion is what keeps the distinction a measurement rather than
+ * a sentence — without it the test would pass under either reading.
+ *
+ * THE ARITHMETIC:
+ *
+ *   one tick moves a need's pressure by            10,000 / patienceTicks basis points
+ *   a SERVED need's patience regenerates, so its pressure FALLS at that rate
+ *   a WAITING need's patience drains,     so its pressure RISES at that rate
+ *   -> after a switch the gap closes at              10,000/P_a + 10,000/P_b per tick,
+ *      which is fastest when both are the minimum:   2 x 10,000 / P
+ *   at the switch the gap is at least M, and a REVERSE switch needs it to reach -M,
+ *   so the gap must travel                            2M
+ *   ticks before a reverse switch is possible        2M / (2 x 10,000 / P) = M x P / 10,000
+ *   require that to be at least L                    M >= L x 10,000 / P
+ *
+ *   shipped: 180 x 10,000 / 300 = 6,000.
+ *
+ * WHAT THIS DOES **NOT** BUY, AND THE ERROR THAT MADE IT LOOK AS THOUGH IT DID. The first
+ * version of this derivation attached the same arithmetic to the requirement *"a guest can
+ * complete its longest engagement"*. That is a DIFFERENT QUANTITY and the formula does not
+ * compute it. A FIRST switch needs the gap to travel only `M` — it starts near zero — where
+ * a REVERSE switch needs it to travel `2M`, so completion costs twice the margin:
+ *
+ *   complete the LONGEST engagement (L = 180)   needs M >= 12,000   over the 10,000 ceiling
+ *   complete the SHORTEST engagement (150)      needs M >= 10,000   the saturating margin
+ *   do not switch BACK within L = 180           needs M >=  6,000   derived, and shipped
+ *
+ * SO NO NON-SATURATING MARGIN CAN GUARANTEE A GUEST COMPLETES AN ENGAGEMENT IT STARTS, and
+ * that is structural rather than a tuning failure: a margin governs the GAP, and the gap
+ * keeps moving while the guest is being served. Guaranteeing completion needs a DWELL TERM
+ * — a minimum engaged duration — which is a different mechanism and is parked with its
+ * falsification test (`PARKING.md`, G-014b). A worked reachable case exists today: two needs
+ * at pressure 3,333, a provider frees, and at M = 6,000 the guest abandons after 90 ticks
+ * carrying 90 of 180 ticks of progress.
+ *
+ * WHERE ELSE THIS CLASS LIVES — a requirement attached to a formula that computes a
+ * different quantity (`HOTELSIM.md` §5.8). Checked, and named so it can be re-inspected:
+ *
+ *   - `fitBasisPointsSchema` above — CARRIES NO BOUND AT ALL. Its own note says the
+ *     magnitudes are ordinal and inert, and `utility.test.ts` proves an order-preserving
+ *     relabel is byte-identical, so there is no number here for a requirement to mis-attach
+ *     to. Clean.
+ *   - `demolitionRefundBasisPoints` above — `refund > constructionCostPence -
+ *     nightlyUpkeepPence` reopens the upkeep dodge. Re-derived: demolishing before midnight
+ *     and rebuilding after costs `cost - refund` and saves one night of upkeep, so the
+ *     inequality IS the quantity its requirement names. Clean.
+ *   - `liquidationRoomsMax` in `economySchema` below — "the most rooms a player may ever
+ *     have to scrap to afford one", checked as `refund x most >= cheapest`. Same quantity as
+ *     the sentence. Clean.
+ *   - `HOTELSIM.md` §2.1.2's I5 budget — its requirement (a 60-room hotel at the top speed
+ *     sustaining real time) and its formula (`525,600 x S / (speed x H)`) were checked
+ *     against each other at G-018 and again at G-020a, and §2.1.2 records two drafts that
+ *     misread its own sensitivity table. Not this class: the errors were about what the
+ *     table was evidence FOR, not about the budget formula computing another quantity.
+ * ---------------------------------------------------------------------------
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `role`, `requires` and price contract exactly,
+ * and for the same hazard in mirror image. Silence in HISTORY is a true statement: a content
+ * set written before G-014b had no margin because a guest could not abandon at all, so
+ * `GuestRulesData` in `packages/sim/src/content.ts` keeps the table optional and its absence
+ * reads as TOTAL COMMITMENT (ADR-0008 — argued from the era, not chosen). Silence on a NEW
+ * document is a designer forgetting a dial, and the historical default they would inherit is
+ * the one that turns the feature off silently. So a document that reaches this schema must
+ * say.
+ *
+ * 0 IS LEGAL AND IS THE THRASH CONTROL. `bindContent` does not refuse a twitchy margin,
+ * deliberately: G-014b's criterion 3 runs `margin 0` as an arm, and content a gate refuses
+ * cannot be an arm. See `PARKING.md` for the conditions under which that would be revisited.
+ */
+export const abandonMarginBasisPointsSchema = basisPointsSchema;
+
+/**
+ * The rules a guest's own behaviour obeys (G-014b), as opposed to the rules of the money
+ * loop (`economySchema`) or of any one room, item or need.
+ *
+ * A TOP-LEVEL ARRAY WITH AN `id`, like every other table here, for the two mechanical
+ * reasons `economySchema` gives: `check:content` fails a content file it can find no `id`
+ * in at any depth, and the sim reaches this through `firstGuestRules` — the lowest id after
+ * normalisation, the `firstEconomy` precedent — so no snake_case literal enters
+ * `packages/sim` (ADR-0003). Per-archetype rules are the shape this grows into at M6.
+ */
+export const guestRulesSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  abandonMarginBasisPoints: abandonMarginBasisPointsSchema,
+});
+
+/** The whole `guest-rules.json` document. A top-level array, for the same reason. */
+export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
+
+/**
  * The house rules of the money loop (G-011): what a hotel opens with, and what it can
  * borrow when it has nothing left.
  *
@@ -530,6 +652,7 @@ export const economySchema = z.strictObject({
 /** The whole `economy.json` document. A top-level array, for the same reason. */
 export const economiesSchema = z.array(economySchema).min(1);
 
+export type GuestRules = z.infer<typeof guestRulesSchema>;
 export type RoomType = z.infer<typeof roomTypeSchema>;
 export type NeedType = z.infer<typeof needTypeSchema>;
 export type NeedRole = z.infer<typeof needRoleSchema>;

@@ -199,6 +199,32 @@ export type EconomyData = {
 };
 
 /**
+ * The rules a guest's own behaviour obeys (G-014b).
+ *
+ * Structurally identical to `GuestRules` in `@hotelsim/content` and deliberately not
+ * imported from it (ADR-0001), exactly as `EconomyData` is.
+ *
+ * WHY THIS IS CONTENT RATHER THAN A CONSTANT IN `utility.ts`. It is a balance number — how
+ * committed a guest looks to somebody watching — and I3 puts balance numbers on disk. The
+ * `EconomyData` argument transfers whole, including the part that decides it: this table CAN
+ * be absent, and its absence is a TRUE HISTORICAL STATEMENT rather than a missing value. A
+ * world from before G-014b had no margin because its guests could not abandon anything.
+ */
+export type GuestRulesData = {
+  readonly id: ContentId;
+  readonly name: string;
+  /**
+   * How far a rival need's pressure must exceed the engaged need's before a guest walks out
+   * on what it is doing, in basis points.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `role` and price contract exactly. See
+   * `abandonMarginBasisPointsSchema` in `packages/content` for the derivation of the shipped
+   * 6,000 and, more importantly, for what a margin CANNOT buy at any value.
+   */
+  readonly abandonMarginBasisPoints?: number | undefined;
+};
+
+/**
  * One item a room can require, and one thing that can serve a need (G-009, G-013).
  *
  * Structurally identical to `ItemType` in `@hotelsim/content` and deliberately not
@@ -310,6 +336,15 @@ export type SimContent = {
    * per-scenario economies want anyway.
    */
   readonly economy?: readonly EconomyData[] | undefined;
+  /**
+   * How a guest behaves (G-014b). Optional for the reason `economy` is, and the absence is
+   * the same clean historical statement: content without this table describes a world in
+   * which commitment was total, which is what a pre-G-014b world had.
+   *
+   * A LIST WITH ONE ENTRY TODAY, reached through `firstGuestRules` — the lowest id after
+   * normalisation, the `firstEconomy` precedent, and the same ADR-0003 reason.
+   */
+  readonly guestRules?: readonly GuestRulesData[] | undefined;
 };
 
 /**
@@ -539,6 +574,34 @@ function assertFitValue(owner: string, ownerId: ContentId, fit: number | undefin
         'value outside the range is a typo rather than a stronger preference.',
     );
   }
+}
+
+/**
+ * Clone a guest-rules record, validating the margin at the boundary (G-014b).
+ *
+ * The `cloneEconomy` discipline exactly: a float, a negative or an out-of-range margin from
+ * a raw host — one that did not come through the zod schema — dies here, at bind time, with
+ * the table named, rather than inside `reserve` on the tick a guest tried to abandon
+ * something. The key is STRIPPED when absent rather than carried as `undefined`, for the
+ * reason `cloneNeedType` strips `role`: only the absent form is the historical statement.
+ *
+ * 0 AND `MAX_FIT_BASIS_POINTS` ARE BOTH LEGAL AND BOTH MEAN SOMETHING. 0 is "re-decide every
+ * tick" and is G-014b criterion 3's thrash control; 10,000 is unreachable by construction
+ * (`pressureBasisPoints` cannot exceed 9,999 for a pending need — see `utility.ts`) and so
+ * means total commitment, which is the era this goal ends. Refusing either would make an arm
+ * of this goal's own evidence unloadable.
+ */
+function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
+  const { abandonMarginBasisPoints: margin, ...rest } = rules;
+  if (margin === undefined) return { ...rest };
+  if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
+    throw new Error(
+      `bindContent: guest rules "${rules.id}" have an abandonMarginBasisPoints of ${String(margin)}; it must be an ` +
+        `integer in 0..${ONE_WHOLE_BASIS_POINTS}. The margin is a fraction of a need's own patience in basis points — ` +
+        `${ONE_WHOLE_BASIS_POINTS} is one whole — and it is compared against a pressure, which can never exceed that.`,
+    );
+  }
+  return { ...rest, abandonMarginBasisPoints: margin };
 }
 
 /**
@@ -1040,6 +1103,10 @@ export function bindContent(content: SimContent): BoundContent {
     content.economy === undefined
       ? undefined
       : normaliseTable(content.economy, 'economy', cloneEconomy);
+  const guestRules =
+    content.guestRules === undefined
+      ? undefined
+      : normaliseTable(content.guestRules, 'guest rules', cloneGuestRules);
 
   // ROLES ARE SETTLED FIRST (G-013), and the order is load-bearing rather than tidy:
   // `assertNeedsAreSatisfiable` refuses an ITEM that provides the lodging need, so it has
@@ -1069,7 +1136,8 @@ export function bindContent(content: SimContent): BoundContent {
   // different document.
   const withNeeds: SimContent = needTypes === undefined ? { roomTypes } : { roomTypes, needTypes };
   const withItems: SimContent = itemTypes === undefined ? withNeeds : { ...withNeeds, itemTypes };
-  const normalised: SimContent = economy === undefined ? withItems : { ...withItems, economy };
+  const withEconomy: SimContent = economy === undefined ? withItems : { ...withItems, economy };
+  const normalised: SimContent = guestRules === undefined ? withEconomy : { ...withEconomy, guestRules };
   return Object.freeze({
     content: Object.freeze(normalised),
     fingerprint: hashJson(normalised as unknown as JsonValue),
@@ -1221,6 +1289,39 @@ export function firstEconomy(bound: BoundContent): EconomyData | undefined {
 }
 
 /**
+ * The guest rules this content declares, or `undefined` if it declares none (G-014b).
+ *
+ * The LOWEST id after normalisation — the `firstEconomy` contract exactly, for the same two
+ * reasons (I2's order-independence, and ADR-0003's no-snake_case-in-the-sim).
+ */
+export function firstGuestRules(bound: BoundContent): GuestRulesData | undefined {
+  return bound.content.guestRules?.[0];
+}
+
+/**
+ * HOW FAR A RIVAL NEED MUST OUTSCORE THE ENGAGED ONE BEFORE A GUEST ABANDONS IT (G-014b),
+ * in basis points of pressure.
+ *
+ * ABSENCE MEANS TOTAL COMMITMENT, AND THAT IS ARGUED FROM THE ERA RATHER THAN CHOSEN
+ * (ADR-0008). Content with no `guestRules` table is content from before this goal, and in
+ * that era `reserve` returned early for any engaged guest — a guest could not abandon an
+ * engagement at all. `ONE_WHOLE_BASIS_POINTS` reproduces that EXACTLY rather than
+ * approximately: `pressureBasisPoints` returns at most 9,999 for a pending need (see
+ * `utility.ts`, which ties that ceiling to `isNeedPending`'s own definition), and the
+ * challenger must EXCEED the incumbent by the margin, so a margin of 10,000 can never be
+ * cleared however the two needs stand. It is not "a very large number"; it is the smallest
+ * value at which the branch is unreachable.
+ *
+ * THE SAME VALUE IS REACHABLE FROM DISK, DELIBERATELY. A designer may write 10,000 and get
+ * total commitment back, which is what makes G-014b's Era-A arm a content document rather
+ * than a code path — see criterion 3. So this function has no "is the table there" branch
+ * that a test could not also reach through content.
+ */
+export function abandonMarginOf(bound: BoundContent): number {
+  return firstGuestRules(bound)?.abandonMarginBasisPoints ?? ONE_WHOLE_BASIS_POINTS;
+}
+
+/**
  * What scrapping a room of this type returns, in integer pence (G-011).
  *
  * Rounded ONCE, here, through the single rule in `applyBasisPoints`. Absent means zero —
@@ -1295,15 +1396,28 @@ export function providesOf(bound: BoundContent, kind: ContentId): readonly Conte
 }
 
 /**
+ * One whole, as an integer count of basis points — the unit `basisPointsSchema` defines and
+ * ADR-0002's argument for integer fractions demands.
+ *
+ * ONE DEFINITION, WHERE THE BOUNDARY CHECKS ARE. It was two: this file's `MAX_FIT_BASIS_POINTS`
+ * and a private copy in `utility.ts`, both `10_000`, neither reading the other. G-014b adds a
+ * third consumer (the abandon margin's range check), and three copies of a constant that must
+ * agree is the duplicated-constant shape G-018 removed from the budget and G-020a removed from
+ * the bench. `MAX_FIT_BASIS_POINTS` is now an alias of this rather than a second literal.
+ */
+export const ONE_WHOLE_BASIS_POINTS = 10_000;
+
+/**
  * The largest fit any content may declare (G-014a).
  *
  * IT LIVES HERE, WITH THE CHECK THAT ENFORCES IT, so the bound and the refusal cannot drift
  * apart — the `liquidationRoomsMax` discipline one scale down.
  *
  * 10,000 is not a chosen number: a fit is a basis-point fraction, and 10,000 basis points
- * is one whole (`basisPointsSchema`, ADR-0002's argument for integer fractions).
+ * is one whole (`basisPointsSchema`, ADR-0002's argument for integer fractions) — which is
+ * why this now READS that constant instead of restating it.
  */
-export const MAX_FIT_BASIS_POINTS = 10_000;
+export const MAX_FIT_BASIS_POINTS = ONE_WHOLE_BASIS_POINTS;
 
 /**
  * How well an entity of this KIND serves what it provides, in basis points (G-014a).

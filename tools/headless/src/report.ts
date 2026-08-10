@@ -43,6 +43,7 @@
 // boundary.
 
 import {
+  abandonMarginOf,
   assertBuildOutcomes,
   assertGuestOutcomes,
   assertLoanOutcomes,
@@ -69,6 +70,7 @@ import {
   lodgingNeedOf,
   needOutcomeOf,
   needTypesInOrder,
+  ONE_WHOLE_BASIS_POINTS,
   outstandingDebtOf,
   requiredItemsOf,
   roomTypeProvides,
@@ -925,6 +927,23 @@ export type RunSummary = {
      * constant), and `metByRoom` never shipped, so removing it owes nothing either.
      */
     readonly metByItem: number;
+    /**
+     * How many times an instance of this need was ABANDONED — a guest walking out on a
+     * provider it had engaged for it because another need beat it by the content-defined
+     * margin (G-014b).
+     *
+     * IT IS THE ONLY WITNESS THIS PROJECT HAS FOR THRASHING, AND THAT IS NOT A FIGURE OF
+     * SPEECH. I2 holds no reference hash, so a scorer that dithers identically on every run
+     * passes the determinism gate; the eye is the other witness and it needs a recording
+     * (`HOTELSIM.md` §5 WATCH). This number is what a test can read.
+     *
+     * NOT BOUNDED BY `met` OR BY `unmet` — a guest departs once but abandons zero or many
+     * times. See the matrix on `NeedOutcome.abandoned` in `packages/sim/src/needs.ts` for
+     * what can and cannot catch a misfiling of it.
+     *
+     * An additive field, so `SUMMARY_SCHEMA_VERSION` does not move.
+     */
+    readonly abandoned: number;
   }[];
   /**
    * The state of the building itself (G-009).
@@ -1172,6 +1191,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       met: row?.met ?? 0,
       unmet: row?.unmet ?? 0,
       metByItem: row?.metByItem ?? 0,
+      abandoned: row?.abandoned ?? 0,
     };
   });
 
@@ -1374,6 +1394,31 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   const providedByAnyItemType = (needId: string): boolean =>
     (content.content.itemTypes ?? []).some((itemType) => itemTypeProvides(content, itemType.id, needId));
 
+  // AND ABANDONMENT IS PINNED BY CONTENT WHEREVER CONTENT CAN PIN IT (G-014b), by the same
+  // rule as the two attribution laws above: compare the tally against a SEPARATE INPUT, and
+  // only where that input decides the answer outright.
+  //
+  // Two conditions make abandonment IMPOSSIBLE, and they are independent of each other:
+  //
+  //   the margin saturates       a challenger must EXCEED the incumbent by the margin, and a
+  //                              pending need's pressure cannot reach 10,000
+  //                              (`MAX_PENDING_PRESSURE_BASIS_POINTS` ties that to
+  //                              `isNeedPending`'s own definition). So at a margin of 10,000
+  //                              no comparison can ever succeed.
+  //   fewer than two engagement  a guest abandons one need FOR ANOTHER. With at most one
+  //   need types                 engagement need there is no other to move to, and the
+  //                              lodging need is never a candidate (`reserve` skips it).
+  //
+  // WHAT THIS CATCHES THAT NOTHING ELSE DOES: a build that increments `abandoned` on a path
+  // that is not a switch. The counter is otherwise unbounded above — a guest may abandon the
+  // same need many times — so there is no conservation law to compare it against, and these
+  // two are the only places content decides the number. They are what makes G-014b's Era-A
+  // arm a MEASUREMENT rather than an assertion that a number happened to be zero: that arm
+  // runs the saturating margin, so this violation is live throughout it.
+  const engagementNeedTypes = needTypesInOrder(content).filter((needType) => needType.id !== lodgingNeed?.id);
+  const marginSaturates = abandonMarginOf(content) >= ONE_WHOLE_BASIS_POINTS;
+  const nothingToSwitchTo = engagementNeedTypes.length < 2;
+
   for (const row of needs) {
     if (row.met + row.unmet !== departed) {
       violations.push(
@@ -1395,6 +1440,21 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         `Need attribution broken at tick ${world.tick}: need "${row.needId}" records ${row.metByItem} ` +
           'satisfaction(s) delivered by an item, but NO ITEM TYPE in this content provides it — only a room can ' +
           'have served it (G-013).',
+      );
+    }
+    if (row.abandoned > 0 && marginSaturates) {
+      violations.push(
+        `Abandonment broken at tick ${world.tick}: need "${row.needId}" records ${row.abandoned} abandonment(s), but ` +
+          `this content's abandon margin is ${abandonMarginOf(content)} basis points. A pending need's pressure ` +
+          'cannot reach one whole, so no challenger can ever exceed an incumbent by that much and no guest can ' +
+          'abandon anything (G-014b).',
+      );
+    }
+    if (row.abandoned > 0 && nothingToSwitchTo) {
+      violations.push(
+        `Abandonment broken at tick ${world.tick}: need "${row.needId}" records ${row.abandoned} abandonment(s), but ` +
+          `this content defines ${engagementNeedTypes.length} engagement need type(s). A guest abandons one need FOR ` +
+          'ANOTHER, and the lodging need is never a candidate, so there is nothing to switch to (G-014b).',
       );
     }
   }
@@ -1526,7 +1586,7 @@ export function renderText(summary: RunSummary): string {
     ...summary.needs.map(
       (need) =>
         `need ${need.lodging ? 'L' : ' '}     ${need.needId} ${need.met} met, ${need.unmet} unmet ` +
-        `(${need.met - need.metByItem} by room, ${need.metByItem} by item)`,
+        `(${need.met - need.metByItem} by room, ${need.metByItem} by item), ${need.abandoned} abandoned`,
     ),
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,

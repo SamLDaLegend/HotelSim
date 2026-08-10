@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-09, G-020b done. M2: 9 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-014b done. M2: 10 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent (G-013 paid v7; G-015 v8).
@@ -15,9 +15,8 @@
 - **ADR-0013** (human) a perceptual criterion needs a perceptual check · **ADR-0014**
   placeholder art, M5 neither waits nor relitigates.
 - **ADR-0015** (G-020b) — the tripwire's bound is `sqrt(noise ceiling × smallest known
-  regression)`, and **POOL within a configuration, REPLACE on a configuration change**. Both
-  halves EXECUTE now; both were prose first, found a round apart. **A rule with two halves
-  gets one of them executed and the other admired.**
+  regression)`; **POOL within a configuration, REPLACE on one change.** Both halves execute
+  now; both were prose first. **A two-halved rule gets one half executed, one admired.**
 - **The newer rulings live in the charter, not here** — §2.0, §4.1, §5.5–5.8, §7.1.
 - **Open contradictions**: four, in `GOALS.md`'s digest. I4 unreliable and escalated.
 

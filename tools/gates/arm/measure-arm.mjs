@@ -46,13 +46,29 @@
 //
 // WHY CONTENT IS READ AS RAW JSON. Validation lives in `@hotelsim/content` and pulls zod,
 // which would mean `node_modules` inside an arm, which is the linked-dependency trap this
-// whole design exists to avoid (`lib/git-tree.mjs`). The four content files are plain
-// arrays, so the arm assembles the registry and hands it to that arm's own `bindContent`.
-// The shortcut is not taken on trust: the arm reports its state hash, and the test suite
-// asserts the HEAD arm reproduces the hash `bench.workload.golden.test.ts` committed for
-// this exact workload through the real zod-validated loader.
+// whole design exists to avoid (`lib/git-tree.mjs`). The content files are plain arrays, so
+// the arm assembles the registry and hands it to that arm's own `bindContent`. The shortcut
+// is not taken on trust: the arm reports its state hash, and `check-measure.mjs` asserts both
+// arms reproduce the hash the SHIPPED zod-validated CLI produces for this exact workload.
+//
+// AND A TABLE THAT ONE ARM HAS AND THE OTHER DOES NOT IS READ AS ABSENT, NOT AS AN ERROR
+// (G-014b). `guest-rules.json` arrived at G-014b, so measuring that commit against the one
+// before it means the base arm's tree does not contain the file. Reading it unconditionally
+// would make the base arm die and the verdict INCOMPARABLE — the instrument abstaining on
+// precisely the commit it was pointed at. Omitting the KEY (rather than passing an empty
+// array) is the same "absence is not emptiness" statement the sim's own `SimContent` makes:
+// each arm binds the content its own revision actually shipped, which is what a paired
+// measurement of a content change is supposed to compare.
+//
+// THIS IS NOT A GATE BEING WIDENED TO PASS, AND THAT IS CHECKED RATHER THAN ASSERTED.
+// `check-measure.mjs` compares each arm's state hash against the shipped CLI's, so an arm
+// that quietly ignored a content table the CLI loads goes RED rather than green. Re-run the
+// probe: restore this file to the revision before G-014b, run `pnpm check:measure`, and it
+// fails with "an arm's state hash is not the one the real pipeline produces … the arm's raw
+// JSON content read has drifted from the validated loader". Restore this version and it is
+// green again. The change makes the instrument see MORE of the shipped content, not less.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -130,11 +146,17 @@ async function loadArm(dir) {
   const harness = await import(pathToFileURL(join(dir, 'harness/schedule.ts')).href);
   if (typeof harness.schedule !== 'function') throw new Error('the copied harness exports no schedule()');
   const data = (name) => JSON.parse(readFileSync(join(dir, 'packages/content/data', name), 'utf8'));
+  const optional = (name) => {
+    const path = join(dir, 'packages/content/data', name);
+    return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+  };
+  const guestRules = optional('guest-rules.json');
   const content = sim.bindContent({
     roomTypes: data('room-types.json'),
     needTypes: data('need-types.json'),
     itemTypes: data('item-types.json'),
     economy: data('economy.json'),
+    ...(guestRules === undefined ? {} : { guestRules }),
   });
   return { sim, harness, content };
 }

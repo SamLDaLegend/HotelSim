@@ -24,6 +24,7 @@ export type { Command, ScheduledCommand } from './commands.js';
 export type {
   BoundContent,
   EconomyData,
+  GuestRulesData,
   ItemTypeData,
   NeedRole,
   NeedTypeData,
@@ -31,12 +32,14 @@ export type {
   SimContent,
 } from './content.js';
 export {
+  abandonMarginOf,
   bindContent,
   demolitionRefundOf,
   findItemType,
   findNeedType,
   findRoomType,
   firstEconomy,
+  firstGuestRules,
   firstRoomTypeProviding,
   fitOf,
   hasContentId,
@@ -46,6 +49,7 @@ export {
   MAX_FIT_BASIS_POINTS,
   minConstructionCostOf,
   needTypesInOrder,
+  ONE_WHOLE_BASIS_POINTS,
   providesOf,
   requiredItemsOf,
   roomTypeProvides,
@@ -127,6 +131,7 @@ export {
 } from './guests.js';
 export type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 export {
+  abandonNeed,
   advanceNeeds,
   assertNeedOutcomes,
   assertNeedVector,
@@ -227,7 +232,12 @@ export {
   validRoomsOf,
   validRoomsProviding,
 } from './validity.js';
-export { compareProviderPreference, pressureBasisPoints } from './utility.js';
+export {
+  abandonThresholdBasisPoints,
+  compareProviderPreference,
+  MAX_PENDING_PRESSURE_BASIS_POINTS,
+  pressureBasisPoints,
+} from './utility.js';
 export type { World } from './world.js';
 export {
   assertContentMatches,

@@ -157,10 +157,11 @@ describe('the v1 fixture, through the real migration', () => {
 
   it('is still a v1 blob, and v1 is still the oldest version this build accepts', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
-    // G-007 bumped this to 3, G-008 to 4, G-011 to 5, G-012 to 6. The fixture did not
-    // move; the schema did, five times, and each time a migration carried these same bytes
-    // forward.
-    expect(SAVE_SCHEMA_VERSION).toBe(8);
+    // G-007 bumped this to 3, G-008 to 4, G-011 to 5, G-012 to 6, G-013 to 7, G-015 to 8
+    // and G-014b to 9. The fixture did not move; the schema did, seven times, and each time
+    // a migration carried these same bytes forward. The claim is the RELATION — one step per
+    // version, no gaps — not the number, which this file does not own (G-014b).
+    expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 

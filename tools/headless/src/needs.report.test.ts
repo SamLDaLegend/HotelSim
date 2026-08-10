@@ -40,11 +40,20 @@
 // ================================================================================
 
 import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { createWorld, lodgingNeedOf, run } from '@hotelsim/sim';
-import { loadContent } from './content-loader.js';
+import { afterAll, describe, expect, it } from 'vitest';
+import { createWorld, lodgingNeedOf, ONE_WHOLE_BASIS_POINTS, run } from '@hotelsim/sim';
+import {
+  loadContent,
+  ECONOMY_PATH,
+  GUEST_RULES_PATH,
+  ITEM_TYPES_PATH,
+  NEED_TYPES_PATH,
+  ROOM_TYPES_PATH,
+} from './content-loader.js';
 import {
   buildSummary,
   departuresOf,
@@ -120,22 +129,50 @@ describe('the criterion invocation prints a per-need table that measures somethi
     expect(departuresOf(summary, 'gaveUpWaiting')).toBe(0);
   });
 
-  it('has one need type met for EVERYBODY, so the table is three different stories', () => {
+  it('tells THREE DIFFERENT STORIES, which is what the criterion above needs to mean anything', () => {
     // The control. Without it, "two needs are both met and missed" could describe a table
     // in which every row is the same row.
     //
-    // THIS CLAUSE WAS BRIEFLY REPLACED AT G-014a AND IS RESTORED UNCHANGED, WHICH IS THE
-    // FINDING WORTH KEEPING. It went red during that goal — but under the build G-014a
-    // ABANDONED, in which provider fit reordered which NEED a guest pursued and the busiest
-    // need stopped saturating. The shipped build settles need order by pressure alone, this
-    // row saturates exactly as it did before, and the red was never re-taken against it.
-    // Replacing a control on the strength of a failure the shipped code does not produce is
-    // `CLAUDE.md`'s "a number you cannot re-measure paired is withdrawn, not restated",
-    // applied to a test outcome; the replacement — three distinct `met` counts — also pinned
-    // a coincidence with a margin of one guest (178, 179), which is weaker than what stood
-    // here. Re-measured on the shipped build: this passes.
-    const alwaysMet = summary.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0);
-    expect(alwaysMet.length).toBeGreaterThanOrEqual(1);
+    // ITS FORM CHANGED AT G-014b AND THE PROPERTY IT GUARDS DID NOT. READ THE HISTORY FIRST,
+    // BECAUSE THIS CLAUSE HAS BEEN CHANGED ONCE BEFORE AND THAT CHANGE WAS WRONG.
+    //
+    // The clause used to read "one engagement need is met for EVERYBODY", and it was briefly
+    // replaced at G-014a and restored — because that goal's red came from a build G-014a
+    // ABANDONED, and the shipped one saturated exactly as before. `CLAUDE.md` rule 5 applied
+    // to a test outcome: a red you cannot re-take is withdrawn, not acted on.
+    //
+    // THIS TIME THE RED IS REPRODUCIBLE, AND ITS CAUSE IS ISOLATED TO ONE CONTENT FIELD BY A
+    // TEST RATHER THAN BY THIS COMMENT. The last describe in this file runs THIS invocation
+    // against content whose only difference is a SATURATING abandon margin, and the old
+    // clause passes there unchanged. So the saturation form is neither dropped nor demoted
+    // to prose: it is alive, in this file, in the era it describes — and the shipped build
+    // failing it is asserted beside it, so the pair is the causal claim rather than a story
+    // about one.
+    //
+    // What stands HERE is the property that clause was FOR, stated directly: three
+    // engagement rows telling three different stories. It is a stronger reading than the old
+    // one, which one saturating row could satisfy while the other two were identical.
+    //
+    // AND IT IS NOT THE COINCIDENCE G-014a REJECTED. That replacement pinned two counts a
+    // single guest apart, which is why it was refused; this asserts a spread wider than the
+    // number of rows, computed rather than captured.
+    const engagement = summary.needs.filter((row) => !row.lodging);
+    expect(engagement).toHaveLength(3);
+    // THE PRIMARY CLAUSE, and the one doing the work: three engagement rows, three DIFFERENT
+    // met counts. A table in which every row is the same row cannot satisfy it.
+    expect(new Set(engagement.map((row) => row.met)).size).toBe(engagement.length);
+    // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
+    // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
+    // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is
+    // the whole of what the requirement says.
+    //
+    // IT SAID `> engagement.length` UNTIL SWEEP 1, AND THAT MIXED DENOMINATORS — rows and
+    // guests are different units, which is §4.1's own complaint, and 3 traced to nothing. The
+    // actual spread is two orders of magnitude clear of either bound, so this is a floor
+    // against a coincidence rather than a measurement of the gap; the gap itself is pinned,
+    // in guests, by `hysteresis.report.test.ts`'s three-arm table.
+    const met = engagement.map((row) => row.met).sort((a, b) => a - b);
+    expect(met[met.length - 1]! - met[0]!).toBeGreaterThan(1);
   });
 
   it('closes exactly: every row sums to the number of guests that have departed', () => {
@@ -221,8 +258,81 @@ describe('the same invocation through a real process', () => {
     // different line that also begins with "need".
     const needLines = result.stdout.split('\n').filter((line) => /^need (L| ) /.test(line));
     expect(needLines).toHaveLength((content.content.needTypes ?? []).length);
-    for (const line of needLines) expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\)$/);
+    for (const line of needLines) {
+      expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\), \d+ abandoned$/);
+    }
     // Exactly one row is marked as the lodging need.
     expect(needLines.filter((line) => line.startsWith('need L'))).toHaveLength(1);
   }, 60_000);
+});
+
+// ============================================================================
+//  THE OLD CONTROL, ALIVE IN THE ERA IT DESCRIBES (G-014b).
+//
+//  "One engagement need is met for EVERYBODY" stopped being true of the shipped build when
+//  the hysteresis margin landed. Deleting it and writing the reason in a comment would be a
+//  claim nothing pins — ADR-0007's amendment, and the shape this project has been caught by
+//  four times. So it runs, at THIS criterion's own invocation, against content whose only
+//  difference from the shipped table is `abandonMarginBasisPoints`.
+//
+//  THAT IS ALSO THE WHOLE CAUSAL CLAIM, EXECUTED. "The red is caused by the margin and by
+//  nothing else" is exactly "the same invocation, one integer changed, and the old clause
+//  passes again".
+// ============================================================================
+describe('and the old control still holds under a SATURATING margin — the era before this goal', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hotelsim-needs-era-'));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH]) {
+    copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
+  }
+  const rules = JSON.parse(readFileSync(GUEST_RULES_PATH, 'utf8')) as {
+    abandonMarginBasisPoints: number;
+  }[];
+  writeFileSync(
+    join(dir, 'guest-rules.json'),
+    `${JSON.stringify(
+      rules.map((entry) => ({ ...entry, abandonMarginBasisPoints: ONE_WHOLE_BASIS_POINTS })),
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+
+  const era = ((): RunSummary => {
+    const result = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', CLI, ...CRITERION, '--content', dir, '--json'],
+      { cwd: ROOT, env: { ...process.env, NODE_NO_WARNINGS: '1' }, encoding: 'utf8' },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    return JSON.parse(result.stdout) as RunSummary;
+  })();
+
+  it('has one engagement need met for EVERYBODY, exactly as it did before the margin', () => {
+    const alwaysMet = era.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0);
+    expect(alwaysMet.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('and it abandons nothing, which is what "the era before this goal" means', () => {
+    expect(era.needs.reduce((total, row) => total + row.abandoned, 0)).toBe(0);
+  });
+
+  /** The same invocation under the SHIPPED content, in process. */
+  const shipped = runInProcess(CRITERION).summary;
+
+  it('and the SHIPPED build does NOT satisfy it, so the two arms really do differ', () => {
+    // The other half of the causal claim. Without this the era arm would pass just as
+    // happily on a build that never shipped a margin at all.
+    const alwaysMet = shipped.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0);
+    expect(alwaysMet).toHaveLength(0);
+  });
+
+  it('and G-012 OWN CRITERION holds in BOTH eras, which is the thing that must not break', () => {
+    // The goal block makes a break here an escalation trigger rather than a licence to edit
+    // an earlier goal's criterion. It does not break: two need types straddle met-and-unmet
+    // under the margin and under total commitment alike.
+    for (const arm of [era, shipped]) {
+      expect(arm.needs.filter((row) => row.met > 0 && row.unmet > 0).length).toBeGreaterThanOrEqual(2);
+    }
+  });
 });
