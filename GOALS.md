@@ -2239,7 +2239,34 @@ Exit criteria:
     `pnpm test`; they run as a standalone check beside `check:tickcost`, which is the human's
     own precedent for this shape (*"a gate wearing vitest's clothes"*, 2026-08-09)
   - **the discriminating measurement**: `needs.scaling.test.ts`'s need-vector ratio at HEAD
-    against a **pre-G-013** revision, paired and interleaved, **quiet and loaded, both stated**
+    against a **pre-G-013** revision, paired and interleaved, **quiet and loaded, both stated**.
+    **ITS EFFECT CLASS IS PRE-REGISTERED AND IT IS A MULTIPLE, NOT A DRIFT (BLOCKER 1, §5.6).**
+    `sim-critic` measured the instrument's own spread at the planned sample size — n=7,
+    alternated, quiet, `win32/12cpu` — and it is **+19%/-14% about the median**, so a ratio of
+    two such medians resolves **~12% at 2σ**. The effect this criterion was written to detect
+    is **1.7%** (the recorded 1.74 against the ~1.77 measured). **The campaign as first
+    specified was seven times too small and would have returned "indistinguishable" whatever
+    was true** — a criterion satisfiable by every outcome, ADR-0007's class one level up.
+    **So: this criterion tests for a `>= 1.3x` MULTIPLE**, which `tripwire.mjs:51-63` already
+    establishes is the only class this project has ever produced, and **a drift is BELOW ITS
+    RESOLUTION AND IS SAID SO IN THE REPORT.** n>=7 is ample for that question and hopeless
+    for the other.
+  - **BOTH REVISIONS RUN THE 3-ARM ROTATION** — the one that exists at both. HEAD interleaves
+    four arms, `aa30218` three, and interleaved arms share one process's heap, GC and JIT, so
+    **an arm-set change is a workload change to the arms that remain**: `sim-critic` measured
+    **10.5% between the two rotations at the median in one alternated sitting.** The
+    denominator moved too — HEAD's `lodgingOnly` filters `itemTypes` and drops
+    `fitBasisPoints`; `aa30218`'s does neither. A ratio of ratios divides out machine speed; it
+    does **not** divide out a control arm that changed. The shipped 4-arm reading is a
+    **different quantity** and the report says so.
+  - **PER-ARM MODULE IDENTITY IS ASSERTED, NOT ASSUMED.** pnpm's workspace links are
+    **absolute** into this checkout, so copying `node_modules` into the extracted tree makes
+    the "pre-G-013 arm" import **HEAD's simulation** under `aa30218`'s harness — a plausible
+    number and no error. `pnpm install --offline` avoids it (verified: 99 packages, 0
+    downloaded, lockfile byte-identical between the revisions). Resolve `@hotelsim/sim` in the
+    child, assert the realpath is inside that arm's own tree, and cross-check the state hash
+    against that revision's own CLI. `measure.mjs` is the precedent — it fails on "a module
+    resolved outside its arm".
   - ~~**the CI regime, read off a real run rather than argued**~~ — **STRUCK 2026-08-10 AND
     OWED BY THE HUMAN. There is no remote; CI has never run.** Restated as an M2-exit
     condition: add a remote, push, and record the first three `TICKCOST` lines and
@@ -2248,8 +2275,38 @@ Exit criteria:
     there, that is a §2.0 finding about the gate, NOT a licence to widen it (§9).** In its
     place, this goal owes only that `tripwire.mjs` states the limitation at the point of
     use — which it already does, more correctly than its author knew.
+  - **THE BOUND IS RE-DERIVED ABOVE THE OBSERVED QUIET MAXIMUM. RELOCATION ALONE DOES NOT
+    DISCHARGE THIS (BLOCKER 2, §5.6).** Criteria 2 and 5 only connect if defect A is a
+    contention artefact, **and it is not.** `sim-critic` measured the shipped test isolated,
+    one fresh process per run, **n=10, QUIET**, on a clean extraction of HEAD: **9 × exit 0,
+    1 × exit 1 — "expected 2.653418174841722 to be less than 2.5".** Its independent tsx probe
+    produced **2.5903** in the same conditions. **Two harnesses, two exceedances of
+    `BOUND = 2.5`, neither under load.** So the assertion does not stop flaking when it leaves
+    the parallel runner — it flakes in `check:scaling` instead, and the count would go from
+    "one gate carrying two defects" to "one gate carrying one defect plus a new unreliable
+    check". **This also falsifies two live sentences harder than this block first stated**:
+    `needs.scaling.test.ts:160-162`'s *"anything up to ~2.0 is this spread and the machine"*
+    (quiet readings reach **2.65**) and `:230-231`'s *"load can only push the reading down,
+    never up"*, offered as the reason the bound is flake-proof — **not the mechanism here at
+    all.**
+  - **THE BOUND'S TWO CONSTRAINTS GET AN EXECUTABLE BRAKE AND A PRE-REGISTERED CROSSING
+    RESPONSE.** `BOUND <= trunc(median × 1.5)` is correct and ADR-0015 does not displace it —
+    `DECISIONS.md:733-737` names 1.74/1.281/4.2 as **signals**, for which G-010's ×1.5 holds,
+    and reserves the geometric rule for a noise floor. But: **they can cross, by six parts in
+    ten thousand on the repo's own recorded median** (ceiling 2.6550 against the quiet maximum
+    2.6534), so **the goal block must say which campaign supplies the median** — ONE stated
+    regime for the signal, every observed regime for the max, and **taking the median from the
+    loaded arm to widen the window is the regime-mixing this goal exists to stop.** And the
+    floor is **monotone non-decreasing**, i.e. the same ratchet `tripwire.mjs:384-402` ships
+    `MAX_NOISE_CEILING` against — **port that shape: a limit derived from figures already in
+    the file, refusing in code, never in prose.** `tripwire.mjs:353-366` records what happened
+    the last time that clause was prose: a 106% "noise" ceiling shipped green.
   - the count of unreliable gates in every digest reaches **0**, and §2.0's guard is satisfied
-  - all §2 invariant gates green (pnpm verify)
+  - all §2 invariant gates green (`pnpm verify`, **eleven rows**), plus the unmoved-reading
+    set — **I2 `10926cc3b569c887`**, `SAVE_V1_CONTENT` `8e09fe4f0fa162a3`, save v9, `BUDGET_MS`
+    389,333ms. G-021's block carries these and this one did not: extracting arms reaches
+    `report.ts`'s `schedule()`, which is where the determinism log's command stream comes from,
+    so **a green `test:determinism` would not by itself say the hash held.**
 Out of scope: optimising anything the discriminating measurement finds — if a real per-need
   regression exists, fixing it is its own goal  (-> PARKING.md)
 Critique rounds used: 0/3
@@ -2284,6 +2341,46 @@ Critique rounds used: 0/3
   4. **`verify` GOING TO ELEVEN ROWS IS ACCEPTED** and follows from the human's own ruling that
      a timing bound is "a gate wearing vitest's clothes". The closing line still says six
      invariants; **minting a seventh remains a human call** (§9).
+
+  5. **CAMPAIGN 1 RUNS AFTER THE RELOCATION, AND ITS CLASSIFIER GETS A FOURTH CELL.** Defect A
+     fires at ~8% isolated and ~33% in-suite, so run before relocation it lands as
+     `exit 1, >=1 failed`, the classifier calls it "not B", and the sample is spent diagnosing
+     a suite that is not the one whose cap is being decided. After relocation A cannot fire
+     inside `pnpm test` at all. **And the triple partitions three cells of a four-cell space:
+     `exit 1 / 0 failed / no such string` is exactly what the G-016 diagnosis missed, one level
+     out.** An explicit **UNCLASSIFIED** bucket is REPORTED, never folded into "not B" — a rate
+     computed over a partition that does not cover the space reads clean because the classifier
+     could not see the event. **Capture the full output of every run**, because re-running a
+     30-45 minute campaign for a third class is the expensive failure. And note where the
+     classifier lives that **the string is a vitest internal**: a version bump silently
+     reclassifies every run as UNCLASSIFIED.
+  6. **THE STOPWATCH SCAN ALLOW-LISTS MATCHED LINES, NOT FILENAMES** — filename exemption is
+     the rot, as I said, and the stated reason for this one is **measurably wrong**:
+     `bench.budget.test.ts:289-299` spawns a real copied `bench.mjs` with `BUDGET_MS = 0` and
+     asserts exit 1, so it **executes a gate** rather than only pinning source text. (The
+     exemption is still right — a zero budget fails at any elapsed time, so it cannot flake —
+     but a maintainer reasoning from the wrong reason will exempt the wrong thing.) All three
+     of its matches are inside one regex literal and two string searches; **exempt those exact
+     texts, so a genuine `process.hrtime.bigint()` added there tomorrow is a new unexempted
+     match and goes red.** Reuse `speed-ladder.scan.test.ts`'s per-root counting and
+     bites-on-synthetic-source shape rather than re-deriving it, and **derive the file set from
+     `vitest.config.ts`'s actual `include`/`exclude`** or the scan and the runner can disagree
+     about what "in the suite" means.
+  7. **WHAT MOVES AND WHAT STAYS, because "move the timing assertions" is not precise enough.**
+     The measurement runs in the `describe` **body**, so the file runs a stopwatch even for its
+     non-timing tests. **STAY in `pnpm test`**: the arms-really-differ-in-need-count assertion
+     (pure content) and the dense-arm-really-has-more-providers assertion (two full sims, no
+     stopwatch, and the behavioural anti-vacuity floor). **LEAVE WITH THE BOUND**:
+     `NOT_OVERHEAD_DOMINATED`, which is itself a timing assertion and is ADR-0007's guard on
+     the ratio — leave it behind and a timing bound stays in `pnpm test` **with the scan
+     green.** `scaling.test.ts` has no non-timing assertions and moves wholesale.
+  8. **TWO CITATIONS IN THIS BLOCK WERE WRONG AND ARE FIXED.** The `measure-arm.mjs` pointer
+     read `:74-80`, which is the guest-rules header; the noise floor is at **`:92`** and
+     **`:96`**, and there is a **third occurrence at `:109`** this block never named. §5.8's
+     guard is that a location can be re-inspected — a wrong one cannot. Also:
+     `vitest.config.ts:39`'s *"THE CAUSE: `measure.instrument.test.ts`"* **is the conflation
+     `72ae268` retracted, still standing in the file the cap lives in** — the correction went
+     into `ESCALATIONS.md` and left its twin in the config. In scope by criterion 1.
 
   **WHY BOTH, IN ONE GOAL.** They are distinct defects with distinct signatures — one names a
   failing test, the other has none at all — and `ESCALATIONS.md` carries both. But **they need
