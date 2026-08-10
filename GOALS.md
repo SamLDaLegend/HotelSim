@@ -10,7 +10,9 @@
   UNRELIABLE (§2.0), 2 defects.** All ten green ×2 at G-014b VERIFY.
 - **Tripwire**: `BOUND 1.4557 = sqrt(1.0238 × 2.07)`, arm **30 days**, ADR-0015. G-014b read
   **1.0416–1.0977 over nine pairs**, all inside. **Quiet `win32/12cpu`; CI unmeasured** — G-020c's.
-- **Order**: G-019 → G-021 → G-020c → M2 exit. **G-019 is last — two critics.**
+- **Order**: G-021 → G-020c → **G-019 LAST, two critics** → M2 exit. *Reordered at G-014b
+  REFLECT so "last in milestone" stays true — and on merit: G-020c repairs I4 before the
+  final goal runs against it, G-021 makes the ladder content before G-019 watches a run.*
 - **Owed by the human**: M2 exit sign-off — the digest experiment scored **both ways** (four
   failures logged, newest the worst), the unreliable count **with its noun**, and the bimodal
   recording **watched, not made** — now G-019's criterion 6, so it lands as a deliverable.
@@ -2311,7 +2313,7 @@ Critique rounds used: 0/3
   goal retakes it in the same campaign. The two obligations share a measurement.
 
 ## G-021 — The speed ladder is content
-Status: pending — **before M5 tunes anything against it**
+Status: **in-progress** — PLAN dispatched 2026-08-10. **Before M5 tunes anything against it.**
 Milestone: M2
 Owner pair: sim-engineer / sim-critic
 Statement: The play-speed ladder — ticks per real second at each rung — is JSON in
