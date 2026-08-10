@@ -1464,7 +1464,10 @@ Critique rounds used: 0/3
   2. **CRITERION 2 GAINS A NEGATIVE CONTROL.** "Three distinct scores" is a measurement only
      if some configuration yields fewer: `--rooms 6 --amenities 0` yields **one**. Without it
      the number 3 is a constant.
-  3. **THE SCALE'S SIZE IS DERIVED, NOT CHOSEN, AND THE DERIVATION IS ONE INEQUALITY.** A top
+  3. **THE SCALE'S SIZE IS DERIVED, NOT CHOSEN — AND THE INEQUALITY BELOW IS WRONG. SEE
+     RULING 7, WHICH SUPERSEDES IT.** Corrected in place rather than appended beside, because
+     `balance-critic` found the superseded form still standing here after the build had already
+     removed the field it describes — a reader of this block would have re-introduced it. A top
      review must be unreachable while any need is unmet; with uniform weights that holds
      **exactly when `bands > needTypes`**. Shipped: 1..5 against 4 need types. **It is
      refused at bind time**, so content whose review scale cannot express its own need table
@@ -1489,6 +1492,75 @@ Critique rounds used: 0/3
   6. **I2's HASH WILL MOVE** — a new `World` field and new content. The builder reports the
      new value; that is expected, not a regression, and the unmoved set to check is
      `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` and the v1 fixture's zero-line diff.
+
+  **§5.6 RULINGS 7-12 — `balance-critic` returned PROCEED with 1 BLOCKER + 5 MAJOR, every one
+  carrying a measurement from 1000-day runs across twelve configurations. Its verdict on scope:
+  *"the risk in this goal is not size. It is that four of the five criteria are satisfied by
+  distributions that are point masses, and one term of the design is pinned by nothing."***
+
+  7. **THE BAND DERIVATION IS WRONG AS RULING 3 STATES IT. `bands > needTypes` USES THREE
+     SYMBOLS AND CONSTRAINS TWO.** Counter-example that passes bind time: **min 1, max 5,
+     bands 8, needTypes 4** — a guest meeting 2 of 4 needs scores `1 + floor(0.5 x 8) = 5 =
+     max`, **a top review with half the need vector unmet**, which is exactly what the
+     inequality exists to forbid. **The property holds iff `(max - min) >= needTypes`**, i.e.
+     `bands` is DERIVED as `max - min + 1` rather than authored. Shipped: two integers on disk,
+     `bands` derived, so the 1/5/8 document **cannot be written**. The shipped scale sits
+     exactly on the boundary (5 - 1 = 4 = 4 needs), so **a fifth need type refuses all content
+     until the scale widens** — intended, and nobody would guess it from ruling 3's wording.
+  8. **THE EVICTION FLOOR STAYS AND ITS JUSTIFICATION IS REPLACED.** The money-loop argument
+     was **wrong**: evicting forfeits the guest's 8,500p stay and refunds 5,000bp of a
+     250,000p build, so "let them in, demolish, refund" already **burns 133,500p per guest**
+     before any review is written. The one place demolition pays is the free `--rooms N`
+     seeded stock — ADR-0013 §5's scenario-capital contamination, **an M4 prerequisite with
+     its own owner, not something the review scale should be defending against.** The honest
+     justification, and the one written in the code: **an eviction scores the HOTEL'S CONDUCT,
+     not the guest's experience.** Its cost is pinned as a test rather than hidden: an evicted
+     guest meeting three of four needs scores 1, while a gave-up guest meeting one scores 2.
+  9. **THE TOP-BAND SHARE IS NON-MONOTONE IN ROOM COUNT AND PEAKS AT THE SHIPPED DEFAULT.
+     RECORDED AS A MEASURED PROPERTY AND PARKED, NOT PATCHED.** 1000 days, seed 7,
+     `--amenities 1`:
+
+     | rooms | five-star share | mean |
+     |---|---|---|
+     | 1 | **25.00%** | 2.750 |
+     | **3 — `HOTEL_ROOMS`, the default** | **41.66%** | 3.583 |
+     | 6 | **0.01%** | 4.000 |
+     | 12 | **0.01%** | 4.000 |
+
+     **Building from 3 rooms to 6 destroys 41.65 points of five-star share while raising the
+     mean.** A queueing guest completes its engagement needs while it waits, and the queue
+     costs it nothing below 145 of 180 patience ticks. **THE MEAN IS MONOTONE**, so this is a
+     constraint on M4 rather than a defect in what ships here: **a reputation term reading the
+     MEAN is safe; one reading share-of-top-reviews inverts the build loop at the
+     configuration a player starts in.** Parked with its falsification test, and the parked
+     item must say **which statistic M4 may read** — ruling 4's hypothesis does not cover this,
+     because it asks only whether the top score is modal under high amenity density.
+  10. **ONE INTEGER DIVISION, NOT TWO.** `floor(sum/needCount)` then
+     `floor(x*bands/ONE_WHOLE)` is not `floor(sum*bands/(needCount*ONE_WHOLE))` unless
+     `ONE_WHOLE % bands == 0`. Shipped bands 5 divides 10,000, so no bite today — **but the
+     scale is content.** Counter-example, shipped as a test: min 1, max 3, bands 3, needTypes
+     2, lodging-only with waitShare 3333 → **score 1 two-step, score 2 one-step. A whole
+     band, from a rounding step nobody would look for.**
+  11. **THE REVIEW STORE FOLLOWS THE `needOutcomes` IDIOM** — sparse rows, created on first
+     use, ascending and unique, empty by default. `assertWorldShape` is content-free by
+     construction and the review scale is CONTENT, so a fixed-length table indexed by the
+     scale has no content-free shape check available at load. **And `buildSummary` states that
+     law B is FALSE of a legitimately migrated v9 world carrying evictions** — latent because
+     nothing builds a summary from a loaded save, but every other law there carries its own
+     why-this-cannot-fire paragraph and this one's would otherwise be weaker.
+  12. **THE SATURATION PARKING GAINS ITS COST SIDE.** `balance-critic` does **not** read the
+     `--amenities 5` saturation as a dominant strategy, and said so with pennies rather than an
+     opinion: the top band costs **22,500,000p per 1000 days at `--rooms 6` — 22.1% of room
+     revenue** — against **4,500,000p (4.4%)** for the two bands `--amenities 1` buys. **The
+     last band costs 4x the first two, so the ladder already has diminishing returns priced
+     in.** My ruling 4 stands, now with its numbers, and those numbers belong in the parked
+     hypothesis because "the configuration a player can afford" is not decidable at M4 without
+     the cost side.
+
+  **AND THE REJECTED `satisfyTicks` WEIGHTING WAS REJECTED FOR A STRONGER REASON THAN THE
+  BUILDER GAVE.** Under it, **every one of the three engagement-need flips leaves the top band
+  intact** — entertainment 0.844, comfort 0.844, nourishment 0.813, all clearing the 0.800
+  threshold. Not just `guest_entertainment`: all three.
 
   **THE HEADLINE CRITERION CANNOT DETECT WHAT IT CLAIMS — HUMAN FINDING, 2026-08-09,
   BEFORE PLAN. Read this before designing the review function.**
