@@ -2318,17 +2318,65 @@ Milestone: M2
 Owner pair: sim-engineer / sim-critic
 Statement: The play-speed ladder — ticks per real second at each rung — is JSON in
   `packages/content` validated by a schema, not a constant in code.
-Exit criteria:
-  - `pnpm check:content` green with the ladder as content; no ticks-per-second literal in
-    `packages/sim` or `tools/`
-  - `tools/gates/bench.mjs` derives I5's budget from the content ladder rather than a
-    local constant, and `bench.budget.test.ts` still ties the two together
-  - changing a rung in JSON changes the derived budget with **no code edit**, proven by a
-    test that loads an alternative ladder
-  - all §2 invariant gates green (pnpm verify)
+Exit criteria — **REWRITTEN 2026-08-10 after `sim-engineer` found all three defective at
+PLAN (§5.7). The originals are struck, not deleted, because the pattern is the finding.**
+
+  - ~~`pnpm check:content` green with the ladder as content~~ — **VACUOUS: green at HEAD, and
+    green if this goal ships nothing.** Verified by the orchestrator. ADR-0007's sixth
+    amendment, in exit criteria, **for the second consecutive goal.** Replaced by:
+    **`pnpm exec vitest run speed-ladder` green**, including a scan of `packages/sim/src`
+    and `tools/` finding **zero** speed literals, shown to bite on a synthetic one, and
+    **RED at HEAD with the reading recorded.** `check:content` stays as a named guard row,
+    never as evidence.
+  - **…and the second clause of that criterion is FALSE TODAY, which nothing could see.**
+    `tools/viewer/viewer.js:551` holds `const SPEEDS = [1, 5, 30, 120]` — a ticks-per-second
+    ladder in code, containing the **dead 1× the human killed** and a 120 the ruling does not
+    contain, **inside the very instrument whose watching produced the ruling**, under a
+    comment naming itself the discharge point. The scan above is what makes this a
+    measurement rather than a sentence.
+  - ~~`tools/gates/bench.mjs` derives I5's budget~~ — **WRONG FILE, and following it would
+    UNDO a critique fix.** `bench.mjs` deliberately derives nothing; `sim-critic` split the
+    arithmetic into `budget.mjs` at G-018 round 1 so it could be pinned. Verified: the
+    constant lives at `budget.mjs:39`, and `bench.mjs` only imports `BUDGET_MS`. Replaced by:
+    **`tools/gates/budget.mjs` derives `TOP_SPEED_TICKS_PER_SECOND` from the content ladder**
+    rather than a local constant, and `bench.budget.test.ts` still ties every copy together.
+  - changing a rung in JSON changes the derived budget with **no code edit**, proven against
+    a **byte-identical copy of the shipped module (`sha256` asserted equal)**, with a
+    **control** arm at the shipped ladder, arms in **both directions** (×2 halves, ÷2
+    doubles), an **order** arm (fastest rung written last, pinning `max` not `[0]`), and a
+    **malformed** arm that must **throw rather than fall back**. Each arm also asserts
+    `BUDGET_MS > 0` and that `TOP_SPEED` itself moved — **the ×2 relation is preserved by
+    zero**, which the builder caught in its own first draft.
+  - all §2 invariant gates green (`pnpm verify` — **ten rows**), plus the unmoved-reading
+    set: I2 `10926cc3b569c887`, `SAVE_V1_CONTENT` `8e09fe4f0fa162a3`, save v9, fixture
+    zero-line diff, `BUDGET_MS` 389,333ms.
 Out of scope: choosing the final rung values (that is a balance question the viewer
   informs); speed-control UI (M5)
 Critique rounds used: 0/3
+
+  **ORCHESTRATOR RULINGS AT PLAN, 2026-08-10.**
+
+  1. **THE SEAM IS THE VIEWER, AND IT IS NOT TAKEN.** `sim-engineer` named it (move
+     `viewer.js`'s ladder to a separate G-021b) and recommended against, and I concur:
+     the wire already exists (`serve.mjs:39` serves `/content/`), it is ~12 lines, and it is
+     **the only place in the repo where "labels travel with the values" is load-bearing
+     rather than anticipated.** Shipping "the speed ladder is content" while
+     `const SPEEDS = [1, 5, 30, 120]` stays in `tools/` would ship a known instance of the
+     class the goal exists to remove. **Scored at REFLECT** — the builder's stated cost of
+     NOT splitting: *one extra file in the critic's sweep with no new invariant surface.*
+  2. **THE BUDGET DOES NOT MOVE, AND THAT IS THE GOAL'S CENTRAL RISK — STATED BY THE BUILDER
+     BEFORE IT BUILT.** `max{30, 12, 5} = 30`, the incumbent constant, so `BUDGET_MS` stays
+     389,333ms and **no gate reading discriminates a working feature from a decorative one.**
+     Criterion 3's probe is the only discriminator in the goal. That is why its control and
+     malformed arms matter more than its headline arm.
+  3. **THE CHARTER IS MINE TO EDIT.** §2's I5 row and §2.1.1's "PROVISIONAL WORKING FIGURE"
+     framing both become false on landing. The builder hands me exact text; **I apply it in
+     the same commit** so the charter is never false in a committed state. The builder owns
+     the comment corrections in `budget.mjs`, `bench.mjs` and `viewer.js`.
+  4. **A NEAR-MISS WORTH KEEPING.** The obvious enforcement — *"no rung may be an integer
+     multiple of another"* — **would reject the human's own ladder**: 30 = 6 × 5. The
+     enforcement has to constrain the **format and the consumers**, never the designer's
+     values.
 
   **THE LADDER'S SHAPE, RULED 2026-08-09 AFTER WATCHING — and it is NOT a linear ramp.**
 
