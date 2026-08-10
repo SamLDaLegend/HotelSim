@@ -1379,8 +1379,17 @@ Statement: A departing guest leaves an integer review derived from its own recor
   its stay was cut short. The review is recorded and reported; nothing reads it.
 Exit criteria:
   - pnpm exec vitest run review  (all green)
-  - pnpm sim:run --days 30 --seed 7 --rooms 6  prints a review distribution with at least
-    THREE distinct scores non-zero
+  - **CRITERION 2, REPLACED — THE ORIGINAL WAS DISCHARGED BY TWO GUESTS (BLOCKER, §5.6).**
+    `balance-critic` measured `--rooms 6 --amenities 1 --seed 7` at 10/30/100/365/1000 days:
+    the distribution is `3:1, 4:N, 5:1` at **every** run length. **The only 5 is guest #2 and
+    the only 3 is guest #9 — both opening transients — and every guest from #10 to #12,000
+    scores exactly 4.** So "three distinct scores non-zero" **cannot distinguish this goal's
+    review function from one that returns a constant after the first simulated day**, and the
+    negative control I added does not rescue it: it shows only that 1 ≠ 3, where the 3 is
+    1 + 11,994 + 1. **Replaced by the configuration the WATCH criterion already mandates**:
+    `--days 30 --seed 7 --rooms 6 --arrivals 60`, measured at **`1:126, 2:316, 3:265, 4:4`
+    over 711 departures** — a real spread at no extra cost. **State a minimum SHARE per named
+    score, not "non-zero"**, so a distribution of point masses cannot satisfy it.
   - **AXIS 1 — LODGING.** --rooms 1 and --rooms 12 produce review distributions whose means
     differ by more than <n>, COMPUTED BY THE TEST rather than asserted.
     **TWO FACTS ABOUT THIS AXIS, MEASURED BY `ai-engineer` AT PLAN AND RE-VERIFIED BY THE
@@ -1411,6 +1420,23 @@ Exit criteria:
     where nothing executes it. WITHOUT AXIS 2, AXIS 1 PASSES GREEN ON A REVIEW FUNCTION THAT
     READS ONLY `night_rest`** and three-quarters of the need vector contributes nothing.
   - no sim module reads the review store — the boundary made mechanical, not documented
+  - **THE LODGING WAIT TERM IS PINNED BY A CONFIGURATION THAT MOVES IT (MAJOR, §5.6).**
+    **Deleting the wait term leaves every criterion in the original list byte-identical** —
+    `balance-critic` scored with and without it across (6,0), (6,1), (6,5), (1,1), (12,1) at
+    30, 365 and 1000 days: **guests whose band the term moved: zero, everywhere.** A satisfied
+    guest must wait ≥145 of 180 patience ticks to lose a band, and waits are quantised by the
+    arrival cadence to 0, 120 or 160. **The one part of the review that is not "count the
+    needs" was pinned by nothing** — in the goal whose §5.8 ruling reports two *other* unpinned
+    criteria. `--rooms 6 --arrivals 60` moves **528 of 711** guests' bands and is now in the
+    criteria, so the term is measured or it comes out.
+  - **THE EVICTION ARM IS NAMED, BECAUSE REPORT LAW B OTHERWISE INSPECTS NOTHING (MAJOR).**
+    Evictions are **0 in all five criterion configurations and in all twelve of the 1000-day
+    sweep**; `--build`/`--demolish` appear in no criterion. ADR-0007 requires reaching the
+    check from the real path *and* a case proving it can fail. Arm, measured:
+    `--days 30 --rooms 6 --amenities 5 --arrivals 60 --demolish 900` → **5 evictions, 5 floor
+    reviews.** (Law A is fine by contrast: it folds a min over every need row and bites hard
+    at `--rooms 1 --amenities 1`, where 89 maximal reviews sit against a minimum row of
+    exactly 89 — equality, at 30 days.)
   - **A WATCH ENTRY IN `JOURNAL.md` FROM THE BIMODAL RECORDING, ~6 rooms and ~24
     arrivals/day** — a human sees a guest succeed AND a guest fail in the same run. This is
     one criterion doing two jobs deliberately: G-019 needs both outcomes visible, and M2
