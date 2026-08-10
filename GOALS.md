@@ -1371,7 +1371,7 @@ Critique rounds used: 0/3
   `M = 6000` the guest abandons after 90 ticks carrying 90 of 180 progress.
 
 ## G-019 — Reviews, and a hotel that reviews differently from a bad one
-Status: pending
+Status: **in-progress** — PLAN dispatched 2026-08-10. **LAST GOAL IN M2.**
 Milestone: M2 — **LAST GOAL IN THE MILESTONE**
 Owner pair: ai-engineer / **balance-critic** · second critic `ai-critic` (§7.1)
 Statement: A departing guest leaves an integer review derived from its own recorded
