@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-021 done. M2: 11 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
 
 - **143 items across 19 goals.** G-020b added four, G-014b five, **each with its falsification
   test attached** (§4). **G-020a's zero is discharged**; the §9 warning stands for next time.
@@ -843,14 +843,18 @@ Raised by `ai-engineer` at PLAN and BUILD, and deliberately kept out of the diff
   re-measuring — but the first goal to re-size this workload should close both halves at
   once, and should expect the reading to rise several-fold when it does. Recorded in
   `HOTELSIM.md` §2.1.3 and in `bench.mjs` so it cannot be discovered a third time.
-- **THE DENSITY RATIO COMPRESSES UNDER LOAD, so the new scaling criterion is weaker in CI
-  than in isolation.** Measured 1.274-1.411 in an isolated process, 1.094-1.243 with the file
-  alone, 1.003-1.172 under the full parallel suite — contention adds the same ABSOLUTE cost to
-  both arms and pulls every ratio towards 1. The bound is therefore flake-proof (load can only
-  push the reading down) and the criterion is LESS sensitive under load. Recorded rather than
-  glossed; a reader seeing only the isolated numbers would over-read a green tick. The general
-  problem — timing criteria that measure less in the environment they run in — has no fix in
-  this diff. -> **a gate goal**, when one exists.
+- ~~**THE DENSITY RATIO COMPRESSES UNDER LOAD, so the new scaling criterion is weaker in CI
+  than in isolation.**~~ **DISCHARGED AND HALF-FALSIFIED AT G-020c — this was the gate goal.**
+  The observation held for the axis it was taken on and **not** as the generalisation it was
+  written as. Re-measured on all four axes, one instrument, quiet (n=12) against 12 busy
+  processes on 12 cores (n=8), `win32/12cpu`: **three of four axes move UP on the median and
+  three of four move UP on the max** — `needs` 2.0757 → 2.1636 median and 2.5906 → 2.9733 max,
+  `rooms-bench` 3.0746 → 3.8136 median. Only `density` — the axis the note was written about —
+  compresses on the tail (1.6154 → 1.5619). The original figures (1.274-1.411 isolated,
+  1.003-1.172 in-suite) were taken inside vitest's parallel workers, which no longer runs any
+  timing bound. **What replaced it**: `tools/gates/scaling-bound.mjs` places every bound above
+  the worst reading observed in EVERY regime, so the bound rests on what load was seen doing
+  rather than on a model of what it ought to do.
 - **`release` AT STEP 2 OF `stepGuests` IS UNOBSERVABLE, AND WILL STOP BEING SO.** Deleting it
   leaves the whole suite green, because that site fires exactly when the provider has stopped
   providing: `freed` is null, so nothing is un-marked, and the id it removes from `held` is one
@@ -1249,3 +1253,93 @@ changed one constant, its derivation, and the records that quoted it.
   ruling actually names. **FALSIFICATION TEST**: when `apps/game` exists, add it to
   `speed-ladder.scan.test.ts`'s roots; the test that the scan bites is a synthetic source
   computing that ratio, which must produce a violation. **-> M5.**
+
+## Deferred during G-020c — the two unreliable-gate defects (2026-08-10)
+
+- **A SHIPPED PROOF-OF-BITE GATE FOR `check:scaling`** (`check:scaling:proof`, a
+  `check-tripwire.mjs` sibling). **The seam the orchestrator TOOK at PLAN** — a third ~600-line
+  proof harness is what would have made this goal unsweepable, and G-020b's proof harness took a
+  round to get right and shipped a hand-typed count in the file built to hunt hand-typed counts.
+  What exists instead: `scaling.bound.test.ts` pins the arithmetic and nudges a reading to watch
+  the bound move, and the bite was witnessed ONCE at VERIFY with the stash recipe.
+  **FALSIFICATION TEST**: apply G-020b's M1 quadratic to `guests.ts` and run `pnpm check:scaling`
+  at n>=3. *If it reddens every time, the witnessed run generalises and a shipped proof gate buys
+  only regression protection for the probe itself; if it reddens intermittently, the gate's
+  sensitivity is below its bound and that is a §2.0 finding about `check:scaling`.*
+- **THE `needs` AXIS HAS THE THINNEST MARGIN IN THE REPO — 1.0472x over the worst reading
+  observed in any regime**, against 1.25-1.35x for the other three. It is inside its two
+  constraints and it is the axis most likely to produce the next false red.
+  **FALSIFICATION TEST**: run `pnpm check:scaling` n>=20 quiet and count reds. *If the rate is
+  zero, the 1.2018x QUIET margin is the one that governs and the pooled figure is conservative;
+  if it is non-zero, the instrument needs more samples per reading and the campaign must be
+  RE-TAKEN at the new sample count (never pooled — ADR-0015).*
+- **THE THREE-ARM AND FOUR-ARM NEED ROTATIONS ARE DIFFERENT QUANTITIES, AND NOBODY HAS
+  MEASURED THE GAP ON THIS INSTRUMENT.** `sim-critic` measured 10.5% between them at the median
+  in one alternated sitting; this goal took the ruling and ran both revisions on the three-arm
+  rotation rather than re-deriving the gap. **FALSIFICATION TEST**: alternate
+  `--rotation needs` and `--rotation needs3` in one sitting, n>=9 each, and compare the `needs`
+  ratio. *If the gap is under this instrument's ~12% resolution, the rotations are
+  interchangeable for this axis and `check:scaling` could drop an arm; if it is above, every
+  cross-rotation comparison in this repo needs the rotation named beside the number.*
+- **`stripComments`'s REGEX-LITERAL BLIND SPOT, NOW OBSERVED TWICE.** A quote inside a regex
+  literal opens a string span that never closes, and the shared copy at
+  `tools/gates/lib/scan.mjs:41` sits behind I1, I2 and I3. G-021 parked it; G-020c hit it in a
+  new file within one goal. Still parked, and the reason is unchanged and worth restating: the
+  failure direction is a LOUD FALSE POSITIVE — comments survive stripping and a gate fires on
+  its own prose — so nothing is silently omitted from what those gates inspect.
+  **FALSIFICATION TEST**: add `const p = /'[^']+'/g;` to a file under `packages/sim/src` and run
+  `pnpm check:purity`, `pnpm check:content` and `pnpm test:determinism`. *If any goes red on
+  prose below that line, the blind spot reaches an invariant gate and it stops being cosmetic;
+  if all three stay green, the span closes before it reaches anything they scan and this waits.*
+- ~~**`tools/gates/arm/needs3-arm.ts` IS TYPECHECKED BY NOTHING**, and its only proof is that
+  `pnpm sim:needs-history` runs — *"which is true today"*.~~ **DISCHARGED IN THE SAME GOAL, AND
+  THE PARKED NOTE WAS ALREADY FALSE WHEN IT WAS WRITTEN.** It was not true today: the file had
+  been corrupted into an unparseable state by a scripted edit, `pnpm sim:needs-history` could not
+  run, and **`pnpm verify` was eleven rows green over it** — no tsconfig in this repository
+  references `tools/gates`, and no test imported it. `sim-critic` found it by reading the file.
+  **Parking a known gap as a hypothesis let it read as a future risk when it was a present
+  defect**, which is the failure mode of parking anything you have not just executed. The file
+  now lives at `tools/headless/src/needs3-arm.ts` — the location it is copied to, so its imports
+  resolve identically in the arm and under `pnpm typecheck`, which then found a second real
+  defect in its types — and `needs-history.spawn.test.ts` executes it, including the
+  module-identity refusal that had never once fired.
+- **DEFECT B'S ACTUAL REMEDY — three candidates, none of them a concurrency cap.** G-020c
+  measured the cap out: under 12 busy processes on 12 cores, `pnpm test` produced signature B in
+  **10 of 10 runs across BOTH arms** (uncapped and `--maxWorkers=2`), with all 1,426 tests
+  passing every time; quiet, it produced **0 of 20**. The discriminator is LOAD. Candidates, in
+  the order they should be tried: (1) `pool: 'forks'` instead of the default worker threads;
+  (2) a worker-count POLICY derived from a stated requirement rather than a number
+  (§2.1) — e.g. leave one core free; (3) handle the RPC timeout so a starved channel does not
+  become an unhandled error that fails a run whose tests all passed.
+  **FALSIFICATION TEST**: run each candidate against the shipped configuration under
+  `tools/gates/arm/load.mjs --workers 12`, n>=5, alternated with a control arm in one sitting.
+  *If a candidate produces zero signature B where the control produces five, it is the remedy and
+  it earns a goal; if all three still produce B, the defect is in the runner rather than in its
+  configuration and the honest answer is that `pnpm test` is not a reliable gate on an
+  oversubscribed machine — which is a charter question about I4 and belongs to the human.*
+  **-> a goal of its own, and it blocks nothing until CI exists.**
+- **DID THE CAP EVER WORK? The historical claim is WITHDRAWN, and it is answerable.** G-020c
+  measured today's 1,426-test suite: capped and uncapped both produce signature B in 10 of 10
+  loaded runs. It is tempting to read that back onto the 1,235-test sitting the cap was ruled in
+  on — and that sitting was never re-run and never recorded its load condition, so inferring the
+  regime from the absence of a label is **rule 4 run backwards**. **FALSIFICATION TEST**:
+  materialise `72ae268` (the tree as it was when the cap was ruled in) with
+  `tools/gates/lib/git-tree.mjs`'s technique plus `pnpm install --offline`, and run
+  `tools/gates/arm/suite-signature.mjs --runs 5` per arm, quiet and loaded, alternated. *If the
+  capped arm is clean loaded on that tree where it is not on this one, the cap DID work and the
+  suite outgrew it — which would make suite size the lever and is worth knowing before anyone
+  reaches for a cap again; if it fails there too, the original observation was a quiet-regime
+  reading and this goal's account generalises.* **-> the goal that fixes defect B.**
+- **A REAL 11-25% DIFFERENCE IN THE NEED-VECTOR RATIO BETWEEN HEAD AND PRE-G-013, AND IT IS NOT
+  A MULTIPLE.** G-020c's discriminating measurement was built to answer "is there a multiple"
+  and answered NO on the quiet arm — but its interval also EXCLUDES 1.0 (1.1071 .. 1.2534 at
+  95.7% coverage, n=25 per revision, `win32/12cpu`, quiet, three-arm rotation), so a real
+  difference is evidence rather than an open question. **Out of scope by this goal's own
+  boundary**: optimising anything the measurement finds is its own goal.
+  **FALSIFICATION TEST**: `pnpm sim:needs-history --base aa30218 --repeat 60` — a
+  distribution-free median interval narrows with n, so this localises the ratio further at a
+  cost of readings alone. *If the interval stays clear of 1.0, the difference is real and worth a
+  goal that bisects it across G-013..HEAD to find which commit carries it; if it comes to span
+  1.0 at larger n, the n=25 reading was a corner of the coverage and there is nothing to chase.*
+  **Do NOT reach for a different instrument first** — an earlier draft of the goal block claimed
+  one was needed, which was wrong: this one narrows with readings.

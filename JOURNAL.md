@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-021 done. M2: 11 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
 
 - **State**: save **v9** · summary **v2** · I2 `10926cc3b569c887` · **I4 unreliable (§2.0)**
   · `pnpm verify` is ten rows now, three of them `—` and not invariants.
@@ -1690,3 +1690,72 @@ scan is parked with its test because `apps/game` may not be opened yet.
 **No WATCH owed**, and the unmoved I2 hash is the evidence rather than my say-so.
 `pnpm verify` ×2 by the orchestrator, ten rows green each; `git diff --stat packages/sim`
 empty; `BUDGET_MS` 389,333ms; `SAVE_V1_CONTENT` unmoved; suite 1,389 → 1,401 tests.
+
+---
+
+## G-020c — The two unreliable-gate defects — REFLECT
+
+**DONE, DRY at 2/3, with one criterion unmet and escalated.** Two sweeps (1 BLOCKER + 7 MAJOR +
+5 MINOR + 1 NIT) and four verification passes, one of which converted. **The largest diff in M2,
+swept end to end three times, every finding discharged by execution rather than by reading.**
+
+**THE HEADLINE: THE CAP WAS NOT THE REMEDY.** Ten loaded runs, both arms, **every one signature
+B** with all 1,426 tests passing. **The discriminator is load, not worker count** — and
+`maxWorkers: 2` cost **1.564× on every run since G-020b to prevent nothing.** The observation it
+was ruled in on (*"it passes clean at `--maxWorkers=2`"*) was true of its sitting and **carried no
+load condition.** That is rule 4's fifth slot failing **inside a fix rather than inside a
+number** — a new address for the oldest defect here.
+
+**AND THE BUILDER DECLINED THE AVAILABLE GREEN.** Criterion 5 — the unreliable count reaching 0 —
+was reachable from the quiet arm alone, with a loaded arm in the same campaign saying otherwise.
+Its pre-registered third branch fired instead: **A repaired, B diagnosed and unrepaired, count =
+1 gate / 1 defect, escalated.** Pre-registering decision rules *before the readings exist* is what
+made refusing cheap, and this is the first time in the project a builder has turned down a green
+it could have claimed.
+
+**THE BLOCKER IS THE GOAL'S OWN SUBJECT, AND IT IS ALMOST TOO NEAT.** `needs3-arm.ts` shipped
+**unparseable** — and `pnpm verify` was **eleven rows green over it**, because no tsconfig
+references `tools/gates` and no test imported it. Campaign 3, the whole discriminating
+measurement, could not run; three criteria were marked met resting on it. **The goal about things
+nothing checks shipped a file nothing checks.** The fix was not to repair the file but to **give
+it a home a checker can see** — and that immediately found a second real defect, a cast dropping
+`id` and `name`. The parked note claiming the file's only proof was that the campaign runs
+(*"which is true today"*) was **already false when written**.
+
+**A CONCLUSION OUTLIVED ITS NUMBERS, IN THE PARAGRAPH REPORTING THE HEADLINE MEASUREMENT.** *"Most
+of the apparent movement is two SITTINGS rather than two revisions"* was true of campaign 1 and
+was **carried unchanged through two campaign replacements** while the base median walked back onto
+the recorded 1.74. Decomposed: sitting **−1.8%**, apparent movement **+15.8%**, revision
+**+17.9%** — the revision term *exceeds* the movement and the sitting term works *against* it.
+**The orchestrator repeated the false version to the human before it was caught.** What survives
+is the part that matters: the quiet interval **excludes 1.3×**, so whatever the difference is, it
+is not the class this project produces.
+
+**THE INSTRUMENT WAS FIXED BY CHANGING WHAT IT CLAIMS, NOT WHAT IT PRINTS.** `needs-history`
+rendered a verdict from a point estimate; the critic ran `--repeat 1` and got **MULTIPLE**, the
+orchestrator ran the identical command and got **NO MULTIPLE** — **two runs, opposite verdicts,
+straddling the threshold, with the caveat suppressed in exactly the branch that claimed a
+regression.** Replaced with a distribution-free order-statistic interval, `--repeat 1` refusing
+outright, and the caveat in every branch. **The fix changed an answer**: n=9 went from NO MULTIPLE
+to INCONCLUSIVE, and n=25 was pre-registered before either regime ran. **The loaded point estimate
+sits further from 1.3 than the quiet one and supports LESS** — the trap a point estimate sets,
+demonstrated on the goal's own data.
+
+**TWO REFUSALS WORTH KEEPING.** The builder kept its coverage figure at the **95.7% the code
+computes** rather than the **~99.5% the critic measured by Monte Carlo** — a number that would
+have *strengthened* its own result — because a simulation from a critique transcript is not a
+provenance (rule 3, applied against its own interest). And `MIN_READINGS_PER_REGIME` was
+**deleted rather than sourced**: the campaign declares its counts and the derivation pins the
+arrays to them, so there is no threshold left to justify.
+
+**Scored predictions (§5.5).** Seam A stayed and was right to: the pre-G-013 figure carried no
+load condition, so deferring meant choosing withdrawal by default. **Seam B was taken** and the
+builder's prediction for declining it — *the diff exceeds one sweep, expect UNSWEPT at round 1
+and a defect in the proof harness itself* — was never tested, which is the point of taking it.
+
+**Owed forward.** B's remedy candidates are parked with a falsification test; **a cap is ruled out
+by measurement.** The historical *"the cap never worked"* is withdrawn and parked. **CI has never
+run — there is no remote**, and that is the human's.
+
+**No invariant weakened.** `pnpm verify` ×2 by the orchestrator, **eleven rows green each**;
+**I4 at 41.6s and 41.9s against ~91s under the cap**; I2 `10926cc3b569c887` unmoved.

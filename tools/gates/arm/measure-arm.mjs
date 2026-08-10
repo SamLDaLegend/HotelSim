@@ -87,16 +87,24 @@ const WARM_UPS = 2;
  * Timed runs inside one process, of which the MEDIAN becomes this process's single sample.
  * The parent then takes a median of those.
  *
- * THE SHIPPED NOISE FLOOR, WHICH IS THE NUMBER A READER ACTUALLY NEEDS:
+ * THE SHIPPED NOISE FLOOR ~~`~±10%` for a single reading, `~±3%` at `--repeat 7`~~ —
+ * **BOTH FIGURES ARE WITHDRAWN (G-020c), NOT RESTATED.**
  *
- *   a single `sim:measure` reading    ~±10%   (null medians 1.026 / 0.987 / 1.001 across
- *                                              three sittings; individual readings have
- *                                              spanned 0.884 to 1.090, and a fourth sitting
- *                                              by `sim-critic` read 0.913 to 1.111)
- *   a `--repeat 7` median             ~±3%
+ * `CLAUDE.md` rule 5: a number you cannot re-measure paired is withdrawn rather than restated.
+ * Neither figure survives its own citation rules —
+ *
+ *   the `~±10%`   carried no LOAD CONDITION, rule 4's fifth slot. The same instrument's `--null`
+ *                 ratio reads +2.38% quiet and +9.73% loaded (`tripwire.mjs`'s campaign), over
+ *                 4x apart, so a single spread figure without its regime names no quantity.
+ *   the `~±3%`    IS KNOWN NOT TO REPRODUCE: two `--repeat` medians on a null read 0.9067 and
+ *                 1.0501 (G-020b PLAN). It was quoted here for four goals.
+ *
+ * WHERE A PINNED FIGURE LIVES INSTEAD: `tools/gates/tripwire.mjs`'s `BOUND_CAMPAIGN`, whose
+ * arms carry all five slots each, and whose ceiling is COMPUTED from them rather than typed.
+ * Quote that, or re-measure; do not resurrect these.
  *
  * The null experiment is two arms one COMMENT apart, so their state hashes are identical
- * and every one of those numbers should be 1.000.
+ * and every one of those numbers should be 1.000. THAT part needs no stopwatch and stands.
  *
  * TIMED_RUNS = 3 WAS NOT SHOWN TO MOVE THAT FLOOR, and this comment used to claim it did.
  * Measured paired and interleaved over 7 alternating rounds: TIMED_RUNS=3 sd 6.8%,
@@ -106,8 +114,10 @@ const WARM_UPS = 2;
  * (~150ms against the ~900ms a process costs to start) and not worse, not because it is
  * the lever.
  *
- * THE LEVERS THAT DO MOVE IT, for whoever needs a tighter floor than ±10%: `--repeat`, which
- * is measured above and costs linear time, and a LONGER ARM.
+ * THE LEVERS THAT MOVE THE FLOOR, for whoever needs a tighter one than this instrument has:
+ * `--repeat`, which costs linear time, and a LONGER ARM. (This sentence used to name `±10%` as
+ * the floor being improved on; that figure is withdrawn above, and the levers are unaffected —
+ * they are a claim about direction, not about a spread.)
  *
  * ~~which is not measured and would move the hash `check-measure.mjs` cross-checks~~ —
  * **BOTH CLAUSES ARE FALSIFIED, BY G-020b, IN THE COMMIT THAT SHIPPED THE ARM.** The longer arm

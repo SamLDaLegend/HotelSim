@@ -567,6 +567,77 @@ tripwire that is deliberately **outside `pnpm test`**, so it adds no new timing 
 path — but the two entries above are still open, and §2.0's "a third is a stop condition"
 still stands.
 
+### RESOLVED 2026-08-10 (G-020c) — both defects, both by measurement. The entries above stand as history.
+
+**Nothing above is edited.** ADR-0008: an artefact describing the past must not track the
+present, and those paragraphs record what was believed and measured at the time. Where a figure
+in them is now known unreproducible, the correction is here.
+
+**DEFECT B — the worker RPC starvation. THE CAP IS REMOVED, AND ON THE SUITE THAT SHIPS IT
+PREVENTS NOTHING.** `pnpm test` classified by SIGNATURE into a **four-cell partition** — the fourth cell
+being `exit 1 / 0 failed / no such string`, which is the case the original diagnosis could not
+see — arms alternated in one sitting, on the suite as it ships after the relocation (74 files,
+1,426 tests), `win32/12cpu`, node 22.16:
+
+| regime | arm | n | PASS | **B** | A | UNCLASSIFIED | wall clock median |
+|---|---|---|---|---|---|---|---|
+| quiet | **uncapped** | 10 | 10 | **0** | 0 | 0 | **53.9s** |
+| quiet | `--maxWorkers=2` | 10 | 10 | **0** | 0 | 0 | 84.3s |
+| **loaded** (12 busy processes on 12 cores) | **uncapped** | 5 | 0 | **5** | 0 | 0 | 171.4s |
+| **loaded** | `--maxWorkers=2` | 5 | 0 | **5** | 0 | 0 | 343.4s |
+
+**TEN LOADED RUNS, BOTH ARMS, EVERY ONE SIGNATURE B** — exit 1, all 1,426 tests passing. **The
+discriminator is LOAD, not worker count.** Capping halves the parallelism, doubles the wall
+clock, and the RPC channel starves anyway.
+
+*"It passes clean at `--maxWorkers=2`"* — the observation this cap was ruled in on — **carried
+no load condition**: `CLAUDE.md` rule 4's fifth slot, **inside a fix rather than inside a
+number**. **The tax is measured too: 1.564× wall clock on every run, to prevent nothing.**
+
+**THE SCOPE, STATED BECAUSE THE FIRST VERSION OF THIS PARAGRAPH OVERREACHED.** These readings
+cover **today's 1,426-test suite**. The sitting the cap was ruled in on ran **1,235 tests**, was
+never re-run, and its regime is unrecorded — so this campaign **cannot** say the cap never
+worked, and inferring the old regime from the absence of a label would be rule 4 run backwards.
+The rates in the entry above (2 of 3, 6 of 6, then none for a day) are consistent with an
+unlabelled load condition and that remains a HYPOTHESIS; the falsification test is parked. **The
+decision to remove the cap rests on the shipped configuration alone and does not need it.**
+
+**DEFECT A — the named assertion failure. NOT a contention artefact, and the relocation alone
+would NOT have fixed it.** `sim-critic` measured the shipped assertion isolated, one fresh
+process per run, n=10, QUIET: **9 × exit 0, 1 × exit 1, "expected 2.653418174841722 to be less
+than 2.5"**, with an independent tsx probe at 2.5903 and this goal's own campaign reading 2.5906
+as its worst of twelve quiet readings. **`BOUND = 2.5` sat inside the assertion's own quiet
+spread.** Moving it to a standalone check would have moved the flake into the new check and
+called the count zero.
+
+So the repair is BOTH: the three timing bounds are `pnpm check:scaling` (out of I4), and every
+bound is **re-derived** — pinned to equality with `trunc(quiet median × 1.5)` and refused if it
+sits at or below the worst reading observed in any measured regime (ADR-0016).
+
+**AND ONE FIGURE IN THE ENTRY ABOVE IS WITHDRAWN.** *"A single timing reading on this machine is
+worth ±10%, and a `--repeat 7` median ~±3%"* — the first carried no load condition (rule 4's
+fifth slot, ruled in after it was written) and the second does not reproduce (0.9067 / 1.0501).
+The **shape** of that diagnosis was right — a gate built on one timing sample cannot be more
+reliable than one timing sample — and the quantity was wrong. `CLAUDE.md` rule 5: withdrawn
+here, not restated, and **not** edited out of the paragraph above.
+
+**THE UNRELIABLE-GATE COUNT (§2.0) GOES TO 1 GATE / 1 DEFECT — NOT TO ZERO — AND G-020c's
+CRITERION THAT SAYS 0 IS NOT MET.** The noun is stated because §4.1 requires it: **gates**, with
+the defect count beside it. Defect A is repaired; **defect B is diagnosed and unrepaired**, and
+it now has a REPRODUCIBLE TRIGGER (heavy external load) rather than a rate, which under §2.0 is
+the difference between an instrument that has stopped reporting and a fact.
+
+**Reporting 0 was available and would have been wrong**: the quiet arm alone gives 20 of 20
+clean, and the loaded arm in the same campaign gives 10 of 10 failing. "Green on the run I took"
+is unsafe for exactly the reason "red on the run I took" is (§2.0), and choosing the arm that
+suits the criterion is the same move one level up.
+
+**WHAT IS ASKED OF THE HUMAN — a decision, not a fix.** Three candidate remedies are parked with
+falsification tests (`PARKING.md`, G-020c): vitest's `pool` setting, an explicit worker-count
+policy sourced to a stated requirement, and handling the RPC timeout rather than letting it
+become an unhandled error. **Each is a goal, none is a comment**, and the one thing this campaign
+rules out is the fourth option — putting the cap back.
+
 ---
 
 ## OPEN — G-020c's CI-regime criterion cannot be met: there is no remote (2026-08-10)
@@ -621,3 +692,54 @@ nothing here ever pushes.
 a consequence worth stating: `verify.yml` should then be **deleted** rather than left as
 decoration, because a workflow nobody runs is a check that certifies nothing — which is
 ADR-0007's subject, in YAML.
+
+---
+
+## OPEN — I4's second defect is DIAGNOSED but UNREPAIRED. The count is 1, not 0 (G-020c, 2026-08-10)
+
+**This is G-020c's own pre-registered third branch firing, not a failure of the goal.** The
+decision rule was written into the block *before any reading existed*: if both arms show
+signature B, the cap is not the remedy, the defect is unrepaired, **the count does not reach 0,
+and that is an escalation rather than a claimed zero.** It fired.
+
+**WHAT WAS MEASURED.** `pnpm test` classified by **signature** — `(exit code, failed-test count,
+"[vitest-worker]: Timeout calling \"onTaskUpdate\"")` — into a **four-cell** partition whose
+fourth cell is `exit 1 / 0 failed / no such string`, the cell the G-016 diagnosis missed. Arms
+alternated in one sitting, shipped post-relocation suite (74 files, 1,426 tests), `win32/12cpu`:
+
+| regime | arm | n | PASS | **B** | A | UNCLASSIFIED | median wall |
+|---|---|---|---|---|---|---|---|
+| quiet | uncapped | 10 | 10 | **0** | 0 | 0 | 53.9s |
+| quiet | `--maxWorkers=2` | 10 | 10 | **0** | 0 | 0 | 84.3s |
+| **loaded** (12 busy processes on 12 cores) | uncapped | 5 | 0 | **5** | 0 | 0 | 171.4s |
+| **loaded** | `--maxWorkers=2` | 5 | 0 | **5** | 0 | 0 | 343.4s |
+
+**THE CAP WAS NOT THE REMEDY, ON THE SHIPPED CONFIGURATION.** Ten loaded runs, both arms, every
+one signature B with all 1,426 tests passing. **The discriminator is load, not worker count** —
+and the cap cost **1.564×** on every run to prevent nothing. It is removed.
+
+**WHAT IS AND IS NOT CLAIMED.** This covers **today's 1,426-test suite**. The sitting the cap was
+originally ruled in on ran a **1,235-test suite**, was never re-run, and **its load condition is
+unrecorded** — so the broader claim *"the cap never worked"* is **withdrawn**, and is parked with
+its falsification test (materialise `72ae268`, run the shipped classifier). Inferring that
+sitting's regime from the absence of a label would be rule 4 run backwards, and ADR-0015's
+REPLACE half says a 1,235-test and a 1,426-test suite are different configurations.
+
+**DEFECT A IS REPAIRED.** The timing bounds left `pnpm test` for `pnpm check:scaling` — an
+eleventh `verify` row — and relocation alone was **not** the repair: `sim-critic` measured the
+shipped assertion isolated, quiet, n=10, and got **1 × "expected 2.653418174841722 to be less
+than 2.5"**. `BOUND = 2.5` sat *inside* its own quiet spread. Bounds are re-derived by a uniform
+rule, pinned to equality with `trunc(quiet median × 1.5)` and refused below the worst reading in
+any observed regime, with a too-noisy brake **in code**. Two tightened, two loosened.
+
+**WHAT THE HUMAN IS BEING ASKED.** Not to approve a repair — to accept a **diagnosis** in place
+of one, and to rule on where B goes:
+
+- **Accept 1 gate / 1 defect for M2 exit**, with B named, measured and parked; or
+- **Hold M2 open** until B is repaired, which is its own goal.
+
+**Remedy candidates are parked with a falsification test** — vitest's `pool` option, a **sourced**
+worker-count policy, or handling the RPC timeout. **A cap is ruled out by measurement.**
+
+**§2.0's guard is unchanged and worth restating: a THIRD unreliable gate is a stop condition.**
+The count is 1. It has never been 0 since G-016.

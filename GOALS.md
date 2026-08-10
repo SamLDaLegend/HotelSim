@@ -2,21 +2,21 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-021 done. M2: 11 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
 
-- **Schemas**: save **v9** · summary **v2** · I2 `10926cc3b569c887`. **`verify` runs TEN
-  rows**: six invariants, `typecheck`, and three `—` rows (`check:measure`, **`check:tickcost`**,
-  **`check:tickcost:proof`**) that are **not** invariants — a seventh is a human call. **I4
-  UNRELIABLE (§2.0), 2 defects.** Ten green ×2 at G-021 VERIFY. **The ladder is CONTENT**
-  (30/12/5, pause a transport state); `budget.mjs` derives I5's budget from it.
-- **Tripwire**: `BOUND 1.4557 = sqrt(1.0238 × 2.07)`, 30-day arm, ADR-0015; quiet
-  `win32/12cpu`, **CI unmeasured** (G-020c's). **Order**: G-020c → **G-019 LAST, two
-  critics** → M2 exit.
+- **Schemas**: save **v9** · summary **v2** · I2 `10926cc3b569c887`. **`verify` runs ELEVEN
+  rows**: six invariants, `typecheck`, and four `—` rows (`check:measure`, **`check:tickcost`**,
+  `check:tickcost:proof`, **`check:scaling`**) that are **not** invariants — a seventh is a human
+  call. **I4 UNRELIABLE (§2.0), now 1 defect**: A repaired, **B diagnosed and unrepaired**.
+  Eleven green ×2 at G-020c VERIFY. **The ladder is CONTENT**; `budget.mjs` derives I5 from it.
+- **Tripwire** `BOUND 1.4557`, ADR-0015. **`maxWorkers: 2` REMOVED as measured-ineffective** —
+  the discriminator is load, not worker count. **Order**: **G-019 LAST, two critics** → M2 exit.
 - **Owed by the human**: M2 exit sign-off — the digest experiment scored **both ways** (four
-  failures logged), the unreliable count **with its noun**, the bimodal recording **watched**.
+  failures), the unreliable count **with its noun**, the bimodal recording **watched**, **I4's
+  defect B accepted-or-held**, and **a git remote: CI has NEVER run.**
 - **Owed by goals**: G-019 the second axis (amenity density at fixed rooms), without which its
-  headline criterion misses three-quarters of the need vector · G-020c **both I4 defects**, the
-  CI regime reading, replace-don't-pool · **M4 blocked on scenario capital.**
+  headline criterion misses three-quarters of the need vector · **M4 blocked on scenario
+  capital.**
 - **Open contradictions**: G-012's criterion pins a content property any provider can flip ·
   `--rooms N` contaminates every balance sweep · seeds inert until M4. **Not the ladder — settled.**
 
@@ -1705,6 +1705,13 @@ Status: **done, DRY at 3/3** — 3 sweeps (1 BLOCKER + 4 MAJOR + 5 MINOR) plus 3
   method — not an absolute one.** So the human's concern that it might have *"inherited an
   absolute tripwire by default"* does not apply.
 
+  > **BOTH FIGURES BELOW ARE WITHDRAWN AT G-020c, IN PLACE RATHER THAN DELETED.** The `±10%`
+  > carried **no load condition** (rule 4's fifth slot, ruled in after this was written), and the
+  > `±3%` **does not reproduce** — two `--repeat` medians on a null read 0.9067 and 1.0501.
+  > `CLAUDE.md` rule 5: withdrawn, not restated. The pinned replacement is `tripwire.mjs`'s
+  > `BOUND_CAMPAIGN`, whose arms each carry five slots and whose ceiling is computed from them.
+  > The paragraph stands as the record of what was believed; **do not quote its numbers.**
+
   **What the ±10% actually is**: the spread of **that ratio** across repetitions of a
   six-sample invocation, near 1.0. It is not a single-reading absolute. **A `--repeat 7`
   median is ~±3%**, which is within touching distance of the ±2% `CLAUDE.md` records for
@@ -1735,7 +1742,11 @@ Status: **done, DRY at 3/3** — 3 sweeps (1 BLOCKER + 4 MAJOR + 5 MINOR) plus 3
 
   **2. `needs.scaling.test.ts` IS THE OTHER I4 DEFECT AND IT IS YOURS.** A **named**
   assertion failure against hard timing bounds (2.5×, 1.9×) — ~8% isolated, ~33% in-suite —
-  **and G-020a's own measurement explains it: a single timing reading here is worth ±10%.**
+  ~~**and G-020a's own measurement explains it: a single timing reading here is worth ±10%.**~~
+  **THE EXPLANATION WAS RIGHT IN SHAPE AND WRONG IN QUANTITY, AND G-020c MEASURED THE
+  DIFFERENCE**: the `±10%` is withdrawn (it named the `sim:measure` ratio, in no stated regime),
+  and the actual cause is that **the incumbent 2.5 bound sat inside the assertion's own QUIET
+  spread** — 2.5906 / 2.6534 / 2.5903 observed with nothing to find, on three harnesses.
   *A gate built on one timing sample cannot be more reliable than one timing sample.* The
   repair is the same repair this goal owes its own bound: **repeat, or move the bound onto
   something a single sample can carry.** `check-measure.mjs` is the pattern for the venue.
@@ -1753,7 +1764,9 @@ Status: **done, DRY at 3/3** — 3 sweeps (1 BLOCKER + 4 MAJOR + 5 MINOR) plus 3
      harness calls `roomTypeServes`, added at G-013. **The instrument's reachable history
      starts at G-013, and the repo's only cross-session-durable ratio is on the wrong side
      of it.**
-  2. **THE SINGLE-READING FLOOR IS ±10%; a `--repeat 7` median is worth ~±3%.** Five
+  2. ~~**THE SINGLE-READING FLOOR IS ±10%; a `--repeat 7` median is worth ~±3%.**~~
+     **BOTH FIGURES WITHDRAWN AT G-020c** — no load condition on the first, and the second does
+     not reproduce (0.9067 / 1.0501). The CONCLUSION below needs neither and stands: Five
      sittings. **The null spread overlaps both real pairs**, so **the 1.13 bound originally
      ruled is not measurable by one invocation of this tool.** The two ways out are
      `--repeat` (measured, linear cost) and a longer arm (unmeasured — and it re-derives the
@@ -2213,9 +2226,21 @@ Critique rounds used: 0/3
     lacks. Same fix, same reason.
 
 ## G-020c — The two unreliable-gate defects, and one campaign that settles both
-Status: **in-progress** — PLAN dispatched 2026-08-10. Split out of G-020b at PLAN by the
-  orchestrator, over the builder's narrower proposal. Both entries in `ESCALATIONS.md`'s I4
-  record are here and nowhere else.
+Status: **done, DRY at 2/3, WITH ONE CRITERION UNMET AND ESCALATED.** 2 sweeps (**1 BLOCKER** +
+  7 MAJOR + 5 MINOR + 1 NIT) plus four verification passes, one of which converted. **Criterion 5
+  — the unreliable count reaching 0 — is NOT met and was NOT claimed**: defect A is repaired,
+  defect B is diagnosed and unrepaired, so the count is **1 gate / 1 defect**, and that is an
+  `ESCALATIONS.md` entry exactly as this block pre-registered before any reading existed.
+  Split out of G-020b at PLAN by the orchestrator, over the builder's narrower proposal. Both
+  entries in `ESCALATIONS.md`'s I4 record are here and nowhere else.
+
+  **DEFECT A IS REPAIRED. DEFECT B IS DIAGNOSED AND UNREPAIRED, AND THE THING THAT WAS
+  SUPPOSED TO BE HOLDING IT OFF DOES NOTHING.** Under 12 busy processes on 12 cores, `pnpm test`
+  produced signature B in **10 of 10 runs across BOTH arms** — capped and uncapped — with all
+  1,426 tests passing every time; quiet, **0 of 20**. The discriminator is LOAD, not worker
+  count, so the cap is removed as measured-ineffective rather than as expired. **The
+  unreliable-gate count therefore reaches 1 gate / 1 defect, not 0**, and the criterion that
+  says 0 is not met. See the CRITERION STATUS table in the BUILT section.
 
   **ONE CRITERION IS STRUCK AND HANDED TO THE HUMAN: THERE IS NO REMOTE, SO CI HAS NEVER RUN.**
   Measured at SELECT — `git remote -v` is empty, and `.github/workflows/verify.yml` has existed
@@ -2446,6 +2471,517 @@ Critique rounds used: 0/3
   ceiling**, full suite, `maxWorkers: 2`, 1,235 tests in 56.9s, max over 1,234 timed lines, one
   run. **That reading was taken AT the cap**, so removing the cap changes contention and this
   goal retakes it in the same campaign. The two obligations share a measurement.
+
+  ### BUILT 2026-08-10 — what shipped, and every number with all FIVE of rule 4's slots
+
+  **`pnpm check:scaling`** — `tools/gates/scaling.mjs`, the **eleventh row** of `pnpm verify`
+  and the fifth in the `—` column. The three ratios asserted inside `pnpm test` from G-010 to
+  today are asserted there instead, against bounds **re-derived** from a campaign taken at the
+  new instrument. **`packages/sim` is untouched by this goal.**
+
+  **THE SEAM IS A PROCESS BOUNDARY**, as `check:tickcost`'s is. `scaling-harness.ts` measures
+  and holds no bound; `scaling-bound.mjs` holds the readings and derives; `scaling.mjs` judges;
+  `scaling.bound.test.ts` asserts the instrument names none of the four bounds and does not
+  import the module that does. **One process per ROTATION**, because interleaved arms share a
+  heap, GC and JIT — an arm set is part of the workload, and the gate refuses if an axis is
+  measured in a rotation its campaign was not taken in.
+
+  **THE BOUNDS ARE THE CEILING EXACTLY — THERE IS NO FREE PARAMETER.** "Measured × 1.5, then
+  held at or below" leaves a RANGE, and a number chosen from inside a range is a number nobody
+  can source (§2.1) as well as a number a later editor can nudge. So each constant is pinned to
+  **equality** with `trunc(quiet median × 1.5, 4dp)`, and the worst reading observed in ANY
+  regime is a separate refusal beneath it. Nudge a reading and the gate refuses to start,
+  **in either direction** — the shape `tripwire.mjs:343` uses, with a second side.
+
+  | axis | was | now | direction | why |
+  |---|---|---|---|---|
+  | `rooms-saturated` | 6 (shared) | **5.7516** | **tighter** | today's quiet median is 3.8344, not the ~4.2 the 6 was set from |
+  | `rooms-bench` | 6 (shared) | **4.6119** | **tighter** | it never had its own bound; it has one now |
+  | `needs` | 2.5 | **3.1135** | **looser, and FORCED** | quiet readings of 2.5906 (here), 2.6534 and 2.5903 (`sim-critic`, two harnesses) are ABOVE the incumbent |
+  | `density` | 1.9 | **2.0239** | **looser by 6.5%, not forced** | the worst observed reading is 1.6154, under either number; the MEDIAN moved (1.281 → 1.3493) and the rule is applied uniformly |
+
+  **THE REJECTED ALTERNATIVE, RECORDED BECAUSE IT LOOKS SAFER AND IS NOT**: cap each new bound
+  at the incumbent so a bound may only tighten. That imports a median measured inside vitest's
+  parallel workers, under a different rotation, at a sample count this instrument no longer
+  uses — **pooling a reading from a configuration that no longer exists**, which is exactly
+  what ADR-0015's REPLACE half forbids. A uniform rule that moves two bounds down and two up is
+  also its own evidence that it is not a widening dressed as a derivation.
+
+  ### CAMPAIGN 2 — the readings the four bounds derive from
+
+  What: the per-tick cost ratio between two arms of one rotation, from
+  `tools/headless/src/scaling-harness.ts` · Workload: 60 rooms, an arrival every 32 ticks, seed
+  42, 4,320 ticks; the rooms rotation varies rooms and arrivals together · Samples: each reading
+  is a ratio of medians of **5** in-process samples, arms interleaved with the order
+  alternating, one warm-up discarded · Aggregation: **median of the QUIET readings for the
+  signal, max over EVERY reading in EVERY regime for the floor** · Regime: **quiet n=12 and
+  loaded n=8, alternated within one sitting, `win32/12cpu`, node 22.16; loaded = 12 busy
+  processes on 12 cores** (`tools/gates/arm/load.mjs`, so "loaded" is an invocation rather than
+  a sentence).
+
+  | axis | quiet min .. median .. max | loaded min .. median .. max | bound | margin over worst quiet / worst anywhere |
+  |---|---|---|---|---|
+  | needs | 1.8763 .. **2.0757** .. 2.5906 | 1.7462 .. 2.1636 .. **2.9733** | 3.1135 | 1.2018× / **1.0472×** |
+  | density | 0.9915 .. **1.3493** .. 1.6154 | 1.2284 .. 1.3829 .. 1.5619 | 2.0239 | 1.2529× / 1.2529× |
+  | rooms-saturated | 3.1047 .. **3.8344** .. 4.2525 | 3.0356 .. 3.7255 .. **4.3803** | 5.7516 | 1.3525× / 1.3131× |
+  | rooms-bench | 2.1788 .. **3.0746** .. 3.9312 | 2.3596 .. 3.8136 .. **4.1044** | 4.6119 | 1.1732× / 1.1236× |
+
+  **THE NEEDS AXIS IS THE THIN ONE AND THAT IS STATED RATHER THAN AVERAGED AWAY**: 1.0472× over
+  the worst reading in any regime. `pnpm verify` runs quiet, where the margin is 1.2018×, and
+  **both figures are printed by the gate** — reporting only the first would overstate it and
+  only the second would understate what a normal run has to survive.
+
+  **THE INSTRUMENT DID NOT MOVE BETWEEN THE TWO REGIMES**, which is checkable rather than
+  asserted: `scaling-arms.ts` (05:41) and `scaling-harness.ts` (05:44) both predate the quiet
+  campaign (05:47) and the loaded campaign (05:51), and `scaling-bound.mjs` was written after
+  both (05:53).
+
+  ### CAMPAIGN 1 — the cap, discharged by a reading
+
+  **THE CAP IS GONE.** `vitest.config.ts` no longer sets `maxWorkers`, and the comment that
+  carried it is replaced by the campaign below rather than by another comment.
+
+  What: the outcome of `pnpm test`, classified by **SIGNATURE and never by rate**, into a
+  partition that covers the space —
+
+  | cell | test |
+  |---|---|
+  | `PASS` | exit 0 |
+  | `B_WORKER_RPC` | exit ≠ 0, **zero** failing tests, and `Timeout calling` + `onTaskUpdate` present |
+  | `A_NAMED_FAILURE` | exit ≠ 0, ≥ 1 failing test |
+  | **`UNCLASSIFIED`** | **anything else — reported, never folded into "not B"** |
+
+  **THE FOURTH CELL IS THE POINT.** `exit 1 / 0 failed / no such string` is exactly what the
+  G-016 diagnosis missed, one level out: a rate computed over a partition that does not cover the
+  space reads clean because the classifier could not see the event. And the classifier's string
+  is a **vitest internal** — a version bump silently reclassifies every run as `UNCLASSIFIED`
+  rather than as B, which is why that is said where the classifier lives.
+
+  Workload: the suite **as it ships after the relocation** — 74 files, 1,426 tests · Samples:
+  **n=10 per arm quiet, n=5 per arm loaded** · Aggregation: the full classification table, not a
+  percentage · Regime: **BOTH — quiet and loaded (12 busy processes on 12 cores,
+  `tools/gates/arm/load.mjs`), `win32/12cpu`, arms ALTERNATED within each sitting**;
+  `--maxWorkers=2` supplied on the command line so both arms run one binary and one config.
+  *(The first version of this slot line said "quiet" over a table with two loaded rows —
+  rule 4's fifth slot mis-stated in the summary of the campaign that measured it.)*
+  The classifier is `tools/gates/arm/suite-signature.mjs`; the campaign re-runs as
+  `node tools/gates/arm/suite-signature.mjs --runs 10 --label quiet --out <dir> -- pnpm test`.
+
+  | regime | arm | n | PASS | **B** | A | UNCLASSIFIED | wall clock, median (min..max) |
+  |---|---|---|---|---|---|---|---|
+  | quiet | **uncapped** | 10 | 10 | **0** | 0 | 0 | **53.9s** (53.1..55.1) |
+  | quiet | `--maxWorkers=2` | 10 | 10 | **0** | 0 | 0 | 84.3s (83.2..84.5) |
+  | **loaded** | **uncapped** | 5 | 0 | **5** | 0 | 0 | 171.4s (169..175) |
+  | **loaded** | `--maxWorkers=2` | 5 | 0 | **5** | 0 | 0 | 343.4s (326..379) |
+
+  **THE PRE-REGISTERED RULE, WRITTEN BEFORE THE READINGS EXISTED**: zero of both signatures in
+  n=10 quiet and n=5 loaded ⇒ the cap goes for good; any B uncapped with none capped ⇒ the cap
+  returns **carrying the measured rate**; **B in both ⇒ the cap is not the remedy, the count does
+  NOT reach 0, and that is an escalation rather than a claimed zero.** *The third branch fired.*
+
+  ### THE CAP DOES NOT PREVENT B ON THE SUITE THAT SHIPS — AND THAT IS ALL THE CAMPAIGN COVERS
+
+  **Ten loaded runs, both arms, every one of them signature B**: exit 1, 74 files and 1,426
+  tests PASSED, `Timeout calling "onTaskUpdate"`. **THE DISCRIMINATOR IS LOAD, NOT WORKER
+  COUNT.** Capping halves the parallelism, **doubles the wall clock (343.4s against 171.4s)**,
+  and the RPC channel starves anyway.
+
+  **THE SCOPE OF THAT CLAIM, STATED BECAUSE THE FIRST VERSION OVERREACHED AND SAID "THE CAP
+  NEVER WORKED".** What was measured is **today's 1,426-test suite, after the relocation**. The
+  sitting the cap was ruled in on ran **1,235 tests**, was never re-run, and its load condition
+  is unrecorded — and *inferring* that regime from the absence of a label is **rule 4 run
+  backwards**, which is the error this goal exists to stop, committed while correcting it.
+  ADR-0015's REPLACE half says those are different configurations; they are not pooled and the
+  older one is not re-interpreted. `sim-critic` caught this, and it was in four places including
+  a settled `ESCALATIONS.md` entry and a proposed digest line.
+
+  **What the campaign does support, and it is enough for the decision**: on the configuration
+  that ships, the cap prevents nothing in either regime and costs 1.564× in both. **The removal
+  is not in dispute.** What is withdrawn is the historical generalisation about a suite nobody
+  re-ran. Paying for it would mean materialising the old tree and running the same classifier
+  against it — a stated, affordable experiment, parked with its falsification test rather than
+  asserted.
+
+  *"It passes clean at `--maxWorkers=2`"* — the observation the cap was ruled in on — **carried
+  no load condition**, which is `CLAUDE.md` rule 4's fifth slot **inside a fix rather than
+  inside a number**, a place this project had not yet looked. That is a statement about what the
+  observation PINS, not a claim that it was false.
+
+  **CONSEQUENCE, AND IT IS NOT THE ONE THIS GOAL WANTED.** Defect A is repaired. **Defect B is
+  DIAGNOSED, NOT REPAIRED** — it now has a reproducible trigger instead of a rate, and the thing
+  that was supposed to be holding it off does nothing. **The unreliable count therefore goes from
+  1 gate / 2 defects to 1 gate / 1 defect, NOT to zero**, and the exit criterion that says 0 is
+  **not met**. Claiming it on the quiet arm alone would be "green on the run I took" (§2.0) with
+  a loaded arm in the same campaign saying otherwise.
+
+  **AND IT SHARPENS THE ITEM ALREADY OWED BY THE HUMAN.** A hosted CI runner is a shared box
+  whose load is a neighbouring tenant. This campaign says what that regime does to `pnpm test`:
+  **exit 1 with every test passing.** The remedy candidates (vitest `pool`, a worker-count
+  policy, or handling the RPC timeout) are parked with a falsification test; none of them is
+  this goal's, and inventing one at this hour is the fat-goal defect.
+
+  **AND THE TAX THE COMMENT ASSERTED IS NOW MEASURED.** The cap's own text said *"a concurrency
+  cap applied globally to accommodate one 39-second test is a tax on every future run"* — a
+  comment offered as evidence with nothing pinning it (ADR-0007's amendment). It is true and it
+  is **1.564× wall clock** on this machine (84.3 / 53.9), every run, for every agent and every
+  human, since 2026-08-09.
+
+  **THE `testTimeout` READING IS RETAKEN AT THE SHIPPED CONFIGURATION, AND IT MOVED IN THE
+  DIRECTION NOBODY NAMED.** The inherited figure — slowest individual test 3,166 ms = 10.6% of
+  the 30s ceiling — was taken AT the cap. Uncapped, the slowest single test is **8,233 ms =
+  27.4%** of the ceiling, against **4,218 ms = 14.1%** capped, both maxima over 10 runs of the
+  same suite. **Removing the cap makes the SUITE faster and individual TESTS slower**, which is
+  what twelve workers contending for twelve cores does, and it is the opposite of the direction
+  a reader would assume from the wall-clock figure. 30s stays: the worst observed test still has
+  3.6× headroom, and the ceiling exists to catch a deadlock rather than a busy laptop.
+
+  ### CAMPAIGN 3 — the discriminating measurement, and it PRE-REGISTERED what it could see
+
+  `pnpm sim:needs-history --base aa30218` — `tools/gates/needs-history.mjs`. **Not a gate**: no
+  bound, no verdict about the build, not in `pnpm verify`.
+
+  **HOW IT REACHES BEFORE G-013 WHEN `sim:measure` CANNOT.** That instrument compares an
+  ABSOLUTE per-tick cost, so it needs one harness across both arms, and HEAD's harness calls
+  `roomTypeServes` (G-013). This one compares a **ratio of ratios**: each revision's ratio is
+  internally paired, so each side runs its own simulation, its own content and its own
+  `schedule()`. **It does NOT re-open `SMALLEST_KNOWN_REGRESSION`**, which is an absolute and is
+  still unreachable — do not quote it as if it had.
+
+  **PER-ARM MODULE IDENTITY IS ASSERTED TWICE.** Each revision is `git archive`-extracted and
+  `pnpm install --offline`-ed in its own tree; the child resolves `@hotelsim/sim` and refuses
+  unless the realpath is inside its own tree, and the PARENT re-checks the path the child
+  reports — so deleting the child's check would not quietly remove the property. Each arm's
+  `full-vector` state hash is cross-checked against **that revision's own CLI**
+  (`--ticks 4320 --seed 42 --rooms 60 --arrivals 32 --quiet`): `285eecf460e41ac8` at head,
+  `0b0c44de93660ed2` at base, **both AGREE**.
+
+  What: the three-arm need rotation's ratio (`full-vector` / `one-need`) · Workload: as above ·
+  Samples: 5 per arm per reading · **n=25 readings per revision per regime** · Aggregation:
+  median of readings per revision, then the ratio of the two medians, **judged on a
+  distribution-free interval at 95.7% coverage** · Regime: **quiet and loaded (12 busy processes
+  on 12 cores), revisions alternated within each sitting, `win32/12cpu`**.
+  *(This line read "quiet n=9 and loaded n=7" for a round — slots 3 and 5 naming the campaign
+  the block withdraws twelve lines below, directly above the shipped one's table. The same
+  defect as Campaign 1's slot line in sweep 1: the campaign moved and the slot line did not
+  follow it. Twice in one goal is a habit, not an accident — a slot line belongs in the same
+  edit as the table it describes.)*
+
+  **THE VERDICT COMES FROM AN INTERVAL, NOT FROM THE POINT ESTIMATE** (sweep 2). Each revision's
+  median carries a distribution-free interval from ORDER STATISTICS, and the ratio's interval is
+  taken corner to corner; a verdict is rendered only when that interval falls entirely on one
+  side of the threshold. n=25 per revision was **pre-registered before either regime was run**,
+  after n=9 came back INCONCLUSIVE.
+
+  | regime | head `455a538` | base `aa30218` | ratio | interval (95.7%) | verdict |
+  |---|---|---|---|---|---|
+  | **quiet**, n=25 | 1.7442 .. **2.0155** .. 2.3134 | 1.4834 .. **1.7094** .. 1.8540 | 1.1791 | **1.1071 .. 1.2534** | **NO MULTIPLE — excluded** |
+  | **loaded**, n=25 | 1.4917 .. **2.1077** .. 2.5887 | 1.1115 .. **1.9157** .. 2.3212 | 1.1002 | **0.9668 .. 1.3228** | **INCONCLUSIVE** |
+
+  **THE LOADED ARM CANNOT ANSWER THE QUESTION, AND SAYS SO.** Same instrument, same n, same
+  coverage: load widens both revisions' readings until the interval straddles the threshold. The
+  point estimate is *further* from 1.3 than the quiet one — 1.1002 against 1.1791 — and it
+  supports LESS, which is exactly the trap a point estimate sets. Criterion 3 asks for both
+  regimes stated; this is what the loaded one honestly states.
+
+  **TWO EARLIER CAMPAIGNS ARE WITHDRAWN RATHER THAN QUOTED.** The first (2.0569 / 1.8073 /
+  1.1381) was taken from a version of `needs3-arm.ts` that a scripted edit then corrupted into an
+  unparseable file, which SHIPPED — unreproducible as shipped, so `CLAUDE.md` rule 5 withdraws
+  it. The second (1.0868 / 1.2337 at n=9 and n=7) was taken through the point-estimate verdict
+  that sweep 2 removed. **The instrument changed under both, so both are gone**; only the n=25
+  pair above is quotable.
+
+  **THE THRESHOLD WAS FIXED BEFORE THE READING EXISTED.** `>= 1.3×`, sourced to
+  `tripwire.mjs:51-63` — every performance defect in twenty goals was a MULTIPLE (2.07×, 3.9×,
+  6.6×) and not one was a 10% creep.
+
+  **AND THE TOOL NOW REFUSES TO RENDER A VERDICT IT CANNOT SUPPORT, WHICH IT USED TO DO.**
+  `sim-critic` ran `--repeat 1 --samples 2` and got **1.3117 → "MULTIPLE"**; the orchestrator ran
+  the same command and got **1.2725 → "NO MULTIPLE"**. Two runs of one command, opposite
+  verdicts across the threshold — **and the branch asserting a regression was the one that
+  SUPPRESSED the paragraph explaining the instrument cannot tell 1.23 from 1.00.** The caveat was
+  attached to the conclusion a reader was least likely to over-read. Fixed at the control flow
+  rather than by moving the string: the caveat prints in every branch, the verdict is taken from
+  the interval, and `--repeat 1` now prints **`NO VERDICT — too few readings`** because no order
+  statistic reaches the coverage floor at n=1.
+
+  **WHAT IT SETTLES: THE PRE-G-013 REVISION READS ~1.71 QUIET HERE TODAY, NOT 1.74 — AND HEAD
+  READS ~2.02 ON THE SAME MACHINE IN THE SAME MINUTES.** The natural reading of "the file records
+  1.74 and the instrument now says ~2" is a per-need regression. **The quiet interval EXCLUDES a
+  1.3× multiple, so whatever the difference is, it is not the class this project has ever
+  produced.** That is the finding, and it stands alone.
+
+  **AND THE SENTENCE THAT USED TO FOLLOW IT IS WITHDRAWN, BECAUSE THE CAMPAIGN IT IS ATTACHED TO
+  FALSIFIES IT.** It read *"most of the apparent movement is the distance between two SITTINGS
+  rather than between two revisions"*. Decomposed on the shipped n=25 figures:
+
+  | term | arithmetic | |
+  |---|---|---|
+  | sitting | base today 1.7094 / recorded 1.74 | **0.9824 → −1.8%** |
+  | apparent movement | head today 2.0155 / recorded 1.74 | 1.1583 → +15.8% |
+  | **revision** | head 2.0155 / base 1.7094 | **1.1791 → +17.9%** |
+
+  **The revision term is LARGER than the apparent movement and the sitting term works against
+  it.** Essentially none of the movement is the sitting. The sentence was defensible on campaign
+  1, where the base median read 1.8073 and the sitting term was +3.9% — **and it was carried
+  unchanged through two campaign replacements while the base median walked back onto the
+  recorded 1.74, with nobody re-deriving it.** A conclusion outliving the numbers under it is
+  the class this goal exists to remove, committed in the paragraph reporting the goal's own
+  headline measurement. Found by `sim-critic` re-deriving it rather than re-reading it.
+
+  *(The recorded 1.74 also came from a DIFFERENT INSTRUMENT — in-vitest, four-arm rotation — so
+  it was never a like-for-like comparand. That cuts the same way: a further reason the sentence
+  is unsupported, not a rescue for it.)*
+
+  **WHAT THE QUIET ARM POSITIVELY SHOWS, WHICH THE FIRST VERSION OF THIS BLOCK UNDER-CLAIMED.**
+  Its interval is **1.1071 .. 1.2534, and it excludes 1.0 as well as 1.3** — so it is not merely
+  a failure to rule a multiple out, it is **positive evidence that a real difference exists**,
+  localised to roughly 11-25%, between HEAD and the last commit before G-013 on the same machine
+  in the same minutes. The loaded arm's interval spans 1.0 and cannot say either way.
+
+  **AND MORE READINGS WOULD NARROW IT — the previous version of this paragraph said they would
+  not, and that was wrong.** A distribution-free median interval tightens with n (the coverage
+  ladder moves: k=8 of 25 gives 95.7%, k=7 gives 98.5%), and 13.2% of width against an ~18%
+  question is already close. Saying "this needs a different instrument" could send a future goal
+  to build one when it needs a larger `--repeat`. **What is out of scope is not the measurement
+  but the OPTIMISATION** — that is this goal's stated boundary, and the difference is parked with
+  its falsification test.
+
+  ### THE FALSIFIED GUIDANCE, REPLACED WITH A MEASUREMENT RATHER THAN DELETED
+
+  `needs.scaling.test.ts` carried, as the reason its bound was safe: *"contention adds roughly
+  the same ABSOLUTE cost to both arms, so load pulls any ratio towards 1. That makes the bound
+  flake-proof — LOAD CAN ONLY PUSH THE READING DOWN, NEVER UP."* Measured on all four axes,
+  same instrument, same sitting design:
+
+  | axis | quiet median → loaded median | quiet max → loaded max |
+  |---|---|---|
+  | needs | 2.0757 → 2.1636 (**+4.2%**) | 2.5906 → 2.9733 (**+14.8%**) |
+  | density | 1.3493 → 1.3829 (+2.5%) | 1.6154 → 1.5619 (−3.3%) |
+  | rooms-saturated | 3.8344 → 3.7255 (−2.8%) | 4.2525 → 4.3803 (+3.0%) |
+  | rooms-bench | 3.0746 → 3.8136 (**+24.0%**) | 3.9312 → 4.1044 (+4.4%) |
+
+  **Three of four move UP on the median and three of four move UP on the max**, and the axis the
+  claim was written about (density) is the only one it holds for on the tail. What survives
+  needs no stopwatch and is now stated instead: contention adds an absolute cost to every arm,
+  so a ratio between arms **of similar cost** compresses. These arms are not of similar cost.
+  The old sentence generalised a property of one arm pair to every pair in the file.
+
+  **AND `:160-162`'s OTHER HALF IS FALSIFIED TOO** — *"anything up to ~2.0 is this spread and
+  the machine, and anything well past it is a real per-need regression"*. Quiet readings reach
+  **2.5906** here and **2.6534** in `sim-critic`'s extraction, and a reading of ~2.06 is what
+  the PRE-G-013 revision produces today. Both halves of that sentence pointed a future reader at
+  the wrong conclusion, which is ADR-0007's "a comment offered as evidence" class.
+
+  ### SWEEP 1 — 1 BLOCKER + 7 MAJOR + 3 MINOR, ALL ANSWERED
+
+  **THE BLOCKER IS THE GOAL'S OWN SUBJECT, COMMITTED BY ITS AUTHOR.** `needs3-arm.ts` shipped
+  **unparseable** — a scripted edit had left a corrupt duplicate of `fileURLToPathish` beside the
+  original — so **Campaign 3 could not run in the shipped tree**, and criteria 3, 4 and 5 were
+  marked MET resting on it. `pnpm verify` was **eleven rows green over a file that does not
+  parse**, because **no tsconfig in this repository references `tools/gates`** and no test
+  imported it. The goal about things nothing checks shipped a file nothing checks.
+
+  - **Fixed**: the corrupt copy is gone and the function is declared above its use.
+  - **Given a home a checker can see**: the template moved to
+    `tools/headless/src/needs3-arm.ts` — **the location it is copied to**, so its imports resolve
+    identically in the arm and under `pnpm typecheck`, which **immediately found a second real
+    defect** in its `lodgingOnly` types (a cast that dropped `id` and `name` from the result).
+  - **The parked falsification test is now EXECUTED, not parked**:
+    `needs-history.spawn.test.ts` runs the arm and asserts its shape, and — **the assertion that
+    had never once executed** — watches the **module-identity refusal fire**, on a decoy that
+    resolves the simulation successfully and outside its own tree. Two earlier decoys were
+    rejected by the test itself for failing with `ERR_MODULE_NOT_FOUND` instead: satisfiable by
+    the harness breaking, which is G-021's malformed-arm defect.
+  - **Campaign 3 was RE-RUN and its earlier numbers are WITHDRAWN**, not restated. Verdict
+    unchanged in both regimes; every figure different.
+
+  **THE SEVEN MAJORS, each with what discharges it:**
+
+  1. **The REPLACE brake inspected nothing for two of four axes** — the harness reported module
+     constants (60/32) while the rooms rotation runs 25/100 rooms at arrivals 20/5/60/15. Now
+     every rotation reports a **per-arm fingerprint** (`name:rooms/arrivals/amenities/needTypes`,
+     in order) and the campaign records it. `sim-critic`'s exact repro — `saturated-100` 100 →
+     200 — **now refuses and names the drifted arm**; witnessed.
+  2. **The quotable `SCALING` line stated the wrong workload** for the two room axes. It now
+     prints its own two arms: `arms=saturated-100(100r/5a/1m)/saturated-25(25r/20a/1m)`.
+  3. **`MIN_READINGS_PER_REGIME = 7` was sourced to text that does not exist** — and this goal's
+     own Campaign 1 used n=5 loaded. **The constant is gone**: the campaign now DECLARES its
+     counts and the derivation pins the arrays to them. A pin, not a threshold, so there is no
+     number left to source.
+  4. **`load.mjs` could not spawn `pnpm` on win32 and never checked `result.error`** — the
+     invocation that makes "loaded" reproducible could not run. Fixed (shell for a bare name,
+     never for a path; a failed spawn is now loud), and **the four-cell classifier now exists in
+     the tree** as `tools/gates/arm/suite-signature.mjs`, with `suite-signature.test.ts` proving
+     all four cells reachable — including that a reworded vitest string degrades to
+     UNCLASSIFIED rather than to PASS.
+  5. **"The cap never worked" was broader than the campaign** — restated in all four places to
+     what it covers, with the historical question parked *with its falsification test*.
+  6. **The stopwatch scan's glob translation was inert and its guard could not fail.** `**` is
+     now expanded in both forms by an explicit tokeniser, and the exclude step is witnessed:
+     `sim-critic`'s probe — delete the clause from `suiteFiles` — **now reddens**, checked.
+  7. **ADR-0016's worked example was wrong by two orders of magnitude** (164 parts in ten
+     thousand, not six; the six belongs to a different pair). Corrected, with the swap recorded.
+
+  **THE THREE MINORS**: the `median` convention is now **declared, with the cost of the choice
+  tabulated** (+0.28% to +2.64% looser than the mean-of-middles) and **pinned in both
+  directions** by a test; the `TIMED_RUNS` citation is `:144`; Campaign 1's slot line names both
+  regimes.
+
+  ### SWEEP 2 — ONE CODE FINDING, AND IT WAS THE GOAL'S OWN INSTRUMENT COMMITTING THE GOAL'S OWN DEFECT
+
+  **`needs-history.mjs` rendered a verdict it could not support, and hid the caveat in exactly
+  the branch that asserted a regression.** Two runs of `--repeat 1 --samples 2` — one by
+  `sim-critic` at 1.3117, one by the orchestrator at 1.2725 — returned **opposite verdicts**
+  across the threshold, and only the "NO MULTIPLE" branch printed the sentence explaining that
+  the instrument cannot resolve a difference that size. **Fixed in the control flow**:
+
+  - **the verdict is taken from a distribution-free INTERVAL** (order statistics, coverage
+    printed, corner-to-corner combination that is deliberately conservative because this tool's
+    failure mode is over-claiming);
+  - **the caveat prints in every branch**;
+  - **`--repeat 1` refuses** — `NO VERDICT — too few readings` — because no order statistic
+    reaches the coverage floor at n=1. The same shape as `scaling-bound.mjs`'s pin: refuse when
+    the readings cannot support what is claimed of them.
+
+  **AND THE FIX CHANGED AN ANSWER, WHICH IS THE POINT OF FIXING IT.** At n=9 the quiet arm came
+  back INCONCLUSIVE where the point estimate had said NO MULTIPLE. n=25 was then pre-registered
+  for both regimes before either was run, and reported as it came: quiet excludes a multiple,
+  **loaded still cannot tell**.
+
+  **AND THE VERIFICATION PASS THAT FOLLOWED FOUND THE CONCLUSION THIS BLOCK HAD OUTLIVED.**
+  `sim-critic` checked the interval arithmetic by measurement rather than by reading — the exact
+  coverage ladder at n=25 (`k=7` 98.54%, `k=8` 95.67%, `k=9` 89.22%, so `k=8` is the tightest
+  admissible), and **320,000 Monte Carlo trials across σ=0.05, σ=0.30 and a heavy right tail**,
+  finding the corner-to-corner ratio interval delivers **~99.5% coverage while labelled 95.7%**:
+  conservative by four points, invariant to spread and skew, and erring in the direction the file
+  says it errs in. It then re-derived the block's own headline sentence and **falsified it** —
+  see the sitting/revision decomposition above. A pass that verifies the arithmetic and then
+  checks whether the PROSE still follows from it is the pass that catches this class.
+
+  **THE TWO PROSE FINDINGS**: the median-cost table's `rooms-bench` row was wrong (4.5502 →
+  **4.5576**, +1.36% → **+1.19%**) in a table built to make a free parameter checkable and left
+  unchecked — **now parsed and recomputed by `scaling.bound.test.ts`**, with the old figures
+  shown to redden it. And **ADR-0016's worked example is DELETED**: it was wrong in three
+  successive drafts, including inside its own correction, so the ADR now states the rule and
+  points at the code that executes it — which is the lesson `budget.mjs` taught at G-018.
+
+  ### THREE DEFECTS THIS GOAL FOUND IN ITS OWN WORK, BEFORE ANY CRITIC SAW IT
+
+  1. **`stopwatch.scan.test.ts` fired on its author, twice.** `scaling.bound.test.ts` timed the
+     gate's refusal with `Date.now()` to assert it happened "before measuring", and READ the
+     harness's path. The clock is gone — the ORDER is now asserted without one, by running the
+     copied gate from a temp directory where the harness cannot be found, so a gate that reached
+     the measurement would say *"the instrument failed"* instead — **with a control arm that
+     shows the unpatched copy does say exactly that**. The importer check now matches an
+     `import`, not the word.
+  2. **The regex-literal blind spot in `stripComments` RECURRED**, one goal after
+     `speed-ladder.scan.test.ts:132-149` recorded it and parked it. Written as `/'([^']+)'/g`,
+     the two quotes on that line swallowed the next several comment blocks and the scan reported
+     its own prose as a violation of itself. Fixed by building the pattern from
+     `String.fromCharCode(39)`; the shared copy in `tools/gates/lib/scan.mjs` — behind I1, I2 and
+     I3 — is untouched and still parked, because the failure direction is a loud false positive.
+  3. **A PILOT CAMPAIGN WAS DISCARDED, NOT PATCHED.** Fifteen runs of campaign 1 were taken
+     while two tests were being added to the tree, so the suite went from 1,424 to 1,426 tests
+     mid-campaign and one run failed on a half-written file. Under ADR-0015 that is a
+     configuration change and the readings measure a different quantity, so **the whole campaign
+     was re-taken on a frozen tree** rather than pooled or explained. Recorded because the
+     temptation was to keep the fifteen: *do not edit the tree during a measurement campaign.*
+
+  ### THE BITE, WITNESSED ONCE AT VERIFY (seam B was taken, so there is no proof gate)
+
+  `git stash push -u` → G-020b's **M1 quadratic** (factor 3) injected at `stepGuests`'s
+  per-guest loop → `git stash pop` → `pnpm check:scaling`. **Exit code 1**, and the two axes it
+  reddened are the two a guest-quadratic can reach:
+
+  | axis | mutated | bound | verdict |
+  |---|---|---|---|
+  | `rooms-saturated` | **9.9921** | 5.7516 | **RED** (1.74× over) |
+  | `rooms-bench` | **5.9200** | 4.6119 | **RED** (1.28× over) |
+  | `needs` | 1.8626 | 3.1135 | green |
+  | `density` | 1.2391 | 2.0239 | green |
+
+  **The two green axes are the theorem, not a gap**: both hold the guest population still, so a
+  term quadratic in GUESTS lands on both arms and cancels in the quotient — exactly what
+  `check-tripwire.mjs` measured at G-020b, reproduced here against the relocated bounds.
+
+  **REVERTED BY REVERSING THE EXACT EDIT AND PROVED BY DIGEST**, never by `git checkout --`:
+  `packages/sim/src/guests.ts` is byte-identical to `HEAD` afterwards,
+  `sha256 34e762acc73865b0…` before and after.
+
+  ### VERIFY — ELEVEN ROWS, ALL GREEN, AND THE UNMOVED SET
+
+  `typecheck` 8.1s · I1 4.1s · I3 1.0s · **I4 51.0s** · I2 8.4s · I6 4.8s · I5 9.1s ·
+  `check:measure` 31.5s · `check:tickcost` 1.1s · `check:tickcost:proof` 79.3s ·
+  **`check:scaling` 5.9s**. Unmoved: **I2 `10926cc3b569c887`**, save **v9**, `SAVE_V1_CONTENT`
+  `8e09fe4f0fa162a3`, `BUDGET_MS` **389,333ms**. `check:tickcost` returned in 1.1s because the
+  arms' simulation and content bytes are IDENTICAL — this goal changes no file under
+  `packages/sim` or `packages/content`, which is what that row is saying.
+
+  ### CRITERION STATUS, STATED BY THE BUILDER RATHER THAN LEFT TO BE INFERRED
+
+  | criterion | status |
+  |---|---|
+  | `pnpm test` at n ≥ 10 uncapped, signature-B rate reported, cap decided by a reading | **MET** — n=10 per arm quiet, n=5 per arm loaded, four-cell classifier, cap removed |
+  | the timing bounds no longer run inside `pnpm test`; standalone beside `check:tickcost` | **MET** — `pnpm check:scaling`, plus `stopwatch.scan.test.ts` making "no clock in the suite" checkable |
+  | the discriminating measurement, quiet and loaded, both stated | **MET, third campaign** — n=25 per revision per regime. **Quiet EXCLUDES a 1.3× multiple AND excludes 1.0** (1.1071..1.2534), so a real 11-25% difference is positive evidence and is parked; **loaded is INCONCLUSIVE** (0.9668..1.3228) and says so. Two earlier campaigns withdrawn: one unreproducible as shipped, one taken through a point-estimate verdict |
+  | both revisions run the 3-arm rotation | **MET** — and the 4-arm reading is named as a different quantity |
+  | per-arm module identity asserted | **MET, and now WITNESSED** — child refuses, parent re-checks, each arm's hash matches its own revision's CLI, and `needs-history.spawn.test.ts` watches the refusal fire. It was previously asserted by a file that did not parse |
+  | the bound re-derived above the observed quiet maximum | **MET** — and above the loaded maximum too; the floor pools regimes |
+  | the two constraints get an executable brake and a pre-registered crossing response | **MET** — equality pin, floor refusal, "too noisy to gate", response written before the campaign |
+  | **the unreliable count reaches 0 in every digest** | **NOT MET, AND NOT CLAIMED.** Defect B is diagnosed and unrepaired; the count is **1 gate / 1 defect** |
+  | all §2 gates green (`pnpm verify`, eleven rows) | **MET** |
+
+  **The digests are NOT edited here.** §4.1 makes that REFLECT's step and requires all four to
+  carry a byte-identical as-of line, rewritten in one pass. The line this goal supports is:
+  *"Unreliable: 1 gate, 1 defect (I4 — worker RPC starvation under load, diagnosed, cap removed
+  as measured-ineffective)."*
+
+  ### §5.8 — "A STOPGAP THAT BECAME POLICY", AND WHERE ELSE IT LIVES
+
+  The class this goal's headline fix lands on: **a provisional accommodation, correctly reasoned
+  when made, that nothing is scheduled to revisit.** Swept with locations and results — a
+  location can be re-inspected, an assurance cannot (`HOTELSIM.md:279`).
+
+  - `vitest.config.ts` `maxWorkers: 2` — **THE INSTANCE. Fixed by a reading** (campaign 1
+    below), not by inertia and not by another comment.
+  - `vitest.config.ts:25` `testTimeout: 30_000` — **re-measured at the shipped configuration**,
+    because the inherited reading was taken AT the cap. See campaign 1.
+  - `tools/gates/arm/measure-arm.mjs:84,144` `WARM_UPS = 2`, `TIMED_RUNS = 3` — **CARRIES THE
+    SHAPE AND ALREADY DECLARES IT.** The file records that `TIMED_RUNS = 3` was measured and does
+    NOT move the noise floor (sd 6.8% against 8.4% at n=7, unresolvable), and keeps it because it
+    is cheap rather than because it works: *"~150ms against the ~900ms a process costs to
+    start"*. **Checked, not changed**: a stopgap that states its own evidence and its own cost is
+    the thing this rule asks for, and re-litigating it is not this goal's.
+  - `tools/gates/bench.mjs:47` — the ten seconds' policy, *"when this gate starts to hurt, the
+    answer is a faster tick, not a bigger number here"*. **Checked, CLEAN**: genuinely withdrawn
+    in the file, with its replacement stated in the same paragraph. The cap's comment cited this
+    correctly.
+  - `.github/workflows/verify.yml` — **CARRIES IT IN ITS PUREST FORM.** Written at bootstrap
+    "even though there's no remote yet"; there is still no remote, so it has never run. Measured
+    and escalated at SELECT (`ESCALATIONS.md`, 2026-08-10); **the human's, not an agent's.**
+  - `tools/gates/measure.mjs`'s `--repeat`, forwarded by `tripwire.mjs` and never used —
+    **checked, unchanged, still parked with its falsification test** (G-020b). Nothing in this
+    goal disturbs it.
+  - `NOT_OVERHEAD_DOMINATED = 2` — **checked, clean, and it now carries its own measurement.**
+    Not a stopgap but an ADR-0007 anti-vacuity guard, and it moved with the bounds because it is
+    itself a timing assertion. Measured headroom (n=12 quiet medians, campaign 2's rotations,
+    `win32/12cpu`): `one-need` **6.2×** idle, `full-vector` **13.7×**, `bench-100` **30.1×**,
+    `saturated-100` **80.5×**.
+
+  **AND THE `~39×` IN THE OLD `scaling.test.ts:111` IS RESTATED RATHER THAN CARRIED.** It said
+  *"measured at ~39x when this was written"* with no regime, sample count or date — the
+  regime-less-noise class handed to this goal. It is now the four figures above, each with its
+  five slots, and it lives in `scaling-bound.mjs` beside the constant it justifies.
+
+  **THE OTHER TWO REGIME-LESS LOCATIONS ARE WITHDRAWN, NOT RESTATED** (`CLAUDE.md` rule 5).
+  `arm/measure-arm.mjs`'s `~±10%` single-reading and `~±3%` `--repeat 7` figures are struck at
+  **`:92`, `:96` and the third occurrence at `:109`** the block never named, and the pointer in
+  `workload.mjs:42` with them: the first carried no load condition, and the second is already
+  known not to reproduce (0.9067 and 1.0501). Where a pinned figure is wanted,
+  `tripwire.mjs`'s `BOUND_CAMPAIGN` carries five slots per arm and computes its ceiling.
+  **`GOALS.md`'s G-020a block is annotated in place; `JOURNAL.md` and `ESCALATIONS.md`'s closed
+  entries are NOT retro-edited** — ADR-0008, and the orchestrator's ruling 3: history records
+  what was believed, and the correction goes in the current entry.
 
 ## G-021 — The speed ladder is content
 Status: **done, DRY at 1/3** — 1 sweep (4 MAJOR + 4 MINOR) plus a §5.6 plan pass that returned

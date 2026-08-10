@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-021 done. M2: 11 of 13 goals. Unreliable: 1 gate, 2 defects (I4).*
+*As of 2026-08-10, G-020c done. M2: 12 of 13 goals. Unreliable: 1 gate, 1 defect (I4).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent (G-013 paid v7; G-015 v8).
@@ -898,3 +898,68 @@ stops is the ratchet running quietly to absurdity.
 
 **Scope.** It governs ratio bounds. It does not govern I5, whose budget is derived from a
 requirement rather than from a measurement (§2.1.2) and therefore has no margin to eat.
+
+---
+
+## ADR-0016 — A SIGNAL bound is pinned to equality with its derivation, and refused beneath the worst reading observed
+Date: 2026-08-10 · Context: G-020c, the scaling bounds leaving `pnpm test` · Decided by:
+sim-engineer, to be verified by the orchestrator
+
+**Decision.** A gate that compares a **signal ratio** against a bound places that bound at
+
+```
+BOUND == trunc(quiet median x 1.5, 4dp)          and          BOUND > max(every reading, every regime)
+```
+
+and **refuses to start** if either fails, in either direction. The first constraint is
+G-010's rule, which ADR-0015 keeps for a signal; the second is new, and the equality is new.
+
+**Why equality, when G-010 says "held at or below".** "At or below" leaves a RANGE, and this
+project has twice discovered that a number chosen from inside a range is a number nobody can
+source (§2.1) and a number a later editor can nudge (ADR-0015's 8.3% demonstration). At G-020c
+every candidate inside the range was defensible and none was derivable. Pinning the constant to
+equality removes the choice: the diff still shows the constant moving — which is why it stays
+written out — but it can only move because a reading moved.
+
+**Why a floor at all, and why it pools regimes.** ADR-0015's ceiling exists so a bound cannot
+admit the class it catches. Nothing in it stops a bound being placed UNDER the instrument's own
+spread, and that is exactly how `needs.scaling.test.ts` came to make I4 unreliable for five
+goals: `BOUND = 2.5` against quiet readings of 2.5906, 2.6534 and 2.5903. **A bound beneath a
+reading the instrument has already produced with nothing to find is not a tight gate, it is a
+gate that fires on nothing** — §2.0's unreliable, not §2's red. The floor pools every regime
+because ADR-0015's first principle is that the gate never fires on noise and **an observed
+excursion counts whatever produced it**.
+
+**The two constraints can cross, and the crossing is the useful output.** They were already
+crossed on this repository's own history: **G-016's recorded median of 1.74 puts the ceiling
+BELOW a quiet reading `sim-critic` observed on the shipped assertion.** That is not a
+hypothetical about a future campaign; it is the state the incumbent bound was in when this ADR
+was written, and it is why the floor is a refusal rather than a footnote.
+
+**THE WORKED EXAMPLE THAT USED TO SIT HERE IS DELETED, AND THAT IS THE FINDING.** It stated a
+gap between two constants and was **wrong three times in three drafts** — once with the numbers
+swapped under the right descriptor, once with the descriptor kept over the wrong pair, and once
+with a percentage off by a factor of ten in the correction itself. Three attempts, three
+arithmetic errors, in a paragraph whose only job was to illustrate a rule the reader can apply
+in one division. `budget.mjs` taught this repository the same lesson at G-018: **the derivation
+belongs in code that executes, and prose should state the rule and stop.**
+`tools/gates/scaling-bound.mjs` carries the readings, computes both constraints, and refuses
+when they meet; `scaling.bound.test.ts` recomputes them and now parses the one cost table that
+remains in prose. Anyone wanting the figures should read those, where they cannot go stale. When they cross the gate says **the instrument is too
+noisy to gate this axis** and refuses; it does not widen, pick the looser constraint, or fall
+back to the incumbent. **The pre-registered response is a change to the INSTRUMENT** — more
+samples per reading — followed by a **re-taken campaign that REPLACES** (ADR-0015: a different
+sample count is a different configuration, and a pooled max only ever rises).
+
+**Which regime supplies which statistic, because this is the part a later editor will get
+wrong.** ONE stated regime for the signal (the quiet arm); EVERY observed regime for the floor.
+Taking the median from a loaded arm to widen the window is regime-mixing: under load these
+ratios do not merely get noisier, **they move** — measured on four axes at G-020c, three of four
+moved UP on the median and three of four moved UP on the max, which falsified the
+"load can only push a ratio down" generalisation the previous bound rested on.
+
+**What this does NOT govern.** A NOISE bound — ADR-0015's geometric rule owns those, and the
+tell is unchanged: a perfect null of 1.0000 would yield 1.5000 under the rule above, so the
+multiplier would be doing all the work. `check:tickcost` is a noise bound; `check:scaling`'s
+four axes are signals. A gate that cannot say which it has does not yet know what it is
+measuring.

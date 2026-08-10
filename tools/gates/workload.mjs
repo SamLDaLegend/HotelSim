@@ -38,10 +38,12 @@ export const SEED = 42;
  * backwards. It said the golden pinned this value; the code had made this value pin the
  * golden — `bench.workload.golden.test.ts` read it for its own `DAYS`, so changing the
  * instrument's arm length would have moved two committed hashes and five hand-checked
- * counts in the sharpest golden in the repo. Since the likeliest response to this
- * instrument's ±10% noise floor is a LONGER ARM, that coupling would have turned the
- * golden's "IF A HASH BELOW MOVES, STOP" into routine re-pinning, which is how a golden
- * stops being evidence.
+ * counts in the sharpest golden in the repo. Since the likeliest response to a noisy reading
+ * is a LONGER ARM, that coupling would have turned the golden's "IF A HASH BELOW MOVES, STOP"
+ * into routine re-pinning, which is how a golden stops being evidence.
+ * (This sentence used to source that response to "this instrument's ±10% noise floor". THAT
+ * FIGURE IS WITHDRAWN — see `arm/measure-arm.mjs`, G-020c: it carried no load condition, and
+ * the argument never needed a number.)
  *
  * So the golden owns its own run length again, and nothing but `measure.mjs` reads this.
  * The two still describe the same simulated history, and that is now WITNESSED rather than
