@@ -1382,10 +1382,28 @@ Exit criteria:
   - pnpm sim:run --days 30 --seed 7 --rooms 6  prints a review distribution with at least
     THREE distinct scores non-zero
   - **AXIS 1 — LODGING.** --rooms 1 and --rooms 12 produce review distributions whose means
-    differ by more than <n>, COMPUTED BY THE TEST rather than asserted — a hotel that serves
-    nobody must not review the same as one that serves everybody
+    differ by more than <n>, COMPUTED BY THE TEST rather than asserted.
+    **TWO FACTS ABOUT THIS AXIS, MEASURED BY `ai-engineer` AT PLAN AND RE-VERIFIED BY THE
+    ORCHESTRATOR — the gloss that used to sit here was wrong twice over.**
+    (a) **`--rooms 12` is BYTE-IDENTICAL to `--rooms 6`** in every need and guest counter:
+    demand saturates at ~5 concurrent guests (12 arrivals/day × 480-tick stays), so this axis
+    is **starved vs adequate**, not small vs large. It still discriminates — that is what the
+    criterion needs — but nothing here is a claim about capacity beyond ~5 rooms.
+    (b) **`--rooms 1` is NOT "a hotel that serves nobody"**, which is what this line used to
+    say. The engagement reservation does not require a room (`guests.ts:1402-1437`), so a
+    guest queuing for lodging still uses the amenities. Measured at `--days 30 --seed 7`:
+    **comfort met 179 at `--rooms 1` against 145 at `--rooms 6`** — the starved hotel serves
+    *more* engagement needs, because waiting guests have time to. **The upper arm is not
+    better at everything, and a review function that assumed it were would be tuned against
+    a fiction.** The separation the axis actually carries is **1.75 → 3.00 needs met per
+    departure**, and the review scale has to turn that into more than one band.
   - **AXIS 2 — THE STAY. HOLD ROOMS FIXED, VARY AMENITY DENSITY, AND REQUIRE THE REVIEW MEAN
-    TO MOVE** by more than <n>, again COMPUTED BY THE TEST. `watch-ticks` and
+    TO MOVE** — **now a THREE-POINT LADDER, strengthened at PLAN on `ai-engineer`'s argument
+    and accepted: `mean(amenities 0) < mean(amenities 1) < mean(amenities 5)` strictly, at
+    fixed `--rooms 6`.** Two points cannot distinguish *"the scale moves"* from *"the scale is
+    a switch"*, and the property this criterion is actually named for — the shipped default
+    sitting **strictly inside** the scale — needs the middle point to be a measurement. Each
+    gap is COMPUTED BY THE TEST. `watch-ticks` and
     `watch-amenities` already ship with identical entity composition, so this costs an
     invocation rather than a design. **Written into the criteria list 2026-08-09 by the
     orchestrator: the human ruled it a criterion before PLAN and it had been recorded only
@@ -1404,6 +1422,47 @@ Exit criteria:
 Out of scope: the outcome table (G-015); reputation as a stateful aggregate; reviews
   feeding demand, pricing or arrival rate (ALL M4); review text (M5/M6)
 Critique rounds used: 0/3
+
+  **ORCHESTRATOR RULINGS AT PLAN, 2026-08-10.**
+
+  1. **NO SEAM, AND THE BUILDER DID NOT OFFER ONE — accepted with its argument, not by
+     default.** It enumerated three cuts and showed each leaves a half unable to discharge a
+     criterion: *function/record* ships a mechanism that is off, **verbatim G-014b's
+     criterion-2 failure**; *reviews/boundary* ships the field before the fence, which is the
+     wrong order for a fence; *reviews/WATCH* spends a goal's ceremony on one `--record` flag.
+     The load-bearing reason it stays sweepable: **the review function reads no world state
+     but the departing guest** — no provider search, no reservation, no ordering — so none of
+     the classes `ai-critic` hunts is expressible in it. Its predictions (1-2 sweeps, 0
+     BLOCKERs, **at least one MAJOR landing on the derivation or the evidence rather than the
+     code**) are scored at REFLECT.
+  2. **CRITERION 2 GAINS A NEGATIVE CONTROL.** "Three distinct scores" is a measurement only
+     if some configuration yields fewer: `--rooms 6 --amenities 0` yields **one**. Without it
+     the number 3 is a constant.
+  3. **THE SCALE'S SIZE IS DERIVED, NOT CHOSEN, AND THE DERIVATION IS ONE INEQUALITY.** A top
+     review must be unreachable while any need is unmet; with uniform weights that holds
+     **exactly when `bands > needTypes`**. Shipped: 1..5 against 4 need types. **It is
+     refused at bind time**, so content whose review scale cannot express its own need table
+     does not load — the same standing as a need no provider claims.
+  4. **THE SATURATION ADMISSION IS ACCEPTED AND PARKED, NOT PATCHED.** At `--amenities 5`
+     every guest meets every need with no wait, so every review is maximal. **That is a
+     correct answer to an oversupplied hotel, and inventing a term to make a perfect stay
+     review imperfectly is manufactured difficulty.** Demand is a fixed cadence until M4, so
+     the question is not answerable here. Parked with its falsification test: *when M4 makes
+     arrivals respond to reputation, re-run the ladder at the configuration a player can
+     afford; if the top score is still modal there, the scale needs a term oversupply cannot
+     buy.* **`balance-critic` owns this goal precisely because this is dominant-strategy
+     territory — if it reads this as a dominant strategy rather than a correct answer, that
+     is a §5.3 adjudication and I would rather have it than a pre-emptive patch.**
+  5. **THE §5.8 SWEEP FOUND THE CLASS IN TWO SHIPPED TESTS, AND NEITHER IS REPAIRED HERE.**
+     `needs.report.test.ts:108,116,335` — G-012's criterion as a test — asserts *two* of four
+     need rows straddle met-and-unmet, so **a build with two inert needs passes**: the human's
+     G-019 finding, one goal earlier, in a closed goal's recorded criterion. And
+     `hysteresis.report.test.ts:133,344` sums `abandoned` across rows, so three of four rows
+     at zero satisfies it. **Reported with locations rather than repaired** — widening this
+     goal to fix two earlier goals' criteria is how a fat goal starts. Parked.
+  6. **I2's HASH WILL MOVE** — a new `World` field and new content. The builder reports the
+     new value; that is expected, not a regression, and the unmoved set to check is
+     `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` and the v1 fixture's zero-line diff.
 
   **THE HEADLINE CRITERION CANNOT DETECT WHAT IT CLAIMS — HUMAN FINDING, 2026-08-09,
   BEFORE PLAN. Read this before designing the review function.**
