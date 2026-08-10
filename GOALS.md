@@ -2213,8 +2213,18 @@ Critique rounds used: 0/3
     lacks. Same fix, same reason.
 
 ## G-020c — The two unreliable-gate defects, and one campaign that settles both
-Status: pending — **split out of G-020b at PLAN by the orchestrator, over the builder's
-  narrower proposal. Both entries in `ESCALATIONS.md`'s I4 record are here and nowhere else.**
+Status: **in-progress** — PLAN dispatched 2026-08-10. Split out of G-020b at PLAN by the
+  orchestrator, over the builder's narrower proposal. Both entries in `ESCALATIONS.md`'s I4
+  record are here and nowhere else.
+
+  **ONE CRITERION IS STRUCK AND HANDED TO THE HUMAN: THERE IS NO REMOTE, SO CI HAS NEVER RUN.**
+  Measured at SELECT — `git remote -v` is empty, and `.github/workflows/verify.yml` has existed
+  since bootstrap without ever executing. **No agent can meet the CI-regime criterion.** It is
+  restated as an M2-exit condition owed by the human (`ESCALATIONS.md`, 2026-08-10). The rest
+  of this goal proceeds unchanged. **The consequence, stated plainly: `check:tickcost` is a
+  timing-dependent bound shipped into `pnpm verify`, whose behaviour on the three-OS hosted
+  matrix `verify.yml` describes is completely unobserved — and no gate in this project has ever
+  been seen running on any machine but this one.**
 Milestone: M2
 Owner pair: sim-engineer / sim-critic
 Statement: I4 stops being intermittent. The two distinct defects behind it — a worker RPC
@@ -2230,15 +2240,14 @@ Exit criteria:
     own precedent for this shape (*"a gate wearing vitest's clothes"*, 2026-08-09)
   - **the discriminating measurement**: `needs.scaling.test.ts`'s need-vector ratio at HEAD
     against a **pre-G-013** revision, paired and interleaved, **quiet and loaded, both stated**
-  - **the CI regime, read off a real run rather than argued.** G-020b shipped a timing-dependent
-    bound into `pnpm verify` on a three-OS hosted matrix having measured **only a 12-core
-    developer machine**; ADR-0015 says such a bound is not trusted until its regime is observed.
-    Record **the first three `TICKCOST` lines and `check:tickcost:proof`'s three ratios from a
-    real CI run.** The `TICKCOST` line now **prints its own regime** (`regime=<platform>/<n>cpu`),
-    so this is a copy rather than a transcription — G-020b removed that manual step when
-    `sim-critic` pointed out it was the same defect as the hand-typed ceiling. If the control or any probe
-    lands near the bound there, that is a §2.0 finding about the gate, **not** a licence to
-    widen it (§9)
+  - ~~**the CI regime, read off a real run rather than argued**~~ — **STRUCK 2026-08-10 AND
+    OWED BY THE HUMAN. There is no remote; CI has never run.** Restated as an M2-exit
+    condition: add a remote, push, and record the first three `TICKCOST` lines and
+    `check:tickcost:proof`'s three ratios. The `TICKCOST` line prints its own regime, so it is
+    a copy rather than a transcription. **If the control or any probe lands near the bound
+    there, that is a §2.0 finding about the gate, NOT a licence to widen it (§9).** In its
+    place, this goal owes only that `tripwire.mjs` states the limitation at the point of
+    use — which it already does, more correctly than its author knew.
   - the count of unreliable gates in every digest reaches **0**, and §2.0's guard is satisfied
   - all §2 invariant gates green (pnpm verify)
 Out of scope: optimising anything the discriminating measurement finds — if a real per-need

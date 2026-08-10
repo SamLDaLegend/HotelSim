@@ -566,3 +566,58 @@ That is G-020c's to repair.
 tripwire that is deliberately **outside `pnpm test`**, so it adds no new timing bound to I4's
 path — but the two entries above are still open, and §2.0's "a third is a stop condition"
 still stands.
+
+---
+
+## OPEN — G-020c's CI-regime criterion cannot be met: there is no remote (2026-08-10)
+
+**Raised by the orchestrator at G-020c SELECT. Blocks one criterion of G-020c and one
+condition of M2 exit. It does NOT block the rest of G-020c, which proceeds.**
+
+**The finding, measured rather than assumed:**
+
+```
+$ git remote -v
+(no output — no remotes configured)
+
+$ ls .github/workflows/
+verify.yml
+```
+
+**`.github/workflows/verify.yml` has existed since bootstrap and has never run.** It was
+written at §10 step 2 "even though there's no remote yet", and no remote was ever added.
+
+**Why this matters more than it looks.** G-020b shipped `check:tickcost` — a **timing-dependent
+bound** — into `pnpm verify`, and `verify.yml` runs `pnpm verify` on a **three-OS hosted
+matrix** where a runner is a shared 2-4 vCPU box. Every reading behind that bound was taken on
+a **quiet 12-core developer machine**. ADR-0015 says a bound is not trusted until its regime is
+observed, and `CLAUDE.md` rule 4's fifth slot exists because of exactly this class of error.
+**So the repo currently carries a gate whose behaviour in the only regime that would ever run
+it automatically is completely unknown** — and has been since G-020b, undetected, because
+nothing here ever pushes.
+
+**Two things follow, and the second is the uncomfortable one:**
+
+1. **The CI regime reading is owed by the human**, not by an agent. It needs a remote, a push,
+   and a run. Creating a remote and pushing are outward-facing actions the orchestrator will
+   not take unbidden.
+2. **Every "CI is green" style assurance anywhere in this repo is unearned.** No gate in this
+   project has ever been observed running anywhere except this machine. The invariants are
+   real and have been run thousands of times — locally, by one machine, in one regime.
+
+**RECOMMENDATION.** Treat this as an M2-exit item for the human rather than a goal blocker:
+
+- **G-020c proceeds without it** and delivers both I4 defects, the standalone timing check, the
+  discriminating pre-G-013 measurement, and the unreliable-gate count reaching zero.
+- **The CI criterion is struck from G-020c and restated as an M2-exit condition owed by the
+  human**: add a remote, push, and record the first three `TICKCOST` lines and
+  `check:tickcost:proof`'s three ratios from a real run. The `TICKCOST` line prints its own
+  regime, so this is a copy rather than a transcription.
+- **Until then `check:tickcost`'s bound is stated as observed in one regime only**, which is
+  what `tripwire.mjs` already says at `LOADED_OBSERVATIONS` — that comment turns out to have
+  been more right than its author knew.
+
+**If the human would rather not have a remote at all**, that is a legitimate answer and it has
+a consequence worth stating: `verify.yml` should then be **deleted** rather than left as
+decoration, because a workflow nobody runs is a check that certifies nothing — which is
+ADR-0007's subject, in YAML.
