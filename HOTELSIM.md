@@ -420,6 +420,8 @@ Why the three states: thirteen goals ran mostly at 1/3 rounds with zero BLOCKERs
 
 Additionally: any goal that is the LAST IN A MILESTONE gets a second critic from a different pair in its final round. Precedent — G-008 ran sim-critic then balance-critic, and the second pass found the 107-million-penny sweep.
 
+THE TWO CRITICS OF A FINAL ROUND ARE ONE ROUND, NOT TWO (ruled 2026-08-10, G-019). Both passes charge the budget once between them, however they are scheduled - in parallel, or one after the other, or one converting from a verification while the other sweeps fresh. The rule says a second critic is required IN the final round; a round that contains two critics is still a round. Charging two would make the safeguard cost double the budget of the goals that do not use it, which would price the rule out at exactly the boundary it exists to protect. What is NOT relaxed: a finding either of them raises is a finding, and the goal still closes only on DRY from both.
+
 
 8. Milestones
 
