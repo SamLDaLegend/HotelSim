@@ -1975,3 +1975,24 @@ lands on the derivation or the evidence rather than the code* — the BLOCKER, t
 `2:356` alone; both axes across six configurations. **I2 `ece843af1efea843`** (moved, as expected
 — new `World` field and new content); `SAVE_V1_CONTENT` `8e09fe4f0fa162a3` unmoved; the v1
 fixture a zero-line diff through **ten** schema versions.
+
+---
+
+## M2 SIGNED OFF — and one obligation that died quietly (2026-08-10)
+
+**Thirteen goals, signed off by the human.** The rulings are in `ESCALATIONS.md` and the two M3
+prerequisites are in `HOTELSIM.md` §8.
+
+**A PENDING RULING DIED QUIETLY, WHICH IS THE THING THE RULING ITSELF PREDICTED.** G-020b's
+block carried the human's instruction that *the instrument extraction is owed in full and
+`maxWorkers: 2` is a stopgap with an expiry*, alongside its own warning that **"a pending ruling
+whose urgency has just been reduced is a pending ruling that dies."** G-020c repaired defect A,
+diagnosed defect B, and removed the cap as measured-ineffective — **but the extraction obligation
+was never restated as a result, and no goal discharged it.** It was noticed by the human at M2
+exit, not by the loop.
+
+**§5.8's whole premise is that obligations must produce STATED RESULTS**, and this one produced
+silence that read as completion because everything around it closed green. **The remedy is not a
+new rule** — §5.8 already covers it — **it is that the obligation is now a hard prerequisite with
+an owner rather than a sentence in a closed goal's block.** That is the same repair the as-of
+stamp needed, for the same reason, on the same day.

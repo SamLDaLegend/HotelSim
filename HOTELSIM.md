@@ -213,7 +213,13 @@ A NUMBER CARRIES FIVE SLOTS (CLAUDE.md rule 4, fifth added 2026-08-09 by human r
 
 ANY COUNT IN A DIGEST NAMES ITS UNIT (added 2026-08-09, human). Gates, tests, files and findings are FOUR DIFFERENT DENOMINATORS and the digests have mixed them — the unreliable-gate count read 1 in one record and 2 in another purely because nobody had said which noun it counted. THIS IS THE SECOND TIME A MEASUREMENT DISAGREEMENT HERE RESOLVED TO A DEFINITION RATHER THAN A DEFECT; G-016's absolutes-versus-ratios was the first.
 
-Each of GOALS.md, DECISIONS.md, JOURNAL.md and PARKING.md carries a rolling digest at the top under a fixed heading. Fifteen lines maximum. It is REWRITTEN at every REFLECT and never appended to. It carries: current schema version, current gate readings, live obligations owed by future goals, and open contradictions. The append-only history stays exactly as it is beneath it.
+Each of GOALS.md, DECISIONS.md, JOURNAL.md and PARKING.md carries a rolling digest at the top under a fixed heading. It is REWRITTEN at every REFLECT and never appended to.
+
+SCORED AT M2 EXIT AND AMENDED BY THE HUMAN (2026-08-10). The digest is KEPT: it caught the stale-state drift it was built for, and it is the first thing a reader reads. What failed was two hand-maintained numbers, and they are treated differently.
+
+THE FIFTEEN-LINE CAP IS DROPPED. It failed four times in three days, and the fourth failure was the orchestrator's own, one REFLECT after recording the third as the argument for automating it. Automating it was the wrong remedy and the human named why: ENFORCING A LINE COUNT IS ADDING A CHECK TO SATISFY A NUMBER RATHER THAN TO PIN BEHAVIOUR, which §9 already lists as an anti-pattern. An unenforced arbitrary number is a superstition with a heading; AN ENFORCED ARBITRARY NUMBER IS A SUPERSTITION WITH CI ACCESS, WHICH IS WORSE. Keep digests short because a long one is not read, not because a check says so.
+
+THE AS-OF STAMP IS AUTOMATED, AND IT GETS AN OWNER. One source, four files, and REFLECT fails if they disagree — mechanical, cheap, and high-value. It is a hard prerequisite of M3's first goal (§8) rather than a seeded obligation, BECAUSE THE SEEDED VERSION AT THE FOOT OF THIS SECTION ALREADY FAILED EXACTLY ONCE BY HAVING NO OWNER, and re-seeding it the same way would produce the same result. It carries: current schema version, current gate readings, live obligations owed by future goals, and open contradictions. The append-only history stays exactly as it is beneath it.
 
 The reason: the four ledgers passed 2,800 lines and JOURNAL.md — which calls itself the memory that survives compaction — is a quarter of that. An ADR amendment has already spent a day filed under the wrong ADR.
 
@@ -433,9 +439,23 @@ M1 — Structure. Multi-floor grid, build and demolish commands, room validity r
 
 M2 — Needs. Full need vector, item-based provider registry, utility scoring, satisfaction over ticks, patience drain, reviews. Guests visibly succeed and fail. ("Visibly" is discharged by G-017's replay viewer and a WATCH observation in JOURNAL.md, not by the review distribution alone — ADR-0013.)
 
+EVERY SCANNER GATE OWES A PROOF-OF-BITE TEST (ruled 2026-08-10 by the human, generalising G-019's third instance). A gate that decides by matching source text is only as good as its predicate, and three goals running produced the same silently-degraded predicate: a backslash consumed by a template literal, turning a word boundary into a two-letter character class. All three sat inside scanners - a purity check, a boundary fence, a partition guard - and all three changed no answer on the day they shipped.
+
+THE STRUCTURAL POINT, WHICH IS WHY THIS IS A RULE AND NOT A NOTE: the gates check everything, and nothing checks the gates except proof-of-bite, which was done BY HAND AT BOOTSTRAP and never made standing. A scanner whose predicate has quietly stopped matching reports a clean tree forever, and it reports it most confidently about the thing it was built to catch.
+
+It is cheap, because the technique is already in the repo three times over - `check-tripwire.mjs`, `check-measure.mjs` and `viewer.readonly.test.ts` all copy a gate, break the copy in one named way, and assert it goes red. A proof must fail for the RIGHT reason: G-019 shipped one that removed the scanned subject rather than the mention, so a predicate hard-coded to `false` satisfied it.
+
 M3 — Circulation. Stairs and lifts as queued shared resources. Vertical pathing. Wait time as a first-class satisfaction input. This is where the genre's difficulty actually lives.
 
 M4 — Economy. Nightly settlement, staff hiring and wages, upkeep and decay, reputation feeding demand, room pricing. Balance critic runs long simulations and the results are reviewed.
+
+M3 HARD PREREQUISITES, TWO, RULED BY THE HUMAN AT M2 EXIT (2026-08-10). Neither held M2 open — M2's statement is about needs, and both of these are INSTRUMENT DEBTS. Both land on M3's FIRST goal, in the same shape as scenario capital for M4.
+
+(1) I4's DEFECT B, REPAIRED — and the `--maxWorkers` stopgap expires with it. One gate carrying one defect clears the stated bar, so exit was permissible. But B is a LOAD-SENSITIVE flake and M3 is pathfinding and queued shared resources — the milestone most likely to add load. Carrying a load-sensitive unreliable gate into the milestone that stresses it is BAD SEQUENCING RATHER THAN ACCEPTABLE RISK. The cap was approved as provisional and has now had a milestone's worth of inertia.
+
+(2) CI ACTUALLY RUN, GREEN, ON A REAL REMOTE, BEFORE M3 OPENS. This is the larger of the two and the human ranks it THE LARGEST UNVERIFIED CLAIM IN THE PROJECT. `JOURNAL.md`'s bootstrap entry records the gates as wired into a three-OS matrix; THAT MATRIX HAS NEVER EXECUTED. A claim has sat in the permanent record for nineteen goals, attested at a human sign-off, having inspected nothing — ADR-0007's defect class AT THE INFRASTRUCTURE LAYER, underneath everything this project has been rigorous about.
+
+THE SPECIFIC EXPOSURE: I2 says byte-identical ON EVERY PLATFORM and has only ever been tested on one. It is the load-bearing invariant, the tripwire for the whole design, and ITS MOST DEMANDING CLAUSE IS THE UNTESTED ONE. Add a timing-derived bound now shipping inside `pnpm verify`, calibrated on a single machine, and M3 would be the first milestone where a cross-platform surprise costs real rework. If the first matrix run is red, that is the cheapest it will ever be to find out.
 
 M4 HARD PREREQUISITE (ADR-0013 §5): the scenario-capital mechanism lands before the first M4 goal starts. --rooms N seeds stock that is cash at the refund rate — --rooms 3 carries 375,000p against a 500,000p starting constant — and every balance sweep in this project used that flag. Tuning demand and pricing against a 75%-inflated opening balance is how a whole milestone's evidence base goes bad quietly.
 

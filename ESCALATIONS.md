@@ -834,3 +834,30 @@ different goal's block; and **three of four exit criteria in one goal, and all t
 were satisfiable without the feature working** — each found by a builder or critic at PLAN, which
 is the cheapest moment, and each now recorded as ADR-0007's sixth amendment: **a vacuous check
 fails to catch a defect; a vacuous criterion certifies the goal.**
+
+### RESOLVED 2026-08-10 — M2 IS SIGNED OFF, with three rulings and two prerequisites
+
+**"M2 is signed off."** One gate carrying one defect clears the stated bar, so exit was
+permissible. **Neither prerequisite below holds M2 open — M2's statement is about needs, and
+both are INSTRUMENT DEBTS.** They land on M3's first goal instead, in the same shape as
+scenario capital for M4. Both are now in `HOTELSIM.md` §8.
+
+**THE DIGEST — KEPT, STAMP AUTOMATED, CAP DROPPED.** The human owned the scoring of a mechanism
+they proposed, and corrected my recommendation on the half I got wrong: I had offered "automate
+the two mechanical parts **or** delete the cap", treating the cap as automatable. It is not.
+*"Enforcing a line count is adding a check to satisfy a number rather than to pin behaviour",*
+which §9 already names — and my own phrasing was turned against me correctly: **an unenforced
+arbitrary number is a superstition with a heading; an ENFORCED one is a superstition with CI
+access, which is worse.** The digest itself earned its place — it caught the drift it was built
+for. **The as-of stamp is automated AND GETS AN OWNER**, because the version seeded at
+`HOTELSIM.md`'s §4.1 foot failed for exactly one reason: no goal owned it.
+
+**EVERY SCANNER GATE OWES A PROOF-OF-BITE TEST.** The fourth structural-not-individual finding
+of the session, and the one that lands on the gates rather than the code: **the gates check
+everything, and nothing checks the gates except proof-of-bite, which was done by hand at
+bootstrap and never made standing.** Three goals produced the same degraded predicate inside
+three different scanners.
+
+**STILL OPEN, AND IT IS THE HUMAN'S ACTION**: there is no git remote. I cannot create one. Give
+me a URL, or create the repository and I will push — the workflow is audited and ready, and the
+first matrix run is the cheapest possible moment to learn it is red.

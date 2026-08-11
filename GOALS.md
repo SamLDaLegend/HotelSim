@@ -3430,3 +3430,63 @@ seeds stock that is cash at the refund rate — `--rooms 3` carries 375,000p aga
 that flag, so `balance-critic`'s whole accumulated evidence base was taken in a world with
 **75% more effective opening capital than the shipped figure**. Harmless until M4 tunes
 demand curves and pricing against exactly those sweeps.
+
+
+---
+
+# M3 — Circulation
+
+**Stairs and lifts as queued shared resources. Vertical pathing. Wait time as a first-class
+satisfaction input.** §8: *"where the genre's difficulty actually lives."*
+
+**M3 DOES NOT OPEN UNTIL G-022 IS DONE** (`HOTELSIM.md` §8, human 2026-08-10). Both of its
+prerequisites are instrument debts, and the second is the largest unverified claim in the project.
+
+## G-022 — The instrument debts M2 left, before circulation touches anything
+Status: **pending — HARD PREREQUISITE OF M3. No M3 behaviour goal starts until this is done.**
+Milestone: M3 (gate goal)
+Owner pair: sim-engineer / sim-critic
+Statement: I4's defect B is repaired and the `--maxWorkers` stopgap is gone; the as-of stamp is
+  checked mechanically and owned; every scanner gate has a proof-of-bite test; and **CI has
+  actually run green on a real remote across three operating systems.**
+Exit criteria:
+  - **CI GREEN ON A REAL REMOTE, THREE OS, INCLUDING `compare-hashes`.** A run URL in
+    `JOURNAL.md`. **This cannot be satisfied locally and it is the point.** `JOURNAL.md`'s
+    bootstrap entry has recorded the three-OS matrix as wired since G-001; **it has never
+    executed**, so that claim has sat in the permanent record for nineteen goals having
+    inspected nothing — ADR-0007 at the infrastructure layer. **I2 says byte-identical on every
+    platform and has only ever been tested on one**, and it is the tripwire the whole design
+    rests on. *(Audited 2026-08-10: the workflow is well-formed, `fetch-depth: 0` is pinned by
+    `check-measure.mjs`, and `sim:run --ticks 100000 --seed 42 --quiet` was verified to return a
+    hash. What is untested is every platform but this one.)*
+  - **I4's DEFECT B REPAIRED**, with the rate measured by the shipped signature classifier under
+    the loaded arm that produced 10 of 10 at G-020c — **not by a quiet run.** `--maxWorkers`
+    leaves `vitest.config.ts` entirely. **The unreliable count reaches 0 and the digest says so
+    with its noun.**
+  - **THE AS-OF STAMP IS MECHANICAL AND OWNED.** One source, four files; REFLECT fails if they
+    disagree. **The fifteen-line cap is NOT reinstated and NOT automated** — see §4.1.
+  - **EVERY SCANNER GATE HAS A PROOF-OF-BITE TEST**, each shown to fail for the RIGHT reason.
+    G-019 shipped one that removed the scanned subject rather than the mention, so a predicate
+    hard-coded to `false` satisfied it — **that shape is the thing to avoid, and it is the
+    acceptance bar.** Inventory the scanners first and state the list; `check-purity.mjs`,
+    `check-content.mjs`, `determinism.mjs`, `speed-ladder.scan.test.ts`,
+    `stopwatch.scan.test.ts`, `review.boundary.test.ts` and `viewer.readonly.test.ts` are the
+    ones known at PLAN.
+  - all §2 invariant gates green (`pnpm verify`, eleven rows), **plus the same eleven green in
+    CI on all three platforms**
+Out of scope: any circulation behaviour; anything in `packages/sim` beyond what repairing B
+  requires (expected: nothing).
+Critique rounds used: 0/3
+
+  **WHY THIS IS ONE GOAL AND NOT FOUR.** All four are instrument debts, none touches the
+  simulation, and three of them are the same shape — **a check that nobody owns, or that nobody
+  has watched fail.** Splitting them would give each a ceremony larger than its diff. If
+  `sim-critic` disagrees at §5.6, the seam is CI (which needs a human action) against the three
+  local repairs.
+
+  **THE SEQUENCING ARGUMENT, WHICH IS THE HUMAN'S AND IS THE REASON THIS BLOCKS M3.** Defect B
+  is a **load-sensitive** flake, and M3 is pathfinding and queued shared resources — the
+  milestone most likely to add load. **Carrying a load-sensitive unreliable gate into the
+  milestone that stresses it is bad sequencing rather than acceptable risk.** And a
+  timing-derived bound now ships inside `pnpm verify`, calibrated on one machine; M3 would be
+  the first milestone where a cross-platform surprise costs real rework.
