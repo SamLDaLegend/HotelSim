@@ -54,8 +54,20 @@ jobs:
   # I2 across platforms: the state hash after 100k ticks must be the same string on
   # Linux, Windows and macOS. `pnpm verify` proves each machine agrees with itself;
   # this job proves the machines agree with each other.
+  # NOT `needs: verify`, AND THAT IS DELIBERATE (G-022, after run #1).
+  #
+  # It was gated on `verify` until the matrix first executed. Run #1 went red on
+  # macOS alone — and because this job waited on all three, THE ONE CLAIM THIS
+  # WORKFLOW EXISTS FOR WAS NEVER TESTED. I2 says byte-identical on every platform;
+  # `compare-hashes` is the only thing that checks it; and a single unrelated gate
+  # failure on one OS suppressed it entirely.
+  #
+  # Removing the gate REMOVES NOTHING AND ADDS EVIDENCE: `compare-hashes` still has
+  # to pass, `verify` still has to pass, and the run is red if either is red. What
+  # changes is that a five-minute iteration now yields BOTH answers instead of one,
+  # which matters while the timing family is being calibrated against runners nobody
+  # has measured.
   cross-platform-hash:
-    needs: verify
     strategy:
       fail-fast: false
       matrix:
