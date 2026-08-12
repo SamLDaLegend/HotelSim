@@ -47,6 +47,13 @@
 // name for the same reason: `migrateV6ToV7` is guarded here now, and that goal's exit
 // criterion is `pnpm exec vitest run provider`.
 //
+// G-023a ADDED `travel`, FOR THE REASON G-015 ADDED `outcome` — see the paragraph below,
+// which is the whole argument and was written after the near miss. `migrateV10ToV11` is
+// guarded here now: it derives every guest's position from the bytes of a v10 save, and the
+// LIVE placement rule (`standingCell`, `entranceCell`, `GROUND_FLOOR`) produces the same
+// answer today. That coincidence ends the moment G-023b makes travel take time or G-024 puts
+// a queue at the door — which is exactly when the freeze has to have been in place already.
+//
 // G-015 ADDED `outcome`, AND THE OMISSION WAS ALMOST THE DEFECT THIS FILE EXISTS TO PREVENT.
 // `migrateV7ToV8` is guarded here, and G-015's exit criterion is `pnpm exec vitest run
 // outcome` — so without the rename, the guard for this goal's migration would not have been
@@ -61,7 +68,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { GUEST_DEPARTURE_REASONS } from '@hotelsim/sim';
+import { createGridBounds, entranceCell, GROUND_FLOOR, GUEST_DEPARTURE_REASONS } from '@hotelsim/sim';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const SAVE_TS = join(ROOT, 'packages/sim/src/save.ts');
@@ -127,6 +134,25 @@ const FORBIDDEN_IN_SAVE_TS = [
   'GUEST_DEPARTURE_REASONS',
   'departureCountOf',
   'evictedGuests',
+  // G-023a. `migrateV10ToV11` states WHERE A GUEST STOOD in the v10 era: the provider it was
+  // engaged with, else the room it held, else the door. `standingCell` states the same rule
+  // for the CURRENT era and `entranceCell` computes the same door, so the two agree exactly
+  // — today. They are supposed to: the freeze becomes observable only on the day the live
+  // rule moves, and M3 is the milestone that moves it. G-023b gives travel a duration,
+  // G-024 puts a queue somewhere, G-025 adds a lift; each is a candidate for changing where
+  // a guest with nothing to do is standing, and a migration that called the live helper
+  // would silently re-place every guest in every old save on that day.
+  //
+  // `GROUND_FLOOR` is the back door and is the one somebody would actually reach for: the
+  // migration clamps floor 0 into the save's own bounds, and `V11_MIGRATION_ENTRANCE_FLOOR`
+  // is a `0` sitting beside a `GROUND_FLOOR` that is also 0, which is a standing invitation
+  // to deduplicate. `isPlaced` is listed because it is how the live vocabulary asks the one
+  // question this step asks of every host entity, and a migration reaching into it is
+  // reaching into the current era's types to read another era's bytes.
+  'entranceCell',
+  'standingCell',
+  'GROUND_FLOOR',
+  'isPlaced',
 ] as const;
 
 /**
@@ -180,6 +206,8 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(source).toContain('migrateV6ToV7');
     expect(source).toContain('migrateV7ToV8');
     expect(source).toContain('V8_MIGRATION_GUEST_OUTCOMES');
+    expect(source).toContain('migrateV10ToV11');
+    expect(source).toContain('V11_MIGRATION_ENTRANCE_FLOOR');
   });
 
   it('names none of the current-plot identifiers in executable code', () => {
@@ -256,6 +284,40 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     ]);
   });
 
+  it("freezes the ENTRANCE FLOOR as a literal, and clamps it onto the SAVE's own plot", () => {
+    // The v11 half, and it is the first frozen constant in this file that is not a whole
+    // object: the era fact is one integer — in the v11 era, the door was on the ground floor.
+    // Everything else about the entrance comes from the bytes, which is why the assertions
+    // are of two kinds.
+    const code = stripComments(saveSource());
+
+    // ONE: the era fact is a literal, so deleting it and calling `entranceCell` cannot make
+    // the scan pass by removing its subject — the `V4_MIGRATION_BUILD_OUTCOMES` argument.
+    expect(code).toMatch(/const V11_MIGRATION_ENTRANCE_FLOOR = 0;/);
+
+    // TWO: the PLOT is read from the world being migrated and is NOT frozen. A migration
+    // that froze the plot too would put every guest in a narrow-plot save outside its own
+    // building, and `assertGuestStoreInvariants` would refuse the world it had just written.
+    // Built from a normal string rather than written as a literal, so the `\n\}` cannot be
+    // eaten by whatever hands this file around — the rule in `CLAUDE.md` about backslashes,
+    // applied to the one place in this file that needs two of them.
+    const derivation = new RegExp('function v11MigrationEntrance[\\s\\S]{0,900}?\\n\\}').exec(code)?.[0] ?? '';
+    expect(derivation).toContain("grid['minFloor']");
+    expect(derivation).toContain("grid['maxFloor']");
+    expect(derivation).toContain("grid['minColumn']");
+    expect(derivation).toContain('V11_MIGRATION_ENTRANCE_FLOOR');
+  });
+
+  it("and the frozen floor is where this build's own door is, or every migrated save is born in the wrong place", () => {
+    // The other direction, and the reason this is not merely a spelling test — the
+    // `GUEST_DEPARTURE_REASONS` arm above, one constant over. The era literal is ALLOWED to
+    // diverge from the live rule later; that divergence is the whole point of freezing it.
+    // But on the day it is written the two have to agree, or a migrated guest is placed
+    // somewhere this build would never have put it.
+    expect(GROUND_FLOOR).toBe(0);
+    expect(entranceCell(createGridBounds())).toEqual({ floor: 0, column: 0 });
+  });
+
   it('freezes the plot as four integer literals rather than a derived value', () => {
     // The positive half. The two tests above say what `save.ts` must NOT do; this says
     // what it must do, so deleting `V3_MIGRATION_BOUNDS` altogether is not a way to make
@@ -301,6 +363,26 @@ describe('the scan itself can fail', () => {
     expect(scan(bad).map((violation) => violation.name).sort()).toEqual([
       'GUEST_DEPARTURE_REASONS',
       'createGuestOutcomes',
+    ]);
+  });
+
+  it('catches a migration reaching for the LIVE placement rule (G-023a)', () => {
+    // The G-023a case, and the tempting one for the reason every case in this file is
+    // tempting: `standingCell(lodging, engaged, bounds)` answers exactly the question
+    // `migrateV10ToV11` asks, and `entranceCell` computes exactly the same door. Both would
+    // pass every value assertion in `travel.save.test.ts` today.
+    const bad = [
+      'function migrateV10ToV11(w) {',
+      '  const door = entranceCell(w.grid);',
+      '  const floor = GROUND_FLOOR;',
+      '  return { ...w, guests: place(w.guests, standingCell, isPlaced) };',
+      '}',
+    ].join('\n');
+    expect(scan(bad).map((violation) => violation.name).sort()).toEqual([
+      'GROUND_FLOOR',
+      'entranceCell',
+      'isPlaced',
+      'standingCell',
     ]);
   });
 

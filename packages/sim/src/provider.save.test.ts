@@ -198,7 +198,7 @@ describe('v6 -> v7 attributes what the era can attribute, and invents nothing (G
     // could pass it while still consulting content for the ordinary case. ADR-0008 (3) says
     // that where values coincide the guard must be structural, and it is:
     //
-    //     tools/headless/src/migration-scan.build.grid.provider.save.test.ts
+    //     tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts
     //
     // a scan asserting `save.ts` names no content lookup in executable code —
     // `providesOf`, `findItemType`, `needTypesInOrder` and the rest. It lives in

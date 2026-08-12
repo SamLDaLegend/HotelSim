@@ -94,6 +94,9 @@ const store = (count: number): GuestStore => ({
   nextId: count + 1,
   list: Array.from({ length: count }, (_, i) => ({
     id: i + 1,
+    // G-023a: a guest is somewhere. These guests hold nothing, so the doorway is also what
+    // the placement rule would give them.
+    at: { floor: 0, column: 0 },
     arrivedTick: 0,
     roomEntityId: 0,
     engagement: null,

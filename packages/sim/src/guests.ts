@@ -49,9 +49,10 @@ import {
   providesOf,
 } from './content.js';
 import type { BoundContent } from './content.js';
-import { draftGet, getEntity, NO_ENTITY } from './entities.js';
+import { draftGet, getEntity, isPlaced, NO_ENTITY } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
-import type { GridBounds } from './grid.js';
+import { assertCell, cellsEqual, entranceCell } from './grid.js';
+import type { Cell, GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import {
@@ -92,6 +93,18 @@ export type GuestId = number;
 export const NO_GUEST: GuestId = 0;
 
 /**
+ * The prefix of every "this guest is standing somewhere impossible" message (G-023a).
+ *
+ * A MODULE CONSTANT RATHER THAN A TEMPLATE LITERAL AT THE CALL SITE. `assertCell` is called
+ * once per guest per tick from `assertGuestStoreInvariants`, so a message built per call is
+ * a string allocated per guest per tick — the same shape as the array that call made
+ * `assertCell` allocate, which is `sim-critic`'s MAJOR 1. The guest's id is passed separately
+ * and joined only on the throw path. **No figure is claimed for it**: the campaign could not
+ * separate it from the instrument's spread, and `assertCell`'s own note says so.
+ */
+const GUEST_POSITION_INVALID = 'Guest store is invalid: guest';
+
+/**
  * A provider a guest is currently using, and what for (G-012).
  *
  * ONE OBJECT RATHER THAN TWO FIELDS, so the pair cannot half-exist. An entity id with no
@@ -109,6 +122,32 @@ export type Engagement = {
 
 export type Guest = {
   readonly id: GuestId;
+  /**
+   * WHERE THIS GUEST IS STANDING (G-023a). Hashed, saved, and never absent.
+   *
+   * NON-NULLABLE, DELIBERATELY, AND THIS IS THE ONE PLACE `Entity.at`'s SHAPE IS NOT COPIED.
+   * An entity may be unplaced because a v2 world genuinely did not record where its rooms
+   * were, and inventing a position for one would have been inventing history the simulation
+   * then acts on. A guest has no such era: `migrateV10ToV11` derives every migrated guest's
+   * cell FROM THE SAME BYTES that say what it is holding, so there is nothing left unknown
+   * to represent.
+   *
+   * WHY NOT `Cell | null` PLUS LAZY PLACEMENT, which is the cheaper-looking design. `null`
+   * plus "place it on the first tick after loading" is not a statement about history, it is
+   * deferred invention — and it happens IN THE TICK, where G-024 and G-025 will change the
+   * placement rule. The same v10 bytes would then produce a different world one tick after
+   * loading, depending on which build loaded them. That is exactly the drift ADR-0008
+   * forbids, laundered through a tick boundary. Deriving it once, in the migration, freezes
+   * it against the era that wrote the bytes.
+   *
+   * WHAT DECIDES IT TODAY IS `standingCell`: the provider it is engaged with, else the room
+   * it lodges in, else the entrance. NOTHING MOVES YET — G-023a places a guest where it
+   * already logically was, so no outcome anywhere changes and only hashes move. The field is
+   * authoritative rather than derived state even so, because G-023b makes it independent:
+   * a guest in transit is at neither end. It is checked against the plot at every commit and
+   * every load (`assertGuestStoreInvariants`), exactly as an entity's placement is.
+   */
+  readonly at: Cell;
   /**
    * The tick this guest arrived.
    *
@@ -391,6 +430,55 @@ export function isEngaged(guest: Guest): boolean {
 }
 
 /**
+ * WHERE A GUEST HOLDING THESE TWO THINGS IS STANDING (G-023a). The whole placement rule,
+ * in one total function.
+ *
+ *   the provider it is engaged with  ->  else the room it lodges in  ->  else the entrance
+ *
+ * ENGAGEMENT FIRST, BECAUSE THAT IS WHAT THE GUEST IS DOING. A guest holds its bedroom for
+ * the whole stay and leaves it to eat; the café is where it is, and the bedroom is where its
+ * luggage is. The viewer already had to make this choice and made the same one for the same
+ * reason — see `tools/viewer/viewer.js`, which now reads this field instead of re-deriving
+ * it, so there is one answer rather than two that can disagree.
+ *
+ * AN UNPLACED HOST FAILS OVER RATHER THAN SHORT-CIRCUITING. `isPlaced` is the test, so a
+ * legacy room carried unplaced out of the v2 -> v3 chain behaves as "no cell here" and the
+ * next candidate is tried. The alternative reading — an unplaced provider sends the guest
+ * straight to the entrance, skipping a perfectly well-placed bedroom — states a fact the
+ * bytes do not support, and would put a resting guest in the doorway. `travel.save.test.ts`
+ * pins the mixed case, which is the one where the two readings differ.
+ *
+ * NOTHING MOVES HERE. This is a guest's CURRENT position stated from what it currently
+ * holds, which at G-023a is a fact about the world rather than a journey. G-023b makes the
+ * position lag the holdings — that is the whole of the travel goal — and this function is
+ * what it will replace. Every `Guest.at` in the simulation comes from here: the exits of
+ * `reserve` (through `placed`) and the arrival literal in `stepGuests`, which asks it for a
+ * guest that holds nothing rather than spelling the entrance out a second time.
+ *
+ * `migrateV10ToV11` in `save.ts` states this same rule over the bytes of a v10 save, and
+ * MUST NOT call this function: a migration's output is a pure function of its input bytes
+ * and ITS OWN ERA (ADR-0008 (1)), so the day G-023b changes the rule here, the same v10
+ * bytes must keep producing the same v11 world. The two copies coincide today and no
+ * assertion can tell them apart, so the guard is the source scan named in `save.ts`
+ * (ADR-0008 (3)).
+ *
+ * IT RETURNS A HOST'S CELL BY REFERENCE, AND THE COPY IS `placed`'s JOB — see the note
+ * there. Stated here because this function is exported: a caller that lands the result in
+ * hashed state without copying it would leave a guest sharing one `Cell` object with the
+ * room it stands in, which is the sharing `migrateV10ToV11` refuses in its own copy of this
+ * rule and which `draftSpawn` refuses for an entity's own placement.
+ */
+export function standingCell(
+  lodgingRoom: Entity | null,
+  engagedProvider: Entity | null,
+  bounds: GridBounds,
+): Cell {
+  if (engagedProvider !== null && isPlaced(engagedProvider)) return engagedProvider.at;
+  if (lodgingRoom !== null && isPlaced(lodgingRoom)) return lodgingRoom.at;
+  return entranceCell(bounds);
+}
+
+/**
  * How many guests have departed. The right-hand side of the need tally's law.
  *
  * Written here rather than at each call site because three of them exist — the tick, the
@@ -638,8 +726,18 @@ function indexOfEntity(entities: EntityStore, id: EntityId): number {
  * check here is a fact about the world's own shape. "This guest's engagement names a need
  * it actually formed" is such a fact; "that need is one this content defines" is not, and
  * belongs to `bindContent`.
+ *
+ * IT TAKES THE PLOT SINCE G-023a, for the reason `assertEntityStoreInvariants` takes one: a
+ * guest now stands somewhere, and a position that is fractional, non-finite or off the plot
+ * would load happily and then place a guest where the simulation cannot address it. Against
+ * the plot THIS WORLD carries — for a load, the plot the SAVE carries rather than this
+ * build's default.
  */
-export function assertGuestStoreInvariants(guests: GuestStore, entities: EntityStore): void {
+export function assertGuestStoreInvariants(
+  guests: GuestStore,
+  entities: EntityStore,
+  bounds: GridBounds,
+): void {
   if (!Number.isSafeInteger(guests.nextId) || guests.nextId < 1) {
     throw new Error(`Guest store is invalid: nextId must be a positive safe integer, got ${String(guests.nextId)}`);
   }
@@ -672,6 +770,22 @@ export function assertGuestStoreInvariants(guests: GuestStore, entities: EntityS
     if (!Number.isSafeInteger(guest.arrivedTick) || guest.arrivedTick < 0) {
       throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer arrivedTick`);
     }
+    // WHERE IT IS STANDING (G-023a). `null` is NOT legal here, unlike `Entity.at`: a guest
+    // always has a position, so the absent-or-null case is a save this build did not write
+    // and cannot vouch for. Checked through `assertCell`, which is the same function
+    // `draftSpawn` uses, so "a cell this simulation can address" has one definition —
+    // integer-ness first, then the plot, so a float inside the plot fails as what it is.
+    const at: Cell | null | undefined = guest.at;
+    if (at === undefined || at === null || typeof at !== 'object') {
+      throw new Error(
+        `Guest store is invalid: guest ${guest.id} has no position. A guest is always somewhere — the provider it is using, the room it holds, or the entrance (it is hashed state).`,
+      );
+    }
+    // THE MESSAGE IS A CONSTANT AND THE ID IS A NUMBER, which is not a style choice: a
+    // template literal here builds a string for every guest on every tick, and this call is
+    // the one that made `assertCell` a hot function. Same defect as the array `assertCell`
+    // used to allocate, one argument over — see the note there for both measurements.
+    assertCell(at, bounds, GUEST_POSITION_INVALID, guest.id);
     // The need vector: non-empty, ascending, integer countdowns. `needs.ts` owns what a
     // valid vector is, for the reason `validity.ts` owns what a valid room is.
     assertNeedVector(guest.needs, guest.id);
@@ -1299,7 +1413,11 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    `engagedRoom` is passed rather than looked up again for the reason every release in
     //    this loop takes it as a parameter: "is this thing still a provider" is answered once
     //    per guest per tick, in step 1, and a second lookup could disagree with the first.
-    guest = reserve(search, guest, lodgingNeed?.id, engagedRoom);
+    //    IT IS ALSO WHERE THE GUEST ENDS UP STANDING (G-023a). `reserve` is the one place
+    //    both holdings are decided, so it is the one place that can state the position they
+    //    imply without asking the entity store a second question — the two entities are
+    //    already in hand here and in there. Nothing else in this loop touches `at`.
+    guest = reserve(search, guest, lodgingNeed?.id, lodgingRoom, engagedRoom);
     next.push(guest);
   }
 
@@ -1317,8 +1435,17 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     nextId = id + 1;
     // ONE INSTANCE OF EVERY NEED THE CONTENT DEFINES (G-012). Which needs a guest forms is
     // an archetype's business at M6; today every guest wants everything.
+    //
+    // AND IT WALKS IN THROUGH THE DOOR (G-023a). THE CELL IS SET AT CREATION, not on the
+    // guest's first step, and that is load-bearing rather than tidy: this loop runs AFTER
+    // the loop over existing guests, so a guest created on tick t is not stepped until tick
+    // t + 1. A design that placed guests only while stepping them would leave every arrival
+    // unplaced for a whole tick — and `at` would have to be nullable to express it, which is
+    // the design this goal's first ruling refuses. `reserve` below may move it immediately
+    // to whatever it manages to take, exactly as it does for a guest already here.
     const arrived: Guest = {
       id,
+      at: standingCell(null, null, input.entities.bounds),
       arrivedTick: tick,
       roomEntityId: NO_ENTITY,
       engagement: null,
@@ -1326,7 +1453,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     };
     // A guest that has just walked in holds nothing, so there is no incumbent provider to
     // hand over and nothing it could abandon.
-    next.push(reserve(search, arrived, lodgingNeed.id, null));
+    next.push(reserve(search, arrived, lodgingNeed.id, null, null));
   }
 
   // Ids came from a counter, existing guests were visited in ascending order and
@@ -1459,11 +1586,19 @@ function addDepartures(
  * available immediately, but a guest visited EARLIER than the release has already had its
  * turn and waits for the next tick. That is the price of never letting a later arrival
  * overtake an earlier one, and it is G-004's rule unchanged.
+ *
+ * AND IT IS WHERE THE GUEST ENDS UP STANDING (G-023a). Every exit goes through `placed`,
+ * which is why both entities are parameters: this function is the only one that knows what
+ * the guest holds AFTER its decisions, and re-asking the entity store would be a second
+ * lookup that could disagree with the first — the discipline every release in this file
+ * already keeps. It costs no lookup, no pass and no allocation on a tick where the guest
+ * does not move.
  */
 function reserve(
   search: RoomSearch,
   guest: Guest,
   lodgingNeedId: ContentId | undefined,
+  lodgingRoom: Entity | null,
   engagedRoom: Entity | null,
 ): Guest {
   // TWO SPREADS RATHER THAN ONE, AND THE COLLAPSE WAS TRIED AND DROPPED (G-016). Deciding
@@ -1484,6 +1619,10 @@ function reserve(
       if (room !== null) {
         search.held.add(room.id);
         result = { ...result, roomEntityId: room.id };
+        // The parameter is the room this guest held on the way IN, and it has just changed.
+        // Reassigned rather than shadowed so the exits below cannot read the stale one — a
+        // guest that checked in this tick is in its room, not still in the doorway.
+        lodgingRoom = room;
       }
     }
   }
@@ -1535,7 +1674,9 @@ function reserve(
     // pending, has no pressure to compare against. It stays committed rather than being
     // scored against a fabricated zero. The tick cannot reach either state — step 5 releases
     // the engagement the moment its need resolves — so this is a postcondition, not a case.
-    if (incumbent === undefined || incumbentType === undefined || !isNeedPending(incumbent)) return result;
+    if (incumbent === undefined || incumbentType === undefined || !isNeedPending(incumbent)) {
+      return placed(result, lodgingRoom, engagedRoom, search);
+    }
     bar = abandonThresholdBasisPoints(pressureBasisPoints(incumbentType, incumbent), abandonMarginOf(content)) - 1;
   }
   // ONE PASS over the needs, taking the maximum score.
@@ -1601,7 +1742,7 @@ function reserve(
     bestNeed = need;
     bestProvider = provider;
   }
-  if (bestNeed === undefined || bestProvider === null) return result;
+  if (bestNeed === undefined || bestProvider === null) return placed(result, lodgingRoom, engagedRoom, search);
   // ============================================================================
   // THE SEARCH SUCCEEDS BEFORE ANYTHING IS RELEASED, AND THE ORDER IS THE DECISION (G-014b,
   // MAJOR 4(a)). Releasing first and searching afterwards would let a guest abandon INTO
@@ -1629,5 +1770,49 @@ function reserve(
     result = { ...result, needs: abandonNeed(result.needs, engagement.needId), engagement: null };
   }
   search.held.add(bestProvider.id);
-  return { ...result, engagement: { entityId: bestProvider.id, needId: bestNeed.needId } };
+  // AND THE GUEST IS AT THE THING IT JUST ENGAGED (G-023a). `bestProvider`, not `engagedRoom`
+  // — the incumbent was released three lines up, so passing it here would leave a guest
+  // standing at the café it just walked out of.
+  return placed(
+    { ...result, engagement: { entityId: bestProvider.id, needId: bestNeed.needId } },
+    lodgingRoom,
+    bestProvider,
+    search,
+  );
+}
+
+/**
+ * The guest, standing where its holdings put it (G-023a). THE ONLY PLACE `Guest.at` MOVES —
+ * the arrival literal in `stepGuests` is the only other writer, and it writes the same rule
+ * for a guest that holds nothing.
+ *
+ * IDENTITY-RETURNING WHEN THE CELL HAS NOT CHANGED, which is almost every tick of almost
+ * every guest — a sleeping guest does not move. `addDepartures` keeps its rows the same way
+ * and for the same reason: this runs for every guest on every tick, and a spread per guest
+ * per tick to rewrite two integers with the same two integers is exactly the allocation
+ * §6.1 asks `sim-critic` to watch for. `cellsEqual` is the comparison, never `===` on the
+ * object (`grid.ts`).
+ *
+ * IT COSTS NO LOOKUP. Both entities were resolved by `stepGuests` step 1 or found by
+ * `reserve` itself, so this adds no pass over anything and tick cost stays linear in guests.
+ *
+ * THE CELL IS COPIED, NEVER SHARED, AND THE COPY IS HERE RATHER THAN IN `standingCell`
+ * (G-023a, `sim-critic` MINOR 3). `standingCell` hands back the HOST ENTITY'S OWN `at`
+ * object, so landing it unchanged would make a guest and the room it stands in two
+ * references to one `Cell` — precisely the sharing `draftSpawn` refuses for an entity's
+ * placement ("the caller's object must not be able to move an entity after the fact") and
+ * that `migrateV10ToV11` refuses for a migrated guest. Nothing can write through it today
+ * because every field of `Cell` is `readonly`, and the round trip re-splits them, so no hash
+ * moves either way; it is copied because the rule is argued in two other copies of this
+ * placement code and a rule kept in two places out of three is the drift ADR-0008 is about.
+ *
+ * COPYING COSTS NOTHING IN THE STEADY STATE, which is why the choice of site matters:
+ * `cellsEqual` runs FIRST, so a guest that has not moved allocates neither a `Cell` nor a
+ * `Guest`, and the copy happens only on the tick a guest actually changes cell. Copying
+ * inside `standingCell` instead would allocate for every guest on every tick, which is the
+ * per-guest-per-tick allocation MAJOR 1 of the same critique is about.
+ */
+function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entity | null, search: RoomSearch): Guest {
+  const at = standingCell(lodgingRoom, engagedProvider, search.input.entities.bounds);
+  return cellsEqual(guest.at, at) ? guest : { ...guest, at: { floor: at.floor, column: at.column } };
 }

@@ -101,7 +101,7 @@ describe('validity adds nothing to the save', () => {
   it('adds no migration of its own, whatever the chain has grown to since', () => {
     // ADR-0006 has fired four times. It does NOT fire for VALIDITY, and that is the point:
     // a derived property owes no migration. The scan in
-    // `tools/headless/src/migration-scan.build.grid.save.test.ts` predicted that G-009
+    // `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts` predicted that G-009
     // would add a `BuildRefusalReason` and move `V4_MIGRATION_BUILD_OUTCOMES`; it does
     // not, because build refuses nothing on validity grounds.
     //

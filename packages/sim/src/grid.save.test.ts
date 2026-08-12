@@ -34,6 +34,7 @@ import type { JsonValue } from './hash.js';
 import { balanceOf } from './ledger.js';
 import {
   assertMigrationPathComplete,
+  assertWorldShape,
   deserialise,
   MIGRATIONS,
   migrateSaveWorld,
@@ -204,7 +205,7 @@ describe('the 2 -> 3 step invents no history', () => {
     // or calls the function, and it would keep passing on the day you merged them. What
     // makes its name true is a structural guard elsewhere:
     //
-    //     tools/headless/src/migration-scan.build.grid.save.test.ts
+    //     tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts
     //
     // a source scan asserting `save.ts` never names `createGridBounds` or any `DEFAULT_*`
     // grid constant in executable code. It lives outside `packages/sim` because it has to
@@ -361,9 +362,18 @@ describe('World gained the plot, and every mechanism knows', () => {
     const blob = JSON.parse(MIGRATED_V3_BYTES) as { world: Record<string, unknown> };
     const withoutGrid = { ...blob, world: { ...blob.world } };
     delete withoutGrid.world['grid'];
-    expect(() => deserialise(JSON.stringify(withoutGrid))).toThrow(/grid/);
-
     const nullGrid = { ...blob, world: { ...blob.world, grid: null } };
-    expect(() => deserialise(JSON.stringify(nullGrid))).toThrow(/grid/);
+
+    // THE READER, WHICH IS WHAT THIS CASE IS TITLED FOR. Asserted directly, because since
+    // G-023a a plotless save this old is refused one step EARLIER and never reaches here:
+    // `migrateV10ToV11` derives every guest's entrance from the world's OWN plot, so a
+    // world with no plot cannot be carried forward at all. Both refusals are asserted —
+    // the claim "a plot is not optional" is unchanged, and which door it is turned away at
+    // is now recorded rather than assumed.
+    expect(() => assertWorldShape(withoutGrid.world)).toThrow(/grid/);
+    expect(() => assertWorldShape(nullGrid.world)).toThrow(/grid/);
+
+    expect(() => deserialise(JSON.stringify(withoutGrid))).toThrow(/Migration v10 -> v11 failed/);
+    expect(() => deserialise(JSON.stringify(nullGrid))).toThrow(/Migration v10 -> v11 failed/);
   });
 });

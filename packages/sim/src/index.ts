@@ -91,6 +91,7 @@ export {
   DEFAULT_MIN_FLOOR,
   describeBounds,
   describeCell,
+  entranceCell,
   GROUND_FLOOR,
   isWithinBounds,
 } from './grid.js';
@@ -132,6 +133,7 @@ export {
   lodgingNeedStateOf,
   maxGuestLifetimeTicks,
   NO_GUEST,
+  standingCell,
   stepGuests,
 } from './guests.js';
 export type { NeedOutcome, NeedState, ProviderKind } from './needs.js';

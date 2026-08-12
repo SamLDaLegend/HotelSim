@@ -191,6 +191,8 @@ describe('the zero CAN be non-zero', () => {
         list: [
           {
             id: 1,
+            // G-023a: standing in the room it holds, invalid though that room is.
+            at: { floor: 9, column: 10 },
             arrivedTick: 0,
             roomEntityId: 1,
             engagement: null,

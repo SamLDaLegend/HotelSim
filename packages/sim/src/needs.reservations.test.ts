@@ -279,6 +279,10 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
 
   const guest = (id: number, room: EntityId, engagedWith: EntityId | null, over: Countdowns = {}): Guest => ({
     id,
+    // G-023a: a guest is somewhere. The doorway — nothing in this file reads a position,
+    // and `stepGuests` re-states it from what the guest holds on every tick. The placement
+    // rule is pinned in `travel.position.test.ts`.
+    at: { floor: 0, column: 0 },
     arrivedTick: 0,
     roomEntityId: room,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'food' },
@@ -483,7 +487,7 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
   it('1. DANGLING LODGING — a bedroom that is not there', () => {
     const broken = withGuests([{ ...guest, roomEntityId: 4_242, engagement: null }]);
     expect(countOrphanedReservations(broken, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(broken, world.entities)).toThrow(/lodges in entity 4242/);
+    expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/lodges in entity 4242/);
   });
 
   it('2. DANGLING ENGAGEMENT — a café that is not there', () => {
@@ -491,7 +495,7 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
     // `roomEntityId` returns 0 here and reports a healthy hotel.
     const broken = withGuests([{ ...guest, engagement: { entityId: 4_243, needId: 'food' } }]);
     expect(countOrphanedReservations(broken, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(broken, world.entities)).toThrow(
+    expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(
       /is engaged with entity 4243/,
     );
   });
@@ -502,7 +506,7 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
       { ...guest, id: guest.id + 1, roomEntityId: bedroomA!, engagement: null },
     ]);
     expect(countOrphanedReservations(broken, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(broken, world.entities)).toThrow(/held by more than one guest/);
+    expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/held by more than one guest/);
   });
 
   it('4. DOUBLE-ENGAGED — two guests at one table', () => {
@@ -513,7 +517,7 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
       { ...guest, id: guest.id + 1, roomEntityId: bedroomB!, engagement: { entityId: cafe!, needId: 'food' } },
     ]);
     expect(countOrphanedReservations(broken, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(broken, world.entities)).toThrow(/held by more than one guest/);
+    expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/held by more than one guest/);
   });
 
   it('5. CROSSED — one guest\'s bedroom is another guest\'s café', () => {
@@ -525,7 +529,7 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
       { ...guest, id: guest.id + 1, roomEntityId: bedroomB!, engagement: { entityId: bedroomA!, needId: 'food' } },
     ]);
     expect(countOrphanedReservations(broken, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(broken, world.entities)).toThrow(/held by more than one guest/);
+    expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/held by more than one guest/);
   });
 
   it('counts each broken reservation separately, rather than stopping at the first', () => {

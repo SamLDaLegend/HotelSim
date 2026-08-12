@@ -80,6 +80,11 @@ type GuestOver = {
 function guest(id: number, over: GuestOver = {}): Guest {
   return {
     id,
+    // G-023a: a guest is somewhere. THE DOORWAY, because nothing in this file is about
+    // where anybody is standing — these cases are about which room a scan finds, and
+    // `stepGuests` re-states the position from what the guest holds on every tick anyway.
+    // The rule itself is pinned in `travel.position.test.ts`, not here.
+    at: { floor: 0, column: 0 },
     arrivedTick: 0,
     roomEntityId: over.roomEntityId ?? 0,
     engagement: null,

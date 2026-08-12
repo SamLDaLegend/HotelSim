@@ -106,7 +106,13 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // as it does for every content addition) and `World` gains `reviewOutcomes`, which is
     // hashed state. Every guest, need and money number in this document is UNTOUCHED, which
     // is the hand-checked evidence; `review.boundary.test.ts` is the general form of it.
-    stateHash: 'd5bf3db9bb6f29ed',
+    //
+    // MOVED AGAIN AT G-023a from `d5bf3db9bb6f29ed`, for ONE cause and not a behaviour
+    // change: `Guest.at` is hashed state (G-023a). No content moved — this goal ships no
+    // content at all — so the fingerprint is the same one. THE EVIDENCE IS THIS DOCUMENT:
+    // it is compared field by field, and `stateHash` is the ONLY field in it that differs.
+    // Four guests are still in the hotel, 24 still arrived, 15 still satisfied.
+    stateHash: '32edbaa51e933829',
   },
   guests: {
     arrived: 24,
@@ -325,7 +331,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     603500p',
-    'state hash  d5bf3db9bb6f29ed',
+    'state hash  32edbaa51e933829',
   ].join('\n') + '\n';
 
 /**
@@ -482,7 +488,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  d5bf3db9bb6f29ed']);
+    expect(differing).toEqual(['seed        42', 'state hash  32edbaa51e933829']);
     expect(lines43).toContain('seed        43');
   });
 });

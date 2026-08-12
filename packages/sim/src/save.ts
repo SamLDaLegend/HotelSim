@@ -24,7 +24,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 10;
+export const SAVE_SCHEMA_VERSION = 11;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -199,8 +199,9 @@ function migrateV2ToV3(world: unknown): unknown {
  *
  * The guard is structural rather than a value assertion, because the two agree today and
  * no assertion can tell the implementations apart: a source scan in
- * `tools/headless/src/migration-scan.build.grid.save.test.ts` forbids this file from naming
- * `createBuildOutcomes` or `BUILD_REFUSAL_REASONS` in executable code.
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`
+ * forbids this file from naming `createBuildOutcomes` or `BUILD_REFUSAL_REASONS` in
+ * executable code.
  */
 const V4_MIGRATION_BUILD_OUTCOMES: BuildOutcomes = Object.freeze({
   built: 0,
@@ -268,8 +269,9 @@ function migrateV3ToV4(world: unknown): unknown {
  *
  * The guard is structural rather than a value assertion, because the two agree today and
  * no assertion can tell the implementations apart: the source scan in
- * `tools/headless/src/migration-scan.build.grid.save.test.ts` forbids this file from
- * naming `createLoanOutcomes` or `LOAN_REFUSAL_REASONS` in executable code.
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`
+ * forbids this file from naming `createLoanOutcomes` or `LOAN_REFUSAL_REASONS` in
+ * executable code.
  */
 const V5_MIGRATION_LOAN_OUTCOMES: LoanOutcomes = Object.freeze({
   drawn: 0,
@@ -327,9 +329,9 @@ function migrateV4ToV5(world: unknown): unknown {
  * A LITERAL, and it must stay one. `createNeedOutcomes()` in `needs.ts` returns the same
  * value today and the two are allowed to diverge later — that divergence is correct, not a
  * bug to repair (ADR-0008). The source scan in
- * `tools/headless/src/migration-scan.build.grid.save.test.ts` forbids this file from naming
- * it in executable code, because the two values coincide and no assertion could tell the
- * implementations apart.
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`
+ * forbids this file from naming it in executable code, because the two values coincide and
+ * no assertion could tell the implementations apart.
  *
  * EMPTY IS THE TRUE COUNT AND NOT A PLACEHOLDER, and here the argument is unusually clean.
  * A v5 world is not a world whose need tally was left out of the file: it is a world in
@@ -542,7 +544,7 @@ function migrateV6ToV7(world: unknown): unknown {
  *
  * ADR-0008 (3): the values coincide with the live constructor today, so no value assertion
  * can tell the two implementations apart. The structural guard is the source scan in
- * `tools/headless/src/migration-scan.build.grid.provider.outcome.save.test.ts`.
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`.
  */
 const V8_MIGRATION_GUEST_OUTCOMES = Object.freeze([
   Object.freeze({ reason: 'satisfied', count: 0 }),
@@ -765,6 +767,171 @@ function migrateV9ToV10(world: unknown): unknown {
 }
 
 /**
+ * THE STOREY THE DOOR IS ON IN THE v11 ERA, FROZEN AT THE MOMENT v11 WAS DEFINED.
+ *
+ * A LITERAL, and it must stay one. `GROUND_FLOOR` in `grid.ts` holds the same `0` today and
+ * `entranceCell` performs the same clamp; the two are ALLOWED to diverge later and that
+ * divergence is correct rather than a bug to repair (ADR-0008 (1)).
+ *
+ * The risk is not that somebody edits `GROUND_FLOOR` — nothing will. It is that G-023b,
+ * G-024 and G-025 change WHERE AN UNPLACED GUEST STANDS: a lobby entity, the foot of the
+ * stairs, a reception queue. Every one of those is a live rule about the current build, and
+ * a migration that called `entranceCell` would make the same v10 bytes produce a different
+ * v11 world on the day one lands — history drifting with the build, with the pinned hash of
+ * a migrated fixture as the only symptom.
+ *
+ * WHAT IS NOT FROZEN, AND MUST NOT BE, IS THE PLOT. The clamp below reads the bounds out of
+ * the world being migrated, which is the input bytes and therefore exactly what ADR-0008
+ * permits: a v10 save whose plot starts at floor 3 gets its own door, not this build's.
+ *
+ * The guard is structural, because the values coincide today and no assertion can tell the
+ * implementations apart: the source scan in
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`
+ * forbids this file from naming `entranceCell`, `GROUND_FLOOR` or `standingCell` in
+ * executable code (ADR-0008 (3)).
+ */
+const V11_MIGRATION_ENTRANCE_FLOOR = 0;
+
+/**
+ * The cell a v10 guest that holds nothing was standing in, from that world's own plot.
+ *
+ * Not `Math.min`/`Math.max` for its own sake — a clamp written out is a clamp a reader can
+ * check against the bounds it names, and this one has to be TOTAL: `assertGridBounds`
+ * requires only `minFloor <= maxFloor`, so a legal v10 plot need not contain floor 0, and a
+ * migration that assumed it did would emit a world this build then refuses to load.
+ */
+function v11MigrationEntrance(grid: Record<string, unknown>): { floor: number; column: number } {
+  const minFloor = grid['minFloor'];
+  const maxFloor = grid['maxFloor'];
+  const minColumn = grid['minColumn'];
+  if (typeof minFloor !== 'number' || typeof maxFloor !== 'number' || typeof minColumn !== 'number') {
+    throw new Error(
+      'Save is corrupt: world.grid does not describe a plot, so no entrance can be derived for its guests',
+    );
+  }
+  const floor =
+    V11_MIGRATION_ENTRANCE_FLOOR < minFloor
+      ? minFloor
+      : V11_MIGRATION_ENTRANCE_FLOOR > maxFloor
+        ? maxFloor
+        : V11_MIGRATION_ENTRANCE_FLOOR;
+  return { floor, column: minColumn };
+}
+
+/**
+ * v10 -> v11: a world whose guests were nowhere (G-023a).
+ *
+ * ADR-0006 fires for the TENTH time. `Guest` gains `at`, so the permanent v1 fixture
+ * describes a world this build cannot load, and the answer is this step. `fixtures/save-v1.ts`
+ * HAS A ZERO-LINE DIFF in this change; the walk is 1 -> ... -> 10 -> 11.
+ *
+ * THE CELL IS DERIVED FROM THE BYTES, AND EVERY BRANCH OF THE DERIVATION IS A FACT THE SAVE
+ * ALREADY CONTAINS:
+ *
+ *   engaged with a placed provider  ->  that provider's cell. A v10 guest using a café was
+ *                                       at the café; the save says which café, and the café
+ *                                       says which cell.
+ *   else lodging in a placed room   ->  that room's cell. Same argument one field over.
+ *   else                            ->  the entrance, derived from THIS world's plot. A
+ *                                       guest holding nothing was in the doorway waiting,
+ *                                       which is the only thing a v10 world can be read as
+ *                                       saying about it.
+ *
+ * AN UNPLACED HOST FALLS THROUGH TO THE NEXT CANDIDATE, and that case is genuinely reachable
+ * rather than defensive: every entity carried out of the v2 -> v3 chain has `at: null`,
+ * because a world that predated positions could not be given invented ones. Such an entity
+ * names no cell, so it cannot answer the question, and the next candidate is asked. If
+ * neither can, the entrance can — which is what makes `Guest.at` non-nullable at all.
+ *
+ * WHY NOT `at: null` AND PLACE THEM LAZILY IN THE TICK. Because the placement rule is going
+ * to change: G-024 and G-025 are queues and lifts, and where a guest holding nothing stands
+ * is exactly the sort of thing they move. A world loaded from v10 bytes would then be one
+ * world under this build and a different one under the next, one tick after loading — the
+ * drift ADR-0008 exists to forbid, taking a detour through a tick boundary. Deriving it here
+ * pins it to the era that wrote the bytes, which is the same argument `metBy` makes at
+ * v6 -> v7.
+ *
+ * Reads no content and no live constant, so the same v10 bytes produce the same v11 world
+ * however the shipped entrance rule changes afterwards (ADR-0008; see
+ * `V11_MIGRATION_ENTRANCE_FLOOR` for the freeze and the scan that enforces it).
+ *
+ * NOT TESTED BY THE FIXTURE, AND SAYING SO IS THE POINT. The permanent v1 fixture's guest
+ * list is EMPTY — `migrateV1ToV2` gives it `{nextId: 1, list: []}` and nothing since has put
+ * a guest in it — so this step maps over an empty array for the fixture and would report
+ * success having inspected nothing (ADR-0007's exact shape, and the paragraph
+ * `migrateV6ToV7`, `migrateV7ToV8` and `migrateV8ToV9` all carry). `travel.save.test.ts`
+ * drives a hand-written v10 world through every branch above.
+ */
+function migrateV10ToV11(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const grid = world['grid'];
+  if (!isRecord(grid)) {
+    throw new Error('Save is corrupt: world.grid is missing, so its guests cannot be given positions');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its guests cannot be given positions');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const entities = world['entities'];
+  if (!isRecord(entities)) {
+    throw new Error('Save is corrupt: world.entities is missing, so no guest can be placed at what it holds');
+  }
+  const entityList = entities['list'];
+  if (!Array.isArray(entityList)) {
+    throw new Error('Save is corrupt: world.entities.list is missing or not an array');
+  }
+  // The cell of a live entity, or null for one that is unplaced or not there at all. A
+  // LINEAR SEARCH, deliberately: this runs once per guest at LOAD, never in a tick, and a
+  // migration that assumed the ascending-id ordering of the CURRENT build would be reading a
+  // property of this era into bytes from another one.
+  const cellOf = (id: unknown): { floor: number; column: number } | null => {
+    if (typeof id !== 'number' || id === 0) return null;
+    for (const entity of entityList) {
+      if (!isRecord(entity) || entity['id'] !== id) continue;
+      const at = entity['at'];
+      if (!isRecord(at)) return null;
+      const floor = at['floor'];
+      const column = at['column'];
+      return typeof floor === 'number' && typeof column === 'number' ? { floor, column } : null;
+    }
+    return null;
+  };
+
+  const entrance = v11MigrationEntrance(grid);
+  const placed: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    // The one way this step could destroy data — overwriting a position somebody already
+    // recorded — is the one thing it refuses to do, exactly as all nine earlier steps refuse.
+    // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an
+    // own key (G-003).
+    if (Object.keys(guest).includes('at')) {
+      throw new Error(
+        `world.guests.list[${index}] already has an "at" field, so it is not a v10 guest; migrating it would overwrite a real position`,
+      );
+    }
+    const engagement = guest['engagement'];
+    const at =
+      (isRecord(engagement) ? cellOf(engagement['entityId']) : null) ??
+      cellOf(guest['roomEntityId']) ??
+      entrance;
+    // Copied, never shared: two guests standing in the doorway must not hold one object,
+    // because `worldToJson` is an identity cast and the shape that reaches the hash should
+    // be the shape a `JSON.parse` of it would produce.
+    return { ...guest, at: { floor: at.floor, column: at.column } };
+  });
+
+  return { ...world, guests: { ...guests, list: placed } };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -782,6 +949,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 7, to: 8, migrate: migrateV7ToV8 }),
   Object.freeze({ from: 8, to: 9, migrate: migrateV8ToV9 }),
   Object.freeze({ from: 9, to: 10, migrate: migrateV9ToV10 }),
+  Object.freeze({ from: 10, to: 11, migrate: migrateV10ToV11 }),
 ]);
 
 /**
@@ -1004,6 +1172,23 @@ function assertGuest(value: unknown, index: number): asserts value is Guest {
       throw new Error(`Save is corrupt: world.guests.list[${index}].${key} is not a number`);
     }
   }
+  // WHERE IT IS STANDING (G-023a). Shape only here — a record of two numbers — because
+  // `assertGuestStoreInvariants` below owns what a valid POSITION is, against the plot this
+  // save carries, and that definition is shared with the tick rather than written twice.
+  //
+  // NOT `null`, WHICH IS THE ONE PLACE THIS DIFFERS FROM `Entity.at`. An entity may honestly
+  // be nowhere; a guest may not, because `migrateV10ToV11` can always read a cell out of the
+  // bytes. So `at: null` here is a save this build did not write and cannot vouch for, and
+  // it is refused rather than quietly re-placed a tick later.
+  const at = value['at'];
+  if (!isRecord(at)) {
+    throw new Error(`Save is corrupt: world.guests.list[${index}].at is missing or not a cell`);
+  }
+  for (const key of ['floor', 'column'] as const) {
+    if (typeof at[key] !== 'number') {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].at.${key} is not a number`);
+    }
+  }
   // The need vector (G-012). Shape only here — that it is an array of records with the
   // right primitive types — because `assertGuestStoreInvariants` below owns what a VALID
   // vector is, and that definition is shared with the tick rather than written twice.
@@ -1186,7 +1371,14 @@ export function assertWorldShape(value: unknown): asserts value is World {
   // reservation leak is unreachable through the tick, so the only way one can enter the
   // world is from outside it — through here. Same functions the tick uses, so "a valid
   // guest store" has one definition.
-  assertGuestStoreInvariants(guests as unknown as GuestStore, entities as unknown as EntityStore);
+  // Against the plot THIS SAVE carries rather than this build's default, for the reason the
+  // entity store is checked against it (see above): a guest's position is only meaningful
+  // against the coordinate space its own world was played on.
+  assertGuestStoreInvariants(
+    guests as unknown as GuestStore,
+    entities as unknown as EntityStore,
+    grid as unknown as GridBounds,
+  );
   assertGuestOutcomes(guestOutcomes as unknown as GuestOutcomes, guests as unknown as GuestStore);
 
   // The per-need tally (G-012). Same function the tick calls at its own boundary, so "a

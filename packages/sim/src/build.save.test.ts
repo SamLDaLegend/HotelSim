@@ -227,7 +227,7 @@ describe('the 3 -> 4 step invents no history', () => {
     // pass either way, and its name would be a promise its body cannot keep. What makes
     // the name true is a source scan:
     //
-    //     tools/headless/src/migration-scan.build.grid.save.test.ts
+    //     tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts
     //
     // which forbids `save.ts` from naming `createBuildOutcomes` or `BUILD_REFUSAL_REASONS`
     // in executable code. It lives outside packages/sim because it must read a file, and

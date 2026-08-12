@@ -248,7 +248,7 @@ describe('the 4 -> 5 step invents no history, and INVENTS NO MONEY', () => {
     // pass either way, and its name would be a promise its body cannot keep. What makes the
     // name true is a source scan:
     //
-    //     tools/headless/src/migration-scan.build.grid.save.test.ts
+    //     tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts
     //
     // which forbids `save.ts` from naming `createLoanOutcomes` or `LOAN_REFUSAL_REASONS` in
     // executable code. `LoanRefusalReason` WILL grow — M4's bankruptcy state is the obvious

@@ -10,8 +10,10 @@
 // migration. `fixtures/save-v1.ts` HAS A ZERO-LINE DIFF in this change; the migration is
 // what carries it. The walk is 1 -> ... -> 9 -> 10.
 //
-// THIS FILE OWNS THE CURRENT ERA. When v11 arrives, the assertions here move the same way
-// and the frozen literal below must not (ADR-0008 (2)).
+// THIS FILE NO LONGER OWNS THE CURRENT ERA (G-023a). It owned it until `Guest` gained `at`
+// and the chain grew to v11; the current era is `travel.save.test.ts`'s. That is what the
+// paragraph above always said would happen — the assertions about WHERE THE CHAIN ENDS have
+// moved, and the frozen v9 world below has not, which is ADR-0008 (2) working as designed.
 //
 // ============================================================================
 //  THE DEFAULT IS EXACTLY TRUE, WHICH IS NOT THE SAME AS BEING CONVENIENT.
@@ -114,11 +116,15 @@ const v9World = (): Record<string, unknown> => {
   };
 };
 
-describe('the chain walks 1 -> ... -> 10, and every link is still observed', () => {
-  it('ships exactly nine steps, each going exactly one version', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(10);
+describe('the chain walks 1 -> ... -> 11, and every link is still observed', () => {
+  it('ships one step per version, and the 9 -> 10 step is still the ninth of them', () => {
+    // The absolute era pin is `save.fixture.test.ts`'s, whose whole subject is the walk from
+    // v1 to today. This file's own subject is the 9 -> 10 link, so it says how many steps
+    // there are RELATIVELY — the `provider.save.test.ts` precedent, made at the bump that
+    // took the era off that file too.
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(MIGRATIONS).toHaveLength(9);
+    expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
+    expect([step.from, step.to]).toEqual([9, 10]);
     expect(MIGRATIONS.map((entry) => [entry.from, entry.to])).toEqual([
       [1, 2],
       [2, 3],
@@ -129,6 +135,7 @@ describe('the chain walks 1 -> ... -> 10, and every link is still observed', () 
       [7, 8],
       [8, 9],
       [9, 10],
+      [10, 11],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });

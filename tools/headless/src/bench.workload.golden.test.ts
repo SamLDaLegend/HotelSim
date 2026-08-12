@@ -180,7 +180,19 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // content differs ONLY in the review scale produce identical guests, needs, ledgers and
     // build counters (`review.boundary.test.ts`). The hand-checked outcomes below are the
     // local form of the same statement and every one of them is untouched.
-    expect(hashState(plain)).toBe('527c415de4e03d39');
+    //
+    // MOVED AGAIN AT G-023a, FOR ONE CAUSE, AND IT IS NOT A BEHAVIOUR CHANGE. Was
+    // `527c415de4e03d39` at G-019.
+    //
+    //   A NEW HASHED FIELD ON EVERY GUEST. `Guest.at` is part of hashed state, so every
+    //   guest alive at the end of this run contributes a cell to the hash. NOTHING ELSE
+    //   MOVED: the content fingerprint is untouched (this goal ships no content change at
+    //   all), and every hand-checked outcome below is the same number it was — 225 arrived,
+    //   210 satisfied, 0 evicted, 4 need rows, 1 abandonment. That is the evidence, and it
+    //   is stronger here than a hash can be on its own: a guest's position is written from
+    //   what the guest already holds, so nothing in the simulation reads it and nothing it
+    //   decides can change.
+    expect(hashState(plain)).toBe('13cbef2f4b4e199b');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -235,7 +247,12 @@ describe('the same workload with the player churning the building', () => {
     // scale in the content document and the new hashed field. Was `6e9b2d38dfa01134` at
     // G-014b. The sharp control holds again: 19 evictions, unchanged, in the goal that made
     // an eviction the one departure the review scale treats differently from every other.
-    expect(hashState(churn)).toBe('8773494528412341');
+    //
+    // Moved at G-023a with the plain arm, for the one cause described there — `Guest.at` is
+    // hashed state. Was `8773494528412341` at G-019. The sharp control holds for the fifth
+    // time: 19 evictions, unchanged, in a goal that gives the evicted guest a position to be
+    // evicted FROM.
+    expect(hashState(churn)).toBe('5536dd68a2cfe25c');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

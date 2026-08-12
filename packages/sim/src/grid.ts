@@ -117,6 +117,42 @@ export function createGridBounds(): GridBounds {
  */
 export const GROUND_FLOOR = 0;
 
+/**
+ * WHERE A GUEST IS WHEN IT IS NOWHERE IN PARTICULAR (G-023a): the door.
+ *
+ * A TOTAL FUNCTION OF THE PLOT, AND TOTALITY IS THE WHOLE REQUIREMENT. `Guest.at` is
+ * non-nullable, so every guest needs a cell on every tick, including one that holds
+ * nothing at all — and a rule that can fail to produce one puts `at: null` back into the
+ * type by the back door.
+ *
+ * WHY THE FLOOR IS CLAMPED RATHER THAN 0. `Cell.floor` says ground is 0 and M3's
+ * circulation enters there, which makes 0 the right answer whenever it exists — but
+ * `assertGridBounds` requires only `minFloor <= maxFloor`, so a legal plot need not
+ * CONTAIN floor 0. A world whose plot is floors 3..5 would otherwise put its guests
+ * outside their own building, and `assertGuestStoreInvariants` would refuse to load a save
+ * this build wrote. `travel.position.test.ts` pins a plot whose floors are 3..5 and one
+ * entirely below ground, because a clamp nobody has watched clamp is a branch nobody has
+ * run — and it lives there rather than in `grid.test.ts` so that G-023a's own exit filter
+ * (`vitest run travel`) is what runs it.
+ *
+ * Column is `minColumn` — the left edge of the plot, which is where the street is.
+ *
+ * IT IS DERIVED FROM THE BOUNDS PASSED IN, NEVER FROM `createGridBounds()`. A save carries
+ * its own plot (see `GridBounds`), so a world on a narrower plot gets its own entrance
+ * rather than this build's. `migrateV10ToV11` in `save.ts` states the same rule over its
+ * own frozen era constant and MUST NOT call this — see ADR-0008 (1) and the source scan
+ * named there.
+ */
+export function entranceCell(bounds: GridBounds): Cell {
+  const floor =
+    GROUND_FLOOR < bounds.minFloor
+      ? bounds.minFloor
+      : GROUND_FLOOR > bounds.maxFloor
+        ? bounds.maxFloor
+        : GROUND_FLOOR;
+  return { floor, column: bounds.minColumn };
+}
+
 /** Value equality. The one way cells are compared; never `===` on the object. */
 export function cellsEqual(a: Cell, b: Cell): boolean {
   return a.floor === b.floor && a.column === b.column;
@@ -238,17 +274,53 @@ export function isWithinBounds(cell: Cell, bounds: GridBounds): boolean {
  *
  * Integer-ness is checked before bounds so a float inside the plot fails as what it is,
  * rather than passing a comparison that would have accepted it.
+ *
+ * THE TWO CHECKS ARE WRITTEN OUT LONGHAND, AND THAT IS A MEASURED DECISION RATHER THAN A
+ * STYLE (G-023a). This was `for (const key of ['floor', 'column'] as const)`, which
+ * ALLOCATES A FRESH TWO-ELEMENT ARRAY ON EVERY CALL. That cost nothing while the only
+ * caller was `draftSpawn` — once per spawn, a handful of times a run — and it stopped
+ * costing nothing the moment `assertGuestStoreInvariants` began calling it once per guest
+ * per tick.
+ *
+ * `needs.ts` has the same paragraph over `assertNeedVector`, and names the same history:
+ * G-010 removed exactly this shape FROM `assertGuestStoreInvariants`, and this goal walked
+ * back into that function and reintroduced it one layer down. Measured by `sim-critic`,
+ * paired and interleaved — 4M calls over 512 rotating cells, 7 alternated reps, ratio of
+ * medians, loaded machine: **3.53x, about 22ns a call**. Cited as that critique's reading
+ * rather than restated as this file's, because it is a microbenchmark of this function and
+ * nothing here pins it. The loop buys nothing anyway — two fields, named once each — and
+ * every message is byte-identical in both spellings.
+ *
+ * `what` MUST BE A CONSTANT STRING, AND `subject` IS WHY IT CAN BE. The array was not the
+ * only per-call allocation: the caller that runs per guest per tick wants the guest's id in
+ * the message, and `` `…guest ${id}` `` builds a string on every call whether or not
+ * anything is wrong. So the id is passed as a NUMBER and joined only on the throw path,
+ * which is where every other message in `assertGuestStoreInvariants` is already built.
+ *
+ * THIS ONE CARRIES NO FIGURE, AND THE REASON IS WORTH MORE THAN A FIGURE WOULD BE. An arm
+ * with a constant message read **1.0004** where the per-call message read 1.0333/1.0484 —
+ * which looked like the attribution — and then the SHIPPED arm, which differs from it by
+ * passing one integer, read 1.0488 and 1.0521. One integer argument cannot cost 5%, so that
+ * gap is the instrument's spread on a contended machine and not the message. **The
+ * measurement is withdrawn; the change stands on the argument that needs no stopwatch** —
+ * building a string per guest per tick to describe a failure that is not happening is the
+ * same defect as allocating an array to name two fields, one argument over.
  */
-export function assertCell(cell: Cell, bounds: GridBounds, what: string): void {
-  for (const key of ['floor', 'column'] as const) {
-    const value = cell[key];
-    if (!Number.isSafeInteger(value)) {
-      throw new Error(`${what}: ${key} must be a safe integer, got ${String(value)}`);
-    }
+export function assertCell(cell: Cell, bounds: GridBounds, what: string, subject?: number): void {
+  if (!Number.isSafeInteger(cell.floor)) {
+    throw new Error(`${subjectOf(what, subject)}: floor must be a safe integer, got ${String(cell.floor)}`);
+  }
+  if (!Number.isSafeInteger(cell.column)) {
+    throw new Error(`${subjectOf(what, subject)}: column must be a safe integer, got ${String(cell.column)}`);
   }
   if (!isWithinBounds(cell, bounds)) {
     throw new Error(
-      `${what}: ${describeCell(cell)} is outside the plot (${describeBounds(bounds)})`,
+      `${subjectOf(what, subject)}: ${describeCell(cell)} is outside the plot (${describeBounds(bounds)})`,
     );
   }
+}
+
+/** The message prefix, assembled only when something is about to throw. */
+function subjectOf(what: string, subject: number | undefined): string {
+  return subject === undefined ? what : `${what} ${subject}`;
 }

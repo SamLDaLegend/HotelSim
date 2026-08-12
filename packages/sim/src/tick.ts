@@ -856,7 +856,7 @@ export function stepTick(
   // reachable from the phases above as they stand — nothing removes an entity after
   // `runGuests` has matched guests to it — which is precisely why it is here: it is the
   // postcondition those phases promise, and it fires if that ever stops being true.
-  assertGuestStoreInvariants(state.world.guests, state.world.entities);
+  assertGuestStoreInvariants(state.world.guests, state.world.entities, state.world.grid);
   assertGuestOutcomes(state.world.guestOutcomes, state.world.guests);
   // And the per-need tally still describes those departures (G-012). Same function
   // `assertWorldShape` calls at load, so "a valid tally" has one definition rather than

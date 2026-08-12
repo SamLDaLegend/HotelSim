@@ -222,7 +222,18 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
       world: { guests: { list: Record<string, unknown>[] } };
     }).world.guests.list;
     for (const guest of guests) {
-      expect(Object.keys(guest).sort()).toEqual(['arrivedTick', 'engagement', 'id', 'needs', 'roomEntityId']);
+      // `at` joins the list at G-023a, and this is the CURRENT shape rather than a frozen
+      // era: the document under test has been walked all the way to v11, so the key set it
+      // must have is this build's. (The v5-era claim — that the three old fields are GONE —
+      // is the part that must never move.)
+      expect(Object.keys(guest).sort()).toEqual([
+        'arrivedTick',
+        'at',
+        'engagement',
+        'id',
+        'needs',
+        'roomEntityId',
+      ]);
     }
   });
 
@@ -379,7 +390,7 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
       ...shaped(),
       guests: {
         nextId: 2,
-        list: [{ id: 1, arrivedTick: 0, roomEntityId: 0, engagement: null, needs }],
+        list: [{ id: 1, at: { floor: 0, column: 0 }, arrivedTick: 0, roomEntityId: 0, engagement: null, needs }],
       },
       guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     });

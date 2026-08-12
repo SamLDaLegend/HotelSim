@@ -550,6 +550,7 @@ describe('buildSummary violations (forged worlds)', () => {
   it('an orphaned reservation produces the guest violation, and the printed count agrees', () => {
     const { world, options } = defaultRun(2);
     const forged = withForgedGuest(world, {
+      at: { floor: 0, column: 0 }, // G-023a: holding nothing that exists, so the doorway
       arrivedTick: world.tick, // age 0 — cannot read as stuck, so the orphan branch is isolated
       roomEntityId: 999_999, // no such entity
       engagement: null,
@@ -567,6 +568,7 @@ describe('buildSummary violations (forged worlds)', () => {
     const { world, options } = defaultRun(2);
     const limit = maxGuestLifetimeTicks(content, needType.id);
     const forged = withForgedGuest(world, {
+      at: { floor: 0, column: 0 }, // G-023a: waiting in the doorway, which is where it is
       arrivedTick: world.tick - limit - 1, // one tick past the oldest a live guest can be
       roomEntityId: NO_ENTITY, // waiting, not orphaned — isolates the stuck branch
       engagement: null,
@@ -609,6 +611,7 @@ describe('buildSummary violations (forged worlds)', () => {
     const firstSettlement = world.ledger.findIndex((transaction) => transaction.reason === 'upkeep');
     const forged: World = {
       ...withForgedGuest(world, {
+        at: { floor: 0, column: 0 }, // G-023a
         arrivedTick: world.tick,
         roomEntityId: 999_999,
         engagement: null,

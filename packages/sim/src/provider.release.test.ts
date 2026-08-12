@@ -295,6 +295,10 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
 
   const guest = (id: number, room: number, engagedWith: number | null, comfortLeft: number): Guest => ({
     id,
+    // G-023a: a guest is somewhere. The doorway — this file is about what a RELEASE does,
+    // and nothing in the simulation reads a position (`travel.position.test.ts` owns the
+    // placement rule).
+    at: { floor: 0, column: 0 },
     arrivedTick: 0,
     roomEntityId: room,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'comfort' },

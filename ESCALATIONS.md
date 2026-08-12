@@ -993,3 +993,69 @@ not armed at all. The cause was a defect in G-022's own `tempdir.symlink.test.ts
 against the runner-canonicalised long form. **The local repair above is untouched by that** — it
 rests on 5/5 against 0/5, an n=10 confirmation, the unhandled-rejection control and a library
 constant, none of which came from CI.
+
+---
+
+## OPEN — I3's gate is blind to the natural spelling of the thing it forbids (2026-08-12)
+
+**Found by `render-engineer` during G-030, probed rather than asserted, and NOT fixed there —
+correctly, because widening an invariant gate's predicate is not a render goal's call.**
+
+**The finding.** `tools/gates/check-content.mjs:77` walks `stringLiterals`, so:
+
+```js
+{ 'standard_room': 0x3f6fb5 }   // CAUGHT in both roots
+{ standard_room:   0x3f6fb5 }   // CAUGHT IN NEITHER
+```
+
+The second is an **unquoted object key** — and it is how a person actually writes a palette
+table, which is exactly the artefact ADR-0003 was written to forbid. Probed against a mirrored
+tree during G-030's build, both roots, both spellings.
+
+**Why this is worse than an ordinary gap.** I3 is one of the **six invariants**. The project has
+spent twenty-three goals treating "`check:content` is green" as meaning no content definition has
+leaked into code, and that claim has a hole in it shaped like the most natural way to write the
+leak. It is ADR-0007's class — *a check that succeeds while inspecting nothing* — **inside an
+invariant gate**, which is the one place the project has no second line of defence.
+
+**Nothing currently leans on it.** G-030's palette is derived from content ids at runtime rather
+than tabulated, and that choice was made because it beats a table, not because a gate would have
+refused one. `palette.ts`'s comment was corrected during the build so it does not imply cover it
+does not have.
+
+**What is asked of the human — a scheduling decision, not a fix.** This wants its own goal, and
+it is not obviously small: the honest repair probably keys the predicate to **declared content
+ids** (read from `packages/content`) rather than to *snake_case shape*, which changes what the
+gate means as well as what it catches. That is a design decision about an invariant.
+
+- **Option A**: schedule it now, before M2.5's remaining goals add more `apps/game` surface.
+- **Option B**: schedule it at M3 exit with the other instrument debts, as G-022 did.
+- **Not an option**: leave it as a `PARKING.md` note. A known hole in an invariant gate that
+  nobody has scheduled is how the three-OS CI matrix sat unrun for nineteen goals.
+
+**The gate must also get a proof-of-bite covering the unquoted spelling**, per the human's M2
+exit ruling that every scanner gate owes one — the existing proof passes today while the hole
+is open, which makes it the second instance of a proof that certifies less than it appears to.
+
+### RESOLVED 2026-08-12 — human ruling: OPTION B, schedule it with M3's instrument debts
+
+*"I agree you should schedule I3 with M3 instrument debts."*
+
+**Scheduled, not parked** — which was the one outcome ruled out above. It joins the M3 exit block
+as a named obligation and will be the subject of an instrument-debt goal in the shape G-022 took
+for M2's, rather than a `PARKING.md` line nobody owns. **G-022 exists because the same class of
+debt was scheduled rather than noted**, and it found four defects in tests written to prove
+something, including that `check-purity.mjs` (I1) and `determinism.mjs` (I2) had never been
+executed by any committed test.
+
+**What the goal inherits, so it does not re-derive it:** the probe already exists — both roots,
+both spellings, `{ 'standard_room': … }` caught and `{ standard_room: … }` not — and the likely
+repair is to key the predicate to **declared content ids** read from `packages/content` rather
+than to snake_case *shape*, which changes what the gate means as well as what it catches. The
+proof-of-bite must cover the unquoted spelling; today's proof passes with the hole open.
+
+**Accepted risk of deferring, stated so it is a decision rather than an oversight**: M2.5's
+remaining goals (G-031, G-027, G-028) will add `apps/game` and `packages/content` surface before
+the gate is repaired. Nothing currently leans on the hole — G-030's palette is derived at runtime
+rather than tabulated — but a table written in the natural spelling between now and then would
+pass I3 and would have to be found by eye.

@@ -209,13 +209,13 @@ describe('the detector can return something other than zero', () => {
   it('counts a reservation on a room that does not exist', () => {
     const dangling = withGuests([{ ...guest, roomEntityId: 4_242 }]);
     expect(countOrphanedReservations(dangling, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(dangling, world.entities)).toThrow(/does not exist/);
+    expect(() => assertGuestStoreInvariants(dangling, world.entities, world.grid)).toThrow(/does not exist/);
   });
 
   it('counts a room booked twice', () => {
     const doubled = withGuests([guest, { ...guest, id: guest.id + 1 }]);
     expect(countOrphanedReservations(doubled, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(doubled, world.entities)).toThrow(/more than one guest/);
+    expect(() => assertGuestStoreInvariants(doubled, world.entities, world.grid)).toThrow(/more than one guest/);
   });
 
   it('counts each broken reservation separately', () => {

@@ -185,6 +185,14 @@ function loadRecording(text) {
  * whole building in a corner. Computed from the first and last frames together so it
  * covers anything built during the run, and it never moves while watching, which a
  * per-frame fit would.
+ *
+ * IT COVERS GUEST POSITIONS TOO SINCE G-023a, and not only rooms. A guest can now stand
+ * somewhere nothing is built — the entrance is `minColumn`, and a hotel built at column 30
+ * would have put its waiting guests outside the drawn rectangle and shown a watcher an empty
+ * lobby. THE RESIDUAL LIMIT, STATED RATHER THAN LEFT TO BE FOUND: only the first and last
+ * frames are sampled, so a guest who stands somewhere unique in the MIDDLE of a run is still
+ * off-view. That is the same sampling the room extent has always used, and widening it is a
+ * camera, which is out of scope.
  */
 function extentOf(first, last) {
   let minC = Infinity, maxC = -Infinity, minF = 0, maxF = 0;
@@ -195,6 +203,14 @@ function extentOf(first, last) {
       maxC = Math.max(maxC, e.at.column);
       minF = Math.min(minF, e.at.floor);
       maxF = Math.max(maxF, e.at.floor);
+    }
+    for (const guest of world.guests.list) {
+      const at = guest.at;
+      if (at === undefined || at === null) continue;
+      minC = Math.min(minC, at.column);
+      maxC = Math.max(maxC, at.column);
+      minF = Math.min(minF, at.floor);
+      maxF = Math.max(maxF, at.floor);
     }
   }
   if (minC === Infinity) { minC = 0; maxC = 8; }
@@ -211,7 +227,12 @@ function extentOf(first, last) {
 // DRAWING. Side-on cross-section: columns left to right, floors bottom to top.
 
 const MARGIN = 10;
-const STRIP_H = 84;
+// THE STRIP BELOW THE BUILDING IS GONE (G-023a), along with the height it reserved and the
+// `bottom` coordinate that positioned it. It existed because a guest holding nothing had no
+// position in the save and had to be drawn SOMEWHERE; `Guest.at` is now non-nullable, so
+// every guest is drawn on the plot and there is nothing left for a strip to hold. Deleted
+// rather than kept empty: this instrument is disposable, and a feature nobody can reach is
+// the first thing to remove (§9).
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 function geometry() {
@@ -219,12 +240,11 @@ function geometry() {
   const cols = maxC - minC + 1;
   const rows = maxF - minF + 1;
   const cw = clamp((canvas.width - 2 * MARGIN) / cols, 10, 120);
-  const ch = clamp((canvas.height - 2 * MARGIN - STRIP_H) / rows, 16, 130);
+  const ch = clamp((canvas.height - 2 * MARGIN) / rows, 16, 130);
   return {
     cw, ch, minC, maxC, minF, maxF,
     x: (col) => MARGIN + (col - minC) * cw,
     y: (floor) => MARGIN + (maxF - floor) * ch,
-    bottom: MARGIN + rows * ch,
   };
 }
 
@@ -256,9 +276,7 @@ function draw(world) {
 
   // Where each entity stands, and who is inside it.
   const cells = new Map();
-  const placed = new Map();
   for (const e of world.entities.list) {
-    placed.set(e.id, e);
     if (e.at === null) continue;
     const key = `${e.at.floor},${e.at.column}`;
     if (!cells.has(key)) cells.set(key, { at: e.at, room: null, items: [] });
@@ -266,28 +284,52 @@ function draw(world) {
     if (isRoom(e.kind)) cell.room = e; else cell.items.push(e);
   }
 
-  // WHERE TO DRAW A GUEST, AND THE REASON THAT QUESTION HAS NO GOOD ANSWER.
+  // WHERE TO DRAW A GUEST: WHERE THE SAVE SAYS IT IS (G-023a).
   //
-  // A guest holds a bedroom AND an engagement at the same time, and its lodging need
-  // advances while it sits in the basement — so the save says it is in two places at
-  // once. The viewer has to pick one, and picks the ENGAGEMENT, because that is what the
-  // guest is doing. The bedroom it is simultaneously asleep in would then look empty,
-  // which is a state the viewer could not express, so a let bedroom also gets an
-  // occupancy pip. See the WATCH note: this is a finding about the simulation, and the
-  // pip is how a watcher sees it rather than a fix for it.
+  // The viewer used to answer this itself — engagement first, else the bedroom, else a
+  // strip below the building for guests the save placed nowhere — because a guest had no
+  // position and the question had no good answer. `Guest.at` is now hashed, saved state and
+  // non-nullable, so the viewer READS it. That is one answer instead of two that can
+  // disagree, and it is what makes this instrument able to show a movement defect at all.
+  //
+  // THE PIP STAYS, AND SO DOES THE FINDING BEHIND IT. A guest's lodging need advances while
+  // it stands in the café, so the save still says it is asleep in one place and standing in
+  // another; the guest is drawn where it stands and the bedroom keeps an occupancy pip, so a
+  // watcher sees both halves. That is a finding about the SIMULATION which G-023a makes
+  // visible rather than introduces — see the WATCH note. It is not the viewer's to fix.
+  // NOT DRAWN, COUNTED IN TWO KINDS, AND THE SECOND IS THE ONE THAT CAN HAPPEN (G-023a,
+  // `sim-critic` MINOR 5). Deleting the OUTSIDE strip took away the guarantee that every
+  // guest in a frame appears somewhere, so the count that replaced it has to be one that can
+  // actually be non-zero — otherwise it is a reassuring zero that inspects nothing, in the
+  // instrument whose output becomes JOURNAL.md evidence.
+  //
+  //   unplaced  a guest with no `at` at all. Impossible for this build — `Guest.at` is
+  //             non-nullable and `assertWorldShape` refuses a save without it — so this is
+  //             non-zero only for an ndjson recorded before G-023a. Kept for the reason
+  //             `left()` keeps an em-dash for a pre-G-015 table: an old recording must read
+  //             as unreadable rather than as an empty hotel.
+  //   offView   a guest standing outside the drawn rectangle. THIS ONE IS REACHABLE TODAY:
+  //             `extentOf` samples the first and last frames only, so a guest that stands
+  //             somewhere neither of them covers — the doorway of a hotel built away from
+  //             the plot edge, or anywhere a G-023b corridor goes — is drawn off-canvas.
+  //             Fixing the extent is a camera; SAYING SO is a counter.
   const occupants = new Map();
   const holders = new Map();
-  const outside = [];
+  let unplaced = 0;
+  let offView = 0;
   for (const guest of world.guests.list) {
     if (guest.roomEntityId !== NO_ENTITY) {
       holders.set(guest.roomEntityId, (holders.get(guest.roomEntityId) ?? 0) + 1);
     }
-    const host = guest.engagement !== null ? guest.engagement.entityId : guest.roomEntityId;
-    const entity = host === NO_ENTITY ? undefined : placed.get(host);
-    if (entity === undefined || entity.at === null) { outside.push(guest); continue; }
-    const key = `${entity.at.floor},${entity.at.column}`;
-    if (!occupants.has(key)) occupants.set(key, []);
-    occupants.get(key).push(guest);
+    const at = guest.at;
+    if (at === undefined || at === null) { unplaced += 1; continue; }
+    if (at.column < g.minC || at.column > g.maxC || at.floor < g.minF || at.floor > g.maxF) {
+      offView += 1;
+      continue;
+    }
+    const key = `${at.floor},${at.column}`;
+    if (!occupants.has(key)) occupants.set(key, { at, guests: [] });
+    occupants.get(key).guests.push(guest);
   }
 
   for (const [key, cell] of cells) {
@@ -316,25 +358,20 @@ function draw(world) {
       ctx.fillStyle = colourOf(item.kind);
       ctx.fillRect(x + g.cw - 9 - i * 8, y + 4, 6, 6);
     });
-    drawGuests(occupants.get(key) ?? [], x + 3, y + g.ch - 6, g.cw - 6, g.ch);
+    drawGuests(occupants.get(key)?.guests ?? [], x + 3, y + g.ch - 6, g.cw - 6, g.ch);
   }
 
-  // OUTSIDE. A guest with no room and no provider has NO POSITION IN THE SAVE — see the
-  // findings; the sim has no notion of where such a guest is standing. This strip is a
-  // viewer convention, labelled as one, and not a claim about the simulation.
-  const sy = g.bottom + 14;
-  ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = '#3a4150';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(MARGIN + 0.5, sy + 0.5, right - MARGIN - 1, STRIP_H - 24);
-  ctx.setLineDash([]);
-  ctx.fillStyle = '#8b93a1';
-  ctx.font = '10px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillText(`OUTSIDE — no room, no provider (${outside.length}) · viewer convention, not sim state`, MARGIN + 4, sy + 12);
-  drawGuests(outside, MARGIN + 6, sy + STRIP_H - 30, right - MARGIN - 12, 60);
+  // GUESTS STANDING WHERE NOTHING IS BUILT (G-023a) — the doorway, and at G-023b whatever
+  // lies between two rooms. The loop above only visits cells that hold an entity, and the
+  // entrance need not hold one, so without this a waiting guest would be invisible: the
+  // exact "UI that cannot express a state the sim can reach" the deleted strip was itself a
+  // workaround for.
+  for (const [key, spot] of occupants) {
+    if (cells.has(key)) continue;
+    drawGuests(spot.guests, g.x(spot.at.column) + 3, g.y(spot.at.floor) + g.ch - 6, g.cw - 6, g.ch);
+  }
 
-  return { outside: outside.length };
+  return { unplaced, offView };
 }
 
 /**
@@ -344,12 +381,12 @@ function draw(world) {
  * the guest and are `needs.length` segments wide, which is wider than the body; a pitch
  * chosen from the body alone made adjacent guests' vectors overlap into a smear. Measured
  * on `--days 30 --seed 7 --rooms 2 --arrivals 20`, frame 2600: seven guests roomless AND
- * idle, drawn in the OUTSIDE strip, their vectors one unreadable stripe of colour.
+ * idle, crowded into one place, their vectors one unreadable stripe of colour.
  *
- * That invocation is worth naming rather than calling "the oversubscribed hotel", because
- * the strip only ever holds the roomless AND IDLE. A hotel with spare amenities keeps its
- * roomless guests busy and the strip stays empty at any pressure — which is why the
- * homeless mark is on the BODY (see drawGuest) and not on the strip.
+ * THE PLACE THEY WERE CROWDED INTO WAS THE OUTSIDE STRIP, WHICH NO LONGER EXISTS (G-023a).
+ * The crowding does: those seven guests now stand on the entrance cell, which is one cell
+ * wide, so the pitch still has to keep their vectors apart. The reading that produced this
+ * rule is unchanged; only the name of the place is.
  */
 function drawGuests(guests, x0, baseY, width, cellH) {
   if (guests.length === 0) return;
@@ -393,10 +430,10 @@ function drawGuest(guest, x, baseY, w, GUEST_H, NEED_H, segW) {
   // bed, while 89 of 120 guests left unsatisfied. §6.1's "UI that cannot express a state
   // the sim can reach", on the instrument whose output is JOURNAL.md evidence.
   //
-  // Note what this means for the OUTSIDE strip: it holds only the roomless AND idle, so a
-  // roomless guest that is being served is drawn hollow AT ITS PROVIDER. Homelessness is
-  // now legible wherever the guest happens to be standing, which the strip alone could
-  // never have made it.
+  // THIS CUE OUTLIVES THE OUTSIDE STRIP AND IS THE REASON DELETING THE STRIP COSTS NOTHING
+  // (G-023a). The strip could only ever show the roomless AND idle; the fill shows
+  // homelessness wherever the guest is standing, which is every roomless guest including the
+  // ones being served. It was earned by the finding above and it stays.
   const lodging = needs.find((n) => n.needId === content.lodgingNeedId);
   const filled = guest.roomEntityId !== NO_ENTITY;
   let colour = '#77808f';
@@ -490,7 +527,13 @@ function hud(world, extra) {
     ['ledger', `${world.ledger.length} txns`],
     ['rooms / items', `${rooms} / ${items}`],
     ['in hotel', String(world.guests.list.length)],
-    ['outside', String(extra.outside)],
+    // GUESTS THIS FRAME DOES NOT SHOW, IN THE TWO WAYS THAT IS POSSIBLE (G-023a). `off-view`
+    // is the reachable one and the reason this row exists at all: the drawn rectangle is
+    // fitted to the first and last frames, so a guest standing somewhere neither covers is
+    // drawn off-canvas, and a watcher would otherwise see a hotel with a guest missing and no
+    // sign of it. `no position` can only be an ndjson recorded before `Guest.at` existed.
+    // A row that could only ever read 0 would be a reassurance rather than a measurement.
+    ['not drawn', `${extra.offView} off-view · ${extra.unplaced} no position`],
     ['arrived', String(o.arrived)],
     // FIVE LITERAL ROWS, NOT A LOOP OVER THE TABLE (G-015). A loop would render whatever a
     // recording happened to contain, which is how a disposable viewer grows a feature; these

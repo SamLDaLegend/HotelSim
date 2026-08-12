@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-12, G-023a done. M2.5: 1 of 4 goals (G-030 awaiting WATCH). Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -969,3 +969,199 @@ tell is unchanged: a perfect null of 1.0000 would yield 1.5000 under the rule ab
 multiplier would be doing all the work. `check:tickcost` is a noise bound; `check:scaling`'s
 four axes are signals. A gate that cannot say which it has does not yet know what it is
 measuring.
+
+---
+
+## ADR-0017 — Needs are STOCKS, not tasks; and a stay ends by checkout or by dissatisfaction
+
+**Human ruling, 2026-08-12, taken during G-023 PLAN and explicitly accepting that it re-opens
+closed work: *"I'd rather make this decision now before we proceed much further as it seems like
+the gameplay loop will be dependent upon it."***
+
+### The context — what forced the question
+
+G-023 needed a time budget for travel and the shipped content has **exactly zero**. The three
+engagement needs sum to 480 ticks (`need-types.json`: 150 + 150 + 180), the lodging window is
+480 ticks (`night_rest.satisfyTicks`), `night_rest` is served on every tick a guest holds a room,
+and the guest departs the tick `night_rest` is met. So engagement work and the window it must fit
+inside are the same 480 ticks, starting on the same tick, and **every tick in transit is a tick
+stolen from engagement.**
+
+**Measured both ways, orchestrator-run, `--days 30 --seed 7 --rooms 6 --amenities 5`:**
+
+| arm | `guest_nourishment` |
+|---|---|
+| shipped content | 356 met, 0 unmet |
+| `guest_nourishment.satisfyTicks` 180 → 181 | **0 met, 356 unmet** |
+| `night_rest.satisfyTicks` 480 → 479 | **0 met, 356 unmet** |
+
+Total, not gradual, and identical from both sides — it is a cliff, not a knife-edge. This is the
+fourth appearance of one hypothesis: *the engagement vector sums to the lodging budget*, parked
+at G-013 with its experiment, confirmed by G-017's recording, hit as a knife-edge at G-014a, and
+arriving here as a wall.
+
+**Three patches were offered to the human and all three patched the WINDOW.** The human rejected
+the framing and removed the window instead. Recorded because the orchestrator's option set was
+the smaller thought.
+
+### The decision, in five parts
+
+1. **A NEED IS A STOCK.** It has a level that decays over time and is refilled by being served.
+   It is never "done". This deletes `progressRemaining`'s terminal semantics — today
+   `needs.ts:86-95` makes zero **terminal** ("a met need is terminal, so `advanceNeeds` returns it
+   by reference from then on"), which is what makes a need a task with a deadline.
+2. **ACTIVITY DRAWS A STOCK DOWN.** Doing things costs rest; a guest that does a lot may want a
+   nap. Eating tops nourishment up and it stays up, then decays. The loop is oscillation, not
+   completion.
+3. **REST REFILLS ONLY IN THE ROOM** (ruled earlier the same day, and it survives this change
+   intact). Under stocks it carries no starvation consequence: a guest that stays out gets tired,
+   which is the intended behaviour rather than a failure mode.
+4. **A STAY ENDS TWO WAYS AND ONLY TWO.** (a) **Checkout**, after the guest's stay duration
+   elapses. (b) **Dissatisfaction** — the guest gives up and leaves. There is no third
+   terminator, and in particular a stay no longer ends because a need completed.
+5. **THE MODEL MUST ADMIT TWO THINGS IT WILL NOT YET CONTAIN.** A **non-lodging guest** — one
+   that holds no room, comes for a provider, pays and leaves (food, a gym, a spa, a pool) — and
+   **per-personality tolerance**, so that the dissatisfaction threshold in (4b) is a parameter the
+   model reads rather than a constant the code holds. **Both are structural admissions now; the
+   archetypes and their content are M6** (`HOTELSIM.md` §8 already puts guest archetypes there).
+   Hard-wiring "every guest lodges" or "every guest has the same patience" is what makes M6
+   expensive later, and it is free to avoid today.
+
+### What is NOT decided here, and must be derived rather than chosen
+
+Decay rates, refill rates, the dissatisfaction threshold, and the stay duration are **content**
+(I3, ADR-0003) and each needs a derivation from a stated requirement (§2.1, ADR-0007's third
+amendment). This ADR fixes the model, not the numbers. **A number chosen to make the suite green
+is the failure §9 names**, and it is the specific risk here because the old numbers were tuned
+against a model that no longer exists.
+
+### Consequences, stated rather than discovered
+
+- **It re-opens behaviour from four M2 goals**, in a milestone signed off 2026-08-10: G-012's
+  decay model, G-014a/b's utility inputs, G-015's outcome table, and G-019's reviews — the last
+  two because "met / unmet" is a task-shaped tally with no stock-shaped meaning. The natural
+  analogue is **time spent below a threshold**, which is arguably a better review signal than a
+  count. **The human ruled the re-opening acceptable in advance**; it is recorded in
+  `ESCALATIONS.md` rather than treated as drift.
+- **`nightlyRatePence` becomes fixable.** ADR-0010 documents it as charged per *completed stay*
+  rather than per night, giving a 10.2:1 margin where the field name implies 3.4:1, and declined
+  to rename it because the permanent fixture would become a husk. A checkout-based terminator is
+  what makes per-night charging expressible. **This ADR does not itself change the charge** —
+  that is the money loop and belongs with M4 — but it removes the obstacle.
+- **Every balance figure in the project moves.** Less costly than it sounds: they were already
+  taken with `--rooms N` seeding ~75% extra opening capital, which is why M4 is blocked on
+  scenario capital regardless (ADR-0013 §5).
+- **G-023a is unaffected and stands.** Where a guest *is* does not depend on how needs work.
+- **G-023b's blocker dissolves.** With no completion deadline, travel is time not spent doing
+  something else — a trade-off, which is what M3 is for — rather than theft from a fixed budget.
+
+
+---
+
+## ADR-0018 — The loop is re-tuned for velocity, and a playable surface comes forward
+
+**Human ruling, 2026-08-12**, in answer to a measured estimate that the remaining M2.5 + M3 work
+was 7 goals, ~25,000 insertions and 16–20 critique sweeps: *"How can we speed that up — at this
+rate it's going to take ~100 hours for the MVP"*, then *"I agree with all 6 — I also agree that
+a playable surface is important sooner."*
+
+**The measurement that prompted it.** The live ledgers had reached **10,034 lines** across seven
+files, and every agent reads a large fraction of them before writing a line — G-023's PLAN agent
+spent 281K tokens, its critic 176K, much of it re-deriving the same context. **The governance
+had become a per-invocation tax proportional to the project's own history.**
+
+### The six changes
+
+1. **CLOSED MILESTONES ARE ARCHIVED.** `GOALS.md` 3,630 → 240 lines, `JOURNAL.md` 2,091 → 120,
+   into `GOALS-ARCHIVE.md` and `JOURNAL-ARCHIVE.md`. **Nothing is edited in the move** (ADR-0008).
+   *Verified before the move*: nothing reads a ledger programmatically except `tools/gates/stamp.mjs`,
+   which requires the goal named in the as-of stamp to be marked `done` **in `GOALS.md` itself** —
+   so the archive boundary is drawn to leave the stamped goal live, and `check:stamp` plus
+   `ledger-stamp.test.ts` (21 tests) were run green after the split.
+2. **THE §5.6 PLAN PASS IS TIERED.** Kept for any goal that changes behaviour or content; dropped
+   for mechanical goals. It is not dropped wholesale, because it had just paid for itself
+   spectacularly — it found G-023's BLOCKER before a line of code existed.
+3. **WATCH VERDICTS ARE BATCHED.** Recorded per goal, watched by the human in one sitting, so a
+   perceptual criterion no agent may discharge stops sitting on the critical path per goal.
+4. **§4's ONE-GOAL-IN-PROGRESS RULE IS RELAXED to independent goals in parallel worktrees.**
+   This is the largest single lever (~2×) and it is the one that trades rigour: the rule exists so
+   no handover lands on a half-swept diff. **Permitted only where the goals' file sets are
+   disjoint, and the orchestrator states the disjointness before starting the second.**
+5. **G-024 AND G-025 MAY MERGE** — stairs and lifts are both "a queued shared resource with
+   capacity", and the difference (direction, call ordering) may be content plus a policy rather
+   than a second mechanism. **Put to the builder at PLAN rather than decided here**, because this
+   project's history is unambiguous that fat goals cost sweeps.
+6. **G-029 (a guest need not lodge) DEFERS TO M6** with the rest of the archetype work. The
+   *structural admission* — lodging is optional, tolerance is a parameter the model reads — stays
+   a constraint on G-027's design, which costs a paragraph rather than a goal.
+
+### A playable surface comes forward, and what that supersedes
+
+**`HOTELSIM.md:66`'s "apps/game may not be opened before M5" is superseded.** §9's stop condition
+is unaffected and was never in the way: it names **M0** sign-off, which happened 2026-08-07.
+
+**The argument, and it is evidence rather than preference.** Twenty-two goals in, nobody has
+played this game. **ADR-0017 — the largest design change in the project — came from the human's
+intuition about how the game should feel, not from any test**, and it arrived at goal 23 and
+re-opened behaviour in four earlier goals. That is the real cost the estimate was measuring, and
+it is not agent hours. **Design feedback is the scarce input, and playing is how it is generated.**
+
+What the rigour did buy is stated too, because it is why this is a re-plan and not a repudiation:
+determinism and twelve green gates are precisely why a need-model rewrite at goal 23 is safe
+rather than terrifying.
+
+**AN OBLIGATION FALLS DUE THE MOMENT `apps/game` OPENS.** `HOTELSIM.md:66` records that nothing
+in `packages/content` can stop render code computing `ladder[i] / ladder[0]` and reintroducing
+the speed-ladder-as-multiplier defect G-021 deleted; the instrument is **a source scan over
+`apps/game`**, parked with its falsification test *because the directory was shut*. It is no
+longer shut. **The scan ships with the first renderer goal, not after it** — a parked instrument
+whose precondition has expired is ADR-0007's class waiting to happen.
+
+**Sequencing, and the reason it is this way round.** G-023a (positions) → the playable surface →
+**G-027 (the need model)**. The need model's four content numbers — decay rate, refill rate,
+dissatisfaction threshold, stay duration — are exactly the kind that are tuned by feel, and
+ADR-0017 warns that they have no old baseline to inherit because the model they were fitted to
+will not exist. **Building the surface first is what lets those be chosen by playing rather than
+by arguing.** The first renderer goal draws structure and position — rooms, guests, movement —
+which is the part G-027 does not change.
+
+
+---
+
+## ADR-0019 — Parallel tracks need DISJOINT GATES, not just disjoint files; they join at VERIFY
+
+**Orchestrator, 2026-08-12, amending ADR-0018 §4 within hours of writing it, because the
+condition it stated was wrong and the first parallel pair proved it.**
+
+**What ADR-0018 §4 said**: parallel tracks are permitted *"only where the goals' file sets are
+disjoint, and the orchestrator states the disjointness before starting the second."* I stated it,
+and it was true: track A (G-030) touched `apps/game`, `tools/gates` and docs; track B (G-023a)
+touched `packages/sim` and `tools/viewer`. **No file was contended at any point.**
+
+**What happened anyway.** Track B finished its round-1 fixes and could not obtain a green
+`pnpm verify`: the `typecheck` row was red with **8 errors, every one in track A's in-progress
+files**. `pnpm -r typecheck` is workspace-wide, and so, in their own ways, are `check:purity`
+(depcruise over `packages apps tools`), `check:content`, `check:ladder` and `test`.
+
+**THE CORRECTED CONDITION.** Disjoint files is **necessary and not sufficient**. The gates are
+shared, and a gate is the thing a goal is measured by — so:
+
+> **Two tracks may build in parallel. They cannot VERIFY in parallel, and neither commits until
+> the shared gates are green for both.** Parallel tracks **join at VERIFY**.
+
+**Why this is not a reason to stop running tracks in parallel.** The parallel window still buys
+what it was ruled in for: track A built an entire renderer while track B went through a critique
+round and its fixes. What it does not buy is independent *closure*, and pretending otherwise
+would mean either committing on a partially-green gate — §9's shape — or redefining `verify` to
+fit a scheduling decision, which is worse.
+
+**What an orchestrator must state before starting a second track, replacing ADR-0018 §4's
+sentence**: the disjoint file sets, **and** which shared gates the two tracks will contend for,
+**and** the join order at VERIFY. A track whose gate contention is not stated up front is a track
+whose VERIFY will be discovered rather than planned.
+
+**A NOTE ON WHAT THIS COST, SO IT IS NOT REMEMBERED AS FREE.** Nothing, on this occasion — track A
+was going back for legibility work anyway after WATCH #5, so the join was happening regardless.
+**That is luck rather than design**, and it would have cost track B a real wait if the WATCH had
+passed.
+

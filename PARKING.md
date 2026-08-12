@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-12, G-023a done. M2.5: 1 of 4 goals (G-030 awaiting WATCH). Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -1520,3 +1520,209 @@ changed one constant, its derivation, and the records that quoted it.
   per-test hang bound is an argued convention rather than the global `testTimeout` widening §9
   forbids. **Verified under the loaded arm, 5 of 5 PASS.** Kept here rather than deleted because
   the wrong mechanism was believed for two rounds and the correction is the useful part.
+
+## Discovered during the G-030 BUILD — the render layer opens (2026-08-12)
+
+Everything here was cut from G-030 deliberately, or found by it and not fixed by it.
+
+- **CAMERA PAN AND ZOOM -> G-031.** The view auto-fits the built extent, clamped to the
+  world's own plot, and re-fits on resize. There is no camera because a camera is INPUT and
+  the goal's own out-of-scope line assigns input to G-031.
+  **FALSIFICATION TEST**: open the shipped hotel at 1920x1080 and read a room's badge and a
+  guest's need bars. *If the badge is illegible or the built extent does not fit, auto-fit is
+  insufficient and pan/zoom is required in G-031; if both are readable at the shipped six
+  rooms, this stays parked until the player can build a hotel bigger than the window.*
+  **-> G-031, or the first goal where a hotel outgrows a screen.**
+
+- **INTERPOLATED MOVEMENT BETWEEN TICK STATES -> the first goal after G-023b.** The renderer
+  draws each tick's world with no tween. **Nothing moves yet**, so there is provably nothing
+  to interpolate: a guest's cell changes only when it engages or is housed, and G-023a placed
+  every guest where it already logically was.
+  **FALSIFICATION TEST**: once travel lands, watch one journey at the CAREFUL rung (5
+  ticks/s, the slowest and therefore the most exposed). *If the guest visibly jumps more than
+  one cell between redraws, interpolation is needed and it is its own goal; if a journey at 5
+  ticks/s reads as continuous, the tick rate is already finer than the eye and interpolation
+  is decoration.*
+
+- **CONTENT CANNOT EXPRESS A COLOUR, AND THE RENDERER DERIVES ONE. THIS TEST HAS NOW FIRED
+  ONCE — IT IS NOT UNTESTED.** `tools/viewer` reported the gap and said "M5 has to decide
+  where it belongs for real". G-030's first answer was FNV-1a over the content id into a
+  twelve-hue wheel, forced by ADR-0003 (a `{ 'standard_room': '#3f6fb5' }` table is a content
+  id in `apps/game`).
+  **THE FALSIFICATION TEST RAN AND THE DERIVATION FAILED IT.** A human watched the build and
+  reported *"lots of washout of bars … it's not easy"*; measured afterwards, **32 of the
+  wheel's 66 pairs were under 1.3:1 contrast and its worst pair was 1.00:1** — identical
+  luminance, different hue. Reproduced independently during the repair, same figures, same
+  pair (`0x50907c` vs `0x6f7fd0`).
+  **THE REPAIR IS IN, AND IT IS NOT A RE-PARK OF THE SAME NOTE.** The wheel is replaced by
+  per-role luminance ladders, spread geometrically across the band where every colour clears
+  3:1 against the page, assigned by RANK rather than by hash so a small ladder cannot
+  collide. Achieved: rooms 1.811:1 against a ceiling of 1.826, items 2.452 against 2.468,
+  needs 1.814 against 1.826, and **0 pairs under 1.3 in any role**. Pinned by
+  `tools/headless/src/palette.contrast.test.ts` over the SHIPPED content.
+  **WHAT REMAINS PARKED IS THE ORIGINAL GAP, NARROWED BY WHAT WAS LEARNED.** Content still
+  cannot express a colour, and two costs are now being carried that a content field would
+  remove: (1) assignment by rank means **adding a room type re-derives the ladder and every
+  existing room changes colour**, which is the stability property the hash had and the repair
+  gave up deliberately; (2) the ladder's minimum contrast **falls as content grows** — the
+  ceiling is `span^(1/(N-1))`, so 4 room types get 1.83:1, six get 1.45:1 and **eight get
+  1.30:1, at which point the floor is reached and the test goes red**.
+  **UPDATED FALSIFICATION TEST**: add room types until `palette.contrast.test.ts` fails, or
+  until a WATCH reports washout again. *If the test reddens first, the mechanism is working
+  and the answer is a colour field in `packages/content` — a fingerprint move, so a sim-track
+  goal. If a human reports washout while the test is still green, the FLOOR is wrong rather
+  than the scheme, and the number to revisit is `MIN_CONTRAST_WITHIN_ROLE`, which traces to a
+  measurement of the build that failed rather than to a standard.*
+  **-> a sim-track goal once content breadth approaches eight room types; M6 at the latest.**
+
+- **THE LADDER SCAN FOLLOWS ONE LEVEL OF ALIASING, AND TWO LEVELS ESCAPE.**
+  `tools/gates/check-ladder.mjs` registers `const base = rungs[0].ticksPerRealSecond` as a
+  second name for a speed, so the hoisted form of the ban is caught. `const b = base;` is not.
+  Recorded rather than closed, on the `scanner.census.test.ts:264` precedent: widening a regex
+  until it matches every conceivable spelling is how a predicate becomes unreadable, and an
+  unreadable predicate is what this class of gate exists to guard against.
+  **FALSIFICATION TEST**: add a synthetic `apps/game` source doing
+  `const a = ladder[0].ticksPerRealSecond; const b = a; return rung.ticksPerRealSecond / b;`
+  and run `pnpm check:ladder`. *If it stays green the escape is live, and the fix is to match
+  the LADDER BINDING (an array of rungs) rather than the field read, which is a different and
+  larger predicate; if it reddens, this note is stale and should be deleted.*
+  **A SECOND, NARROWER ESCAPE, same test shape**: two rung speeds passed as separate ARGUMENTS
+  to a helper that divides them (`ratio(a.ticksPerRealSecond, b.ticksPerRealSecond)`) reads as
+  comma-separated and is allowed. *Contrived rather than natural, which is why it is recorded
+  and not chased.*
+
+- **NOTHING PROVES POSITIVELY THAT THE SPEED CONTROL READS CONTENT — only that no speed is
+  declared in code.** `check:ladder` and `speed-ladder.scan.test.ts` are both NEGATIVE: they
+  prove the absence of a constant and of arithmetic. A renderer that read the ladder and then
+  ignored it would pass both. The positive is discharged at WATCH by mutation
+  (`git stash push -u`, rename a rung and change its rate, reload, observe, `git stash pop`),
+  which is a human action and not a gate.
+  **FALSIFICATION TEST for the automated version**: whichever mechanism arrives first — a pure
+  ladder module reachable from a test, or `apps/game` entering vitest's include set — assert
+  that a rung renamed in JSON renames the button. *If neither ever arrives, this criterion is
+  permanently discharged by a human at WATCH and that should be stated in the goal rather than
+  implied.* **-> G-031, which already owns the UI-versus-headless hash criterion.**
+
+- **`apps/game/src/scenario.ts` IS A STAND-IN FOR DEMAND AND FOR THE BUILD LOOP.** Six lodging
+  rooms, one of each amenity, an arrival every 120 ticks, seed 7, all fixed. Arrivals answer to
+  nothing — not reputation, not price, not whether a bed is free — because none of that exists
+  before M4.
+  **FALSIFICATION TEST**: when arrivals respond to reputation, a played session's occupancy
+  must vary with the review distribution. *If occupancy is invariant across sessions with very
+  different reviews, the fixed cadence is still in the path and this file is still deciding
+  something M4 owns.* **-> M4; the file shrinks to an opening position at G-031 and to nothing
+  after M4.**
+
+- **THE ACCUMULATOR RUNS EXACTLY ONE TICK BEHIND THE IDEAL AT SOME FRAME RATES, AND IT IS A
+  BOUNDARY EFFECT RATHER THAN DRIFT — MEASURED, NOT ASSUMED.** Ticks spent against the ideal
+  `seconds x rung`, synthetic uniform frame intervals, one sitting, win32/12cpu, at the
+  CAREFUL rung (5/s, the most exposed): **10s, 60s, 600s and 3600s all read exactly -1 at
+  30fps and 144fps, and 0 at 60fps and 240fps.** The deficit does not grow with the window, so
+  the retained carry is doing its job and the missing tick is the one still in it.
+  **AND THE WORLD ITSELF IS FRAME-RATE INDEPENDENT, WHICH IS THE STRONGER CLAIM**: three
+  drivers at 30fps, 144fps and 61.7fps, each run to tick 1440 at the top rung, produce the
+  state hash `3d137625a086e431` — identical, same sitting, same machine.
+  **FALSIFICATION TEST**: re-run the same comparison after G-023b makes guests move. *If the
+  three hashes still agree, the boundary holds through the first goal that adds per-tick
+  motion; if they diverge, something in the render loop has begun feeding the simulation and
+  I2's tripwire has a new customer.* **-> G-031, which formalises this as an exit criterion.**
+
+- **I3's GATE DOES NOT SEE AN UNQUOTED OBJECT KEY, AND THAT IS THE SPELLING A CONTENT-KEYED
+  LOOKUP TABLE ACTUALLY USES.** `check-content.mjs:77` walks `stringLiterals(source)`, so a
+  content id reaches code unnoticed the moment it is written as a bare key:
+
+  ```
+  { 'standard_room': 0x3f6fb5 }   caught, both roots        <- the quoted spelling
+  { standard_room: 0x3f6fb5 }     NOT caught, either root   <- the natural spelling
+  ```
+
+  **Probed during G-030's build** against a mirrored tree (`check-content.mjs` plus
+  `lib/scan.mjs` copied to a temp root, one file per root, one spelling at a time), so both
+  roots and both spellings were exercised separately rather than inferred. `packages/sim`
+  is affected identically to `apps/game`.
+  **IT IS ADR-0007's CLASS INSIDE AN INVARIANT GATE**: the check succeeds while inspecting
+  nothing, and it does so most confidently about a palette or a stats table — the two things
+  ADR-0003 was written for. G-030 did NOT rely on it: the derived-colour scheme in
+  `apps/game/src/view/palette.ts` was chosen because it is better than a table, and the
+  comment there now states what the gate does and does not see rather than implying cover.
+  **FALSIFICATION TEST**: extend `content-gate.test.ts` with an arm writing
+  `export const P = { standard_room: 1 };` into the scanned tree. *If it stays green the gap
+  is live and the repair is to scan identifier-position tokens as well as string literals —
+  and the cost of that is the question, because a bare `max_speed` local is snake_case and is
+  not a content id, so the predicate has to be keyed to the ids the content actually declares
+  rather than to the shape of the word. If it reddens, this entry is wrong and should be
+  deleted.* **-> a sim-track goal; widening an invariant gate's predicate is not a render
+  goal's to do, and it needs the id-set decision above made deliberately.**
+
+## Discovered during the G-030 legibility repair — after the first WATCH (2026-08-12)
+
+- **THREE ROLES' TOP RUNGS ARE ALL NEAR-WHITE, AND NOTHING CURRENTLY DISTINGUISHES THEM BY
+  COLOUR.** Each role's ladder ends at the top of the luminance band, so `standard_room`
+  (`#ebfdff`), `vending_machine` (`#eefcff`) and `night_rest` (`#f9f9ff`) are all but the same
+  colour. It is judged harmless because the three are never the same SHAPE or the same SIZE: a
+  room is a whole cell, an item is an 8px pip on a dark plate, and a need is a bar above a
+  guest's head. Separation WITHIN a role is what the contrast test asserts, and across roles
+  it is carried by geometry rather than by colour.
+  **FALSIFICATION TEST**: at a WATCH, ask whether a white room, a white pip and a white bar
+  are ever confused for one another. *If they are, the fix is to give each role its own
+  sub-band of the luminance range — which costs every role some within-role contrast, and that
+  trade should be made against a measured complaint rather than pre-emptively.*
+  **-> the next WATCH that reports confusion; nothing until then.**
+
+- **A GUEST'S FULL NEED VECTOR IS NO LONGER VISIBLE IN THE PICTURE.** The bars were reduced to
+  the single most urgent unmet need after the first WATCH reported "washout of bars", and the
+  cost is stated where it was paid (`view/guest.ts`): "three of its four needs are half
+  drained" cannot be read off a guest any more. It was not readable from the four-segment
+  smudge either, and the HUD strip and `tools/viewer` both carry per-need detail.
+  **FALSIFICATION TEST**: at a WATCH, try to answer "which need is this hotel failing at" from
+  the picture alone. *If the answer needs the HUD every time, the vector belongs somewhere in
+  the frame — most likely as an aggregate across all guests rather than per guest, which is
+  the question actually being asked. If the single urgent bar answers it, this closes.*
+  **-> G-031 or the first M4 goal that needs a demand read-out.**
+
+## Discovered during G-023a (2026-08-12)
+
+- **A `check:tickcost` reading of 0.7978 sits BELOW anything in `tripwire.mjs`'s recorded
+  campaign**, whose lowest null is 0.9268 and whose worst loaded excursion is 1.0973. Seen in
+  G-023a's arm C (longhand + constant message), n=5, on a machine where another agent was
+  compiling `apps/game` throughout. Raised by `sim-critic` as an observation and **explicitly
+  not a finding** — arm C's median was withdrawn on its own merits, and *"C is withdrawn"* and
+  *"C's spread is unremarkable"* are different claims of which only the first was made.
+  **Why it is worth keeping**: the bound rests on a characterisation of the instrument's noise,
+  and a reading 14% below the campaign's floor suggests that characterisation may not cover
+  heavy concurrent compilation — a regime that is now NORMAL, because ADR-0018 permits parallel
+  tracks. **FALSIFICATION TEST**: take a `--repeat 7` null campaign (working tree against
+  itself, no change) under `tools/gates/arm/load.mjs --workers 12` interleaved with a quiet
+  campaign in one sitting. *If the loaded null's spread reaches below 0.9268 or above 1.0973,
+  `tripwire.mjs`'s `BOUND_CAMPAIGN` and `LOADED_OBSERVATIONS` do not describe the regime the
+  project now runs in and the bound is owed a re-derivation under ADR-0016's REPLACE half; if
+  it stays inside, arm C was a single excursion and this note is closed.* -> **the goal that
+  next touches the tripwire, or M3 exit.**
+
+- **G-023a's residual tick-cost ratio is ~1.05x and is an INPUT TO M3's RUNNING-PRODUCT TEST,
+  not a parked item.** Recorded here only as a pointer so the M3 exit block can find it:
+  arms D and D' read 1.0488 and 1.0521, agreeing to 0.003, above the quiet ceiling (1.0238)
+  and below the worst loaded ceiling (1.0973), regime contended. The per-goal gate passes at
+  1.4557 by design; **seven goals of +5% is 1.41x, which no per-goal reading sees.** This is
+  the first measured input the running-product test has ever had.
+
+## Discovered during G-030 VERIFY, by the orchestrator (2026-08-12)
+
+- **THE RESERVED-HUE GUARD IS BINDING ON THE SHIPPED CONTENT, AT A MARGIN OF 0.14%.**
+  `games_room` receives `#be004f`, hue **335.05**, against a reserved arc of `300 +/- 35`.
+  It clears by **0.05 degrees**. Measured by the orchestrator at VERIFY, calling the shipped
+  `hueDistanceFromReserved` directly against the shipped `createPalette` output on real content.
+  **Not a defect — it passes, and the guard is the thing that makes it pass.** But the guard was
+  added because this exact ladder handed `hotel_cafe` the reserved magenta `#f100f1`, and a
+  reader who sees "the magenta collision is fixed" will assume more headroom than 0.05 degrees.
+  **Any of these flips it inside the arc**: a fifth room type, a change to `ROLE_HUE_PHASE.room`,
+  or a change to `ALLOWED_HUE_SPAN`. **FALSIFICATION TEST**: add a fifth room type to a scratch
+  copy of `room-types.json` and run the palette contrast/hue assertions. *If a room lands inside
+  `300 +/- 35` the guard is binding rather than comfortable and the ladder needs the reserved arc
+  removed from its domain rather than checked after the fact; if all five clear, the 0.05 was a
+  four-entry coincidence and this note closes.* -> **the goal that next changes room content, or
+  the eighth-room-type ceiling the palette already predicts.**
+
+  *Recorded also because the orchestrator misread it first*: `hueDistanceFromReserved` takes a
+  COLOUR, not a hue, and being fed a hue returned 60.8 — a number that would have made the margin
+  look comfortable. The reading only became true when the function was called as designed.

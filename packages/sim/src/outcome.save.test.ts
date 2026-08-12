@@ -281,7 +281,7 @@ describe('the 7 -> 8 step maps three counters onto rows and invents nothing', ()
     // implementations apart — this test would pass either way. What makes its name true is
     // the source scan in
     //
-    //     tools/headless/src/migration-scan.build.grid.provider.outcome.save.test.ts
+    //     tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts
     //
     // which forbids `save.ts` from naming `createGuestOutcomes` or `GUEST_DEPARTURE_REASONS`
     // in executable code, and asserts each reason is spelled out as its own literal `0`. The
