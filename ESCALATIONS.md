@@ -938,3 +938,53 @@ degrades to UNCLASSIFIED** (`suite-signature.mjs`, with the arm in `suite-signat
 from that real output), and `hookTimeout` is now 30s for the same stated reason `testTimeout` is —
 "a timeout should catch a deadlock, not a busy laptop". The campaign above was re-run from scratch
 after both repairs; the contaminated readings are discarded, not reported.
+
+### CANDIDATE 4 IS THE REMEDY, MEASURED AND MECHANISM-NAMED (G-022, 2026-08-12)
+
+**The escalation above stands as history; this is its answer.** The decision rule below was written
+down before any reading existed, as the plan required.
+
+**THE MECHANISM, ESTABLISHED BEFORE THE CAMPAIGN AND INDEPENDENT OF IT.** A version bump that works
+for reasons nobody can name is a stopgap wearing a semver, so the cause was found first:
+
+| | worker RPC construction | consequence |
+|---|---|---|
+| vitest **3.2.7** | `createRuntimeRpc` passes **no timeout** → birpc `DEFAULT_TIMEOUT = 60_000` | `if (timeout >= 0)` arms a 60s timer; expiry throws `[vitest-worker]: Timeout calling "onTaskUpdate"` as an UNHANDLED error, failing a run in which every test passed |
+| vitest **4.1.10** | `createRuntimeRpc` passes **`timeout: -1`** (`dist/chunks/rpc.MzXet3jl.js:117`) | the same guard is false, **no timer is armed**, and a starved main thread delays the call instead of failing the run |
+
+**THE READING.** Arms alternated in one sitting, `node tools/gates/arm/load.mjs --workers 12 --`,
+classified by the shipped `tools/gates/arm/suite-signature.mjs`, `win32/12cpu`, node 22.16, both
+arms at commit `dcc706d` (86 files, 1,640 tests) and differing **only** in the vitest version:
+
+| arm | n | PASS | B_WORKER_RPC | tests passed | median wall |
+|---|---|---|---|---|---|
+| vitest 3.2.7 (control) | 5 | 0 | **5** | 1,640 | 189.6s |
+| vitest 4.1.10 | 5 | **5** | **0** | 1,640 | 196.0s |
+
+**CONFIRMATION, as the pre-registered rule required before any claim of zero:** vitest 4.1.10 at
+**n=10 loaded — 10 of 10 PASS**, 1,640 tests every run, median 191.9s; and **n=5 quiet — 5 of 5
+PASS**. No v4 log contains the RPC string at all, so this is the event not occurring rather than
+the classifier failing to recognise a reworded one (the branch the rule required be checked).
+
+**AND THE CHECK THAT DISTINGUISHES A FIX FROM SUPPRESSION**, because "vitest stopped failing runs"
+would be `dangerouslyIgnoreUnhandledErrors` arriving by upstream default. A probe raising a genuine
+unhandled rejection during a run was put through both versions: **3.2.7 exits 1, 4.1.10 exits 1**,
+both printing "Unhandled Rejection". Error handling is intact; what changed is that the spurious
+error is no longer CREATED.
+
+**THE SUITE NEEDS NO PORTING.** Under 4.1.10, quiet: 86 files, 1,640 tests, all passing, 58.5s
+against 58.8s at 3.2.7. **`pnpm verify` is TWELVE ROWS GREEN under 4.1.10**, including both gates
+that materialise arms.
+
+**WHAT IS NOT YET TRUE.** The repository still ships 3.2.7. **The unreliable count is 1 gate /
+1 defect until the bump lands**, and it is a toolchain change for the orchestrator to commit, not
+for a builder to adopt unilaterally. The change is `package.json`'s devDependency `^3.2.4` ->
+`^4.1.10` plus the lockfile. **When it lands, `vitest.config.ts`'s block must be rewritten in the
+same commit**: candidate 4 is the remedy, and the three falsified candidates stay recorded so
+nobody retries them.
+
+**AND CI IS THE DECIDING TEST.** Run #4 failed I4 on the Windows runner — the slowest, most
+contended of the three — which is consistent with defect B but whose **signature is unverified**,
+because the step log needs authentication and the annotation carries only the row and its duration.
+If the bump lands and Windows CI goes green, that is the confirmation this campaign cannot supply
+from one machine.
