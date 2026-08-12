@@ -14,7 +14,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 // The `—` column is for checks that are NOT §2 invariants. `typecheck` has always been one
 // of those, `check:measure` (G-020a) is the second, G-020b's tick-cost tripwire and its proof
-// are the third and fourth, and G-020c's `check:scaling` is the fifth.
+// are the third and fourth, G-020c's `check:scaling` is the fifth, and G-022's `check:stamp`
+// is the sixth.
+//
+// WHY `check:stamp` IS A ROW HERE AND NOT A TEST INSIDE `pnpm test` (G-022, orchestrator
+// ruling). `review.boundary.test.ts:26-29` set the opposite precedent — ride I4 rather than
+// add a row — and it is right for a boundary that is about the simulation. This one is not:
+// I4 is the gate G-022 is REPAIRING to reach an unreliable count of zero, and making it
+// sensitive to a markdown typo would add a new failure mode to the invariant being
+// stabilised. §4.1's requirement is also literally that REFLECT fails when the four digests
+// disagree, and REFLECT runs this command.
 //
 // `check:scaling` IS IN THIS COLUMN BECAUSE IT CAME OUT OF I4, NOT BECAUSE IT IS NEW. Its
 // three ratios were asserted inside `pnpm test` from G-010 to G-020c, which made a timing
@@ -39,6 +48,7 @@ const GATES = [
   ['—', 'check:tickcost', 'tick cost against the previous commit, inside a derived bound (G-020b)'],
   ['—', 'check:tickcost:proof', 'the tripwire, watched going red under two mutations'],
   ['—', 'check:scaling', 'rooms, needs and provider density scale as claimed (G-020c, out of I4)'],
+  ['—', 'check:stamp', 'the four ledger digests carry one byte-identical as-of line (§4.1, G-022)'],
 ];
 
 const results = [];
@@ -58,6 +68,27 @@ process.stdout.write('\n── summary ──\n');
 for (const r of results) {
   const mark = r.ok ? 'PASS' : 'FAIL';
   process.stdout.write(`  ${mark}  ${r.id.padEnd(3)} ${r.script.padEnd(18)} ${String(r.ms).padStart(6)}ms\n`);
+}
+
+// IN CI, SAY WHICH ROW — AS AN ANNOTATION, WHICH IS THE ONLY PART OF A RUN A READER WITHOUT A
+// TOKEN CAN SEE (G-022).
+//
+// Runs #1 and #2 of the first matrix this project has ever executed both went red on macOS and
+// green on Linux and Windows. The step log names the row; the log endpoint needs authentication;
+// the public annotation said only "Process completed with exit code 1". So the first real CI
+// failure in nineteen goals could be observed to exist and not diagnosed — and the loop's answer
+// would have been to push again and guess, at five minutes a guess.
+//
+// A workflow command on stdout becomes an annotation the REST API serves anonymously. This
+// changes no verdict and adds no lever: the exit status below is computed exactly as before, and
+// on a green run the notice publishes the row-by-row readings, which is the per-platform evidence
+// a milestone gate wants recorded rather than retyped.
+if (process.env.GITHUB_ACTIONS === 'true') {
+  const row = (r) => `${r.ok ? 'PASS' : 'FAIL'} ${r.id} ${r.script} ${r.ms}ms`;
+  process.stdout.write(`::notice title=verify (${process.platform})::${results.map(row).join(' | ')}\n`);
+  for (const r of results.filter((r) => !r.ok)) {
+    process.stdout.write(`::error title=gate ${r.script} (${process.platform})::${r.id} ${r.script} FAILED after ${r.ms}ms\n`);
+  }
 }
 
 const failed = results.filter((r) => !r.ok);

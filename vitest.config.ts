@@ -24,41 +24,61 @@ export default defineConfig({
     // deadlock, not a busy laptop. Reported by economy-engineer at G-008.
     testTimeout: 30_000,
 
-    // THE CONCURRENCY CAP IS GONE, AND IT WENT ON A READING RATHER THAN ON AN EXPIRY.
+    // AND THE SAME ARGUMENT APPLIES TO HOOKS, WHICH WERE LEFT AT VITEST'S 10s (G-022).
     //
-    // `maxWorkers: 2` was added 2026-08-09 by human ruling against I4 failing with ZERO failing
-    // tests — an unhandled `[vitest-worker]: Timeout calling "onTaskUpdate"`, the worker RPC
-    // channel starving. It was labelled A STOPGAP WITH AN EXPIRY, and the expiry was G-020c.
+    // The paragraph above raised `testTimeout` to 30s so that "only a genuine hang trips it —
+    // a timeout should catch a deadlock, not a busy laptop". `hookTimeout` was not raised with
+    // it, so setup that spawns real subprocesses had a bound 3x TIGHTER than the tests it sets
+    // up, for the same reason and with none of the argument.
     //
-    // MEASURED THERE, AND THE RESULT IS NOT THE ONE THE STOPGAP ASSUMED. `pnpm test` classified
-    // by SIGNATURE — exit code, failing-test count, and the RPC string — arms ALTERNATED in one
-    // sitting, on the suite as it ships (74 files, 1,426 tests), win32/12cpu, node 22.16:
+    // MEASURED, NOT SUPPOSED. G-022's first defect-B campaign put `determinism-gate.test.ts`'s
+    // `beforeAll` — four `tsx` process starts, 1.7s on a quiet machine — over the line under
+    // `load.mjs --workers 12`: "Hook timed out in 10000ms", in EVERY cell of both arms. It
+    // failed no assertion; it ran out of clock. That contaminated the campaign it appeared in
+    // and had to be found, because a run with a failed FILE and zero failed TESTS reads as
+    // signature B in a summary line — the same conflation §2.0 was written about.
     //
-    //   REGIME        ARM                 n    signature B     wall clock, median
-    //   quiet         uncapped           10    0               53.9s
-    //   quiet         --maxWorkers=2     10    0               84.3s
-    //   loaded (12)   uncapped            5    5   ALL FIVE    171.4s
-    //   loaded (12)   --maxWorkers=2      5    5   ALL FIVE    343.4s
+    // 30s matches the tests, for the same stated reason, and hooks that spawn several
+    // processes still pass their own longer bound at the call site.
+    hookTimeout: 30_000,
+
+    // NO CONCURRENCY CAP, AND NO POOL SETTING EITHER — BOTH WERE MEASURED OUT, NOT ASSUMED OUT.
     //
-    // (loaded = 12 busy processes on 12 cores, `node tools/gates/arm/load.mjs --workers 12 --`.
-    // Every one of those ten loaded runs reported 74 files and 1,426 tests PASSED and exited 1.)
+    // This block is where somebody will come looking after `pnpm test` exits 1 with every test
+    // passing, so it says what is known, what was tried, and what is still open.
     //
-    // SO THE CAP IS NOT THE REMEDY ON THE SUITE THAT SHIPS. The discriminator is LOAD, not
-    // worker count: capping halves the parallelism, doubles the wall clock, and the RPC channel
-    // starves anyway. Keeping it would cost 1.564x on every run, for every agent and every
-    // human, to prevent nothing.
+    // THE DEFECT. Under heavy external load the worker-to-main RPC channel starves and vitest
+    // throws `[vitest-worker]: Timeout calling "onTaskUpdate"` as an UNHANDLED error. Every test
+    // passes; the run exits 1. It has been I4's remaining unreliability since G-016.
     //
-    // THE LIMIT OF THAT, BECAUSE THE FIRST VERSION OF THIS COMMENT SAID "AND NEVER WAS": the
-    // table above is TODAY'S 1,426-test suite. The sitting the cap was ruled in on ran 1,235
-    // tests and its load condition was never recorded — and inferring that regime from the
-    // absence of a label is rule 4 run backwards. "It passes clean at --maxWorkers=2" carried no
-    // load condition; that says what it PINS, not that it was false.
+    // WHAT HAS BEEN FALSIFIED, each by an alternated campaign under `tools/gates/arm/load.mjs
+    // --workers 12` and classified by `tools/gates/arm/suite-signature.mjs`:
     //
-    // WHAT REMAINS OPEN, STATED HERE BECAUSE THIS IS WHERE SOMEBODY WILL COME LOOKING: under
-    // heavy external load `pnpm test` can still exit 1 with every test passing. That is I4's
-    // remaining defect, it now has a REPRODUCIBLE trigger rather than a rate, and its candidate
-    // remedies are parked with a falsification test in `PARKING.md`. It is NOT fixed by a
-    // concurrency cap, and a future goal reaching for one should read the table above first.
+    //   a concurrency    G-020c: 5 of 5 loaded cells still B, at 1.564x the wall clock, so it was
+    //   cap              removed as measured-ineffective rather than as expired. The
+    //                    discriminator is LOAD, not worker count. The full four-arm table is in
+    //                    `ESCALATIONS.md` (2026-08-10) — read it before reaching for one again.
+    //   `pool: 'forks'`  G-022: 5 of 5 loaded cells still B, alternated with a control that was
+    //                    also 5 of 5, one sitting, win32/12cpu, 85 files / 1,635 tests.
+    //   raising the RPC  NOT AVAILABLE. birpc's `DEFAULT_TIMEOUT` is 60s and vitest 3.2.7 builds
+    //   timeout          the worker RPC with no timeout option reachable from this file
+    //                    (`dist/chunks/index.B521nVV-.js:3`, `dist/chunks/rpc.-pEldfrD.js:42`).
+    //
+    // Those are the three candidates `PARKING.md` parked at G-020c, in the order it named them.
+    // All three are now falsified by measurement rather than by argument.
+    //
+    // WHY BOTH POOLS BEHAVE ALIKE, which is the useful part: workers change from threads to
+    // processes, but the TRANSFORM stays on the main thread either way. Both arms starve the same
+    // consumer, so a pool switch was never going to move it.
+    //
+    // AND WHAT IS REFUSED, NAMED HERE BECAUSE THIS IS WHERE SOMEBODY WILL REACH FOR IT:
+    // `dangerouslyIgnoreUnhandledErrors` would turn every one of those runs green while changing
+    // nothing about them. A gate that stops reporting the failure it exists to report is HOTELSIM
+    // §9's stop condition wearing a configuration key. It is not a candidate and never was.
+    //
+    // SO THE DEFECT IS OPEN, WITH A REPRODUCIBLE TRIGGER RATHER THAN A RATE, and it is an
+    // `ESCALATIONS.md` entry rather than a comment. §2.0: repair the instrument, never
+    // reinterpret the result.
     //
     // THE OTHER I4 DEFECT — `needs.scaling.test.ts`'s timing bounds — IS FIXED (G-020c): the
     // bounds are `pnpm check:scaling`, outside this runner, and re-derived above the worst

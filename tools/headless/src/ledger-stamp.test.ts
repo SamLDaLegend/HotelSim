@@ -1,0 +1,304 @@
+// DOES THE LEDGER STAMP CHECK ACTUALLY BITE? (G-022)
+//
+//   pnpm exec vitest run ledger-stamp
+//
+// `tools/gates/stamp.mjs` is the owner §4.1 never had: one source, four files, and a row in
+// `pnpm verify` so REFLECT fails when the four disagree. A check nobody has watched fail is
+// the class this whole goal is about, so this file watches it fail — nine times, each for a
+// NAMED reason, each with a paired control that leaves the subject in place.
+//
+// THE ACCEPTANCE BAR IS G-019's FAILURE. That goal shipped a proof that removed the scanned
+// SUBJECT rather than the MENTION, so a predicate hard-coded to `false` satisfied it. Every
+// arm below therefore mutates ONE property of an otherwise-valid tree and asserts what the
+// gate SAID — the file it named, the rule it cited — not merely that it exited non-zero.
+//
+// THE TECHNIQUE: A MIRRORED TREE AND A BYTE-IDENTICAL COPY (bench.budget.test.ts:248,
+// check-tripwire.mjs, G-018). `stamp.mjs` derives its root from its own location, so a copy
+// at `<tmp>/tools/gates/stamp.mjs` checks `<tmp>` — WITH NO EDIT TO THE GATE AT ALL. The
+// sha256 assertion below pins that: the thing under test is the shipped bytes, and no
+// configuration hook, environment variable or CI lever was added to make it testable.
+//
+// The ledgers in the temp tree are SYNTHETIC rather than copies of the real ones, because an
+// arm has to be readable and a 3,500-line GOALS.md is not. The real files are covered by the
+// first test, which runs the shipped gate against the shipped tree.
+
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, resolve } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const GATE = join(ROOT, 'tools/gates/stamp.mjs');
+const SCAN_LIB = join(ROOT, 'tools/gates/lib/scan.mjs');
+
+const LEDGERS = ['GOALS.md', 'JOURNAL.md', 'PARKING.md', 'DECISIONS.md'] as const;
+type Ledger = (typeof LEDGERS)[number];
+
+const GOOD_STAMP = '*As of 2026-08-12, G-042 done. Unreliable: 0 gates, 0 defects.*';
+
+/** A goal block whose status begins with `done`, in the bold form GOALS.md actually uses. */
+const DONE_BLOCK = ['## G-042 — a goal that finished', 'Status: **done, DRY at 1/3** — 1 sweep.', ''].join('\n');
+
+/**
+ * THE NEAR-MISS THIS REPOSITORY ALREADY CONTAINS, used as a test case rather than invented.
+ *
+ * G-022's own status line is "**pending — HARD PREREQUISITE OF M3. No M3 behaviour goal
+ * starts until this is done.**". A status predicate written as `includes('done')` calls that
+ * goal DONE, and the stamp check would then certify a stamp naming an unfinished goal. The
+ * shipped predicate is anchored at the start of the status; this arm is what says so.
+ */
+const PENDING_BLOCK = [
+  '## G-042 — a goal that is not finished',
+  'Status: **pending — HARD PREREQUISITE OF M3. No M3 behaviour goal starts until this is done.**',
+  '',
+].join('\n');
+
+function ledgerText(name: Ledger, stamp: string, goalBlock: string, newline = '\n'): string {
+  const body = [
+    `# ${name.replace('.md', '')}`,
+    '',
+    '## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)',
+    '',
+    stamp,
+    '',
+    '- a bullet, so the digest has a body',
+    '',
+    '---',
+    '',
+    name === 'GOALS.md' ? goalBlock : 'Body text.',
+    '',
+  ].join('\n');
+  return newline === '\n' ? body : body.split('\n').join(newline);
+}
+
+type Tree = { readonly dir: string; readonly gate: string };
+
+let tree: Tree;
+
+function makeTree(): Tree {
+  const dir = mkdtempSync(join(tmpdir(), 'hotelsim-stamp-bite-'));
+  mkdirSync(join(dir, 'tools/gates/lib'), { recursive: true });
+  // Copied, not rewritten: `readFileSync` -> `writeFileSync` of the same buffer. The sha256
+  // test below is what turns "copied" from a comment into an assertion.
+  writeFileSync(join(dir, 'tools/gates/stamp.mjs'), readFileSync(GATE));
+  writeFileSync(join(dir, 'tools/gates/lib/scan.mjs'), readFileSync(SCAN_LIB));
+  return { dir, gate: join(dir, 'tools/gates/stamp.mjs') };
+}
+
+/** Write all four synthetic ledgers, then apply per-file overrides. */
+function writeLedgers(
+  dir: string,
+  options: {
+    readonly stamp?: string;
+    readonly goalBlock?: string;
+    readonly newline?: string;
+    readonly overrides?: Partial<Record<Ledger, string>>;
+  } = {},
+): void {
+  const stamp = options.stamp ?? GOOD_STAMP;
+  const goalBlock = options.goalBlock ?? DONE_BLOCK;
+  for (const name of LEDGERS) {
+    const override = options.overrides?.[name];
+    writeFileSync(
+      join(dir, name),
+      override ?? ledgerText(name, stamp, goalBlock, options.newline ?? '\n'),
+      'utf8',
+    );
+  }
+}
+
+type Run = { readonly status: number | null; readonly output: string };
+
+function runGate(gate: string, args: readonly string[] = []): Run {
+  const result = spawnSync(process.execPath, [gate, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  });
+  return { status: result.status, output: `${result.stdout ?? ''}${result.stderr ?? ''}` };
+}
+
+const sha256 = (path: string): string => createHash('sha256').update(readFileSync(path)).digest('hex');
+
+beforeEach(() => {
+  tree = makeTree();
+});
+
+afterEach(() => {
+  rmSync(tree.dir, { recursive: true, force: true });
+});
+
+describe('the shipped tree, and the shipped gate that judges it', () => {
+  it('passes against the four real ledgers, which is the subject this check exists for', () => {
+    const { status, output } = runGate(GATE);
+    expect(output).toContain('4 digests agree');
+    expect(status).toBe(0);
+  });
+
+  it('the copy under test is the shipped gate, byte for byte', () => {
+    // Without this, every arm below could be measuring a gate that drifted from the one in
+    // `pnpm verify` — which is the failure mode of proving anything against a reconstruction.
+    expect(sha256(tree.gate)).toBe(sha256(GATE));
+  });
+});
+
+describe('THE CONTROL — a valid tree, so a red arm below means the mutation and not the harness', () => {
+  it('accepts four agreeing, well-formed stamps', () => {
+    writeLedgers(tree.dir);
+    const { status, output } = runGate(tree.gate);
+    expect(output).toContain('4 digests agree');
+    expect(status).toBe(0);
+  });
+
+  it('and accepts them with LF or CRLF line endings alike', () => {
+    // NOT DECORATION. This repository is checked out CRLF on Windows and LF on Linux and
+    // macOS. The first draft of `stamp.mjs` split on '\n' only, saw every stamp end in a
+    // stray '\r', and failed all four — on this machine. The reverse defect is the dangerous
+    // one: a gate green where it was written and red on two of the three CI platforms.
+    writeLedgers(tree.dir, { newline: '\r\n' });
+    const crlf = runGate(tree.gate);
+    expect(crlf.status).toBe(0);
+
+    writeLedgers(tree.dir, { newline: '\n' });
+    const lf = runGate(tree.gate);
+    expect(lf.status).toBe(0);
+    expect(lf.output).toBe(crlf.output);
+  });
+});
+
+describe('AND IT BITES — nine mutations, each named, each against an otherwise-valid tree', () => {
+  it('one ledger disagreeing with the other three: the file is named and both texts printed', () => {
+    writeLedgers(tree.dir, {
+      overrides: {
+        'PARKING.md': ledgerText(
+          'PARKING.md',
+          '*As of 2026-08-11, G-041 done. Unreliable: 0 gates, 0 defects.*',
+          DONE_BLOCK,
+        ),
+      },
+    });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('PARKING.md');
+    expect(output).toContain('disagrees with');
+    // The point of failure must show BOTH readings, or the reader has to go and diff them.
+    expect(output).toContain('G-041');
+    expect(output).toContain('G-042');
+  });
+
+  it('THE HISTORICAL DEFECT: a stamp that WRAPS in one file and not in the others', () => {
+    // §4.1's parenthetical records that the first hand-repair missed PARKING.md because its
+    // as-of line wrapped onto a second line and a line-anchored pattern did not match it.
+    // The mechanism needed a mechanical check within one minute of being repaired by hand.
+    // This is that check, and the wrapped stamp is caught as a DISAGREEMENT rather than
+    // silently skipped — the two failure modes a line-anchored version confuses.
+    const wrapped = '*As of 2026-08-12, G-042 done.\nUnreliable: 0 gates, 0 defects.*';
+    writeLedgers(tree.dir, {
+      overrides: { 'PARKING.md': ledgerText('PARKING.md', wrapped, DONE_BLOCK) },
+    });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('PARKING.md');
+    expect(output).toContain('disagrees with');
+  });
+
+  it('a ledger with no stamp at all', () => {
+    writeLedgers(tree.dir, {
+      overrides: { 'JOURNAL.md': '# JOURNAL\n\n## DIGEST\n\nNo stamp here.\n' },
+    });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('JOURNAL.md');
+    expect(output).toContain('carries no');
+  });
+
+  it('a stamp with no date', () => {
+    writeLedgers(tree.dir, { stamp: '*As of yesterday, G-042 done. Unreliable: 0 gates, 0 defects.*' });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('no `YYYY-MM-DD` date');
+  });
+
+  it('a stamp that names no goal', () => {
+    writeLedgers(tree.dir, { stamp: '*As of 2026-08-12, things are fine. Unreliable: 0 gates, 0 defects.*' });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('names no goal');
+  });
+
+  it('a stamp naming a goal GOALS.md does not mark done', () => {
+    writeLedgers(tree.dir, { goalBlock: PENDING_BLOCK });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('G-042');
+    expect(output).toContain('does not mark done');
+  });
+
+  it('AND THE STATUS PREDICATE IS ANCHORED: "pending … until this is done" is not done', () => {
+    // The same arm as above, stated as the property rather than the outcome. G-022's own
+    // status line is the string in PENDING_BLOCK; `includes("done")` passes it. If a later
+    // edit loosens the predicate, this is the test that goes red, and the sibling control
+    // below is what stops it being satisfied by a gate that rejects everything.
+    writeLedgers(tree.dir, { goalBlock: PENDING_BLOCK });
+    expect(runGate(tree.gate).status).not.toBe(0);
+    writeLedgers(tree.dir, { goalBlock: DONE_BLOCK });
+    expect(runGate(tree.gate).status).toBe(0);
+  });
+
+  it('a stamp whose count does not name its unit', () => {
+    // §4.1, 2026-08-09: "ANY COUNT IN A DIGEST NAMES ITS UNIT." The unreliable count read 1
+    // in one record and 2 in another purely because nobody said which noun it counted.
+    writeLedgers(tree.dir, { stamp: '*As of 2026-08-12, G-042 done. Unreliable: 0.*' });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('WITH ITS NOUN');
+  });
+
+  it('a stamp that does not close its italics', () => {
+    writeLedgers(tree.dir, { stamp: '*As of 2026-08-12, G-042 done. Unreliable: 0 gates, 0 defects.' });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('does not close its italics');
+  });
+});
+
+describe('--set is the one-step rewrite §4.1 asks for, and it refuses to write rubbish', () => {
+  it('writes a byte-identical stamp into all four files in one invocation', () => {
+    writeLedgers(tree.dir);
+    const next = '*As of 2026-08-12, G-042 done. All quiet. Unreliable: 0 gates, 0 defects.*';
+    const { status, output } = runGate(tree.gate, ['--set', next]);
+    expect(status).toBe(0);
+    expect(output).toContain('set in 4 files');
+
+    for (const name of LEDGERS) {
+      expect(readFileSync(join(tree.dir, name), 'utf8')).toContain(next);
+    }
+    // And the tree it just wrote passes its own check — the loop §4.1 wants closed.
+    expect(runGate(tree.gate).status).toBe(0);
+  });
+
+  it('preserves CRLF where the file already used it, rather than rewriting every line', () => {
+    writeLedgers(tree.dir, { newline: '\r\n' });
+    const next = '*As of 2026-08-12, G-042 done. Unreliable: 0 gates, 0 defects. Two.*';
+    expect(runGate(tree.gate, ['--set', next]).status).toBe(0);
+    const text = readFileSync(join(tree.dir, 'GOALS.md'), 'utf8');
+    expect(text).toContain(`${next}\r\n`);
+    expect(text.split('\n').every((line) => line === '' || line.endsWith('\r'))).toBe(true);
+  });
+
+  it('REFUSES a malformed stamp instead of writing it to four files', () => {
+    writeLedgers(tree.dir);
+    const before = readFileSync(join(tree.dir, 'GOALS.md'), 'utf8');
+    const { status, output } = runGate(tree.gate, ['--set', '*As of 2026-08-12, G-042 done.*']);
+    expect(status).not.toBe(0);
+    expect(output).toContain('refusing to write a malformed stamp');
+    expect(readFileSync(join(tree.dir, 'GOALS.md'), 'utf8')).toBe(before);
+  });
+
+  it('refuses an empty stamp', () => {
+    writeLedgers(tree.dir);
+    expect(runGate(tree.gate, ['--set', '   ']).status).toBe(2);
+  });
+});

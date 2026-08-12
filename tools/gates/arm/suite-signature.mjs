@@ -114,10 +114,36 @@ const slowestTestMs = (text) => {
   return worst;
 };
 
+/**
+ * A FAILED FILE WITH ZERO FAILED TESTS IS NOT SIGNATURE B, AND IT USED TO READ AS ONE (G-022).
+ *
+ * A hook that times out, or a file that throws while collecting, produces `Test Files 1 failed`
+ * with NO `Tests N failed` line at all — vitest counts failing TESTS and this failed before any
+ * test ran. The B cell asked only for zero failing tests, so such a run landed in B whenever the
+ * RPC string was also present.
+ *
+ * MEASURED, IN THE CAMPAIGN THAT DEPENDS ON THIS CLASSIFIER. G-022's first defect-B campaign ran
+ * ten loaded cells and every one reported `B_WORKER_RPC` — while every one also carried
+ * `Test Files 1 failed`, a `beforeAll` in a new test exceeding vitest's 10s hook default under
+ * `load.mjs --workers 12`. Both arms were contaminated identically, so the comparison looked
+ * clean and was not. The whole campaign was discarded and re-run.
+ *
+ * That is this instrument's own founding lesson one level up: B's claim is "every test passed
+ * and the runner still failed", and a file that never ran its tests does not support it. Such a
+ * run now falls to UNCLASSIFIED, which is where the file's own doc says an unrecognised failure
+ * belongs — "an unrecognised failure must look unrecognised". A is untouched, so the historical
+ * meaning of the A and B counts is unchanged.
+ */
+const failedFiles = (text) => {
+  const found = /Test Files\s+(\d+)\s+failed/.exec(text);
+  return found === null ? 0 : Number(found[1]);
+};
+
 export function classify(status, rawText) {
   const text = strip(rawText);
   if (status === 0) return 'PASS';
   if (failedTests(text) > 0) return 'A_NAMED_FAILURE';
+  if (failedFiles(text) > 0) return 'UNCLASSIFIED';
   if (text.includes(B_CALL) && text.includes(B_METHOD)) return 'B_WORKER_RPC';
   return 'UNCLASSIFIED';
 }

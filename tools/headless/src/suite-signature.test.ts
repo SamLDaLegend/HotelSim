@@ -65,6 +65,29 @@ describe('every cell is reachable, and the fourth catches what the other three d
     expect(verdict(1, `${NAMED_FAILURE}\n${WORKER_RPC}`)).toBe('A_NAMED_FAILURE');
   });
 
+  it('A FAILED FILE WITH ZERO FAILED TESTS IS NOT B — the cell that swallowed a hook timeout', () => {
+    // TRIMMED FROM A REAL RUN, and the run it comes from is why this arm exists: G-022's first
+    // defect-B campaign reported ten loaded cells of B, and every one also carried a
+    // `beforeAll` that had exceeded vitest's 10s hook default. No test failed, because none ran.
+    //
+    // Both arms were contaminated the same way, so the comparison looked clean — the failure
+    // mode this classifier was built to prevent, inside the classifier. B claims "every test
+    // passed and the runner still failed"; a file whose tests never ran does not support that,
+    // so it degrades to UNCLASSIFIED rather than quietly counting as evidence.
+    const HOOK_TIMEOUT =
+      ' FAIL  tools/headless/src/determinism-gate.test.ts > THE CONTROL — a clean sim\n' +
+      'Error: Hook timed out in 10000ms.\n' +
+      ' Test Files  1 failed | 84 passed (85)\n      Tests  1621 passed | 13 skipped (1634)\n' +
+      '     Errors  2 errors\n' +
+      '\nUnhandled Error\nError: [vitest-worker]: Timeout calling "onTaskUpdate"\n';
+    expect(verdict(1, HOOK_TIMEOUT)).toBe('UNCLASSIFIED');
+    // And the same run WITHOUT the file failure is still B, so the new guard narrows exactly
+    // one thing rather than disarming the cell.
+    expect(verdict(1, HOOK_TIMEOUT.replace(' Test Files  1 failed | 84 passed (85)', ' Test Files  85 passed (85)'))).toBe(
+      'B_WORKER_RPC',
+    );
+  });
+
   it('ANSI colour does not change any verdict', () => {
     // vitest colours its summary; the campaign's logs are full of escape codes. A classifier
     // that only works on a pipe is a classifier that reads a different quantity from a terminal.

@@ -3472,8 +3472,9 @@ Exit criteria:
     `check-content.mjs`, `determinism.mjs`, `speed-ladder.scan.test.ts`,
     `stopwatch.scan.test.ts`, `review.boundary.test.ts` and `viewer.readonly.test.ts` are the
     ones known at PLAN.
-  - all §2 invariant gates green (`pnpm verify`, eleven rows), **plus the same eleven green in
-    CI on all three platforms**
+  - all §2 invariant gates green (`pnpm verify`, **TWELVE rows** — the stamp check landed as
+    the twelfth `—` row, ruled at PLAN), **plus the same twelve green in CI on all three
+    platforms**
 Out of scope: any circulation behaviour; anything in `packages/sim` beyond what repairing B
   requires (expected: nothing).
 Critique rounds used: 0/3

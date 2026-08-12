@@ -861,3 +861,80 @@ three different scanners.
 **STILL OPEN, AND IT IS THE HUMAN'S ACTION**: there is no git remote. I cannot create one. Give
 me a URL, or create the repository and I will push — the workflow is audited and ready, and the
 first matrix run is the cheapest possible moment to learn it is red.
+
+---
+
+## OPEN — I4's DEFECT B: ALL THREE PARKED REMEDIES ARE NOW FALSIFIED (G-022, 2026-08-12)
+
+**This is G-022's pre-registered third branch firing, written into the plan before any reading
+existed:** *if all candidates still produce B, the defect is in the runner rather than in its
+configuration, the count does not reach 0, and that is an escalation rather than a claimed zero.*
+
+**THE CRITERION THAT SAYS THE UNRELIABLE COUNT REACHES 0 IS NOT MET AND IS NOT CLAIMED.** A quiet
+green was available and would have been worthless: §2.0 says "green on the run I took" is unsafe
+for exactly the reason "red on the run I took" is.
+
+### What was measured
+
+`pnpm test` under `node tools/gates/arm/load.mjs --workers 12 --`, classified by the shipped
+`tools/gates/arm/suite-signature.mjs`, arms **alternated in one sitting**, `win32/12cpu`, node
+22.16, vitest 3.2.7, on the suite as it ships after this goal (**85 files, 1,635 tests**):
+
+| arm | n | B_WORKER_RPC | tests failed | files failed | median wall |
+|---|---|---|---|---|---|
+| control (default pool) | 5 | **5** | 0 | 0 | 197.8s |
+| `pool: 'forks'` | 5 | **5** | 0 | 0 | 213.3s |
+
+Every one of the ten cells: **85 of 85 files passed, 1,635 of 1,635 tests passed, exit 1**, with
+`[vitest-worker]: Timeout calling "onTaskUpdate"` as an unhandled error. Quiet, the same suite is
+green (85 files, 1,635 tests, 58.8s, exit 0).
+
+### The three candidates `PARKING.md` parked at G-020c, all three now answered
+
+1. **`pool: 'forks'` — FALSIFIED by the table above.** 5 of 5, indistinguishable from control.
+2. **A worker-count policy — ALREADY FALSIFIED at G-020c**, which measured a cap at 5 of 5 loaded
+   cells and 1.564x the wall clock. "Leave one core free" is a weaker cap than the one measured.
+3. **Handling the RPC timeout — NO CONFIGURATION SURFACE EXISTS.** Read out of the installed tree:
+   birpc's `DEFAULT_TIMEOUT` is 60s (`vitest@3.2.7/dist/chunks/index.B521nVV-.js:3`) and the
+   worker RPC is built with no timeout option reachable from `vitest.config.ts`
+   (`dist/chunks/rpc.-pEldfrD.js:42`). Changing it means patching vitest.
+
+### The mechanism, which is the useful part and is new
+
+**Both pools starve the same consumer.** Switching from worker threads to forked processes moves
+the TESTS off the main thread; it does not move the TRANSFORM, which stays on the vite server in
+the main process. Under 12-way oversubscription the main thread cannot answer a worker's RPC
+within 60 seconds, and vitest treats that expiry as fatal. That is why the two arms are identical
+rather than merely close, and it is why no parallelism setting was ever going to move it.
+
+### Explicitly refused, so nobody offers it as the fix
+
+**`dangerouslyIgnoreUnhandledErrors`** turns all ten of those runs green while changing nothing
+about them. §9: a gate modified to stop reporting the failure it exists to report. Not a candidate.
+
+### What is asked of the human — a decision, not a fix
+
+- **A fourth candidate exists and I have not tested it: a vitest upgrade.** The timeout is a
+  library constant today; a later version may expose it or stop treating expiry as fatal.
+  **FALSIFICATION TEST**: bump vitest, re-run this exact campaign (n>=5 per arm, alternated,
+  `load.mjs --workers 12`). *If the upgraded arm is 0 of 5 where the control is 5 of 5, that is
+  the remedy and it is a goal; if it is 5 of 5, the runner cannot be configured out of this and
+  the question below is the only one left.* A toolchain bump mid-milestone is not an agent call.
+- **Or rule on what I4 claims.** The honest alternative is that `pnpm test`'s verdict is valid on
+  a machine that is not deliberately oversubscribed, stated in the charter rather than discovered.
+  **That is a change to an invariant's scope and is the human's alone** (§9, `CLAUDE.md`).
+
+**THE COUNT IS 1 GATE / 1 DEFECT. It has never been 0 since G-016.** §2.0's guard is unchanged: a
+THIRD unreliable gate is a stop condition.
+
+### One thing this campaign fixed on its way past
+
+**The first run of this campaign was contaminated and the instrument could not see it.** A
+`beforeAll` in G-022's new `determinism-gate.test.ts` — four `tsx` starts, 1.7s quiet — exceeded
+vitest's **10s hook default** under load, in every cell of both arms. It failed no assertion; it
+ran out of clock. The classifier read those runs as clean signature B, because it asked only for
+zero failing TESTS and a hook failure produces zero failing tests. **A run with a failed FILE now
+degrades to UNCLASSIFIED** (`suite-signature.mjs`, with the arm in `suite-signature.test.ts` built
+from that real output), and `hookTimeout` is now 30s for the same stated reason `testTimeout` is —
+"a timeout should catch a deadlock, not a busy laptop". The campaign above was re-run from scratch
+after both repairs; the contaminated readings are discarded, not reported.

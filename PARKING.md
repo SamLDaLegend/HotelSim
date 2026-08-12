@@ -1415,3 +1415,57 @@ changed one constant, its derivation, and the records that quoted it.
   from `room-types.json` — and run both files. *If they stay green, the criteria certify a
   build with half its need vector dead and are worth a goal; if something else catches it
   first, name what and close this.* **-> a goal of its own, or M4's sweep.**
+- **DEPENDENCY-CRUISER IS THE LARGEST UNBITTEN SCANNER LEFT, AND IT SITS INSIDE I1.**
+  `pnpm check:purity` is two checks: `check-purity.mjs`, which G-022 gave a proof-of-bite, and
+  `depcruise --config .dependency-cruiser.cjs`, which catches the TRANSITIVE reach-through no
+  per-file scan can see. Its six forbidden rules — `sim-not-to-render`, `sim-not-to-tools`,
+  `sim-not-to-core`, `sim-zero-runtime-deps`, `content-not-to-sim-or-render`, `no-circular` —
+  **have never been observed red by any committed test.** Not derivable by
+  `scanner.census.test.ts`'s predicate either: it is a third-party binary, so there is no
+  `readdirSync(` of ours to match, and the census names it under `NOT_DERIVABLE` rather than
+  letting the silence read as coverage.
+  **FALSIFICATION TEST**: mirror `tsconfig.base.json` and `.dependency-cruiser.cjs` into a temp
+  tree with a synthetic `packages/sim/src/probe.ts` importing `node:fs`, run the repo's
+  `depcruise` binary with cwd set to that tree, and assert exit non-zero naming
+  `sim-not-to-core`; then remove the import and assert exit 0. *If the path-anchored `from`
+  patterns (`^packages/sim`) resolve against the temp cwd, all six rules are bitable this way
+  and it is one test file; if they resolve against the real repo root instead, the temp-tree
+  route is dead and the honest fallback is a `git stash push -u` probe witnessed once at
+  VERIFY with its reading recorded — which leaves nothing standing and should be said so.*
+  **-> the next goal that touches I1.**
+- **`check-content.mjs`'s THREE DATA-SIDE PREDICATES ARE UNBITTEN.** `content-gate.test.ts`
+  covers the two CODE-side arms (a content id literal in `packages/sim`, a content table
+  declared there). The gate also refuses invalid JSON in `packages/content/data`, a
+  non-snake_case id, and a duplicate id across two data files — **none of those three has ever
+  been watched failing.** Registered in `scanner.census.test.ts` with the gap stated rather
+  than counted as covered, because "the gate has a proof" and "every arm of the gate has a
+  proof" are different claims and the census makes the weaker one.
+  **FALSIFICATION TEST**: extend `content-gate.test.ts` with three probes writing a broken
+  JSON file, a `notSnakeCase` id and a duplicated id into a mirrored `packages/content/data`.
+  *If all three redden with the id or file named, the arms are live and the census entry gets
+  upgraded; if any passes, that predicate is the one to repair and it is a finding rather than
+  a chore.* **-> a goal of its own, or the next I3 change.**
+- **TWO SCANNER OVER-REACHES, BOTH PINNED BY G-022's NEW BITE TESTS RATHER THAN LEFT AS
+  FOLKLORE.** (1) `check-purity.mjs` rejects a DECLARATION named after a host global — an
+  interface field `process: () => void` inside `packages/sim` is refused, because the
+  lookbehind excludes a preceding dot and not a preceding space. (2) `determinism.mjs` fires on
+  a clock named inside a STRING LITERAL, since `lib/scan.mjs` blanks comments and keeps string
+  bodies. Both are conservative, neither has ever fired on the real tree, and both are now
+  asserted in `purity-gate.test.ts` and `determinism-gate.test.ts` so a later narrowing has to
+  say so out loud.
+  **FALSIFICATION TEST**: narrow either predicate and run `pnpm exec vitest run purity-gate
+  determinism-gate`. *If exactly the two pinned arms redden, the over-reach is understood and
+  the narrowing is safe; if anything else moves, the predicate did more work than the comment
+  claimed.* **-> parked, not scheduled: neither is reachable from any legal sim today.**
+- **TWO SCANNERS INSIDE ONE SUITE CAN COLLIDE, AND NOTHING WARNS YOU.** `determinism-gate.
+  test.ts` has to write fixtures containing `Date.now` and `process.hrtime` so the I2 gate has
+  something to catch; `stopwatch.scan.test.ts` scans every file in `pnpm test` for exactly
+  those spellings and reported eleven matches. The repair was the one that scanner's own author
+  used for the same problem — assemble the token from pieces so the SOURCE carries no
+  contiguous copy while the RUNTIME string still does — rather than widening its EXEMPT table
+  by eleven lines. Recorded because the next gate-bite test written inside the suite will hit
+  it, and because "make the other guard looser" was the available and wrong answer.
+  **FALSIFICATION TEST**: spell one fixture out contiguously and run `pnpm exec vitest run
+  stopwatch`. *If it reports the line, the collision is live and the convention is load-bearing;
+  if it stays green, the scanner has changed and this note is stale.* **-> a convention, not a
+  goal.**

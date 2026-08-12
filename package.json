@@ -15,6 +15,8 @@
     "check:tickcost": "node tools/gates/tripwire.mjs",
     "check:tickcost:proof": "node tools/gates/check-tripwire.mjs",
     "check:scaling": "node tools/gates/scaling.mjs",
+    "check:stamp": "node tools/gates/stamp.mjs",
+    "stamp:set": "node tools/gates/stamp.mjs --set",
     "test": "vitest run",
     "test:determinism": "node tools/gates/determinism.mjs",
     "test:save": "vitest run save",
