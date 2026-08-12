@@ -41,8 +41,9 @@
 // point at that tree, and the arm ASSERTS its resolved `@hotelsim/sim` is inside itself.
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { cpus, platform, tmpdir } from 'node:os';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { makeTempDir } from './lib/tempdir.mjs';
+import { cpus, platform } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -203,7 +204,7 @@ function hashFromCli(dir, ticks) {
 const options = parseArguments(process.argv.slice(2));
 const head = revisionOf(options.head);
 const base = revisionOf(options.base);
-const temp = mkdtempSync(join(tmpdir(), 'hotelsim-needs-history-'));
+const temp = makeTempDir('hotelsim-needs-history-');
 let refused = false;
 
 const median = (values) => {

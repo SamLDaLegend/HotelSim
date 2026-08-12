@@ -61,8 +61,8 @@
 // argument is the reason, and one witnessed run at VERIFY is the belt.
 
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { makeTempDir } from './lib/tempdir.mjs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { finish } from './lib/scan.mjs';
@@ -166,7 +166,7 @@ function repointRepoRoot(target) {
 }
 
 function withGateCopy(patches, use) {
-  const dir = mkdtempSync(join(tmpdir(), 'hotelsim-tripwire-proof-'));
+  const dir = makeTempDir('hotelsim-tripwire-proof-');
   try {
     cpSync(GATES, join(dir, 'gates'), { recursive: true });
     for (const [file, patch] of patches) {

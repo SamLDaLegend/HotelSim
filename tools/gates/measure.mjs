@@ -48,8 +48,8 @@
 // Both of those have already cost this project a measurement and a `node_modules`.
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { makeTempDir } from './lib/tempdir.mjs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -504,7 +504,7 @@ function report(results, options) {
 }
 
 const options = parseArguments(process.argv.slice(2));
-const temp = mkdtempSync(join(tmpdir(), 'hotelsim-measure-'));
+const temp = makeTempDir('hotelsim-measure-');
 try {
   const results = [];
   for (let round = 0; round < options.repeat; round += 1) {

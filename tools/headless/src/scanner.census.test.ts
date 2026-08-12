@@ -232,6 +232,29 @@ const NOT_DERIVABLE: readonly { readonly what: string; readonly config: string; 
   },
 ];
 
+/**
+ * PROOFS WHOSE BITE IS PLATFORM-DEPENDENT, NAMED BECAUSE A GREEN PROOF CAN STILL BE BLIND.
+ *
+ * Every harness in this repository runs on the machine that wrote it. A defect that cannot exist
+ * on that machine cannot be caught by any of them, however thorough they are — and G-022 shipped
+ * two brand-new gate harnesses that would not have found the one the first CI matrix found in
+ * fifteen minutes: `os.tmpdir()` is symlinked on macOS, so the containment checks at
+ * `measure.mjs:269` and `needs-history.mjs:180` compared a canonical path against an aliased
+ * prefix and refused to report.
+ *
+ * So the census records the assumption rather than the reassurance. Each entry names a proof that
+ * STAGES the platform condition deliberately, which is the only kind that transfers.
+ */
+const PLATFORM_ASSUMPTIONS: readonly { readonly assumption: string; readonly stagedBy: string; readonly title: string }[] = [
+  {
+    assumption:
+      'that `os.tmpdir()` returns a canonical path. FALSE on macOS (/var -> /private/var), where ' +
+      'the ESM loader canonicalises module urls and every arm-containment check therefore fails.',
+    stagedBy: 'tools/headless/src/tempdir.symlink.test.ts',
+    title: 'AND WITHOUT THE FIX THE PATH IS NOT CANONICAL — the macOS condition, on this machine',
+  },
+];
+
 describe('the predicate itself, compiled from the bytes on disk', () => {
   it('matches the two tree-walking calls and nothing that merely resembles them', () => {
     // The `\b` is the whole predicate. If it decayed to a bare `b` — the escape defect
@@ -312,6 +335,17 @@ describe('THE CENSUS — every scanner in the tree has a proof that has been wat
     for (const [, entry] of ALL_REGISTERED) {
       expect(entry.proof.endsWith('.test.ts')).toBe(true);
       expect(realFiles.map((file) => file.path)).toContain(entry.proof);
+    }
+  });
+
+  it('names the platform assumptions a proof running on ONE machine cannot test', () => {
+    // The claim "this gate has been watched failing" is weaker than it sounds when the watching
+    // happened on one operating system. Each assumption here must point at a test that stages the
+    // condition on purpose, and that test must still contain the arm named.
+    expect(PLATFORM_ASSUMPTIONS.length).toBeGreaterThan(0);
+    for (const entry of PLATFORM_ASSUMPTIONS) {
+      const staged = readFileSync(join(ROOT, entry.stagedBy), 'utf8');
+      expect(staged, `${entry.stagedBy} no longer stages "${entry.title}"`).toContain(entry.title);
     }
   });
 
