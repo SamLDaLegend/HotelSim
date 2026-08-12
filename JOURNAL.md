@@ -4,8 +4,13 @@
 
 *As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v9** · summary **v2** · I2 `10926cc3b569c887` · **I4 unreliable (§2.0)**
-  · `pnpm verify` is ten rows now, three of them `—` and not invariants.
+- **State**: save **v10** · summary **v2** · I2 `ece843af1efea843` · **unreliable 0 gates /
+  0 defects, the first zero since G-016** · `pnpm verify` is **twelve** rows, six of them `—`
+  and not invariants · **CI green on three platforms** (G-022, run #7).
+- **I2's "byte-identical on every platform" IS EXECUTED AND HOLDS** — one hash
+  `fd9dbb263f6a7e7a` across linux, win32 and darwin, two CPU architectures. **That claim sat
+  in this file from bootstrap for nineteen goals having inspected nothing**, attested at a
+  human sign-off: ADR-0007's class at the infrastructure layer.
 - **WATCH #1–#4 exist.** The viewer found what 1,109 tests could not, caught a defect in
   G-014a's first build, and the human found G-019's criterion undetectable **before PLAN**.
 - **A WATCH ENTRY IS A CRITERION AND CAN BE VACUOUS** (G-014b): its exhibit was wrong **twice
@@ -16,6 +21,11 @@
   a criterion with **no subject**, **goldens that redden because the feature works**, **a
   two-halved rule with one half executed and the other admired**, and **exit criteria that
   certify rather than miss** (ADR-0007's sixth amendment: three of four, in one list).
+- **IT REACHES THE TESTS WRITTEN TO PROVE SOMETHING** — four of G-022's defects were there:
+  a regression test that could only fail on the platform that had already failed, a parity
+  assertion comparing 1 against 1, and **two** newline guards each vacuous by an upstream
+  the guard came from. **`check-purity.mjs` (I1) and `determinism.mjs` (I2) had never been
+  executed by any committed test**; every scanner gate now owes a proof-of-bite.
 - **Prose may describe, it may not measure**; a number you cannot re-measure is **withdrawn,
   not restated** — applied to timings, counts, test totals and test *outcomes*.
 - **When several careful actors make the same error, the rule is missing** — four times.

@@ -4,8 +4,11 @@
 
 *As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
 
-- **143 items across 19 goals.** G-020b added four, G-014b five, **each with its falsification
-  test attached** (§4). **G-020a's zero is discharged**; the §9 warning stands for next time.
+- **168 top-level items**, counted below the digest so the figure does not include itself:
+  `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
+  the previous figure could not be re-derived** (`CLAUDE.md` rule 5). G-022 is the newest source,
+  **each item with its falsification test attached** (§4). **G-020a's zero is discharged**;
+  the §9 warning that PARKING must keep growing stands for next time.
 - **THE DWELL TERM IS NO LONGER A HYPOTHESIS.** Parked at G-014b PLAN with its test; the same
   goal's WATCH *was* that test and returned **positive** — 35 of 38 abandonments leave a need
   past half its `satisfyTicks`. **Fourth parked hypothesis settled by a goal that did not plan
@@ -16,9 +19,17 @@
 - **The costed lever, pinned and unpulled**: sampling the guest-store scan recovers
   **18.4%** of I5. Gating on change detection is **dead and measured** — do not re-argue it.
 - **Heaviest clusters**: M3 owes movement, queues, distance-as-a-score-term (**and the
-  spread that scoring cannot fix**). M6 owes `placeItem`, item cost, archetypes.
+  spread that scoring cannot fix**) — **G-023 takes movement, G-024/G-025 the queues, G-026
+  the score term, and M3 exit must answer or re-park whatever none of them reached.**
+  M6 owes `placeItem`, item cost, archetypes.
+- **NEWEST, FROM G-022**: the stamp gate's **CRLF splice hazard** — `findStamp` indexes by
+  `\n` while `replaceStamp` splices by the file's own newline, live but dormant by where a
+  newline falls, **in the gate whose job is keeping four ledgers agreeing** ·
+  `hysteresis.report.test.ts`'s load sensitivity · and **dependency-cruiser is the largest
+  unbitten scanner left, and it sits inside I1** — its six forbidden rules have never been
+  observed red by any committed test.
 - **Watch for**: privacy as a room-type property — content can put a provider in a bedroom
-  today and a stranger walks in. **No linter is still configured.**
+  today and a stranger walks in. **No linter is still configured** (verified 2026-08-12).
 
 ---
 

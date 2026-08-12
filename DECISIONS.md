@@ -5,7 +5,9 @@
 *As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
-  snake_case = content ID · ADR-0006 the v1 fixture is permanent (G-013 paid v7; G-015 v8).
+  snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
+  v10** (G-013 paid v7, G-015 v8, G-014b v9, G-019 v10), never regenerated. **ADR-0002 was
+  paid off in evidence at G-022**: integer pence is why one hash survives two architectures.
 - **Cited most, SIX amendments deep**: **ADR-0007** — a check that succeeds while inspecting
   nothing is not a check. Vacuous ≠ unreachable · promoted by a threshold, exit on one · a
   threshold must itself be derivable · deleting a bad check is not evidence a good one
@@ -17,8 +19,12 @@
 - **ADR-0015** (G-020b) — the tripwire's bound is `sqrt(noise ceiling × smallest known
   regression)`; **POOL within a configuration, REPLACE on one change.** Both halves execute
   now; both were prose first. **A two-halved rule gets one half executed, one admired.**
+  **ADR-0016** (G-020c) — a SIGNAL bound is pinned to equality with its derivation and
+  **refused beneath the worst reading observed in any measured regime.**
 - **The newer rulings live in the charter, not here** — §2.0, §4.1, §5.5–5.8, §7.1.
-- **Open contradictions**: four, in `GOALS.md`'s digest. I4 unreliable and escalated.
+- **Open contradictions**: **three**, in `GOALS.md`'s digest. **I4 is no longer among them** —
+  0 gates / 0 defects since G-022, and the three falsified remedies for its defect B are
+  recorded in `vitest.config.ts` so nobody re-argues them.
 
 ---
 

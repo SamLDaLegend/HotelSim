@@ -4,21 +4,30 @@
 
 *As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v9** · summary **v2** · I2 `10926cc3b569c887`. **`verify` runs ELEVEN
-  rows**: six invariants, `typecheck`, and four `—` rows (`check:measure`, **`check:tickcost`**,
-  `check:tickcost:proof`, **`check:scaling`**) that are **not** invariants — a seventh is a human
-  call. **I4 UNRELIABLE (§2.0), now 1 defect**: A repaired, **B diagnosed and unrepaired**.
-  Eleven green ×2 at G-020c VERIFY. **The ladder is CONTENT**; `budget.mjs` derives I5 from it.
-- **Tripwire** `BOUND 1.4557`, ADR-0015. **`maxWorkers: 2` REMOVED as measured-ineffective** —
-  the discriminator is load, not worker count. **Order**: **G-019 LAST, two critics** → M2 exit.
-- **Owed by the human**: M2 exit sign-off — the digest experiment scored **both ways** (four
-  failures), the unreliable count **with its noun**, the bimodal recording **watched**, **I4's
-  defect B accepted-or-held**, and **a git remote: CI has NEVER run.**
-- **Owed by goals**: G-019 the second axis (amenity density at fixed rooms), without which its
-  headline criterion misses three-quarters of the need vector · **M4 blocked on scenario
-  capital.**
+- **Schemas**: save **v10** (G-019) · summary **v2** · I2 gate hash `ece843af1efea843`. The bare
+  `sim:run --ticks 100000 --seed 42 --quiet` hash is `fd9dbb263f6a7e7a` and is **identical on
+  linux, win32 and darwin** — I2's cross-platform clause, executed for the first time at G-022.
+- **`verify` runs TWELVE rows**: six invariants plus six `—` rows that are **not** invariants
+  (`typecheck`, `check:measure`, **`check:tickcost`**, `check:tickcost:proof`,
+  **`check:scaling`**, **`check:stamp`**). Twelve green on one **quiet** run, `win32/12cpu`,
+  2026-08-12. **The ladder is CONTENT**; `budget.mjs` derives I5 from it.
+- **Unreliable: 0 gates / 0 defects — the first zero since G-016.** I4's defect A left the
+  parallel runner for `check:scaling` (G-020c); **defect B is repaired by vitest `^4.1.10`**,
+  whose `createRuntimeRpc` passes `timeout: -1` where 3.2.7 armed a 60s birpc timer (G-022).
+  **`maxWorkers`, `pool: 'forks'` and an RPC-timeout option are all FALSIFIED remedies** —
+  recorded in `vitest.config.ts` so nobody retries them. §2.0: a **THIRD** unreliable gate is
+  a stop condition.
+- **Tripwire** `BOUND 1.4557`, ADR-0015; a SIGNAL bound is pinned to its own derivation and
+  refused beneath the worst observed reading, ADR-0016.
+- **Order**: M3 is **G-023 → G-024 → G-025 → G-026**, G-026 **last in milestone, two critics**.
+- **Owed by the human**: M3 exit sign-off, once G-023–G-026 are done. **Nothing blocks G-023.**
+- **Owed by goals**: M3 exit runs the **running-product falsification test** (`PARKING.md`
+  parked it *"after three M3 goals"*) · **every M3 goal needs a green three-OS CI run**, not
+  only the last · every parked item naming M3 answered or re-parked with a reason ·
+  **M4 blocked on scenario capital** (ADR-0013 §5).
 - **Open contradictions**: G-012's criterion pins a content property any provider can flip ·
-  `--rooms N` contaminates every balance sweep · seeds inert until M4. **Not the ladder — settled.**
+  `--rooms N` contaminates every balance sweep · seeds inert until M4. **Not the ladder, not
+  I4 — both settled.**
 
 ---
 
