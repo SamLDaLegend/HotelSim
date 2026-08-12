@@ -386,10 +386,13 @@ describe('the guest rules table (G-014b)', () => {
     id: 'house_guest_rules',
     name: 'House Guest Rules',
     abandonMarginBasisPoints: 6_000,
-    // The review scale (G-019). Required on disk for the SAME reason the margin is, and the
-    // two of them are the whole of this table today.
+    // The review scale (G-019). Required on disk for the SAME reason the margin is.
     reviewScoreMin: 1,
     reviewScoreMax: 5,
+    // How long a stay lasts (G-027a). Required on disk for the SAME reason again, and the
+    // fourth field this table has acquired that way — see `stayDurationTicksSchema`, which
+    // also records that this is the dominant term in the hotel's margin.
+    stayDurationTicks: 1_440,
     ...overrides,
   });
   const parseOneRule = (overrides: Record<string, unknown> = {}): unknown => parseGuestRules([rules(overrides)]);
@@ -404,7 +407,7 @@ describe('the guest rules table (G-014b)', () => {
     // content written before G-014b. A document that reaches THIS schema was written today,
     // and a designer who forgets the field would otherwise inherit the historical default and
     // ship a hotel whose guests silently stopped changing their minds.
-    for (const key of ['id', 'name', 'abandonMarginBasisPoints', 'reviewScoreMin', 'reviewScoreMax']) {
+    for (const key of ['id', 'name', 'abandonMarginBasisPoints', 'reviewScoreMin', 'reviewScoreMax', 'stayDurationTicks']) {
       const entry = rules();
       delete entry[key];
       expect(() => parseGuestRules([entry])).toThrow(ContentError);

@@ -68,6 +68,11 @@ function raw(
         name: 'rules',
         ...(min === undefined ? {} : { reviewScoreMin: min }),
         ...(max === undefined ? {} : { reviewScoreMax: max }),
+        // G-027a: content declaring a lodging need must say how long a stay lasts. The value
+        // is the floor `bindContent` computes — the lodging need and the engagement needs run
+        // in parallel — because nothing here ticks a world; it is only what lets the content
+        // bind, and it must never be the thing a scale assertion is really about.
+        stayDurationTicks: Math.max(satisfyTicks, (needs - 1) * satisfyTicks, 1),
       },
     ],
   };
@@ -107,12 +112,12 @@ describe('the scale must have MORE scores than the content has needs', () => {
     );
     // bands === needs: three of four is 7,500 of one whole against a top band beginning at
     // 7,500, so the guest that missed something gives FULL MARKS.
-    expect(reviewOf(fourBands, threeOfFour, 0, 100, false)).toBe(4);
-    expect(reviewOf(fourBands, threeOfFour, 0, 100, false)).toBe(reviewScaleOf(fourBands)?.max);
+    expect(reviewOf(fourBands, threeOfFour, false)).toBe(4);
+    expect(reviewOf(fourBands, threeOfFour, false)).toBe(reviewScaleOf(fourBands)?.max);
     // bands > needs — the legal shape — and the same experience is strictly below the top.
     const fiveBands = bindContent(raw(4, 1, 5));
-    expect(reviewOf(fiveBands, threeOfFour, 0, 100, false)).toBe(4);
-    expect(reviewOf(fiveBands, threeOfFour, 0, 100, false)).toBeLessThan(reviewScaleOf(fiveBands)!.max);
+    expect(reviewOf(fiveBands, threeOfFour, false)).toBe(4);
+    expect(reviewOf(fiveBands, threeOfFour, false)).toBeLessThan(reviewScaleOf(fiveBands)!.max);
   });
 
   it('AND NO MORE SCORES THAN THE NEED TABLE CAN EVER DISTINGUISH — the ceiling, by pigeonhole', () => {
@@ -141,51 +146,55 @@ describe('the scale must have MORE scores than the content has needs', () => {
     expect(() => bindContent(raw(4, 0, 5_000_000))).toThrow(/cannot take more than 40001 values/);
   });
 
-  it('THE CEILING IS LOOSE, AND HERE IS HOW LOOSE — counted rather than described', () => {
+  it('THE CEILING IS LOOSE, AND G-027a MADE IT LOOSER — counted rather than described', () => {
     /**
-     * THIS TEST REPLACES ONE THAT ASSERTED THE BOUND WAS TIGHT. It was not, and it was not
-     * tight for the very arm it used: only the LODGING need can contribute a non-extreme
-     * share, and the wait share takes `patienceTicks + 1` values rather than `ONE_WHOLE + 1`.
-     * `balance-critic` found it at the final round.
+     * THIS TEST REPLACED ONE THAT ASSERTED THE BOUND WAS TIGHT. It was not, and it was not
+     * tight for the very arm it used: only the LODGING need could contribute a non-extreme
+     * share, through the WAIT term, which took `patienceTicks + 1` values rather than
+     * `ONE_WHOLE + 1`. `balance-critic` found that at G-019's final round.
      *
-     * The reachable count is ENUMERATED here rather than computed from a formula, so this is
-     * a measurement of the shipped scoring function and not a restatement of a derivation
-     * that was already wrong once.
+     * ========================================================================
+     * G-027a DELETED THE WAIT TERM, AND WITH IT THE LAST SOURCE OF A NON-EXTREME SHARE.
+     * Every `q` is now 0 or `ONE_WHOLE`, so a guest's experience takes at most
+     * `needCount + 1` values and the reachable score count collapses to that — 5 for the
+     * shipped four-need table, against a ceiling of 40,001.
+     *
+     * The numbers below fell from 201 / 721 / 10,001 to 2 / 5 / 2. **That is the loosening,
+     * measured**, and it is left as the file's headline rather than tidied away: the ceiling
+     * is a RESOURCE bound and was never a surjectivity claim, and this is the goal that made
+     * the gap between the two enormous. The reachable count is still ENUMERATED rather than
+     * computed from a formula, so it stays a measurement of the shipped function.
+     * ========================================================================
      */
     const reachableScores = (content: BoundContent): number => {
       const needs = formNeedVector(content);
-      const lodgingType = (content.content.needTypes ?? []).find((n) => n.role === 'lodging')!;
       const scores = new Set<number>();
-      // Every count of met needs, and for the lodging need every wait a guest can have.
       for (let metCount = 0; metCount <= needs.length; metCount += 1) {
         const vector = needs.map((need, i) =>
           i < metCount ? { ...need, progressRemaining: 0, metBy: 'room' as const } : need,
         );
-        // `needs[0]` is the lodging need (`raw` puts it first), so it is met iff metCount > 0.
-        const waits = metCount > 0 ? lodgingType.patienceTicks + 1 : 1;
-        for (let waited = 0; waited < waits; waited += 1) {
-          const departure = lodgingType.satisfyTicks + waited;
-          const score = reviewOf(content, vector, 0, departure, false);
-          if (score !== undefined) scores.add(score);
-        }
+        const score = reviewOf(content, vector, false);
+        if (score !== undefined) scores.add(score);
       }
       return scores.size;
     };
 
-    // THE ARM THE OLD TEST USED. patienceTicks 200 against a 10,001-score scale.
+    // THE ARM THE OLD TEST USED: one need type against a 10,001-score scale. It reached 201
+    // while the wait term existed; it reaches 2 now — met and unmet, and nothing between.
     const arm = bindContent(raw(1, 0, ONE_WHOLE_BASIS_POINTS));
-    expect(reachableScores(arm)).toBe(201);
-    // 2.0% of its scale — the figure that makes "tight" untrue.
-    expect(Math.round((201 / 10_001) * 1000) / 10).toBe(2.0);
+    expect(reachableScores(arm)).toBe(2);
 
-    // AND THE SHIPPED SHAPE at its own ceiling: four needs, patience 180.
+    // AND THE SHIPPED SHAPE at its own ceiling: four needs, so five reachable scores.
     const shipped = bindContent(raw(4, 0, 4 * ONE_WHOLE_BASIS_POINTS, 480, 180));
-    expect(reachableScores(shipped)).toBe(721);
+    expect(reachableScores(shipped)).toBe(5);
+    expect(reachableScores(shipped)).toBe((shipped.content.needTypes ?? []).length + 1);
 
-    // THE ONE CASE WHERE IT IS TIGHT, so "loose" is a measurement and not a mood: a lodging
-    // need whose patience reaches ONE_WHOLE — seven simulated days of waiting for a room.
-    const tight = bindContent(raw(1, 0, ONE_WHOLE_BASIS_POINTS, 100, ONE_WHOLE_BASIS_POINTS));
-    expect(reachableScores(tight)).toBe(10_001);
+    // THE ARM THAT USED TO BE TIGHT IS NO LONGER TIGHT ANYWHERE, and that is the point: a
+    // lodging need whose patience reaches ONE_WHOLE used to make the bound exact, because the
+    // wait share could take every value. Nothing can now.
+    const wasTight = bindContent(raw(1, 0, ONE_WHOLE_BASIS_POINTS, 100, ONE_WHOLE_BASIS_POINTS));
+    expect(reachableScores(wasTight)).toBe(2);
+    expect(reachableScores(wasTight)).toBeLessThan(ONE_WHOLE_BASIS_POINTS + 1);
   });
 
   it('so a scale that BINDS can still carry scores nobody can leave — stated, not hidden', () => {
@@ -194,7 +203,8 @@ describe('the scale must have MORE scores than the content has needs', () => {
     // 39,280 are unreachable. Refusing a document for a defect that passing documents share
     // is an argument that does not survive being written down.
     expect(() => bindContent(raw(4, 0, 4 * ONE_WHOLE_BASIS_POINTS, 480, 180))).not.toThrow();
-    expect(40_001 - 721).toBe(39_280);
+    // 40,001 admitted against 5 reachable since G-027a, where it was 40,001 against 721.
+    expect(40_001 - 5).toBe(39_996);
   });
 
   it('scales up and down with the need table rather than being a fixed number', () => {
@@ -228,22 +238,29 @@ describe('the scale must have MORE scores than the content has needs', () => {
      */
     const withBands = bindContent({
       ...raw(4, 1, 5),
-      guestRules: [{ id: 'rules', name: 'rules', reviewScoreMin: 1, reviewScoreMax: 5, bands: 8 } as never],
+      guestRules: [
+        { id: 'rules', name: 'rules', reviewScoreMin: 1, reviewScoreMax: 5, stayDurationTicks: 300, bands: 8 } as never,
+      ],
     });
     expect(reviewScaleOf(withBands)).toEqual({ min: 1, max: 5, bands: 5 });
     const clean = bindContent(raw(4, 1, 5));
     const all = formNeedVector(clean).map((state) => ({ ...state, progressRemaining: 0, metBy: 'room' as const }));
     const three = all.map((state, index) => (index === 3 ? { ...state, progressRemaining: 5, metBy: null } : state));
-    expect(reviewOf(withBands, all, 0, 100, false)).toBe(reviewOf(clean, all, 0, 100, false));
-    expect(reviewOf(withBands, three, 0, 100, false)).toBe(reviewOf(clean, three, 0, 100, false));
+    expect(reviewOf(withBands, all, false)).toBe(reviewOf(clean, all, false));
+    expect(reviewOf(withBands, three, false)).toBe(reviewOf(clean, three, false));
     // And under the document it named, the guest that missed a need still does NOT reach 5.
-    expect(reviewOf(withBands, three, 0, 100, false)).toBe(4);
+    expect(reviewOf(withBands, three, false)).toBe(4);
   });
 });
 
 describe('half a scale is not a historical statement', () => {
   it('binds content that declares NEITHER bound — the pre-G-019 era', () => {
-    const old = bindContent({ ...raw(4), guestRules: [{ id: 'rules', name: 'rules' }] });
+    const old = bindContent({
+      ...raw(4),
+      // No scale, and a stay: "content from before reviews existed" in the only shape that
+      // still binds under G-027a's refusal.
+      guestRules: [{ id: 'rules', name: 'rules', stayDurationTicks: 300 }],
+    });
     expect(reviewScaleOf(old)).toBeUndefined();
   });
 

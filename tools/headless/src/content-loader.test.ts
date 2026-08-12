@@ -278,6 +278,9 @@ describe('injection into a real simulation', () => {
       // `check:content` cannot make — and it fired here first, on the one test that
       // builds a partial registry.
       itemTypes: loadItemTypesFrom(ITEM_TYPES_PATH),
+      // And the guest rules since G-027a, for the same reason one level on: content that
+      // declares a lodging need must say how long a stay lasts or  refuses it.
+      guestRules: loadGuestRulesFrom(GUEST_RULES_PATH),
     });
     const original = loadContent();
 

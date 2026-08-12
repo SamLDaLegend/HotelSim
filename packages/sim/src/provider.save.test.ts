@@ -61,6 +61,9 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
 const content = bindContent({
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
   needTypes: [need('rest', true), need('food', false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
 });
 
 /** The v6 -> v7 step itself. Index 5, the sixth link. */

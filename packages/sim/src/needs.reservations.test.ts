@@ -74,6 +74,9 @@ const need = (id: string, satisfyTicks: number, patienceTicks: number, lodging: 
 const content = bindContent({
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
   needTypes: [need('rest', STAY, 500, true), need('food', MEAL, 500, false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
 });
 
 const spawnBedroom = (index: number): Command => ({
@@ -275,7 +278,23 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
    * there, which is precisely how the first draft of G-010's own file went green while
    * inspecting nothing.
    */
-  type Countdowns = { readonly food?: number; readonly rest?: number; readonly patience?: number };
+  /**
+   * THE TICK THE HAND-BUILT WORLDS IN THIS BLOCK ARE STAGED ON (G-027a).
+   *
+   * `STAY` rather than the tick `hotel()` hands back, so that a guest whose arrival is at 0
+   * has EXACTLY used up its stay and checks out on the step below — and one that arrived on
+   * this tick has the whole of it in front of it. Before this goal the same distinction was
+   * made with `progressRemaining`, which no longer ends a stay.
+   */
+  const STAGED_TICK = STAY;
+
+  type Countdowns = {
+    readonly food?: number;
+    readonly rest?: number;
+    readonly patience?: number;
+    /** Default `STAGED_TICK` — "arrived just now". Pass 0 for a guest whose stay is up. */
+    readonly arrivedTick?: number;
+  };
 
   const guest = (id: number, room: EntityId, engagedWith: EntityId | null, over: Countdowns = {}): Guest => ({
     id,
@@ -283,7 +302,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     // and `stepGuests` re-states it from what the guest holds on every tick. The placement
     // rule is pinned in `travel.position.test.ts`.
     at: { floor: 0, column: 0 },
-    arrivedTick: 0,
+    arrivedTick: over.arrivedTick ?? STAGED_TICK,
     roomEntityId: room,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'food' },
     // `metBy` follows the countdown (G-013): a need this helper forges as ALREADY MET has
@@ -320,6 +339,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
       cafe: cafe!,
       world: {
         ...start,
+        tick: STAGED_TICK,
         guests: { nextId: 4, list: [guest(1, roomA!, null), middle(ids), guest(3, roomC!, null)] },
         guestOutcomes: { arrived: 3, departures: createGuestOutcomes().departures },
       },
@@ -353,9 +373,12 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
   it('SATISFIED: the stay completes mid-meal, and the café goes back with the bedroom', () => {
     // Guest 2 checks out one tick from now while still at the table, so `depart` hands back
     // BOTH reservations. 72 of the criterion run's 356 departures take this path.
-    const { world, cafe } = staged((ids) => guest(2, ids[1]!, ids[3]!, { rest: 1 }));
+    // `arrivedTick: 0` is what makes its stay up on this tick; `rest: 1` says it is also one
+    // tick from meeting the need, which no longer decides anything and is kept so the case
+    // still describes the same guest.
+    const { world, cafe } = staged((ids) => guest(2, ids[1]!, ids[3]!, { rest: 1, arrivedTick: 0 }));
     const after = stepTick(world, content, []);
-    expect(departureCountOf(after.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(after.guestOutcomes, 'checkedOut')).toBe(1);
     expect(guestsInOrder(after.guests).map((entry) => entry.id)).toEqual([1, 3]);
     expectHandedOver(after, cafe);
   });
@@ -366,7 +389,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     // with it.
     const { world, cafe } = staged((ids) => guest(2, NO_ENTITY, ids[3]!, { patience: 1 }));
     const after = stepTick(world, content, []);
-    expect(departureCountOf(after.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(after.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(after.guests).map((entry) => entry.id)).toEqual([1, 3]);
     expectHandedOver(after, cafe);
   });
@@ -392,20 +415,21 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     const [bedroom, cafe] = entitiesInOrder(start.entities).map((entity) => entity.id);
     const world: World = {
       ...start,
+      tick: STAGED_TICK,
       guests: {
         nextId: 4,
         // Guest 1 waits for the only bedroom, guest 2 is one tick from checking out of it,
         // guest 3 waits too — and takes it, because guest 1 was visited before the release.
         list: [
           guest(1, NO_ENTITY, null, { food: 0 }),
-          guest(2, bedroom!, cafe!, { rest: 1 }),
+          guest(2, bedroom!, cafe!, { rest: 1, arrivedTick: 0 }),
           guest(3, NO_ENTITY, null, { food: 0 }),
         ],
       },
       guestOutcomes: { arrived: 3, departures: createGuestOutcomes().departures },
     };
     const after = stepTick(world, content, []);
-    expect(departureCountOf(after.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(after.guestOutcomes, 'checkedOut')).toBe(1);
     const survivors = guestsInOrder(after.guests);
     expect(survivors.find((entry) => entry.id === 1)?.roomEntityId).toBe(NO_ENTITY);
     expect(survivors.find((entry) => entry.id === 3)?.roomEntityId).toBe(bedroom);
@@ -427,7 +451,7 @@ describe('exit path — save and load', () => {
     const resumed = run(deserialise(serialise(mid)), content, 60, []);
     const unsaved = run(mid, content, 60, []);
     expect(hashState(resumed)).toBe(hashState(unsaved));
-    expect(departureCountOf(resumed.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(resumed.guestOutcomes, 'checkedOut')).toBe(1);
   });
 
   it('refuses a save whose guest is engaged with a room the save does not contain', () => {
@@ -555,11 +579,18 @@ describe('thirty days of a hotel where every provider is oversubscribed', () => 
   const busy = bindContent({
     roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
     needTypes: [need('rest', 480, 180, true), need('food', 180, 300, false)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
   });
 
   const schedule = (): readonly ScheduledCommand[] => {
     const commands: ScheduledCommand[] = [];
-    for (let tick = 1; tick < TICKS; tick += 90) commands.push(at(tick, arrive));
+    // ARRIVALS EVERY 45 TICKS RATHER THAN 90 SINCE G-027a. The stay clock runs from ARRIVAL,
+    // so a guest that queued occupies its bedroom for less than the full 480 and throughput
+    // rises with the queue; at 90 this hotel drained fast enough that nobody gave up, which
+    // would have made the two-sided check below one-sided.
+    for (let tick = 1; tick < TICKS; tick += 45) commands.push(at(tick, arrive));
     // The café is demolished under its occupant and rebuilt the tick after, throughout, so
     // the engagement-release path is exercised for the whole run rather than in one test.
     for (let tick = 5_000; tick < TICKS; tick += 7_000) {
@@ -587,8 +618,8 @@ describe('thirty days of a hotel where every provider is oversubscribed', () => 
     }
     // And the run really did exercise all of it, rather than reporting zeros about nothing.
     expect(world.guestOutcomes.arrived).toBeGreaterThan(400);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
     expect(evictedGuests(world.guestOutcomes)).toBe(0); // no bedroom is ever demolished here
     const food = world.needOutcomes.find((row) => row.needId === 'food');
     expect(food?.met).toBeGreaterThan(0);
@@ -603,10 +634,13 @@ describe('a guest that never gets a bedroom still holds nothing on the way out',
     const impatient = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
       needTypes: [need('rest', STAY, 5, true), need('food', 500, 500, false)],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 500 }],
     });
     const start = stepTick(createWorld(1, impatient), impatient, [spawnCafe(0)]);
     const world = run(start, impatient, 10, [at(start.tick, arrive)]);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
     // And the café is genuinely free again: a new guest can take it.

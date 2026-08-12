@@ -47,6 +47,25 @@ module.exports = {
       to: { path: '^(packages/sim|apps/|tools/)' },
     },
     {
+      // G-030 OPENED A NEW EDGE AND THIS IS ITS FENCE. `tools/headless/src/
+      // palette.contrast.test.ts` imports `apps/game/src/view/palette.ts` — one pure,
+      // dependency-free module — because the mechanical half of a perceptual criterion has
+      // to compute over the SHIPPED colours rather than a copy of them.
+      //
+      // NOTHING ELSE MAY CROSS, AND THE REASON IS CONCRETE: the next test to reach into the
+      // render layer would import `view/scene.ts`, which pulls Pixi — and therefore a WebGL
+      // renderer and a DOM — into the test tree that `packages/sim` shares. §3's "the render
+      // layer is playtested, not unit tested" survives exactly as long as this stays one
+      // module wide.
+      name: 'tools-may-reach-only-the-palette',
+      severity: 'error',
+      comment:
+        'Only apps/game/src/view/palette.ts may be imported from tools/ (G-030). Anything ' +
+        'else drags Pixi and the DOM into the sim-side test tree.',
+      from: { path: '^tools/' },
+      to: { path: '^apps/', pathNot: '^apps/game/src/view/palette\\.ts$' },
+    },
+    {
       name: 'no-circular',
       severity: 'error',
       comment: 'Circular imports make tick ordering unpredictable and break tree-shaking.',

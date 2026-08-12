@@ -35,6 +35,30 @@ import { schedule } from './report.js';
 
 const TICKS = 4_320;
 const ROOMS = 60;
+/**
+ * ITS OWN COPY, AND THE ONE EXEMPTION FROM ADR-0021's "ONE LITERAL" RULE.
+ *
+ * It cannot import `tools/gates/workload.mjs`: `needs-history.mjs` copies THIS FILE into an
+ * extracted historical revision's tree and runs it there, and revisions before G-020a have no
+ * such file. `workload.concurrency.test.ts`'s census exempts exactly this path and checks the
+ * reason rather than asserting it.
+ *
+ * ---------------------------------------------------------------------------
+ * AND IT IS STALE AS A MEASUREMENT SINCE G-027a, WHICH IS WHY THIS NOTE IS HERE RATHER THAN
+ * ONLY IN THE TEST. ADR-0017 tripled the stay length on ONE SIDE of the comparison, so at 32
+ * this file now drives **45 concurrent guests at HEAD** (1,440-tick stay) against **15 at
+ * `aa30218`** (480-tick stay). Both were 15 when the recorded interval — 1.1071 .. 1.2534,
+ * n=25, quiet, win32/12cpu — was taken.
+ *
+ * **DO NOT POOL A READING TAKEN NOW WITH THAT INTERVAL, AND DO NOT READ EITHER OUTCOME OF THE
+ * PARKED FALSIFICATION TEST AS ITS RECORDED CONCLUSION.** The two arms no longer differ only in
+ * their revision. See `PARKING.md`, "A REAL 11-25% DIFFERENCE IN THE NEED-VECTOR RATIO"; the
+ * re-take belongs with the tickcost and scaling campaigns.
+ *
+ * The value stays 32 deliberately: it is what the recorded campaign ran at, and changing it
+ * would make this instrument disagree with its own history as well as with the current one.
+ * ---------------------------------------------------------------------------
+ */
 const ARRIVAL_EVERY_TICKS = 32;
 const SEED = 42;
 const AMENITIES = 1;

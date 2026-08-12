@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-023a done. M2.5: 1 of 4 goals (G-030 awaiting WATCH). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -510,6 +510,15 @@ misdirects the person balancing the game is worse than no comment.
 **Consequence.** M4 owns the model change, and when it lands, per-night billing also makes
 `constructionCostPence` a real decision: at 1,440-tick nights the margin is 5,957.5p/day
 and 250,000p is a 42-day payback rather than an 11-day one.
+
+**SUPERSEDED BY ADR-0020 (G-027a). NOTHING ABOVE IS EDITED — this is a pointer, in the
+amendment idiom ADR-0007 uses, appended so that a reader who lands here is not left with
+arithmetic that is no longer true.** ADR-0017 replaced the terminator: a stay is now
+`stayDurationTicks` in `guest-rules.json`, **not** `night_rest.satisfyTicks`, which has no
+economic role at all any more. The formula, the 10.2 : 1 and the 3.85× sensitivity table
+above are all true of the era this ADR describes and false of the current build. Read
+ADR-0020 before quoting any of them — including the 5,957.5p in the line directly above,
+which G-027a re-measured and found LOW, because the stay clock now runs from arrival.
 
 ---
 
@@ -1165,3 +1174,204 @@ was going back for legibility work anyway after WATCH #5, so the join was happen
 **That is luck rather than design**, and it would have cost track B a real wait if the WATCH had
 passed.
 
+
+---
+
+## ADR-0020 — `nightlyRatePence` is billed per STAY DURATION, and the trap has moved file
+
+**Builder (`ai-engineer`) at G-027a BUILD, under ruling C. SUPERSEDES ADR-0010's ARITHMETIC and
+edits none of it (ADR-0008: an artefact whose subject is the past is not rewritten).**
+
+### What ADR-0010 said, and which half of it is now false
+
+ADR-0010 recorded that `nightlyRatePence` is charged **once per completed stay**, that a stay was
+`night_rest.satisfyTicks`, and therefore that
+
+> effective revenue per room-day = `nightlyRatePence × (1440 / satisfyTicks)`
+
+with the consequence a designer had to carry: **`satisfyTicks` is the dominant term in the margin,
+and it lives in another file.** All of that was true of the era it describes.
+
+**ADR-0017 deleted the premise.** A stay no longer ends when `night_rest` is met; it ends by
+checkout after `stayDurationTicks`, or by the guest giving up. So:
+
+- **the denominator is `stayDurationTicks`**, in `guest-rules.json`;
+- **`night_rest.satisfyTicks` has no economic role at all.** It decides when a guest's rest need
+  is met, and nothing else. Editing it moves pacing and the review distribution and moves revenue
+  by nothing.
+
+### The decision
+
+1. **The live formula is `nightlyRatePence × (1440 / stayDurationTicks)`**, and it is stated in
+   exactly two places in code: on `nightlyRatePence` in `roomTypeSchema`, and on
+   `stayDurationTicksSchema` where the dominant term now lives. Both were false-and-sourced before
+   this goal and both were corrected in the same commit (§5.8).
+2. **THE TRAP MOVED FILE AND THE SIGN MOVED WITH IT.** ADR-0010's whole force was that the number
+   which decides the hotel's margin was in a file nobody balancing revenue would open. That is
+   still true and it is now a **different** file: `guest-rules.json`, whose subject is guest
+   behaviour. A designer halving `stayDurationTicks` to make the game feel brisker doubles the
+   hotel's income. `stayDurationTicksSchema` carries that warning in the field's own doc comment.
+3. **The field is still not renamed and the billing model is still not changed.** ADR-0010's two
+   refusals stand for their own reasons: renaming would move `SAVE_V1_CONTENT`'s shape and its
+   `8e09fe4f0fa162a3` fingerprint (ADR-0006), and per-night proration is a pricing change and
+   belongs to M4. What ADR-0017 promised — that a checkout terminator makes per-night charging
+   *expressible* — is delivered; nobody has spent it.
+
+### The margin, measured — and it is NOT the number this goal was briefed to expect
+
+At the shipped numbers the NOMINAL margin is `8,500p` against `2,500p` of `nightlyUpkeepPence`:
+**3.4 : 1, which is finally what the two field names imply**, where ADR-0010 measured 10.2 : 1.
+
+**The REALISED figure is 9,066.7p per bedroom-day — 3.63 : 1, ABOVE the nominal ceiling — and the
+reason is worth more than the number.** *What: total `roomRevenue` over bedroom-days. Workload:
+`pnpm sim:run --days 30 --seed 42`, the shipped default — 3 bedrooms, one of each amenity, an
+arrival every 120 ticks. Sample: one run. Aggregated: `816,000p / (30 days × 3 bedrooms)`. Regime:
+none needed — this is a deterministic simulation output, byte-identical on any machine under I2,
+not a stopwatch reading.*
+
+**A room turns over slightly FASTER than once per stay duration**, because the stay clock runs from
+ARRIVAL: a guest that queued 180 ticks for a room occupies it for 1,260 rather than 1,440, so a
+busy hotel fits up to `1440/1260 = 1.14` stays per room-day. 96 completed stays over 90 bedroom-days
+is 1.07.
+
+**G-027a's brief predicted ~2.38 : 1 and that prediction is wrong, in the direction that matters.**
+It came from ADR-0010's own `satisfyTicks 1440` sensitivity arm (5,957.5p per room-day), which was
+measured under the model where a queued guest's stay began at CHECK-IN — so queueing lengthened a
+guest's life and lowered throughput. It no longer does. **Anyone re-deriving the margin from
+ADR-0010's table will be low by about half a band**, and that is exactly the kind of carry-over
+this ADR exists to stop.
+
+### What this cost, stated rather than discovered
+
+**Every balance figure in the project moved, and none of them was repaired by touching a price.**
+`room-types.json` and `economy.json` are **byte-identical** across G-027a — every value in both
+asserted by `content.stay.test.ts` reading the shipped bytes (the whole room-type table, and all
+five of the economy's numbers), and the bytes themselves by `git diff --exit-code` at VERIFY —
+because the
+cheapest way to make the balance goldens green was to raise `nightlyRatePence`, that is pricing,
+that is M4's, and reaching for it inside a goal about guest behaviour is §9's stop condition. The
+goldens moved instead, each with a note saying which way and why. The most visible: the G-008 build
+arm builds **3 rooms where it built 10**, because a third of the revenue per room-day refuses far
+more builds. That is the money loop telling the truth about a longer stay, and it is M4's to
+answer.
+
+---
+
+## ADR-0021 — A benchmark constant is a PROXY for an axis, and the axis gets pinned
+
+**Human ruling, 2026-08-12, during G-027a VERIFY, on an escalation from `ai-engineer` that
+`check:tickcost` was red at 2.02x with `check:scaling` green.**
+
+### The finding, measured rather than argued
+
+`check:tickcost` compares the working tree against HEAD on a fixed workload. It read **2.02x**
+against a 1.4557 bound. It was not a regression:
+
+**THE RATIO IS THE FINDING AND THE ABSOLUTES ARE NOT** (`CLAUDE.md` rule 2). Stated first,
+because the first draft of this ADR gave two ns/tick figures and derived its load-bearing claim
+from them while citing none of sample count, aggregation or regime — three of the five slots, in
+the same commit as ADR-0020 which names all five. `ai-critic` caught it.
+
+**The finding: cost per guest-tick FELL by about a third**, while the paired per-tick ratio read
+**1.98x**. *What: `sim:measure`'s head/base per-tick cost ratio, and the same quantity divided by
+the concurrent guest count. Workload: 60 rooms / an arrival every 32 ticks / seed 42 / 30 days
+(`workload.mjs`). Sample: 6 per arm, arms interleaved and alternating, warm-up discarded.
+Aggregated: median per arm, ratio of medians. Regime: quiet, no deliberate concurrent load,
+12-core developer machine (win32/12cpu).* The builder read **2.02x** independently on the same
+regime, and the concurrent counts are exact simulation outputs rather than timings — 45 measured
+(`in hotel 45`), 15 derived as 480/32.
+
+| | concurrent guests | relative cost per guest-tick |
+|---|---|---|
+| HEAD | 15 *(derived, 480/32)* | 1.00 |
+| G-027a | 45 *(measured)* | **~0.66** |
+
+The absolute ns/tick readings behind that are deliberately not quoted: they are single-sitting
+figures on one machine, and the same pair re-measured after the cadence change came back at less
+than half the absolute while agreeing on the per-guest-tick direction (−40% against −34%), which
+is rule 3's whole point. The tick was doing three times the guest-work
+because ADR-0017 tripled the stay length, so the hotel held three times as many guests at the
+same arrival cadence. `check:scaling` was green on all four axes throughout — complexity did not
+move, quantity did.
+
+### What had actually broken, and it was not the code
+
+`workload.mjs` states its own axis: *"the honest axis is CONCURRENT GUESTS"*, and
+`ARRIVAL_EVERY_TICKS` is documented as *"sets concurrent guests, which is what these measurements
+actually measure."* Both sentences were true. **Neither was checked.**
+
+`ARRIVAL_EVERY_TICKS = 32` was a PROXY for fifteen concurrent guests, and it was one only while a
+stay was `night_rest.satisfyTicks` = 480. **G-027a redefined the benchmark from 15 to 45
+concurrent without touching the constant, and nothing could say so.** A tripwire cannot
+distinguish a regression from a workload redefinition; that is not a defect in the tripwire.
+
+### The ruling
+
+1. **`ARRIVAL_EVERY_TICKS` 32 -> 96.** `1440 / 96 = 15` restores the occupancy the bound campaign
+   was calibrated against. **Predicted before the run and met exactly**: `--days 30 --seed 42
+   --rooms 60 --arrivals 96` reports `in hotel 15` and `arrived 450` (`43,200 / 96`).
+2. **THE BOUND DOES NOT MOVE.** 1.4557 stands. **Widening it was REFUSED**, and the reason is the
+   whole of this ADR: a wider bound would have absorbed the reading and buried the fact that the
+   benchmark's MEANING had changed. The gate would have gone green while measuring a different
+   hotel than the one it was calibrated on — which is worse than a red gate, because it is a green
+   one that has stopped being evidence.
+3. **THE LITERAL STAYS A LITERAL.** `ARRIVAL_EVERY_TICKS` is not derived from content at runtime.
+   This is a PAIRED RATIO gate: `measure.mjs` hands one `--arrivals` to both arms, and a constant
+   that computed itself from content would let two arms built from two revisions run two different
+   workloads. A stale literal is a comparability problem you can see; a self-adjusting one is one
+   you cannot.
+4. **THE AXIS IS PINNED MECHANICALLY, OVER EVERY CONSUMER — AND THE FIRST VERSION OF THIS
+   CLAUSE WAS HALF TRUE.** `tools/headless/src/workload.concurrency.test.ts` asserts
+   `stayDurationTicks / ARRIVAL_EVERY_TICKS === TARGET_CONCURRENT_GUESTS`, with 15 named as the
+   calibrated target and sourced to the bound campaign. **The relationship now lives in an
+   assertion rather than in a comment**, so the next such change reddens it by name instead of
+   surfacing three gates downstream as a timing ratio nobody can attribute.
+
+   **AS FIRST WRITTEN IT READ `workload.mjs` AND NOTHING ELSE, AND `ai-critic` found a SECOND
+   COPY of the literal that this ADR had therefore left behind:** `scaling-arms.ts:32` held its
+   own `ARRIVAL_EVERY_TICKS = 32` under a comment claiming it was the bench's hotel, so
+   `check:scaling` went on measuring FORTY-FIVE concurrent guests against a campaign taken at
+   fifteen. Its drift guard could not see it — the guard compares an arm fingerprint spelled in
+   flags that are RENDERED FROM THE COPY IT IS GUARDING, which is G-018's duplicated-constant
+   defect inside the check meant to catch it. `tripwire.mjs` refused only because this goal
+   happened to move ITS literal.
+
+   **THE RULING, EXTENDED: ONE LITERAL.** `scaling-arms.ts` imports the gate constant (through
+   `workload.d.mts`, a declaration and not a build step), and the pin is over the value WHEREVER
+   IT IS EXPORTED plus a source census that fails on a second copy **whether or not it has
+   drifted yet** — which is the state `scaling-arms.ts` was in for a goal. The census
+   immediately found a THIRD copy nobody had named, `needs3-arm.ts`, which is allowed one
+   because `needs-history.mjs` copies that file into an extracted historical tree where
+   `workload.mjs` does not exist; the exemption is checked rather than asserted.
+
+`TARGET_CONCURRENT_GUESTS = 15` is **frozen, not derived**: it is a historical fact about a
+measurement campaign, and re-deriving it would make the bound describe a hotel nobody calibrated
+against (ADR-0008's argument, one artefact over).
+
+### The consequence, which is NOT closed by this ADR
+
+**`tripwire.mjs` AND `scaling.mjs` now both refuse to run**, each by its own ADR-0015 check —
+the second only after the ruling above removed the duplicate literal that had been hiding its
+drift. **That third red row is taken deliberately**, on this ADR's own words: the alternative is
+knowingly shipping a gate that passes while measuring a different hotel, and a green gate that has
+stopped being evidence is worse than a red one. The re-take goal covers BOTH campaigns, and
+neither bound is touched.
+
+`tripwire.mjs`'s refusal:
+
+> THE BOUND CAMPAIGN WAS TAKEN AT A DIFFERENT CONFIGURATION.
+> arrivalEveryTicks: campaign 32, shipped workload 96 — POOL within a configuration, REPLACE on a
+> configuration change. RE-TAKE the campaign at the new configuration and replace the arms.
+
+That is the gate working, and it collides with (2): **the bound is COMPUTED from the campaign
+arms, so replacing them necessarily re-derives it.** Re-taking a four-arm interleaved campaign at
+~36s a reading, plus its loaded-regime arm, is a goal's worth of measurement and a human decision
+about the new ceiling. It is left open here rather than guessed at, and `ai-engineer` reports the
+raw number the gate declined to render.
+
+**AND ONE FACT THE RE-TAKE MUST FACE, because no cadence fixes it.** The two arms have different
+stay lengths — 480 at base, 1,440 at head — so **no single `--arrivals` puts both arms at fifteen
+concurrent guests.** Restoring head's occupancy un-restores base's: at 32 the pair was 45 against
+15; at 96 it is 15 against 5. The 3:1 gap between arms is the same, mirrored. A paired-ratio
+tripwire is not configuration-neutral across a content change that redefines occupancy, and the
+campaign re-take is where that has to be answered rather than rediscovered.

@@ -1,8 +1,8 @@
-// Reviews (G-019).
+// Reviews (G-019, re-expressed at G-027a).
 //
 //   A departing guest leaves an integer review derived from its own recorded experience:
-//   which needs were met, how long it waited against its patience, and whether its stay
-//   was cut short. THE REVIEW IS RECORDED AND REPORTED; NOTHING READS IT.
+//   which of its needs were met, and whether its stay was cut short. THE REVIEW IS
+//   RECORDED AND REPORTED; NOTHING READS IT.
 //
 // ============================================================================
 // THIS MODULE IS WRITE-ONLY FROM THE SIMULATION'S POINT OF VIEW, AND THAT IS A CHECKED
@@ -41,12 +41,48 @@
 // THE FUNCTION, AND WHY EVERY NUMBER IN IT IS DERIVED (HOTELSIM.md §2.1 — a threshold must
 // be derivable from a stated requirement; a review scale is full of thresholds).
 //
-//   q(need) = 0                            the need was not met
-//           = ONE_WHOLE                     met, and not the lodging need
-//           = ONE_WHOLE - waitShare         met, and the lodging need
+//   q(need) = 0            the need was not met
+//           = ONE_WHOLE     met
 //
-//   score   = min + min(bands - 1, floor(Σ q x bands / (needCount x ONE_WHOLE)))
-//   score   = min                           if the stay was cut short
+//   score   = min + min(bands - 1, floor(metCount x bands / needCount))
+//   score   = min           if the stay was cut short
+//
+// ============================================================================
+// THE WAIT AXIS IS GONE, AND G-019's LAW A IS NOW UNCONDITIONAL (G-027a). SAID LOUDLY,
+// BECAUSE THIS IS A REAL WEAKENING OF THE FUNCTION AND NOT A SIMPLIFICATION.
+//
+// G-019 gave the lodging need a partial term — `ONE_WHOLE - waitShare` — so a guest that
+// queued for its room scored below one that walked straight in. That term was recoverable
+// for exactly one reason, stated in the paragraph below that used to justify it: a
+// SATISFIED guest was served on exactly `satisfyTicks` of the ticks it was decayed on, so
+// `(departureTick - arrivedTick) - satisfyTicks` WAS the wait, exactly. **ADR-0017 deletes
+// the premise.** A stay now ends on a clock, so `departureTick - arrivedTick` is
+// `stayDurationTicks` for EVERY guest that checks out, whatever it waited, and the
+// subtraction computes a constant. Keeping the term would have made it a formula that
+// looks like a measurement and is a literal — §5.8's class, in the module whose header
+// already carries two corrections of exactly that shape.
+//
+// SO IT IS DELETED RATHER THAN DEFAULTED, and `lodgingWaitBasisPoints` is deleted with it
+// rather than left as an unread export. What replaces it is nothing: this goal does not
+// invent a substitute, because the honest substitute is a recorded per-need `waitedTicks`,
+// which G-019 refused to add for an ADR-0008 reason that still holds, and which M3's
+// G-026 owns by name ("waiting is a satisfaction input").
+//
+// G-019's LAW A — *within one vector length, and setting the floor aside, meeting more
+// needs never scores lower* — was a careful statement hedged by the wait term. It is now
+// STRICTLY MONOTONE IN THE MET COUNT and needs no hedge: every met need contributes
+// exactly `ONE_WHOLE` and nothing subtracts. Two consequences a reader should not have to
+// derive:
+//
+//   * `q` is two-valued, so `Σq / needCount` is `metCount / needCount` — the score is a
+//     COUNT expressed on the content's scale, which is what G-019's "one weight per need"
+//     always meant and can now be read straight off the formula.
+//   * the distribution is coarser than it was. On the shipped 1..5 scale over four needs
+//     the reachable scores are exactly {1, 2, 3, 4, 5} and nothing between; before this,
+//     the wait term could move a guest between two of them. G-028 owns the distribution's
+//     shape, and G-019's minimum-share criterion is re-measured against THIS build in
+//     `JOURNAL.md` under G-027a rather than assumed to survive.
+// ============================================================================
 //
 // ONE WEIGHT PER NEED, AND NOTHING IS AUTHORED. The goal statement's first input is
 // "which needs were met" — it names a COUNT, not a ranking. Uniform weights make the
@@ -62,36 +98,39 @@
 // review at the top. That is the human's "three-quarters of the need vector contributes
 // nothing" finding wearing a different hat. Measured by `balance-critic` at §5.6.
 //
-// THE WAIT TERM IS THE LODGING WAIT, AND THAT IT IS ONLY THE LODGING WAIT IS A
-// MEASUREMENT RATHER THAN AN OMISSION. Patience REGENERATES while a need is served
-// (`advanceNeed`'s cap branch), capped at `patienceTicks`. So for `night_rest` — patience
-// 180, satisfy 480 — every satisfied guest ends with its patience fully restored whatever
-// it waited, and every guest that gave up ends at exactly zero. FINAL NEED STATE CARRIES
-// NO WAIT INFORMATION AT ALL. What is exact is this: a satisfied guest was served on
-// exactly `satisfyTicks` ticks and decayed on `departureTick - arrivedTick` of them, so
-// the difference is precisely the ticks it stood in the lobby. Engagement waits are not
-// recoverable from anything this build records, and a per-need `waitedTicks` field is
-// refused rather than added: its v9 -> v10 default could not be argued from the era (a v9
-// guest waited and nothing wrote it down), which is the dishonest default ADR-0008
-// forbids. Parked with its falsification test for M3, where §8 makes wait a first-class
-// satisfaction input.
+// WAITING IS NOT RECOVERABLE FROM ANYTHING THIS BUILD RECORDS, AND THAT IS WHY THERE IS NO
+// WAIT TERM. Patience REGENERATES while a need is served (`advanceNeed`'s cap branch),
+// capped at `patienceTicks`, so a guest that got its room ends with its patience fully
+// restored whatever it waited and a guest that gave up ends at exactly zero: FINAL NEED
+// STATE CARRIES NO WAIT INFORMATION AT ALL. G-019 recovered the lodging wait from the
+// CLOCK instead — see the block above for why G-027a's checkout terminator makes that
+// arithmetic a constant. A per-need `waitedTicks` field is still refused rather than added:
+// its v9 -> v10 default could not be argued from the era (a v9 guest waited and nothing
+// wrote it down), which is the dishonest default ADR-0008 forbids. Parked with its
+// falsification test for M3's G-026, where §8 makes wait a first-class satisfaction input.
 //
 // ONE INTEGER DIVISION, NOT TWO, AND THE SHIPPED SCALE HIDES THE DIFFERENCE.
 // `floor(Σq / needCount)` followed by `floor(x x bands / ONE_WHOLE)` is NOT the single
 // division above unless `ONE_WHOLE % bands == 0`. At the shipped `bands = 5` it is, so
 // there is no bite here — and the scale is CONTENT, so "no bite here" is not a property
-// anyone may rely on. `balance-critic`'s counter-example is driven in `review.test.ts`:
-// min 1, max 3, bands 3, two need types, lodging-only met at a wait share of 3,333 gives
-// **score 1 two-step and score 2 one-step — a whole band.** `experienceBasisPoints` below
-// exists for the report and for tests and IS the two-step intermediate; the score never
-// reads it.
+// anyone may rely on. `experienceBasisPoints` below IS the two-step intermediate and the
+// score never reads it.
+//
+// **THE COUNTER-EXAMPLE THAT MADE THAT A CORRECTNESS PROPERTY NEEDED THE WAIT TERM, AND
+// G-027a HAS TAKEN IT AWAY.** `balance-critic`'s case was min 1, max 3, bands 3, two need
+// types, lodging-only met AT A WAIT SHARE OF 3,333 — and with `q` now two-valued, `Σq` is
+// a multiple of `ONE_WHOLE`, so the two spellings agree for every input. The guard is kept
+// anyway, and this is not caution for its own sake: `q` becomes non-extreme again the
+// moment a partial term returns, which is exactly what G-026 is chartered to add. The
+// single division is the form in which that day changes nothing. `review.test.ts` drives
+// the two spellings against a HAND-BUILT non-extreme sum so the property is still
+// measured rather than asserted about content that cannot currently produce it.
 //
 // NO RANDOMNESS, NO WALL CLOCK, INTEGER ARITHMETIC END TO END (I2). Every input is the
-// departing guest's own state, the tick, and injected content.
+// departing guest's own state and injected content.
 
-import { findNeedType, firstGuestRules, lodgingNeedOf, ONE_WHOLE_BASIS_POINTS } from './content.js';
+import { firstGuestRules, ONE_WHOLE_BASIS_POINTS } from './content.js';
 import type { BoundContent } from './content.js';
-import type { ContentId } from './entities.js';
 import { isNeedMet } from './needs.js';
 import type { NeedState } from './needs.js';
 
@@ -130,36 +169,22 @@ export function reviewScaleOf(bound: BoundContent): ReviewScale | undefined {
   return { min, max, bands: max - min + 1 };
 }
 
-/**
- * The fraction of its lodging patience a guest spent waiting for a room, in basis points.
+/*
+ * `lodgingWaitBasisPoints` WAS HERE AND WAS DELETED AT G-027a. NAMED, NOT DISCOVERED —
+ * the `compareNeedPriority` idiom in `needs.ts`.
  *
- * `waited = (departureTick - arrivedTick) - satisfyTicks`, and the derivation is in this
- * module's header: the lodging need is served on exactly `satisfyTicks` of the ticks a
- * guest is decayed on, so everything else was spent waiting. Negative for a guest that
- * never got a room — it did not stay long enough to have been served — and that case
- * returns 0 rather than a negative share, because an unmet lodging need scores zero
- * anyway and a wait share is only ever asked of a MET one.
+ * It returned the fraction of its lodging patience a guest spent waiting for a room, as
+ * `(departureTick - arrivedTick) - satisfyTicks` over `patienceTicks`, saturating. The
+ * subtraction was exact under G-019's terminator, where a stay ended `satisfyTicks` after
+ * the guest got a room. Under a CHECKOUT terminator the same expression evaluates to
+ * `stayDurationTicks - satisfyTicks` for every guest that checks out — 960 on the shipped
+ * table, for the guest that walked straight in and for the guest that queued 179 ticks
+ * alike — so it stopped measuring anything and started reading as though it did.
  *
- * Shaped exactly like `pressureBasisPoints` in `utility.ts`, including the saturating
- * branch, so the codebase has one way of turning ticks into a fraction rather than two.
+ * Deleted rather than left as a dead export, because an unread export whose name still
+ * promises a measurement is what a future caller trusts. The subject it named comes back
+ * at M3's G-026, from a recorded quantity rather than from the clock.
  */
-export function lodgingWaitBasisPoints(
-  bound: BoundContent,
-  lodgingNeedId: ContentId,
-  arrivedTick: number,
-  departureTick: number,
-): number {
-  const needType = findNeedType(bound, lodgingNeedId);
-  if (needType === undefined) return 0;
-  const waited = departureTick - arrivedTick - needType.satisfyTicks;
-  if (waited <= 0) return 0;
-  const patience = needType.patienceTicks;
-  if (!(patience > 0)) return 0;
-  if (waited >= patience) return ONE_WHOLE_BASIS_POINTS;
-  // Exact in a double: ticks and patience are far inside 2^53, so the product is exact and
-  // the floor is a decision about a remainder rather than about drift (I2).
-  return Math.floor((waited * ONE_WHOLE_BASIS_POINTS) / patience);
-}
 
 /**
  * How much of what this guest came for it actually got, in basis points — the numerator
@@ -180,14 +205,9 @@ export function lodgingWaitBasisPoints(
  * it without `index.ts` re-exporting it to everybody else. Its one job is to let a test name
  * the two-step intermediate in order to show that the score is NOT it.
  */
-export function experienceBasisPoints(
-  bound: BoundContent,
-  needs: readonly NeedState[],
-  arrivedTick: number,
-  departureTick: number,
-): number {
+export function experienceBasisPoints(needs: readonly NeedState[]): number {
   if (needs.length === 0) return 0;
-  return Math.floor(qualitySum(bound, needs, arrivedTick, departureTick) / needs.length);
+  return Math.floor(qualitySum(needs) / needs.length);
 }
 
 /**
@@ -196,22 +216,16 @@ export function experienceBasisPoints(
  * Walks the vector the guest actually formed, not the content table, so a guest MIGRATED
  * from v5 carrying one need is reviewed on the one need it has rather than being marked
  * down for three it never formed.
+ *
+ * IT NEEDS NO CONTENT SINCE G-027a, AND THE SIGNATURE SAYS SO RATHER THAN IGNORING AN
+ * ARGUMENT. Every met need now contributes the same whole (see the header), so there is no
+ * lodging need to single out and nothing to look up. A parameter kept "in case" would be an
+ * invitation to reintroduce a term here rather than where G-026 will put one.
  */
-function qualitySum(
-  bound: BoundContent,
-  needs: readonly NeedState[],
-  arrivedTick: number,
-  departureTick: number,
-): number {
-  const lodgingNeedId = lodgingNeedOf(bound)?.id;
+function qualitySum(needs: readonly NeedState[]): number {
   let sum = 0;
   for (const need of needs) {
-    if (!isNeedMet(need)) continue;
-    if (need.needId === lodgingNeedId) {
-      sum += ONE_WHOLE_BASIS_POINTS - lodgingWaitBasisPoints(bound, need.needId, arrivedTick, departureTick);
-    } else {
-      sum += ONE_WHOLE_BASIS_POINTS;
-    }
+    if (isNeedMet(need)) sum += ONE_WHOLE_BASIS_POINTS;
   }
   return sum;
 }
@@ -257,30 +271,33 @@ function qualitySum(
  * survive; it is a claim about the shipped CONTENT wearing the clothes of a claim about the
  * function. Three cases, stated so nobody has to rediscover them from a distribution:
  *
- *   1. EQUAL COUNTS, DIFFERENT SCORES. Two needs met with no room and no wait scores 3; two
- *      needs met WITH the room after a 121-tick wait scores 2. That is the wait term working
- *      as designed, and it is unreachable under the SHIPPED need table only because a queuing
- *      guest cannot finish a second 150-tick engagement inside 180 ticks of patience — a fact
- *      about `need-types.json`, and the scale is content.
- *   2. MORE NEEDS MET, LOWER SCORE — reachable, and NOT through the wait term. The
+ *   1. EQUAL COUNTS, DIFFERENT SCORES — **RETIRED AT G-027a, AND ITS RETIREMENT IS THE
+ *      WEAKENING THIS GOAL SHIPPED.** It read: two needs met with no room and no wait scores
+ *      3; two needs met WITH the room after a 121-tick wait scores 2. That was the wait term
+ *      working as designed. There is no wait term now (see the header), so equal counts
+ *      score equally, always. The case is left in place rather than deleted because a reader
+ *      who remembers the old distribution needs to be told the axis went, not to find the
+ *      list one shorter.
+ *   2. MORE NEEDS MET, LOWER SCORE — reachable, and NEVER through a wait term. The
  *      denominator is the guest's OWN vector length (see `qualitySum`), so a guest MIGRATED
  *      from v5 carrying one met need scores the maximum while a current guest meeting two of
  *      four scores the middle. Two eras in one distribution, both correct about the guest
  *      they describe. `review.test.ts` pins the first half of that pair.
  *   3. THE EVICTION FLOOR, above.
  *
- * What IS structural, and is the useful half of the sentence that was there: **within one
- * vector length, and setting the floor aside, meeting more needs never scores lower** — the
- * lodging need's contribution is `ONE_WHOLE - waitShare >= 0`, so an extra met need cannot
- * subtract. The eviction floor is the only thing that reverses the order, and it reverses it
- * on purpose.
+ * G-019's LAW A, RE-EXPRESSED AT G-027a AND NOW UNCONDITIONAL: **within one vector length,
+ * and setting the floor aside, meeting more needs never scores lower.** It used to rest on
+ * `ONE_WHOLE - waitShare >= 0` — true, but a hedge, and a hedge that would have failed the
+ * day anybody let the wait share exceed one whole. Every met need now contributes exactly
+ * `ONE_WHOLE` and nothing subtracts, so the law is monotone in the met count by
+ * construction, and `review.test.ts` asserts it over every subset of a four-need vector
+ * rather than over the two cases the hedge admitted. The eviction floor is the only thing
+ * that reverses the order, and it reverses it on purpose.
  * ---------------------------------------------------------------------------
  */
 export function reviewOf(
   bound: BoundContent,
   needs: readonly NeedState[],
-  arrivedTick: number,
-  departureTick: number,
   cutShort: boolean,
 ): number | undefined {
   const scale = reviewScaleOf(bound);
@@ -290,7 +307,7 @@ export function reviewOf(
   // guest outright, so this is a postcondition rather than a case — and it is here because
   // the alternative is a division by zero that would reach the tally as NaN.
   if (needs.length === 0) return undefined;
-  const sum = qualitySum(bound, needs, arrivedTick, departureTick);
+  const sum = qualitySum(needs);
   // THE ONE DIVISION. See the header for the counter-example that makes this a correctness
   // property rather than a tidiness one.
   const band = Math.floor((sum * scale.bands) / (needs.length * ONE_WHOLE_BASIS_POINTS));

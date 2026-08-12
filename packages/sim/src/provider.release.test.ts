@@ -112,6 +112,9 @@ const content = bindContent({
     roomType('lounge', [], ['chair']),
   ],
   needTypes: [need('rest', STAY, true), need('comfort', SITTING, false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
   itemTypes: [itemType('chair', ['comfort'])],
 });
 

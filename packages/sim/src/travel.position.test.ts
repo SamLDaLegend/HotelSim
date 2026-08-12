@@ -57,8 +57,17 @@ const need = (id: string, lodging: boolean, satisfyTicks: number): NeedTypeData 
 const DEFINITIONS: SimContent = {
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
   needTypes: [need('food', false, 6), need('rest', true, 120)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
   guestRules: [
-    { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 3_000, reviewScoreMin: 1, reviewScoreMax: 5 },
+    {
+      id: 'houseRules',
+      name: 'House Rules',
+      abandonMarginBasisPoints: 3_000,
+      reviewScoreMin: 1,
+      reviewScoreMax: 5,
+      stayDurationTicks: 120,
+    },
   ],
 };
 const content = bindContent(DEFINITIONS);

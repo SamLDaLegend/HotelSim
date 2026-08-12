@@ -322,16 +322,62 @@ describe('the seam: the instrument holds no bound, and the two lists agree', () 
     }
   });
 
-  it('the campaign was taken at the workload the arms module still declares', () => {
-    // ADR-0015's REPLACE half: a campaign is only evidence for the configuration it was taken
-    // at. The gate checks this against the CHILD's reported workload at run time; this checks
-    // it against the arms module at build time, so a workload edit reddens `pnpm test` too.
-    expect(CAMPAIGN.configuration).toMatchObject({
-      rooms: ROOMS,
-      arrivalEveryTicks: ARRIVAL_EVERY_TICKS,
-      seed: SEED,
-      ticks: TICKS,
-    });
+  it('THE CAMPAIGN IS STALE ON EXACTLY ONE AXIS, AND THAT IS DELIBERATE AND SCHEDULED', () => {
+    // ========================================================================
+    // THIS ASSERTED AGREEMENT ON ALL FOUR FIELDS UNTIL G-027a, AND THE INVERSION IS THE
+    // HUMAN'S RULING RATHER THAN A REPAIR — the same shape as the v8/v12 reason-list arm in
+    // `migration-scan.build.grid.provider.outcome.travel.save.test.ts`.
+    //
+    // ADR-0021 moved `ARRIVAL_EVERY_TICKS` 32 -> 96 to restore the benchmark's calibrated
+    // occupancy of fifteen concurrent guests, which ADR-0017's longer stay had silently
+    // redefined to forty-five. `scaling-arms.ts` now imports that constant instead of holding
+    // a second copy, so the arms run at 96 while `scaling-bound.mjs`'s campaign records 32.
+    //
+    // **`check:scaling` IS RED BECAUSE OF THIS AND IS MEANT TO BE.** ADR-0015 says REPLACE on
+    // a configuration change, the bound is DERIVED from the campaign arms, and re-taking a
+    // four-axis campaign is a scheduled goal rather than something to slip into this diff.
+    // Widening or re-deriving a bound to clear it was refused for the reason ADR-0021 gives:
+    // a green gate measuring a different hotel has stopped being evidence.
+    //
+    // WHY THIS TEST DOES NOT SIMPLY STAY RED. A red GATE row says "this campaign owes a
+    // re-take". A red `pnpm test` says "I4, the ledger, is broken", and those are different
+    // claims — conflating them is what teaches people to re-run a suite until it passes. So
+    // the divergence is pinned as a FACT with exactly one permitted axis: a SECOND field
+    // drifting still reddens here, by name, and so does the first one drifting to a value
+    // nobody chose.
+    // ========================================================================
+    expect(CAMPAIGN.configuration).toMatchObject({ rooms: ROOMS, seed: SEED, ticks: TICKS });
+
+    // THE ONE PERMITTED DIVERGENCE, asserted BEFORE it is excused, so "they agree" cannot be
+    // reached by quietly ignoring a field.
+    expect(CAMPAIGN.configuration.arrivalEveryTicks).toBe(32);
+    expect(ARRIVAL_EVERY_TICKS).toBe(96);
+    expect(CAMPAIGN.configuration.arrivalEveryTicks).not.toBe(ARRIVAL_EVERY_TICKS);
+
+    // AND IT IS THE OCCUPANCY THAT WAS BEING RESTORED, not an arbitrary number: the campaign's
+    // 32 was fifteen concurrent guests under a 480-tick stay, and 96 is fifteen under 1,440.
+    // Both describe the SAME hotel; only one of them describes it under this build's content.
+    expect(480 / CAMPAIGN.configuration.arrivalEveryTicks).toBe(15);
+    expect(1_440 / ARRIVAL_EVERY_TICKS).toBe(15);
+
+    // AND NO FIELD HAS BEEN ADDED TO THE CAMPAIGN'S CONFIGURATION SINCE THE DIVERGENCE WAS
+    // PERMITTED. The first version of this line filtered the key list for `arrivalEveryTicks`
+    // and asserted length 1 — which can only be 0 or 1, and 0 was already excluded five lines
+    // above, so it closed the argument it was written to close. A tautology in the assertion
+    // meant to bound an exemption.
+    //
+    // The real second-drift guard is the `toMatchObject` at the top of this test, which covers
+    // every field the campaign records TODAY. This covers the one it cannot: a NEW field, which
+    // `toMatchObject` would pass over in silence. Frozen, so adding one reddens here and has to
+    // be added to the match above deliberately.
+    expect(Object.keys(CAMPAIGN.configuration).sort()).toEqual([
+      'arrivalEveryTicks',
+      'fingerprints',
+      'rooms',
+      'samplesPerArm',
+      'seed',
+      'ticks',
+    ]);
   });
 
   it('the gate applies both the bounds and the anti-vacuity floor it imports', () => {

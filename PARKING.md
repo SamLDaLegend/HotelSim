@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-023a done. M2.5: 1 of 4 goals (G-030 awaiting WATCH). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -308,9 +308,25 @@ deferrals, each with the reason it is not G-008's.
   test. `--build 10080` ends 36M behind `--build 120`. Test against that, do not
   rediscover it.
 - **Per-night billing, and what it does to construction cost. -> M4.** ADR-0010 keeps
-  `nightlyRatePence` per-stay and documents the coupling. When M4 bills pro-rata, the
-  margin falls to 5,957.5p/room-day and 250,000p becomes a **42-day payback instead of
-  11** — which is the number that makes construction a real decision. **Do not also raise
+  `nightlyRatePence` per-stay and documents the coupling.
+  ~~When M4 bills pro-rata, the margin falls to 5,957.5p/room-day and 250,000p becomes a
+  **42-day payback instead of 11**~~ — **CORRECTED 2026-08-12 (G-027a, ADR-0020/0021).
+  THE FOURTH COPY OF ADR-0010's ARITHMETIC, AND RULING C'S SWEEP FOUND THREE.** Two things
+  in that sentence are now false: **the fall has already happened at G-027a**, and
+  **pro-rata billing is not what caused it** — a 1,440-tick stay already spans exactly one
+  night, so per-night proration changes nothing at the shipped numbers. The realised margin
+  is **3.63:1**, not the ~2.38:1 predicted, because the stay clock runs from **arrival**, so
+  a queued guest holds its room for less than the full duration and a busy hotel fits up to
+  1.14 stays per room-day. **The payback figure is withdrawn rather than restated**
+  (`CLAUDE.md` rule 5) — it was computed under a check-in-relative clock that no longer
+  exists, which is rule 4's first slot: it measured a different quantity wearing the same
+  units. **What survives, and is the part M4 needs**: per-night billing is no longer the
+  lever that makes construction a real decision, because the margin already moved without
+  it — so M4 must re-derive the payback against ADR-0020's figures before treating
+  construction cost as balanced. **Found by `ai-critic` at G-027a sweep 1, in the file M4
+  reads first; struck rather than deleted (ADR-0008) because a reader should see that this
+  arithmetic propagated to four places and that the sweep which found three declared itself
+  complete.** **Do not also raise
   `constructionCostPence`**; balance-critic showed raising it cannot fix the sink, because
   total useful lifetime spend is bounded by N* x C and N* is demand-bounded at 4 (a 1% sink
   against lifetime revenue, rising only to 8% at 2,000,000p).
@@ -1355,6 +1371,23 @@ changed one constant, its derivation, and the records that quoted it.
   **Do NOT reach for a different instrument first** — an earlier draft of the goal block claimed
   one was needed, which was wrong: this one narrows with readings.
 
+  **THE INTERVAL IS A PRE-G-027a READING AND THE INVOCATION NO LONGER MEASURES THE QUANTITY
+  BEHIND IT (ADR-0015 REPLACE, applied to a parked experiment).** `needs3-arm.ts` holds its own
+  `ARRIVAL_EVERY_TICKS = 32` — legitimately, because `needs-history.mjs` copies it into an
+  extracted revision where `workload.mjs` does not exist — and ADR-0017 tripled the stay length
+  on ONE SIDE ONLY. So the head arm now runs at **45 concurrent guests** (1,440-tick stay) and
+  `aa30218` at **15** (480-tick stay), where both were 15 when 1.1071 .. 1.2534 was recorded.
+  It is the same asymmetry ADR-0021's closing paragraph names for the tripwire — *no single
+  `--arrivals` puts both arms at fifteen* — arriving in a ratio-of-ratios whose recorded arm
+  predates it.
+
+  **SO RUN AS WRITTEN, NEITHER CONCLUSION ABOVE IS AVAILABLE**: an interval that still excludes
+  1.0 does not license *"bisect it"*, and one that spans 1.0 does not license *"there is nothing
+  to chase"*, because the two arms no longer differ only in their revision. **THE RE-TAKE MUST
+  RE-ESTABLISH A BASELINE BEFORE NARROWING ANYTHING** — the n=25 interval is not poolable with
+  anything measured after G-027a — and it belongs with the tickcost and scaling campaign
+  re-takes, which are the same class of debt.
+
 ---
 
 ## From G-019 — reviews
@@ -1591,6 +1624,35 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   comma-separated and is allowed. *Contrived rather than natural, which is why it is recorded
   and not chased.*
 
+  **A THIRD ESCAPE — AN INDEX COMPUTED WITH ARITHMETIC — AND IT IS THE MOST NATURAL OF THE
+  THREE TO WRITE.** `const base = rungs[i - 1].ticksPerRealSecond` is not registered as an
+  alias at all, because the `-` inside the brackets fails the no-arithmetic clause, so the
+  later `other.ticksPerRealSecond / base` is **silent**. Measured, both arms: the `rungs[i]`
+  spelling of the same code **bites**, the `rungs[i - 1]` spelling **does not**.
+  **IT WAS CREATED BY THE FIX FOR THE PREVIOUS SWEEP'S FINDING** — the no-arithmetic clause
+  that distinguishes a speed from a tick count — and it then went unrecorded for a sweep while
+  the gate's own prose said all three escapes were parked. That is the same defect as the
+  aliasing claim it was introduced to repair: **a statement slightly larger than its record,
+  in the sentence declaring the instrument discharged.** Found by `render-critic`, sweep 2.
+  **FALSIFICATION TEST**: `pnpm exec vitest run ladder-arithmetic` contains the pair as an arm
+  asserting the escape is SILENT and its control BITES. *If the silent arm ever reddens,
+  somebody has closed the escape and this bullet should be deleted; if the control arm
+  reddens, the alias rule has broken and the escape is the least of it.* Kept as an executable
+  arm rather than a note precisely because the previous two escapes were prose and one of them
+  was still missing when the sweep looked.
+
+  **AND THE PREDICATE HAS TWO KNOWN FALSE POSITIVES, WHICH ARE DELIBERATELY NOT FIXED.**
+  `const shown = String(rung.ticksPerRealSecond)` and `const isTop = rung.ticksPerRealSecond > 0`
+  both register a NON-speed as a speed alias, so combining either with another rung read
+  reports as arithmetic between two rungs. Both are asserted as arms.
+  **WHY THEY STAY**: every available tightening buys a silent miss with a loud report. Banning
+  calls in an initialiser would also drop `(rung).ticksPerRealSecond`; banning comparisons
+  would also drop `paused || rung === undefined ? null : rung.ticksPerRealSecond`, which is
+  the spelling the shipped renderer contains and the one sweep 1 raised. **A false report
+  costs a reader five minutes and arrives with a file and a line; a silent miss certifies a
+  clean tree forever and nobody looks.** *If a real one ever fires on honest code, the fix is
+  to rewrite that line or to record the exception — not to widen the predicate a third time.*
+
 - **NOTHING PROVES POSITIVELY THAT THE SPEED CONTROL READS CONTENT — only that no speed is
   declared in code.** `check:ladder` and `speed-ladder.scan.test.ts` are both NEGATIVE: they
   prove the absence of a constant and of arithmetic. A renderer that read the ladder and then
@@ -1669,16 +1731,33 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   trade should be made against a measured complaint rather than pre-emptively.*
   **-> the next WATCH that reports confusion; nothing until then.**
 
-- **A GUEST'S FULL NEED VECTOR IS NO LONGER VISIBLE IN THE PICTURE.** The bars were reduced to
-  the single most urgent unmet need after the first WATCH reported "washout of bars", and the
-  cost is stated where it was paid (`view/guest.ts`): "three of its four needs are half
-  drained" cannot be read off a guest any more. It was not readable from the four-segment
-  smudge either, and the HUD strip and `tools/viewer` both carry per-need detail.
-  **FALSIFICATION TEST**: at a WATCH, try to answer "which need is this hotel failing at" from
-  the picture alone. *If the answer needs the HUD every time, the vector belongs somewhere in
-  the frame — most likely as an aggregate across all guests rather than per guest, which is
-  the question actually being asked. If the single urgent bar answers it, this closes.*
-  **-> G-031 or the first M4 goal that needs a demand read-out.**
+- **A GUEST'S FULL NEED VECTOR WAS REMOVED, AND WATCH #6 PUT IT BACK. THIS TEST HAS FIRED AND
+  BEEN ACTED ON — IT IS NOT UNTESTED, AND IT IS NOT OPEN.**
+  The bars were cut to the single most urgent unmet need after WATCH #5 reported "washout of
+  bars". The parked test was: *at a WATCH, try to answer "which need is this hotel failing at"
+  from the picture alone.* **It fired at the next WATCH**, from the human, unprompted: *"I note
+  I can only see one need at a time, whereas before I could see all needs."* The vector is
+  restored, larger, on a dark plate, with the urgent column outlined so the "who is in
+  trouble" reading survives inside the full vector instead of replacing it.
+  **WHAT THIS COST, AND IT IS THE REUSABLE PART: THE REDUCTION WAS ARGUED FROM A CONFOUND.**
+  The justification was "four 3px segments above a 13px body is not four readings, it is one
+  smudge" and — decisively — **"it was not readable from the smudge either"**, which was a
+  claim about someone else's perception, made without asking them, and false. The mechanism is
+  that **the palette and the vector were changed in the SAME pass, and the vector's removal
+  was justified by the state of the palette BEFORE the same commit repaired it.** Measured
+  both ways: the need role's ADJACENT columns — which is precisely what a smudge is made of —
+  separated at **1.019:1** under the old wheel and at **1.840 / 1.823 / 1.814 to one** under
+  the ladder that shipped alongside the removal. Nobody had ever seen the multi-segment bar
+  against the repaired palette. **Two changes in one pass, and the second solved a problem the
+  first had already solved.**
+  **THE STANDING LESSON, WHICH OUTLIVES THIS ENTRY**: when one pass changes both a signal and
+  the medium carrying it, the change to the signal cannot be justified by observations taken
+  through the unrepaired medium. Repair the medium, re-observe, then decide.
+  **RESIDUAL FALSIFICATION TEST, for the reading the vector still does not give**: at a WATCH,
+  try to answer *"which need is this HOTEL failing at"* — the aggregate, across all guests
+  rather than per guest. *If that needs the HUD every time, the answer is a hotel-level
+  read-out and not more per-guest ink; if scanning the row of guests answers it, this closes
+  for good.* **-> the first M4 goal that needs a demand read-out.**
 
 ## Discovered during G-023a (2026-08-12)
 
@@ -1726,3 +1805,114 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   *Recorded also because the orchestrator misread it first*: `hueDistanceFromReserved` takes a
   COLOUR, not a hue, and being fed a hue returned 60.8 — a number that would have made the margin
   look comfortable. The reading only became true when the function was called as designed.
+
+## Deferred out of G-030's sweep 1 (2026-08-12)
+
+- **THE ONE PERSON WHOSE EDIT SILENTLY RECOLOURS THE HOTEL IS THE ONE NOT TOLD.** Room
+  colours are derived from a per-role luminance ladder whose length is the number of room
+  types, and assignment is by rank — so **adding a room type re-derives the ladder and every
+  existing room changes colour**. A designer opening `packages/content` to add one has no way
+  to know that: the word "colour" does not appear anywhere in that package, which was checked
+  rather than assumed (`grep -rn 'colour\|color' packages/content/src/schema.ts
+  packages/content/data/room-types.json` returns nothing).
+  **NOT FIXED IN G-030, AND THE REASON IS THE TRACK BOUNDARY RATHER THAN THE COST.** It is one
+  comment line in `roomTypeSchema`, and `packages/content/src/schema.ts` was **open on track B
+  at the moment this was raised** (ADR-0017's need-model work). A render goal editing a live
+  sim-track file is exactly the collision ADR-0018 §4's disjointness rule exists to prevent,
+  and a one-line comment is not worth breaking it for. The text to place, verbatim:
+  *"Adding a room type re-derives the renderer's colour ladder, so every existing room
+  changes colour (`apps/game/src/view/palette.ts`). That is a deliberate trade for
+  legibility and it is asserted by `tools/headless/src/palette.contrast.test.ts`."*
+  **FALSIFICATION TEST**: add a room type and diff a screenshot. *If the existing rooms keep
+  their colours, the ladder no longer re-derives and this note is stale; if they change and
+  nothing in `packages/content` warned, the note is still owed.*
+  **-> the next sim-track goal that touches `packages/content/src/schema.ts`.**
+
+- **A STRESSED OPENING, SO THE FAILURE MARKS ARE WATCHED RATHER THAN MERELY DRAWN.**
+  `render-critic` drove the shipped scenario for 4,320 ticks at seed 7: **0 invalid rooms, 0
+  roomless guest-ticks, never more than 2 guests on a cell.** Six rooms against one arrival
+  per 120 ticks is permanently under-subscribed, so the room hatching, the invalidity word,
+  the hollow-body mark and the `+N` crowd counter are **unreachable by construction** — the
+  WATCH that passed could not have contained them, and none may be carried as verified.
+  **DELIBERATELY NOT FIXED BY ADDING CODE** (orchestrator ruling): manufacturing a broken room
+  in the opening scenario would fake the evidence rather than earn it. The honest route is
+  G-031, which gives the player the ability to build a bad hotel.
+  **FALSIFICATION TEST**: at G-031, build a room in mid-air and one sealed between neighbours,
+  and oversubscribe the hotel. *If the hatching, the invalidity word, the hollow body and the
+  `+N` all appear and read, these four marks are discharged; if any of them is illegible or
+  absent, it is a render defect that has been hiding behind an easy scenario since G-030.*
+  **-> G-031, as a criterion rather than a note.**
+
+## Discovered during G-030 round 1 (2026-08-12)
+
+- **A MUTATION PROBE MUST ASSERT THAT THE MUTATION LANDED.** `render-engineer`'s first two
+  probes against the new dependency-cruiser rule **silently failed to mutate and reported
+  green**, and it nearly concluded the rule was vacuous when it was the probe that was. The
+  third asserted the mutation applied (`if (hit !== 1) exit 1`) and the rule bit immediately.
+  **`CLAUDE.md`'s mutation recipe currently mandates `git stash push -u` over `git checkout --`
+  — a rule about RECOVERY — and says nothing about verifying the mutation took effect.**
+  A probe that did not mutate and a check that does not bite are indistinguishable from the
+  outside, and the failure is in the reassuring direction: it reports a gate as broken when the
+  gate is fine, so the "fix" is a change to a working check.
+  **This belongs in `CLAUDE.md` beside the revert mechanism, not in `PARKING.md`** — parked
+  here only until a goal owns the charter edit, because four independent agents reached for the
+  wrong revert mechanism before that rule was written and this is the same shape one step later.
+  **FALSIFICATION TEST**: none needed — it is a procedure, not a hypothesis. What would refute
+  it is a probe design in which a failed mutation cannot report green; if someone produces one,
+  this collapses to "use that design".
+
+- ~~**`packages/content` never says the word "colour"…**~~ **DUPLICATE — MERGED UPWARD, and the
+  duplication was the orchestrator's.** This is the same item as the colour-pointer entry above,
+  which carries the **verbatim schema text**; I parked it a second time under a different heading
+  with a different falsification test, and `render-critic` found both at sweep 2. The surviving
+  entry is the earlier one. **The test recorded here was the better of the two and is merged into
+  it**: add a fifth room type to a scratch copy of `room-types.json` and diff the colours the
+  palette hands the original four — a screenshot diff cannot tell a recolour from a redraw.
+  **Struck rather than deleted (ADR-0008): a reader should see that this file carried one item
+  twice, because "the next goal discharges one and leaves the other standing" is exactly how a
+  parked obligation survives being paid.**
+
+- **THE IDLE GUEST — 61.9% OF OCCUPIED ROOM-TIME HAS NOTHING PENDING (G-027a WATCH).** A belief
+  about how the sim behaves, so it is parked **with its falsification test** (human ruling,
+  2026-08-09).
+
+  **THE BELIEF.** G-027a landed ADR-0017 §4 (a stay is a duration) without §1/§2 (a need is a
+  stock that decays and is drawn down by activity). So a guest works through its engagement
+  needs, meets or fails all of them, and then **has nothing left to want for the rest of its
+  stay** — it sits in its room as furniture. Before this diff that instant was the moment the
+  guest LEFT; it is now roughly two thirds of the time it is in the building, during which the
+  amenity half of the guest loop is disconnected from anything a player can affect. **This is
+  the larger of the two limits G-027a ships and it is what a watcher sees first** — larger than
+  the give-up limit that goal did record (arm 4's zero give-ups, ADR-0017 4(b)).
+
+  **THE BASELINE, so re-measurement has something to compare against.** `watch-stay.ndjson`
+  (`--days 4 --seed 7 --rooms 6 --amenities 2 --arrivals 60 --record-every 10`):
+
+  - **2,083 of 3,366 room-holding guest-frames — 61.9% — have no pending need at all.**
+  - **The longest idle RUN is 96 consecutive frames** (guest 1, ticks 490–1441 = 960 of its
+    1,440), during which its serialised state is byte-identical frame to frame.
+  - The most common hotel state is **`inHotel 9 / engaged 3 / IDLE 6`, 228 times**. *The first
+    draft of this entry wrote `engaged 0` there and `ai-critic` corrected it: the three ARE
+    engaged, and they are the roomless guests using the amenities while they queue. The
+    difference matters in a baseline — "nobody is doing anything" overstates it, and what is
+    true is "nobody who has a room is".* The 61.9% and the 228 were right.
+
+  **THE FALSIFICATION TEST — TWO NUMBERS, BOTH DERIVED AT THE PLAN THAT SHIPS THE STOCK MODEL.**
+  Re-record that exact invocation and recompute both statistics the same way (a room-holding
+  guest-frame is idle when no need of that guest has `progressRemaining > 0 &&
+  patienceRemaining > 0`). Refuted when **the longest idle run exceeds N frames, or the idle
+  share is at or above X.**
+
+  **N AND X ARE NOT CHOSEN HERE, AND THAT IS THE POINT.** The first version of this entry said
+  the share must fall *"substantially"* — an adjective in a pass/fail slot, in a criterion
+  binding a goal owned by a different pair, and one that **cannot fail where it matters**: a
+  model that re-opens one need per stay moves 61.9% to about 55% and somebody calls that
+  substantial. Both numbers are **derived at G-027b's PLAN from the decay rate that goal
+  actually ships** — a need that decays back into wanting every `d` ticks bounds the longest
+  idle run at roughly `d` and the share at roughly the fraction of a stay spent above threshold
+  — **and stated before BUILD**. A number picked today would be an invention about a decay rate
+  nobody has written yet.
+
+  **THE LONGEST RUN IS THE SHARPER OF THE TWO AND IS THE PERCEPTUAL ONE.** A share can fall
+  while every guest still freezes for four hundred ticks in the middle of its stay; a watcher
+  sees the freeze, not the average. `ai-critic` proposed it and it is the better statistic.

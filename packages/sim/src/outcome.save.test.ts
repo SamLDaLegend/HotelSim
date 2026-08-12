@@ -165,6 +165,13 @@ const V7_CONTENT: SimContent = Object.freeze({
     }),
   ]),
   needTypes: Object.freeze([Object.freeze({ id: 'rest', name: 'Rest', satisfyTicks: 30, patienceTicks: 40 })]),
+  // G-027a. Content is what a world is run under NOW, not what it was written under: this
+  // build refuses content whose guests could never leave, so loading v7 bytes today means
+  // choosing a duration for them. The frozen BYTES above are untouched, and the migration is
+  // forbidden to read this (ADR-0008).
+  guestRules: Object.freeze([
+    Object.freeze({ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }),
+  ]),
 });
 const v7Content = bindContent(V7_CONTENT);
 
@@ -183,11 +190,11 @@ describe('the 7 -> 8 step maps three counters onto rows and invents nothing', ()
   it('moves satisfied and unsatisfied onto reasons that say the same thing', () => {
     const world = deserialise(v7Blob());
     expect(world.guestOutcomes.arrived).toBe(11);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(5);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(5);
     // v7's `unsatisfied` documented itself as "patience for a room ran out before one was
     // free". That is not a rename invented here; it is the field's own meaning, written
     // as a reason.
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(3);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(3);
   });
 
   it('REFUSES TO GUESS WHY THE EVICTIONS HAPPENED, which is the whole step', () => {
@@ -296,12 +303,18 @@ describe('the 7 -> 8 step maps three counters onto rows and invents nothing', ()
   });
 
   it('AND THE MIGRATED WORLD GOES ON BEING SIMULATED, which is the point of all of it', () => {
-    // A migrated save that loads and cannot tick is a husk. Guest 1 has 7 ticks of stay
-    // left, so it checks out and pays — landing in the `satisfied` row beside the five that
-    // arrived there from v7, and leaving the unrecorded evictions exactly where they were.
+    // A migrated save that loads and cannot tick is a husk. Guest 1 arrived on tick 880 of a
+    // world that is at 900, and this content gives a stay of 30 ticks, so it checks out on
+    // tick 910 and pays — landing in the `checkedOut` row beside the five that arrived there
+    // from v7, and leaving the unrecorded evictions exactly where they were.
+    //
+    // ELEVEN TICKS RATHER THAN EIGHT SINCE G-027a, and the arithmetic moved rather than the
+    // claim: the stay used to end when the need was met, seven ticks of `restRemaining`
+    // away; it now ends on `arrivedTick + 30`, which is ten ticks from where the bytes say
+    // this world is.
     const loaded = deserialise(v7Blob());
-    const advanced = run(loaded, v7Content, 8, []);
-    expect(departureCountOf(advanced.guestOutcomes, 'satisfied')).toBe(6);
+    const advanced = run(loaded, v7Content, 11, []);
+    expect(departureCountOf(advanced.guestOutcomes, 'checkedOut')).toBe(6);
     expect(departureCountOf(advanced.guestOutcomes, 'evictedCauseUnrecorded')).toBe(2);
     expect(advanced.guests.list).toHaveLength(0);
     expect(advanced.guestOutcomes.arrived).toBe(11);
@@ -368,11 +381,11 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
         needOutcomes: tallyWithoutV9,
         guestOutcomes: {
           arrived: outcomes.arrived,
-          satisfied: count('satisfied'),
+          satisfied: count('checkedOut'),
           // A world with no evictions, deliberately: `evictedCauseUnrecorded` is a REAL
           // difference between the two paths and would break the identity honestly. The
           // test above is what covers the eviction case.
-          unsatisfied: count('gaveUpWaiting'),
+          unsatisfied: count('gaveUp'),
           evicted: 0,
         },
       },
@@ -394,7 +407,7 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
      * below says so rather than leaving it to be rediscovered.
      */
     const world = lived();
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
     expect(evictedGuests(world.guestOutcomes)).toBe(0);
     expect(totalReviews(world.reviewOutcomes)).toBe(0);
     const migrated = deserialise(asV7Bytes(world));
@@ -452,7 +465,7 @@ describe('assertWorldShape inspects the new shape', () => {
       assertWorldShape(withOutcomes({ arrived: 0, departures: [{ reason: 1, count: 0 }] })),
     ).toThrow(/departures\[0\].reason is not a string/);
     expect(() =>
-      assertWorldShape(withOutcomes({ arrived: 0, departures: [{ reason: 'satisfied', count: '0' }] })),
+      assertWorldShape(withOutcomes({ arrived: 0, departures: [{ reason: 'checkedOut', count: '0' }] })),
     ).toThrow(/departures\[0\].count is not a number/);
   });
 

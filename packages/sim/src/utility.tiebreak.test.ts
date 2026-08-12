@@ -82,6 +82,9 @@ const content = bindContent({
     roomType('gamesRoom', ['fun'], FIT, ['machine']),
   ],
   needTypes: [need('food', false), need('fun', false), need('rest', true)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 400 }],
   itemTypes: [itemType('machine', ['food'], FIT)],
 });
 
@@ -181,6 +184,9 @@ describe('fit outranks the id, and the id only ever settles a tie', () => {
       roomType('kiosk', ['food'], 2_500),
     ],
     needTypes: [need('food', false), need('rest', true)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 400 }],
   });
 
   it('a better provider spawned LATER still wins, in both insertion orders', () => {

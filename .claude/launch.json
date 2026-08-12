@@ -7,6 +7,21 @@
       "runtimeArgs": ["tools/viewer/serve.mjs"],
       "port": 8171,
       "url": "http://127.0.0.1:8171"
+    },
+    {
+      "name": "game",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@hotelsim/game",
+        "exec",
+        "vite",
+        "--port",
+        "5180",
+        "--strictPort"
+      ],
+      "port": 5180,
+      "url": "http://localhost:5180"
     }
   ]
 }

@@ -209,6 +209,11 @@ const contentBeforeRecovery = bindContent({
   roomTypes: content.content.roomTypes.map(({ demolitionRefundBasisPoints: _refund, ...rest }) => rest),
   ...(content.content.needTypes === undefined ? {} : { needTypes: content.content.needTypes }),
   ...(content.content.itemTypes === undefined ? {} : { itemTypes: content.content.itemTypes }),
+  // THE GUEST RULES COME ALONG SINCE G-027a, for the reason the item table comes along:
+  // `bindContent` refuses content that declares a lodging need and says nothing about how
+  // long a stay lasts, so a registry assembled by hand has to assemble a WHOLE one. Only the
+  // refund fields are being stripped here; the stay is not what this baseline is about.
+  ...(content.content.guestRules === undefined ? {} : { guestRules: content.content.guestRules }),
 });
 
 function worldFor(
@@ -255,7 +260,7 @@ describe('the baselines these criteria discriminate against', () => {
       expect(
         {
           built: summary.summary.build.built,
-          satisfied: departuresOf(summary.summary, 'satisfied'),
+          satisfied: departuresOf(summary.summary, 'checkedOut'),
           valid: summary.summary.rooms.valid,
           entities: summary.summary.world.entities,
         },
@@ -278,7 +283,7 @@ describe('CRITERION A: a hotel with nothing returns to a hotel that works', () =
   });
 
   it('and at least one guest satisfied, having started with no rooms at all', () => {
-    expect(departuresOf(report, 'satisfied')).toBeGreaterThan(0);
+    expect(departuresOf(report, 'checkedOut')).toBeGreaterThan(0);
     expect(report.money.revenuePennies).toBeGreaterThan(0);
     expect(report.input.rooms).toBe(0);
   });
@@ -324,9 +329,14 @@ describe('CRITERION A: a hotel with nothing returns to a hotel that works', () =
     // checks rots, so the column this file CAN check is now checked. The 1,000-day column
     // stays prose because replaying it here costs 164 seconds — that one is the
     // orchestrator's to confirm at VERIFY, and it is labelled as such.
-    expect(report.rooms.valid).toBe(22);
-    expect(departuresOf(report, 'satisfied')).toBe(1_271);
-    expect(report.build.refused.insufficientFunds).toBe(93);
+    // RE-MEASURED AT G-027a. A stay is 1,440 ticks rather than 480, so this hotel earns
+    // about a third as much per room-day: it builds 12 working rooms where it built 22, and
+    // serves 900 stays where it served 1,271. The CRITERION is unaffected — a hotel that
+    // started with nothing still ends with rooms that work and guests that paid — and these
+    // are the numbers, not the claim.
+    expect(report.rooms.valid).toBe(12);
+    expect(departuresOf(report, 'checkedOut')).toBe(900);
+    expect(report.build.refused.insufficientFunds).toBe(99);
     expect(report.loans.drawn).toBe(0);
   });
 });
@@ -446,7 +456,7 @@ describe('the same invocations through a real process, at a shorter horizon', ()
     // consumer of the document has to. `?? -1` rather than `?? 0` deliberately — a missing
     // row must fail the assertion below, not read as "nobody was satisfied".
     const guests = json['guests'] as { departures: { reason: string; count: number }[] };
-    const satisfied = guests.departures.find((row) => row.reason === 'satisfied')?.count ?? -1;
+    const satisfied = guests.departures.find((row) => row.reason === 'checkedOut')?.count ?? -1;
     expect(rooms.valid).toBeGreaterThan(0);
     expect(satisfied).toBeGreaterThan(0);
   });

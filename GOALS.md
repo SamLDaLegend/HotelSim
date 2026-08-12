@@ -2,40 +2,47 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-023a done. M2.5: 1 of 4 goals (G-030 awaiting WATCH). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v11** (G-023a) · summary **v2** · I2 gate hash **`0da3bbefd62bc863`** · bare
-  `sim:run --ticks 100000 --seed 42 --quiet` **`5ea79c98e4c7868c`**. Both measured at G-023a's
-  commit, both moved because `Guest.at` is hashed state. **The cross-platform clause was executed
-  for the first time at G-022** (one hash on linux, win32 and darwin) and **has not been re-run
-  since these moved** — owed by G-023a's CI run.
-- **`verify` runs TWELVE rows**: six invariants plus six `—` rows that are **not** invariants
-  (`typecheck`, `check:measure`, **`check:tickcost`**, `check:tickcost:proof`,
-  **`check:scaling`**, **`check:stamp`**). Twelve green on one **quiet** run, `win32/12cpu`,
-  2026-08-12. **The ladder is CONTENT**; `budget.mjs` derives I5 from it.
-- **Unreliable: 0 gates / 0 defects — the first zero since G-016.** I4's defect A left the
-  parallel runner for `check:scaling` (G-020c); **defect B is repaired by vitest `^4.1.10`**,
-  whose `createRuntimeRpc` passes `timeout: -1` where 3.2.7 armed a 60s birpc timer (G-022).
-  **`maxWorkers`, `pool: 'forks'` and an RPC-timeout option are all FALSIFIED remedies** —
-  recorded in `vitest.config.ts` so nobody retries them. §2.0: a **THIRD** unreliable gate is
-  a stop condition.
-- **Tripwire** `BOUND 1.4557`, ADR-0015; a SIGNAL bound is pinned to its own derivation and
-  refused beneath the worst observed reading, ADR-0016.
-- **Order**: **M3 PAUSED after G-023a** for **M2.5 — Feel** (ADR-0017/0018, human). Two parallel
-  tracks: **A** G-030 → G-031 (`apps/game`), **B** G-027 → G-028 (`packages/sim`). M3 then resumes
-  at G-023b → G-024/G-025 → G-026, G-026 last in milestone, two critics.
-- **Owed by the human**: **G-030's WATCH** — legibility passed at WATCH #6, the need vector
-  regressed and is being restored · M2.5 exit · M3 exit.
-- **Owed by goals**: **G-023a's CI run — the cross-platform hashes moved and have not been
-  re-checked on three platforms** · M3 exit runs the **running-product falsification test**
-  (`PARKING.md` parked it *"after three M3 goals"*; G-023a's ~1.05× is its first measured input)
-  · every M3 goal needs a green three-OS CI run · every parked item naming M3 answered or
-  re-parked · **M4 blocked on scenario capital** (ADR-0013 §5) · **the M3 instrument-debt goal**
-  now carries I3's unquoted-key hole, the tripwire's unrecharacterised regime, and the 0.05°
-  reserved-hue margin.
+- **Schemas**: save **v12** (G-027a) · summary **3** (G-027a) · I2 gate hash `452920cbe5ded417`.
+  **G-023a AND G-027a both moved the cross-platform hashes and NEITHER has been re-checked on
+  three platforms.** I2's byte-identical-on-every-platform clause is the tripwire the whole design
+  rests on; it has been executed exactly once, at G-022, against values now two goals stale.
+  **Owed by the next push** — `gh` is authenticated as of 2026-08-12, so the matrix is readable.
+- **`verify` runs THIRTEEN rows** (G-030 added `check:ladder`). **TEN GREEN, THREE RED.**
+  The three are `check:tickcost`, its proof row, and `check:scaling` — **three rows, TWO causes,
+  both ADR-0015 configuration refusals, human-ruled and accepted.** Each declines to compare a
+  campaign taken at `arrivalEveryTicks: 32` against a workload now at 96. **No bound was touched.
+  NO INVARIANT IS RED.**
+- **STATE EVERY VERIFY AS "ten green, three ruled red" — NEVER AS A GREEN COUNT ALONE.** §9's
+  shape is *a gate that flakes red teaches people to re-run it*; a gate that is **known** red
+  teaches people to skim the summary. The exception becomes the habit the first time it is not
+  named out loud.
+- **Unreliable: 0 gates / 0 defects** — §2.0's sense, which is flakiness, **not** the ruled reds.
+  §2.0: a **THIRD** unreliable gate is a stop condition. **Tripwire** `BOUND 1.4557` (ADR-0015),
+  bounds pinned to their derivation (ADR-0016). **The ladder is CONTENT.**
+- **The re-take goal carries THREE campaigns**: tickcost, scaling, and `PARKING.md`'s
+  needs-history interval (1.1071..1.2534, n=25) whose two arms are no longer poolable. Sized by
+  `ai-critic`, which checked four other candidates and found none implied.
+- **Order**: **M3 PAUSED after G-023a** for **M2.5 — Feel** (ADR-0017/0018). **2 of 5 done**:
+  **G-030 ✓** (the game is playable), **G-027a ✓** · G-031, G-027b, G-028 pending. **M3 then
+  resumes at G-023b — UNBLOCKED**, because a 1,440-tick stay against 480 ticks of engagement is
+  **960 ticks of slack** where G-023b's plan pass measured **zero**. Then G-024/G-025 → G-026,
+  last in milestone, two critics.
+- **Owed by the human**: M2.5 exit · M3 exit · **a push**, which is the only thing that discharges
+  the hashes above.
+- **Owed by goals**: **G-027b derives N and X at PLAN, before BUILD** — the idle-run bound and
+  idle-share ceiling that G-028's criterion and `PARKING.md`'s hypothesis both rest on; baseline
+  **61.9% of room-holding guest-frames idle, longest run 96 frames = 960 of 1,440 ticks** · **the
+  M3 instrument-debt goal** carries the three campaigns, I3's unquoted-key hole and the 0.05°
+  reserved-hue margin · M3 exit runs the **running-product falsification test** · every M3 goal
+  needs a green three-OS CI run · **M4 blocked on scenario capital** (ADR-0013 §5).
+- **THE DEFECT THIS PROJECT PRODUCED FOUR TIMES IN ONE GOAL: the prose claimed more than the
+  predicate** — and every instance was written by someone who had just demonstrated they
+  understood the rule; the last acquired its overclaim **while being repaired for the opposite
+  one**. **Repair by assertion, never by a better sentence.**
 - **Open contradictions**: G-012's criterion pins a content property any provider can flip ·
-  `--rooms N` contaminates every balance sweep · seeds inert until M4. **Not the ladder, not
-  I4 — both settled.**
+  `--rooms N` contaminates every balance sweep · seeds inert until M4.
 
 ---
 
@@ -268,7 +275,61 @@ of the archetype work. **The structural admission is not deferred**: G-027 must 
 optional and tolerance a parameter the model reads, which costs a paragraph rather than a goal.
 
 ## G-030 — The hotel is on screen
-Status: pending — **opens `apps/game`, superseding `HOTELSIM.md:66` (ADR-0018)**
+Status: **DRY at 3/3, awaiting the ADR-0019 join before commit.** 3 sweeps (**9 findings**:
+  4 MAJOR + 4 MINOR + 3 NIT) plus 1 verification that did **not** convert. **WATCH passed at
+  the third asking** (#5 failed, #6 partial, #7 *"It reads"*). Opens `apps/game` after 23
+  goals, superseding `HOTELSIM.md:66` (ADR-0018).
+
+  **THE §5.5 PREDICTION, SCORED — AND THE HONEST SCORE IS NOT THE FLATTERING ONE.**
+  The builder offered a seam (drawing / timing), recommended declining, and I declined with
+  its prediction recorded. Outcome:
+  - **(i) at least one BLOCKER or MAJOR in the timing class — WRONG.** None at any sweep, held
+    on **reconstruction rather than reading**: `render-critic` added the reference arm the
+    builder's measurement lacked (three drivers agreeing cannot detect an offset shared by all
+    three) and drove seven arms — 30/60/144/61.7fps, a jittered profile, a 10-minute stall
+    exercising the backlog clamp, and headless `run()` — all to one hash. One wall-clock read
+    exists in the whole layer; no assignment into sim state exists anywhere in `apps/game`.
+  - **(ii) does not close DRY at 1/3 — CONFIRMED, at full cost.** 3/3 sweeps, closing on a
+    ninth finding.
+  - **(iii) diff exceeds ~1,200 lines — CONFIRMED** at 2,105+.
+
+  **AND THE SEAM THAT WOULD HAVE PAID WAS NOT THE ONE ON THE TABLE. FIVE OF THE NINE FINDINGS
+  CAME FROM `check:ladder` AND ITS PROSE** — the parked instrument this goal absorbed as an
+  obligation falling due — and they consumed most of three sweeps. That seam existed,
+  **gate-versus-renderer, and nobody offered it, me included.** The builder's generalisation is
+  the durable output of this goal and is recorded in its own words:
+
+  > **"A builder proposing a seam should ask what the goal is CARRYING, not only what it is
+  > BUILDING. The parked instrument was named in the goal block from the start and I read it as
+  > a task rather than as a seam."**
+
+  §5.5 currently asks a builder what it is *building*. This says the question must also be
+  asked of everything the goal *inherits*.
+
+  **THE DEFECT CLASS THIS GOAL PRODUCED THREE TIMES, IN THREE DIFFERENT CLOTHES**: the gate's
+  prose claiming more than its predicate · three escapes claimed parked when one was not · and
+  the retracted phrase *"conservative in the safe direction"* surviving in `HOTELSIM.md:70`,
+  **nineteen words from the sentence retracting it**, where `CLAUDE.md`'s precedence rule would
+  have resolved the disagreement **in favour of the retracted reading**. Each time the general
+  rule was written down correctly and the instance beside it was missed. The builder's account,
+  quoted because it is exact: *"I wrote the correction into the gate, wrote the general lesson
+  into the charter paragraph, and left the specific instance of that lesson standing in the
+  same paragraph."* **It is a reading failure, not a writing one** — the paragraph was edited by
+  someone who had just proved they understood the rule.
+
+  **THE GATE WAS BLIND TO ITS OWN SUBJECT WHEN THE EXPRESSION WRAPPED.**
+  `STATEMENT_BREAK_SOURCE` counted a newline as a statement boundary, so `ladder[i] / ladder[0]`
+  split across two lines — this repo's house style, with no formatter to prevent it — reported
+  clean. Demonstrated `wrapped 0 · oneline 1`. **The failure the human's M2-exit ruling names,
+  in the gate shipped to close a parked instrument**, and it shipped because the proof had no
+  multi-line arm.
+
+  **AND THE FIX WAS DECLINED IN THE RIGHT DIRECTION.** Both available tightenings of the alias
+  predicate buy a **silent miss** to remove a **loud report** — one of them killing the exact
+  ternary at `main.ts:135` that sweep 1 raised. The predicate stays wide, the false positives
+  are executable arms, and the ordering is now stated in the gate: *a false report costs a
+  reader five minutes and arrives with a file, a line and a message; a silent miss certifies a
+  clean tree forever and nobody looks, because nothing asked them to.*
 Milestone: M2.5
 Owner pair: render-engineer / render-critic
 Statement: A live simulation is drawn as a side-on cross-section — rooms, items and guests as
@@ -379,35 +440,99 @@ Exit criteria:
 Out of scope: item placement (M6); pricing (M4); save/load UI (M5).
 Critique rounds used: 0/3
 
-## G-027 — Needs are stocks, and a stay ends by checkout or by dissatisfaction
-Status: pending — **the largest behaviour change since M2.** ADR-0017.
+## G-027 — SPLIT at PLAN, 2026-08-12. Seam ε, offered by the builder and taken (§5.5).
+
+Cut at **the stay clock** against **the need's shape**. Each half owns **exactly one
+`SAVE_SCHEMA_VERSION` bump and touches the other's tables not at all** — the property that made
+G-023's split right. The numbers split the same way, into two independently-sourced groups, so a
+critic sweeping the derivations never has to hold both frames at once.
+
+**And G-027a alone unblocked G-023b**: a 1,440-tick stay against 480 ticks of engagement work is
+**960 ticks of slack**, which is the quantity ADR-0017 exists to create and the reason M3 stopped.
+
+## G-027a — A stay has a duration, and nothing ends because a need finished
+Status: **done, DRY at 3/3.** 3 sweeps (**1 BLOCKER + 3 MAJOR + 7 MINOR at plan pass and sweeps**)
+  plus 1 verification that did not convert. Save **v12**, summary **3**.
+Milestone: M2.5
+Owner pair: ai-engineer / ai-critic
+Statement: Departure stops reading need state and reads `arrivedTick + stayDurationTicks`.
+  `NeedState` is unchanged — needs are still countdowns.
+Exit criteria: *(as amended at PLAN — four of the original five were vacuous or wrong)*
+  - `pnpm exec vitest run stay` — **not `stock`**; nothing stock-shaped ships here, and **no file
+    matched `stock`, so the original criterion passed green against ZERO tests.** One test asserts
+    the file count.
+  - **NO DEPARTURE READS NEED STATE TO DECIDE THE STAY IS OVER** — source scan over the branch.
+  - **FOUR ARMS, computed**: well-provisioned → `checkedOut > 0`, `gaveUp` **0** · starved of rooms
+    → `checkedOut` **0**, `gaveUp > 0` · contended → both · **rooms and no amenities → `gaveUp` 0**.
+    That last arm exists to record that **ADR-0017 4(b) is NOT implemented here.**
+  - **`stayDurationTicks = 1440` derived and EXECUTED** — spans exactly one settlement boundary,
+    counted by stepping a world rather than asserted against `TICKS_PER_DAY`.
+  - **`room-types.json` and `economy.json` byte-identical**, asserted from the shipped bytes.
+  - Save **v12**, v1 fixture zero-line diff walking 1→12, `SAVE_V1_CONTENT_FINGERPRINT` unmoved.
+    **Summary 3** — the reason strings are what a consumer matches on, so the rename bumps it.
+  - the Era-A reservation-leak coverage **re-provided by a named test** (retirement conditional).
+Out of scope: the stock model, `NeedState`, optional lodging, ADR-0017 4(b), per-need numbers.
+Critique rounds used: 3/3 — DRY.
+
+  **THE GOAL'S DEFINING DEFECT CLASS, FOUR TIMES IN ONE GOAL: THE PROSE CLAIMED MORE THAN THE
+  PREDICATE.** `countStuckGuests`'s new paragraph named as its motivating mutation the one case
+  its predicate could not see · an exemption "checked rather than asserted" whose two reads were
+  satisfied by **a block comment and a `node:fs` import** · a tautology (`Object.keys(...).filter`
+  can only be 0 or 1) placed as the closer of the argument it was meant to close · and ADR-0020's
+  sentence, **which acquired an overclaim while being repaired for the opposite one.**
+  **Every one was written by someone who had just demonstrated they understood the rule.** Each
+  was repaired by an assertion rather than by a better sentence, which is the only repair that
+  cannot repeat the class.
+
+  **THE ECONOMY MOVED AS A SIDE EFFECT AND NO PRICE WAS TOUCHED.** Margin 10.2:1 → **3.63:1**
+  realised (not the ~2.38:1 the orchestrator predicted — the stay clock runs from **arrival**, so
+  a queued guest holds its room for less than the full duration and a busy hotel fits up to 1.14
+  stays per room-day). **The cheapest green was raising `nightlyRatePence`, which is M4's and is
+  §9's stop condition**, so the byte-identical guard is the goal's most important criterion —
+  and it now pins construction cost and demolition refund too, both **named levers** in
+  `PARKING.md`, proved to bite by mutation including a **sum-preserving reshuffle** the positional
+  assertions catch and a multiset pin would wave through.
+
+## G-027b — A need is a stock
+Status: pending — **blocked on G-027a.** ADR-0017 §1/§2.
 Milestone: M2.5
 Owner pair: ai-engineer / ai-critic
 Statement: A need is a level that decays over time and is refilled by being served; it is never
-  "done". Activity draws a stock down. Rest refills only in the guest's own room. A stay ends
-  two ways and only two: checkout after the stay duration, or the guest giving up.
+  "done". Activity draws a stock down. Rest refills only in the guest's own room. **Lodging
+  becomes structurally optional and tolerance a parameter the model reads.**
 Exit criteria:
-  - `pnpm exec vitest run stock` (all green)
-  - **NO NEED IS TERMINAL.** `progressRemaining`'s zero-is-terminal semantics are gone, asserted
-    by a case that serves a need to full and then watches it decay again.
-  - **BOTH TERMINATORS FIRE IN ONE RUN, AND NEITHER IS THE ONLY ONE** — a run reporting
-    non-zero checkouts AND non-zero give-ups, computed by the test. A build in which one is
-    always zero has not implemented two terminators.
-  - **THE FOUR NUMBERS ARE DERIVED, NOT TUNED** — decay rate, refill rate, dissatisfaction
-    threshold, stay duration. Each traces to a stated requirement (§2.1) and the derivation is
-    **executed**, not prose. **This is the goal's real risk**: the old values were fitted to a
-    model that will no longer exist, so there is no baseline to inherit and every number is a
-    fresh invention unless it is sourced.
-  - **THE MODEL ADMITS WHAT IT DOES NOT YET CONTAIN**: lodging is optional and tolerance is a
-    parameter read from content, both asserted by a test, **with no archetype content shipped**.
-  - a WATCH entry — and by then there is a playable surface to watch it in
-  - all §2 gates green, THIRTEEN rows (G-030 added `check:ladder`), and CI green on three platforms
-Out of scope: archetypes and their content (M6); per-night charging (M4); reviews (G-028).
+  - `pnpm exec vitest run stock` — **and the files it matches are named in this block before
+    BUILD**, because the identical criterion on G-027a passed green against zero tests.
+  - **NO NEED IS TERMINAL**, asserted by a case that serves a need to full then watches it decay.
+  - **ADR-0017 4(b) — the RESIDENT guest that leaves because it is dissatisfied — lands here**,
+    with the arm that proves it: the "rooms, no amenities" configuration that reports **zero**
+    give-ups at G-027a must report **non-zero** here.
+  - **LODGING IS OPTIONAL**, and it is **four guards, not a paragraph** (ADR-0018 §6 mispriced
+    it): `countStuckGuests` (`guests.ts:587`), `applyCommand` (`tick.ts:422`), `stepGuests`
+    (`guests.ts:1426`), `lodgingRoomTypeOf` (`report.ts:427`). **G-015's one-row law becomes
+    content-conditioned**: `lodgingNeedOf(content) !== undefined ⇒ revenue === checkedOut`,
+    else `revenue === 0`.
+  - **EVERY CONTENT NUMBER THE STOCK MODEL READS traces to a stated requirement or lies inside
+    an executed box** — there are `2 × needTypes + 2`, **not four**, so a criterion naming four
+    can be satisfied while an eighth number nobody counted is invented.
+  - **N AND X ARE DERIVED AT THIS GOAL'S PLAN AND STATED BEFORE BUILD** — the idle-run bound and
+    the idle-share ceiling that G-028's criterion and `PARKING.md`'s hypothesis both depend on.
+    **A need that decays back into wanting every `d` ticks bounds the longest idle run at roughly
+    `d`**, so both are derivable from the decay rate this goal ships. **Neither may be chosen.**
+    *(Routed here at G-027a REFLECT: they were undischargeable at the point of discharge and not
+    yet owed at the point of derivation, so the failure mode was late discovery at G-028.)*
+  - the baseline to beat, measured at G-027a: **61.9% of room-holding guest-frames idle**
+    (2,083 of 3,366), longest run **96 consecutive frames = 960 of one guest's 1,440 ticks**.
+  - a WATCH entry · thirteen rows · CI green on three platforms
+Out of scope: archetypes (M6); per-night charging (M4); reviews and the outcome table (G-028).
 Critique rounds used: 0/3
 
-  **WHY THE TERMINATOR CANNOT BE A SEPARATE GOAL.** If a need never completes and departure
-  still keys off completion, no guest ever leaves, guests accumulate without bound and the
-  simulation does not run. The terminator must land in the goal that removes completion.
+  **WHY THE TERMINATOR COULD NOT WAIT FOR THIS GOAL.** If a need never completes and departure
+  still keys off completion, no guest ever leaves. That is why G-027a went first.
+
+  **AND WHY THIS ONE IS STILL THE HARDER HALF**: `R1` lands here in full — `hysteresis.bound.test.ts`
+  computes the abandon margin's bound from `patienceTicks` and `satisfyTicks` as a **countdown**
+  model, and **will keep passing while both fields have changed meaning.** Re-derive it here.
 
 ## G-028 — Outcomes and reviews are stock-shaped
 Status: pending
@@ -422,6 +547,27 @@ Exit criteria:
     re-expression, including AXIS 2's three-point amenity ladder, recomputed rather than copied
   - **THE DISTRIBUTION IS NOT A POINT MASS**: a stated minimum share per named score, which is
     the form G-019 had to be rewritten into after its original was discharged by two guests
+  - **THE IDLE GUEST IS MEASURED AGAINST G-027a's OWN RECORDING — TWO NUMBERS, BOTH DERIVED
+    BEFORE BUILD.** Carried here from `PARKING.md` rather than left to be rediscovered at WATCH.
+    G-027a landed ADR-0017 §4 without §1/§2, so **2,083 of 3,366 room-holding guest-frames —
+    61.9% — have no pending need at all**, and **the longest idle RUN is 96 consecutive frames**
+    (guest 1, ticks 490–1441 = 960 of its 1,440, byte-identical throughout). A guest finishes
+    its amenities and becomes furniture for the rest of its stay. **This is the larger of the
+    two limits G-027a ships and it is what a watcher sees first.**
+
+    Re-record `--days 4 --seed 7 --rooms 6 --amenities 2 --arrivals 60 --record-every 10` and
+    recompute both the same way. **REFUTED WHEN the longest idle run exceeds N frames, OR the
+    idle share is at or above X.**
+
+    **N AND X ARE AN OBLIGATION ON THE PLAN THAT SHIPS THE STOCK MODEL (G-027b), DERIVED FROM
+    THE DECAY RATE IT ACTUALLY SHIPS AND STATED BEFORE BUILD.** They are deliberately not
+    chosen here: this criterion first read *"if it does not fall substantially"*, which is an
+    adjective in a pass/fail slot (`CLAUDE.md`: exit criteria are commands, not adjectives) and
+    could not fail where it matters — a model re-opening one need per stay moves 61.9% to about
+    55% and somebody calls that substantial. **THE LONGEST RUN IS THE SHARPER AND MORE
+    PERCEPTUAL OF THE TWO**: a share can fall while every guest still freezes for hundreds of
+    ticks mid-stay, and a watcher sees the freeze rather than the average. **This criterion is
+    not dischargeable until N and X exist.**
   - summary schema bump if the shape changes, with the migration ADR-0006 requires
   - all §2 gates green, THIRTEEN rows (G-030 added `check:ladder`), and CI green on three platforms
 Out of scope: reputation and demand reading the review (M4).

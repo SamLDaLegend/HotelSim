@@ -192,7 +192,23 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   is stronger here than a hash can be on its own: a guest's position is written from
     //   what the guest already holds, so nothing in the simulation reads it and nothing it
     //   decides can change.
-    expect(hashState(plain)).toBe('13cbef2f4b4e199b');
+    // MOVED AT G-027a, and this is the first cause since G-023a that is a BEHAVIOUR change
+    // MOVED TWICE INSIDE G-027a, and the two causes are different and both stated:
+    //
+    //   `13cbef2f4b4e199b` -> `362eb3575c4a25a3`   ADR-0017 replaced the terminator, so this
+    //                                              workload's guests leave and pay at
+    //                                              different ticks. A BEHAVIOUR change, and
+    //                                              the first cause since G-023a that is not
+    //                                              a state-shape one.
+    //   `362eb3575c4a25a3` -> `a9fa0b1054f2b5e4`   ADR-0021 moved `ARRIVAL_EVERY_TICKS` 32 ->
+    //                                              96 to restore the benchmark's calibrated
+    //                                              occupancy of fifteen concurrent guests,
+    //                                              which the first change had silently
+    //                                              redefined to forty-five. A WORKLOAD change
+    //                                              — this file's own reason 3 — and exactly
+    //                                              the kind its header says must be
+    //                                              deliberate rather than discovered.
+    expect(hashState(plain)).toBe('a9fa0b1054f2b5e4');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -200,8 +216,15 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // facts a reader can re-derive: if the hash moves and these hold, something changed in
     // state that outcomes do not cover; if these move too, the simulation changed.
     expect(plain.guestOutcomes.arrived).toBe(EXPECTED_ARRIVALS);
-    expect(plain.guestOutcomes.arrived).toBe(225);
-    expect(departureCountOf(plain.guestOutcomes, 'satisfied')).toBe(210);
+    // 75 WHERE IT WAS 225: a third of the arrivals, because ADR-0021 tripled the cadence to
+    // hold the CONCURRENT population at the fifteen this benchmark was calibrated for.
+    // `EXPECTED_ARRIVALS` is derived from `ARRIVAL_EVERY_TICKS` and re-derived itself; this
+    // line is the arithmetic written out so a reader can check the derivation rather than
+    // trust it.
+    expect(plain.guestOutcomes.arrived).toBe(75);
+    // 60 of those 75 complete a stay inside five simulated days; the other 15 are the ones
+    // still in the hotel at the end, which is the steady-state occupancy by construction.
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(60);
     expect(evictedGuests(plain.guestOutcomes)).toBe(0);
     expect(plain.needOutcomes).toHaveLength(4);
     // AND THE ABANDONMENT COUNT IS HAND-CHECKED TOO (G-014b), because it is now part of what
@@ -209,7 +232,13 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // starved of providers, and a guest can only abandon towards a FREE one. If this ever
     // climbs, the hash above moved because guests started changing their minds rather than
     // because a content table did.
-    expect(plain.needOutcomes.reduce((total, row) => total + row.abandoned, 0)).toBe(1);
+    // ONE -> TWENTY-ONE, and it is not a thrash: the CONCURRENT population is the same
+    // fifteen it was, and each guest now lives 1,440 ticks rather than 480, so it re-scores
+    // its vector three times as often before leaving. Per guest-lifetime this is the same
+    // rate of mind-changing spread over three times the stay. If it ever climbs without the
+    // stay moving, the hash above moved because guests started dithering rather than because
+    // a content table did — which is what this assertion is for.
+    expect(plain.needOutcomes.reduce((total, row) => total + row.abandoned, 0)).toBe(21);
   });
 
   it('and every guest is accounted for', () => {
@@ -252,7 +281,9 @@ describe('the same workload with the player churning the building', () => {
     // hashed state. Was `8773494528412341` at G-019. The sharp control holds for the fifth
     // time: 19 evictions, unchanged, in a goal that gives the evicted guest a position to be
     // evicted FROM.
-    expect(hashState(churn)).toBe('5536dd68a2cfe25c');
+    // Moved at G-027a with the plain arm, twice and for the same two causes it lists.
+    // `5536dd68a2cfe25c` -> `e35df7062bea43aa` -> `a8976e5fe2d15acb`.
+    expect(hashState(churn)).toBe('a8976e5fe2d15acb');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
@@ -262,13 +293,23 @@ describe('the same workload with the player churning the building', () => {
   });
 
   it('and G-015 says WHICH KIND, which this workload could not report before', () => {
-    // NEW INFORMATION FROM AN UNCHANGED RUN, and the point of the whole goal in one
-    // assertion: 19 evictions were 19 evictions until now. ALL NINETEEN ARE THE SAME KIND —
-    // guests whose room was demolished under them — and NONE is a guest left in a room that
-    // stopped working. That is a fact about this workload, and it is worth pinning precisely
-    // because it is invisible without the split: `--build 240` packs the player's rooms on
-    // floor 1 above a 60-room ground floor that `--demolish 360` never eats through in five
-    // days, so nothing here ever loses its support while occupied.
+    // ============================================================================
+    // NINETEEN AND ZERO, UNCHANGED ACROSS G-027a — AND THE ROUTE BACK TO IT IS THE EVIDENCE.
+    //
+    // The split held at 19 / 0 for five goals. It went to 19 / 16 the moment ADR-0017 tripled
+    // the stay: at an arrival every 32 ticks the hotel then held forty-five guests instead of
+    // fifteen, so a room on floor 1 was far more likely to be OCCUPIED on the tick
+    // `--demolish 360` took the ground-floor room beneath it away. The demolition rate did
+    // not change; the occupancy it landed on did.
+    //
+    // ADR-0021 restored the occupancy to fifteen, and the sixteen went away exactly. **That
+    // is an independent confirmation of the mechanism the tick-cost ruling was made on**,
+    // from a different instrument, measured rather than argued: a counter that only moves
+    // with the concurrent population, moving back when the population does.
+    //
+    // The split earned its keep twice over. A single `evicted` counter would have gone 19 ->
+    // 35 -> 19 and said nothing about which half did it.
+    // ============================================================================
     expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(19);
     expect(departureCountOf(churn.guestOutcomes, 'evictedRoomUnusable')).toBe(0);
     // Only a migration writes the third, so a run that never loaded a save must read zero.

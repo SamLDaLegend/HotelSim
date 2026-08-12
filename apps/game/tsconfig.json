@@ -4,5 +4,6 @@
     "lib": ["ES2022", "DOM"],
     "types": []
   },
-  "include": ["src/**/*.ts"]
+  "//": "vite.config.ts is included because `check-ladder.mjs` scans the whole of apps/game, so a file the gate judges must be a file the compiler judges too (G-030).",
+  "include": ["src/**/*.ts", "vite.config.ts"]
 }

@@ -69,6 +69,9 @@ const content = bindContent({
     },
   ],
   needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 30, patienceTicks: 10 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
@@ -96,8 +99,8 @@ describe('a guest will not take an invalid room', () => {
     expect(countInvalidRooms(world.entities, BOUNDS, content).unsupported).toBe(1);
     expect(guestsInOrder(world.guests)[0]?.roomEntityId).toBe(0);
     world = run(world, content, 20);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(0);
     // And it paid nothing, because it never had what it came for.
     expect(balanceOf(world.ledger)).toBe(0);
   });
@@ -109,7 +112,7 @@ describe('a guest will not take an invalid room', () => {
     ]);
     expect(countInvalidRooms(world.entities, BOUNDS, content).missingItem).toBe(1);
     world = run(world, content, 20);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
   });
 
   it('waits, and gives up, when the only room is sealed in by its neighbours', () => {
@@ -121,7 +124,7 @@ describe('a guest will not take an invalid room', () => {
     ]);
     expect(countInvalidRooms(world.entities, BOUNDS, content).noDoor).toBe(1);
     world = run(world, content, 20);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
   });
 
   it('IS NOT SERVED IN A SKY TOWER, however many storeys it has', () => {
@@ -143,8 +146,8 @@ describe('a guest will not take an invalid room', () => {
       { tick: world.tick, command: arrive() },
       { tick: world.tick + 1, command: arrive() },
     ]);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(0);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(2);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(2);
     // No stay was paid for. Compared against the seeded cash rather than against zero,
     // because `worldWithCash` books its float under the same reason a stay does.
     expect(sumByReason(world.ledger, 'roomRevenue')).toBe(cash);
@@ -159,7 +162,7 @@ describe('a guest will not take an invalid room', () => {
     let world = stepTick(worldWithCash(cash), content, builds);
     expect(countInvalidRooms(world.entities, BOUNDS, content).unsupported).toBe(0);
     world = run(world, content, 60, [{ tick: world.tick, command: arrive() }]);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
   });
 
   it('is evicted from every storey when the foot of the tower is demolished', () => {
@@ -220,7 +223,7 @@ describe('a guest will not take an invalid room', () => {
     });
     expect(guestsInOrder(world.guests)[0]?.roomEntityId).toBe(2);
     world = run(world, content, 40);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
     expect(sumByReason(world.ledger, 'roomRevenue')).toBe(RATE);
   });
 });
@@ -289,7 +292,7 @@ describe('a valid room can go invalid under a guest', () => {
     world = stepTick(world, content, [build('cupboard', cell(GROUND_FLOOR, 20))]);
     expect(evictedGuests(world.guestOutcomes)).toBe(0);
     world = run(world, content, 40);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
   });
 });
 

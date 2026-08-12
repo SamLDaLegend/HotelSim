@@ -145,7 +145,13 @@ describe('the bound MOVES with content, which is what makes it a derivation', ()
         { id: 'roomA', name: 'roomA', capacity: 2, nightlyRatePence: 0, provides: ['aaa'], requires: [] },
       ],
       needTypes,
-      guestRules: [{ id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 6_000 }],
+      // `stayDurationTicks` since G-027a: content declaring a lodging need must say how long
+      // a stay lasts. 400 is the lodging need's own satisfyTicks in every table below and
+      // clears the engagement track; nothing here ticks a world, so it is only what lets the
+      // content bind.
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 6_000, stayDurationTicks: 400 },
+      ],
     });
   const need = (id: string, role: 'lodging' | 'engagement', satisfyTicks: number, patienceTicks: number): NeedTypeData => ({
     id,

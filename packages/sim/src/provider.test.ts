@@ -68,6 +68,10 @@ const content = bindContent({
     roomType('lounge', [], ['chair']),
   ],
   needTypes: [need('rest', true), need('comfort', false), need('food', false), need('fun', false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave. The floor
+  // is max(10 lodging, 3 x 10 engagement) = 30.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
   itemTypes: [itemType('bed', []), itemType('chair', ['comfort']), itemType('machine', ['food'])],
 });
 

@@ -55,6 +55,9 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
 const withExtras = (extras: Partial<SimContent>): SimContent => ({
   roomTypes: [roomType('bedroom', ['rest'], [])],
   needTypes: [need('rest', true)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
   itemTypes: [],
   ...extras,
 });
@@ -207,11 +210,17 @@ describe('an item’s provides is validated like a room type’s (G-013)', () =>
     const absent = bindContent({
       roomTypes: [roomType('bedroom', ['rest'], ['armChair'])],
       needTypes: [need('rest', true)],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
       itemTypes: [{ id: 'armChair', name: 'armChair' }],
     });
     const empty = bindContent({
       roomTypes: [roomType('bedroom', ['rest'], ['armChair'])],
       needTypes: [need('rest', true)],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
       itemTypes: [itemType('armChair', [])],
     });
     expect(absent.fingerprint).not.toBe(empty.fingerprint);
@@ -223,6 +232,8 @@ describe('the lookups agree about what a thing offers (G-013)', () => {
   const content = bindContent({
     roomTypes: [roomType('bedroom', ['rest'], ['bed']), roomType('gamesRoom', ['fun'], ['vendingMachine'])],
     needTypes: [need('rest', true), need('fun', false), need('food', false)],
+    // G-027a: max(10 lodging, 10 + 10 engagement) = 20, and this clears it.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
     itemTypes: [itemType('bed', []), itemType('vendingMachine', ['food'])],
   });
 

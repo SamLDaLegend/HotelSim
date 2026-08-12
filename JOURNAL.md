@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-023a done. M2.5: 1 of 4 goals (G-030 awaiting WATCH). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v10** · summary **v2** · I2 `ece843af1efea843` · **unreliable 0 gates /
   0 defects, the first zero since G-016** · `pnpm verify` is **twelve** rows, six of them `—`
@@ -302,3 +302,59 @@ finished — hostage to an outage on a track it shares no file with. Isolated wi
 `git stash push -u`, 111 files hashed before and compared after. **ADR-0019's cost, stated:
 "tracks join at VERIFY" means any failure on either track blocks both, including failures that
 are nobody's code.**
+
+---
+
+## 2026-08-12 — WATCH #7 (human): "It reads."
+
+**G-030's perceptual criterion is DISCHARGED**, at the third asking. Three verdicts, one goal:
+
+| | verdict | outcome |
+|---|---|---|
+| #5 | *"Reads quite difficult… lots of washout of bars"* | **failed** — palette, need bars and layout all named |
+| #6 | *"Reads much better now. Though I note I can only see one need at a time"* | legibility **passed**, need vector **regressed** |
+| #7 | *"It reads"* | **passed** |
+
+**THE RESTORATION SETTLED THE QUESTION BY MEASUREMENT, AND THE ANSWER WAS THE OPPOSITE OF THE
+ONE SHIPPED.** Adjacent columns are what a smudge is made of — non-adjacent pairs are further
+apart by construction — so the worst **adjacent** pair is the number:
+
+| | worst adjacent pair |
+|---|---|
+| need colours the vector was removed under | **1.019 : 1** |
+| need colours it is restored against | **1.814 / 1.823 / 1.840 : 1** |
+
+**The constraint was chromatic, not geometric.** The fix was the vector back at a slightly larger
+size — not a new mechanism, not less information. And it is a staircase for a structural reason:
+the ladder assigns luminance by rank in ascending id order and the vector draws in ascending id
+order, so **every column is a step brighter than its neighbour**.
+
+**Cross-checked against the orchestrator's own independent measurement**: the need role's worst
+pair *overall* was measured at **1.814**, which is one of the adjacent pairs — as it must be for
+a monotone ladder. So the adjacent framing is not a friendlier subset chosen after the fact; it
+is the same worst case, correctly identified.
+
+### THE DURABLE RULE THIS ROUND PRODUCED
+
+> **When one pass changes both a signal and the medium carrying it, the change to the signal
+> cannot be justified by observations taken through the unrepaired medium. Repair the medium,
+> re-observe, then decide.**
+
+The builder repaired the palette and reduced the need vector **in the same pass**, and justified
+the reduction with *"it was not readable from the smudge either"* — **a claim about the human's
+perception, made without asking them, inside the goal whose entire purpose is to stop doing
+that.** ADR-0013 exists for exactly that failure. **Neither the critic nor the orchestrator
+caught it; the human caught it by noticing something missing.**
+
+### A FOURTH DEFECT, FOUND ONLY BY READING THE FILE OFF DISK
+
+`scene.ts` still computed guest pitch as `bodyWidth + 4`, under a comment asserting *"the need
+vector is ONE bar the width of the body"* — false the moment the vector returned, and a
+body-driven pitch smears adjacent vectors into each other, which is `viewer.js:360-372`'s finding
+verbatim. **Found because the builder re-read the bytes rather than trusting its memory of a file
+it had been killed out of twice.** `CLAUDE.md`'s rule, paying off in a place it was not written
+for.
+
+**NOT YET DONE.** The WATCH passing is not the goal closing: **no critic has swept this diff.**
+§7.1 says a goal closes only on DRY, and a perceptual verdict and a critique answer different
+questions. `render-critic` round 1 is running.

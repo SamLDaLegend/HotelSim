@@ -128,11 +128,11 @@ describe('and it reaches rooms that do work', () => {
     // Without this, every assertion above could hold in a harness where the guest loop
     // had stopped working entirely — and the I2 hash would be a stable, meaningless
     // number. This is the half G-004's lesson is about.
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
   });
 
   it('also turns guests away, because most of the hotel does not work', () => {
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
   });
 
   it('evicts guests, so the invalidated-under-a-guest path is inside the gate too', () => {

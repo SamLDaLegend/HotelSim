@@ -76,7 +76,13 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
 const V9_CONTENT: SimContent = {
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food']), roomType('gamesRoom', ['fun'])],
   needTypes: [need('food', false), need('fun', false), need('rest', true)],
-  guestRules: [{ id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 3_000 }],
+  // `stayDurationTicks` added at G-027a: this build refuses content whose guests could never
+  // leave, so loading v8 bytes today means choosing a duration. The frozen bytes below are
+  // untouched. 40 is the lodging need's own satisfyTicks and clears the 12-tick engagement
+  // track.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 3_000, stayDurationTicks: 40 },
+  ],
 };
 const content = bindContent(V9_CONTENT);
 
@@ -243,6 +249,31 @@ describe('a migrated v8 world and a v9 world with the same history are the SAME 
     return run(world, content, 60, [{ tick: 1, command: { kind: 'guestArrives' } }]);
   };
 
+
+/**
+ * ONE OUTCOME TABLE, RE-LABELLED THE WAY EVERY SAVE OLDER THAN v12 SPELLED IT (G-027a).
+ *
+ * A FROZEN LIST, NOT `GUEST_DEPARTURE_REASONS`. It describes an era that is over, so it must
+ * not track the live union (ADR-0008 (2)) — the two agree on three of five names today and
+ * are free to diverge further. Used to write a world lived forward under THIS build back into
+ * an older SHAPE, which is the same job stripping a newer field does.
+ */
+const PRE_V12_DEPARTURE_LABELS = [
+  'satisfied',
+  'gaveUpWaiting',
+  'evictedRoomGone',
+  'evictedRoomUnusable',
+  'evictedCauseUnrecorded',
+] as const;
+
+const v11Labels = (world: Record<string, unknown>): unknown => {
+  const outcomes = world['guestOutcomes'] as { arrived: number; departures: { reason: string; count: number }[] };
+  return {
+    ...outcomes,
+    departures: outcomes.departures.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
+  };
+};
+
   /** The same world with the two v9 fields stripped off, stamped as v8. */
   const asV8Bytes = (world: World): string => {
     const json = JSON.parse(JSON.stringify(world)) as Record<string, unknown>;
@@ -258,6 +289,10 @@ describe('a migrated v8 world and a v9 world with the same history are the SAME 
       schemaVersion: 8,
       world: {
         ...withoutV10,
+        // AND THE v12 ROW LABELS COME OFF (G-027a), for the reason `reviewOutcomes` does: two
+        // of the five departure reasons are spelled differently since ADR-0017, so a table
+        // carrying today's spellings is not a v8 table and `migrateV11ToV12` refuses it.
+        guestOutcomes: v11Labels(withoutV10),
         guests: {
           ...guests,
           list: guests.list.map((guest) => ({
@@ -300,7 +335,7 @@ describe('a migrated v8 world and a v9 world with the same history are the SAME 
     // survive. This one carries numbers.
     const busy = bindContent({
       ...V9_CONTENT,
-      guestRules: [{ id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 0 }],
+      guestRules: [{ id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 0, stayDurationTicks: 40 }],
     });
     const seeded = stepTick(createWorld(5, busy), busy, [
       { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0 } },

@@ -51,6 +51,16 @@ jobs:
 
       - run: pnpm verify
 
+      # THE RENDER LAYER MUST BUNDLE, ON EVERY PLATFORM — and `pnpm verify` cannot see that
+      # (G-030). `typecheck` compiles `apps/game` on all three OSes already, which catches a
+      # type error; it does not catch a module that fails to RESOLVE in a browser build, a
+      # bad asset path, or a workspace package Vite cannot transform. Those are exactly the
+      # defects that differ by platform, and this is the cheapest place to find out.
+      #
+      # It is a CI step rather than a `pnpm verify` row deliberately: `verify` is thirteen
+      # rows of invariants and checks about the SIMULATION, and a bundler failing is neither.
+      - run: pnpm --filter @hotelsim/game build
+
   # I2 across platforms: the state hash after 100k ticks must be the same string on
   # Linux, Windows and macOS. `pnpm verify` proves each machine agrees with itself;
   # this job proves the machines agree with each other.

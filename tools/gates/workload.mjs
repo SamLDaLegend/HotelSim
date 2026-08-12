@@ -25,8 +25,52 @@
 /** G-010: a real hotel rather than a three-room toy. See `bench.mjs`'s head first. */
 export const ROOMS = 60;
 
-/** Sets concurrent guests, which is what these measurements actually measure. */
-export const ARRIVAL_EVERY_TICKS = 32;
+/**
+ * THE CALIBRATED OCCUPANCY OF THIS BENCHMARK, AND THE ONLY NUMBER IN THIS FILE THAT IS A
+ * TARGET RATHER THAN A SETTING (G-027a, human ruling — ADR-0021).
+ *
+ * `ARRIVAL_EVERY_TICKS` below is a PROXY for this, and the proxy broke silently. The bound
+ * campaign behind `tripwire.mjs` was run against a hotel holding **fifteen concurrent
+ * guests**; nothing said so in a form anything could check, so when ADR-0017 tripled the
+ * stay length the same literal `32` started meaning FORTY-FIVE and the benchmark quietly
+ * became a different benchmark. `check:tickcost` read 2.02x and it was right — the tick was
+ * doing three times the guest-work — but the reading described a workload redefinition
+ * rather than a regression, which is precisely the distinction a tripwire cannot make.
+ *
+ * WHY 15 AND NOT SOMETHING ELSE: it is not derived from anything, and it must not be. It is
+ * the occupancy the noise ceiling and the bound were MEASURED at, so re-deriving it would
+ * make the bound describe a hotel nobody calibrated against. It is a historical fact about a
+ * campaign (`workload.mjs`'s 30-day null rows, `tripwire.mjs`'s four arms) and it is frozen
+ * for the reason ADR-0008 freezes any such fact.
+ *
+ * IT IS PINNED MECHANICALLY, WHICH IS THE HALF THAT WAS MISSING:
+ * `tools/headless/src/workload.concurrency.test.ts` asserts
+ * `stayDurationTicks / ARRIVAL_EVERY_TICKS === TARGET_CONCURRENT_GUESTS` against the SHIPPED
+ * content. The next content change that moves the stay length reddens that assertion by name
+ * instead of quietly redefining what this benchmark measures.
+ */
+export const TARGET_CONCURRENT_GUESTS = 15;
+
+/**
+ * Sets concurrent guests, which is what these measurements actually measure.
+ *
+ * 32 -> 96 AT G-027a, AND THIS IS A RESTORATION RATHER THAN A RETUNE (ADR-0021, human).
+ * `1440 / 96 = 15` puts the benchmark back on the occupancy its bound was calibrated at,
+ * where `1440 / 32 = 45` had moved it without anybody choosing to. **THE BOUND DID NOT
+ * MOVE** — `tripwire.mjs`'s 1.4557 is untouched, and widening it was refused because it
+ * would have buried the fact that the workload's MEANING changed.
+ *
+ * IT STAYS A LITERAL AND IS NOT DERIVED FROM CONTENT AT RUNTIME, deliberately. This gate is
+ * a PAIRED RATIO: `measure.mjs` hands the same `--arrivals` to both arms, and a constant
+ * that computed itself from content would let two arms built from two revisions run two
+ * different workloads. A stale literal is a comparability problem you can see; a
+ * self-adjusting one is a comparability problem you cannot. What was missing was never
+ * derivation — it was an executed check that the literal still means what this file says.
+ *
+ * The header's "THESE VALUES ARE EXTRACTED, NOT RETUNED" is still true of G-020a, and this
+ * is the first time any of them has moved since.
+ */
+export const ARRIVAL_EVERY_TICKS = 96;
 
 /** I5's own wording is `--seed 42`, and every pinned golden was taken at it. */
 export const SEED = 42;

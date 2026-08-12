@@ -47,6 +47,7 @@ import {
   lodgingNeedOf,
   needTypesInOrder,
   providesOf,
+  stayDurationOf,
 } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftGet, getEntity, isPlaced, NO_ENTITY } from './entities.js';
@@ -61,7 +62,7 @@ import {
   assertNeedVector,
   findNeedState,
   formNeedVector,
-  isNeedMet,
+  isNeedFailed,
   isNeedPending,
   recordNeedsAtDeparture,
 } from './needs.js';
@@ -204,11 +205,20 @@ export type GuestStore = {
  * EACH REASON IS DECIDED IN EXACTLY ONE PLACE, and the table is only worth the schema
  * bump because that is true:
  *
- *   satisfied             stepGuests step 6, the lodging need is met
- *   gaveUpWaiting         stepGuests step 6, the lodging need ran out of patience
+ *   checkedOut            stepGuests step 6, the stay duration has elapsed in a room
+ *   gaveUp                stepGuests step 6, the lodging need ran out of patience
  *   evictedRoomGone       stepGuests step 1, the room entity is no longer in the draft
  *   evictedRoomUnusable   stepGuests step 1, the entity is there and is not a valid room
  *   evictedCauseUnrecorded  `migrateV7ToV8` ONLY — see below
+ *
+ * THE FIRST TWO WERE `satisfied` AND `gaveUpWaiting` UNTIL G-027a, AND THE RENAME IS A
+ * CORRECTION RATHER THAN A TIDY-UP (ADR-0017 §4). `satisfied` named a need's completion —
+ * a stay ended on the tick `night_rest` was met — and that terminator no longer exists, so
+ * the word would now be a claim about the guest's feelings that nothing computes: a guest
+ * checks out having failed every engagement need it formed. `checkedOut` names what the
+ * branch observes, which is a clock and a room. `gaveUpWaiting` lost its second word for a
+ * narrower reason: it is the only remaining way a guest can end its own stay, and "waiting"
+ * over-narrows it the moment ADR-0017 4(b)'s dissatisfaction threshold lands at G-027b.
  *
  * `evictedCauseUnrecorded` IS NOT WRITABLE BY THE TICK, AND THAT IS A TYPE RULE RATHER
  * THAN A PROMISE. v7 carried a single `evicted` counter with no cause, so a migrated v7
@@ -218,8 +228,8 @@ export type GuestStore = {
  * that narrower type, and a future branch that tried would not compile.
  */
 export const GUEST_DEPARTURE_REASONS = Object.freeze([
-  'satisfied',
-  'gaveUpWaiting',
+  'checkedOut',
+  'gaveUp',
   'evictedRoomGone',
   'evictedRoomUnusable',
   'evictedCauseUnrecorded',
@@ -251,8 +261,8 @@ export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnr
  */
 export function isCutShort(reason: GuestDepartureReason): boolean {
   switch (reason) {
-    case 'satisfied':
-    case 'gaveUpWaiting':
+    case 'checkedOut':
+    case 'gaveUp':
       return false;
     case 'evictedRoomGone':
     case 'evictedRoomUnusable':
@@ -301,8 +311,8 @@ export type GuestOutcomeRow = {
  * WHAT THE LAW CANNOT SEE. A departure filed under the WRONG REASON keeps the total
  * intact, so the law says nothing about any individual row.
  *
- * ONE ROW OF THE FIVE HAS A WITNESS, AND IT IS `satisfied`:
- * `countRoomRevenueTransactions(ledger) === the satisfied row` — the
+ * ONE ROW OF THE FIVE HAS A WITNESS, AND IT IS `checkedOut`:
+ * `countRoomRevenueTransactions(ledger) === the checkedOut row` — the
  * `countDemolitionRefundTransactions === demolished` pattern (`build.ts`), asserted **in
  * the report, and nowhere else**. Not at the tick boundary and not at load: `stepTick`'s
  * postcondition block never reads the ledger, and a save predating a feature legitimately
@@ -315,6 +325,12 @@ export type GuestOutcomeRow = {
  * named here so nobody mistakes it for a law: the pinned bench goldens (19 / 0 / 0 on the
  * churn arm) and the criterion-2 invocation, both of which are RUN-LEVEL pins that would
  * move if the split changed.
+ *
+ * A MISFILING BETWEEN `checkedOut` AND `gaveUp` IS NOW CHEAPER TO MAKE AND EXACTLY AS
+ * VISIBLE (G-027a). The two branches were "the lodging need is met" and "the lodging need
+ * failed" — one predicate, two outcomes. They are now "the clock ran out in a room" and "the
+ * lodging need failed", which touch different state entirely; but `payForStay` still fires on
+ * the first branch and only there, so the ledger witness above still separates them exactly.
  *
  * WHAT IS DELIBERATELY NOT HERE IS THE PER-NEED TALLY. These rows are about STAYS, and a
  * stay has exactly one outcome; a guest can leave satisfied having failed two of its
@@ -386,15 +402,15 @@ export function evictedGuests(outcomes: GuestOutcomes): number {
  * ATTRIBUTION half of the outcome table's evidence. For any world ticked from 0 under this
  * build the law is
  *
- *   countRoomRevenueTransactions(world.ledger) === departureCountOf(outcomes, 'satisfied')
+ *   countRoomRevenueTransactions(world.ledger) === departureCountOf(outcomes, 'checkedOut')
  *
  * exactly: `payForStay` is the only producer of a `roomRevenue` transaction and it is
- * called on the satisfied path and nowhere else, while the row is incremented by a
- * different line for a different reason. A departure misfiled BETWEEN `satisfied` AND ANY
+ * called on the checkout path and nowhere else, while the row is incremented by a
+ * different line for a different reason. A departure misfiled BETWEEN `checkedOut` AND ANY
  * OTHER ROW leaves the conservation law perfectly intact and moves this.
  *
- * IT WITNESSES ONE ROW, NOT THE TABLE. A misfiling that does not touch `satisfied` — say
- * `gaveUpWaiting` into `evictedRoomGone` — moves nothing here and nothing in the
+ * IT WITNESSES ONE ROW, NOT THE TABLE. A misfiling that does not touch `checkedOut` — say
+ * `gaveUp` into `evictedRoomGone` — moves nothing here and nothing in the
  * conservation law either. There is no second input to compare the other four rows against,
  * because an eviction writes no transaction; see `GuestOutcomes` for what covers them
  * instead, and for why that is a run-level pin rather than a law.
@@ -542,11 +558,24 @@ export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedSta
 }
 
 /**
- * The longest a guest can legitimately exist: it waits out its patience for a room, or
- * waits some of it and then completes a stay.
+ * The longest a guest can legitimately exist: it waits out its patience for a room, or it
+ * gets one and stays until its stay duration elapses.
+ *
+ * IT IS A MAX AND IT IS EXACT SINCE G-027a, WHERE IT USED TO BE A SUM AND AN OVERESTIMATE.
+ * The old bound was `patienceTicks + satisfyTicks + 1` — the guest queued, then its stay ran
+ * from the moment it got a room, so the two terms ADDED. The checkout clock runs from
+ * ARRIVAL (`arrivedTick + stayDurationTicks`), so queueing no longer extends anything: a
+ * guest either leaves at `patienceTicks` having got nothing, or at `stayDurationTicks`
+ * having got a room, and there is no path that reaches both. The bound is therefore the
+ * larger of the two rather than their sum, and it is attained rather than merely respected —
+ * which is what makes `countStuckGuests` below a measurement with no slack hiding inside it.
  *
  * ENGAGEMENT NEEDS DO NOT EXTEND IT. They are satisfied during the stay and never end it,
- * so the bound is the lodging need's exactly as it was at G-004.
+ * exactly as at G-004; what changed is that the LODGING need does not end it either.
+ *
+ * `stayDurationTicks` IS ABSENT ONLY FOR CONTENT WITH NO LODGING NEED (`assertEveryStayCanEnd`
+ * refuses the rest), and such content has no stay to bound — the patience term stands alone,
+ * which is the honest answer for a guest that can only ever give up.
  *
  * The `+ 1` is the arrival tick itself, on which a guest is created and may already
  * reserve a room. Anything older than this has not been progressed by the simulation.
@@ -554,7 +583,9 @@ export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedSta
 export function maxGuestLifetimeTicks(content: BoundContent, needId: ContentId): number {
   const needType = findNeedType(content, needId);
   if (needType === undefined) return 0;
-  return needType.patienceTicks + needType.satisfyTicks + 1;
+  const stay = stayDurationOf(content) ?? 0;
+  const longest = stay > needType.patienceTicks ? stay : needType.patienceTicks;
+  return longest + 1;
 }
 
 /**
@@ -570,6 +601,35 @@ export function maxGuestLifetimeTicks(content: BoundContent, needId: ContentId):
  * still waiting inside its patience. Those are guests the hotel is working on, and
  * counting them would make the criterion fail on a busy hotel — which would teach
  * whoever reads the report to ignore the number.
+ *
+ * IT IS RE-BASED ON THE STAY CLOCK AT G-027a AND IT GOT SHARPER, NOT LOOSER. The bound it
+ * compares against is now attained rather than merely respected (see `maxGuestLifetimeTicks`),
+ * so a guest that overstays by ONE tick is counted, where the old sum-shaped bound would have
+ * hidden anything up to `satisfyTicks` of drift. That matters because this number is what
+ * would catch a checkout comparison written `>` where it meant `>=`, or a stay clock that
+ * silently stopped: both leave a guest holding a room forever, and both are invisible to the
+ * conservation law, which is satisfied by a guest that simply never leaves.
+ *
+ * ---------------------------------------------------------------------------
+ * THE COMPARISON BELOW IS `>=`, AND IT WAS `>` FOR ONE CRITIQUE ROUND. That paragraph claimed
+ * a one-tick overstay was counted, and offered as its motivation the very mutation it could
+ * not see. With `>` against `limit = max(stay, patience) + 1` the first age counted was
+ * `max + 2` — measured at stay 200 / patience 30: ages 199, 200, 201 gave 0, and 202 gave 1 —
+ * while the `>`-for-`>=` checkout mutation makes checkout fire at age `stay + 1` and leaves
+ * the guest at exactly 201. **The detector missed the mutation the comment named as its
+ * reason for existing.** A claim and its predicate disagreeing inside the comment that offers
+ * the predicate as evidence is ADR-0007's class, in the sentence about ADR-0007's class.
+ *
+ * WHY `>=` IS THE TIGHTEST CORRECT COMPARISON AND NOT ONE TICK TIGHTER. The oldest age a LIVE
+ * guest can legitimately have at a commit boundary is `max(stay, patience)`: checkout fires
+ * DURING the tick on which age reaches `stay`, so the guest is still in the store at the
+ * boundary that tick ends on, and gone from the next. `limit` is that plus one, so `>=` counts
+ * the first age no correct simulation can produce, and nothing before it.
+ *
+ * `guest.stay.terminator.test.ts` drives ages `max`, `max + 1` and `max + 2` through this
+ * function rather than leaving the arithmetic as a paragraph — which is what the round before
+ * it did.
+ * ---------------------------------------------------------------------------
  */
 export function countStuckGuests(
   tick: number,
@@ -588,7 +648,7 @@ export function countStuckGuests(
       stuck += 1;
       continue;
     }
-    if (tick - guest.arrivedTick > limit) stuck += 1;
+    if (tick - guest.arrivedTick >= limit) stuck += 1;
   }
   return stuck;
 }
@@ -972,15 +1032,24 @@ export type GuestTickResult = {
 };
 
 /**
- * What a satisfied guest pays: one night at the rate of the room type it lodged in.
+ * What a guest that checks out pays: one stay at the rate of the room type it lodged in.
  *
  * THE SEAM FOR M4. Pricing, demand, per-night proration and nightly settlement are that
  * milestone's, and this is the single call site they will replace. ADR-0010 records what
  * this actually charges — once per COMPLETED STAY, not once per night — and G-012 does not
  * touch it: engagement needs are free, because charging for them is pricing.
  *
+ * THE STAY IT IS CHARGED FOR IS NOW `stayDurationTicks` AND NOT `night_rest.satisfyTicks`
+ * (G-027a). Nothing about this function changes; what changes is the length of the thing it
+ * bills, and therefore the margin. ADR-0020 supersedes ADR-0010's arithmetic and
+ * `stayDurationTicksSchema` in `packages/content` carries the live formula. Per-night
+ * proration is now EXPRESSIBLE for the first time — the checkout terminator is what ADR-0017
+ * said would make it so — and is still M4's.
+ *
  * A guest that gave up or was evicted pays nothing, which is not a balance decision so
- * much as the only honest one: it never had what it came for.
+ * much as the only honest one: it never had a whole stay. Note what this no longer implies:
+ * a guest that pays is not a guest that was HAPPY. It is a guest that stayed the course, and
+ * it may have failed every engagement need it formed. That is what the review is for.
  */
 function payForStay(
   ledger: readonly Transaction[],
@@ -1198,7 +1267,11 @@ function depart(
   //
   // `undefined` under content that declares no review scale, in which case nothing is
   // recorded and the distribution stays empty — the historical case, not a failure.
-  const score = reviewOf(content, guest.needs, guest.arrivedTick, search.input.tick, isCutShort(reason));
+  //
+  // IT NO LONGER TAKES THE TWO TICKS (G-027a). The wait axis is gone, so the guest's arrival
+  // and departure ticks say nothing about its experience; passing them anyway would leave a
+  // review function that LOOKS like it reads the clock. See `reviews.ts`'s header.
+  const score = reviewOf(content, guest.needs, isCutShort(reason));
   if (score !== undefined) search.reviewOutcomes = recordReview(search.reviewOutcomes, score);
 }
 
@@ -1259,14 +1332,20 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     reviewOutcomes: input.reviewOutcomes,
   };
   const lodgingNeed = lodgingNeedOf(content);
+  // READ ONCE PER TICK, NOT ONCE PER GUEST (G-027a). It is one array index behind two
+  // optional chains, and it is the same answer for every guest in the hotel — the
+  // `lodgingNeed` line above is here for the same reason. Per-archetype durations are M6's,
+  // and the day they land this becomes a per-guest lookup rather than a per-tick one; saying
+  // so here is cheaper than discovering that this hoist was load-bearing.
+  const stayDuration = stayDurationOf(content);
 
   const next: Guest[] = [];
   let ledger = input.ledger;
   // ONE LOCAL PER REASON, WRITTEN OUT rather than an array indexed by ordinal: the table is
   // rebuilt once at the end of the tick instead of once per departure, and a tick with no
   // departures allocates nothing at all (see `addDepartures`).
-  let satisfied = 0;
-  let gaveUpWaiting = 0;
+  let checkedOut = 0;
+  let gaveUp = 0;
   let evictedRoomGone = 0;
   let evictedRoomUnusable = 0;
 
@@ -1383,27 +1462,62 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       }
     }
 
-    // 6. DOES THE STAY END? Only the lodging need can end it. An engagement need that runs
-    //    out of patience has already failed on its own, in step 4, and is recorded on the
-    //    way out; the guest stays and gets on with the rest of its holiday.
-    const lodging = lodgingNeed === undefined ? undefined : findNeedState(guest.needs, lodgingNeed.id);
-    if (lodging !== undefined && isNeedMet(lodging)) {
-      // Met. Pay, release, leave. THE ROOM IS FREE FROM HERE ON IN THIS TICK — a guest
-      // visited later in this same loop can take it, even though it arrived later, because
-      // the room genuinely is empty now.
-      if (lodgingRoom !== null) ledger = payForStay(ledger, tick, lodgingRoom.kind, content);
-      depart(search, content, guest, lodgingRoom, engagedRoom, 'satisfied');
-      satisfied += 1;
+    // ========================================================================
+    // 6. DOES THE STAY END? TWO WAYS AND ONLY TWO (ADR-0017 §4).
+    //
+    //    CHECKOUT READS THE CLOCK AND THE ROOM. IT READS NO NEED STATE AT ALL, AND THAT IS
+    //    THIS GOAL'S WHOLE POINT rather than an implementation detail: until G-027a the
+    //    stay ended on the tick `night_rest` was met, so "the guest got what it came for"
+    //    and "the guest went home" were the same event, and every engagement need was
+    //    racing a deadline it did not know about (the wall ADR-0017 measured). A stay is
+    //    now a DURATION. A need finishing ends nothing.
+    //
+    //    THE CLOCK IS ARRIVAL-RELATIVE, WHICH COSTS NO FIELD AND MAKES THE LIFETIME BOUND
+    //    EXACT. `arrivedTick` already exists and is already hashed, so nothing is added to
+    //    `Guest`, no migration has to invent a check-in tick, and `maxGuestLifetimeTicks`
+    //    becomes `max(patience, stay)` — attained, not merely respected. (A nullable
+    //    `checkedInTick` defaulting to `null` would have been perfectly recoverable — it is
+    //    the `metBy: null` idiom and ADR-0008 permits it — so this is chosen on those two
+    //    properties and NOT because the alternative was unrepresentable.)
+    //
+    //    WHAT THE CHOICE COSTS, STATED RATHER THAN DISCOVERED: a guest that queued for a
+    //    room gets a SHORTER stay in it, because the clock started at the door. Under the
+    //    shipped table that is at most 180 ticks of 1,440 and it reads correctly to a
+    //    watching player — the hotel is not giving the late arrival a free extension. It
+    //    also means the room is released on a schedule set by arrivals rather than by
+    //    occupancy, which is what keeps `--rooms N` a capacity a queue can drain.
+    //
+    //    `>=` AND NOT `===`. A guest that took a room LATE — its stay clock already past —
+    //    would sail past an equality test and stay forever. Under the shipped table that is
+    //    unreachable (patience 180 < stay 1,440), and an unreachable state is exactly where
+    //    an equality quietly becomes a leak: `countStuckGuests` measures it either way, and
+    //    the comparison should not depend on a number in another file.
+    // ========================================================================
+    if (lodgingRoom !== null && stayDuration !== undefined && tick - guest.arrivedTick >= stayDuration) {
+      // Pay, release, leave. THE ROOM IS FREE FROM HERE ON IN THIS TICK — a guest visited
+      // later in this same loop can take it, even though it arrived later, because the room
+      // genuinely is empty now.
+      ledger = payForStay(ledger, tick, lodgingRoom.kind, content);
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'checkedOut');
+      checkedOut += 1;
       continue;
     }
-    if (lodging !== undefined && !isNeedPending(lodging)) {
+    // THE OTHER TERMINATOR, AND IT STILL READS LODGING PATIENCE (G-027a scope line). ADR-0017
+    // 4(b) makes giving up a dissatisfaction THRESHOLD read from content — per-personality
+    // tolerance — and that is G-027b's, not this goal's. What is here is the same predicate
+    // as before: patience for a ROOM ran out before one was free. `isNeedFailed`, not
+    // `!isNeedPending`, and the difference is new and load-bearing — the old branch was
+    // reached only after the met case had already `continue`d, so "not pending" meant
+    // "failed"; with no met case above it, `!isNeedPending` would send every guest whose rest
+    // need had completed straight out of the door, restoring the terminator this goal deletes.
+    const lodging = lodgingNeed === undefined ? undefined : findNeedState(guest.needs, lodgingNeed.id);
+    if (lodging !== undefined && isNeedFailed(lodging)) {
       // Waited it out and never got a room. It pays nothing and leaves with that recorded.
-      // `gaveUpWaiting` names what happened rather than how it felt: patience for a room
-      // ran out, which is v7's `unsatisfied` field said as a reason (its own doc comment
-      // read "patience for a room ran out before one was free"), and it is what
-      // `migrateV7ToV8` maps that counter onto.
-      depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUpWaiting');
-      gaveUpWaiting += 1;
+      // `gaveUp` names what happened rather than how it felt, and it is what `migrateV7ToV8`
+      // maps v7's `unsatisfied` counter onto (whose own doc comment read "patience for a room
+      // ran out before one was free").
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUp');
+      gaveUp += 1;
       continue;
     }
 
@@ -1467,8 +1581,8 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     arrived: outcomes.arrived + arriving,
     departures: addDepartures(
       outcomes.departures,
-      satisfied,
-      gaveUpWaiting,
+      checkedOut,
+      gaveUp,
       evictedRoomGone,
       evictedRoomUnusable,
     ),
@@ -1496,23 +1610,23 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
  */
 function addDepartures(
   rows: readonly GuestOutcomeRow[],
-  satisfied: number,
-  gaveUpWaiting: number,
+  checkedOut: number,
+  gaveUp: number,
   evictedRoomGone: number,
   evictedRoomUnusable: number,
 ): readonly GuestOutcomeRow[] {
-  if (satisfied === 0 && gaveUpWaiting === 0 && evictedRoomGone === 0 && evictedRoomUnusable === 0) {
+  if (checkedOut === 0 && gaveUp === 0 && evictedRoomGone === 0 && evictedRoomUnusable === 0) {
     return rows;
   }
   const next: GuestOutcomeRow[] = [];
   for (const row of rows) {
     let added = 0;
     switch (row.reason) {
-      case 'satisfied':
-        added = satisfied;
+      case 'checkedOut':
+        added = checkedOut;
         break;
-      case 'gaveUpWaiting':
-        added = gaveUpWaiting;
+      case 'gaveUp':
+        added = gaveUp;
         break;
       case 'evictedRoomGone':
         added = evictedRoomGone;

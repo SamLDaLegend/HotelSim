@@ -58,6 +58,9 @@ const roomType = (id: string, cost: number | undefined): RoomTypeData => ({
 const content = bindContent({
   roomTypes: [roomType('priced', COST), roomType('free', undefined), roomType('cheap', 100)],
   needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
 });
 
 const cell = (floor: number, column: number): Cell => ({ floor, column });

@@ -78,7 +78,7 @@ function default2Day(): CliResult {
 
 /** The --json document for the same run, shared by the direct-spawn and through-pnpm tests. */
 const GOLDEN_2_DAYS_SEED_42_JSON = {
-  schema: 2,
+  schema: 3,
   input: {
     seed: 42,
     ticks: 2880,
@@ -112,7 +112,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // content at all — so the fingerprint is the same one. THE EVIDENCE IS THIS DOCUMENT:
     // it is compared field by field, and `stateHash` is the ONLY field in it that differs.
     // Four guests are still in the hotel, 24 still arrived, 15 still satisfied.
-    stateHash: '32edbaa51e933829',
+    stateHash: 'd51f729128990015',
   },
   guests: {
     arrived: 24,
@@ -121,8 +121,8 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // are the same counts, which is what makes the bump a reshape of the report rather
     // than a change to the simulation.
     departures: [
-      { reason: 'satisfied', count: 15 },
-      { reason: 'gaveUpWaiting', count: 5 },
+      { reason: 'checkedOut', count: 4 },
+      { reason: 'gaveUp', count: 16 },
       { reason: 'evictedRoomGone', count: 0 },
       { reason: 'evictedRoomUnusable', count: 0 },
       { reason: 'evictedCauseUnrecorded', count: 0 },
@@ -210,10 +210,10 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   // file pins one.
   // ============================================================================
   needs: [
-    { needId: 'guest_comfort', lodging: false, met: 13, unmet: 7, metByItem: 13, abandoned: 3 },
-    { needId: 'guest_entertainment', lodging: false, met: 14, unmet: 6, metByItem: 0, abandoned: 1 },
-    { needId: 'guest_nourishment', lodging: false, met: 16, unmet: 4, metByItem: 7, abandoned: 5 },
-    { needId: 'night_rest', lodging: true, met: 15, unmet: 5, metByItem: 0, abandoned: 0 },
+    { needId: 'guest_comfort', lodging: false, met: 10, unmet: 10, metByItem: 10, abandoned: 0 },
+    { needId: 'guest_entertainment', lodging: false, met: 11, unmet: 9, metByItem: 0, abandoned: 0 },
+    { needId: 'guest_nourishment', lodging: false, met: 6, unmet: 14, metByItem: 2, abandoned: 3 },
+    { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
   // beside it, each standing on the ground. Zero invalid rooms here is the assertion that
@@ -229,10 +229,10 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     scoreMax: 5,
     distribution: [
       { score: 1, count: 0 },
-      { score: 2, count: 5 },
-      { score: 3, count: 5 },
-      { score: 4, count: 2 },
-      { score: 5, count: 8 },
+      { score: 2, count: 16 },
+      { score: 3, count: 0 },
+      { score: 4, count: 1 },
+      { score: 5, count: 3 },
     ],
   },
   rooms: {
@@ -244,8 +244,8 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // cannot start with money unless the money is a transaction — there is no balance
     // field to put it in (I4) — so the capital is a line in the ledger like everything
     // else, and the balance below is the fold that includes it.
-    transactions: 18,
-    revenuePennies: 127500,
+    transactions: 7,
+    revenuePennies: 34000,
     // -24000 rather than -15000 since G-012: three amenity rooms at 1,500p a night for two
     // nights is 9,000p more. They earn nothing — `payForStay` charges for the LODGING room
     // — so an amenity is pure cost until reviews feed demand at M4. That is a real balance
@@ -265,7 +265,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     outstandingDebtPennies: 0,
     settlements: 2,
     nights: 2,
-    balancePennies: 603500,
+    balancePennies: 510000,
   },
   // The default run builds nothing: `--build` and `--demolish` are off unless asked for
   // (G-008), which is what keeps this golden and `pnpm sim:bench` measuring the same
@@ -298,11 +298,12 @@ const GOLDEN_2_DAYS_SEED_42 =
     'rooms ok    6',
     'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no item',
     'arrived     24',
-    // G-015: three fixed lines became one per DEPARTURE REASON. Same simulation, same 15
-    // and 5 — the two numbers moved from a counter each into a row each, and the three
-    // zero rows are reasons this run had no occasion to produce.
-    'left satisfied              15',
-    'left gaveUpWaiting          5',
+    // G-027a: `satisfied` and `gaveUpWaiting` became `checkedOut` and `gaveUp` (ADR-0017),
+    // and the SPLIT moved with them — 4 and 16 where it was 15 and 5. A stay is 1,440 ticks
+    // rather than 480, so three rooms serve three guests in two days instead of fifteen and
+    // the rest run out of patience. Same simulation, three times the stay.
+    'left checkedOut             4',
+    'left gaveUp                 16',
     'left evictedRoomGone        0',
     'left evictedRoomUnusable    0',
     'left evictedCauseUnrecorded 0',
@@ -310,14 +311,14 @@ const GOLDEN_2_DAYS_SEED_42 =
     'stuck       0',
     'orphan res  0',
     'in bad room 0',
-    'need       guest_comfort 13 met, 7 unmet (0 by room, 13 by item), 3 abandoned',
-    'need       guest_entertainment 14 met, 6 unmet (14 by room, 0 by item), 1 abandoned',
-    'need       guest_nourishment 16 met, 4 unmet (9 by room, 7 by item), 5 abandoned',
-    'need L     night_rest 15 met, 5 unmet (15 by room, 0 by item), 0 abandoned',
-    'reviews     1:0, 2:5, 3:5, 4:2, 5:8',
-    'mean x100   365',
-    'ledger      18 transactions',
-    'revenue     127500p',
+    'need       guest_comfort 10 met, 10 unmet (0 by room, 10 by item), 0 abandoned',
+    'need       guest_entertainment 11 met, 9 unmet (11 by room, 0 by item), 0 abandoned',
+    'need       guest_nourishment 6 met, 14 unmet (4 by room, 2 by item), 3 abandoned',
+    'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned',
+    'reviews     1:0, 2:16, 3:0, 4:1, 5:3',
+    'mean x100   255',
+    'ledger      7 transactions',
+    'revenue     34000p',
     'upkeep      -24000p',
     'built       0',
     'demolished  0',
@@ -330,8 +331,8 @@ const GOLDEN_2_DAYS_SEED_42 =
     'scrap value 750000p',
     'debt        0p',
     'settlements 2',
-    'balance     603500p',
-    'state hash  32edbaa51e933829',
+    'balance     510000p',
+    'state hash  d51f729128990015',
   ].join('\n') + '\n';
 
 /**
@@ -488,7 +489,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  32edbaa51e933829']);
+    expect(differing).toEqual(['seed        42', 'state hash  d51f729128990015']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -815,24 +816,30 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     const result = runCli([...BUILD_ARGS, '--json']);
     expect(result.status).toBe(0);
     expect(result.stderr.length).toBe(0);
-    expect(summary().build.built).toBe(10);
-    expect(summary().build.constructionTransactions).toBe(10);
-    expect(summary().money.constructionPennies).toBe(-2_500_000);
+    // THREE ROOMS BUILT WHERE TEN WERE, AND THAT IS THE MARGIN COLLAPSE G-027a SHIPPED. A
+    // room bills once per 1,440-tick stay rather than once per 480, so revenue per room-day
+    // falls to roughly a third and the cash test refuses far more builds. `build.refused`
+    // below is the same fact from the other side: 12 refusals where there were 5. This is
+    // pricing behaviour changing because the STAY changed, which is exactly the trap
+    // `stayDurationTicksSchema` warns about, and it is NOT a licence to raise the rate.
+    expect(summary().build.built).toBe(3);
+    expect(summary().build.constructionTransactions).toBe(3);
+    expect(summary().money.constructionPennies).toBe(-750_000);
   });
 
   it('matches the hand-derived closed form, penny for penny', () => {
     const s = summary();
-    const satisfied = s.guests.departures.find((row) => row.reason === 'satisfied')?.count ?? -1;
+    const satisfied = s.guests.departures.find((row) => row.reason === 'checkedOut')?.count ?? -1;
     expect(satisfied * 8_500).toBe(s.money.revenuePennies);
-    expect(s.money.revenuePennies).toBe(2_975_000);
+    expect(s.money.revenuePennies).toBe(824_500);
     // TWO ROOM TYPES PAY UPKEEP SINCE G-012, so the closed form has two terms: the
     // bedrooms at 2,500p and the three inherited amenities at 1,500p, standing for all 30
-    // nights. The bedroom term moved from 266 room-nights to 262 because amenity upkeep
-    // drains cash, so a build that used to squeak through on a given night is refused and
-    // lands later — the same ten rooms, four room-nights later in aggregate. Both terms are
-    // derived rather than captured, which is what makes this a check and not a snapshot.
-    expect(s.money.upkeepPennies).toBe(262 * -2_500 + 3 * 30 * -1_500);
-    expect(s.money.upkeepPennies).toBe(-790_000);
+    // nights. The bedroom term is 154 room-nights at G-027a, down from 262, because only
+    // three rooms are ever built and they arrive later — a room-night is only paid once the
+    // room exists. Both terms are derived rather than captured, which is what makes this a
+    // check and not a snapshot.
+    expect(s.money.upkeepPennies).toBe(154 * -2_500 + 3 * 30 * -1_500);
+    expect(s.money.upkeepPennies).toBe(-520_000);
     // The capital is a transaction like any other, and it is the only one of G-011's new
     // reasons this run produces: nothing is demolished, so nothing is refunded, and the
     // hotel is never stuck, so nothing is borrowed.
@@ -845,8 +852,8 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // (G-013): the lounge's arm chair and the games room's vending machine. The café
     // requires nothing, so the amenities contribute 3 rooms + 2 items rather than 3 + 0.
     // `rooms.valid` is the number a reader wants, and it is neither 13 nor 31.
-    expect(s.world.entities).toBe((3 + 10) * 2 + 3 + 2);
-    expect(s.world.entities).toBe(31);
+    expect(s.world.entities).toBe((3 + 3) * 2 + 3 + 2);
+    expect(s.world.entities).toBe(17);
     // AND EIGHT OF THE TEN ROOMS THE PLAYER BUILT DO NOT WORK. The player's walk packs
     // rooms onto the floor above, over the corridors of the hotel below, so most of them
     // have nothing underneath — and with ten built rather than nine, two are now adjacent
@@ -856,10 +863,12 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // player now pays 250,000p apiece for eight rooms that house nobody and still cost
     // 2,500p a night each. Recovery money buys a bigger mistake faster; the terminator for
     // that spiral is still M4's.
-    expect(s.rooms.invalid.unsupported).toBe(7);
+    expect(s.rooms.invalid.unsupported).toBe(2);
     expect(s.rooms.invalid.noDoor).toBe(1);
-    // Five bedrooms that work, plus the three basement amenities, which always do.
-    expect(s.rooms.valid).toBe(5 + 3);
+    // Three inherited bedrooms that work, plus the three basement amenities, which always
+    // do. All three of the player's builds are duds — the ratio of waste to spend is what
+    // ADR-0009 describes, and a thinner margin does not make the walk any wiser.
+    expect(s.rooms.valid).toBe(3 + 3);
     expect(s.guests.inInvalidRooms).toBe(0);
   });
 
@@ -874,7 +883,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
       s.money.upkeepPennies +
       s.money.constructionPennies;
     expect(folded).toBe(s.money.balancePennies);
-    expect(folded).toBe(185_000);
+    expect(folded).toBe(54_500);
   });
 
   it('records refusals as OUTCOMES on a real run, without ever exiting non-zero', () => {
@@ -882,19 +891,22 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // `buildRoom` that threw on an unaffordable build would make this exit 1 with a stack
     // trace; one that silently skipped would report 0 here. THIS IS THE EXIT CRITERION'S
     // "refusal is a recorded outcome rather than a throw", measured through the CLI.
-    expect(summary().build.refused.insufficientFunds).toBe(5);
+    expect(summary().build.refused.insufficientFunds).toBe(12);
     expect(summary().build.built + summary().build.refused.insufficientFunds).toBe(15);
     expect(runCli(BUILD_ARGS).status).toBe(0);
   });
 
   it('accounts for every guest, with capacity growth visible in the outcome', () => {
-    // Conservation still closes with a hotel that changes size underneath it, and the
-    // build loop is doing something real: 3 rooms serve 267 guests over this window (the
-    // G-004/G-005 figure), 13 rooms serve 350.
+    // Conservation still closes with a hotel that changes size underneath it. THE SECOND
+    // HALF OF THIS TEST'S TITLE IS RETIRED AT G-027a: it read "3 rooms serve 267 guests over
+    // this window, 13 rooms serve 350", and neither number survives a 1,440-tick stay. Six
+    // working rooms now serve 97, and the three the player built are duds anyway. Capacity
+    // growth is asserted where it is real — `build.built` above — rather than through a
+    // guest count that a stay-length change moves for a different reason.
     const g = summary().guests;
     expect(departures(g) + g.inHotel).toBe(g.arrived);
     expect(g.arrived).toBe(360);
-    expect(left(g, 'satisfied')).toBeGreaterThan(267);
+    expect(left(g, 'checkedOut')).toBe(97);
     expect(g.stuck).toBe(0);
     expect(g.orphanedReservations).toBe(0);
   });

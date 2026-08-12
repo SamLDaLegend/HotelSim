@@ -242,6 +242,30 @@ export type GuestRulesData = {
    */
   readonly reviewScoreMin?: number | undefined;
   readonly reviewScoreMax?: number | undefined;
+  /**
+   * HOW LONG A STAY LASTS, IN TICKS (G-027a, ADR-0017 §4a).
+   *
+   * A guest checks out at `arrivedTick + stayDurationTicks`. See `stayDurationTicksSchema`
+   * in `packages/content` for the derivation of the shipped 1,440 and — more importantly —
+   * for the fact that **this is the dominant term in the hotel's margin**, sitting in a file
+   * about guest behaviour.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `abandonMarginBasisPoints` contract exactly.
+   * Absence is a true historical statement: content written before G-027a had no stay
+   * duration because in that era a stay ended when the lodging need was met.
+   *
+   * BUT ABSENCE HAS NO SAFE READING FOR CONTENT THAT DECLARES A LODGING NEED, and that is
+   * why this field has a refusal where the margin has a default. `abandonMarginOf` can
+   * return `ONE_WHOLE_BASIS_POINTS` and reproduce the pre-G-014b era EXACTLY. There is no
+   * such value here: the era this replaces ended a stay `satisfyTicks` after the guest got
+   * a ROOM, and an arrival-relative clock cannot say that for a guest that queued. Any
+   * default would therefore be an invention (ADR-0008), and the invention's consequence is
+   * a guest that checks in and never checks out. `assertEveryStayCanEnd` refuses it
+   * instead — keyed on the LODGING NEED rather than on the need table, so `SAVE_V1_CONTENT`
+   * (no need types at all, therefore no guest that could be stuck) still binds and still
+   * ticks.
+   */
+  readonly stayDurationTicks?: number | undefined;
 };
 
 /**
@@ -612,9 +636,15 @@ function assertFitValue(owner: string, ownerId: ContentId, fit: number | undefin
  * of this goal's own evidence unloadable.
  */
 function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
-  const { abandonMarginBasisPoints: margin, reviewScoreMin: min, reviewScoreMax: max, ...rest } = rules;
-  const withScale = cloneReviewScale(rules.id, rest, min, max);
-  if (margin === undefined) return withScale;
+  const {
+    abandonMarginBasisPoints: margin,
+    reviewScoreMin: min,
+    reviewScoreMax: max,
+    stayDurationTicks: stay,
+    ...rest
+  } = rules;
+  const withStay = cloneStayDuration(rules.id, cloneReviewScale(rules.id, rest, min, max), stay);
+  if (margin === undefined) return withStay;
   if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
     throw new Error(
       `bindContent: guest rules "${rules.id}" have an abandonMarginBasisPoints of ${String(margin)}; it must be an ` +
@@ -622,7 +652,32 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
         `${ONE_WHOLE_BASIS_POINTS} is one whole — and it is compared against a pressure, which can never exceed that.`,
     );
   }
-  return { ...withScale, abandonMarginBasisPoints: margin };
+  return { ...withStay, abandonMarginBasisPoints: margin };
+}
+
+/**
+ * The stay-duration half of `cloneGuestRules` (G-027a): a positive integer count of ticks.
+ *
+ * The `cloneEconomy` discipline exactly: a float, a zero or a negative from a raw host —
+ * one that did not come through the zod schema — dies here, at bind time, with the table
+ * named, rather than inside `stepGuests` as a checkout comparison that can never be true.
+ * The key is STRIPPED when absent rather than carried as `undefined`, for the reason
+ * `cloneNeedType` strips `role`: only the absent form is the historical statement.
+ *
+ * ZERO IS REFUSED AND IS NOT A DEGENERATE-BUT-LEGAL VALUE, unlike the margin's 0. A stay of
+ * zero ticks would check a guest out on the tick after it arrived, before it could be served
+ * anything, which is not a game anybody means — and unlike `abandonMarginBasisPoints: 0`
+ * (G-014b's thrash control) no arm of any goal wants it.
+ */
+function cloneStayDuration(id: ContentId, rest: GuestRulesData, stay: number | undefined): GuestRulesData {
+  if (stay === undefined) return rest;
+  if (!Number.isSafeInteger(stay) || stay < 1) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a stayDurationTicks of ${String(stay)}; it must be a positive whole ` +
+        'number of ticks. A stay is measured in ticks from the guest\'s arrival, and one tick is one in-game minute.',
+    );
+  }
+  return { ...rest, stayDurationTicks: stay };
 }
 
 /**
@@ -781,6 +836,111 @@ function assertReviewScaleIsBoundedByTheNeedTable(
           `scores too. The widest scale this table admits is ${min}..${min + ceiling}.`,
       );
     }
+  }
+}
+
+/**
+ * Refuses content in which a guest could book a room and never leave it (G-027a).
+ *
+ * THE ONE THING A STAY MUST DO IS END. ADR-0017 §4 leaves exactly two terminators —
+ * checkout after `stayDurationTicks`, and the guest giving up — and only the second is
+ * reachable for a guest that HAS a room, because a served need's patience regenerates every
+ * tick. So content that declares a lodging need and no stay duration describes a hotel whose
+ * guests accumulate without bound: the failure G-027's own goal block names, and §6.1's
+ * "a need that cannot be satisfied is a bug, not difficulty" one level up — a STAY that
+ * cannot end.
+ *
+ * KEYED ON THE LODGING NEED RATHER THAN ON THE NEED TABLE OR ON THE GUEST-RULES TABLE, and
+ * both halves of that are load-bearing:
+ *
+ *   - Content with NO lodging need has no guest that could be stuck. `SAVE_V1_CONTENT` is
+ *     exactly that document — two room types and no need types — and it must keep binding,
+ *     because its fingerprint `8e09fe4f0fa162a3` is what keeps the permanent v1 fixture a
+ *     world that still TICKS rather than a husk (ADR-0006, ADR-0010).
+ *   - Content that declares a lodging need and NO `guestRules` table at all is refused just
+ *     as loudly as one that declares the table and omits the field. A missing table is a
+ *     historical statement about the MARGIN (`abandonMarginOf` reproduces that era exactly);
+ *     it is not a statement about stays, because in that era stays ended and under this build
+ *     they would not.
+ *
+ * IT IS ASKED OF EVERY ROW, not only of `firstGuestRules`. A second archetype at M6 that
+ * forgot the field would otherwise load and then be discovered by a guest.
+ */
+function assertEveryStayCanEnd(
+  guestRules: readonly GuestRulesData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  if (lodgingNeedId === undefined) return;
+  if (guestRules.length === 0) {
+    throw new Error(
+      `bindContent: this content declares the lodging need "${lodgingNeedId}" and no guest rules at all, so nothing ` +
+        'says how long a stay lasts. A stay ends by checkout or by the guest giving up (ADR-0017), and a guest that ' +
+        'holds a room can never give up — its patience regenerates every tick it is served — so such a guest would ' +
+        'check in and never leave. Declare guest rules carrying stayDurationTicks.',
+    );
+  }
+  for (const rules of guestRules) {
+    if (rules.stayDurationTicks !== undefined) continue;
+    throw new Error(
+      `bindContent: guest rules "${rules.id}" declare no stayDurationTicks, but this content declares the lodging ` +
+        `need "${lodgingNeedId}". A stay ends by checkout after stayDurationTicks or by the guest giving up ` +
+        '(ADR-0017), and a guest holding a room can never give up, so a guest under these rules would check in and ' +
+        'never leave. There is no historical value to fall back on: the era this replaces ended a stay a fixed time ' +
+        'after the guest got a ROOM, which an arrival-relative clock cannot restate for a guest that queued.',
+    );
+  }
+}
+
+/**
+ * Refuses content whose stay is too short for what its guests come for (G-027a).
+ *
+ * THE REQUIREMENT: **everything a guest forms must be completable inside its stay.** A need
+ * every guest forms and no guest can ever finish is guaranteed unhappiness rather than
+ * difficulty (`HOTELSIM.md` §6.1) — the same standing as a need no reachable provider claims,
+ * and refused in the same place for the same reason.
+ *
+ * THE FLOOR IS A MAX AND NOT A SUM, AND THAT IS A FACT ABOUT THE TICK RATHER THAN A CHOICE.
+ * The lodging need is served on every tick the guest holds a room (`stepGuests` step 4), and
+ * engagement needs are served ONE PROVIDER AT A TIME. So the two are parallel tracks — a
+ * guest eats while its room goes on resting it — and the binding constraint is whichever
+ * track is longer:
+ *
+ *     floor = max( lodging satisfyTicks , Σ engagement satisfyTicks )
+ *
+ * On the shipped table both tracks are 480 (the coincidence ADR-0017 calls the wall: the
+ * three engagement needs sum to exactly `night_rest.satisfyTicks`), so the floor is 480 and
+ * the shipped 1,440 leaves 960 ticks of slack.
+ *
+ * IT IS NECESSARY AND NOT SUFFICIENT, AND SAYING SO IS THE POINT. Clearing the floor does not
+ * promise a guest finishes anything: it must still find providers free, and travel is M3's.
+ * What it refuses is the content in which finishing was arithmetically impossible before a
+ * guest took a step, which is the class that is a content bug rather than a hard hotel.
+ *
+ * Content with no lodging need is untouched — it has no stay for a need to fit inside.
+ */
+function assertStayFitsTheNeedTable(
+  guestRules: readonly GuestRulesData[],
+  needTypes: readonly NeedTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  if (lodgingNeedId === undefined) return;
+  let engagementTotal = 0;
+  let lodgingTrack = 0;
+  for (const needType of needTypes) {
+    if (needType.id === lodgingNeedId) lodgingTrack = needType.satisfyTicks;
+    else engagementTotal += needType.satisfyTicks;
+  }
+  const floor = engagementTotal > lodgingTrack ? engagementTotal : lodgingTrack;
+  for (const rules of guestRules) {
+    const stay = rules.stayDurationTicks;
+    if (stay === undefined || stay >= floor) continue;
+    throw new Error(
+      `bindContent: guest rules "${rules.id}" declare a stayDurationTicks of ${stay}, but a guest under this need ` +
+        `table needs ${floor} tick(s) to finish what it forms: ${lodgingTrack} of lodging and ${engagementTotal} of ` +
+        'engagement, which run in parallel, so the floor is the larger of the two. A stay shorter than that ships a ' +
+        'need every guest forms and no guest can complete, which is guaranteed unhappiness rather than difficulty ' +
+        '(HOTELSIM.md §6.1). Raise stayDurationTicks or lower a satisfyTicks.',
+    );
   }
 }
 
@@ -1310,6 +1470,13 @@ export function bindContent(content: SimContent): BoundContent {
   // and it needs both tables normalised — which is why it is here and not in
   // `cloneGuestRules`, where only one of them exists yet.
   assertReviewScaleIsBoundedByTheNeedTable(guestRules ?? [], needTypes ?? []);
+  // THE STAY AGAINST THE NEED TABLE (G-027a), LAST, AND THE ORDER IS DELIBERATE. Both
+  // refusals need the lodging need settled, exactly as the three above do. They come after
+  // every other cross-table check so that content which is ALREADY broken for an older
+  // reason still fails on that reason: a table naming two lodging needs, or a need nothing
+  // provides, should say so rather than complain about a missing duration.
+  assertEveryStayCanEnd(guestRules ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  assertStayFitsTheNeedTable(guestRules ?? [], needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
 
   // ABSENCE IS NOT EMPTINESS. Content that does not define need types produces the same
   // document — and therefore the same fingerprint — that it produced before need types
@@ -1503,6 +1670,28 @@ export function firstGuestRules(bound: BoundContent): GuestRulesData | undefined
  */
 export function abandonMarginOf(bound: BoundContent): number {
   return firstGuestRules(bound)?.abandonMarginBasisPoints ?? ONE_WHOLE_BASIS_POINTS;
+}
+
+/**
+ * HOW LONG A STAY LASTS UNDER THIS CONTENT, in ticks, or `undefined` if it declares none
+ * (G-027a).
+ *
+ * `undefined` RATHER THAN A DEFAULT, WHICH IS THE OPPOSITE CALL TO `abandonMarginOf`'s ONE
+ * LINE ABOVE, and the two sit together so the difference is read rather than reconstructed.
+ * A missing margin has an EXACT historical reading — `ONE_WHOLE_BASIS_POINTS` reproduces the
+ * pre-G-014b era, in which no guest could abandon anything, precisely. A missing stay
+ * duration has none: the era it replaces ended a stay a fixed time after the guest got a
+ * ROOM, and this clock runs from ARRIVAL, so the two differ by however long the guest queued.
+ * Substituting anything would be the invented default ADR-0008 forbids, and its consequence
+ * would be a guest that never checks out.
+ *
+ * So the only content that reaches a tick with `undefined` here is content that declares NO
+ * LODGING NEED — `bindContent` refuses the rest (`assertEveryStayCanEnd`) — and such content
+ * has no guest holding a room to check out in the first place. `stepGuests` reads it as
+ * "there is no checkout under this content" rather than as a number.
+ */
+export function stayDurationOf(bound: BoundContent): number | undefined {
+  return firstGuestRules(bound)?.stayDurationTicks;
 }
 
 /**

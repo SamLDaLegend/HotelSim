@@ -54,6 +54,9 @@ const needType = (satisfyTicks = SATISFY, patienceTicks = PATIENCE): NeedTypeDat
 const content = bindContent({
   roomTypes: [roomType('roomA', ['rest'])],
   needTypes: [needType()],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
 });
 
 /**
@@ -85,7 +88,7 @@ describe('exit path — the need was met', () => {
   it('releases the room, and the next guest takes the same room', () => {
     const world = run(hotel(1), content, SATISFY + 4, [at(1, arrive), at(SATISFY + 2, arrive)]);
     const room = entitiesInOrder(world.entities)[0]!.id;
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
     expect(resting(world).map((guest) => guest.roomEntityId)).toEqual([room]);
     expect(orphansIn(world)).toBe(0);
   });
@@ -108,7 +111,7 @@ describe('exit path — the guest gave up', () => {
       expect(guestsInOrder(world.guests).every((guest) => guest.roomEntityId === NO_ENTITY)).toBe(true);
       world = stepTick(world, content);
     }
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(orphansIn(world)).toBe(0);
   });
 });
@@ -134,7 +137,7 @@ describe('exit path — the room stopped existing', () => {
     const start = run(hotel(1), content, SATISFY - 1, [at(1, arrive)]);
     const room = entitiesInOrder(start.entities)[0]!.id;
     const after = stepTick(start, content, [despawn(room)]);
-    expect(departureCountOf(after.guestOutcomes, 'satisfied')).toBe(0);
+    expect(departureCountOf(after.guestOutcomes, 'checkedOut')).toBe(0);
     expect(evictedGuests(after.guestOutcomes)).toBe(1);
     expect(after.ledger).toHaveLength(0);
   });
@@ -172,7 +175,7 @@ describe('exit path — save and load', () => {
     const resumed = run(deserialise(serialise(mid)), content, 40, []);
     const unsaved = run(mid, content, 40, []);
     expect(hashState(resumed)).toBe(hashState(unsaved));
-    expect(departureCountOf(resumed.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(resumed.guestOutcomes, 'checkedOut')).toBe(1);
   });
 
   it('refuses a save whose guest holds a room the save does not contain', () => {
@@ -243,11 +246,18 @@ describe('thirty days of a hotel that is always over capacity', () => {
   const busyContent = bindContent({
     roomTypes: [roomType('roomA', ['rest'])],
     needTypes: [needType(480, 180)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
   });
 
   const schedule = (): readonly ScheduledCommand[] => {
     const commands: ScheduledCommand[] = [];
-    for (let tick = 1; tick < TICKS; tick += 90) commands.push(at(tick, arrive));
+    // ARRIVALS EVERY 45 TICKS RATHER THAN 90 SINCE G-027a. The stay clock runs from ARRIVAL,
+    // so a guest that queued occupies its room for less than the full 480 and throughput
+    // rises with the queue; at 90 these four rooms drained fast enough that nobody gave up,
+    // which would have left the two-sided check below one-sided.
+    for (let tick = 1; tick < TICKS; tick += 45) commands.push(at(tick, arrive));
     // Rooms are demolished under their occupants throughout and rebuilt the tick after,
     // so eviction is exercised for the whole run rather than in one unit test.
     for (let tick = 5_000; tick < TICKS; tick += 7_000) {
@@ -271,8 +281,8 @@ describe('thirty days of a hotel that is always over capacity', () => {
       expect(countStuckGuests(world.tick, world.guests, busyContent)).toBe(0);
     }
     expect(world.guestOutcomes.arrived).toBeGreaterThan(400);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
     // The demolitions really do hit occupied rooms, so this run proves the eviction
     // path over 30 days and not only in the tick that follows a despawn.
     expect(evictedGuests(world.guestOutcomes)).toBeGreaterThan(0);

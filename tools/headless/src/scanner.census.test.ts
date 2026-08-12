@@ -136,6 +136,22 @@ const derived = scannersIn(realFiles);
 const REGISTER: ReadonlyMap<string, { readonly proof: string; readonly title: string; readonly note: string }> =
   new Map([
     [
+      // G-027a. It walks `tools/` and `packages/` counting the places `ARRIVAL_EVERY_TICKS`
+      // is written down, so the derivation below picks it up as a scanner and it owes a proof
+      // like any other. Its proof is INSIDE ITSELF, which the register permits and which is
+      // right here: the anti-vacuity assertions and the comment-stripping control are what
+      // make the count a measurement, and they are the same file's subject.
+      'tools/headless/src/workload.concurrency.test.ts',
+      {
+        proof: 'tools/headless/src/workload.concurrency.test.ts',
+        title: 'and the number is WRITTEN DOWN in one place, plus ONE named exception that cannot import',
+        note:
+          'ADR-0021 MAJOR 1. WATCHED FAILING TWICE while being written: once on the real third ' +
+          'copy in needs3-arm.ts, and once on a probe string in the test itself that spelled ' +
+          'the declaration out. Both are pinned in the file as controls.',
+      },
+    ],
+    [
       'tools/gates/check-purity.mjs',
       {
         proof: 'tools/headless/src/purity-gate.test.ts',
@@ -151,6 +167,18 @@ const REGISTER: ReadonlyMap<string, { readonly proof: string; readonly title: st
         note:
           'I3. Covers the two CODE-side predicates. The three DATA-side arms — invalid JSON, a ' +
           'non-snake_case id, a duplicate id — are unbitten and parked with a falsification test.',
+      },
+    ],
+    [
+      'tools/gates/check-ladder.mjs',
+      {
+        proof: 'tools/headless/src/ladder-arithmetic.test.ts',
+        title: 'AND IT BITES — arithmetic between two rungs',
+        note:
+          'G-030. The instrument §2.1.1 parked and ADR-0018 called due: no render code computes ' +
+          'one play speed from another. Bitten in three shapes, and — because the ban must not ' +
+          'swallow what a play speed is FOR — held silent on four allowed ones, so a predicate ' +
+          'hard-coded to `true` fails as loudly as one hard-coded to `false`.',
       },
     ],
     [

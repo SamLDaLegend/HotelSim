@@ -72,6 +72,9 @@ const needType = (id: string, satisfyTicks = SATISFY, patienceTicks = PATIENCE):
 const simContent: SimContent = {
   roomTypes: [roomType('roomA', ['rest'])],
   needTypes: [needType('rest')],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
 };
 const content = bindContent(simContent);
 
@@ -179,11 +182,11 @@ describe('the need is met', () => {
     let world = stepTick(hotel(1), content, [arrive]);
     for (let i = 1; i < SATISFY; i += 1) {
       world = stepTick(world, content);
-      expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(0);
+      expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(0);
       expect(guestsInOrder(world.guests)).toHaveLength(1);
     }
     world = stepTick(world, content);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
   });
 
@@ -200,8 +203,8 @@ describe('the need is met', () => {
 
   it('records the outcome and leaves, so the room serves the next guest', () => {
     const world = run(hotel(1), content, 2 * SATISFY + 4, [at(1, arrive), at(SATISFY + 2, arrive)]);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(2);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(2);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(0);
     expect(world.ledger).toHaveLength(2);
   });
 });
@@ -214,10 +217,10 @@ describe('the need is not met', () => {
     let world = stepTick(hotel(0), content, [arrive]);
     for (let i = 1; i < PATIENCE; i += 1) {
       world = stepTick(world, content);
-      expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(0);
+      expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(0);
     }
     world = stepTick(world, content);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(world.ledger).toHaveLength(0);
   });
@@ -227,7 +230,7 @@ describe('the need is not met', () => {
     // terminal outcome — not a guest standing in the lobby for the rest of the run.
     const world = run(hotel(0), content, 200, [at(1, arrive), at(5, arrive), at(50, arrive)]);
     expect(world.guestOutcomes.arrived).toBe(3);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(3);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(3);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(countStuckGuests(world.tick, world.guests, content)).toBe(0);
     expect(() => assertGuestOutcomes(world.guestOutcomes, world.guests)).not.toThrow();
@@ -275,8 +278,11 @@ describe('who gets the room', () => {
     expect(isResting(resting!)).toBe(true);
     expect(older!.id).toBeLessThan(younger!.id);
 
-    // Let the resident finish; the older of the two waiting takes the room.
-    const after = run(start, content, SATISFY, []);
+    // Let the resident's STAY run out; the older of the two waiting takes the room on the
+    // tick it is freed. G-027a: the clock starts at ARRIVAL, so guest 1 leaves on tick
+    // `1 + SATISFY` and the run stops there — going further would watch guest 2 check out
+    // too, because its own clock started on tick 2.
+    const after = run(start, content, 2 + SATISFY - start.tick, []);
     const survivor = guestsInOrder(after.guests).find((guest) => isResting(guest));
     expect(survivor?.id).toBe(older!.id);
   });
@@ -289,7 +295,8 @@ describe('who gets the room', () => {
     const queued = guestsInOrder(waiting.guests)[1]!;
     expect(isResting(queued)).toBe(false);
 
-    const later = run(waiting, content, SATISFY, [at(waiting.tick + 1, arrive)]);
+    // To the tick guest 1's stay ends, and no further — see the note above.
+    const later = run(waiting, content, 2 + SATISFY - waiting.tick, [at(waiting.tick + 1, arrive)]);
     const inRoom = guestsInOrder(later.guests).filter((guest) => isResting(guest));
     expect(inRoom).toHaveLength(1);
     expect(inRoom[0]!.id).toBe(queued.id);
@@ -464,10 +471,19 @@ describe('the exit criteria, over 30 simulated days', () => {
   // command line checks is a criterion nobody checks.
   const DAYS = 30;
   const ROOMS = 3;
-  const EVERY = 120;
+  // ARRIVALS EVERY 60 TICKS RATHER THAN 120, AND THE REASON IS G-027a's CLOCK. A room used
+  // to be held for `satisfyTicks` FROM CHECK-IN, so three rooms served one guest per 160
+  // ticks and arrivals every 120 overran capacity. The stay clock now runs from ARRIVAL, so
+  // a guest that queued for 40 ticks occupies its room for 440 rather than 480 — throughput
+  // rises with the queue, and at 120 this hotel settled into a steady state with NO give-ups
+  // at all, which would have left the two-sided criterion below one-sided.
+  const EVERY = 60;
   const hotelContent = bindContent({
     roomTypes: [roomType('roomA', ['rest'])],
     needTypes: [needType('rest', 480, 180)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
   });
 
   const thirtyDays = (): World => {
@@ -481,8 +497,8 @@ describe('the exit criteria, over 30 simulated days', () => {
   it('has guests arrive, has some of them satisfied, and leaves none stuck', () => {
     const world = thirtyDays();
     expect(world.guestOutcomes.arrived).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
     expect(countStuckGuests(world.tick, world.guests, hotelContent)).toBe(0);
   });
 
@@ -505,8 +521,8 @@ describe('the exit criteria, over 30 simulated days', () => {
     // satisfied stay, and the whole balance is revenue.
     const world = thirtyDays();
     const revenue = world.ledger.filter((transaction) => transaction.reason === 'roomRevenue');
-    expect(revenue).toHaveLength(departureCountOf(world.guestOutcomes, 'satisfied'));
-    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(departureCountOf(world.guestOutcomes, 'satisfied') * RATE);
-    expect(balanceOf(world.ledger)).toBe(departureCountOf(world.guestOutcomes, 'satisfied') * RATE);
+    expect(revenue).toHaveLength(departureCountOf(world.guestOutcomes, 'checkedOut'));
+    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(departureCountOf(world.guestOutcomes, 'checkedOut') * RATE);
+    expect(balanceOf(world.ledger)).toBe(departureCountOf(world.guestOutcomes, 'checkedOut') * RATE);
   });
 });

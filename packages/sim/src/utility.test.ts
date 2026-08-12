@@ -109,6 +109,9 @@ const table = (cafeFit: number, dinerFit: number, machineFit: number, gamesFit: 
     need('fun', 6, FUN_PATIENCE, false),
     need('rest', STAY, STAY, true),
   ],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
   itemTypes: [itemType('machine', ['food'], machineFit)],
 });
 
@@ -228,7 +231,7 @@ describe('FIT NEVER REORDERS NEEDS — pressure decides which, fit only decides 
     const served = run(opened, content, STAY + 20, [at(opened.tick, arrive)]);
     // The guest has gone home; every need it formed is recorded, and both engagement needs
     // were MET rather than one of them having run out of patience while it sat elsewhere.
-    expect(departureCountOf(served.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(served.guestOutcomes, 'checkedOut')).toBe(1);
     for (const row of served.needOutcomes) {
       expect(row.met, row.needId).toBe(1);
       expect(row.unmet, row.needId).toBe(0);
@@ -425,6 +428,9 @@ describe('bindContent refuses a fit that could never be read, or never be compar
     const silent = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
       needTypes: [need('food', 6, FOOD_PATIENCE, false), need('rest', STAY, STAY, true)],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
     });
     const world = stepTick(createWorld(2, silent), silent, [
       spawn('bedroom', 0, 0),

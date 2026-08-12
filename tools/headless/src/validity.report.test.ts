@@ -60,7 +60,12 @@ const content = loadContent();
  * the walk's index races so far ahead between them that no two built rooms are ever
  * neighbours — which means `noDoor` never occurs and the run has only one reason in it.
  */
-const CRITERION = ['--days', '30', '--seed', '7', '--rooms', '20', '--arrivals', '20', '--build', '1440', '--demolish', '5760'];
+// RETUNED AT G-027a FROM `--rooms 20`. A stay is three times longer, so the hotel earns
+// about a third as much per room-day and the cash test refuses far more builds — at 20 rooms
+// the player never packs two rooms hard enough against each other to produce a `noDoor`, and
+// the criterion below needs TWO reasons. 40 seeded rooms restores it (5 noDoor, 22
+// unsupported) without touching the rules this file is about.
+const CRITERION = ['--days', '30', '--seed', '7', '--rooms', '40', '--arrivals', '20', '--build', '1440', '--demolish', '5760'];
 
 function runInProcess(argv: readonly string[]): ReturnType<typeof buildSummary> {
   const options = parseArgs([...argv]);
@@ -104,7 +109,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
 
   it('is a hotel that still works, so the zero is not the zero of an empty building', () => {
     expect(summary.rooms.valid).toBeGreaterThan(0);
-    expect(departuresOf(summary, 'satisfied')).toBeGreaterThan(0);
+    expect(departuresOf(summary, 'checkedOut')).toBeGreaterThan(0);
     expect(summary.money.revenuePennies).toBeGreaterThan(0);
   });
 
@@ -152,7 +157,10 @@ describe('the shipped hotel still works', () => {
     // basement, which is grounded by the earth, corridored, and requires no furniture, so
     // they are valid on the same terms as the bedrooms above them.
     expect(summary.rooms.valid).toBe(3 + amenityRoomTypesOf(content).length);
-    expect(departuresOf(summary, 'satisfied')).toBe(267);
+    // 96 WHERE IT WAS 267 (G-027a): three rooms serve one guest a day each rather than three,
+    // so the shipped default turns most of its arrivals away. The rooms are all still valid,
+    // which is what this test is about.
+    expect(departuresOf(summary, 'checkedOut')).toBe(96);
     expect(violations).toEqual([]);
   });
 

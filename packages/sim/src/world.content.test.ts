@@ -95,6 +95,13 @@ describe('bindContent — normalisation', () => {
 
 describe('bindContent — need types, and why absence is not emptiness (G-004)', () => {
   const need = (id: string): NeedTypeData => ({ id, name: id, satisfyTicks: 480, patienceTicks: 180 });
+  /**
+   * G-027a: content that declares a lodging need must say how long a stay lasts, or
+   * `bindContent` refuses it. 960 clears the floor for the two-need tables below (480 of
+   * lodging against 480 of engagement, in parallel) and is the same value on every arm, so
+   * the fingerprint comparisons stay comparisons about NEEDS.
+   */
+  const stayRules = [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 960 }];
   const provider = (id: string, provides: readonly string[]): RoomTypeData => ({
     id,
     name: id,
@@ -125,10 +132,11 @@ describe('bindContent — need types, and why absence is not emptiness (G-004)',
     const content = bindContent({
       roomTypes: [provider('alpha', ['restA', 'restB'])],
       needTypes: [need('restB'), need('restA')],
+      guestRules: stayRules,
     });
     expect(content.content.needTypes?.map((entry) => entry.id)).toEqual(['restA', 'restB']);
     expect(Object.isFrozen(content.content.needTypes?.[0])).toBe(true);
-    expect(() => bindContent({ roomTypes: [provider('alpha', ['restA'])], needTypes: [need('restA'), need('restA')] })).toThrow(
+    expect(() => bindContent({ roomTypes: [provider('alpha', ['restA'])], needTypes: [need('restA'), need('restA')], guestRules: stayRules })).toThrow(
       /duplicate need type id/,
     );
   });
@@ -137,23 +145,25 @@ describe('bindContent — need types, and why absence is not emptiness (G-004)',
     const forwards = bindContent({
       roomTypes: [provider('alpha', ['restA', 'restB'])],
       needTypes: [need('restA'), need('restB')],
+      guestRules: stayRules,
     });
     const backwards = bindContent({
       roomTypes: [provider('alpha', ['restB', 'restA'])],
       needTypes: [need('restB'), need('restA')],
+      guestRules: stayRules,
     });
     expect(backwards.fingerprint).toBe(forwards.fingerprint);
   });
 
   it('rejects a room type that lists the same need twice', () => {
     expect(() =>
-      bindContent({ roomTypes: [provider('alpha', ['restA', 'restA'])], needTypes: [need('restA')] }),
+      bindContent({ roomTypes: [provider('alpha', ['restA', 'restA'])], needTypes: [need('restA')], guestRules: stayRules }),
     ).toThrow(/lists need "restA" twice/);
   });
 
   it('does not mutate the provides list it was handed', () => {
     const provides = ['restB', 'restA'];
-    bindContent({ roomTypes: [provider('alpha', provides)], needTypes: [need('restA'), need('restB')] });
+    bindContent({ roomTypes: [provider('alpha', provides)], needTypes: [need('restA'), need('restB')], guestRules: stayRules });
     expect(provides).toEqual(['restB', 'restA']);
   });
 });

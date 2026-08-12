@@ -4,13 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@hotelsim/content": "workspace:*",
-    "@hotelsim/sim": "workspace:*"
+    "@hotelsim/sim": "workspace:*",
+    "pixi.js": "^8.6.6"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vite": "^7.3.6"
   }
 }

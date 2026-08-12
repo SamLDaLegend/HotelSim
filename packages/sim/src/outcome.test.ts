@@ -20,7 +20,7 @@
 //       Catches a departure DROPPED, DOUBLE-COUNTED or INVENTED. Blind to a departure
 //       filed under the wrong reason, because the total does not move.
 //
-//   L2  roomRevenue transactions === the satisfied row      the report, and here.
+//   L2  roomRevenue transactions === the checkedOut row     the report, and here.
 //       Catches exactly what L1 cannot. It reads the LEDGER — a different subsystem,
 //       written by different code for a different purpose — which is what "compares
 //       against a separate input" means and what the deleted G-013 check lacked.
@@ -69,6 +69,9 @@ const needType = (id: string): NeedTypeData => ({
 const content = bindContent({
   roomTypes: [roomType('roomA', ['rest'])],
   needTypes: [needType('rest')],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
 });
 
 /** Rooms stand two columns apart so each has a door of its own (G-009). */
@@ -128,8 +131,8 @@ describe('the table has one row per reason and nothing else', () => {
     // The list is pinned so that adding a reason is a deliberate act with a migration
     // attached (see `outcome.save.test.ts`), not a quiet widening.
     expect([...GUEST_DEPARTURE_REASONS]).toEqual([
-      'satisfied',
-      'gaveUpWaiting',
+      'checkedOut',
+      'gaveUp',
       'evictedRoomGone',
       'evictedRoomUnusable',
       'evictedCauseUnrecorded',
@@ -137,7 +140,7 @@ describe('the table has one row per reason and nothing else', () => {
   });
 
   it('has no stored total: departed is a fold, so nothing can disagree with the rows', () => {
-    const outcomes = table(10, { satisfied: 4, gaveUpWaiting: 3, evictedRoomGone: 1 });
+    const outcomes = table(10, { checkedOut: 4, gaveUp: 3, evictedRoomGone: 1 });
     expect(departedGuests(outcomes)).toBe(8);
     // The object carries `arrived` and `departures` and NOTHING else. A stored `departed`
     // beside the rows would make L1 an identity — this is that promise as an assertion.
@@ -148,7 +151,7 @@ describe('the table has one row per reason and nothing else', () => {
 describe('L1: the conservation law, and it can fail', () => {
   it('accepts a table whose rows and arrivals account for everybody', () => {
     expect(() =>
-      assertGuestOutcomes(table(10, { satisfied: 5, gaveUpWaiting: 3 }), store(2)),
+      assertGuestOutcomes(table(10, { checkedOut: 5, gaveUp: 3 }), store(2)),
     ).not.toThrow();
   });
 
@@ -157,12 +160,12 @@ describe('L1: the conservation law, and it can fail', () => {
     // no longer accounts for the guests that arrived, so the law names itself. This is
     // what a vacuous law cannot do: `metByRoom + metByItem === met` stayed true no matter
     // what was deleted from it, because both sides came from the same numbers.
-    const full = table(10, { satisfied: 5, gaveUpWaiting: 3 });
+    const full = table(10, { checkedOut: 5, gaveUp: 3 });
     expect(() => assertGuestOutcomes(full, store(2))).not.toThrow();
 
     const missing: GuestOutcomes = {
       arrived: full.arrived,
-      departures: full.departures.filter((row) => row.reason !== 'gaveUpWaiting'),
+      departures: full.departures.filter((row) => row.reason !== 'gaveUp'),
     };
     expect(() => assertGuestOutcomes(missing, store(2))).toThrow(
       /10 arrived but 5 departed and 2 are still here/,
@@ -176,7 +179,7 @@ describe('L1: the conservation law, and it can fail', () => {
     // Conservation runs over whatever rows are present, BEFORE the shape check. Delete a
     // ZERO row and conservation is satisfied — correctly, nobody is missing — so the
     // shape check is what fires. Both failures are real and they are different failures.
-    const full = table(10, { satisfied: 5, gaveUpWaiting: 3 });
+    const full = table(10, { checkedOut: 5, gaveUp: 3 });
     const missingZero: GuestOutcomes = {
       arrived: full.arrived,
       departures: full.departures.filter((row) => row.reason !== 'evictedRoomUnusable'),
@@ -187,37 +190,37 @@ describe('L1: the conservation law, and it can fail', () => {
   });
 
   it('throws on a duplicated row, which would sum correctly on its own', () => {
-    const rows: GuestOutcomeRow[] = [...table(10, { satisfied: 5, gaveUpWaiting: 3 }).departures];
-    rows.splice(1, 0, { reason: 'satisfied', count: 0 });
+    const rows: GuestOutcomeRow[] = [...table(10, { checkedOut: 5, gaveUp: 3 }).departures];
+    rows.splice(1, 0, { reason: 'checkedOut', count: 0 });
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
       /6 departure row\(s\) against 5 known reason\(s\)/,
     );
   });
 
   it('throws on rows in the wrong order, because the order is in the state hash', () => {
-    const rows = [...table(10, { satisfied: 5, gaveUpWaiting: 3 }).departures];
+    const rows = [...table(10, { checkedOut: 5, gaveUp: 3 }).departures];
     const [first, second] = [rows[0]!, rows[1]!];
     rows[0] = second;
     rows[1] = first;
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
-      /departures\[0\] is "gaveUpWaiting" where "satisfied" belongs/,
+      /departures\[0\] is "gaveUp" where "checkedOut" belongs/,
     );
   });
 
   it('throws on an unknown reason, so a typo cannot become a silent sixth bucket', () => {
-    const rows = [...table(10, { satisfied: 5, gaveUpWaiting: 3 }).departures];
+    const rows = [...table(10, { checkedOut: 5, gaveUp: 3 }).departures];
     rows[1] = { reason: 'gaveUpWating' as never, count: 3 };
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
-      /departures\[1\] is "gaveUpWating" where "gaveUpWaiting" belongs/,
+      /departures\[1\] is "gaveUpWating" where "gaveUp" belongs/,
     );
   });
 
   it('throws on a negative or non-integer count, naming the row', () => {
-    expect(() => assertGuestOutcomes(table(10, { satisfied: -1 }), store(2))).toThrow(
-      /departures\[0\] \(satisfied\) must be a non-negative safe integer/,
+    expect(() => assertGuestOutcomes(table(10, { checkedOut: -1 }), store(2))).toThrow(
+      /departures\[0\] \(checkedOut\) must be a non-negative safe integer/,
     );
-    expect(() => assertGuestOutcomes(table(10, { gaveUpWaiting: 1.5 }), store(2))).toThrow(
-      /departures\[1\] \(gaveUpWaiting\) must be a non-negative safe integer/,
+    expect(() => assertGuestOutcomes(table(10, { gaveUp: 1.5 }), store(2))).toThrow(
+      /departures\[1\] \(gaveUp\) must be a non-negative safe integer/,
     );
   });
 
@@ -236,15 +239,15 @@ describe('L2: a departure filed under the wrong reason', () => {
 
   it('leaves the conservation law perfectly happy', () => {
     const world = lived();
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
-    // Move one departure from `satisfied` to `gaveUpWaiting`. The sum is unchanged, so
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
+    // Move one departure from `checkedOut` to `gaveUp`. The sum is unchanged, so
     // L1 sees nothing at all — which is the whole reason L2 exists.
     const misfiled: GuestOutcomes = {
       arrived: world.guestOutcomes.arrived,
       departures: world.guestOutcomes.departures.map((row) =>
-        row.reason === 'satisfied'
+        row.reason === 'checkedOut'
           ? { reason: row.reason, count: row.count - 1 }
-          : row.reason === 'gaveUpWaiting'
+          : row.reason === 'gaveUp'
             ? { reason: row.reason, count: row.count + 1 }
             : row,
       ),
@@ -255,11 +258,11 @@ describe('L2: a departure filed under the wrong reason', () => {
 
   it('and is caught by the ledger, which is not one of the table\'s own inputs', () => {
     const world = lived();
-    const satisfied = departureCountOf(world.guestOutcomes, 'satisfied');
+    const checkedOut = departureCountOf(world.guestOutcomes, 'checkedOut');
     // The law, on an honest world.
-    expect(countRoomRevenueTransactions(world.ledger)).toBe(satisfied);
+    expect(countRoomRevenueTransactions(world.ledger)).toBe(checkedOut);
     // And the same law over the misfiled table, which moves.
-    const misfiled = satisfied - 1;
+    const misfiled = checkedOut - 1;
     expect(countRoomRevenueTransactions(world.ledger)).not.toBe(misfiled);
   });
 
@@ -275,28 +278,40 @@ describe('every reason a tick can write is reached by a real run', () => {
   // A reason no run can produce is a row nobody can interpret. Each of these drives the
   // branch in `stepGuests` that decides it, through `stepTick`, and reads the row back.
 
-  it('satisfied: the lodging need is met and the stay is paid for', () => {
+  it('checkedOut: the stay duration elapsed in a room, and the stay is paid for', () => {
     const world = run(hotel(1), content, 30, [at(1, arrive)]);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
     expect(evictedGuests(world.guestOutcomes)).toBe(0);
     expect(countRoomRevenueTransactions(world.ledger)).toBe(1);
   });
 
-  it('gaveUpWaiting: patience for a room ran out before one was free', () => {
-    // One room, six guests. The queue moves at one guest per 10 ticks and patience is 25,
-    // so the ones at the back leave having paid nothing — v7 called this `unsatisfied`,
-    // and the row name is that field's own doc comment.
+  it('gaveUp: patience for a room ran out before one was free', () => {
+    // ONE ROOM, THIRTY GUESTS, ALL AT THE DOOR ON THE SAME TICK. v7 called this row
+    // `unsatisfied`, and the name is that field's own doc comment.
+    //
+    // THE ARM GREW FROM SIX ARRIVALS TO THIRTY AT G-027a, AND THE REASON IS WORTH READING
+    // RATHER THAN PATCHING PAST. The stay clock runs from ARRIVAL, so a guest that queued
+    // spends part of its stay in the queue and checks out sooner after getting the room. On
+    // this file's content — stay 10, patience 25 — the one room therefore turns over roughly
+    // once a tick once the queue has formed, which drains six guests long inside their
+    // patience and made the old arm report zero give-ups. Thirty guests is a queue the drain
+    // rate cannot clear in 25 ticks, which is what the row is about.
+    //
+    // IT IS NOT A DEGENERATE CASE ON THE SHIPPED TABLE, and saying so is the point of this
+    // note: there, patience is 180 against a stay of 1,440, so the most a guest can lose to
+    // the queue is an eighth of its stay. This content has stay === satisfyTicks, which is
+    // the floor `bindContent` allows and the shortest stay expressible.
     const world = run(
       hotel(1),
       content,
-      200,
-      [1, 2, 3, 4, 5, 6].map((tick) => at(tick, arrive)),
+      400,
+      Array.from({ length: 30 }, () => at(1, arrive)),
     );
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
     expect(evictedGuests(world.guestOutcomes)).toBe(0);
     expect(countRoomRevenueTransactions(world.ledger)).toBe(
-      departureCountOf(world.guestOutcomes, 'satisfied'),
+      departureCountOf(world.guestOutcomes, 'checkedOut'),
     );
   });
 
@@ -343,7 +358,9 @@ describe('every reason a tick can write is reached by a real run', () => {
     // reason there is no runtime assertion here to make it fail. What CAN be asserted is
     // that a long, eventful run never moves it.
     const world = run(hotel(2), content, 400, [
-      ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((tick) => at(tick, arrive)),
+      // Thirty at the door, for the reason the `gaveUp` arm above states at length: the queue
+      // has to outrun the drain rate before anybody gives up.
+      ...Array.from({ length: 30 }, () => at(1, arrive)),
       // Take a room out from under whoever is in it, halfway through the queue.
       at(5, despawn(1)),
     ]);
@@ -351,8 +368,8 @@ describe('every reason a tick can write is reached by a real run', () => {
     // And the run really was eventful, or the zero above is a zero about nothing.
     expect(departedGuests(world.guestOutcomes)).toBeGreaterThan(3);
     expect(evictedGuests(world.guestOutcomes)).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
   });
 });
 
@@ -388,6 +405,6 @@ describe('the tick keeps the table honest as it goes', () => {
     const before = world.guestOutcomes.departures;
     world = run(world, content, 30, []);
     expect(world.guestOutcomes.departures).not.toBe(before);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
   });
 });

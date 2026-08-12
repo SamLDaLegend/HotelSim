@@ -109,24 +109,34 @@ describe('the criterion invocation prints a per-need table that measures somethi
     expect(both.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('and they are the two that are oversubscribed, which is the prediction', () => {
-    // Named rather than counted, so a change that swapped one need for another is visible
-    // instead of absorbed. The ids come from the CONTENT's own table by position in the
-    // vector, so this file carries no snake_case literal of its own.
+  it('and EVERY need type straddles since G-027a, the lodging one included', () => {
+    // ========================================================================
+    // THIS TEST ASSERTED THE LODGING NEED WAS *NOT* IN THE STRADDLING SET, AND THE REASON IT
+    // WAS TRUE HAS GONE. Six rooms served THREE stays a day each — 18 against 12 arrivals —
+    // so everybody got a bed and `night_rest` was met for every guest that arrived. A stay is
+    // now 1,440 ticks, so six rooms serve six guests a day against the same twelve arrivals
+    // and 161 of 353 never get one.
+    //
+    // THE CRITERION IS UNAFFECTED AND STRONGER: it asks for at least TWO need types with a
+    // non-zero met AND a non-zero unmet, and all FOUR now qualify. What is retired is the
+    // PREDICTION about which two, because the answer is "all of them".
+    // ========================================================================
     const both = summary.needs.filter((row) => row.met > 0 && row.unmet > 0).map((row) => row.needId);
     const lodging = lodgingNeedOf(content);
     expect(lodging).toBeDefined();
-    expect(both).not.toContain(lodging!.id);
-    for (const id of both) expect(summary.needs.find((row) => row.needId === id)?.lodging).toBe(false);
+    expect(both).toContain(lodging!.id);
+    expect(both).toHaveLength(summary.needs.length);
   });
 
-  it('and the lodging need CANNOT carry it at six rooms, which is why two engagement needs must', () => {
-    // Six rooms x three stays a day against twelve arrivals: everybody gets a bed. If this
-    // ever goes red, the criterion has become easier rather than the hotel better.
+  it('and the lodging need CARRIES it at six rooms now, which is the capacity change stated', () => {
+    // The other half of the flip, as numbers rather than as prose. If this ever goes back to
+    // zero unmet, either capacity or the stay length has moved and the criterion has become
+    // easier rather than the hotel better.
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBeGreaterThan(0);
-    expect(lodging?.unmet).toBe(0);
-    expect(departuresOf(summary, 'gaveUpWaiting')).toBe(0);
+    expect(lodging?.met).toBe(192);
+    expect(lodging?.unmet).toBe(161);
+    expect(departuresOf(summary, 'gaveUp')).toBe(161);
+    expect(departuresOf(summary, 'checkedOut')).toBe(192);
   });
 
   it('tells THREE DIFFERENT STORIES, which is what the criterion above needs to mean anything', () => {
@@ -178,7 +188,7 @@ describe('the criterion invocation prints a per-need table that measures somethi
   it('closes exactly: every row sums to the number of guests that have departed', () => {
     // The conservation law, over a real run of thirty simulated days. A need instance
     // dropped on an exit path — or counted twice — moves one side of this and not the other.
-    const departed = departuresOf(summary, 'satisfied') + departuresOf(summary, 'gaveUpWaiting') + evictedInSummary(summary);
+    const departed = departuresOf(summary, 'checkedOut') + departuresOf(summary, 'gaveUp') + evictedInSummary(summary);
     expect(departed).toBeGreaterThan(0);
     for (const row of summary.needs) {
       expect(row.met + row.unmet, row.needId).toBe(departed);
@@ -214,14 +224,14 @@ describe('a hotel with nothing to do in it', () => {
   });
 
   it('still serves and charges for every stay — a failed want is not a failed visit', () => {
-    expect(departuresOf(summary, 'satisfied')).toBeGreaterThan(0);
+    expect(departuresOf(summary, 'checkedOut')).toBeGreaterThan(0);
     expect(summary.money.revenuePennies).toBeGreaterThan(0);
     expect(summary.guests.stuck).toBe(0);
     expect(violations).toEqual([]);
   });
 
   it('and the table still closes, so "everything failed" is counted rather than skipped', () => {
-    const departed = departuresOf(summary, 'satisfied') + departuresOf(summary, 'gaveUpWaiting') + evictedInSummary(summary);
+    const departed = departuresOf(summary, 'checkedOut') + departuresOf(summary, 'gaveUp') + evictedInSummary(summary);
     for (const row of summary.needs) expect(row.met + row.unmet, row.needId).toBe(departed);
   });
 });
@@ -308,9 +318,23 @@ describe('and the old control still holds under a SATURATING margin — the era 
     return JSON.parse(result.stdout) as RunSummary;
   })();
 
-  it('has one engagement need met for EVERYBODY, exactly as it did before the margin', () => {
+  it('has no engagement need met for EVERYBODY any more, because nobody is here for everybody', () => {
+    // ========================================================================
+    // THE ERA CONTROL STILL DISCRIMINATES; WHAT IT DISCRIMINATES ON MOVED (G-027a). Under a
+    // saturating margin a guest never abandoned anything, so the need it engaged first was
+    // met for every guest that stayed — and `--rooms 6` used to mean every guest stayed.
+    // With a 1,440-tick stay 161 of 353 guests never get a room at all, and a guest that
+    // never gets one still fails whatever it could not reach, so no row is unmet-free.
+    //
+    // What the arm is FOR is unchanged and is the assertion below it: this era abandons
+    // nothing. That is the property that separates it from the shipped margin, and it is
+    // exact rather than a distributional shape.
+    // ========================================================================
     const alwaysMet = era.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0);
-    expect(alwaysMet.length).toBeGreaterThanOrEqual(1);
+    expect(alwaysMet).toHaveLength(0);
+    // And every engagement row still MET somebody, so this is a hotel that works rather than
+    // one that stopped serving anyone.
+    for (const row of era.needs.filter((entry) => !entry.lodging)) expect(row.met).toBeGreaterThan(0);
   });
 
   it('and it abandons nothing, which is what "the era before this goal" means', () => {

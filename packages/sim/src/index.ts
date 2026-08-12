@@ -54,6 +54,10 @@ export {
   requiredItemsOf,
   roomTypeProvides,
   roomTypeServes,
+  // G-027a. Exported because the runner reports the stay length and the tests that compute
+  // the four arms need it from outside `packages/sim`; it is the `abandonMarginOf` shape and
+  // is on the surface for the same reason.
+  stayDurationOf,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {
@@ -124,8 +128,9 @@ export {
   guestCount,
   guestsInOrder,
   // `isCutShort` is DELIBERATELY ABSENT (G-019, `ai-critic` MINOR 1). It escaped the ruling
-  // that withheld `experienceBasisPoints` and `lodgingWaitBasisPoints` twenty lines below,
-  // for exactly the same reason: no consumer outside `packages/sim`. The report asks the
+  // that withheld `experienceBasisPoints` twenty lines below (and `lodgingWaitBasisPoints`,
+  // which G-027a deleted outright), for exactly the same reason: no consumer outside
+  // `packages/sim`. The report asks the
   // same question with a string prefix, because a JSON document carries reasons as strings
   // and has no union to switch on — see `EVICTION_REASON_PREFIX` there for that trade.
   isEngaged,
@@ -153,12 +158,13 @@ export {
   urgencyOf,
 } from './needs.js';
 export type { ReviewOutcomeRow, ReviewScale } from './reviews.js';
-// `experienceBasisPoints` and `lodgingWaitBasisPoints` are DELIBERATELY ABSENT (G-019,
-// `balance-critic` MINOR 4). Both are diagnostics with no consumer outside `packages/sim`,
-// and the first is worse than merely unused: it computes the two-step intermediate that
-// `reviews.ts` documents as a whole-band error, so exporting it invites a caller to derive a
-// score from it and get a different answer from `reviewOf`. Tests inside this package reach
-// both directly; nothing outside it has a reason to.
+// `experienceBasisPoints` is DELIBERATELY ABSENT (G-019, `balance-critic` MINOR 4). It is a
+// diagnostic with no consumer outside `packages/sim`, and it is worse than merely unused: it
+// computes the two-step intermediate that `reviews.ts` documents as a whole-band error, so
+// exporting it invites a caller to derive a score from it and get a different answer from
+// `reviewOf`. Tests inside this package reach it directly; nothing outside it has a reason
+// to. (`lodgingWaitBasisPoints` shared this note until G-027a deleted the function — see the
+// epitaph in `reviews.ts` for why the wait axis went rather than being defaulted.)
 export {
   assertReviewOutcomes,
   createReviewOutcomes,

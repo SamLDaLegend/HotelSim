@@ -262,6 +262,8 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     // union but not to history.
     const code = stripComments(saveSource());
     const declaration = /V8_MIGRATION_GUEST_OUTCOMES[\s\S]{0,900}?\]\)/.exec(code)?.[0] ?? '';
+    // THE v8-ERA SPELLINGS, AND THEY ARE DELIBERATELY NOT THE LIVE ONES ANY MORE (G-027a).
+    // See the arm below.
     expect(declaration).toContain("reason: 'satisfied', count: 0");
     expect(declaration).toContain("reason: 'gaveUpWaiting', count: 0");
     expect(declaration).toContain("reason: 'evictedRoomGone', count: 0");
@@ -270,18 +272,49 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(declaration).toContain('Object.freeze');
   });
 
-  it('and the frozen list is the one the sim actually ships, or the migration is already wrong', () => {
-    // The other direction, and the reason this is not merely a spelling test: the five
-    // reasons above must be exactly the reasons a v8 world may carry TODAY. They are allowed
-    // to diverge LATER — that divergence is the whole point of freezing them — but on the day
-    // the constant is written they have to agree, or every migrated save is born invalid.
+  it('THE FROZEN LIST HAS DIVERGED FROM THE LIVE ONE, WHICH IS THE FREEZE WORKING (G-027a)', () => {
+    // ============================================================================
+    // THIS ARM USED TO ASSERT THE OPPOSITE, AND THE FLIP IS THE POINT RATHER THAN A REPAIR.
+    //
+    // It read: "the five reasons above must be exactly the reasons a v8 world may carry
+    // TODAY. They are allowed to diverge LATER — that divergence is the whole point of
+    // freezing them — but on the day the constant is written they have to agree."
+    //
+    // **G-027a IS THAT LATER.** `satisfied -> checkedOut` and `gaveUpWaiting -> gaveUp`, so
+    // the v8 literal and `GUEST_DEPARTURE_REASONS` now disagree on exactly two of five names.
+    // The v8 literal must NOT be updated — a v7 world's rows are carried onto v8's names and
+    // `migrateV11ToV12` renames them onwards — and the live list must not be dragged back.
+    //
+    // So the assertion becomes the one that is still true and still bites: the two lists
+    // agree in LENGTH and in the three names no era renamed, and the v12 step is what closes
+    // the gap. A test that simply deleted the old expectation would have removed the only
+    // thing watching the two lists at all.
+    // ============================================================================
+    const v8Era = ['satisfied', 'gaveUpWaiting', 'evictedRoomGone', 'evictedRoomUnusable', 'evictedCauseUnrecorded'];
     expect([...GUEST_DEPARTURE_REASONS]).toEqual([
-      'satisfied',
-      'gaveUpWaiting',
+      'checkedOut',
+      'gaveUp',
       'evictedRoomGone',
       'evictedRoomUnusable',
       'evictedCauseUnrecorded',
     ]);
+    expect(GUEST_DEPARTURE_REASONS).toHaveLength(v8Era.length);
+    // The two that were renamed, and the three that were not — stated by position, so a
+    // future rename lands here rather than in a run's goldens.
+    expect(GUEST_DEPARTURE_REASONS.slice(2)).toEqual(v8Era.slice(2));
+    expect(GUEST_DEPARTURE_REASONS.slice(0, 2)).not.toEqual(v8Era.slice(0, 2));
+  });
+
+  it('and the v12 step is what closes that gap, by position and from a frozen pair list', () => {
+    // The positive half: the divergence above is only safe because a migration carries the
+    // old names onto the new ones. `migrateV11ToV12` may not read the live list either, so
+    // its mapping is its own frozen literal.
+    const code = stripComments(saveSource());
+    const declaration = /V12_MIGRATION_DEPARTURE_RENAMES[\s\S]{0,900}?\]\)/.exec(code)?.[0] ?? '';
+    expect(declaration).toContain("from: 'satisfied', to: 'checkedOut'");
+    expect(declaration).toContain("from: 'gaveUpWaiting', to: 'gaveUp'");
+    expect(declaration).toContain("from: 'evictedRoomGone', to: 'evictedRoomGone'");
+    expect(declaration).toContain('Object.freeze');
   });
 
   it("freezes the ENTRANCE FLOOR as a literal, and clamps it onto the SAVE's own plot", () => {

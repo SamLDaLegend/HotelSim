@@ -539,8 +539,16 @@ function hud(world, extra) {
     // recording happened to contain, which is how a disposable viewer grows a feature; these
     // are the five reasons this build writes, spelled out, and `left` returns an em-dash for
     // a recording that predates them rather than a plausible 0.
-    ['satisfied', left(o, 'satisfied')],
-    ['gave up', left(o, 'gaveUpWaiting')],
+    //
+    // THE FIRST TWO ROWS WERE RENAMED AT G-027a AND THE EM-DASH NOW MEANS TWO THINGS. It has
+    // always meant "this recording predates the row". It now ALSO means "this recording used
+    // the pre-G-027a spelling" — every committed `watch-*.ndjson` shows an em-dash against
+    // these two rows, because their tables say `satisfied` / `gaveUpWaiting`. That is the
+    // honest direction (a stale recording reads as unknown rather than as zero) and it is
+    // stated here because an em-dash with two meanings is exactly the kind of thing a watcher
+    // would otherwise read as a bug in the viewer.
+    ['checked out', left(o, 'checkedOut')],
+    ['gave up', left(o, 'gaveUp')],
     ['room gone', left(o, 'evictedRoomGone')],
     ['room broke', left(o, 'evictedRoomUnusable')],
     ['evicted (old save)', left(o, 'evictedCauseUnrecorded')],

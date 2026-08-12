@@ -315,7 +315,7 @@ describe('buildSummary', () => {
     // transaction, because there is no balance field to put it in (I4).
     expect(summary.money.startingCapitalPennies).toBeGreaterThan(0);
     expect(summary.money.transactions).toBe(
-      1 + departuresOf(summary, 'satisfied') + summary.money.settlements,
+      1 + departuresOf(summary, 'checkedOut') + summary.money.settlements,
     );
     expect(summary.money.balancePennies).toBe(
       summary.money.startingCapitalPennies + summary.money.revenuePennies + summary.money.upkeepPennies,
@@ -379,7 +379,7 @@ describe('assertIntegerLeaves', () => {
 // the wrong field produces a visible mismatch rather than a coincidental pass.
 // Module scope: the emitReport tests reuse it as the summary of a forged BuiltReport.
 const distinct: RunSummary = {
-  schema: 2,
+  schema: SUMMARY_SCHEMA_VERSION,
   input: {
     seed: 101,
     ticks: 102,
@@ -396,8 +396,8 @@ const distinct: RunSummary = {
     // DISTINCT PER ROW, for the reason every other number here is distinct: a renderer that
     // printed the rows in the wrong order, or printed one row twice, would otherwise pass.
     departures: [
-      { reason: 'satisfied', count: 111 },
-      { reason: 'gaveUpWaiting', count: 112 },
+      { reason: 'checkedOut', count: 111 },
+      { reason: 'gaveUp', count: 112 },
       { reason: 'evictedRoomGone', count: 113 },
       { reason: 'evictedRoomUnusable', count: 140 },
       { reason: 'evictedCauseUnrecorded', count: 141 },
@@ -478,8 +478,8 @@ describe('renderers', () => {
         'arrived     110',
         // One line per row, in table order, each carrying its own distinct sentinel — so a
         // renderer that printed the rows in the wrong order, or printed one twice, fails here.
-        'left satisfied              111',
-        'left gaveUpWaiting          112',
+        'left checkedOut             111',
+        'left gaveUp                 112',
         'left evictedRoomGone        113',
         'left evictedRoomUnusable    140',
         'left evictedCauseUnrecorded 141',
@@ -569,7 +569,13 @@ describe('buildSummary violations (forged worlds)', () => {
     const limit = maxGuestLifetimeTicks(content, needType.id);
     const forged = withForgedGuest(world, {
       at: { floor: 0, column: 0 }, // G-023a: waiting in the doorway, which is where it is
-      arrivedTick: world.tick - limit - 1, // one tick past the oldest a live guest can be
+      // `world.tick - limit` — ONE tick past the oldest age a live guest can legitimately
+      // have, which is `limit - 1` (see `countStuckGuests`). This read `- limit - 1` with the
+      // same comment, which was two ticks past and therefore did not say what it did: an
+      // off-by-one between a comment and its predicate, in the subsystem whose MAJOR this round
+      // was an off-by-one between a comment and its predicate. The arm was never weakened —
+      // both ages count — but the tightest forgery is the one that makes the comment true.
+      arrivedTick: world.tick - limit,
       roomEntityId: NO_ENTITY, // waiting, not orphaned — isolates the stuck branch
       engagement: null,
       needs: [{ needId: needType.id, patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 }],

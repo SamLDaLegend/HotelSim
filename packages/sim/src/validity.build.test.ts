@@ -58,6 +58,9 @@ const content = bindContent({
     },
   ],
   needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 30, patienceTicks: 10 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
   itemTypes: [
     { id: 'bed', name: 'bed' },
     { id: 'lamp', name: 'lamp' },

@@ -52,8 +52,22 @@ const roomType = (id: string, overrides: Partial<RoomTypeData> = {}): RoomTypeDa
 });
 const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: SATISFY, patienceTicks: PATIENCE };
 
+/**
+ * G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+ * refuses it — a guest holding a room has no other way to leave. `SATISFY`, so a guest that
+ * walks into an empty hotel still checks out on the tick this file has always expected.
+ */
+const stayRules = [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }];
+
 /** One priced room type, one need. The M0 hotel with the G-005 field on it. */
-const content = bindContent({ roomTypes: [roomType('roomA')], needTypes: [needType] });
+const content = bindContent({
+  roomTypes: [roomType('roomA')],
+  needTypes: [needType],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave. SATISFY, so
+  // a guest that walks into an empty hotel still checks out on the tick this file expects.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
+});
 
 // G-007: a spawn carries a cell. G-008 made the column MEANINGFUL rather than incidental:
 // `spawnEntity` onto a cell where a room already stands now throws, so every spawn in a
@@ -130,6 +144,9 @@ describe('one settlement transaction per simulated night', () => {
     const mixed = bindContent({
       roomTypes: [roomType('roomA'), roomType('roomFree', { nightlyUpkeepPence: undefined })],
       needTypes: [needType],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
     });
     const world = run(hotel(1, mixed, 'roomA'), mixed, TICKS_PER_DAY, [at(5, spawn('roomFree', 50))]);
     expect(world.ledger).toHaveLength(1);
@@ -164,7 +181,7 @@ describe('the books close after the day\'s business', () => {
     // this is the observation. A guest arriving at MIDNIGHT - SATISFY pays exactly at
     // midnight; the night's books close after it has paid.
     const world = run(hotel(1), content, TICKS_PER_DAY, [at(MIDNIGHT - SATISFY, arrive)]);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
     expect(world.ledger).toHaveLength(2);
     expect(world.ledger.map((transaction) => transaction.reason)).toEqual(['roomRevenue', 'upkeep']);
     expect(world.ledger.map((transaction) => transaction.tick)).toEqual([MIDNIGHT, MIDNIGHT]);
@@ -215,8 +232,8 @@ describe('the balance is the fold, and the fold is fully explained', () => {
     for (let tick = 1; tick < days * TICKS_PER_DAY; tick += 120) arrivals.push(at(tick, arrive));
     const world = run(hotel(rooms), content, days * TICKS_PER_DAY, arrivals);
 
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
-    const expected = departureCountOf(world.guestOutcomes, 'satisfied') * RATE - days * rooms * UPKEEP;
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
+    const expected = departureCountOf(world.guestOutcomes, 'checkedOut') * RATE - days * rooms * UPKEEP;
     expect(balanceOf(world.ledger)).toBe(expected);
 
     // Two independent computations of one number: the blind fold against the sum of
@@ -224,7 +241,7 @@ describe('the balance is the fold, and the fold is fully explained', () => {
     let classified = 0;
     for (const reason of TRANSACTION_REASONS) classified += sumByReason(world.ledger, reason);
     expect(balanceOf(world.ledger)).toBe(classified);
-    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(departureCountOf(world.guestOutcomes, 'satisfied') * RATE);
+    expect(sumByReason(world.ledger, 'roomRevenue')).toBe(departureCountOf(world.guestOutcomes, 'checkedOut') * RATE);
     expect(sumByReason(world.ledger, 'upkeep')).toBe(-(days * rooms * UPKEEP));
     expect(countSettlementTransactions(world.ledger)).toBe(days);
   });
@@ -261,12 +278,13 @@ describe('the upkeep rate is content, validated at the boundary', () => {
     // disagree about which simulation they are running.
     const bare = roomType('roomA', {});
     const { nightlyUpkeepPence: _dropped, ...withoutKey } = bare;
-    const absent = bindContent({ roomTypes: [{ ...withoutKey }], needTypes: [needType] });
+    const absent = bindContent({ roomTypes: [{ ...withoutKey }], needTypes: [needType], guestRules: stayRules });
     const explicit = bindContent({
       roomTypes: [roomType('roomA', { nightlyUpkeepPence: undefined })],
       needTypes: [needType],
+      guestRules: stayRules,
     });
-    const priced = bindContent({ roomTypes: [roomType('roomA')], needTypes: [needType] });
+    const priced = bindContent({ roomTypes: [roomType('roomA')], needTypes: [needType], guestRules: stayRules });
     expect(explicit.fingerprint).toBe(absent.fingerprint);
     expect(priced.fingerprint).not.toBe(absent.fingerprint);
   });

@@ -171,6 +171,9 @@ const V5_CONTENT: SimContent = Object.freeze({
     }),
   ]),
   needTypes: Object.freeze([Object.freeze({ id: 'rest', name: 'Rest', satisfyTicks: 30, patienceTicks: 40 })]),
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
 });
 const v5Content = bindContent(V5_CONTENT);
 
@@ -246,16 +249,32 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
   });
 
   it('AND THE MIGRATED GUESTS GO ON BEING SIMULATED, which is the point of all of it', () => {
-    // A migrated save that loads and cannot tick is a husk. Guest 3 has one tick of stay
-    // left, so it checks out and pays; guest 1 has 12 ticks of patience and no free room —
-    // rooms 1 and 3 are taken and room 2 is free, so it takes room 2 instead and stays.
+    // A migrated save that loads and cannot tick is a husk.
+    //
+    // ============================================================================
+    // BOTH LODGERS CHECK OUT ON THE FIRST TICK SINCE G-027a, WHERE ONE DID. That is the
+    // arrival-relative clock reading these bytes rather than a change in what they say:
+    // guests 2 and 3 arrived on ticks 700 and 600 of a world that is at 900, and this
+    // content gives a stay of 30 ticks, so BOTH have overstayed by the time the save is
+    // loaded and both leave at once. Under the era that wrote them, only guest 3 was one
+    // tick from having its need met.
+    //
+    // IT IS THE HONEST READING RATHER THAN A DEFECT, and the alternative would have been to
+    // invent a check-in tick these bytes do not carry (ADR-0008). A v5 world was never
+    // written under a stay duration at all — see `V5_CONTENT`, which supplies one because
+    // this build refuses content whose guests could never leave.
+    // ============================================================================
     const loaded = deserialise(v5Blob());
     const advanced = run(loaded, v5Content, 2, []);
-    expect(departureCountOf(advanced.guestOutcomes, 'satisfied')).toBe(5);
-    expect(advanced.ledger.filter((entry) => entry.reason === 'roomRevenue')).toHaveLength(2);
-    // And the tally it was given empty now has a row, written by a guest that arrived under
-    // content with no vector at all.
-    expect(advanced.needOutcomes).toEqual([{ needId: 'rest', met: 1, unmet: 0, metByItem: 0, abandoned: 0 }]);
+    expect(departureCountOf(advanced.guestOutcomes, 'checkedOut')).toBe(6);
+    // TWO NEW roomRevenue TRANSACTIONS, on top of the one the frozen v5 ledger already
+    // carried — one per checkout, which is the ledger witness holding across a migration.
+    expect(advanced.ledger.filter((entry) => entry.reason === 'roomRevenue')).toHaveLength(3);
+    // And the tally it was given empty now has rows, written by guests that arrived under
+    // content with no vector at all. Guest 3 was one tick from meeting its need and met it;
+    // guest 2 had seven to go and left with it unmet — which is a stay that was PAID FOR and
+    // not enjoyed, the shape G-028's review work exists for.
+    expect(advanced.needOutcomes).toEqual([{ needId: 'rest', met: 1, unmet: 1, metByItem: 0, abandoned: 0 }]);
   });
 
   it('and a migrated guest still fails on patience like any other', () => {
@@ -274,7 +293,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
       },
     });
     const world = run(deserialise(blob), v5Content, 12, []);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(3);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(3);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(world.needOutcomes).toEqual([{ needId: 'rest', met: 0, unmet: 1, metByItem: 0, abandoned: 0 }]);
   });
@@ -427,8 +446,8 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
       guestOutcomes: {
         arrived: 9,
         departures: [
-          { reason: 'satisfied' as const, count: 5 },
-          { reason: 'gaveUpWaiting' as const, count: 3 },
+          { reason: 'checkedOut' as const, count: 5 },
+          { reason: 'gaveUp' as const, count: 3 },
           { reason: 'evictedRoomGone' as const, count: 1 },
           { reason: 'evictedRoomUnusable' as const, count: 0 },
           { reason: 'evictedCauseUnrecorded' as const, count: 0 },
@@ -457,6 +476,9 @@ describe('the need vector round-trips out of a real run', () => {
       { id: 'food', name: 'food', role: 'engagement', satisfyTicks: 10, patienceTicks: 60 },
       { id: 'rest', name: 'rest', role: 'lodging', satisfyTicks: 40, patienceTicks: 30 },
     ],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 40 }],
   });
   // 100 ticks, and the horizon is chosen rather than round: the last arrival is at tick 90,
   // so guests are still in the hotel and one is still mid-meal when the save is taken. A

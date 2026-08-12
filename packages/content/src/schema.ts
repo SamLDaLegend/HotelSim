@@ -174,29 +174,43 @@ export const fitBasisPointsSchema = basisPointsSchema.optional();
  *
  * The name is honest about the unit it was written for and dishonest about the unit it
  * is billed in. `payForStay` in `packages/sim/src/guests.ts` appends ONE `roomRevenue`
- * transaction of exactly this amount at the moment a guest's need is met — and a stay
- * lasts `night_rest.satisfyTicks` ticks, which is a number in `need-types.json`, not
- * here. So:
+ * transaction of exactly this amount at the moment a guest CHECKS OUT — and a stay
+ * lasts `stayDurationTicks` ticks, which is a number in `guest-rules.json`, not here. So:
  *
- *     effective revenue per room-day = nightlyRatePence × (1440 / satisfyTicks)
+ *     effective revenue per room-day = nightlyRatePence × (1440 / stayDurationTicks)
  *
- * At the shipped numbers — rate 8,500p, `satisfyTicks` 480 (8 hours) — that is three
- * paid stays per 1,440-tick day: 25,500p nominal, 25,491.5p measured across seeds
- * (arrival gaps eat the fraction), against 2,500p of `nightlyUpkeepPence`. A margin of
- * 10.2 : 1, not the 3.4 : 1 the two field names imply.
+ * ---------------------------------------------------------------------------
+ * THE DENOMINATOR CHANGED FILE AT G-027a AND THE OLD ONE IS NOT MERELY STALE, IT IS
+ * FALSE. Until G-027a a stay ended when `night_rest` was MET, so the denominator was
+ * `night_rest.satisfyTicks` in `need-types.json` and the shipped 480 billed a room three
+ * times a night. ADR-0017 deleted that terminator: **`night_rest.satisfyTicks` now has NO
+ * ECONOMIC ROLE AT ALL** — it decides when a guest's rest need is met, and nothing else.
+ * Anyone who reads the old sentence and edits `need-types.json` to move the margin will
+ * find the margin does not move. Superseded by ADR-0020; ADR-0010 is left as written
+ * (ADR-0008).
+ * ---------------------------------------------------------------------------
  *
- * The consequence a designer must carry: `satisfyTicks` IS THE DOMINANT TERM IN THE
- * MARGIN, and it lives in another file. Measured, editing it alone and nothing else:
+ * At the shipped numbers — rate 8,500p, `stayDurationTicks` 1,440 — that is ONE paid stay
+ * per 1,440-tick day per occupied room: 8,500p nominal against 2,500p of
+ * `nightlyUpkeepPence`, a NOMINAL margin of 3.4 : 1, which is finally what the two field
+ * names imply.
  *
- *     satisfyTicks 1440  ->  5,957.5p per room-day   (one stay a night)
- *     satisfyTicks  480  -> 25,491.5p per room-day   <- shipped, 3.85× more
+ * THE REALISED FIGURE IS SLIGHTLY HIGHER, NOT LOWER, AND THE REASON IS A DESIGN FACT RATHER
+ * THAN NOISE: the stay clock runs from ARRIVAL, so a guest that queued occupies its room for
+ * less than the full duration and a busy hotel turns rooms over faster than once per stay.
+ * Measured at 9,066.7p per bedroom-day on the shipped default — see ADR-0020, which carries
+ * the invocation and the arithmetic.
  *
- * Balancing the economy therefore means opening `need-types.json` as well as this file.
- * It does not mean editing code (I3) — but it is not one file either, and the earlier
- * version of this comment said it was. Per-night pro-rata billing would remove the trap
- * by making the name true; it is a pricing-model change and belongs to M4, and renaming
- * the field is barred because it would move `SAVE_V1_CONTENT`'s shape and its
- * fingerprint `8e09fe4f0fa162a3` (ADR-0006).
+ * The consequence a designer must carry: **`stayDurationTicks` IS THE DOMINANT TERM IN
+ * THE MARGIN, and it lives in `guest-rules.json`** — a file whose subject is guest
+ * behaviour rather than money, which is exactly why this note exists. Halving it doubles
+ * the hotel's income without a price ever being edited. Balancing the economy therefore
+ * means opening `guest-rules.json` as well as this file. It does not mean editing code
+ * (I3) — but it is not one file either.
+ *
+ * Per-night pro-rata billing would remove the trap by making the name true; it is a
+ * pricing-model change and belongs to M4, and renaming the field is barred because it
+ * would move `SAVE_V1_CONTENT`'s shape and its fingerprint `8e09fe4f0fa162a3` (ADR-0006).
  * ---------------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------------
@@ -346,13 +360,22 @@ export const needRoleSchema = z.enum(['lodging', 'engagement']);
  * See `PARKING.md`.
  * ---------------------------------------------------------------------------
  *
- * `satisfyTicks` IS AN ECONOMIC NUMBER, not only a pacing one, and it is the file's
- * biggest surprise. A room bills `nightlyRatePence` once per COMPLETED stay, and this
- * is how long a stay is — so effective revenue per room-day is
- * `nightlyRatePence × (1440 / satisfyTicks)`, and halving this number doubles the
- * hotel's income without a price ever being edited. Measured, everything else shipped:
- * `satisfyTicks` 1440 -> 5,957.5p per room-day; 480 -> 25,491.5p, a 3.85× swing. See
- * the long note on `nightlyRatePence` in `roomTypeSchema` above before changing it.
+ * ---------------------------------------------------------------------------
+ * `satisfyTicks` HAS NO ECONOMIC ROLE, AND THIS PARAGRAPH USED TO SAY THE OPPOSITE.
+ *
+ * Until G-027a a stay ended on the tick `night_rest` was met, so this number WAS the
+ * length of a stay and therefore the dominant term in the hotel's margin — "the file's
+ * biggest surprise", as it said. ADR-0017 deleted that terminator: a stay now ends by
+ * CHECKOUT after `stayDurationTicks` (in `guest-rules.json`) or by the guest giving up,
+ * and **nothing bills against this field any more.** It decides one thing: how many ticks
+ * of provision meet the need. Editing it moves pacing and the review distribution, and
+ * moves revenue by nothing at all.
+ *
+ * The old sentence is corrected rather than deleted because it is the shape of error §5.8
+ * exists for — a sourced formula, with figures, in the place a designer is told to read
+ * first — and a reader who remembers it needs to be told it is wrong, not to find it gone.
+ * The live formula is on `nightlyRatePence` in `roomTypeSchema` above.
+ * ---------------------------------------------------------------------------
  *
  * WHICH provider satisfies this need is not recorded here. It is recorded on the
  * provider — as `roomType.provides` or, since G-013, as `itemType.provides` — so a new
@@ -619,6 +642,63 @@ export const abandonMarginBasisPointsSchema = basisPointsSchema;
 export const reviewScoreSchema = z.int();
 
 /**
+ * HOW LONG A STAY LASTS, IN TICKS (G-027a, ADR-0017 §4a) — and the only thing that ends
+ * one, apart from the guest giving up.
+ *
+ * A guest checks out on the tick `arrivedTick + stayDurationTicks`. Nothing about its
+ * needs is consulted: a need is a want, not a countdown to the door. **No need is
+ * terminal** is a separate claim about `needs.ts` and is G-027b's, not this field's;
+ * what this field says is narrower and is the whole of ADR-0017 §4 — a stay ends two ways
+ * and only two, and neither of them is "a need finished".
+ *
+ * ---------------------------------------------------------------------------
+ * THIS IS THE DOMINANT TERM IN THE HOTEL'S MARGIN, AND IT IS IN THE WRONG-LOOKING FILE.
+ * READ THIS BEFORE TREATING IT AS A PACING DIAL.
+ *
+ * `nightlyRatePence` is charged ONCE PER COMPLETED STAY (ADR-0010, ADR-0020), so
+ *
+ *     effective revenue per room-day = nightlyRatePence × (1440 / stayDurationTicks)
+ *
+ * and halving this number doubles the hotel's income without a price being edited. The
+ * trap ADR-0010 documented has not gone away; it has MOVED, from `need-types.json` to this
+ * file, whose subject is guest behaviour rather than money. The sign is here so it is not
+ * still pointing at the old room. See `nightlyRatePence` in `roomTypeSchema`.
+ * ---------------------------------------------------------------------------
+ *
+ * WHERE 1,440 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
+ *
+ * THE REQUIREMENT: **a stay spans exactly one nightly settlement, whatever tick it starts
+ * on** — so one completed stay's revenue is earned against exactly one night of the upkeep
+ * that room costs, and `nightlyRatePence` against `nightlyUpkeepPence` is a comparison a
+ * designer can make in their head. Settlement fires once per `TICKS_PER_DAY`, so a window
+ * of exactly `TICKS_PER_DAY` ticks contains exactly one settlement tick from any offset,
+ * and no shorter or longer window does. Hence 1,440. It is EXECUTED rather than asserted:
+ * `content.stay.test.ts` steps a world across every start offset and counts the settlements
+ * inside the window, rather than comparing this number against `TICKS_PER_DAY`.
+ *
+ * THE FLOOR, which is a different requirement and is the one `bindContent` refuses on:
+ * **everything a guest forms must be completable inside its stay**, or the content ships
+ * guaranteed unhappiness (`HOTELSIM.md` §6.1). A guest is served its lodging need whenever
+ * it holds a room, and its engagement needs ONE PROVIDER AT A TIME, so the two are parallel
+ * tracks and the floor is
+ *
+ *     max( lodging satisfyTicks , Σ engagement satisfyTicks )
+ *
+ * = max(480, 150 + 150 + 180) = 480 on the shipped table, leaving **960 ticks of slack**.
+ * The refusal is `assertStayFitsTheNeedTable` in `packages/sim/src/content.ts`, which is
+ * where both tables are in hand — this schema never sees the need table.
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `role`, `requires`, price, margin and review
+ * scale contract exactly. Silence in HISTORY is a true statement: content written before
+ * G-027a had no stay duration because in that era a stay ended when the lodging need was
+ * met. Silence on a NEW document is a designer forgetting the dial that sets the whole
+ * economy, so a document that reaches this schema must say. `bindContent` refuses any
+ * content that DECLARES A LODGING NEED and carries no duration, because such a guest
+ * could book a room and never leave it — see `assertEveryStayCanEnd`.
+ */
+export const stayDurationTicksSchema = z.int().min(1);
+
+/**
  * The rules a guest's own behaviour obeys (G-014b), as opposed to the rules of the money
  * loop (`economySchema`) or of any one room, item or need.
  *
@@ -635,6 +715,7 @@ export const guestRulesSchema = z
     abandonMarginBasisPoints: abandonMarginBasisPointsSchema,
     reviewScoreMin: reviewScoreSchema,
     reviewScoreMax: reviewScoreSchema,
+    stayDurationTicks: stayDurationTicksSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
   // cannot separate two stays and so cannot report on either. The relation that actually

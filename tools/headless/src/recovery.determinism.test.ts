@@ -122,8 +122,8 @@ describe('and none of it made the harness stop being a determinism harness', () 
   });
 
   it('still runs a hotel that serves guests, so none of this is failure being deterministic', () => {
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
     expect(evictedGuests(world.guestOutcomes)).toBeGreaterThan(0);
   });
 });

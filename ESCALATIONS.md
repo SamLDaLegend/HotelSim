@@ -1059,3 +1059,62 @@ remaining goals (G-031, G-027, G-028) will add `apps/game` and `packages/content
 the gate is repaired. Nothing currently leans on the hole — G-030's palette is derived at runtime
 rather than tabulated — but a table written in the natural spelling between now and then would
 pass I3 and would have to be found by eye.
+
+---
+
+## RESOLVED 2026-08-12 — `check:tickcost` cannot measure a commit that redefines occupancy
+
+**Human ruling: accept the red for G-027a, with the reason recorded, and schedule the campaign
+re-take as its own goal.** The alternatives — re-taking the campaign inside G-027a, or reverting
+the workload so the gate produces a number — were both offered and refused.
+
+### What happened, in order, because the sequence is the finding
+
+1. **G-027a tripped `check:tickcost` at 2.02× against a 1.4557 bound.** The builder did **not**
+   touch the gate (§9) and escalated with a mechanism instead of a request for a wider bound.
+2. **The orchestrator measured rather than accepting it.** `sim:measure --json`, paired and
+   interleaved, quiet: ratio **1.9834**, head **31,959 ns/tick**, base **16,113**, **1350
+   arrivals in both arms**. Population measured, not assumed: **`in hotel 45`** against 15 at
+   HEAD. **Cost per guest-tick fell from ~1,074 to ~710 — about a third.** On the axis
+   `workload.mjs` itself calls *"the honest axis… CONCURRENT GUESTS"*, this commit made the
+   simulation **cheaper**; the gate read 2× because the population tripled.
+3. **The human ruled `ARRIVAL_EVERY_TICKS` 32 → 96** to restore the calibrated 15 concurrent
+   (`1440/96`), with the bound explicitly NOT moved, and the orchestrator added a mechanical pin
+   so the proxy cannot silently redefine itself again.
+4. **AND THAT RULING WAS INCOMPLETE — THE ORCHESTRATOR REASONED ABOUT ONE ARM.** The builder
+   found that **no cadence fixes it**: the arms have different stay lengths (480 base, 1,440
+   head), so nothing puts both at 15. **45-vs-15 simply became 15-vs-5** — the 3:1 gap identical
+   and mirrored. The gate then **refused to run** on ADR-0015's own configuration check
+   (*"campaign 32, shipped workload 96 — POOL within a configuration, REPLACE on a configuration
+   change"*), and `check:tickcost:proof` cascaded from it.
+
+### The general finding, which is worth more than this goal
+
+> **A paired-ratio tripwire is not configuration-neutral across a content change that redefines
+> occupancy.** It compares two commits at one workload; when content changes what that workload
+> *means*, the two arms are running different experiments and no setting reconciles them.
+
+**The refusal is the gate working, and is strictly better than the number it would otherwise
+print**: 2.02 would assert a regression that does not exist. **A green gate measuring a different
+hotel is worse than a red one, because it has stopped being evidence** (ADR-0021).
+
+### Confirmed twice, independently configured
+
+Per-guest-tick cost fell **−34%** at cadence 32 and **−40%** at cadence 96 — two configurations,
+same direction, same order. And an independent instrument agreed: **the eviction split went
+19/0 → 19/16 → back to 19/0** when occupancy was restored — a counter that moves only with
+concurrent population, moving back when the population did.
+
+### What is owed, and by whom
+
+- **The bound campaign is RE-TAKEN at the shipped configuration**, under ADR-0015's REPLACE half
+  and ADR-0016's derivation rule, **as its own goal** — it is a four-arm interleaved campaign
+  plus a loaded arm, and it needs **a human decision on the new ceiling**, which is why it is not
+  a fix inside G-027a.
+- **It joins the M3 instrument-debt goal** beside I3's unquoted-key hole, the tripwire's
+  unrecharacterised regime under parallel tracks, and the 0.05° reserved-hue margin.
+- **THE RISK OF ACCEPTING A RED ROW, STATED SO IT IS A DECISION AND NOT A DRIFT**: `pnpm verify`
+  exits 1 until that goal runs, so every goal in between inherits a red row. §9's shape is *"a
+  gate that flakes red teaches people to re-run it"*; a gate that is **known** red teaches people
+  to skim the summary. **Every VERIFY between now and the re-take must state the row count green
+  AND name these two as the ruled exceptions**, or the exception has become the habit.

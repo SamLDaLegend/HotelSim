@@ -97,7 +97,7 @@ import type { BoundContent, Cell, GridBounds, RoomTypeData, ScheduledCommand, Wo
  *
  * The two numbers are deliberately out of balance: 12 guests a day against 9 stays the
  * hotel can serve, so a 30-day run demonstrates BOTH halves of "has it met or not". A
- * hotel that could never disappoint anybody would make "satisfied" a number nobody
+ * hotel that could never disappoint anybody would make "checkedOut" a number nobody
  * could interpret.
  *
  * These constants are the DEFAULTS for `--rooms` and `--arrivals`. The default run —
@@ -365,11 +365,27 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
  * row per reason. This is exactly what the policy above reserves a bump for: three fields
  * removed, not a fourth added. The scheduled bump named in this comment since G-006.
  *
+ * **3 (G-027a) — THE SECOND BUMP, AND IT IS A RENAME RATHER THAN A REMOVAL.** Two values
+ * inside `guests.departures[].reason` change: `satisfied -> checkedOut` and
+ * `gaveUpWaiting -> gaveUp` (ADR-0017 §4). Nothing is added and nothing is removed, so this
+ * is the case the policy above needs read carefully: **the policy says a RENAME bumps, and
+ * it does not say "a renamed KEY".** A consumer asking
+ * `departures.find(row => row.reason === 'satisfied')?.count ?? 0` gets zero where it used
+ * to get the whole hotel's completed stays — the identical failure the v1 -> v2 note
+ * describes, one level down the document, and worse for being invisible: the KEY
+ * `departures` still exists, the array still has five rows, and every one of them still has
+ * a `reason` and a `count`. There is nothing for a shape check to catch.
+ *
+ * That is the argument for spending the bump on a value rename, and it is worth stating
+ * because the cheap reading — "the shape did not change, so no bump" — is available and
+ * wrong. A version that moves when a document's MEANING breaks is worth having; one that
+ * moves only when a key does is a shape check with a version number.
+ *
  * Same discipline as SAVE_SCHEMA_VERSION, one integer. (Note the difference in kind: a
  * SAVE bump is owed for ANY field, because an old save must still be readable; a REPORT is
  * generated fresh every run and nothing has to read yesterday's.)
  */
-export const SUMMARY_SCHEMA_VERSION = 2;
+export const SUMMARY_SCHEMA_VERSION = 3;
 
 /**
  * Refuse a summary document that is not the schema this reader was written against.
@@ -1565,11 +1581,11 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // evictions migrate to `evictedCauseUnrecorded`, and older eras carry ledger reasons this
   // fold does not count — but the policy is the reason, not the example.
   const revenueTransactions = countRoomRevenueTransactions(world.ledger);
-  const satisfiedStays = departureCountOf(world.guestOutcomes, 'satisfied');
-  if (revenueTransactions !== satisfiedStays) {
+  const checkedOutStays = departureCountOf(world.guestOutcomes, 'checkedOut');
+  if (revenueTransactions !== checkedOutStays) {
     violations.push(
       `Outcome attribution broken at tick ${world.tick}: ${revenueTransactions} room revenue transaction(s) ` +
-        `against ${satisfiedStays} stay(s) recorded as satisfied. A satisfied stay pays exactly once and is ` +
+        `against ${checkedOutStays} stay(s) recorded as checked out. A completed stay pays exactly once and is ` +
         'counted under exactly one reason, so a departure filed under the wrong reason moves one and not ' +
         'the other (G-015).',
     );

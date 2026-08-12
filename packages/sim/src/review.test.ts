@@ -2,9 +2,10 @@
 //
 //   pnpm exec vitest run review
 //
-// What a departing guest leaves, from its own recorded experience: which needs were met,
-// how long it waited for a room against its patience, and whether the hotel cut its stay
-// short. Every case here is built from primitives, because `reviewOf` takes primitives —
+// What a departing guest leaves, from its own recorded experience: which of its needs were
+// met, and whether the hotel cut its stay short. **THE WAIT AXIS WAS DELETED AT G-027a** —
+// see `reviews.ts`'s header for why a checkout terminator turns the wait arithmetic into a
+// constant. Every case here is built from primitives, because `reviewOf` takes primitives —
 // see `reviews.ts` for why that is structural (a circular import is an error) rather than
 // a convenience.
 //
@@ -26,7 +27,6 @@ import {
   assertReviewOutcomes,
   createReviewOutcomes,
   experienceBasisPoints,
-  lodgingWaitBasisPoints,
   recordReview,
   reviewCountOf,
   reviewOf,
@@ -69,7 +69,21 @@ function build(needs: number, min: number, max: number, satisfyTicks = 100, pati
   return bindContent({
     roomTypes: rooms,
     needTypes,
-    guestRules: [{ id: 'rules', name: 'rules', reviewScoreMin: min, reviewScoreMax: max }],
+    // `stayDurationTicks` is required of content that declares a lodging need (G-027a). It is
+    // `satisfyTicks` here — the floor `bindContent` computes — because nothing in this file
+    // ticks a world: every case is built from primitives, so the value is only ever the thing
+    // that lets the content bind.
+    guestRules: [
+      {
+        id: 'rules',
+        name: 'rules',
+        reviewScoreMin: min,
+        reviewScoreMax: max,
+        // The floor `bindContent` computes: the lodging need and the engagement needs run in
+        // parallel, so it is max(satisfyTicks, (needs - 1) x satisfyTicks).
+        stayDurationTicks: Math.max(satisfyTicks, (needs - 1) * satisfyTicks),
+      },
+    ],
   });
 }
 
@@ -85,7 +99,7 @@ function vector(content: BoundContent, met: readonly string[]): readonly NeedSta
 
 /** The review a guest leaves having met `met`, with no wait and no eviction. */
 const scoreFor = (content: BoundContent, met: readonly string[]): number | undefined =>
-  reviewOf(content, vector(content, met), 0, 0, false);
+  reviewOf(content, vector(content, met), false);
 
 describe('the scale is read from content, and its absence is the historical case', () => {
   it('reads min, max and a DERIVED band count', () => {
@@ -96,11 +110,17 @@ describe('the scale is read from content, and its absence is the historical case
   it('content that declares no scale leaves no review at all — not a default score', () => {
     // ADR-0008: absence is a true statement about an era, not a missing value. A default
     // here would put a review in the distribution that no guest ever left.
-    const old = bindContent({ roomTypes: [roomType('r0', ['n0'])], needTypes: [need('n0', true, 100, 200)] });
+    const old = bindContent({
+      roomTypes: [roomType('r0', ['n0'])],
+      needTypes: [need('n0', true, 100, 200)],
+      // A stay duration and no review scale: "content from before reviews existed", in the
+      // only shape that still binds under G-027a's refusal.
+      guestRules: [{ id: 'rules', name: 'rules', stayDurationTicks: 100 }],
+    });
     expect(reviewScaleOf(old)).toBeUndefined();
-    expect(reviewOf(old, vector(old, ['n0']), 0, 0, false)).toBeUndefined();
+    expect(reviewOf(old, vector(old, ['n0']), false)).toBeUndefined();
     // Including for an eviction, which is the branch that returns before anything else.
-    expect(reviewOf(old, vector(old, ['n0']), 0, 0, true)).toBeUndefined();
+    expect(reviewOf(old, vector(old, ['n0']), true)).toBeUndefined();
   });
 });
 
@@ -169,54 +189,83 @@ describe('NO NEED TYPE IS INERT — the human\'s finding, as a law over the cont
   });
 });
 
-describe('the lodging wait term', () => {
-  const WAIT = build(2, 1, 5, 100, 200);
+describe("G-019's LAW A, RE-EXPRESSED AT G-027a: the score is MONOTONE in the met count", () => {
+  // ============================================================================
+  // WHAT WAS HERE, AND WHY IT IS NOT.
+  //
+  // `describe('the lodging wait term')` — six cases pinning `lodgingWaitBasisPoints`, the
+  // band it cost, and that it applied to the lodging need alone. **G-027a DELETED THE
+  // FUNCTION AND THE AXIS.** The wait was recovered from the clock, as
+  // `(departureTick - arrivedTick) - satisfyTicks`, and that subtraction was exact only
+  // because a stay ENDED when the lodging need was met. Under a checkout terminator it
+  // evaluates to `stayDurationTicks - satisfyTicks` for every guest that checks out — the
+  // same number for the guest that walked straight in and for the guest that queued.
+  //
+  // WHAT REPLACES IT IS THE LAW THE HEDGE WAS PROTECTING. G-019's law A read *"within one
+  // vector length, and setting the floor aside, meeting more needs never scores lower"*, and
+  // it rested on `ONE_WHOLE - waitShare >= 0`. Every met need now contributes exactly
+  // `ONE_WHOLE`, so the law is monotone by construction — and it is asserted over EVERY
+  // SUBSET of a four-need vector rather than over the two cases the hedge admitted.
+  // ============================================================================
 
-  it('is the stay minus what the lodging need takes to serve, as a fraction of its patience', () => {
-    // satisfyTicks 100, patienceTicks 200. A guest that arrived at 0 and left at 150 was
-    // served on 100 of those ticks and waited the other 50 — a quarter of its patience.
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 0, 150)).toBe(2_500);
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 1_000, 1_150)).toBe(2_500);
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 0, 100)).toBe(0);
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 0, 299)).toBe(9_950);
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 0, 300)).toBe(ONE_WHOLE_BASIS_POINTS);
-    // Beyond the whole it saturates rather than exceeding one whole, the
-    // `pressureBasisPoints` branch exactly.
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 0, 10_000)).toBe(ONE_WHOLE_BASIS_POINTS);
+  const IDS = ['n0', 'n1', 'n2', 'n3'] as const;
+
+  /** Every subset of the four needs, as a met-list. Sixteen of them. */
+  const subsets = (): readonly (readonly string[])[] => {
+    const out: string[][] = [];
+    for (let mask = 0; mask < 1 << IDS.length; mask += 1) {
+      out.push(IDS.filter((_, index) => (mask & (1 << index)) !== 0));
+    }
+    return out;
+  };
+
+  it('adding a met need never lowers the score, over every subset and every addition', () => {
+    for (const met of subsets()) {
+      for (const extra of IDS) {
+        if (met.includes(extra)) continue;
+        const before = scoreFor(FOUR, met)!;
+        const after = scoreFor(FOUR, [...met, extra])!;
+        expect(after, `${met.join('+') || 'none'} -> +${extra}`).toBeGreaterThanOrEqual(before);
+      }
+    }
   });
 
-  it('is zero for a stay too short to have waited at all, and never negative', () => {
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 0, 0)).toBe(0);
-    expect(lodgingWaitBasisPoints(WAIT, 'n0', 500, 0)).toBe(0);
+  it('and on this scale it STRICTLY rises, so the law is not met by a constant function', () => {
+    // ADR-0007's shape: `>=` alone is satisfied by a review function that hands everybody a
+    // 3. The shipped scale has one band per need, so every addition has to move it.
+    for (const met of subsets()) {
+      for (const extra of IDS) {
+        if (met.includes(extra)) continue;
+        expect(scoreFor(FOUR, [...met, extra])!).toBeGreaterThan(scoreFor(FOUR, met)!);
+      }
+    }
   });
 
-  it('is zero for a need this content does not define', () => {
-    expect(lodgingWaitBasisPoints(WAIT, 'nowhere', 0, 5_000)).toBe(0);
+  it('the score depends on the met COUNT and on nothing else about the guest', () => {
+    // The hedge is gone in both directions: no input separates two guests with the same
+    // number of met needs any more. That is the weakening this goal shipped, and it is a
+    // test rather than something to be inferred from a distribution.
+    const byCount = new Map<number, number>();
+    for (const met of subsets()) {
+      const score = scoreFor(FOUR, met)!;
+      const seen = byCount.get(met.length);
+      if (seen === undefined) byCount.set(met.length, score);
+      else expect(score, `${met.join('+')}`).toBe(seen);
+    }
+    expect([...byCount.keys()].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it('costs the guest a band when it is long enough, and nothing when it is not', () => {
-    // Two needs, both met: without a wait that is one whole and the top score.
-    expect(reviewOf(WAIT, vector(WAIT, ['n0', 'n1']), 0, 100, false)).toBe(5);
-    // Half the lodging patience spent waiting takes a quarter off the total.
-    expect(reviewOf(WAIT, vector(WAIT, ['n0', 'n1']), 0, 200, false)).toBe(4);
-    // And the whole of it takes half.
-    expect(reviewOf(WAIT, vector(WAIT, ['n0', 'n1']), 0, 300, false)).toBe(3);
-  });
-
-  it('applies to the LODGING need and to nothing else', () => {
-    // An engagement need met after any amount of waiting is worth its whole share: this
-    // build records no per-need wait, and inventing one would be the default ADR-0008
-    // forbids. Stated as a test so the limitation is visible rather than implied.
-    const late = vector(WAIT, ['n1']);
-    expect(reviewOf(WAIT, late, 0, 100, false)).toBe(reviewOf(WAIT, late, 0, 5_000, false));
+  it('and the reachable scores are exactly the five the scale admits — no more, no fewer', () => {
+    const reached = [...new Set(subsets().map((met) => scoreFor(FOUR, met)!))].sort((a, b) => a - b);
+    expect(reached).toEqual([1, 2, 3, 4, 5]);
   });
 });
 
 describe('a stay the hotel cut short reviews at the floor', () => {
   it('whatever else the guest got', () => {
-    expect(reviewOf(FOUR, vector(FOUR, ['n0', 'n1', 'n2', 'n3']), 0, 100, true)).toBe(1);
-    expect(reviewOf(FOUR, vector(FOUR, ['n1', 'n2', 'n3']), 0, 100, true)).toBe(1);
-    expect(reviewOf(FOUR, vector(FOUR, []), 0, 100, true)).toBe(1);
+    expect(reviewOf(FOUR, vector(FOUR, ['n0', 'n1', 'n2', 'n3']), true)).toBe(1);
+    expect(reviewOf(FOUR, vector(FOUR, ['n1', 'n2', 'n3']), true)).toBe(1);
+    expect(reviewOf(FOUR, vector(FOUR, []), true)).toBe(1);
   });
 
   it('and the cost of that is real: three needs met scores BELOW one need met', () => {
@@ -224,8 +273,8 @@ describe('a stay the hotel cut short reviews at the floor', () => {
     // deliberate — an eviction scores the hotel's CONDUCT, not the guest's experience —
     // and it is pinned here so that nobody discovers it in a distribution and calls it a
     // bug. See `reviewOf` for why the money-loop justification this shipped with was wrong.
-    const evictedWithThree = reviewOf(FOUR, vector(FOUR, ['n1', 'n2', 'n3']), 0, 100, true);
-    const gaveUpWithOne = reviewOf(FOUR, vector(FOUR, ['n1']), 0, 100, false);
+    const evictedWithThree = reviewOf(FOUR, vector(FOUR, ['n1', 'n2', 'n3']), true);
+    const gaveUpWithOne = reviewOf(FOUR, vector(FOUR, ['n1']), false);
     expect(evictedWithThree).toBe(1);
     expect(gaveUpWithOne).toBe(2);
     expect(evictedWithThree).toBeLessThan(gaveUpWithOne!);
@@ -233,39 +282,74 @@ describe('a stay the hotel cut short reviews at the floor', () => {
 
   it('and the floor is the content\'s floor, not the number 1', () => {
     const shifted = build(4, 7, 11);
-    expect(reviewOf(shifted, vector(shifted, ['n0', 'n1', 'n2', 'n3']), 0, 100, true)).toBe(7);
+    expect(reviewOf(shifted, vector(shifted, ['n0', 'n1', 'n2', 'n3']), true)).toBe(7);
   });
 });
 
-describe('ONE INTEGER DIVISION, NOT TWO — and the shipped scale hides the difference', () => {
+describe('ONE INTEGER DIVISION, NOT TWO — and G-027a took the counter-example away', () => {
   /**
    * `balance-critic`'s MAJOR 5. `floor(Σq / needCount)` followed by
    * `floor(x x bands / ONE_WHOLE)` is not the single division unless `ONE_WHOLE % bands`
    * is 0. At the shipped `bands = 5` it is — so there is no bite on the shipped table, and
    * THE SCALE IS CONTENT, so "no bite here" is not something anyone may rely on.
+   *
+   * ============================================================================
+   * THE ORIGINAL COUNTER-EXAMPLE IS UNREACHABLE FROM CONTENT SINCE G-027a, AND THE GUARD
+   * STAYS ANYWAY.
+   *
+   * It was: two needs, scale 1..3, lodging met AT A WAIT SHARE OF 3,333. The wait share was
+   * the only thing that ever made a `q` non-extreme, and the wait axis is gone — every `q`
+   * is now 0 or `ONE_WHOLE`, so `Σq` is a multiple of `ONE_WHOLE` and the two spellings
+   * agree for every input any content can produce.
+   *
+   * So the property is driven from a HAND-BUILT `Σq` rather than deleted, because the
+   * arithmetic is what is being pinned and it becomes load-bearing again the moment a
+   * partial term returns — which is exactly what M3's G-026 is chartered to add. Asserting
+   * it against content that cannot currently produce a non-extreme sum would be the vacuity
+   * ADR-0007 names: a check that passes while inspecting nothing.
+   * ============================================================================
    */
-  it('disagree by a WHOLE BAND on a legal three-score scale', () => {
-    // Two needs, scale 1..3, so bands = 3 and 10,000 % 3 != 0. Lodging met with a wait
-    // share of 3,333; the other need unmet.
+  const bands = 3;
+  const needCount = 2;
+
+  /** The score `reviewOf` computes, spelled out: ONE division. */
+  const oneStep = (sum: number): number =>
+    1 + Math.min(bands - 1, Math.floor((sum * bands) / (needCount * ONE_WHOLE_BASIS_POINTS)));
+
+  /** The tempting rearrangement: `experienceBasisPoints`, then the scale. TWO divisions. */
+  const twoStep = (sum: number): number =>
+    1 + Math.min(bands - 1, Math.floor((Math.floor(sum / needCount) * bands) / ONE_WHOLE_BASIS_POINTS));
+
+  it('disagree by a WHOLE BAND on a legal three-score scale, at a sum no content can make today', () => {
+    // Σq = ONE_WHOLE - 3,333 + 0: one need met at a partial share, one unmet. That is exactly
+    // the guest `balance-critic` built, with the wait share written down rather than produced.
+    const sum = ONE_WHOLE_BASIS_POINTS - 3_333;
+    expect(twoStep(sum)).toBe(1);
+    expect(oneStep(sum)).toBe(2);
+  });
+
+  it('and they agree for every sum the CURRENT model can produce, which is why nothing bites today', () => {
+    // `q` is two-valued now, so `Σq` over two needs is 0, ONE_WHOLE or 2 x ONE_WHOLE.
+    for (const met of [0, 1, 2]) {
+      const sum = met * ONE_WHOLE_BASIS_POINTS;
+      expect(oneStep(sum)).toBe(twoStep(sum));
+    }
+  });
+
+  it('and the shipped function is the ONE-step form, over a scale whose bands do divide', () => {
+    // The link between the arithmetic above and the code: `reviewOf` agrees with `oneStep`
+    // wherever both are defined, and `experienceBasisPoints` is the intermediate the score
+    // never reads.
     const three = build(2, 1, 3, 100, 300);
-    const waited = vector(three, ['n0']);
-    // arrivedTick 0, departure 200: waited 100 of 300 patience -> 3,333 basis points.
-    expect(lodgingWaitBasisPoints(three, 'n0', 0, 200)).toBe(3_333);
-    const twoStep = Math.floor(
-      (experienceBasisPoints(three, waited, 0, 200) * 3) / ONE_WHOLE_BASIS_POINTS,
-    );
-    // The two-step form puts this guest in the bottom band: score 1.
-    expect(1 + twoStep).toBe(1);
-    // The shipped single division puts it in the next one up: score 2. A whole band, from
-    // an arithmetic rearrangement that looks like a refactor.
-    expect(reviewOf(three, waited, 0, 200, false)).toBe(2);
+    expect(reviewOf(three, vector(three, ['n0']), false)).toBe(oneStep(ONE_WHOLE_BASIS_POINTS));
+    expect(reviewOf(three, vector(three, ['n0', 'n1']), false)).toBe(3);
   });
 
   it('and `experienceBasisPoints` is the two-step intermediate, exposed and never scored from', () => {
-    expect(experienceBasisPoints(FOUR, vector(FOUR, ['n0', 'n1', 'n2', 'n3']), 0, 0)).toBe(ONE_WHOLE_BASIS_POINTS);
-    expect(experienceBasisPoints(FOUR, vector(FOUR, ['n0', 'n1']), 0, 0)).toBe(5_000);
-    expect(experienceBasisPoints(FOUR, vector(FOUR, []), 0, 0)).toBe(0);
-    expect(experienceBasisPoints(FOUR, [], 0, 0)).toBe(0);
+    expect(experienceBasisPoints(vector(FOUR, ['n0', 'n1', 'n2', 'n3']))).toBe(ONE_WHOLE_BASIS_POINTS);
+    expect(experienceBasisPoints(vector(FOUR, ['n0', 'n1']))).toBe(5_000);
+    expect(experienceBasisPoints(vector(FOUR, []))).toBe(0);
+    expect(experienceBasisPoints([])).toBe(0);
   });
 });
 
@@ -275,7 +359,10 @@ describe('the ends of the scale are both reachable, and nothing lands outside it
     expect(scoreFor(FOUR, ['n0', 'n1', 'n2', 'n3'])).toBe(5);
   });
 
-  it('over a grid of vectors, wait shares and scales, every score is an integer INSIDE the scale', () => {
+  it('over a grid of vectors and scales, every score is an integer INSIDE the scale', () => {
+    // THE WAIT-SHARE AXIS OF THIS GRID WENT AT G-027a. It used to iterate seven departure
+    // ticks per cell; there is no departure tick to iterate any more, so the grid is the two
+    // axes that remain — vector length x met count x scale x cut-short.
     for (const needs of [1, 2, 3, 4, 5]) {
       for (const [min, max] of [
         [1, 5],
@@ -286,13 +373,11 @@ describe('the ends of the scale are both reachable, and nothing lands outside it
         const content = build(needs, min, max);
         const ids = (content.content.needTypes ?? []).map((entry) => entry.id);
         for (let met = 0; met <= needs; met += 1) {
-          for (const departure of [0, 100, 150, 200, 250, 300, 1_000]) {
-            for (const cutShort of [false, true]) {
-              const score = reviewOf(content, vector(content, ids.slice(0, met)), 0, departure, cutShort);
-              expect(Number.isInteger(score)).toBe(true);
-              expect(score).toBeGreaterThanOrEqual(min);
-              expect(score).toBeLessThanOrEqual(max);
-            }
+          for (const cutShort of [false, true]) {
+            const score = reviewOf(content, vector(content, ids.slice(0, met)), cutShort);
+            expect(Number.isInteger(score)).toBe(true);
+            expect(score).toBeGreaterThanOrEqual(min);
+            expect(score).toBeLessThanOrEqual(max);
           }
         }
       }
@@ -302,14 +387,14 @@ describe('the ends of the scale are both reachable, and nothing lands outside it
   it('a guest carrying no needs at all leaves no review rather than dividing by zero', () => {
     // Unreachable through the tick — `assertNeedVector` refuses such a guest — so this is a
     // postcondition. Without it the division would produce NaN and reach hashed state.
-    expect(reviewOf(FOUR, [], 0, 100, false)).toBeUndefined();
+    expect(reviewOf(FOUR, [], false)).toBeUndefined();
   });
 
   it('a guest MIGRATED with a shorter vector is reviewed on the needs it actually formed', () => {
     // A v5 guest carries one need where the content defines four. It is not marked down for
     // three needs it never had: the denominator is its own vector's length.
     const one = vector(FOUR, ['n0']).slice(0, 1);
-    expect(reviewOf(FOUR, one, 0, 0, false)).toBe(5);
+    expect(reviewOf(FOUR, one, false)).toBe(5);
   });
 });
 

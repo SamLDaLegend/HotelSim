@@ -57,6 +57,9 @@ const content = bindContent({
     },
   ],
   needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 6, patienceTicks: 4 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 6 }],
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
@@ -206,6 +209,9 @@ describe('clause 4 — `context.content === content`: the same injected content'
         },
       ],
       needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 6, patienceTicks: 4 }],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 6 }],
       itemTypes: [
         { id: 'bed', name: 'bed' },
         { id: 'lamp', name: 'lamp' },
@@ -286,7 +292,7 @@ describe('the acceptance bar: a pure optimisation must not move the state hash',
     expect(hashState(withCache)).toBe(hashState(without));
     // And the run has to have DONE something, or the equality above is two empty worlds
     // agreeing (ADR-0007). Every one of these is a path a stale index could corrupt.
-    expect(departureCountOf(withCache.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(withCache.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
     expect(evictedGuests(withCache.guestOutcomes)).toBeGreaterThan(0);
     expect(withCache.buildOutcomes.built).toBeGreaterThan(0);
     expect(withCache.buildOutcomes.demolished).toBeGreaterThan(0);

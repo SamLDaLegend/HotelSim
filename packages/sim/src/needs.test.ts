@@ -71,6 +71,9 @@ const content = bindContent({
     need('fun', 8, 400, 'engagement'),
     need('rest', 60, 100, 'lodging'),
   ],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 60 }],
 });
 
 const spawn = (kind: string, column: number): Command => ({
@@ -134,6 +137,9 @@ describe('a guest forms one instance of EVERY need the content defines', () => {
     const single = bindContent({
       roomTypes: [roomType('bedroom', ['rest'])],
       needTypes: [need('rest', 10, 20, 'lodging')],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
     });
     const world = stepTick(createWorld(1, single), single, [spawn('bedroom', 0), arrive]);
     expect(only(world).needs).toHaveLength(1);
@@ -155,8 +161,8 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     expect(isNeedPending(findNeedState(midStay.needs, 'food')!)).toBe(true);
     // The stay completes and the guest pays, having failed nothing that ends a stay.
     world = run(world, content, 40, []);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(0);
     expect(world.ledger.filter((entry) => entry.reason === 'roomRevenue')).toHaveLength(1);
   });
 
@@ -165,7 +171,7 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     // between `guestOutcomes` (which counts STAYS) and `needOutcomes` (which counts WANTS),
     // and it is the whole subject of the goal.
     const world = run(noAmenities(), content, 200, [at(1, arrive)]);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
     expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 1, unmet: 0, metByItem: 0, abandoned: 0 });
     expect(needOutcomeOf(world.needOutcomes, 'food')).toEqual({ needId: 'food', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
     expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({ needId: 'fun', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
@@ -176,6 +182,9 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     const slow = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
       needTypes: [need('food', 8, 20, 'engagement'), need('rest', 400, 400, 'lodging')],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 400 }],
     });
     let world = stepTick(createWorld(1, slow), slow, [spawn('bedroom', 0)]);
     world = run(world, slow, 30, [at(world.tick, arrive)]);
@@ -194,7 +203,7 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     // The asymmetry, stated as a test rather than as a comment: the lodging need is the
     // stay, so its failure is the guest giving up and leaving.
     const world = run(hotel([]), content, 120, [at(1, arrive)]);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
   });
@@ -376,7 +385,7 @@ describe('the per-need tally', () => {
     // of guests that have departed. A need dropped on an exit path moves one side only.
     const world = run(hotel(), content, 400, [1, 2, 3, 100, 200].map((tick) => at(tick, arrive)));
     const departed =
-      departureCountOf(world.guestOutcomes, 'satisfied') + departureCountOf(world.guestOutcomes, 'gaveUpWaiting') + evictedGuests(world.guestOutcomes);
+      departureCountOf(world.guestOutcomes, 'checkedOut') + departureCountOf(world.guestOutcomes, 'gaveUp') + evictedGuests(world.guestOutcomes);
     expect(departed).toBeGreaterThan(0);
     for (const needType of needTypesInOrder(content)) {
       const row = needOutcomeOf(world.needOutcomes, needType.id);
@@ -495,6 +504,9 @@ describe('the lodging need, and how the simulation finds it', () => {
         { id: 'alpha', name: 'alpha', satisfyTicks: 10, patienceTicks: 20 },
         { id: 'beta', name: 'beta', satisfyTicks: 10, patienceTicks: 20 },
       ],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
     });
     expect(lodgingNeedOf(historical)?.id).toBe('alpha');
   });

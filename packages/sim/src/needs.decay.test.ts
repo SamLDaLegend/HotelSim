@@ -77,6 +77,9 @@ const needType = (id: string, satisfyTicks: number, patienceTicks: number, lodgi
 const patient = bindContent({
   roomTypes: [roomType('roomA', ['rest'])],
   needTypes: [needType('rest', 480, LONG_PATIENCE)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
 });
 
 const arrive = { kind: 'guestArrives' } as const;
@@ -162,6 +165,9 @@ describe('the clamp, which is the other half of the form', () => {
   const brief = bindContent({
     roomTypes: [roomType('roomA', ['rest'])],
     needTypes: [needType('rest', 480, SHORT)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
   });
 
   it('stops at patienceTicks and stays there, rather than counting past it', () => {
@@ -170,6 +176,9 @@ describe('the clamp, which is the other half of the form', () => {
     const withEngagement = bindContent({
       roomTypes: [roomType('roomA', ['rest']), roomType('roomB', ['fun'])],
       needTypes: [needType('rest', 4_000, 4_000), needType('fun', 10, SHORT, false)],
+      // G-027a: content declaring a lodging need must say how long a stay lasts, or
+      // `bindContent` refuses it — a guest holding a room has no other way to leave.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 4_000 }],
     });
     const spawnRoom = { kind: 'spawnEntity', entityKind: 'roomA', at: { floor: 0, column: 0 } } as const;
     let world = stepTick(createWorld(1, withEngagement), withEngagement, [spawnRoom, arrive]);
@@ -187,7 +196,7 @@ describe('the clamp, which is the other half of the form', () => {
   it('a guest whose LODGING need clamps leaves, and does not linger at the ceiling', () => {
     const world = run(createWorld(1, brief), brief, SHORT + 10, [{ tick: 1, command: arrive }]);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(departureCountOf(world.guestOutcomes, 'gaveUpWaiting')).toBe(1);
+    expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
   });
 });
 
@@ -200,6 +209,9 @@ describe('urgency FALLS while a provider serves it, and only then', () => {
   const served = bindContent({
     roomTypes: [roomType('roomA', ['rest'])],
     needTypes: [needType('rest', SATISFY, 1_000)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
   });
   const spawnRoom = { kind: 'spawnEntity', entityKind: 'roomA', at: { floor: 0, column: 0 } } as const;
 

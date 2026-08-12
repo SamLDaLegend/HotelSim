@@ -24,7 +24,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 11;
+export const SAVE_SCHEMA_VERSION = 12;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -531,13 +531,16 @@ function migrateV6ToV7(world: unknown): unknown {
  *
  * A LITERAL, and every reason is spelled out with its own `0` — the
  * `V4_MIGRATION_BUILD_OUTCOMES` shape, for the identical reason. `createGuestOutcomes()`
- * in `guests.ts` builds the same five rows today and the two are ALLOWED to diverge later;
- * that divergence is correct rather than a bug to repair (ADR-0008 (1)). The day
- * `GuestDepartureReason` gains a member — and a departure taxonomy is exactly the union
- * that grows, M3's "gave up waiting for a lift" being the obvious next one — a migration
- * that folded the live list would start writing a row for a reason that did not exist when
- * these bytes were written, silently, and the only symptom would be a moved fixture hash on
- * an unrelated change.
+ * in `guests.ts` built the same five rows and the two were ALLOWED to diverge later; that
+ * divergence is correct rather than a bug to repair (ADR-0008 (1)).
+ *
+ * **THEY HAVE NOW DIVERGED, AND THE PREDICTION WAS ONLY HALF RIGHT.** This comment expected
+ * the union to GAIN a member ("gave up waiting for a lift"). What actually happened at
+ * G-027a was a RENAME: `satisfied -> checkedOut` and `gaveUpWaiting -> gaveUp`. The two
+ * names above are v7-era spellings and MUST NOT be updated to match the live list — a v7
+ * world's rows are carried onto v8's names, and `migrateV11ToV12` renames them onwards from
+ * there. A migration that folded the live list would rename these bytes twice, silently, and
+ * the only symptom would be a moved fixture hash on an unrelated change.
  *
  * The counts are filled in from the v7 counters below; the ORDER and the MEMBERSHIP are
  * this literal's, so the row list a v7 save migrates onto is fixed forever.
@@ -932,6 +935,132 @@ function migrateV10ToV11(world: unknown): unknown {
 }
 
 /**
+ * THE DEPARTURE ROWS A v11 WORLD CARRIED, FROZEN AT THE MOMENT v12 WAS DEFINED, IN ORDER.
+ *
+ * A LITERAL, AND THIS IS THE DAY IT DIVERGES FROM `createGuestOutcomes()` — the divergence
+ * `V8_MIGRATION_GUEST_OUTCOMES` predicted three goals ago and pre-authorised (ADR-0008 (1)).
+ * Those two lists agreed on all five names for four schema versions; they no longer do, and
+ * both are correct about the era they describe. A migration that walked the LIVE
+ * `GUEST_DEPARTURE_REASONS` would now rename a v7 world's rows too, silently, and the only
+ * symptom would be a moved fixture hash on an unrelated change.
+ *
+ * IT IS A PAIR LIST RATHER THAN TWO PARALLEL ARRAYS, so a row cannot be renamed onto the
+ * wrong position by an edit to one of them.
+ */
+const V12_MIGRATION_DEPARTURE_RENAMES = Object.freeze([
+  Object.freeze({ from: 'satisfied', to: 'checkedOut' }),
+  Object.freeze({ from: 'gaveUpWaiting', to: 'gaveUp' }),
+  Object.freeze({ from: 'evictedRoomGone', to: 'evictedRoomGone' }),
+  Object.freeze({ from: 'evictedRoomUnusable', to: 'evictedRoomUnusable' }),
+  Object.freeze({ from: 'evictedCauseUnrecorded', to: 'evictedCauseUnrecorded' }),
+]);
+
+/**
+ * v11 -> v12: a world whose stays ended because a need finished (G-027a, ADR-0017).
+ *
+ * ADR-0006 fires for the ELEVENTH time. No field arrives and none leaves; two ROW LABELS in
+ * `world.guestOutcomes.departures` change, and a label inside hashed state is a schema
+ * change exactly as a field is. `fixtures/save-v1.ts` HAS A ZERO-LINE DIFF in this change;
+ * the walk is 1 -> ... -> 11 -> 12.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE RENAME IS SOUND, AND IT IS NOT "THE SAME POPULATION RENAMED".
+ *
+ * That defence would be false. A v11 guest counted under `satisfied` departed BECAUSE ITS
+ * LODGING NEED COMPLETED — the terminator this goal deletes — and no v12 guest departs for
+ * that reason, so the two rows are not filled by the same event at all.
+ *
+ * What makes the mapping honest is narrower and is checkable: **the two populations coincide
+ * under every predicate either era applies to that row.** Everything downstream asks exactly
+ * three questions of a departure row, and v11's `satisfied` and v12's `checkedOut` give the
+ * same answer to all three:
+ *
+ *   did this stay pay?        YES, exactly once. `payForStay` was called on the v11
+ *                             satisfied path and is called on the v12 checkout path, and on
+ *                             no other path in either era — which is why
+ *                             `countRoomRevenueTransactions === this row` is a law in both.
+ *   was it cut short?         NO. `isCutShort` returned false for `satisfied` and returns
+ *                             false for `checkedOut`; the guest left when the stay ended.
+ *   may the tick write it?    YES. Both are in `TickDepartureReason`.
+ *
+ * `gaveUpWaiting -> gaveUp` is the same argument with the answers NO / NO / YES, and the
+ * word that leaves is the one that over-narrows: v11's row already covered every way a guest
+ * ended its own stay, because waiting for a room was the only one there was.
+ *
+ * SO THE COUNTS CARRY. What a migrated v12 world says is *this many stays ended without
+ * being cut short and having paid*, which is true of those bytes and was true when they were
+ * written. What it does NOT claim, and must not be read as claiming, is that those guests
+ * stayed 1,440 ticks — they did not, and `stayDurationTicks` is content this migration is
+ * forbidden to consult (ADR-0008).
+ * ---------------------------------------------------------------------------
+ *
+ * Reads no content and no live constant, so the same v11 bytes produce the same v12 world
+ * however the shipped reason list changes afterwards (ADR-0008; the structural guard is the
+ * source scan in `migration-scan.build.grid.provider.outcome.travel.save.test.ts`, which
+ * already forbids this file from naming `GUEST_DEPARTURE_REASONS`).
+ *
+ * THE OVERWRITE GUARD IS A NAME CHECK RATHER THAN A KEY CHECK, because nothing is being
+ * ADDED. Every earlier step refuses a document that already carries the field it is about;
+ * this one refuses a row that is not spelled the way v11 spelled it — which catches a v12
+ * document fed in as v11 (its first row already reads `checkedOut`) and a corrupt table
+ * alike. `Object.keys().includes` still guards the one key this step reaches through,
+ * because `JSON.parse` makes `__proto__` an own key (G-003).
+ *
+ * TESTED BY THE PERMANENT v1 FIXTURE, WHICH REACHES THIS STEP WITH FIVE ZERO ROWS — over
+ * which any mapping whatsoever would look correct (ADR-0007's exact shape, and the paragraph
+ * `migrateV7ToV8` carries). `guest.stay.save.test.ts` drives a synthetic v11 world with all
+ * five counters distinct and non-zero and watches each land under its v12 name.
+ */
+function migrateV11ToV12(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const outcomes = world['guestOutcomes'];
+  if (!isRecord(outcomes)) {
+    throw new Error('Save is corrupt: world.guestOutcomes is missing, so its stays cannot be renamed');
+  }
+  if (!Object.keys(outcomes).includes('departures')) {
+    throw new Error(
+      'Save is corrupt: world.guestOutcomes has no "departures" field, so it is not a v11 world',
+    );
+  }
+  const rows = outcomes['departures'];
+  if (!Array.isArray(rows)) {
+    throw new Error('Save is corrupt: world.guestOutcomes.departures is missing or not an array');
+  }
+  if (rows.length !== V12_MIGRATION_DEPARTURE_RENAMES.length) {
+    throw new Error(
+      `Save is corrupt: world.guestOutcomes.departures has ${rows.length} row(s) where a v11 world has ` +
+        `${V12_MIGRATION_DEPARTURE_RENAMES.length}; this is not a v11 departure table`,
+    );
+  }
+  // Mapped by POSITION IN THE FROZEN LITERAL, so the shape of a migrated v11 world is this
+  // constant's and the counts are the bytes' — `migrateV7ToV8`'s mechanism exactly.
+  const renamed = V12_MIGRATION_DEPARTURE_RENAMES.map((rename, index) => {
+    const row = rows[index];
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.guestOutcomes.departures[${index}] is not an object`);
+    }
+    if (row['reason'] !== rename.from) {
+      throw new Error(
+        `world.guestOutcomes.departures[${index}] is "${String(row['reason'])}" where a v11 world carries ` +
+          `"${rename.from}", so it is not a v11 departure table; migrating it would rename a row onto a reason ` +
+          'it does not describe',
+      );
+    }
+    const count = row['count'];
+    if (typeof count !== 'number') {
+      throw new Error(
+        `Save is corrupt: world.guestOutcomes.departures[${index}].count is missing or not a number, so this ` +
+          "world's stays cannot be counted",
+      );
+    }
+    return { reason: rename.to, count };
+  });
+  return { ...world, guestOutcomes: { ...outcomes, departures: renamed } };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -950,6 +1079,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 8, to: 9, migrate: migrateV8ToV9 }),
   Object.freeze({ from: 9, to: 10, migrate: migrateV9ToV10 }),
   Object.freeze({ from: 10, to: 11, migrate: migrateV10ToV11 }),
+  Object.freeze({ from: 11, to: 12, migrate: migrateV11ToV12 }),
 ]);
 
 /**

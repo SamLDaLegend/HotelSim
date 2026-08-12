@@ -23,14 +23,38 @@
 
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
+// THE GATE'S OWN CONSTANTS, IMPORTED RATHER THAN COPIED (G-027a, ADR-0021 MAJOR 1). See the
+// note on `ROOMS` below for what the second copy cost.
+import { ARRIVAL_EVERY_TICKS as GATE_ARRIVALS, ROOMS as GATE_ROOMS, SEED as GATE_SEED } from '../../gates/workload.mjs';
 
 /** Six simulated hours — the length both scaling files have used since G-010. */
 export const TICKS = 4_320;
 
-/** The bench's hotel, so the criterion and the I5 gate describe the same building. */
-export const ROOMS = 60;
-export const ARRIVAL_EVERY_TICKS = 32;
-export const SEED = 42;
+/**
+ * THE BENCH'S HOTEL — AND SINCE G-027a THAT IS TRUE OF THE CODE RATHER THAN OF A COMMENT.
+ *
+ * ============================================================================
+ * THIS COMMENT WAS FALSE FOR ONE GOAL AND THE SENTENCE ABOVE IS THE ONE THAT WAS FALSE.
+ * It read "the bench's hotel, so the criterion and the I5 gate describe the same building",
+ * over three literals that were a SECOND COPY of `tools/gates/workload.mjs`. `bench.mjs` and
+ * `measure.mjs` import that file; this one did not. So when ADR-0021 moved
+ * `ARRIVAL_EVERY_TICKS` 32 -> 96 to restore the benchmark's calibrated occupancy of fifteen
+ * concurrent guests, THIS file stayed at 32 and `check:scaling` went on measuring
+ * FORTY-FIVE — against a campaign taken at fifteen.
+ *
+ * IT WAS INVISIBLE TO THE DRIFT GUARD, which is the part worth carrying forward.
+ * `scaling.mjs` compares seed, ticks, samples and an arm fingerprint spelled in FLAGS
+ * (`60r/32a`); no flag moved, because the flags are rendered from these very literals. A
+ * guard fed by the thing it is guarding cannot see the thing move — G-018's
+ * duplicated-constant defect, in the check meant to catch it.
+ *
+ * `tripwire.mjs` refused only because G-027a happened to move ITS literal. Had it not,
+ * `check:tickcost` would have sailed through the same blind guard.
+ * ============================================================================
+ */
+export const ROOMS = GATE_ROOMS;
+export const ARRIVAL_EVERY_TICKS = GATE_ARRIVALS;
+export const SEED = GATE_SEED;
 
 /** The shipped default, and the hotel `sim:bench` measures. */
 export const SPARSE_AMENITIES = 1;

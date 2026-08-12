@@ -246,7 +246,7 @@ describe('a v2 world with guests in it', () => {
     provides,
   });
   const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 };
-  const content = bindContent({ roomTypes: [roomType('roomA', ['rest'])], needTypes: [needType] });
+  const content = bindContent({ roomTypes: [roomType('roomA', ['rest'])], needTypes: [needType], guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }] });
   // A function of the column since G-008: `spawnEntity` onto an occupied cell throws.
   // Stride two since G-009: adjacent rooms seal each other in, and a sealed room is not
   // a provider, so a hotel leaves a corridor between its rooms.
@@ -275,7 +275,7 @@ describe('a v2 world with guests in it', () => {
     // something rather than agreeing about an empty store.
     expect(guestsInOrder(world.guests).length).toBeGreaterThan(2);
     expect(guestsInOrder(world.guests).some((guest) => guest.roomEntityId === 0)).toBe(true);
-    expect(departureCountOf(world.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
     expect(world.guestOutcomes.arrived).toBeGreaterThan(0);
     const restored = deserialise(serialise(world));
     expect(hashState(restored)).toBe(hashState(world));

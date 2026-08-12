@@ -40,6 +40,9 @@ import {
 } from './report.js';
 import type { Options } from './report.js';
 import { SUMMARY_V1_DOCUMENT, SUMMARY_V1_GUEST_KEYS_REMOVED_AT_V2 } from './fixtures/summary-v1.js';
+// A REAL SCHEMA-2 DOCUMENT, borrowed from G-014b's Era-A recording rather than manufactured,
+// so `assertSummarySchema`'s v2 arm is proved against bytes a process actually wrote (G-027a).
+import { ERA_A_TOTAL_COMMITMENT } from './fixtures/hysteresis-eras.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -140,7 +143,7 @@ describe('L1 and L2, driven to the point where they fire', () => {
     const short = forge((outcomes) => ({
       arrived: outcomes.arrived,
       departures: outcomes.departures.map((row) =>
-        row.reason === 'satisfied' ? { reason: row.reason, count: row.count - 1 } : row,
+        row.reason === 'checkedOut' ? { reason: row.reason, count: row.count - 1 } : row,
       ),
     }));
     expect(() => buildSummary(short, content, options)).toThrow(
@@ -154,9 +157,9 @@ describe('L1 and L2, driven to the point where they fire', () => {
     const misfiled = forge((outcomes) => ({
       arrived: outcomes.arrived,
       departures: outcomes.departures.map((row) =>
-        row.reason === 'satisfied'
+        row.reason === 'checkedOut'
           ? { reason: row.reason, count: row.count - 1 }
-          : row.reason === 'gaveUpWaiting'
+          : row.reason === 'gaveUp'
             ? { reason: row.reason, count: row.count + 1 }
             : row,
       ),
@@ -166,16 +169,16 @@ describe('L1 and L2, driven to the point where they fire', () => {
     expect(text).toMatch(/Outcome attribution broken/);
     expect(text).not.toMatch(/Outcome accounting broken/);
     // Named numbers, so the message is diagnostic rather than decorative.
-    const satisfied = departureCountOf(world.guestOutcomes, 'satisfied');
+    const checkedOut = departureCountOf(world.guestOutcomes, 'checkedOut');
     expect(text).toContain(`${countRoomRevenueTransactions(world.ledger)} room revenue transaction(s)`);
-    expect(text).toContain(`against ${satisfied - 1} stay(s) recorded as satisfied`);
+    expect(text).toContain(`against ${checkedOut - 1} stay(s) recorded as checked out`);
   });
 
   it('and L2 stays silent when the attribution is right, so it is not simply always on', () => {
     const { violations } = buildSummary(world, content, options);
     expect(violations).toEqual([]);
     expect(countRoomRevenueTransactions(world.ledger)).toBe(
-      departureCountOf(world.guestOutcomes, 'satisfied'),
+      departureCountOf(world.guestOutcomes, 'checkedOut'),
     );
     expect(countRoomRevenueTransactions(world.ledger)).toBeGreaterThan(0);
   });
@@ -208,11 +211,31 @@ describe('L1 and L2, driven to the point where they fire', () => {
   });
 });
 
-describe('summary schema 2, and what a schema 1 consumer does with it', () => {
-  it('is 2, and the document says so', () => {
-    expect(SUMMARY_SCHEMA_VERSION).toBe(2);
+describe('summary schema 3, and what an older consumer does with it', () => {
+  it('is 3, and the document says so', () => {
+    // 2 -> 3 AT G-027a: `guests.departures[].reason` renames two of its five values. The
+    // policy note on `SUMMARY_SCHEMA_VERSION` argues why a value rename inside a kept key is
+    // the breaking kind, and it is the harder case than v1 -> v2 was: nothing is missing, so
+    // no shape check anywhere can catch it.
+    expect(SUMMARY_SCHEMA_VERSION).toBe(3);
     const { world, options } = runWorld(['--days', '2', '--seed', '42']);
-    expect(buildSummary(world, content, options).summary.schema).toBe(2);
+    expect(buildSummary(world, content, options).summary.schema).toBe(3);
+  });
+
+  it('THE RENAMED REASONS ARE ABSENT FROM v3, NOT ZERO — the property THIS bump exists for', () => {
+    // The v2 analogue of the three-keys test below, one level down the document. A consumer
+    // written against schema 2 asks for `satisfied` and finds no such row; `?? 0` then reports
+    // a hotel in which nobody ever completed a stay, across a whole sweep, with every field
+    // present and every count plausible.
+    const { world, options } = runWorld(['--days', '2', '--seed', '42']);
+    const { summary } = buildSummary(world, content, options);
+    const reasons = summary.guests.departures.map((row) => row.reason);
+    expect(reasons).toContain('checkedOut');
+    expect(reasons).toContain('gaveUp');
+    expect(reasons).not.toContain('satisfied');
+    expect(reasons).not.toContain('gaveUpWaiting');
+    expect(departuresOf(summary, 'satisfied')).toBe(0);
+    expect(reasons).toHaveLength(5);
   });
 
   it('ACCEPTS the frozen real v1 document, so the guard is not merely always-throwing', () => {
@@ -222,13 +245,27 @@ describe('summary schema 2, and what a schema 1 consumer does with it', () => {
     expect(() => assertSummarySchema(SUMMARY_V1_DOCUMENT, 1)).not.toThrow();
   });
 
-  it('REFUSES a v2 document, naming both versions', () => {
+  it('REFUSES the current document to a v1 consumer, naming both versions', () => {
     const { world, options } = runWorld(['--days', '2', '--seed', '42']);
-    const v2 = JSON.parse(JSON.stringify(buildSummary(world, content, options).summary)) as unknown;
-    expect(() => assertSummarySchema(v2, 1)).toThrow(/schema 2, not the schema 1 this consumer reads/);
+    const current = JSON.parse(JSON.stringify(buildSummary(world, content, options).summary)) as unknown;
+    expect(() => assertSummarySchema(current, 1)).toThrow(/schema 3, not the schema 1 this consumer reads/);
+    // And to a v2 consumer, which is the reader this bump is about.
+    expect(() => assertSummarySchema(current, 2)).toThrow(/schema 3, not the schema 2 this consumer reads/);
     // And the current reader accepts the current document, or the check is pointed at
     // nothing.
-    expect(() => assertSummarySchema(v2, SUMMARY_SCHEMA_VERSION)).not.toThrow();
+    expect(() => assertSummarySchema(current, SUMMARY_SCHEMA_VERSION)).not.toThrow();
+  });
+
+  it('ACCEPTS the frozen real v2 document, so the v2 half is not merely always-throwing', () => {
+    // `ERA_A_TOTAL_COMMITMENT` is a whole schema-2 document a real process wrote (G-014b), so
+    // the guard is proved against real v2 bytes in both directions rather than against a
+    // document this build made up. The anti-vacuity argument the v1 arm above makes, applied
+    // to the version this bump leaves behind.
+    expect((ERA_A_TOTAL_COMMITMENT as { schema: number }).schema).toBe(2);
+    expect(() => assertSummarySchema(ERA_A_TOTAL_COMMITMENT, 2)).not.toThrow();
+    expect(() => assertSummarySchema(ERA_A_TOTAL_COMMITMENT, SUMMARY_SCHEMA_VERSION)).toThrow(
+      /schema 2, not the schema 3 this consumer reads/,
+    );
   });
 
   it('refuses something that is not a document at all', () => {
@@ -237,7 +274,7 @@ describe('summary schema 2, and what a schema 1 consumer does with it', () => {
     expect(() => assertSummarySchema({}, 1)).toThrow(/schema undefined, not the schema 1/);
   });
 
-  it('THE THREE KEYS ARE ABSENT FROM v2, NOT ZERO — the property the bump exists for', () => {
+  it('THE THREE KEYS ARE ABSENT FROM v2 AND v3, NOT ZERO — the property the FIRST bump existed for', () => {
     // This is the load-bearing assertion of the whole schema change. A consumer that skips
     // the version check reads `undefined`, and `undefined ?? 0` is the single most likely
     // line in any consumer: it would turn a schema break into a hotel where nobody was ever
@@ -257,18 +294,55 @@ describe('summary schema 2, and what a schema 1 consumer does with it', () => {
     expect(Array.isArray(v2.guests['departures'])).toBe(true);
   });
 
-  it('and the numbers agree where the two schemas overlap, so this is a reshape', () => {
-    // The v1 fixture is the same invocation as the CLI golden — `--days 2 --seed 42` — so
-    // the three retired counters must equal the rows that replaced them. If they did not,
-    // this change would have altered the simulation while claiming to alter the report.
+  it('THE v1 VALUE COMPARISON IS RETIRED AT G-027a, AND WHAT REPLACES IT IS THE MAPPING', () => {
+    // ========================================================================
+    // WHAT THIS TEST USED TO ASSERT, AND WHY IT CANNOT ANY MORE.
+    //
+    // It read: *"the v1 fixture is the same invocation as the CLI golden — `--days 2 --seed
+    // 42` — so the three retired counters must equal the rows that replaced them. If they did
+    // not, this change would have altered the simulation while claiming to alter the report."*
+    //
+    // G-027a DOES alter the simulation. A stay was 480 ticks and is 1,440, so this invocation
+    // produces different departure counts by design, and the old equality is now a claim that
+    // the goal did not change what it set out to change. Keeping it and re-pinning the FROZEN
+    // side would be ADR-0006's forbidden move; keeping it and deleting the assertion would
+    // lose the mapping it also proved.
+    //
+    // SO WHAT SURVIVES IS THE MAPPING, WHICH IS WHAT THE RESHAPE CLAIM ACTUALLY NEEDED: the
+    // three v1 counters correspond ONE FOR ONE to rows that exist today, `arrived` and
+    // `inHotel` still mean what they meant, and every v1 guest is still accounted for by the
+    // same conservation law. That is checkable against a frozen document from another era;
+    // the counts are not.
+    // ========================================================================
     const { world, options } = runWorld(['--days', '2', '--seed', '42']);
     const { summary } = buildSummary(world, content, options);
     const v1Guests = SUMMARY_V1_DOCUMENT['guests'] as Record<string, number>;
-    expect(summary.guests.arrived).toBe(v1Guests['arrived']);
-    expect(departuresOf(summary, 'satisfied')).toBe(v1Guests['satisfied']);
-    expect(departuresOf(summary, 'gaveUpWaiting')).toBe(v1Guests['unsatisfied']);
-    expect(evictedInSummary(summary)).toBe(v1Guests['evicted']);
-    expect(summary.guests.inHotel).toBe(v1Guests['inHotel']);
+
+    // ONE: every v1 counter has exactly one live row it maps onto, and each is a real row.
+    const reasons = summary.guests.departures.map((row) => row.reason);
+    expect(reasons).toContain('checkedOut');
+    expect(reasons).toContain('gaveUp');
+    expect(evictedInSummary(summary)).toBeGreaterThanOrEqual(0);
+
+    // TWO: the v1 document still conserves under its own era's law, so it is a real document
+    // rather than a fixture that has rotted into nonsense.
+    expect(
+      v1Guests['satisfied']! + v1Guests['unsatisfied']! + v1Guests['evicted']! + v1Guests['inHotel']!,
+    ).toBe(v1Guests['arrived']);
+
+    // THREE: and so does today's, over the rows that replaced them. Same law, both eras,
+    // different numbers — which is the honest statement of what changed.
+    expect(
+      summary.guests.departures.reduce((total, row) => total + row.count, 0) + summary.guests.inHotel,
+    ).toBe(summary.guests.arrived);
+
+    // FOUR: the numbers really did move, so this is not the old equality passing under a new
+    // name. Without this the three assertions above would hold on a build that changed
+    // nothing at all.
+    const moved =
+      departuresOf(summary, 'checkedOut') !== v1Guests['satisfied'] ||
+      departuresOf(summary, 'gaveUp') !== v1Guests['unsatisfied'];
+    expect(moved).toBe(true);
   });
 });
 
@@ -285,7 +359,14 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   //   hotel along the ground floor, where nothing can lose its support; `builtRoomCell`
   //   puts the player's rooms on floor 1 when `--rooms > 0`. So the invocation needs
   //   `--build` as well as `--demolish`, and that is why it is this one.
-  const ARGS = ['--days', '30', '--seed', '7', '--rooms', '6', '--build', '720', '--demolish', '2880'];
+  //   AND IT WAS RETUNED AT G-027a, EXACTLY AS THE `MARGIN IS ONE` NOTE BELOW SAID IT WOULD
+  //   HAVE TO BE. That note listed "the stay length" among the levers that could stop the
+  //   single `evictedRoomUnusable` episode happening, and ADR-0017 pulled it: the old
+  //   invocation now reports 30 / 324 / 5 / 0, three reasons where the criterion needs four.
+  //   Retuned per the note's own step 2 rather than weakened to three — `--rooms 12
+  //   --build 360 --demolish 1440` puts more guests in more rooms and demolishes underneath
+  //   them twice as often, and it buys a margin of TWO on the row that had one.
+  const ARGS = ['--days', '30', '--seed', '7', '--rooms', '12', '--build', '360', '--demolish', '1440'];
 
   it('the pinned invocation exits 0 and reports at least FOUR reasons non-zero', () => {
     const result = runCli([...ARGS, '--json']);
@@ -296,19 +377,24 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     };
     assertSummarySchema(document, SUMMARY_SCHEMA_VERSION);
     const nonZero = document.guests.departures.filter((row) => row.count > 0);
+    // Sorted, so the order is the alphabet's rather than the table's — and `checkedOut`
+    // sorts FIRST where `satisfied` sorted last, which is the rename showing up in a place
+    // nobody would predict.
     expect(nonZero.map((row) => row.reason).sort()).toEqual([
+      'checkedOut',
       'evictedRoomGone',
       'evictedRoomUnusable',
-      'gaveUpWaiting',
-      'satisfied',
+      'gaveUp',
     ]);
     expect(nonZero).toHaveLength(4);
   });
 
   it('AND THE MARGIN IS ONE — read this first if the test above just went red', () => {
     // MEASURED, AND NARROW. Three of the four reasons arrive in the dozens or hundreds
-    // (90 / 263 / 5 at the time of writing). `evictedRoomUnusable` arrives EXACTLY ONCE:
-    // one guest, in one room, on one tick, whose support was demolished from under it.
+    // (60 / 286 / 11 at G-027a). `evictedRoomUnusable` arrives TWICE: two guests, in two
+    // rooms, whose support was demolished from under them. It was ONE before G-027a, on a
+    // different invocation — see the note on `ARGS` for why that one had to be retuned, and
+    // treat two as barely more headroom than one.
     //
     // SO THE CRITERION HAS NO HEADROOM ON THAT ROW, and the failure mode is a trap for
     // whoever hits it. Change the build cadence, the demolish cadence, the plot, the
@@ -331,10 +417,10 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     };
     const count = (reason: string): number =>
       document.guests.departures.find((row) => row.reason === reason)?.count ?? -1;
-    expect(count('evictedRoomUnusable')).toBe(1);
+    expect(count('evictedRoomUnusable')).toBe(2);
     // The other three, for contrast: this is what headroom looks like.
-    expect(count('satisfied')).toBeGreaterThan(50);
-    expect(count('gaveUpWaiting')).toBeGreaterThan(50);
+    expect(count('checkedOut')).toBeGreaterThan(50);
+    expect(count('gaveUp')).toBeGreaterThan(50);
     expect(count('evictedRoomGone')).toBeGreaterThan(1);
   });
 
@@ -361,20 +447,27 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
 
   it('the text report shows the same four, so a human sees what the JSON says', () => {
     const printed = runCli(ARGS).stdout;
-    for (const reason of ['satisfied', 'gaveUpWaiting', 'evictedRoomGone', 'evictedRoomUnusable']) {
+    for (const reason of ['checkedOut', 'gaveUp', 'evictedRoomGone', 'evictedRoomUnusable']) {
       expect(printed).toMatch(new RegExp(`left ${reason}\\s+[1-9]`));
     }
     expect(printed).toMatch(/left evictedCauseUnrecorded\s+0/);
   });
 
-  it('and the default hotel produces only ONE, which is why the criterion needs flags', () => {
+  it('and the default hotel produces only TWO, which is why the criterion needs flags', () => {
     // Recorded as a measurement rather than a claim: this is the invocation the goal block
-    // originally named, and it cannot meet the criterion under any correct implementation.
+    // originally named, and it cannot meet the criterion under any correct implementation —
+    // nothing is ever built or demolished, so neither eviction reason has a cause.
+    //
+    // IT WAS ONE REASON BEFORE G-027a AND IS TWO NOW, which is the same capacity change the
+    // rest of this diff records: six rooms no longer serve twelve arrivals a day, so guests
+    // give up as well as check out. Two of four is still short of the criterion, which is the
+    // point of the arm.
     const { world, options } = runWorld(['--days', '30', '--seed', '7', '--rooms', '6']);
     const { summary, violations } = buildSummary(world, content, options);
     expect(violations).toEqual([]);
     expect(summary.guests.departures.filter((row) => row.count > 0).map((row) => row.reason)).toEqual([
-      'satisfied',
+      'checkedOut',
+      'gaveUp',
     ]);
   });
 });

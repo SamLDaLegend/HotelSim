@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HotelSim</title>
+    <style>
+      /* Placeholder art (ADR-0014): flat colour, clear silhouettes, no assets. Everything
+         in the building is drawn by Pixi; this stylesheet only lays out the page chrome. */
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0d0f12;
+        color: #c8cfda;
+        font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        overflow: hidden;
+      }
+      #app {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        height: 100%;
+      }
+      #hud,
+      #transport {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        align-items: center;
+        padding: 6px 10px;
+        background: #14181f;
+        border-bottom: 1px solid #232833;
+      }
+      #transport {
+        border-bottom: none;
+        border-top: 1px solid #232833;
+      }
+      #stage {
+        position: relative;
+        min-height: 0;
+      }
+      #stage canvas {
+        display: block;
+      }
+      .k {
+        color: #6b7787;
+      }
+      .v {
+        color: #e8edf5;
+      }
+      button {
+        font: inherit;
+        color: #c8cfda;
+        background: #1b212b;
+        border: 1px solid #2c3542;
+        border-radius: 3px;
+        padding: 3px 9px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #222a36;
+      }
+      button.on {
+        background: #2f4a7a;
+        border-color: #3f6fb5;
+        color: #ffffff;
+      }
+      button .u {
+        color: #8f9db0;
+      }
+      button.on .u {
+        color: #cfe0ff;
+      }
+      #guests {
+        padding: 4px 10px;
+        color: #6b7787;
+        background: #14181f;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="hud"></div>
+      <div id="stage"></div>
+      <div>
+        <div id="guests"></div>
+        <div id="transport"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -4,6 +4,7 @@
     "name": "House Guest Rules",
     "abandonMarginBasisPoints": 6000,
     "reviewScoreMin": 1,
-    "reviewScoreMax": 5
+    "reviewScoreMax": 5,
+    "stayDurationTicks": 1440
   }
 ]

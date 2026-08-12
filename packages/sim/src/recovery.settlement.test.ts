@@ -152,6 +152,9 @@ describe('through the real tick, a borrowed hotel repays itself out of trade', (
   const trading = bindContent({
     roomTypes: [{ ...roomType, provides: ['rest'] }],
     needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 480, patienceTicks: 180 }],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or
+    // `bindContent` refuses it — a guest holding a room has no other way to leave.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
     economy: [economy({ startingCapitalPence: 250_000 })],
   });
 

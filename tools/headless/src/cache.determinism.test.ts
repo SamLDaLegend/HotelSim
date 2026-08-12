@@ -74,9 +74,9 @@ describe('the cache changes nothing about what the simulation does', () => {
     expect(cached.buildOutcomes.built).toBeGreaterThan(0);
     expect(cached.buildOutcomes.demolished).toBeGreaterThan(0);
     expect(cached.entities.nextId).toBeGreaterThan(50);
-    expect(departureCountOf(cached.guestOutcomes, 'satisfied')).toBeGreaterThan(0);
+    expect(departureCountOf(cached.guestOutcomes, 'checkedOut')).toBeGreaterThan(0);
     expect(evictedGuests(cached.guestOutcomes)).toBeGreaterThan(0);
-    expect(departureCountOf(cached.guestOutcomes, 'gaveUpWaiting')).toBeGreaterThan(0);
+    expect(departureCountOf(cached.guestOutcomes, 'gaveUp')).toBeGreaterThan(0);
   });
 
   it('is seed-sensitive, so the equality above is not two constants agreeing', () => {

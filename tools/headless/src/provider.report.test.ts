@@ -150,7 +150,7 @@ describe('THE CRITERION: the run reports what delivered every satisfaction (G-01
   });
 
   it('and still closes the G-012 law: every row sums to the guests that have departed', () => {
-    const departed = departuresOf(summary, 'satisfied') + departuresOf(summary, 'gaveUpWaiting') + evictedInSummary(summary);
+    const departed = departuresOf(summary, 'checkedOut') + departuresOf(summary, 'gaveUp') + evictedInSummary(summary);
     expect(departed).toBeGreaterThan(0);
     for (const row of summary.needs) expect(row.met + row.unmet, row.needId).toBe(departed);
   });
@@ -341,7 +341,7 @@ describe('THE NEGATIVE CONTROL: content whose items provide nothing (G-013)', ()
 
   it('and the hotel still works: guests are still served, by rooms', () => {
     // A control that broke the run would prove only that broken content reports zeroes.
-    expect(departuresOf(summary, 'satisfied')).toBeGreaterThan(0);
+    expect(departuresOf(summary, 'checkedOut')).toBeGreaterThan(0);
     expect(totalByRoom(summary.needs)).toBeGreaterThan(0);
     expect(violations).toEqual([]);
   });

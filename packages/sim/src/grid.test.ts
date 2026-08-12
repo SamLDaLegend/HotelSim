@@ -53,6 +53,9 @@ const roomType = (id: string): RoomTypeData => ({
 const content = bindContent({
   roomTypes: ['alpha', 'beta', 'gamma', 'delta'].map(roomType),
   needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or
+  // `bindContent` refuses it — a guest holding a room has no other way to leave.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
 });
 
 const cell = (floor: number, column: number): Cell => ({ floor, column });

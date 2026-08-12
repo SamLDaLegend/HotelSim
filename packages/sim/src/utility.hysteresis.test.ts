@@ -119,8 +119,24 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
   patienceTicks: lodging ? 100_000 : ENGAGEMENT_PATIENCE,
 });
 
+/**
+ * `stayDurationTicks` IS ON EVERY ROW SINCE G-027a, AND IT IS DELIBERATELY ENORMOUS. This
+ * file's lodging need is 100,000 ticks for a stated reason — no stay may end mid-experiment,
+ * because the only thing allowed to end an engagement here is the decision under test — and
+ * the checkout terminator is a second way a stay could end. It is pushed past every run in
+ * this file for exactly the same reason, and `bindContent`'s floor makes 100,000 the minimum
+ * it could be anyway.
+ */
+const STAY = 100_000;
+
 const rules = (abandonMarginBasisPoints: number): readonly GuestRulesData[] => [
-  { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints },
+  { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints, stayDurationTicks: STAY },
+];
+
+/** The same table with no MARGIN on it — the pre-G-014b statement, in the only shape that
+ *  can still be run (see the `no guest rules` block below). */
+const rulesWithoutMargin: readonly GuestRulesData[] = [
+  { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY },
 ];
 
 /**
@@ -134,7 +150,7 @@ const twoNeeds = (margin: number | undefined, extra: Partial<SimContent> = {}): 
   bindContent({
     roomTypes: [roomType('bedroom', ['rest']), roomType('roomA', ['aaa']), roomType('roomB', ['bbb'])],
     needTypes: [need('aaa', false), need('bbb', false), need('rest', true)],
-    ...(margin === undefined ? {} : { guestRules: rules(margin) }),
+    guestRules: margin === undefined ? rulesWithoutMargin : rules(margin),
     ...extra,
   });
 
@@ -548,21 +564,52 @@ describe('a guest never leaves a half-eaten meal to eat the same meal at a nicer
 //  THE MARGIN IS CONTENT, AND ITS ABSENCE IS AN ERA (ADR-0008).
 // ============================================================================
 
-describe('content that declares no guest rules is content from before the margin', () => {
+describe('content that declares no MARGIN is content from before the margin', () => {
   // REACHED AT THE `bindContent` / `SimContent` LEVEL, BECAUSE NO HOST CAN REACH IT
   // (`ai-critic`, MINOR 4). `loadContent` reads five fixed filenames and `readContentFile`
   // throws on a missing one, so a `--content` directory without `guest-rules.json` is
-  // refused rather than defaulted. The absent-table branch is therefore only reachable from
+  // refused rather than defaulted. The absent-margin branch is therefore only reachable from
   // an injected `SimContent` — which is exactly what a save taken under pre-G-014b content
   // is, and what M5's bundler-fed host could be. ADR-0007: a branch nothing exercises is a
   // branch nobody has checked.
+  //
+  // ============================================================================
+  // WHAT G-027a CHANGED HERE, AND IT IS A REAL NARROWING RATHER THAN A RENAME.
+  //
+  // These arms used to omit the `guestRules` TABLE entirely, which was the literal
+  // pre-G-014b document. **That document can no longer be run at all** when it declares a
+  // lodging need: `assertEveryStayCanEnd` refuses it, because a stay duration has no
+  // historical value to fall back on and a guest without one would check in and never leave.
+  //
+  // So the era statement is made in the only shape that still runs — a table that declares
+  // the stay and says nothing about the margin — and it is the same claim: `abandonMarginOf`
+  // reads absence as TOTAL COMMITMENT, and a world driven under it behaves exactly like one
+  // driven at the saturating value. The whole-table-absent case keeps its own arm below,
+  // over content with no lodging need, which is the only content that can still express it.
+  // ============================================================================
   const marginless = twoNeeds(undefined);
   const saturating = twoNeeds(ONE_WHOLE_BASIS_POINTS);
   const live = twoNeeds(1_000);
 
   it('reads as TOTAL COMMITMENT, which is the smallest value at which the branch is unreachable', () => {
-    expect(marginless.content.guestRules).toBeUndefined();
+    expect(marginless.content.guestRules?.[0]).not.toHaveProperty('abandonMarginBasisPoints');
     expect(abandonMarginOf(marginless)).toBe(ONE_WHOLE_BASIS_POINTS);
+  });
+
+  it('and so does a content set with NO guest-rules table, which needs a hotel nobody lodges in', () => {
+    // The literal pre-G-014b document, kept reachable at the one place it still binds.
+    //
+    // IT HAS NO NEED TYPES AT ALL, AND THAT IS FORCED RATHER THAN CHOSEN. Every content set
+    // that declares a need declares a LODGING need — `lodgingNeedIn` falls back to the lowest
+    // id when no role is written, and `assertLodgingNeedIsUnambiguous` refuses a table that
+    // declares roles and names no lodging one. So "declares needs and has no lodging need" is
+    // not a document that exists, and the only content `assertEveryStayCanEnd` has nothing to
+    // say about is content with no needs. That is exactly `SAVE_V1_CONTENT`'s shape, which is
+    // why the permanent fixture still binds (ADR-0006).
+    const noTable = bindContent({ roomTypes: [roomType('roomA', [])] });
+    expect(noTable.content.guestRules).toBeUndefined();
+    expect(Object.keys(noTable.content)).not.toContain('guestRules');
+    expect(abandonMarginOf(noTable)).toBe(ONE_WHOLE_BASIS_POINTS);
   });
 
   it('and the ABSENT table and a SATURATING one produce the same simulation', () => {
@@ -596,7 +643,10 @@ describe('content that declares no guest rules is content from before the margin
     // — is a different document.
     expect(marginless.fingerprint).not.toBe(saturating.fingerprint);
     expect(saturating.fingerprint).not.toBe(live.fingerprint);
-    expect(Object.keys(marginless.content)).not.toContain('guestRules');
+    // The KEY, not the table (G-027a): a document that declares the stay and no margin is a
+    // different document from one that declares both, and `cloneGuestRules` strips the absent
+    // key rather than carrying `undefined` into the fingerprint.
+    expect(Object.keys(marginless.content.guestRules![0]!)).not.toContain('abandonMarginBasisPoints');
   });
 });
 
@@ -612,7 +662,7 @@ describe('bindContent refuses a margin no comparison could mean, from a host zod
         roomTypes: [roomType('bedroom', ['rest']), roomType('roomA', ['aaa'])],
         needTypes: [need('aaa', false), need('rest', true)],
         guestRules: [
-          { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints } as GuestRulesData,
+          { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints, stayDurationTicks: STAY } as GuestRulesData,
         ],
       });
 
@@ -635,9 +685,12 @@ describe('bindContent refuses a margin no comparison could mean, from a host zod
     const bound = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('roomA', ['aaa'])],
       needTypes: [need('aaa', false), need('rest', true)],
-      guestRules: [{ id: 'houseRules', name: 'House Rules' }],
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
     });
-    expect(Object.keys(bound.content.guestRules![0]!)).toEqual(['id', 'name']);
+    // `stayDurationTicks` is present because this content declares a lodging need and
+    // `bindContent` refuses it otherwise (G-027a); the MARGIN key is the one under test, and
+    // it is still absent rather than `undefined`.
+    expect(Object.keys(bound.content.guestRules![0]!)).toEqual(['id', 'name', 'stayDurationTicks']);
     expect(abandonMarginOf(bound)).toBe(ONE_WHOLE_BASIS_POINTS);
   });
 });
@@ -661,13 +714,23 @@ describe('a margin of ZERO is the thrash control, and it thrashes', () => {
     const content = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('roomA', ['aaa']), roomType('roomB', ['bbb'])],
       needTypes: [
-        need('aaa', false),
-        need('bbb', false),
+        // SHORTER ENGAGEMENTS THAN THE REST OF THIS FILE USES, AND THAT IS G-027a's FLOOR
+        // TALKING. `bindContent` refuses a stay shorter than the engagement track, so a case
+        // that wants a stay of 30 ticks cannot also want two 5,000-tick engagements: that
+        // content ships needs no guest could ever finish, which is the refusal working. 12
+        // and 12 against a stay of 30 leaves the same thrash — margin 0 re-decides every
+        // tick — with a content set the simulation will actually load.
+        { ...need('aaa', false), satisfyTicks: 12 },
+        { ...need('bbb', false), satisfyTicks: 12 },
         // A stay short enough to end inside this run, so the fold at departure is what is
         // being read rather than the live guest.
         { id: 'rest', name: 'rest', role: 'lodging', satisfyTicks: 30, patienceTicks: 100 },
       ],
-      guestRules: rules(0),
+      // `rules(0)` carries this file's enormous `STAY`, which would keep the guest here past
+      // the end of the run. The stay is the thing this case needs to END, so it declares its
+      // own — and it is the one place in this file where the checkout terminator is wanted
+      // rather than pushed out of the way.
+      guestRules: [{ id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 0, stayDurationTicks: 30 }],
     });
     const world = build(content, spawn('bedroom', 0), spawn('roomA', 2), spawn('roomB', 4));
     const served = run(world, content, 60, [at(world.tick, arrive)]);
@@ -706,8 +769,8 @@ describe('two guest-rules entries: the LOWEST ID decides the margin, whatever th
       needTypes: [need('aaa', false), need('rest', true)],
       guestRules: [first, second],
     });
-  const alpha: GuestRulesData = { id: 'aaaRules', name: 'A', abandonMarginBasisPoints: 1_000 };
-  const omega: GuestRulesData = { id: 'zzzRules', name: 'Z', abandonMarginBasisPoints: 9_000 };
+  const alpha: GuestRulesData = { id: 'aaaRules', name: 'A', abandonMarginBasisPoints: 1_000, stayDurationTicks: STAY };
+  const omega: GuestRulesData = { id: 'zzzRules', name: 'Z', abandonMarginBasisPoints: 9_000, stayDurationTicks: STAY };
 
   it('takes the lower id in both declaration orders, and the two orders fingerprint alike', () => {
     const forward = twoRules(alpha, omega);

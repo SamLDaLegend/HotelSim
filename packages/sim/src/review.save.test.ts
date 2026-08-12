@@ -77,8 +77,17 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
 const V10_CONTENT: SimContent = {
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
   needTypes: [need('food', false), need('rest', true)],
+  // `stayDurationTicks` added at G-027a, for the reason `outcome.save.test.ts` states: this
+  // build refuses content whose guests could never leave. The frozen bytes below are untouched.
   guestRules: [
-    { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 3_000, reviewScoreMin: 1, reviewScoreMax: 5 },
+    {
+      id: 'houseRules',
+      name: 'House Rules',
+      abandonMarginBasisPoints: 3_000,
+      reviewScoreMin: 1,
+      reviewScoreMax: 5,
+      stayDurationTicks: 40,
+    },
   ],
 };
 const content = bindContent(V10_CONTENT);
@@ -106,7 +115,7 @@ const v9World = (): Record<string, unknown> => {
       // goal's own check is satisfied and the assertion under test is the one that fires.
       arrived: 4,
       departures: createGuestOutcomes().departures.map((row) =>
-        row.reason === 'satisfied' ? { ...row, count: 3 } : row.reason === 'evictedRoomGone' ? { ...row, count: 1 } : row,
+        row.reason === 'checkedOut' ? { ...row, count: 3 } : row.reason === 'evictedRoomGone' ? { ...row, count: 1 } : row,
       ),
     },
     needOutcomes: [
@@ -116,7 +125,7 @@ const v9World = (): Record<string, unknown> => {
   };
 };
 
-describe('the chain walks 1 -> ... -> 11, and every link is still observed', () => {
+describe('the chain walks 1 -> ... -> 12, and every link is still observed', () => {
   it('ships one step per version, and the 9 -> 10 step is still the ninth of them', () => {
     // The absolute era pin is `save.fixture.test.ts`'s, whose whole subject is the walk from
     // v1 to today. This file's own subject is the 9 -> 10 link, so it says how many steps
@@ -136,6 +145,7 @@ describe('the chain walks 1 -> ... -> 11, and every link is still observed', () 
       [8, 9],
       [9, 10],
       [10, 11],
+      [11, 12],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -229,7 +239,7 @@ describe('the load path validates the distribution from the bytes alone', () => 
     guestOutcomes: {
       arrived: 1,
       departures: createGuestOutcomes().departures.map((row) =>
-        row.reason === 'satisfied' ? { ...row, count: 1 } : row,
+        row.reason === 'checkedOut' ? { ...row, count: 1 } : row,
       ),
     },
   });
@@ -267,6 +277,31 @@ describe('the load path validates the distribution from the bytes alone', () => 
   });
 });
 
+
+/**
+ * ONE OUTCOME TABLE, RE-LABELLED THE WAY EVERY SAVE OLDER THAN v12 SPELLED IT (G-027a).
+ *
+ * A FROZEN LIST, NOT `GUEST_DEPARTURE_REASONS`. It describes an era that is over, so it must
+ * not track the live union (ADR-0008 (2)) — the two agree on three of five names today and
+ * are free to diverge further. Used to write a world lived forward under THIS build back into
+ * an older SHAPE, which is the same job stripping a newer field does.
+ */
+const PRE_V12_DEPARTURE_LABELS = [
+  'satisfied',
+  'gaveUpWaiting',
+  'evictedRoomGone',
+  'evictedRoomUnusable',
+  'evictedCauseUnrecorded',
+] as const;
+
+const v11Labels = (world: Record<string, unknown>): unknown => {
+  const outcomes = world['guestOutcomes'] as { arrived: number; departures: { reason: string; count: number }[] };
+  return {
+    ...outcomes,
+    departures: outcomes.departures.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
+  };
+};
+
 describe('a migrated v9 world and a v10 world with the same history are the SAME world', () => {
   /** A world lived forward under this build: one room, one café, one completed stay. */
   const lived = (): World => {
@@ -277,10 +312,18 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
     return run(world, content, 60, [{ tick: 1, command: { kind: 'guestArrives' } }]);
   };
 
-  /** The same world with the v10 field stripped off, stamped as v9. */
+  /**
+   * The same world with the v10 field stripped off and the v12 row labels put back, stamped
+   * as v9.
+   *
+   * THE LABELS COME OFF TOO SINCE G-027a, for the reason the field does: "the same world
+   * written in the v9 SHAPE" means every difference v9 had, and two of its five departure
+   * rows were spelled differently. Leaving today's spellings on would hand `migrateV11ToV12`
+   * a table it correctly refuses, which is the guard working rather than a test to relax.
+   */
   const asV9Bytes = (world: World): string => {
     const { reviewOutcomes: _drop, ...rest } = JSON.parse(JSON.stringify(world)) as Record<string, unknown>;
-    return JSON.stringify({ schemaVersion: 9, world: rest });
+    return JSON.stringify({ schemaVersion: 9, world: { ...rest, guestOutcomes: v11Labels(rest) } });
   };
 
   it('round-trips at v10, which is I6 over the new shape, WITH a review in it', () => {
