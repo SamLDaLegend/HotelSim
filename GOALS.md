@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-019 done. M2: 13 of 13 goals — COMPLETE, pending sign-off. Unreliable: 1 gate, 1 defect (I4).*
+*As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v9** · summary **v2** · I2 `10926cc3b569c887`. **`verify` runs ELEVEN
   rows**: six invariants, `typecheck`, and four `—` rows (`check:measure`, **`check:tickcost`**,

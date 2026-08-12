@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-10, G-019 done. M2: 13 of 13 goals — COMPLETE, pending sign-off. Unreliable: 1 gate, 1 defect (I4).*
+*As of 2026-08-12, G-022 done. M3: 1 of 5 goals (G-022 gate goal). Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v9** · summary **v2** · I2 `10926cc3b569c887` · **I4 unreliable (§2.0)**
   · `pnpm verify` is ten rows now, three of them `—` and not invariants.
@@ -1996,3 +1996,74 @@ silence that read as completion because everything around it closed green. **The
 new rule** — §5.8 already covers it — **it is that the obligation is now a hard prerequisite with
 an owner rather than a sentence in a closed goal's block.** That is the same repair the as-of
 stamp needed, for the same reason, on the same day.
+
+---
+
+## G-022 — The instrument debts M2 left — REFLECT
+
+**DONE, DRY at 2/3. Both M3 prerequisites discharged. CI green on three platforms, run #7
+(`c718d52`): https://github.com/SamLDaLegend/HotelSim/actions/runs/31584592314**
+
+**THE HEADLINE IS THE ONE NUMBER: 0 GATES / 0 DEFECTS, THE FIRST ZERO SINCE G-016.** Defect A
+left the parallel runner at G-020c. Defect B is repaired by **vitest 4.1.10**, whose
+`createRuntimeRpc` passes `timeout: -1` where 3.2.7 passed nothing and birpc armed a 60-second
+timer — **the timer that fired is the timer they removed.** A named library constant, an
+alternated 5/5-against-0/5 campaign, an n=10 confirmation, and an unhandled-rejection control
+proving both versions still fail a genuine error, so it is a repair rather than a suppression.
+**Every reading taken under the loaded arm; a quiet green is what this goal's own criterion
+forbids resting on, and it is what nearly let two defects ship.**
+
+**I2's "byte-identical on every platform" IS TESTED FOR THE FIRST TIME AND HOLDS.**
+`fd9dbb263f6a7e7a` on linux, win32, darwin and this box — **two CPU architectures, one hash.**
+ADR-0002's integer-pence decision was made in G-001 precisely so float accumulation could not
+break this, and it has now been paid off in evidence rather than argument.
+
+**AND THE CLAIM THAT HAD SAT IN THIS FILE SINCE BOOTSTRAP WAS FALSE FOR NINETEEN GOALS.** The
+three-OS matrix was recorded as wired and **had never executed** — ADR-0007's class at the
+infrastructure layer, underneath everything the project has been rigorous about, and attested
+at a human sign-off. It took six runs to go green and found **two real cross-platform defects
+no work on this machine could have surfaced**: `/var` is a symlink on macOS, so the instruments
+compared a canonicalised module path against an uncanonicalised temp root; and the GitHub
+Windows runner's `TEMP` is an **8.3 short path**, which broke the regression test written for
+the first.
+
+**FOUR OF THE DEFECTS THIS GOAL FOUND WERE IN TESTS WRITTEN TO PROVE SOMETHING.** A regression
+test that could only fail on the platform that had already failed · a parity assertion
+comparing 1 against 1, which would have passed against a branch returning 0 for both · a
+newline guard **vacuous by the split it came from** · and a **second** newline guard vacuous by
+a `trimEnd()` upstream — **that last found only by attempting the fix the orchestrator
+proposed for the first.** The rule the human ruled at M2 exit — *every scanner gate owes a
+proof-of-bite test* — landed immediately on its two most important subjects: **`check-purity.mjs`
+(I1) and `determinism.mjs` (I2) had never been executed by any committed test.**
+
+**THE ORCHESTRATOR'S OWN ERRORS, WHICH COST THE MOST TIME IN THIS GOAL.**
+1. **The seam.** `sim-engineer` offered exactly one at PLAN — CI against the three local
+   repairs — and recommended declining. I agreed. **Events falsified both halves within the
+   hour**: CI's diff was three commits, and nothing overlapped; three finished local criteria
+   sat behind an open-ended CI criterion for hours. **"CI green on three platforms" is
+   open-ended discovery wearing a bounded criterion**, and G-022 reached CRITIQUE only after
+   the human asked what was taking so long.
+2. **A number attached to the wrong referent, in the project that wrote the rule against it.**
+   I read 65,577ms and 65,685ms as a *failure timeout* and built a hypothesis strong enough to
+   redirect the investigation. They were the **suite duration**; the failing test took 19ms.
+3. **Diagnosing without credentials.** Five commits and five CI runs to learn what one
+   authenticated query answered in seconds. The workaround (annotation emitters) was good and
+   is now shipped — but I should have asked once and stopped working around it.
+
+**Scored predictions (§5.5).** The builder's ranked hypothesis for the macOS failure —
+**B 45% / timing 35% / environmental 20%** — **landed in the branch it had argued against**,
+and its own diagnosis of why is the useful part: *it treated "ubuntu green" as evidence about
+the platform class when the discriminator was the filesystem.* My own expectation, that the
+timing family would be the casualty, was **wrong in mechanism**: no timing bound was involved
+anywhere in six runs.
+
+**Owed forward.** `PARKING.md` gains the stamp's CRLF splice hazard — `findStamp` indexes by
+`\n` while `replaceStamp` splices by the file's own newline, **live but dormant by where a
+newline happens to fall**, in the gate whose job is keeping four ledgers agreeing — and
+`hysteresis.report.test.ts`'s load sensitivity, with the wrong mechanism kept beside its
+correction because the correction is the useful part.
+
+**M3 IS SEEDED AND READY**: G-023 movement, G-024 stairs as a queued shared resource, G-025
+lifts, G-026 travel time in the score with waiting as a satisfaction input — **last in
+milestone, two critics** — and an exit block that finally runs the running-product
+falsification test `PARKING.md` parked *"after three M3 goals"*.
