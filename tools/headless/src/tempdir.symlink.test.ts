@@ -46,9 +46,26 @@ const HELPER = pathToFileURL(join(ROOT, 'tools/gates/lib/tempdir.mjs')).href;
 
 const made: string[] = [];
 
-/** A real directory plus an aliased path that reaches it through a symlink. */
+/**
+ * A real directory plus an aliased path that reaches it through a symlink.
+ *
+ * `realpathSync.NATIVE`, AND THE REASON IS THE BEST SENTENCE IN THIS GOAL: THE TEST WRITTEN TO
+ * PROVE THAT COMPARING A CANONICALISED PATH AGAINST AN UNCANONICALISED ONE IS THE DEFECT DID
+ * EXACTLY THAT — on a third platform, through a second canonicalisation nobody had in mind.
+ *
+ * The GitHub Windows runner's `TEMP` is an 8.3 SHORT PATH — `C:\Users\RUNNER~1\…`, because the
+ * account name `runneradmin` is over eight characters. Plain `realpathSync` resolves symlinks and
+ * junctions but does NOT expand a short name, so `real` kept the short form; the ESM loader
+ * canonicalises short names as well as symlinks, so it returned `C:\Users\runneradmin\…`; and the
+ * assertion below compared the two by exact equality and failed. CI run #4, Windows only, and the
+ * two platforms the file was written for both passed.
+ *
+ * `realpathSync.native` is the same call the loader's canonicalisation uses, so `real` absorbs
+ * whatever the operating system applies — a symlink, a short name, or both — and the comparison is
+ * canonical against canonical on every platform.
+ */
 function aliasedDir(): { readonly real: string; readonly alias: string } {
-  const real = realpathSync(mkdtempSync(join(tmpdir(), 'hotelsim-alias-real-')));
+  const real = realpathSync.native(mkdtempSync(join(tmpdir(), 'hotelsim-alias-real-')));
   const alias = `${real}-alias`;
   // The type argument is Windows-only and ignored elsewhere: a junction needs no privilege on
   // Windows, where a true symlink does. One call covers all three CI platforms.
@@ -77,6 +94,22 @@ afterAll(() => {
 });
 
 describe('THE STAGED CONDITION — os.tmpdir() reaches a real directory through a symlink', () => {
+  it('the root is a FIXED POINT of the canonicalisation the loader uses', () => {
+    // The property that failed on the Windows runner, asserted directly: canonicalising `real`
+    // again must change nothing. A short name, a symlinked ancestor, or both would move it.
+    //
+    // AND THE LIMIT OF THIS ASSERTION ON THIS MACHINE, STATED RATHER THAN IMPLIED. It passes
+    // trivially here, because 8.3 name generation is disabled on this volume — measured, not
+    // assumed: asking `cmd` for the short name of a freshly created long-named directory returns
+    // the long name unchanged. So the SHORT-NAME half of this defect cannot be staged locally at
+    // all, and the arm that gives this file teeth on every platform is the SYMLINK one below.
+    // The Windows runner is where the short-name half is exercised, and that is a limitation of
+    // this machine rather than a property of the fix.
+    const { real, alias } = aliasedDir();
+    expect(realpathSync.native(real)).toBe(real);
+    expect(realpathSync.native(alias)).toBe(real);
+  });
+
   it('the alias really is an alias, or every arm below is vacuous', () => {
     // THE CONTROL THAT MAKES THE REST MEAN ANYTHING. If pointing the environment at a symlink did
     // not take — a platform that ignores TMPDIR, a junction that silently resolved at creation —
@@ -142,7 +175,38 @@ describe('the mechanism itself, asserted rather than described', () => {
     const viaAlias = pathToFileURL(join(alias, 'module.mjs')).href;
     const loaded = (await import(viaAlias)) as { readonly self: string };
 
+    // BOTH SIDES CANONICALISED, BY THE SAME CALL, AND THE PAIR IS WHAT KEEPS THE TEETH. This is
+    // the line CI run #4 failed: it reconstructed the expected url from `real` and compared it to
+    // the loader's answer by exact equality, so any canonicalisation the loader applied and the
+    // reconstruction did not — a symlink on macOS, an 8.3 short name on the Windows runner — made
+    // two spellings of one file look like two files.
+    //
+    // Canonicalising the expected side would ALONE be weaker: it could pass against a loader that
+    // canonicalised nothing. The assertion above is what forbids that — the url must have moved
+    // away from the alias it was imported by — so the two together say "it canonicalised, and it
+    // canonicalised to exactly this", without depending on which trick the platform played.
     expect(loaded.self).not.toBe(viaAlias);
-    expect(loaded.self).toBe(pathToFileURL(join(real, 'module.mjs')).href);
+    expect(loaded.self).toBe(pathToFileURL(realpathSync.native(join(real, 'module.mjs'))).href);
+  });
+
+  it('THE FIX ITSELF, given teeth here: old form false, new form true, on one file', async () => {
+    // The 8.3 half of this defect cannot be staged on this machine — 8.3 generation is disabled on
+    // this volume — so a symlink stands in for it. The SHAPE is identical and it is the shape the
+    // fix addresses: one file, two spellings, one of them not canonical.
+    //
+    // Without this arm the fix would rest on CI alone, which is precisely the criticism that
+    // rewrote this file the first time: a proof that can only fail on the platform that already
+    // failed is not a proof.
+    const { real, alias } = aliasedDir();
+    writeFileSync(join(real, 'module.mjs'), 'export const self = import.meta.url;\n', 'utf8');
+    const spelling = join(alias, 'module.mjs');
+    const loaded = (await import(pathToFileURL(spelling).href)) as { readonly self: string };
+
+    // THE OLD FORM — reconstruct the url from the spelling you happen to hold. This is exactly
+    // what failed on the Windows runner, with a short name where this has a symlink.
+    expect(loaded.self).not.toBe(pathToFileURL(spelling).href);
+
+    // THE NEW FORM — canonicalise first, with the call the loader uses. Same file, now equal.
+    expect(loaded.self).toBe(pathToFileURL(realpathSync.native(spelling)).href);
   });
 });

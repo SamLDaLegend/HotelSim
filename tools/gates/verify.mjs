@@ -9,6 +9,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { escapeAnnotation, tail } from './lib/annotate.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -51,17 +52,34 @@ const GATES = [
   ['—', 'check:stamp', 'the four ledger digests carry one byte-identical as-of line (§4.1, G-022)'],
 ];
 
+// IN CI, CAPTURE EACH ROW'S OUTPUT SO A RED ONE CAN SPEAK; EVERYWHERE ELSE, STREAM IT.
+//
+// `stdio: 'inherit'` is what makes a local `pnpm verify` watchable — output appears as it
+// happens. It also means nothing is kept, so the parent cannot quote a failing child. In CI that
+// trade is the wrong way round: nobody is watching a live log, and the failing row's text is the
+// one thing a reader without a token cannot otherwise obtain.
+//
+// So in CI the child is piped and its output is written straight back out afterwards. The step
+// log is the same text either way; only its arrival changes, from interleaved to per-row blocks.
+// THE VERDICT IS UNTOUCHED — `result.status` is read identically on both paths, and the exit code
+// at the foot of this file is computed from `results` exactly as before.
+const CI = process.env.GITHUB_ACTIONS === 'true';
+
 const results = [];
 for (const [id, script, blurb] of GATES) {
   process.stdout.write(`\n── ${id} ${script} — ${blurb}\n`);
   const started = Date.now();
   const result = spawnSync(`pnpm run ${script}`, {
     cwd: ROOT,
-    stdio: 'inherit',
+    stdio: CI ? 'pipe' : 'inherit',
     shell: true,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env, NODE_NO_WARNINGS: '1' },
   });
-  results.push({ id, script, ok: result.status === 0, ms: Date.now() - started });
+  const output = CI ? `${result.stdout ?? ''}${result.stderr ?? ''}` : '';
+  if (CI) process.stdout.write(output);
+  results.push({ id, script, ok: result.status === 0, ms: Date.now() - started, output });
 }
 
 process.stdout.write('\n── summary ──\n');
@@ -83,11 +101,24 @@ for (const r of results) {
 // changes no verdict and adds no lever: the exit status below is computed exactly as before, and
 // on a green run the notice publishes the row-by-row readings, which is the per-platform evidence
 // a milestone gate wants recorded rather than retyped.
-if (process.env.GITHUB_ACTIONS === 'true') {
+// AND THE THIRD STEP: THE FAILING ROW'S OWN OUTPUT (G-022, after run #5).
+//
+// Row names alone took the diagnosis a long way — they identified the macOS symlink defect from
+// two names and three durations. They then ran out: Windows CI has failed I4 at 65,577ms and
+// 65,685ms, 108 MILLISECONDS APART ACROSS A VITEST MAJOR VERSION CHANGE, which is a deterministic
+// wall rather than the load-sensitive race the local campaign measured. No duration can say which
+// test or which error that is. The text can.
+if (CI) {
   const row = (r) => `${r.ok ? 'PASS' : 'FAIL'} ${r.id} ${r.script} ${r.ms}ms`;
   process.stdout.write(`::notice title=verify (${process.platform})::${results.map(row).join(' | ')}\n`);
   for (const r of results.filter((r) => !r.ok)) {
     process.stdout.write(`::error title=gate ${r.script} (${process.platform})::${r.id} ${r.script} FAILED after ${r.ms}ms\n`);
+    const excerpt = tail(r.output);
+    if (excerpt !== '') {
+      process.stdout.write(
+        `::error title=${r.script} tail (${process.platform})::${escapeAnnotation(excerpt)}\n`,
+      );
+    }
   }
 }
 
