@@ -864,7 +864,7 @@ first matrix run is the cheapest possible moment to learn it is red.
 
 ---
 
-## OPEN — I4's DEFECT B: ALL THREE PARKED REMEDIES ARE NOW FALSIFIED (G-022, 2026-08-12)
+## RESOLVED — I4's DEFECT B: three remedies falsified, the fourth measured and adopted (G-022, 2026-08-12)
 
 **This is G-022's pre-registered third branch firing, written into the plan before any reading
 existed:** *if all candidates still produce B, the defect is in the runner rather than in its
@@ -976,15 +976,20 @@ error is no longer CREATED.
 against 58.8s at 3.2.7. **`pnpm verify` is TWELVE ROWS GREEN under 4.1.10**, including both gates
 that materialise arms.
 
-**WHAT IS NOT YET TRUE.** The repository still ships 3.2.7. **The unreliable count is 1 gate /
-1 defect until the bump lands**, and it is a toolchain change for the orchestrator to commit, not
-for a builder to adopt unilaterally. The change is `package.json`'s devDependency `^3.2.4` ->
-`^4.1.10` plus the lockfile. **When it lands, `vitest.config.ts`'s block must be rewritten in the
-same commit**: candidate 4 is the remedy, and the three falsified candidates stay recorded so
-nobody retries them.
+**WHAT WAS NOT YET TRUE WHEN THIS WAS WRITTEN — AND IS NOW.** ~~The repository still ships
+3.2.7~~ and ~~the unreliable count is 1 gate / 1 defect until the bump lands~~: **the bump landed
+at `4e768c9`**, `package.json` ships `^4.1.10`, and `vitest.config.ts`'s block was rewritten at
+sweep 1 with the fourth row and the `rpc.MzXet3jl.js:117` mechanism, as this paragraph required.
+The three falsified candidates stay recorded there so nobody retries them. **Struck rather than
+deleted (ADR-0008): the obligation is what made the rewrite happen, and a reader should see that
+it was owed before it was paid.**
 
-**AND CI IS THE DECIDING TEST.** Run #4 failed I4 on the Windows runner — the slowest, most
-contended of the three — which is consistent with defect B but whose **signature is unverified**,
-because the step log needs authentication and the annotation carries only the row and its duration.
-If the bump lands and Windows CI goes green, that is the confirmation this campaign cannot supply
-from one machine.
+**AND CI WAS THE DECIDING TEST — IT DECIDED AGAINST THE HYPOTHESIS.** Run #4 failed I4 on the
+Windows runner and this entry called that "consistent with defect B" while stating the signature
+was unverified. **It was not defect B.** Run #5 failed at 65,685ms against run #4's 65,577ms —
+**108 milliseconds apart across a vitest major version change**, and under 4.1.10 the RPC timer is
+not armed at all. The cause was a defect in G-022's own `tempdir.symlink.test.ts`, introduced in
+`dcc706d`, which is the exact commit where Windows first went red: it compared an 8.3 short path
+against the runner-canonicalised long form. **The local repair above is untouched by that** — it
+rests on 5/5 against 0/5, an n=10 confirmation, the unhandled-rejection control and a library
+constant, none of which came from CI.

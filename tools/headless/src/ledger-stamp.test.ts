@@ -302,3 +302,72 @@ describe('--set is the one-step rewrite §4.1 asks for, and it refuses to write 
     expect(runGate(tree.gate, ['--set', '   ']).status).toBe(2);
   });
 });
+
+describe('THROUGH THE SCRIPT NAME A HUMAN ACTUALLY TYPES — the arm that was missing', () => {
+  // EVERY OTHER ARM IN THIS FILE SPAWNS `node …/stamp.mjs` DIRECTLY, and that is exactly how the
+  // defect survived: §4.1's criterion is "a command that SETS it, so the one-step rewrite is one
+  // step", and the command it named — `pnpm stamp:set -- "…"` — did not work. pnpm 10.15 forwards
+  // the `--`, the gate read it as the stamp, and refused it as malformed. Nine bite arms, all
+  // green, none of them touching the invocation the criterion is about.
+  //
+  // So this runs the real script name, in a tree with its own package.json carrying the same two
+  // script definitions the repository ships.
+  const scripts = {
+    'check:stamp': 'node tools/gates/stamp.mjs',
+    'stamp:set': 'node tools/gates/stamp.mjs --set',
+  };
+
+  function pnpmTree(): string {
+    const dir = makeTree().dir;
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: 'stamp-probe', version: '0.0.0', private: true, scripts }, null, 2),
+      'utf8',
+    );
+    writeLedgers(dir);
+    return dir;
+  }
+
+  function runScript(dir: string, args: readonly string[]): { readonly status: number | null; readonly output: string } {
+    const result = spawnSync('pnpm', args, {
+      cwd: dir,
+      encoding: 'utf8',
+      shell: true,
+      env: { ...process.env, NODE_NO_WARNINGS: '1' },
+    });
+    return { status: result.status, output: `${result.stdout ?? ''}${result.stderr ?? ''}` };
+  }
+
+  const NEXT = '*As of 2026-08-12, G-042 done. Unreliable: 0 gates, 0 defects.*';
+
+  it('`pnpm stamp:set "<text>"` writes all four', () => {
+    const dir = pnpmTree();
+    const { status, output } = runScript(dir, ['stamp:set', `"${NEXT}"`]);
+    expect(status).toBe(0);
+    expect(output).toContain('set in 4 files');
+    for (const name of LEDGERS) expect(readFileSync(join(dir, name), 'utf8')).toContain(NEXT);
+  });
+
+  it('AND WITH A `--` SEPARATOR TOO, which is the form that was documented and broken', () => {
+    const dir = pnpmTree();
+    const { status, output } = runScript(dir, ['stamp:set', '--', `"${NEXT}"`]);
+    expect(status).toBe(0);
+    expect(output).toContain('set in 4 files');
+    for (const name of LEDGERS) expect(readFileSync(join(dir, name), 'utf8')).toContain(NEXT);
+  });
+
+  it('and `pnpm check:stamp` passes over what `pnpm stamp:set` just wrote', () => {
+    // The loop §4.1 wants closed, driven end to end through the two shipped script names.
+    const dir = pnpmTree();
+    expect(runScript(dir, ['stamp:set', `"${NEXT}"`]).status).toBe(0);
+    const { status, output } = runScript(dir, ['check:stamp']);
+    expect(status).toBe(0);
+    expect(output).toContain('4 digests agree');
+  });
+
+  it('and a bare `--` with NO stamp after it is still refused, not treated as one', () => {
+    const dir = pnpmTree();
+    const { status } = runScript(dir, ['stamp:set', '--']);
+    expect(status).toBe(2);
+  });
+});

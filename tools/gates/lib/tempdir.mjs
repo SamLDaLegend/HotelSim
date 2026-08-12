@@ -52,6 +52,50 @@ import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+// DO NOT CHANGE `realpathSync` TO `realpathSync.native` HERE. RULED AT G-022 SWEEP 1, AGAINST
+// THE INSTINCT OF EVERYONE WHO LOOKED AT IT, INCLUDING ITS AUTHOR.
+//
+// The temptation arrives with a true observation: `realpathSync` does NOT expand an 8.3 short
+// name, `.native` does, and the GitHub Windows runner's TEMP is `C:\Users\RUNNER~1\…`. So a root
+// minted here keeps the short form on that runner, and it looks like a latent version of the very
+// defect this file fixes.
+//
+// IT IS NOT, AND THE REASON IS THAT `realpathSync` IS EXACTLY LOADER-EQUIVALENT. It resolves
+// symlinks, which node's resolution resolves; it leaves short names alone, which node's resolution
+// also leaves alone. The arm root and the urls recorded beneath it therefore agree in both
+// spellings. Measured three ways on `win32/12cpu`, importing one file through `C:/PROGRA~1/…` and
+// `C:/Program Files/…` and comparing module identity:
+//
+//   plain node                     two instances  -> does NOT canonicalise a short name
+//   node --import tsx              two instances  -> does NOT either, and this is what the
+//                                                    instruments actually spawn
+//   inside the vitest 4.1.10 runner   ONE instance -> DOES canonicalise
+//
+// SO THE REASON TO KEEP `realpathSync` IS THAT IT IS THE MINIMAL CALL MATCHING NODE'S OWN
+// CANONICALISATION: it resolves what node resolves and stops where node stops, which makes this
+// root a FIXED POINT OF THE RESOLVER BY CONSTRUCTION rather than by coincidence.
+//
+// AND SAY PRECISELY WHAT `.native` WOULD AND WOULD NOT DO, because the first version of this
+// paragraph overstated it and `sim-critic` measured it false (G-022 sweep 2). It claimed `.native`
+// would make the helper disagree with the resolver and the instrument would refuse to report.
+// IT WOULD NOT, TODAY: under a short root, `.native` yields the long spelling and node hands back
+// whatever spelling it was given, so every path downstream derives from that same long string and
+// containment still holds. Measured both ways on the real condition — `contained: true` for plain
+// AND for native.
+//
+// What is true is narrower and is the reason the ruling stands: `.native` canonicalises FURTHER
+// than the resolver its consumers use, and that surplus costs nothing only while every path being
+// compared derives from this same root. The first time a root is compared against a path obtained
+// independently of it — a golden, a config, another process's output — the surplus is exactly the
+// mismatch macOS produced, where `mkdtempSync` supplied the aliased spelling and node canonicalised
+// it away. Matching the resolver has no such failure mode, so match it.
+//
+// WHERE THE FALSE MODEL CAME FROM, since it is the reason this comment is long: G-022 wrote "the
+// ESM loader canonicalises short names as well as symlinks" into a test file and into a commit
+// message. It is false of node and true of vitest, and the test that produced it is the one file
+// in the repository that runs inside vitest rather than beside it. The short-name half belongs to
+// the RUNNER, not to the loader, and only code executing under the runner needs `.native`.
+
 /**
  * Make a temporary directory and return its CANONICAL path.
  *

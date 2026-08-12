@@ -393,10 +393,22 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // And it agrees with the arm the criterion runs through the real CLI, which is what makes
     // this in-process shortcut safe to have taken.
     expect(margin.abandoned).toBe(abandonmentsIn(shipped));
-  });
+    // AN EXPLICIT HANG BOUND, THE CONVENTION FIVE SIBLINGS ALREADY CARRY (G-022).
+    //
+    // This test runs `at()` THREE times, and each is a full in-process simulation — CPU-bound
+    // work, not a spawn. Quiet the whole file is 8.78s; under `tools/gates/arm/load.mjs
+    // --workers 12` this one test was measured at 35,025ms and tripped vitest's 30s default,
+    // giving `A_NAMED_FAILURE` in 1 of 5 classified runs while every assertion in it held.
+    //
+    // 60s matches `needs.determinism:152`, `needs.report:246,266`, `recovery.report:265` and
+    // `validity.report:141` — every other test in this suite that does this much work. It is a
+    // DEADLOCK detector, not a performance bound: nothing here asserts a duration, and the
+    // global `testTimeout` is untouched, because widening that to fit the slowest machine is
+    // the move §9 forbids.
+  }, 60_000);
 
   it('and MORE amenities than three change nothing, so the sweep really does saturate', () => {
     expect(at(4, SHIPPED_MARGIN)).toEqual(at(3, SHIPPED_MARGIN));
     expect(at(5, SHIPPED_MARGIN)).toEqual(at(3, SHIPPED_MARGIN));
-  });
+  }, 60_000);
 });

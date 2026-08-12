@@ -36,8 +36,8 @@
 
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve, sep } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -45,6 +45,33 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const HELPER = pathToFileURL(join(ROOT, 'tools/gates/lib/tempdir.mjs')).href;
 
 const made: string[] = [];
+
+/**
+ * A WRITABLE directory reachable through an 8.3 short alias, or `null` if this machine has none.
+ *
+ * THE DISCOVERY IS A MEASUREMENT, NOT A GUESS: a candidate qualifies only if `realpathSync` and
+ * `realpathSync.native` DISAGREE about it, which is exactly the condition the GitHub Windows
+ * runner presents and the only thing that makes the arm below meaningful.
+ *
+ * `Documents` is nine characters, so a profile created before 8.3 generation was switched off
+ * carries `DOCUME~1` — and the temp directory does not, which is why `tmpdir()` is tried and
+ * rejected rather than assumed.
+ */
+const CANDIDATES = process.platform === 'win32' ? [join(homedir(), 'DOCUME~1'), tmpdir()] : [];
+
+function shortNameBase(): string | null {
+  for (const candidate of CANDIDATES) {
+    try {
+      if (realpathSync.native(candidate) !== realpathSync(candidate)) return candidate;
+    } catch {
+      // Not present on this machine; try the next. The companion test re-derives this negative
+      // rather than trusting the catch.
+    }
+  }
+  return null;
+}
+
+const SHORT_NAME_BASE = shortNameBase();
 
 /**
  * A real directory plus an aliased path that reaches it through a symlink.
@@ -55,14 +82,23 @@ const made: string[] = [];
  *
  * The GitHub Windows runner's `TEMP` is an 8.3 SHORT PATH — `C:\Users\RUNNER~1\…`, because the
  * account name `runneradmin` is over eight characters. Plain `realpathSync` resolves symlinks and
- * junctions but does NOT expand a short name, so `real` kept the short form; the ESM loader
- * canonicalises short names as well as symlinks, so it returned `C:\Users\runneradmin\…`; and the
- * assertion below compared the two by exact equality and failed. CI run #4, Windows only, and the
- * two platforms the file was written for both passed.
+ * junctions but does NOT expand a short name, so `real` kept the short form; the thing that loaded
+ * the module returned `C:\Users\runneradmin\…`; and the assertion below compared the two by exact
+ * equality and failed. CI run #4, Windows only, and the two platforms this file was written for
+ * both passed.
  *
- * `realpathSync.native` is the same call the loader's canonicalisation uses, so `real` absorbs
- * whatever the operating system applies — a symlink, a short name, or both — and the comparison is
- * canonical against canonical on every platform.
+ * AND THE FIRST VERSION OF THIS PARAGRAPH NAMED THE WRONG COMPONENT, WHICH MATTERS MORE THAN THE
+ * TYPO IT LOOKS LIKE. It said "the ESM loader canonicalises short names as well as symlinks".
+ * IT DOES NOT. Measured three ways here, importing one file through `C:/PROGRA~1/…` and
+ * `C:/Program Files/…` and comparing module identity: plain node gives TWO instances,
+ * `node --import tsx` gives TWO, and the VITEST 4.1.10 RUNNER gives ONE. Short-name
+ * canonicalisation belongs to the vite/vitest module runner, not to node.
+ *
+ * THAT IS WHY `.native` IS RIGHT HERE AND WRONG IN `tools/gates/lib/tempdir.mjs`. This file is the
+ * one place in the repository whose `import()` goes through the runner, so its expected side must
+ * canonicalise the way the runner does. The gates spawn `node --import tsx`, so their roots must
+ * canonicalise the way NODE does — which is plain `realpathSync`, and that helper carries the
+ * ruling not to "fix" it.
  */
 function aliasedDir(): { readonly real: string; readonly alias: string } {
   const real = realpathSync.native(mkdtempSync(join(tmpdir(), 'hotelsim-alias-real-')));
@@ -94,17 +130,27 @@ afterAll(() => {
 });
 
 describe('THE STAGED CONDITION — os.tmpdir() reaches a real directory through a symlink', () => {
-  it('the root is a FIXED POINT of the canonicalisation the loader uses', () => {
+  it('the root is a FIXED POINT of the canonicalisation the RUNNER uses', () => {
     // The property that failed on the Windows runner, asserted directly: canonicalising `real`
     // again must change nothing. A short name, a symlinked ancestor, or both would move it.
     //
-    // AND THE LIMIT OF THIS ASSERTION ON THIS MACHINE, STATED RATHER THAN IMPLIED. It passes
-    // trivially here, because 8.3 name generation is disabled on this volume — measured, not
-    // assumed: asking `cmd` for the short name of a freshly created long-named directory returns
-    // the long name unchanged. So the SHORT-NAME half of this defect cannot be staged locally at
-    // all, and the arm that gives this file teeth on every platform is the SYMLINK one below.
-    // The Windows runner is where the short-name half is exercised, and that is a limitation of
-    // this machine rather than a property of the fix.
+    // THIS ARM COVERS THE SYMLINK HALF. The short-name half is staged for real at the foot of
+    // this file — see "THE REAL RUNNER CONDITION".
+    //
+    // THE ROUTE TO THAT ARM IS RECORDED HERE BECAUSE THE LIMIT WAS WRITTEN WRONG THREE TIMES, each
+    // time by inferring from one measurement instead of taking the next one:
+    //
+    //   1. "8.3 generation is disabled on this volume"  — from `cmd`'s short name for a NEWLY
+    //      created long-named directory coming back unchanged. True, and about CREATION.
+    //   2. "so the short-name half cannot be staged locally"  — does not follow. Aliases minted
+    //      before generation was switched off still RESOLVE: `realpathSync('C:/PROGRA~1')` is
+    //      `C:\PROGRA~1` while `.native` is `C:\Program Files`.
+    //   3. "it needs a writable path with an alias, and this account has none"  — false. `Documents`
+    //      is nine characters, so `C:\Users\<user>\DOCUME~1` exists, resolves, and is writable:
+    //      plain `C:\Users\Sam\DOCUME~1`, native `C:\Users\Sam\Documents`.
+    //
+    // NOT GENERATED IS NOT THE SAME AS DOES NOT RESOLVE, and that distinction is the whole reason
+    // the real condition turned out to be reproducible on a developer box.
     const { real, alias } = aliasedDir();
     expect(realpathSync.native(real)).toBe(real);
     expect(realpathSync.native(alias)).toBe(real);
@@ -147,7 +193,16 @@ describe('THE STAGED CONDITION — os.tmpdir() reaches a real directory through 
     expect(moduleInside.startsWith(raw + sep)).toBe(false);
   });
 
-  it('AND WITH THE FIX IT IS CANONICAL, so the same containment check holds', () => {
+  it('AND WITH THE FIX IT IS CANONICAL — for SYMLINKS, which is the half the gates need', () => {
+    // SAY WHAT THIS COVERS, BECAUSE IT IS NOT WHAT THE FILE HEADER ONCE CLAIMED. Both sides here
+    // use plain `realpathSync`, so this arm is blind to the SHORT-NAME half by construction. That
+    // is deliberate and correct rather than an oversight: `makeTempDir` exists to agree with the
+    // resolver its consumers use, and the instruments spawn `node --import tsx`, which does not
+    // canonicalise a short name either. An arm that demanded `.native` here would be testing for
+    // a disagreement with the loader.
+    //
+    // The half this DOES cover has teeth, and the critic measured them: revert `makeTempDir` to a
+    // bare `mkdtempSync` under an aliased TMPDIR and the property below goes false.
     const { alias } = aliasedDir();
     const out = inAliasedTmp(
       alias,
@@ -165,10 +220,13 @@ describe('THE STAGED CONDITION — os.tmpdir() reaches a real directory through 
 });
 
 describe('the mechanism itself, asserted rather than described', () => {
-  it('the ESM loader canonicalises a module reached through an alias', async () => {
+  it('a module reached through a SYMLINK comes back canonicalised', async () => {
     // `recorder-hooks.mjs` logs the url `next()` returned — "a specifier is what someone wrote;
     // a url is what node loaded" — so what the instrument compares against is always canonical,
     // whatever string the arm directory was built from.
+    //
+    // SYMLINKS, specifically. Node canonicalises those; the short-name half is the runner's and is
+    // covered by the file header's three-way measurement, not by this arm.
     const { real, alias } = aliasedDir();
     writeFileSync(join(real, 'module.mjs'), 'export const self = import.meta.url;\n', 'utf8');
 
@@ -190,13 +248,10 @@ describe('the mechanism itself, asserted rather than described', () => {
   });
 
   it('THE FIX ITSELF, given teeth here: old form false, new form true, on one file', async () => {
-    // The 8.3 half of this defect cannot be staged on this machine — 8.3 generation is disabled on
-    // this volume — so a symlink stands in for it. The SHAPE is identical and it is the shape the
-    // fix addresses: one file, two spellings, one of them not canonical.
-    //
-    // Without this arm the fix would rest on CI alone, which is precisely the criticism that
-    // rewrote this file the first time: a proof that can only fail on the platform that already
-    // failed is not a proof.
+    // A SYMLINK STANDS IN FOR THE SHORT NAME HERE, and it runs on every platform: the SHAPE is
+    // what the fix addresses — one file, two spellings, one of them not canonical. The real 8.3
+    // condition is staged in the arm below this one, on Windows machines that carry an alias.
+    // Both are kept: they cover different halves and this one is the portable half.
     const { real, alias } = aliasedDir();
     writeFileSync(join(real, 'module.mjs'), 'export const self = import.meta.url;\n', 'utf8');
     const spelling = join(alias, 'module.mjs');
@@ -208,5 +263,116 @@ describe('the mechanism itself, asserted rather than described', () => {
 
     // THE NEW FORM — canonicalise first, with the call the loader uses. Same file, now equal.
     expect(loaded.self).toBe(pathToFileURL(realpathSync.native(spelling)).href);
+  });
+});
+
+describe('THE REAL RUNNER CONDITION — an 8.3 short root, and the ruling it confirms', () => {
+  // UNTIL THIS ARM, THE RULING THE WHOLE REPAIR RESTS ON WAS ARGUED BY ANALOGY. "Plain
+  // `realpathSync` is right and `.native` would be wrong in `tools/gates/lib/tempdir.mjs`" was
+  // supported by a three-way module-identity measurement plus a SYMLINK stand-in. This stages the
+  // actual condition the GitHub Windows runner presents — a temp root reached through an 8.3
+  // alias — and runs the gates' own resolver over it.
+  //
+  // It is skipped where no writable alias exists, which is every non-Windows machine and any
+  // Windows profile whose names are all eight characters or shorter. That is a real gap and it is
+  // why the symlink arms above stay: they carry the shape everywhere, this one carries the
+  // instance where it can.
+
+  it.skipIf(SHORT_NAME_BASE === null)(
+    'a plain-realpathSync root is a FIXED POINT of node\'s resolution under a short root',
+    () => {
+      const base = SHORT_NAME_BASE as string;
+      // Create through the LONG spelling, then reach the same directory through the SHORT one —
+      // which is exactly the asymmetry the runner has, with `TEMP` naming the short form.
+      const real = mkdtempSync(join(realpathSync.native(base), 'hotelsim-shortname-'));
+      made.push(real);
+      const shortRoot = join(base, basename(real));
+
+      const program = [
+        `import { makeTempDir } from ${JSON.stringify(HELPER)};`,
+        'import { writeFileSync, realpathSync } from "node:fs";',
+        'import { join, sep } from "node:path";',
+        'import { pathToFileURL, fileURLToPath } from "node:url";',
+        'const dir = makeTempDir("arm-");',
+        'writeFileSync(join(dir, "mod.mjs"), "export const self = import.meta.url;" + String.fromCharCode(10));',
+        'const loaded = await import(pathToFileURL(join(dir, "mod.mjs")).href);',
+        'process.stdout.write(JSON.stringify({',
+        '  dir,',
+        '  url: loaded.self,',
+        '  contained: fileURLToPath(loaded.self).startsWith(dir + sep),',
+        '  native: realpathSync.native(dir),',
+        '}));',
+      ].join('\n');
+
+      // `--import tsx`, because that is what `measure.mjs` and `needs-history.mjs` spawn. The
+      // resolver under test has to be the resolver the instruments actually use.
+      const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', program], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, TMPDIR: shortRoot, TEMP: shortRoot, TMP: shortRoot, NODE_NO_WARNINGS: '1' },
+      });
+      if (result.status !== 0) throw new Error(`probe failed: ${result.stderr}`);
+      const seen = JSON.parse(result.stdout) as {
+        dir: string;
+        url: string;
+        contained: boolean;
+        native: string;
+      };
+
+      // THE CONDITION IS REALLY STAGED — without this the rest could pass on a long path and mean
+      // nothing, which is the vacuity every arm in this file is written against.
+      expect(seen.dir).toContain('~');
+      expect(seen.url).toContain('%7E');
+
+      // WHAT THIS ESTABLISHES, AT THE STRENGTH IT ACTUALLY HAS. `makeTempDir`'s plain
+      // `realpathSync` keeps the short spelling, node keeps the short spelling, and containment
+      // holds — the root is a FIXED POINT of the resolver its consumers use.
+      //
+      // AND WHAT IT DOES NOT ESTABLISH, because the first version of this arm claimed it and
+      // `sim-critic` measured it false: `.native` does NOT break containment here. Under a short
+      // root node hands back whatever spelling it was given, so a `.native` root and the urls
+      // beneath it both derive from the same long string and `contained` is true either way —
+      // measured, both variants. The macOS case is not the parallel: there the two sides came from
+      // DIFFERENT derivations, `mkdtempSync` supplying the aliased spelling and node canonicalising
+      // it away.
+      //
+      // So the ruling rests on `.native` doing MORE than the resolver does, not on it being broken
+      // today. `seen.native` is asserted to be the other spelling purely to record that the two
+      // calls really do differ on this machine — it is a property of the platform, not a verdict
+      // about the helper.
+      expect(seen.contained).toBe(true);
+      expect(seen.native).not.toBe(seen.dir);
+      expect(seen.native.startsWith(realpathSync.native(base))).toBe(true);
+    },
+  );
+
+  it('and the discovery is a MEASUREMENT, so a skip means "no alias here" and not "check broken"', () => {
+    // A skipped test is silent, and silence is what this whole goal is about. So the discovery
+    // itself is pinned: it returns a path only where the two realpath calls genuinely disagree,
+    // and `null` otherwise. On this machine that is `DOCUME~1`; on Linux and macOS it is `null`
+    // because there is no such thing, not because the lookup failed.
+    if (SHORT_NAME_BASE === null) {
+      // THE NEGATIVE, RE-DERIVED. The first version asserted a string was truthy, which on Linux
+      // and macOS — two of the three CI platforms — was the whole test. Worse, it could not tell
+      // "this machine has no alias" from "both lookups threw and the catch swallowed them".
+      //
+      // So the null case is now checked the only way it can be: every candidate must be genuinely
+      // unqualified — absent, or present with its two realpaths in agreement. A candidate that
+      // exists AND disagrees would mean the discovery missed one.
+      for (const candidate of CANDIDATES) {
+        let plain: string | null = null;
+        let native: string | null = null;
+        try {
+          plain = realpathSync(candidate);
+          native = realpathSync.native(candidate);
+        } catch {
+          plain = null;
+        }
+        if (plain !== null) expect(plain).toBe(native);
+      }
+      return;
+    }
+    expect(realpathSync(SHORT_NAME_BASE)).not.toBe(realpathSync.native(SHORT_NAME_BASE));
+    expect(realpathSync(SHORT_NAME_BASE)).toContain('~');
   });
 });

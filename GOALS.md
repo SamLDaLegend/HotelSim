@@ -3443,7 +3443,10 @@ satisfaction input.** §8: *"where the genre's difficulty actually lives."*
 prerequisites are instrument debts, and the second is the largest unverified claim in the project.
 
 ## G-022 — The instrument debts M2 left, before circulation touches anything
-Status: **pending — HARD PREREQUISITE OF M3. No M3 behaviour goal starts until this is done.**
+Status: **done, DRY at 2/3.** 2 sweeps (1 BLOCKER-class CI failure + 6 MAJOR + 6 MINOR)
+  plus five verification passes, two of which converted. **THE UNRELIABLE COUNT REACHES 0
+  GATES / 0 DEFECTS, THE FIRST ZERO SINCE G-016**, and CI is green on three platforms.
+  **FOUR OF THE DEFECTS THIS GOAL FOUND WERE IN TESTS WRITTEN TO PROVE SOMETHING.**
 Milestone: M3 (gate goal)
 Owner pair: sim-engineer / sim-critic
 Statement: I4's defect B is repaired and the `--maxWorkers` stopgap is gone; the as-of stamp is
@@ -3491,3 +3494,127 @@ Critique rounds used: 0/3
   milestone that stresses it is bad sequencing rather than acceptable risk.** And a
   timing-derived bound now ships inside `pnpm verify`, calibrated on one machine; M3 would be
   the first milestone where a cross-platform surprise costs real rework.
+
+
+---
+
+## G-023 — A guest is somewhere, and going somewhere takes time
+Status: pending — **first BEHAVIOUR goal of M3. Blocked on G-022.**
+Milestone: M3
+Owner pair: ai-engineer / ai-critic
+Statement: A guest occupies a floor and a cell, and moving to a provider takes ticks
+  proportional to the distance. Nothing queues yet; nothing is shared yet. This goal exists to
+  make "where" and "how long" real so the queueing goals have something to queue for.
+Exit criteria:
+  - `pnpm exec vitest run travel` (all green)
+  - **A GUEST'S POSITION IS IN THE HASHED STATE**, so a movement defect is an I2 failure rather
+    than a rendering opinion. Save **v11**, the v1 fixture a zero-line diff.
+  - **THE DIFFERENTIAL, TWO-SIDED**: the same invocation with providers placed far apart and
+    close together reports **strictly more time-in-transit** in the far arm, COMPUTED BY THE
+    TEST. It must not be satisfiable by never moving anyone.
+  - **`check:tickcost` inside its bound, and `check:scaling` green.** G-020's tripwire exists
+    for this milestone; this is the first goal that can trip it.
+  - a WATCH entry: a human watches a guest cross the hotel and says whether it reads as
+    movement or as teleporting with a delay
+  - all §2 gates green (`pnpm verify`, twelve rows) **and CI green on three platforms**
+Out of scope: queues, capacity, lifts, stairs (G-024/G-025); travel time in the SCORE (G-026)
+Critique rounds used: 0/3
+
+  **DISCHARGES**: `PARKING.md`'s "vertical circulation and adjacency for pathing" and the
+  seed for "tick cost measured against agent count rather than in total".
+
+  **THE TRAP, NAMED AT SEED.** *"Movement costs time"* is satisfiable by a counter that
+  decrements while nothing observable changes. The criterion is a **differential over
+  placement**, not a duration — and the WATCH is what decides whether it looks like walking.
+
+## G-024 — Stairs are a shared resource, and sharing means queueing
+Status: pending
+Milestone: M3
+Owner pair: ai-engineer / ai-critic
+Statement: A staircase has capacity. When more guests want it than it holds, they queue, and
+  the queue is FIFO and deterministic.
+Exit criteria:
+  - `pnpm exec vitest run queue` (all green)
+  - **THE QUEUE IS DETERMINISTIC UNDER I2** — no Set or Map iteration order, ties broken by a
+    stated rule, asserted on TWO insertion orders (G-014a's precedent).
+  - **A CONTENDED INVOCATION PRODUCES A NON-ZERO QUEUE AND A NON-ZERO WAIT**, and an
+    uncontended one produces zero of both — the two-sided form, so it cannot be met by never
+    queueing anyone.
+  - **NO GUEST WAITS FOREVER**: a liveness assertion over a long run, stated as a bound
+    derived from capacity and arrival rate rather than chosen.
+  - **`check:tickcost` inside its bound.** A queue is where a quadratic appears; this is the
+    goal G-020 was made a prerequisite for.
+  - a WATCH entry with a frame reference showing a queue forming and draining
+  - all §2 gates green, twelve rows, **and CI green on three platforms**
+Out of scope: lifts (G-025); travel time in the score (G-026)
+Critique rounds used: 0/3
+
+  **DISCHARGES**: "M3's statement is literally queued shared resources" and "a provider is a
+  queue with capacity", both parked since M2.
+
+## G-025 — Lifts: capacity, direction, and a call queue
+Status: pending
+Milestone: M3
+Owner pair: ai-engineer / ai-critic
+Statement: A lift carries a bounded number of guests, moves in a direction, and serves calls
+  in an order that is stated and deterministic.
+Exit criteria:
+  - `pnpm exec vitest run lift` (all green)
+  - **THE SERVICE ORDER IS A STATED RULE, NOT AN EMERGENT ONE**, pinned by a test that would
+    fail if the rule changed — and the rule is in `packages/content`, not in code (I3).
+  - **A DIFFERENTIAL OVER CAPACITY**: the same invocation at capacity 2 and capacity 8 reports
+    strictly different wait totals, COMPUTED BY THE TEST.
+  - **NO GUEST IS STRANDED** — the liveness bound from G-024, extended to a resource that
+    moves.
+  - `check:tickcost` and `check:scaling` inside their bounds
+  - a WATCH entry: does the lift read as sensible, or as the thing §6.1 calls dithering
+  - all §2 gates green, twelve rows, **and CI green on three platforms**
+Out of scope: lift *placement* as a build decision (M5's tools); pricing or upkeep (M4)
+Critique rounds used: 0/3
+
+## G-026 — Travel time enters the score, and waiting is a satisfaction input
+Status: pending — **LAST GOAL IN M3 → second critic from a different pair (§7.1)**
+Milestone: M3
+Owner pair: ai-engineer / **balance-critic** · second critic `ai-critic`
+Statement: A guest choosing between providers accounts for how long it will take to get there
+  and how long it will wait; and time spent waiting reduces satisfaction directly rather than
+  only through patience running out.
+Exit criteria:
+  - `pnpm exec vitest run score` (all green)
+  - **THE WEIGHT IS CONTENT AND ITS SIZE IS DERIVED FROM A STATED REQUIREMENT** (§2.1), not
+    chosen — and `bindContent` refuses content the requirement cannot support.
+  - **THE DIFFERENTIAL**: identical hotels differing only in provider distance produce
+    different provider choices, COMPUTED BY THE TEST — **and a second axis holding distance
+    fixed while varying queue length**, so a scorer reading only distance cannot pass.
+  - **THE PARKED HYPOTHESES ARE ANSWERED, EACH WITH ITS RECORDED TEST**: whether
+    provider-upgrading within a need becomes worth having once travel makes the trade real;
+    whether the equidistant-provider artefact closes; and **the dwell term**, which M2 left as
+    a result rather than a hypothesis.
+  - a WATCH entry at the middle-band configuration, **watched not manufactured**
+  - all §2 gates green, twelve rows, **and CI green on three platforms**
+Out of scope: reputation, pricing, demand (M4)
+Critique rounds used: 0/3
+
+  **THIS IS WHERE M2's PARKED HYPOTHESES COME DUE.** `PARKING.md` carries at least four that
+  name this goal by number or by subject, each with the invocation and reading that settles
+  it. **A parked hypothesis with its test is a result waiting for a goal that happens to run
+  it** — this is that goal, and it should report them as results rather than re-derive them.
+
+## M3 exit — human sign-off required
+
+When **G-022 to G-026** are `done`, that is a §5.4 escalation. Write it to `ESCALATIONS.md`
+and stop.
+
+**M3 exit additionally requires:**
+- **THE RUNNING-PRODUCT FALSIFICATION TEST, RUN.** `PARKING.md` parks it explicitly *"after
+  three M3 goals"*: multiply the recorded per-goal `check:tickcost` ratios. **If the product
+  materially exceeds the largest single reading, the per-goal gate has the compounding hole
+  and the milestone-anchor version earns its cost.** This is the first milestone that can run
+  it, and it was parked with that trigger.
+- **EVERY M3 GOAL'S CI RUN GREEN ON THREE PLATFORMS**, not just the last — CI is now a
+  standing gate rather than a one-off, and a goal that never had a green matrix run has not
+  been shown to hold anywhere but this desk.
+- **THE PARKED ITEMS NAMING M3 ARE EACH ANSWERED OR RE-PARKED WITH A REASON.** There are
+  more than a dozen. Silence reads as coverage, which is the failure this project keeps
+  paying for.
+- **M4 REMAINS BLOCKED ON SCENARIO CAPITAL** (ADR-0013 §5) regardless of M3's outcome.

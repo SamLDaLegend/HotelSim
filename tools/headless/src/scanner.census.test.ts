@@ -12,8 +12,15 @@
 //
 // A RULE WITH NO OWNER IS THE THING THIS GOAL EXISTS TO FIX, so the rule is not left as prose
 // for a future author to remember. This file DERIVES the list of scanners from the tree and
-// fails if one of them has no registered proof. Add a scanner tomorrow and this goes red
-// tomorrow, naming it.
+// fails if one of them has no registered proof.
+//
+// WHAT IT GUARANTEES, STATED AT THE STRENGTH THE PREDICATE ACTUALLY SUPPORTS. An earlier version
+// of this paragraph said "add a scanner tomorrow and this goes red tomorrow, naming it". That
+// over-claims, and the over-claim is the exact failure this file is about, so: a scanner that
+// walks a tree with one of the calls named below, in a source file under `tools/` or `packages/`,
+// cannot be added without either a registered proof or a red test. A scanner that walks a tree
+// some OTHER way is invisible here, and the ways it can do that are listed in `NOT_DERIVABLE`
+// with falsification tests rather than left to be discovered.
 //
 // WHAT COUNTS AS A SCANNER, AND WHY THE LINE IS DRAWN HERE. A scanner is a check that renders
 // a verdict by applying a text predicate to source files IT FINDS BY WALKING A DIRECTORY TREE.
@@ -23,9 +30,11 @@
 // different animal: when its subject moves it throws, loudly, at the read. Those are covered
 // by their own tests and are not this file's subject.
 //
-// Mechanically, that is `collectFiles(` or `readdirSync(` in comment-stripped source. The
-// derivation reproduced the seven scanners the human listed by hand at PLAN, and found no
-// eighth — the list and the definition agree, which is worth more than either alone.
+// Mechanically, that is `collectFiles(`, `readdirSync(`, `opendirSync(`, `globSync(` or their
+// promise forms, in comment-stripped source. The derivation reproduces the SEVEN scanners the
+// human listed by hand at PLAN and finds no eighth OF THAT KIND; the register holds NINE, the
+// extra two being `lib/scan.mjs`, the shared walker every gate uses, and this file, which walks a
+// tree itself and so owes its own proof by its own definition.
 //
 // TWO GAPS IT FOUND, both now closed by this goal: `check-purity.mjs` (I1) and
 // `determinism.mjs` (I2) — the two most load-bearing gates in the project — had never been
@@ -46,14 +55,26 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
  * what it says. Three goals, three authors, all three inside scanners. A literal cannot have
  * that defect, and the first test below compiles this one against strings that discriminate.
  */
-const WALKS_A_TREE = /\bcollectFiles\s*\(|\breaddirSync\s*\(/;
+const WALKS_A_TREE =
+  /\bcollectFiles\s*\(|\breaddirSync\s*\(|\bopendirSync\s*\(|\bglobSync\s*\(|\breaddir\s*\(|\bopendir\s*\(|\bglob\s*\(/;
 
 /** Directories that are not source. */
 const SKIP = new Set(['node_modules', 'dist', '.git', 'coverage', '.tmp']);
 
-/** Files that could be scanners: the gates themselves, and any test in the workspace. */
+/**
+ * Files that could be scanners.
+ *
+ * WIDENED AT SWEEP 1. The first version admitted only `.mjs` under `tools/gates/` plus
+ * `*.test.ts`, so a scanner written as a `.ts` helper, a `.cjs`, a `.js`, or a gate living in any
+ * other directory was never even a CANDIDATE — and a census that cannot see a file reports full
+ * coverage of it, which is the silence-read-as-coverage failure this file exists to prevent.
+ * Every executable source file under `tools/` and `packages/` is now considered; the predicate
+ * above is what decides.
+ */
 const isCandidate = (path: string): boolean =>
-  (path.endsWith('.mjs') && path.includes(`${sep}tools${sep}gates${sep}`)) || path.endsWith('.test.ts');
+  /\.(mjs|cjs|js|ts)$/.test(path) &&
+  !path.endsWith('.d.ts') &&
+  (path.includes(`${sep}tools${sep}`) || path.includes(`${sep}packages${sep}`));
 
 function collect(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -233,6 +254,32 @@ const NOT_DERIVABLE: readonly { readonly what: string; readonly config: string; 
 ];
 
 /**
+ * THE ESCAPES THIS DERIVATION STILL HAS, NAMED SO THE COVERAGE CLAIM STAYS HONEST (sweep 1).
+ *
+ * Each is a way to walk a tree that the predicate above does not match. They are recorded rather
+ * than fixed because widening a regex until it matches every conceivable spelling is how a
+ * predicate becomes unreadable — and an unreadable predicate is the thing this file guards.
+ * Each carries what would settle it.
+ */
+const KNOWN_ESCAPES: readonly { readonly escape: string; readonly falsificationTest: string }[] = [
+  {
+    escape: 'a hand-rolled walk: `fs.opendir` used via a destructured or aliased binding, or a ' +
+      'recursive `readdir` reached through a wrapper whose name this predicate does not know.',
+    falsificationTest:
+      'add a scanner that walks with `const { opendir: walk } = fs; walk(dir)` and run this file. ' +
+      'If the census stays green, the escape is live and the fix is to match the IMPORT of a ' +
+      'directory-reading API rather than its call site; if it reddens, this note is stale.',
+  },
+  {
+    escape: 'a scanner outside `tools/` and `packages/` — a root-level script, or a new workspace.',
+    falsificationTest:
+      'put a tree-walking scanner at the repository root and run this file. If it stays green, ' +
+      'the root belongs in `isCandidate`; the reason it is excluded today is that no source lives ' +
+      'there, which a `ls` at the root can confirm and a future directory would silently change.',
+  },
+];
+
+/**
  * PROOFS WHOSE BITE IS PLATFORM-DEPENDENT, NAMED BECAUSE A GREEN PROOF CAN STILL BE BLIND.
  *
  * Every harness in this repository runs on the machine that wrote it. A defect that cannot exist
@@ -346,6 +393,16 @@ describe('THE CENSUS — every scanner in the tree has a proof that has been wat
     for (const entry of PLATFORM_ASSUMPTIONS) {
       const staged = readFileSync(join(ROOT, entry.stagedBy), 'utf8');
       expect(staged, `${entry.stagedBy} no longer stages "${entry.title}"`).toContain(entry.title);
+    }
+  });
+
+  it('names its own escapes, each with what would settle it', () => {
+    // A coverage claim is only as good as its list of exceptions, and a list of exceptions with no
+    // test attached is a wish. §4's parking rule applied to a predicate rather than to a feature.
+    expect(KNOWN_ESCAPES.length).toBeGreaterThan(0);
+    for (const entry of KNOWN_ESCAPES) {
+      expect(entry.escape).not.toBe('');
+      expect(entry.falsificationTest).toContain('If');
     }
   });
 

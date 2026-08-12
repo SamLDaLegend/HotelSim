@@ -42,43 +42,50 @@ export default defineConfig({
     // processes still pass their own longer bound at the call site.
     hookTimeout: 30_000,
 
-    // NO CONCURRENCY CAP, AND NO POOL SETTING EITHER — BOTH WERE MEASURED OUT, NOT ASSUMED OUT.
+    // I4's DEFECT B IS REPAIRED, AND THE REPAIR IS THE VITEST VERSION IN `package.json` (G-022).
     //
     // This block is where somebody will come looking after `pnpm test` exits 1 with every test
-    // passing, so it says what is known, what was tried, and what is still open.
+    // passing, so it keeps the whole trail: the defect, the three things that did NOT fix it, the
+    // one that did, and the thing that must never be reached for.
     //
-    // THE DEFECT. Under heavy external load the worker-to-main RPC channel starves and vitest
-    // throws `[vitest-worker]: Timeout calling "onTaskUpdate"` as an UNHANDLED error. Every test
-    // passes; the run exits 1. It has been I4's remaining unreliability since G-016.
+    // THE DEFECT, AS IT WAS. Under heavy external load the worker-to-main RPC channel starved and
+    // vitest threw `[vitest-worker]: Timeout calling "onTaskUpdate"` as an UNHANDLED error. Every
+    // test passed; the run exited 1. It made I4 unreliable from G-016 to G-022.
     //
-    // WHAT HAS BEEN FALSIFIED, each by an alternated campaign under `tools/gates/arm/load.mjs
-    // --workers 12` and classified by `tools/gates/arm/suite-signature.mjs`:
+    // WHAT WAS FALSIFIED, each by an alternated campaign under `tools/gates/arm/load.mjs
+    // --workers 12`, classified by `tools/gates/arm/suite-signature.mjs`:
     //
     //   a concurrency    G-020c: 5 of 5 loaded cells still B, at 1.564x the wall clock, so it was
     //   cap              removed as measured-ineffective rather than as expired. The
     //                    discriminator is LOAD, not worker count. The full four-arm table is in
     //                    `ESCALATIONS.md` (2026-08-10) — read it before reaching for one again.
     //   `pool: 'forks'`  G-022: 5 of 5 loaded cells still B, alternated with a control that was
-    //                    also 5 of 5, one sitting, win32/12cpu, 85 files / 1,635 tests.
-    //   raising the RPC  NOT AVAILABLE. birpc's `DEFAULT_TIMEOUT` is 60s and vitest 3.2.7 builds
-    //   timeout          the worker RPC with no timeout option reachable from this file
-    //                    (`dist/chunks/index.B521nVV-.js:3`, `dist/chunks/rpc.-pEldfrD.js:42`).
+    //                    also 5 of 5, one sitting, win32/12cpu.
+    //   raising the RPC  NOT AVAILABLE at 3.2.7: birpc's `DEFAULT_TIMEOUT` is 60s and that version
+    //   timeout          built the worker RPC with no timeout option reachable from this file.
     //
-    // Those are the three candidates `PARKING.md` parked at G-020c, in the order it named them.
-    // All three are now falsified by measurement rather than by argument.
+    // AND WHAT DID FIX IT — the fourth candidate, and the mechanism is a library constant rather
+    // than a rate, which is why it is a repair and not a lucky rebuild:
     //
-    // WHY BOTH POOLS BEHAVE ALIKE, which is the useful part: workers change from threads to
-    // processes, but the TRANSFORM stays on the main thread either way. Both arms starve the same
-    // consumer, so a pool switch was never going to move it.
+    //   vitest 4.1.10   `createRuntimeRpc` passes `timeout: -1` (`dist/chunks/rpc.MzXet3jl.js:117`)
+    //                   and birpc only arms a timer `if (timeout >= 0)`. NO TIMER IS ARMED, so a
+    //                   starved main thread delays the call instead of failing the run.
+    //                   Alternated against 3.2.7 in one sitting, both arms at the same commit and
+    //                   differing only in the version: 3.2.7 5 of 5 signature B, 4.1.10 0 of 5.
+    //                   Confirmed n=10 loaded and n=5 quiet, all PASS, 1,640 tests every run.
+    //
+    // IT IS NOT SUPPRESSION, AND THAT WAS CHECKED RATHER THAN ASSUMED: a probe raising a genuine
+    // unhandled rejection during a run exits 1 on BOTH versions. What changed is that the spurious
+    // error is no longer CREATED.
+    //
+    // WHY BOTH POOLS BEHAVED ALIKE, kept because it is the reason a pool switch was never going to
+    // work: workers change from threads to processes, but the TRANSFORM stays on the main thread
+    // either way, so both arms starved the same consumer.
     //
     // AND WHAT IS REFUSED, NAMED HERE BECAUSE THIS IS WHERE SOMEBODY WILL REACH FOR IT:
-    // `dangerouslyIgnoreUnhandledErrors` would turn every one of those runs green while changing
-    // nothing about them. A gate that stops reporting the failure it exists to report is HOTELSIM
-    // §9's stop condition wearing a configuration key. It is not a candidate and never was.
-    //
-    // SO THE DEFECT IS OPEN, WITH A REPRODUCIBLE TRIGGER RATHER THAN A RATE, and it is an
-    // `ESCALATIONS.md` entry rather than a comment. §2.0: repair the instrument, never
-    // reinterpret the result.
+    // `dangerouslyIgnoreUnhandledErrors` would have turned every failing run green while changing
+    // nothing about it. A gate that stops reporting the failure it exists to report is HOTELSIM
+    // §9's stop condition wearing a configuration key. It was not a candidate and never was.
     //
     // THE OTHER I4 DEFECT — `needs.scaling.test.ts`'s timing bounds — IS FIXED (G-020c): the
     // bounds are `pnpm check:scaling`, outside this runner, and re-derived above the worst

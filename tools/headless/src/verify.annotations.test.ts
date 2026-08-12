@@ -46,26 +46,32 @@ afterAll(() => {
  * A mirrored tree with the shipped verify.mjs, its annotate helper, and a package.json whose
  * scripts are one passing row and one failing row that prints a known marker.
  */
-function makeTree(): string {
+type Rows = 'both' | 'red-only' | 'green-only';
+
+function makeTree(rows: Rows = 'both'): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'hotelsim-verify-ann-')));
   trees.push(dir);
   mkdirSync(join(dir, 'tools/gates/lib'), { recursive: true });
 
+  // EVERY ROW COSTS A `pnpm run`, AND pnpm STARTUP IS THIS FILE'S ENTIRE COST — ~417ms quiet,
+  // 5-7s under `load.mjs --workers 12`. Only ONE cell needs a two-row table, because only one
+  // claim is about the notice listing several rows; the other three prove their claim with a
+  // single row and pay half. That is the difference between eight spawned children and five.
+  const GREEN_ROW = "  ['—', 'row:green', 'a row that passes'],";
+  const RED_ROW = "  ['I9', 'row:red', 'a row that fails'],";
+  const table: readonly string[] =
+    rows === 'both' ? [GREEN_ROW, RED_ROW] : rows === 'red-only' ? [RED_ROW] : [GREEN_ROW];
+
   const shipped = readFileSync(VERIFY, 'utf8');
   const stubbed = shipped.replace(
     /const GATES = \[[\s\S]*?\n\];/,
-    [
-      'const GATES = [',
-      "  ['—', 'row:green', 'a row that passes'],",
-      "  ['I9', 'row:red', 'a row that fails'],",
-      '];',
-    ].join('\n'),
+    ['const GATES = [', ...table, '];'].join('\n'),
   );
   // THE PROBE MUST BE SEEN TO HAVE APPLIED. A replacement that matched nothing would leave the
   // real twelve-row table in place, run the whole gate suite from a temp directory, and report
   // something nobody meant to measure.
   expect(stubbed).not.toBe(shipped);
-  expect(stubbed).toContain("['I9', 'row:red', 'a row that fails']");
+  expect(stubbed).toContain(rows === 'green-only' ? "'row:green'" : "['I9', 'row:red', 'a row that fails']");
   expect(stubbed).not.toContain('check:tickcost:proof');
 
   writeFileSync(join(dir, 'tools/gates/verify.mjs'), stubbed, 'utf8');
@@ -79,7 +85,12 @@ function makeTree(): string {
         private: true,
         scripts: {
           'row:green': 'node -e "process.stdout.write(\'all good\\n\')"',
-          'row:red': `node -e "process.stdout.write('line one\\n${MARKER}\\n'); process.exit(1)"`,
+          // THE FAILING ROW EMITS CRLF, DELIBERATELY. A real child on Windows does — pnpm and
+          // vitest both do — and the CR is the character that survives `output.split('\n')` to
+          // reach the annotation. With LF-only output the one-line guard below could never fire
+          // on any input, which is the difference between "falsifiable in principle" and
+          // "exercised by this test".
+          'row:red': `node -e "process.stdout.write('line one' + String.fromCharCode(13,10) + '${MARKER}' + String.fromCharCode(13,10)); process.exit(1)"`,
         },
       },
       null,
@@ -89,6 +100,9 @@ function makeTree(): string {
   );
   return dir;
 }
+
+/** The same mirrored tree with a single PASSING row, so the green path costs one child. */
+const makeGreenTree = (): string => makeTree('green-only');
 
 function runVerify(dir: string, ci: boolean): { readonly status: number | null; readonly output: string } {
   const env: NodeJS.ProcessEnv = { ...process.env, NODE_NO_WARNINGS: '1' };
@@ -114,6 +128,17 @@ describe('the escaping and the tail, which are the parts with rules', () => {
     expect(kept).toBe('line 95\nline 96\nline 97\nline 98\nline 99');
   });
 
+  it('strips the carriage return, which is what actually keeps an annotation on one line', () => {
+    // THE REAL GUARANTOR, PINNED WHERE IT CAN FAIL. A Windows child emits CRLF; `tail()` splits on
+    // LF and trims each line's end, so the CR never reaches `escapeAnnotation`. That is why no
+    // end-to-end assertion on CR or LF in the cells below is able to fail, and why the claim lives
+    // here instead. Delete the `trimEnd` and this reddens.
+    const crlf = `a${String.fromCharCode(13, 10)}b${String.fromCharCode(13, 10)}`;
+    const kept = excerpt(crlf, { lines: 5 });
+    expect(kept).toBe(`a${String.fromCharCode(10)}b`);
+    expect(kept).not.toContain(String.fromCharCode(13));
+  });
+
   it('drops blank lines and ANSI colour, which an annotation renders as literal bytes', () => {
     const coloured = `${String.fromCharCode(27)}[31mFAIL${String.fromCharCode(27)}[39m`;
     expect(strip(coloured)).toBe('FAIL');
@@ -130,19 +155,34 @@ describe('the escaping and the tail, which are the parts with rules', () => {
   });
 });
 
-describe('the shipped verify.mjs, run against a green row and a red one', () => {
-  it('OUTSIDE CI: no workflow command is emitted at all', () => {
-    const dir = makeTree();
-    const { status, output } = runVerify(dir, false);
+// FOUR CELLS, ONE SPAWNED RUN EACH — AND THE STRUCTURE IS THE FIX, NOT A TIDY-UP.
+//
+// The first version of this block ran SEVEN copies of `verify.mjs`, four of them inside a single
+// "verdict is unchanged" test. Each copy spawns two `pnpm run` children, and pnpm startup is
+// ~417ms quiet on this box and 5-7s under `load.mjs --workers 12`. That one test therefore took
+// 46-58s loaded against a 30s `testTimeout`, and `pnpm test` — row 4 of the very runner this file
+// tests — went RED with `A_NAMED_FAILURE` in 3 of 3 loaded runs.
+//
+// THAT IS DEFECT A'S FAMILY, IN THE GOAL THAT REPAIRED DEFECT A: a stopwatch-sensitive test living
+// inside the parallel unit runner, discovered by the classifier this same goal built. The forbidden
+// repair is raising `testTimeout`, which is widening a bound to fit the slowest machine (§9). The
+// real repair is to stop doing the expensive thing.
+//
+// So the matrix is covered by FOUR tests doing ONE run each: (red|green) x (CI|not CI). Each pins
+// its own EXPECTED exit code rather than comparing two runs at runtime, which is both cheaper and
+// a stronger claim — 1,1,0,0 pinned four times says "the verdict does not depend on the mode" more
+// exactly than an equality between two numbers nobody has pinned.
+describe('the shipped verify.mjs — four cells, and the verdict pinned in each', () => {
+  it('RED + not CI: no workflow command at all, and the child text still reaches the log', () => {
+    const { status, output } = runVerify(makeTree('red-only'), false);
     expect(status).toBe(1);
-    expect(output).toContain(MARKER); // the child's output still reaches the log, streamed
+    expect(output).toContain(MARKER); // streamed through `stdio: inherit`
     expect(output).not.toContain('::error');
     expect(output).not.toContain('::notice');
   });
 
-  it('IN CI: the summary notice, the failing row, and the failing row\'s TEXT', () => {
-    const dir = makeTree();
-    const { status, output } = runVerify(dir, true);
+  it('RED + CI: the summary notice, the failing row, and that row\'s TEXT', () => {
+    const { status, output } = runVerify(makeTree(), true);
     expect(status).toBe(1);
 
     const notice = output.split('\n').find((line) => line.startsWith('::notice'));
@@ -150,29 +190,45 @@ describe('the shipped verify.mjs, run against a green row and a red one', () => 
     expect(notice).toContain('PASS — row:green');
     expect(notice).toContain('FAIL I9 row:red');
 
-    const named = output.split('\n').find((line) => line.startsWith('::error title=gate row:red'));
-    expect(named).toBeDefined();
+    expect(output.split('\n').find((line) => line.startsWith('::error title=gate row:red'))).toBeDefined();
 
-    // THE POINT OF THIS GOAL'S THIRD ANNOTATION: the child's own words, escaped onto one line.
+    // THE THIRD ANNOTATION: the child's own words, escaped onto one line.
     const excerptLine = output.split('\n').find((line) => line.startsWith('::error title=row:red tail'));
     expect(excerptLine).toBeDefined();
     expect(excerptLine).toContain(MARKER);
     expect(excerptLine).toContain('%0A');
-    // One annotation, one line: an unescaped newline would split it and lose everything after.
-    expect(excerptLine).not.toContain('\r');
+    // NO CHARACTER-LEVEL GUARD BELONGS HERE, AND FINDING OUT WHY IS THE POINT.
+    //
+    // The line that stood here asserted `not.toContain(LF)`. That is vacuous: `excerptLine` comes
+    // from `output.split('\n')`, so it cannot hold a newline whatever the escaping does. The
+    // obvious repair was CR — the character that CAN survive a split on LF — and the fixture above
+    // now emits CRLF so it would actually be present.
+    //
+    // IT STILL CANNOT FAIL, FOR A SECOND REASON NOBODY HAD NAMED: `tail()` trims each line's end
+    // before joining, so the CR is gone before `escapeAnnotation` ever sees it. Measured — with CR
+    // escaping deleted from `annotate.mjs`, the unit test at :106-109 reddens and an end-to-end CR
+    // assertion does not.
+    //
+    // So the one-line property is guaranteed by `tail()`, not by the escaper, and it is asserted
+    // where it can fail: `strips the carriage return` below pins the trim, and :106-109 pins the
+    // escaping of both characters. The two neighbours above — MARKER and `%0A` — both redden on an
+    // annotation carrying an unescaped newline, which is what makes this cell's claim complete
+    // without a guard that inspects nothing.
   });
 
-  it('and the GREEN row contributes no error annotation, so the channel is not just noisy', () => {
-    const dir = makeTree();
-    const { output } = runVerify(dir, true);
-    expect(output).not.toContain('::error title=gate row:green');
-    expect(output).not.toContain('::error title=row:green tail');
+  it('GREEN + CI: a notice, and NO error annotation of either kind', () => {
+    // The channel is not merely noisy: a passing row contributes nothing to the error stream, and
+    // this is also the green half of the verdict claim.
+    const { status, output } = runVerify(makeGreenTree(), true);
+    expect(status).toBe(0);
+    expect(output).toContain('::notice');
+    expect(output).not.toContain('::error');
   });
 
-  it('THE VERDICT IS UNCHANGED BY THE MODE — same gates, same exit code', () => {
-    // The guard that matters most: this whole feature is reporting, and a reporting change that
-    // moved an exit code would be a gate change wearing a log message.
-    const dir = makeTree();
-    expect(runVerify(dir, true).status).toBe(runVerify(dir, false).status);
+  it('GREEN + not CI: silent, and still exit 0 — the fourth corner of the verdict claim', () => {
+    const { status, output } = runVerify(makeGreenTree(), false);
+    expect(status).toBe(0);
+    expect(output).not.toContain('::error');
+    expect(output).not.toContain('::notice');
   });
 });

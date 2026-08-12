@@ -34,7 +34,7 @@
 // SAY WHAT THAT COSTS, SO NOBODY READS MORE INTO A GREEN CONTROL THAN IT CARRIES: the control
 // below proves the gate accepts a well-behaved harness. It says NOTHING about `packages/sim`.
 // The real simulation is judged by the shipped gate on the shipped tree, which is `pnpm
-// test:determinism` and an eleven-row `pnpm verify` — deliberately NOT re-run from here, since
+// test:determinism` and a twelve-row `pnpm verify` — deliberately NOT re-run from here, since
 // duplicating a 100,000-tick gate inside the unit suite would buy nothing and cost everyone
 // four more replays per run.
 

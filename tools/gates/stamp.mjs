@@ -1,7 +1,12 @@
 // THE LEDGER AS-OF STAMP — ONE SOURCE, FOUR FILES, CHECKED BY A MACHINE (G-022).
 //
-//   node tools/gates/stamp.mjs                 -> check.  Exit 1 if the four disagree.
-//   node tools/gates/stamp.mjs --set "<text>"  -> rewrite all four in ONE step.
+//   pnpm check:stamp                           -> check.  Exit 1 if the four disagree.
+//   pnpm stamp:set "<text>"                    -> rewrite all four in ONE step.
+//   (equivalently: node tools/gates/stamp.mjs [--set "<text>"])
+//
+// BOTH FORMS OF `stamp:set` WORK, WITH OR WITHOUT A `--` SEPARATOR, and that is a fix rather than
+// a courtesy: the documented invocation carried one, pnpm forwards it, and the gate refused the
+// separator as a malformed stamp (G-022 sweep 1).
 //
 // HOTELSIM.md §4.1 requires that GOALS.md, JOURNAL.md, PARKING.md and DECISIONS.md each
 // carry a BYTE-IDENTICAL `*As of …*` line at the top of their digest, rewritten at every
@@ -168,7 +173,20 @@ function shapeViolations(where, stamp, done) {
 
 const argv = process.argv.slice(2);
 const setIndex = argv.indexOf('--set');
-const replacement = setIndex === -1 ? null : argv[setIndex + 1];
+
+/**
+ * The stamp text, SKIPPING A BARE `--`, because the documented invocation puts one there.
+ *
+ * `pnpm stamp:set -- "*As of …*"` is the form §4.1's "one step" promises and the form this file
+ * printed as its own suggestion. It did not work: pnpm 10.15 FORWARDS the separator, so the gate
+ * received `['--set', '--', '*As of …*']`, took `--` as the replacement, and refused it as
+ * malformed — the refusal firing correctly on an argument the user never typed.
+ *
+ * Found at G-022 sweep 1. The bite tests missed it because every one of them spawned
+ * `node tools/gates/stamp.mjs` directly, so none ever went through the script name a human uses.
+ * `ledger-stamp.test.ts` now runs the shipped `pnpm stamp:set` in both forms.
+ */
+const replacement = setIndex === -1 ? null : argv.slice(setIndex + 1).find((arg) => arg !== '--');
 
 const read = (name) => readFileSync(join(ROOT, name), 'utf8');
 
@@ -235,7 +253,7 @@ if (stamps.length === LEDGERS.length) {
           'as-of stamp disagrees with ' + first.where + ' (§4.1: byte-identical, rewritten in one step).\n' +
           `      this: ${JSON.stringify(other.stamp.text)}\n` +
           `      that: ${JSON.stringify(first.stamp.text)}\n` +
-          '    Suggested direction: `pnpm stamp:set -- "*As of …*"` writes all four at once.',
+          '    Suggested direction: `pnpm stamp:set "*As of …*"` writes all four at once.',
       });
     }
   }

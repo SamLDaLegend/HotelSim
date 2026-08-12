@@ -1469,3 +1469,43 @@ changed one constant, its derivation, and the records that quoted it.
   stopwatch`. *If it reports the line, the collision is live and the convention is load-bearing;
   if it stays green, the scanner has changed and this note is stale.* **-> a convention, not a
   goal.**
+- **`stamp.mjs` COUNTS LINES ONE WAY AND SPLICES THEM ANOTHER, AND ONLY THE PLACEMENT OF A
+  NEWLINE KEEPS IT HARMLESS.** `findStamp` numbers lines by splitting on `\n` (stripping a
+  trailing `\r`); `replaceStamp` splices by the file's DOMINANT newline. In a CRLF file that also
+  contains a lone `LF` **above** the stamp, the two numberings drift apart and `--set` would
+  splice at the wrong offset — in the gate whose whole job is keeping four files in agreement.
+  Found by `sim-critic` at G-022 sweep 1, raised deliberately as latent rather than as a defect.
+  **Measured on the four ledgers at `4e768c9`**: `JOURNAL.md` is the mixed file — 1,927 CRLF and
+  71 lone LF — and it is safe **only because its first lone LF sits at byte 126,676 while the
+  stamp sits at byte 95**. `GOALS.md` and `DECISIONS.md` are pure CRLF, `PARKING.md` is pure LF,
+  and a uniform file cannot exhibit it at all.
+  **FALSIFICATION TEST**: build a CRLF ledger carrying a single lone `LF` in the digest body ABOVE
+  the `*As of …*` paragraph, run `pnpm stamp:set "*As of …*"` against a tree containing it, and
+  diff. *If the stamp lands on the wrong line, or any other line is disturbed, the hazard is live
+  and the repair is to make both functions agree on one splitting rule — split once, carry the
+  offsets; if the file comes back correct, the two numberings coincide more often than this
+  analysis suggests and the note should say why.* **-> the next goal that touches `stamp.mjs`;
+  it blocks nothing today and no ledger currently triggers it.**
+- **`hysteresis.report.test.ts:385` IS MARGINAL UNDER LOAD, AND IT IS THE NEXT TEST TO TIP.**
+  G-022's first loaded campaign after sweep 1 produced `A_NAMED_FAILURE` in 1 of 5 runs — not the
+  goal's own new test, but G-014b's shipped one: *"THE SHIPPED PIN (2 of each): all three arms
+  differ"*, **timed out in 30000ms with `slowestTestMs` 35,025**. It spawns real `--import tsx`
+  CLI runs and takes 8.78s for the whole file quiet, so at twelve-way oversubscription it sits
+  just the wrong side of the 30s default. **It did not fail once the same goal cut its own new
+  test's child spawns from fourteen to five** (second campaign: 5 of 5 PASS, 1,657 tests, and the
+  loaded suite's wall clock fell from ~94-117s to ~70-73s), so it is marginal rather than broken —
+  it tips when anything else makes the suite heavier.
+  **FIVE SIBLING TESTS ALREADY CARRY THE CONVENTION IT LACKS**: `}, 60_000)` explicit per-test
+  bounds in `needs.determinism`, `needs.report` (twice), `recovery.report` and `validity.report`,
+  all spawn-heavy for the same reason. This one was never given one.
+  **DISCHARGED IN G-022 BY ORCHESTRATOR RULING, AND THE MECHANISM ABOVE WAS WRONG.** This entry
+  said the test "spawns real `--import tsx` CLI runs". It does not: `reportOf()` at `:137-139` is
+  the spawn and it is MODULE-LEVEL, run once and shared by every test in the file. The failing
+  test calls `at()` three times, and `at()` binds content and runs the simulation IN PROCESS —
+  **CPU-bound, not spawn-bound**, which is why cutting another file's spawns relieved it and why
+  no amount of spawn-trimming would have fixed it outright. Checked by reading `:331-343`.
+  **The repair applied is the one-liner its five siblings already carry** — `}, 60_000)` on that
+  test — on the ruling that an unqualified zero over a parked 1-in-5 is not honest, and that a
+  per-test hang bound is an argued convention rather than the global `testTimeout` widening §9
+  forbids. **Verified under the loaded arm, 5 of 5 PASS.** Kept here rather than deleted because
+  the wrong mechanism was believed for two rounds and the correction is the useful part.
