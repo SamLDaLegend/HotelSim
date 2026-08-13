@@ -169,11 +169,27 @@ const V5_CONTENT: SimContent = Object.freeze({
       nightlyRatePence: 8_500,
       provides: Object.freeze(['rest']),
     }),
+    Object.freeze({
+      id: 'fixtureLounge',
+      name: 'Fixture Lounge',
+      capacity: 8,
+      nightlyRatePence: 0,
+      provides: Object.freeze(['snack']),
+    }),
   ]),
-  needTypes: Object.freeze([Object.freeze({ id: 'rest', name: 'Rest', satisfyTicks: 30, patienceTicks: 40 })]),
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
+  // G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 40 is
+  // carried; 40/30 rounds to a refill of 1. `snack` and the lounge that provides it are what
+  // makes the table legal — a guest arrives AT its want line, and a want line needs away-ticks
+  // to be crossed in, which only an engagement need generates. No guest in the frozen v5 world
+  // carries `snack`, and that is the point of the fallback this file exercises: a vector may
+  // predate the table it is read against.
+  needTypes: Object.freeze([
+    Object.freeze({ id: 'rest', name: 'Rest', role: 'lodging', capacityTicks: 40, refillPerTick: 1 }),
+    Object.freeze({ id: 'snack', name: 'Snack', role: 'engagement', capacityTicks: 40, refillPerTick: 3 }),
+  ]),
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 30, toleranceTicks: 40, wantAtBasisPoints: 500 },
+  ],
 });
 const v5Content = bindContent(V5_CONTENT);
 
@@ -185,22 +201,21 @@ const v5Blob = (): string =>
   });
 
 describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
-  it('gives every guest a ONE-ENTRY vector carrying its old countdowns, value for value', () => {
-    // The whole claim of the migration, guest by guest. `patienceRemaining` and
-    // `restRemaining` are not recomputed, defaulted or scaled — they are moved.
+  it('gives every guest a ONE-ENTRY vector carrying its old countdown, value for value', () => {
+    // The whole claim of the migration, guest by guest. `restRemaining` is not recomputed,
+    // defaulted or scaled — it is moved onto `progressRemaining` at v6 and onto `deficit` at
+    // v13, both of which mean "ticks this need still owes". `patienceRemaining` is the field
+    // the stock model DELETES, and the run down the whole chain is what proves it is dropped
+    // rather than silently reinterpreted as a stock.
     const world = deserialise(v5Blob());
     const guests = guestsInOrder(world.guests);
     expect(guests).toHaveLength(3);
-    for (const [index, expected] of [
-      { patienceRemaining: 12, progressRemaining: 30 },
-      { patienceRemaining: 40, progressRemaining: 7 },
-      { patienceRemaining: 40, progressRemaining: 1 },
-    ].entries()) {
+    for (const [index, deficit] of [30, 7, 1].entries()) {
       const guest = guests[index]!;
       expect(guest.needs).toHaveLength(1);
       expect(guest.needs[0]!.needId).toBe('rest');
-      expect(guest.needs[0]!.patienceRemaining).toBe(expected.patienceRemaining);
-      expect(guest.needs[0]!.progressRemaining).toBe(expected.progressRemaining);
+      expect(guest.needs[0]!.deficit).toBe(deficit);
+      expect(Object.keys(guest.needs[0]!).sort()).toEqual(['abandonCount', 'deficit', 'metBy', 'needId']);
     }
   });
 
@@ -277,10 +292,17 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
     expect(advanced.needOutcomes).toEqual([{ needId: 'rest', met: 1, unmet: 1, metByItem: 0, abandoned: 0 }]);
   });
 
-  it('and a migrated guest still fails on patience like any other', () => {
-    // Guest 1 waits in a hotel where the two free-able rooms are taken. Give it nowhere to
-    // go and it runs out of patience exactly 12 ticks later, which is the number the v5
-    // bytes carried.
+  it('and a migrated guest still gives up like any other — on the CLOCK, not on a carried fuse', () => {
+    // Guest 1 waits in a hotel where the two free-able rooms are taken. Give it nowhere to go
+    // and it leaves.
+    //
+    // THE NUMBER MOVED AND THE MIGRATION IS WHY (G-027b). It used to run out exactly 12 ticks
+    // later, because 12 was the `patienceRemaining` the v5 bytes carried — and that field is
+    // the one the stock model DELETES rather than reinterprets. A guest now gives up
+    // `toleranceTicks` after it ARRIVED, which for this guest is tick 880 + 40 = 920, and the
+    // world's own clock says 900. So the wait is 20 ticks from here, read off the save's
+    // arrival tick and today's content, and nothing about the deleted fuse survives to be
+    // silently re-read as a stock.
     const noRooms = { ...V5_WORLD_WITH_GUESTS, contentHash: v5Content.fingerprint, entities: { nextId: 4, list: [] } };
     // Guests 2 and 3 hold rooms 1 and 3, so an empty entity store would be a dangling
     // reservation — they are evicted on the first tick instead, which is the honest world.
@@ -292,7 +314,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
         guestOutcomes: { arrived: 7, satisfied: 4, unsatisfied: 2, evicted: 0 },
       },
     });
-    const world = run(deserialise(blob), v5Content, 12, []);
+    const world = run(deserialise(blob), v5Content, 21, []);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(3);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     expect(world.needOutcomes).toEqual([{ needId: 'rest', met: 0, unmet: 1, metByItem: 0, abandoned: 0 }]);
@@ -417,14 +439,14 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
     expect(() =>
       assertWorldShape(
         withGuest([
-          { needId: 'zeta', patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 },
-          { needId: 'alpha', patienceRemaining: 1, progressRemaining: 1, metBy: null, abandonCount: 0 },
+          { needId: 'zeta', deficit: 1, metBy: null, abandonCount: 0 },
+          { needId: 'alpha', deficit: 1, metBy: null, abandonCount: 0 },
         ]),
       ),
     ).toThrow(/needs out of order/);
     expect(() =>
-      assertWorldShape(withGuest([{ needId: 'rest', patienceRemaining: -1, progressRemaining: 1, metBy: null, abandonCount: 0 }])),
-    ).toThrow(/negative or non-integer patienceRemaining/);
+      assertWorldShape(withGuest([{ needId: 'rest', deficit: -1, metBy: null, abandonCount: 0 }])),
+    ).toThrow(/negative or non-integer deficit/);
   });
 
   it('rejects each World key in turn when it is deleted — including the new one', () => {
@@ -473,12 +495,17 @@ describe('the need vector round-trips out of a real run', () => {
       { id: 'cafe', name: 'cafe', capacity: 4, nightlyRatePence: 0, provides: ['food'] },
     ],
     needTypes: [
-      { id: 'food', name: 'food', role: 'engagement', satisfyTicks: 10, patienceTicks: 60 },
-      { id: 'rest', name: 'rest', role: 'lodging', satisfyTicks: 40, patienceTicks: 30 },
+      // Capacities are the old `patienceTicks`, carried; the refills are chosen so the table
+      // demands 3,333 basis points of a guest's time rather than the whole of it.
+      { id: 'food', name: 'food', role: 'engagement', capacityTicks: 60, refillPerTick: 3 },
+      { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 30, refillPerTick: 1 },
     ],
-    // G-027a: content declaring a lodging need must say how long a stay lasts, or
-    // `bindContent` refuses it — a guest holding a room has no other way to leave.
-    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 40 }],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+    // refuses it. G-027b adds the wait and the want line: 2 x 1,000 x 30 = 60,000 against the
+    // ten away-ticks a 40-tick stay generates at refill 3, which is 100,000.
+    guestRules: [
+      { id: 'houseRules', name: 'House Rules', stayDurationTicks: 40, toleranceTicks: 30, wantAtBasisPoints: 1_000 },
+    ],
   });
   // 100 ticks, and the horizon is chosen rather than round: the last arrival is at tick 90,
   // so guests are still in the hotel and one is still mid-meal when the save is taken. A

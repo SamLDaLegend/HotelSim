@@ -29,10 +29,18 @@
 //
 // WHAT THIS ERA IS. `guest-rules.json` did not exist, so `reserve` returned early for any
 // engaged guest. That is reproducible from disk today at `abandonMarginBasisPoints: 10000`:
-// a pending need's pressure cannot reach one whole (`MAX_PENDING_PRESSURE_BASIS_POINTS`,
-// tied to `isNeedPending`'s own definition), and a challenger must EXCEED the incumbent by
-// the margin — so the comparison can never succeed. Total commitment is a CONTENT
-// DOCUMENT, not a dead code path, which is what makes this arm runnable at all.
+// no need's pressure can reach one whole (`MAX_PENDING_PRESSURE_BASIS_POINTS`), and a
+// challenger must EXCEED the incumbent by the margin — so the comparison can never succeed.
+// Total commitment is a CONTENT DOCUMENT, not a dead code path, which is what makes this arm
+// runnable at all.
+//
+// THAT SENTENCE'S WARRANT WAS REWRITTEN AT G-027b AND ITS CLAIM WAS NOT (R1). The ceiling used
+// to be tied to `isNeedPending`'s definition — `patienceRemaining > 0` — and that field is gone:
+// a stock has no patience and nothing is terminal, so an EMPTY need is scored like any other.
+// It is now a CLAMP inside `pressureBasisPoints`, imposed precisely so that this document keeps
+// meaning what it meant. The ARM stays runnable and its verdict is unchanged; if the clamp were
+// ever removed, a saturating margin would start permitting switches and this era would silently
+// stop being reproducible from content.
 
 /** The document, exactly as the pre-margin CLI wrote it, whitespace removed. */
 export const ERA_A_TOTAL_COMMITMENT = Object.freeze(

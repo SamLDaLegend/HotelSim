@@ -40,6 +40,84 @@
 // a bad hotel, which is G-031's, and a stressed opening is a criterion there. Adding a
 // deliberately broken room to this scenario would manufacture the evidence instead of
 // earning it.
+//
+// G-031a ANSWERED THAT, AND THE ANSWER IS FOUR OF THE FIVE MARKS RATHER THAN ALL FIVE.
+// Measured before the WATCH by driving the SHIPPED scenario with the player's own commands
+// (2,400 ticks, seed 7, one build-family command per tick — the sequence the WATCH card
+// follows):
+//
+//   invalid rooms       REACHED, up to 4 at once, in BOTH reasons a player can cause:
+//                       `noDoor` by filling a corridor gap between two rooms, `unsupported`
+//                       by building in mid-air AND by demolishing the room underneath an
+//                       occupied one. Hatching, alarm outline and the invalidity word are
+//                       all watchable, and the word is shown to carry information rather
+//                       than merely to exist.
+//   roomless guests     REACHED. Demolish the bedrooms and the arrivals keep coming: the
+//                       hollow body appears within a few in-game hours.
+//   >2 guests on a cell NOT OBSERVED — which is weaker than "not reachable", and the
+//                       difference is the whole of the paragraph below.
+//
+// THE MECHANISM HAS NOW BEEN WRONG THREE TIMES AND THE CONCLUSION HAS SURVIVED EVERY TIME.
+// That pattern is the finding worth keeping, because a reader relies on the mechanism and
+// not on the conclusion. The wrong versions, in order: "never more than three live guests"
+// (false — the shipped hotel reaches EIGHT); then "a guest holding a room is drawn at its own
+// cell, so the population does not pile up anywhere" (false — `standingCell` is *the provider
+// it is engaged with, ELSE the room it lodges in, else the entrance*, so an engaged guest
+// stands AT THE PROVIDER, which this file's own note headed THE ASLEEP-IN-THE-CAFE GUEST has
+// said all along — cited by its heading rather than by a line count, because the count said
+// "thirty lines below", was true when written, and was 52 by the time it was read).
+// Both were caught by `render-critic`, and both are this project's defining defect class
+// sitting inside the justification for calling a human-written criterion unreachable.
+//
+// MEASURED, WITH THE COLUMN THE FIRST TWO VERSIONS OMITTED — *which cell carried the
+// maximum*. Seed 7, shipped `createScenario` through `stepTick`, demolition arms one command
+// per tick from the stated start tick, build arms one every 10 ticks from t=200 into a
+// ground-floor row right of the hotel:
+//
+//   arm                                    live  unlodged  max/cell  and WHERE
+//   shipped hotel, untouched  (4,320t)       8       2         2     Games Room, capacity 8
+//   all amenities but one, t=300             8       2         2     Games Room, capacity 8
+//   all bedrooms but one, t=300              3       2         2     Games Room, capacity 8
+//   everything demolished, t=1               2       2         2     the entrance
+//   everything demolished, t=300             3       2         2     Games Room, capacity 8
+//   everything demolished, t=600             6       2         2     Games Room, capacity 8
+//   player builds 12 bedrooms (8,640t)      10       2         2     Games Room, capacity 8
+//   player builds 20 bedrooms (20,000t)     10       2         2     Games Room, capacity 8
+//
+// TWO SLOTS THAT WERE MISSING AND CHANGED THE NUMBERS. "Everything demolished" is
+// START-TICK SENSITIVE (2, 3 and 6 live at t=1, 300, 600), and an earlier version of this
+// table quoted the middle one with no start tick. The build arms mostly DID NOT BUILD: 10 of
+// 12 and 18 of 20 commands were refused for `insufficientFunds`, so two bedrooms were added,
+// not twelve or twenty — which is its own finding about the opening balance and is why those
+// rows say `live 10` rather than the 8 quoted before.
+//
+// SO THE BOUND IS TWO SEPARATE THINGS, AND ONLY THE FIRST IS STRUCTURAL:
+//
+//   AT THE ENTRANCE, unlodged guests cap at TWO by the scenario's fixed 120-tick arrival
+//   cadence against the guest rules' 180 ticks of `toleranceTicks`: a guest that cannot get a
+//   bed gives up before a third arrival can join it. (It attributed the 180 to
+//   `night_rest`'s patience until θ-a sweep 3 — the number is the same one, carried, but it
+//   has lived on the guest rules rather than on the need type since ADR-0017 §4.) This holds
+//   in every arm above and does not move with the size of the hotel. The cadence answers to
+//   demand, and demand is M4's.
+//
+//   AT A PROVIDER, nothing of the sort applies. Guests pile where they ENGAGE, and that is
+//   bounded only by how many happen to engage one provider at once — the Games Room carrying
+//   every maximum above has a CONTENT CAPACITY OF 8, so the simulation would permit eight on
+//   that cell. Two is what these arms produced. That is an EMPIRICAL NEGATIVE over the arms
+//   listed, not a proof, and a player who builds one amenity beside twenty bedrooms is
+//   exactly the configuration nobody has run.
+//
+// The criterion is therefore re-parked as NOT OBSERVED rather than not reachable.
+//
+// The badge is still reachable on the WIDTH axis, because what it measures is "more guests
+// than FIT in this cell": with the two that do occur, capacity falls to one when the cell is
+// drawn under 56px wide, which the shipped hotel reaches at a STAGE 449px WIDE OR NARROWER —
+// at any stage height from 600 to 1080px. The threshold moves with stage HEIGHT, because
+// `guestGeometry` scales off `cellHeight`: at a 500px-tall stage the cell shrinks, the pitch
+// with it, and the figure is 393px. That is a real sighting of the mark, it is in the WATCH
+// card with its window size, and it is deliberately not described as the crowded hotel the
+// mark was written for.
 // ---------------------------------------------------------------------------------------
 //
 // THE ASLEEP-IN-THE-CAFE GUEST IS DRAWN TWICE ON PURPOSE, AND MUST STAY THAT WAY. Rest is
@@ -56,11 +134,11 @@ import {
   findItemType,
   findRoomType,
   isPlaced,
-  isRoomKind,
   NO_ENTITY,
   roomInvalidity,
   storeEntities,
 } from '@hotelsim/sim';
+import { isRoomEntity } from '../pick.js';
 import type { BoundContent, Cell, Entity, Guest, World } from '@hotelsim/sim';
 import { Container, Graphics } from 'pixi.js';
 import { drawGuest, guestGeometry, needVectorWidth } from './guest.js';
@@ -130,7 +208,10 @@ export function createScene(content: BoundContent): Scene {
     for (const entity of world.entities.list) {
       if (!isPlaced(entity)) continue;
       const key = keyOf(entity.at);
-      if (isRoomKind(content, entity.kind)) rooms.set(key, entity);
+      // ONE PREDICATE FOR "THIS IS A ROOM", SHARED WITH THE PICKER (G-031a). The room the
+      // player clicks is by construction the room the player can see, because the same
+      // function decided both.
+      if (isRoomEntity(content, entity)) rooms.set(key, entity);
       else {
         const bucket = items.get(key);
         if (bucket === undefined) items.set(key, [entity]);
@@ -169,7 +250,7 @@ export function createScene(content: BoundContent): Scene {
 
     let crowdedOut = 0;
     for (const [, guests] of standing) {
-      crowdedOut += drawStandingGuests(shapes, labels, layout, content, palette, guests);
+      crowdedOut += drawStandingGuests(shapes, labels, layout, content, palette, guests, world.tick);
     }
 
     labels.end();
@@ -352,12 +433,17 @@ function drawItems(g: Graphics, layout: Layout, palette: Palette, items: readonl
  * A row of guests standing on one cell, feet on the floor.
  *
  * THE PITCH IS DRIVEN BY THE NEED VECTOR, NOT BY THE BODY — inherited as a finding from
- * `viewer.js:360-372`, measured at `--rooms 2 --arrivals 20` frame 2600: seven guests
+ * `drawGuests` in `viewer.js`, measured at `--rooms 2 --arrivals 20` frame 2600: seven guests
  * crowded into one cell, their vectors one unreadable stripe of colour. The vector is wider
  * than the body, so a pitch chosen from the body alone smears them together.
  *
  * Returns how many did not fit, so the HUD can say so. A guest that is not drawn must be
  * COUNTED — silently dropping one is the difference between an instrument and a decoration.
+ *
+ * THE FEET SIT 5px ABOVE THE FLOOR LINE, AND THAT GAP IS NOW OCCUPIED. `baseY` is
+ * `y(floor) + cellHeight - 5`, which is where the lobby fuse is drawn (`drawGuest`). It was
+ * slack before and it is a mark now, so a change to that `- 5` moves a reading rather than a
+ * margin.
  */
 function drawStandingGuests(
   g: Graphics,
@@ -366,6 +452,7 @@ function drawStandingGuests(
   content: BoundContent,
   palette: Palette,
   guests: readonly Guest[],
+  tick: number,
 ): number {
   const first = guests[0];
   if (first === undefined) return 0;
@@ -379,7 +466,7 @@ function drawStandingGuests(
   // longer overhung the body. WATCH #6 sent the vector back — "I can only see one need at a
   // time, whereas before I could see all needs" — so the overhang is real again and so is
   // this rule. Reinstated rather than re-derived: the finding it came from is unchanged
-  // (`viewer.js:360-372`, seven guests on one cell at `--rooms 2 --arrivals 20` frame 2600,
+  // (`drawGuests` in `viewer.js`, seven guests on one cell at `--rooms 2 --arrivals 20` frame 2600,
   // their vectors one unreadable stripe), and a pitch chosen from the body alone smears
   // adjacent vectors into each other exactly as it did there.
   //
@@ -392,7 +479,7 @@ function drawStandingGuests(
   const drawn = Math.min(room, guests.length);
   for (let i = 0; i < drawn; i += 1) {
     const guest = guests[i];
-    if (guest !== undefined) drawGuest(g, content, palette, guest, x0 + i * pitch, baseY, geometry);
+    if (guest !== undefined) drawGuest(g, content, palette, guest, x0 + i * pitch, baseY, geometry, tick);
   }
   const crowdedOut = guests.length - drawn;
   if (crowdedOut > 0) {

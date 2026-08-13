@@ -58,6 +58,9 @@ export {
   // the four arms need it from outside `packages/sim`; it is the `abandonMarginOf` shape and
   // is on the surface for the same reason.
   stayDurationOf,
+  toleranceOf,
+  wantAtOf,
+  idleShareBasisPoints,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {
@@ -150,9 +153,11 @@ export {
   createNeedOutcomes,
   findNeedState,
   formNeedVector,
-  isNeedFailed,
-  isNeedMet,
-  isNeedPending,
+  isNeedEmpty,
+  isNeedFull,
+  isNeedSatisfiedIn,
+  isNeedWanted,
+  wantLineOf,
   needOutcomeOf,
   recordNeedsAtDeparture,
   urgencyOf,

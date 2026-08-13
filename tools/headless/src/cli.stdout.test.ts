@@ -112,7 +112,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // content at all — so the fingerprint is the same one. THE EVIDENCE IS THIS DOCUMENT:
     // it is compared field by field, and `stateHash` is the ONLY field in it that differs.
     // Four guests are still in the hotel, 24 still arrived, 15 still satisfied.
-    stateHash: 'd51f729128990015',
+    stateHash: 'e1f94931bdab91b5',
   },
   guests: {
     arrived: 24,
@@ -194,7 +194,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   //
   // WHY MORE RATHER THAN FEWER, AND IT IS THE POINT OF THE GOAL RATHER THAN A SURPRISE. A
   // guest that abandons does so for the need with the MOST pressure — the one closest to
-  // running out of patience — so with three needs sharing one lodging budget the margin buys
+  // EMPTY — so with three needs sharing one lodging budget the margin buys
   // triage. Total commitment made a guest finish whatever it started even while another need
   // burned down; the margin lets it switch once the gap is wide enough to be worth the swap.
   //
@@ -210,9 +210,14 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   // file pins one.
   // ============================================================================
   needs: [
-    { needId: 'guest_comfort', lodging: false, met: 10, unmet: 10, metByItem: 10, abandoned: 0 },
-    { needId: 'guest_entertainment', lodging: false, met: 11, unmet: 9, metByItem: 0, abandoned: 0 },
-    { needId: 'guest_nourishment', lodging: false, met: 6, unmet: 14, metByItem: 2, abandoned: 3 },
+    // RE-RECORDED AT G-027b, and the direction is the goal's own headline rather than noise:
+    // a need is a stock that is refilled and decays again, so a two-day guest is served far
+    // more often than one that could finish a task once. Every engagement need moves from
+    // roughly half met to four fifths met. `night_rest` does not move at all — 4 met, 16 unmet
+    // — because it is capacity that decides it: three rooms against 24 arrivals over two days.
+    { needId: 'guest_comfort', lodging: false, met: 16, unmet: 4, metByItem: 16, abandoned: 0 },
+    { needId: 'guest_entertainment', lodging: false, met: 16, unmet: 4, metByItem: 0, abandoned: 0 },
+    { needId: 'guest_nourishment', lodging: false, met: 18, unmet: 2, metByItem: 5, abandoned: 0 },
     { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -228,10 +233,15 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     scoreMin: 1,
     scoreMax: 5,
     distribution: [
+      // RE-RECORDED AT G-027b. The distribution moves with the need table above: 16 guests
+      // that used to leave at 2 now leave at 3 or 4, because they were served repeatedly
+      // rather than once. It still conserves against the departure table — 0 + 0 + 9 + 8 + 3 =
+      // 20 = 4 checked out + 16 who gave up — which `buildSummary` asserts rather than
+      // leaving to this literal.
       { score: 1, count: 0 },
-      { score: 2, count: 16 },
-      { score: 3, count: 0 },
-      { score: 4, count: 1 },
+      { score: 2, count: 0 },
+      { score: 3, count: 9 },
+      { score: 4, count: 8 },
       { score: 5, count: 3 },
     ],
   },
@@ -301,7 +311,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // G-027a: `satisfied` and `gaveUpWaiting` became `checkedOut` and `gaveUp` (ADR-0017),
     // and the SPLIT moved with them — 4 and 16 where it was 15 and 5. A stay is 1,440 ticks
     // rather than 480, so three rooms serve three guests in two days instead of fifteen and
-    // the rest run out of patience. Same simulation, three times the stay.
+    // the rest give up waiting. Same simulation, three times the stay.
     'left checkedOut             4',
     'left gaveUp                 16',
     'left evictedRoomGone        0',
@@ -311,12 +321,12 @@ const GOLDEN_2_DAYS_SEED_42 =
     'stuck       0',
     'orphan res  0',
     'in bad room 0',
-    'need       guest_comfort 10 met, 10 unmet (0 by room, 10 by item), 0 abandoned',
-    'need       guest_entertainment 11 met, 9 unmet (11 by room, 0 by item), 0 abandoned',
-    'need       guest_nourishment 6 met, 14 unmet (4 by room, 2 by item), 3 abandoned',
+    'need       guest_comfort 16 met, 4 unmet (0 by room, 16 by item), 0 abandoned',
+    'need       guest_entertainment 16 met, 4 unmet (16 by room, 0 by item), 0 abandoned',
+    'need       guest_nourishment 18 met, 2 unmet (13 by room, 5 by item), 0 abandoned',
     'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned',
-    'reviews     1:0, 2:16, 3:0, 4:1, 5:3',
-    'mean x100   255',
+    'reviews     1:0, 2:0, 3:9, 4:8, 5:3',
+    'mean x100   370',
     'ledger      7 transactions',
     'revenue     34000p',
     'upkeep      -24000p',
@@ -332,7 +342,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     510000p',
-    'state hash  d51f729128990015',
+    'state hash  e1f94931bdab91b5',
   ].join('\n') + '\n';
 
 /**
@@ -489,7 +499,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  d51f729128990015']);
+    expect(differing).toEqual(['seed        42', 'state hash  e1f94931bdab91b5']);
     expect(lines43).toContain('seed        43');
   });
 });

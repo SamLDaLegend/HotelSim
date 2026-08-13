@@ -50,29 +50,37 @@ import {
   MIGRATIONS,
   migrateSaveWorld,
   MIN_SUPPORTED_SCHEMA_VERSION,
-  SAVE_SCHEMA,
   SAVE_SCHEMA_VERSION,
 } from './save.js';
 import { createWorld, WORLD_KEYS } from './world.js';
 
-describe('the chain walks 1 -> ... -> 12, and the new step is the eleventh', () => {
-  it('has no gaps and the 11 -> 12 step is the last of them', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(12);
+describe('the chain has no gaps, and the v11 -> v12 step is the eleventh of them', () => {
+  it('has no gaps and the 11 -> 12 step is where it should be', () => {
+    // NOT "THE LAST OF THEM" ANY MORE (G-027b). This asserted that the v11 -> v12 step was the
+    // final one, which was true on the day it was written and false the moment a v12 -> v13
+    // step landed behind it. The claim this file can actually keep is that the step it is about
+    // is the eleventh; how long the chain is belongs to whichever file owns the newest step.
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
     expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
-    const last = MIGRATIONS[MIGRATIONS.length - 1];
-    expect([last?.from, last?.to]).toEqual([11, 12]);
+    expect([MIGRATIONS[10]?.from, MIGRATIONS[10]?.to]).toEqual([11, 12]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
-  it('fails FIRST at the step count if the new step is removed, before any data is touched', () => {
+  it('fails FIRST at the step count if a step is removed, before any data is touched', () => {
+    // The numbers are read off the chain rather than written down, for the reason above: a
+    // hard-coded 10/11/12 was a statement about the era, not about the runner.
     expect(() =>
       assertMigrationPathComplete({
         migrations: MIGRATIONS.slice(0, MIGRATIONS.length - 1),
-        minVersion: 1,
-        currentVersion: 12,
+        minVersion: MIN_SUPPORTED_SCHEMA_VERSION,
+        currentVersion: SAVE_SCHEMA_VERSION,
       }),
-    ).toThrow(/10 step\(s\) but v1 -> v12 requires exactly 11/);
+    ).toThrow(
+      new RegExp(
+        `${MIGRATIONS.length - 1} step\\(s\\) but v${MIN_SUPPORTED_SCHEMA_VERSION} -> ` +
+          `v${SAVE_SCHEMA_VERSION} requires exactly ${MIGRATIONS.length}`,
+      ),
+    );
   });
 
   it('THE PERMANENT v1 FIXTURE STILL LOADS, STILL HASHES, AND ITS FINGERPRINT HAS NOT MOVED', () => {
@@ -178,20 +186,49 @@ const V11_CONTENT: SimContent = Object.freeze({
       nightlyRatePence: 8_500,
       provides: Object.freeze(['rest']),
     }),
+    // A provider for the engagement need, never spawned by anything here.
+    Object.freeze({
+      id: 'fixtureLounge',
+      name: 'Fixture Lounge',
+      capacity: 8,
+      nightlyRatePence: 0,
+      provides: Object.freeze(['snack']),
+    }),
   ]),
   needTypes: Object.freeze([
-    Object.freeze({ id: 'rest', name: 'Rest', satisfyTicks: 30, patienceTicks: 40 }),
+    // G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 40 is
+    // carried; a refill is a whole tick, so 40/30 rounds to 1.
+    Object.freeze({ id: 'rest', name: 'Rest', role: 'lodging', capacityTicks: 40, refillPerTick: 1 }),
+    Object.freeze({ id: 'snack', name: 'Snack', role: 'engagement', capacityTicks: 40, refillPerTick: 3 }),
   ]),
   guestRules: Object.freeze([
-    Object.freeze({ id: 'houseRules', name: 'House Rules', stayDurationTicks: 300 }),
+    Object.freeze({
+      id: 'houseRules',
+      name: 'House Rules',
+      stayDurationTicks: 300,
+      toleranceTicks: 40,
+      wantAtBasisPoints: 1_000,
+    }),
   ]),
 });
 const v11Content = bindContent(V11_CONTENT);
 
 const v11World = (): unknown => ({ ...V11_WORLD_WITH_STAYS, contentHash: v11Content.fingerprint });
 
+/**
+ * The v11 world AFTER THE v11 -> v12 STEP AND NO FURTHER.
+ *
+ * It used to run `SAVE_SCHEMA` — the whole chain — which was the same thing on the day it was
+ * written and stopped being it the moment G-027b added a v12 -> v13 step that rewrites every
+ * need in the vector. "Renames two rows and moves nothing else" is a claim about ONE step, so
+ * the chain it runs has to stop where that step does.
+ */
 const migrated = (): Record<string, unknown> =>
-  migrateSaveWorld(v11World(), 11, SAVE_SCHEMA) as Record<string, unknown>;
+  migrateSaveWorld(v11World(), 11, {
+    migrations: MIGRATIONS.filter((migration) => migration.to <= 12),
+    minVersion: MIN_SUPPORTED_SCHEMA_VERSION,
+    currentVersion: 12,
+  }) as Record<string, unknown>;
 
 describe('v11 -> v12 renames two rows by position and moves nothing else', () => {
   it('carries all five counts onto the v12 names, in order', () => {
@@ -242,7 +279,12 @@ describe('v11 -> v12 renames two rows by position and moves nothing else', () =>
 });
 
 describe('the step refuses what it cannot honestly rename', () => {
-  const step = MIGRATIONS[MIGRATIONS.length - 1]?.migrate;
+  // FOUND BY VERSION AND NOT BY POSITION (G-027b). This used to read
+  // `MIGRATIONS[MIGRATIONS.length - 1]`, which was the v11 -> v12 step on the day it was
+  // written and became the v12 -> v13 step the moment a migration landed after it — so every
+  // refusal below would have been asked of the wrong function while still throwing, which is
+  // exactly the shape that keeps a test green while its subject changes underneath it.
+  const step = MIGRATIONS.find((migration) => migration.from === 11)?.migrate;
 
   it('refuses a table whose first row is already the v12 spelling', () => {
     // THE OVERWRITE GUARD, IN THE SHAPE THIS STEP CAN HAVE ONE. Nothing is added here, so

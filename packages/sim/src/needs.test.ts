@@ -2,28 +2,33 @@
 //
 //   pnpm exec vitest run needs
 //
-//   A guest forms one instance of every need type the content defines, each with its own
-//   integer urgency that rises every tick and falls only while a provider serves it. A
-//   need that runs out of patience fails on its own and is recorded; it does not end the
-//   stay. A guest holds its lodging room for the whole stay and engages one provider at a
-//   time.
+//   A guest forms one instance of every need type the content defines, each carrying one
+//   integer: how far below full it is. It decays, it is refilled by being served, and it
+//   decays again. Nothing about it ends the stay. A guest holds its lodging room for the
+//   whole stay and engages one provider at a time.
 //
-// The decay arithmetic is `needs.decay.test.ts`'s and the two reservations are
-// `needs.reservations.test.ts`'s. This file is the rest of the statement: what a guest
-// forms, what ends a stay and what does not, what gets recorded, and what content the
-// simulation refuses to run at all.
+//   THIS HEADER DESCRIBED THE COUNTDOWNS UNTIL θ-a SWEEP 3 — "integer urgency that rises
+//   every tick", "runs out of patience fails on its own" — in a file the same diff changed
+//   by 359 lines. ADR-0017 §1 replaced the model; see `needs.ts`'s header for why the
+//   sentence a reader meets FIRST is the one that survives a repair.
+//
+// The decay arithmetic is `needs.stock.test.ts`'s and the two reservations are
+// `needs.reservations.test.ts`'s. (It pointed at `needs.decay.test.ts`, in the present
+// tense, in the diff that DELETED that file — `needs.stock.test.ts:237` records the
+// retirement.) This file is the rest of the statement: what a guest forms, what ends a stay
+// and what does not, what gets recorded, and what content the simulation refuses to run at
+// all.
 //
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
 import type { Command, ScheduledCommand } from './commands.js';
-import { bindContent, lodgingNeedOf, needTypesInOrder } from './content.js';
+import { bindContent, findNeedType, lodgingNeedOf, needTypesInOrder } from './content.js';
 import type { NeedTypeData, RoomTypeData } from './content.js';
 import {
   departureCountOf,
   evictedGuests,
   guestsInOrder,
-  isEngaged,
   isResting,
   lodgingNeedStateOf,
 } from './guests.js';
@@ -34,9 +39,9 @@ import {
   createNeedOutcomes,
   findNeedState,
   formNeedVector,
-  isNeedFailed,
-  isNeedMet,
-  isNeedPending,
+  isNeedEmpty,
+  isNeedFull,
+  isNeedWanted,
   needOutcomeOf,
   recordNeedsAtDeparture,
 } from './needs.js';
@@ -54,12 +59,27 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
 });
 const need = (
   id: string,
-  satisfyTicks: number,
-  patienceTicks: number,
+  capacityTicks: number,
+  refillPerTick: number,
   role: 'lodging' | 'engagement',
-): NeedTypeData => ({ id, name: id, role, satisfyTicks, patienceTicks });
+): NeedTypeData => ({ id, name: id, role, capacityTicks, refillPerTick });
 
-/** A bedroom, a café and a games room: one lodging need and two engagement needs. */
+/**
+ * Where a guest starts wanting a need, as a share of that need's capacity — so the want line is
+ * 20 ticks of `food`, 40 of `fun` and 10 of `rest`, and a guest arrives at each of them.
+ */
+const WANT_AT = 1_000;
+
+/**
+ * A bedroom, a café and a games room: one lodging need and two engagement needs.
+ *
+ * THE CAPACITIES ARE THE OLD `patienceTicks`, CARRIED (G-027b) — 200, 400 and 100 — because
+ * `capacityTicks` names the same quantity, time to empty. The REFILLS are not a carry: the old
+ * `satisfyTicks` was time to fill from EMPTY, and a guest no longer arrives empty, it arrives at
+ * its want line. What the numbers below are chosen for is the ordering these tests are about:
+ * `food` and `fun` start at the SAME pressure (20/200 and 40/400 are both 1,000 basis points),
+ * so the tie goes to the lower id, and `fun` costs twice as many served ticks to fill.
+ */
 const content = bindContent({
   roomTypes: [
     roomType('bedroom', ['rest']),
@@ -67,13 +87,18 @@ const content = bindContent({
     roomType('games', ['fun']),
   ],
   needTypes: [
-    need('food', 8, 200, 'engagement'),
-    need('fun', 8, 400, 'engagement'),
-    need('rest', 60, 100, 'lodging'),
+    need('food', 200, 3, 'engagement'),
+    need('fun', 400, 3, 'engagement'),
+    need('rest', 100, 2, 'lodging'),
   ],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 60 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it — a guest holding a room has no other way to leave. G-027b adds the other way
+  // out (`toleranceTicks`, which is where the lodging need's `patienceTicks` went) and the want
+  // line, which the stay has to cross twice: 2 x 1,000 x 100 = 200,000 against the 30 away-ticks
+  // two engagement needs generate in 60 at refill 3, which is 300,000.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 60, toleranceTicks: 100, wantAtBasisPoints: WANT_AT },
+  ],
 });
 
 const spawn = (kind: string, column: number): Command => ({
@@ -105,23 +130,25 @@ describe('a guest forms one instance of EVERY need the content defines', () => {
     );
   });
 
-  it('starts each one at its own full patience and its own full stay', () => {
+  it('starts each one at its OWN want line, which is a share of its own capacity', () => {
     const guest = only(stepTick(hotel(), content, [arrive]));
     // `metBy: null` on both (G-013) and `abandonCount: 0` on both (G-014b): a freshly
     // formed need has been delivered by nothing and walked out on by nobody. Written out
     // rather than omitted, because `toEqual` over the WHOLE object is what makes a silently
     // added field a visible decision — which is exactly what it did when G-014b added one.
+    //
+    // ONE FIELD WHERE THERE WERE TWO (G-027b), and it is a DEFICIT: 0 is full. 20 is 1,000
+    // basis points of `food`'s 200-tick capacity, and 10 is the same share of `rest`'s 100 —
+    // the same line, read against two different capacities.
     expect(findNeedState(guest.needs, 'food')).toEqual({
       needId: 'food',
-      patienceRemaining: 200,
-      progressRemaining: 8,
+      deficit: 20,
       metBy: null,
       abandonCount: 0,
     });
     expect(findNeedState(guest.needs, 'rest')).toEqual({
       needId: 'rest',
-      patienceRemaining: 100,
-      progressRemaining: 60,
+      deficit: 10,
       metBy: null,
       abandonCount: 0,
     });
@@ -133,32 +160,42 @@ describe('a guest forms one instance of EVERY need the content defines', () => {
     expect(formNeedVector(content)).toEqual(only(stepTick(hotel(), content, [arrive])).needs);
   });
 
-  it('and a guest under one-need content forms exactly one, as it always did', () => {
-    const single = bindContent({
-      roomTypes: [roomType('bedroom', ['rest'])],
-      needTypes: [need('rest', 10, 20, 'lodging')],
-      // G-027a: content declaring a lodging need must say how long a stay lasts, or
-      // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
+  it('and a guest under two-need content forms exactly two, in the table\'s own order', () => {
+    // THIS USED TO BE "ONE-NEED CONTENT FORMS EXACTLY ONE" AND THAT CONTENT NO LONGER EXISTS
+    // (G-027b). A guest arrives AT its want line, so a table with no want line leaves every
+    // need full with nothing recorded as having served it — refused at the first commit — and
+    // a table WITH one must generate away-ticks for the lodging need to become wanted in, which
+    // only an engagement need does. The smallest legal table is therefore two needs, and the
+    // claim that survives is the one that was always the point: the vector is one entry per
+    // need type, from CONTENT, whatever the content happens to be.
+    const pair = bindContent({
+      roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
+      needTypes: [need('rest', 20, 2, 'lodging'), need('food', 20, 1, 'engagement')],
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', stayDurationTicks: 10, toleranceTicks: 20, wantAtBasisPoints: 1_000 },
+      ],
     });
-    const world = stepTick(createWorld(1, single), single, [spawn('bedroom', 0), arrive]);
-    expect(only(world).needs).toHaveLength(1);
+    const world = stepTick(createWorld(1, pair), pair, [spawn('bedroom', 0), arrive]);
+    expect(only(world).needs.map((entry) => entry.needId)).toEqual(['food', 'rest']);
   });
 });
 
-describe('a need that runs out of patience fails ON ITS OWN and does not end the stay', () => {
-  // The sentence in the goal statement that most needed a test: an engagement need failing
-  // must be survivable, or the vector is just a longer way to lose a guest.
+describe('a need nothing ever serves runs down ON ITS OWN and does not end the stay', () => {
+  // The sentence in the goal statement that most needed a test: an engagement need going
+  // unserved must be survivable, or the vector is just a longer way to lose a guest.
   const noAmenities = (): World => hotel(['bedroom']);
 
-  it('keeps the guest, and keeps its stay running, when an engagement need fails', () => {
-    // `food` has 200 ticks of patience and no café was built, so it fails at 200 — well
-    // inside a stay that needs the guest to be here for 60 ticks of service.
+  it('keeps the guest, and keeps its stay running, when an engagement need goes unserved', () => {
+    // No café was built, so `food` decays from its want line for the whole stay and is WANTED
+    // throughout — which under the model this replaces was "pending", and under a stock is a
+    // need that is simply never topped up.
     let world = stepTick(noAmenities(), content, [arrive]);
     world = run(world, content, 30, []);
     const midStay = only(world);
     expect(isResting(midStay)).toBe(true);
-    expect(isNeedPending(findNeedState(midStay.needs, 'food')!)).toBe(true);
+    const food = findNeedState(midStay.needs, 'food')!;
+    expect(isNeedWanted(findNeedType(content, 'food'), food, WANT_AT, false)).toBe(true);
+    expect(food.deficit).toBeGreaterThan(20);
     // The stay completes and the guest pays, having failed nothing that ends a stay.
     world = run(world, content, 40, []);
     expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
@@ -166,7 +203,7 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     expect(world.ledger.filter((entry) => entry.reason === 'roomRevenue')).toHaveLength(1);
   });
 
-  it('records the failed need as unmet and the met one as met, for the SAME guest', () => {
+  it('records the unserved need as unmet and the served one as met, for the SAME guest', () => {
     // One guest, one departure, two different fates in the table. This is the difference
     // between `guestOutcomes` (which counts STAYS) and `needOutcomes` (which counts WANTS),
     // and it is the whole subject of the goal.
@@ -177,31 +214,36 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
     expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({ needId: 'fun', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
   });
 
-  it('marks it failed rather than merely pending, so nothing tries to serve it again', () => {
-    // A stay long enough for `food` to run out of patience part-way through it.
+  it('EMPTY IS NOT TERMINAL: a café that appears late still fills a need that ran right out', () => {
+    // THE ASSERTION IS INVERTED FROM WHAT IT WAS, AND THE INVERSION IS THE GOAL (G-027b). This
+    // test used to read "the failed need is not resurrected: it had its chance", because a
+    // countdown that reached zero was a fate. A stock has no fate: `food` runs to EMPTY, sits
+    // there saturated — and the moment something can serve it, it fills.
     const slow = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-      needTypes: [need('food', 8, 20, 'engagement'), need('rest', 400, 400, 'lodging')],
-      // G-027a: content declaring a lodging need must say how long a stay lasts, or
-      // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 400 }],
+      needTypes: [need('food', 20, 2, 'engagement'), need('rest', 400, 1, 'lodging')],
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', stayDurationTicks: 400, toleranceTicks: 400, wantAtBasisPoints: 1_000 },
+      ],
     });
     let world = stepTick(createWorld(1, slow), slow, [spawn('bedroom', 0)]);
     world = run(world, slow, 30, [at(world.tick, arrive)]);
-    const food = findNeedState(only(world).needs, 'food')!;
-    expect(isNeedFailed(food)).toBe(true);
-    expect(isNeedPending(food)).toBe(false);
-    expect(isNeedMet(food)).toBe(false);
+    const foodType = findNeedType(slow, 'food')!;
+    const starved = findNeedState(only(world).needs, 'food')!;
+    expect(isNeedEmpty(foodType, starved)).toBe(true);
+    expect(isNeedFull(starved)).toBe(false);
 
-    // A café appears LATE. The failed need is not resurrected: it had its chance.
+    // A café appears LATE, and the guest goes to it: nothing about a need is over.
     const after = run(stepTick(world, slow, [spawn('cafe', 2)]), slow, 20, []);
-    expect(isEngaged(only(after))).toBe(false);
-    expect(findNeedState(only(after).needs, 'food')).toEqual(food);
+    const refilled = findNeedState(only(after).needs, 'food')!;
+    expect(refilled.deficit).toBeLessThan(starved.deficit);
+    expect(refilled.metBy).toBe('room');
   });
 
-  it('but the LODGING need failing DOES end the stay, unsatisfied', () => {
-    // The asymmetry, stated as a test rather than as a comment: the lodging need is the
-    // stay, so its failure is the guest giving up and leaving.
+  it('but a guest that is never given a room DOES leave, unsatisfied', () => {
+    // The asymmetry, stated as a test rather than as a comment: the lodging need is the stay,
+    // and a guest that never gets a room runs out of `toleranceTicks` and goes. G-027b moved
+    // the number that decides it from the need to the guest rules; the event is the same one.
     const world = run(hotel([]), content, 120, [at(1, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
@@ -209,44 +251,21 @@ describe('a need that runs out of patience fails ON ITS OWN and does not end the
   });
 });
 
-describe('met, failed and pending are a TOTAL and EXCLUSIVE classification', () => {
-  // `isNeedPending` is written out rather than derived from the other two, because the
-  // derived form cost 2.2% of the 365-day bench (see the note on it — that figure is a
-  // G-016 correction of an earlier 11% reading taken inside a machine-drift window, and the
-  // longhand is still worth keeping at the true number). This is what the derived form
-  // bought, kept as a property: over a grid that includes the states only a corrupt save
-  // can reach, exactly one of the three is true for every input. If the three ever disagree,
-  // a guest can be engaged for a need nothing will ever resolve — the engagement that
-  // cannot be released.
-  const values = [0, 1, 2, 7];
-
-  it('classifies every combination of countdowns as exactly one of the three', () => {
-    let seen = 0;
-    for (const patienceRemaining of values) {
-      for (const progressRemaining of values) {
-        const need: NeedState = { needId: 'rest', patienceRemaining, progressRemaining, metBy: null, abandonCount: 0 };
-        const arms = [isNeedMet(need), isNeedFailed(need), isNeedPending(need)].filter(Boolean);
-        expect(arms, `patience ${patienceRemaining}, progress ${progressRemaining}`).toHaveLength(1);
-        seen += 1;
-      }
-    }
-    // The loop ran, over every combination — a classification test that inspected nothing
-    // would pass just as quietly (ADR-0007).
-    expect(seen).toBe(values.length * values.length);
-  });
-
-  it('and each arm is reachable, so none of them is a branch nothing takes', () => {
-    expect(isNeedMet({ needId: 'rest', patienceRemaining: 5, progressRemaining: 0, metBy: 'room', abandonCount: 0 })).toBe(true);
-    expect(isNeedFailed({ needId: 'rest', patienceRemaining: 0, progressRemaining: 5, metBy: null, abandonCount: 0 })).toBe(true);
-    expect(isNeedPending({ needId: 'rest', patienceRemaining: 5, progressRemaining: 5, metBy: null, abandonCount: 0 })).toBe(true);
-    // The corrupt corner: both countdowns spent. MET wins, and it must, because a need that
-    // was completed is not also a need that ran out of waiting.
-    const both: NeedState = { needId: 'rest', patienceRemaining: 0, progressRemaining: 0, metBy: 'room', abandonCount: 0 };
-    expect(isNeedMet(both)).toBe(true);
-    expect(isNeedFailed(both)).toBe(false);
-    expect(isNeedPending(both)).toBe(false);
-  });
-});
+/*
+ * `met, failed and pending are a TOTAL and EXCLUSIVE classification` WAS HERE AND WAS DELETED
+ * AT G-027b. NAMED, NOT DISCOVERED.
+ *
+ * It drove `isNeedMet`, `isNeedFailed` and `isNeedPending` over a grid of both countdowns and
+ * required exactly one of the three to hold for every combination, including the corrupt corner
+ * where both were spent. All three predicates are deleted with the model: a stock is a single
+ * number, and the property was a statement about a PAIR of them being consistent.
+ *
+ * THE SUCCESSORS ARE NOT A PARTITION AND MUST NOT BE PINNED AS ONE. `isNeedFull`, `isNeedEmpty`
+ * and `isNeedWanted` overlap on purpose — an empty need is also a wanted one, and a full need is
+ * neither empty nor wanted — so re-writing this block against them would be inventing a law
+ * rather than carrying one. What replaced it is behavioural and lives in `needs.stock.test.ts`:
+ * a need served to full, watched decaying back past its line, and wanted again.
+ */
 
 describe('a need type is resolved by position, and the fallback is REAL (G-016)', () => {
   // `advanceNeeds` reads the need type positionally — `needs[i]` against
@@ -260,46 +279,54 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
   // than the 1.6%. A guest MIGRATED from v5 carries one need where this content defines
   // three, which is exactly the misaligned case.
   //
-  // The discriminator in every case below is the PATIENCE CAP. Relief is capped at the need
-  // type's own `patienceTicks`, so a served need whose type was not found does not have its
-  // patience restored at all (`advanceNeed`'s `?? need.patienceRemaining`). A wrong type is
-  // just as visible: the caps differ between these need types on purpose.
+  // THE DISCRIMINATOR MOVED FROM THE PATIENCE CAP TO THE CAPACITY CLAMP (G-027b), and it is the
+  // same shape of witness: a decaying need stops at its own `capacityTicks` and is returned by
+  // reference thereafter, so a need resolved against the WRONG type stops at the wrong number —
+  // and a need resolved against NO type is held where it stands. The three capacities here are
+  // 200, 400 and 100, different on purpose.
+  //
+  // `decay` runs one tick with nothing serving anything and the guest AWAY, which is the cell
+  // that reads the clamp.
+  const decay = (needs: readonly NeedState[]): readonly NeedState[] =>
+    advanceNeeds(content, needs, null, null, 'room', true, 'rest');
 
-  it('ALIGNED: a full vector takes the positional path and is capped by its own type', () => {
-    // `rest` is capped at 100 and is one short of it, so being served restores exactly one.
-    const needs = formNeedVector(content).map((n) =>
-      n.needId === 'rest' ? { ...n, patienceRemaining: 99 } : n,
-    );
-    const advanced = advanceNeeds(content, needs, 'rest', null, 'room');
-    expect(findNeedState(advanced, 'rest')?.patienceRemaining).toBe(100);
-    // And it does not go past the cap on the next tick.
-    expect(findNeedState(advanceNeeds(content, advanced, 'rest', null, 'room'), 'rest')?.patienceRemaining).toBe(100);
+  it('ALIGNED: a full vector takes the positional path and is clamped by its own type', () => {
+    // `rest` holds 100 ticks of stock and is one short of empty, so one tick of decay fills
+    // exactly one and the next tick moves nothing.
+    const needs = formNeedVector(content).map((n) => (n.needId === 'rest' ? { ...n, deficit: 99 } : n));
+    const advanced = decay(needs);
+    expect(findNeedState(advanced, 'rest')?.deficit).toBe(100);
+    // And it does not go past the clamp on the next tick.
+    expect(findNeedState(decay(advanced), 'rest')?.deficit).toBe(100);
   });
 
   it('SHORTER VECTOR (the migrated guest): falls back to the search and still finds the type', () => {
     // One need where the content defines three — lengths differ, so the positional path is
-    // skipped entirely. Without a working fallback the cap would be unknown and patience
-    // would hold at 99 instead of being restored to 100.
-    const migrated: readonly NeedState[] = [{ needId: 'rest', patienceRemaining: 99, progressRemaining: 5, metBy: null, abandonCount: 0 }];
-    const advanced = advanceNeeds(content, migrated, 'rest', null, 'room');
-    expect(advanced[0]?.patienceRemaining).toBe(100);
-    expect(advanced[0]?.progressRemaining).toBe(4);
+    // skipped entirely. Without a working fallback the capacity would be unknown and the need
+    // would be HELD at 99 rather than decaying to its clamp.
+    const migrated: readonly NeedState[] = [{ needId: 'rest', deficit: 99, metBy: null, abandonCount: 0 }];
+    const advanced = decay(migrated);
+    expect(advanced[0]?.deficit).toBe(100);
+    expect(decay(advanced)[0]?.deficit).toBe(100);
   });
 
   it('SAME LENGTH, DIFFERENT IDS: the per-entry check catches it and the type is still right', () => {
     // Three needs, so the length check passes — but the ids are shifted, so position 0 holds
-    // `fun` where the table holds `food`. `fun` is capped at 400 and `food` at 200; reading
-    // the type positionally would cap this at 200 and the assertion below would fail.
+    // `fun` where the table holds `food`. `fun` holds 400 ticks and `food` 200; reading the
+    // type positionally would find this need ALREADY past a 200-tick clamp and freeze it at
+    // 399, so the assertion below is what separates the two reads.
     const shifted: readonly NeedState[] = [
-      { needId: 'fun', patienceRemaining: 399, progressRemaining: 5, metBy: null, abandonCount: 0 },
-      { needId: 'rest', patienceRemaining: 50, progressRemaining: 5, metBy: null, abandonCount: 0 },
-      { needId: 'zzz', patienceRemaining: 10, progressRemaining: 5, metBy: null, abandonCount: 0 },
+      { needId: 'fun', deficit: 399, metBy: null, abandonCount: 0 },
+      { needId: 'rest', deficit: 50, metBy: null, abandonCount: 0 },
+      { needId: 'zzz', deficit: 10, metBy: null, abandonCount: 0 },
     ];
-    const advanced = advanceNeeds(content, shifted, 'fun', null, 'room');
-    expect(advanced[0]?.patienceRemaining).toBe(400);
-    // And a need this content does not define at all still decays without a type, rather
-    // than throwing or growing without bound — the `findNeedType` undefined contract.
-    expect(advanced[2]?.patienceRemaining).toBe(9);
+    const advanced = decay(shifted);
+    expect(advanced[0]?.deficit).toBe(400);
+    // And a need this content does not define at all is HELD rather than guessed at — there is
+    // no capacity to clamp it against, so it neither decays nor throws. The `findNeedType`
+    // undefined contract, and the direction is deliberate: a need nobody declared cannot be
+    // run down towards a limit nobody stated.
+    expect(advanced[2]?.deficit).toBe(10);
   });
 
   it('and the positional path and the search path agree, need for need, over a whole stay', () => {
@@ -308,11 +335,11 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // this is where it would show, rather than in a state hash nobody can attribute.
     let aligned = formNeedVector(content);
     let misaligned: readonly NeedState[] = [...aligned, {
-      needId: 'zzz', patienceRemaining: 500, progressRemaining: 500, metBy: null, abandonCount: 0,
+      needId: 'zzz', deficit: 500, metBy: null, abandonCount: 0,
     }];
     for (let tick = 0; tick < 100; tick += 1) {
-      aligned = advanceNeeds(content, aligned, 'rest', 'food', 'room');
-      misaligned = advanceNeeds(content, misaligned, 'rest', 'food', 'room');
+      aligned = advanceNeeds(content, aligned, 'rest', 'food', 'room', true, 'rest');
+      misaligned = advanceNeeds(content, misaligned, 'rest', 'food', 'room', true, 'rest');
       // The extra entry is the only difference; the three shared needs must match exactly.
       expect(misaligned.slice(0, 3)).toEqual(aligned);
     }
@@ -341,16 +368,20 @@ describe('a bad need vector is still refused, and the message still names the gu
     ['not an array', 42],
     ['empty', []],
     ['a hole', [null]],
-    ['an empty needId', [{ needId: '', patienceRemaining: 1, progressRemaining: 1, metBy: null }]],
+    ['an empty needId', [{ needId: '', deficit: 1, metBy: null, abandonCount: 0 }]],
     [
       'out of order',
       [
-        { needId: 'rest', patienceRemaining: 1, progressRemaining: 1, metBy: null },
-        { needId: 'food', patienceRemaining: 1, progressRemaining: 1, metBy: null },
+        { needId: 'rest', deficit: 1, metBy: null, abandonCount: 0 },
+        { needId: 'food', deficit: 1, metBy: null, abandonCount: 0 },
       ],
     ],
-    ['a negative patience', [{ needId: 'rest', patienceRemaining: -1, progressRemaining: 1, metBy: null }]],
-    ['a fractional progress', [{ needId: 'rest', patienceRemaining: 1, progressRemaining: 0.5, metBy: null }]],
+    ['a negative deficit', [{ needId: 'rest', deficit: -1, metBy: null, abandonCount: 0 }]],
+    ['a missing metBy', [{ needId: 'rest', deficit: 1, abandonCount: 0 }]],
+    ['a metBy that is not a provider kind', [{ needId: 'rest', deficit: 1, metBy: 'ghost', abandonCount: 0 }]],
+    ['a full need nothing served', [{ needId: 'rest', deficit: 0, metBy: null, abandonCount: 0 }]],
+    ['a missing abandonCount', [{ needId: 'rest', deficit: 1, metBy: null }]],
+    ['a negative abandonCount', [{ needId: 'rest', deficit: 1, metBy: null, abandonCount: -1 }]],
   ];
 
   it.each(badVectors)('refuses %s, naming the guest', (_label, vector) => {
@@ -374,7 +405,7 @@ describe('a bad need vector is still refused, and the message still names the gu
 
   it('and a good vector is accepted, so the guard is not simply always throwing', () => {
     expect(() =>
-      assertNeedVector([{ needId: 'rest', patienceRemaining: 3, progressRemaining: 4, metBy: null, abandonCount: 0 }], 41),
+      assertNeedVector([{ needId: 'rest', deficit: 4, metBy: null, abandonCount: 0 }], 41),
     ).not.toThrow();
   });
 });
@@ -415,15 +446,14 @@ describe('the per-need tally', () => {
     // recorded twice, carrying 2 then 3, and comes out at 5.
     const state = (needId: string, met: boolean, abandonCount = 0): NeedState => ({
       needId,
-      patienceRemaining: met ? 5 : 0,
-      progressRemaining: met ? 0 : 5,
+      deficit: met ? 0 : 5,
       metBy: met ? 'room' : null,
       abandonCount,
     });
     let tally = createNeedOutcomes();
-    tally = recordNeedsAtDeparture(tally, [state('zeta', true, 2)]);
-    tally = recordNeedsAtDeparture(tally, [state('alpha', false, 7), state('zeta', false, 3)]);
-    tally = recordNeedsAtDeparture(tally, [state('mid', true)]);
+    tally = recordNeedsAtDeparture(content, tally, [state('zeta', true, 2)]);
+    tally = recordNeedsAtDeparture(content, tally, [state('alpha', false, 7), state('zeta', false, 3)]);
+    tally = recordNeedsAtDeparture(content, tally, [state('mid', true)]);
     expect(tally).toEqual([
       { needId: 'alpha', met: 0, unmet: 1, metByItem: 0, abandoned: 7 },
       { needId: 'mid', met: 1, unmet: 0, metByItem: 0, abandoned: 0 },
@@ -432,12 +462,12 @@ describe('the per-need tally', () => {
   });
 
   it('returns its input unchanged for a guest carrying no needs at all', () => {
-    const tally = recordNeedsAtDeparture(createNeedOutcomes(), []);
+    const tally = recordNeedsAtDeparture(content, createNeedOutcomes(), []);
     expect(tally).toEqual([]);
   });
 });
 
-describe('a guest pursues the need that has burned through most of its own patience', () => {
+describe('a guest pursues the need that has drawn down most of its own capacity', () => {
   // THE THREE COMPARATOR UNIT TESTS THAT STOOD HERE WERE RE-DERIVED AT G-014a, NOT DROPPED.
   // They exercised `compareNeedPriority`, which that goal deleted: a scalar score replaced
   // the comparator, because "beats it" and "beats it by this much" are different questions
@@ -456,27 +486,32 @@ describe('a guest pursues the need that has burned through most of its own patie
   //
   // The content in this file declares no `fitBasisPoints`, so every provider ties on fit and
   // pressure alone decides — which is why these two tests read exactly as they did at G-012.
-  it('sends the guest to the amenity it needs MOST when it cannot have both', () => {
-    // The behaviour the ranking exists for. `food` runs out in 200 ticks and `fun` in 400,
-    // so a guest that can only be in one place goes for food first — and a guest that went
-    // to the games room while its dinner expired is §6.1's "reads as stupid" in the form
-    // this goal can produce.
+  it('sends the guest to the amenity it needs MOST, and BACK to the first one when it decays', () => {
+    // The behaviour the ranking exists for. A guest that can only be in one place goes to the
+    // more pressing need first — and a guest that went to the games room while its dinner sat
+    // untouched is §6.1's "reads as stupid" in the form this goal can produce.
+    //
+    // THE SECOND HALF IS G-027b's AND IT IS WHY THIS TEST CHANGED SHAPE. It used to end with
+    // "everything it came for is done, so it holds no provider at all" — a sentence that only
+    // means something under a model where a need can be finished. Nothing finishes now: the
+    // café is released the moment `food` is full, `food` decays back past its want line while
+    // the guest is in the games room, and the guest RETURNS. One guest, one stay, two visits.
     let world = stepTick(hotel(), content, [arrive]);
-    // Both are equally urgent on the tick it walks in, so the tie goes to the lower id and
-    // it eats first. Then — and only then — it goes to the games room.
+    // Both are equally urgent on the tick it walks in — 20 of 200 and 40 of 400 are the same
+    // fraction — so the tie goes to the lower id and it eats first.
     expect(only(world).engagement?.needId).toBe('food');
-    world = run(world, content, 8, []);
-    const halfway = only(world);
-    expect(isNeedMet(findNeedState(halfway.needs, 'food')!)).toBe(true);
-    expect(halfway.engagement?.needId).toBe('fun');
-    // And when everything it came for is done, it holds no provider at all — a guest that
-    // kept a seat in the café it had finished with would be holding an amenity nobody
-    // could ever release.
-    world = run(world, content, 10, []);
-    const done = only(world);
-    expect(done.engagement).toBeNull();
-    expect(isNeedMet(findNeedState(done.needs, 'fun')!)).toBe(true);
-    expect(isResting(done)).toBe(true);
+
+    const visits: string[] = ['food'];
+    for (let tick = 0; tick < 50; tick += 1) {
+      world = run(world, content, 1, []);
+      const guest = guestsInOrder(world.guests)[0];
+      if (guest === undefined) break;
+      const engaged = guest.engagement?.needId;
+      if (engaged !== undefined && engaged !== visits[visits.length - 1]) visits.push(engaged);
+    }
+    expect(visits.slice(0, 3)).toEqual(['food', 'fun', 'food']);
+    // And it never engages a provider for the lodging need on the way round.
+    expect(visits.includes('rest')).toBe(false);
   });
 
   it('never engages a provider for the LODGING need, however urgent it is', () => {
@@ -501,12 +536,14 @@ describe('the lodging need, and how the simulation finds it', () => {
     const historical = bindContent({
       roomTypes: [roomType('bedroom', ['alpha']), roomType('cafe', ['beta'])],
       needTypes: [
-        { id: 'alpha', name: 'alpha', satisfyTicks: 10, patienceTicks: 20 },
-        { id: 'beta', name: 'beta', satisfyTicks: 10, patienceTicks: 20 },
+        { id: 'alpha', name: 'alpha', capacityTicks: 20, refillPerTick: 2 },
+        { id: 'beta', name: 'beta', capacityTicks: 20, refillPerTick: 1 },
       ],
       // G-027a: content declaring a lodging need must say how long a stay lasts, or
       // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', stayDurationTicks: 10, toleranceTicks: 20, wantAtBasisPoints: 1_000 },
+      ],
     });
     expect(lodgingNeedOf(historical)?.id).toBe('alpha');
   });
@@ -517,7 +554,7 @@ describe('the lodging need, and how the simulation finds it', () => {
     expect(() =>
       bindContent({
         roomTypes: [roomType('cafe', ['food'])],
-        needTypes: [need('food', 8, 20, 'engagement')],
+        needTypes: [need('food', 20, 1, 'engagement')],
       }),
     ).toThrow(/none of them is the lodging need/);
   });
@@ -526,7 +563,7 @@ describe('the lodging need, and how the simulation finds it', () => {
     expect(() =>
       bindContent({
         roomTypes: [roomType('bedroom', ['rest']), roomType('cabin', ['sleep'])],
-        needTypes: [need('rest', 10, 20, 'lodging'), need('sleep', 10, 20, 'lodging')],
+        needTypes: [need('rest', 20, 2, 'lodging'), need('sleep', 20, 2, 'lodging')],
       }),
     ).toThrow(/are both the lodging need/);
   });
@@ -535,7 +572,7 @@ describe('the lodging need, and how the simulation finds it', () => {
     expect(() =>
       bindContent({
         roomTypes: [roomType('bedroom', ['rest'])],
-        needTypes: [{ ...need('rest', 10, 20, 'lodging'), role: 'napping' as never }],
+        needTypes: [{ ...need('rest', 20, 2, 'lodging'), role: 'napping' as never }],
       }),
     ).toThrow(/a need is either "lodging"/);
   });
@@ -557,7 +594,7 @@ describe('every need this content defines has somewhere to be met', () => {
     expect(() =>
       bindContent({
         roomTypes: [roomType('bedroom', ['rest'])],
-        needTypes: [need('rest', 10, 20, 'lodging'), need('food', 8, 20, 'engagement')],
+        needTypes: [need('rest', 10, 20, 'lodging'), need('food', 20, 1, 'engagement')],
       }),
     ).toThrow(/need "food" has no provider a player can reach/);
   });

@@ -40,9 +40,15 @@ import { run, stepTick } from './tick.js';
 import { createWorld, hashState } from './world.js';
 import type { World } from './world.js';
 
-// Every room type provides the one need, so the guest loop actually runs in the tests
+// Every buildable room type provides the lodging need, so the guest loop actually runs in the tests
 // below that use it — a placement test whose ticks are idle would say nothing about
 // whether the grid survives a tick with real work in it.
+//
+// TWO NEEDS SINCE G-027b, AND THE SECOND ONE IS STRUCTURAL. A guest arrives at its want line;
+// a want line of 0 puts it at a full need nothing served, which `assertNeedVector` refuses at
+// the first commit; and declaring a want line makes `assertLodgingBecomesWanted` demand
+// away-ticks that only an ENGAGEMENT need generates. One-need content is no longer expressible,
+// so the minimum legal table is lodging + engagement.
 const roomType = (id: string): RoomTypeData => ({
   id,
   name: id,
@@ -51,11 +57,23 @@ const roomType = (id: string): RoomTypeData => ({
   provides: ['rest'],
 });
 const content = bindContent({
-  roomTypes: ['alpha', 'beta', 'gamma', 'delta'].map(roomType),
-  needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 }],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
+  // `lounge` provides the engagement need and is NEVER spawned below.
+  roomTypes: [...['alpha', 'beta', 'gamma', 'delta'].map(roomType), { id: 'lounge', name: 'lounge', capacity: 8, nightlyRatePence: 0, provides: ['snack'] }],
+  needTypes: [
+    // `capacityTicks` is time-to-empty — what the deleted `patienceTicks` named — so 12 carries
+    // across; a refill is a whole tick, so 12/20 floors at 1.
+    { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 12, refillPerTick: 1 },
+    // Refill 3 keeps the table's demand at 5,000 basis points of a guest's time rather than the
+    // whole 10,000 `assertNeedDemandIsServiceable` refuses on.
+    { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: 12, refillPerTick: 3 },
+  ],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it — a guest holding a room has no other way to leave. G-027b adds `toleranceTicks`
+  // (the other way out, carrying the lodging need's old `patienceTicks`) and the want line the
+  // stay must cross twice: 2 x 2,000 x 12 = 48,000 against 5 away-ticks x 10,000 = 50,000.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 12, wantAtBasisPoints: 2_000 },
+  ],
 });
 
 const cell = (floor: number, column: number): Cell => ({ floor, column });

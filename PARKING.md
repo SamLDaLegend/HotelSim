@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, G-027a done. M2.5: 2 of 8 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -1916,3 +1916,158 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   **THE LONGEST RUN IS THE SHARPER OF THE TWO AND IS THE PERCEPTUAL ONE.** A share can fall
   while every guest still freezes for four hundred ticks in the middle of its stay; a watcher
   sees the freeze, not the average. `ai-critic` proposed it and it is the better statistic.
+
+## Discovered during G-031a (2026-08-12) — a balance finding from a RENDER goal
+
+- **THE OPENING BALANCE REFUSES 10 OF 12 BUILDS IN A NAIVE EXPANSION.** Measured by
+  `render-engineer` while probing whether the crowd badge was reachable — it issued 12
+  `buildRoom` commands and **10 were refused for `insufficientFunds`**; at 20 commands, 18
+  were refused. **Two bedrooms were added, not twelve.** `startingCapitalPence` 500,000 against
+  `constructionCostPence` 250,000 is exactly two rooms, and the sim has no way to tell the
+  player that in advance because **the UI deliberately never predicts a refusal** (G-031a's own
+  ruling: a local affordability check would be a second implementation of a rule the sim owns).
+  **Why it is parked rather than fixed**: this is the money loop, it is M4's, and G-031a's first
+  criterion is *"every player action is an existing command; this goal adds no simulation
+  behaviour"*. **Why it is worth keeping**: it is the first observation in the project of the
+  build loop as a *player* experiences it rather than as a sweep measures it — eight refusals in
+  a row, each one a click that does nothing but tick a counter.
+    **UPGRADED FROM A NOTE TO A HYPOTHESIS WITH ITS TEST, on render-critic's ruling that a note is
+  a reminder and a hypothesis is a result waiting for a goal that runs it (CLAUDE.md, Parking).**
+  **THE CLAIM, stated so it can be false**: the opening balance affords exactly
+  `floor(balanceOf(createWorld(7, content).ledger) / constructionCostOf(content, lodgingRoomType))`
+  = **2 rooms**. **THE TEST**: build one room every 10 ticks from t=200 and read
+  `buildOutcomes.built` against `refused.insufficientFunds`. Reproduced twice at G-031a —
+  **built 2 / refused 10** on a twelve-command arm and **built 2 / refused 18** on a twenty.
+  **ITS LIVE NEIGHBOUR**: G-027a moved the margin 10.2:1 -> 3.63:1 without touching a price, and
+  this is **the same lever seen from the player's end** — the first time in this project anyone
+  has looked at the opening balance from inside a session rather than from a report.
+  **FALSIFICATION TEST**: at M4, once demand and pricing exist, run the same twelve-build
+  expansion from the shipped opening balance and count refusals. *If the ratio is still ~5:1 the
+  opening balance is not a starting position but a tutorial about scarcity, and M4 owes it a
+  decision — a loan prompt, a cheaper first room, or a larger opening float. If revenue by then
+  funds the expansion, this closes.* -> **M4**, and it should be read beside ADR-0011's
+  absorbing-state ruling and `PARKING.md`'s construction-cost entry, both of which assume the
+  player can act.
+
+## Discovered during G-031a's verification (2026-08-12) — a charter amendment owed
+
+- **THE REGEX TRAP'S ENFORCEMENT IS THE EMPTY-MATCH ASSERTION, NOT THE READ-THE-BYTES ADVICE.**
+  Fourth instance in four goals by four authors — this one in a **verification probe**, where
+  `` `^\s*const ${name} =` `` through two quoting layers collapsed `\s` to a bare `s` and matched
+  nothing. **`CLAUDE.md`'s existing rule could not have caught it**: that rule says *check it
+  against the bytes on disk, not against a retyped copy*, which catches **transcription** — and
+  the author **was** reading the bytes. The fault was in the **matcher**. What caught it was
+  **G-030 round 1's rule from an entirely different subject**: *assert the search found something
+  before using its result.*
+  **THE GENERALISATION, which is the reusable part**: the regex trap is a special case of the
+  class this project keeps rediscovering **in scanners** — `check-content.mjs`'s JSON walk that
+  inspected nothing, `speed-ladder.scan.test.ts`'s dead glob, `stopwatch.scan.test.ts`'s exclude
+  clause that could not fail, `check-ladder.mjs`'s newline-as-statement-boundary. **Four authors
+  have now demonstrated that "be careful when you write `\w`" does not scale, and one empty-match
+  assertion catches all of them.**
+  **AND IT HAPPENED INSIDE A VERIFICATION PROBE**, which has the same standing as
+  *"an agent's report that tests pass is not evidence"*: **a probe that proceeds on an empty match
+  is not evidence either.**
+  **This is a `CLAUDE.md` amendment, parked here only until a goal owns the charter edit** — the
+  same route the mutation-probe rule took. **FALSIFICATION TEST**: none needed, it is a procedure.
+  What would refute it is a fifth instance caught by the read-the-bytes rule rather than by an
+  empty-match assertion; if that happens, both rules earn their place separately.
+  **Note for whoever writes it**: this is the FIRST time in this project that a written rule
+  caught its own defect class without a person noticing first, and it was a rule written for a
+  different subject. That is the argument for stating rules as properties rather than as warnings.
+
+## Discovered during G-027b θ-a's fixture repair (2026-08-13)
+
+- **G-014b's CENTRAL FINDING HAS REVERSED, AND ITS SIGNED-OFF CRITERION 2 IS NOW FALSE — recorded
+  here because it lives ONLY inside a test file.** Found by `ai-critic` at θ-a sweep 2. Both
+  readings are **executed and green** at `tools/headless/src/hysteresis.report.test.ts`:
+  - `:187` — `expect(abandonmentsIn(shipped)).toBe(0)`. G-014b's criterion 2 was
+    `abandoned(margin 0) > abandoned(shipped) > 0`, and **the right-hand term is the one that
+    forbids shipping a saturating margin and calling the feature delivered.** At its own pinned
+    invocation it now reads **zero**.
+  - `:250` — `engagementMet(thrash) > engagementMet(shipped)`, **2,081 against 1,875.** That
+    reverses *"triage beats thrash"*, which is the entire warrant for `abandonMarginBasisPoints`
+    existing, for the 6,000 value, and for ADR-0021's frozen Era-A document. **A margin of ZERO
+    now meets more engagement needs than the shipped one.**
+  **Why it is parked and not acted on**: `met` is a **departure snapshot**, which is precisely the
+  instrument G-028 is rewriting — so this is a reading taken on a gauge the ledger already flags.
+  **An open contradiction to record, not a result to act on.**
+  **Why it is parked and not left**: the test file argues both carefully and says *"whether
+  contention-gated is the right design is not settled here"* — agreed, **which is exactly why it
+  belongs in a ledger.** `JOURNAL.md` contained no occurrence of "margin", "thrash" or "triage";
+  neither did `GOALS.md`, `DECISIONS.md` or this file. **Compare the review reversals found in the
+  same pass**: same class, same goal, and those got a human ruling, a table in `GOALS.md` and
+  G-028's first job. **One was routed and one was not, and the difference was that a person
+  happened to read one of them.**
+  **FALSIFICATION TEST**: after G-028 replaces the departure snapshot, re-run
+  `pnpm exec vitest run hysteresis.report` and read `:187` and `:250` again. *If `shipped` still
+  abandons zero and thrash still beats triage on the NEW metric, the margin's warrant is gone and
+  `abandonMarginBasisPoints` is a parameter defending a result it no longer produces — that is a
+  DECISIONS entry, not a tuning pass. If either flips, the reversal was the old gauge.*
+  -> **G-028, as its second job, immediately after the AXIS 1 repair.**
+
+- ~~**`bindContent` ACCEPTS CONTENT NO GUEST CAN ARRIVE UNDER.**~~ **CLOSED 2026-08-13, IN θ-a's
+  OWN FIX PASS — AND CLOSED BY THE SECOND BRANCH OF ITS OWN FALSIFICATION TEST, NOT THE FIRST.**
+  The prediction was a bind-time refusal. What shipped **splits the case**, and the split was
+  *measured rather than judged*: refusing the absent line too turned **7 test files / 14 tests**
+  red, and **every one of them omits the key** — under the shipped rates a lodging-only table can
+  only bind by omitting it. A blanket refusal would therefore have made **ADR-0008's reading
+  unrunnable rather than historical**, which is the one thing ADR-0008 exists to forbid. So:
+  a **declared** want line that floors to zero is **refused at bind** (`assertEveryNeedIsWantedOn
+  Arrival`, per row, per need type, both named in the message); an **absent** one is **accepted**,
+  and `formNeedVector` forms at `Math.max(1, wantLineOf(...))` — a pre-G-027b guest arrives one
+  tick below full, which is exactly what that era's `progressRemaining > 0` meant.
+  **The parked clause that fired is the escape hatch nobody expected to use**: *"if some later
+  change makes absence meaningful, this closes."* Absence became meaningful **in the same pass
+  that would have refused it**. Both halves proved to bite by mutation; the new behaviour is
+  pinned in `stock.content.test.ts` and `needs.stock.test.ts`, so the falsification test now runs
+  the other way — **it binds and does not throw**, by design and under test.
+  **The reason it is struck rather than deleted**: the cost claim below is still true and is the
+  reusable part. *Original entry follows.*
+
+  Content declaring a lodging need
+  and **no `wantAtBasisPoints`** binds happily, then throws `assertNeedVector` **deep in the tick**
+  on the first guest. `toleranceTicks` got a bind-time refusal in θ-a; the want line did not, and
+  it has the **same "no historical value to fall back on" character** — there is no era in which
+  content had a want line, so absence cannot be read as history.
+  **Why it is worth a goal rather than a note**: `sim-engineer` reported it as **the single
+  biggest cost multiplier** in repairing ~45 fixtures — the failure surfaces as a throw inside the
+  tick rather than as a refusal at load, so every fixture that hit it cost a debugging cycle
+  instead of a message. **A refusal that fires at load is worth more than one that fires at tick
+  1**, which is the whole argument `assertNeedsAreSatisfiable` and `assertLodgingBecomesWanted`
+  already rest on. **Correctly NOT fixed in θ-a**: adding a `bindContent` refusal is a model
+  change, not fixture repair.
+  **FALSIFICATION TEST**: bind content declaring a lodging need with `wantAtBasisPoints` omitted.
+  *If it binds and then throws on the first stepped tick, the refusal is owed; if some later
+  change makes absence meaningful, this closes.* -> **a one-line follow-up in G-027c or θ-b.**
+
+- ~~**INTERRUPTED ENGAGEMENTS DROP BELOW THE WANT LINE AND ARE NOT RESUMED.**~~ **RE-FRAMED
+  2026-08-13 BY THE HUMAN, WHO REJECTED THE PREMISE RATHER THAN ANSWERING THE QUESTION.** Asked
+  whether the pause reads as sated or as giving up, the reply was ***"Why would the meal be
+  interrupted?"*** — and the answer is that **there is no spontaneous interruption. Every path is a
+  PLAYER ACTION**: demolish the amenity mid-engagement, demolish the room beneath it (the provider
+  becomes unsupported and stops being valid), or demolish the room hosting an item. All three go
+  through G-008's command with G-031a's button on it.
+  **So the guest is not failing to resume an interrupted meal — it is PARTLY FULL.** It ate half a
+  meal, its stock sits above the want line, and it does something else until it is hungry again.
+  **That is the hysteresis working**, and the watcher always has a cause in mind because they have
+  just knocked the restaurant down. **The original title read as a defect in the pursuit logic and
+  was the wrong question**: it was framed around a mechanism that smuggled in a premise the model
+  does not contain. **Struck rather than deleted (ADR-0008) — the re-framing is the useful part.**
+  **WHAT SURVIVES AS A WATCH QUESTION, narrower and worth asking**: does a guest walking away from
+  a half-eaten meal *the player just demolished* read as sated, or as sulking? -> **the first goal
+  that watches a demolition.**
+
+- **INTERRUPTED ENGAGEMENTS DROP BELOW THE WANT LINE AND ARE NOT RESUMED.** A guest whose café is
+  demolished mid-meal **keeps its progress** (correct) but is then **below its want line and served
+  by nothing**, so `isNeedWanted` is false and it stops pursuing food until the stock decays back —
+  **exactly as many ticks as it had eaten.** Pinned as *behaviour* in `needs.reservations.test.ts`
+  rather than reported as a defect, correctly: it follows directly from expressing hysteresis
+  without a stored flag, which is the design ADR-0017 implies.
+  **It is a WATCH question, not a finding**: this is precisely the shape §6.1 calls **dithering**
+  when a human sees it — a guest that stops wanting the thing it was halfway through.
+  **FALSIFICATION TEST**: in a WATCH recording, demolish an amenity mid-engagement and count the
+  ticks before the guest pursues that need again. *If a watcher reads the pause as the guest
+  giving up rather than as being sated, hysteresis needs a served-recently flag and that is a
+  model change worth its own goal; if it reads as a guest who has just eaten, this closes.*
+  -> **θ-b's WATCH, or the first goal that watches a demolition.**

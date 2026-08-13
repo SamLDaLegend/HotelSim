@@ -28,6 +28,7 @@
         height: 100%;
       }
       #hud,
+      #tools,
       #transport {
         display: flex;
         flex-wrap: wrap;
@@ -89,7 +90,12 @@
   </head>
   <body>
     <div id="app">
-      <div id="hud"></div>
+      <div>
+        <div id="hud"></div>
+        <!-- The build tools sit under the HUD and above the stage: the player reads the
+             cash, picks a room, then clicks the building. -->
+        <div id="tools"></div>
+      </div>
       <div id="stage"></div>
       <div>
         <div id="guests"></div>

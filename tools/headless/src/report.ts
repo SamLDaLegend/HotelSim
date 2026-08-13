@@ -756,8 +756,10 @@ export function schedule(
   };
   for (let i = 0; i < rooms; i += 1) seedRoom(entityKind, false);
   // AND SOMEWHERE TO EAT (G-012). Without an amenity every engagement need a guest forms
-  // fails on patience, so a run would report a full vector and satisfy none of it — a
-  // hotel that could only disappoint, which is the shape §6.1 puts first. One of each by
+  // decays to empty with nothing able to refill it, so a run would report a full vector and
+  // satisfy none of it — a hotel that could only disappoint, which is the shape §6.1 puts
+  // first. (It read "fails on patience" until θ-a sweep 3; under a stock a need cannot fail,
+  // it can only sit below its want line at the tick its guest leaves.) One of each by
   // default; `--amenities 0` is how the disappointing hotel is deliberately measured.
   for (const amenity of amenityRoomTypesOf(content)) {
     for (let i = 0; i < amenities; i += 1) seedRoom(amenity.id, true);
@@ -1475,11 +1477,25 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   //
   // Two conditions make abandonment IMPOSSIBLE, and they are independent of each other:
   //
-  //   the margin saturates       a challenger must EXCEED the incumbent by the margin, and a
-  //                              pending need's pressure cannot reach 10,000
-  //                              (`MAX_PENDING_PRESSURE_BASIS_POINTS` ties that to
-  //                              `isNeedPending`'s own definition). So at a margin of 10,000
-  //                              no comparison can ever succeed.
+  //   the margin saturates       a challenger must EXCEED the incumbent by the margin, and no
+  //                              need's pressure can reach 10,000
+  //                              (`MAX_PENDING_PRESSURE_BASIS_POINTS`). So at a margin of
+  //                              10,000 no comparison can ever succeed.
+  //
+  //                              ITS WARRANT CHANGED AT G-027b AND THE LAW DID NOT (R1). That
+  //                              ceiling used to be a CONSEQUENCE of `isNeedPending`, which was
+  //                              defined as `patienceRemaining > 0`, so an out-of-patience need
+  //                              dropped out of scoring and the saturating branch was
+  //                              unreachable for anything a guest would score. Under a stock
+  //                              there is no patience and nothing is terminal — an EMPTY need
+  //                              is scored like any other — so the ceiling is now a CLAMP
+  //                              imposed inside `pressureBasisPoints`, driven at that exact
+  //                              state by `utility.stock.pressure.test.ts`. Had it been left to
+  //                              fall out of the arithmetic, pressure would saturate at one
+  //                              whole, a saturating margin would become REACHABLE, and THIS
+  //                              LAW WOULD FIRE ON A LEGITIMATE RUN — a violation report
+  //                              against a frozen content document. Same number, different
+  //                              warrant, and the warrant is the part that had to be rewritten.
   //   fewer than two engagement  a guest abandons one need FOR ANOTHER. With at most one
   //   need types                 engagement need there is no other to move to, and the
   //                              lodging need is never a candidate (`reserve` skips it).

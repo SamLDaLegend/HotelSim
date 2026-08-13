@@ -38,11 +38,20 @@ const roomType = (id: string): RoomTypeData => ({
   provides: ['rest'],
 });
 const content = bindContent({
-  roomTypes: ['alpha', 'beta', 'gamma', 'delta'].map(roomType),
-  needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 10 }],
+  // `lounge` provides the engagement need and is NEVER spawned below.
+  roomTypes: [...['alpha', 'beta', 'gamma', 'delta'].map(roomType), { id: 'lounge', name: 'lounge', capacity: 8, nightlyRatePence: 0, provides: ['snack'] }],
+  // G-027b: `capacityTicks` is time-to-empty — the deleted `patienceTicks`, carried. `snack`
+  // and the lounge that provides it are structural: a guest arrives AT its want line, and a
+  // want line needs away-ticks, which only an engagement need generates.
+  needTypes: [
+    { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 10, refillPerTick: 1 },
+    { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: 10, refillPerTick: 3 },
+  ],
   // G-027a: content declaring a lodging need must say how long a stay lasts, or
   // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 10, wantAtBasisPoints: 1_000 },
+  ],
 });
 
 // G-007: a spawn carries a cell. G-008 made the column MEANINGFUL rather than

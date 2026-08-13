@@ -23,15 +23,23 @@
 //
 // That is correct for THIS build and it is not the finished model. ADR-0017 4(b) makes
 // giving up a DISSATISFACTION THRESHOLD read from content: a guest whose wants go unserved
-// long enough leaves. **G-027a does not implement 4(b)** — the give-up branch still reads
-// LODGING patience and nothing else, and a guest holding a room can never exhaust that,
-// because a served need's patience regenerates on every tick it is served (`advanceNeed`'s
-// cap branch). So a guest with a bed and no dinner is, to this build, a guest whose reason
-// for booking is being met perfectly.
+// long enough leaves. **Neither G-027a nor G-027b implements 4(b)** — the give-up branch is
+// asked only of a guest with NO ROOM (`guests.ts` step 6 tests `roomEntityId === NO_ENTITY`),
+// because a housed guest's lodging need is served every tick it is at home and so it has no
+// unserved run at all. So a guest with a bed and no dinner is, to this build, a guest whose
+// reason for booking is being met perfectly.
 //
-// The arm is here so that fact is a MEASUREMENT with a name rather than a silence: when
-// G-027b lands 4(b), this arm's zero becomes non-zero, and the test that changes will be
-// this one, deliberately, rather than a golden somebody re-pins.
+// THAT SENTENCE READ "the give-up branch still reads LODGING patience … because a served need's
+// patience REGENERATES" UNTIL θ-a SWEEP 2. The verdict is unchanged and the mechanism behind it
+// is not: there is no patience, and what makes the branch unreachable is a room predicate rather
+// than a countdown that keeps being topped up.
+//
+// The arm is here so that fact is a MEASUREMENT with a name rather than a silence: on the day
+// 4(b) lands — it needs a SAVED unserved-run counter that survives being interrupted by sleep,
+// so it is a schema bump and not a predicate change — this arm's zero becomes non-zero, and the
+// test that changes will be this one, deliberately, rather than a golden somebody re-pins.
+// (This line named G-027b as that day until θ-a sweep 2. G-027b came and went; `guests.ts` step
+// 6 records the same debt, still owed.)
 // ============================================================================
 //
 // Content ids here are camelCase (ADR-0003).
@@ -47,11 +55,26 @@ import { createWorld } from './world.js';
 import type { World } from './world.js';
 
 const RATE = 8_500;
-const LODGING_SATISFY = 60;
-const LODGING_PATIENCE = 40;
-const ENGAGEMENT_SATISFY = 30;
-const ENGAGEMENT_PATIENCE = 50;
-/** Clears the floor `bindContent` refuses below: max(60, 30 + 30) = 60. */
+// G-027b — THE NEEDS ARE STOCKS. `capacityTicks` is time-to-empty, which is what the deleted
+// `patienceTicks` named, so both capacities are carried across unchanged (40 and 50).
+// `refillPerTick` is capacity over the deleted `satisfyTicks` and neither divides, so each is
+// the nearest whole tick that also leaves the table serviceable: at refill 4 the two engagement
+// needs demand 4,000 basis points of a guest's time and rest a further 4,000, which is the
+// 8,000 total `assertNeedDemandIsServiceable` admits. At refill 2 the same table demands 13,332
+// and is refused.
+const LODGING_CAPACITY = 40;
+const LODGING_REFILL = 1;
+const ENGAGEMENT_CAPACITY = 50;
+const ENGAGEMENT_REFILL = 4;
+/** How long a guest waits for a room before giving up. The lodging need's old `patienceTicks`. */
+const TOLERANCE = 40;
+/** Where a guest starts wanting: 4 ticks of rest, 5 of each engagement need. */
+const WANT_AT = 1_000;
+/**
+ * Long enough for the lodging need to become wanted TWICE, which is what `bindContent` refuses
+ * below: 2 x 1,000 x 40 = 80,000 against the 48 away-ticks two engagement needs generate in 120
+ * at refill 4, which is 480,000.
+ */
 const STAY = 120;
 
 const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
@@ -65,20 +88,25 @@ const lodgingNeed: NeedTypeData = {
   id: 'rest',
   name: 'rest',
   role: 'lodging',
-  satisfyTicks: LODGING_SATISFY,
-  patienceTicks: LODGING_PATIENCE,
+  capacityTicks: LODGING_CAPACITY,
+  refillPerTick: LODGING_REFILL,
 };
 const engagementNeed = (id: string): NeedTypeData => ({
   id,
   name: id,
   role: 'engagement',
-  satisfyTicks: ENGAGEMENT_SATISFY,
-  patienceTicks: ENGAGEMENT_PATIENCE,
+  capacityTicks: ENGAGEMENT_CAPACITY,
+  refillPerTick: ENGAGEMENT_REFILL,
 });
 const houseRules: GuestRulesData = {
   id: 'houseRules',
   name: 'House Rules',
   stayDurationTicks: STAY,
+  // The second way out (G-027b): a guest that never gets a room gives up after this long. The
+  // number is where the lodging need's own `patienceTicks` went, so arm 2 fails at the tick it
+  // failed at before.
+  toleranceTicks: TOLERANCE,
+  wantAtBasisPoints: WANT_AT,
 };
 
 /**
@@ -152,7 +180,7 @@ describe('the four arms, computed rather than pinned', () => {
 
   it('3. CONTENDED: BOTH terminators fire in ONE run', () => {
     // The criterion a build with one terminator cannot meet. One bedroom against eight
-    // arrivals: whoever gets it stays the course, whoever does not runs out of patience.
+    // arrivals: whoever gets it stays the course, whoever does not runs out of TOLERANCE.
     expect(contended.checkedOut).toBeGreaterThan(0);
     expect(contended.gaveUp).toBeGreaterThan(0);
   });

@@ -24,7 +24,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 12;
+export const SAVE_SCHEMA_VERSION = 13;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -1061,6 +1061,101 @@ function migrateV11ToV12(world: unknown): unknown {
 }
 
 /**
+ * v12 -> v13: a world whose needs were TASKS becomes one whose needs are STOCKS (G-027b,
+ * ADR-0017 §1).
+ *
+ * ADR-0006 fires for the twelfth time, and this is the FIRST STEP IN THE CHAIN THAT DROPS A
+ * FIELD. Every earlier step added, defaulted or renamed. That difference is the model change
+ * showing through the bytes, and it is stated rather than smoothed over:
+ *
+ *   progressRemaining -> deficit   CARRIED UNCHANGED. Both are "ticks this need still owes,
+ *                                  0 = satisfied": the same KIND of quantity, and the sign of
+ *                                  the meaning is preserved exactly. What cannot be preserved
+ *                                  is the FRACTION — the cap it was a fraction of was
+ *                                  `satisfyTicks`, and a v13 deficit is a fraction of
+ *                                  `capacityTicks`. Both are CONTENT, which a migration may
+ *                                  not read (ADR-0008), so no rescaling is available at any
+ *                                  price. A carried value that lands above the new capacity is
+ *                                  a legal state and reads as EMPTY everywhere it matters
+ *                                  (`isNeedEmpty` compares `>=`, `pressureBasisPoints` clamps),
+ *                                  which is the honest reading of a need that owed more than
+ *                                  the new model's whole stock.
+ *   patienceRemaining -> DROPPED   The countdown it drove does not exist. It was a fuse on a
+ *                                  task with a deadline, and ADR-0017 removes deadlines from
+ *                                  the model; there is nothing in a v13 world for it to mean.
+ *                                  Dropping information is the one thing migrations here have
+ *                                  never done, so: it is dropped rather than parked in an
+ *                                  unread field, because a field nothing reads is the husk
+ *                                  ADR-0010 refused to create, and a reader who finds it would
+ *                                  reasonably believe the simulation still consults it.
+ *
+ * `metBy` IS NOT TOUCHED, and that is a statement rather than an omission. Its meaning widened
+ * from "what FINISHED this need" to "what LAST SERVED it", and a v12 record satisfies the wider
+ * reading exactly: the provider that finished it did last serve it. The narrower half of v13's
+ * reading — `null` means never served — is an OVER-claim for a migrated world, because v12
+ * recorded nothing for a need that was part-served and abandoned. That is a true statement
+ * about those bytes rather than an invention, and the invariant `assertNeedVector` checks
+ * (`deficit === 0` implies attributed) holds for them: a v12 met need carried both.
+ *
+ * NOT TESTED BY THE FIXTURE ALONE, DELIBERATELY. The permanent v1 fixture carries no guests, so
+ * this step would run over an empty list and prove nothing — ADR-0007's exact shape, and the
+ * reason `migrateV6ToV7`, `migrateV7ToV8` and `migrateV8ToV9` all carry this paragraph.
+ * `needs.stock.save.test.ts` drives a synthetic v12 world with a met need, a part-served need
+ * and a failed one, and watches all three land.
+ */
+function migrateV12ToV13(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its needs cannot become stocks');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const converted: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    const needs = guest['needs'];
+    if (!Array.isArray(needs)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].needs is missing or not an array`);
+    }
+    return {
+      ...guest,
+      needs: needs.map((need, at) => {
+        if (!isRecord(need)) {
+          throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${at}] is not an object`);
+        }
+        // The one way this step could destroy data — overwriting a deficit somebody already
+        // made — is the one thing it refuses to do, exactly as all eleven earlier steps refuse.
+        // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an
+        // own key (G-003).
+        if (Object.keys(need).includes('deficit')) {
+          throw new Error(
+            `world.guests.list[${index}].needs[${at}] already has a "deficit" field, so it is not a v12 need; migrating it would overwrite a real stock level`,
+          );
+        }
+        const owed = need['progressRemaining'];
+        if (typeof owed !== 'number' || !Number.isSafeInteger(owed) || owed < 0) {
+          throw new Error(
+            `Save is corrupt: world.guests.list[${index}].needs[${at}].progressRemaining is missing or not a ` +
+              'non-negative whole number, so this need has no level to carry onto a stock',
+          );
+        }
+        // Destructured out rather than deleted: the field leaves, and the two that remain are
+        // named here so a reader can see exactly what a v13 need carries.
+        const { progressRemaining: _owed, patienceRemaining: _fuse, ...rest } = need;
+        return { ...rest, deficit: owed };
+      }),
+    };
+  });
+  return { ...world, guests: { ...guests, list: converted } };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1080,6 +1175,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 9, to: 10, migrate: migrateV9ToV10 }),
   Object.freeze({ from: 10, to: 11, migrate: migrateV10ToV11 }),
   Object.freeze({ from: 11, to: 12, migrate: migrateV11ToV12 }),
+  Object.freeze({ from: 12, to: 13, migrate: migrateV12ToV13 }),
 ]);
 
 /**
@@ -1333,10 +1429,13 @@ function assertGuest(value: unknown, index: number): asserts value is Guest {
     if (typeof need['needId'] !== 'string') {
       throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${needIndex}].needId is not a string`);
     }
-    for (const key of ['patienceRemaining', 'progressRemaining'] as const) {
-      if (typeof need[key] !== 'number') {
-        throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${needIndex}].${key} is not a number`);
-      }
+    // ONE FIELD WHERE THERE WERE TWO (G-027b). `patienceRemaining` and `progressRemaining` are
+    // the countdowns the stock model deletes; `deficit` is how far below full the need is. A v12
+    // save still carries the old pair and reaches this line only through `migrateV12ToV13`,
+    // which is what turns one into the other — so by the time shape is checked, a save that
+    // names the old fields and not this one is a save no migration produced.
+    if (typeof need['deficit'] !== 'number') {
+      throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${needIndex}].deficit is not a number`);
     }
   });
   // PRESENT, and either null or an engagement (G-012) — the `Entity.at` contract exactly.

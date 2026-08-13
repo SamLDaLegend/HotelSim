@@ -72,8 +72,12 @@
 //                                    inside a derivation, decomposed in HOTELSIM.md §2.1.2.
 //                                    No designer will ever open them.
 //   packages/sim/src/save.ts:25,28   schema versions. Clean: protocol, not content.
-//   packages/content/data/*.json     prices, upkeep, refunds, patience, satisfy ticks, fit,
-//                                    abandon margin — ALREADY content.
+//   packages/content/data/*.json     prices, upkeep, refunds, capacities, refill rates, want
+//                                    lines, stay durations, tolerances, fit, abandon margin —
+//                                    ALREADY content. (It listed "patience, satisfy ticks"
+//                                    until θ-a sweep 3; ADR-0017 §1 deleted both from the
+//                                    shipped tables, so the inventory named two fields no
+//                                    designer can open those files and find.)
 // -----------------------------------------------------------------------------------
 //
 // THE SCANNER IS WRITTEN OUT HERE rather than imported from `tools/gates/lib/scan.mjs`,

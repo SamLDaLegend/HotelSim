@@ -72,8 +72,24 @@ describe('the arm parses and reports the shape `needs-history.mjs` consumes', ()
     // silently change what the three that remain measure — the 10.5% `sim-critic` measured.
     expect(reading.arms).toHaveLength(3);
     expect(reading.workload).toMatchObject({ rooms: 60, arrivalEveryTicks: 32, seed: 42, ticks: 4320, amenities: 1 });
-    // The control arm really is one need, at whatever revision this runs against.
-    expect(reading.oneNeedTypes).toBe(1);
+    // ========================================================================
+    // THE CONTROL ARM IS THE SMALLEST TABLE THAT BINDS, AND IT IS NO LONGER ONE NEED AT HEAD
+    // (G-027b). This asserted `oneNeedTypes === 1` "at whatever revision this runs against",
+    // and that sentence has stopped being true of both revisions at once: at `aa30218` a
+    // lodging-only table binds and the arm carries one need; at HEAD the lodging need decays
+    // only in AWAY time, so `bindContent` refuses a table that generates none and the smallest
+    // bindable one carries THREE.
+    //
+    // SO THE CLAIM THAT SURVIVES IS THE ONE THE ARM NEEDS: the control is STRICTLY SHORTER than
+    // the full vector, which is what makes the ratio a measurement of vector length rather than
+    // one workload measured twice. The count itself is read off the arm rather than written
+    // down, because it is now revision-dependent — and a reading taken across the two is
+    // measuring the model change rather than the code change. See `lodgingOnly` in
+    // `needs3-arm.ts`, and `PARKING.md`'s note that this instrument's readings are already
+    // non-poolable across the stay-length change.
+    // ========================================================================
+    expect(reading.oneNeedTypes as number).toBeGreaterThanOrEqual(1);
+    expect(reading.oneNeedTypes as number).toBeLessThan(reading.needTypes as number);
     expect(reading.needTypes as number).toBeGreaterThan(1);
     // Two arms with different content must produce different simulated histories, or the ratio
     // is one workload measured twice.

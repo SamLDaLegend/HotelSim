@@ -50,23 +50,28 @@ const roomType = (id: string, overrides: Partial<RoomTypeData> = {}): RoomTypeDa
   provides: ['rest'],
   ...overrides,
 });
-const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: SATISFY, patienceTicks: PATIENCE };
+// G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so `PATIENCE`
+// is carried. `snack` and the lounge that provides it are structural — a guest arrives AT its
+// want line, and a want line needs away-ticks to be crossed in, which only an engagement need
+// generates. No lounge is ever spawned below, so nothing engages.
+const needType: NeedTypeData = { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: PATIENCE, refillPerTick: 1 };
+const snackType: NeedTypeData = { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: PATIENCE, refillPerTick: 3 };
+const loungeType = { id: 'lounge', name: 'lounge', capacity: 8, nightlyRatePence: 0, provides: ['snack'] } as const;
 
 /**
  * G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
  * refuses it — a guest holding a room has no other way to leave. `SATISFY`, so a guest that
  * walks into an empty hotel still checks out on the tick this file has always expected.
  */
-const stayRules = [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }];
+const stayRules = [
+  { id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY, toleranceTicks: PATIENCE, wantAtBasisPoints: 500 },
+];
 
 /** One priced room type, one need. The M0 hotel with the G-005 field on it. */
 const content = bindContent({
-  roomTypes: [roomType('roomA')],
-  needTypes: [needType],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave. SATISFY, so
-  // a guest that walks into an empty hotel still checks out on the tick this file expects.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
+  roomTypes: [roomType('roomA'), loungeType],
+  needTypes: [needType, snackType],
+  guestRules: stayRules,
 });
 
 // G-007: a spawn carries a cell. G-008 made the column MEANINGFUL rather than incidental:
@@ -142,11 +147,11 @@ describe('one settlement transaction per simulated night', () => {
     // Pre-G-005 content (the permanent v1 fixture included) omits the key and charges
     // nothing, which is what keeps that fixture a world that still ticks (ADR-0006).
     const mixed = bindContent({
-      roomTypes: [roomType('roomA'), roomType('roomFree', { nightlyUpkeepPence: undefined })],
-      needTypes: [needType],
+      roomTypes: [roomType('roomA'), roomType('roomFree', { nightlyUpkeepPence: undefined }), loungeType],
+      needTypes: [needType, snackType],
       // G-027a: content declaring a lodging need must say how long a stay lasts, or
       // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
+      guestRules: stayRules,
     });
     const world = run(hotel(1, mixed, 'roomA'), mixed, TICKS_PER_DAY, [at(5, spawn('roomFree', 50))]);
     expect(world.ledger).toHaveLength(1);
@@ -278,13 +283,13 @@ describe('the upkeep rate is content, validated at the boundary', () => {
     // disagree about which simulation they are running.
     const bare = roomType('roomA', {});
     const { nightlyUpkeepPence: _dropped, ...withoutKey } = bare;
-    const absent = bindContent({ roomTypes: [{ ...withoutKey }], needTypes: [needType], guestRules: stayRules });
+    const absent = bindContent({ roomTypes: [{ ...withoutKey }, loungeType], needTypes: [needType, snackType], guestRules: stayRules });
     const explicit = bindContent({
-      roomTypes: [roomType('roomA', { nightlyUpkeepPence: undefined })],
-      needTypes: [needType],
+      roomTypes: [roomType('roomA', { nightlyUpkeepPence: undefined }), loungeType],
+      needTypes: [needType, snackType],
       guestRules: stayRules,
     });
-    const priced = bindContent({ roomTypes: [roomType('roomA')], needTypes: [needType], guestRules: stayRules });
+    const priced = bindContent({ roomTypes: [roomType('roomA'), loungeType], needTypes: [needType, snackType], guestRules: stayRules });
     expect(explicit.fingerprint).toBe(absent.fingerprint);
     expect(priced.fingerprint).not.toBe(absent.fingerprint);
   });

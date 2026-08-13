@@ -89,7 +89,7 @@ import {
   findNeedState,
   getEntity,
   guestsInOrder,
-  isNeedPending,
+  isNeedFull,
   isProviding,
   isRoomKind,
   needOutcomeOf,
@@ -163,7 +163,11 @@ function census(): ReleaseCensus {
       if (guest === undefined) continue;
       if (now.get(guestId)?.entityId === was.entityId) continue;
       const need = findNeedState(guest.needs, was.needId);
-      if (need !== undefined && !isNeedPending(need)) {
+      // "FINISHED" IS `isNeedFull` SINCE G-027b. `isNeedPending` was `progressRemaining > 0 &&
+      // patienceRemaining > 0`, and both fields are deleted; the release step 5 lets go of a
+      // provider on the tick the need it serves reaches FULL, so that is the state that means
+      // "this release was the need completing" rather than something going wrong.
+      if (need !== undefined && isNeedFull(need)) {
         finished += 1;
         continue;
       }

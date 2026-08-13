@@ -152,6 +152,54 @@ const REGISTER: ReadonlyMap<string, { readonly proof: string; readonly title: st
       },
     ],
     [
+      // G-027b. It walks `packages/sim/src` and `tools/headless/src` for the test files the
+      // goal's exit criterion selects, so the derivation below picks it up as a scanner and it
+      // owes a proof like any other. Its proof is INSIDE ITSELF, which the register permits and
+      // which is right here: the subject is a file set, and the proof builds a scratch tree of
+      // three, hands the predicate a list of two, and requires the report to NAME the third.
+      'tools/headless/src/stock.census.test.ts',
+      {
+        proof: 'tools/headless/src/stock.census.test.ts',
+        title: 'PROOF-OF-BITE — over a scratch tree, and it must NAME what it missed',
+        note:
+          "G-027a's `vitest run stock` passed against ZERO matching files. This asserts the set " +
+          'on disk equals the list the goal block names; the proof fails for the right reason ' +
+          '(a stale list is reported by NAME), and a decoy whose CONTENTS carry the word is ' +
+          'required not to match — which is the exact way the criterion selected nothing.',
+      },
+    ],
+    [
+      // G-027b θ-a, sweep 2. It walks `packages/` and `tools/` extracting every `new Error(…)`
+      // argument and every `describe`/`it`/`test` title, and fails on ADR-0017's deleted
+      // vocabulary in either — the two of R1's four "first-contact" surfaces that are executable
+      // strings rather than prose. Its proof is INSIDE ITSELF, which the register permits: the
+      // subject is a pair of text predicates, and they are driven over synthetic sources that
+      // are never written to disk.
+      'tools/headless/src/deleted-vocabulary.test.ts',
+      {
+        proof: 'tools/headless/src/deleted-vocabulary.test.ts',
+        title: 'AND IT BITES — the predicates, against synthetic input that is not on disk',
+        note:
+          'R1 reached eleven instances across three sweeps and the whole class was then ' +
+          'ENUMERATED at sweep 3. THE CENSUS IS PUBLISHED IN ONE PLACE — that file\'s own ' +
+          'header, with the command that reproduces it — and deliberately not restated here: ' +
+          'this note used to carry a second, different repair count for the same population, ' +
+          'which is the defect the register exists to make impossible one level up. BITTEN IN ' +
+          'SIX SHAPES, counted: (1) an offending message; (2) an offending title through an ' +
+          'escaped quote; (3) a message read PAST its first interpolation, which is the ' +
+          'truncation a naive reader makes; (4) a title behind a BLOCK-comment opener inside a ' +
+          'string literal and (5) behind a LINE-comment opener, the pair that blinded this ' +
+          'scanner on the real tree until sweep 3; (6) a title in a CHAINED call, `it.each(t)(…)` ' +
+          'and `it.skipIf(c)(…)`, both of which are populated surfaces on disk — counted there ' +
+          'as `chainedSites` rather than typed as a number here. HELD SILENT in four: ' +
+          'a clean message, ' +
+          'a clean title, the `visit(`/`it(` boundary, and a one-hop-bounded chain that is not a ' +
+          'test call — so a predicate hard-coded to `true` fails as loudly as one hard-coded to ' +
+          '`false`. It also asserts that its own header, which names every deleted field, is not ' +
+          'an offender: comments are blanked.',
+      },
+    ],
+    [
       'tools/gates/check-purity.mjs',
       {
         proof: 'tools/headless/src/purity-gate.test.ts',

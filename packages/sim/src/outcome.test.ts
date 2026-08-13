@@ -59,19 +59,39 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   nightlyRatePence: RATE,
   provides,
 });
-const needType = (id: string): NeedTypeData => ({
+/**
+ * G-027b: `capacityTicks` is time-to-empty, which is what the deleted `patienceTicks` named, so
+ * `PATIENCE` is carried onto it. `refillPerTick` is chosen: 3 on the engagement need keeps the
+ * table's demand at 6,250 basis points of a guest's time rather than the whole of it.
+ */
+const needType = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
-  satisfyTicks: SATISFY,
-  patienceTicks: PATIENCE,
+  role: lodging ? 'lodging' : 'engagement',
+  capacityTicks: lodging ? 10 : PATIENCE,
+  refillPerTick: lodging ? 1 : 3,
 });
 
 const content = bindContent({
-  roomTypes: [roomType('roomA', ['rest'])],
-  needTypes: [needType('rest')],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
+  // `lounge` makes the engagement need reachable and is NEVER spawned below, so no guest can
+  // engage and nothing here consumes a room's capacity for anything but lodging.
+  roomTypes: [roomType('roomA', ['rest']), { id: 'lounge', name: 'lounge', capacity: 8, nightlyRatePence: 0, provides: ['snack'] }],
+  // TWO NEEDS SINCE G-027b, AND THE SECOND IS STRUCTURAL: a guest arrives AT its want line, a
+  // line of 0 leaves every need full with nothing recorded as having served it, and a declared
+  // line needs away-ticks to be crossed in — which only an engagement need generates.
+  needTypes: [needType('rest', true), needType('snack', false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it. G-027b adds the wait — `PATIENCE`, where the lodging need's own countdown used
+  // to state it — and the want line: 2 x 1,000 x 10 = 20,000 fits inside the two away-ticks a
+  // 10-tick stay generates at refill 3, which is 20,000.
+  //
+  // THE LODGING CAPACITY IS 10 AND NOT `PATIENCE`, AND THAT IS THE ONE DEVIATION. Carrying 25
+  // onto a 10-tick stay puts the want line further out than the stay generates away-time for,
+  // and `bindContent` refuses such content outright. `PATIENCE` still states the WAIT, which is
+  // what it always measured here; what it can no longer also be is the lodging capacity.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY, toleranceTicks: PATIENCE, wantAtBasisPoints: 1_000 },
+  ],
 });
 
 /** Rooms stand two columns apart so each has a door of its own (G-009). */
@@ -285,22 +305,26 @@ describe('every reason a tick can write is reached by a real run', () => {
     expect(countRoomRevenueTransactions(world.ledger)).toBe(1);
   });
 
-  it('gaveUp: patience for a room ran out before one was free', () => {
+  it('gaveUp: the tolerance for waiting ran out before a room was free', () => {
     // ONE ROOM, THIRTY GUESTS, ALL AT THE DOOR ON THE SAME TICK. v7 called this row
     // `unsatisfied`, and the name is that field's own doc comment.
     //
     // THE ARM GREW FROM SIX ARRIVALS TO THIRTY AT G-027a, AND THE REASON IS WORTH READING
     // RATHER THAN PATCHING PAST. The stay clock runs from ARRIVAL, so a guest that queued
     // spends part of its stay in the queue and checks out sooner after getting the room. On
-    // this file's content — stay 10, patience 25 — the one room therefore turns over roughly
+    // this file's content — stay 10, tolerance 25 — the one room therefore turns over roughly
     // once a tick once the queue has formed, which drains six guests long inside their
-    // patience and made the old arm report zero give-ups. Thirty guests is a queue the drain
+    // tolerance and made the old arm report zero give-ups. Thirty guests is a queue the drain
     // rate cannot clear in 25 ticks, which is what the row is about.
     //
     // IT IS NOT A DEGENERATE CASE ON THE SHIPPED TABLE, and saying so is the point of this
-    // note: there, patience is 180 against a stay of 1,440, so the most a guest can lose to
-    // the queue is an eighth of its stay. This content has stay === satisfyTicks, which is
-    // the floor `bindContent` allows and the shortest stay expressible.
+    // note: there, `toleranceTicks` is 180 against a stay of 1,440, so the most a guest can
+    // lose to the queue is an eighth of its stay. Here the stay is 10 against a tolerance of
+    // 25, which is the tightest ratio this file can express — the two ARE the same length in
+    // ticks that the deleted `satisfyTicks` once made them, but nothing derives one from the
+    // other any more and there is no stay floor left for it to sit on: the refusal that
+    // enforced one (`assertStayFitsTheNeedTable`) is gone, and what `bindContent` now checks
+    // is the need table's share of a guest's time (`assertNeedDemandIsServiceable`).
     const world = run(
       hotel(1),
       content,

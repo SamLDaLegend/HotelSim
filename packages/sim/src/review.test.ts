@@ -19,7 +19,7 @@
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
-import { bindContent, ONE_WHOLE_BASIS_POINTS } from './content.js';
+import { bindContent, findNeedType, ONE_WHOLE_BASIS_POINTS } from './content.js';
 import type { BoundContent, NeedTypeData, RoomTypeData } from './content.js';
 import { formNeedVector } from './needs.js';
 import type { NeedState } from './needs.js';
@@ -43,12 +43,17 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   requires: [],
 });
 
-const need = (id: string, lodging: boolean, satisfyTicks: number, patienceTicks: number): NeedTypeData => ({
+/**
+ * G-027b: `capacityTicks` is time-to-empty, which is what the deleted `patienceTicks` named, so
+ * it is carried; `refillPerTick` replaces `satisfyTicks` and nothing in this file reads it —
+ * every case here is built from primitives rather than ticked forward.
+ */
+const need = (id: string, lodging: boolean, refillPerTick: number, capacityTicks: number): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks,
-  patienceTicks,
+  capacityTicks,
+  refillPerTick,
 });
 
 /**
@@ -58,30 +63,39 @@ const need = (id: string, lodging: boolean, satisfyTicks: number, patienceTicks:
  * Need ids are `n0`.., ascending, and `n0` is the lodging need, so a caller can index the
  * vector positionally and still be reading the table's own order.
  */
-function build(needs: number, min: number, max: number, satisfyTicks = 100, patienceTicks = 200): BoundContent {
+// THE REFILL SCALES WITH THE NEED COUNT, and it has to. `assertNeedDemandIsServiceable` refuses
+// a table whose needs together demand a guest's whole time, and each engagement need costs
+// `1/(1 + refillPerTick)` of it — so a fixed refill binds at some need count and this file's
+// arms range over several. `2 x needs` keeps every arm inside the bound with room to spare.
+function build(needs: number, min: number, max: number, refillPerTick = 2 * needs, capacityTicks = 200): BoundContent {
   const needTypes: NeedTypeData[] = [];
   const rooms: RoomTypeData[] = [];
   for (let i = 0; i < needs; i += 1) {
     const id = `n${i}`;
-    needTypes.push(need(id, i === 0, satisfyTicks, patienceTicks));
+    needTypes.push(need(id, i === 0, refillPerTick, capacityTicks));
     rooms.push(roomType(`r${i}`, [id]));
   }
   return bindContent({
     roomTypes: rooms,
     needTypes,
-    // `stayDurationTicks` is required of content that declares a lodging need (G-027a). It is
-    // `satisfyTicks` here — the floor `bindContent` computes — because nothing in this file
-    // ticks a world: every case is built from primitives, so the value is only ever the thing
-    // that lets the content bind.
+    // `stayDurationTicks` is required of content that declares a lodging need (G-027a). Its
+    // value is arbitrary here — nothing in this file ticks a world; every case is built from
+    // primitives, so the number is only ever the thing that lets the content bind. (It read
+    // "it is `satisfyTicks` here — the floor `bindContent` computes" until θ-a sweep 2: that
+    // field is deleted and there is no stay floor left for it to be.)
     guestRules: [
       {
         id: 'rules',
         name: 'rules',
         reviewScoreMin: min,
         reviewScoreMax: max,
-        // The floor `bindContent` computes: the lodging need and the engagement needs run in
-        // parallel, so it is max(satisfyTicks, (needs - 1) x satisfyTicks).
-        stayDurationTicks: Math.max(satisfyTicks, (needs - 1) * satisfyTicks),
+        stayDurationTicks: 1_000,
+        // G-027b: the second way out of a stay. NO WANT LINE IS DECLARED, deliberately — a
+        // want line makes `assertLodgingBecomesWanted` demand away-ticks that only engagement
+        // needs generate, and half the arms below are single-need tables. Nothing here needs
+        // one: `vector` sets each need's deficit directly, and "satisfied" at a line of 0 is
+        // "full", which is exactly the two states these cases are built out of.
+        toleranceTicks: capacityTicks,
       },
     ],
   });
@@ -90,10 +104,19 @@ function build(needs: number, min: number, max: number, satisfyTicks = 100, pati
 /** The shipped shape: four needs, a 1..5 scale. */
 const FOUR = build(4, 1, 5);
 
-/** A vector in which the needs named in `met` are met and the rest are pending. */
+/**
+ * A vector in which the needs named in `met` are FULL and the rest are EMPTY.
+ *
+ * IT SETS BOTH ENDS EXPLICITLY SINCE G-027b, where it used to set one. `formNeedVector` builds
+ * every need at the want line, and this content declares none — so the formed state is already
+ * full and "the rest are pending" would silently be "the rest are met too". Naming both states
+ * is what keeps each case the contrast it says it is.
+ */
 function vector(content: BoundContent, met: readonly string[]): readonly NeedState[] {
   return formNeedVector(content).map((state) =>
-    met.includes(state.needId) ? { ...state, progressRemaining: 0, metBy: 'room' as const } : state,
+    met.includes(state.needId)
+      ? { ...state, deficit: 0, metBy: 'room' as const }
+      : { ...state, deficit: findNeedType(content, state.needId)?.capacityTicks ?? 1, metBy: null },
   );
 }
 
@@ -112,10 +135,10 @@ describe('the scale is read from content, and its absence is the historical case
     // here would put a review in the distribution that no guest ever left.
     const old = bindContent({
       roomTypes: [roomType('r0', ['n0'])],
-      needTypes: [need('n0', true, 100, 200)],
+      needTypes: [need('n0', true, 3, 200)],
       // A stay duration and no review scale: "content from before reviews existed", in the
       // only shape that still binds under G-027a's refusal.
-      guestRules: [{ id: 'rules', name: 'rules', stayDurationTicks: 100 }],
+      guestRules: [{ id: 'rules', name: 'rules', stayDurationTicks: 1_000, toleranceTicks: 200 }],
     });
     expect(reviewScaleOf(old)).toBeUndefined();
     expect(reviewOf(old, vector(old, ['n0']), false)).toBeUndefined();
@@ -174,9 +197,16 @@ describe('NO NEED TYPE IS INERT — the human\'s finding, as a law over the cont
   it('and the `satisfyTicks` weighting that was REJECTED would break that, for all three', () => {
     // Recorded as an executable counter-example rather than as a sentence in a comment
     // (ADR-0007: prose may describe, it may not measure). Weighting each need by its own
-    // `satisfyTicks` — the shipped 480/150/150/180 — leaves the best-without-each at
-    // 0.844, 0.844 and 0.813 of one whole, all above the 0.800 top-band floor. So a guest
+    // `satisfyTicks` — 480/150/150/180, WHICH WAS THE SHIPPED TABLE WHEN THE ALTERNATIVE WAS
+    // REJECTED AT G-019 AND IS A DELETED FIELD NOW (ADR-0017 §1) — leaves the best-without-each
+    // at 0.844, 0.844 and 0.813 of one whole, all above the 0.800 top-band floor. So a guest
     // could miss ANY engagement need and still review at the top.
+    //
+    // THE FOUR WEIGHTS ARE FROZEN HISTORY, NOT A READING OF CONTENT, and that is why they are
+    // typed in rather than loaded: the document they came from no longer exists, so this arm
+    // cannot go stale and cannot be re-derived either. It pins the SHAPE of the rejected idea —
+    // a per-need weighting whose spread lets the top band survive a missing need — which is what
+    // a future goal reaching for `refillPerTick` as a weight would be re-inventing.
     const weights = [480, 150, 150, 180];
     const total = weights.reduce((a, b) => a + b, 0);
     const topBandFloor = (ONE_WHOLE_BASIS_POINTS * 4) / 5;
@@ -340,16 +370,18 @@ describe('ONE INTEGER DIVISION, NOT TWO — and G-027a took the counter-example 
     // The link between the arithmetic above and the code: `reviewOf` agrees with `oneStep`
     // wherever both are defined, and `experienceBasisPoints` is the intermediate the score
     // never reads.
-    const three = build(2, 1, 3, 100, 300);
+    const three = build(2, 1, 3, 3, 300);
     expect(reviewOf(three, vector(three, ['n0']), false)).toBe(oneStep(ONE_WHOLE_BASIS_POINTS));
     expect(reviewOf(three, vector(three, ['n0', 'n1']), false)).toBe(3);
   });
 
   it('and `experienceBasisPoints` is the two-step intermediate, exposed and never scored from', () => {
-    expect(experienceBasisPoints(vector(FOUR, ['n0', 'n1', 'n2', 'n3']))).toBe(ONE_WHOLE_BASIS_POINTS);
-    expect(experienceBasisPoints(vector(FOUR, ['n0', 'n1']))).toBe(5_000);
-    expect(experienceBasisPoints(vector(FOUR, []))).toBe(0);
-    expect(experienceBasisPoints([])).toBe(0);
+    // It takes the CONTENT since G-027b: "how met is this need" is a band rather than a flag
+    // under a stock, so the quality of a need is read against its own want line and capacity.
+    expect(experienceBasisPoints(FOUR, vector(FOUR, ['n0', 'n1', 'n2', 'n3']))).toBe(ONE_WHOLE_BASIS_POINTS);
+    expect(experienceBasisPoints(FOUR, vector(FOUR, ['n0', 'n1']))).toBe(5_000);
+    expect(experienceBasisPoints(FOUR, vector(FOUR, []))).toBe(0);
+    expect(experienceBasisPoints(FOUR, [])).toBe(0);
   });
 });
 

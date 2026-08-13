@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, G-027a done. M2.5: 2 of 8 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -1375,3 +1375,216 @@ concurrent guests.** Restoring head's occupancy un-restores base's: at 32 the pa
 15; at 96 it is 15 against 5. The 3:1 gap between arms is the same, mirrored. A paired-ratio
 tripwire is not configuration-neutral across a content change that redefines occupancy, and the
 campaign re-take is where that has to be answered rather than rediscovered.
+
+---
+
+## ADR-0022 — In a shared working tree, arms are MATERIALISED, never stashed
+
+**Amends ADR-0019. Found by `ai-engineer` against its own work at G-027b θ-a's measurement
+checkpoint, 2026-08-12 — and the first instance was the orchestrator's, earlier the same day.**
+
+**What happened.** θ-a needed a HEAD arm for a paired measurement and used the mutation recipe's
+`git stash push -u` / `git stash pop`. **It stashed and restored track A's in-progress G-031a
+work as well** — `apps/game/*`, `README.md`, `PARKING.md` — because a stash takes the *tree*, not
+the *author*. It restored cleanly. **But the `sha256` guard covered only the three files the
+agent knew about**, so it could attest its own restore and not the other track's.
+
+**The earlier instance was mine.** I isolated G-023a for commit with the same mechanism while
+track A's agent was **dead** — which is why it was safe, and I said so at the time. The agent's
+case is the same manoeuvre with the other track **live**.
+
+### The rule
+
+> **While two tracks share one working tree, a comparison arm is MATERIALISED — `tools/gates/lib/git-tree.mjs`, the route `measure.mjs` already uses — and never stashed.** A stash is
+> scoped to the tree; a materialised tree is scoped to the commit. Only the second is safe when
+> another author is writing.
+
+**This does NOT weaken `CLAUDE.md`'s mutation recipe.** `git stash push -u` over
+`git checkout --` remains correct, and for the reason it was written: **it is recoverable**. Four
+agents once reached for the destructive form and it silently discarded unreviewed work each time.
+What ADR-0019's parallel window adds is a **second** author, and recoverability is not the
+property that matters when the thing being moved is someone else's in-flight edit — **scope is.**
+
+### Why it is an ADR rather than a note
+
+**The failure mode is invisible on success.** Both stashes popped cleanly, so nothing red ever
+appeared; the only reason this is written down is that an agent audited the *coverage of its own
+guard* rather than its outcome and noticed it had attested less than it appeared to. That is the
+same shape as every scanner finding this session — **a check that passes while inspecting
+something narrower than it claims** — arriving in a recovery mechanism instead of a gate.
+
+**And the sha256 guard is not wrong, it is under-scoped.** The recipe says capture a hash and
+compare after; it does not say *of what*. In a single-author tree "the files I touched" is the
+right answer. In a shared tree it is the wrong one, and it fails silently in the reassuring
+direction. **If a stash is genuinely unavoidable, the hash covers `git status --porcelain` in
+full, not the author's own list.**
+
+**Cost of the deferred alternative, stated**: materialising a tree is slower than a stash. That is
+the whole price, and it buys the property that another author's uncommitted work is never in the
+blast radius of a measurement.
+
+## ADR-0023 — WATCH is discharged through `apps/game`; the viewer is a REPLAY instrument, not the picture of record
+
+**Date**: 2026-08-13 · **Status**: accepted · **Amends**: ADR-0013 · **Raised by**: `ai-engineer`
+at θ-a round-2 fixes, which correctly declined to decide it.
+
+### The question
+
+θ-a's round-2 pass added `drawLobbyFuse` to `apps/game/src/view/guest.ts` — a roomless guest's
+`toleranceTicks` drawn as a shrinking bar under its feet. It did **not** add the fuse to
+`tools/viewer/viewer.js`, on the grounds that the viewer is disposable and shrinking it is the
+standing rule (§9). It then flagged the consequence rather than acting on it: **the two pictures
+now differ, and ADR-0013 names the viewer as the instrument WATCH is discharged through.** A
+human watching a recording would not see a mark a player would.
+
+That is the right escalation. It is also a question the ledger should already have answered.
+
+### The ruling
+
+**The WATCH surface is `apps/game`. `tools/viewer` is a replay instrument for measurement and for
+questions a live surface cannot answer; it is not the picture of record.**
+
+### Why, and why this is a correction rather than a change
+
+**It had already moved, and nobody wrote it down.** ADR-0013 named the viewer because, when it was
+written, `apps/game` was shut and there was no other candidate. ADR-0018 then opened `apps/game`
+by human ruling, and **all three of the human's WATCH verdicts since — *"reads quite difficult…
+lots of washout of bars"*, *"reads much better, but I can only see one need"*, *"it reads"* — were
+taken against `apps/game` at `localhost:5180`.** The practice changed at G-030 and the charter
+kept describing the old arrangement for two goals.
+
+**This is the same shape as the G-027b block that was split in dispatch and whole in the ledger**,
+found by `ai-critic` in the same round: a decision made in the doing, correct in the doing, and
+never written where the next reader looks. Two instances in one goal is a pattern, not a
+coincidence.
+
+> **When a practice moves and the ledger does not, the ledger does not become silent — it becomes
+> WRONG, and it keeps being consulted.**
+
+### What follows
+
+1. **A WATCH obligation is discharged against `apps/game`**, and a frame reference means a frame
+   of `apps/game` unless it says otherwise.
+2. **The viewer does not grow features to keep pace with the game.** Divergence between the two
+   pictures is *expected* and is not a defect. §9's rule stands with more force, not less: if the
+   viewer acquires features or defenders, delete it.
+3. **The viewer must still agree with the sim about anything it DOES draw.** Round 2's
+   `isWantedWhileServed` transcription is the model: not "the viewer may drift", but "the viewer
+   draws less, and what it draws is derived rather than guessed."
+4. **ADR-0013's structural argument is untouched and is the reason this is safe.** The viewer
+   cannot act, because it replays recorded frames through the save serialiser. `apps/game` is a
+   live surface and *can* act — so a WATCH taken there is a reading of a hotel a player could have
+   driven, which is a stronger observation, not a weaker one. **What ADR-0013 was protecting was
+   "nobody has seen this game run", and that is discharged better by the thing a player sees.**
+
+### The cost, stated
+
+`apps/game` is heavier to stand up than a static replay page, and it needs a browser. Where a
+question is answerable from recorded frames — counts, runs, distributions — **prefer the viewer or
+a stepped harness**, and reserve the live surface for perceptual questions. This ADR moves the
+picture of record; it does not claim the viewer is redundant.
+
+## ADR-0024 — A defect CLASS is closed by ENUMERATION; sweeping finds instances and hides the size
+
+**Date**: 2026-08-13 · **Status**: accepted · **Relates to**: ADR-0007 (a check that inspects
+nothing is not a check), §7.1 (sweep budget) · **Raised by**: the orchestrator at θ-a sweep 3,
+from five rounds of evidence.
+
+### The evidence
+
+θ-a's defect class R1 — *a derivation that outlives the model it was derived from* — was hunted
+five times by four different actors. The yields, in order:
+
+| pass | new sites found |
+|---|---|
+| PLAN | 5 (named in the plan) |
+| sweep 1 | 3 more |
+| sweep 2 | 8 more |
+| the sweep-2 fix pass | **11 more files**, found by widening the grep |
+| sweep 3 | 8 more |
+
+**That is not a converging sequence, and it was never going to be.** Every pass grepped a slightly
+different needle set over a slightly wider scope. Each one therefore **sampled** the class and
+reported its sample as progress. The fix pass that found the most was the one that widened the
+needle list — which is the tell: **the yield tracked the method, not the remaining defects.**
+
+The sharpest single instance says the same thing from the other end. Sweep 3 found `needs.ts:239`'s
+`unmet` docstring still describing two deleted fates — **one line below `:238`'s `met` docstring,
+which that very diff had rewritten.** A sweep that reads a diff sees the line that changed. It does
+not see the line that should have.
+
+### The ruling
+
+**When a defect is a CLASS rather than an instance, the first act is to enumerate the class and
+publish its size. Fixing starts after the count exists, and the count is what the verification
+checks.**
+
+1. **Derive the needle set from the change itself** — the deleted identifiers, taken from the
+   diffs — **not from the sites anyone has noticed.**
+2. **Scan the whole surface**, not the diff. A stale claim's danger is unrelated to whether its
+   file was touched.
+3. **State the before-count and the after-count.** The after-count is the verification's subject.
+   **A number nobody can check is worse than a large number.**
+4. Only then fix: correct, or fence in past tense, or register as deliberate history.
+
+### Why this is not just "sweep harder"
+
+A sweep is bounded by a budget (three) **because sweeps are for finding what nobody predicted.**
+A class is, by definition, predicted the moment its second instance appears. **Spending sweep
+budget on a known class converts an open-ended search into a slow enumeration with a censoring
+mechanism attached** — and the censor is that each round reports a number that looks like progress.
+
+> **Sweeping tells you a class exists. Only enumeration tells you how big it is, and only a size
+> can be driven to zero.**
+
+### The corollary that saved the executable half
+
+Half of R1 *was* closed, and by this rule rather than by hand: `deleted-vocabulary.test.ts` scans
+live `Error` messages and test titles — **the two of the four first-contact surfaces that are
+executable strings** — and it explicitly registers what it cannot see rather than letting silence
+read as coverage. **A predicate can close the half of a class that is machine-readable. State the
+other half as a named escape with its control**, which here is a human reading prose for tense.
+Sweep 3 *was* that control running, and it came back positive — which is the escape working, not
+failing.
+
+### The cost, stated
+
+Enumeration is front-loaded and feels slower: nobody fixes anything for the first stretch, and the
+published count is usually embarrassing. **That is the point.** θ-a's alternative was five rounds
+producing a number that never meant anything.
+
+### OUTCOME, measured the same day — the rule paid on its first application
+
+The enumeration ran immediately after this ADR was written, on the same tree sweep 3 had just
+finished reading.
+
+| | |
+|---|---|
+| sites sweep 3 found, by sweeping | **8** |
+| present-tense sites the enumeration found, same tree | **31** |
+| total occurrences of the deleted vocabulary | **407 lines / 70 files** → **392** after |
+
+**The sweep found a quarter of what was there.** And the vocabulary itself was derived rather than
+guessed — every identifier on a removed line of the diff with no live code referent left — which
+surfaced two nobody had named (`assertStayFitsTheNeedTable`, `urgencyIn`) and **confirmed fourteen
+others at zero**, which is the half of an enumeration that sweeping cannot produce at all: *proof
+that a name is finished with.*
+
+**The 23 extra sites are the argument.** Three of them sat inside prose that had already been
+repaired for this exact class: `guests.ts:1529`'s `max(stay, patience)` **six lines below a correct
+`max(stay, tolerance)` in the same docstring**; `utility.test.ts:102`'s *"`food` has less patience
+than `fun`"* **twenty lines under the paragraph declaring that word is not carried**; and
+`registry.ts:170` stating the **deleted** countdown margin bound as the live check. A reader
+sweeping for the class had passed within a screen of each.
+
+**And the sharpest instance was one prose cannot fence at all**: `patienceFractionOf`, live and
+exported. Sweep 2 corrected every sentence around it and left the name. **An identifier has no past
+tense** — it is either renamed or it is a lie. Renamed to `stockFractionOf`.
+
+> **Corollary: when the class lives in names, fencing is not available. The only two moves are
+> rename and delete.**
+
+**The delta is 15, not 31, and the reason is not slippage**: a past-tense fence must name the field
+it fences, so repairing a hit sometimes *adds* an occurrence. **That is why the count is published
+with the grep that produces it rather than asserted** — a number whose movement needs an
+explanation is only useful if the reader can re-run it. (Re-run by the orchestrator: **392**.)

@@ -340,10 +340,13 @@ describe('a lived-in build history survives a round trip', () => {
   });
   const content = bindContent({
     roomTypes: [roomType('roomA')],
-    needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 }],
+    // G-027b: `capacityTicks` is time-to-empty (the deleted `patienceTicks`, carried); a refill
+    // is a whole tick, so 12/20 floors at 1. No guest arrives in this file.
+    needTypes: [{ id: 'rest', name: 'rest', capacityTicks: 12, refillPerTick: 1 }],
     // G-027a: content declaring a lodging need must say how long a stay lasts, or
-    // `bindContent` refuses it — a guest holding a room has no other way to leave.
-    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
+    // `bindContent` refuses it — a guest holding a room has no other way to leave. G-027b adds
+    // `toleranceTicks`, the other way out, carrying the lodging need's old `patienceTicks`.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 12 }],
   });
   const cell = (floor: number, column: number): Cell => ({ floor, column });
   const build = (at: Cell): Command => ({ kind: 'buildRoom', roomType: 'roomA', at });

@@ -65,23 +65,38 @@ const roomType = (id: string, provides: readonly string[], requires: readonly st
   provides,
   requires,
 });
+/**
+ * G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 200 is
+ * carried on every need. The refills are chosen rather than carried — the old `satisfyTicks`
+ * measured a fill from EMPTY and a guest arrives at its want line — and they are what keep the
+ * table serviceable: 3 puts the two engagement needs at 5,000 basis points of a guest's time
+ * and rest at a further 1,000.
+ */
 const need = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks: lodging ? 40 : 6,
-  patienceTicks: lodging ? 200 : 200,
+  capacityTicks: 200,
+  refillPerTick: lodging ? 5 : 3,
 });
 
 const V9_CONTENT: SimContent = {
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food']), roomType('gamesRoom', ['fun'])],
   needTypes: [need('food', false), need('fun', false), need('rest', true)],
-  // `stayDurationTicks` added at G-027a: this build refuses content whose guests could never
-  // leave, so loading v8 bytes today means choosing a duration. The frozen bytes below are
-  // untouched. 40 is the lodging need's own satisfyTicks and clears the 12-tick engagement
-  // track.
+  // `stayDurationTicks` added at G-027a and `toleranceTicks`/`wantAtBasisPoints` at G-027b:
+  // this build refuses content whose guests could never leave, or whose lodging need could
+  // never become wanted, so loading v8 bytes today means choosing all three. The frozen bytes
+  // below are untouched. The want line is 5 ticks of each need, and 2 x 250 x 200 = 100,000
+  // fits inside the 20 away-ticks a 40-tick stay generates at refill 3, which is 200,000.
   guestRules: [
-    { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 3_000, stayDurationTicks: 40 },
+    {
+      id: 'houseRules',
+      name: 'House Rules',
+      abandonMarginBasisPoints: 3_000,
+      stayDurationTicks: 40,
+      toleranceTicks: 200,
+      wantAtBasisPoints: 250,
+    },
   ],
 };
 const content = bindContent(V9_CONTENT);
@@ -187,16 +202,29 @@ describe('v8 -> v9 defaults BOTH new fields from the era, and invents nothing', 
     // `assertNeedOutcomes` throws on the counter check; with `abandonCount` missing,
     // `assertNeedVector` throws by name. Neither is a hypothetical — both were observed
     // while this step was being written.
+    //
+    // THE VECTOR IS CHECKED AT THE END OF THE CHAIN AND NOT AT v9 (G-027b). `assertNeedVector`
+    // is what THIS build enforces, and this build's need vector carries a `deficit` that only
+    // the v12 -> v13 step writes — so asking it of a v9 world would be asking today's validator
+    // about a shape no version of it was ever contemporary with. The tally is unaffected by
+    // that step, so it is still asked of this step's own output, which is where `abandoned`
+    // lands.
     const migrated = step.migrate(v8World()) as MigratedWorld;
-    expect(() => assertNeedVector(migrated.guests.list[0]!.needs, 1)).not.toThrow();
     expect(() => assertNeedOutcomes(migrated.needOutcomes, 3)).not.toThrow();
+    const toStock = MIGRATIONS.find((migration) => migration.from === 12)!.migrate;
+    const current = toStock(migrated) as MigratedWorld;
+    expect(() => assertNeedVector(current.guests.list[0]!.needs, 1)).not.toThrow();
+    expect(current.guests.list[0]!.needs.every((entry) => entry.abandonCount === 0)).toBe(true);
   });
 
   it('and a v8 world WITHOUT the migration fails those same checks, so the step is doing work', () => {
     // ADR-0007's companion case. "The migrated world passes" says nothing unless the
     // unmigrated one fails — otherwise the step could be the identity function.
+    // The vector half is asked of the FIELD rather than of `assertNeedVector`, for the reason
+    // above: a v8 vector fails today's validator on `deficit` first, which would make this
+    // case pass on an error that has nothing to do with the step under test.
     const raw = v8World() as unknown as MigratedWorld;
-    expect(() => assertNeedVector(raw.guests.list[0]!.needs, 1)).toThrow(/no abandonCount field/);
+    expect(raw.guests.list[0]!.needs.every((entry) => 'abandonCount' in entry)).toBe(false);
     expect(() => assertNeedOutcomes(raw.needOutcomes, 3)).toThrow(/abandoned for "food"/);
   });
 
@@ -335,7 +363,16 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
     // survive. This one carries numbers.
     const busy = bindContent({
       ...V9_CONTENT,
-      guestRules: [{ id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 0, stayDurationTicks: 40 }],
+      guestRules: [
+        {
+          id: 'houseRules',
+          name: 'House Rules',
+          abandonMarginBasisPoints: 0,
+          stayDurationTicks: 40,
+          toleranceTicks: 200,
+          wantAtBasisPoints: 250,
+        },
+      ],
     });
     const seeded = stepTick(createWorld(5, busy), busy, [
       { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0 } },

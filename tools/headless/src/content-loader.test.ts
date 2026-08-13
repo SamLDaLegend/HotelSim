@@ -83,8 +83,13 @@ describe('the shipped content file', () => {
     expect(needTypes.length).toBeGreaterThanOrEqual(4);
     for (const need of needTypes) {
       expect(need.id).toMatch(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/);
-      expect(Number.isInteger(need.satisfyTicks)).toBe(true);
-      expect(Number.isInteger(need.patienceTicks)).toBe(true);
+      // G-027b: a need is a STOCK, so the two numbers are `capacityTicks` (time to empty) and
+      // `refillPerTick` (how fast a provider fills it). Both are whole ticks and both are
+      // divisors, so a zero would put an Infinity in hashed state (I2).
+      expect(Number.isInteger(need.capacityTicks)).toBe(true);
+      expect(need.capacityTicks).toBeGreaterThan(0);
+      expect(Number.isInteger(need.refillPerTick)).toBe(true);
+      expect(need.refillPerTick).toBeGreaterThan(0);
       expect(['lodging', 'engagement']).toContain(need.role);
     }
     // EXACTLY ONE lodging need. Two would give a guest two reasons to book one room, and

@@ -12,11 +12,18 @@
 // THE CONTENT BELOW IS BUILT SO THAT PRESSURE IS ARITHMETIC A READER CAN DO IN THEIR HEAD,
 // AND THAT IS WHAT MAKES THE BOUNDARY CASES EXACT RATHER THAN APPROXIMATE.
 //
-// Both engagement needs have `patienceTicks` 100, so one tick of waiting moves a need's
-// pressure by exactly 10000/100 = 100 basis points. The incumbent is SERVED, so its patience
-// is pinned at its cap and its pressure stays at 0 (`advanceNeed`'s cap branch). So after n
-// ticks of engagement the gap between a waiting challenger and the incumbent is exactly
-// 100n, and a margin of M is first cleared at n = M/100.
+// Both engagement needs have `capacityTicks` 400 at `refillPerTick` 3, so one tick moves each
+// by exactly 10,000/400 = 25 basis points — the challenger DOWN by one step of decay and the
+// incumbent UP by three of refill. The gap between them therefore opens at exactly 100 basis
+// points a tick, and a margin of M is first cleared at n = M/100.
+//
+// IT READ "both engagement needs have `patienceTicks` 100 … the incumbent is SERVED, so its
+// patience is pinned at its cap and its pressure stays at 0" UNTIL θ-a SWEEP 2, AND BOTH HALVES
+// WERE WRONG BY THEN. The field is deleted, the capacity is 400, and under a stock the incumbent
+// does not sit pinned — it is REFILLED, which is why the gap closes from both ends and why 4 x 25
+// comes to the same 100 the countdown model got from the challenger alone. `ENGAGEMENT_CAPACITY`
+// and `GAP_BASIS_POINTS_PER_TICK` below both say this correctly, seventy lines from a header that
+// did not: the derived rate was rewritten, the paragraph a reader meets first was not.
 //
 // That relation — not a captured tick number — is what the boundary test asserts, computed
 // from the content it runs against.
@@ -67,7 +74,6 @@ import {
   assertNeedOutcomes,
   assertNeedVector,
   findNeedState,
-  isNeedPending,
   needOutcomeOf,
 } from './needs.js';
 import type { NeedState } from './needs.js';
@@ -80,12 +86,44 @@ import {
 import { createWorld } from './world.js';
 import type { World } from './world.js';
 
-/** One tick of waiting moves a need with this patience by exactly 100 basis points. */
-const ENGAGEMENT_PATIENCE = 100;
-const BASIS_POINTS_PER_TICK = ONE_WHOLE_BASIS_POINTS / ENGAGEMENT_PATIENCE;
+/**
+ * One tick of decay moves a need of this capacity by exactly 25 basis points.
+ *
+ * 400 RATHER THAN THE OLD `patienceTicks` OF 100, and it is chosen so that TWO of this file's
+ * requirements survive at once:
+ *
+ *   THE GAP STILL OPENS AT 100 BASIS POINTS A TICK, so `dueAfter` is still `margin / 100` and
+ *   every run length below still lands where it did. Under the countdown model that 100 was the
+ *   challenger's own rate; under a stock it is the SUM of the challenger's decay and the
+ *   incumbent's refill, and 4 x 25 is the same number.
+ *   NO ENGAGEMENT FINISHES ON ITS OWN. A stock finishes when it is FULL, which takes
+ *   `wantLine / refillPerTick` ticks — 67 here, against the 60 ticks of the longest run below.
+ */
+const ENGAGEMENT_CAPACITY = 400;
+const BASIS_POINTS_PER_TICK = ONE_WHOLE_BASIS_POINTS / ENGAGEMENT_CAPACITY;
 
-/** Long enough that no engagement in this file ever finishes on its own. */
-const ENGAGEMENT_SATISFY = 5_000;
+/**
+ * G-027b — THE GAP NOW CLOSES FROM BOTH ENDS, AND THAT IS THE ONE ARITHMETIC CHANGE IN THIS
+ * FILE.
+ *
+ * Under the countdown model a SERVED need's patience sat pinned at its cap, so its pressure was
+ * 0 and only the challenger moved: the gap grew at `BASIS_POINTS_PER_TICK` a tick. Under a stock
+ * the incumbent is being REFILLED while the challenger DECAYS, so both move and the gap grows at
+ * `(refillPerTick + 1) x BASIS_POINTS_PER_TICK`. Every "due after" below is derived from this
+ * rate rather than from the challenger's alone.
+ */
+const ENGAGEMENT_REFILL = 3;
+const GAP_BASIS_POINTS_PER_TICK = (ENGAGEMENT_REFILL + 1) * BASIS_POINTS_PER_TICK;
+
+/**
+ * Where a guest starts wanting, as a share of each need's own capacity — so every need is formed
+ * at the SAME pressure, which is what keeps `aaa` the incumbent by the tie rule alone.
+ *
+ * IT IS HALF THE CAPACITY, and that is chosen so an engagement lasts: at refill 3 the incumbent
+ * takes 67 ticks to fill and be released, which outlasts every run in this file.
+ */
+const WANT_AT = 5_000;
+const ENGAGEMENT_LINE = (WANT_AT * ENGAGEMENT_CAPACITY) / ONE_WHOLE_BASIS_POINTS;
 
 const roomType = (
   id: string,
@@ -114,9 +152,14 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
   name: id,
   role: lodging ? 'lodging' : 'engagement',
   // The lodging need outlasts everything here, so no stay ends mid-experiment and the only
-  // thing that can end an engagement is the decision this file is about.
-  satisfyTicks: lodging ? 100_000 : ENGAGEMENT_SATISFY,
-  patienceTicks: lodging ? 100_000 : ENGAGEMENT_PATIENCE,
+  // thing that can end an engagement is the decision this file is about. It is 20,000 rather
+  // than the old 100,000 because `assertLodgingBecomesWanted` refuses a want line further away
+  // than the stay generates away-time for; nothing here reads the lodging need, and a guest
+  // that is always engaged is never at home to be served by its room anyway.
+  capacityTicks: lodging ? 20_000 : ENGAGEMENT_CAPACITY,
+  // 8 rather than 2 so that a table with THREE engagement needs still leaves a guest time to
+  // sleep: `assertNeedDemandIsServiceable` refuses one that demands the whole of it.
+  refillPerTick: lodging ? 8 : ENGAGEMENT_REFILL,
 });
 
 /**
@@ -130,13 +173,20 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
 const STAY = 100_000;
 
 const rules = (abandonMarginBasisPoints: number): readonly GuestRulesData[] => [
-  { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints, stayDurationTicks: STAY },
+  {
+    id: 'houseRules',
+    name: 'House Rules',
+    abandonMarginBasisPoints,
+    stayDurationTicks: STAY,
+    toleranceTicks: STAY,
+    wantAtBasisPoints: WANT_AT,
+  },
 ];
 
 /** The same table with no MARGIN on it — the pre-G-014b statement, in the only shape that
  *  can still be run (see the `no guest rules` block below). */
 const rulesWithoutMargin: readonly GuestRulesData[] = [
-  { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY },
+  { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: STAY, wantAtBasisPoints: WANT_AT },
 ];
 
 /**
@@ -180,57 +230,67 @@ const abandonCountOf = (guest: Guest, needId: string): number =>
   findNeedState(guest.needs, needId)?.abandonCount ?? -1;
 
 // ============================================================================
-//  CRITERION 3's SATURATION CLAUSE, PINNED AT `isNeedPending`'s DEFINITION.
+//  CRITERION 3's SATURATION CLAUSE, PINNED AT THE CLAMP IN `pressureBasisPoints`.
+//  (It was pinned at `isNeedPending`'s definition until θ-a sweep 2, and that field is deleted;
+//  the block below has said so since G-027b, ten lines under a banner that had not moved.)
 // ============================================================================
 
-describe('a PENDING need can never reach one whole, so a margin of one whole is total commitment', () => {
-  // WHY THIS IS NOT A GRID OVER CONSTRUCTED PAIRS. A grid SAMPLES the property: it shows
-  // that pressure stayed under 10,000 for the pairs somebody thought of. The property is a
+describe('NO need can reach one whole, so a margin of one whole is total commitment', () => {
+  // WHY THIS IS NOT A GRID OVER CONSTRUCTED PAIRS. A grid SAMPLES the property: it shows that
+  // pressure stayed under 10,000 for the states somebody thought of. The property is a
   // consequence of one definition, so the test follows the definition instead — the
-  // orchestrator's ruling at PLAN, and it is a better test for being three assertions
-  // rather than a hundred.
-  const type = (patienceTicks: number): NeedTypeData => ({
+  // orchestrator's ruling at PLAN, and it is a better test for being four assertions rather
+  // than a hundred.
+  //
+  // THE DEFINITION MOVED AT G-027b AND THE PROPERTY DID NOT. It used to rest on
+  // `isNeedPending`: a need with no patience left was not scored at all, so the ceiling fell
+  // out of the scoring loop's own exit. A stock has no such exit — nothing is terminal and an
+  // EMPTY need is scored like any other — so the ceiling is now a CLAMP inside
+  // `pressureBasisPoints`, imposed precisely so that this document keeps meaning what it meant.
+  // The steps below follow the new definition in the same shape.
+  const type = (capacityTicks: number): NeedTypeData => ({
     id: 'x',
     name: 'x',
     role: 'engagement',
-    satisfyTicks: 1,
-    patienceTicks,
+    capacityTicks,
+    refillPerTick: 1,
   });
-  const state = (patienceRemaining: number): NeedState => ({
+  const state = (deficit: number): NeedState => ({
     needId: 'x',
-    patienceRemaining,
-    progressRemaining: 1,
-    metBy: null,
+    deficit,
+    metBy: deficit === 0 ? 'room' : null,
     abandonCount: 0,
   });
 
-  it('STEP 1 — `isNeedPending` is false at patienceRemaining 0 and true at 1, so a pending need has at least 1', () => {
-    expect(isNeedPending(state(0))).toBe(false);
-    expect(isNeedPending(state(1))).toBe(true);
+  it('STEP 1 — an EMPTY need is still scored, so the old ceiling has nothing to rest on', () => {
+    // The premise the countdown proof used and the stock model deletes, stated as a case so
+    // the change is visible rather than inferred: a need at its capacity is a legal, scorable
+    // state, and one PAST its capacity is reachable through the v12 -> v13 migration.
+    expect(pressureBasisPoints(type(100), state(100))).toBeGreaterThan(0);
+    expect(pressureBasisPoints(type(100), state(400))).toBeGreaterThan(0);
   });
 
-  it('STEP 2 — so the most urgent PENDING need of any patience scores under one whole', () => {
-    // `patienceRemaining: 1` is the extreme step 1 licenses, and pressure falls as patience
-    // remaining rises, so this is the maximum over every pending state of that patience.
-    // Driven across four orders of magnitude of `patienceTicks` — including 1, where the
-    // extreme is also the ONLY pending state — rather than over a grid of pairs.
-    for (const patienceTicks of [1, 2, 100, 10_000, 1_000_000]) {
-      const need = state(1);
-      expect(isNeedPending(need)).toBe(true);
-      expect(pressureBasisPoints(type(patienceTicks), need)).toBeLessThanOrEqual(
-        MAX_PENDING_PRESSURE_BASIS_POINTS,
-      );
+  it('STEP 2 — so the ceiling is the clamp, and no deficit of any capacity beats it', () => {
+    // Driven across five orders of magnitude of capacity — including 1, where every non-zero
+    // deficit is already at or past it — and at deficits below, on and far past the capacity.
+    for (const capacityTicks of [1, 2, 100, 10_000, 1_000_000]) {
+      for (const deficit of [1, capacityTicks - 1, capacityTicks, capacityTicks * 4]) {
+        if (deficit < 1) continue;
+        expect(pressureBasisPoints(type(capacityTicks), state(deficit))).toBeLessThanOrEqual(
+          MAX_PENDING_PRESSURE_BASIS_POINTS,
+        );
+      }
     }
     expect(MAX_PENDING_PRESSURE_BASIS_POINTS).toBe(ONE_WHOLE_BASIS_POINTS - 1);
   });
 
-  it('STEP 3 — and the saturating branch is REAL: it fires, but only for a need that is not pending', () => {
-    // ADR-0007's other half. "Unreachable for a pending need" is only interesting if the
-    // branch exists at all; a `pressureBasisPoints` that could never return one whole would
-    // satisfy step 2 while inspecting nothing.
-    const spent = state(0);
-    expect(pressureBasisPoints(type(100), spent)).toBe(ONE_WHOLE_BASIS_POINTS);
-    expect(isNeedPending(spent)).toBe(false);
+  it('STEP 3 — and the clamp is REAL: an empty need lands exactly on it rather than near it', () => {
+    // ADR-0007's other half. "Nothing beats the ceiling" is only interesting if something
+    // reaches it; a `pressureBasisPoints` that saturated well below would satisfy step 2 while
+    // inspecting nothing. Two needs that are both empty therefore SCORE ALIKE, which is the
+    // resolution the clamp costs and the thing G-028 inherits.
+    expect(pressureBasisPoints(type(100), state(100))).toBe(MAX_PENDING_PRESSURE_BASIS_POINTS);
+    expect(pressureBasisPoints(type(7), state(7_000))).toBe(MAX_PENDING_PRESSURE_BASIS_POINTS);
   });
 
   it('STEP 4 — so the threshold at a saturating margin is one no pressure can reach', () => {
@@ -257,14 +317,17 @@ describe('the boundary: a gap of margin - 1 keeps the engagement, a gap of margi
   /**
    * THE TICK THE SWITCH IS DUE, COMPUTED FROM CONTENT RATHER THAN CAPTURED.
    *
-   * The incumbent is served, so its patience sits at its cap and its pressure is 0; the
-   * challenger waits, so its pressure rises `BASIS_POINTS_PER_TICK` a tick. The gap first
-   * REACHES the margin after `margin / rate` ticks of waiting.
+   * BOTH ENDS MOVE SINCE G-027b. The incumbent is being REFILLED, so its pressure FALLS by
+   * `refillPerTick x BASIS_POINTS_PER_TICK` a tick; the challenger decays, so its pressure
+   * rises by `BASIS_POINTS_PER_TICK`. The gap therefore opens at the sum of the two, and first
+   * REACHES the margin after `margin / that` ticks. Under the countdown model the incumbent's
+   * patience sat pinned at its cap and only the challenger moved.
    */
-  const dueAfter = abandonMarginOf(content) / BASIS_POINTS_PER_TICK;
+  const dueAfter = abandonMarginOf(content) / GAP_BASIS_POINTS_PER_TICK;
 
   it('the arithmetic this file rests on is what the content actually says', () => {
     expect(abandonMarginOf(content)).toBe(MARGIN);
+    expect(GAP_BASIS_POINTS_PER_TICK).toBe(100);
     expect(dueAfter).toBe(10);
     expect(Number.isInteger(dueAfter)).toBe(true);
   });
@@ -276,8 +339,9 @@ describe('the boundary: a gap of margin - 1 keeps the engagement, a gap of margi
     const challenger = findNeedState(guest.needs, 'bbb')!;
     const type = (id: string): NeedTypeData => content.content.needTypes!.find((entry) => entry.id === id)!;
     // The gap is stated, so a failure says WHICH side moved rather than only that it did.
-    expect(pressureBasisPoints(type('aaa'), incumbent)).toBe(0);
-    expect(pressureBasisPoints(type('bbb'), challenger)).toBe(MARGIN - BASIS_POINTS_PER_TICK);
+    // The GAP is what the margin is compared against, and both ends of it moved this tick.
+    const gap = pressureBasisPoints(type('bbb'), challenger) - pressureBasisPoints(type('aaa'), incumbent);
+    expect(gap).toBe(MARGIN - GAP_BASIS_POINTS_PER_TICK);
     expect(engagedKind(world, guest)).toBe('roomA');
     expect(abandonCountOf(guest, 'aaa')).toBe(0);
   });
@@ -286,7 +350,10 @@ describe('the boundary: a gap of margin - 1 keeps the engagement, a gap of margi
     const world = after(dueAfter);
     const guest = only(world);
     const type = (id: string): NeedTypeData => content.content.needTypes!.find((entry) => entry.id === id)!;
-    expect(pressureBasisPoints(type('bbb'), findNeedState(guest.needs, 'bbb')!)).toBe(MARGIN);
+    const gap =
+      pressureBasisPoints(type('bbb'), findNeedState(guest.needs, 'bbb')!) -
+      pressureBasisPoints(type('aaa'), findNeedState(guest.needs, 'aaa')!);
+    expect(gap).toBe(MARGIN);
     expect(engagedKind(world, guest)).toBe('roomB');
     // THE COUNT LANDS ON THE NEED THAT WAS WALKED OUT ON, NOT ON THE ONE WALKED TO. No law
     // can catch that misfiling — it conserves the total and moves no other number — so it is
@@ -301,9 +368,11 @@ describe('the boundary: a gap of margin - 1 keeps the engagement, a gap of margi
     // make abandonment far more expensive than any margin could price.
     const world = after(dueAfter);
     const abandoned = findNeedState(only(world).needs, 'aaa')!;
-    expect(abandoned.progressRemaining).toBeLessThan(ENGAGEMENT_SATISFY);
-    expect(abandoned.progressRemaining).toBe(ENGAGEMENT_SATISFY - dueAfter);
-    expect(isNeedPending(abandoned)).toBe(true);
+    // It was served for `dueAfter` ticks at `ENGAGEMENT_REFILL` a tick, so exactly that much of
+    // its deficit is gone and the rest is still owed. A reset would put it back on the line.
+    expect(abandoned.deficit).toBeLessThan(ENGAGEMENT_LINE);
+    expect(abandoned.deficit).toBe(ENGAGEMENT_LINE - dueAfter * ENGAGEMENT_REFILL);
+    expect(abandoned.deficit).toBeGreaterThan(0);
   });
 });
 
@@ -356,7 +425,10 @@ describe('two challengers tied on pressure, both clearing the margin: the LOWER 
         const guest = only(served);
         const bbb = findNeedState(guest.needs, 'bbb')!;
         const ccc = findNeedState(guest.needs, 'ccc')!;
-        expect(bbb.patienceRemaining).toBe(ccc.patienceRemaining);
+        // Equal DEFICITS since G-027b, which is the same statement one model on: both are
+        // decaying untouched from the same want line, so neither is ahead of the other and the
+        // tie is a real tie rather than a rounding artefact.
+        expect(bbb.deficit).toBe(ccc.deficit);
         expect(engagedKind(served, guest)).toBe('roomB');
         expect(abandonCountOf(guest, 'aaa')).toBe(1);
       });
@@ -420,7 +492,7 @@ describe('a challenger that clears the margin but has NO free provider changes n
       guestRules: rules(1_000),
     });
     const world = build(content, spawn('bedroom', 0), spawn('roomA', 2));
-    // Fifty ticks: five times the margin's worth of gap, and half of `bbb`'s whole patience.
+    // Fifty ticks: five times the margin's worth of gap, and half of `bbb`'s whole capacity.
     const served = run(world, content, 51, [at(world.tick, arrive)]);
     const guest = only(served);
     expect(engagedKind(served, guest)).toBe('roomA');
@@ -662,7 +734,14 @@ describe('bindContent refuses a margin no comparison could mean, from a host zod
         roomTypes: [roomType('bedroom', ['rest']), roomType('roomA', ['aaa'])],
         needTypes: [need('aaa', false), need('rest', true)],
         guestRules: [
-          { id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints, stayDurationTicks: STAY } as GuestRulesData,
+          {
+            id: 'houseRules',
+            name: 'House Rules',
+            abandonMarginBasisPoints,
+            stayDurationTicks: STAY,
+            toleranceTicks: STAY,
+            wantAtBasisPoints: WANT_AT,
+          } as GuestRulesData,
         ],
       });
 
@@ -685,12 +764,21 @@ describe('bindContent refuses a margin no comparison could mean, from a host zod
     const bound = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('roomA', ['aaa'])],
       needTypes: [need('aaa', false), need('rest', true)],
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: STAY, wantAtBasisPoints: WANT_AT },
+      ],
     });
-    // `stayDurationTicks` is present because this content declares a lodging need and
-    // `bindContent` refuses it otherwise (G-027a); the MARGIN key is the one under test, and
-    // it is still absent rather than `undefined`.
-    expect(Object.keys(bound.content.guestRules![0]!)).toEqual(['id', 'name', 'stayDurationTicks']);
+    // The other three keys are present because this content declares a lodging need and
+    // `bindContent` refuses it otherwise (G-027a for the stay, G-027b for the wait and the
+    // want line); the MARGIN key is the one under test, and it is still absent rather than
+    // `undefined`.
+    expect(Object.keys(bound.content.guestRules![0]!)).toEqual([
+      'id',
+      'name',
+      'stayDurationTicks',
+      'wantAtBasisPoints',
+      'toleranceTicks',
+    ]);
     expect(abandonMarginOf(bound)).toBe(ONE_WHOLE_BASIS_POINTS);
   });
 });
@@ -698,14 +786,26 @@ describe('bindContent refuses a margin no comparison could mean, from a host zod
 describe('a margin of ZERO is the thrash control, and it thrashes', () => {
   // The other end. It must stay loadable — `bindContent` refuses no margin, deliberately —
   // because it is the arm criterion 3 measures the shipped margin against.
-  it('re-decides as soon as the gap opens at all, and the counter says so', () => {
-    const content = twoNeeds(0);
-    const world = build(content, spawn('bedroom', 0), spawn('roomA', 2), spawn('roomB', 4));
-    const served = run(world, content, 60, [at(world.tick, arrive)]);
-    const guest = only(served);
-    // Every tick the served need's pressure falls behind the waiting one's by one step, so
-    // the guest swaps at the first opportunity and keeps swapping.
-    expect(abandonCountOf(guest, 'aaa') + abandonCountOf(guest, 'bbb')).toBeGreaterThan(10);
+  it('re-decides as soon as the gap opens at all, where the shipped-shaped margin never does', () => {
+    // TWO-SIDED, AND IT HAD TO BECOME SO AT G-027b. The old form asserted "more than ten
+    // switches in sixty ticks", which was true when the only thing standing between a guest
+    // and a switch was the margin. It is not the only thing any more: a challenger must also
+    // be WANTED, and a need that was just served sits below its want line until it decays back
+    // to it. So the want line damps thrash on its own and a margin of zero yields four
+    // switches in sixty ticks rather than sixty.
+    //
+    // A bare "more than one" would be a weaker claim than the old one, so the arm is paired:
+    // the same run at a margin the shipped table's size produces NONE. Thrash against no
+    // thrash is what this control was always for.
+    const thrashing = twoNeeds(0);
+    const damped = twoNeeds(6_000);
+    const swaps = (content: BoundContent): number => {
+      const world = build(content, spawn('bedroom', 0), spawn('roomA', 2), spawn('roomB', 4));
+      const guest = only(run(world, content, 60, [at(world.tick, arrive)]));
+      return abandonCountOf(guest, 'aaa') + abandonCountOf(guest, 'bbb');
+    };
+    expect(swaps(thrashing)).toBeGreaterThan(1);
+    expect(swaps(damped)).toBe(0);
   });
 
   it('and a departing guest carries its whole history into the tally, not a flag', () => {
@@ -714,23 +814,28 @@ describe('a margin of ZERO is the thrash control, and it thrashes', () => {
     const content = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('roomA', ['aaa']), roomType('roomB', ['bbb'])],
       needTypes: [
-        // SHORTER ENGAGEMENTS THAN THE REST OF THIS FILE USES, AND THAT IS G-027a's FLOOR
-        // TALKING. `bindContent` refuses a stay shorter than the engagement track, so a case
-        // that wants a stay of 30 ticks cannot also want two 5,000-tick engagements: that
-        // content ships needs no guest could ever finish, which is the refusal working. 12
-        // and 12 against a stay of 30 leaves the same thrash — margin 0 re-decides every
-        // tick — with a content set the simulation will actually load.
-        { ...need('aaa', false), satisfyTicks: 12 },
-        { ...need('bbb', false), satisfyTicks: 12 },
-        // A stay short enough to end inside this run, so the fold at departure is what is
-        // being read rather than the live guest.
-        { id: 'rest', name: 'rest', role: 'lodging', satisfyTicks: 30, patienceTicks: 100 },
+        // SMALLER STOCKS THAN THE REST OF THIS FILE USES. This case needs a stay that ENDS
+        // inside the run, and `assertLodgingBecomesWanted` refuses a want line further out
+        // than a short stay generates away-time for — so the lodging capacity comes down with
+        // the stay. The thrash is unchanged: at margin 0 the guest re-decides every tick.
+        need('aaa', false),
+        need('bbb', false),
+        { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 12, refillPerTick: 8 },
       ],
       // `rules(0)` carries this file's enormous `STAY`, which would keep the guest here past
       // the end of the run. The stay is the thing this case needs to END, so it declares its
       // own — and it is the one place in this file where the checkout terminator is wanted
       // rather than pushed out of the way.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', abandonMarginBasisPoints: 0, stayDurationTicks: 30 }],
+      guestRules: [
+        {
+          id: 'houseRules',
+          name: 'House Rules',
+          abandonMarginBasisPoints: 0,
+          stayDurationTicks: 30,
+          toleranceTicks: 60,
+          wantAtBasisPoints: WANT_AT,
+        },
+      ],
     });
     const world = build(content, spawn('bedroom', 0), spawn('roomA', 2), spawn('roomB', 4));
     const served = run(world, content, 60, [at(world.tick, arrive)]);
@@ -769,8 +874,22 @@ describe('two guest-rules entries: the LOWEST ID decides the margin, whatever th
       needTypes: [need('aaa', false), need('rest', true)],
       guestRules: [first, second],
     });
-  const alpha: GuestRulesData = { id: 'aaaRules', name: 'A', abandonMarginBasisPoints: 1_000, stayDurationTicks: STAY };
-  const omega: GuestRulesData = { id: 'zzzRules', name: 'Z', abandonMarginBasisPoints: 9_000, stayDurationTicks: STAY };
+  const alpha: GuestRulesData = {
+    id: 'aaaRules',
+    name: 'A',
+    abandonMarginBasisPoints: 1_000,
+    stayDurationTicks: STAY,
+    toleranceTicks: STAY,
+    wantAtBasisPoints: WANT_AT,
+  };
+  const omega: GuestRulesData = {
+    id: 'zzzRules',
+    name: 'Z',
+    abandonMarginBasisPoints: 9_000,
+    stayDurationTicks: STAY,
+    toleranceTicks: STAY,
+    wantAtBasisPoints: WANT_AT,
+  };
 
   it('takes the lower id in both declaration orders, and the two orders fingerprint alike', () => {
     const forward = twoRules(alpha, omega);
@@ -782,36 +901,43 @@ describe('two guest-rules entries: the LOWEST ID decides the margin, whatever th
   });
 });
 
-describe('abandonNeed is the one place the count moves, and it refuses a terminal need', () => {
-  // The guard exists because a caller that reached a resolved need must not be able to invent
-  // a history for it. The TICK cannot reach that state — step 5 releases an engagement the
-  // moment its need resolves, before step 7 can abandon anything — which is exactly why it is
-  // driven here rather than left to the loop.
-  const state = (progressRemaining: number, patienceRemaining: number): NeedState => ({
+describe('abandonNeed is the one place the count moves, and it refuses a FULL need', () => {
+  // The guard exists because a caller that reached a need nothing could still be serving must
+  // not be able to invent a history for it. The TICK cannot reach that state — step 5 releases
+  // an engagement the moment its need reaches full, before step 7 can abandon anything — which
+  // is exactly why it is driven here rather than left to the loop.
+  //
+  // "A FAILED NEED" IS NO LONGER ONE OF THE CASES, and its absence is the model rather than an
+  // omission: an EMPTY need is a need a guest is still pursuing hardest of all, so abandoning
+  // one is legal and is counted. Only FULL is refused, and the guard reads `deficit === 0`
+  // rather than the wanting predicate — see `abandonNeed`.
+  const state = (deficit: number): NeedState => ({
     needId: 'aaa',
-    patienceRemaining,
-    progressRemaining,
-    metBy: progressRemaining === 0 ? 'room' : null,
+    deficit,
+    metBy: deficit === 0 ? 'room' : null,
     abandonCount: 0,
   });
 
-  it('increments a PENDING need by one and leaves both countdowns alone', () => {
-    const before = [state(5, 5)];
+  it('increments a need that is still wanted by one and leaves its deficit alone', () => {
+    const before = [state(5)];
     const after = abandonNeed(before, 'aaa');
     expect(after[0]).toEqual({ ...before[0], abandonCount: 1 });
     expect(after).not.toBe(before);
   });
 
-  it('returns the SAME ARRAY for a met need, a failed need, and a need that is not there', () => {
-    const met = [state(0, 5)];
-    const failed = [state(5, 0)];
-    expect(abandonNeed(met, 'aaa')).toBe(met);
-    expect(abandonNeed(failed, 'aaa')).toBe(failed);
-    expect(abandonNeed(met, 'zzz')).toBe(met);
+  it('returns the SAME ARRAY for a FULL need and for a need that is not there', () => {
+    const full = [state(0)];
+    expect(abandonNeed(full, 'aaa')).toBe(full);
+    expect(abandonNeed(full, 'zzz')).toBe(full);
+    // And an EMPTY need is NOT refused: nothing is terminal, so a guest can walk out on the
+    // thing it wants most. This is the case the countdown model called "failed" and skipped.
+    const empty = [state(ENGAGEMENT_CAPACITY)];
+    expect(abandonNeed(empty, 'aaa')).not.toBe(empty);
+    expect(abandonNeed(empty, 'aaa')[0]!.abandonCount).toBe(1);
   });
 
   it('and it touches nothing but the one need it is given', () => {
-    const before = [state(5, 5), { ...state(5, 5), needId: 'bbb' }];
+    const before = [state(5), { ...state(5), needId: 'bbb' }];
     const after = abandonNeed(before, 'bbb');
     expect(after[0]).toBe(before[0]);
     expect(after[1]!.abandonCount).toBe(1);
@@ -819,12 +945,12 @@ describe('abandonNeed is the one place the count moves, and it refuses a termina
 });
 
 describe('assertNeedVector refuses a corrupt abandonCount, like every other counter on a need', () => {
-  // Its siblings — `patienceRemaining` and `progressRemaining` — are both driven at load
+  // Its sibling — `deficit` — is driven at load
   // (`needs.save.test.ts`, `guest.save.test.ts`). The MISSING-key case for this field is
   // driven by `needs.hysteresis.save.test.ts`'s unmigrated-v8 world; the corrupt-VALUE case
   // was not driven by anything until this block.
   const vector = (abandonCount: unknown): unknown[] => [
-    { needId: 'aaa', patienceRemaining: 5, progressRemaining: 5, metBy: null, abandonCount },
+    { needId: 'aaa', deficit: 5, metBy: null, abandonCount },
   ];
 
   it('refuses a negative, a fraction and a non-number, naming the field and the guest', () => {

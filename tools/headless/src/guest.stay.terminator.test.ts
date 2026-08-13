@@ -8,12 +8,18 @@
 // `guest.stay.save.test.ts`; the content derivations are in `content.stay.test.ts`.
 //
 // THE ONE CLAIM THIS FILE MAKES AND THE ONE IT MAY NOT MAKE. ADR-0017 has five parts and
-// G-027a builds one of them: §4, a stay ends by checkout or by the guest giving up. It does
-// NOT build §1, "a need is a stock, never done" — `needs.ts` is untouched, `night_rest`
-// still completes at `satisfyTicks` and stays completed. So the assertions below say *no
-// DEPARTURE reads need state to decide the stay is over*. **"No need is terminal" is
-// G-027b's and is not claimed here**, and the difference is exactly the difference between
-// "the door no longer opens when the need finishes" and "the need no longer finishes".
+// G-027a built one of them: §4, a stay ends by checkout or by the guest giving up. The
+// assertions below say *no DEPARTURE reads need state to decide the stay is over*, and that is
+// all they say — the difference between "the door no longer opens when the need finishes" and
+// "the need no longer finishes".
+//
+// §1 HAS SINCE LANDED, AND THIS PARAGRAPH OUTLIVED IT BY A GOAL. It read *"`needs.ts` is
+// untouched, `night_rest` STILL COMPLETES at `satisfyTicks` and stays completed … 'no need is
+// terminal' is G-027b's and is not claimed here"*, which was true when it was written and false
+// from the moment G-027b landed: `satisfyTicks` is deleted and nothing completes. The scoping is
+// kept because it is still what this file's assertions are ABOUT — a terminator test that
+// quietly widened into a need-model test would be pinning something nobody chose — but the state
+// of the world around it is now stated in the past tense. `needs.stock.test.ts` owns §1.
 //
 // Content ids here are camelCase (ADR-0003).
 
@@ -30,7 +36,7 @@ import {
   departureCountOf,
   findNeedState,
   guestsInOrder,
-  isNeedMet,
+  isNeedFull,
   maxGuestLifetimeTicks,
   run,
   stepTick,
@@ -58,22 +64,36 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   nightlyRatePence: RATE,
   provides,
 });
-const needType = (id: string): NeedTypeData => ({
+/**
+ * G-027b: `capacityTicks` is time-to-empty, which is what the deleted `patienceTicks` named, so
+ * `PATIENCE` is carried onto the lodging need. `refillPerTick` replaces `satisfyTicks`; neither
+ * decides a departure any more, which is this file's whole subject.
+ */
+const needType = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
-  role: 'lodging',
-  satisfyTicks: SATISFY,
-  patienceTicks: PATIENCE,
+  role: lodging ? 'lodging' : 'engagement',
+  capacityTicks: PATIENCE,
+  refillPerTick: lodging ? 2 : 3,
 });
 const rules = (stay: number): GuestRulesData => ({
   id: 'houseRules',
   name: 'House Rules',
   stayDurationTicks: stay,
+  // The OTHER terminator (G-027b), and it is deliberately longer than any wait below: this file
+  // is about the CHECKOUT clock, so a guest giving up would be a second way out competing with
+  // the one under test.
+  toleranceTicks: 10_000,
+  // 1,000 basis points of a 30-tick capacity is a want line of 3. Two crossings cost 60,000
+  // against the 50 away-ticks a 200-tick stay generates at refill 3, which is 500,000.
+  wantAtBasisPoints: 1_000,
 });
 
 const content = bindContent({
-  roomTypes: [roomType('roomA', ['rest'])],
-  needTypes: [needType('rest')],
+  // `lounge` provides the engagement need and is NEVER spawned below: with none in the store
+  // no guest can engage, so every departure here is still a checkout or a wait.
+  roomTypes: [roomType('roomA', ['rest']), roomType('lounge', ['snack'])],
+  needTypes: [needType('rest', true), needType('snack', false)],
   guestRules: [rules(STAY)],
 });
 
@@ -116,55 +136,67 @@ describe('the stay ends on a clock, and the clock starts at the door', () => {
   });
 
   it('THE LODGING NEED COMPLETES LONG BEFORE THE DOOR OPENS, AND COMPLETING IT ENDS NOTHING', () => {
-    // The whole goal in one assertion. `SATISFY` is 20 and `STAY` is 200: under the era this
+    // The whole goal in one assertion. `SATISFY` was 20 and `STAY` is 200: under the era this
     // replaces the guest left at tick 21. It is still here at tick 100, in its room, with the
-    // need it came for already met.
+    // need it came for FULL — and under G-027b full is not even a terminal state, it is where
+    // a resting guest sits while its room keeps topping it up.
     const world = run(hotel(1), content, 100, [at(1, arrive)]);
     const guest = guestsInOrder(world.guests)[0];
     expect(guest).toBeDefined();
     const lodging = guest === undefined ? undefined : findNeedState(guest.needs, 'rest');
     expect(lodging).toBeDefined();
-    expect(lodging !== undefined && isNeedMet(lodging)).toBe(true);
+    expect(lodging !== undefined && isNeedFull(lodging)).toBe(true);
     expect(guest?.roomEntityId).not.toBe(0);
     expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(0);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(0);
   });
 
-  it('a met lodging need does not become a give-up either, which is where the old branch would have sent it', () => {
-    // `!isNeedPending` is true of a MET need as well as a failed one. Before this goal the met
+  it('a FULL lodging need does not become a give-up either, which is where the old branch would have sent it', () => {
+    // `!isNeedPending` was true of a MET need as well as a failed one. Before G-027a the met
     // case had already `continue`d, so the give-up branch could read the loose predicate; with
-    // no met case above it, a `!isNeedPending` here would file every completed stay as
-    // `gaveUp` the tick after the need finished. This case is that mutation's tripwire: the
-    // guest below has a met need and 180 ticks left to run.
+    // no met case above it, such a predicate here would file every completed stay as `gaveUp`
+    // the tick after the need finished. G-027b removes the predicate and keys the give-up on
+    // the CLOCK instead, so the tripwire is now "a guest whose rest is full and whose wait has
+    // not run out stays put": the guest below has 180 ticks left to run.
     const world = run(hotel(1), content, SATISFY + 3, [at(1, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(0);
     expect(guestsInOrder(world.guests)).toHaveLength(1);
   });
 
-  it('a guest with no room still gives up when its patience runs out, and pays nothing', () => {
-    // Zero rooms. The lodging need drains one tick of patience a tick and fails at PATIENCE.
-    const empty = stepTick(createWorld(1, content), content, []);
-    const world = run(empty, content, PATIENCE + 1, [at(1, arrive)]);
+  it('a guest with no room still gives up when its toleranceTicks run out, and pays nothing', () => {
+    // Zero rooms. A guest with no room gives up after `toleranceTicks` of waiting, which this
+    // content puts far out on purpose — see `rules`. The number that decides it is the guest
+    // rules' now, not the lodging need's, so the run is as long as the tolerance rather than
+    // as long as the old patience.
+    const patient = bindContent({
+      roomTypes: [roomType('roomA', ['rest']), roomType('lounge', ['snack'])],
+      needTypes: [needType('rest', true), needType('snack', false)],
+      guestRules: [{ ...rules(STAY), toleranceTicks: PATIENCE }],
+    });
+    const empty = stepTick(createWorld(1, patient), patient, []);
+    const world = run(empty, patient, PATIENCE + 1, [at(1, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(0);
     expect(world.ledger.filter((transaction) => transaction.reason === 'roomRevenue')).toHaveLength(0);
   });
 
-  it('the lifetime bound is max(patience, stay) + 1, and it is ATTAINED rather than respected', () => {
+  it('the lifetime bound is max(tolerance, stay) + 1, and it is ATTAINED rather than respected', () => {
     // The old bound was `patience + satisfy + 1` — a sum, and an overestimate, because a
     // queued guest's stay used to start when it got a room. The clock is arrival-relative
     // now, so the two terms are alternatives. A bound nothing reaches cannot catch a guest
     // that overstays by a little, which is what `countStuckGuests` is for.
-    expect(maxGuestLifetimeTicks(content, 'rest')).toBe(STAY + 1);
+    // THE WAIT TERM IS `toleranceTicks` SINCE G-027b, where it was the lodging need's own
+    // `patienceTicks`. The two are the same quantity — how long a guest that never gets a room
+    // waits — and this content's is 10,000, so IT is the larger term here.
+    expect(maxGuestLifetimeTicks(content, 'rest')).toBe(10_000 + 1);
 
-    // 25 is below this need's PATIENCE of 30 and above the floor `bindContent` computes
-    // (the lodging need's own 20 satisfyTicks), so the patience term is the larger one.
-    const shortStay = bindContent({
-      roomTypes: [roomType('roomA', ['rest'])],
-      needTypes: [needType('rest')],
-      guestRules: [rules(25)],
+    // And with a tolerance below the stay, the stay is the larger one.
+    const shortWait = bindContent({
+      roomTypes: [roomType('roomA', ['rest']), roomType('lounge', ['snack'])],
+      needTypes: [needType('rest', true), needType('snack', false)],
+      guestRules: [{ ...rules(STAY), toleranceTicks: PATIENCE }],
     });
-    expect(maxGuestLifetimeTicks(shortStay, 'rest')).toBe(PATIENCE + 1);
+    expect(maxGuestLifetimeTicks(shortWait, 'rest')).toBe(STAY + 1);
   });
 
   it('AND `countStuckGuests` COUNTS A ONE-TICK OVERSTAY — the claim its comment makes, executed', () => {
@@ -179,7 +211,10 @@ describe('the stay ends on a clock, and the clock starts at the door', () => {
     // LEGITIMATE — checkout fires during the tick age reaches `stay`, so it is still in the
     // store at that tick's commit boundary — and a guest at `max + 1` is the overstay.
     // ========================================================================
-    const max = Math.max(STAY, PATIENCE);
+    // The two terms are the stay and the TOLERANCE (G-027b), so this content's own numbers are
+    // read back rather than the need's.
+    const toleranceHere = 10_000;
+    const max = Math.max(STAY, toleranceHere);
     expect(maxGuestLifetimeTicks(content, 'rest')).toBe(max + 1);
 
     const guestAged = (age: number): GuestStore => ({
@@ -192,7 +227,8 @@ describe('the stay ends on a clock, and the clock starts at the door', () => {
           roomEntityId: 1,
           engagement: null,
           needs: [
-            { needId: 'rest', patienceRemaining: PATIENCE, progressRemaining: 0, metBy: 'room', abandonCount: 0 },
+            { needId: 'rest', deficit: 0, metBy: 'room', abandonCount: 0 },
+            { needId: 'snack', deficit: 3, metBy: null, abandonCount: 0 },
           ],
         },
       ],
@@ -238,11 +274,10 @@ describe('NO DEPARTURE READS NEED STATE TO DECIDE THE STAY IS OVER', () => {
     expect(branch).toContain('tick - guest.arrivedTick');
     expect(branch).toContain('lodgingRoom');
     for (const forbidden of [
-      'isNeedMet',
-      'isNeedFailed',
-      'isNeedPending',
-      'progressRemaining',
-      'patienceRemaining',
+      'isNeedFull',
+      'isNeedEmpty',
+      'isNeedWanted',
+      'deficit',
       'findNeedState',
       'lodgingNeed',
       'guest.needs',
@@ -251,15 +286,30 @@ describe('NO DEPARTURE READS NEED STATE TO DECIDE THE STAY IS OVER', () => {
     }
   });
 
-  it('and the scan can fail — the same predicate over a branch that DOES read need state', () => {
-    // ADR-0007: a check that cannot fail is not a check. The give-up branch four lines below
-    // the checkout one legitimately reads `isNeedFailed`, so pointing the identical scan at
-    // it must go red. That is the failing companion, and it doubles as the record that
-    // ADR-0017 4(b) is NOT implemented here: giving up still reads lodging patience.
-    const start = source.indexOf('if (lodging !== undefined && isNeedFailed(lodging))');
-    expect(start).toBeGreaterThan(0);
+  it('and the give-up branch is a clock too now, so BOTH ways out are clocks', () => {
+    // G-027b. This used to be the failing companion: the give-up branch read `isNeedFailed` on
+    // the lodging need, so pointing the checkout scan at it went red. It does not any more —
+    // the wait ends on `toleranceTicks` from the guest's own `arrivedTick` — which is a
+    // strengthening of this whole block rather than a hole in it, and it is asserted here so
+    // the change cannot be silent.
+    const start = source.indexOf('if (lodgingUnserved && tick - guest.arrivedTick >= tolerance)');
+    expect(start, 'the give-up branch has been rewritten; this scan is pointed at nothing').toBeGreaterThan(0);
     const end = source.indexOf('continue;', start);
     const branch = source.slice(start, end);
-    expect(branch).toContain('isNeedFailed');
+    expect(branch).not.toContain('findNeedState');
+    expect(branch).not.toContain('deficit');
+  });
+
+  it('and the scan can fail — the same predicate over a branch that DOES read need state', () => {
+    // ADR-0007: a check that cannot fail is not a check. The ENGAGEMENT RELEASE in step 5
+    // legitimately reads need state — it lets go of a provider when the need it serves reaches
+    // full — so pointing the identical scan at it must go red. That is the failing companion,
+    // and it moved here because the branch it used to be pointed at stopped reading need state
+    // when both terminators became clocks.
+    const start = source.indexOf('if (served === undefined || !isNeedWanted(');
+    expect(start).toBeGreaterThan(0);
+    const branch = source.slice(start, source.indexOf('}', start));
+    expect(branch).toContain('isNeedWanted');
+    expect(branch).toContain('findNeedType');
   });
 });

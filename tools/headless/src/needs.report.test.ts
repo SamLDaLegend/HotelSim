@@ -133,10 +133,20 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // zero unmet, either capacity or the stay length has moved and the criterion has become
     // easier rather than the hotel better.
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBe(192);
-    expect(lodging?.unmet).toBe(161);
+    expect(lodging?.met).toBe(188);
+    expect(lodging?.unmet).toBe(165);
     expect(departuresOf(summary, 'gaveUp')).toBe(161);
     expect(departuresOf(summary, 'checkedOut')).toBe(192);
+    // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
+    // the countdown, a guest that checked out had by definition completed its lodging need, so
+    // the two columns were the same number. "Met" is now a BAND read at the moment of
+    // departure — below the want line — and four of the 192 guests that checked out walked out
+    // of the door with their rest above it, having been away when their clock ran out. The
+    // conservation law is unmoved: 188 + 165 = 353 = every guest that arrived and left.
+    expect((lodging?.met ?? 0) + (lodging?.unmet ?? 0)).toBe(
+      departuresOf(summary, 'gaveUp') + departuresOf(summary, 'checkedOut'),
+    );
+    expect(lodging?.met).toBeLessThan(departuresOf(summary, 'checkedOut'));
   });
 
   it('tells THREE DIFFERENT STORIES, which is what the criterion above needs to mean anything', () => {

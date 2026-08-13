@@ -266,6 +266,27 @@ export type GuestRulesData = {
    * ticks.
    */
   readonly stayDurationTicks?: number | undefined;
+  /**
+   * WHERE A GUEST STARTS WANTING A NEED, as a share of that need's capacity in basis points
+   * (G-027b). Pursued from this deficit; pursued until FULL — the hysteresis is the gap
+   * between those two lines, and it is also where every need starts at arrival.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `abandonMarginBasisPoints` contract exactly, and the
+   * absence has the same clean reading: content written before G-027b had no want line because
+   * in that era a need was a task with a deadline rather than a level. `wantAtOf` supplies the
+   * era's own answer for such content — see it for why that value is 0 and not a guess.
+   */
+  readonly wantAtBasisPoints?: number | undefined;
+  /**
+   * How long a guest is left wanting before it gives up and leaves, in ticks (G-027b).
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK, and absence is a true historical statement for the reason
+   * `abandonMarginBasisPoints`'s is: in the pre-G-027b era the fuse was a countdown on the
+   * lodging need itself (`patienceTicks`), so content from that era says nothing about this and
+   * `toleranceOf` reproduces it. See `toleranceTicksSchema` for why 180 is PRESERVED rather
+   * than re-derived.
+   */
+  readonly toleranceTicks?: number | undefined;
 };
 
 /**
@@ -343,13 +364,29 @@ export type NeedTypeData = {
    * out of history.
    */
   readonly role?: NeedRole | undefined;
-  /** Ticks of provision that meet the need. */
-  readonly satisfyTicks: number;
   /**
-   * Ticks a guest waits for a provider before giving up — and, since G-012, the ceiling
-   * on this need's urgency. See the header of `needs.ts` for the closed form.
+   * How long a FULL stock lasts before it is empty, in ticks (G-027b, ADR-0017 §1).
+   *
+   * The denominator of this need's pressure, and the thing `wantAtBasisPoints` is a fraction
+   * OF. What "decay" counts depends on the ROLE — wall time for an engagement need, AWAY time
+   * for the lodging need — see `advanceNeed` in `needs.ts` and `capacityTicksSchema` in
+   * `packages/content` for the derivation of the shipped 600 / 1,400.
+   *
+   * REQUIRED ON DISK AND REQUIRED HERE, which is the FIRST need-type field to be required in
+   * the sim. `satisfyTicks` and `patienceTicks` were required here too; there is no era in
+   * which a need type carried neither pair, because a need with no shape cannot be simulated
+   * at all. What IS optional stays optional (`role`).
    */
-  readonly patienceTicks: number;
+  readonly capacityTicks: number;
+  /**
+   * How much one tick of provision restores, in ticks of stock (G-027b).
+   *
+   * Decay is always one per tick, so this is the only rate in the model: a need's whole shape
+   * is this number against `capacityTicks`. It also fixes the need's share of a guest's time —
+   * `1/(1 + refillPerTick)` in steady state — which is what `assertNeedDemandIsServiceable`
+   * bounds and what G-028's idle share is derived from.
+   */
+  readonly refillPerTick: number;
 };
 
 /**
@@ -641,15 +678,23 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     reviewScoreMin: min,
     reviewScoreMax: max,
     stayDurationTicks: stay,
+    wantAtBasisPoints: wantAt,
+    toleranceTicks: tolerance,
     ...rest
   } = rules;
-  const withStay = cloneStayDuration(rules.id, cloneReviewScale(rules.id, rest, min, max), stay);
+  const withStay = cloneStockRules(
+    rules.id,
+    cloneStayDuration(rules.id, cloneReviewScale(rules.id, rest, min, max), stay),
+    wantAt,
+    tolerance,
+  );
   if (margin === undefined) return withStay;
   if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
     throw new Error(
       `bindContent: guest rules "${rules.id}" have an abandonMarginBasisPoints of ${String(margin)}; it must be an ` +
-        `integer in 0..${ONE_WHOLE_BASIS_POINTS}. The margin is a fraction of a need's own patience in basis points — ` +
-        `${ONE_WHOLE_BASIS_POINTS} is one whole — and it is compared against a pressure, which can never exceed that.`,
+        `integer in 0..${ONE_WHOLE_BASIS_POINTS}. The margin is a fraction of a need's own capacityTicks in basis ` +
+        `points — ${ONE_WHOLE_BASIS_POINTS} is one whole — and it is compared against a pressure, which can never ` +
+        'exceed that.',
     );
   }
   return { ...withStay, abandonMarginBasisPoints: margin };
@@ -678,6 +723,50 @@ function cloneStayDuration(id: ContentId, rest: GuestRulesData, stay: number | u
     );
   }
   return { ...rest, stayDurationTicks: stay };
+}
+
+/**
+ * The stock-model half of `cloneGuestRules` (G-027b): the want line and the tolerance.
+ *
+ * The `cloneStayDuration` discipline exactly — a float, a negative or an out-of-range value from
+ * a raw host dies here, at bind time, with the table named, rather than inside `advanceNeed` as
+ * a want line no deficit can reach. Each key is STRIPPED when absent rather than carried as
+ * `undefined`, because only the absent form is the "predates the stock model" statement.
+ *
+ * INDEPENDENTLY OPTIONAL, WHERE THE REVIEW SCALE'S TWO ARE NOT. Half a review scale is a
+ * designer who stopped typing, because the two bounds only mean anything together. These two are
+ * separate mechanisms — where a guest starts wanting, and how long it is left wanting — and each
+ * absence has its own exact historical reading (`wantAtOf`, `toleranceOf`). Refusing the pair
+ * would refuse content neither field is missing FROM.
+ */
+function cloneStockRules(
+  id: ContentId,
+  rest: GuestRulesData,
+  wantAt: number | undefined,
+  tolerance: number | undefined,
+): GuestRulesData {
+  let result = rest;
+  if (wantAt !== undefined) {
+    if (!Number.isInteger(wantAt) || wantAt < 0 || wantAt > ONE_WHOLE_BASIS_POINTS) {
+      throw new Error(
+        `bindContent: guest rules "${id}" have a wantAtBasisPoints of ${String(wantAt)}; it must be an integer in ` +
+          `0..${ONE_WHOLE_BASIS_POINTS}. The want line is a fraction of a need's own capacity in basis points — ` +
+          `${ONE_WHOLE_BASIS_POINTS} is one whole — and it is compared against a deficit, which never exceeds it.`,
+      );
+    }
+    result = { ...result, wantAtBasisPoints: wantAt };
+  }
+  if (tolerance !== undefined) {
+    if (!Number.isSafeInteger(tolerance) || tolerance < 1) {
+      throw new Error(
+        `bindContent: guest rules "${id}" have a toleranceTicks of ${String(tolerance)}; it must be a positive whole ` +
+          'number of ticks. It is how long a guest is left wanting before it gives up, measured in ticks from the ' +
+          'moment nothing has been serving it, and one tick is one in-game minute.',
+      );
+    }
+    result = { ...result, toleranceTicks: tolerance };
+  }
+  return result;
 }
 
 /**
@@ -776,25 +865,33 @@ function cloneReviewScale(
  * IT IS A NECESSARY CONDITION AND IT IS DELIBERATELY LOOSE. AN EARLIER VERSION OF THIS
  * PARAGRAPH CALLED IT TIGHT, AND THAT WAS FALSE — INCLUDING FOR THE ARM CHOSEN TO SHOW IT.
  *
- * Only the LODGING need can contribute a non-extreme `q`; every other need scores 0 or
- * `ONE_WHOLE`. And the wait share takes `patienceTicks + 1` values, not `ONE_WHOLE + 1`. So
- * the reachable count is nothing like the admitted one (`review.scale.test.ts` counts both
- * by enumeration rather than by this formula):
+ * EVERY `q` IS NOW EXTREME — 0 or `ONE_WHOLE` — so a guest's experience takes at most
+ * `needCount + 1` values and the reachable count collapses to that. The three arms
+ * `review.scale.test.ts` ENUMERATES (it counts, rather than applying this formula):
  *
- *   raw(1, 0, 10000), patienceTicks 200      admits 10,001   reaches    201
- *   the shipped shape (N=4, patience 180)    admits 40,001   reaches    721
- *   N=1 with patienceTicks = ONE_WHOLE       admits 10,001   reaches 10,001
+ *   raw(1, 0, 10000)                         admits 10,001   reaches     2
+ *   the shipped shape (N=4)                  admits 40,001   reaches     5
+ *   N=1 with the widest lodging need         admits 10,001   reaches     2
  *
- * The bound is tight ONLY when the lodging need's `patienceTicks` reaches `ONE_WHOLE` —
- * seven simulated days of patience for a room — and the arm that used to be cited as proof
- * of tightness is onto for **2.0% of its scale**. `balance-critic` found this at the final
- * round.
+ * The bound is therefore tight NOWHERE, and there is no content that would make it tight.
+ *
+ * ---------------------------------------------------------------------------
+ * THE READINGS ABOVE WERE 201 / 721 / 10,001 UNTIL θ-a SWEEP 2, AND THE TABLE THEY CAME FROM
+ * IS A DELETED MODEL. They were a count over the WAIT SHARE, the one non-extreme `q`, which
+ * took `patienceTicks + 1` values — and G-027a deleted the wait term (`reviews.ts`'s header)
+ * before ADR-0017 §1 deleted `patienceTicks`. The third row's claim — that the bound goes
+ * tight when the lodging need's patience reaches `ONE_WHOLE` — cannot even be stated now:
+ * there is no patience for a scale to be onto through. `balance-critic` found the ORIGINAL
+ * over-claim of tightness at G-019's final round, and the correction it forced is what the
+ * rest of this block says; the numbers that carried it did not survive the model.
+ * ---------------------------------------------------------------------------
  *
  * SO THE CLAIM IS RESTATED TO WHAT IT IS: **a sound necessary condition whose purpose is the
  * RESOURCE BOUND, not surjectivity.** Nothing correct is refused, which is the property that
  * matters and is unchanged. What must NOT be said — and the refusal message no longer says
  * it — is that a document passing this bound has no unreachable scores: `0..40000` binds and
- * then renders 40,001 rows of which 39,280 are scores no guest can leave. Refusing a
+ * then renders 40,001 rows of which 39,996 are scores no guest can leave (it read 39,280
+ * until θ-a sweep 2, which was 40,001 less the 721 the wait term used to reach). Refusing a
  * document for a defect that passing documents share is an argument that does not survive
  * being written down.
  * ---------------------------------------------------------------------------
@@ -842,13 +939,21 @@ function assertReviewScaleIsBoundedByTheNeedTable(
 /**
  * Refuses content in which a guest could book a room and never leave it (G-027a).
  *
- * THE ONE THING A STAY MUST DO IS END. ADR-0017 §4 leaves exactly two terminators —
- * checkout after `stayDurationTicks`, and the guest giving up — and only the second is
- * reachable for a guest that HAS a room, because a served need's patience regenerates every
- * tick. So content that declares a lodging need and no stay duration describes a hotel whose
- * guests accumulate without bound: the failure G-027's own goal block names, and §6.1's
+ * THE ONE THING A STAY MUST DO IS END. ADR-0017 §4 leaves exactly two terminators — checkout
+ * after `stayDurationTicks`, and the guest giving up after `toleranceTicks` of being left
+ * wanting — and the second is **unreachable for a guest that HAS a room**: the give-up branch
+ * (`guests.ts` step 6) tests `roomEntityId === NO_ENTITY`, because a room serves the lodging
+ * need on every tick the guest is at home and so no housed guest has an unserved run at all.
+ * So content that declares a lodging need and no stay duration describes a hotel
+ * whose guests accumulate without bound: the failure G-027's own goal block names, and §6.1's
  * "a need that cannot be satisfied is a bug, not difficulty" one level up — a STAY that
  * cannot end.
+ *
+ * THE SENTENCE ABOVE READ "a served need's PATIENCE REGENERATES every tick" UNTIL θ-a SWEEP 2,
+ * WHICH IS THE COUNTDOWN MODEL'S WORDING FOR THE SAME REFUSAL. Under a stock there is no
+ * patience to regenerate; what makes the give-up branch unreachable is the unserved RUN
+ * resetting, and that is a different mechanism reaching the same verdict. It is spelled out
+ * because this docstring is one of the four surfaces R1 named — see `needs.ts`'s header.
  *
  * KEYED ON THE LODGING NEED RATHER THAN ON THE NEED TABLE OR ON THE GUEST-RULES TABLE, and
  * both halves of that are load-bearing:
@@ -875,11 +980,27 @@ function assertEveryStayCanEnd(
     throw new Error(
       `bindContent: this content declares the lodging need "${lodgingNeedId}" and no guest rules at all, so nothing ` +
         'says how long a stay lasts. A stay ends by checkout or by the guest giving up (ADR-0017), and a guest that ' +
-        'holds a room can never give up — its patience regenerates every tick it is served — so such a guest would ' +
-        'check in and never leave. Declare guest rules carrying stayDurationTicks.',
+        'holds a room can never give up — the give-up branch is asked only of a guest with NO room — so such a guest ' +
+        'would check in and never leave. Declare guest rules carrying stayDurationTicks.',
     );
   }
   for (const rules of guestRules) {
+    // THE SECOND TERMINATOR IS CHECKED HERE TOO SINCE G-027b, in the same function and for the
+    // identical reason. ADR-0017 §4 leaves two ways out and this refusal is named for both of
+    // them; under the countdown model the give-up fuse was `patienceTicks` on the lodging need
+    // itself, so content from that era says nothing about `toleranceTicks` and there is no
+    // historical value to fall back on. Absent it, a guest that never gets a room never checks
+    // out either — it holds no room to check out OF — and accumulates in the lobby forever,
+    // which is the same failure this function already refuses one field over.
+    if (rules.toleranceTicks === undefined) {
+      throw new Error(
+        `bindContent: guest rules "${rules.id}" declare no toleranceTicks, but this content declares the lodging ` +
+          `need "${lodgingNeedId}". A stay ends by checkout after stayDurationTicks or by the guest giving up after ` +
+          'toleranceTicks of being left wanting (ADR-0017 §4), and a guest that never gets a room can only leave the ' +
+          'second way — so under these rules it would wait in the lobby forever. The era this replaces fused that ' +
+          'wait with a countdown on the lodging need, which a stock model has no field to restate.',
+      );
+    }
     if (rules.stayDurationTicks !== undefined) continue;
     throw new Error(
       `bindContent: guest rules "${rules.id}" declare no stayDurationTicks, but this content declares the lodging ` +
@@ -892,55 +1013,217 @@ function assertEveryStayCanEnd(
 }
 
 /**
- * Refuses content whose stay is too short for what its guests come for (G-027a).
+ * Refuses a need table that demands more of a guest's time than a guest HAS (G-027b).
  *
- * THE REQUIREMENT: **everything a guest forms must be completable inside its stay.** A need
- * every guest forms and no guest can ever finish is guaranteed unhappiness rather than
- * difficulty (`HOTELSIM.md` §6.1) — the same standing as a need no reachable provider claims,
- * and refused in the same place for the same reason.
+ * THE REQUIREMENT: **a guest must be able to keep up with the needs it forms.** A need every
+ * guest forms and no guest can ever hold up is guaranteed unhappiness rather than difficulty
+ * (`HOTELSIM.md` §6.1) — the same standing as a need no reachable provider claims, and refused
+ * in the same place for the same reason.
  *
- * THE FLOOR IS A MAX AND NOT A SUM, AND THAT IS A FACT ABOUT THE TICK RATHER THAN A CHOICE.
- * The lodging need is served on every tick the guest holds a room (`stepGuests` step 4), and
- * engagement needs are served ONE PROVIDER AT A TIME. So the two are parallel tracks — a
- * guest eats while its room goes on resting it — and the binding constraint is whichever
- * track is longer:
+ * IT IS A SHARE OF A TICK AND NOT A LENGTH OF STAY, AND THAT IS A FACT ABOUT A STOCK. Under a
+ * task model the question was "does everything FIT inside the stay", because a need was finished
+ * once and then over. Nothing is over now: a stock decays for as long as the guest is there, so
+ * the constraint is a RATE. A guest is served ONE thing at a time, so the shares must leave
+ * something over:
  *
- *     floor = max( lodging satisfyTicks , Σ engagement satisfyTicks )
+ *     Σ over engagement needs of  1/(1 + refillPerTick)     the duty cycle of a need that
+ *                                                           decays whenever it is not served
+ *     + that away time / lodging refillPerTick              rest is what the activity COSTS
+ *     <  ONE_WHOLE                                          a guest has one whole tick
  *
- * On the shipped table both tracks are 480 (the coincidence ADR-0017 calls the wall: the
- * three engagement needs sum to exactly `night_rest.satisfyTicks`), so the floor is 480 and
- * the shipped 1,440 leaves 960 ticks of slack.
+ * `needShareBasisPoints` below owns the fold and states why the lodging term is not `1/(1+r)`.
+ * On the shipped table the total is well under one whole, and the slack is what G-028's idle
+ * share is written against — the same fold, read as `ONE_WHOLE - total`.
  *
- * IT IS NECESSARY AND NOT SUFFICIENT, AND SAYING SO IS THE POINT. Clearing the floor does not
- * promise a guest finishes anything: it must still find providers free, and travel is M3's.
- * What it refuses is the content in which finishing was arithmetically impossible before a
- * guest took a step, which is the class that is a content bug rather than a hard hotel.
+ * IT IS NECESSARY AND NOT SUFFICIENT, AND SAYING SO IS THE POINT. Clearing it does not promise a
+ * guest keeps anything full: it must still find providers free, and travel is M3's. What it
+ * refuses is the content in which keeping up was arithmetically impossible before a guest took a
+ * step, which is the class that is a content bug rather than a hard hotel.
  *
- * Content with no lodging need is untouched — it has no stay for a need to fit inside.
+ * Content with no lodging need is untouched by the lodging term — there is no rest for activity
+ * to cost — and the engagement sum still binds.
+ *
+ * ---------------------------------------------------------------------------
+ * THIS DOCSTRING DESCRIBED `assertStayFitsTheNeedTable` UNTIL θ-a SWEEP 2, WHICH IS THE FUNCTION
+ * THIS ONE REPLACED. It said *"refuses content whose stay is too short"*, gave the floor as
+ * `max(lodging satisfyTicks, Σ engagement satisfyTicks)`, and read *"both tracks are 480 … the
+ * shipped 1,440 leaves 960 ticks of slack"* — against a signature that no longer takes
+ * `guestRules`, reads no stay, and names two fields ADR-0017 §1 deleted. The call site's comment
+ * had been updated and this had not, which is the R1 asymmetry exactly: a PLAN names call sites.
+ * See `needs.ts`'s header for the four surfaces that outlive their model.
+ * ---------------------------------------------------------------------------
  */
-function assertStayFitsTheNeedTable(
+function assertNeedDemandIsServiceable(
+  needTypes: readonly NeedTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  const share = needShareBasisPoints(needTypes, lodgingNeedId);
+  if (share.total < ONE_WHOLE_BASIS_POINTS) return;
+  throw new Error(
+    `bindContent: this need table demands ${share.total} basis points of a guest's time — ${share.engagement} for its ` +
+      `engagement needs and ${share.lodging} for lodging — which is ${ONE_WHOLE_BASIS_POINTS} or more, the whole of ` +
+      'it. A guest is served ONE thing at a time, so such a table ships needs no guest could ever keep up with: ' +
+      'guaranteed unhappiness rather than difficulty (HOTELSIM.md §6.1). A need held in steady state is served for ' +
+      '1/(1+refillPerTick) of the time, and the lodging need costs a further 1/refillPerTick of the away time the ' +
+      'engagement needs generate. Raise a refillPerTick.',
+  );
+}
+
+/**
+ * Each need's share of a guest's time, in basis points, and what is left over.
+ *
+ * ONE FOLD, TWO CALLERS, AND THAT IS WHY IT IS A FUNCTION RATHER THAN A LOOP IN EACH. The
+ * refusal above reads `total`; the idle-share derivation G-028's criterion is written against
+ * reads `ONE_WHOLE - total`. Two copies of this arithmetic would be two chances for the gate and
+ * the criterion to describe different hotels, which is G-018's duplicated-constant defect and
+ * ADR-0021's proxy defect wearing one another's clothes.
+ *
+ * THE LODGING TERM IS NOT `1/(1+r)` AND THAT SUBSTITUTION IS THE DEFECT THIS GOAL SHIPPED AND
+ * WITHDREW. `1/(1+r)` is the duty cycle of a need that decays whenever it is not served, which
+ * is true of an engagement need and FALSE of the lodging need: rest decays only while the guest
+ * is AWAY, and away time is bounded by the engagement needs' own service. So the lodging need's
+ * share is that away time divided by its refill rate — sleep is what the day's activity costs,
+ * not an independent line in a budget. Sized the other way, `night_rest` never becomes wanted at
+ * all and the guest sits in its room for the whole stay with a full bar.
+ *
+ * Every division floors, so every share is reported at or below its true value and the refusal
+ * above is permissive by at most one basis point per need. The direction is stated because it is
+ * the one that admits a marginal table rather than refusing a legal one.
+ */
+function needShareBasisPoints(
+  needTypes: readonly NeedTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): { readonly engagement: number; readonly lodging: number; readonly total: number } {
+  let engagement = 0;
+  let lodgingRefill: number | undefined;
+  for (const needType of needTypes) {
+    if (needType.id === lodgingNeedId) lodgingRefill = needType.refillPerTick;
+    else engagement += Math.floor(ONE_WHOLE_BASIS_POINTS / (1 + needType.refillPerTick));
+  }
+  const lodging = lodgingRefill === undefined ? 0 : Math.floor(engagement / lodgingRefill);
+  return { engagement, lodging, total: engagement + lodging };
+}
+
+/**
+ * Refuses content whose lodging need could never become wanted inside a stay (G-027b).
+ *
+ * THE REQUIREMENT — this goal's own headline, applied to the one need the previous model made
+ * terminal by construction: **NO NEED IS TERMINAL.** The lodging need must become wanted, be
+ * slept off, and become wanted AGAIN within one stay. Once is indistinguishable from "at the
+ * last tick of the stay", which is indistinguishable from never.
+ *
+ *     away ticks per stay   A = Σ over engagement needs of stayDurationTicks/(1+refillPerTick)
+ *     the guest crosses the want line every   wantAtBasisPoints × capacityTicks / 10,000  of them
+ *     require at least two crossings          wantAt × capacity / 10,000  ≤  A / 2
+ *
+ * asserted as `2 × wantAt × capacity ≤ A × 10,000`, integer throughout.
+ *
+ * THIS IS NOT A HYPOTHETICAL REFUSAL. The first number set G-027b planned — `capacityTicks`
+ * 3,200 against an A of 540 — fails it by a factor of three, and the consequence was measured
+ * rather than imagined: rest never became wanted, the idle share came out at 62.5% against a
+ * 61.9% baseline, and the model failed to move the number it exists to move. The bound is
+ * REACHABLE from the other side too: at the shipped rates a capacity of 900 sits exactly on it
+ * and 901 is refused.
+ *
+ * IT IS ASKED OF EVERY GUEST-RULES ROW, for the reason `assertEveryStayCanEnd` is: an archetype
+ * at M6 with its own want line would otherwise load and be discovered by a guest.
+ *
+ * Content with no lodging need is untouched — it has no lodging need to strand.
+ */
+function assertLodgingBecomesWanted(
   guestRules: readonly GuestRulesData[],
   needTypes: readonly NeedTypeData[],
   lodgingNeedId: ContentId | undefined,
 ): void {
   if (lodgingNeedId === undefined) return;
-  let engagementTotal = 0;
-  let lodgingTrack = 0;
-  for (const needType of needTypes) {
-    if (needType.id === lodgingNeedId) lodgingTrack = needType.satisfyTicks;
-    else engagementTotal += needType.satisfyTicks;
-  }
-  const floor = engagementTotal > lodgingTrack ? engagementTotal : lodgingTrack;
+  const lodging = needTypes.find((needType) => needType.id === lodgingNeedId);
+  if (lodging === undefined) return;
   for (const rules of guestRules) {
     const stay = rules.stayDurationTicks;
-    if (stay === undefined || stay >= floor) continue;
+    const wantAt = rules.wantAtBasisPoints;
+    if (stay === undefined || wantAt === undefined) continue;
+    let away = 0;
+    for (const needType of needTypes) {
+      if (needType.id === lodgingNeedId) continue;
+      away += Math.floor(stay / (1 + needType.refillPerTick));
+    }
+    if (2 * wantAt * lodging.capacityTicks <= away * ONE_WHOLE_BASIS_POINTS) continue;
     throw new Error(
-      `bindContent: guest rules "${rules.id}" declare a stayDurationTicks of ${stay}, but a guest under this need ` +
-        `table needs ${floor} tick(s) to finish what it forms: ${lodgingTrack} of lodging and ${engagementTotal} of ` +
-        'engagement, which run in parallel, so the floor is the larger of the two. A stay shorter than that ships a ' +
-        'need every guest forms and no guest can complete, which is guaranteed unhappiness rather than difficulty ' +
-        '(HOTELSIM.md §6.1). Raise stayDurationTicks or lower a satisfyTicks.',
+      `bindContent: guest rules "${rules.id}" put the want line at ${wantAt} basis points of the lodging need ` +
+        `"${lodgingNeedId}"'s ${lodging.capacityTicks}-tick capacity, so a guest must spend ` +
+        `${Math.floor((wantAt * lodging.capacityTicks) / ONE_WHOLE_BASIS_POINTS)} tick(s) away from its room before it ` +
+        `wants rest at all — and this need table only generates ${away} away-tick(s) in a ${stay}-tick stay. The ` +
+        'lodging need decays in AWAY time and nowhere else (ADR-0017 §2), so it would never become wanted twice, or ' +
+        'in the worst case never at all: the guest holds a room for the whole stay with a full bar, which is the ' +
+        'furniture problem ADR-0017 exists to remove. Lower capacityTicks, lower wantAtBasisPoints, or raise a ' +
+        'refillPerTick so the guest is out of its room more.',
     );
+  }
+}
+
+/**
+ * Refuses content whose DECLARED want line rounds away to nothing (G-027b, round 1).
+ *
+ * THE REQUIREMENT: **a guest arrives wanting everything, just barely.** `formNeedVector` forms
+ * every need AT its want line, so the line is also the arrival state — and a line of 0 forms a
+ * need that is already FULL with nothing recorded as having served it. That is the one need
+ * vector `assertNeedVector` refuses, so before this check the first arrival threw from inside
+ * the tick under content that had bound cleanly. `sim-engineer` reported that shape as the
+ * single biggest cost multiplier in repairing ~45 fixtures for this goal: a refusal that fires
+ * at load is worth more than one that fires at tick 1, which is the argument
+ * `assertNeedsAreSatisfiable` and `assertLodgingBecomesWanted` already rest on.
+ *
+ * ---------------------------------------------------------------------------
+ * IT REFUSES A DECLARED LINE AND NOT AN ABSENT ONE, AND THAT SPLIT IS THE ONE THIS FILE MAKES
+ * EVERYWHERE ELSE: silence on a NEW document is a designer's oversight, silence in HISTORY is a
+ * statement (the `provides` / `requires` / price contract, ADR-0008). Two of the three ways in
+ * are a designer writing a number that does not do what they meant, and one is an era:
+ *
+ *   wantAtBasisPoints 0        REFUSED. `basisPointsSchema` permits it and `cloneStockRules`
+ *                              admits it deliberately — 0 is a legal fraction, it is just not a
+ *                              legal PLACE TO START, and nobody writes it meaning "the era
+ *                              before want lines".
+ *   a line that FLOORS to 0    REFUSED. 50 basis points against a 100-tick capacity is half a
+ *                              tick, and a want line is a deficit in whole ticks. The number
+ *                              was written, and it rounded away — which is exactly the silent
+ *                              case a load-time message is worth having for.
+ *   wantAtBasisPoints absent   ACCEPTED, and handled where it belongs: `formNeedVector` forms
+ *                              at `max(1, line)`, so a guest under pre-G-027b content arrives
+ *                              one tick below full on every need — "barely wanting", which is
+ *                              what that era's `progressRemaining > 0` meant, exactly. Refusing
+ *                              it instead would make ADR-0008's reading of absence unrunnable
+ *                              rather than historical.
+ * ---------------------------------------------------------------------------
+ *
+ * ASKED OF EVERY GUEST-RULES ROW AND EVERY NEED TYPE, for the reason `assertLodgingBecomesWanted`
+ * is asked of every row: an archetype at M6 with its own want line would otherwise load and be
+ * discovered by the guest that formed under it. `wantAtOf` reads only the FIRST row today, so a
+ * later row is checked before anything reads it — the refusal is ahead of the reader on purpose.
+ *
+ * CONTENT WITH NO NEED TYPES IS UNTOUCHED, which is what keeps `SAVE_V1_CONTENT` binding and
+ * ticking (ADR-0006): it has no need for a line to be a fraction of, and a guest under it forms
+ * no vector for this to be true or false of.
+ */
+function assertEveryNeedIsWantedOnArrival(
+  guestRules: readonly GuestRulesData[],
+  needTypes: readonly NeedTypeData[],
+): void {
+  if (needTypes.length === 0) return;
+  for (const rules of guestRules) {
+    const wantAt = rules.wantAtBasisPoints;
+    if (wantAt === undefined) continue;
+    for (const needType of needTypes) {
+      if (wantLineOf(needType, wantAt) > 0) continue;
+      throw new Error(
+        `bindContent: guest rules "${rules.id}" put the want line at ${wantAt} basis points, which on need ` +
+          `"${needType.id}"'s ${needType.capacityTicks}-tick capacity is a line of 0 ticks. A guest is formed AT its ` +
+          'want line, so it would arrive with that need already FULL and nothing recorded as having served it — the ' +
+          'one need vector assertNeedVector refuses, thrown on the first arrival rather than here. A guest arrives ' +
+          'wanting everything, just barely (ADR-0017 §1). Raise wantAtBasisPoints, or raise this need\'s ' +
+          'capacityTicks so the fraction reaches a whole tick. (Omitting the key entirely is the different, ' +
+          'historical statement and is accepted: such a guest arrives one tick below full.)',
+      );
+    }
   }
 }
 
@@ -956,6 +1239,24 @@ function assertStayFitsTheNeedTable(
  */
 function cloneNeedType(needType: NeedTypeData): NeedTypeData {
   const { role, ...rest } = needType;
+  // THE TWO RATES ARE VALIDATED HERE AND WERE NOT BEFORE (G-027b), and the reason is that they
+  // are now DIVISORS rather than counters. `pressureBasisPoints` divides by `capacityTicks` and
+  // the duty-cycle refusals divide by `1 + refillPerTick`; a zero, a float or a negative from a
+  // raw host would reach those as an Infinity or a NaN in hashed state, which is an I2
+  // divergence with no tolerance to absorb it. The `cloneEconomy` discipline, arriving late
+  // because the fields only became load-bearing at this goal.
+  for (const [field, value] of [
+    ['capacityTicks', needType.capacityTicks],
+    ['refillPerTick', needType.refillPerTick],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new Error(
+        `bindContent: need type "${needType.id}" has a ${field} of ${String(value)}; it must be a whole number of ` +
+          'ticks of at least 1. A need is a stock that decays one tick at a time and is refilled in whole ticks ' +
+          '(ADR-0017 §1), and both numbers are divisors — a zero would put an Infinity in hashed state (I2).',
+      );
+    }
+  }
   if (role === undefined) return { ...rest };
   if (role !== 'lodging' && role !== 'engagement') {
     throw new Error(
@@ -1015,10 +1316,10 @@ function cloneEconomy(economy: EconomyData): EconomyData {
  *
  * This is the check HOTELSIM.md §6.1 puts FIRST in `ai-critic`'s catalogue: "needs that
  * can never be satisfied, producing guaranteed unhappiness ... If none exists, that is a
- * BLOCKER dressed up as content." A guest that forms such a need waits out its patience
- * and leaves unhappy every single time, and no test of the guest loop can tell that
- * apart from a hotel that is merely full. So it is rejected at the boundary, before a
- * world exists, on the one path every host goes through.
+ * BLOCKER dressed up as content." A guest that forms such a need watches it drain to empty
+ * and stay there for the whole stay, and leaves unhappy every single time — and no test of the
+ * guest loop can tell that apart from a hotel that is merely full. So it is rejected at the
+ * boundary, before a world exists, on the one path every host goes through.
  *
  * ---------------------------------------------------------------------------
  * DECLARED IS NOT REACHABLE, AND THAT DISTINCTION IS THE WHOLE OF G-013's CRITERION 3.
@@ -1476,7 +1777,19 @@ export function bindContent(content: SimContent): BoundContent {
   // reason still fails on that reason: a table naming two lodging needs, or a need nothing
   // provides, should say so rather than complain about a missing duration.
   assertEveryStayCanEnd(guestRules ?? [], lodgingNeedIn(needTypes ?? [])?.id);
-  assertStayFitsTheNeedTable(guestRules ?? [], needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  // THE TWO REFUSALS `assertStayFitsTheNeedTable` BECAME (G-027b, HOTELSIM.md §5.8: the class is
+  // preserved, not deleted). Its requirement — everything a guest forms must be completable
+  // inside its stay — has no referent once nothing completes, and it split along the seam its
+  // own comment named: the DEMAND a table places on one guest at a time (`…DemandIsServiceable`),
+  // and the one need whose decay is not driven by the clock (`…LodgingBecomesWanted`).
+  assertNeedDemandIsServiceable(needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  assertLodgingBecomesWanted(guestRules ?? [], needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  // AND THE ARRIVAL STATE ITSELF, LAST OF ALL (round 1). It is the widest of the three — it
+  // reads every need type rather than the lodging one — so a table that is broken for a
+  // narrower, older reason still says so first. `assertLodgingBecomesWanted` above and this
+  // one bracket the want line from both sides: too high and the lodging need never becomes
+  // wanted, too low and no guest can be formed at all.
+  assertEveryNeedIsWantedOnArrival(guestRules ?? [], needTypes ?? []);
 
   // ABSENCE IS NOT EMPTINESS. Content that does not define need types produces the same
   // document — and therefore the same fingerprint — that it produced before need types
@@ -1558,11 +1871,16 @@ const EMPTY_NEED_TYPES: readonly NeedTypeData[] = Object.freeze([]);
 /**
  * THE NEED A GUEST BOOKS A ROOM FOR, or undefined if this content defines no needs.
  *
- * It is the one need whose satisfaction IS the stay: the guest holds a room for it from
- * check-in to check-out, meeting it is what `payForStay` charges for, and failing to find
- * a room for it before patience runs out is what makes a guest leave unsatisfied. Every
- * other need is an engagement need, met at a provider the guest engages one at a time and
- * never ending the stay (G-012).
+ * It is the one need a guest BOOKS for: it holds a room for it from check-in to check-out,
+ * and failing to get a room for it before its tolerance runs out is what makes a guest leave
+ * without ever checking in. Every other need is an engagement need, served at a provider the
+ * guest engages one at a time (G-012).
+ *
+ * WHAT IT NO LONGER DOES IS END THE STAY (ADR-0017 §4, θ-a sweep 3). This docstring read
+ * "the one need whose satisfaction IS the stay … meeting it is what `payForStay` charges for
+ * … before patience runs out", which was G-012's terminator exactly. A stay is now a
+ * DURATION: `payForStay` is charged at `arrivedTick + stayDurationTicks` (`guests.ts`), and a
+ * need finishing ends nothing because a stock never finishes.
  *
  * Reached through the ROLE rather than by position, which is what keeps the snake_case id
  * that names it out of `packages/sim` (ADR-0003) while still letting a designer move it.
@@ -1657,8 +1975,10 @@ export function firstGuestRules(bound: BoundContent): GuestRulesData | undefined
  * (ADR-0008). Content with no `guestRules` table is content from before this goal, and in
  * that era `reserve` returned early for any engaged guest — a guest could not abandon an
  * engagement at all. `ONE_WHOLE_BASIS_POINTS` reproduces that EXACTLY rather than
- * approximately: `pressureBasisPoints` returns at most 9,999 for a pending need (see
- * `utility.ts`, which ties that ceiling to `isNeedPending`'s own definition), and the
+ * approximately: `pressureBasisPoints` CLAMPS at 9,999 — **a clamp, not a consequence**, and
+ * this line called it a consequence of `isNeedPending`'s own definition until θ-a sweep 2, which
+ * is a field the stock model deletes. Under a stock nothing is terminal, an empty need is still
+ * scored, and the ceiling is imposed at the one site that computes pressure (`utility.ts`). The
  * challenger must EXCEED the incumbent by the margin, so a margin of 10,000 can never be
  * cleared however the two needs stand. It is not "a very large number"; it is the smallest
  * value at which the branch is unreachable.
@@ -1692,6 +2012,93 @@ export function abandonMarginOf(bound: BoundContent): number {
  */
 export function stayDurationOf(bound: BoundContent): number | undefined {
   return firstGuestRules(bound)?.stayDurationTicks;
+}
+
+/**
+ * Where a guest starts wanting a need, as a share of that need's capacity in basis points
+ * (G-027b) — or **0** for content that declares no want line.
+ *
+ * ---------------------------------------------------------------------------
+ * THE 0 IS NOW A REFUSAL TRIGGER RATHER THAN A LIVE READING, AND THIS PARAGRAPH USED TO SAY
+ * THE OPPOSITE (round 1). It said that content predating the stock model "behaves as it did",
+ * on the argument that a line of 0 reads as "wanted iff not full" — the pre-G-027b rule —
+ * because `isNeedWanted` also requires a non-zero deficit.
+ *
+ * IT DOES NOT BEHAVE AS IT DID; IT THROWS ON ITS FIRST GUEST. A guest is formed AT its want
+ * line (`formNeedVector`), so a line of 0 forms a need that is already FULL with nothing
+ * recorded as having served it — the one state `assertNeedVector` refuses — and the throw
+ * happens deep inside the tick rather than at load. `assertEveryNeedIsWantedOnArrival` now
+ * refuses that content at bind time, so the 0 returned here reaches nothing that could act on
+ * it: the only content that both binds and reads 0 is content with NO NEED TYPES, which has no
+ * want line to be a fraction of. The `> 0` clause in `isNeedWanted` is still live and still
+ * load-bearing, but for the OTHER end of the hysteresis — a full need is never wanted.
+ *
+ * The old sentence is corrected rather than deleted (HOTELSIM.md §5.8): a reader who
+ * remembers "absence is the era's own answer" needs to be told which half of that survived.
+ * Absence is still not a guess — it is still exactly what the era said — it is simply no
+ * longer a document this simulation can run.
+ * ---------------------------------------------------------------------------
+ */
+export function wantAtOf(bound: BoundContent): number {
+  return firstGuestRules(bound)?.wantAtBasisPoints ?? 0;
+}
+
+/**
+ * The deficit at which a guest starts wanting this need, in ticks of its own stock (G-027b).
+ *
+ * ONE DEFINITION, FOUR READERS — the arrival state and the wanting predicate in `needs.ts`, the
+ * report, and `assertEveryNeedIsWantedOnArrival` below — because a second copy of
+ * `wantAt × capacity / 10,000` is a second answer to "does this guest want dinner", and the two
+ * would drift at exactly the rounding.
+ *
+ * IT LIVES HERE AND NOT IN `needs.ts`, WHICH IS WHERE IT SHIPPED (round 1). The bind-time
+ * refusal that keeps this line above 0 has to compute it, `needs.ts` imports `content.ts` and
+ * not the other way round, and a fourth spelling of the arithmetic inside the check that guards
+ * it is ADR-0021's proxy defect exactly. `needs.ts` re-exports the symbol, so every caller is
+ * unchanged.
+ *
+ * IT FLOORS, and a want line that floors to 0 is REFUSED at bind time rather than handled here:
+ * a guest formed at a deficit of 0 is a full need nothing has served, which `assertNeedVector`
+ * rejects on its first commit. See `assertEveryNeedIsWantedOnArrival`.
+ */
+export function wantLineOf(needType: NeedTypeData, wantAtBasisPoints: number): number {
+  return Math.floor((wantAtBasisPoints * needType.capacityTicks) / ONE_WHOLE_BASIS_POINTS);
+}
+
+/**
+ * How long a guest is left wanting before it gives up, in ticks (G-027b), or `undefined` under
+ * content that declares none.
+ *
+ * `undefined` RATHER THAN A DEFAULT, the `stayDurationOf` call and not the `abandonMarginOf`
+ * one: the era this replaces fused the wait to a countdown on the lodging need, and a stock
+ * model has no field to restate that in, so any number here would be an invention. Content that
+ * declares a LODGING need and no tolerance is refused outright (`assertEveryStayCanEnd`), so the
+ * `undefined` a caller can actually meet belongs to content with no lodging need — which has no
+ * guest waiting for a room to give up on.
+ */
+export function toleranceOf(bound: BoundContent): number | undefined {
+  return firstGuestRules(bound)?.toleranceTicks;
+}
+
+/**
+ * The share of a stay a guest has nothing to want, in basis points — **the idle share**, derived
+ * from the shipped rates alone (G-027b).
+ *
+ * IT IS THE COMPLEMENT OF THE DEMAND `assertNeedDemandIsServiceable` REFUSES ON, computed by the
+ * same fold, so the number a criterion is written against and the number a gate refuses on can
+ * never describe different hotels. G-028's falsification threshold is this value; the measured
+ * share of a recorded run must come in BELOW it, because contention only ever lengthens the time
+ * a guest spends wanting.
+ *
+ * IT IS A CEILING AND NOT A PREDICTION, and the gap is one-directional for a reason worth
+ * stating: a guest arrives with every need exactly at its want line, so it carries an arrival
+ * deficit that adds service and removes idle from its one and only stay. A stepped world reads
+ * lower than this number, never higher — which is why the executed arm asserts `stepped ≤ this`
+ * rather than equality, and reports the gap.
+ */
+export function idleShareBasisPoints(bound: BoundContent): number {
+  const share = needShareBasisPoints(needTypesInOrder(bound), lodgingNeedOf(bound)?.id);
+  return ONE_WHOLE_BASIS_POINTS - share.total;
 }
 
 /**

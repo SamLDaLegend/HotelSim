@@ -48,6 +48,8 @@ import {
   needTypesInOrder,
   providesOf,
   stayDurationOf,
+  toleranceOf,
+  wantAtOf,
 } from './content.js';
 import type { BoundContent } from './content.js';
 import { draftGet, getEntity, isPlaced, NO_ENTITY } from './entities.js';
@@ -62,8 +64,7 @@ import {
   assertNeedVector,
   findNeedState,
   formNeedVector,
-  isNeedFailed,
-  isNeedPending,
+  isNeedWanted,
   recordNeedsAtDeparture,
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
@@ -153,9 +154,10 @@ export type Guest = {
    * The tick this guest arrived.
    *
    * Not decoration: it is what makes "stuck" a MEASURED fact rather than an assumption.
-   * A guest cannot legitimately live longer than its patience plus its stay, so age is
-   * the one question that distinguishes a guest which is progressing from one the
-   * simulation has forgotten about.
+   * A guest cannot legitimately live longer than the LARGER of its `toleranceTicks` and its
+   * stay (`maxGuestLifetimeTicks`, which explains why it is a max and not the sum this line
+   * used to name), so age is the one question that distinguishes a guest which is progressing
+   * from one the simulation has forgotten about.
    */
   readonly arrivedTick: number;
   /**
@@ -206,7 +208,9 @@ export type GuestStore = {
  * bump because that is true:
  *
  *   checkedOut            stepGuests step 6, the stay duration has elapsed in a room
- *   gaveUp                stepGuests step 6, the lodging need ran out of patience
+ *   gaveUp                stepGuests step 6, a roomless guest reached `toleranceTicks`
+ *                         (it read "the lodging need ran out of patience" until θ-a sweep 2,
+ *                         which is the countdown model's name for the same row)
  *   evictedRoomGone       stepGuests step 1, the room entity is no longer in the draft
  *   evictedRoomUnusable   stepGuests step 1, the entity is there and is not a valid room
  *   evictedCauseUnrecorded  `migrateV7ToV8` ONLY — see below
@@ -558,14 +562,14 @@ export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedSta
 }
 
 /**
- * The longest a guest can legitimately exist: it waits out its patience for a room, or it
- * gets one and stays until its stay duration elapses.
+ * The longest a guest can legitimately exist: it waits out its `toleranceTicks` for a room, or
+ * it gets one and stays until its stay duration elapses.
  *
  * IT IS A MAX AND IT IS EXACT SINCE G-027a, WHERE IT USED TO BE A SUM AND AN OVERESTIMATE.
  * The old bound was `patienceTicks + satisfyTicks + 1` — the guest queued, then its stay ran
  * from the moment it got a room, so the two terms ADDED. The checkout clock runs from
  * ARRIVAL (`arrivedTick + stayDurationTicks`), so queueing no longer extends anything: a
- * guest either leaves at `patienceTicks` having got nothing, or at `stayDurationTicks`
+ * guest either leaves at `toleranceTicks` having got nothing, or at `stayDurationTicks`
  * having got a room, and there is no path that reaches both. The bound is therefore the
  * larger of the two rather than their sum, and it is attained rather than merely respected —
  * which is what makes `countStuckGuests` below a measurement with no slack hiding inside it.
@@ -574,7 +578,7 @@ export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedSta
  * exactly as at G-004; what changed is that the LODGING need does not end it either.
  *
  * `stayDurationTicks` IS ABSENT ONLY FOR CONTENT WITH NO LODGING NEED (`assertEveryStayCanEnd`
- * refuses the rest), and such content has no stay to bound — the patience term stands alone,
+ * refuses the rest), and such content has no stay to bound — the tolerance term stands alone,
  * which is the honest answer for a guest that can only ever give up.
  *
  * The `+ 1` is the arrival tick itself, on which a guest is created and may already
@@ -584,7 +588,13 @@ export function maxGuestLifetimeTicks(content: BoundContent, needId: ContentId):
   const needType = findNeedType(content, needId);
   if (needType === undefined) return 0;
   const stay = stayDurationOf(content) ?? 0;
-  const longest = stay > needType.patienceTicks ? stay : needType.patienceTicks;
+  // THE WAIT TERM IS `toleranceTicks` SINCE G-027b, WHERE IT WAS THE LODGING NEED'S OWN
+  // `patienceTicks`. The two are the same quantity — how long a guest that never gets a room
+  // waits before it leaves — and the number is carried across unchanged (180); what moved is
+  // which table states it. It is asked of the LODGING need's id still, because that is what
+  // makes this bound about the one need a guest can fail to be given at all.
+  const tolerance = toleranceOf(content) ?? 0;
+  const longest = stay > tolerance ? stay : tolerance;
   return longest + 1;
 }
 
@@ -598,7 +608,7 @@ export function maxGuestLifetimeTicks(content: BoundContent, needId: ContentId):
  * a countdown stopped draining, the guests holding it pile up here.
  *
  * Note what this deliberately does NOT count: a guest that is simply still resting, or
- * still waiting inside its patience. Those are guests the hotel is working on, and
+ * still waiting inside its tolerance. Those are guests the hotel is working on, and
  * counting them would make the criterion fail on a busy hotel — which would teach
  * whoever reads the report to ignore the number.
  *
@@ -613,15 +623,15 @@ export function maxGuestLifetimeTicks(content: BoundContent, needId: ContentId):
  * ---------------------------------------------------------------------------
  * THE COMPARISON BELOW IS `>=`, AND IT WAS `>` FOR ONE CRITIQUE ROUND. That paragraph claimed
  * a one-tick overstay was counted, and offered as its motivation the very mutation it could
- * not see. With `>` against `limit = max(stay, patience) + 1` the first age counted was
- * `max + 2` — measured at stay 200 / patience 30: ages 199, 200, 201 gave 0, and 202 gave 1 —
+ * not see. With `>` against `limit = max(stay, tolerance) + 1` the first age counted was
+ * `max + 2` — measured at stay 200 / tolerance 30: ages 199, 200, 201 gave 0, and 202 gave 1 —
  * while the `>`-for-`>=` checkout mutation makes checkout fire at age `stay + 1` and leaves
  * the guest at exactly 201. **The detector missed the mutation the comment named as its
  * reason for existing.** A claim and its predicate disagreeing inside the comment that offers
  * the predicate as evidence is ADR-0007's class, in the sentence about ADR-0007's class.
  *
  * WHY `>=` IS THE TIGHTEST CORRECT COMPARISON AND NOT ONE TICK TIGHTER. The oldest age a LIVE
- * guest can legitimately have at a commit boundary is `max(stay, patience)`: checkout fires
+ * guest can legitimately have at a commit boundary is `max(stay, tolerance)`: checkout fires
  * DURING the tick on which age reaches `stay`, so the guest is still in the store at the
  * boundary that tick ends on, and gone from the next. `limit` is that plus one, so `>=` counts
  * the first age no correct simulation can produce, and nothing before it.
@@ -887,10 +897,16 @@ export function assertGuestStoreInvariants(
           'An engagement is always for one of the guest\'s own needs; otherwise nothing could ever end it.',
       );
     }
-    if (!isNeedPending(served)) {
+    // A PROVIDER IS NEVER HELD FOR A FULL NEED, and this is what that invariant became at
+    // G-027b. It used to say "already resolved", which under a stock is a state that does not
+    // exist — a need is never done. What it can still say, and what it must, is that nothing
+    // holds a table it has no reason to be at: step 5 releases the engagement on the tick the
+    // deficit reaches zero, so a saved world showing otherwise is one the tick never wrote.
+    // Content-free, like every other clause here.
+    if (served.deficit === 0) {
       throw new Error(
-        `Guest store is invalid: guest ${guest.id} is engaged for need "${engagement.needId}", which is already resolved. ` +
-          'A provider is released on the tick the need it serves is met or fails.',
+        `Guest store is invalid: guest ${guest.id} is engaged for need "${engagement.needId}", which is already full. ` +
+          'A provider is released on the tick the need it serves reaches full, so nothing holds one with nothing to do.',
       );
     }
     held = claimEntity(held, entities, guest, engagement.entityId, 'is engaged with');
@@ -1252,7 +1268,7 @@ function depart(
 ): void {
   if (guest.roomEntityId !== NO_ENTITY) release(search, guest.roomEntityId, lodgingRoom, content);
   if (guest.engagement !== null) release(search, guest.engagement.entityId, engagedRoom, content);
-  search.needOutcomes = recordNeedsAtDeparture(search.needOutcomes, guest.needs);
+  search.needOutcomes = recordNeedsAtDeparture(content, search.needOutcomes, guest.needs);
   // THE REVIEW, AND IT IS RECORDED HERE FOR THE REASON THE RESERVATIONS ARE RELEASED HERE
   // (G-019). This is the ONE exit path — all three departure branches in `stepGuests` go
   // through it — so "every guest that leaves leaves a review" is structural rather than a
@@ -1338,6 +1354,12 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   // and the day they land this becomes a per-guest lookup rather than a per-tick one; saying
   // so here is cheaper than discovering that this hoist was load-bearing.
   const stayDuration = stayDurationOf(content);
+  // READ ONCE PER TICK, for the reason `lodgingNeed` and `stayDuration` are: each is one array
+  // index behind two optional chains and each is the same answer for every guest in the hotel.
+  // Per-archetype want lines and tolerances are M6's, and the day they land these become
+  // per-guest lookups rather than per-tick ones.
+  const wantAt = wantAtOf(content);
+  const tolerance = toleranceOf(content);
 
   const next: Guest[] = [];
   let ledger = input.ledger;
@@ -1428,16 +1450,40 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       continue;
     }
 
-    // 4. DECAY. Every pending need loses a tick of patience, except the ones something is
-    //    serving, which gain a tick of progress and a tick of relief. The lodging room
+    // 4. DECAY. Every need that decays this tick falls one further below full, except the
+    //    ones something is serving, which are refilled by `refillPerTick`. The lodging room
     //    serves the lodging need for as long as the guest holds it; the engagement serves
     //    exactly one other. See `needs.ts` for the closed form.
+    //    (It read "loses a tick of patience … gain a tick of progress and a tick of relief"
+    //    until θ-a sweep 3 — three of ADR-0017's deleted nouns in one sentence, directly above
+    //    the call that implements the model that deleted them.)
     //    AND WHO DELIVERED IT IS RECORDED ON THE TICK IT COMPLETES (G-013), because
     //    nothing remembers afterwards: step 5 releases the provider the moment the need
     //    resolves. The lodging room is a room by construction; the engagement is whatever
     //    the guest walked to. `engagedRoom` is the entity when it is still providing, so
     //    the kind is read from the thing itself rather than from the reservation.
-    const servedByRoom = guest.roomEntityId === NO_ENTITY ? null : lodgingNeed?.id ?? null;
+    // ========================================================================
+    // REST REQUIRES PRESENCE, AND PRESENCE IS `HOLDS A ROOM AND IS NOT ENGAGED` (ADR-0017 §3).
+    //
+    // Until this goal the lodging need was served on every tick the guest HELD a room, so a
+    // guest asleep in the basement café was also, to the simulation, asleep in its bed. G-023a
+    // made that visible and parked it verbatim: *"Rest is served by holding a room, not by
+    // standing in it… ADR-0017 is what fixes it."* This line is that fix, and the parked
+    // observation is discharged here.
+    //
+    // WHY THE PREDICATE IS THE ENGAGEMENT AND NOT A POSITION COMPARISON. `standingCell` puts an
+    // unengaged room-holder in its own room and an engaged guest at its provider, so
+    // `engagement === null` IS "at home" exactly, with no second lookup and nothing to disagree
+    // with. G-023b gives a guest a position independent of what it holds — in transit it is at
+    // neither end — and on that day this becomes a cell comparison. Saying so here is cheaper
+    // than discovering that this line was the definition of presence.
+    //
+    // `away` IS THE SAME FACT SEEN FROM THE OTHER SIDE and it is what makes activity cost rest:
+    // the lodging need decays only while it is true. One derivation, two uses, no chance of the
+    // serving rule and the decay rule disagreeing about where the guest is.
+    // ========================================================================
+    const atHome = guest.roomEntityId !== NO_ENTITY && guest.engagement === null;
+    const servedByRoom = atHome ? lodgingNeed?.id ?? null : null;
     const engagedKind: ProviderKind =
       engagedRoom !== null && !isRoomKind(content, engagedRoom.kind) ? 'item' : 'room';
     const needs = advanceNeeds(
@@ -1446,6 +1492,8 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       servedByRoom,
       guest.engagement?.needId ?? null,
       engagedKind,
+      !atHome,
+      lodgingNeed?.id,
     );
     if (needs !== guest.needs) guest = { ...guest, needs };
 
@@ -1455,7 +1503,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     const engagement = guest.engagement;
     if (engagement !== null) {
       const served = findNeedState(guest.needs, engagement.needId);
-      if (served === undefined || !isNeedPending(served)) {
+      // RELEASED AT FULL, WHICH IS THE FAR SIDE OF THE HYSTERESIS. A need is wanted from its
+      // want line until it is FULL, so a guest served past its line keeps its table until the
+      // stock is topped right up — it does not stand up the moment it stops being hungry. That
+      // asymmetry is the whole of the hysteresis, and asking `isNeedWanted` with
+      // `beingServed = true` is what states it in one place: the same predicate the scoring
+      // loop uses, given the fact only this branch knows.
+      if (served === undefined || !isNeedWanted(findNeedType(content, served.needId), served, wantAt, true)) {
         release(search, engagement.entityId, engagedRoom, content);
         engagedRoom = null;
         guest = { ...guest, engagement: null };
@@ -1475,7 +1529,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    THE CLOCK IS ARRIVAL-RELATIVE, WHICH COSTS NO FIELD AND MAKES THE LIFETIME BOUND
     //    EXACT. `arrivedTick` already exists and is already hashed, so nothing is added to
     //    `Guest`, no migration has to invent a check-in tick, and `maxGuestLifetimeTicks`
-    //    becomes `max(patience, stay)` — attained, not merely respected. (A nullable
+    //    becomes `max(tolerance, stay)` — attained, not merely respected. (A nullable
     //    `checkedInTick` defaulting to `null` would have been perfectly recoverable — it is
     //    the `metBy: null` idiom and ADR-0008 permits it — so this is chosen on those two
     //    properties and NOT because the alternative was unrepresentable.)
@@ -1489,7 +1543,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //
     //    `>=` AND NOT `===`. A guest that took a room LATE — its stay clock already past —
     //    would sail past an equality test and stay forever. Under the shipped table that is
-    //    unreachable (patience 180 < stay 1,440), and an unreachable state is exactly where
+    //    unreachable (tolerance 180 < stay 1,440), and an unreachable state is exactly where
     //    an equality quietly becomes a leak: `countStuckGuests` measures it either way, and
     //    the comparison should not depend on a number in another file.
     // ========================================================================
@@ -1502,16 +1556,33 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       checkedOut += 1;
       continue;
     }
-    // THE OTHER TERMINATOR, AND IT STILL READS LODGING PATIENCE (G-027a scope line). ADR-0017
-    // 4(b) makes giving up a dissatisfaction THRESHOLD read from content — per-personality
-    // tolerance — and that is G-027b's, not this goal's. What is here is the same predicate
-    // as before: patience for a ROOM ran out before one was free. `isNeedFailed`, not
-    // `!isNeedPending`, and the difference is new and load-bearing — the old branch was
-    // reached only after the met case had already `continue`d, so "not pending" meant
-    // "failed"; with no met case above it, `!isNeedPending` would send every guest whose rest
-    // need had completed straight out of the door, restoring the terminator this goal deletes.
-    const lodging = lodgingNeed === undefined ? undefined : findNeedState(guest.needs, lodgingNeed.id);
-    if (lodging !== undefined && isNeedFailed(lodging)) {
+    // THE OTHER TERMINATOR, RE-EXPRESSED RATHER THAN MOVED (G-027b). The predicate was "the
+    // lodging need ran out of patience", and patience is the field the stock model deletes. What
+    // replaces it is the same event stated in the terms that survive: THE GUEST HAS NO ROOM AND
+    // NOTHING HAS SERVED ITS REASON FOR BOOKING SINCE IT ARRIVED.
+    //
+    // AGE IS THE UNSERVED RUN, AND THAT EQUIVALENCE RESTS ON THREE FACTS RATHER THAN ON ONE
+    // COMPARISON. It is why no counter is stored, and it is why this fires on exactly the tick
+    // the countdown fired on — probed, 0 give-ups at 30 ticks and 1 at 31 under both models:
+    //
+    //   1. THE ARRIVAL TICK IS FREE. A guest is created during `arrivedTick`, AFTER that tick's
+    //      decay pass, so the first decay it suffers is on `arrivedTick + 1` and at tick `t` it
+    //      has suffered exactly `t - arrivedTick` of them.
+    //   2. DECAY PRECEDES THIS TEST WITHIN A TICK (step 4, then step 6), so the tick on which
+    //      the run reaches the tolerance is the tick this branch observes it.
+    //   3. A ROOMLESS GUEST IS NEVER SERVED LODGING — nothing but a room can serve it, and it
+    //      has none — so no relief interrupts the run; and a guest that HAD a room and lost it
+    //      departs in step 3, before this line, so there is no path on which age and the
+    //      unserved run diverge.
+    //
+    // THE RESIDENT WHO IS DISSATISFIED IS NOT HERE, AND ITS ABSENCE IS RECORDED RATHER THAN
+    // IMPLIED. ADR-0017 4(b) is the guest that HOLDS a room and leaves because nothing serves
+    // what it came to do — a hotel with beds and no café. That is the next goal's, it needs a
+    // saved counter (an unserved run that survives being interrupted by sleep), and until it
+    // lands `guest.stay.test.ts`'s fourth arm still reports zero give-ups. Deliberately.
+    const lodgingUnserved =
+      lodgingNeed !== undefined && guest.roomEntityId === NO_ENTITY && tolerance !== undefined;
+    if (lodgingUnserved && tick - guest.arrivedTick >= tolerance) {
       // Waited it out and never got a room. It pays nothing and leaves with that recorded.
       // `gaveUp` names what happened rather than how it felt, and it is what `migrateV7ToV8`
       // maps v7's `unsatisfied` counter onto (whose own doc comment read "patience for a room
@@ -1531,7 +1602,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    both holdings are decided, so it is the one place that can state the position they
     //    imply without asking the entity store a second question — the two entities are
     //    already in hand here and in there. Nothing else in this loop touches `at`.
-    guest = reserve(search, guest, lodgingNeed?.id, lodgingRoom, engagedRoom);
+    guest = reserve(search, guest, lodgingNeed?.id, lodgingRoom, engagedRoom, wantAt);
     next.push(guest);
   }
 
@@ -1567,7 +1638,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     };
     // A guest that has just walked in holds nothing, so there is no incumbent provider to
     // hand over and nothing it could abandon.
-    next.push(reserve(search, arrived, lodgingNeed.id, null, null));
+    next.push(reserve(search, arrived, lodgingNeed.id, null, null, wantAt));
   }
 
   // Ids came from a counter, existing guests were visited in ascending order and
@@ -1677,13 +1748,20 @@ function addDepartures(
  * 356 unmet at `--days 30 --seed 7 --rooms 6 --amenities 5`, where it had been 356 met.
  * `utility.starvation.test.ts` is that run, kept as a test.
  *
- * The cause is worth carrying forward because it belongs to the CONTENT and not to this
- * code: the three engagement needs sum to exactly the lodging budget (WATCH #1), so the
- * ORDER of pursuit decides whether a guest can have all three. Two of the six orders do, and
- * BOTH END IN ENTERTAINMENT — whatever goes last has waited 330 ticks, and entertainment's
- * patience is the only one long enough to survive that. The combined score produced an
- * entertainment-FIRST order, which is the class that starves. `utility.starvation.test.ts`
- * simulates all six rather than asserting this in prose.
+ * The cause belonged to the CONTENT and not to this code: the three engagement needs summed to
+ * exactly the lodging budget (WATCH #1), so the ORDER of pursuit decided whether a guest could
+ * have all three. Two of the six orders did, and BOTH ENDED IN ENTERTAINMENT — whatever went
+ * last had waited 330 ticks, and entertainment's patience was the only one in the table long
+ * enough to survive that. The combined score produced an entertainment-FIRST order, which is
+ * the class that starved. `utility.starvation.test.ts` simulates all six rather than asserting
+ * this in prose.
+ *
+ * **ADR-0017 §1 DELETED THAT PREMISE AND NOT THE RULING** (θ-a sweep 3 — the paragraph above was
+ * present tense until then, and every term in it is a countdown-era one). There is no
+ * `satisfyTicks` to sum, no patience to outlast, and a need that is never terminal cannot be
+ * stranded by an order. The ruling stands on its own footing: fit is a designer's taste and
+ * pressure is the guest's need, and letting taste outrank need is the dominant-strategy shape
+ * regardless of which decay model is underneath. `utility.starvation.test.ts` says the same.
  *
  * THE LODGING SEARCH DOES NOT CONSULT FIT, and that is a scope line rather than an
  * oversight. A bedroom's desirability trades against its PRICE, and pricing is M4's; a fit
@@ -1714,7 +1792,12 @@ function reserve(
   lodgingNeedId: ContentId | undefined,
   lodgingRoom: Entity | null,
   engagedRoom: Entity | null,
+  wantAt: number,
 ): Guest {
+  // HOISTED TO THE TOP OF THE FUNCTION AT G-027b, because the lodging branch below now asks a
+  // content question ("does this guest want a room") where it used to ask a state one. One read,
+  // one name, and nothing below can reach a different content than the line above it.
+  const content = search.input.content;
   // TWO SPREADS RATHER THAN ONE, AND THE COLLAPSE WAS TRIED AND DROPPED (G-016). Deciding
   // both reservations before writing either — so a guest that takes a room AND engages a
   // provider on one tick allocates one `Guest` instead of two — was implemented and
@@ -1728,7 +1811,12 @@ function reserve(
   let result = guest;
   if (result.roomEntityId === NO_ENTITY && lodgingNeedId !== undefined) {
     const lodging = findNeedState(result.needs, lodgingNeedId);
-    if (lodging !== undefined && isNeedPending(lodging)) {
+    // WANTED, NOT MERELY UNFULL. A guest books a room because it wants rest, and it arrives
+    // exactly at its want line, so this is true on the tick it walks in — which is the timing
+    // G-004 shipped and this goal must not move. It gates only the ACQUISITION: commitment to a
+    // room stays total for the whole stay (`stepGuests`), so a guest whose rest fills does not
+    // hand its bed back at noon.
+    if (lodging !== undefined && isNeedWanted(findNeedType(content, lodgingNeedId), lodging, wantAt, false)) {
       const room = findFreeRoom(search, lodgingNeedId, true);
       if (room !== null) {
         search.held.add(room.id);
@@ -1740,7 +1828,6 @@ function reserve(
       }
     }
   }
-  const content = search.input.content;
   // ============================================================================
   // WHERE COMMITMENT USED TO BE TOTAL (G-014b). Until this goal the line here read
   // `if (result.engagement !== null) return result;` — an engaged guest was never scored
@@ -1758,7 +1845,9 @@ function reserve(
   // test stays strict.
   //
   // NO FAST PATH FOR A SATURATING MARGIN, DELIBERATELY. `margin === ONE_WHOLE_BASIS_POINTS`
-  // makes the bar unreachable (`MAX_PENDING_PRESSURE_BASIS_POINTS`), so an early return
+  // makes the bar unreachable — because `pressureBasisPoints` CLAMPS at
+  // `MAX_PENDING_PRESSURE_BASIS_POINTS`, which since G-027b is an imposed ceiling rather than a
+  // consequence of `isNeedPending`, whose field this model deletes (R1) — so an early return
   // would be provably behaviour-preserving and would cost content that predates this goal
   // nothing. It is left out because that content is G-014b's Era-A ARM: skipping the walk
   // would mean the arm proves the fast path rather than proving that the real re-scoring
@@ -1788,7 +1877,7 @@ function reserve(
     // pending, has no pressure to compare against. It stays committed rather than being
     // scored against a fabricated zero. The tick cannot reach either state — step 5 releases
     // the engagement the moment its need resolves — so this is a postcondition, not a case.
-    if (incumbent === undefined || incumbentType === undefined || !isNeedPending(incumbent)) {
+    if (incumbent === undefined || incumbentType === undefined || !isNeedWanted(incumbentType, incumbent, wantAt, true)) {
       return placed(result, lodgingRoom, engagedRoom, search);
     }
     bar = abandonThresholdBasisPoints(pressureBasisPoints(incumbentType, incumbent), abandonMarginOf(content)) - 1;
@@ -1825,7 +1914,10 @@ function reserve(
   for (let i = 0; i < result.needs.length; i += 1) {
     const need = result.needs[i];
     if (need === undefined) continue;
-    if (!isNeedPending(need)) continue;
+    // A FULL NEED IS NOT A CANDIDATE, and this is the cheap half of the wanting test — one
+    // integer compare, before any type resolution, for every need of every guest on every tick.
+    // The other half needs the capacity and is asked below, once the type is in hand.
+    if (need.deficit === 0) continue;
     // The lodging need is served by the room the guest holds, never by an engagement: a
     // guest does not book a second bedroom to sleep in.
     if (need.needId === lodgingNeedId) continue;
@@ -1844,6 +1936,13 @@ function reserve(
     // sorted last under the old comparator and is skipped here, which is the same outcome
     // reached without a special case in the ranking.
     if (needType === undefined) continue;
+    // WANTED, and `beingServed` is FALSE for every candidate in this walk: the incumbent is
+    // skipped by name above, so nothing here is a need something is already serving. A need
+    // between full and its want line is therefore not a candidate — the near side of the
+    // hysteresis, and the reason a guest does not walk out to chase a stock it has barely
+    // dented. Asked here rather than at the top of the loop because it needs the capacity, and
+    // resolving the type is the expensive part G-016 spent a goal making positional.
+    if (!isNeedWanted(needType, need, wantAt, false)) continue;
     const pressure = pressureBasisPoints(needType, need);
     // STRICTLY GREATER, so an exact tie keeps the need already held — and needs are walked
     // in ascending id, so a tie is settled by the LOWER NEED ID. That is `compareNeedPriority`'s

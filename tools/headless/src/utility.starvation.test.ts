@@ -5,10 +5,10 @@
 // WHAT HAPPENED, BECAUSE THIS FILE ONLY MAKES SENSE WITH IT. G-014a's first build ranked
 // every candidate by one number, `pressure * FIT_SCALE + fit`, with the scale chosen so that
 // fit could never outrank a DIFFERENCE in pressure. That argument is sound and it is not
-// enough: it says nothing about EQUAL pressure, which is the normal case here — every need
-// of a newly arrived guest is at zero, and two engagement needs with the same
-// `patienceTicks` stay exactly tied while neither is served. Fit therefore chose the NEED,
-// and the first recording made for this goal's WATCH opened with:
+// enough: it says nothing about EQUAL pressure, which is the normal case here — every need of
+// a newly arrived guest sits at the same fraction of its own capacity, and two engagement
+// needs with the same denominator stay exactly tied while neither is served. Fit therefore
+// chose the NEED, and the first recording made for this goal's WATCH opened with:
 //
 //     need  guest_comfort 0 met, 356 unmet      (--days 30 --seed 7 --rooms 6 --amenities 5)
 //
@@ -16,28 +16,38 @@
 // things a guest comes for had stopped happening, for every guest, in every run. All six
 // gates were green and 1,133 tests passed.
 //
-// THE CAUSE IS IN THE CONTENT AND WILL OUTLIVE THIS GOAL, WHICH IS WHY THIS TEST IS HERE
-// RATHER THAN A COMMENT. The three engagement needs sum to exactly `night_rest.satisfyTicks`
-// — WATCH #1's second finding, measured a goal earlier — so the ORDER a guest pursues them
-// in decides whether it can have all three. The first block below SIMULATES ALL SIX ORDERS
-// through the shipped decay rule rather than asserting one in prose, and the answer is:
+// WHAT THE FIRST BLOCK BELOW MEASURES NOW, AND IT IS WEAKER THAN WHAT THIS HEADER USED TO
+// PROMISE. IT ENUMERATES ALL SIX PURSUIT ORDERS through the shipped decay rule, and the answer
+// is **six of six satisfy all three, and no final need is privileged** (`:179`, `:207`).
 //
-//     two of the six satisfy all three, and BOTH END IN ENTERTAINMENT.
+// ---------------------------------------------------------------------------------------
+// THE CLAIM THIS HEADER CARRIED UNTIL θ-a SWEEP 2, AND IT WAS CONTRADICTED BY THE ASSERTIONS
+// 180 LINES BELOW IT — the same diff that rewrote them left this paragraph alone, which is R1
+// exactly (see `packages/sim/src/needs.ts`'s header):
 //
-// A served need's patience regenerates while it is served, so only the WAITING needs burn
-// down; whatever is pursued last has waited 330 ticks, and `guest_entertainment`'s 360 is
-// the only patience long enough to survive it. Commitment is total, so a need that runs out
-// while the guest sits elsewhere can never be picked up again.
+//     "The three engagement needs sum to exactly `night_rest.satisfyTicks` … so the ORDER a
+//      guest pursues them in decides whether it can have all three … two of the six satisfy
+//      all three, and BOTH END IN ENTERTAINMENT. A served need's patience regenerates while it
+//      is served, so only the WAITING needs burn down; whatever is pursued last has waited 330
+//      ticks, and `guest_entertainment`'s 360 is the only patience long enough to survive it."
+//
+// ADR-0017 DELETED THE PREMISE AND NOT THE NUMBERS. There is no `satisfyTicks` to sum and no
+// patience to outlast; a need is a level with no terminal state, so an order cannot strand one.
+// `utility.ts`'s header is the live statement of what replaced it. **Round 1 repaired the two
+// pointers at `:202` and `:215` into that header and left the header of the file containing
+// them** — which is why the correction is written here at length rather than deleted.
+// ---------------------------------------------------------------------------------------
 //
 // THE FIRST VERSION OF THIS FILE SAID "THE ONE ORDER" AND WAS WRONG, and the correction is
 // recorded rather than swept: `ai-critic` falsified it in a single run. That is the reason
 // the enumeration is now executed instead of described — the same rule ADR-0007's amendment
-// states for any comment offered as evidence.
+// states for any comment offered as evidence, and the reason there was an executable thing to
+// RE-EXPRESS when the model changed underneath it rather than a paragraph to rewrite.
 //
 // SO THIS IS NOT A TEST ABOUT FIT. It is the assertion that the shipped hotel still serves
 // everything it offers, at the invocation the project has used since G-012 — and it will go
-// red for a tie-break change, a patience change, a `satisfyTicks` change, or anything else
-// that perturbs the order. When it does, the fix is NOT to tune a number until it passes:
+// red for a tie-break change, a capacity or refill change, or anything else that makes an
+// order cost something again. When it does, the fix is NOT to tune a number until it passes:
 // read `utility.ts`'s header first, decide whether the change is meant to make a want
 // unservable, and say so in the goal.
 
@@ -46,9 +56,8 @@ import {
   advanceNeeds,
   createWorld,
   findNeedState,
+  findNeedType,
   formNeedVector,
-  isNeedMet,
-  isNeedPending,
   lodgingNeedOf,
   needTypesInOrder,
   run,
@@ -90,29 +99,74 @@ const { summary, violations } = (() => {
   return buildSummary(run(initial, content, options.ticks, commands), content, options);
 })();
 
-describe('the shipped table admits exactly the orders that end in entertainment', () => {
-  // THE ENUMERATION, EXECUTED. It drives `advanceNeeds` — the simulation's own decay rule,
-  // not a re-derivation of it — one engagement need at a time, serving each until it is met
-  // or its patience is gone, exactly as a committed guest does. A guest holds its lodging
-  // room throughout, so the lodging need is served in every phase.
+describe('THE SUCCESSOR CLAIM, AND IT IS WEAKER THAN THE ONE IT REPLACES (G-027b)', () => {
+  // ==========================================================================================
+  // WHAT THIS BLOCK USED TO ASSERT, AND WHY IT CANNOT BE PORTED.
+  //
+  // It enumerated all six orders a guest could pursue three engagement needs in, drove each
+  // through the simulation's own decay rule, and found that EXACTLY TWO satisfied all three —
+  // both ending in `guest_entertainment`, whose patience was the only one long enough to
+  // survive the wait. "Entertainment last" was the invariant, and the four losing orders
+  // STARVED something: a need whose patience ran out was over, permanently, for that guest.
+  //
+  // ADR-0017 DELETES THE PREMISE. Under a stock there is no terminal state to strand a need
+  // in: patience is gone, an empty need is not a failed need, and being served refills it
+  // whenever the guest gets round to it. So the enumeration no longer discriminates — all six
+  // orders satisfy all three — and the honest report of that is NOT a stronger claim in new
+  // clothes. It is a weaker one, and it is written as such.
+  //
+  // WEAKER IN EXACTLY WHAT WAY, said plainly so nobody mistakes 6-of-6 for an improvement:
+  //   GONE     the enumeration's power to separate good orders from bad. It separates nothing
+  //            now, and a test that reports "every case passes" is inspecting a property that
+  //            no longer has a counter-example in this content.
+  //   KEPT     that the ORDER still costs something, and that what it costs is bounded. A need
+  //            pursued last waits longer and gets deeper, and the claim with content is that
+  //            no order drives one to EMPTY — the state where the pressure signal saturates and
+  //            the guest can no longer tell two wants apart.
+  //
+  // DELETING THE ENUMERATION AND STOPPING IS WHAT ADR-0007'S AMENDMENT FORBIDS: removing a
+  // check is not evidence a property holds. So it still runs, over the same six orders, driving
+  // the same `advanceNeeds` — and it asserts the weaker thing.
+  // ==========================================================================================
   const engagementIds = needTypesInOrder(content)
     .filter((needType) => needType.role !== 'lodging')
     .map((needType) => needType.id);
   const lodgingId = lodgingNeedOf(content)?.id;
 
-  const pursue = (order: readonly string[]): readonly string[] => {
+  /**
+   * Serve each need in turn until it is FULL, and report which were EVER full and how deep any
+   * got.
+   *
+   * "EVER FULL" AND NOT "FULL AT THE END", AND THE DIFFERENCE IS THE MODEL RATHER THAN A
+   * CONVENIENCE. The old enumeration asked what a guest had at the END of a pursuit, which is a
+   * question a task model can answer because a met need STAYED met. Under a stock the first need
+   * served is decaying while the third is being served, so "all three full at once" is not an
+   * end state any order reaches — asking for it would report every order as failing and would be
+   * measuring the model's own definition rather than the pursuit order. What the order can still
+   * be asked is whether every want got SERVED, and that is what this returns.
+   */
+  const pursue = (order: readonly string[]): { readonly satisfied: readonly string[]; readonly deepest: number } => {
     let needs = formNeedVector(content);
+    let deepest = 0;
+    const everFull = new Set<string>();
     for (const needId of order) {
       for (let guard = 0; guard < 10_000; guard += 1) {
         const state = findNeedState(needs, needId);
-        if (state === undefined || !isNeedPending(state)) break;
-        needs = advanceNeeds(content, needs, lodgingId ?? null, needId, 'room');
+        if (state === undefined || state.deficit === 0) break;
+        // A guest being served at a provider is AWAY from its room, which is the input the
+        // lodging need's decay reads. Passing the lodging id as served would be a guest asleep
+        // at the cafe — the very thing ADR-0017 §3 removes.
+        needs = advanceNeeds(content, needs, null, needId, 'room', true, lodgingId);
+        for (const entry of needs) {
+          const needType = findNeedType(content, entry.needId);
+          if (needType === undefined) continue;
+          if (entry.deficit === 0) everFull.add(entry.needId);
+          const depth = Math.floor((entry.deficit * 10_000) / needType.capacityTicks);
+          if (depth > deepest) deepest = depth;
+        }
       }
     }
-    return engagementIds.filter((id) => {
-      const state = findNeedState(needs, id);
-      return state !== undefined && isNeedMet(state);
-    });
+    return { satisfied: engagementIds.filter((id) => everFull.has(id)), deepest };
   };
 
   const permutations = <T,>(items: readonly T[]): T[][] =>
@@ -125,36 +179,50 @@ describe('the shipped table admits exactly the orders that end in entertainment'
   const orders = permutations(engagementIds);
 
   it('has six orders to choose between, so the enumeration is not inspecting one case', () => {
-    // ANTI-VACUITY first: a content table with fewer engagement needs would make every
-    // assertion below trivially true, and this test would report success having compared
+    // ANTI-VACUITY first, unchanged: a table with fewer engagement needs would make every
+    // assertion below trivially true and this test would report success having compared
     // nothing (ADR-0007).
     expect(engagementIds).toHaveLength(3);
     expect(orders).toHaveLength(6);
   });
 
-  it('satisfies all three in EXACTLY TWO of them, and both end in the same need', () => {
-    const complete = orders.filter((order) => pursue(order).length === engagementIds.length);
-    expect(complete).toHaveLength(2);
-    // The shared property, read off the result rather than typed in: both winning orders end
-    // with the same need, and it is the one with the most patience — the only one that can
-    // survive waiting for the other two.
-    const finals = new Set(complete.map((order) => order[order.length - 1]));
-    expect(finals.size).toBe(1);
-    const longestPatience = [...needTypesInOrder(content)]
-      .filter((needType) => needType.role !== 'lodging')
-      .sort((a, b) => b.patienceTicks - a.patienceTicks)[0];
-    expect([...finals][0]).toBe(longestPatience?.id);
+  it('EVERY order satisfies all three — the pursuit order cannot make a want unservable', () => {
+    // The weaker claim, stated as the measurement it is. Six of six, where it was two of six.
+    for (const order of orders) {
+      expect(pursue(order).satisfied.length, order.join(' -> ')).toBe(engagementIds.length);
+    }
   });
 
-  it('and every order that ends in something else starves something', () => {
-    const finalOf = (order: readonly string[]): string | undefined => order[order.length - 1];
-    const winner = orders.find((order) => pursue(order).length === engagementIds.length);
-    expect(winner).toBeDefined();
-    const losers = orders.filter((order) => finalOf(order) !== finalOf(winner!));
-    expect(losers).toHaveLength(4);
-    for (const order of losers) {
-      expect(pursue(order).length, order.join(' -> ')).toBeLessThan(engagementIds.length);
-    }
+  it('and the ORDER still costs something — it is bounded rather than free', () => {
+    // What survives of "starves": a need pursued last waits longer and gets deeper. The claim
+    // with content is the BOUND — no order drives a need to empty, which is where the pressure
+    // signal saturates and the guest stops being able to tell two wants apart.
+    const depths = orders.map((order) => pursue(order).deepest);
+    expect(Math.max(...depths)).toBeLessThan(10_000);
+    // AND EVERY ORDER COSTS THE SAME, WHICH IS MEASURED RATHER THAN ASSUMED AND IS WHY THE
+    // WEAKENING GOES FURTHER THAN EXPECTED. A first version of this assertion required the
+    // orders to DIFFER in depth — the stock analogue of "the order matters" — and they do not:
+    // all six reach the same maximum, because the three engagement needs on the shipped table
+    // are identical in capacity and refill, so permuting them permutes nothing. The order costs
+    // the LAST need served the same wait whichever need that is.
+    //
+    // So the honest statement is stronger than "bounded" and weaker than "the order matters":
+    // ON THIS TABLE THE PURSUIT ORDER IS INERT. It is asserted rather than left implicit,
+    // because a future table that differentiates the three needs makes this line red and sends
+    // the reader to `utility.ts`'s header — which is exactly the service the old enumeration
+    // performed, for the one property that survives.
+    expect(new Set(depths).size).toBe(1);
+  });
+
+  it('and "entertainment last" is DISSOLVED, not preserved — no final need is privileged', () => {
+    // The old invariant read off the result rather than typed in, re-run: the set of final
+    // needs among the winning orders used to have exactly one member. It now has all three,
+    // because every order wins. Asserted so that a future content change which RE-CREATES a
+    // starving order reddens here and sends the reader to `utility.ts`'s header rather than
+    // letting the property come back unnoticed.
+    const winners = orders.filter((order) => pursue(order).satisfied.length === engagementIds.length);
+    const finals = new Set(winners.map((order) => order[order.length - 1]));
+    expect(finals.size).toBe(engagementIds.length);
   });
 });
 

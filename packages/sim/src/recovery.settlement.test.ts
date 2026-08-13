@@ -150,11 +150,31 @@ describe('through the real tick, a borrowed hotel repays itself out of trade', (
   // Capital enough to build one room, so the hotel earns; a loan drawn on top of it would
   // be refused as `notEligible`, so this run borrows by being genuinely broke first.
   const trading = bindContent({
-    roomTypes: [{ ...roomType, provides: ['rest'] }],
-    needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 480, patienceTicks: 180 }],
-    // G-027a: content declaring a lodging need must say how long a stay lasts, or
-    // `bindContent` refuses it — a guest holding a room has no other way to leave.
-    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
+    // `lounge` provides the engagement need and is never built: this run's subject is the
+    // ledger, not the amenities.
+    //
+    // IT COSTS THE SAME AS A BEDROOM, AND THAT IS NOT DECORATION. Loan eligibility asks whether
+    // the hotel could afford to build ANYTHING, so a free room type in the table means the
+    // hotel is never stuck and the draw below is refused — which is exactly what happened when
+    // this lounge first appeared with no `constructionCostPence` at all.
+    roomTypes: [
+      { ...roomType, provides: ['rest'] },
+      { ...roomType, id: 'lounge', name: 'lounge', provides: ['snack'] },
+    ],
+    // The shipped proportions as stocks (G-027b): rest empties in 180 ticks AWAY from a room —
+    // where the lodging need's `patienceTicks` went — refilled a tick at a time, and the
+    // engagement need is the shipped table's own 1,400 at refill 7.
+    needTypes: [
+      { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 180, refillPerTick: 1 },
+      { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: 1_400, refillPerTick: 7 },
+    ],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+    // refuses it. G-027b adds the wait (180, the lodging need's old `patienceTicks`) and the
+    // want line: rest is wanted after 18 away-ticks, twice over inside the 60 a 480-tick stay
+    // generates at refill 7.
+    guestRules: [
+      { id: 'houseRules', name: 'House Rules', stayDurationTicks: 480, toleranceTicks: 180, wantAtBasisPoints: 1_000 },
+    ],
     economy: [economy({ startingCapitalPence: 250_000 })],
   });
 

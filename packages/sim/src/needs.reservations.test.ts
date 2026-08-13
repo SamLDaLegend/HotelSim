@@ -41,7 +41,7 @@ import {
   isResting,
 } from './guests.js';
 import type { Guest, GuestStore } from './guests.js';
-import { findNeedState, isNeedMet, isNeedPending } from './needs.js';
+import { findNeedState, isNeedSatisfiedIn } from './needs.js';
 import { deserialise, serialise } from './save.js';
 import { run, stepTick } from './tick.js';
 import { createGridBounds } from './grid.js';
@@ -62,21 +62,39 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   nightlyRatePence: 8_500,
   provides,
 });
-const need = (id: string, satisfyTicks: number, patienceTicks: number, lodging: boolean): NeedTypeData => ({
+const need = (id: string, capacityTicks: number, refillPerTick: number, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks,
-  patienceTicks,
+  capacityTicks,
+  refillPerTick,
 });
 
-/** A bedroom and a café: one lodging need, one engagement need, one provider each. */
+/**
+ * Where a guest starts wanting a need. 120 basis points of a 500-tick capacity is 6, so a guest
+ * arrives owing exactly `MEAL` ticks of food and a café at one tick each takes exactly `MEAL`
+ * ticks to fill it — which is what the deleted `satisfyTicks` used to say directly.
+ */
+const WANT_AT = 120;
+
+/**
+ * A bedroom and a café: one lodging need, one engagement need, one provider each.
+ *
+ * THE CAPACITIES ARE THE OLD `patienceTicks`, CARRIED (500 each): `capacityTicks` names the same
+ * quantity, time to empty. What is chosen is the pair `WANT_AT` and `refillPerTick`, together, so
+ * that the DEFICIT a guest arrives with counts down exactly as `progressRemaining` did — 6, one a
+ * tick, to 0 — and every "half a meal" reading below is the reading it always was.
+ */
 const content = bindContent({
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-  needTypes: [need('rest', STAY, 500, true), need('food', MEAL, 500, false)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
+  needTypes: [need('rest', 500, 5, true), need('food', 500, 1, false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it — a guest holding a room has no other way to leave. G-027b adds the other way out
+  // and the want line: 2 x 120 x 500 = 120,000 against the 20 away-ticks a 40-tick stay generates
+  // at refill 1, which is 200,000.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: STAY, wantAtBasisPoints: WANT_AT },
+  ],
 });
 
 const spawnBedroom = (index: number): Command => ({
@@ -132,7 +150,11 @@ describe('a guest engages one provider at a time', () => {
     const guest = only(world);
     expect(isEngaged(guest)).toBe(false);
     expect(isResting(guest)).toBe(true); // the stay carries on
-    expect(isNeedMet(findNeedState(guest.needs, 'food')!)).toBe(true);
+    // SATISFIED rather than FULL, and the difference is the model: a stock sits at exactly
+    // full for about one tick and then decays, so "full two ticks after the meal ended" is a
+    // question with the answer no. Satisfied is the band — below the want line — and it is the
+    // one definition the tally and the review both use.
+    expect(isNeedSatisfiedIn(content, findNeedState(guest.needs, 'food')!)).toBe(true);
     expect(orphansIn(world)).toBe(0);
   });
 
@@ -177,7 +199,7 @@ describe('exit path — the provider stopped existing', () => {
     const start = run(hotel(1, 1), content, 4, [at(1, arrive)]);
     const cafe = entitiesInOrder(start.entities)[1]!.id;
     const before = findNeedState(only(start).needs, 'food')!;
-    expect(before.progressRemaining).toBeLessThan(MEAL);
+    expect(before.deficit).toBeLessThan(MEAL);
 
     const after = stepTick(start, content, [despawn(cafe)]);
     const guest = only(after);
@@ -185,25 +207,43 @@ describe('exit path — the provider stopped existing', () => {
     expect(isResting(guest)).toBe(true);
     expect(evictedGuests(after.guestOutcomes)).toBe(0); // a lost café is not an eviction
     const food = findNeedState(guest.needs, 'food')!;
-    expect(food.progressRemaining).toBe(before.progressRemaining);
-    expect(isNeedPending(food)).toBe(true);
+    // RETAINED, PLUS THIS TICK'S OWN DECAY. Nothing served the need on the tick the café went,
+    // so it decayed by one like any unserved need — what "retained" rules out is the deficit
+    // being thrown back to the want line, which is what a reset would look like.
+    expect(food.deficit).toBe(before.deficit + 1);
+    expect(food.deficit).toBeLessThan(MEAL);
     expect(orphansIn(after)).toBe(0);
   });
 
-  it('resumes at a NEW café from where it left off, rather than starting again', () => {
+  it('goes to a NEW café once the need is WANTED again, and finishes it there', () => {
     // The other half of "retained": the progress has to be usable, or retaining it is a
     // number nobody reads.
+    //
+    // IT NO LONGER RESUMES ON THE NEXT TICK, AND THAT IS THE HYSTERESIS RATHER THAN A GAP.
+    // `isNeedWanted` is a Schmitt trigger with no stored flag: wanting starts at the want line
+    // and continues only while something is SERVING the need. A guest whose café was demolished
+    // half way through its meal is below the line and is being served by nothing, so it stops
+    // pursuing food until the stock decays back to the line — which, since the deficit was
+    // retained rather than reset, takes exactly the ticks it had eaten. It then eats a full
+    // meal at the second café. The progress is retained; what it buys is time, not a shorter
+    // second meal.
     const start = run(hotel(1, 2), content, 4, [at(1, arrive)]);
     const [, firstCafe] = entitiesInOrder(start.entities).map((entity) => entity.id);
-    const eaten = MEAL - findNeedState(only(start).needs, 'food')!.progressRemaining;
+    const eaten = MEAL - findNeedState(only(start).needs, 'food')!.deficit;
     expect(eaten).toBeGreaterThan(0);
 
     let world = stepTick(start, content, [despawn(firstCafe!)]);
-    world = stepTick(world, content); // takes the second café
+    expect(isEngaged(only(world))).toBe(false);
+    // It waits out the ticks it had eaten, and no more: the deficit was retained, so it is
+    // exactly `eaten` ticks below the line it has to climb back to — less the one tick of
+    // decay the demolition tick itself charged it.
+    for (let tick = 0; tick < eaten - 1; tick += 1) {
+      expect(isEngaged(only(world))).toBe(false);
+      world = stepTick(world, content);
+    }
     expect(isEngaged(only(world))).toBe(true);
-    // Finishing needs only what was LEFT, so the meal completes sooner than a fresh one.
-    world = run(world, content, MEAL - eaten + 1, []);
-    expect(isNeedMet(findNeedState(only(world).needs, 'food')!)).toBe(true);
+    world = run(world, content, MEAL, []);
+    expect(isNeedSatisfiedIn(content, findNeedState(only(world).needs, 'food')!)).toBe(true);
     expect(orphansIn(world)).toBe(0);
   });
 
@@ -288,15 +328,14 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
    */
   const STAGED_TICK = STAY;
 
-  type Countdowns = {
+  type Deficits = {
     readonly food?: number;
     readonly rest?: number;
-    readonly patience?: number;
     /** Default `STAGED_TICK` — "arrived just now". Pass 0 for a guest whose stay is up. */
     readonly arrivedTick?: number;
   };
 
-  const guest = (id: number, room: EntityId, engagedWith: EntityId | null, over: Countdowns = {}): Guest => ({
+  const guest = (id: number, room: EntityId, engagedWith: EntityId | null, over: Deficits = {}): Guest => ({
     id,
     // G-023a: a guest is somewhere. The doorway — nothing in this file reads a position,
     // and `stepGuests` re-states it from what the guest holds on every tick. The placement
@@ -305,23 +344,21 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     arrivedTick: over.arrivedTick ?? STAGED_TICK,
     roomEntityId: room,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'food' },
-    // `metBy` follows the countdown (G-013): a need this helper forges as ALREADY MET has
-    // to say what delivered it, or `assertNeedVector` refuses the world before the case
-    // under test can run. Attributed to a room, which is what these hand-built worlds are
-    // about — the item cases live in `provider.release.test.ts`.
+    // `metBy` follows the deficit (G-013, G-027b): a need this helper forges as FULL has to
+    // say what filled it, or `assertNeedVector` refuses the world before the case under test
+    // can run. Attributed to a room, which is what these hand-built worlds are about — the
+    // item cases live in `provider.release.test.ts`.
     needs: [
       {
         needId: 'food',
-        patienceRemaining: 400,
-        progressRemaining: over.food ?? MEAL,
+        deficit: over.food ?? MEAL,
         metBy: (over.food ?? MEAL) === 0 ? 'room' : null,
         abandonCount: 0,
       },
       {
         needId: 'rest',
-        patienceRemaining: over.patience ?? 400,
-        progressRemaining: over.rest ?? STAY,
-        metBy: (over.rest ?? STAY) === 0 ? 'room' : null,
+        deficit: over.rest ?? MEAL,
+        metBy: (over.rest ?? MEAL) === 0 ? 'room' : null,
         abandonCount: 0,
       },
     ],
@@ -385,9 +422,10 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
 
   it('UNSATISFIED: the guest gives up on a room mid-meal, and still hands the café back', () => {
     // Guest 2 never had a bedroom — it has been eating while it waited — and this tick its
-    // patience for a room runs out. It leaves with nothing, and the café must not leave
-    // with it.
-    const { world, cafe } = staged((ids) => guest(2, NO_ENTITY, ids[3]!, { patience: 1 }));
+    // tolerance for waiting runs out. It leaves with nothing, and the café must not leave
+    // with it. `arrivedTick: 0` against a 500-tick tolerance is not enough on its own, so the
+    // staged tick is what makes the wait long enough; see `STAGED_TICK`.
+    const { world, cafe } = staged((ids) => guest(2, NO_ENTITY, ids[3]!, { arrivedTick: 0 }));
     const after = stepTick(world, content, []);
     expect(departureCountOf(after.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(after.guests).map((entry) => entry.id)).toEqual([1, 3]);
@@ -480,18 +518,18 @@ describe('exit path — save and load', () => {
     const world = run(hotel(1, 1), content, 3, [at(1, arrive)]);
     const blob = JSON.parse(serialise(world)) as {
       world: {
-        guests: { list: { needs: { needId: string; progressRemaining: number; metBy: string | null }[] }[] };
+        guests: { list: { needs: { needId: string; deficit: number; metBy: string | null }[] }[] };
       };
     };
     const food = blob.world.guests.list[0]!.needs.find((entry) => entry.needId === 'food');
-    food!.progressRemaining = 0;
+    food!.deficit = 0;
     // AND ITS ATTRIBUTION IS FORGED TO MATCH (G-013), deliberately, so this case still tests
     // the rule it is named for. `assertNeedVector` now refuses a met need that records
     // nothing that delivered it, and that check runs FIRST — leaving `metBy` null here
     // would make this test pass on the wrong error, which is a test that no longer covers
     // its subject. `provider.save.test.ts` covers the metBy rule on its own.
     food!.metBy = 'room';
-    expect(() => deserialise(JSON.stringify(blob))).toThrow(/which is already resolved/);
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/which is already full/);
   });
 });
 
@@ -578,10 +616,16 @@ describe('thirty days of a hotel where every provider is oversubscribed', () => 
   const TICKS = DAYS * TICKS_PER_DAY;
   const busy = bindContent({
     roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-    needTypes: [need('rest', 480, 180, true), need('food', 180, 300, false)],
-    // G-027a: content declaring a lodging need must say how long a stay lasts, or
-    // `bindContent` refuses it — a guest holding a room has no other way to leave.
-    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
+    // The shipped proportions as stocks: rest empties in 180 ticks AWAY from a room — where the
+    // lodging need's `patienceTicks` went — and food in 300, refilled seven ticks at a time.
+    needTypes: [need('rest', 180, 1, true), need('food', 300, 7, false)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+    // refuses it. G-027b adds the wait (the lodging need's old `patienceTicks`, 180) and the
+    // want line, which puts rest at 18 away-ticks — twice over inside the 60 a 480-tick stay
+    // generates at refill 7.
+    guestRules: [
+      { id: 'houseRules', name: 'House Rules', stayDurationTicks: 480, toleranceTicks: 180, wantAtBasisPoints: 1_000 },
+    ],
   });
 
   const schedule = (): readonly ScheduledCommand[] => {
@@ -629,14 +673,16 @@ describe('thirty days of a hotel where every provider is oversubscribed', () => 
 
 describe('a guest that never gets a bedroom still holds nothing on the way out', () => {
   it('leaves unsatisfied, with its engagement released', () => {
-    // A guest can be eating while it waits for a room, and can run out of patience for the
-    // room WHILE it is eating. Both reservations must go with it.
+    // A guest can be eating while it waits for a room, and its TOLERANCE for that wait can
+    // run out WHILE it is eating. Both reservations must go with it.
     const impatient = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-      needTypes: [need('rest', STAY, 5, true), need('food', 500, 500, false)],
-      // G-027a: content declaring a lodging need must say how long a stay lasts, or
-      // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 500 }],
+      needTypes: [need('rest', 500, 5, true), need('food', 500, 1, false)],
+      // A tolerance of 5 is what makes this guest impatient: it gives up on a room five ticks
+      // after arriving, which is where the lodging need's `patienceTicks` of 5 used to say it.
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', stayDurationTicks: 500, toleranceTicks: 5, wantAtBasisPoints: WANT_AT },
+      ],
     });
     const start = stepTick(createWorld(1, impatient), impatient, [spawnCafe(0)]);
     const world = run(start, impatient, 10, [at(start.tick, arrive)]);

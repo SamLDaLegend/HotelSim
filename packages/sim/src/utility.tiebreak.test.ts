@@ -64,8 +64,13 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks: lodging ? 400 : 6,
-  patienceTicks: 400,
+  // G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 400 is
+  // carried. The refills are chosen with the want line below (450 basis points of 400 = 18): an
+  // engagement need clears in the six ticks the deleted `satisfyTicks` used to state directly
+  // (18 of deficit at 3 a tick). Refill 3 rather than 1 because two engagement needs at 1 demand
+  // the WHOLE of a guest's time, which `assertNeedDemandIsServiceable` refuses.
+  capacityTicks: 400,
+  refillPerTick: lodging ? 4 : 3,
 });
 
 /**
@@ -82,9 +87,12 @@ const content = bindContent({
     roomType('gamesRoom', ['fun'], FIT, ['machine']),
   ],
   needTypes: [need('food', false), need('fun', false), need('rest', true)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 400 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it. G-027b adds the wait and the want line: 2 x 450 x 400 = 360,000 fits inside the
+  // 200 away-ticks two engagement needs generate in a 400-tick stay at refill 3.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 400, toleranceTicks: 400, wantAtBasisPoints: 450 },
+  ],
   itemTypes: [itemType('machine', ['food'], FIT)],
 });
 
@@ -184,9 +192,9 @@ describe('fit outranks the id, and the id only ever settles a tie', () => {
       roomType('kiosk', ['food'], 2_500),
     ],
     needTypes: [need('food', false), need('rest', true)],
-    // G-027a: content declaring a lodging need must say how long a stay lasts, or
-    // `bindContent` refuses it — a guest holding a room has no other way to leave.
-    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 400 }],
+    guestRules: [
+      { id: 'houseRules', name: 'House Rules', stayDurationTicks: 400, toleranceTicks: 400, wantAtBasisPoints: 450 },
+    ],
   });
 
   it('a better provider spawned LATER still wins, in both insertion orders', () => {

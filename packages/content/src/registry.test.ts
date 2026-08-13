@@ -393,6 +393,12 @@ describe('the guest rules table (G-014b)', () => {
     // fourth field this table has acquired that way — see `stayDurationTicksSchema`, which
     // also records that this is the dominant term in the hotel's margin.
     stayDurationTicks: 1_440,
+    // Where a guest starts wanting a need, and how long it waits for a room before it gives
+    // up (G-027b). Required on disk for the same reason as the four above: the stock model has
+    // no historical value to fall back on for either, so silence is a forgotten dial rather
+    // than a statement about an era.
+    wantAtBasisPoints: 3_000,
+    toleranceTicks: 180,
     ...overrides,
   });
   const parseOneRule = (overrides: Record<string, unknown> = {}): unknown => parseGuestRules([rules(overrides)]);
@@ -407,7 +413,16 @@ describe('the guest rules table (G-014b)', () => {
     // content written before G-014b. A document that reaches THIS schema was written today,
     // and a designer who forgets the field would otherwise inherit the historical default and
     // ship a hotel whose guests silently stopped changing their minds.
-    for (const key of ['id', 'name', 'abandonMarginBasisPoints', 'reviewScoreMin', 'reviewScoreMax', 'stayDurationTicks']) {
+    for (const key of [
+      'id',
+      'name',
+      'abandonMarginBasisPoints',
+      'reviewScoreMin',
+      'reviewScoreMax',
+      'stayDurationTicks',
+      'wantAtBasisPoints',
+      'toleranceTicks',
+    ]) {
       const entry = rules();
       delete entry[key];
       expect(() => parseGuestRules([entry])).toThrow(ContentError);

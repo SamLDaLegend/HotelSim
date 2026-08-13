@@ -1,59 +1,104 @@
-// The need vector (G-012).
+// The need vector (G-012), as STOCKS (G-027b, ADR-0017 §1).
 //
-//   A guest forms one instance of every need type the content defines, each with its
-//   own integer urgency that rises every tick and falls only while a provider serves
-//   it. A need that runs out of patience fails on its own and is recorded; it does not
-//   end the stay.
+//   A guest forms one instance of every need type the content defines, each carrying one
+//   integer: how far below full it is. A need is never "done". It decays, it is refilled by
+//   being served, and it decays again — the loop is oscillation, not completion.
 //
-// THE SPLIT THIS MODULE OWNS. `guests.ts` owns what a guest DOES — which room it takes,
-// which provider it engages, when it leaves. This module owns what a need IS: how it
-// decays, when it is met, when it has failed, and how the tally of met and unmet is
-// kept. That is the same seam `validity.ts` has with `guests.ts`, and it exists for the
-// same reason: neither file has to be opened to change the other.
+// THE SPLIT THIS MODULE OWNS. `guests.ts` owns what a guest DOES — which room it takes, which
+// provider it engages, when it leaves. This module owns what a need IS: how it decays, when a
+// guest wants it, and how the tally of met and unmet is kept. That is the same seam
+// `validity.ts` has with `guests.ts`, and it exists for the same reason: neither file has to be
+// opened to change the other.
 //
-// URGENCY IS DERIVED, NEVER STORED, AND THAT IS A MIGRATION DECISION AS MUCH AS A
-// DESIGN ONE. What a guest carries per need is two COUNTDOWNS — `patienceRemaining` and
-// `progressRemaining` — which are exactly the two fields a pre-vector guest already had.
-// So the v5 -> v6 migration is a pure reshape that invents no value. Storing urgency
-// instead would have forced that migration to compute `patienceTicks - patienceRemaining`,
-// and `patienceTicks` is CONTENT, which a migration may not read (ADR-0008): a migration's
-// output must be a pure function of its input bytes and its own era. The state shape is
-// therefore chosen by the migration rule, not merely checked against it.
-//
-// Deriving it also means there is no second copy to drift, which is the call I4 makes
-// about the cash balance, G-004 makes about reservations and G-009 makes about validity.
+// ONE FIELD WHERE THERE WERE TWO, AND THE DELETED ONE WAS THE DEADLINE. A G-012 need carried
+// `progressRemaining` (provision still owed) and `patienceRemaining` (a fuse). ADR-0017 removes
+// the deadline from the model outright, so the fuse has nothing to burn: what is left is a
+// level, carried as a DEFICIT so that "full" is 0 and needs no content to recognise.
 //
 // THE CLOSED FORM, and it is integer arithmetic end to end (I2):
 //
-//     urgency(need)      = patienceTicks - patienceRemaining
-//     patienceRemaining  -= 1                              on a tick nothing serves it
-//     patienceRemaining   = min(patienceTicks, +1)         on a tick something does
-//     progressRemaining  -= 1                              on a tick something serves it
+//     deficit  += 1                          on a tick it decays and nothing serves it
+//     deficit  -= refillPerTick              on a tick something serves it
+//     both clamped into [0, capacityTicks]
+//     pressure  = floor(deficit x 10,000 / capacityTicks), clamped one below the whole
 //
-//   so for a need nothing ever serves, with `t` THE WORLD'S TICK COUNTER — which after a
-//   run is the tick ABOUT TO BE SIMULATED, not the last one that ran:
+//   so for a need nothing ever serves, with `t` THE WORLD'S TICK COUNTER — which after a run is
+//   the tick ABOUT TO BE SIMULATED, not the last one that ran:
 //
-//     urgency(t) = min(patienceTicks, (t - 1) - arrivedTick)
+//     deficit(t) = min(capacityTicks, arrivalDeficit + (t - 1) - arrivedTick)
 //
-//   exactly, at every t, with no accumulated float and no repeated non-integer add.
+//   where `arrivalDeficit` is `max(1, wantLine)` — the want line, except under content that
+//   declares none, where it is the one tick that keeps "barely wanting" from meaning "full".
+//   See `formNeedVector`; on every table that declares a line it IS the line.
 //
-//   THE `- 1` IS CHECK-IN AND THE ORACLE MUST NOT DEPEND ON WHICH `t` A READER PICKS. A
-//   guest is created DURING tick `arrivedTick`, after that tick's decay pass has already
-//   run, so the tick it walks in on costs it nothing — G-004 pinned the same fact as "full
-//   patience: it has been here for no ticks yet". `needs.decay.test.ts` steps one guest
-//   100,000 real ticks and asserts this form, character for character.
+//   exactly, at every t, with no accumulated float and no repeated non-integer add. THE `- 1`
+//   IS CHECK-IN and the oracle must not depend on which `t` a reader picks: a guest is created
+//   DURING tick `arrivedTick`, after that tick's decay pass has already run, so the tick it
+//   walks in on costs it nothing. `needs.stock.test.ts` asserts this form over 100,000
+//   iterations of `advanceNeeds`, character for character.
 //
-// THERE IS NO SEPARATE DECAY RATE IN CONTENT, deliberately. Rise and relief are one tick
-// each, and the per-need knob is `patienceTicks`, which already exists and is already the
-// number that says how hard a need presses. A second rate would let a designer write a
-// need whose urgency and whose patience disagree about how long it has left.
+//   IT DRIVES `advanceNeeds` DIRECTLY, WHERE `needs.decay.test.ts` DROVE A WORLD, and the
+//   difference is exactly the `- 1` above. The retired file ran `run(createWorld(...))` and
+//   compared its oracle against `world.tick`, so CHECK-IN WAS INSIDE WHAT IT MEASURED; the
+//   successor counts its own iterations, and the `- 1` is a correction its reader applies by
+//   hand rather than a term any assertion in it can be wrong about. Said here because this
+//   paragraph capitalises the half the closed-form test no longer exercises — what still steps
+//   a world past an arrival is `guest.stay.test.ts` and `stock.idle.test.ts` in tools/headless.
 //
-// No Set, no Map, no float, no wall clock. The vector is a plain array, strictly
-// ascending by need id, and every number in it is a non-negative safe integer.
+// WHAT DECAY COUNTS IS THE ROLE'S BUSINESS, AND IT IS THE MODEL'S ONE ASYMMETRY. An engagement
+// need decays in WALL time. The lodging need decays in AWAY time and is HELD while the guest is
+// in its own room — that is ADR-0017 §2 ("activity draws a stock down") as a mechanism rather
+// than a sentence, and `advanceNeed` carries the two implementations it was chosen over.
+//
+// A GUEST ARRIVES AT ITS WANT LINE on every need: wanting everything, just barely. That costs no
+// field and no content number, and it is what makes a 1,440-tick stay the steady state rather
+// than one long transient.
+//
+// No Set, no Map, no float, no wall clock. The vector is a plain array, strictly ascending by
+// need id, and every number in it is a non-negative safe integer.
+//
+// ============================================================================
+// R1 — "A DERIVATION THAT OUTLIVES THE MODEL IT WAS DERIVED FROM", AND WHERE IT HIDES.
+// THIS IS THE DEFECT CLASS OF THE GOAL THAT WROTE THIS FILE. Three critique sweeps found
+// ELEVEN instances of it. Read this before writing a comment that quotes a number.
+//
+// ADR-0017 deleted `satisfyTicks`, `patienceTicks`, `progressRemaining` and `patienceRemaining`,
+// and with them every derivation that stood on one: the 480/480 stay floor, the 300/360/300 lcm,
+// the 201/721/10,001 reachable-score counts, "entertainment last", "a served need's patience
+// regenerates", "9,999 falls out of `isNeedPending`". The CODE was replaced in one goal. The
+// SENTENCES were not, and the pattern in which they survived is sharp enough to state:
+//
+//   THE SITES A PLAN NAMES GET REPAIRED. THE SITES A READER MEETS FIRST DO NOT.
+//
+// Every one of the eleven survivors was one of four things — **an error message, a docstring, a
+// file header, a `describe` title** — while the call site, the assertion and the body ten lines
+// away had all been rewritten correctly. A plan enumerates call sites; nobody writes "and the
+// paragraph above it" on a task list. The worst instance was a docstring on a function the SAME
+// DIFF created, carrying verbatim the docstring of the function it replaced.
+//
+// SO THE RULE, AND IT IS CHEAP: when a model changes, grep the DELETED VOCABULARY, not the
+// deleted call sites, and read every hit FOR TENSE. A mention is fine — this repository keeps
+// its history deliberately — but it must be fenced as history, in the shape
+// `packages/content/src/schema.ts`'s countdown-era block uses: named as the era it describes,
+// past tense, with what replaced it. A present-tense sentence about a deleted field is a lie
+// with a citation.
+//
+// TWO OF THE FOUR SURFACES ARE EXECUTABLE STRINGS AND ARE NOW SCANNED RATHER THAN REMEMBERED:
+// `tools/headless/src/deleted-vocabulary.test.ts` fails on deleted vocabulary in a live refusal
+// message or a test title, with the historical mentions registered by name. The other two are
+// prose and no predicate can tell their tense; they are what this paragraph is for.
+// ============================================================================
 
-import { findNeedType, needTypesInOrder } from './content.js';
+import { findNeedType, needTypesInOrder, wantAtOf, wantLineOf } from './content.js';
 import type { BoundContent, NeedTypeData } from './content.js';
 import type { ContentId } from './entities.js';
+
+// THE WANT LINE MOVED TO `content.ts` AND IS RE-EXPORTED FROM HERE (round 1), so no caller
+// changed. It had to move because the bind-time refusal that keeps the line above 0
+// (`assertEveryNeedIsWantedOnArrival`) computes it, and `content.ts` cannot import this module.
+// One definition, four readers; the alternative was a fourth spelling of the arithmetic inside
+// the check that guards it, which is ADR-0021's proxy defect.
+export { wantLineOf };
 
 /**
  * What KIND of thing served a need (G-013).
@@ -67,31 +112,67 @@ import type { ContentId } from './entities.js';
 export type ProviderKind = 'room' | 'item';
 
 /**
- * One need a guest has formed, and how far it has got.
+ * One need a guest has formed, and how far below full it has fallen.
  *
- * The two countdowns are exactly the fields a pre-G-012 guest carried
- * (`patienceRemaining` and `restRemaining`) — see the header for why that is the
- * migration's shape rather than a coincidence.
+ * ONE FIELD, AND THE PARAGRAPH THAT USED TO BE HERE DESCRIBED TWO. It read "the two countdowns
+ * are exactly the fields a pre-G-012 guest carried (`patienceRemaining` and `restRemaining`)",
+ * which was G-012's migration argument and was true until ADR-0017 §1 deleted both countdowns —
+ * **in the diff this sentence survived, in the file that declares the rule against exactly that.**
+ * The migration chain it described is still real and is stated where it belongs, once: v5 -> v6
+ * reshaped a guest's two countdowns into a one-entry vector and v12 -> v13 carried the surviving
+ * one onto `deficit` (`save.ts`, and the header above).
  */
 export type NeedState = {
   readonly needId: ContentId;
   /**
-   * Ticks of patience left before this need fails. Drains while nothing serves the
-   * need, and is restored — never above `patienceTicks` — while something does.
+   * HOW EMPTY THIS NEED IS, in ticks of stock (G-027b, ADR-0017 §1). **0 is full**;
+   * `capacityTicks` is empty.
    *
-   * Urgency is this number counted the other way (`urgencyOf`). Zero means the need has
-   * run out of patience and failed.
+   * Rises by one on every tick the need decays and falls by `refillPerTick` on every tick
+   * something serves it, clamped at both ends. It replaces the two countdowns a G-012 need
+   * carried, and one field replaces two because a stock has one state: `patienceRemaining` was
+   * a fuse that only a task with a deadline needs, and there are no deadlines left.
+   *
+   * ---------------------------------------------------------------------------
+   * A DEFICIT AND NOT A LEVEL, AND THE THREE REASONS ARE ALL STRUCTURAL.
+   *
+   *   1. `assertNeedVector` stays CONTENT-FREE. "Full" is `deficit === 0`, which needs no
+   *      capacity to check — where "level === capacityTicks" would need one, and that
+   *      validator runs at every load with no content in hand and must keep one definition.
+   *   2. IDENTITY-RETURN SURVIVES AT BOTH ENDS. A full need being topped up and an empty need
+   *      nothing is serving both come back by reference, so a sleeping guest and a guest with
+   *      no café to go to each allocate nothing per tick. Under a level, the clamps land on
+   *      different constants and one of the two ends is lost.
+   *   3. The v12 -> v13 migration is a same-kind carry: `progressRemaining` was "ticks this
+   *      need still owes, 0 = satisfied" and so is this. What it cannot preserve is the
+   *      FRACTION, because the cap it was a fraction of is content and a migration may not
+   *      read content (ADR-0008). See `migrateV12ToV13`.
+   * ---------------------------------------------------------------------------
+   *
+   * WHAT MAKES IT RISE DEPENDS ON THE NEED'S ROLE, and that is the model's one asymmetry: an
+   * engagement need decays in WALL time, the lodging need in AWAY time. See `advanceNeed`.
    */
-  readonly patienceRemaining: number;
-  /** Ticks of provision still owed. Drains only while a provider serves it. Zero means met. */
-  readonly progressRemaining: number;
+  readonly deficit: number;
   /**
-   * What kind of provider finished this need, or `null` while it is not finished (G-013).
+   * What kind of provider last served this need, or `null` if nothing ever has (G-013,
+   * re-derived at G-027b).
    *
-   * NON-NULL IF AND ONLY IF `progressRemaining === 0`, checked at every commit and every
-   * load by `assertNeedVector`. It is written on the one tick the countdown reaches zero
-   * and never touched again — a met need is terminal, so `advanceNeeds` returns it by
-   * reference from then on and it costs nothing further.
+   * ---------------------------------------------------------------------------
+   * THE IFF BECAME AN IMPLICATION, AND THE HALF THAT DIED DID SO BY DESIGN RATHER THAN BY
+   * NEGLECT. It used to read: non-null if and only if `progressRemaining === 0`.
+   *
+   *   SURVIVES   `deficit === 0`  ⇒  `metBy !== null`. A need can only reach full by being
+   *              served, so a full need with nothing recorded is a satisfaction the tally
+   *              could not attribute and `metByItem` would silently under-count. Content-free,
+   *              so `assertNeedVector` still checks it at every commit and every load.
+   *   DIES       `metBy !== null`  ⇒  `deficit === 0`. Under a stock a need that WAS full and
+   *              has decayed still remembers what filled it, and that is a true statement
+   *              about its history rather than a contradiction. A task had no history to
+   *              remember; a stock does.
+   *
+   * That is the whole difference, and it is why the field's meaning moved from "what FINISHED
+   * it" to "what last SERVED it": nothing finishes any more.
+   * ---------------------------------------------------------------------------
    *
    * WHY IT IS STORED AT ALL, WHICH IS THE QUESTION TO ASK OF ANY NEW STATE. G-013's
    * criterion asks a run to report satisfactions delivered by an item and by a room, and
@@ -151,15 +232,17 @@ export type NeedState = {
  * who are still here, and the only way to check it would be to walk every live guest's
  * vector every tick. `satisfied` has always worked this way for the same reason.
  *
- * `unmet` is one number covering two fates — ran out of patience, and still pending when
- * the guest left. Splitting it is G-015's, where the outcome tally becomes a table by
- * reason.
+ * `unmet` IS ONE NUMBER OVER ONE FATE NOW, AND IT USED TO BE TWO. Under the countdowns it
+ * covered "ran out of patience" and "still pending when the guest left" — two ends a need could
+ * come to, and the reason G-015 planned to split the tally by reason. A stock has neither: a
+ * need is not a task, so it cannot fail and it cannot be outstanding. It is simply BELOW ITS
+ * WANT LINE at the tick its guest walks out, or it is not.
  */
 export type NeedOutcome = {
   readonly needId: ContentId;
-  /** Instances that reached `progressRemaining === 0` before their guest left. */
+  /** Instances that were at or above their want line — satisfied, not wanting — when their guest left. */
   readonly met: number;
-  /** Instances that did not: failed on patience, or still pending at departure. */
+  /** Instances that were below it: still wanting, at departure. */
   readonly unmet: number;
   /**
    * How many of `met` were delivered BY AN ITEM (G-013).
@@ -259,14 +342,37 @@ export function needOutcomeOf(outcomes: readonly NeedOutcome[], needId: ContentI
  */
 export function formNeedVector(content: BoundContent): readonly NeedState[] {
   const needTypes = content.content.needTypes ?? [];
+  const wantAt = wantAtOf(content);
   const needs: NeedState[] = [];
   for (const needType of needTypes) {
     needs.push({
       needId: needType.id,
-      patienceRemaining: needType.patienceTicks,
-      progressRemaining: needType.satisfyTicks,
-      // Nothing has served it yet. `satisfyTicks` is at least 1 on disk, so this is
-      // consistent with `assertNeedVector`'s "non-null iff met" from the first tick.
+      // A GUEST ARRIVES AT ITS WANT LINE ON EVERY NEED (G-027b): it walks in wanting everything,
+      // just barely. Derived from content rather than stored per need, so it costs no field and
+      // no number — and it is what makes the whole 1,440-tick stay the steady state rather than
+      // one long transient. Arriving EMPTY was measured and rejected: rest alone would take most
+      // of the stay to clear. Arriving FULL was rejected on the sentence that a guest which does
+      // not want a bed does not book one.
+      // ============================================================================
+      // AND NEVER AT 0 — THE `max` IS THE PRE-STOCK ERA, NOT A FUDGE (round 1).
+      //
+      // A deficit of 0 is a FULL need, and a full need that nothing has served is the one vector
+      // `assertNeedVector` refuses: it would throw on this guest's first commit. The line reaches
+      // 0 only when the content declares no want line at all (`wantAtOf` answers the era's 0), and
+      // for that content "one tick below full" IS the era's own reading — a pre-G-027b guest
+      // pursued a need whenever any provision was outstanding, which is `deficit >= 1` exactly.
+      //
+      // IT IS NOT COVERING FOR A DESIGNER'S ZERO. A want line that was WRITTEN and floors to 0 is
+      // refused at bind time, by name, with the need named (`assertEveryNeedIsWantedOnArrival`),
+      // so this `max` is only ever load-bearing for content that predates the field. On any table
+      // whose line is at least 1 — every shipped one — it changes nothing.
+      // ============================================================================
+      deficit: Math.max(1, wantLineOf(needType, wantAt)),
+      // Nothing has served it yet, and the deficit above is at least 1, so this is consistent
+      // with `assertNeedVector`'s "full implies attributed" from the first tick. UNTIL ROUND 1
+      // THIS READ "the line is above 0 for any want line a designer can write" — and three
+      // schema-valid documents said otherwise, each of them throwing here, one commit later,
+      // from inside the tick.
       metBy: null,
       // Nothing has been walked out on yet either (G-014b).
       abandonCount: 0,
@@ -275,81 +381,84 @@ export function formNeedVector(content: BoundContent): readonly NeedState[] {
   return needs;
 }
 
-/** Met: the provision this need asked for has been delivered in full. */
-export function isNeedMet(need: NeedState): boolean {
-  return need.progressRemaining === 0;
-}
-
 /**
- * Failed: it ran out of patience before anything finished serving it.
+ * Full: this need has as much as it can hold. **Not terminal** — it decays again next tick.
  *
- * Checked after `isNeedMet`, so a need that was completed is met even if its patience
- * also happens to be spent. The tick cannot produce that state — nothing serves a failed
- * need — but the order makes the two predicates exclusive for any input, including one a
- * hand-built save could carry.
+ * The stock-model successor to `isNeedMet`, and the rename is the point rather than tidiness:
+ * "met" named a task that was over, and the thing this asks is a momentary state a need passes
+ * through several times a stay.
  */
-export function isNeedFailed(need: NeedState): boolean {
-  return need.progressRemaining > 0 && need.patienceRemaining === 0;
+export function isNeedFull(need: NeedState): boolean {
+  return need.deficit === 0;
 }
 
 /**
- * Neither met nor failed: still worth pursuing. The only state a guest acts on.
+ * Empty: this need has nothing left. **Not terminal either** — being served refills it.
  *
- * WRITTEN DIRECTLY RATHER THAN AS `!isNeedMet && !isNeedFailed`, AND THE REASON IS A
- * MEASUREMENT. The derived form is the tidier statement of the same fact and it is what
- * this shipped for an afternoon — but this is the hottest predicate in the guest loop, read
- * for every need of every guest on every tick, and the two extra calls cost **2.2% of the
- * 365-day bench**. Small, and still worth it: 2.2% is not a style question on a gate this
- * milestone spent a whole goal defending.
- *
- * THAT FIGURE IS A CORRECTION. It was first recorded as **11%** (10,408ms against
- * 11,713ms), and those absolutes are impossible — the entire build now runs in ~6.1s. The
- * original reading was taken across a session in which this machine drifted nearly 2x in
- * speed, with the two arms timed minutes apart. Re-measured paired and interleaved, it is
- * 2.2%. See `depart` in `guests.ts` for the full account; every number in this milestone
- * that was not taken against a same-session paired control has been re-derived or removed.
- *
- * WHAT THE DERIVED FORM BOUGHT IS KEPT, as a test rather than as an indirection:
- * `needs.test.ts` asserts the three predicates are TOTAL and MUTUALLY EXCLUSIVE across a
- * grid of countdowns, including the states only a corrupt save can reach. A property that
- * is checked is worth more than a property that is structural and slow, and this is the
- * one place in the module where those two pulled against each other.
+ * The successor to `isNeedFailed`, and it is a level rather than a fate. Its consequence today
+ * is that pressure saturates here, so the utility function can no longer separate this need
+ * from another that is also empty; the consequence that makes it matter to a guest — leaving
+ * because nothing has served it — is the next goal's.
  */
-export function isNeedPending(need: NeedState): boolean {
-  return need.progressRemaining > 0 && need.patienceRemaining > 0;
+export function isNeedEmpty(needType: NeedTypeData, need: NeedState): boolean {
+  return need.deficit >= needType.capacityTicks;
 }
 
 /**
- * How badly this guest wants it: `patienceTicks - patienceRemaining`, an integer.
+ * WANTED: the guest is pursuing this need. **The one predicate the guest loop acts on**, and
+ * the hysteresis lives here rather than in the scorer.
  *
- * Derived, never stored (see the header). Returns 0 for a need this content does not
- * define — the `requiredItemsOf` contract: a caller that cares about the difference has
- * already asked `findNeedType`, and a need with no type cannot be pursued anyway.
+ * A SCHMITT TRIGGER, WHICH IS WHY IT TAKES `beingServed`. Wanting STARTS when the deficit
+ * reaches the want line and STOPS only at FULL — so the two thresholds differ and a guest
+ * cannot flicker in and out of wanting a thing on consecutive ticks. Expressed without a stored
+ * flag: a need is wanted if it is at or past the line, OR if something is already serving it
+ * and it is not yet full. `stepGuests` knows which needs are being served this tick; nothing
+ * else has to.
+ *
+ * THE `deficit > 0` CLAUSE IS THE TOP OF THE TRIGGER — "a full need is never wanted" — and that
+ * is the whole of its job (corrected at round 1). It used to be described as carrying the
+ * pre-stock era as well: `wantAtOf` answers 0 for content that predates the want line, and at a
+ * line of 0 this reads "wanted iff not full", which is what a guest did when a need was a task
+ * with outstanding provision. THAT CONTENT NO LONGER REACHES THIS FUNCTION. A guest is formed AT
+ * its want line, so a line of 0 forms a full need nothing has served — refused by
+ * `assertNeedVector` at the first commit and now by `bindContent` at load
+ * (`assertEveryNeedIsWantedOnArrival`). The clause is unchanged and still load-bearing; what is
+ * gone is the second reading, which described a document this simulation cannot run.
+ */
+export function isNeedWanted(
+  needType: NeedTypeData | undefined,
+  need: NeedState,
+  wantAtBasisPoints: number,
+  beingServed: boolean,
+): boolean {
+  if (need.deficit <= 0) return false;
+  // A need this content does not define has no capacity for a line to be a fraction OF, so the
+  // line is 0 and this reads "wanted iff not full" — the `advanceNeed` contract for the same
+  // case, and the same answer the task model gave a need with outstanding provision. It cannot
+  // be PURSUED either way: `reserve` skips a need whose type it cannot resolve.
+  if (needType === undefined) return true;
+  return beingServed || need.deficit >= wantLineOf(needType, wantAtBasisPoints);
+}
+
+/**
+ * How badly this guest wants it: **the deficit itself**, an integer count of ticks of stock
+ * (G-027b).
+ *
+ * IT IS NO LONGER DERIVED, AND THAT IS THE HEADER'S "URGENCY IS DERIVED, NEVER STORED" GOING
+ * THE OTHER WAY ON PURPOSE. Under two countdowns, urgency was `patienceTicks - patienceRemaining`
+ * — a quantity the state did not carry, computed from content so that the v5 -> v6 migration
+ * could invent nothing. A stock stores the want directly, so the number that used to be derived
+ * IS the field, and there is still exactly one copy of it. What is derived now is the FRACTION
+ * (`pressureBasisPoints`), which is the thing decisions are actually compared on.
+ *
+ * Kept as a named function, and still taking content, because callers outside this module ask
+ * "how much does this guest want that" without holding a need type — and because deleting an
+ * exported name to save an indirection is a diff nobody can review as one line.
  */
 export function urgencyOf(content: BoundContent, need: NeedState): number {
-  const needType = findNeedType(content, need.needId);
-  if (needType === undefined) return 0;
-  return urgencyIn(needType, need);
+  return findNeedType(content, need.needId) === undefined ? 0 : need.deficit;
 }
 
-/**
- * Urgency, given the need type the caller has already looked up.
- *
- * IT HAS ONE CALLER — `urgencyOf` above — SINCE G-014a, AND IT IS NOT THE ONE DEFINITION OF
- * URGENCY IN THE CODEBASE. Both halves of what this comment used to claim were false and are
- * corrected rather than trimmed, because the false version is the shape ADR-0007's amendment
- * names: it justified the split by `compareNeedPriority`, which G-014a deleted eleven lines
- * below, and it claimed sharing the line stops urgency being computed twice — while
- * `pressureBasisPoints` in `utility.ts` computes `patienceTicks - patienceRemaining` inline
- * and always has.
- *
- * It is kept, rather than folded back into `urgencyOf`, only because it takes the need TYPE
- * the caller has already resolved. If a future goal gives it no second caller and no reason
- * to exist, delete it; nothing here argues that it must survive.
- */
-function urgencyIn(needType: NeedTypeData, need: NeedState): number {
-  return needType.patienceTicks - need.patienceRemaining;
-}
 
 /*
  * `compareNeedPriority` WAS HERE AND WAS DELETED AT G-014a. NAMED, NOT DISCOVERED.
@@ -362,9 +471,15 @@ function urgencyIn(needType: NeedTypeData, need: NeedState): number {
  * `pressureBasisPoints` in `utility.ts` replaces it, and the replacement is LOSSY. Flooring
  * each fraction into basis points can tie where the cross-multiplication separated, so this
  * is a behaviour change and not a refactor. It is exactly equivalent for content whose
- * patiences have a least common multiple under 10,000 — which the shipped 300 / 360 / 300
- * table does, at 1,800 — and `utility.test.ts` asserts that exhaustively, with a
- * counter-example table beside it so the claim stays a measurement rather than a law.
+ * DENOMINATORS have a least common multiple under 10,000, and the sufficiency argument, the
+ * shipped denominators and what executes them all live in `utility.ts`'s header — one copy,
+ * because this paragraph carried a second and it went stale.
+ *
+ * IT READ "the shipped 300 / 360 / 300 table does, at 1,800" UNTIL θ-a SWEEP 2, and every term
+ * of that was a countdown-era `patienceTicks` table. The denominator is `capacityTicks` now, and
+ * `utility.test.ts` drives a FIXED pair of denominators rather than the shipped ones — the
+ * shipped table is checked in `tools/headless`, because this package never sees content.
+ * **That sentence had seven other copies, chased across two sweeps; this was the eighth.**
  *
  * Why a scalar had to replace a comparator: G-014b needs "beats it by a margin", and a
  * comparator cannot express a margin. `a beats b` and `a beats b by this much` are
@@ -376,26 +491,31 @@ function urgencyIn(needType: NeedTypeData, need: NeedState): number {
  */
 
 /**
- * One tick of decay for a whole vector.
+ * One tick of the whole vector's stocks.
  *
- * `servedA` and `servedB` are the needs something is serving this tick — the lodging need
- * while the guest holds its room, and the need it is engaged for. Two parameters rather
- * than a predicate callback because this runs for every live guest on every tick, and a
- * closure per guest per tick is the allocation shape G-010 spent a goal removing.
+ * `servedA` and `servedB` are the needs something is serving this tick — the lodging need while
+ * the guest is IN its own room (not merely holding it: ADR-0017 §3, and `stepGuests` step 4 owns
+ * that predicate), and the need it is engaged for. Two parameters rather than a predicate
+ * callback because this runs for every live guest on every tick, and a closure per guest per
+ * tick is the allocation shape G-010 spent a goal removing.
  *
- * RETURNS THE SAME ARRAY BY REFERENCE when no entry moved, and reuses every entry that
- * did not, so a guest whose needs have all resolved allocates nothing. Terminal needs are
- * frozen by definition: nothing serves them and their patience no longer drains, so they
- * are the common reusable case in a long stay.
+ * `away` IS THE THIRD INPUT AND IT ONLY REACHES THE LODGING NEED. It is what makes "activity
+ * draws a stock down" (ADR-0017 §2) a mechanism rather than a sentence: rest decays while the
+ * guest is out and is HELD while it is in its room, so being busy is the only thing that costs
+ * rest. See `advanceNeed` for the three cells and for the arm that separates this law from the
+ * two implementations that look like it.
  *
- * THE NEED TYPE IS RESOLVED BY POSITION WHEN IT CAN BE (G-016). `formNeedVector` builds one
- * entry per need type, in the content table's own ascending order, so for any guest that
- * formed its vector under THIS content `needs[i]` and `needTypesInOrder(content)[i]` are the
- * same need. Where that holds, the type is an array index instead of a binary search per
- * served need per guest per tick. It is CHECKED rather than assumed, per entry, by a string
- * identity compare — one pointer comparison against `indexOfId`'s several — and any guest it
- * does not hold for falls back to the search. A guest MIGRATED from v5 carries one need
- * where the content defines four, which is exactly that case: see `Guest.needs`.
+ * RETURNS THE SAME ARRAY BY REFERENCE when no entry moved, and reuses every entry that did not.
+ * Under a stock model nothing is terminal, so the old reason a vector was reusable is gone — and
+ * TWO reasons survive, one at each end, which is why the deficit is stored rather than the level:
+ * a FULL need being served (a sleeping guest) and an EMPTY need nothing serves (a guest with no
+ * cafe to go to) both clamp onto their own value and come back by reference.
+ *
+ * THE NEED TYPE IS RESOLVED BY POSITION WHEN IT CAN BE (G-016), unchanged: `formNeedVector`
+ * builds one entry per need type in the content table's own ascending order, so `needs[i]` and
+ * `needTypesInOrder(content)[i]` are the same need for any guest that formed its vector under
+ * THIS content. Checked per entry by a string identity compare, with a fallback to the search
+ * for a guest whose vector predates the table.
  */
 export function advanceNeeds(
   content: BoundContent,
@@ -403,6 +523,8 @@ export function advanceNeeds(
   servedA: ContentId | null,
   servedB: ContentId | null,
   servedByKind: ProviderKind,
+  away: boolean,
+  lodgingNeedId: ContentId | undefined,
 ): readonly NeedState[] {
   const needTypes = needTypesInOrder(content);
   // A vector of a different length cannot be positionally aligned with the table at all, so
@@ -417,14 +539,12 @@ export function advanceNeeds(
       positional !== undefined && positional.id === need.needId
         ? positional
         : findNeedType(content, need.needId);
-    // `servedA` is the LODGING room, so it is a room by construction — a guest holds a room
-    // for the whole stay and nothing else can serve that need (`bindContent` refuses an item
-    // that provides it). `servedB` is the engagement, and its kind is whatever the guest is
-    // engaged with. A scalar rather than a pair or a closure: this runs for every need of
-    // every guest on every tick, and an allocation here is the shape G-010 spent a goal
-    // removing.
+    // `servedA` is the LODGING room, so it is a room by construction — nothing else can serve
+    // that need (`bindContent` refuses an item that provides it). `servedB` is the engagement,
+    // and its kind is whatever the guest is engaged with. Scalars rather than a pair or a
+    // closure: this runs for every need of every guest on every tick.
     const servedBy = need.needId === servedA ? 'room' : need.needId === servedB ? servedByKind : null;
-    const moved = advanceNeed(needType, need, servedBy);
+    const moved = advanceNeed(needType, need, servedBy, need.needId === lodgingNeedId ? away : true);
     if (moved !== need && next === null) {
       next = needs.slice(0, i);
     }
@@ -434,50 +554,80 @@ export function advanceNeeds(
 }
 
 /**
- * One tick of decay for one need. Returns the same object when nothing moved.
+ * One tick of one stock. Returns the same object when nothing moved.
+ *
+ * ---------------------------------------------------------------------------
+ * THREE CELLS, AND THE THIRD IS LOAD-BEARING RATHER THAN TIDY (G-027b).
+ *
+ *   served                       deficit -= refillPerTick, clamped at 0
+ *   not served, DECAYING         deficit += 1, clamped at capacityTicks
+ *   not served, NOT DECAYING     unchanged - the entry is returned by reference
+ *
+ * The third cell is what a guest sitting in its own room does to its rest: it neither sleeps
+ * nor tires. `decaying` is `true` for every engagement need on every tick — they decay in wall
+ * time — and for the lodging need only while the guest is AWAY.
+ *
+ * IT SEPARATES THIS LAW FROM THE TWO IMPLEMENTATIONS THAT LOOK LIKE IT, and both of those were
+ * built and rejected during this goal rather than imagined:
+ *
+ *   UNIFORM DECAY — the lodging need decays in wall time like the others. Reads +1 in the third
+ *   cell. It satisfies ADR-0017 §3's sentence and implements none of §2: activity costs
+ *   nothing, because the stock falls at the same rate whatever the guest does.
+ *   UNCONDITIONAL REFILL — the room tops rest up whenever the guest is present. Reads -r in the
+ *   third cell. It makes the drawdown observable and then starves rest of any deficit to
+ *   accumulate: the binding quantity becomes the longest CONTIGUOUS away run, which is an
+ *   artefact of the order a guest happens to pursue its needs in — the same phase-alignment
+ *   fragility `utility.ts` records as the cause of ADR-0017's cliff. A sizing rule that depends
+ *   on phase alignment is not a sizing rule.
+ *
+ * So one arm — read the lodging deficit's change in all three cells — discriminates this law
+ * from both, and it is the same arm that catches the second of them, which is the defect that
+ * made the lodging need decorative in this goal's first number set. `needs.stock.test.ts`
+ * drives it.
+ * ---------------------------------------------------------------------------
  *
  * Takes the need TYPE rather than the content, because the caller has already resolved it —
- * positionally where it could, by search where it could not (see `advanceNeeds`). `undefined`
- * still means "this content does not define the need", exactly as `findNeedType` returning
- * undefined always did, and the cap below still holds patience still rather than guessing.
+ * positionally where it could, by search where it could not. `undefined` still means "this
+ * content does not define the need": such a need cannot be clamped against a capacity nobody
+ * declared, so it is HELD rather than guessed at, exactly as patience was.
  */
 function advanceNeed(
   needType: NeedTypeData | undefined,
   need: NeedState,
   servedBy: ProviderKind | null,
+  decaying: boolean,
 ): NeedState {
-  // Terminal. A met or failed need is not pursued, not served and does not decay — so it
-  // is also the entry `advanceNeeds` gets to reuse rather than reallocate. `metBy` is
-  // therefore written exactly once, on the tick below where progress reaches zero, and is
-  // never revisited.
-  if (!isNeedPending(need)) return need;
   if (servedBy === null) {
+    // Held: not decaying at all, or already empty. Both come back by reference, which is the
+    // second of the two identity-return ends the deficit exists to preserve.
+    if (!decaying) return need;
+    const capacity = needType?.capacityTicks;
+    if (capacity === undefined || need.deficit >= capacity) return need;
     return {
       needId: need.needId,
-      patienceRemaining: need.patienceRemaining - 1,
-      progressRemaining: need.progressRemaining,
-      metBy: null,
-      // Carried, never reset. Decay says nothing about a guest's history of walking out on
-      // this need, and a counter that decay quietly cleared would under-report exactly the
-      // guest the margin is tuned against — one that keeps changing its mind (G-014b).
+      deficit: need.deficit + 1,
+      // Carried, never cleared. What last served this need is a fact about its history, and a
+      // stock has history where a task had none — see `NeedState.metBy`.
+      metBy: need.metBy,
+      // Carried, never reset. Decay says nothing about a guest's history of walking out on this
+      // need, and a counter that decay quietly cleared would under-report exactly the guest the
+      // margin is tuned against — one that keeps changing its mind (G-014b).
       abandonCount: need.abandonCount,
     };
   }
-  // Relief is capped at the patience the need started with: being served restores what
-  // waiting spent, and never more. Content that does not define the need cannot say what
-  // that cap is, so patience holds still rather than growing without bound.
-  const cap = needType?.patienceTicks ?? need.patienceRemaining;
-  const progressRemaining = need.progressRemaining - 1;
+  // Served. A full need being topped up is the FIRST identity-return end: a sleeping guest whose
+  // rest is already full allocates nothing, tick after tick, for as long as it sleeps.
+  if (need.deficit === 0 && need.metBy === servedBy) return need;
+  const refill = needType?.refillPerTick ?? 1;
+  const deficit = need.deficit > refill ? need.deficit - refill : 0;
   return {
     needId: need.needId,
-    patienceRemaining: need.patienceRemaining < cap ? need.patienceRemaining + 1 : need.patienceRemaining,
-    progressRemaining,
-    // THE ONE WRITE. `metBy` records who finished the job, so it is set on the transition to
-    // zero and nowhere else — a need served for one tick out of sixty is not "met by" anybody
-    // yet, and a guest that eats half its dinner at a vending machine and the rest at the
-    // café is recorded against the café, which is the honest answer to "what delivered it".
-    metBy: progressRemaining === 0 ? servedBy : null,
-    // Carried, for the reason the unserved branch above carries it.
+    deficit,
+    // WRITTEN ON EVERY SERVED TICK, where it used to be written once on the transition to zero.
+    // "What last served it" is the honest reading under a model where nothing finishes, and the
+    // guest that eats half its dinner at a vending machine and the rest at the cafe is recorded
+    // against the cafe — the same answer the transition rule gave, for the same reason.
+    metBy: servedBy,
     abandonCount: need.abandonCount,
   };
 }
@@ -486,30 +636,59 @@ function advanceNeed(
  * A guest walks out on the provider it had engaged for this need (G-014b). THE ONE PLACE
  * `abandonCount` MOVES.
  *
- * PROGRESS AND PATIENCE ARE UNTOUCHED, and both halves are deliberate. Progress is RETAINED
- * because a guest interrupted halfway through dinner has had half a dinner — the rule G-012
- * settled at seeding for a provider that stopped providing, and abandoning is the same event
- * chosen rather than suffered. Patience is untouched because the need reverts to WAITING and
- * `advanceNeed` will start draining it again on the very next tick; docking it here would
- * charge the guest twice for one decision.
+ * THE DEFICIT IS UNTOUCHED, and that is the whole of it under a stock. A guest interrupted
+ * halfway through dinner has had half a dinner, so the level it reached is RETAINED — the rule
+ * G-012 settled at seeding for a provider that stopped providing, and abandoning is the same
+ * event chosen rather than suffered. From the next tick the need simply decays again, like any
+ * other need nothing is serving.
+ *
+ * (It read "PROGRESS AND PATIENCE ARE UNTOUCHED … patience is untouched because the need reverts
+ * to WAITING" until θ-a sweep 3. Two of those nouns are ADR-0017's deleted fields and the second
+ * half named a penalty that could not be applied to a field that no longer exists. What is left
+ * of the argument is the first half, and it is unchanged: retention is the decision.)
  *
  * IT DOES NOT RELEASE ANYTHING. The reservation lives on the guest and is given back through
  * `release` in `guests.ts`, which is the one place `held` shrinks; a need module that also
  * touched the room search would be a second release site and would break the short-circuit
  * that depends on there being one (see `findFreeRoom`).
  *
- * Returns the same object when the need is not pending, so a caller that somehow reached a
- * terminal need cannot invent a history for it. The tick cannot produce that state — a
- * resolved need's engagement is released in step 5, before step 7 can abandon anything.
+ * Returns the same object when the need is already FULL, so a caller that somehow reached a
+ * need nobody could still be serving cannot invent a history for it. The tick cannot produce
+ * that state — a need that reaches full has its engagement released in step 5, before step 7
+ * can abandon anything.
+ *
+ * THE GUARD IS `deficit === 0` AND NOT `!isNeedWanted`, deliberately, and the difference is the
+ * hysteresis. A need between its want line and full IS still being pursued while something
+ * serves it, which is exactly the guest this function exists for: one that walks out on a
+ * half-finished meal. Asking the wanting predicate here would need the content and the serving
+ * flag, and would answer "not wanted" for the very case being recorded.
  */
 export function abandonNeed(needs: readonly NeedState[], needId: ContentId): readonly NeedState[] {
   const index = indexOfNeed(needs, needId);
   if (index === -1) return needs;
   const need = needs[index];
-  if (need === undefined || !isNeedPending(need)) return needs;
+  if (need === undefined || need.deficit === 0) return needs;
   const next = needs.slice();
   next[index] = { ...need, abandonCount: need.abandonCount + 1 };
   return next;
+}
+
+/**
+ * SATISFIED: at or above this need's want line, asked with the content in hand (G-027b).
+ *
+ * THE ONE DEFINITION OF "MET" FOR ANYTHING THAT REPORTS ON A STAY — the departure tally and the
+ * review both call it, so a guest cannot be satisfied to the reviewer and unmet to the report.
+ * It is a BAND and not a point: a stock sits at exactly full for about one tick per cycle, so
+ * "full at departure" would report almost nothing met and say nothing about the stay.
+ *
+ * A need whose type this content does not define counts as NOT satisfied — the `urgencyOf`
+ * contract, and the same answer the task model gave a need with outstanding provision.
+ */
+export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boolean {
+  if (need.deficit === 0) return true;
+  const needType = findNeedType(content, need.needId);
+  if (needType === undefined) return false;
+  return need.deficit < wantLineOf(needType, wantAtOf(content));
 }
 
 /**
@@ -523,12 +702,30 @@ export function abandonNeed(needs: readonly NeedState[], needId: ContentId): rea
  * Every instance is counted exactly once — met if it was met, unmet otherwise — so
  * `met + unmet` advances by exactly one per row per departing guest that carried that
  * need. That is the identity `assertNeedOutcomes` bounds and the report checks exactly.
+ *
+ * IT TAKES CONTENT SINCE G-027b, AND THAT IS WHAT "MET" NOW COSTS. Under a task model "met"
+ * was `progressRemaining === 0`, readable from the need alone. Under a stock it is a BAND and
+ * not a point: a need sits at exactly full for about one tick per cycle, so counting "full at
+ * departure" would report ~0 met for every engagement need and say nothing about the stay. Met
+ * is therefore "at or above the want line when the guest left" — satisfied, not wanting — which
+ * needs the capacity and the line, both content. `depart` already holds content, so no call
+ * site gains a lookup.
+ *
+ * IT IS A SNAPSHOT AND IT IS HONEST ABOUT BEING ONE. "Was satisfied when it left" is a weaker
+ * statement than "was satisfied throughout", and the stock-shaped replacement — time spent
+ * below the line — is a per-need accumulator, which is saved state and therefore the next
+ * goal's schema bump rather than this one's.
  */
 export function recordNeedsAtDeparture(
+  content: BoundContent,
   outcomes: readonly NeedOutcome[],
   needs: readonly NeedState[],
 ): readonly NeedOutcome[] {
   if (needs.length === 0) return outcomes;
+  // ONE DEFINITION, NOT A SECOND COPY OF THE COMPARISON. `isNeedSatisfiedIn` is what the review
+  // asks too, so the tally and the review cannot disagree about a guest — which is the property
+  // `metByItem <= met` and `Σ reviews === departed` both quietly depend on.
+  const satisfied = (need: NeedState): boolean => isNeedSatisfiedIn(content, need);
   const merged: NeedOutcome[] = [];
   let i = 0;
   let j = 0;
@@ -543,9 +740,9 @@ export function recordNeedsAtDeparture(
     if (row === undefined || row.needId > need.needId) {
       merged.push({
         needId: need.needId,
-        met: isNeedMet(need) ? 1 : 0,
-        unmet: isNeedMet(need) ? 0 : 1,
-        metByItem: byItem(need),
+        met: satisfied(need) ? 1 : 0,
+        unmet: satisfied(need) ? 0 : 1,
+        metByItem: byItem(need, satisfied(need)),
         abandoned: need.abandonCount,
       });
       j += 1;
@@ -558,9 +755,9 @@ export function recordNeedsAtDeparture(
     }
     merged.push({
       needId: row.needId,
-      met: row.met + (isNeedMet(need) ? 1 : 0),
-      unmet: row.unmet + (isNeedMet(need) ? 0 : 1),
-      metByItem: row.metByItem + byItem(need),
+      met: row.met + (satisfied(need) ? 1 : 0),
+      unmet: row.unmet + (satisfied(need) ? 0 : 1),
+      metByItem: row.metByItem + byItem(need, satisfied(need)),
       // The guest's whole history of walking out on this need, added once, on the way out —
       // which is what keeps `met + unmet === departed` true of the same row (G-014b).
       abandoned: row.abandoned + need.abandonCount,
@@ -574,13 +771,20 @@ export function recordNeedsAtDeparture(
 /**
  * 1 when an ITEM delivered this need, 0 otherwise (G-013).
  *
- * Reads `metBy` rather than re-deriving anything, and `assertNeedVector` has already
- * established that `metBy` is non-null if and only if the need is met — so a need counted
- * into `met` here and a need counted into `metByItem` cannot disagree about whether it was
- * finished.
+ * Reads `metBy` rather than re-deriving anything, and takes the caller's own `met` answer
+ * rather than asking a second time — so a need counted into `met` and a need counted into
+ * `metByItem` cannot disagree about whether it was satisfied. `assertNeedOutcomes` bounds
+ * `metByItem <= met`, and this is what makes that true at the site rather than by luck.
+ *
+ * WHAT IT CAN UNDER-COUNT, SAID RATHER THAN DISCOVERED (G-027b). `metBy` is what LAST SERVED
+ * the need, so a need that is above its line because an item served it reads `item` exactly.
+ * A need that reached its line and was never served at all — impossible today, because a guest
+ * arrives AT the line and only serving moves it down — would read `null` and count into `met`
+ * without counting here. The inequality holds in the direction that matters and the gap is
+ * unreachable through the tick.
  */
-function byItem(need: NeedState): number {
-  return need.metBy === 'item' ? 1 : 0;
+function byItem(need: NeedState, met: boolean): number {
+  return met && need.metBy === 'item' ? 1 : 0;
 }
 
 /**
@@ -658,14 +862,15 @@ export function assertNeedVector(needs: unknown, guestId: number): asserts needs
     // drift window and has been withdrawn rather than restated: it was never re-measured
     // paired. The change stands on its shape, which is the one G-010 spent a goal removing,
     // and not on a number.
-    if (!Number.isSafeInteger(entry.patienceRemaining) || entry.patienceRemaining < 0) {
+    // ONE NUMBER WHERE THERE WERE TWO (G-027b). It is not bounded ABOVE here and that is not
+    // an omission: the ceiling is `capacityTicks`, which is content, and this validator runs at
+    // every load with no content in hand — the same reason it has never bounded patience. A
+    // deficit past its capacity is reachable through the v12 -> v13 migration and reads as
+    // "empty" everywhere that matters (`isNeedEmpty` compares `>=`, `pressureBasisPoints`
+    // clamps), so it is a legal state rather than an unchecked one.
+    if (!Number.isSafeInteger(entry.deficit) || entry.deficit < 0) {
       throw new Error(
-        `Guest store is invalid: ${describeGuest} has a negative or non-integer patienceRemaining on need "${entry.needId}"`,
-      );
-    }
-    if (!Number.isSafeInteger(entry.progressRemaining) || entry.progressRemaining < 0) {
-      throw new Error(
-        `Guest store is invalid: ${describeGuest} has a negative or non-integer progressRemaining on need "${entry.needId}"`,
+        `Guest store is invalid: ${describeGuest} has a negative or non-integer deficit on need "${entry.needId}"`,
       );
     }
     // `metBy` IS NON-NULL IF AND ONLY IF THE NEED IS MET (G-013), and both halves matter.
@@ -689,16 +894,15 @@ export function assertNeedVector(needs: unknown, guestId: number): asserts needs
           'finished by a room or by an item, or by nothing yet.',
       );
     }
-    if (metBy === null && entry.progressRemaining === 0) {
+    // FULL IMPLIES ATTRIBUTED, AND THE CONVERSE IS GONE ON PURPOSE (G-027b). A need can only
+    // reach a zero deficit by being served, so a full need recording nothing is a satisfaction
+    // `metByItem` could not attribute. The other direction — attributed implies full — was true
+    // of a task and is FALSE of a stock: a need that was filled and has since decayed still
+    // remembers what filled it, which is history rather than contradiction. See `NeedState.metBy`.
+    if (metBy === null && entry.deficit === 0) {
       throw new Error(
-        `Guest store is invalid: ${describeGuest} has met need "${entry.needId}" but records nothing that delivered ` +
-          'it. Every satisfaction is attributed to a room or an item on the tick it completes.',
-      );
-    }
-    if (metBy !== null && entry.progressRemaining > 0) {
-      throw new Error(
-        `Guest store is invalid: ${describeGuest} records need "${entry.needId}" as delivered by a ${metBy}, but it ` +
-          `still owes ${entry.progressRemaining} tick(s) of provision.`,
+        `Guest store is invalid: ${describeGuest} has need "${entry.needId}" full but records nothing that served ` +
+          'it. A stock only reaches full by being served, and every such tick attributes itself to a room or an item.',
       );
     }
     // `abandonCount` IS HASHED STATE, so the key is always present (G-014b). Typed wider than

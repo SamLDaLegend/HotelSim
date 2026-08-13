@@ -208,7 +208,25 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //                                              — this file's own reason 3 — and exactly
     //                                              the kind its header says must be
     //                                              deliberate rather than discovered.
-    expect(hashState(plain)).toBe('a9fa0b1054f2b5e4');
+    //
+    // MOVED A THIRD TIME AT G-027b, AND IT IS A BEHAVIOUR CHANGE WITH A PREDICTED DIRECTION:
+    //
+    //   `a9fa0b1054f2b5e4` -> `0f013923e178c187`   ADR-0017 §1/§2 made a need a STOCK. Every
+    //                                              guest in this run is served, decays and is
+    //                                              served again where it used to finish a task
+    //                                              once, so the ticks on which providers are
+    //                                              taken and released all move. NOT a workload
+    //                                              change and NOT a state-shape change: the
+    //                                              workload constants are untouched and the
+    //                                              only field the vector lost is one of two
+    //                                              countdowns.
+    //
+    // THE HAND-CHECKED COLUMNS ARE THE CONTROL AND THEY HELD. 75 arrived, 60 checked out, 0
+    // evicted, 4 need rows — all unchanged across this move, which is what says the hash moved
+    // because guests were SERVED differently rather than because the hotel was built or
+    // populated differently. The one column that did move is the abandonment count, and it has
+    // its own argument below.
+    expect(hashState(plain)).toBe('0f013923e178c187');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -238,7 +256,23 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // rate of mind-changing spread over three times the stay. If it ever climbs without the
     // stay moving, the hash above moved because guests started dithering rather than because
     // a content table did — which is what this assertion is for.
-    expect(plain.needOutcomes.reduce((total, row) => total + row.abandoned, 0)).toBe(21);
+    //
+    // TWENTY-ONE -> TEN AT G-027b, AND THE FALL WAS PREDICTED BEFORE IT WAS READ. Two
+    // independent brakes, both consequences of the stock model rather than of any number:
+    //
+    //   THE GAP OPENS FROM ONE END NO LONGER. A served need's patience used to sit pinned at
+    //   its cap, so its pressure was 0 and only the challenger moved. A served STOCK is being
+    //   refilled, so the incumbent's pressure FALLS towards the challenger's rise — the gap
+    //   still opens, but the incumbent is climbing out of the comparison at the same time, and
+    //   it reaches FULL and releases itself long before a 6,000-basis-point gap can form.
+    //   A CHALLENGER MUST BE WANTED. `isNeedWanted` is a Schmitt trigger: a need below its
+    //   want line is not pursued at all, so a need that was recently served cannot challenge
+    //   anything until it has decayed back to the line.
+    //
+    // Both say FEWER switches at the same margin, and ten is fewer. It is still non-zero, which
+    // matters: the mechanism is live in this 60-room hotel even though the 3-room default run
+    // now records none at all (`report.test.ts` carries that reading and its two-sided control).
+    expect(plain.needOutcomes.reduce((total, row) => total + row.abandoned, 0)).toBe(10);
   });
 
   it('and every guest is accounted for', () => {
@@ -283,7 +317,13 @@ describe('the same workload with the player churning the building', () => {
     // evicted FROM.
     // Moved at G-027a with the plain arm, twice and for the same two causes it lists.
     // `5536dd68a2cfe25c` -> `e35df7062bea43aa` -> `a8976e5fe2d15acb`.
-    expect(hashState(churn)).toBe('a8976e5fe2d15acb');
+    //
+    // Moved a THIRD time at G-027b with the plain arm, for the one cause stated there — a need
+    // became a STOCK, so every guest is served, decays and is served again where it used to
+    // finish once: `a8976e5fe2d15acb` -> `0cbe3a1234affebe`. THE SHARP CONTROL HOLDS FOR THE
+    // SIXTH TIME: 19 evictions, unchanged, in a goal that changed what being served MEANS and
+    // nothing about which rooms the churn schedule demolishes.
+    expect(hashState(churn)).toBe('0cbe3a1234affebe');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

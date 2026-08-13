@@ -46,17 +46,23 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   nightlyRatePence: 8_500,
   provides,
 });
-const need = (id: string, lodging: boolean, satisfyTicks: number): NeedTypeData => ({
+/**
+ * G-027b: `capacityTicks` is time-to-empty — what the deleted `patienceTicks` named — so 400 is
+ * carried on both needs. The refills are chosen with the want line below: 150 basis points of
+ * 400 is a deficit of 6, so a café clearing one a tick empties `food` in the six ticks the
+ * deleted `satisfyTicks` used to state directly.
+ */
+const need = (id: string, lodging: boolean, refillPerTick: number): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks,
-  patienceTicks: 400,
+  capacityTicks: 400,
+  refillPerTick,
 });
 
 const DEFINITIONS: SimContent = {
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-  needTypes: [need('food', false, 6), need('rest', true, 120)],
+  needTypes: [need('food', false, 1), need('rest', true, 3)],
   // G-027a: content declaring a lodging need must say how long a stay lasts, or
   // `bindContent` refuses it — a guest holding a room has no other way to leave.
   guestRules: [
@@ -67,6 +73,11 @@ const DEFINITIONS: SimContent = {
       reviewScoreMin: 1,
       reviewScoreMax: 5,
       stayDurationTicks: 120,
+      // G-027b: the other way out, and the want line. 2 x 150 x 400 = 120,000 fits inside the
+      // 60 away-ticks one engagement need generates in a 120-tick stay at refill 1, which is
+      // 600,000.
+      toleranceTicks: 400,
+      wantAtBasisPoints: 150,
     },
   ],
 };
@@ -227,12 +238,16 @@ describe('3. the rule through the tick — a guest arrives, checks in, eats, sle
     expect(isEngaged(guest)).toBe(true);
     expect(isResting(guest)).toBe(true);
     expect(guest.at).toEqual(CAFE);
-    // Its lodging need is progressing while it stands in the café: this is the fact above,
-    // rather than an inference from the two booleans.
+    // ITS LODGING NEED IS DRAINING WHILE IT STANDS IN THE CAFÉ, AND THE SIGN OF THAT READING
+    // FLIPPED AT G-027b. It used to say the lodging need was PROGRESSING — a guest asleep in the
+    // basement café, which G-023a recorded and parked. Rest is now served only while the guest
+    // is IN its own room and decays while it is away (ADR-0017 §2/§3), so the deficit RISES by
+    // one on this tick. Same fact about where the guest is; opposite consequence for its rest,
+    // which is the whole of what the parked observation asked for.
     const rest = guest.needs.find((entry) => entry.needId === 'rest');
     const later = onlyGuest(run(world, content, 1));
-    expect(later.needs.find((entry) => entry.needId === 'rest')?.progressRemaining).toBe(
-      (rest?.progressRemaining ?? 0) - 1,
+    expect(later.needs.find((entry) => entry.needId === 'rest')?.deficit).toBe(
+      (rest?.deficit ?? 0) + 1,
     );
   });
 
@@ -252,9 +267,12 @@ describe('3. the rule through the tick — a guest arrives, checks in, eats, sle
         seen.push(guest.at);
       }
     }
-    // `food` takes 6 ticks and the stay takes 120, so the guest finishes eating and returns
-    // to its bedroom long before it checks out.
-    expect(seen).toEqual([CAFE, BEDROOM]);
+    // `food` takes 6 ticks to fill and the stay takes 120, so the guest finishes eating and
+    // returns to its bedroom long before it checks out — and then, since G-027b, GOES BACK.
+    // Nothing is finished under a stock: `food` decays past its want line again and the guest
+    // makes the same trip a second time. That oscillation is the goal's headline, and the
+    // trajectory is what a watcher would see it as.
+    expect(seen).toEqual([CAFE, BEDROOM, CAFE, BEDROOM]);
     // The door is missing from that list for a reason worth stating: this guest never spends
     // a tick holding nothing, because the room and the café were both free when it walked in.
     // The empty-hotel case above is where the door is observed.

@@ -60,20 +60,37 @@ export const basisPointsSchema = z.int().min(0).max(10_000);
  * NEEDS, AND THAT RESTRICTION WAS BOUGHT WITH A DEFECT.
  *
  * A guest decides WHICH NEED to pursue by pressure — the fraction of that need's own
- * patience already spent — and only then decides WHERE, among the providers of that need,
- * by this number. The first build of G-014a combined the two into one score, so at equal
- * pressure the higher-fit need won. Equal pressure is the normal case (every need of a
- * newly arrived guest is at zero), and on the shipped table it reordered the guest's whole
- * stay: `guest_comfort` went from 356 met to 0 met, 356 unmet, over thirty simulated days.
+ * `capacityTicks` already drawn down — and only then decides WHERE, among the providers of
+ * that need, by this number. The first build of G-014a combined the two into one score, so at
+ * equal pressure the higher-fit need won. Equal pressure is the normal case (every need of a
+ * newly arrived guest sits at the same fraction of its own capacity — it arrives at its want
+ * line on all of them), and on the shipped table it reordered the guest's whole stay:
+ * `guest_comfort` went from 356 met to 0 met, 356 unmet, over thirty simulated days.
  *
- * WHAT A DESIGNER NEEDS FROM THAT, STATED AS THE RULE IT ACTUALLY IS: the engagement needs
- * sum to exactly `night_rest.satisfyTicks`, so the ORDER a guest pursues them in decides
- * whether it can have all three — and since a served need's patience regenerates, whatever
- * is pursued LAST has waited for the other two. Two of the six orders satisfy all three, and
- * both end in `guest_entertainment`, whose patience is the only one long enough to survive
- * the wait. Change a `patienceTicks` or a `satisfyTicks` here and that stops being true
- * silently. Read the note on `guest_comfort.satisfyTicks` in `needTypeSchema` beside this
- * one; they are the same fragility seen from two sides.
+ * WHAT A DESIGNER NEEDS FROM THAT, STATED AS THE RULE IT ACTUALLY IS: **the two decisions stay
+ * separate.** Fit decides where a guest goes and never what it goes for; if that separation is
+ * ever collapsed again, the need with the least attractive providers starves for every guest in
+ * the hotel and no gate sees it. Read `packages/sim/src/utility.ts`'s header, which is where the
+ * live argument lives, and the note on `needTypeSchema` beside this one.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THIS PARAGRAPH SAID UNTIL θ-a SWEEP 2, AND WHY IT IS GONE RATHER THAN CORRECTED. It gave
+ * the rule as an ORDERING hazard: *"the engagement needs sum to exactly `night_rest.satisfyTicks`,
+ * so the ORDER a guest pursues them in decides whether it can have all three … two of the six
+ * orders satisfy all three, and both end in `guest_entertainment`, whose patience is the only one
+ * long enough to survive the wait. Change a `patienceTicks` or a `satisfyTicks` here and that
+ * stops being true silently."**
+ *
+ * ADR-0017 DISSOLVED IT. There is no `satisfyTicks` to sum, no patience to outlast, and nothing
+ * for an order to strand a need in — a stock refills whenever the guest gets round to it, so
+ * **all six orders now satisfy all three** and no final need is privileged. That was measured,
+ * not assumed: `tools/headless/src/utility.starvation.test.ts` enumerates the six. A designer who
+ * acted on the old sentence would be defending a wall that is not there.
+ *
+ * THE DEFECT IT WAS WRITTEN ABOUT IS STILL REAL — it is the one in the paragraph above, and it
+ * cost a whole need for every guest in the hotel. What changed is that its cause was the SCORER
+ * and not the table.
+ * ---------------------------------------------------------------------------
  *
  * ONLY THE ORDER MATTERS. THE MAGNITUDES ARE INERT, AND THAT IS PROVED RATHER THAN
  * CLAIMED. READ THIS BEFORE "TUNING" ONE. The numbers below are an ORDINAL statement — "a
@@ -284,12 +301,19 @@ export const roomTypeSchema = z.strictObject({
  * What a need is FOR (G-012, ADR-0012).
  *
  *   lodging     the reason a guest books at all. A guest reserves a room for it and
- *               HOLDS THAT ROOM FOR THE WHOLE STAY; meeting it ends the stay, is what
- *               `payForStay` charges for, and failing to get a room for it is what
- *               makes a guest leave unsatisfied. Exactly one need may be lodging.
- *   engagement  a want met DURING the stay, at a provider the guest engages one at a
- *               time. It never ends the stay: it is met, or it runs out of patience
- *               and fails on its own, and either way it is recorded.
+ *               HOLDS THAT ROOM FOR THE WHOLE STAY, and failing to get a room for it
+ *               before its tolerance runs out is what makes a guest leave without ever
+ *               checking in. Exactly one need may be lodging.
+ *   engagement  a want served DURING the stay, at a provider the guest engages one at a
+ *               time. It is refilled there, and it decays again.
+ *
+ * NEITHER ROLE ENDS THE STAY, AND THIS BLOCK SAID BOTH DID UNTIL θ-a SWEEP 3. It read
+ * *"meeting it ends the stay, is what `payForStay` charges for"* of the lodging role and
+ * *"it is met, or it runs out of patience and fails on its own"* of the engagement one —
+ * the countdown terminator and the countdown fuse, both deleted by ADR-0017 §1 and §4.
+ * A stay ends by CHECKOUT after `stayDurationTicks`, or by the guest giving up while it
+ * waits for a room; `payForStay` is charged on the first. This is designer-facing text and
+ * it is the twin of the block 200 lines below, which was repaired one sweep earlier.
  *
  * REQUIRED HERE, OPTIONAL IN THE SIM — the `requires` and price contract exactly, and
  * for the same hazard in mirror image. A new need type that forgets to say what it is
@@ -305,92 +329,175 @@ export const roomTypeSchema = z.strictObject({
 export const needRoleSchema = z.enum(['lodging', 'engagement']);
 
 /**
- * One need a guest can form (G-004, G-012).
+ * HOW LONG A FULL STOCK LASTS, IN TICKS (G-027b, ADR-0017 §1).
  *
- * A guest forms ONE INSTANCE OF EVERY NEED IN THIS TABLE on arrival (G-012), so a row
- * added here is a want every guest in the game acquires — and `bindContent` refuses
- * content in which some room type does not provide it, because a need nothing can
- * satisfy is guaranteed unhappiness rather than difficulty (HOTELSIM.md §6.1).
- *
- *   role           what the need is for — see `needRoleSchema`
- *   satisfyTicks   ticks of uninterrupted provision that MEET the need
- *   patienceTicks  ticks a guest will wait for a provider before giving up
- *
- * Both are ticks, never seconds and never a wall-clock duration: one tick is one
- * in-game minute (I2).
- *
- * `patienceTicks` IS ALSO THE CEILING ON URGENCY (G-012). A guest's urgency for a need
- * rises by one a tick while nothing is serving it and falls by one a tick while
- * something is, and the need FAILS when urgency reaches this number. So there is one
- * knob per need rather than a separate decay rate: a need that should press harder is a
- * need with less patience. See `needs.ts` in `packages/sim` for the closed form.
+ * A need is a LEVEL, carried as a DEFICIT: 0 is full, `capacityTicks` is empty. The deficit
+ * rises by one on every tick the need decays and falls by `refillPerTick` on every tick
+ * something serves it. So this number is the time from full to empty with nothing serving it,
+ * and it is the denominator of the need's pressure.
  *
  * ---------------------------------------------------------------------------
- * `guest_comfort.satisfyTicks` WENT 60 -> 150 AT G-013, AND IT IS COMPENSATION FOR THAT
- * GOAL'S OWN REGISTRY WORK RATHER THAN AN INDEPENDENT BALANCE DECISION. READ THIS BEFORE
- * TREATING IT AS A TUNED NUMBER.
+ * WHAT DECAY MEANS DEPENDS ON THE ROLE, AND THAT IS THE ONE PLACE THE TWO ROLES BEHAVE
+ * DIFFERENTLY UNDER THE STOCK MODEL. READ THIS BEFORE SIZING A LODGING NEED.
  *
- * G-013 made items providers, and `guest_nourishment` gained a second one: the café is a
- * room and the vending machine in the games room is an item. That doubled the hotel's
- * capacity to feed people, and the need stopped being able to fail. Measured on
- * `--days 30 --seed 7 --rooms 6`, which is G-012's own criterion invocation:
+ *   engagement  decays in WALL TIME — every tick nothing is serving it.
+ *   lodging     decays in AWAY TIME — every tick the guest is out of its own room, and NOT
+ *               otherwise. Sitting in the room HOLDS it; sleeping in the room refills it.
  *
- *                        comfort      entertainment   nourishment   rows with BOTH non-zero
- *   comfort at  60      356 /   0      285 /  71      356 /   0             1
- *   comfort at 150      178 / 178      179 / 177      356 /   0             2
- *
- * G-012's signed-off criterion is "at least TWO different need types have a non-zero met
- * count AND a non-zero unmet count". At 60 only entertainment straddles, so shipping the
- * registry without touching anything would have retroactively falsified a committed
- * criterion of the previous goal. Raising comfort's budget restores the second straddling
- * row. That is the whole of the reason.
- *
- * WHAT THIS NUMBER IS NOT. It is not derived from a requirement (`HOTELSIM.md` §2.1), and
- * an earlier version of this comment argued that it was — via "the engagement needs sum to
- * the lodging budget", a rule that appeared for the first time in the same commit as the
- * number it justified. `ai-critic` grepped four ledgers and found no prior statement of it.
- * That is choosing a number and then writing its justification, which is the pattern §2.1
- * exists to name, and the framing is withdrawn rather than defended. **THIS DIAL HAS NO
- * SWEEP BEHIND IT AND IS OWED TO M4**, alongside the demand model — the same diff that
- * moved it parks it as unswept work, and those two facts belong in the same sentence.
- *
- * THE GENERAL HAZARD, WHICH IS WORTH MORE THAN THE NUMBER: G-012's criterion pins a
- * property of the CONTENT TABLE — how many need types straddle met-and-unmet — and ANY
- * future goal that adds a provider can flip it. G-014 and G-015 both add to this table.
- * See `PARKING.md`.
+ * That is ADR-0017 §2 ("activity draws a stock down") read as strictly as it can be: activity
+ * is the ONLY thing that draws rest down. It is also what makes this field sizeable at all for
+ * a lodging need, because the supply of away-ticks is bounded by the engagement needs' own
+ * service — see `assertLodgingBecomesWanted` in `packages/sim/src/content.ts`, which REFUSES a
+ * lodging capacity so large the need could never become wanted inside a stay. That refusal is
+ * not decorative: the first number set G-027b planned failed it, and the guest sat in its room
+ * for the whole stay with a full rest bar, which is ADR-0017's furniture problem surviving the
+ * fix built for it.
  * ---------------------------------------------------------------------------
  *
- * ---------------------------------------------------------------------------
- * `satisfyTicks` HAS NO ECONOMIC ROLE, AND THIS PARAGRAPH USED TO SAY THE OPPOSITE.
+ * WHERE THE SHIPPED NUMBERS COME FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
  *
- * Until G-027a a stay ended on the tick `night_rest` was met, so this number WAS the
- * length of a stay and therefore the dominant term in the hotel's margin — "the file's
- * biggest surprise", as it said. ADR-0017 deleted that terminator: a stay now ends by
- * CHECKOUT after `stayDurationTicks` (in `guest-rules.json`) or by the guest giving up,
- * and **nothing bills against this field any more.** It decides one thing: how many ticks
- * of provision meet the need. Editing it moves pacing and the review distribution, and
- * moves revenue by nothing at all.
+ * THE REQUIREMENT — a guest's stay is one day (1,440 ticks, derived at G-027a from the
+ * settlement window), and the needs it forms ACCOUNT FOR THAT DAY:
  *
- * The old sentence is corrected rather than deleted because it is the shape of error §5.8
- * exists for — a sourced formula, with figures, in the place a designer is told to read
- * first — and a reader who remembers it needs to be told it is wrong, not to find it gone.
- * The live formula is on `nightlyRatePence` in `roomTypeSchema` above.
- * ---------------------------------------------------------------------------
+ *     three one-hour meals · three one-hour lounge visits · three one-hour games visits
  *
- * WHICH provider satisfies this need is not recorded here. It is recorded on the
- * provider — as `roomType.provides` or, since G-013, as `itemType.provides` — so a new
- * provider can claim an existing need without editing the need. `bindContent` in
- * packages/sim rejects a need that no REACHABLE provider claims: a need nothing can
- * satisfy is guaranteed unhappiness, which is a bug rather than difficulty
- * (HOTELSIM.md §6.1). "Reachable" is the G-013 strengthening and it is not a synonym for
+ * so each engagement need is served 180 ticks a day in 3 visits of 60. Hence, per need:
+ *
+ *     refillPerTick   r  = stayDurationTicks / serviceTicksPerDay − 1     = 7
+ *     visit length       = serviceTicksPerDay / visits                    = 60
+ *     period          P  = stayDurationTicks / visits                     = 480
+ *     capacityTicks   C  = (P − visit) / wantAtBasisPoints                = 1,400
+ *
+ * `guest_nourishment`'s 180 a day was the countdown era's `satisfyTicks` EXACTLY; `guest_comfort` and
+ * `guest_entertainment` rise 150 → 180, and that dial had no sweep behind it either way (see
+ * the note further down this file, which says so and owes it to M4).
+ *
+ * THE LODGING NEED IS DERIVED AND NOT STATED, and getting that backwards is what produced the
+ * defect above. Sleep is what the day's ACTIVITY COSTS, not an independent line in the budget:
+ *
+ *     away per day    A  = Σ over engagement needs of stayDurationTicks/(1+r)  = 540
+ *     sleep per day      = A / refillPerTick(lodging)                          = 540
+ *     wantAt × C(lodging) = A / naps per day                                   = 180
+ *
+ * `refillPerTick` 1 for `night_rest` is one sentence — AN HOUR OF ACTIVITY COSTS AN HOUR OF
+ * RECOVERY — and three naps a day is the same rhythm the three engagement needs already carry.
+ * Hence `capacityTicks` 600. The day that falls out is 9 hours out, 9 hours napping, 6 hours
+ * spare, and those 6 hours are the headroom M3's travel and provider contention are spent from.
+ */
+export const capacityTicksSchema = z.int().min(1);
+
+/**
+ * HOW MUCH ONE TICK OF PROVISION RESTORES, IN TICKS OF STOCK (G-027b, ADR-0017 §1).
+ *
+ * `refillPerTick` 7 means one tick at the café buys seven ticks before the guest is hungry
+ * again; 1 means being served is exactly as fast as decaying. It is the only rate in the model:
+ * decay is always one per tick, so the whole shape of a need is this number against
+ * `capacityTicks`.
+ *
+ * IT SETS THE NEED'S SHARE OF THE GUEST'S TIME, AND THAT IS WHY IT IS NOT A FREE DIAL. A need
+ * held in steady state is served for `1/(1+refillPerTick)` of the time, so the whole table's
+ * demand on one guest is
+ *
+ *     Σ over engagement needs 1/(1+r)   ×   (1 + 1/r_lodging)      = 0.75 as shipped
+ *
+ * and `bindContent` refuses a table whose demand reaches one whole: a guest is served one thing
+ * at a time, so such content ships needs no guest could ever keep up with — guaranteed
+ * unhappiness rather than difficulty (`HOTELSIM.md` §6.1). What is left over — a quarter of the
+ * stay as shipped — is the idle share G-028's criterion is written against, and it is derived
+ * from these rates rather than chosen. See `assertNeedDemandIsServiceable`.
+ */
+export const refillPerTickSchema = z.int().min(1);
+
+/**
+ * One need a guest can form (G-004, G-012, restated as a STOCK at G-027b).
+ *
+ * A guest forms ONE INSTANCE OF EVERY NEED IN THIS TABLE on arrival (G-012), so a row added here
+ * is a want every guest in the game acquires — and `bindContent` refuses content in which no
+ * reachable provider offers it, because a need nothing can satisfy is guaranteed unhappiness
+ * rather than difficulty (HOTELSIM.md §6.1).
+ *
+ *   role            what the need is for — see `needRoleSchema`
+ *   capacityTicks   how long a full stock lasts, and the denominator of the need's pressure
+ *   refillPerTick   how much one tick of provision restores
+ *
+ * Both are counted in TICKS, never seconds and never a wall-clock duration — one tick is one
+ * in-game minute (I2): `capacityTicks` is a duration and `refillPerTick` is ticks of stock bought
+ * by one tick of provision. **The derivation of the shipped numbers lives on
+ * `capacityTicksSchema` and `refillPerTickSchema` above — read those two first; they carry the
+ * whole of it between them.**
+ *
+ * A GUEST ARRIVES AT ITS WANT LINE ON EVERY NEED, and that line is `wantAtBasisPoints` (in
+ * `guest-rules.json`) OF THE CAPACITY HERE — so a capacity small enough that the shipped want
+ * line floors to 0 is content no guest can arrive under, and `bindContent` refuses it at load
+ * with the need named. FOUR ticks is the smallest capacity the shipped want line admits. See
+ * `wantAtBasisPointsSchema`, which carries the inequality; it is the same class of
+ * cross-document bound as `requires` and `provides`, and for the same reason it cannot live in
+ * a schema.
+ *
+ * WHICH provider satisfies this need is not recorded here. It is recorded on the provider — as
+ * `roomType.provides` or, since G-013, as `itemType.provides` — so a new provider can claim an
+ * existing need without editing the need. `bindContent` in packages/sim rejects a need that no
+ * REACHABLE provider claims. "Reachable" is the G-013 strengthening and it is not a synonym for
  * "declared" — see `itemTypeSchema`.
+ *
+ * DECLARED AFTER THE TWO RATE SCHEMAS IT USES, AND THAT IS NOT A STYLE CHOICE: a `const` is in
+ * the temporal dead zone until its initialiser runs, so a `strictObject` referring upward to a
+ * schema declared below it throws at module evaluation rather than at validation.
+ *
+ * ===========================================================================
+ * THE COUNTDOWN ERA, WHICH THIS TABLE NO LONGER DESCRIBES (G-004 to G-027a).
+ *
+ * Kept because §5.8 asks for a correction rather than a deletion where a designer was told to
+ * read something first, and this is that file. **Every field named below is DELETED**; nothing
+ * here is a live statement about a document you can write today.
+ *
+ *   satisfyTicks    ticks of uninterrupted provision that MET the need. There is no "met" any
+ *                   more: a need is a level that refills, and `refillPerTick` is a RATE where
+ *                   this was a total.
+ *   patienceTicks   ticks a guest would wait before the need FAILED — and also the ceiling on
+ *                   urgency, so one knob set both the deadline and the rate at which pressure
+ *                   rose. NOTHING FAILS ANY MORE. A stock has no terminal state: an empty need
+ *                   is still scored and still refills the moment something serves it, and the
+ *                   only deadline left in the model is `toleranceTicks`, on the guest rather
+ *                   than on the need — how long it waits for a ROOM before giving up.
+ *
+ * `capacityTicks` IS NOT A RENAMED `patienceTicks`, AND READING IT AS ONE IS THE SPECIFIC ERROR
+ * THIS BLOCK EXISTS TO STOP. It is the denominator of a fraction of stock; the old field was a
+ * countdown to a failure that no longer exists. The two happen to be divided into the same
+ * 10,000 basis points, which is exactly what makes the misreading survivable — see
+ * `abandonMarginBasisPointsSchema` below, whose bound was re-derived at G-027b and came out at
+ * the same verdict from completely different terms.
+ *
+ * TWO THINGS THAT WERE TRUE OF THE OLD FIELDS AND ARE WORTH CARRYING FORWARD:
+ *
+ *   1. `satisfyTicks` HAD NO ECONOMIC ROLE by the end, and this file once said the opposite in
+ *      the strongest terms. Until G-027a a stay ended on the tick `night_rest` was met, so that
+ *      number WAS the length of a stay and the dominant term in the hotel's margin — "the file's
+ *      biggest surprise", as it said. ADR-0017 deleted that terminator before ADR-0017 §1
+ *      deleted the field. The live formula is on `nightlyRatePence` in `roomTypeSchema` above,
+ *      and its denominator is `stayDurationTicks` in `guest-rules.json`.
+ *   2. `guest_comfort.satisfyTicks` WENT 60 -> 150 AT G-013 AS COMPENSATION FOR THAT GOAL'S OWN
+ *      REGISTRY WORK, not as a balance decision: items became providers, nourishment gained a
+ *      second one, and `guest_comfort` had to be re-widened so that two need types still
+ *      straddled met-and-unmet, which was G-012's signed-off criterion. An earlier version of
+ *      that note claimed the number was derived — via "the engagement needs sum to the lodging
+ *      budget", a rule that first appeared in the same commit as the number it justified — and
+ *      the framing was withdrawn. **THAT DIAL HAD NO SWEEP BEHIND IT AND THE DEBT IS STILL OWED
+ *      TO M4**, alongside the demand model. It is owed against the SHIPPED numbers now: the
+ *      three engagement needs are identical (1,400 / 7), so there is no per-need dial left to
+ *      sweep — the sweep M4 owes is over `capacityTicks` and `refillPerTick` as a table.
+ *      THE GENERAL HAZARD OUTLIVED BOTH NUMBERS: G-012's criterion pins a property of the
+ *      CONTENT TABLE — how many need types straddle met-and-unmet — so any goal that adds a
+ *      provider can flip it, and G-028 is rewriting what "met" means underneath it. See
+ *      `PARKING.md`.
+ * ===========================================================================
  */
 export const needTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
   role: needRoleSchema,
-  satisfyTicks: z.int().min(1),
-  patienceTicks: z.int().min(1),
+  capacityTicks: capacityTicksSchema,
+  refillPerTick: refillPerTickSchema,
 });
 
 /**
@@ -472,61 +579,66 @@ export const itemTypesSchema = z.array(itemTypeSchema).min(1);
  * exactly what shipped at G-014a.
  *
  * ---------------------------------------------------------------------------
- * WHERE 6,000 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
+ * WHERE 6,000 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE — AND IT IS
+ * NOT THE DERIVATION THIS PARAGRAPH CARRIED UNTIL G-027b. SAME VALUE, DIFFERENT WARRANT.
  *
- * THE REQUIREMENT: **a guest that has just switched does not switch BACK within the
- * longest engagement.** Nothing here promises the guest FINISHES what it switched to; see
+ * THE REQUIREMENT IS UNCHANGED: **a guest that has just switched does not switch BACK within
+ * the longest engagement.** Nothing here promises the guest FINISHES what it switched to; see
  * "what this does NOT buy" below, which is the more important half of this note.
  *
- * THE INPUTS, each read off `need-types.json` and none of them written here:
+ * EVERY TERM UNDER IT CHANGED. The old form read `M >= L x 10,000 / P` off `satisfyTicks` and
+ * `patienceTicks`, and ADR-0017 §1 deleted both fields. Re-derived over a stock, the bound is
  *
- *   P   = min `patienceTicks` over the ENGAGEMENT need types           300 as shipped
- *   L   = max `satisfyTicks`  over the ENGAGEMENT need types           180 as shipped
+ *     M >= 10,000 x (refillPerTick + 1) / (2 x refillPerTick)
  *
- * BOTH READINGS ARE OVER ENGAGEMENT NEEDS ONLY, AND THE LODGING NEED WOULD CHANGE EVERY
- * ANSWER. The scoring loop skips the lodging need outright (`reserve` in
- * `packages/sim/src/guests.ts`), so it is not a need a guest can ever abandon or switch to.
- * Read `min patienceTicks` over ALL need types and the shipped table gives `night_rest`'s
- * 180, hence `M >= 10000` — the saturating margin, which turns the feature off. Read
- * `max satisfyTicks` over all types and it gives `night_rest`'s 480, hence `M >= 16000`,
- * which is over the 10,000 ceiling and therefore unsatisfiable. The two readings differ by
- * the whole feature, so `hysteresis.bound.test.ts` in `tools/headless` computes BOTH from
- * the need's ROLE rather than from the table's extremes: it asserts the shipped margin
- * clears the engagement-only bound, AND that it does NOT clear the all-need-types
- * misreading. The second assertion is what keeps the distinction a measurement rather than
- * a sentence — without it the test would pass under either reading.
+ * and **THE CAPACITY CANCELS**: it is a property of the REFILL RATE alone, where the countdown
+ * form turned on two fields of two different needs. At the shipped `refillPerTick` of 7 that is
+ * 10,000 x 8 / 14 = 5,714.28, which ROUNDS UP to **5,715**. The shipped margin of 6,000 clears
+ * it, exactly as it cleared the old bound — which is precisely the shape that keeps a test green
+ * while its meaning changes, and the reason the two forms are driven AGAINST each other rather
+ * than one being swapped in.
  *
- * THE ARITHMETIC:
+ * **THE ARITHMETIC LIVES IN `tools/headless/src/fixtures/margin-bound.ts` AND IS NOT RESTATED
+ * HERE.** One definition, two importers — `hysteresis.bound.test.ts` (G-014b criterion 5) and
+ * `stock.content.test.ts` (G-027b's census) — because two copies of one derivation is G-018's
+ * duplicated-constant defect, which is what this file would become a third copy of. What is
+ * written here is which quantity the bound is about and which requirement it answers; what the
+ * number is, is computed from `need-types.json` every time those tests run.
  *
- *   one tick moves a need's pressure by            10,000 / patienceTicks basis points
- *   a SERVED need's patience regenerates, so its pressure FALLS at that rate
- *   a WAITING need's patience drains,     so its pressure RISES at that rate
- *   -> after a switch the gap closes at              10,000/P_a + 10,000/P_b per tick,
- *      which is fastest when both are the minimum:   2 x 10,000 / P
- *   at the switch the gap is at least M, and a REVERSE switch needs it to reach -M,
- *   so the gap must travel                            2M
- *   ticks before a reverse switch is possible        2M / (2 x 10,000 / P) = M x P / 10,000
- *   require that to be at least L                    M >= L x 10,000 / P
- *
- *   shipped: 180 x 10,000 / 300 = 6,000.
+ * THE ENGAGEMENT-ONLY READING IS STILL THE LOAD-BEARING DISTINCTION, AND WHICH SIDE OF THE
+ * CEILING THE MISREADING LANDS ON HAS MOVED. The scoring loop skips the lodging need outright
+ * (`reserve` in `packages/sim/src/guests.ts`), so it is not a need a guest can abandon or switch
+ * to, and the bound is read over the ENGAGEMENT need types only. Under the countdown table the
+ * all-need-types misreading demanded `M >= 16,000` and was UNSATISFIABLE — over the 10,000
+ * ceiling. Under the stock table it is MERELY WRONG: `night_rest` refills at 1, so reading it in
+ * gives 10,000 x 2 / 2 = **10,000**, the saturating margin, which the shipped 6,000 does not
+ * clear. Either way the distinction costs the whole feature, which is why
+ * `hysteresis.bound.test.ts` asserts BOTH — that the shipped margin clears the engagement-only
+ * bound, and that it does NOT clear the all-types one. Without the second the test would pass
+ * under either reading.
  *
  * WHAT THIS DOES **NOT** BUY, AND THE ERROR THAT MADE IT LOOK AS THOUGH IT DID. The first
- * version of this derivation attached the same arithmetic to the requirement *"a guest can
- * complete its longest engagement"*. That is a DIFFERENT QUANTITY and the formula does not
- * compute it. A FIRST switch needs the gap to travel only `M` — it starts near zero — where
- * a REVERSE switch needs it to travel `2M`, so completion costs twice the margin:
+ * version of this derivation attached its arithmetic to the requirement *"a guest can complete
+ * its longest engagement"*. That is a DIFFERENT QUANTITY and the formula does not compute it. A
+ * FIRST switch needs the gap to travel only `M` — it starts near zero — where a REVERSE switch
+ * needs it to travel `2M`, so completion costs twice the margin, and twice the shipped bound is
+ * over the 10,000 ceiling.
  *
- *   complete the LONGEST engagement (L = 180)   needs M >= 12,000   over the 10,000 ceiling
- *   complete the SHORTEST engagement (150)      needs M >= 10,000   the saturating margin
- *   do not switch BACK within L = 180           needs M >=  6,000   derived, and shipped
+ * SO NO NON-SATURATING MARGIN CAN GUARANTEE A GUEST COMPLETES AN ENGAGEMENT IT STARTS, and that
+ * is structural rather than a tuning failure: a margin governs the GAP, and the gap keeps moving
+ * while the guest is being served. It survived the model change with the factor of two intact,
+ * because the factor of two is about first-versus-reverse switching and not about how a need
+ * decays. Guaranteeing completion needs a DWELL TERM — a minimum engaged duration — which is a
+ * different mechanism and is parked with its falsification test (`PARKING.md`, G-014b). (The
+ * worked numeric case that used to close this paragraph — a guest abandoning after 90 of 180
+ * ticks of progress — was arithmetic in the two deleted fields, and is withdrawn rather than
+ * restated. `utility.hysteresis.test.ts` drives the live boundary both ways: a gap of
+ * `margin - 1` keeps the engagement and a gap of exactly `margin` switches.)
  *
- * SO NO NON-SATURATING MARGIN CAN GUARANTEE A GUEST COMPLETES AN ENGAGEMENT IT STARTS, and
- * that is structural rather than a tuning failure: a margin governs the GAP, and the gap
- * keeps moving while the guest is being served. Guaranteeing completion needs a DWELL TERM
- * — a minimum engaged duration — which is a different mechanism and is parked with its
- * falsification test (`PARKING.md`, G-014b). A worked reachable case exists today: two needs
- * at pressure 3,333, a provider frees, and at M = 6,000 the guest abandons after 90 ticks
- * carrying 90 of 180 ticks of progress.
+ * AND THE ROOM LEFT OVER HAS COLLAPSED, WHICH IS G-027b's OWN FINDING: 6,000 against a floor of
+ * 5,715 is 285 basis points, where the countdown model left 4,000. A goal that wants freer
+ * switching cannot get it by lowering the margin — below the floor a guest switches back within
+ * one visit, which is the thrash the margin exists to forbid. It has to move the capacities.
  *
  * WHERE ELSE THIS CLASS LIVES — a requirement attached to a formula that computes a
  * different quantity (`HOTELSIM.md` §5.8). Checked, and named so it can be re-inspected:
@@ -567,9 +679,15 @@ export const abandonMarginBasisPointsSchema = basisPointsSchema;
 /**
  * THE REVIEW SCALE (G-019): the lowest and highest integer a departing guest can leave.
  *
- * A review is an integer derived from one guest's own recorded experience — which of its
- * needs were met, how long it waited for a room against its patience, and whether the
- * hotel cut its stay short. These two numbers say what alphabet that answer is written in.
+ * A review is an integer derived from one guest's own recorded experience — which of its needs
+ * were satisfied when it left, and whether the hotel cut its stay short. These two numbers say
+ * what alphabet that answer is written in.
+ *
+ * IT NAMED A THIRD INPUT UNTIL θ-a SWEEP 2 — *"how long it waited for a room against its
+ * patience"* — AND THERE IS NO SUCH TERM. G-027a deleted the wait share (`reviews.ts`'s header
+ * says why: under a checkout clock the arithmetic that recovered it became a constant), and
+ * ADR-0017 §1 then deleted the patience it was a fraction of. Waiting comes back as a
+ * satisfaction input at M3's G-026, from a recorded quantity rather than from the clock.
  *
  * ---------------------------------------------------------------------------
  * TWO FIELDS, AND `bands` IS NOT ONE OF THEM. READ THIS BEFORE ADDING A THIRD.
@@ -676,17 +794,23 @@ export const reviewScoreSchema = z.int();
  * `content.stay.test.ts` steps a world across every start offset and counts the settlements
  * inside the window, rather than comparing this number against `TICKS_PER_DAY`.
  *
- * THE FLOOR, which is a different requirement and is the one `bindContent` refuses on:
- * **everything a guest forms must be completable inside its stay**, or the content ships
- * guaranteed unhappiness (`HOTELSIM.md` §6.1). A guest is served its lodging need whenever
- * it holds a room, and its engagement needs ONE PROVIDER AT A TIME, so the two are parallel
- * tracks and the floor is
+ * THE OTHER REQUIREMENT `bindContent` REFUSES ON IS A RATE AND NOT A LENGTH, AND THAT IS THE
+ * ONE A DESIGNER SHORTENING THIS NUMBER WILL MEET: **a guest must be able to keep up with the
+ * needs it forms**, or the content ships guaranteed unhappiness (`HOTELSIM.md` §6.1). A guest is
+ * served ONE thing at a time, so the need table's demand — `1/(1 + refillPerTick)` per
+ * engagement need, plus what that away time costs the lodging need — must leave something over.
+ * The refusal is `assertNeedDemandIsServiceable` in `packages/sim/src/content.ts`, which is
+ * where both tables are in hand; this schema never sees the need table.
  *
- *     max( lodging satisfyTicks , Σ engagement satisfyTicks )
- *
- * = max(480, 150 + 150 + 180) = 480 on the shipped table, leaving **960 ticks of slack**.
- * The refusal is `assertStayFitsTheNeedTable` in `packages/sim/src/content.ts`, which is
- * where both tables are in hand — this schema never sees the need table.
+ * ---------------------------------------------------------------------------
+ * IT SAID "THE FLOOR" AND GAVE `max( lodging satisfyTicks , Σ engagement satisfyTicks )` =
+ * `max(480, 150 + 150 + 180)` = 480, "leaving 960 ticks of slack", UNTIL θ-a SWEEP 2. Every term
+ * of that is deleted (ADR-0017 §1) and so is the refusal it named, `assertStayFitsTheNeedTable`.
+ * **It was a TICK floor, and there is no length a stay has to clear any more** — under a stock
+ * nothing is ever finished, so "completable inside the stay" is not a question that has an
+ * answer. A designer acting on the old paragraph would have been sizing this number against a
+ * constraint that no longer exists, on the one dial that sets the whole economy.
+ * ---------------------------------------------------------------------------
  *
  * REQUIRED HERE, OPTIONAL IN THE SIM — the `role`, `requires`, price, margin and review
  * scale contract exactly. Silence in HISTORY is a true statement: content written before
@@ -697,6 +821,89 @@ export const reviewScoreSchema = z.int();
  * could book a room and never leave it — see `assertEveryStayCanEnd`.
  */
 export const stayDurationTicksSchema = z.int().min(1);
+
+/**
+ * WHERE A GUEST STARTS WANTING A NEED, as a fraction of that need's own capacity, in basis
+ * points (G-027b, ADR-0017 §1).
+ *
+ * A need is pursued once its DEFICIT reaches this share of `capacityTicks`, and is pursued
+ * until it is FULL again. That asymmetry is the hysteresis: entering wanting and leaving it
+ * happen at different levels, so a guest cannot flicker in and out of wanting a thing on
+ * consecutive ticks. It is also where a guest STARTS a stay — every need begins exactly at this
+ * line, so a guest walks in wanting everything, just barely, and the whole 1,440-tick stay is
+ * the steady state rather than one long transient.
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE 3,000 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
+ *
+ * THE REQUIREMENT: **two needs that are both merely WANTED, and neither yet being served, must
+ * be able to differ by the abandon margin** — otherwise an unengaged guest's first choice can
+ * never be a margin-width preference and `abandonMarginBasisPoints` describes a comparison that
+ * cannot happen at the moment it matters.
+ *
+ *     the pressures of two wanted needs span   [ wantAtBasisPoints , MAX_PENDING ]
+ *     so the widest gap between them is        MAX_PENDING − wantAtBasisPoints
+ *     require that to reach the margin         wantAt ≤ MAX_PENDING − abandonMargin
+ *                                              wantAt ≤ 9,999 − 6,000 = 3,999
+ *
+ * Shipped: 3,000 — the largest whole thousand of basis points under that bound. The rounding is
+ * DOWN, which is the conservative direction on both counts: a smaller line widens the wanted
+ * band the pressure signal lives in, and widens the grace between wanting a thing and having
+ * none of it left.
+ *
+ * IT IS COUPLED TO A CLAMP, AND THE COUPLING IS ONE BASIS POINT WIDE. The 9,999 above is
+ * `MAX_PENDING_PRESSURE_BASIS_POINTS` in `packages/sim/src/utility.ts`, which under the stock
+ * model is a CLAMP rather than a consequence of a countdown that stops at one. If it ever became
+ * 10,000 the bound becomes 4,000, and 3,999-passes/4,000-fails — the arm this derivation is
+ * pinned by — inverts by exactly the basis point it is built around.
+ *
+ * WHAT THIS BOUND IS NOT. It does not make abandonment impossible above 3,999: an incumbent's
+ * pressure FALLS while it is served, so a switch that this line forbids on the tick a guest
+ * engages is merely deferred by a tick. The requirement is about the choice at the engagement
+ * tick and is stated that narrowly on purpose; a wider claim was drafted, measured, and withdrawn.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * AND IT IS BOUNDED FROM BELOW TOO, BY A NUMBER THAT IS NOT IN THIS FILE (round 1). The line is
+ * a fraction of a need's own `capacityTicks` AND IT FLOORS, so it must be big enough to reach one
+ * whole tick on EVERY need in `need-types.json`:
+ *
+ *     wantAtBasisPoints × capacityTicks ≥ 10,000    for every need type
+ *
+ * Below that the line is 0, and a guest is formed AT its line — so it would arrive with that need
+ * already FULL and nothing having served it, which is a need vector the simulation refuses. The
+ * throw would land on the first arrival rather than at load.
+ *
+ * 0 IS THE SHARPEST CASE AND `basisPointsSchema` PERMITS IT, which is the whole reason this
+ * paragraph exists: 0 is a legal fraction and an illegal PLACE TO START. The bound is a
+ * CROSS-REFERENCE into another document — no schema in this file can see a capacity — so
+ * `bindContent` in packages/sim enforces it, per need type, on every host start, exactly as it
+ * does for `requires`, `provides` and the refund threshold. At the shipped 3,000 against
+ * capacities of 600 and 1,400 the lines are 180 and 420; the smallest capacity this want line
+ * admits at all is FOUR ticks (3,000 × 4 = 12,000, a line of 1; at three it is 9,000 and floors
+ * to 0), and `stock.content.test.ts` drives the boundary from both sides rather than quoting it.
+ * ---------------------------------------------------------------------------
+ */
+export const wantAtBasisPointsSchema = basisPointsSchema;
+
+/**
+ * HOW LONG A GUEST IS LEFT WANTING BEFORE IT GIVES UP AND LEAVES, IN TICKS (G-027b).
+ *
+ * PRESERVED, NOT RE-DERIVED. 180 is `night_rest.patienceTicks` from the countdown era — the fuse
+ * on a guest that never gets a room — and it is carried across unchanged because it is the
+ * number that decides how long a guest stands in the lobby, and therefore how many guests the
+ * hotel holds at once. ADR-0021 is the whole argument: the benchmark's occupancy is a calibrated
+ * quantity, and a goal that redefines it while measuring itself against it cannot tell a
+ * regression from a redefinition. `TARGET_CONCURRENT_GUESTS` is frozen for the same reason, one
+ * instrument over.
+ *
+ * WHAT READS IT TODAY IS THE LODGING CASE ONLY: a guest holding no room has been wanting lodging,
+ * unserved, since it arrived, so its unserved run IS its age and no counter is needed. The
+ * general form — any need, any guest, including one that HAS a room and cannot get dinner
+ * (ADR-0017 4(b)) — is the next goal's, and it is what will ask this number to serve a second
+ * axis it was never calibrated for.
+ */
+export const toleranceTicksSchema = z.int().min(1);
 
 /**
  * The rules a guest's own behaviour obeys (G-014b), as opposed to the rules of the money
@@ -716,6 +923,8 @@ export const guestRulesSchema = z
     reviewScoreMin: reviewScoreSchema,
     reviewScoreMax: reviewScoreSchema,
     stayDurationTicks: stayDurationTicksSchema,
+    wantAtBasisPoints: wantAtBasisPointsSchema,
+    toleranceTicks: toleranceTicksSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
   // cannot separate two stays and so cannot report on either. The relation that actually

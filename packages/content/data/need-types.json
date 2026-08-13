@@ -3,28 +3,28 @@
     "id": "night_rest",
     "name": "Rest",
     "role": "lodging",
-    "satisfyTicks": 480,
-    "patienceTicks": 180
+    "capacityTicks": 600,
+    "refillPerTick": 1
   },
   {
     "id": "guest_comfort",
     "name": "Comfort",
     "role": "engagement",
-    "satisfyTicks": 150,
-    "patienceTicks": 300
+    "capacityTicks": 1400,
+    "refillPerTick": 7
   },
   {
     "id": "guest_entertainment",
     "name": "Entertainment",
     "role": "engagement",
-    "satisfyTicks": 150,
-    "patienceTicks": 360
+    "capacityTicks": 1400,
+    "refillPerTick": 7
   },
   {
     "id": "guest_nourishment",
     "name": "Nourishment",
     "role": "engagement",
-    "satisfyTicks": 180,
-    "patienceTicks": 300
+    "capacityTicks": 1400,
+    "refillPerTick": 7
   }
 ]

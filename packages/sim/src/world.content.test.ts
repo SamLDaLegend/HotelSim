@@ -94,14 +94,20 @@ describe('bindContent — normalisation', () => {
 });
 
 describe('bindContent — need types, and why absence is not emptiness (G-004)', () => {
-  const need = (id: string): NeedTypeData => ({ id, name: id, satisfyTicks: 480, patienceTicks: 180 });
+  // G-027b: `capacityTicks` is time-to-empty — what the deleted `patienceTicks` named, carried.
+  // A refill of 3 keeps every table below inside the demand `assertNeedDemandIsServiceable`
+  // admits; at 1 a two-need table demands exactly the whole of a guest's time and is refused.
+  const need = (id: string): NeedTypeData => ({ id, name: id, capacityTicks: 180, refillPerTick: 3 });
   /**
-   * G-027a: content that declares a lodging need must say how long a stay lasts, or
-   * `bindContent` refuses it. 960 clears the floor for the two-need tables below (480 of
-   * lodging against 480 of engagement, in parallel) and is the same value on every arm, so
-   * the fingerprint comparisons stay comparisons about NEEDS.
+   * G-027a/G-027b: content that declares a lodging need must say how long a stay lasts AND how
+   * long a guest waits before giving up, or `bindContent` refuses it. Both are the same value on
+   * every arm, so the fingerprint comparisons stay comparisons about NEEDS.
+   *
+   * NO WANT LINE, deliberately: `assertLodgingBecomesWanted` only fires where one is declared,
+   * and these arms exist to compare DOCUMENTS — several of them are single-need tables that
+   * could not carry a line at all.
    */
-  const stayRules = [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 960 }];
+  const stayRules = [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 960, toleranceTicks: 180 }];
   const provider = (id: string, provides: readonly string[]): RoomTypeData => ({
     id,
     name: id,

@@ -28,13 +28,13 @@ import {
   isResting,
 } from './guests.js';
 import type { Guest } from './guests.js';
-import { findNeedState, isNeedMet, needOutcomeOf } from './needs.js';
+import { findNeedState, isNeedSatisfiedIn, needOutcomeOf } from './needs.js';
 import { run, stepTick } from './tick.js';
 import { createWorld } from './world.js';
 import type { World } from './world.js';
 
 /** Short enough that a stay and a sitting both finish inside a unit test. */
-const STAY = 30;
+const STAY = 60;
 const SITTING = 6;
 
 const roomType = (
@@ -43,12 +43,26 @@ const roomType = (
   requires: readonly string[] = [],
 ): RoomTypeData => ({ id, name: id, capacity: 2, nightlyRatePence: 8_500, provides, requires });
 const itemType = (id: string, provides: readonly string[]): ItemTypeData => ({ id, name: id, provides });
-const need = (id: string, satisfyTicks: number, lodging: boolean): NeedTypeData => ({
+/**
+ * G-027b — THE NEEDS AS STOCKS, AND THE ENGAGEMENT ONES KEEP `SITTING` EXACTLY.
+ *
+ * The engagement capacity is the old `patienceTicks`, carried (400). Its refill is chosen WITH
+ * the want line below: 300 basis points of 400 is a deficit of 12, and a provider clearing 2 a
+ * tick empties it in 6 — which is `SITTING`, the number the deleted `satisfyTicks` used to state
+ * directly. So every "sits for SITTING ticks" reading in this file is the reading it always was.
+ *
+ * THE LODGING CAPACITY IS NOT A CARRY AND THAT IS THE ONE HONEST DEVIATION. 400 ticks of rest
+ * against a 30-tick stay puts the want line further away than the whole stay generates away-time
+ * for, and `bindContent` refuses such content outright — rest would never become wanted. 60 is
+ * the largest capacity that keeps this stay legal; the file is about ENGAGEMENT providers and
+ * asserts nothing about how long rest takes to run out.
+ */
+const need = (id: string, capacityTicks: number, refillPerTick: number, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks,
-  patienceTicks: 400,
+  capacityTicks,
+  refillPerTick,
 });
 
 /**
@@ -63,10 +77,22 @@ const content = bindContent({
     roomType('cafe', ['food'], []),
     roomType('gamesRoom', ['fun'], ['machine']),
   ],
-  needTypes: [need('rest', STAY, true), need('food', SITTING, false), need('fun', SITTING, false)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
+  needTypes: [need('rest', 180, 4, true), need('food', 120, 2, false), need('fun', 120, 2, false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it. G-027b adds the wait and the want line: 2 x 1,000 x 180 = 360,000 fits inside the
+  // 40 away-ticks two engagement needs generate in a 60-tick stay at refill 2, which is 400,000.
+  //
+  // THE STAY DOUBLED FROM 30 TO 60 AND THAT IS FORCED RATHER THAN CHOSEN. A stock is "met" when
+  // it is BELOW its want line at the moment the guest leaves, so a stay that ends mid-engagement
+  // reports a need unmet that the guest has been served all stay. At 30 the lodging line could
+  // not be put further away than 10 ticks without `assertLodgingBecomesWanted` refusing the
+  // table, and a single engagement costs 6 away-ticks — so whether rest read as met depended on
+  // which need the guest happened to be at when its clock ran out. 60 buys a line of 18 against
+  // the same 6, which is the margin that makes these attributions readings rather than coin
+  // flips.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: 400, wantAtBasisPoints: 1_000 },
+  ],
   itemTypes: [itemType('machine', ['food'])],
 });
 
@@ -119,7 +145,7 @@ describe('a guest is served by an ITEM, and the need records that (G-013)', () =
     const world = machineOnly();
     const after = run(world, content, SITTING + 4, [at(world.tick, arrive)]);
     const food = findNeedState(only(after).needs, 'food')!;
-    expect(isNeedMet(food)).toBe(true);
+    expect(isNeedSatisfiedIn(content, food)).toBe(true);
     expect(food.metBy).toBe('item');
   });
 
@@ -133,18 +159,22 @@ describe('a guest is served by an ITEM, and the need records that (G-013)', () =
     expect(rest.metByItem).toBe(0);
   });
 
-  it('is null while the need is still being served, and only flips on the last tick', () => {
-    // The transition, watched tick by tick. `metBy` is written where progress reaches zero
-    // and nowhere else, so a guest that has had five of its six ticks of lunch has been fed
-    // by nobody yet.
+  it('is null until something serves the need, then flips on the FIRST served tick and stays', () => {
+    // The transition, watched tick by tick.
+    //
+    // THE MOMENT IT FLIPS MOVED AT G-027b, AND THE FIELD'S MEANING MOVED WITH IT. `metBy` used
+    // to be written where progress reached zero and nowhere else, so a guest that had had five
+    // of its six ticks of lunch had been fed by nobody yet. Under a stock nothing finishes, so
+    // the honest reading is "what LAST SERVED it" and it is written on every served tick — the
+    // first one included. What survives unchanged is the shape of the sequence: nulls, then
+    // items, never back, exactly one transition.
     const world = machineOnly();
-    let running = run(world, content, 2, [at(world.tick, arrive)]);
+    let running = run(world, content, 1, [at(world.tick, arrive)]);
     const seen: (string | null)[] = [];
     for (let tick = 0; tick < SITTING + 2; tick += 1) {
       running = stepTick(running, content, []);
       seen.push(findNeedState(only(running).needs, 'food')?.metBy ?? null);
     }
-    expect(seen.filter((entry) => entry === null).length).toBeGreaterThan(0);
     expect(seen[seen.length - 1]).toBe('item');
     // Exactly one transition: nulls, then items, never back.
     expect(seen.indexOf('item')).toBe(seen.lastIndexOf(null) + 1);

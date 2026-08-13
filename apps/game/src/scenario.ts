@@ -179,12 +179,18 @@ export function seedCommands(content: BoundContent, bounds: GridBounds): readonl
 }
 
 /**
- * THE COMMANDS DUE ON ONE TICK — a pure function of the tick number and nothing else.
+ * THE SCENARIO'S COMMANDS DUE ON ONE TICK — a pure function of the tick number.
  *
- * That purity is what makes the driver's output independent of the frame rate: a frame that
- * runs seven ticks asks seven times and gets what the seventh tick was always going to get,
- * so the sequence of worlds is the sequence a headless run of the same length produces.
- * Nothing here reads a clock, a frame, a mouse or a world.
+ * STILL PURE, AND THE SCOPE OF THAT WORD IS NARROWED AT G-031a. This function is pure; the
+ * command source the DRIVER sees no longer is, because `session.ts` composes this with a
+ * drained queue of the player's commands. G-030's version of this paragraph went on to say
+ * that purity was "what makes the driver's output independent of the frame rate" — which
+ * described the whole source, not this function, and stopped being true the moment a player
+ * could click. Amended here in the same change that broke it rather than left to be found:
+ * the twin sentence in `driver.ts` carried the identical claim and is amended with it.
+ *
+ * What survives, and it is this function's own contract: nothing here reads a clock, a
+ * frame, a mouse or a world, so tick N's scenario commands are the same on every run.
  */
 export function createScenario(
   content: BoundContent,

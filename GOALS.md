@@ -2,13 +2,16 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, G-027a done. M2.5: 2 of 8 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v12** (G-027a) · summary **3** (G-027a) · I2 gate hash `452920cbe5ded417`.
-  **G-023a AND G-027a both moved the cross-platform hashes and NEITHER has been re-checked on
-  three platforms.** I2's byte-identical-on-every-platform clause is the tripwire the whole design
-  rests on; it has been executed exactly once, at G-022, against values now two goals stale.
-  **Owed by the next push** — `gh` is authenticated as of 2026-08-12, so the matrix is readable.
+  **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
+  **SUCCESS**, bare-run hash **`a15d1a9bce32d38f` identical on ubuntu, macOS and Windows**. I2's
+  byte-identical-on-every-platform clause — the tripwire the whole design rests on — has now been
+  executed **twice**, and ADR-0002's integer-pence decision is paid off in evidence a second time.
+  **All six invariants green on all three platforms.** The only reds are the three ruled ADR-0015
+  refusals, **identical on every platform, with no fourth row and nothing platform-specific** —
+  against G-022's precedent of six runs and two real cross-platform defects.
 - **`verify` runs THIRTEEN rows** (G-030 added `check:ladder`). **TEN GREEN, THREE RED.**
   The three are `check:tickcost`, its proof row, and `check:scaling` — **three rows, TWO causes,
   both ADR-0015 configuration refusals, human-ruled and accepted.** Each declines to compare a
@@ -24,11 +27,16 @@
 - **The re-take goal carries THREE campaigns**: tickcost, scaling, and `PARKING.md`'s
   needs-history interval (1.1071..1.2534, n=25) whose two arms are no longer poolable. Sized by
   `ai-critic`, which checked four other candidates and found none implied.
-- **Order**: **M3 PAUSED after G-023a** for **M2.5 — Feel** (ADR-0017/0018). **2 of 5 done**:
-  **G-030 ✓** (the game is playable), **G-027a ✓** · G-031, G-027b, G-028 pending. **M3 then
-  resumes at G-023b — UNBLOCKED**, because a 1,440-tick stay against 480 ticks of engagement is
-  **960 ticks of slack** where G-023b's plan pass measured **zero**. Then G-024/G-025 → G-026,
-  last in milestone, two critics.
+- **Order**: **M3 PAUSED after G-023a** for **M2.5 — Feel** (ADR-0017/0018). **M2.5 IS NOW EIGHT
+  GOALS, NOT FOUR** — it grew through three seams taken in one session (G-023, G-027 ε, G-027 θ),
+  each argued on evidence and each having paid, because **ADR-0017 turned out roughly twice the
+  size the estimate implied and the seams REVEALED that rather than causing it.**
+  **Done (2)**: G-030 ✓ (the game is playable and takes input), G-027a ✓.
+  **In flight (2)**: G-031a — **DRY, owes a real WATCH** · G-027b θ-a — 1,840 passing, re-expressing
+  G-019 to green.
+  **Not started (4)**: θ-b · G-027c · G-031b · G-028.
+  **THEN M3 RESUMES at G-023b — UNBLOCKED** (960 ticks of slack where its plan pass measured zero)
+  → G-024/G-025 → G-026, last in milestone, two critics. **Four M3 goals of its own remain.**
 - **Owed by the human**: M2.5 exit · M3 exit · **a push**, which is the only thing that discharges
   the hashes above.
 - **Owed by goals**: **G-027b derives N and X at PLAN, before BUILD** — the idle-run bound and
@@ -494,36 +502,71 @@ Critique rounds used: 3/3 — DRY.
   assertions catch and a multiset pin would wave through.
 
 ## G-027b — A need is a stock
-Status: pending — **blocked on G-027a.** ADR-0017 §1/§2.
+Status: **SPLIT into θ-a and θ-b** (ADR-0019, parallel tracks). θ-a in-progress, sweeps 2/3.
 Milestone: M2.5
 Owner pair: ai-engineer / ai-critic
 Statement: A need is a level that decays over time and is refilled by being served; it is never
   "done". Activity draws a stock down. Rest refills only in the guest's own room. **Lodging
   becomes structurally optional and tolerance a parameter the model reads.**
-Exit criteria:
+
+  **WHICH TRACK OWNS WHICH CRITERION — written 2026-08-13, MID-θ-a, which is late.** The split was
+  made when the tracks were dispatched and **never written down here**, so this block spent the
+  whole of θ-a presenting VERIFY with a criterion θ-a's own code deliberately refuses to meet:
+  `guests.ts:1572-1576` says in as many words that the resident give-up *"is the next goal's"*,
+  and confirmed at `pnpm sim:run --days 30 --seed 7 --rooms 6 --amenities 0` — **`left gaveUp 161`,
+  every one a roomless waiter, not one a resident.** Found by `ai-critic`, not by the orchestrator
+  who made the split. **Only the digest recorded that θ-b exists.** A goal that is split in
+  dispatch and whole in the ledger will be verified against the whole.
+
+Exit criteria: *(**θ-a** = the stock model, its content and its documentation. **θ-b** = departure
+  and optional lodging. A criterion tagged θ-b is NOT owed at θ-a's VERIFY.)*
   - `pnpm exec vitest run stock` — **and the files it matches are named in this block before
     BUILD**, because the identical criterion on G-027a passed green against zero tests.
-  - **NO NEED IS TERMINAL**, asserted by a case that serves a need to full then watches it decay.
-  - **ADR-0017 4(b) — the RESIDENT guest that leaves because it is dissatisfied — lands here**,
-    with the arm that proves it: the "rooms, no amenities" configuration that reports **zero**
-    give-ups at G-027a must report **non-zero** here.
-  - **LODGING IS OPTIONAL**, and it is **four guards, not a paragraph** (ADR-0018 §6 mispriced
+    **The six, named 2026-08-13 by the orchestrator after `ai-critic` found the criterion still
+    undischarged**: θ-a's list-asserting test cited this block, and this block named nothing, so
+    the test compared **the disk against itself**. The clause that says *before BUILD* — the whole
+    content of the repair — was the part left undone.
+    ```
+    packages/sim/src/needs.stock.test.ts
+    packages/sim/src/needs.stock.save.test.ts
+    packages/sim/src/utility.stock.pressure.test.ts
+    tools/headless/src/stock.content.test.ts
+    tools/headless/src/stock.idle.test.ts
+    tools/headless/src/stock.census.test.ts
+    ```
+    **The block↔list tie is by eye; nothing executes it. What executes is list↔disk.** That is now
+    stated in `stock.census.test.ts` rather than implied — the honest form of a criterion whose
+    other half is a human comparing two lists. A reader of this block is that half.
+  - **[θ-a] NO NEED IS TERMINAL**, asserted by a case that serves a need to full then watches it
+    decay.
+  - **[θ-b] ADR-0017 4(b) — the RESIDENT guest that leaves because it is dissatisfied**, with the
+    arm that proves it: the "rooms, no amenities" configuration that reports **zero** resident
+    give-ups at θ-a must report **non-zero** here. **θ-a ships the tolerance parameter the rule
+    will read and stops there, on purpose.**
+  - **[θ-b] LODGING IS OPTIONAL**, and it is **four guards, not a paragraph** (ADR-0018 §6 mispriced
     it): `countStuckGuests` (`guests.ts:587`), `applyCommand` (`tick.ts:422`), `stepGuests`
     (`guests.ts:1426`), `lodgingRoomTypeOf` (`report.ts:427`). **G-015's one-row law becomes
     content-conditioned**: `lodgingNeedOf(content) !== undefined ⇒ revenue === checkedOut`,
     else `revenue === 0`.
-  - **EVERY CONTENT NUMBER THE STOCK MODEL READS traces to a stated requirement or lies inside
+  - **[θ-a] EVERY CONTENT NUMBER THE STOCK MODEL READS traces to a stated requirement or lies inside
     an executed box** — there are `2 × needTypes + 2`, **not four**, so a criterion naming four
     can be satisfied while an eighth number nobody counted is invented.
-  - **N AND X ARE DERIVED AT THIS GOAL'S PLAN AND STATED BEFORE BUILD** — the idle-run bound and
+  - **[θ-a] N AND X ARE DERIVED AT THIS GOAL'S PLAN AND STATED BEFORE BUILD** — the idle-run bound and
     the idle-share ceiling that G-028's criterion and `PARKING.md`'s hypothesis both depend on.
     **A need that decays back into wanting every `d` ticks bounds the longest idle run at roughly
     `d`**, so both are derivable from the decay rate this goal ships. **Neither may be chosen.**
     *(Routed here at G-027a REFLECT: they were undischargeable at the point of discharge and not
     yet owed at the point of derivation, so the failure mode was late discovery at G-028.)*
-  - the baseline to beat, measured at G-027a: **61.9% of room-holding guest-frames idle**
+  - **[θ-a] the baseline to beat, measured at G-027a: 61.9% of room-holding guest-frames idle**
     (2,083 of 3,366), longest run **96 consecutive frames = 960 of one guest's 1,440 ticks**.
-  - a WATCH entry · thirteen rows · CI green on three platforms
+    **READ THE SLOT-1 WARNING WITH IT** (`JOURNAL.md`, WATCH #8): ADR-0017 changed the model
+    underneath this pair, so the *share* is not like-for-like across the arms — reclassifying
+    "standing in your room" as resting moves it without moving what a watcher sees. **The
+    LONGEST RUN is the term that survives the model change; compare that.**
+  - a WATCH entry · **ten green rows and three ruled red** (`check:tickcost`,
+    `check:tickcost:proof`, `check:scaling` — ADR-0015 configuration refusals, human-accepted;
+    "thirteen rows" was written into this block *after* that rule was established) · CI green on
+    three platforms
 Out of scope: archetypes (M6); per-night charging (M4); reviews and the outcome table (G-028).
 Critique rounds used: 0/3
 
@@ -543,6 +586,44 @@ Statement: The outcome table and the review function describe a stock rather tha
   replacement is time spent below a threshold.
 Exit criteria:
   - `pnpm exec vitest run review` and `pnpm exec vitest run outcome` (all green)
+  - **AXIS 1 HAS REVERSED AND REPAIRING IT IS THIS GOAL'S FIRST JOB** (human ruling, 2026-08-13:
+    *θ-a records it, G-028 fixes it*). Measured at θ-a, `--days 30 --seed 7`:
+
+    | arm | mean review |
+    |---|---|
+    | `--rooms 1` | **3.90** |
+    | `--rooms 12` | **3.58** |
+
+    G-019 requires 12 rooms to beat 1 by **more than one whole step**; it is now **lower**. The
+    mechanism, measured: at one room **326 of 358 guests never get a bed**, wander uncontended
+    amenities, and **261 leave 4-star reviews**. **Fewer rooms → more engagement satisfaction →
+    better reviews.**
+    **THE CONSEQUENCE IS BIGGER THAN THE TEST, AND IT IS WHY THIS IS FIRST.** M2's exit recorded
+    *"at M4 a reputation term reading the mean is safe; one reading share-of-top-reviews inverts
+    the build loop."* **The stock model has now inverted the MEAN as well** — so at M4 a
+    reputation term reading **anything here** rewards not building rooms. **The build loop's
+    signal is inverted until this goal repairs it.**
+    **θ-a's re-expression is a GOLDEN, not a criterion** — it asserts what the model now does so
+    I4 could go green, with the reversal named in the file. **Replacing it with a criterion is
+    the deliverable**, and the replacement must be something the build loop can rest on.
+  - **CRITERION 2's NAMED INVOCATION NO LONGER SPREADS** (θ-a): `--rooms 6 --arrivals 60` clears
+    the one-guest-per-day floor on **two** bands, not the four it did. Other invocations still
+    clear three or four, so this is about **the invocation the criterion names**, not the scale.
+  - **AXIS 2's CONTROL IS NOW INEXACT** (θ-a): *"room count held fixed ⇒ lodging met identical"*
+    reads **192 / 188 / 192** across `amen0/1/5` — the same departure-snapshot effect as
+    `needs.report`, and it weakens the argument that axis 2 is not lodging in disguise. **Axis 2
+    itself still holds strongly** (1.54 → 3.41 → 4.00), so this is the control, not the claim.
+  - **`--amenities 5` IS NOW A PURE POINT MASS, WHICH VIOLATES THIS GOAL'S OWN CRITERION BELOW.**
+    All **353** reviews land on score **4**, mean exactly **4.00**, because every guest meets
+    exactly three of four needs — 192 with a room meet lodging plus two engagement, 161 without a
+    room meet three engagement. **This is the sharpest instance in the file of the thing the
+    "not a point mass" criterion forbids**, and it is a *well-provisioned* hotel producing it.
+    Found by the agent re-expressing the other three, not by anyone looking for it.
+  - **TWO MEASUREMENT NOTES CARRIED SO NOBODY RECONCILES THEM TWICE**: `rooms1` is **391**
+    hundredths, not 390 — `meanReviewHundredths` rounds (1399/358 = 3.9078) where this block
+    truncated · and `rooms12`'s distribution carries a **`5:1`** omitted from the first list,
+    which matters because the top-band share reads **29 basis points off that single guest** and
+    **the share peak has moved back to THREE rooms — where G-019 originally found it.**
   - **THE REVIEW RESPONDS TO THE STAY, NOT ONLY TO LODGING** — G-019's two axes survive the
     re-expression, including AXIS 2's three-point amenity ladder, recomputed rather than copied
   - **THE DISTRIBUTION IS NOT A POINT MASS**: a stated minimum share per named score, which is

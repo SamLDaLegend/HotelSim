@@ -5,6 +5,8 @@
     "abandonMarginBasisPoints": 6000,
     "reviewScoreMin": 1,
     "reviewScoreMax": 5,
-    "stayDurationTicks": 1440
+    "stayDurationTicks": 1440,
+    "wantAtBasisPoints": 3000,
+    "toleranceTicks": 180
   }
 ]

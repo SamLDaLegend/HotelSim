@@ -40,7 +40,7 @@
 //
 //   RANK, NOT HASH, and this is a TRADE rather than an improvement — it is stated because
 //   the property being given up was argued for in the previous version and in
-//   `tools/viewer/viewer.js:13-18`. A hash into a small ladder collides: four ids into four
+//   `tools/viewer/viewer.js`'s PALETTE block. A hash into a small ladder collides: four ids into four
 //   slots collide 91% of the time, and a collision means two room types are the same colour,
 //   which is worse than the disease. Rank is collision-free and deterministic. THE COST IS
 //   THAT ADDING A ROOM TYPE RE-DERIVES THE LADDER AND EVERY EXISTING ROOM CHANGES COLOUR,
@@ -307,4 +307,20 @@ export const INK = {
   alarm: 0xff5a5f,
   guestIdle: 0x9aa7b8,
   occupancyPip: 0xffffff,
+  /**
+   * THE PLAYER'S OWN MARKS (G-031a), and they are three because the player's move has three
+   * states the simulation can put it in: waiting, accepted, refused.
+   *
+   * `intent` is the cell under the pointer and the ghost of a queued command; `ok` is a
+   * build or demolish the simulation accepted; refusal reuses `alarm`, deliberately, because
+   * a refused build and an invalid room are the same message to a player — this cost money
+   * or it will, and it is not working.
+   *
+   * Neither new hue lands in the reserved magenta arc (300 +/- 35): `intent` is ~218 degrees
+   * and `ok` ~145. They are INK rather than palette entries, so no content ladder derives
+   * them and `palette.contrast.test.ts` is untouched — it enumerates `byRole` and the two
+   * inks it names.
+   */
+  intent: 0x8fb4ff,
+  ok: 0x5fd08a,
 } as const;

@@ -245,8 +245,21 @@ describe('a v2 world with guests in it', () => {
     nightlyRatePence: 8_500,
     provides,
   });
-  const needType: NeedTypeData = { id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 };
-  const content = bindContent({ roomTypes: [roomType('roomA', ['rest'])], needTypes: [needType], guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }] });
+  // G-027b: `capacityTicks` is time-to-empty (the deleted `patienceTicks`, carried across) and
+  // a refill is a whole tick, so 12/20 floors at 1. `snack` and the `lounge` that provides it
+  // are what makes the table legal at all: a guest arrives AT its want line, a line of 0 leaves
+  // every need full with nothing recorded as having served it, and a declared line makes
+  // `assertLodgingBecomesWanted` demand away-ticks that only an engagement need generates.
+  // Nothing here spawns a lounge, so no guest engages and every save carries lodging only.
+  const needType: NeedTypeData = { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 12, refillPerTick: 1 };
+  const snack: NeedTypeData = { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: 12, refillPerTick: 3 };
+  const content = bindContent({
+    roomTypes: [roomType('roomA', ['rest']), roomType('lounge', ['snack'])],
+    needTypes: [needType, snack],
+    guestRules: [
+      { id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 12, wantAtBasisPoints: 2_000 },
+    ],
+  });
   // A function of the column since G-008: `spawnEntity` onto an occupied cell throws.
   // Stride two since G-009: adjacent rooms seal each other in, and a sealed room is not
   // a provider, so a hotel leaves a corridor between its rooms.
@@ -304,15 +317,16 @@ describe('a v2 world with guests in it', () => {
     expect(() => deserialise(JSON.stringify(blob))).toThrow(/at or above nextId/);
   });
 
-  it('refuses a save with a negative countdown', () => {
-    // G-012 moved the countdowns into the need vector; the claim is unchanged, and the
-    // check is still the one the TICK uses rather than a second definition at the door.
+  it('refuses a save with a negative stock', () => {
+    // G-012 moved the countdowns into the need vector and G-027b replaced them with one
+    // deficit; the claim is unchanged, and the check is still the one the TICK uses rather
+    // than a second definition at the door.
     const world = lived();
     const blob = JSON.parse(serialise(world)) as {
-      world: { guests: { list: { needs: { progressRemaining: number }[] }[] } };
+      world: { guests: { list: { needs: { deficit: number }[] }[] } };
     };
-    blob.world.guests.list[0]!.needs[0]!.progressRemaining = -1;
-    expect(() => deserialise(JSON.stringify(blob))).toThrow(/negative or non-integer progressRemaining/);
+    blob.world.guests.list[0]!.needs[0]!.deficit = -1;
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/negative or non-integer deficit/);
   });
 
   it('refuses a save whose outcomes do not account for everybody', () => {

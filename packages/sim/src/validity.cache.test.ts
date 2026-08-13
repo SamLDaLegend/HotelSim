@@ -45,6 +45,10 @@ const BOUNDS = createGridBounds();
 
 const content = bindContent({
   roomTypes: [
+    { id: 'lounge', name: 'lounge', capacity: 8, nightlyRatePence: 0, provides: ['snack'] },
+    // ^ A PROVIDER FOR THE ENGAGEMENT NEED THAT NOTHING BELOW EVER BUILDS. It exists so
+    // `bindContent` can see `snack` is reachable; with no lounge in any store, no guest can
+    // engage, so nothing here consumes a bedroom's capacity for anything but lodging.
     {
       id: 'bedroom',
       name: 'bedroom',
@@ -56,10 +60,22 @@ const content = bindContent({
       requires: ['bed'],
     },
   ],
-  needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 6, patienceTicks: 4 }],
+  // G-027b — A NEED IS A STOCK. `capacityTicks` is time-to-empty, which is what the deleted
+  // `patienceTicks` named, so it is carried; a refill is a whole tick. THE SECOND NEED IS
+  // STRUCTURAL: a guest arrives AT its want line, a line of 0 leaves every need full with
+  // nothing recorded as having served it (refused at the first commit), and a declared line
+  // makes `assertLodgingBecomesWanted` demand away-ticks, which only an ENGAGEMENT need
+  // generates. The same room type provides both rather than a second one appearing in a file
+  // whose subject is which rooms are USABLE.
+  needTypes: [
+    { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 4, refillPerTick: 2 },
+    { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: 4, refillPerTick: 1 },
+  ],
   // G-027a: content declaring a lodging need must say how long a stay lasts, or
   // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 6 }],
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 6, toleranceTicks: 4, wantAtBasisPoints: 2500 },
+  ],
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
@@ -197,6 +213,7 @@ describe('clause 4 — `context.content === content`: the same injected content'
     // cache that ignored content identity would report the room as working.
     const stricter = bindContent({
       roomTypes: [
+      { id: 'lounge', name: 'lounge', capacity: 8, nightlyRatePence: 0, provides: ['snack'] },
         {
           id: 'bedroom',
           name: 'bedroom',
@@ -208,10 +225,22 @@ describe('clause 4 — `context.content === content`: the same injected content'
           requires: ['bed', 'lamp'],
         },
       ],
-      needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 6, patienceTicks: 4 }],
+      // G-027b — A NEED IS A STOCK. `capacityTicks` is time-to-empty, which is what the deleted
+  // `patienceTicks` named, so it is carried; a refill is a whole tick. THE SECOND NEED IS
+  // STRUCTURAL: a guest arrives AT its want line, a line of 0 leaves every need full with
+  // nothing recorded as having served it (refused at the first commit), and a declared line
+  // makes `assertLodgingBecomesWanted` demand away-ticks, which only an ENGAGEMENT need
+  // generates. The same room type provides both rather than a second one appearing in a file
+  // whose subject is which rooms are USABLE.
+  needTypes: [
+    { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 4, refillPerTick: 2 },
+    { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: 4, refillPerTick: 1 },
+  ],
       // G-027a: content declaring a lodging need must say how long a stay lasts, or
       // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 6 }],
+      guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 6, toleranceTicks: 4, wantAtBasisPoints: 2500 },
+  ],
       itemTypes: [
         { id: 'bed', name: 'bed' },
         { id: 'lamp', name: 'lamp' },

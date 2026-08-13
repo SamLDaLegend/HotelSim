@@ -4,8 +4,10 @@
 //
 // A guest makes TWO decisions in a fixed order, and they use different terms:
 //
-//     WHICH NEED      by PRESSURE — the fraction of that need's own patience already spent,
-//                                   in basis points. Ties go to the lower need id.
+//     WHICH NEED      by PRESSURE — the fraction of that need's own `capacityTicks` already
+//                                   drawn down, in basis points. Ties go to the lower need id.
+//                                   (It read "own patience already spent" until θ-a sweep 2;
+//                                   that field is deleted, and the fraction is now of a stock.)
 //     WHICH PROVIDER  by FIT      — the designer's ranking of the providers OF THAT NEED.
 //                                   Ties go to the lower entity id.
 //
@@ -69,12 +71,24 @@ const itemType = (id: string, provides: readonly string[], fit?: number): ItemTy
   ...(fit === undefined ? {} : { fitBasisPoints: fit }),
 });
 
-const need = (id: string, satisfyTicks: number, patienceTicks: number, lodging: boolean): NeedTypeData => ({
+/**
+ * G-027b: `capacityTicks` is time-to-empty, which is exactly what the deleted `patienceTicks`
+ * named — so every capacity below is a NUMBER carried across unchanged, and every reading in
+ * this file is the same fraction of the same number it always was. The refills are the new
+ * parameter, and with the want line they fix how long a provider takes to fill a need.
+ *
+ * WHAT IS NOT CARRIED IS THE WORD. The old field was a countdown to a FAILURE and this one is
+ * the size of a level that refills, so "fraction of its own patience" is not a paraphrase of
+ * "fraction of its own capacity" — it names a quantity this build has no equivalent of. The
+ * constants below are still spelled `FOOD_PATIENCE` and `FUN_PATIENCE`: **that is the carry
+ * being visible, not a live claim**, and it is the reason this paragraph exists.
+ */
+const need = (id: string, capacityTicks: number, refillPerTick: number, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks,
-  patienceTicks,
+  capacityTicks,
+  refillPerTick,
 });
 
 /**
@@ -85,8 +99,11 @@ const need = (id: string, satisfyTicks: number, patienceTicks: number, lodging: 
  *   fun  -> gamesRoom (7500, a room)
  *   rest -> bedroom (lodging; declares NO fit, because it could never be read)
  *
- * `food` has less patience than `fun`, so the two needs' pressures diverge whenever the
- * guest cannot act — which is what makes the pressure test below possible at all.
+ * `food` has less CAPACITY than `fun`, so the two needs' pressures diverge whenever the
+ * guest cannot act — which is what makes the pressure test below possible at all. (Said in
+ * the live noun, deliberately: the constants are still spelled `_PATIENCE` because the
+ * NUMBERS were carried, and the paragraph above is where that carry is declared. A sentence
+ * here saying "less patience" would have made the carry read as a live claim.)
  */
 const FOOD_PATIENCE = 300;
 const FUN_PATIENCE = 600;
@@ -105,13 +122,22 @@ const table = (cafeFit: number, dinerFit: number, machineFit: number, gamesFit: 
     roomType('lobby', [], undefined, ['machine']),
   ],
   needTypes: [
-    need('food', 6, FOOD_PATIENCE, false),
-    need('fun', 6, FUN_PATIENCE, false),
-    need('rest', STAY, STAY, true),
+    need('food', FOOD_PATIENCE, 3, false),
+    need('fun', FUN_PATIENCE, 3, false),
+    need('rest', STAY, 4, true),
   ],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it. G-027b adds the wait and the want line. 600 basis points of `food`'s 300 is a
+  // deficit of 18, which a café clearing 3 a tick empties in the six ticks the deleted
+  // `satisfyTicks` used to state directly — and 2 x 600 x 400 = 480,000 fits inside the 200
+  // away-ticks two engagement needs generate in a 400-tick stay at refill 3.
+  //
+  // AND IT IS WHY THE TIE BELOW IS STILL A TIE. Every need is formed at the SAME want line
+  // measured as a share of its own capacity, so every need of a newly arrived guest scores
+  // exactly `wantAtBasisPoints` whatever its capacity — 18/300 and 36/600 are both 600.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: STAY, wantAtBasisPoints: 600 },
+  ],
   itemTypes: [itemType('machine', ['food'], machineFit)],
 });
 
@@ -134,33 +160,44 @@ const only = (world: World): Guest => {
   return guests[0]!;
 };
 
-/** A pending need with `spent` ticks of its patience already burned. */
-const spent = (needId: string, patienceTicks: number, burned: number): NeedState => ({
+/**
+ * A need with `burned` ticks of its own capacity already run down.
+ *
+ * THE THIRD ARGUMENT MEANS WHAT IT ALWAYS MEANT and the second is now unread: under the
+ * countdown model this built `patienceRemaining = patienceTicks - burned`, and under a stock the
+ * deficit IS the burned count. Same quantity, one subtraction fewer.
+ */
+const spent = (needId: string, _capacityTicks: number, burned: number): NeedState => ({
   needId,
-  patienceRemaining: patienceTicks - burned,
-  progressRemaining: 6,
+  deficit: burned,
   metBy: null,
   abandonCount: 0,
 });
 
-describe('pressure is the fraction of a need\'s OWN patience already spent', () => {
-  const foodType = { id: 'food', name: 'food', satisfyTicks: 6, patienceTicks: FOOD_PATIENCE } as NeedTypeData;
+describe('pressure is the fraction of a need\'s OWN capacity already drawn down', () => {
+  const foodType = { id: 'food', name: 'food', capacityTicks: FOOD_PATIENCE, refillPerTick: 3 } as NeedTypeData;
 
-  it('is 0 for a need that has waited for nothing, and 10000 when its patience is gone', () => {
+  it('is 0 for a need that is full, and ONE BELOW the whole when it is empty', () => {
+    // 9,999 RATHER THAN 10,000 SINCE G-027b, and the one basis point is load-bearing. Under
+    // the countdown model an empty need dropped out of scoring altogether, so the ceiling fell
+    // out of `isNeedPending`'s own definition; a stock has no such exit — nothing is terminal —
+    // so `pressureBasisPoints` clamps instead. What the clamp buys is that a margin of one
+    // whole stays unreachable, which is what keeps the frozen total-commitment content document
+    // meaning what it meant. See the note on the clamp in `utility.ts`.
     expect(pressureBasisPoints(foodType, spent('food', FOOD_PATIENCE, 0))).toBe(0);
-    expect(pressureBasisPoints(foodType, spent('food', FOOD_PATIENCE, FOOD_PATIENCE))).toBe(10_000);
+    expect(pressureBasisPoints(foodType, spent('food', FOOD_PATIENCE, FOOD_PATIENCE))).toBe(9_999);
   });
 
   it('is the fraction, not the raw count — so a long fuse does not outrank a short one', () => {
     // THE PROPERTY `compareNeedPriority` USED TO CARRY, in the form this goal replaced it
     // with. Both needs have burned 150 ticks; `food` is half gone and `fun` is a quarter
     // gone. Ranking by raw urgency would have called them equal.
-    const funType = { id: 'fun', name: 'fun', satisfyTicks: 6, patienceTicks: FUN_PATIENCE } as NeedTypeData;
+    const funType = { id: 'fun', name: 'fun', capacityTicks: FUN_PATIENCE, refillPerTick: 3 } as NeedTypeData;
     expect(pressureBasisPoints(foodType, spent('food', FOOD_PATIENCE, 150))).toBe(5_000);
     expect(pressureBasisPoints(funType, spent('fun', FUN_PATIENCE, 150))).toBe(2_500);
   });
 
-  it('is an integer at every point of a whole patience, never a float (I2)', () => {
+  it('is an integer at every point of a whole capacity, never a float (I2)', () => {
     // 300 does not divide 10,000, so most of these are truncations. A float here would
     // accumulate differently on another platform, which is an I2 divergence with no
     // tolerance to absorb it.
@@ -178,9 +215,10 @@ describe('FIT NEVER REORDERS NEEDS — pressure decides which, fit only decides 
     // THE PROPERTY THIS GOAL'S FIRST BUILD DID NOT HAVE, AND THE ONE WATCHING CAUGHT. Scoring
     // `pressure * FIT_SCALE + fit` across needs is sound for UNEQUAL pressure and says
     // nothing about equal pressure — which is not a corner here but the normal case: every
-    // need of a newly arrived guest is at zero, and two needs with the same `patienceTicks`
-    // stay exactly tied while neither is served. Letting fit break that tie reordered a
-    // guest's whole stay and starved a need for every guest in the hotel.
+    // need of a newly arrived guest sits at the same fraction of its own capacity, and two
+    // needs with the same `capacityTicks` stay exactly tied while neither is served. Letting
+    // fit break that tie reordered a guest's whole stay and starved a need for every guest in
+    // the hotel.
     //
     // `food` (2500 machine, in a lobby) against `fun` (7500 games room), both untouched, so
     // both are at zero pressure. The lower need id must win even though its only provider is
@@ -198,8 +236,8 @@ describe('FIT NEVER REORDERS NEEDS — pressure decides which, fit only decides 
 
   it('and a guest walks past a 7500-fit games room to eat at a 2500-fit machine', () => {
     // THE BEHAVIOURAL FORM, WHICH IS THE ONE THAT MATTERS. The guest arrives into a hotel
-    // with nowhere to eat and nothing to do, so both needs burn patience at their own
-    // rates: after 150 ticks `food` is at 5000 and `fun` is at 2500. Then both providers
+    // with nowhere to eat and nothing to do, so both needs empty at their own rates:
+    // after 150 ticks `food` is at 5000 and `fun` is at 2500. Then both providers
     // appear on the same tick. The machine is the worst provider in the table and the
     // games room is tied for the best, and the guest eats — because it is hungrier than it
     // is bored.
@@ -230,7 +268,9 @@ describe('FIT NEVER REORDERS NEEDS — pressure decides which, fit only decides 
     ]);
     const served = run(opened, content, STAY + 20, [at(opened.tick, arrive)]);
     // The guest has gone home; every need it formed is recorded, and both engagement needs
-    // were MET rather than one of them having run out of patience while it sat elsewhere.
+    // are MET rather than one of them being unsatisfied at departure because the guest spent
+    // the stay at the other's provider. There is no clock on a need to run out: under a stock
+    // the failure this test is about is a need never PURSUED, and that lands as `unmet`.
     expect(departureCountOf(served.guestOutcomes, 'checkedOut')).toBe(1);
     for (const row of served.needOutcomes) {
       expect(row.met, row.needId).toBe(1);
@@ -427,10 +467,12 @@ describe('bindContent refuses a fit that could never be read, or never be compar
     // permanent v1 fixture's `8e09fe4f0fa162a3` where it is.
     const silent = bindContent({
       roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-      needTypes: [need('food', 6, FOOD_PATIENCE, false), need('rest', STAY, STAY, true)],
+      needTypes: [need('food', FOOD_PATIENCE, 3, false), need('rest', STAY, 4, true)],
       // G-027a: content declaring a lodging need must say how long a stay lasts, or
       // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: STAY, wantAtBasisPoints: 600 },
+      ],
     });
     const world = stepTick(createWorld(2, silent), silent, [
       spawn('bedroom', 0, 0),
@@ -443,13 +485,19 @@ describe('bindContent refuses a fit that could never be read, or never be compar
   });
 });
 
-describe('the quantised score orders the SHIPPED needs exactly as the exact comparison did', () => {
+describe('the quantised score orders needs exactly as the exact comparison did, under the bound', () => {
   // RULING 4, PINNED RATHER THAN ASSERTED IN A COMMENT (ADR-0007). `pressureBasisPoints` is
   // a LOSSY form of the cross-multiplication `compareNeedPriority` used: it can tie where
   // the exact comparison separates. Whether it does is a property of the CONTENT, not of
   // the code:
   //
-  //     lcm(patienceA, patienceB) < 10000  IS SUFFICIENT for the order to be preserved
+  //     lcm(denominatorA, denominatorB) < 10000  IS SUFFICIENT for the order to be preserved
+  //
+  // THE DENOMINATOR IS `capacityTicks` SINCE G-027b; it was `patienceTicks`, and the pair used
+  // below is that era's. It is kept as a FIXED PAIR because this block is arithmetic about the
+  // quantisation and not a census of the shipped table — which this package cannot see anyway,
+  // content being injected (ADR-0001). The shipped capacities are checked against the same
+  // bound in `stock.content.test.ts`, where the real table is loaded.
   //
   // because two distinct fractions with those denominators differ by at least 1/lcm, which
   // is more than one basis point exactly when lcm is under 10,000 — and two numbers more
@@ -463,8 +511,9 @@ describe('the quantised score orders the SHIPPED needs exactly as the exact comp
   const quantisedOrder = (uA: number, patA: number, uB: number, patB: number): number =>
     Math.sign(Math.floor((uA * 10_000) / patA) - Math.floor((uB * 10_000) / patB));
 
-  it('agrees on every pair of urgencies for the shipped patiences (300 and 360)', () => {
-    // The shipped table is 300 / 360 / 300, whose worst pair has lcm 1800.
+  it('agrees on every pair of deficits for a pair of denominators under the bound (300 and 360)', () => {
+    // lcm(300, 360) = 1,800, well under 10,000. These were the countdown era's shipped
+    // patiences; what makes them the right pair to drive here is the lcm, not the provenance.
     let compared = 0;
     for (let uA = 0; uA <= 300; uA += 1) {
       for (let uB = 0; uB <= 360; uB += 1) {
@@ -477,12 +526,12 @@ describe('the quantised score orders the SHIPPED needs exactly as the exact comp
   });
 
   it('and DISAGREES for a table well past the bound, so the equivalence is CONTENT\'S and not the code\'s', () => {
-    // A need with 3 ticks of patience against one with 30,000: lcm 30,000, three times the
-    // bound. `1/3` and `9999/30000` are different fractions that both floor to 3,333 basis
-    // points, so the exact comparison separates them and the quantised one ties — and the
-    // tie then falls to the lower need id. That is a real behaviour change, it is content
-    // this table's shape could produce, and it is why the shipped patiences are asserted
-    // exhaustively above rather than assumed.
+    // A need with a capacity of 3 against one of 30,000: lcm 30,000, three times the bound.
+    // `1/3` and `9999/30000` are different fractions that both floor to 3,333 basis points, so
+    // the exact comparison separates them and the quantised one ties — and the tie then falls
+    // to the lower need id. That is a real behaviour change, it is content a need table could
+    // produce, and it is why a pair under the bound is driven exhaustively above rather than
+    // assumed.
     expect(exactOrder(1, 3, 9_999, 30_000)).not.toBe(0);
     expect(quantisedOrder(1, 3, 9_999, 30_000)).toBe(0);
 

@@ -71,9 +71,10 @@ export type Command =
    * One guest walks in (G-004).
    *
    * NO PAYLOAD. A guest has no archetype (M6) and no party size at M0, so there is
-   * nothing for a caller to choose: every arrival is the same event. The need it forms
-   * and the patience it has come from content, and the id it gets is allocated by the
-   * guest store, not by the caller — the same division `spawnEntity` uses.
+   * nothing for a caller to choose: every arrival is the same event. The needs it forms, the
+   * capacities they decay through and the tolerance it waits under all come from content, and
+   * the id it gets is allocated by the guest store, not by the caller — the same division
+   * `spawnEntity` uses.
    *
    * Arrival is a COMMAND rather than something the simulation decides, because how
    * often guests turn up is demand, and demand is M4. Keeping it out here means the

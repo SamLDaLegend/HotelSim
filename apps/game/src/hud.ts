@@ -12,6 +12,8 @@
 
 import {
   balanceOf,
+  BUILD_REFUSAL_REASONS,
+  constructionCostOf,
   dayOf,
   departedGuests,
   departureCountOf,
@@ -21,9 +23,13 @@ import {
   needTypesInOrder,
   needOutcomeOf,
   TICKS_PER_DAY,
+  totalRefusals,
 } from '@hotelsim/sim';
-import type { BoundContent, Guest, World } from '@hotelsim/sim';
+import type { BoundContent, Guest, RoomTypeData, World } from '@hotelsim/sim';
 import type { SpeedRung } from '@hotelsim/content';
+import { describeAction } from './session.js';
+import type { ResolvedAction } from './session.js';
+import type { Tool } from './input.js';
 
 /** Where a guest is, as text, so a screenshot can be checked against the picture. */
 export function describeGuestPosition(guest: Guest): string {
@@ -45,7 +51,7 @@ const pad = (value: number): string => String(value).padStart(2, '0');
  * no content to read them from. Splitting the identifier is the honest way to show a union
  * this layer must not enumerate — and it means a reason added tomorrow is legible tonight.
  */
-const wordsOf = (name: string): string =>
+export const wordsOf = (name: string): string =>
   name.replace(/([a-z0-9])([A-Z])/gu, '$1 $2').toLowerCase();
 
 /**
@@ -74,6 +80,10 @@ export type HudState = {
   readonly invalidRooms: number;
   readonly rooms: number;
   readonly fps: number;
+  /** How many of the player's commands are clicked and not yet spent (G-031a). */
+  readonly queued: number;
+  /** The last one the simulation answered, or `null` if the player has not acted yet. */
+  readonly lastAction: ResolvedAction | null;
 };
 
 const cell = (key: string, value: string): string =>
@@ -154,6 +164,40 @@ function outcomeCells(world: World, content: BoundContent): readonly string[] {
   return [cell('stays', stays), needs === '' ? '' : cell('needs met', needs)];
 }
 
+/**
+ * THE BUILD LOOP'S OWN OUTCOME — built, demolished, and every refusal by reason (G-031a).
+ *
+ * ---------------------------------------------------------------------------------------
+ * THIS IS HALF OF "A REFUSAL IS VISIBLE", AND IT IS THE HALF THAT SURVIVES A RELOAD.
+ *
+ * Every figure is derived at read time from `world.buildOutcomes`, which is hashed, saved
+ * state — so the tally is the simulation's own count of what it refused, not a number this
+ * layer accumulated while watching. The other half is the last-action line below, which says
+ * WHICH move was refused and where; that one is render-side and ephemeral, because the
+ * simulation does not record it (`build.ts:140-149` — per-command acknowledgement is parked,
+ * and this goal may not add it).
+ *
+ * Between them the player can answer both questions a refusal raises: what just happened to
+ * the thing I clicked, and how often has this been happening.
+ *
+ * NO REASON IS SPELLED IN THIS FILE. `BUILD_REFUSAL_REASONS` is folded, exactly as
+ * `GUEST_DEPARTURE_REASONS` is folded above and for the reason recorded there: a reason
+ * added to the simulation tomorrow gets a visual the day it exists, and one renamed on
+ * another track does not silently vanish from the screen.
+ * ---------------------------------------------------------------------------------------
+ */
+function buildCells(world: World): readonly string[] {
+  const outcomes = world.buildOutcomes;
+  const refused = totalRefusals(outcomes);
+  const reasons = BUILD_REFUSAL_REASONS.filter((reason) => outcomes.refused[reason] > 0)
+    .map((reason) => `${outcomes.refused[reason]} ${wordsOf(reason)}`)
+    .join(' · ');
+  return [
+    cell('built', `${outcomes.built} · ${outcomes.demolished} demolished`),
+    refused === 0 ? '' : cell(`refused ${refused}`, reasons),
+  ];
+}
+
 export function renderHud(host: HTMLElement, state: HudState): void {
   const { world } = state;
   host.innerHTML = [
@@ -162,9 +206,16 @@ export function renderHud(host: HTMLElement, state: HudState): void {
     cell('guests', String(guestCount(world.guests))),
     cell('rooms', `${state.rooms - state.invalidRooms}/${state.rooms} valid`),
     ...outcomeCells(world, state.content),
+    ...buildCells(world),
     cell('tick', String(world.tick)),
     cell('fps', String(Math.round(state.fps))),
     state.crowdedOut > 0 ? cell('not drawn', `${state.crowdedOut} guest(s) — cell too narrow`) : '',
+    state.queued > 0 ? cell('queued', `${state.queued} waiting for the next tick`) : '',
+    // THE LAST MOVE, AND IT NEVER EXPIRES. A message that fades is a message a player can
+    // miss by looking at the building instead of the bar — and the one thing they most need
+    // to see is the refusal they did not expect. It is superseded by the next action and by
+    // nothing else.
+    state.lastAction === null ? '' : cell('last', describeAction(state.lastAction, wordsOf)),
   ].join('');
 }
 
@@ -257,4 +308,85 @@ export function renderTransport(
   note.className = 'k';
   note.textContent = 'one tick = one in-game minute';
   host.append(note);
+}
+
+export type ToolHandlers = {
+  readonly onPick: (tool: Tool) => void;
+  readonly onExport: () => void;
+};
+
+/**
+ * THE BUILD TOOLS — one button per room type the content defines, plus demolish (G-031a).
+ *
+ * ---------------------------------------------------------------------------------------
+ * IT IS THE SPEED CONTROL'S RULE APPLIED TO A SECOND TABLE, AND DELIBERATELY SO.
+ *
+ *   The label is `roomType.name`, read from content. No room is named in this file, no id
+ *   is spelled anywhere in `apps/game` (ADR-0003, `check:content`), and a room renamed in
+ *   JSON renames its button with no edit here.
+ *
+ *   The price is `constructionCostPence` printed as itself — the simulation's own
+ *   `constructionCostOf`, not a copy of the JSON field and not arithmetic over it. It is
+ *   shown because a player deciding what to build is spending money they can see in the
+ *   HUD, and a button that hides its price makes `insufficientFunds` look like a bug.
+ *
+ *   EVERY room type gets a button, including the ones that provide nothing. A hotel of
+ *   lounges is a bad hotel and the player is allowed to build one — `build.ts` is explicit
+ *   that "the player is allowed to build a bad room, finds out that it houses nobody while
+ *   still costing upkeep, and is told why". A toolbar that offered only the good rooms
+ *   would be this layer making a balance decision.
+ *
+ * NO TOOL IS SELECTED AT START. A game whose first stray click spends a quarter of the
+ * opening capital is a game that punishes looking around.
+ * ---------------------------------------------------------------------------------------
+ */
+export function renderTools(
+  host: HTMLElement,
+  content: BoundContent,
+  roomTypes: readonly RoomTypeData[],
+  tool: Tool,
+  handlers: ToolHandlers,
+): void {
+  host.replaceChildren();
+
+  const label = document.createElement('span');
+  label.className = 'k';
+  label.textContent = 'build';
+  host.append(label);
+
+  for (const roomType of roomTypes) {
+    const button = document.createElement('button');
+    const name = document.createElement('span');
+    name.textContent = roomType.name;
+    const price = document.createElement('span');
+    price.className = 'u';
+    price.textContent = moneyOf(constructionCostOf(content, roomType.id));
+    button.append(name, ' ', price);
+    button.classList.toggle('on', tool?.kind === 'build' && tool.roomType.id === roomType.id);
+    button.addEventListener('click', () => handlers.onPick({ kind: 'build', roomType }));
+    host.append(button);
+  }
+
+  const demolish = document.createElement('button');
+  demolish.textContent = 'demolish';
+  demolish.title = 'click a room to demolish it; the refund is a content number';
+  demolish.classList.toggle('on', tool?.kind === 'demolish');
+  demolish.addEventListener('click', () => handlers.onPick({ kind: 'demolish' }));
+  host.append(demolish);
+
+  const none = document.createElement('button');
+  none.textContent = 'none';
+  none.title = 'put the tool down (Escape)';
+  none.classList.toggle('on', tool === null);
+  none.addEventListener('click', () => handlers.onPick(null));
+  host.append(none);
+
+  // THE SESSION LOG, ON DEMAND. G-031b replays this file headless and compares hashes; it
+  // is a button rather than an automatic write because `hashState` canonicalises the whole
+  // world and nothing should pay that once a frame.
+  const save = document.createElement('button');
+  save.textContent = 'export session';
+  save.title = 'the seed, the command log and the state hash — G-031b replays it headless';
+  save.addEventListener('click', handlers.onExport);
+  host.append(save);
 }

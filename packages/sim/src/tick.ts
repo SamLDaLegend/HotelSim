@@ -561,8 +561,12 @@ export function applyCommands(state: TickState): TickState {
 }
 
 /**
- * Phase 2 of 5. The guest loop: arrivals, reservations, patience, satisfaction and
- * payment (G-004).
+ * Phase 2 of 5. The guest loop: arrivals, reservations, decay, provision and payment
+ * (G-004).
+ *
+ * (It listed "patience, satisfaction" until θ-a sweep 3. Patience is ADR-0017's deleted
+ * field, and there is no moment of satisfaction to name: a stock is refilled and decays
+ * again.)
  *
  * All of the behaviour is in `guests.ts`; this is the plumbing that turns a `TickState`
  * into that module's input and back. The split is not tidiness: `world.ts` needs the
@@ -579,8 +583,8 @@ export function applyCommands(state: TickState): TickState {
  *
  * Precondition: a draft is open, nothing has been committed, and the guest loop has not
  * already run this tick — so `applyCommands` has run, `commitEntities` has not, and
- * this is the first and only visit. Running twice would drain patience and rest twice
- * and could hand one guest two rooms in a tick, which nothing downstream could see.
+ * this is the first and only visit. Running twice would decay every need twice and could
+ * hand one guest two rooms in a tick, which nothing downstream could see.
  */
 export function runGuests(state: TickState): TickState {
   if (state.entities === null) {

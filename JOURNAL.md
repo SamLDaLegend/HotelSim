@@ -2,33 +2,59 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-12, G-027a done. M2.5: 2 of 5 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, G-027b θ-a and G-031a both code-complete and VERIFIED, both UNCOMMITTED and both
+owing a WATCH. M2.5: 2 of 8 goals done (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v10** · summary **v2** · I2 `ece843af1efea843` · **unreliable 0 gates /
-  0 defects, the first zero since G-016** · `pnpm verify` is **twelve** rows, six of them `—`
-  and not invariants · **CI green on three platforms** (G-022, run #7).
-- **I2's "byte-identical on every platform" IS EXECUTED AND HOLDS** — one hash
-  `fd9dbb263f6a7e7a` across linux, win32 and darwin, two CPU architectures. **That claim sat
-  in this file from bootstrap for nineteen goals having inspected nothing**, attested at a
-  human sign-off: ADR-0007's class at the infrastructure layer.
-- **WATCH #1–#4 exist.** The viewer found what 1,109 tests could not, caught a defect in
-  G-014a's first build, and the human found G-019's criterion undetectable **before PLAN**.
-- **A WATCH ENTRY IS A CRITERION AND CAN BE VACUOUS** (G-014b): its exhibit was wrong **twice
-  about the same row**, both times found by *walking the recording*, not reading the table.
-- **Park a hypothesis WITH its experiment**: G-013 parked, G-017 ran it unplanned, G-014a
-  hit the knife-edge it described. Three goals chained; none planned the next.
-- **The defect this repo produces**: checks and claims that inspect nothing. Newest forms —
-  a criterion with **no subject**, **goldens that redden because the feature works**, **a
-  two-halved rule with one half executed and the other admired**, and **exit criteria that
-  certify rather than miss** (ADR-0007's sixth amendment: three of four, in one list).
-- **IT REACHES THE TESTS WRITTEN TO PROVE SOMETHING** — four of G-022's defects were there:
-  a regression test that could only fail on the platform that had already failed, a parity
-  assertion comparing 1 against 1, and **two** newline guards each vacuous by an upstream
-  the guard came from. **`check-purity.mjs` (I1) and `determinism.mjs` (I2) had never been
-  executed by any committed test**; every scanner gate now owes a proof-of-bite.
-- **Prose may describe, it may not measure**; a number you cannot re-measure is **withdrawn,
-  not restated** — applied to timings, counts, test totals and test *outcomes*.
-- **When several careful actors make the same error, the rule is missing** — four times.
+- **State**: save **v13** · summary **v3** · I2 `9e76bf0fb27494cb` · measure golden
+  `0f013923e178c187` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+  (`check:tickcost`, `check:tickcost:proof`, `check:scaling`: one ADR-0015 configuration debt,
+  human-accepted, re-take owed) · **all six invariants green** · CI green on three platforms
+  (G-022, run #7).
+- **THE THREE RED ROWS ARE NOT "UNRELIABLE".** Unreliable is 0 gates / 0 defects, and a third
+  unreliable gate is a stop condition (§2). A *ruled* red is a configuration refusal that a human
+  accepted with a re-take scheduled. **Do not let the two counts merge** — that is the
+  §4.1 denominator failure that has already resolved a measurement disagreement into a definition.
+- **A DEFECT CLASS IS CLOSED BY ENUMERATION, NOT BY SWEEPING** (ADR-0024, and it paid the day it
+  was written). Five passes hunting one class yielded 5 / 3 / 8 / 11 / 8 — **not converging,
+  because each pass sampled and reported the sample as progress.** Enumerating the same tree:
+  sweeping found **8**, enumeration found **31**, out of **407 occurrences over 70 files**.
+  **Publish the size, then drive it to zero.** A number nobody can re-run is worse than a big one.
+- **WHEN A CLASS LIVES IN NAMES, FENCING IS NOT AVAILABLE — the only moves are rename and delete.**
+  An identifier has no past tense. Sweep 2 corrected every sentence around `patienceFractionOf` and
+  left the name; the rename then left *its own reference* behind, 179 lines away, in the same pass.
+- **A PREDICATE CAN CLOSE THE MACHINE-READABLE HALF OF A CLASS. NAME THE OTHER HALF AS AN ESCAPE
+  WITH ITS CONTROL.** `deleted-vocabulary.test.ts` scans live `Error` messages and test titles;
+  prose is a stated escape whose control is a human reading for tense — **and that control came
+  back positive every time it ran.** The scanner shipped blind three times (a `/*` inside a string
+  literal blanking 2,512 chars; `it.each(` unseen, 14 on disk; **`.ts`-only collection hiding every
+  `.mjs` gate and all of `viewer.js`**). **A silent near-miss inside a scanner is the worst kind.**
+- **§7.1's SPLIT TRIGGER IS EARNING ITS KEEP.** Six firings, **five prose / one code**. θ-a's
+  verification returned 2 MAJOR + 4 MINOR, all prose: **no escalation, no round consumed.** The
+  2026-08-08 scored prediction (rename and re-scope the guard if firings stay prose) has
+  **arguably met its condition and is flagged to the human, unacted-on.**
+- **A NUMBER'S FIRST SLOT IS WHAT IT IS A MEASUREMENT *OF*, and correcting the other four does not
+  protect it.** The orchestrator made this error **twice against one baseline in one day** — the
+  values (62.2 %/102 → **61.9 %/96**, withdrawn), then *"two-thirds of the sitting-still is gone"*,
+  which was true of the share and false of the sitting-still: **standing in your own room got
+  reclassified as resting.** A watcher cannot see a deficit. **The claim that survived a model
+  change was the longest motionless run, 96 frames → 28.**
+- **WATCH #1–#8 exist and the last one is OWED.** The viewer found what 1,109 tests could not,
+  and the human's three verdicts on `apps/game` falsified a builder's claim about the human's own
+  perception. **ADR-0023: `apps/game` is now the WATCH surface; the viewer is a replay instrument.**
+  It had moved at G-030 and the charter described the old arrangement for two goals.
+- **A WATCH ENTRY IS A CRITERION AND CAN BE VACUOUS** (G-014b), and **a stepped frame-count is not
+  a WATCH** — it is a measurement of the predicates a picture would be drawn from. ADR-0013 exists
+  because thirteen goals hunted "reads as stupid" with no watching player.
+- **Park a hypothesis WITH its experiment**: G-013 parked, G-017 ran it unplanned, G-014a hit the
+  knife-edge it described. Newest: **G-014b's central finding has REVERSED** — the shipped margin
+  now abandons **zero** and a margin of zero meets *more* engagement needs (2,081 v 1,875) — living
+  only inside a test file until θ-a's sweep 2 routed it.
+- **The defect this repo produces**: checks and claims that inspect nothing, **and it reaches the
+  tests written to prove something.** Every scanner gate owes a proof-of-bite.
+- **Prose may describe, it may not measure**; a number you cannot re-measure is **withdrawn, not
+  restated**. Three numbers in θ-a were wrong *inside the sentence explaining why numbers must be
+  right* — one computed as `18 − 14`, subtracting one population from another.
+- **When several careful actors make the same error, the rule is missing** — five times now.
 
 ---
 
@@ -358,3 +384,386 @@ for.
 **NOT YET DONE.** The WATCH passing is not the goal closing: **no critic has swept this diff.**
 §7.1 says a goal closes only on DRY, and a perceptual verdict and a critique answer different
 questions. `render-critic` round 1 is running.
+
+---
+
+## 2026-08-12 — CI run #8: the second time this project has ever been verified off this desk
+
+**Run [31638930195](https://github.com/SamLDaLegend/HotelSim/actions/runs/31638930195)**, commits
+`81961fc..ab2991c` (the digest repair, G-023a, and G-030 + G-027a at the join).
+
+### THE OBLIGATION IS DISCHARGED, AND IT IS THE ONE THAT MATTERED
+
+**`compare-hashes` SUCCESS — `a15d1a9bce32d38f` on ubuntu, macOS and Windows.** I2's
+*byte-identical on every platform* clause has now been executed **twice**: once at G-022 against
+values that G-023a and G-027a then moved, and now against the current ones. The digest carried
+*"neither has been re-checked on three platforms"* as owed by the next push; **that is paid.**
+
+**ADR-0002's integer-pence decision, taken at G-001 so float accumulation could not break this,
+has now been paid off in evidence twice** — two CPU architectures, one hash.
+
+### ALL SIX INVARIANTS GREEN ON ALL THREE PLATFORMS
+
+```
+PASS — typecheck · I1 purity · I3 content · I4 test · I2 determinism · I6 save · I5 bench
+PASS — check:measure · check:stamp · check:ladder
+FAIL — check:tickcost · check:tickcost:proof · check:scaling
+3 gate(s) red — IDENTICAL on ubuntu, macOS and Windows
+```
+
+**The three reds are the ADR-0015 configuration refusals**, human-ruled and accepted, owed to the
+campaign re-take goal. **No fourth row went red. No failure was platform-specific.** The ruled
+exceptions travelled to CI exactly as predicted and nothing else did.
+
+**Worth stating against G-022's precedent**: that goal's first push took **six runs** to go green
+and found **two real cross-platform defects no work on this machine could have surfaced** —
+`/var` is a symlink on macOS, and the Windows runner's `TEMP` is an 8.3 short path. This run
+found none, on a diff spanning three goals including the first opening of `apps/game`. That is
+what the six runs bought.
+
+### AND THE READING THAT WOULD HAVE BEEN WRONG
+
+*"verify failed on three platforms"* is true and useless. **The question worth asking is WHICH
+rows**, and the answer — the same three everywhere, with every invariant green — is a completely
+different fact from the one the summary line reports. **A red run is not evidence about a
+project; a red row is.** Checked per-platform rather than accepted, because G-022's own history
+is the argument for doing so.
+
+---
+
+## 2026-08-13 — WATCH #8 (human): PROVISIONAL, and two design questions answered
+
+**The verdict is provisional and is recorded as provisional**, because of what the human was
+actually shown: **numbers and a recording, not the running game.** θ-a is mid-repair, so the tree
+does not render. Verbatim: ***"Looks OK. Will have to see when it's all rendered out to be
+honest."***
+
+**A REAL WATCH IS STILL OWED BY BOTH G-031a AND G-027b θ-a.** Today's reading does not discharge
+either. **"Looks OK" against a table is not the perceptual check ADR-0013 requires** — the whole
+point of that ruling is that a perceptual criterion needs a perceptual instrument, and the
+instrument was unavailable. Recorded so nobody later reads this entry as the discharge.
+
+The figures the verdict was given against, like-for-like (identical denominator, 3,366
+room-holding guest-frames, because rooms, arrivals and stay length are unchanged):
+
+| | baseline | **θ-a** | bound |
+|---|---|---|---|
+| idle share | **61.9 %** (2,083 of 3,366) | **8.3 %** (280 of 3,366) | X = 25.0 % |
+| longest idle run | **96 frames** | **12 frames** | N = 43 |
+
+
+**CORRECTED 2026-08-13, AND THE CORRECTION IS A WITHDRAWAL RATHER THAN A RE-STATEMENT.** This
+table first read **62.2 % / 102 frames**. `ai-critic` materialised the base arm from `ab2991c`
+(`git archive` — **not a stash**, ADR-0022) and re-ran both arms: **3,366 room-holding
+guest-frames, 2,083 idle = 61.88 %, longest run 96, guest 1** — exactly the figures `GOALS.md` has
+carried since G-027a. **It could not reproduce 62.2 % or 102 by any variant it tried.** That pair
+came from its own earlier λ=3,000 recomputation and is **withdrawn, not restated**
+(`CLAUDE.md` rule 5).
+
+**The like-for-like claim is STRONGER than it was stated in ONE slot and WEAKER in another, and
+only the first was noticed at the time.** The denominator is identical at 3,366 in both arms,
+**verified by materialising the base rather than argued from the invocation** — that is the strong
+half. **The numerators are NOT the same predicate.** ADR-0017 replaced the model underneath them,
+so the base arm's `idle` and this arm's `idle` are two different questions asked of two different
+worlds. The denominator identity was asserted; the predicate identity was assumed, and it is false.
+
+**Why this correction is not cosmetic**: 61.9 % / 96 is the number the human's WATCH verdict was
+shown against, and it is the number **G-028's falsification test will be compared to**. A baseline
+that exists in two versions across the ledgers and the code is the ADR-0021 class one instrument
+over — and it was carried in **six places**: `JOURNAL.md` here, `GOALS.md` in three (including
+G-028's REFUTED-WHEN criterion), `content.ts`, and two `stock.*` tests.
+
+~~**Two-thirds of the sitting-still is gone**, which is what ADR-0017 was for.~~ **WITHDRAWN
+2026-08-13, sweep 2, and it is the ORCHESTRATOR'S sentence — the second slot-1 error I have made
+against this same baseline in one day.** The share did fall 61.9 % → 8.3 %, and the table is right;
+the sentence is a claim about **sitting still**, and sitting still is the half that did not move.
+`ai-critic` reproduced it on this machine, quiet, stepping the world at stride 10 over
+`--days 4 --seed 7 --rooms 6 --amenities 2 --arrivals 60` — the population, not a sample, because
+I2:
+
+| | |
+|---|---|
+| idle by the `wantsNothing` predicate | **280 of 3,366 = 8.3 %** (reproduces the table exactly) |
+| guest UNENGAGED — motionless in its own room | **2,184 of 3,366 = 64.9 %** |
+
+**1,904 of those 2,184 frames are counted non-idle for one reason: the room is topping up a
+non-zero rest deficit.** A watcher cannot see a deficit. On screen a room-holder is motionless
+**64.9 %** of the time, against a base arm whose motionless share was **at least** the 61.9 % it
+reports idle. **Standing in your room was reclassified as resting; it was not replaced by moving.**
+
+**What actually moved, and it is the sharper claim by G-028's own text — *"a watcher sees the
+freeze rather than the average"*: the longest unbroken motionless run, 96 frames → 28.** That
+holds under **either** predicate, which is exactly why it is the one to make. (The table's `12` is
+the idle-predicate run; 28 is the same quantity read the way a watcher reads it. Both are true; 28
+is the one that survives the model change.)
+
+**Why I made it.** I had just corrected this baseline's *values* and did not re-ask what the
+values were measurements OF — `CLAUDE.md` rule 4, slot one, immediately after spending a
+correction on slots three and four of the same number. **The fix for a wrong number is not a right
+number; it is asking what the number counts.**
+
+### RULED: the naps read as RESTING
+
+*"Resting."* — the human, asked whether a guest going to bed three times a day reads as a guest
+resting or as a guest that cannot decide.
+
+**This settles the number set**, because everything in it derives from that reading: `r_rest = 1`
+(*an hour of activity costs an hour of recovery*), three naps of 180, `C_rest = 600`, and the
+`bindContent` refusal `λ·C_rest ≤ A/2` that boxes them. `ai-critic` had tested the reading hard
+and found it carried **zero leverage** on any quantity it could have been bent for; the human's
+answer is what makes it a requirement rather than a defensible inference.
+
+### THE INTERRUPTED-MEAL QUESTION WAS THE WRONG QUESTION, AND THE HUMAN'S REPLY IS WHY
+
+Asked whether a guest that stops pursuing food after a demolished café reads as sated or as
+giving up, the human asked back: ***"Why would the meal be interrupted?"***
+
+**That reframes it correctly.** There is no spontaneous interruption — **every path is a player
+action**: demolish the amenity mid-engagement, demolish the room beneath it (the provider becomes
+unsupported and stops being valid), or demolish the room hosting an item. All three go through
+G-008's command with G-031a's button on it.
+
+**So the guest is not "not resuming an interrupted meal" — it is partly full.** It ate half a
+meal, its stock is above the want line, and it does something else until it is hungry again. The
+parked entry was written as *"interrupted engagements are not resumed"*, which reads as a defect
+in the pursuit logic; **it is the hysteresis working, and the watcher always has a cause in mind
+because they just knocked the restaurant down.** Re-parked in those terms.
+
+**The lesson is about the question rather than the answer**: a WATCH question framed around a
+mechanism ("interrupted engagements") smuggled in a premise the model does not contain. The human
+rejected the premise rather than answering the question, which is the second time in two days that
+has been the useful reply.
+
+---
+
+## G-030 — The hotel is on screen — REFLECT
+
+*(Written 2026-08-13, after the fact. **G-030 and G-027a were both committed at `ab2991c` without
+REFLECT entries** — the loop's last step skipped because the commit made them look finished. Found
+by grepping this file for `REFLECT`, not by anything noticing at the time.)*
+
+**DONE, DRY at 3/3.** 3 sweeps, **9 findings** (4 MAJOR + 4 MINOR + 3 NIT), 1 verification that did
+not convert. **`apps/game` opened after 23 goals**, superseding `HOTELSIM.md:66` by human ruling.
+
+**THE HEADLINE IS THAT SOMEBODY LOOKED AT IT.** Three WATCH verdicts: *"reads quite difficult…
+lots of washout of bars"*, then *"reads much better, but I can only see one need"*, then *"it
+reads"*. No test in this repository could have produced any of the three, and the first failed a
+build that had thirteen green gate rows.
+
+**THE PALETTE WAS ARITHMETICALLY DOOMED, AND THAT IS THE DURABLE PART.** N colours in a contrast
+band can do no better than `span^(1/(N-1))`; for twelve that ceiling is **1.184** — *below the
+ratio the build already washed out at*. **Twelve was the mistake, not the hues.** Measured: 32 of
+66 pairs under 1.3:1, worst pair **1.000**, identical luminance with different hue. Repaired to
+per-role luminance ladders: worst pair **1.811**, zero pairs under threshold. **Verified
+independently by the orchestrator** against the real `createPalette` output rather than taken on
+report.
+
+**AND THE FIX BROKE SOMETHING ITS OWN JUSTIFICATION RESTED ON.** The need vector was reduced to one
+bar, argued as *"it was not readable from the smudge either"* — **a claim about the human's
+perception, made without asking them, inside the goal whose purpose is to stop doing that.** The
+human falsified it at WATCH #6. The mechanism: the palette was repaired **in the same pass**, so
+the reduction was justified by the state of the medium *before* it was fixed. Restored; adjacent-
+pair contrast tells the story — **1.019 before, 1.814 to 1.840 after.** The constraint was
+chromatic, not geometric.
+
+> **When one pass changes both a signal and the medium carrying it, the change to the signal
+> cannot be justified by observations taken through the unrepaired medium.**
+
+**THE SEAM SCORE, WHICH REFLECTS BADLY ON THE ORCHESTRATOR AND IS RECORDED THAT WAY.** The builder
+offered drawing-versus-timing, recommended declining, and I declined with its prediction recorded.
+**(i) WRONG** — no timing-class finding at any sweep, held on reconstruction: seven driver arms
+including a headless reference all reaching one hash, one wall-clock read in the layer, no
+assignment into sim state anywhere. **(ii) CONFIRMED at full cost** — 3/3, closing on a ninth
+finding. **(iii) CONFIRMED** at 2,105+ lines. **And the seam that would have paid was not the one
+on the table: five of nine findings came from `check:ladder` and its prose**, an instrument the
+goal absorbed as an obligation falling due. **That seam existed — gate-versus-renderer — and
+nobody offered it, me included.**
+
+> **A builder proposing a seam should ask what the goal is CARRYING, not only what it is BUILDING.**
+
+**THE GATE SHIPPED BLIND TO ITS OWN SUBJECT.** `STATEMENT_BREAK_SOURCE` counted a newline as a
+statement boundary, so the banned expression was silent the moment it wrapped — this repo's house
+style, with no formatter to prevent it. `wrapped 0 / oneline 1`. **The failure the M2-exit ruling
+names, in the gate shipped to close a parked instrument**, and it shipped because the proof had no
+multi-line arm. The repair then **declined to tighten the predicate**, correctly: both tightenings
+buy a *silent miss* to remove a *loud report*, and one kills the exact ternary sweep 1 raised.
+**A false report costs a reader five minutes; a silent miss certifies a clean tree forever.**
+
+**AND THE RETRACTED PHRASE SURVIVED NINETEEN WORDS FROM ITS OWN RETRACTION.** `HOTELSIM.md:70`
+still carried *"conservative in the safe direction"* while the gate retracted it at length, and
+`CLAUDE.md`'s precedence rule would have resolved the disagreement **in favour of the retracted
+reading**. The builder's account is exact: *"I wrote the correction into the gate, wrote the
+general lesson into the charter paragraph, and left the specific instance of that lesson standing
+in the same paragraph."* **A reading failure, not a writing one.**
+
+**Owed forward**: the `+N` crowd badge is **NOT OBSERVED** rather than unreachable · the
+reserved-hue guard binds at **0.05 degrees of 35** · content still cannot express a colour, and
+`packages/content` never says the word.
+
+---
+
+## G-027a — A stay has a duration — REFLECT
+
+**DONE, DRY at 3/3.** 3 sweeps (1 BLOCKER + 3 MAJOR + 7 MINOR across the plan pass and sweeps),
+1 verification that did not convert. Save **v12**, summary **3**.
+
+**IT EXISTS BECAUSE A CRITIC MEASURED SOMETHING BEFORE ANY CODE WAS WRITTEN.** G-023b's travel
+budget is **exactly zero** — the three engagement needs sum to the 480-tick lodging window and rest
+runs on every tick a guest holds a room. Reproduced by the orchestrator **both ways**: +1 tick of
+work, and −1 tick of window, each flipping `guest_nourishment` from 356 met / 0 unmet to **0 met /
+356 unmet**. A cliff, not a knife-edge, and **the fourth appearance of a hypothesis G-013 parked
+with its experiment**. That measurement produced ADR-0017.
+
+**THE ECONOMY MOVED AS A SIDE EFFECT AND NO PRICE WAS TOUCHED.** Margin 10.2:1 to **3.63:1**
+realised — not the ~2.38:1 predicted, because the stay clock runs from **arrival**, so a queued
+guest holds its room for less than the full duration. **The cheapest green was raising
+`nightlyRatePence`**, which is M4's and is §9's stop condition, so the byte-identical guard became
+the goal's most important criterion — and it grew to pin construction cost and demolition refund
+too, **proved to bite by mutation including a sum-preserving reshuffle** that positional assertions
+catch and a multiset pin would wave through.
+
+**THE DEFINING DEFECT, FOUR TIMES IN ONE GOAL: THE PROSE CLAIMED MORE THAN THE PREDICATE.**
+`countStuckGuests`'s paragraph named as its motivating mutation the one case its predicate could
+not see · an exemption *"checked rather than asserted"* whose two reads were satisfied by **a block
+comment and a `node:fs` import** · a tautology (`Object.keys().filter` can only be 0 or 1) placed
+as the closer of the argument it was meant to close · and ADR-0020's sentence, **which acquired an
+overclaim while being repaired for the opposite one**. **Every instance was written by someone who
+had just demonstrated they understood the rule.** Each was repaired by an **assertion** rather than
+a better sentence, which is the only repair that cannot repeat the class.
+
+**FOUR OF FIVE EXIT CRITERIA WERE VACUOUS OR WRONG, ALL CAUGHT AT PLAN.** `vitest run stock`
+**passed green against zero tests** — no file matched, in the ledger whose own preamble warns about
+exactly that · "both terminators fire" was satisfiable by any oversubscribed hotel · "the four
+numbers" is arithmetically wrong · "lodging is optional" had no mechanical definition.
+**ADR-0007's sixth amendment in action: a vacuous criterion certifies the goal.**
+
+**AND THE ORCHESTRATOR VERIFIED THE WRONG THING.** I checked the builder's derivation arithmetic
+against the bytes, found it internally correct, and called it sound. **The arithmetic was right and
+the model was wrong** — I never asked which constraint binds. `CLAUDE.md` rule 4's first slot,
+applied to a derivation rather than to a number.
+
+**Owed forward**: ADR-0010's arithmetic was false in **four** places and a sweep that found three
+declared itself complete · G-015's one-row law becomes content-conditioned at G-027c · seam ε's
+property (each half owning exactly one schema bump) is what made it right, and **G-027a alone
+unblocked G-023b** — 960 ticks of slack where its plan pass measured zero.
+
+## G-027b θ-a — A need is a stock (the model half) — VERIFY
+
+**Verified by the orchestrator, not taken on report.** `pnpm verify`: **ten green, three ruled red**
+(`check:tickcost`, `check:tickcost:proof`, `check:scaling` — one ADR-0015 configuration debt,
+proven pre-existing on a clean detached-`HEAD` worktree with `tools/gates/` unmodified). **All six
+invariants green: I1–I6.** `pnpm test` 103 files / 1,892. `pnpm exec vitest run stock` 6 files / 60,
+matching the six filenames now named in the goal block. **Determinism hash `9e76bf0fb27494cb` and
+measure golden `0f013923e178c187` unmoved across every round** — the evidence that no shipped
+behaviour changed while ~40 files of documentation did.
+
+**ROUNDS: 3 sweeps (budget exhausted) + 2 verifications. 10 + 7 + 6 findings, one BLOCKER-free.**
+Sweep 3 closed **OPEN**, not DRY. The verification then returned six findings, **all prose**, so
+under §7.1's split trigger the goal **neither escalated nor consumed a round** — the sixth firing
+of that mechanism and the second time the prose arm has done exactly what it was ruled to do.
+
+**THE GOAL'S DEFECT CLASS WAS NEVER THE CODE. IT WAS R1 — a derivation that outlives the model it
+was derived from — and it took five passes to notice that the METHOD was the defect.** Yields by
+pass: **5 named at PLAN, 3, 8, 11, 8.** Not converging, and it could not have: every pass grepped a
+different needle set over a wider scope, so each **sampled** the class and reported the sample as
+progress. **The pass that found the most was the one that widened the needles** — the yield was
+tracking the method.
+
+The tell, and it is exact: sweep 3 found `needs.ts:239`'s `unmet` docstring still naming two deleted
+fates, **one line below `:238`'s `met` docstring, which that very diff had rewritten.** A sweep
+reading a diff sees the line that changed. It cannot see the line that should have.
+
+**ADR-0024 came out of that, and paid the same day.** Enumerate the class, publish the size, drive
+it to zero. Sweeping had found **8**; enumerating the same tree found **31** present-tense claims
+out of **407 occurrences over 70 files**. Three of the extra 23 sat inside prose *already repaired
+for this class* — `guests.ts:1529`'s `max(stay, patience)` **six lines below a correct
+`max(stay, tolerance)` in the same docstring**, and `utility.test.ts:102`'s *"food has less patience
+than fun"* **twenty lines under the paragraph declaring that word is not carried**.
+
+**AND THE SHARPEST INSTANCE WAS ONE PROSE CANNOT FENCE.** `patienceFractionOf`, live and exported.
+Sweep 2 corrected every sentence around it and left the name. **An identifier has no past tense —
+it is renamed or it is a lie.** Then the rename landed and *its own reference* was left behind 179
+lines away, which is the same defect inverted inside one pass.
+
+> **When a class lives in names, fencing is not available. The only two moves are rename and delete.**
+
+**HALF THE CLASS IS NOW CLOSED BY A PREDICATE AND THE OTHER HALF IS NAMED.**
+`deleted-vocabulary.test.ts` scans live `Error` messages and test titles — the two of the four
+first-contact surfaces that are executable strings — and registers what it cannot see rather than
+letting silence read as coverage. **Its own predicate had shipped blind twice**: `stripComments`
+was not string-aware, so `'apps/**'` opened a block comment and blanked 2,512 characters across 16
+of 138 files; and `testTitles` could not see `it.each(`, 14 sites on disk. **The third blindness
+was found by the fix pass, not by a critic: `collect` takes `.ts` only, so every `.mjs` gate and
+the whole of `viewer.js` were invisible** — an unnamed silence in the file whose contract is that
+silences get named.
+
+**THREE NUMBERS IN THIS GOAL WERE WRONG INSIDE THE SENTENCE EXPLAINING WHY NUMBERS MUST BE RIGHT.**
+The escape register computed its prose remainder as **18 − 14**, subtracting one population from
+another — CLAUDE.md rule 4's slot-one referent error, in the note citing that rule as its reason
+for existing. The verification re-measured and got 18/13; the fix pass could reproduce neither and
+got 17. **The arithmetic was deleted rather than corrected, and the population given a name derived
+from the walk.** Two files also published different repair counts for the same population; both
+deleted, one place points at the other.
+
+**AND TWO OF THEM WERE THE ORCHESTRATOR'S**, against one baseline, in one day. First the values
+(62.2 %/102 → **61.9 %/96**, withdrawn after `ai-critic` materialised `ab2991c` and could not
+reproduce the pair). Then, having corrected the values, I wrote *"two-thirds of the sitting-still is
+gone"* — **a claim about what the number is a measurement OF, made immediately after spending a
+correction on the same number's other slots.** The share moved because standing in your own room
+was reclassified as resting; **on screen a room-holder is motionless 64.9 % of the time.** What
+actually moved is the longest motionless run, **96 frames → 28**, which holds under either
+predicate. **The fix for a wrong number is not a right number; it is asking what the number counts.**
+
+**Owed forward**: the WATCH is **NOT DISCHARGED** — see below · G-014b's central finding has
+reversed and is parked with its test · the `arrivalEveryTicks` 32-vs-96 campaign re-take.
+
+### WATCH — OWED, AND SAID SO RATHER THAN SUBSTITUTED FOR
+
+**No perceptual observation was taken.** The Browser pane was never displayed in this session, so
+`apps/game` would not composite and every screenshot timed out. **This is recorded as a skipped
+step, not as an absence of findings** (§5: *no observation means a step was skipped*).
+
+**What exists instead, and what it is not.** `ai-critic` recorded 577 frames
+(`--days 4 --seed 7 --rooms 6 --amenities 2 --arrivals 60 --record-every 10`, state hash
+`b581eb2c0a5e9400`) and drove the viewer's own draw predicates over every one: **0 A→B→A engagement
+flips across 96 guests, 0 abandonments, no fixed pursuit order** (144/135/142 across comfort /
+entertainment / nourishment), idle **288 of 4,824 room-holding guest-frames, longest run 12**.
+*(Slots: the fraction of frames the viewer paints `INK.guestIdle`, that one invocation, n = 4,824 as
+a population not a sample since the run is deterministic, count ratio and max run, quiet 12-core
+Windows box. **Not comparable to the 61.9 % baseline — different predicate. Do not pool them.**)*
+
+**The eight frames drawing idle over a want line were each checked and each is correct.** At tick
+1210 guest 3 sits in its own room with entertainment at deficit 476 against a want line of 420, and
+**both games rooms are occupied**. It has nowhere to go. **That is not a guest reading as stupid;
+that is a hotel reading as too small**, which is the signal the build loop exists to produce.
+
+**None of that is a WATCH.** It is a measurement of the predicates a picture would be drawn from,
+by an agent that also could not open a browser. ADR-0013 exists because thirteen goals hunted
+"reads as stupid to a watching player" with no watching player. **A stepped count is the instrument
+that ruling was written against, not the discharge of it.** Two things are unobserved and one of
+them is new: `drawLobbyFuse`, a bar under a roomless guest's feet shrinking as tolerance runs out;
+and whether 64.9 % in-room time reads as three naps or as loitering — **the question the human
+already answered "Resting" to, against a picture in which a napping guest drew as IDLE for 58 % of
+its nap.** That answer may well stand. It has not yet been tested.
+
+### RECORDED DEVIATION — COMMIT taken BEFORE WATCH (2026-08-13)
+
+**§5's loop is VERIFY → WATCH → COMMIT. I committed θ-a and G-031a with the WATCH still owed.**
+Recorded here rather than left for a reader to notice from the git log.
+
+**Why**: 92 files / +6,569 / −2,252 of *verified* work from **two parallel tracks** was sitting
+uncommitted in one shared tree. ADR-0022 exists because uncommitted work in a shared tree is the
+fragile thing; leaving it there across a session boundary to preserve a step ordering trades a
+large real risk for a small procedural one.
+
+**What this commit does NOT do**: it does not close either goal. Neither is marked `done`, neither
+has a REFLECT, and **the WATCH remains owed and is named in the commit message.** The ordering
+exists so nothing is *signed off* unobserved — and nothing has been.
+
+> **COMMIT is not sign-off. REFLECT is.** The loop's ordering protects the second; it was written
+> before the project had two tracks sharing a tree, which is the condition that makes deferring the
+> first expensive.
+
+**The honest cost**: if the WATCH turns up something that reads wrong, the repair lands as a
+follow-up commit rather than as an amendment before the work ever entered history. That is a real
+price and it is the one being paid deliberately.

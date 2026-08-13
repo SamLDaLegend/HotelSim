@@ -52,7 +52,7 @@ const UNKNOWN = '#ff00ff';
 
 /** `NO_ENTITY` — packages/sim/src/entities.ts. Ids start at 1, so 0 means "no room yet". */
 const NO_ENTITY = 0;
-/** `TICKS_PER_DAY` — packages/sim/src/world.ts:33. One tick is one in-game minute. */
+/** `TICKS_PER_DAY` — `packages/sim/src/world.ts`. One tick is one in-game minute. */
 const TICKS_PER_DAY = 1440;
 
 const el = (id) => document.getElementById(id);
@@ -68,9 +68,18 @@ function colourOf(id) {
 }
 
 // ---------------------------------------------------------------------------------
-// CONTENT. Names, roles and patience come from the shipped JSON rather than from
-// literals here, so a balance edit cannot leave this file quietly disagreeing with the
-// simulation that produced the recording. Colour does not, for the reason above.
+// CONTENT. The need-type fields this file reads are `id`, `name`, `role` and `capacityTicks`,
+// and they come from the shipped JSON rather than from literals here, so a balance edit cannot
+// leave this file quietly disagreeing with the simulation that produced the recording. Colour
+// does not, for the reason above.
+//
+// THAT LIST SAID "patience" UNTIL θ-a'S UNPINNED-CLAIM PASS, and ADR-0017 left no such field:
+// a file header naming a field that `loadContent` directly below it does not read, in one of
+// the four surfaces `packages/sim/src/needs.ts`'s header calls first-contact. It is no longer
+// spelled on trust. `tools/headless/src/prose-citations.test.ts` reads the backticked names
+// out of the line above, requires every one to be a key on every entry of `need-types.json`,
+// and requires the list to be exactly the set of that file's keys this file names as a
+// property — so a field added to the list, dropped from it, or renamed in content reddens.
 
 const content = { rooms: new Map(), items: new Map(), needs: new Map(), lodgingNeedId: null, speeds: [] };
 
@@ -95,24 +104,68 @@ async function loadContent() {
 }
 
 /**
- * How much of this need's patience is left, 0..1 — or `null` when the loaded content does
- * not define the need at all, which makes the question unanswerable.
+ * HOW FULL THIS NEED'S STOCK IS, 0..1 (G-027b) — or `null` when the loaded content does not
+ * define the need at all, which makes the question unanswerable.
+ *
+ * THE PICTURE IS THE SAME AND THE QUANTITY BEHIND IT IS NEW. It used to be patience remaining
+ * over patience; a need is a LEVEL now, so it is `1 - deficit/capacity`. A full bar still means
+ * a contented guest.
+ *
+ * IT WAS CALLED `patienceFractionOf` UNTIL θ-a SWEEP 3, and the name was the last thing in
+ * either renderer still asserting the deleted model — a docstring can be fenced in the past
+ * tense and an identifier cannot, so it was renamed rather than annotated. That is R1's own
+ * lesson applied to the surface a reader meets FIRST.
  *
  * IT RETURNS null RATHER THAN 1, AND THE DIRECTION OF THE OLD BUG IS THE WHOLE POINT. It
  * used to be `patience ? remaining / patience : 1`, so a need whose id the content does not
- * carry — a recording made under different content — drew a FULL bar: a need with zero
- * patience left rendered as the healthiest state on screen. Silent, and in the reassuring
+ * carry — a recording made under different content — drew a FULL bar: a need with nothing left
+ * rendered as the healthiest state on screen. Silent, and in the reassuring
  * direction, which is the worst direction for an instrument whose output becomes evidence.
  * The caller paints these magenta, exactly as `colourOf` paints an unknown id, and the id
  * is announced in the header.
  */
-function patienceFractionOf(need) {
-  const patience = content.needs.get(need.needId)?.patienceTicks;
-  if (typeof patience !== 'number' || patience <= 0) {
+function stockFractionOf(need) {
+  const capacity = content.needs.get(need.needId)?.capacityTicks;
+  if (typeof capacity !== 'number' || capacity <= 0) {
     unknownIds.add(need.needId);
     return null;
   }
-  return clamp(need.patienceRemaining / patience, 0, 1);
+  return clamp(1 - need.deficit / capacity, 0, 1);
+}
+
+/** A need nothing has left in it. The stock-model successor to "patience ran out". */
+function isEmpty(need) {
+  const capacity = content.needs.get(need.needId)?.capacityTicks;
+  return typeof capacity === 'number' && need.deficit >= capacity;
+}
+
+/**
+ * `isNeedWanted(needType, need, wantAtBasisPoints, true)` — the sim's predicate at the ONE arm
+ * this file asks it on: a need something is already serving.
+ *
+ * ALL THREE BRANCHES, because a transcription that quotes two of three is one a reader cannot
+ * check (θ-a sweep 3 — both transcriptions in this file quoted the first and the last). Quoted
+ * to the byte, INCLUDING the parameter name, because that is what lets a test compare them
+ * against the sim's own source: `prose-citations.test.ts` lifts the branch lines out of
+ * `isNeedWanted` and requires both transcriptions in this file to contain each one.
+ *
+ *     if (need.deficit <= 0) return false;
+ *     if (needType === undefined) return true;
+ *     return beingServed || need.deficit >= wantLineOf(needType, wantAtBasisPoints);
+ *
+ * Reading them in order: full is never wanted; an unknown id always is; and the last is the
+ * trigger itself.
+ *
+ * With `beingServed` true, the second and third branches both answer TRUE for any need that got
+ * past the first — so the whole of it is exactly "not full", and the middle branch changes no
+ * answer at this arm. It is quoted anyway: the reader checking that claim has to be able to see
+ * the branch they are checking. The want line is deliberately absent from the body rather than
+ * computed and ignored: a line this file could get wrong is a line this file should not hold.
+ * See the block at the call site in `drawGuest` for why it is transcribed rather than imported,
+ * and for what would make it wrong.
+ */
+function isWantedWhileServed(need) {
+  return need.deficit > 0;
 }
 
 const isRoom = (kind) => content.rooms.has(kind);
@@ -143,10 +196,36 @@ const rec = { lines: [], cache: new Map(), everyTicks: 1, extent: null };
 // rather than counts. That is the honest failure and it is not worth fixing: recordings are
 // disposable, the viewer is disposable (§9), and wiring a migration chain into it is the
 // first sentence of the story where this becomes a second renderer.
+/**
+ * The save schema this viewer reads (G-027b).
+ *
+ * A LITERAL, NOT AN IMPORT, and that is the viewer's whole relationship with the sim: it is a
+ * plain script served to a browser with no build step, so it cannot import `SAVE_SCHEMA_VERSION`
+ * and must not pretend otherwise. The cost is that this number is a SECOND COPY and can go
+ * stale — which is exactly what `frameAt` turns into a loud refusal rather than a silent
+ * mis-draw. A stale copy here refuses every recording, including the good ones, which is a
+ * five-minute repair with a message pointing at it.
+ */
+const VIEWER_SCHEMA_VERSION = 13;
+
 function frameAt(i) {
   const hit = rec.cache.get(i);
   if (hit !== undefined) return hit;
-  const world = JSON.parse(rec.lines[i]).world;
+  const blob = JSON.parse(rec.lines[i]);
+  // THE VERSION IS READ BEFORE THE FIELDS, AND THE FAILURE STAYS LOUD (G-027b). Under v13 a
+  // need carries `deficit`; a v12 frame carries `progressRemaining`, so `n.deficit` reads
+  // `undefined`, every threshold comparison is false, and the whole need table renders
+  // PLAUSIBLY AND WRONG in silence. There are v12 recordings in this repo and they are a
+  // goal's baseline evidence. One comparison, one message, and NO migration chain: wiring one
+  // in is the first sentence of the story where this becomes a second renderer (§9).
+  if (blob.schemaVersion !== VIEWER_SCHEMA_VERSION) {
+    throw new Error(
+      `that recording is save schema ${blob.schemaVersion}, and this viewer reads ${VIEWER_SCHEMA_VERSION}. ` +
+        'Re-record it; the fields a need carries changed, and drawing it anyway would show a plausible hotel ' +
+        'that is not the hotel that ran.',
+    );
+  }
+  const world = blob.world;
   rec.cache.set(i, world);
   if (rec.cache.size > 24) rec.cache.delete(rec.cache.keys().next().value);
   return world;
@@ -409,9 +488,9 @@ function drawGuest(guest, x, baseY, w, GUEST_H, NEED_H, segW) {
   let failing = false;
   let failed = false;
   for (const n of needs) {
-    if (n.progressRemaining === 0) continue;
-    const frac = patienceFractionOf(n);
-    if (n.patienceRemaining === 0) failed = true;
+    if (n.deficit === 0) continue;
+    const frac = stockFractionOf(n);
+    if (isEmpty(n)) failed = true;
     else if (frac !== null && frac <= 0.25) failing = true;
   }
 
@@ -434,12 +513,41 @@ function drawGuest(guest, x, baseY, w, GUEST_H, NEED_H, segW) {
   // (G-023a). The strip could only ever show the roomless AND idle; the fill shows
   // homelessness wherever the guest is standing, which is every roomless guest including the
   // ones being served. It was earned by the finding above and it stays.
+  //
+  // THE RESTING COLOUR ASKS THE SIM'S OWN PREDICATE, SPELLED OUT (θ-a sweep 2). The renderer
+  // one directory over calls `isNeedWanted` from its own `isWanted`, in
+  // `apps/game/src/view/guest.ts`; this file cannot import it — it is a plain browser module
+  // with no bundler — so the predicate is transcribed, with the arm it is being called on
+  // named. BY SYMBOL AND NOT BY LINE: this citation carried a LINE NUMBER in `guest.ts` until
+  // θ-a's unpinned-claim pass, by which time the line it named was the middle of an unrelated
+  // function. `prose-citations.test.ts` holds both ends of it now, and holds this file to
+  // citing by symbol.
+  //
+  // AT `beingServed === true` THE SCHMITT TRIGGER COLLAPSES TO `deficit > 0`. `isNeedWanted` has
+  // THREE branches, and all three are quoted because two of three is not checkable (θ-a sweep 3),
+  // to the byte for the reason `isWantedWhileServed`'s block gives:
+  //
+  //     if (need.deficit <= 0) return false;
+  //     if (needType === undefined) return true;
+  //     return beingServed || need.deficit >= wantLineOf(needType, wantAtBasisPoints);
+  //
+  // A guest that is at home and not engaged IS being served its lodging need, so the last branch
+  // short-circuits on `beingServed` and the want line never enters; the middle branch answers
+  // TRUE at this arm too, for a need the content does not define, so it changes no answer here
+  // and is not a hole in the collapse. **This is therefore the same drawing as before, not a new one**; the
+  // reading was already correct and what it lacked was the derivation. Said here because the
+  // viewer is the instrument a WATCH is ruled against, and "these two agree today" is a fact a
+  // reader should not have to re-derive to trust the picture.
+  //
+  // IF `isNeedWanted` EVER STOPS COLLAPSING — a served need that is not wanted, say — this line
+  // is wrong and the file to read is `packages/sim/src/needs.ts`.
   const lodging = needs.find((n) => n.needId === content.lodgingNeedId);
   const filled = guest.roomEntityId !== NO_ENTITY;
+  const atHome = filled && guest.engagement === null;
   let colour = '#77808f';
   if (guest.engagement !== null) {
     colour = colourOf(guest.engagement.needId);
-  } else if (filled && lodging !== undefined && lodging.progressRemaining > 0) {
+  } else if (atHome && lodging !== undefined && isWantedWhileServed(lodging)) {
     colour = colourOf(lodging.needId);
   }
 
@@ -458,23 +566,25 @@ function drawGuest(guest, x, baseY, w, GUEST_H, NEED_H, segW) {
   let sx = x + w / 2 - total / 2;
   const sy = top - NEED_H - 2;
   for (const n of needs) {
-    const frac = patienceFractionOf(n);
+    const frac = stockFractionOf(n);
     ctx.fillStyle = '#20242c';
     ctx.fillRect(sx, sy, segW, NEED_H);
-    if (n.progressRemaining === 0) {
-      // Met. Terminal, so patience stopped mattering: a full block with a pale cap, which
-      // is what tells it apart from a fresh need that merely still has all its patience.
+    if (n.deficit === 0) {
+      // FULL, WHICH IS NOT THE SAME AS FINISHED (G-027b): a full block with a pale cap, which
+      // is what tells it apart from a nearly-full one. It decays again next tick — nothing is
+      // terminal — so the cap says "at the top right now", not "done". (It read "Met. Terminal,
+      // so patience stopped mattering" until θ-a sweep 2, which is the model this goal deleted.)
       ctx.fillStyle = colourOf(n.needId);
       ctx.fillRect(sx, sy, segW, NEED_H);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(sx, sy, segW, 2);
     } else if (frac === null) {
-      // Unmeasurable, and therefore drawn LOUD rather than healthy. See patienceFractionOf.
+      // Unmeasurable, and therefore drawn LOUD rather than healthy. See stockFractionOf.
       ctx.fillStyle = UNKNOWN;
       ctx.fillRect(sx, sy, segW, NEED_H);
     } else {
       const h = Math.round(frac * NEED_H);
-      ctx.fillStyle = n.patienceRemaining === 0 ? '#e5484d' : colourOf(n.needId);
+      ctx.fillStyle = isEmpty(n) ? '#e5484d' : colourOf(n.needId);
       ctx.fillRect(sx, sy + NEED_H - Math.max(h, 1), segW, Math.max(h, 1));
     }
     sx += segW + 1;
@@ -561,8 +671,8 @@ function hud(world, extra) {
     for (const n of guest.needs) {
       if (!live.has(n.needId)) live.set(n.needId, { met: 0, pending: 0, failed: 0 });
       const r = live.get(n.needId);
-      if (n.progressRemaining === 0) r.met += 1;
-      else if (n.patienceRemaining === 0) r.failed += 1;
+      if (n.deficit === 0) r.met += 1;
+      else if (isEmpty(n)) r.failed += 1;
       else r.pending += 1;
     }
   }

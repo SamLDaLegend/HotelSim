@@ -13,6 +13,12 @@
 // parked with its falsification test: if a room's label is illegible or the built extent
 // does not fit at the shipped hotel's size, auto-fit is insufficient and pan/zoom moves into
 // G-031.
+//
+// STILL NO CAMERA AT G-031a. The parked test was run and did not fire: at the shipped hotel
+// the built extent is 7 columns by 5 floors and the badges are legible at every window size
+// down to 500x500 (measured at PLAN). What the player can now do is build OUTWARD, so the
+// trigger becomes "a hotel bigger than the window" rather than "the opening hotel" — the
+// parked entry is re-parked with that sharper condition rather than discharged.
 
 import { isPlaced } from '@hotelsim/sim';
 import type { Cell, GridBounds, World } from '@hotelsim/sim';
@@ -156,5 +162,40 @@ export function layoutFor(
     cellHeight,
     x: (column: number): number => GUTTER + (column - extent.minColumn) * cellWidth,
     y: (floor: number): number => MARGIN + (extent.maxFloor - floor) * cellHeight,
+  };
+}
+
+/**
+ * WHICH CELL A POINT IS IN — the exact inverse of `layout.x` and `layout.y` (G-031a).
+ *
+ * IT LIVES BESIDE THE PROJECTION AND NOWHERE ELSE, and that placement is the point rather
+ * than tidiness. A hit test written in the input module would be a SECOND description of
+ * where a cell is, and the two would agree until the day somebody changed the gutter — at
+ * which point the player would click one room and build in another, with every test in the
+ * repository still green. Same rule `scene.ts` follows for validity: ask the one definition.
+ *
+ * NOT CLAMPED, AND DELIBERATELY SO. A point outside the drawn extent returns the cell it
+ * would be — which may be off the plot entirely — and that is what lets the player reach the
+ * simulation's own `outOfBounds` refusal. This function must not quietly correct anything:
+ * the render layer does not decide what a legal placement is (`build.ts`: "two doors, one
+ * rule").
+ *
+ * WHERE OFF-PLOT ACTUALLY IS, BECAUSE THE OBVIOUS ILLUSTRATION IS THE ONE CASE THAT IS NOT.
+ * "Click the sky" is WRONG for the shipped hotel: the plot runs to floor 20 while the drawn
+ * extent tops out around floor 2, so a click above the building is comfortably ON the plot
+ * and builds a real, unsupported room — no refusal at all. The two places that are genuinely
+ * off it are the LEFT GUTTER (`x < GUTTER` gives column -1, and `DEFAULT_MIN_COLUMN` is 0)
+ * and the strip BELOW THE BASEMENT (floor -3 against a `DEFAULT_MIN_FLOOR` of -2). Those are
+ * the clicks that earn `outOfBounds`, and they are what the WATCH card says.
+ *
+ * Round trip: `cellAt(l, l.x(c) + e, l.y(f) + e)` is `{floor: f, column: c}` for any
+ * `0 <= e < cellWidth` (and `< cellHeight`). `Math.floor` on a negative offset is what makes
+ * the cell one to the LEFT rather than the same cell, which is the behaviour a click in the
+ * gutter needs.
+ */
+export function cellAt(layout: Layout, x: number, y: number): Cell {
+  return {
+    floor: layout.extent.maxFloor - Math.floor((y - MARGIN) / layout.cellHeight),
+    column: layout.extent.minColumn + Math.floor((x - GUTTER) / layout.cellWidth),
   };
 }

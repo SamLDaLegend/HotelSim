@@ -18,12 +18,32 @@
 // earns does not depend on the refresh rate. A 144Hz monitor and a 60Hz monitor run the same
 // hotel at the same rate and differ only in batch size.
 //
-// WHAT THIS BUYS, STATED AS A PROPERTY RATHER THAN CLAIMED AS EVIDENCE. `commandsAt` is a
-// pure function of the tick number, so the world at tick N here is the world
-// `run(initial, content, N, schedule)` produces headless, whatever the frame rate was.
-// G-031's exit criterion is what PROVES that — a session driven through the UI and one
-// driven by the same command log headless producing the same state hash. This goal states
-// the property and does not offer it as proof.
+// WHAT THIS BUYS, STATED AS A PROPERTY RATHER THAN CLAIMED AS EVIDENCE — AND THE STATEMENT
+// IS AMENDED AT G-031a, BECAUSE THE ONE G-030 WROTE STOPPED BEING TRUE THE DAY THE PLAYER
+// COULD CLICK.
+//
+// G-030 said: "`commandsAt` is a pure function of the tick number." That was true when the
+// only source was `scenario.ts`. G-031a drains a queue of player commands through the same
+// parameter, and DRAINING A QUEUE IS A SIDE EFFECT — so the old sentence would now be prose
+// claiming more than the code, which is the defect class this project has produced most
+// often and always from someone who had just demonstrated they understood the rule.
+//
+// THE PROPERTY THAT ACTUALLY HOLDS, and it is the one that was load-bearing all along:
+//
+//   `commandsAt` IS ASKED EXACTLY ONCE PER TICK, BY TICK NUMBER, IN INCREASING ORDER, AND
+//   WHAT IT RETURNS IS RECORDED.
+//
+// So the world at tick N here is the world `run(initial, content, N, log)` produces
+// headless, whatever the frame rate was — where `log` is what was recorded rather than what
+// a scenario would have generated. The wall clock chooses WHICH TICK a click lands on and
+// nothing else; that choice is captured in the log's tick numbers, which is precisely what
+// I2 means by "same seed plus same command log".
+//
+// It is checked rather than described: `session.ts`'s `commandsFor` THROWS if it is asked
+// twice for one tick or asked to go backwards. G-031b's exit criterion is what proves the
+// rest — a session driven through the UI and one driven by the same command log headless
+// producing the same state hash. This goal states the property and does not offer it as
+// proof.
 // ---------------------------------------------------------------------------------------
 
 import { createValidityCache, stepTick } from '@hotelsim/sim';
@@ -110,6 +130,13 @@ export function ticksEarned(
  * COMMANDS ARE ASKED FOR PER TICK, not per frame, and by TICK NUMBER rather than by
  * position in a list. A frame that runs seven ticks runs seven separate command sets, which
  * is what makes the sequence identical to the headless one whatever the frame rate.
+ *
+ * `observe` IS CALLED AFTER EACH TICK WITH THE WORLD BEFORE AND THE WORLD AFTER (G-031a).
+ * It is how a refusal becomes visible: the only way to tell WHY one command was refused is
+ * to diff `buildOutcomes` across the single tick that carried it, and a per-FRAME hook
+ * cannot do that — a frame at the top rung runs many ticks and several of them may carry a
+ * command. It is an observer in the strict sense: it receives two worlds and returns
+ * nothing, and nothing it does can reach `stepTick`, whose argument list is unchanged.
  */
 export function advance(
   driver: Driver,
@@ -117,13 +144,17 @@ export function advance(
   now: number,
   ticksPerRealSecond: number | null,
   commandsAt: (tick: number) => readonly Command[],
+  observe?: (before: World, after: World) => void,
 ): number {
   const dtMs = driver.last === null ? 0 : now - driver.last;
   driver.last = now;
   const earned = ticksEarned(dtMs, ticksPerRealSecond, driver.carry);
   driver.carry = earned.carry;
   for (let i = 0; i < earned.ticks; i += 1) {
-    driver.world = stepTick(driver.world, content, commandsAt(driver.world.tick), driver.cache);
+    const before = driver.world;
+    const after = stepTick(before, content, commandsAt(before.tick), driver.cache);
+    driver.world = after;
+    observe?.(before, after);
   }
   return earned.ticks;
 }

@@ -90,19 +90,28 @@
 // a player and leaves no hidden dial for a balance pass to discover later.
 //
 // THE ALTERNATIVE WAS TRIED ON PAPER AND REJECTED, AND IT IS THE MORE TEMPTING ONE.
-// Weighting each need by its own `satisfyTicks` (480/150/150/180 — lodging exactly half,
-// because WATCH #1 found the three engagement needs sum to `night_rest.satisfyTicks`) is
-// elegant and it FAILS THE PROPERTY THIS GOAL EXISTS FOR: with those weights **all three
-// engagement flips leave the top band intact** — 0.844, 0.844 and 0.813 of one whole
-// against a 0.800 band floor — so a guest could miss any single amenity need and still
-// review at the top. That is the human's "three-quarters of the need vector contributes
-// nothing" finding wearing a different hat. Measured by `balance-critic` at §5.6.
+// **Stated in the countdown era's terms, because the field it weighted by is deleted and its
+// successor is a RATE rather than a total.** Weighting each need by its own `satisfyTicks`
+// (480/150/150/180 — lodging exactly half, because WATCH #1 found the three engagement needs
+// summed to `night_rest.satisfyTicks`) was elegant and it FAILED THE PROPERTY THIS GOAL EXISTS
+// FOR: with those weights **all three engagement flips left the top band intact** — 0.844, 0.844
+// and 0.813 of one whole against a 0.800 band floor — so a guest could miss any single amenity
+// need and still review at the top. That is the human's "three-quarters of the need vector
+// contributes nothing" finding wearing a different hat. Measured by `balance-critic` at §5.6.
+//
+// THE ARGUMENT SURVIVES THE MODEL AND THE ARITHMETIC DOES NOT, WHICH IS WHY IT IS KEPT AS
+// HISTORY RATHER THAN RESTATED. A weighting by `refillPerTick` or by `capacityTicks` is the
+// obvious modern spelling of the same temptation; nobody has measured whether it has the same
+// defect, and the four numbers above CANNOT be re-derived because the table they came from is
+// gone. Anyone reaching for a weighted score owes a fresh measurement, not this one.
 //
 // WAITING IS NOT RECOVERABLE FROM ANYTHING THIS BUILD RECORDS, AND THAT IS WHY THERE IS NO
-// WAIT TERM. Patience REGENERATES while a need is served (`advanceNeed`'s cap branch),
-// capped at `patienceTicks`, so a guest that got its room ends with its patience fully
-// restored whatever it waited and a guest that gave up ends at exactly zero: FINAL NEED
-// STATE CARRIES NO WAIT INFORMATION AT ALL. G-019 recovered the lodging wait from the
+// WAIT TERM. A stock REFILLS while it is served and is clamped at full (`advanceNeed`), so a
+// guest that got its room converges on the same deficit whatever it waited, and a guest that
+// gave up sits at whatever the clamp left it: FINAL NEED STATE CARRIES NO WAIT INFORMATION AT
+// ALL. (It read "patience REGENERATES … capped at `patienceTicks`" until θ-a sweep 2 — the
+// countdown model's version of the same argument, and it reached the same conclusion, which is
+// exactly why nobody noticed the premise had been deleted.) G-019 recovered the lodging wait from the
 // CLOCK instead — see the block above for why G-027a's checkout terminator makes that
 // arithmetic a constant. A per-need `waitedTicks` field is still refused rather than added:
 // its v9 -> v10 default could not be argued from the era (a v9 guest waited and nothing
@@ -131,7 +140,7 @@
 
 import { firstGuestRules, ONE_WHOLE_BASIS_POINTS } from './content.js';
 import type { BoundContent } from './content.js';
-import { isNeedMet } from './needs.js';
+import { isNeedSatisfiedIn } from './needs.js';
 import type { NeedState } from './needs.js';
 
 /**
@@ -177,8 +186,10 @@ export function reviewScaleOf(bound: BoundContent): ReviewScale | undefined {
  * `(departureTick - arrivedTick) - satisfyTicks` over `patienceTicks`, saturating. The
  * subtraction was exact under G-019's terminator, where a stay ended `satisfyTicks` after
  * the guest got a room. Under a CHECKOUT terminator the same expression evaluates to
- * `stayDurationTicks - satisfyTicks` for every guest that checks out — 960 on the shipped
- * table, for the guest that walked straight in and for the guest that queued 179 ticks
+ * `stayDurationTicks - satisfyTicks` for every guest that checks out — 960 on the table AS IT
+ * STOOD AT G-027a (1,440 less a `satisfyTicks` of 480; ADR-0017 §1 has since deleted the second
+ * term, so the subtraction cannot be redone against the shipped content and the number is frozen
+ * history), for the guest that walked straight in and for the guest that queued 179 ticks
  * alike — so it stopped measuring anything and started reading as though it did.
  *
  * Deleted rather than left as a dead export, because an unread export whose name still
@@ -205,9 +216,9 @@ export function reviewScaleOf(bound: BoundContent): ReviewScale | undefined {
  * it without `index.ts` re-exporting it to everybody else. Its one job is to let a test name
  * the two-step intermediate in order to show that the score is NOT it.
  */
-export function experienceBasisPoints(needs: readonly NeedState[]): number {
+export function experienceBasisPoints(content: BoundContent, needs: readonly NeedState[]): number {
   if (needs.length === 0) return 0;
-  return Math.floor(qualitySum(needs) / needs.length);
+  return Math.floor(qualitySum(content, needs) / needs.length);
 }
 
 /**
@@ -217,15 +228,18 @@ export function experienceBasisPoints(needs: readonly NeedState[]): number {
  * from v5 carrying one need is reviewed on the one need it has rather than being marked
  * down for three it never formed.
  *
- * IT NEEDS NO CONTENT SINCE G-027a, AND THE SIGNATURE SAYS SO RATHER THAN IGNORING AN
- * ARGUMENT. Every met need now contributes the same whole (see the header), so there is no
- * lodging need to single out and nothing to look up. A parameter kept "in case" would be an
- * invitation to reintroduce a term here rather than where G-026 will put one.
+ * IT TAKES CONTENT AGAIN AT G-027b, AND THAT REVERSES A G-027a DECISION FOR A STATED REASON.
+ * That goal removed the parameter on the argument that a parameter kept "in case" invites a
+ * term to be reintroduced here rather than where G-026 will put one — which was right about
+ * the term and is no longer true about the LOOKUP. "Satisfied" under a stock is "at or above
+ * this need's want line", and the line is a fraction of the need's own capacity: it cannot be
+ * read off the need alone at any price. No term has come back; the predicate simply stopped
+ * being content-free, and the same argument still forbids adding a weight here.
  */
-function qualitySum(needs: readonly NeedState[]): number {
+function qualitySum(content: BoundContent, needs: readonly NeedState[]): number {
   let sum = 0;
   for (const need of needs) {
-    if (isNeedMet(need)) sum += ONE_WHOLE_BASIS_POINTS;
+    if (isNeedSatisfiedIn(content, need)) sum += ONE_WHOLE_BASIS_POINTS;
   }
   return sum;
 }
@@ -307,7 +321,7 @@ export function reviewOf(
   // guest outright, so this is a postcondition rather than a case — and it is here because
   // the alternative is a division by zero that would reach the tally as NaN.
   if (needs.length === 0) return undefined;
-  const sum = qualitySum(needs);
+  const sum = qualitySum(bound, needs);
   // THE ONE DIVISION. See the header for the counter-example that makes this a correctness
   // property rather than a tidiness one.
   const band = Math.floor((sum * scale.bands) / (needs.length * ONE_WHOLE_BASIS_POINTS));

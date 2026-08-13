@@ -42,8 +42,10 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks: 10,
-  patienceTicks: 100,
+  // G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 100 is
+  // carried; a refill is a whole tick, so 100/10 is 10 exactly.
+  capacityTicks: 100,
+  refillPerTick: 10,
 });
 
 /**
@@ -55,9 +57,12 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
 const withExtras = (extras: Partial<SimContent>): SimContent => ({
   roomTypes: [roomType('bedroom', ['rest'], [])],
   needTypes: [need('rest', true)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it — a guest holding a room has no other way to leave. G-027b adds the other way
+  // out. NO WANT LINE IS DECLARED, deliberately: `assertLodgingBecomesWanted` only fires where
+  // one is, and every case in this file is about a DIFFERENT refusal — a want line here would
+  // put a second reason to throw in front of the reason under test.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30, toleranceTicks: 100 }],
   itemTypes: [],
   ...extras,
 });
@@ -154,7 +159,7 @@ describe('an item may not provide the LODGING need (G-013)', () => {
     // does because `bindContent` settles roles before it asks.
     const historical: SimContent = {
       roomTypes: [{ id: 'bedroom', name: 'bedroom', capacity: 2, nightlyRatePence: 8_500, provides: ['aRest'], requires: ['pod'] }],
-      needTypes: [{ id: 'aRest', name: 'aRest', satisfyTicks: 10, patienceTicks: 100 }],
+      needTypes: [{ id: 'aRest', name: 'aRest', capacityTicks: 100, refillPerTick: 10 }],
       itemTypes: [itemType('pod', ['aRest'])],
     };
     expect(() => bindContent(historical)).toThrow(/lodging need/i);
@@ -212,7 +217,7 @@ describe('an item’s provides is validated like a room type’s (G-013)', () =>
       needTypes: [need('rest', true)],
       // G-027a: content declaring a lodging need must say how long a stay lasts, or
       // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10, toleranceTicks: 100 }],
       itemTypes: [{ id: 'armChair', name: 'armChair' }],
     });
     const empty = bindContent({
@@ -220,7 +225,7 @@ describe('an item’s provides is validated like a room type’s (G-013)', () =>
       needTypes: [need('rest', true)],
       // G-027a: content declaring a lodging need must say how long a stay lasts, or
       // `bindContent` refuses it — a guest holding a room has no other way to leave.
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10 }],
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 10, toleranceTicks: 100 }],
       itemTypes: [itemType('armChair', [])],
     });
     expect(absent.fingerprint).not.toBe(empty.fingerprint);
@@ -232,8 +237,9 @@ describe('the lookups agree about what a thing offers (G-013)', () => {
   const content = bindContent({
     roomTypes: [roomType('bedroom', ['rest'], ['bed']), roomType('gamesRoom', ['fun'], ['vendingMachine'])],
     needTypes: [need('rest', true), need('fun', false), need('food', false)],
-    // G-027a: max(10 lodging, 10 + 10 engagement) = 20, and this clears it.
-    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
+    // G-027a/G-027b: a stay ends by checkout or by the guest giving up, and content declaring a
+    // lodging need must say how long each takes.
+    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30, toleranceTicks: 100 }],
     itemTypes: [itemType('bed', []), itemType('vendingMachine', ['food'])],
   });
 

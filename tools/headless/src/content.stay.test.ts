@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   bindContent,
+  idleShareBasisPoints,
   isSettlementTick,
   lodgingNeedOf,
   needTypesInOrder,
@@ -76,20 +77,30 @@ describe('the shipped stay duration', () => {
     }
   });
 
-  it('leaves 960 ticks of slack over what a guest has to finish', () => {
-    // THE FLOOR, computed off the shipped need table rather than restated. The lodging need
-    // is served whenever the guest holds a room and the engagement needs one at a time, so
-    // the two are parallel tracks and the floor is the larger.
+  it('leaves the shipped table a quarter of a guest time idle, computed off the table itself', () => {
+    // THE FLOOR THIS ASSERTION USED TO READ IS GONE (G-027b). It was a TICK floor —
+    // `max(lodging satisfyTicks, sum of engagement satisfyTicks)` — and both fields it summed
+    // are deleted by the stock model. What refuses an over-demanding table now is a SHARE: a
+    // need held in steady state is served for `1/(1 + refillPerTick)` of the time, and the
+    // lodging need costs a further slice of the away time the engagement needs generate.
+    //
+    // The complement of that demand is the IDLE SHARE, and it is the same fold — one
+    // derivation, two readers, so the number a gate refuses on and the number a criterion is
+    // written against can never describe different hotels. At the shipped rates the table
+    // demands 7,500 basis points and leaves 2,500.
     const lodging = lodgingNeedOf(content);
     expect(lodging).toBeDefined();
-    let engagement = 0;
+    expect(lodging?.capacityTicks).toBe(600);
+    expect(lodging?.refillPerTick).toBe(1);
     for (const needType of needTypesInOrder(content)) {
-      if (needType.id !== lodging?.id) engagement += needType.satisfyTicks;
+      if (needType.id === lodging?.id) continue;
+      expect(needType.capacityTicks).toBe(1_400);
+      expect(needType.refillPerTick).toBe(7);
     }
-    expect(engagement).toBe(480);
-    expect(lodging?.satisfyTicks).toBe(480);
-    const floor = Math.max(engagement, lodging?.satisfyTicks ?? 0);
-    expect((stay ?? 0) - floor).toBe(960);
+    expect(idleShareBasisPoints(content)).toBe(2_500);
+    // And the stay is still long enough for the lodging need to become wanted twice, which is
+    // the refusal that replaced the floor. `bindContent` accepted this content, so it is.
+    expect(stay).toBe(1_440);
   });
 });
 
@@ -105,20 +116,20 @@ const roomType = (id: string, provides: readonly string[]) => ({
   nightlyRatePence: 8_500,
   provides,
 });
-const need = (id: string, role: 'lodging' | 'engagement', satisfyTicks: number) => ({
+const need = (id: string, role: 'lodging' | 'engagement', refillPerTick: number) => ({
   id,
   name: id,
   role,
-  satisfyTicks,
-  patienceTicks: 100,
+  capacityTicks: 100,
+  refillPerTick,
 });
 const withRules = (stay: number | undefined): SimContent => ({
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-  needTypes: [need('rest', 'lodging', 60), need('food', 'engagement', 50)],
+  needTypes: [need('rest', 'lodging', 2), need('food', 'engagement', 3)],
   guestRules:
     stay === undefined
-      ? [{ id: 'houseRules', name: 'House Rules' }]
-      : [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: stay }],
+      ? [{ id: 'houseRules', name: 'House Rules', toleranceTicks: 100 }]
+      : [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: stay, toleranceTicks: 100 }],
 });
 
 describe('bindContent refuses a hotel whose guests could never leave', () => {
@@ -143,21 +154,34 @@ describe('bindContent refuses a hotel whose guests could never leave', () => {
     expect(() => bindContent({ roomTypes: [roomType('bedroom', [])] })).not.toThrow();
   });
 
-  it('refuses a stay shorter than what a guest has to finish, and names both tracks', () => {
-    // floor = max(lodging 60, engagement 50) = 60.
-    expect(() => bindContent(withRules(59))).toThrow(/needs 60 tick\(s\) to finish what it forms/);
-    expect(() => bindContent(withRules(60))).not.toThrow();
+  it('refuses a need table that demands the WHOLE of a guest time — the successor to the floor', () => {
+    // THE TICK FLOOR BECAME A SHARE (G-027b). "A stay long enough to finish everything" is a
+    // sentence about a task; under a stock nothing finishes, and what can still be guaranteed
+    // unhappiness is a table whose needs together demand more time than a guest has. At refill
+    // 1 a single engagement need costs half of it and the lodging need the same again, which
+    // is the whole of it.
+    const greedy: SimContent = {
+      roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
+      needTypes: [need('rest', 'lodging', 1), need('food', 'engagement', 1)],
+      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 60, toleranceTicks: 100 }],
+    };
+    expect(() => bindContent(greedy)).toThrow(/basis points of a guest's time/);
   });
 
-  it('and the ENGAGEMENT track can be the binding one, not only the lodging track', () => {
-    // A floor that only ever read the lodging need would pass this content and ship a hotel
-    // in which nobody can finish dinner.
-    const engagementBound: SimContent = {
+  it('and refuses a stay too short for the LODGING need to become wanted twice', () => {
+    // The other half of what the floor used to cover, and the one that is specific to a stock:
+    // rest decays only in away time, so a stay that generates too little of it ships a guest
+    // that holds a room all stay with a full bar — the furniture problem ADR-0017 exists to
+    // remove. A want line is what arms this refusal, so it is declared here and nowhere else
+    // in this block.
+    const sleepy: SimContent = {
       roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
-      needTypes: [need('rest', 'lodging', 10), need('food', 'engagement', 90)],
-      guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 50 }],
+      needTypes: [need('rest', 'lodging', 2), need('food', 'engagement', 3)],
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', stayDurationTicks: 60, toleranceTicks: 100, wantAtBasisPoints: 5_000 },
+      ],
     };
-    expect(() => bindContent(engagementBound)).toThrow(/needs 90 tick\(s\)/);
+    expect(() => bindContent(sleepy)).toThrow(/it would never become wanted twice/);
   });
 
   it('refuses a zero or fractional stay at the clone boundary', () => {

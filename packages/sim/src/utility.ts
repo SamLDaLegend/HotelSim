@@ -1,24 +1,25 @@
-// Utility scoring (G-014a).
+// Utility scoring (G-014a, re-expressed for a STOCK at G-027b).
 //
 //   A guest chooses which need to pursue and which provider to use in that order, and the
 //   two decisions use different terms:
 //
-//       WHICH NEED      by PRESSURE  — the fraction of that need's own patience already
-//                                      spent, in basis points. Ties go to the lower need id.
+//       WHICH NEED      by PRESSURE  — how far down that need's own stock is, as a fraction
+//                                      of its `capacityTicks`, in basis points. Ties go to
+//                                      the lower need id.
 //       WHICH PROVIDER  by FIT       — the designer's ranking of the providers OF THAT NEED.
 //                                      Ties go to the lower entity id.
 //
 // ============================================================================
 // FIT NEVER REORDERS NEEDS, AND THAT IS THE MOST IMPORTANT LINE IN THIS FILE. IT IS ALSO
-// THE ONE THING THIS GOAL GOT WRONG AND HAD TO BE SHOWN BY WATCHING.
+// THE ONE THING G-014a GOT WRONG AND HAD TO BE SHOWN BY WATCHING.
 //
 // The first build scored `pressure * FIT_SCALE + fit` as one number across every candidate,
 // with `FIT_SCALE` chosen so that fit could never outrank a DIFFERENCE in pressure. That
 // argument is sound and it is not enough: it says nothing about EQUAL pressure, which is not
-// a corner case here but the common one — every need of a guest that has just arrived is at
-// zero, and two engagement needs with the same `patienceTicks` stay exactly tied for as long
-// as neither is served. In that case fit chose the NEED, and on the shipped table the
-// consequence was total:
+// a corner case here but the common one — every need of a guest that has just arrived sits at
+// exactly the same fraction of its capacity, and two engagement needs with identical rates
+// stay exactly tied for as long as neither is served. In that case fit chose the NEED, and on
+// the shipped table the consequence was total:
 //
 //     guest_comfort  0 met, 356 unmet   at --days 30 --seed 7 --rooms 6 --amenities 5
 //                                       where it had been 356 met, 0 unmet
@@ -26,29 +27,47 @@
 // A need that cannot be satisfied is a bug and not difficulty, and this one was invisible to
 // 1,133 passing tests and to all six gates. It was found by recording a run and reading the
 // need table before anything else — the first time WATCH has caught a defect in the goal
-// that produced it.
+// that produced it. The separation of the two decisions is why this file still has a header.
 //
-// THE CAUSE IS THE CONTENT'S AND IT WILL OUTLIVE THIS FILE. The three engagement needs sum
-// to exactly `night_rest.satisfyTicks` (WATCH #1's second finding), so the ORDER a guest
-// pursues them in decides whether it can have all three. Simulated through the shipped decay
-// rule, all six orders, in `utility.starvation.test.ts`:
+// ============================================================================
+// WHAT THE ENUMERATION IN `utility.starvation.test.ts` MEASURES NOW, AND IT SEPARATES
+// NOTHING. READ THIS BEFORE TREATING ITS SIX-OF-SIX AS A RESULT.
 //
-//     TWO of the six satisfy all three, and BOTH END IN ENTERTAINMENT.
-//     THE INVARIANT IS "ENTERTAINMENT LAST", not any single order.
+// THE OLD CLAIM, WHICH WAS THIS FILE'S SHARPEST AND IS DISSOLVED: the three engagement needs
+// summed to exactly `night_rest.satisfyTicks`, so the ORDER a guest pursued them in decided
+// whether it could have all three. Two of the six orders satisfied all three and BOTH ENDED
+// IN ENTERTAINMENT — "entertainment last" was the invariant, because a served need's patience
+// regenerated while only the waiting ones burned down, whatever went last had waited 330
+// ticks, and `guest_entertainment`'s 360 was the only patience in the table long enough to
+// survive it. The four losing orders STARVED something: a need whose patience ran out was
+// over, permanently, for that guest.
 //
-// Why that is the constraint: a served need's patience REGENERATES while it is served
-// (`advanceNeed`'s cap branch), so only the WAITING needs burn down. Whatever goes last has
-// waited 330 ticks, and `guest_entertainment`'s 360 is the only patience in the table that
-// survives that. All four orders not ending in entertainment starve something.
+// ADR-0017 DELETES THE PREMISE, NOT THE NUMBERS. `patienceTicks` and `satisfyTicks` are gone;
+// a need is a level with no terminal state, so there is nothing for an order to strand a need
+// IN. Being served refills it whenever the guest gets round to it. All six orders now satisfy
+// all three, and the shipped table makes the three engagement needs IDENTICAL (1,400 ticks of
+// capacity, refill 7), so permuting them permutes nothing — measured, not assumed: all six
+// reach the same maximum depth.
 //
-// A CORRECTION, AND THE REASON IT IS WRITTEN HERE RATHER THAN QUIETLY FIXED: this paragraph
-// first said "the ONE order", and that a lower-need-id tie-break was the only tie-break the
-// hotel survives. Both are false — settling the tie on the HIGHER need id gives
-// nourishment -> comfort -> entertainment, which also works. `ai-critic` falsified it in one
-// run. The conclusion it was written to support is untouched, because the deleted combined
-// score produced an ENTERTAINMENT-FIRST order, which is exactly the class that starves.
-// The enumeration is now a test rather than a sentence (ADR-0007: prose may describe, it may
-// not measure).
+// SO THE SUCCESSOR TEST IS WEAKER AND IS WRITTEN AS SUCH. What it still asserts is a BOUND —
+// no order drives a need to EMPTY, which is where `pressureBasisPoints` saturates at 9,999 and
+// the guest can no longer tell two wants apart. That is the property with a live consequence
+// in this file, because a saturated pressure is a pressure the scorer cannot order.
+//
+// WHY THE TEST STILL EXISTS AND WHY IT POINTS BACK HERE: deleting a check is not evidence a
+// property holds (ADR-0007's amendment). A future table that differentiates the three needs
+// — different capacities, different refills — makes the "every order costs the same" line red
+// and re-opens the question this paragraph answers. **"Entertainment last" is DISSOLVED, not
+// preserved, and no final need is privileged**; if that ever stops being true, the content
+// changed and this header is where to start.
+//
+// A CORRECTION FROM THE COUNTDOWN ERA, KEPT BECAUSE THE REASONING IS REUSABLE: the paragraph
+// above first said "the ONE order", and that a lower-need-id tie-break was the only tie-break
+// the hotel survived. Both were false — settling the tie on the HIGHER need id gave
+// nourishment -> comfort -> entertainment, which also worked, and `ai-critic` falsified it in
+// one run. That is why the enumeration became a test rather than a sentence (ADR-0007: prose
+// may describe, it may not measure), and it is the reason there was an executable thing to
+// re-express when the model changed underneath it rather than a paragraph to rewrite.
 // ============================================================================
 //
 // PRESSURE IS QUANTISED AND THAT IS A REAL CHANGE, NAMED RATHER THAN DISCOVERED.
@@ -57,15 +76,23 @@
 // needs the exact form separates can land in one basis point and tie. Whether that ever
 // happens is a property of the CONTENT rather than of this code —
 //
-//     lcm(patienceA, patienceB) < 10000  is SUFFICIENT for the order to be preserved
+//     lcm(capacityA, capacityB) < 10000  is SUFFICIENT for the order to be preserved
 //
 // because two distinct fractions with those denominators differ by at least 1/lcm, which is
 // more than one basis point exactly when lcm is under 10,000, and two numbers more than one
-// apart cannot share a floor. It is sufficient and NOT necessary. The shipped table is
-// 300 / 360 / 300 (worst lcm 1,800), so the two orders agree everywhere — asserted
-// exhaustively in `utility.test.ts`, with a counter-example table beside it so the claim
-// stays a measurement and not a law. A tie the exact form would have separated falls through
-// to the lower need id, which is the rule the exact form used for its own ties.
+// apart cannot share a floor. It is sufficient and NOT necessary.
+//
+// THE DENOMINATOR IS NOW `capacityTicks`, AND THE SHIPPED TABLE STILL CLEARS THE CONDITION —
+// but it is a different table and the old reading of this paragraph (300 / 360 / 300, worst
+// lcm 1,800) describes fields that no longer exist. It is 600 / 1,400 / 1,400 / 1,400: the
+// engagement pairs have an lcm of 1,400 and the lodging pairs 4,200, both well under 10,000,
+// so the exact and quantised orders agree everywhere. THAT IS EXECUTED IN TWO PLACES RATHER
+// THAN ASSERTED HERE, because the shipped table is content and this package never sees it:
+// `utility.test.ts` drives the arithmetic exhaustively over a fixed pair of denominators, with
+// a counter-example table beside it so the claim stays a measurement and not a law, and
+// `stock.content.test.ts` in tools/headless checks the SHIPPED capacities against the bound. A
+// tie the exact form would have separated falls through to the lower need id, which is the
+// rule the exact form used for its own ties.
 //
 // WHY A NUMBER AND NOT A COMPARATOR, given that the two decisions are now separate: G-014b
 // needs "beats it by a MARGIN", and a comparator cannot express one. `a beats b` and `a
@@ -88,51 +115,80 @@ import type { NeedState } from './needs.js';
 export { MAX_FIT_BASIS_POINTS } from './content.js';
 
 /**
- * How hard a need presses, as the fraction of its OWN patience already spent, in basis
- * points: 0 when nothing has been waited for, 10,000 when its patience is gone.
+ * How hard a need presses, as the fraction of its OWN STOCK already gone, in basis points: 0
+ * when the need is full, 9,999 when it is empty (G-027b).
+ *
+ * THE DENOMINATOR IS `capacityTicks` AND THE NUMERATOR IS THE DEFICIT — read the body, not the
+ * word "patience", which is what this docstring said until round 1 and what the deleted field
+ * was called. The two are not a rename: `patienceTicks` was a countdown to a FAILURE and this
+ * capacity is the size of a level that refills. The picture the number paints is the same and
+ * the quantity behind it is new.
  *
  * THE FRACTION, NOT THE RAW COUNT, and that is inherited from `compareNeedPriority` rather
- * than invented here: raw urgency would rank a need by how long its fuse is instead of by
- * how far down it has burned, so the need with the most patience would always be served
- * first, which is precisely backwards.
+ * than invented here: a raw deficit would rank a need by how big its tank is instead of by how
+ * far down it has drawn, so the need with the most capacity would always be served first,
+ * which is precisely backwards.
  *
  * Takes the need TYPE the caller has already resolved — the `advanceNeed` contract. The
  * guest loop resolves it positionally where it can, and a second binary search per need per
  * guest per tick is exactly the cost G-016 spent a goal removing.
  *
- * A need type with no patience cannot express a fraction of it, so it scores 0: it is a
- * need nothing can be urgent about, and `bindContent` refuses a patience below 1 anyway.
+ * A need type with no capacity cannot express a fraction of it, so it scores 0: it is a need
+ * nothing can be urgent about, and `bindContent` refuses a capacity below 1 anyway.
  */
 export function pressureBasisPoints(needType: NeedTypeData, need: NeedState): number {
-  const patience = needType.patienceTicks;
-  if (!(patience > 0)) return 0;
-  const urgency = patience - need.patienceRemaining;
-  if (urgency <= 0) return 0;
-  if (urgency >= patience) return ONE_WHOLE_BASIS_POINTS;
-  // Exact in a double: urgency and patience are far inside 2^53 for any sane content, so
+  const capacity = needType.capacityTicks;
+  if (!(capacity > 0)) return 0;
+  const deficit = need.deficit;
+  if (deficit <= 0) return 0;
+  // ============================================================================
+  // THE CLAMP, AND IT IS A CLAMP RATHER THAN A CONSEQUENCE (G-027b). Under the countdown model
+  // this branch could not be reached by a need the guest loop would score: `isNeedPending` was
+  // DEFINED as `patienceRemaining > 0`, so an empty need dropped out of scoring altogether and
+  // 9,999 fell out of the arithmetic. A stock has no such exit — nothing is terminal, an empty
+  // need is still scored — so the ceiling has to be imposed here.
+  //
+  // WHY IT IS IMPOSED AT ALL, AND IT IS NOT TIDINESS. `MAX_PENDING_PRESSURE_BASIS_POINTS` is
+  // what makes a margin of one whole UNREACHABLE, which is what makes "content that predates
+  // G-014b" and "content whose margin is 10,000" the same simulation. Without the clamp a
+  // saturating margin becomes reachable, a guest under the frozen Era-A document starts
+  // switching, and `report.ts`'s executable law — abandonments must be zero at a saturating
+  // margin — goes FALSE against an artefact nobody may edit. One `min` keeps all of that true.
+  //
+  // AND ONE BASIS POINT OF IT IS LOAD-BEARING ELSEWHERE: `wantAtBasisPoints` is derived as
+  // `MAX_PENDING - abandonMargin`, so this constant staying 9,999 is what keeps the shipped
+  // want line clearing its own bound. If it ever became 10,000 that derivation moves by one.
+  // ============================================================================
+  if (deficit >= capacity) return MAX_PENDING_PRESSURE_BASIS_POINTS;
+  // Exact in a double: deficit and capacity are far inside 2^53 for any sane content, so
   // the product is exact and the floor is a decision about a remainder, never about drift.
-  return Math.floor((urgency * ONE_WHOLE_BASIS_POINTS) / patience);
+  const raw = Math.floor((deficit * ONE_WHOLE_BASIS_POINTS) / capacity);
+  return raw > MAX_PENDING_PRESSURE_BASIS_POINTS ? MAX_PENDING_PRESSURE_BASIS_POINTS : raw;
 }
 
 /**
  * THE MOST PRESSURE A **PENDING** NEED CAN EVER SHOW, and the reason a margin of
  * `ONE_WHOLE_BASIS_POINTS` is total commitment rather than merely a large number (G-014b).
  *
- * THE PROOF IS A CHAIN OF THREE STEPS AND EVERY LINK IS A DEFINITION IN THIS REPO, so it is
- * pinned AT the definition rather than sampled by a grid of constructed pairs:
+ * THE PROOF IS NOW ONE STEP AND IT IS A CLAMP, NOT A CONSEQUENCE — REWRITTEN AT G-027b, AND THE
+ * OLD PROOF IS RECORDED BECAUSE ITS FIRST PREMISE NO LONGER EXISTS.
  *
- *   1. `isNeedPending` is DEFINED as `progressRemaining > 0 && patienceRemaining > 0`
- *      (`needs.ts`). So a pending need has `patienceRemaining >= 1`.
- *   2. `pressureBasisPoints` computes `urgency = patience - patienceRemaining`, so a pending
- *      need has `urgency <= patience - 1 < patience`, and the `urgency >= patience`
- *      saturating branch above is STRUCTURALLY UNREACHABLE for it.
- *   3. The remaining branch is `floor(urgency x 10,000 / patience)`, which at the largest
- *      pending urgency is `10,000 - ceil(10,000 / patience) <= 10,000 - 1`.
+ *   NOW    `pressureBasisPoints` returns `min(floor(deficit x 10,000 / capacity), this)`, so
+ *          nothing anywhere can produce a larger pressure. One line, at the one site that
+ *          computes pressure, and `utility.stock.pressure.test.ts` drives an EMPTY need — the
+ *          state the old proof made unreachable — straight at it.
  *
- * The guest loop only ever scores PENDING needs (`reserve` skips the rest), so 9,999 is the
- * ceiling on every number the margin is ever compared against. A challenger must EXCEED the
- * incumbent by the margin, and the incumbent's pressure is at least 0, so at a margin of
- * 10,000 the comparison can never be satisfied.
+ *   WAS    a three-step consequence of `isNeedPending` being DEFINED as
+ *          `progressRemaining > 0 && patienceRemaining > 0`, which gave a pending need
+ *          `patienceRemaining >= 1`, hence `urgency < patience`, hence a floor at or below
+ *          9,999. **Every link of that chain is gone**: there is no patience, and no need drops
+ *          out of scoring for being empty, because nothing is terminal. The value is unchanged
+ *          and its warrant is completely different, which is exactly the shape that keeps a
+ *          test passing while its meaning changes — so the warrant is stated here rather than
+ *          inherited.
+ *
+ * A challenger must EXCEED the incumbent by the margin, and the incumbent's pressure is at
+ * least 0, so at a margin of 10,000 the comparison can never be satisfied.
  *
  * WHY THAT MATTERS BEYOND TIDINESS: it is what makes "content that predates the margin" and
  * "content whose margin is 10,000" the same simulation, which is what lets G-014b's Era-A

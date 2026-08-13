@@ -37,12 +37,17 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   requires: [],
 });
 
-const need = (id: string, lodging: boolean, satisfyTicks = 100, patienceTicks = 200): NeedTypeData => ({
+/**
+ * G-027b: `capacityTicks` is time-to-empty, which is what the deleted `patienceTicks` named, so
+ * it is carried; `refillPerTick` replaces `satisfyTicks` and nothing in this file reads it —
+ * every case here is about the review SCALE, and the need table only has to bind.
+ */
+const need = (id: string, lodging: boolean, refillPerTick = 4, capacityTicks = 200): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks,
-  patienceTicks,
+  capacityTicks,
+  refillPerTick,
 });
 
 /** Content with `needs` need types and a review scale of `min..max`, unbound. */
@@ -50,13 +55,17 @@ function raw(
   needs: number,
   min?: number,
   max?: number,
-  satisfyTicks = 100,
-  patienceTicks = 200,
+  // THE REFILL SCALES WITH THE NEED COUNT, and it has to: each engagement need costs
+  // `1/(1 + refillPerTick)` of a guest's time and `assertNeedDemandIsServiceable` refuses a
+  // table that demands all of it, so a fixed refill would bind at some need count — and the
+  // arms below range from one need to ten.
+  refillPerTick = 2 * Math.max(needs, 2),
+  capacityTicks = 200,
 ): SimContent {
   const needTypes: NeedTypeData[] = [];
   const rooms: RoomTypeData[] = [];
   for (let i = 0; i < needs; i += 1) {
-    needTypes.push(need(`n${i}`, i === 0, satisfyTicks, patienceTicks));
+    needTypes.push(need(`n${i}`, i === 0, refillPerTick, capacityTicks));
     rooms.push(roomType(`r${i}`, [`n${i}`]));
   }
   return {
@@ -68,11 +77,13 @@ function raw(
         name: 'rules',
         ...(min === undefined ? {} : { reviewScoreMin: min }),
         ...(max === undefined ? {} : { reviewScoreMax: max }),
-        // G-027a: content declaring a lodging need must say how long a stay lasts. The value
-        // is the floor `bindContent` computes — the lodging need and the engagement needs run
-        // in parallel — because nothing here ticks a world; it is only what lets the content
-        // bind, and it must never be the thing a scale assertion is really about.
-        stayDurationTicks: Math.max(satisfyTicks, (needs - 1) * satisfyTicks, 1),
+        // G-027a/G-027b: content declaring a lodging need must say how long a stay lasts and
+        // how long a guest waits before giving up. Nothing here ticks a world, so both are only
+        // what lets the content bind and neither may be the thing a scale assertion is really
+        // about. NO WANT LINE, for the reason `review.test.ts` states: half these arms are
+        // single-need tables, which a want line makes unbindable.
+        stayDurationTicks: 1_000,
+        toleranceTicks: capacityTicks,
       },
     ],
   };
@@ -107,8 +118,11 @@ describe('the scale must have MORE scores than the content has needs', () => {
     const fourBands = bindContent(raw(3, 1, 4));
     expect(reviewScaleOf(fourBands)?.bands).toBe(4);
     const fourNeeds = formNeedVector(bindContent(raw(4, 1, 5)));
+    // G-027b: FULL is `deficit === 0` and the one that is missing is EMPTY, so both ends are
+    // named rather than one — `formNeedVector` under a table with no want line already builds
+    // every need full.
     const threeOfFour = fourNeeds.map((state, index) =>
-      index === 3 ? state : { ...state, progressRemaining: 0, metBy: 'room' as const },
+      index === 3 ? { ...state, deficit: 200, metBy: null } : { ...state, deficit: 0, metBy: 'room' as const },
     );
     // bands === needs: three of four is 7,500 of one whole against a top band beginning at
     // 7,500, so the guest that missed something gives FULL MARKS.
@@ -171,7 +185,7 @@ describe('the scale must have MORE scores than the content has needs', () => {
       const scores = new Set<number>();
       for (let metCount = 0; metCount <= needs.length; metCount += 1) {
         const vector = needs.map((need, i) =>
-          i < metCount ? { ...need, progressRemaining: 0, metBy: 'room' as const } : need,
+          i < metCount ? { ...need, deficit: 0, metBy: 'room' as const } : { ...need, deficit: 200, metBy: null },
         );
         const score = reviewOf(content, vector, false);
         if (score !== undefined) scores.add(score);
@@ -185,14 +199,14 @@ describe('the scale must have MORE scores than the content has needs', () => {
     expect(reachableScores(arm)).toBe(2);
 
     // AND THE SHIPPED SHAPE at its own ceiling: four needs, so five reachable scores.
-    const shipped = bindContent(raw(4, 0, 4 * ONE_WHOLE_BASIS_POINTS, 480, 180));
+    const shipped = bindContent(raw(4, 0, 4 * ONE_WHOLE_BASIS_POINTS));
     expect(reachableScores(shipped)).toBe(5);
     expect(reachableScores(shipped)).toBe((shipped.content.needTypes ?? []).length + 1);
 
     // THE ARM THAT USED TO BE TIGHT IS NO LONGER TIGHT ANYWHERE, and that is the point: a
     // lodging need whose patience reaches ONE_WHOLE used to make the bound exact, because the
     // wait share could take every value. Nothing can now.
-    const wasTight = bindContent(raw(1, 0, ONE_WHOLE_BASIS_POINTS, 100, ONE_WHOLE_BASIS_POINTS));
+    const wasTight = bindContent(raw(1, 0, ONE_WHOLE_BASIS_POINTS, 4, ONE_WHOLE_BASIS_POINTS));
     expect(reachableScores(wasTight)).toBe(2);
     expect(reachableScores(wasTight)).toBeLessThan(ONE_WHOLE_BASIS_POINTS + 1);
   });
@@ -239,13 +253,21 @@ describe('the scale must have MORE scores than the content has needs', () => {
     const withBands = bindContent({
       ...raw(4, 1, 5),
       guestRules: [
-        { id: 'rules', name: 'rules', reviewScoreMin: 1, reviewScoreMax: 5, stayDurationTicks: 300, bands: 8 } as never,
+        {
+          id: 'rules',
+          name: 'rules',
+          reviewScoreMin: 1,
+          reviewScoreMax: 5,
+          stayDurationTicks: 300,
+          toleranceTicks: 200,
+          bands: 8,
+        } as never,
       ],
     });
     expect(reviewScaleOf(withBands)).toEqual({ min: 1, max: 5, bands: 5 });
     const clean = bindContent(raw(4, 1, 5));
-    const all = formNeedVector(clean).map((state) => ({ ...state, progressRemaining: 0, metBy: 'room' as const }));
-    const three = all.map((state, index) => (index === 3 ? { ...state, progressRemaining: 5, metBy: null } : state));
+    const all = formNeedVector(clean).map((state) => ({ ...state, deficit: 0, metBy: 'room' as const }));
+    const three = all.map((state, index) => (index === 3 ? { ...state, deficit: 200, metBy: null } : state));
     expect(reviewOf(withBands, all, false)).toBe(reviewOf(clean, all, false));
     expect(reviewOf(withBands, three, false)).toBe(reviewOf(clean, three, false));
     // And under the document it named, the guest that missed a need still does NOT reach 5.
@@ -257,9 +279,9 @@ describe('half a scale is not a historical statement', () => {
   it('binds content that declares NEITHER bound — the pre-G-019 era', () => {
     const old = bindContent({
       ...raw(4),
-      // No scale, and a stay: "content from before reviews existed" in the only shape that
-      // still binds under G-027a's refusal.
-      guestRules: [{ id: 'rules', name: 'rules', stayDurationTicks: 300 }],
+      // No scale, a stay and a tolerance: "content from before reviews existed" in the only
+      // shape that still binds under G-027a's and G-027b's refusals.
+      guestRules: [{ id: 'rules', name: 'rules', stayDurationTicks: 300, toleranceTicks: 200 }],
     });
     expect(reviewScaleOf(old)).toBeUndefined();
   });

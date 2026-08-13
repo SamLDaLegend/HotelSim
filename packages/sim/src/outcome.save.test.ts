@@ -163,14 +163,37 @@ const V7_CONTENT: SimContent = Object.freeze({
       nightlyRatePence: 8_500,
       provides: Object.freeze(['rest']),
     }),
+    Object.freeze({
+      id: 'fixtureLounge',
+      name: 'Fixture Lounge',
+      capacity: 8,
+      nightlyRatePence: 0,
+      provides: Object.freeze(['snack']),
+    }),
   ]),
-  needTypes: Object.freeze([Object.freeze({ id: 'rest', name: 'Rest', satisfyTicks: 30, patienceTicks: 40 })]),
+  // G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 40 is
+  // carried; 40/30 rounds to a refill of 1. `snack` is what makes the table legal under a stock
+  // model — see `needs.save.test.ts` — and no guest in the frozen v7 bytes carries it.
+  needTypes: Object.freeze([
+    Object.freeze({ id: 'rest', name: 'Rest', role: 'lodging', capacityTicks: 40, refillPerTick: 1 }),
+    Object.freeze({ id: 'snack', name: 'Snack', role: 'engagement', capacityTicks: 40, refillPerTick: 3 }),
+  ]),
   // G-027a. Content is what a world is run under NOW, not what it was written under: this
   // build refuses content whose guests could never leave, so loading v7 bytes today means
   // choosing a duration for them. The frozen BYTES above are untouched, and the migration is
   // forbidden to read this (ADR-0008).
   guestRules: Object.freeze([
-    Object.freeze({ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }),
+    Object.freeze({
+      id: 'houseRules',
+      name: 'House Rules',
+      stayDurationTicks: 30,
+      toleranceTicks: 40,
+      // A want line is not optional for content a guest actually ARRIVES under: a guest forms
+      // its vector at the line, and a line of 0 is a full need nothing served, which
+      // `assertNeedVector` refuses at the first commit. 2 x 500 x 40 = 40,000 fits inside the
+      // seven away-ticks a 30-tick stay generates at refill 3, which is 70,000.
+      wantAtBasisPoints: 500,
+    }),
   ]),
 });
 const v7Content = bindContent(V7_CONTENT);

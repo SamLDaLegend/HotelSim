@@ -40,10 +40,17 @@ const roomType = (id: string, cost: number): RoomTypeData => ({
 
 const content = bindContent({
   roomTypes: [roomType('priced', COST), roomType('gratis', 0)],
-  needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 20, patienceTicks: 12 }],
+  // G-027b: a need is a STOCK. `capacityTicks` is time-to-empty, which is what the deleted
+  // `patienceTicks` named, so 12 is carried across rather than chosen; `refillPerTick` is
+  // capacity over time-to-fill (12/20 < 1) and a refill is a whole tick, so it floors at 1.
+  // Nothing in this file forms a need — it refuses builds — so the numbers are a legal table
+  // for a room type to provide against and nothing more.
+  needTypes: [{ id: 'rest', name: 'rest', capacityTicks: 12, refillPerTick: 1 }],
   // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
+  // `bindContent` refuses it — a guest holding a room has no other way to leave. G-027b adds
+  // the second way out: `toleranceTicks` is the wait the countdown era fused to the lodging
+  // need's own `patienceTicks`, so it carries that same 12.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 12 }],
 });
 
 const cell = (floor: number, column: number): Cell => ({ floor, column });

@@ -167,10 +167,15 @@ export function parseEconomies(raw: unknown, sourceLabel = 'content'): readonly 
  * and a table rather than a registry for the same reason: one file is one table.
  *
  * What it does NOT check is whether the margin is large enough to be worth having. That is
- * `M >= maxSatisfyTicks x 10000 / minPatienceTicks` over the ENGAGEMENT need types — a
- * relationship across two files — so it lives where the other cross-table checks live and
+ * `M >= 10,000 x (refillPerTick + 1) / (2 x refillPerTick)` over the ENGAGEMENT need types —
+ * a relationship across two files — so it lives where the other cross-table checks live and
  * is asserted by `hysteresis.bound` in `tools/headless`, which computes both readings from
- * content rather than quoting them.
+ * content rather than quoting them. The derivation is `fixtures/margin-bound.ts`, once.
+ *
+ * (It read `M >= maxSatisfyTicks x 10000 / minPatienceTicks` until θ-a sweep 3. Both fields
+ * are ADR-0017 §1's, and the re-derivation over a stock is not a rename — THE CAPACITY
+ * CANCELS, so the bound is a property of the refill rate alone where the countdown form
+ * depended on two fields of two different needs.)
  */
 export function parseGuestRules(raw: unknown, sourceLabel = 'content'): readonly GuestRules[] {
   const result = guestRulesTableSchema.safeParse(raw);

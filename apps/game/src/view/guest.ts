@@ -4,18 +4,20 @@
 // THIS IS THE ONLY MODULE IN `apps/game` THAT READS `NeedState`, AND THAT IS DELIBERATE
 // CONTAINMENT RATHER THAN TIDINESS.
 //
-// ADR-0017 deletes `progressRemaining`'s terminal semantics and makes a need a STOCK that
-// decays and refills: "it is never done". That lands in G-027, on the sim track, running in
-// PARALLEL with this goal. It will change the shape this file reads. Keeping every field
-// access in one file makes that a single-file repair with a known address instead of a
-// scatter hunt through the renderer — and the address is written here so whoever does G-027
-// finds it without looking.
+// ADR-0017 deleted `progressRemaining`'s terminal semantics and made a need a STOCK that decays
+// and refills: "it is never done". That landed in G-027b, on the sim track, which ran in
+// PARALLEL with G-030 — and **THE PREDICTION CAME TRUE AND THE CONTAINMENT PAID**: the whole
+// repair was `stockFractionOf` (then named `patienceFractionOf`) and `isWanted` below, in
+// this file, at the address written
+// here before the change existed. Nothing else in the renderer had to be opened.
 //
-// It is a scheduled cost, not a surprise, and it is recorded in both goal blocks.
+// IT WAS A SCHEDULED COST AND IT IS NOW A SPENT ONE, kept because the containment argument is
+// the reusable part: G-028 changes what "met" means, and the same rule applies — every
+// `NeedState` field access stays in this file.
 // ---------------------------------------------------------------------------------------
 //
 // TWO ORTHOGONAL MARKS, BECAUSE THEY ANSWER TWO INDEPENDENT QUESTIONS. Inherited as a
-// FINDING from `tools/viewer/viewer.js:401-419` — the code there is disposable, this
+// FINDING from `drawGuest` in `tools/viewer/viewer.js` — the code there is disposable, this
 // reasoning is not:
 //
 //   COLOUR = what the guest is DOING: the need its provider is serving, or the lodging
@@ -30,13 +32,30 @@
 // while 89 of 120 guests left unsatisfied. That is §6.1's "UI that cannot express a state
 // the sim can reach", and the fill is what closes it.
 
-import { findNeedType, isNeedFailed, isNeedMet, lodgingNeedOf, NO_ENTITY } from '@hotelsim/sim';
+import {
+  findNeedType,
+  isNeedEmpty,
+  isNeedFull,
+  isNeedWanted,
+  lodgingNeedOf,
+  NO_ENTITY,
+  toleranceOf,
+  wantAtOf,
+} from '@hotelsim/sim';
 import type { BoundContent, Guest, NeedState } from '@hotelsim/sim';
 import type { Graphics } from 'pixi.js';
 import { INK, UNKNOWN } from './palette.js';
 import type { Palette } from './palette.js';
 
-/** At or below this share of patience remaining, a guest is visibly in trouble. */
+/**
+ * At or below this share of a stock remaining — or of a lobby fuse — a guest is visibly in
+ * trouble.
+ *
+ * It read "share of patience remaining" until θ-a sweep 2, and there is no patience: the two
+ * quantities this threshold is applied to are how full a need's STOCK is and how much of a
+ * queueing guest's `toleranceTicks` is left. Both are fractions and neither is a countdown on a
+ * need.
+ */
 const FAILING_AT = 0.25;
 
 export type GuestGeometry = {
@@ -82,34 +101,128 @@ export function needVectorWidth(needs: number, geometry: GuestGeometry): number 
 }
 
 /**
- * How much of this need's patience is left, 0..1, or `null` when the loaded content does
- * not define the need at all — which makes the question unanswerable.
+ * HOW FULL THIS NEED'S STOCK IS, 0..1 (G-027b), or `null` when the loaded content does not
+ * define the need at all — which makes the question unanswerable.
+ *
+ * THE PICTURE IS THE SAME AND THE QUANTITY BEHIND IT IS NEW. It used to be patience remaining
+ * over patience; a need is now a LEVEL, so it is `1 - deficit/capacity`. A full bar still means
+ * a contented guest and an empty one still means trouble, which is why the column drawing below
+ * needed no rework — but the field it reads is gone, and a renderer left reading it would have
+ * drawn `undefined/undefined` on every guest.
+ *
+ * IT WAS CALLED `patienceFractionOf` UNTIL θ-a SWEEP 3. Sweep 2 fenced every sentence around it
+ * and left the NAME, which is the sharpest form of the class this goal is about: prose can be
+ * put in the past tense and an identifier cannot, so the only honest repairs are a rename or a
+ * registration. Renamed, in both renderers, on the same pass.
  *
  * IT RETURNS `null` RATHER THAN 1, AND THE DIRECTION OF THE OLD BUG IS THE WHOLE POINT
- * (`viewer.js:101-108`). It used to be `patience ? remaining / patience : 1`, so a need the
- * content does not carry drew a FULL bar: a need with no patience left rendered as the
- * healthiest state on screen. Silent, and in the reassuring direction, which is the worst
- * direction for something whose output becomes evidence in `JOURNAL.md`.
+ * (`stockFractionOf` in `tools/viewer/viewer.js` says the same at length, and is cited by
+ * SYMBOL because the line range this used to name had already drifted off it). It used to
+ * be `patience ? remaining / patience : 1`, so a need the
+ * content does not carry drew a FULL bar: a need with nothing left rendered as the healthiest
+ * state on screen. Silent, and in the reassuring direction, which is the worst direction for
+ * something whose output becomes evidence in `JOURNAL.md`.
  */
-export function patienceFractionOf(content: BoundContent, need: NeedState): number | null {
-  const patience = findNeedType(content, need.needId)?.patienceTicks;
-  if (patience === undefined || patience <= 0) return null;
-  return Math.max(0, Math.min(need.patienceRemaining / patience, 1));
+export function stockFractionOf(content: BoundContent, need: NeedState): number | null {
+  const capacity = findNeedType(content, need.needId)?.capacityTicks;
+  if (capacity === undefined || capacity <= 0) return null;
+  return Math.max(0, Math.min(1 - need.deficit / capacity, 1));
+}
+
+/**
+ * Is this need one the guest is currently after? **`isNeedWanted`, called** (G-027b).
+ *
+ * IT ASKS THE SIM'S OWN PREDICATE rather than re-deriving a threshold here: a renderer that
+ * decided for itself where "wanting" starts would be holding authoritative state, which is
+ * §6.1's first render defect.
+ *
+ * ---------------------------------------------------------------------------------------
+ * IT USED TO SAY THAT AND RE-IMPLEMENT THE PREDICATE INSTEAD, DROPPING THE `beingServed` ARM
+ * — AND THE PICTURE THE HUMAN ANSWERED THE NAPS WATCH QUESTION AGAINST WAS THE BROKEN ONE.
+ *
+ * `isNeedWanted` is a SCHMITT TRIGGER: wanting starts at the want line and stops only at FULL,
+ * so a need something is already serving stays wanted all the way up. A copy that tested only
+ * `deficit >= wantLine` drops the second arm, and the state it drops is the commonest thing a
+ * housed guest does — sleeping. A guest asleep in its own bed rendered as a guest doing nothing,
+ * for the tail of every nap.
+ *
+ * TWO MEASUREMENTS OF IT, BOTH OVER `--days 4 --seed 7 --rooms 6 --amenities 2 --arrivals 60`,
+ * and they count different things — the run is deterministic (I2), so each is the population
+ * rather than a sample:
+ *
+ *   `ai-critic`, round 1, from the recording at `--record-every 10`: GUEST 1 is at home being
+ *   refilled for 749 FRAMES and 432 of them (58%) drew as idle grey, the longest unbroken
+ *   stretch being 179 consecutive ticks of a 272-tick nap.
+ *
+ *   The repair, stepped rather than recorded, over EVERY guest and every TICK: of 21,511
+ *   at-home guest-ticks, the dropped-arm predicate called 13,220 (61.5%) idle, longest single-
+ *   guest run 481 ticks; calling `isNeedWanted` with `beingServed` leaves 2,632 (12.2%), which
+ *   are the ticks the lodging need really is full and the guest really is doing nothing.
+ *
+ * `beingServed` IS A FACT THE CALLER HAS AND THIS FUNCTION CANNOT DERIVE, which is why the
+ * predicate takes it. For the lodging need it is `holds a room && not engaged` — the same
+ * derivation `stepGuests` makes for `const atHome` in `guests.ts`, and the reason a guest at a
+ * café is not also asleep in its bed (ADR-0017 §3). `activityColourOf` is the only caller and it
+ * has both facts already. (Cited by SYMBOL: both citations of it in this file carried a line
+ * number in `guests.ts` until θ-a's unpinned-claim pass, by which time the definition had moved
+ * six lines below it.)
+ * ---------------------------------------------------------------------------------------
+ */
+function isWanted(content: BoundContent, need: NeedState, beingServed: boolean): boolean {
+  return isNeedWanted(findNeedType(content, need.needId), need, wantAtOf(content), beingServed);
+}
+
+/**
+ * How much of its `toleranceTicks` a guest waiting for a room has left, 0..1 — **re-derived
+ * from the clock, because the field it used to read is gone** (G-027b). `null` for a guest that
+ * holds a room, which has no fuse.
+ *
+ * A GUEST IN THE LOBBY IS THE ONE THING ON SCREEN WITH A DEADLINE, and it is the only deadline
+ * left in the model: it leaves at `toleranceTicks` after arriving unless it gets a room. That
+ * used to be legible as the lodging need's patience bar; under a stock the lodging need's bar
+ * shows a LEVEL, which for a roomless guest barely moves — so without this the queueing guest's
+ * fuse would simply have disappeared from the picture, in the goal whose exit criterion is a
+ * watch.
+ *
+ * IT WAS COMPUTED AND NEVER DRAWN FOR ONE CRITIQUE ROUND, WHICH MADE THE PARAGRAPH ABOVE A
+ * DESCRIPTION OF A DEFECT IT DID NOT FIX. `drawLobbyFuse` is the repair; the sentence is kept
+ * because the reason the mark exists is still the reason, and because "exported, argued for, and
+ * called by nothing" is a shape worth being able to recognise.
+ */
+export function lobbyFractionOf(content: BoundContent, guest: Guest, tick: number): number | null {
+  if (guest.roomEntityId !== NO_ENTITY) return null;
+  const tolerance = toleranceOf(content);
+  if (tolerance === undefined || tolerance <= 0) return null;
+  return Math.max(0, Math.min(1 - (tick - guest.arrivedTick) / tolerance, 1));
+}
+
+/** Empty — nothing left in the stock — asked with the content the caller already holds. */
+function isNeedEmptyIn(content: BoundContent, need: NeedState): boolean {
+  const needType = findNeedType(content, need.needId);
+  return needType !== undefined && isNeedEmpty(needType, need);
 }
 
 /** What this guest is doing, as a colour. */
 function activityColourOf(content: BoundContent, palette: Palette, guest: Guest): number {
   if (guest.engagement !== null) return palette.needColour(guest.engagement.needId);
   const lodgingNeed = lodgingNeedOf(content);
-  if (guest.roomEntityId !== NO_ENTITY && lodgingNeed !== undefined) {
+  // AT HOME: holds a room and is not engaged — the engaged case returned one line above, so
+  // this IS the sim's own definition of presence (`const atHome` in `guests.ts`) and therefore
+  // of "the room is serving the lodging need this tick". That is exactly the `beingServed` fact
+  // `isNeedWanted` needs and cannot see for itself.
+  const atHome = guest.roomEntityId !== NO_ENTITY;
+  if (atHome && lodgingNeed !== undefined) {
     const lodging = guest.needs.find((need) => need.needId === lodgingNeed.id);
-    if (lodging !== undefined && !isNeedMet(lodging)) return palette.needColour(lodging.needId);
+    if (lodging !== undefined && isWanted(content, lodging, true)) return palette.needColour(lodging.needId);
   }
   return INK.guestIdle;
 }
 
 /**
- * The unmet need with the least patience left — the one the vector EMPHASISES.
+ * The wanting need with the LEAST LEFT IN IT — the one the vector EMPHASISES.
+ *
+ * (It read "the least patience left" until θ-a sweep 3's enumeration, which covered apps/.
+ * There is no patience: what is ranked is how empty a stock is.)
  *
  * ---------------------------------------------------------------------------------------
  * THIS FUNCTION SURVIVED A REVERSAL AND ITS JOB CHANGED. It is worth reading the history,
@@ -142,8 +255,8 @@ export function mostUrgentNeed(content: BoundContent, guest: Guest): NeedState |
   let worst: NeedState | null = null;
   let worstFraction = Infinity;
   for (const need of guest.needs) {
-    if (isNeedMet(need)) continue;
-    const fraction = patienceFractionOf(content, need);
+    if (isNeedFull(need)) continue;
+    const fraction = stockFractionOf(content, need);
     // An unknown need type is the most urgent thing on screen: it means the recording and
     // the content disagree, and every other reading is suspect.
     if (fraction === null) return need;
@@ -156,12 +269,17 @@ export function mostUrgentNeed(content: BoundContent, guest: Guest): NeedState |
 }
 
 /**
- * One guest, standing with its feet on `baseY`, its need vector stacked above it.
+ * One guest, standing with its feet on `baseY`, its need vector stacked above it and — if it is
+ * still waiting for a room — its lobby fuse beneath its feet.
  *
  * The vector is `guest.needs.length` segments wide — the needs THIS guest actually carries,
  * which is not necessarily every need the content defines: a guest migrated from an older
  * save carries the vector it formed under the content of its own era, and that is a true
  * statement about it rather than a gap to fill in.
+ *
+ * `tick` IS THE WORLD'S, AND IT IS HERE FOR THE FUSE ALONE. It is the only quantity in this file
+ * that is not read off the guest, because the one deadline left in the model is a clock
+ * comparison rather than a stored countdown (`lobbyFractionOf`).
  */
 export function drawGuest(
   g: Graphics,
@@ -171,14 +289,24 @@ export function drawGuest(
   x: number,
   baseY: number,
   geometry: GuestGeometry,
+  tick: number,
 ): void {
   const { bodyWidth, bodyHeight } = geometry;
   const urgent = mostUrgentNeed(content, guest);
-  // THE ONLY URGENCY QUESTION LEFT AT THIS LEVEL IS THE HALO. Patience fractions, the
-  // failing threshold and the bar heights all belong to `drawNeedVector` now — when the
-  // single bar became a full vector, the per-column reading moved with it, and reading it
-  // twice in two places is how the picture and the emphasis drift apart.
-  const failed = urgent !== null && isNeedFailed(urgent);
+  // THE ONLY URGENCY QUESTION LEFT AT THIS LEVEL IS THE HALO. `stockFractionOf`, the failing
+  // threshold and the bar heights all belong to `drawNeedVector` now — when the single bar
+  // became a full vector, the per-column reading moved with it, and reading it twice in two
+  // places is how the picture and the emphasis drift apart.
+  //
+  // IT SAID "PATIENCE FRACTIONS" UNTIL θ-a'S UNPINNED-CLAIM PASS: the present tense, naming a
+  // quantity the PREVIOUS pass had already renamed at the top of this same file, and renamed
+  // there for the stated reason that an identifier cannot be put in the past tense. The rename
+  // landed and the sentence pointing at it did not. **A rename that leaves
+  // its own references behind is exactly what a pin catches and prose does not**, so both
+  // identifiers named above are registered in `tools/headless/src/prose-citations.test.ts` and
+  // the next rename reddens instead of drifting.
+  const failed =
+    urgent !== null && isNeedEmptyIn(content, urgent);
 
   const top = baseY - bodyHeight;
   const colour = activityColourOf(content, palette, guest);
@@ -198,6 +326,7 @@ export function drawGuest(
   }
 
   drawNeedVector(g, content, palette, guest, x, top - 3, geometry, urgent);
+  drawLobbyFuse(g, content, guest, x, baseY, geometry, tick);
 
   // AND THE ALARM IS A HALO ROUND THE WHOLE FIGURE, not a three-pixel cap on its head.
   if (failed) {
@@ -206,11 +335,53 @@ export function drawGuest(
 }
 
 /**
+ * THE LOBBY FUSE: a bar UNDER THE FEET of a guest that is still waiting for a room, shrinking
+ * from full to nothing as its `toleranceTicks` run out. Nothing is drawn for a guest that holds
+ * a room, because it has no fuse.
+ *
+ * A THIRD MARK, AND IT IS DELIBERATELY NOT ONE OF THE FIRST TWO. The header's rule is that
+ * COLOUR says what the guest is doing and FILL says whether it has a bed; a fuse is a third,
+ * independent question — how long it has left to get one — and folding it into either of the
+ * other two is the chain-of-conditions defect that block records. So it is drawn OUTSIDE the
+ * body, below the feet, in the 5px the standing row leaves between a guest and the floor line.
+ * A watcher can read all three at once, and the one that is absent for most guests is absent
+ * rather than encoded as an ambiguous shade of a mark that is always there.
+ *
+ * IT IS SPATIALLY THE OPPOSITE OF THE NEED VECTOR ON PURPOSE. Needs stack ABOVE the head and
+ * this sits BELOW the feet, so "the clock on this guest" and "what this guest wants" cannot be
+ * misread for one another at a glance, however crowded the cell gets.
+ *
+ * IT TURNS ALARM AT THE SAME `FAILING_AT` THE COLUMNS USE, which is the point of sharing the
+ * threshold: a hotel where the lobby is going red is the same reading as a hotel where the bars
+ * are, and a watcher does not have to learn two scales.
+ */
+function drawLobbyFuse(
+  g: Graphics,
+  content: BoundContent,
+  guest: Guest,
+  x: number,
+  baseY: number,
+  geometry: GuestGeometry,
+  tick: number,
+): void {
+  const left = lobbyFractionOf(content, guest, tick);
+  if (left === null) return;
+  const { bodyWidth } = geometry;
+  // The track is the whole width, so a short bar reads as "most of it gone" rather than as a
+  // small mark — the same reason the need columns have a track behind them.
+  g.rect(x, baseY + 1, bodyWidth, 2).fill({ color: INK.soot, alpha: 0.85 });
+  const lit = Math.max(1, Math.round(bodyWidth * left));
+  g.rect(x, baseY + 1, lit, 2).fill(left <= FAILING_AT ? INK.alarm : INK.paper);
+}
+
+/**
  * EVERY NEED THIS GUEST CARRIES, one column each, standing on `baseY`.
  *
- * A column's HEIGHT is the patience left for that need, so a full vector is a level row of
+ * A column's HEIGHT is how full that need's STOCK is, so a full vector is a level row of
  * bars and a hotel in trouble is visibly ragged. That is the reading the human asked for
- * back: "I can only see one need at a time, whereas before I could see all needs."
+ * back: "I can only see one need at a time, whereas before I could see all needs." (It read
+ * "the patience left for that need" until θ-a sweep 2; `stockFractionOf` above has said what
+ * the quantity is since G-027b, and this paragraph had not caught up.)
  *
  * THREE THINGS ARE DIFFERENT FROM THE VERSION THAT WAS REMOVED, and all three are size or
  * ground rather than mechanism — the mechanism was never the problem, the palette was:
@@ -262,7 +433,7 @@ function drawNeedVector(
 
   guest.needs.forEach((need, i) => {
     const segX = x + i * (segmentWidth + segmentGap);
-    const fraction = patienceFractionOf(content, need);
+    const fraction = stockFractionOf(content, need);
     // A need the content cannot name fills its whole column magenta: unanswerable, and loud
     // about it. Never a full bar in a plausible colour, which is the reassuring direction.
     if (fraction === null) {
@@ -270,8 +441,8 @@ function drawNeedVector(
       return;
     }
     const tint = palette.needColour(need.needId);
-    const met = isNeedMet(need);
-    const dying = !met && (isNeedFailed(need) || fraction <= FAILING_AT);
+    const met = isNeedFull(need);
+    const dying = !met && (isNeedEmptyIn(content, need) || fraction <= FAILING_AT);
     const filled = met ? needHeight : Math.max(1, Math.round(needHeight * fraction));
     g.rect(segX, top, segmentWidth, needHeight).fill({ color: tint, alpha: 0.28 });
     g.rect(segX, baseY - filled, segmentWidth, filled).fill(dying ? INK.alarm : tint);

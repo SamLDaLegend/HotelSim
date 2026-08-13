@@ -61,16 +61,22 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks: lodging ? 40 : 6,
-  patienceTicks: 200,
+  // G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 200 is
+  // carried on both. The refills are chosen to keep the table serviceable and the lodging need
+  // reachable inside a 40-tick stay.
+  capacityTicks: 200,
+  refillPerTick: lodging ? 5 : 3,
 });
 
 const V11_CONTENT: SimContent = {
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
   needTypes: [need('food', false), need('rest', true)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 40 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it. G-027b adds the wait and the want line: 2 x 200 x 200 = 80,000 fits inside the
+  // ten away-ticks one engagement need generates in a 40-tick stay at refill 3, which is 100,000.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 40, toleranceTicks: 200, wantAtBasisPoints: 200 },
+  ],
 };
 const content = bindContent(V11_CONTENT);
 
@@ -192,9 +198,8 @@ type MigratedGuest = { readonly id: number; readonly at: { readonly floor: numbe
 const migratedGuests = (world: Record<string, unknown>): readonly MigratedGuest[] =>
   (step.migrate(world) as { guests: { list: MigratedGuest[] } }).guests.list;
 
-describe('the chain walks 1 -> ... -> 12, and every link is still observed (G-023a)', () => {
+describe('the chain walks 1 -> ... -> today, and every link is still observed (G-023a)', () => {
   it('ships one step per version, and the 10 -> 11 step is still the tenth of them', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(12);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
     expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
     expect([step.from, step.to]).toEqual([10, 11]);
@@ -210,6 +215,7 @@ describe('the chain walks 1 -> ... -> 12, and every link is still observed (G-02
       [9, 10],
       [10, 11],
       [11, 12],
+      [12, 13],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });

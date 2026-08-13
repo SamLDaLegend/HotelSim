@@ -83,22 +83,36 @@ const ONE_NEED = lodgingOnly(FULL);
 const NEEDS = (FULL.content.needTypes ?? []).length;
 
 describe('the need-vector arms differ in the axis they are named for', () => {
-  it('the full arm carries a vector and the control carries exactly one need', () => {
+  it('the full arm carries a vector and the control carries the SMALLEST vector there is', () => {
     // Without this the ratio the gate measures could be 1.0 because both arms carry the same
     // vector — a scaling test whose axis never moved.
+    //
+    // THREE NEEDS RATHER THAN ONE SINCE G-027b, AND IT IS FORCED TWICE OVER. A lodging need
+    // alone generates no away time, so it could never become wanted and `bindContent` refuses
+    // the content; and rest must become wanted TWICE inside a stay, which at the shipped rates
+    // takes the away time of two engagement needs rather than one. `lodgingOnly` searches for
+    // the smallest table that binds rather than naming a number, so this asserts the SHAPE that
+    // still makes the arm a control — strictly shorter than the full vector — and reads the
+    // count off the arm. See `lodgingOnly` for what the collapse from 4-against-1 to
+    // 4-against-3 costs the axis.
     expect(NEEDS).toBeGreaterThan(1);
-    expect((ONE_NEED.content.needTypes ?? []).length).toBe(1);
+    expect((ONE_NEED.content.needTypes ?? []).length).toBeLessThan(NEEDS);
+    expect((ONE_NEED.content.needTypes ?? []).length).toBe(3);
     // And the trimmed arm still has somewhere to meet that need, or it would be measuring a
     // hotel that serves nobody rather than a hotel with one need.
     expect(ONE_NEED.content.roomTypes.length).toBeGreaterThan(0);
   });
 
-  it('the control is reached through the lodging ROLE, so no content id appears in code', () => {
+  it('the control is reached through the ROLE, so no content id appears in code', () => {
     // ADR-0003: a snake_case string literal is a content ID and must not appear here. The
     // filter is by role, so adding a need type to `packages/content` grows the full arm by
-    // itself and leaves the control alone.
+    // itself and leaves the control at whatever the smallest bindable table is.
     const kept = ONE_NEED.content.needTypes ?? [];
-    expect(kept.map((entry) => entry.role)).toEqual(['lodging']);
+    expect(kept.filter((entry) => entry.role === 'lodging')).toHaveLength(1);
+    expect(kept.filter((entry) => entry.role === 'engagement').length).toBeGreaterThan(0);
+    expect(kept.filter((entry) => entry.role === 'engagement').length).toBeLessThan(
+      (FULL.content.needTypes ?? []).filter((entry) => entry.role === 'engagement').length,
+    );
   });
 });
 

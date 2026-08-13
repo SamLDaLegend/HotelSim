@@ -41,12 +41,18 @@ const roomType = (
   requires: readonly string[] = [],
 ): RoomTypeData => ({ id, name: id, capacity: 2, nightlyRatePence: 8_500, provides, requires });
 const itemType = (id: string, provides: readonly string[]): ItemTypeData => ({ id, name: id, provides });
+/**
+ * G-027b: `capacityTicks` is time-to-empty — what the deleted `patienceTicks` named — so 500 is
+ * carried. The refills are chosen: at 4 the three engagement needs demand 6,000 basis points of a
+ * guest's time and rest a further 1,200, which is inside the 10,000
+ * `assertNeedDemandIsServiceable` refuses at.
+ */
 const need = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks: 10,
-  patienceTicks: 500,
+  capacityTicks: 500,
+  refillPerTick: lodging ? 5 : 4,
 });
 
 /**
@@ -68,10 +74,13 @@ const content = bindContent({
     roomType('lounge', [], ['chair']),
   ],
   needTypes: [need('rest', true), need('comfort', false), need('food', false), need('fun', false)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave. The floor
-  // is max(10 lodging, 3 x 10 engagement) = 30.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 30 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it — a guest holding a room has no other way to leave. G-027b adds the wait and the
+  // want line: the line is 5 ticks of each need, and 2 x 100 x 500 = 100,000 fits inside the 18
+  // away-ticks three engagement needs generate in 30 at refill 4, which is 180,000.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 30, toleranceTicks: 500, wantAtBasisPoints: 100 },
+  ],
   itemTypes: [itemType('bed', []), itemType('chair', ['comfort']), itemType('machine', ['food'])],
 });
 

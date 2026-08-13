@@ -1,7 +1,11 @@
 // G-004 — THE GUEST LOOP.
 //
-//   A guest arrives, occupies the one room type, forms one need, has it met or not
-//   before patience runs out, pays, and leaves with a recorded outcome.
+//   A guest arrives, occupies the one room type, forms one need, has it served or not,
+//   pays, and leaves with a recorded outcome.
+//
+//   (It read "has it met or not before patience runs out" until θ-a sweep 3, in a file the
+//   same diff changed by 132 lines. ADR-0017 §1 deleted the deadline: a stay ends by
+//   CHECKOUT after `stayDurationTicks`, or because the guest gave up waiting for a room.)
 //
 // Every test here names the behaviour it pins, and each one fails on a simulation that
 // merely ticks. That is deliberate: the goal's exit criteria are "at least one guest
@@ -48,11 +52,19 @@ const RATE = 8_500;
 /**
  * A short stay and a long fuse, so a unit test can watch a guest wait for a room
  * WITHOUT it giving up first. The 30-day block at the bottom uses the shipped
- * proportions instead — patience shorter than a stay — because that is the case where
+ * proportions instead — a tolerance shorter than a stay — because that is the case where
  * both outcomes actually occur.
+ *
+ * `STAY` WAS `SATISFY` AND `TOLERANCE` WAS `PATIENCE`, and both are the same numbers. What
+ * changed at G-027b is which table states them: a stay ends on `stayDurationTicks` and a wait
+ * ends on `toleranceTicks`, where the countdown model fused both to the lodging need's own two
+ * fields. Every loop below that counted to one of them still counts to it.
  */
-const SATISFY = 10;
-const PATIENCE = 25;
+const STAY = 10;
+const TOLERANCE = 25;
+/** 500 basis points of a 25-tick capacity: a guest arrives one tick below full on each need. */
+const WANT_AT = 500;
+const WANT_LINE = 1;
 
 const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   id,
@@ -61,20 +73,39 @@ const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   nightlyRatePence: RATE,
   provides,
 });
-const needType = (id: string, satisfyTicks = SATISFY, patienceTicks = PATIENCE): NeedTypeData => ({
+/**
+ * A need as a STOCK. `capacityTicks` is time-to-empty — what the deleted `patienceTicks` named
+ * — and `refillPerTick` is that capacity over the deleted `satisfyTicks`, rounded to a whole
+ * tick, because a refill cannot be a fraction of one.
+ */
+const needType = (id: string, capacityTicks = TOLERANCE, refillPerTick = 3): NeedTypeData => ({
   id,
   name: id,
-  satisfyTicks,
-  patienceTicks,
+  capacityTicks,
+  refillPerTick,
 });
 
-/** One room type providing the one need. The M0 hotel. */
+/**
+ * One room type providing lodging, one providing an engagement need, and NOTHING BELOW EVER
+ * SPAWNS THE SECOND.
+ *
+ * THE ENGAGEMENT NEED IS STRUCTURAL (G-027b). A guest arrives AT its want line, so a want line
+ * of 0 would leave every need full with nothing recorded as having served it — refused by
+ * `assertNeedVector` at the first commit — and a declared want line makes
+ * `assertLodgingBecomesWanted` demand away-ticks, which only an engagement need generates. So
+ * one-need content is no longer expressible. With no `lounge` in any hotel here, no guest can
+ * ever engage, so every claim below is about lodging exactly as it was.
+ */
 const simContent: SimContent = {
-  roomTypes: [roomType('roomA', ['rest'])],
-  needTypes: [needType('rest')],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: SATISFY }],
+  roomTypes: [roomType('roomA', ['rest']), roomType('lounge', ['snack'])],
+  needTypes: [needType('rest'), needType('snack', TOLERANCE, 1)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it — a guest holding a room has no other way to leave. G-027b adds the other way
+  // out and the want line: 2 x 500 x 25 = 25,000 against the five away-ticks a 10-tick stay
+  // generates at refill 1, which is 50,000.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: TOLERANCE, wantAtBasisPoints: WANT_AT },
+  ],
 };
 const content = bindContent(simContent);
 
@@ -115,14 +146,19 @@ function hotel(rooms: number, seed = 1): World {
 }
 
 /**
- * The two countdowns on the one need this content defines (G-012).
+ * How far below full each need is (G-027b).
  *
- * `Guest.patienceRemaining` and `Guest.restRemaining` moved into the need vector, where
- * every need has its own pair. These read them back out, so every claim below is the
- * claim it always was.
+ * `Guest.patienceRemaining` and `Guest.restRemaining` moved into the need vector at G-012,
+ * where every need had its own pair; the pair became one DEFICIT here. A deficit counts UP
+ * where a countdown counted down, so "lost a tick of patience" and "gained a tick of deficit"
+ * are the same reading, and the claims below are the claims they always were.
+ *
+ * THE TWO ARE READ FOR DIFFERENT REASONS AND THAT IS THE MODEL'S ONE ASYMMETRY. `restOf` is
+ * the LODGING need, which decays only while the guest is AWAY from its room and is held while
+ * it is in it; `snackOf` is an engagement need, which decays in wall time like a clock.
  */
-const patienceOf = (guest: Guest): number => findNeedState(guest.needs, 'rest')?.patienceRemaining ?? -1;
-const restOf = (guest: Guest): number => findNeedState(guest.needs, 'rest')?.progressRemaining ?? -1;
+const restOf = (guest: Guest): number => findNeedState(guest.needs, 'rest')?.deficit ?? -1;
+const snackOf = (guest: Guest): number => findNeedState(guest.needs, 'snack')?.deficit ?? -1;
 
 const onlyGuest = (world: World): Guest => {
   const guests = guestsInOrder(world.guests);
@@ -138,11 +174,11 @@ describe('a guest arrives', () => {
     const guest = onlyGuest(world);
     expect(guest.id).toBe(1);
     expect(guest.arrivedTick).toBe(1);
-    // One instance of every need this content defines (G-012). It defines one, so the
-    // vector has one entry, and its two countdowns are what `Guest` used to carry flat.
-    expect(guest.needs.map((need) => need.needId)).toEqual(['rest']);
-    expect(patienceOf(guest)).toBe(PATIENCE);
-    expect(restOf(guest)).toBe(SATISFY);
+    // One instance of every need this content defines (G-012), ascending by id, and each at
+    // its WANT LINE (G-027b): a guest walks in wanting everything, just barely.
+    expect(guest.needs.map((need) => need.needId)).toEqual(['rest', 'snack']);
+    expect(restOf(guest)).toBe(WANT_LINE);
+    expect(snackOf(guest)).toBe(WANT_LINE);
     expect(guest.engagement).toBeNull();
     expect(world.guestOutcomes.arrived).toBe(1);
   });
@@ -159,9 +195,9 @@ describe('a guest arrives', () => {
     const [first, second] = guestsInOrder(world.guests);
     expect(isResting(first!)).toBe(true);
     expect(second!.roomEntityId).toBe(NO_ENTITY);
-    // Full patience: it has been here for no ticks yet. Patience is time SPENT
-    // waiting, so it starts draining on the tick after the one it walked in on.
-    expect(patienceOf(second!)).toBe(PATIENCE);
+    // Still at its want line: it has been here for no ticks yet. Rest drains in time spent
+    // AWAY from a room, so it starts draining on the tick after the one it walked in on.
+    expect(restOf(second!)).toBe(WANT_LINE);
   });
 
   it('gives every guest a distinct id, never reused after one leaves', () => {
@@ -178,9 +214,9 @@ describe('a guest arrives', () => {
 });
 
 describe('the need is met', () => {
-  it('is satisfied after exactly satisfyTicks, not one tick sooner', () => {
+  it('checks out after exactly stayDurationTicks, not one tick sooner', () => {
     let world = stepTick(hotel(1), content, [arrive]);
-    for (let i = 1; i < SATISFY; i += 1) {
+    for (let i = 1; i < STAY; i += 1) {
       world = stepTick(world, content);
       expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(0);
       expect(guestsInOrder(world.guests)).toHaveLength(1);
@@ -193,7 +229,7 @@ describe('the need is met', () => {
   it('pays exactly one night at the rate of the room it occupied, once', () => {
     // "Pays" for G-004. Pricing, proration and nightly settlement are G-005; what this
     // pins is that a met need produces revenue at all, in integer pence.
-    const world = run(hotel(1), content, SATISFY + 2, [at(1, arrive)]);
+    const world = run(hotel(1), content, STAY + 2, [at(1, arrive)]);
     expect(world.ledger).toHaveLength(1);
     expect(world.ledger[0]!.amount).toBe(RATE);
     expect(Number.isInteger(world.ledger[0]!.amount)).toBe(true);
@@ -202,7 +238,7 @@ describe('the need is met', () => {
   });
 
   it('records the outcome and leaves, so the room serves the next guest', () => {
-    const world = run(hotel(1), content, 2 * SATISFY + 4, [at(1, arrive), at(SATISFY + 2, arrive)]);
+    const world = run(hotel(1), content, 2 * STAY + 4, [at(1, arrive), at(STAY + 2, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(2);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(0);
     expect(world.ledger).toHaveLength(2);
@@ -210,12 +246,12 @@ describe('the need is met', () => {
 });
 
 describe('the need is not met', () => {
-  it('gives up after exactly patienceTicks and pays nothing', () => {
+  it('gives up after exactly toleranceTicks and pays nothing', () => {
     // The failure path must be REACHABLE. A guest loop in which nobody can ever be
     // disappointed is as broken as one in which nobody can ever be satisfied, and both
     // report a healthy "zero stuck".
     let world = stepTick(hotel(0), content, [arrive]);
-    for (let i = 1; i < PATIENCE; i += 1) {
+    for (let i = 1; i < TOLERANCE; i += 1) {
       world = stepTick(world, content);
       expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(0);
     }
@@ -280,9 +316,9 @@ describe('who gets the room', () => {
 
     // Let the resident's STAY run out; the older of the two waiting takes the room on the
     // tick it is freed. G-027a: the clock starts at ARRIVAL, so guest 1 leaves on tick
-    // `1 + SATISFY` and the run stops there — going further would watch guest 2 check out
+    // `1 + STAY` and the run stops there — going further would watch guest 2 check out
     // too, because its own clock started on tick 2.
-    const after = run(start, content, 2 + SATISFY - start.tick, []);
+    const after = run(start, content, 2 + STAY - start.tick, []);
     const survivor = guestsInOrder(after.guests).find((guest) => isResting(guest));
     expect(survivor?.id).toBe(older!.id);
   });
@@ -296,7 +332,7 @@ describe('who gets the room', () => {
     expect(isResting(queued)).toBe(false);
 
     // To the tick guest 1's stay ends, and no further — see the note above.
-    const later = run(waiting, content, 2 + SATISFY - waiting.tick, [at(waiting.tick + 1, arrive)]);
+    const later = run(waiting, content, 2 + STAY - waiting.tick, [at(waiting.tick + 1, arrive)]);
     const inRoom = guestsInOrder(later.guests).filter((guest) => isResting(guest));
     expect(inRoom).toHaveLength(1);
     expect(inRoom[0]!.id).toBe(queued.id);
@@ -325,7 +361,7 @@ describe('a guest does not change its mind', () => {
     // adds scoring across providers and inherits a guest that commits.
     let world = stepTick(hotel(1), content, [arrive]);
     const chosen = onlyGuest(world).roomEntityId;
-    for (let i = 1; i < SATISFY; i += 1) {
+    for (let i = 1; i < STAY; i += 1) {
       world = stepTick(world, content, [spawnRoom(i)]);
       expect(onlyGuest(world).roomEntityId).toBe(chosen);
     }
@@ -336,8 +372,15 @@ describe('a guest does not change its mind', () => {
     world = stepTick(world, content, [arrive]);
     world = stepTick(world, content, [arrive]);
     const resident = guestsInOrder(world.guests)[0]!;
-    // Two ticks of rest across three ticks: the arrival tick is check-in, not a stay.
-    expect(restOf(resident)).toBe(SATISFY - 2);
+    // TWO TICKS OF DECAY ACROSS THREE TICKS: the arrival tick is check-in, not a stay. Read on
+    // the ENGAGEMENT need rather than on rest, and the switch is the model rather than
+    // convenience — rest is HELD while the guest is in its own room, so a resident's lodging
+    // deficit is the one number in the vector that does NOT move with the clock. `snack` decays
+    // in wall time, so it is what still counts the ticks this test is about.
+    expect(snackOf(resident)).toBe(WANT_LINE + 2);
+    // And rest went the other way: the room served it to full on the first tick and has held
+    // it there since, which is the asymmetry stated from the other side.
+    expect(restOf(resident)).toBe(0);
   });
 });
 
@@ -465,7 +508,7 @@ describe('the phase table', () => {
 
 describe('the exit criteria, over 30 simulated days', () => {
   // The shipped proportions, and the CLI's: a stay of eight hours, three hours of
-  // patience, three rooms, and a guest every two hours — twelve a day against nine the
+  // TOLERANCE for the wait, three rooms, and a guest every two hours — twelve a day against nine the
   // hotel can serve. Deliberately out of balance so BOTH halves of "has it met or not"
   // occur. Pinned here as well as on the command line, because a criterion only the
   // command line checks is a criterion nobody checks.
@@ -479,11 +522,18 @@ describe('the exit criteria, over 30 simulated days', () => {
   // at all, which would have left the two-sided criterion below one-sided.
   const EVERY = 60;
   const hotelContent = bindContent({
-    roomTypes: [roomType('roomA', ['rest'])],
-    needTypes: [needType('rest', 480, 180)],
-    // G-027a: content declaring a lodging need must say how long a stay lasts, or
-    // `bindContent` refuses it — a guest holding a room has no other way to leave.
-    guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 480 }],
+    roomTypes: [roomType('roomA', ['rest']), roomType('lounge', ['snack'])],
+    // The shipped proportions as stocks: rest empties in 180 ticks AWAY from a room — where the
+    // lodging need's `patienceTicks` went — and a room refills it a tick at a time. The
+    // engagement need is the shipped table's, 1,400 at refill 7.
+    needTypes: [needType('rest', 180, 1), needType('snack', 1_400, 7)],
+    // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+    // refuses it — a guest holding a room has no other way to leave. The wait is 180, which is
+    // that same lodging `patienceTicks`; the want line puts rest at 18 ticks away, and two of
+    // those fit inside the 60 away-ticks a 480-tick stay generates at refill 7.
+    guestRules: [
+      { id: 'houseRules', name: 'House Rules', stayDurationTicks: 480, toleranceTicks: 180, wantAtBasisPoints: 1_000 },
+    ],
   });
 
   const thirtyDays = (): World => {

@@ -111,13 +111,59 @@ if (!resolved.startsWith(treeRoot)) {
   fail(`@hotelsim/sim resolved to ${resolved}, which is OUTSIDE this arm's tree ${treeRoot}`);
 }
 
-/** The shipped content cut to the LODGING need alone. Reached through `role`, never an id
- *  (ADR-0003); every key it touches is optional, so it is revision-tolerant by construction. */
+/**
+ * The shipped content cut to the SMALLEST NEED TABLE THAT BINDS. Reached through `role`, never
+ * an id (ADR-0003); every key it touches is optional, so it is revision-tolerant by
+ * construction.
+ *
+ * ============================================================================
+ * IT WAS "THE LODGING NEED ALONE", AND THE SEARCH IS WHAT KEEPS IT RUNNING AT BOTH REVISIONS
+ * (G-027b). At `aa30218` a lodging-only table binds on the first candidate, so this arm is the
+ * arm it always was there. At HEAD it does not: the lodging need decays only in AWAY time, away
+ * time comes from ENGAGEMENT needs, and `bindContent` refuses a table whose lodging need could
+ * never become wanted twice — which at the shipped rates takes two engagement needs, not none.
+ *
+ * SO THE `one-need` ARM CARRIES THREE NEEDS AT HEAD AND ONE AT `aa30218`, AND THE CROSS-REVISION
+ * RATIO IS NOT A LIKE-FOR-LIKE COMPARISON ANY MORE. `PARKING.md` already records this
+ * instrument's readings as non-poolable across the stay-length change; this is a second,
+ * independent reason and it is worse, because the two sides now differ in the axis the arm is
+ * NAMED for. A reading taken across it measures the model change, not the code change.
+ * ============================================================================
+ */
 function lodgingOnly(bound: BoundContent): BoundContent {
-  const needTypes = (bound.content.needTypes ?? []).filter((entry) => entry.role === 'lodging');
+  const all = bound.content.needTypes ?? [];
+  const engagement = all.filter((entry) => entry.role !== 'lodging');
+  let lastRefusal = 'none — the table has no engagement needs to cut';
+  for (let take = 0; take < engagement.length; take += 1) {
+    const keep = new Set(engagement.slice(0, take).map((entry) => entry.id));
+    try {
+      return cutTo(bound, all.filter((entry) => entry.role === 'lodging' || keep.has(entry.id)));
+    } catch (error) {
+      // Not enough away time yet for the lodging need to become wanted twice. Take one more,
+      // keeping the reason: the loop is a search and the last refusal is why it ended.
+      lastRefusal = error instanceof Error ? error.message : String(error);
+    }
+  }
+  // THROWS RATHER THAN RETURNING THE WHOLE TABLE (round 1) — the same repair as
+  // `scaling-arms.ts`, which is the copy this one tracks. An arm identical to its own control
+  // reports 1.00 and reads as a measurement.
+  throw new Error(
+    `lodgingOnly: no need table smaller than the full ${all.length}-need one binds, so this arm would be identical ` +
+      `to the full-vector arm it is the control for. The last refusal was: ${lastRefusal}`,
+  );
+}
+
+function cutTo(bound: BoundContent, needTypes: NonNullable<SimContent['needTypes']>): BoundContent {
   const kept = needTypes.map((entry) => entry.id);
+  const hosts = (bound.content.itemTypes ?? [])
+    .filter((itemType) => (itemType.provides ?? []).some((id) => kept.includes(id)))
+    .map((itemType) => itemType.id);
   const roomTypes = bound.content.roomTypes
-    .filter((roomType) => (roomType.provides ?? []).some((id) => kept.includes(id)))
+    .filter(
+      (roomType) =>
+        (roomType.provides ?? []).some((id) => kept.includes(id)) ||
+        (roomType.requires ?? []).some((id) => hosts.includes(id)),
+    )
     .map((roomType) => ({ ...roomType, provides: (roomType.provides ?? []).filter((id) => kept.includes(id)) }));
   // TYPED AGAINST HEAD, RUN AGAINST EITHER REVISION. Every key it touches is optional, and tsx
   // erases the types, so absence at `aa30218` (no `provides`, no `fitBasisPoints` on an item) is
@@ -125,8 +171,14 @@ function lodgingOnly(bound: BoundContent): BoundContent {
   // lost `id` and `name` from the result type — a defect the typechecker found the moment this
   // file was moved somewhere a typechecker could see it.
   const itemTypes = (bound.content.itemTypes ?? []).map((itemType) => {
+    const provides = (itemType.provides ?? []).filter((id) => kept.includes(id));
+    // An item that still serves a KEPT engagement need must keep its fit, or `bindContent`
+    // refuses it as a silent provider standing beside declared ones; one that serves nothing
+    // must lose it, or it is a dial nothing can read. At `aa30218` neither key exists and both
+    // branches are the same no-op.
+    if (provides.length > 0) return { ...itemType, provides };
     const { fitBasisPoints: _dropped, ...rest } = itemType;
-    return { ...rest, provides: (itemType.provides ?? []).filter((id) => kept.includes(id)) };
+    return { ...rest, provides };
   });
   return bindContent({ ...bound.content, roomTypes, needTypes, itemTypes } satisfies SimContent);
 }

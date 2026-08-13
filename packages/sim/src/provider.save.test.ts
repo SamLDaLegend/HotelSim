@@ -54,16 +54,20 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks: 20,
-  patienceTicks: 100,
+  // G-027b: `capacityTicks` is time-to-empty, which is what `patienceTicks` named, so 100 is
+  // carried; a refill is a whole tick, so 100/20 is 5 exactly.
+  capacityTicks: 100,
+  refillPerTick: 5,
 });
 
 const content = bindContent({
   roomTypes: [roomType('bedroom', ['rest']), roomType('cafe', ['food'])],
   needTypes: [need('rest', true), need('food', false)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20 }],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it. G-027b adds the other way out. No want line is declared: nothing here forms a
+  // need vector by living forward — every guest below is written by hand in the v6 shape — so
+  // there is no arrival for a line to be the starting point of.
+  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 100 }],
 });
 
 /** The v6 -> v7 step itself. Index 5, the sixth link. */
@@ -247,27 +251,35 @@ describe('v6 -> v7 refuses to destroy what it cannot have written (G-013)', () =
   });
 });
 
-describe('the metBy invariant is enforced at load, in BOTH directions (G-013)', () => {
-  const vector = (progressRemaining: number, metBy: unknown): unknown[] => [
-    { needId: 'rest', patienceRemaining: 10, progressRemaining, metBy, abandonCount: 0 },
+describe('the metBy invariant is enforced at load, in the direction that survives (G-013)', () => {
+  const vector = (deficit: number, metBy: unknown): unknown[] => [
+    { needId: 'rest', deficit, metBy, abandonCount: 0 },
   ];
 
-  it('refuses a MET need that records nothing that delivered it', () => {
-    // Not reachable through the tick — `advanceNeed` writes the field on the transition —
+  it('refuses a FULL need that records nothing that served it', () => {
+    // Not reachable through the tick — `advanceNeed` writes the field on every served tick —
     // which is exactly why it is checked on the path that faces bytes this build did not
     // write. Without it, `metByItem` would silently under-count and the report's
     // attribution law would fail on a save rather than on the code that broke it.
-    expect(() => assertNeedVector(vector(0, null), 1)).toThrow(/records nothing that delivered it/);
+    expect(() => assertNeedVector(vector(0, null), 1)).toThrow(/records nothing that served/);
   });
 
-  it('refuses a PENDING need that claims one', () => {
-    expect(() => assertNeedVector(vector(5, 'room'), 1)).toThrow(/still owes 5 tick\(s\)/);
-  });
+  /*
+   * `refuses a PENDING need that claims one` WAS HERE AND WAS DELETED AT G-027b. NAMED, NOT
+   * DISCOVERED — and the describe above it is now half a title, deliberately.
+   *
+   * The iff became an implication. "Attributed implies met" was true of a TASK, which had no
+   * history: a need that recorded a provider had been finished by it. A STOCK remembers what
+   * last served it and then decays, so a half-empty need naming the café that filled it is a
+   * true statement about its past rather than a contradiction. The half that survives — full
+   * implies attributed — is the case above, and it survives because a stock can only reach full
+   * by being served.
+   */
 
   it('refuses an attribution that is neither a room nor an item, and a missing key', () => {
     expect(() => assertNeedVector(vector(0, 'wizard'), 1)).toThrow(/metBy "wizard"/);
     expect(() =>
-      assertNeedVector([{ needId: 'rest', patienceRemaining: 10, progressRemaining: 0, abandonCount: 0 }], 1),
+      assertNeedVector([{ needId: 'rest', deficit: 0, abandonCount: 0 }], 1),
     ).toThrow(/has no metBy field/);
   });
 

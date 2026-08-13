@@ -33,7 +33,22 @@ import { tickValidityContext } from './validity.js';
 
 const BOUNDS = createGridBounds();
 
-/** One room, one bed, one need. `satisfyTicks` 2 so a stay can END inside a short test. */
+/**
+ * One buildable room, one bed, and the smallest need table a stock model can express.
+ *
+ * TWO NEEDS AND A LOUNGE NOBODY BUILDS (G-027b). A guest arrives AT its want line, so a want
+ * line of 0 would put every need at full with nothing recorded as having served it — which
+ * `assertNeedVector` refuses at the first commit — and declaring a want line makes
+ * `assertLodgingBecomesWanted` demand away-ticks, which only an ENGAGEMENT need generates. So
+ * one-need content is no longer expressible. `lounge` exists to make `snack` reachable and is
+ * never built by any hotel below, which is deliberate: with no lounge in the store no guest can
+ * ever engage, so `engagement` stays null and this file's subject — which room a SCAN finds —
+ * is untouched by the second need.
+ *
+ * THE NUMBERS. `capacityTicks` 50 is the deleted `patienceTicks`, carried; `refillPerTick` 25 is
+ * that capacity over the deleted `satisfyTicks` of 2, which divides exactly. The want line is
+ * 200 basis points of 50 ticks = 1, the smallest line that is not 0.
+ */
 const content = bindContent({
   roomTypes: [
     {
@@ -46,11 +61,21 @@ const content = bindContent({
       provides: ['rest'],
       requires: ['bed'],
     },
+    { id: 'lounge', name: 'lounge', capacity: 8, nightlyRatePence: 0, provides: ['snack'] },
   ],
-  needTypes: [{ id: 'rest', name: 'rest', satisfyTicks: 2, patienceTicks: 50 }],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 2 }],
+  needTypes: [
+    { id: 'rest', name: 'rest', role: 'lodging', capacityTicks: 50, refillPerTick: 25 },
+    { id: 'snack', name: 'snack', role: 'engagement', capacityTicks: 50, refillPerTick: 1 },
+  ],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it — a guest holding a room has no other way to leave. G-027b adds the other way
+  // out (`toleranceTicks`) and the want line. STAY 6 RATHER THAN THE OLD 2, and it is forced
+  // rather than chosen: the lodging need must become wanted twice inside a stay, which takes
+  // 2 x 200 x 50 = 20,000 against the 10,000-per-away-tick the engagement need generates, so
+  // the stay must produce at least two away-ticks and at refill 1 that is six ticks.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: 6, toleranceTicks: 6, wantAtBasisPoints: 200 },
+  ],
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
@@ -67,26 +92,33 @@ function oneRoomHotel(): EntityStore {
   };
 }
 
+/** The deficit a guest arrives at: 200 basis points of a 50-tick capacity. */
+const WANT_LINE = 1;
+
 /**
- * A guest with the one need this content defines.
+ * A guest with both needs this content defines, each at its want line.
  *
- * G-012 moved patience and rest INTO the need vector, so this builder takes the same two
- * numbers and puts them where they now live. The tests below are unchanged in what they
- * claim: the short-circuit is about finding rooms, and one need is all it takes to arm it.
+ * G-012 moved patience and rest INTO the need vector; G-027b replaced the two countdowns
+ * inside it with one deficit, so what a case can vary is HOW EMPTY a need is and WHEN the
+ * guest arrived. **Neither number decides a departure any more** — a stay ends on the clock and
+ * a wait ends on `toleranceTicks` — so `arrivedTick` is what these cases steer, and `deficit`
+ * is only read where the tick is expected to move it.
  */
 type GuestOver = {
   readonly roomEntityId?: number;
-  readonly patienceRemaining?: number;
-  readonly restRemaining?: number;
+  readonly restDeficit?: number;
   /**
-   * When this guest arrived (G-027a). Default 0, which is BEFORE the tick these cases run on,
-   * so a guest holding a room checks out. A case that needs the room to STAY held passes
-   * `TICK` — a guest that arrived this tick has its whole stay in front of it.
+   * When this guest arrived (G-027a, re-purposed at G-027b). Default 0, which is `TICK`
+   * ticks ago: a guest holding a room checks out and a guest holding none gives up, because
+   * `TICK` is at or past both `stayDurationTicks` and `toleranceTicks`. A case that needs a
+   * guest to SURVIVE the tick passes `TICK` — one that arrived this tick has its whole stay
+   * in front of it and has waited no time at all.
    */
   readonly arrivedTick?: number;
 };
 
 function guest(id: number, over: GuestOver = {}): Guest {
+  const restDeficit = over.restDeficit ?? WANT_LINE;
   return {
     id,
     // G-023a: a guest is somewhere. THE DOORWAY, because nothing in this file is about
@@ -97,32 +129,36 @@ function guest(id: number, over: GuestOver = {}): Guest {
     arrivedTick: over.arrivedTick ?? 0,
     roomEntityId: over.roomEntityId ?? 0,
     engagement: null,
+    // Strictly ascending by need id, and one entry per need type — the vector `formNeedVector`
+    // would have built. `snack` is here to be legal state rather than to be pursued: no lounge
+    // is ever built below, so nothing can serve it.
     needs: [
-      {
-        needId: 'rest',
-        patienceRemaining: over.patienceRemaining ?? 50,
-        progressRemaining: over.restRemaining ?? 2,
-        metBy: (over.restRemaining ?? 2) === 0 ? 'room' : null,
-        abandonCount: 0,
-      },
+      { needId: 'rest', deficit: restDeficit, metBy: restDeficit === 0 ? 'room' : null, abandonCount: 0 },
+      { needId: 'snack', deficit: WANT_LINE, metBy: null, abandonCount: 0 },
     ],
   };
 }
 
-/** Patience left on the one need. What `guest.patienceRemaining` used to be. */
-const patienceOf = (g: Guest): number => findNeedState(g.needs, 'rest')?.patienceRemaining ?? -1;
+/**
+ * How far below full the guest's rest is. What `patienceRemaining` used to be, upside down:
+ * patience COUNTED DOWN as a guest waited and this counts UP, so "lost one tick of patience"
+ * and "gained one tick of deficit" are the same reading.
+ */
+const restDeficitOf = (g: Guest): number => findNeedState(g.needs, 'rest')?.deficit ?? -1;
 
 /**
- * THE TICK THESE CASES ARE SIMULATED ON, AND IT MOVED FROM 1 TO 3 AT G-027a.
+ * THE TICK THESE CASES ARE SIMULATED ON. It moved from 1 to 3 at G-027a and from 3 to 7 here.
  *
- * A stay used to end when the resting guest'''s `progressRemaining` reached zero, so a guest
+ * A stay used to end when the resting guest's `progressRemaining` reached zero, so a guest
  * built with one tick of rest left departed on whatever tick this was. A stay now ends on the
- * CLOCK — `tick - arrivedTick >= stayDurationTicks` — and every guest here is built with
- * `arrivedTick: 0` against a stay of 2, so the release this file is about happens on tick 2
- * or later. 3 rather than 2 so the arithmetic is not sitting on the boundary, which is
- * `guest.stay.terminator.test.ts`'''s subject rather than this file'''s.
+ * CLOCK — `tick - arrivedTick >= stayDurationTicks` — and a wait ends the same way, on
+ * `toleranceTicks`. Both are 6 under this content (the stay could not be shorter: see the
+ * fixture), and every guest here is built with `arrivedTick: 0` unless it is meant to survive,
+ * so the release this file is about happens on tick 6 or later. 7 rather than 6 so the
+ * arithmetic is not sitting on the boundary, which is `guest.stay.terminator.test.ts`'s
+ * subject rather than this file's.
  */
-const TICK = 3;
+const TICK = 7;
 
 /** One tick of the guest loop over a hand-built store, with no cache. */
 function tick(guests: GuestStore, entities: EntityStore, arriving = 0) {
@@ -168,9 +204,9 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
     const guests: GuestStore = {
       nextId: 4,
       list: [
-        guest(1, { patienceRemaining: 50 }),
-        guest(2, { roomEntityId: 1, restRemaining: 1 }),
-        guest(3, { patienceRemaining: 50 }),
+        guest(1, { arrivedTick: TICK }),
+        guest(2, { roomEntityId: 1 }),
+        guest(3, { arrivedTick: TICK }),
       ],
     };
     const result = tick(guests, oneRoomHotel());
@@ -182,16 +218,17 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
       [1, 0],
       [3, 1],
     ]);
-    // And guest 1 was really processed rather than skipped: it lost exactly one patience.
-    expect(patienceOf(result.guests.list[0] as Guest)).toBe(49);
+    // And guest 1 was really processed rather than skipped: its rest fell by exactly one tick
+    // of stock. It holds no room, so it is AWAY, and away is the only thing that drains rest.
+    expect(restDeficitOf(result.guests.list[0] as Guest)).toBe(WANT_LINE + 1);
   });
 
   it('guest 2 takes the room guest 1 vacates, though guest 1 is visited first', () => {
-    // Guest 1 is resting with ONE tick of rest left, so this tick it finishes, pays and
-    // releases. Guest 2 has been waiting. There is exactly one room in the hotel.
+    // Guest 1's stay is up, so this tick it checks out, pays and releases. Guest 2 arrived
+    // this tick and has been waiting. There is exactly one room in the hotel.
     const guests: GuestStore = {
       nextId: 3,
-      list: [guest(1, { roomEntityId: 1, restRemaining: 1 }), guest(2)],
+      list: [guest(1, { roomEntityId: 1 }), guest(2, { arrivedTick: TICK })],
     };
     const result = tick(guests, oneRoomHotel());
 
@@ -210,7 +247,7 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
     // Arrivals are processed after everyone already here, so this is the same release
     // seen from the other side of the loop: the room is freed during the existing-guest
     // pass and claimed during the arrival pass.
-    const guests: GuestStore = { nextId: 2, list: [guest(1, { roomEntityId: 1, restRemaining: 1 })] };
+    const guests: GuestStore = { nextId: 2, list: [guest(1, { roomEntityId: 1 })] };
     const result = tick(guests, oneRoomHotel(), 1);
 
     expect(departureCountOf(result.outcomes, 'checkedOut')).toBe(1);
@@ -220,34 +257,37 @@ describe('a room released mid-tick is taken by a later guest in the SAME tick', 
 });
 
 describe('and when nothing is released, the answer really is nothing', () => {
-  it('a full hotel leaves every waiting guest waiting, draining patience by exactly one', () => {
+  it('a full hotel leaves every waiting guest waiting, draining rest by exactly one', () => {
     const guests: GuestStore = {
       nextId: 5,
       list: [
         // ARRIVED THIS TICK, so its stay is not up and it releases nothing (G-027a).
-        guest(1, { roomEntityId: 1, restRemaining: 5, arrivedTick: TICK }),
-        guest(2, { patienceRemaining: 10 }),
-        guest(3, { patienceRemaining: 10 }),
-        guest(4, { patienceRemaining: 10 }),
+        guest(1, { roomEntityId: 1, arrivedTick: TICK }),
+        guest(2, { arrivedTick: TICK }),
+        guest(3, { arrivedTick: TICK }),
+        guest(4, { arrivedTick: TICK }),
       ],
     };
     const result = tick(guests, oneRoomHotel());
 
     expect(departureCountOf(result.outcomes, 'checkedOut')).toBe(0);
-    // Every waiting guest is still waiting, and each lost exactly one tick of patience —
+    // Every waiting guest is still waiting, and each lost exactly one tick of rest —
     // so the short-circuit skipped the SCAN, not the guest.
     const waiting = result.guests.list.filter((g) => !isResting(g));
     expect(waiting.map((g) => g.id)).toEqual([2, 3, 4]);
-    expect(waiting.map(patienceOf)).toEqual([9, 9, 9]);
+    expect(waiting.map(restDeficitOf)).toEqual([WANT_LINE + 1, WANT_LINE + 1, WANT_LINE + 1]);
   });
 
-  it('a guest whose patience runs out in a full hotel still leaves unsatisfied', () => {
+  it('a guest whose tolerance runs out in a full hotel still leaves unsatisfied', () => {
     const guests: GuestStore = {
       nextId: 4,
       list: [
-        guest(1, { roomEntityId: 1, restRemaining: 5, arrivedTick: TICK }),
-        guest(2, { patienceRemaining: 1 }),
-        guest(3, { patienceRemaining: 1 }),
+        guest(1, { roomEntityId: 1, arrivedTick: TICK }),
+        // Arrived at tick 0 and still has no room, so `TICK` ticks of waiting is past the
+        // 6-tick tolerance: these two give up. It is the CLOCK that decides it now, where
+        // it used to be a countdown carried on the guest's own need.
+        guest(2),
+        guest(3),
       ],
     };
     const result = tick(guests, oneRoomHotel());
@@ -264,7 +304,7 @@ describe('an eviction is a release too', () => {
     const empty: EntityStore = { nextId: 3, list: [] };
     const guests: GuestStore = {
       nextId: 3,
-      list: [guest(1, { roomEntityId: 1, restRemaining: 5 }), guest(2, { patienceRemaining: 10 })],
+      list: [guest(1, { roomEntityId: 1 }), guest(2, { arrivedTick: TICK })],
     };
     const result = tick(guests, empty);
     expect(evictedGuests(result.outcomes)).toBe(1);

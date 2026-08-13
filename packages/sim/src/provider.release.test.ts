@@ -84,12 +84,19 @@ const roomType = (
   requires: readonly string[] = [],
 ): RoomTypeData => ({ id, name: id, capacity: 2, nightlyRatePence: 8_500, provides, requires });
 const itemType = (id: string, provides: readonly string[]): ItemTypeData => ({ id, name: id, provides });
-const need = (id: string, satisfyTicks: number, lodging: boolean): NeedTypeData => ({
+/**
+ * G-027b — THE NEEDS AS STOCKS, AND `SITTING` IS PRESERVED EXACTLY. `comfort` holds 1,000 ticks
+ * and its want line is 400 basis points of that — 40, which is `SITTING` — refilled one a tick,
+ * so a guest arrives owing exactly one sitting and a chair clears it in exactly `SITTING` ticks.
+ * That is what the deleted `satisfyTicks` used to say directly. `rest` carries the old
+ * `patienceTicks` of 900 as its capacity.
+ */
+const need = (id: string, capacityTicks: number, refillPerTick: number, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks,
-  patienceTicks: 900,
+  capacityTicks,
+  refillPerTick,
 });
 
 /**
@@ -111,10 +118,14 @@ const content = bindContent({
     roomType('cellar', [], []),
     roomType('lounge', [], ['chair']),
   ],
-  needTypes: [need('rest', STAY, true), need('comfort', SITTING, false)],
-  // G-027a: content declaring a lodging need must say how long a stay lasts, or
-  // `bindContent` refuses it — a guest holding a room has no other way to leave.
-  guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY }],
+  needTypes: [need('rest', 900, 2, true), need('comfort', 1_000, 1, false)],
+  // G-027a: content declaring a lodging need must say how long a stay lasts, or `bindContent`
+  // refuses it. G-027b adds the wait and the want line: 2 x 400 x 900 = 720,000 fits inside the
+  // 200 away-ticks one engagement need generates in a 400-tick stay at refill 1, which is
+  // 2,000,000.
+  guestRules: [
+    { id: 'houseRules', name: 'House Rules', stayDurationTicks: STAY, toleranceTicks: 900, wantAtBasisPoints: 400 },
+  ],
   itemTypes: [itemType('chair', ['comfort'])],
 });
 
@@ -193,13 +204,17 @@ describe('(a) THE HOST ROOM IS DEMOLISHED — the exit criterion, literally (G-0
     // reservations is in this assertion, and the retained progress is the seeding ruling:
     // a guest interrupted halfway through sitting down has had half a sit.
     const world = armed(stage(0));
-    const before = findNeedState(only(world).needs, 'comfort')!.progressRemaining;
+    const before = findNeedState(only(world).needs, 'comfort')!.deficit;
     const after = stepTick(world, content, [demolish(idOf(world, 'lounge'))]);
     const guest = only(after);
     expect(isResting(guest)).toBe(true);
     expect(evictedGuests(after.guestOutcomes)).toBe(0);
-    expect(findNeedState(guest.needs, 'comfort')!.progressRemaining).toBeLessThan(SITTING);
-    expect(findNeedState(guest.needs, 'comfort')!.progressRemaining).toBe(before);
+    // RETAINED, PLUS AT MOST THIS TICK'S OWN DECAY (G-027b). Nothing served the need on the
+    // tick the lounge came down, so it decayed by one like any unserved need. What "retained"
+    // rules out is the deficit being thrown back to the want line, which is what a reset would
+    // look like and is what this assertion separates.
+    expect(findNeedState(guest.needs, 'comfort')!.deficit).toBe(before + 1);
+    expect(findNeedState(guest.needs, 'comfort')!.deficit).toBeLessThanOrEqual(SITTING);
   });
 
   it('RESCAN: it walks to the café in the SAME tick rather than standing still', () => {
@@ -306,8 +321,8 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
     roomEntityId: room,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'comfort' },
     needs: [
-      { needId: 'comfort', patienceRemaining: 800, progressRemaining: comfortLeft, metBy: null, abandonCount: 0 },
-      { needId: 'rest', patienceRemaining: 800, progressRemaining: STAY, metBy: null, abandonCount: 0 },
+      { needId: 'comfort', deficit: comfortLeft, metBy: null, abandonCount: 0 },
+      { needId: 'rest', deficit: 36, metBy: null, abandonCount: 0 },
     ],
   });
 
@@ -341,7 +356,7 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
     const after = stepTick(world, content, []);
     const survivors = guestsInOrder(after.guests);
     // Guest 2 finished and let go of it.
-    expect(findNeedState(survivors.find((g) => g.id === 2)!.needs, 'comfort')!.progressRemaining).toBe(0);
+    expect(findNeedState(survivors.find((g) => g.id === 2)!.needs, 'comfort')!.deficit).toBe(0);
     expect(survivors.find((g) => g.id === 2)!.engagement).toBe(null);
     // Guest 1 was visited before the release and correctly did not get it — that is the
     // price of never letting a later arrival overtake an earlier one (G-004's rule).

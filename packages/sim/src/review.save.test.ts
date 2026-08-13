@@ -70,8 +70,11 @@ const need = (id: string, lodging: boolean): NeedTypeData => ({
   id,
   name: id,
   role: lodging ? 'lodging' : 'engagement',
-  satisfyTicks: lodging ? 40 : 6,
-  patienceTicks: 200,
+  // G-027b: `capacityTicks` is time-to-empty — what `patienceTicks` named — so 200 is carried
+  // on both. The refills keep the table serviceable and the lodging need reachable inside a
+  // 40-tick stay.
+  capacityTicks: 200,
+  refillPerTick: lodging ? 5 : 3,
 });
 
 const V10_CONTENT: SimContent = {
@@ -87,6 +90,10 @@ const V10_CONTENT: SimContent = {
       reviewScoreMin: 1,
       reviewScoreMax: 5,
       stayDurationTicks: 40,
+      // G-027b: the other way out, and the want line — 2 x 200 x 200 = 80,000 fits inside the
+      // ten away-ticks one engagement need generates in a 40-tick stay at refill 3.
+      toleranceTicks: 200,
+      wantAtBasisPoints: 200,
     },
   ],
 };
@@ -125,7 +132,7 @@ const v9World = (): Record<string, unknown> => {
   };
 };
 
-describe('the chain walks 1 -> ... -> 12, and every link is still observed', () => {
+describe('the chain walks 1 -> ... -> 13, and every link is still observed', () => {
   it('ships one step per version, and the 9 -> 10 step is still the ninth of them', () => {
     // The absolute era pin is `save.fixture.test.ts`'s, whose whole subject is the walk from
     // v1 to today. This file's own subject is the 9 -> 10 link, so it says how many steps
@@ -146,6 +153,7 @@ describe('the chain walks 1 -> ... -> 12, and every link is still observed', () 
       [9, 10],
       [10, 11],
       [11, 12],
+      [12, 13],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
