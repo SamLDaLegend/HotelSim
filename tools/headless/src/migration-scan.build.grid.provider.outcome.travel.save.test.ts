@@ -300,9 +300,22 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     // point: `leftDissatisfied` went in at index 2, so the three v8 names that no era renamed
     // now sit at 3, 4 and 5 and are still carried, in order, unrenamed.
     // ----------------------------------------------------------------------------
+    // ----------------------------------------------------------------------------
+    // AND A THIRD TIME AT θ-b2, WHICH IS WHY THE POSITIONS BELOW ARE NOW DERIVED RATHER THAN
+    // TYPED. `visitEnded` went in at index 1, so the three unrenamed v8 names slid from 3, 4, 5
+    // to 4, 5, 6 — and a hand-typed `slice(3)` would have gone red for the right reason and been
+    // repaired by re-typing a number, which is the row-count claim class this goal enumerated.
+    //
+    // **The claim that survives every insertion is the one that was always meant: the three v8
+    // names no era renamed are still present, still contiguous, still in v8's order, and still
+    // at the TAIL.** Expressed as a suffix rather than as an offset, it needs no re-typing when
+    // the fourth row is inserted — and it still fails if a rename, a reorder or a deletion
+    // touches them.
+    // ----------------------------------------------------------------------------
     const v8Era = ['satisfied', 'gaveUpWaiting', 'evictedRoomGone', 'evictedRoomUnusable', 'evictedCauseUnrecorded'];
     expect([...GUEST_DEPARTURE_REASONS]).toEqual([
       'checkedOut',
+      'visitEnded',
       'gaveUp',
       'leftDissatisfied',
       'evictedRoomGone',
@@ -310,12 +323,34 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
       'evictedCauseUnrecorded',
     ]);
     // THE LIVE LIST IS NOW LONGER, and the v8 literal must not grow with it: a v7 world could
-    // not record a reason that did not exist, and `migrateV13ToV14` is what inserts the row.
+    // not record a reason that did not exist, and `migrateV13ToV14` and `migrateV14ToV15` are
+    // what insert the rows.
     expect(GUEST_DEPARTURE_REASONS.length).toBeGreaterThan(v8Era.length);
-    // The two that were renamed, and the three that were not — stated by position, so a
-    // future rename lands here rather than in a run's goldens.
-    expect(GUEST_DEPARTURE_REASONS.slice(3)).toEqual(v8Era.slice(2));
-    expect(GUEST_DEPARTURE_REASONS.slice(0, 2)).not.toEqual(v8Era.slice(0, 2));
+    // The three that were never renamed, as a SUFFIX — derived from the v8 literal's own length
+    // so no insertion ahead of them requires an edit here.
+    const unrenamed = v8Era.slice(2);
+    expect(GUEST_DEPARTURE_REASONS.slice(-unrenamed.length)).toEqual(unrenamed);
+    // And the two that WERE renamed are still absent from the live list entirely, which is the
+    // half a suffix comparison cannot see.
+    expect(GUEST_DEPARTURE_REASONS).not.toContain('satisfied');
+    expect(GUEST_DEPARTURE_REASONS).not.toContain('gaveUpWaiting');
+  });
+
+  it('and the v15 step is what carries a v14 table forward, by a frozen list and a frozen index', () => {
+    // The θ-b2 half, and the same argument as the v14 arm below it: the migration may not read
+    // the live list, so the six names it expects and the index it inserts at are its own
+    // literals. The INDEX is frozen for the reason the names are — `assertGuestOutcomes` compares
+    // row ORDER, so where the row goes is a fact about the bytes rather than a formatting choice.
+    const code = stripComments(saveSource());
+    const declaration = /V14_MIGRATION_DEPARTURE_ROWS[\s\S]{0,900}?\]\)/.exec(code)?.[0] ?? '';
+    expect(declaration).toContain("'checkedOut'");
+    expect(declaration).toContain("'leftDissatisfied'");
+    expect(declaration).toContain("'evictedCauseUnrecorded'");
+    // AND IT DOES NOT NAME THE ROW IT INSERTS, because a v14 table does not carry one.
+    expect(declaration).not.toContain('visitEnded');
+    expect(declaration).toContain('Object.freeze');
+    expect(code).toMatch(/const V15_MIGRATION_INSERT_AT = 1;/);
+    expect(code).toMatch(/const V15_MIGRATION_INSERTED_REASON = 'visitEnded';/);
   });
 
   it('and the v14 step is what carries a v13 table forward, by a frozen list and a frozen index', () => {

@@ -255,8 +255,10 @@ function qualitySum(content: BoundContent, needs: readonly NeedState[]): number 
  *
  * `cutShort` IS DECIDED BY THE CALLER, from the departure reason, through an exhaustive
  * switch in `guests.ts`. It is not decided here because `GuestDepartureReason` is not
- * visible here, and it is not a boolean invented at the call site either: a fifth reason
- * added to that union is a TYPE ERROR in `isCutShort` rather than a silent `false`.
+ * visible here, and it is not a boolean invented at the call site either: a NEW reason
+ * added to that union is a TYPE ERROR in `isCutShort` rather than a silent `false`. (It said
+ * "a fifth" until θ-b2 made the union seven — an ordinal beside a growing list is the row-count
+ * claim class, and the mechanism it describes never depended on the number.)
  *
  * WHAT CUTTING A STAY SHORT MEANS FOR THE SCORE, AND THE HONEST REASON, WHICH IS NOT THE
  * ONE THIS SHIPPED WITH. The first draft justified the floor as an anti-exploit — that a

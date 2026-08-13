@@ -155,6 +155,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed', 
       [11, 12],
       [12, 13],
       [13, 14],
+      [14, 15],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -304,19 +305,35 @@ const PRE_V12_DEPARTURE_LABELS = [
 ] as const;
 
 /**
- * The row θ-b1 INSERTED, and where. Frozen here for the reason the labels above are frozen: a
- * world written back into a pre-v12 SHAPE must have five rows, and this build's table has six.
- * Dropping it by INDEX rather than by name is deliberate — the index is what `migrateV13ToV14`
- * inserts at, so this reverses that step rather than guessing at the same answer.
+ * The rows a v11 world carried, under THIS build's spelling of them.
+ *
+ * ---------------------------------------------------------------------------
+ * IT WAS AN INSERTION INDEX UNTIL θ-b2 — `const V14_INSERTED_ROW_AT = 2`, dropped by position on
+ * the argument that "the index is what `migrateV13ToV14` inserts at, so this reverses that step".
+ * That was true of one insertion and became wrong at the second: `visitEnded` went in at index 1,
+ * which slid `leftDissatisfied` to 3, so a helper hard-coding 2 quietly deleted the WRONG ROW.
+ *
+ * **The list below needs no edit when a third row is inserted**, because it states the era fact —
+ * *which departure reasons a v11 world could record* — rather than the arithmetic of getting back
+ * to it. (The twin of this helper in `needs.hysteresis.save.test.ts` carries the same repair; the
+ * two files describe two different steps of the same chain and each owns its own copy, which is
+ * ADR-0008's rule rather than a duplication to fold away.)
+ * ---------------------------------------------------------------------------
  */
-const V14_INSERTED_ROW_AT = 2;
+const V11_ERA_REASONS: readonly string[] = [
+  'checkedOut',
+  'gaveUp',
+  'evictedRoomGone',
+  'evictedRoomUnusable',
+  'evictedCauseUnrecorded',
+];
 
 const v11Labels = (world: Record<string, unknown>): unknown => {
   const outcomes = world['guestOutcomes'] as { arrived: number; departures: { reason: string; count: number }[] };
-  const withoutV14 = outcomes.departures.filter((_row, index) => index !== V14_INSERTED_ROW_AT);
+  const v11Only = outcomes.departures.filter((row) => V11_ERA_REASONS.includes(row.reason));
   return {
     ...outcomes,
-    departures: withoutV14.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
+    departures: v11Only.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
   };
 };
 

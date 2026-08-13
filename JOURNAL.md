@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v14** · summary **v3** · I2 `21938e08d179c60c` · measure golden
   `5a8cec719d1e9e95` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
@@ -896,3 +896,172 @@ deepened** (3.58 → 3.78) and **twelve rooms with two amenities now beats one r
 G-028 should fix the ladder before the scorer · the `arrivalEveryTicks` campaign re-take, now
 carrying that **no cadence restores the calibrated 15**, since the quotient reads 15 at 14.77, at
 6.40 and at 8.72.
+
+## 2026-08-13 — WATCH #9 (`tools/viewer`, ADR-0028 §4): a guest comes for lunch and goes home
+
+**CAVEAT ADDED AT SWEEP 1, AND IT BOUNDS EVERYTHING BELOW.** `tools/viewer/serve.mjs:19` serves
+`packages/content/data` from a **hard-coded path**, so a `--content <dir>` recording is drawn
+against the **shipped** tables rather than the ones it was run under. That is benign here only
+because the food-court fixture is shipped-content-minus-two-rows — every id it uses exists in the
+shipped tables and renders correctly. **A genuinely different food court would draw as magenta bars
+with nothing saying why.** So ADR-0028 §4's exception is sound for content that is a SUBSET of the
+shipped tables and unsound otherwise, and the readings below inherit that bound.
+
+**The surface is `tools/viewer`, and that is a stated exception rather than a retreat.** `apps/game`
+imports the shipped JSON statically through the bundler and has no content-selection path, so the
+goal that produces a guest arriving, eating and leaving has no picture in the renderer of record.
+ADR-0023 assumed one content set; ADR-0028 §4 rules the replay viewer sufficient here, and the
+recordings below go through the real CLI and the real save serialiser.
+
+Three arms recorded, `--rooms 0 --content <food court>`, seed 7, 2 simulated days.
+
+| arm | arrivals | result |
+|---|---|---|
+| `--amenities 3` | every 120 | 23 visits ended, **0 walkouts**, 0 stuck, every need met |
+| `--amenities 1` | every 120 | 23 visits ended, **0 walkouts**, 0 stuck |
+| `--amenities 1 --arrivals 30` | every 30 | 54 visits ended, **34 walkouts**, 8 still in, 0 stuck |
+
+**WHAT IT LOOKS LIKE.** Guest 1's whole visit, from the `--amenities 3` recording: lounge from
+tick 10 to 60 (comfort), games room 70 to 130 (entertainment), café 140 to 200 (nourishment),
+gone at 208. Three rooms, in order, one at a time, and then home. **472 guest-frames and not one
+of them shows a guest doing nothing.**
+
+**MY PLAN'S PERCEPTUAL PREDICTION WAS WRONG, AND IT IS RECORDED AS WRONG.** I predicted
+lobby-teleporting — `standingCell(null, null, …)` puts an unengaged guest at the door, so I
+expected visitors to flicker between the doorway and the tables between engagements. **Zero
+unengaged frames in both 120-tick arms.** The reason is the derivation itself: `visitDurationTicks`
+is 208 and one uncontended round of service is *also* 208, so a well-provisioned visitor has no
+idle gap to stand in. The prediction assumed a gap the arithmetic had already closed.
+
+**WHERE THE DOORWAY DOES SHOW, AND IT READS AS A QUEUE RATHER THAN AS A BUG.** In the
+over-subscribed arm **47.2 % of guest-frames are guests waiting for a free table**, longest wait
+130 ticks. That is the provider cliff ADR-0026 measured, seen from the floor: half the room is
+standing about, and 34 of them eventually leave unhappy. It reads as a café with too few tables,
+which is what it is — and it is exactly the signal `leftDissatisfied` exists to give the player.
+G-024's queues are what will make it look deliberate rather than merely crowded.
+
+**AND NOTHING VANISHES MID-MEAL.** 4,296 guest-frames scrubbed across the busy arm: **zero
+departures with more than one frame of food left.** That was ADR-0026's amendment's defect and
+ADR-0028 §1's BLOCKER, and the arm that would have caught it is `guest.visit.test.ts`'s — proved by
+mutation, which produced **67 mid-meal vanishes, one with 42 ticks of its meal outstanding.**
+
+**ONE OBSERVATION HANDED TO G-028, NOT FIXED HERE.** The well-provisioned food court reviews as a
+**pure point mass — all 23 guests score 5, mean exactly 5.00** — which is the shape G-028's "not a
+point mass" criterion forbids, arriving from a new direction. The busy arm spreads properly
+(22 twos, 66 fours, mean 3.50). Recorded rather than repaired: reviews are G-028's.
+
+### WATCH #10 — the human looked, and BOTH answers were negative (2026-08-13)
+
+**Asked**: can you tell a guest that walked out from one that checked out, and can you see the new
+patience mark? **Answered**: *"No I can't tell a guest who walks out v checks out — but this will
+be easier to show when we get to visualising the game. No I do not see 'the new mark' visually
+displayed either."*
+
+**Both are findings. Neither is a null result, and the second is a defect.**
+
+**1. DEPARTURE REASON IS NOT LEGIBLE ON SCREEN.** Seven rows exist in the outcome table and a guest
+leaving looks the same whichever fired. **This is the perceptual half of ADR-0025 §2** — that
+ruling spent a schema row so *"nobody would give me a room"* and *"I had a bed and nothing to do"*
+would stay distinguishable, **and they are distinguishable in the DATA and not on the SCREEN.** The
+human's own framing routes it: *"easier to show when we get to visualising the game"* — so it is
+the render track's, not a defect in the sim. **Parked with its falsification test.**
+
+~~**2. THE LOBBY FUSE IS NOT VISIBLE.**~~ **WITHDRAWN WITHIN THE HOUR, BY THE HUMAN, AND THE
+ORCHESTRATOR'S ERROR IS THE ENTIRE CONTENT OF IT.** Follow-up, verbatim: *"FYI — I can see the new
+mark in the HotelSim 5180. The viewer has not been visually updated with the new schema or
+anything."*
+
+**The mark works. It was never a defect.** `apps/game` draws it and the human sees it. **I recorded
+a negative observation without establishing WHICH SURFACE it was taken on** — I had just handed them
+the viewer at `127.0.0.1:8171`, mentioned the game at `localhost:5180` in the same breath, and then
+wrote down the answer as though there were only one screen.
+
+> **CLAUDE.md rule 4, slot one, on an OBSERVATION rather than a number: what was this an observation
+> OF? A perceptual finding carries the surface it was seen on, or it is not a finding.** Fourth
+> slot-one error this milestone, third of them mine, and the first against a picture rather than a
+> figure.
+
+**And I compounded it**: within minutes I had written *"a 2px mark was reasoned about and shipped
+without anyone looking"* and filed it as G-030's palette defect repeating. **That was a confident
+diagnosis of a defect that did not exist**, aimed at a comment whose reasoning turned out to be
+correct — and the shape of my error was exactly the one I accused it of: **asserting what a person
+would perceive without checking.**
+
+**WHAT THE ANSWER ACTUALLY FOUND, and it is a real finding.** *"The viewer has not been visually
+updated with the new schema or anything."* **The schema constant was two versions stale and I fixed
+that; the DRAWING is stale too, and I did not check it.** The viewer now parses v15 frames and still
+does not show what v14 and v15 added. **So ADR-0028 §4, which routes θ-b2's WATCH through this
+instrument, rests on a surface that reads the new fields and draws the old picture** — the exact
+failure mode `frameAt`'s own refusal was written to prevent, arriving one layer above the version
+check it guards.
+
+**What stands unchanged.** θ-a's predicate repair (a napping guest no longer draws as IDLE) and
+ADR-0029's ruling, which was given against `apps/game`'s corrected picture. **Finding 1 also stands
+— it was answered about the game, not the viewer.**
+
+## G-027b θ-b2 — Lodging is optional — REFLECT
+
+**DONE.** 3 sweeps (4 + 3 + 4 MAJOR, no BLOCKER in code) plus a plan review that returned **2
+BLOCKERs before a line existed**, and one verification closing on a single UNPINNED-CLAIM finding —
+**no round, no split** (§7.1). Save **v15**. Every exit criterion re-run by the orchestrator.
+
+**THE GOAL'S SUBJECT DID NOT EXIST WHEN IT STARTED.** Lodging-free content was **unrepresentable**:
+four candidate documents, all refused at `bindContent`, the gate at `content.ts:1620` — **a site
+neither the goal block nor the builder's own earlier enumeration named.** All 25 previously
+enumerated sites were unreachable behind it. The builder's diagnosis of its own miss is the durable
+part: *"I enumerated consumers of the lodging need and never enumerated the refusals that make
+lodging-free content unrepresentable. A list, not a class."*
+
+**THE PLAN REVIEW PAID FOR ITSELF TWICE OVER, AS IT DID IN θ-b1.** The terminator as planned was an
+unconditional clock, so it fired mid-service — **236 of 236 departures engaged**, a higher rate than
+the 94 % that forced ADR-0026's amendment. And `visitEnded` would have made `leftDissatisfied`
+**structurally unreachable** for the one content shape the goal exists to create: a visitor's
+dissatisfaction cannot exceed its age, so **the starved food court and the working one reported the
+identical row and the identical count.** *That is the build-loop signal ADR-0025 §2 spent a schema
+row to protect, destroyed by the row added to protect it.*
+
+**AND THE DEFINING FIGHT WAS ABOUT WHAT A PREDICTOR IS ALLOWED TO BE.** `visitRoundTicks` predicts a
+visitor's service order and sets **both endpoints of a bind-time refusal**. Each sweep found it
+missing one more thing the simulation does — the wrong order, then the deficit clamp, then
+`reserve`'s engaged pass. Measured on content the guards **admitted**: true window (635, 669)
+against a derived (810, …) — **disjoint** — and on a third table an **empty window where no ceiling
+binds at all.**
+
+> **A predictor that must track a simulation to stay correct IS a simulation. The escape is not a
+> better predictor — it is a smaller domain, stated and refused at the boundary.** (ADR-0031)
+
+The fold grew **no** clamp, **no** margin term, **no** preemption model. It got **three stated
+properties**, each with its own arm and message. **And the sufficiency question — the goal's whole
+remaining risk — was answered empirically rather than argued**: 6,000 randomised need tables fed to
+`bindContent`, **946 accepted, ZERO disagreements** between the fold and the observed round.
+
+**FOUR TIMES IN ONE GOAL, ADR-0027 CAUGHT THE AUTHOR WHO SUPPLIED ITS EVIDENCE.** The sharpest: the
+fold's **own** domain block still described the deleted ascending-order version, present tense,
+immediately above the repaired code — including *"no arm in this repository could have seen it"*,
+**fourteen lines above the arm that sees it.** The repair had swept the sibling function's docstring
+and left the subject function's own.
+
+**THE PUBLISHED ZERO WAS WRONG THREE TIMES, AND EACH CORRECTION CAME FROM WIDENING THE NEEDLE.**
+11 → 0, then 12 → 0, then **seven live sites**, then **four more** the critic found. The mechanism,
+stated by the builder against itself: **a grep for *six* cannot find *five*, and nobody greps for a
+figure nobody has said.** That is the evidence behind ADR-0032 §1 — **no derived figure appears in
+prose** — which fired on its first day, on this goal, in a test title the runner prints.
+
+**THE ORCHESTRATOR'S ERRORS, AND THE FOURTH IS A NEW KIND.**
+1. **My attainment ruling had a hole one function wide.** I tightened a bound 409 → 299 because
+   *"112 ticks of slack hides the class the function exists to catch"*, applied it to one term and
+   never to the `max` that selects between terms — **slack 1,166, ten times what I refused, in the
+   same commit.**
+2. **I said this goal discharged a debt it does not.** θ-b2 lacks θ-b1's confound; **not having a
+   confound is not resolving one.**
+3. **I appended a duplicate `PARKING.md` block** with divergent readings of one hypothesis.
+4. **I recorded a HUMAN'S PERCEPTUAL FINDING WITHOUT NOTING WHICH SCREEN IT CAME FROM**, then filed
+   a confident diagnosis of a defect that did not exist — accusing a comment of asserting what a
+   person would perceive without checking, **which is exactly what the accusation did.** Slot one,
+   applied to a picture instead of a number. **A perceptual finding carries the surface it was seen
+   on, or it is not a finding.**
+
+**Owed forward**: **the human WATCH on `apps/game`** for θ-a and G-031a · **the viewer parses v15 and
+draws the v13 picture** — parked, and it narrows ADR-0028 §4's own WATCH routing · **departure reason
+is not legible on screen** (human, WATCH #10) — seven rows in the data, one appearance to a player ·
+**G-028 is re-aimed by ADR-0033**: the review signal is **absent, not inverted**.

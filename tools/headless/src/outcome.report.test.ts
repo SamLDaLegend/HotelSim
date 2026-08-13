@@ -235,12 +235,19 @@ describe('summary schema 3, and what an older consumer does with it', () => {
     expect(reasons).not.toContain('satisfied');
     expect(reasons).not.toContain('gaveUpWaiting');
     expect(departuresOf(summary, 'satisfied')).toBe(0);
-    // SIX SINCE θ-b1, and the v3 document carries the new row without a bump: an ADDITIVE row
-    // does not move `SUMMARY_SCHEMA_VERSION` (`report.ts`'s stated policy), because every v3
-    // reason string is still present and still means what it meant. A consumer asking for
-    // `checkedOut` gets the same population it got; only a RENAME breaks that, and a rename is
-    // what the two `not.toContain` lines above are watching for.
-    expect(reasons).toHaveLength(6);
+    // THE v3 DOCUMENT CARRIES EVERY ROW THE SIM DOES, WITHOUT A BUMP: an ADDITIVE row does not
+    // move `SUMMARY_SCHEMA_VERSION` (`report.ts`'s stated policy), because every v3 reason string
+    // is still present and still means what it meant. A consumer asking for `checkedOut` gets the
+    // same population it got; only a RENAME breaks that, and a rename is what the two
+    // `not.toContain` lines above are watching for. Additive twice now: `leftDissatisfied` at
+    // θ-b1 and `visitEnded` at θ-b2, neither of them a bump.
+    //
+    // (It read `toHaveLength(6)` under a comment reading "SIX SINCE θ-b1" — a literal count in an
+    // assertion and a second copy of it in the prose beside, both needing a re-type at every
+    // insertion. Comparing against the sim's own union says the thing that was always meant —
+    // *the report drops no row* — and it cannot go stale. A LENGTH would also have been satisfied
+    // by six rows with one renamed; this is not.)
+    expect(reasons).toEqual([...GUEST_DEPARTURE_REASONS]);
   });
 
   it('ACCEPTS the frozen real v1 document, so the guard is not merely always-throwing', () => {
@@ -360,7 +367,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   //   was written. It read "nothing goes wrong in that hotel — 356 satisfied, 0 of everything
   //   else". At θ-b1 plenty goes wrong: 163 check out, 148 never get a bed and 42 walk out of
   //   one. What that hotel still cannot produce is an EVICTION, because nothing is ever built or
-  //   demolished in it — so it reaches three of six reasons and the criterion needs four.
+  //   demolished in it — so it reaches three of the table's reasons and the criterion needs four.
   //
   //   `evictedRoomUnusable` NEEDS A STOREY ABOVE A DEMOLITION. `roomCell` lays the seeded
   //   hotel along the ground floor, where nothing can lose its support; `builtRoomCell`
@@ -499,7 +506,11 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
 });
 
 describe('an empty table is still a whole table', () => {
-  it('a world where nobody has arrived reports five zero rows rather than none', () => {
+  it('a world where nobody has arrived reports a WHOLE table of zero rows rather than none', () => {
+    // (The title said "five zero rows" — a count in a test NAME, stale since θ-b1 and stale
+    // again at θ-b2, while the assertion two lines down has always compared against the sim's
+    // own union and could not go stale. Exactly the surface this file calls the worst place for
+    // a count while fixing two others in it.)
     const options = parseArgs(['--days', '0', '--seed', '1']);
     const world = createWorld(1, content);
     expect(world.guestOutcomes).toEqual(createGuestOutcomes());

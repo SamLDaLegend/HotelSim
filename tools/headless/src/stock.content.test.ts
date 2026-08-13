@@ -1,14 +1,22 @@
-// G-027b — THE TWELVE NUMBERS, ENUMERATED FROM THE SCHEMA AND EACH ONE EXERCISED.
+// G-027b — EVERY NUMBER THE STOCK MODEL READS, ENUMERATED FROM THE SCHEMA AND EACH ONE EXERCISED.
 //
 //   pnpm exec vitest run stock
 //
 // ============================================================================
-// A CENSUS, NOT A FORMULA. The goal block said `2 x needTypes + 2`; the true count is
-// `2 x needTypes + 4` = TWELVE, because the model also reads `abandonMarginBasisPoints` (whose
-// derivation R1 re-opens, so it cannot be excluded as pre-existing) and `stayDurationTicks`.
+// A CENSUS, NOT A FORMULA. The goal block said `2 x needTypes + 2`; the true count was
+// `2 x needTypes + 4` = TWELVE at θ-a, because the model also reads `abandonMarginBasisPoints`
+// (whose derivation R1 re-opens, so it cannot be excluded as pre-existing) and
+// `stayDurationTicks`. θ-b1 took it to fourteen and θ-b2 to fifteen.
 // A formula that happens to equal the right answer is not a census — so the list is REFLECTED
 // out of the parsed schemas and asserted set-equal to the names below, and a numeric field
 // added to either schema and not added here reddens by name.
+//
+// **THE COUNT LIVES IN ONE ASSERTION AND NOWHERE ELSE, AND THIS HEADER USED TO BREAK THAT.** It
+// read "THE TWELVE NUMBERS" and gave the total as a bare `= TWELVE` — a figure θ-b1 moved to
+// fourteen without touching this line, so the file's own title was two goals stale while every
+// assertion in it was green. That is the row-count claim class θ-b2 enumerated (ADR-0027): a
+// number duplicated across prose and predicate, where only the predicate is checked. The prose
+// now names the ERAS, which do not go out of date, and the live total is the `it(...)` below.
 //
 // AND EVERY ONE OF THEM MUST MOVE THE SIMULATION. The second half is the exhaustion arm: run
 // the shipped content, run it again with one number changed, and require the state hash to
@@ -39,6 +47,7 @@ import {
 } from '@hotelsim/sim';
 import type { BoundContent, GuestRulesData, NeedTypeData, SimContent } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
+import { FOOD_COURT_CONTENT } from './fixtures/food-court.js';
 import { marginBoundOver } from './fixtures/margin-bound.js';
 import { schedule } from './report.js';
 
@@ -56,6 +65,12 @@ const PER_GUEST_RULES = [
   // this list is what stops that.
   'dissatisfactionCapacityTicks',
   'dissatisfactionReliefPerTick',
+  // θ-b2. The census grew by one again, and this one is the first member that is UNREACHABLE IN
+  // THE SHIPPED HOTEL: a visit duration ends the stay of a guest that books no room, and every
+  // guest under shipped content books one. It is on the census rather than in `NOT_THE_MODELS`
+  // because the stock model absolutely does read it — see the exhaustion arm, which gives it the
+  // one hotel it is reachable in rather than excusing it.
+  'visitDurationTicks',
 ] as const;
 
 
@@ -103,9 +118,9 @@ describe('THE CENSUS — reflected out of the schemas, not counted by hand', () 
     for (const name of PER_GUEST_RULES) expect(declared).toContain(name);
   });
 
-  it('and the total is 2 x needTypes + 6 — FOURTEEN, where θ-a shipped twelve', () => {
+  it('and the total is 2 x needTypes + 7 — FIFTEEN, where θ-b1 shipped fourteen and θ-a twelve', () => {
     expect(needTypesInOrder(SHIPPED).length).toBe(4);
-    expect(PER_NEED_TYPE.length * needTypesInOrder(SHIPPED).length + PER_GUEST_RULES.length).toBe(14);
+    expect(PER_NEED_TYPE.length * needTypesInOrder(SHIPPED).length + PER_GUEST_RULES.length).toBe(15);
   });
 });
 
@@ -156,6 +171,20 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
    */
   const DEFAULT_ARM: Arm = { rooms: 3, amenities: 1, ticks: 2_000 };
   const SERVED_ARM: Arm = { rooms: 60, amenities: 3, ticks: 6_000 };
+  /**
+   * The hotel with NO BEDROOMS (θ-b2), and it is the third answer to "where does this number
+   * live" rather than an exception to the question.
+   *
+   * `visitDurationTicks` ends the stay of a guest that books no room, and **every guest under
+   * shipped content books one** — so it is unreachable in both arms above, at every value, by
+   * construction rather than by tuning. That is not grounds for excusing it onto
+   * `NOT_THE_MODELS`: the stock model reads it, hard, and the honest report is the one this file
+   * already gives for `dissatisfactionReliefPerTick` — say WHERE the number lives and run it
+   * there. `--rooms 0` because a food court has none, and `schedule` now refuses `--rooms N > 0`
+   * over such content rather than quietly seeding nothing.
+   */
+  const VISITOR_ARM: Arm = { rooms: 0, amenities: 3, ticks: 2_000 };
+  const FOOD_COURT = bindContent(FOOD_COURT_CONTENT as unknown as SimContent);
 
   /**
    * How each guest-rules field is mutated, in which hotel, and why — because a mutation chosen
@@ -173,21 +202,53 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
    *
    * `dissatisfactionReliefPerTick` GOES UP, because 1 is the floor `cloneDissatisfaction`
    * admits: a stock that never drains is a ratchet.
+   *
+   * `visitDurationTicks` GOES TO 400 IN THE FOOD COURT, and the hotel, the direction and the
+   * SIZE are each forced by something rather than chosen.
+   *
+   * THE HOTEL: no visitor exists in the other two arms, at any value.
+   *
+   * THE DIRECTION: `assertVisitCeilingIsInTheWindow` requires the ceiling strictly inside
+   * `(visit - t_last, visit)`, so against the fixture's ceiling of 190 the duration cannot go to
+   * or below 190 without the content refusing to bind. Downward is a 17-tick window; upward is
+   * open.
+   *
+   * THE SIZE, AND THIS IS THE ARM'S OWN RESOLUTION RATHER THAN A FACT ABOUT THE FIELD. Measured
+   * over this arm — 208 (shipped), 191, 207 and 300 all produce a BYTE-IDENTICAL world. Two
+   * mechanisms quantise it, both of them correct:
+   *
+   *   THE DEFERRAL. A visitor is at a provider from age 129 to 208, so a clock expiring anywhere
+   *   in [191, 207] is held until 208 — it leaves when it is next at liberty (ADR-0026 amended).
+   *   The whole downward window sits inside one filling.
+   *
+   *   THE SNAPSHOT. This arm hashes one world at one tick, and arrivals are 120 ticks apart, so a
+   *   change smaller than one arrival interval moves no guest across the boundary between
+   *   "departed" and "still here". 300 - 208 = 92 < 120 and is invisible; **400 - 208 = 192 > 120
+   *   and is not.**
+   *
+   * So the mutation is the smallest one that clears BOTH quantisers, and the numbers above are
+   * why, rather than a value that happened to turn the arm green. Recording them is the point:
+   * an arm whose resolution nobody has stated will one day be satisfied by a field it cannot see.
    */
-  const GUEST_RULES_MUTATION: Record<string, { readonly to: number; readonly arm: Arm }> = {
+  const GUEST_RULES_MUTATION: Record<
+    string,
+    { readonly to: number; readonly arm: Arm; readonly base?: BoundContent }
+  > = {
     wantAtBasisPoints: { to: 2_940, arm: DEFAULT_ARM },
     toleranceTicks: { to: 120, arm: DEFAULT_ARM },
     abandonMarginBasisPoints: { to: 0, arm: DEFAULT_ARM },
     stayDurationTicks: { to: 1_380, arm: DEFAULT_ARM },
     dissatisfactionCapacityTicks: { to: 181, arm: DEFAULT_ARM },
     dissatisfactionReliefPerTick: { to: 61, arm: SERVED_ARM },
+    visitDurationTicks: { to: 400, arm: VISITOR_ARM, base: FOOD_COURT },
   };
 
-  it('a mutation to ANY of the fourteen produces a different SIMULATION', () => {
+  it('a mutation to ANY of the fifteen produces a different SIMULATION', () => {
     const unmoved: string[] = [];
     const baseline = new Map<Arm, string>([
       [DEFAULT_ARM, simHash(SHIPPED, DEFAULT_ARM)],
       [SERVED_ARM, simHash(SHIPPED, SERVED_ARM)],
+      [VISITOR_ARM, simHash(FOOD_COURT, VISITOR_ARM)],
     ]);
     for (const needType of needTypesInOrder(SHIPPED)) {
       for (const field of PER_NEED_TYPE) {
@@ -202,10 +263,12 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
     for (const field of PER_GUEST_RULES) {
       const plan = GUEST_RULES_MUTATION[field];
       expect(plan, `${field} is on the census with no mutation planned`).toBeDefined();
-      const mutated = rebound({
-        guestRules: (SHIPPED.content.guestRules ?? []).map(
-          (entry) => ({ ...entry, [field]: plan!.to }) as GuestRulesData,
-        ),
+      // THE BASE IS THE ARM'S OWN CONTENT, not always `SHIPPED` (θ-b2): a field only reachable in
+      // a hotel with no bedrooms has to be mutated in the document that describes one.
+      const base = plan!.base ?? SHIPPED;
+      const mutated = bindContent({
+        ...base.content,
+        guestRules: (base.content.guestRules ?? []).map((entry) => ({ ...entry, [field]: plan!.to }) as GuestRulesData),
       });
       if (simHash(mutated, plan!.arm) === baseline.get(plan!.arm)) unmoved.push(`guestRules.${field}`);
     }

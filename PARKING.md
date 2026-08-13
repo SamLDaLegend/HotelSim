@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2159,3 +2159,167 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   found by a critic**, and not diagnosed. **FALSIFICATION TEST**: repeat at C = 700 and 1050; if it
   fills in monotonically the 1200 reading is noise, and if it does not, the feedback is real and the
   dial has a usable range rather than a usable direction.
+
+## Discovered during G-027b θ-b2 (2026-08-13) — optional lodging
+
+- **A MIXED HOTEL — SOME GUESTS LODGE, SOME VISIT — IS M6's, AND θ-b2 SHIPS ONLY THE ADMISSION.**
+  The human's design intent is *"some guests might not want to stay at the hotel"*, which needs
+  guest archetypes. What landed is the structural half (ADR-0017 §5): the terminator is keyed on
+  each guest's OWN vector via `lodgingNeedStateOf`, never on the content, so a hotel serving both
+  populations is an archetype table away rather than a rewrite. **FALSIFICATION TEST**: give one
+  guest-rules row a need subset and arrive two guests under one content set. If each reaches its
+  own clock with no change to `stepGuests`, the admission held; if `stepGuests` needs a branch,
+  the keying was per-content after all and the M6 estimate is wrong.
+
+- **A VISITOR PAYS NOTHING.** The money loop's half of the human's intent: a food court currently
+  gives lunch away. `hotel_cafe.nightlyRatePence` is 0 and `payForStay` charges for a ROOM, so
+  `visitEnded` writes no transaction at all. Per-provider pricing is M4's. **FALSIFICATION TEST**:
+  run the food-court fixture and fold `roomRevenue` — it is 0 today and 0 after this goal, so the
+  money loop is not yet fed by a visitor. When per-provider pricing lands this reads non-zero, and
+  `countRoomRevenueTransactions === checkedOut` will need a second witness for the visit row.
+
+- **HYPOTHESIS: A VISITOR IS ~1.0 CONCURRENT GUESTS PER PROVIDER WHERE A LODGER IS ~0.125.**
+  ADR-0026 measured one provider sustaining ~8 concurrent lodgers, because a lodger sleeps most of
+  its day. A visitor occupies a provider for **208 of its 208 ticks** — its visit IS its service —
+  so the provisioning rule for a food court is roughly **eight times tighter**, and the build loop
+  reads completely differently there. **FALSIFICATION TEST**: seed `k` of each amenity and arrive
+  every `A` ticks; `leftDissatisfied` should stay 0 while `208/A <= k` and rise sharply above it.
+  Consistent so far at k=3,A=30 (0 walkouts) and k=1,A=30 (non-zero), and at k=1,A=120 (0). **If
+  the knee is not at `208/A = k` the arithmetic is wrong, not the dial.**
+
+- **THE VISIT CLOCK IS QUANTISED BY THE DEFERRAL, SO SMALL CHANGES TO IT ARE INERT.** Measured on
+  the shipped fixture: `visitDurationTicks` of 191, 207 and 208 all produce a **byte-identical**
+  world, because the guest is at a provider from age 129 to 208 and the terminator waits for it to
+  be at liberty. That is correct behaviour, and it means the field's usable resolution is the
+  engagement boundary rather than the tick. **FALSIFICATION TEST**: sweep it across an engagement
+  boundary (208 → 400 moves the hash; 208 → 300 does not, at `arrivalEveryTicks` 120). If a
+  sub-boundary change ever moves a run, the deferral has stopped applying somewhere.
+
+- **`apps/game` HAS NO CONTENT-SELECTION PATH, AND `scenario.ts:78` CARRIES A SECOND THROWING
+  `lodgingRoomTypeOf`.** ADR-0019 keeps it out of θ-b2's file set and ADR-0028 §4 routes the WATCH
+  around it, but the debt is real: the renderer of record cannot draw a hotel this simulation can
+  now run. **FALSIFICATION TEST**: point `apps/game` at a lodging-free content directory — it
+  throws *"there is no hotel to open"*. The repair is the same nullable-accessor split
+  `report.ts` took (`lodgingRoomTypeIn` beside a still-throwing `lodgingRoomTypeOf`), and it
+  belongs to whichever goal ships a second content set for real.
+
+- **ONE HOST DECISION, THREE IMPLEMENTATIONS.** `report.ts:443`, `apps/game/src/scenario.ts:78`
+  and `determinism-log.ts:112` each answer *"which room type do guests sleep in"*, and two of them
+  throw the same sentence in different words. θ-b2 fixed only the one it owns. **FALSIFICATION
+  TEST**: grep for `firstRoomTypeProviding` behind a `lodgingNeedOf` — three hits today. A change
+  to the rule has to be made three times, which is the duplicated-constant class G-018 paid for.
+
+- **`idleShareBasisPoints` RISES WHEN THE LODGING TERM DROPS OUT**, and G-028's falsification
+  threshold X is written against it. A food court's need table has no lodging term, so the ceiling
+  it computes is strictly higher than a hotel's. **FALSIFICATION TEST**: compute it under both
+  content sets; if the food court's is not strictly higher, `needShareBasisPoints` is not reading
+  the lodging term the way its docstring says it does.
+
+- **THE WATCH INSTRUMENT DRAWS EVERY RECORDING AGAINST THE SHIPPED CONTENT TABLES.**
+  `tools/viewer/serve.mjs:19` serves `packages/content/data` from a **hard-coded path**, so a
+  recording made with `--content <dir>` is rendered using labels, colours and need names from the
+  *shipped* tables rather than the ones the run actually used. **ADR-0028 §4 routes θ-b2's WATCH
+  through this instrument**, which makes the caveat load-bearing rather than tidy.
+  **Benign this time, and not always**: the food-court fixture is shipped-content-minus-two-rows,
+  so every need it uses has a shipped entry. **A genuinely different content set would render
+  magenta bars with nothing on screen saying why** — a WATCH that looks like a finding and is an
+  instrument fault.
+  **ADR-0028 §4 is hereby narrowed**: the viewer is a sound WATCH surface for content that is a
+  **subset of the shipped tables**, and unsound otherwise.
+  **FALSIFICATION TEST**: record a run under content declaring a need id absent from
+  `packages/content/data/need-types.json`, then open it. *If the viewer renders it with a fallback
+  colour and no warning, the caveat is real and the fix is to serve the recording's own content
+  directory. If it refuses or labels the gap, this closes.*
+  -> **owed by whichever goal ships a second content set for real, beside the `apps/game` entry
+  above.**
+
+  *(Filed 2026-08-13. **The orchestrator appended a SECOND θ-b2 block here and it duplicated three
+  of the entries above with DIVERGENT readings** — the concurrency hypothesis cited `k=3,A=30 /
+  k=1,A=30 / k=1,A=120` in one and `k=3,A=60 / k=1,A=30 (143 of ~473)` in the other. Found by
+  `ai-critic` at sweep 2. **A parked hypothesis whose falsification test cites two different arms
+  is precisely what the parking rule exists to prevent** — a reader cannot tell which is current,
+  so neither is a result waiting for a goal. Duplicate removed; only this entry was new. **The
+  lesson is not "check before appending" but that a ledger section keyed on a goal name needs its
+  goal name to be unique**, and two blocks headed `G-027b θ-b2` on the same date were both
+  correct-looking.)*
+
+- **A DEPARTING GUEST LOOKS THE SAME WHATEVER MADE IT LEAVE** (human, WATCH #10, 2026-08-13).
+  Seven departure rows, one appearance. **ADR-0025 §2 spent a schema row keeping "nobody would give
+  me a room" distinct from "I had a bed and nothing to do", because they are opposite instructions
+  to a player — build rooms, or build amenities. That distinction is live in the data and absent
+  from the screen**, so the build loop's steering signal reaches the report and not the person.
+  **The human routed it themselves**: *"this will be easier to show when we get to visualising the
+  game."* Render track, not the sim.
+  **FALSIFICATION TEST**: show a watcher a recording containing at least three departure reasons
+  and ask which guests left for which. *If they can sort them without reading the outcome table,
+  this closes. If they cannot, the row split is doing its job in the ledger and not in the game,
+  and the render goal owes a mark per reason.*
+
+- ~~**A 2-PIXEL MARK IS NOT A MARK**~~ **WITHDRAWN THE SAME HOUR — THE MARK WORKS.** The human
+  reported not seeing the lobby fuse; the orchestrator filed it as a perceptual defect and as
+  G-030's palette failure repeating. **The human was looking at the VIEWER. In `apps/game` they can
+  see it.** *("FYI — I can see the new mark in the HotelSim 5180.")*
+  **The orchestrator handed over two surfaces in one message and then wrote down the answer as
+  though there were one.** A perceptual finding carries the surface it was seen on, or it is not a
+  finding — CLAUDE.md rule 4 slot one, applied to an observation instead of a number.
+  **Kept struck rather than deleted, because the confident wrong diagnosis is the reusable part**:
+  it accused a comment of asserting what a person would perceive without checking, which is
+  precisely what the accusation itself did.
+
+- **THE VIEWER PARSES THE NEW SCHEMA AND DRAWS THE OLD PICTURE** (human, WATCH #10, 2026-08-13).
+  *"The viewer has not been visually updated with the new schema or anything."* Its version
+  constant was two releases stale and is now pinned to `SAVE_SCHEMA_VERSION` by a test — **but the
+  drawing was never updated for what v14 and v15 added**, so it renders a v15 recording without the
+  patience fuse and without distinguishing the departure rows.
+  **This is `frameAt`'s own failure mode one layer up.** That guard exists so a mismatched frame is
+  refused rather than *"drawn as a plausible hotel that is not the hotel that ran"* — and a viewer
+  that accepts the frame and omits what is new does the same thing with the version check green.
+  **ADR-0028 §4 routes θ-b2's WATCH through this instrument**, so this is load-bearing, not tidy.
+  **FALSIFICATION TEST**: open a v15 recording containing a queueing guest and a `visitEnded`
+  departure. *If the fuse and the row are absent, the drawing is behind the schema and the WATCH
+  routing needs re-deciding. If they render, only the constant was stale and this closes.*
+  **Decide alongside the keep-or-delete question**: the viewer's one unique capability is
+  scrub-and-replay, which  cannot do — but it is now behind on drawing, cannot load
+  alternative content, and each repair is a step toward the second renderer §9 forbids.
+
+- **THE WATCH INSTRUMENT DRAWS EVERY RECORDING AGAINST THE SHIPPED CONTENT TABLES.**
+  `tools/viewer/serve.mjs:19` serves `packages/content/data` from a **hard-coded path**, so a
+  recording made with `--content <dir>` is rendered using labels, colours and need names from the
+  *shipped* tables rather than the ones the run actually used. **ADR-0028 §4 routes θ-b2's WATCH
+  through this instrument**, which makes the caveat load-bearing rather than tidy.
+  **Benign this time, and not always**: the food-court fixture is shipped-content-minus-two-rows,
+  so every need it uses has a shipped entry. **A genuinely different content set would render
+  magenta bars with nothing on screen saying why** — a WATCH that looks like a finding and is an
+  instrument fault.
+  **ADR-0028 §4 is hereby narrowed**: the viewer is a sound WATCH surface for content that is a
+  **subset of the shipped tables**, and unsound otherwise.
+  **FALSIFICATION TEST**: record a run under content declaring a need id absent from
+  `packages/content/data/need-types.json`, then open it. *If the viewer renders it with a fallback
+  colour and no warning, the caveat is real and the fix is to serve the recording's own content
+  directory. If it refuses or labels the gap, this closes.*
+  -> **owed by whichever goal ships a second content set for real, beside the `apps/game` entry
+  above.**
+
+  *(Filed 2026-08-13. **The orchestrator appended a SECOND θ-b2 block here and it duplicated three
+  of the entries above with DIVERGENT readings** — the concurrency hypothesis cited `k=3,A=30 /
+  k=1,A=30 / k=1,A=120` in one and `k=3,A=60 / k=1,A=30 (143 of ~473)` in the other. Found by
+  `ai-critic` at sweep 2. **A parked hypothesis whose falsification test cites two different arms
+  is precisely what the parking rule exists to prevent** — a reader cannot tell which is current,
+  so neither is a result waiting for a goal. Duplicate removed; only this entry was new. **The
+  lesson is not "check before appending" but that a ledger section keyed on a goal name needs its
+  goal name to be unique**, and two blocks headed `G-027b θ-b2` on the same date were both
+  correct-looking.)*
+
+- **A DEPARTING GUEST LOOKS THE SAME WHATEVER MADE IT LEAVE** (human, WATCH #10, 2026-08-13).
+  Seven departure rows, one appearance. **ADR-0025 §2 spent a schema row keeping "nobody would give
+  me a room" distinct from "I had a bed and nothing to do", because they are opposite instructions
+  to a player — build rooms, or build amenities. That distinction is live in the data and absent
+  from the screen**, so the build loop's steering signal reaches the report and not the person.
+  **The human routed it themselves**: *"this will be easier to show when we get to visualising the
+  game."* Render track, not the sim.
+  **FALSIFICATION TEST**: show a watcher a recording containing at least three departure reasons
+  and ask which guests left for which. *If they can sort them without reading the outcome table,
+  this closes. If they cannot, the row split is doing its job in the ledger and not in the game,
+  and the render goal owes a mark per reason.*
+
+

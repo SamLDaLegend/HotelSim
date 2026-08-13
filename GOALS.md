@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v14** (θ-b1) · summary **3** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -28,7 +28,11 @@
   named out loud.
 - **Unreliable: 0 gates / 0 defects** — §2.0's sense, which is flakiness, **not** the ruled reds.
   §2.0: a **THIRD** unreliable gate is a stop condition. **Tripwire** `BOUND 1.4557` (ADR-0015),
-  bounds pinned to their derivation (ADR-0016). **The ladder is CONTENT.**
+  bounds pinned to their derivation (ADR-0016). **The SPEED ladder is CONTENT** — *(corrected
+  2026-08-13, ADR-0033: this line read "the ladder is CONTENT" and was being taken as covering
+  AXIS 1's ladder too. **AXIS 1's ladder is four CLI flag strings in a test file**, provisioned by
+  `schedule()`'s defaults, and no gate reads it. Two different objects, similar names, one
+  sentence.)*
 - **The re-take goal carries THREE campaigns**: tickcost, scaling, and `PARKING.md`'s
   needs-history interval (1.1071..1.2534, n=25) whose two arms are no longer poolable. Sized by
   `ai-critic`, which checked four other candidates and found none implied.
@@ -44,11 +48,17 @@
   displayed browser pane** — `apps/game` is the WATCH surface (ADR-0023) and it will not composite
   headless. **θ-b1's WATCH is discharged**: `ai-critic` recorded and scrubbed 2,880 frames, found a
   guest vanishing mid-meal at tick 6428, and confirmed the repair at tick 2718.
-  **Not started (4)**: **θ-b2 — optional lodging, 25 enumerated sites** · G-027c · G-031b · G-028.
+  **In flight (1)**: **θ-b2 — optional lodging**, sweeps spent, in verification.
+  **Not started (1)**: **G-028** — and its FIRST job is now the LADDER, not the scorer (ADR-0030).
+  **STRUCK — NAMES ONLY, NEVER GOALS (ADR-0032 §2)**: ~~G-027c~~ · ~~G-031b~~. **Each occurred
+  exactly once in the whole ledger — in this list.** No statement, no criteria, no owner, and both
+  were being counted in "M2.5 is nine goals" and in every estimate of what remained. **A goal with
+  no block is not counted.** M2.5 is **SEVEN goals, four done**. If a statement can be written for
+  either, it gets a block and rejoins; if not, the slot is closed and was always empty.
   **THEN M3 RESUMES at G-023b — UNBLOCKED** (960 ticks of slack where its plan pass measured zero)
   → G-024/G-025 → G-026, last in milestone, two critics. **Four M3 goals of its own remain.**
-- **Owed by the human**: M2.5 exit · M3 exit · **a push**, which is the only thing that discharges
-  the hashes above.
+- **Owed by the human**: M2.5 exit · M3 exit · **the two WATCHes**. *(The push was DISCHARGED
+  2026-08-13: `ab2991c..9f89c31`.)*
 - **Owed by goals**: **G-027b derives N and X at PLAN, before BUILD** — the idle-run bound and
   idle-share ceiling that G-028's criterion and `PARKING.md`'s hypothesis both rest on; baseline
   **61.9% of room-holding guest-frames idle, longest run 96 frames = 960 of 1,440 ticks** · **the

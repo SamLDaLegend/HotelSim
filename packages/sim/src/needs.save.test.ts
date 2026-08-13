@@ -484,6 +484,11 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
         arrived: 9,
         departures: [
           { reason: 'checkedOut' as const, count: 5 },
+          // θ-b2: this world is a v5-content forgery, so no guest under it could be a visitor —
+          // the row is present and zero, which is what a table with every reason in it looks
+          // like when one of them is unreachable. `assertGuestOutcomes` demands the ROW, not a
+          // count, and that distinction is the reason it is spelled here rather than omitted.
+          { reason: 'visitEnded' as const, count: 0 },
           { reason: 'gaveUp' as const, count: 3 },
           { reason: 'leftDissatisfied' as const, count: 0 },
           { reason: 'evictedRoomGone' as const, count: 1 },

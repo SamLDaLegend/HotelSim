@@ -24,7 +24,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 14;
+export const SAVE_SCHEMA_VERSION = 15;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -1304,6 +1304,109 @@ function migrateV13ToV14(world: unknown): unknown {
 }
 
 /**
+ * The v14 departure table, spelled out rather than read from the live union (θ-b2).
+ *
+ * A FROZEN LITERAL FOR `migrateV13ToV14`'s REASON, ONE ERA LATER: a migration that walked
+ * `GUEST_DEPARTURE_REASONS` would re-describe history every time the union grows, and this step
+ * must keep meaning what a v14 world meant however many rows this build has.
+ */
+const V14_MIGRATION_DEPARTURE_ROWS: readonly string[] = Object.freeze([
+  'checkedOut',
+  'gaveUp',
+  'leftDissatisfied',
+  'evictedRoomGone',
+  'evictedRoomUnusable',
+  'evictedCauseUnrecorded',
+]);
+
+/** Where `visitEnded` goes: immediately after `checkedOut`, ahead of everything else. */
+const V15_MIGRATION_INSERT_AT = 1;
+
+/** What the inserted row is called, spelled here rather than read from the live union. */
+const V15_MIGRATION_INSERTED_REASON = 'visitEnded';
+
+/**
+ * v14 -> v15: a world in which lodging was compulsory (θ-b2, ADR-0017 §5, ADR-0025, ADR-0028).
+ *
+ * ADR-0006 fires for the FOURTEENTH time, and this step carries ONE change where its predecessor
+ * carried two:
+ *
+ *   departures[1]   INSERTED, 0.   A v14 guest could not end a VISIT, because it could not be a
+ *                                  visitor: `bindContent` refused content declaring roles and no
+ *                                  lodging need, and `applyCommands` refused a guest arriving
+ *                                  under content with no lodging need. The count is therefore 0
+ *                                  EXACTLY rather than by approximation — a row NOBODY COULD HAVE
+ *                                  FILLED, which is `migrateV13ToV14`'s weaker claim and not
+ *                                  `migrateV11ToV12`'s coincident-populations argument. The
+ *                                  conservation law is untouched because 0 adds nothing to a sum.
+ *
+ * NO GUEST FIELD MOVES, and that is worth stating because the previous step added one. A visitor
+ * is not a new KIND of guest record: it is a guest whose need vector happens to contain no lodging
+ * need, which every version of `Guest` since v5 could already represent. Nothing in the bytes needs
+ * rewriting, so nothing is.
+ *
+ * THE OVERWRITE GUARD refuses a table that is not spelled the way v14 spelled it, which catches a
+ * v15 document fed in as v14 — its index 1 already reads `visitEnded` — and a corrupt table alike.
+ *
+ * NOT TESTED BY THE FIXTURE ALONE, DELIBERATELY, for `migrateV13ToV14`'s reason: the permanent v1
+ * fixture reaches this step with six ZERO rows, over which any insertion whatsoever looks correct
+ * (ADR-0007's exact shape). `guest.visit.save.test.ts` drives a synthetic v14 world with all six
+ * counters distinct and non-zero and watches each land under its v15 index.
+ */
+function migrateV14ToV15(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const outcomes = world['guestOutcomes'];
+  if (!isRecord(outcomes)) {
+    throw new Error('Save is corrupt: world.guestOutcomes is missing, so its departures cannot gain a row');
+  }
+  if (!Object.keys(outcomes).includes('departures')) {
+    throw new Error('Save is corrupt: world.guestOutcomes has no "departures" field, so it is not a v14 world');
+  }
+  const rows = outcomes['departures'];
+  if (!Array.isArray(rows)) {
+    throw new Error('Save is corrupt: world.guestOutcomes.departures is missing or not an array');
+  }
+  if (rows.length !== V14_MIGRATION_DEPARTURE_ROWS.length) {
+    throw new Error(
+      `Save is corrupt: world.guestOutcomes.departures has ${rows.length} row(s) where a v14 world has ` +
+        `${V14_MIGRATION_DEPARTURE_ROWS.length}; this is not a v14 departure table`,
+    );
+  }
+  // CHECKED BEFORE ANYTHING IS INSERTED, so a table that is not v14's comes out unmodified and
+  // says why — rather than gaining a row in the middle of a shape nobody recognises.
+  const carried = V14_MIGRATION_DEPARTURE_ROWS.map((reason, index) => {
+    const row = rows[index];
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.guestOutcomes.departures[${index}] is not an object`);
+    }
+    if (row['reason'] !== reason) {
+      throw new Error(
+        `world.guestOutcomes.departures[${index}] is "${String(row['reason'])}" where a v14 world carries ` +
+          `"${reason}", so it is not a v14 departure table; inserting a row into it would shift counts onto ` +
+          'reasons that do not describe them',
+      );
+    }
+    const count = row['count'];
+    if (typeof count !== 'number') {
+      throw new Error(
+        `Save is corrupt: world.guestOutcomes.departures[${index}].count is missing or not a number, so this ` +
+          "world's stays cannot be counted",
+      );
+    }
+    return { reason, count };
+  });
+  const departures = [
+    ...carried.slice(0, V15_MIGRATION_INSERT_AT),
+    { reason: V15_MIGRATION_INSERTED_REASON, count: 0 },
+    ...carried.slice(V15_MIGRATION_INSERT_AT),
+  ];
+
+  return { ...world, guestOutcomes: { ...outcomes, departures } };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1325,6 +1428,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 11, to: 12, migrate: migrateV11ToV12 }),
   Object.freeze({ from: 12, to: 13, migrate: migrateV12ToV13 }),
   Object.freeze({ from: 13, to: 14, migrate: migrateV13ToV14 }),
+  Object.freeze({ from: 14, to: 15, migrate: migrateV14ToV15 }),
 ]);
 
 /**

@@ -119,7 +119,14 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // DOCUMENT: it is compared field by field, and `stateHash` plus the new zero row are the
     // only things in it that differ. Four guests still in the hotel, 24 still arrived, 4 still
     // checked out, 16 still gave up.
-    stateHash: '8d173796369a55b2',
+    // MOVED AGAIN AT θ-b2 from `8d173796369a55b2`, for TWO causes and neither is a behaviour
+    // change IN THIS HOTEL: the departure table gains a SEVENTH ROW (`visitEnded`), which is
+    // hashed state, and `guest-rules.json` gains `visitDurationTicks` so the fingerprint moves
+    // with it. **This content declares a lodging need, so no guest under it can be a visitor and
+    // the new branch is unreachable at any value of the new field.** THE EVIDENCE IS THIS
+    // DOCUMENT, field by field: `stateHash` and the new zero row are the only things that differ.
+    // Four guests still in the hotel, 24 still arrived, 4 still checked out, 16 still gave up.
+    stateHash: 'd21f2a04f787dc80',
   },
   guests: {
     arrived: 24,
@@ -129,6 +136,11 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // than a change to the simulation.
     departures: [
       { reason: 'checkedOut', count: 4 },
+      // θ-b2, ADDITIVE AND WITHOUT A SCHEMA BUMP — `report.ts`'s published policy: a new row
+      // renames nothing and removes nothing, so every schema-3 consumer still finds every
+      // string it knew. Zero here because this content declares a lodging need and a visitor
+      // therefore cannot exist under it.
+      { reason: 'visitEnded', count: 0 },
       { reason: 'gaveUp', count: 16 },
       { reason: 'leftDissatisfied', count: 0 },
       { reason: 'evictedRoomGone', count: 0 },
@@ -321,6 +333,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     // rather than 480, so three rooms serve three guests in two days instead of fifteen and
     // the rest give up waiting. Same simulation, three times the stay.
     'left checkedOut             4',
+    // θ-b2: the seventh row, ZERO here for a structural reason rather than a contingent one —
+    // this content declares a lodging need, so every guest books a room and NO guest under it
+    // can be a visitor at all. Where `leftDissatisfied`'s zero below is "it did not happen in
+    // this hotel", this one is "it cannot happen under this content".
+    'left visitEnded             0',
     'left gaveUp                 16',
     // θ-b1: the sixth row, and it is ZERO here — which is the golden earning its keep. In a
     // three-room hotel almost nobody gets a bed, and a guest with no bed leaves as `gaveUp`
@@ -357,7 +374,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     510000p',
-    'state hash  8d173796369a55b2',
+    'state hash  d21f2a04f787dc80',
   ].join('\n') + '\n';
 
 /**
@@ -514,7 +531,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  8d173796369a55b2']);
+    expect(differing).toEqual(['seed        42', 'state hash  d21f2a04f787dc80']);
     expect(lines43).toContain('seed        43');
   });
 });

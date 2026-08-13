@@ -306,9 +306,14 @@ describe('the 7 -> 8 step maps three counters onto rows and invents nothing', ()
   });
 
   it('writes the rows as its OWN frozen literal, not a live value it borrowed', () => {
-    // ADR-0008 (1). `V8_MIGRATION_GUEST_OUTCOMES` and `createGuestOutcomes()` hold the same
-    // five reasons today and are SUPPOSED to, so no assertion here can tell the two
-    // implementations apart — this test would pass either way. What makes its name true is
+    // ADR-0008 (1). `V8_MIGRATION_GUEST_OUTCOMES` names a v8 world's reasons and
+    // `createGuestOutcomes()` names this build's; **they no longer agree, in count or in
+    // spelling** — θ-b1 and θ-b2 each inserted a row, and G-027a renamed two — which is the
+    // divergence ADR-0008 exists to permit. (This read "hold the same five reasons today and are
+    // SUPPOSED to", which was true at G-015 and false from θ-b1 onward, and the sentence's whole
+    // argument rested on it.) No assertion HERE can tell the two implementations apart either
+    // way, because this test drives the migration rather than the live builder. What makes its
+    // name true is
     // the source scan in
     //
     //     tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts

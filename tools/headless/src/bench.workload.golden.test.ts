@@ -235,7 +235,17 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   benchmark's hotel being a bad hotel, not the benchmark breaking — see
     //   `workload.concurrency.test.ts`, which pins the occupancy this workload actually holds
     //   and asserts, by name, that it has diverged from the campaign's calibrated fifteen.
-    expect(hashState(plain)).toBe('5a8cec719d1e9e95');
+    //   `5a8cec719d1e9e95` -> `bab5925fb9c5df13`   θ-b2 made lodging OPTIONAL. TWO causes, and
+    //   they are separable here in a way ADR-0026's amendment records they were not at θ-b1:
+    //   the departure table gains a SEVENTH ROW (`visitEnded`), which is hashed state and moves
+    //   the hash for every world whatever it did; and `guest-rules.json` gains
+    //   `visitDurationTicks`, which moves the content fingerprint. **NEITHER IS A BEHAVIOUR
+    //   CHANGE HERE**: this benchmark's content declares a lodging need, so every guest books a
+    //   room, no guest can be a visitor, and the new branch is unreachable at any value of the
+    //   new field. The control is the outcome block below — arrivals, checkouts, evictions and
+    //   the need rows are all unmoved, which is what says the shape moved and the simulation
+    //   did not.
+    expect(hashState(plain)).toBe('bab5925fb9c5df13');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -350,7 +360,10 @@ describe('the same workload with the player churning the building', () => {
     // nothing about which rooms the churn schedule demolishes.
     // SEVENTH TIME AT θ-b1: `0cbe3a1234affebe` -> `dc043d95d351ba49`, for the two causes the
     // PLAIN row above gives — a new hashed field and a moved content fingerprint.
-    expect(hashState(churn)).toBe('dc043d95d351ba49');
+    //   `dc043d95d351ba49` -> `6a2bcb431c45e2f7`   θ-b2, for the reason the plain arm moved:
+    //   a seventh departure row in hashed state and a new content field in the fingerprint,
+    //   with no reachable behaviour change under content that declares a lodging need.
+    expect(hashState(churn)).toBe('6a2bcb431c45e2f7');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

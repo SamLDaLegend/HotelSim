@@ -256,12 +256,41 @@ describe('HALF TWO: the departure table gains a row, at a frozen position', () =
 });
 
 describe('the position is a fact about the union, not about this migration alone', () => {
-  it('lands `leftDissatisfied` where the live table carries it', () => {
-    // The two are written down separately ON PURPOSE — the migration may not read the live list
-    // (ADR-0008), which is what lets them diverge later. Today they agree, and this is the test
-    // that would notice the day somebody reorders the union without writing a migration.
-    expect(GUEST_DEPARTURE_REASONS[2]).toBe('leftDissatisfied');
+  it('lands `leftDissatisfied` at the index the v14 ERA carries it, and the live list still has it', () => {
+    // ------------------------------------------------------------------
+    // THEY DIVERGED AT θ-b2, AND THIS TEST'S OWN COMMENT PREDICTED IT IN THESE WORDS: *"the two
+    // are written down separately ON PURPOSE — the migration may not read the live list
+    // (ADR-0008), which is what lets them diverge LATER. Today they agree."*
+    //
+    // **θ-b2 is that later.** `visitEnded` went in at index 1, so the live table has seven rows
+    // where this STEP produces six, and the old assertion — `migrated().departures ===
+    // GUEST_DEPARTURE_REASONS` — compared a v14 document against a v15 union.
+    //
+    // The repair is NOT to re-type the index. What this arm exists to catch is *somebody
+    // reordering the union without writing a migration*, and that claim survives the divergence
+    // intact if it is stated the way it was always meant:
+    //
+    //   THE STEP lands the row at its own frozen index, in the v14 era's own order.
+    //   THE UNION still carries the row, and `migrateV14ToV15` is what accounts for the gap.
+    //
+    // Both are asserted below, and neither has a hand-typed live index in it.
+    // ------------------------------------------------------------------
+    const V14_ERA = [
+      'checkedOut',
+      'gaveUp',
+      'leftDissatisfied',
+      'evictedRoomGone',
+      'evictedRoomUnusable',
+      'evictedCauseUnrecorded',
+    ];
+    expect(V14_ERA[2]).toBe('leftDissatisfied');
     const outcomes = migrated()['guestOutcomes'] as { departures: { reason: string }[] };
-    expect(outcomes.departures.map((row) => row.reason)).toEqual([...GUEST_DEPARTURE_REASONS]);
+    expect(outcomes.departures.map((row) => row.reason)).toEqual(V14_ERA);
+    // AND THE LIVE UNION STILL CARRIES IT — a rename or a deletion lands here, where a mere
+    // insertion ahead of it does not. Every v14 name is still live and still in its old relative
+    // order, which is the property a migration chain has to preserve.
+    for (const reason of V14_ERA) expect(GUEST_DEPARTURE_REASONS).toContain(reason);
+    const liveOrder = GUEST_DEPARTURE_REASONS.filter((reason) => V14_ERA.includes(reason));
+    expect(liveOrder).toEqual(V14_ERA);
   });
 });

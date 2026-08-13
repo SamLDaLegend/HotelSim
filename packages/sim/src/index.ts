@@ -63,6 +63,13 @@ export {
   // the four arms need it from outside `packages/sim`; it is the `abandonMarginOf` shape and
   // is on the surface for the same reason.
   stayDurationOf,
+  // θ-b2, and on the surface for `stayDurationOf`'s reason: the runner and the food-court arms
+  // need the visitor's clock from outside `packages/sim` to re-derive it rather than copy it.
+  visitDurationOf,
+  // ADR-0031. Exported so `visit.content.test.ts` calls THE fold rather than keeping a second
+  // copy of it in step — the duplicate it replaces had drifted a whole sweep behind and returned
+  // 73/10/63 where this returns 70/34/36, under a docstring claiming they could not disagree.
+  visitRoundOf,
   toleranceOf,
   wantAtOf,
   idleShareBasisPoints,

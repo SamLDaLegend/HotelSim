@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -1938,3 +1938,660 @@ it**, and in both cases the list is the sample somebody happened to notice.
 class of claims** — found by the critic reading for the class instead.
 
 > **Enumerating a list is not enumerating a class. The list is always the part somebody noticed.**
+
+## ADR-0025 AMENDMENT 2 — §1's "θ-b2 carries no schema" was wrong, and the builder named it rather than quietly paying it
+
+**Date**: 2026-08-13 · **Amends**: ADR-0025 §1 · **Raised by**: `ai-engineer` at θ-b2 PLAN.
+
+ADR-0025 §1's seam table said **θ-b1 carries the schema bump and θ-b2 carries none.** θ-b2's plan
+argues for a **seventh departure row, `visitEnded`, at index 1, and save v15.** The contradiction
+is named here because ADR-0025's *first* amendment set that precedent: **an ADR that misprices a
+cost makes the next reader weigh the trade wrongly, and the correction matters more than the
+arithmetic.** Second time in one ADR; both times the builder caught it against the shipped policy.
+
+### Why the row, and it turns on a criterion being vacuous
+
+The block's law is `lodgingNeedOf(content) !== undefined ⇒ revenue === checkedOut`, **else
+`revenue === 0`**. The second clause is **structurally true and was true before this goal existed**:
+`reserve` (`guests.ts:2064`) gates room acquisition on `lodgingNeedId !== undefined`, so under
+lodging-free content no guest holds a room and `payForStay` is unreachable. **Measured on the arm
+with none of θ-b2's code written: 45 arrivals, 23 departures, roomRevenue transactions 0.**
+
+> **A criterion that already passes at HEAD is not a criterion for this goal.** ADR-0007's sixth
+> amendment, in the exit criteria rather than in a test.
+
+And the alternative is worse than vacuous. If the visitor is filed under `checkedOut`, then
+`report.ts:1601`'s `revenueTransactions === checkedOutStays` **must become content-conditioned** —
+and it would stop looking **exactly on the code path this goal adds.** `guests.ts:487-512` says in
+as many words that this is *the one cross-subsystem witness the outcome table has*, and that what
+it catches is a departure misfiled between `checkedOut` and any other row. **Conditioning it away
+is ADR-0027's class — a replacement better at its own subject that drops what the old one carried
+— located in a criterion instead of a test.**
+
+With a seventh row the law stays **unconditional and non-vacuous on both content shapes**, and
+`revenue === 0` becomes a *consequence a mutation can falsify* rather than an axiom nothing can
+move. There is also a naming argument: `checkedOut`'s docstring means *"the clock ran out **in a
+room**"*, and ADR-0024's corollary is that when the class lives in a name, the only moves are
+rename and delete.
+
+### The ruling: CONDITIONALLY ACCEPTED, and the condition is an experiment the plan already names
+
+**Criterion 3 decides it, not me.** Mutate the visitor's departure to file under `checkedOut` on a
+materialised arm: **under the seventh row the revenue law goes RED; under the block's
+content-conditioned form it stays GREEN.** If it stays green under the row too, **the row is wrong
+and θ-b2 takes the block's form.**
+
+**Run it before writing the migration.** This is the right shape for a disagreement between an ADR
+and a plan: not an adjudication, but a one-run experiment whose outcome both parties agreed to in
+advance. **`SUMMARY_SCHEMA_VERSION` stays 3** — additive, per amendment 1's policy.
+
+### And the enumeration moved again
+
+ADR-0018 §6 priced optional lodging at **a paragraph**; the block corrected it to **four guards**;
+θ-b's plan enumerated **25**; θ-b2's plan, re-run after θ-b1 changed the tree, reports **37
+behavioural sites** plus a 933-line identifier census. **Four estimates, each larger, each made by
+someone reading the previous list.** The only one produced by counting a population rather than
+reading a list is the one that keeps growing — which is ADR-0024's point, and the reason the
+growth is evidence of method rather than of scope creep.
+
+## ADR-0028 — θ-b2's four rulings, made BEFORE BUILD because each costs a sweep if it surfaces after
+
+**Date**: 2026-08-13 · **Status**: accepted · **Relates to**: ADR-0023, ADR-0025 §2 + amendment 2,
+ADR-0026 + amendment, ADR-0027 · **Raised by**: `ai-critic` at θ-b2 plan review — **two BLOCKERs
+and five MAJORs before any code existed.**
+
+### 1. THE VISIT TERMINATOR DEFERS WHILE THE GUEST IS ENGAGED
+
+The plan's terminator is an **unconditional clock**, modelled on `checkedOut` at `guests.ts:1745`
+rather than on the dissatisfaction branch at `:1816-1820`, **which carries `guest.engagement ===
+null` precisely because ADR-0026's amendment put it there.** Measured on the arm with the
+terminator installed:
+
+| configuration | visits ended | **engaged at departure** |
+|---|---|---|
+| 1 provider/need, arrivals/60 | 236 | **236 (100 %)** |
+| 1 provider/need, arrivals/30 | 473 | **471 (99.6 %)** |
+| 3 providers/need, arrivals/60 | 236 | 0 — *the derived case* |
+
+**That is the café frame at tick 6428 again, at a higher rate than the 94 % that forced the
+amendment** — and it is ADR-0027's class for the third goal running: **the plan carried the clock
+and dropped the deferral the branch beside it already had.** The bound survives (step 5 releases
+on full, so `visit + ceil(maxCapacity/refill) + 1` is still attained for `countStuckGuests`).
+
+> **The derivation is uncontended. The terminator is not. A number derived in the free-flow case
+> must say so, or it will be read as a claim about the loaded one.**
+
+### 2. THE CEILING MUST BE STRICTLY BELOW THE VISIT DURATION, OR THE WALKOUT ROW IS DEAD
+
+**A visitor's dissatisfaction cannot exceed its age.** With the terminator at ~209 and the shipped
+ceiling at 431, `leftDissatisfied` is **structurally unreachable** for lodging-free content.
+Measured:
+
+| configuration | visitEnded | leftDissatisfied | mean let-down ticks |
+|---|---|---|---|
+| 1 provider, arrivals/30 | 473 | **0** | **209.0 of 209 — let down on every tick** |
+| 1 provider, arrivals/60 | 236 | **0** | 171.0 |
+| 3 providers, arrivals/60 | 236 | **0** | 49.0 |
+
+**The starved food court and the working one report the identical row and the identical count.**
+That is exactly the failure ADR-0025 §2 spent a schema row to prevent — *"build more amenities"*
+made unsayable — **arriving through the row this goal adds.** `assertDissatisfactionOutlastsTheLobby`
+passes trivially here (431 > 180) while saying nothing about the case that matters.
+
+**Ruled**: a **mirror refusal** — under content with no lodging need,
+`dissatisfactionCapacityTicks` must be **strictly less than `visitDurationTicks`** — plus a fixture
+that picks a ceiling under the duration and an arm asserting **non-zero `leftDissatisfied` in the
+busy food court.** `content.ts:1137-1142`'s own rule applies: **loud failures get a boundary test;
+silent misfilings get a refusal.** This is a silent misfiling.
+
+### 3. THE DURATION IS 208, AND THE `+1` WAS ATTRIBUTED TO THE WRONG MECHANISM
+
+Measured, uncontended: **`VISIT=208` departs at age 208 with the last need exactly full**
+(deficits `[148,79,0]`); `209` departs at `[149,80,1]`, already decaying. The plan's transitions
+*"2/62/131/210"* are **post-step tick counters**; the guest's **ages** are 0/60/129/208. Service
+begins on the tick after arrival and runs contiguously, so **the completion age is the sum of the
+service ticks: 60 + 69 + 79 = 208.** The arrival tick costs nothing the sum does not carry.
+
+**`maxGuestLifetimeTicks`'s `+1` is a different term entirely** — it makes `limit` the *first age no
+correct simulation can produce*, so `>=` counts the first illegal age and nothing before it.
+Copying it into a **duration** makes the visitor furniture for one tick. **The consequence today is
+one idle tick; the defect is the derivation**, and a term attributed to the wrong mechanism is how
+the same figure gets re-derived wrongly next time. **208, with the correct warrant.**
+
+### 4. θ-b2's WATCH IS DISCHARGED AGAINST `tools/viewer` — a stated ADR-0023 exception
+
+`apps/game` **imports the shipped JSON statically through the bundler; there is no
+content-selection path**, and `scenario.ts:78` carries a second throwing `lodgingRoomTypeOf`. So
+**the goal that produces a guest arriving, eating and going home has no surface a human can watch
+it on.** ADR-0023 made `apps/game` the picture of record; that ruling assumed one content set.
+
+**Ruled**: θ-b2's WATCH is taken on a `--record`ed `--content <dir>` run **through `tools/viewer`**,
+which is what the viewer's replay-through-the-save-serialiser design is for. **This is an exception
+with a reason, not a retreat** — ADR-0023 §4 rests on *"nobody has seen this game run"*, and a
+replay of a hotel `apps/game` cannot construct still discharges that better than nothing.
+**Giving `apps/game` a content switch is real scope and drags `scenario.ts:78` in; it belongs to
+whichever goal ships a second content set for real.**
+
+### 5. SCOPE: THE GOAL STAYS WHOLE AND SHEDS THE CENSUS REPAIRS
+
+The critic answers *"is this the right size for three sweeps"* with **no**, and offers a seam at the
+departure row. **I decline that seam** — it costs *a whole goal's worth of visitor departures filed
+under a row known to be wrong*, and ruling 2 has just shown that misfiling this particular row is
+the failure mode with the highest blast radius.
+
+**I take the critic's other suggestion instead: the two censuses' REPAIRS leave this goal.**
+Publish the counts per ADR-0024 — that is the part that must happen at PLAN — and repair the
+933-line identifier census and the 372-line claim census in the instrument-debt goal. **The
+row-count claim class stays**, because θ-b2 is what invalidates it, and it is **nine live sites,
+not seven** — the two the plan missed are **code, not prose** (`addDepartures`'s five positional
+parameters, and `guests.ts:334`'s type-error claim). The twelve era-fenced *"five rows"* sites
+**stay at twelve; a sweep that repairs them has damaged history.**
+
+### What this review cost and what it bought
+
+**Two BLOCKERs, five MAJORs and three MINORs, none of which required a line of code to exist.**
+§5.6 is the cheapest moment in the loop and this is the second consecutive goal where it has
+rebuilt the design. θ-b1's plan review saved a rule that would have evicted 77 % of a working
+hotel's guests; θ-b2's has saved one that would have made every visitor vanish mid-meal **and**
+made the amenity-scarcity signal unsayable.
+
+## ADR-0028 AMENDMENT — §1's bound was LOOSE and §2's refusal was ONE-SIDED. Both raised by the builder, against the ADR written to correct its plan.
+
+**Date**: 2026-08-13 · **Amends**: ADR-0028 §1, §2 · **Raised by**: `ai-engineer` at θ-b2 plan
+revision 2, **with the measurements attached.**
+
+### §1's bound — accepted, tightened from 409 to 299
+
+I stated the deferred bound as `visit + ceil(maxCapacity/refill) + 1` = 208 + 200 + 1 = **409**.
+Measured maximum deferred age across four contention regimes up to 45 concurrent guests per
+provider: **296, 297, 297, 297.** Respected, and **never approached.**
+
+**That is the one property `countStuckGuests` cannot afford.** Its entire warrant (`guests.ts:659`,
+`:719-725`) is that the bound is **ATTAINED** — *"a measurement with no slack hiding inside it"*.
+**A 112-tick slack hides exactly the class the function exists to catch.**
+
+The correct derivation: **a need's deficit while engaged during a visit is at most
+`wantLine + visit`, not `capacityTicks`** — 1,400 is unreachable inside a 208-tick visit.
+
+```
+visit + ceil((wantLine + visit) / refill_min) + 1  =  208 + ceil(628/7) + 1  =  299
+```
+
+Measured **297** against 299. **Accepted. The arm asserts the bound is attained, not merely
+respected.** My error was reaching for the widest safe number instead of the reachable one — which
+is the same slot-1 mistake in a different costume: **I bounded a quantity the model cannot produce.**
+
+### §2's refusal — accepted, made two-sided
+
+I ruled `dissatisfactionCapacityTicks < visitDurationTicks`. **That admits ceilings that break the
+working food court.** Sweep, arrivals/30, 14,400 ticks:
+
+| ceiling | working (3/need) | starved (1/need) | |
+|---|---|---|---|
+| 431 | 0 | **0** | row **DEAD** — the finding §2 was written for |
+| **181 … 207** | **0** | **143 … 164** | **discriminates throughout** |
+| **104, 60** | **476, 478** | 475, 478 | row **SATURATED** — every visitor walks out of a *working* hotel |
+
+**104 and 60 satisfy my refusal and are broken.** And the lower bound is **derivable from the same
+fold, not chosen**: a lone visitor in an empty, fully-provisioned food court still accumulates
+**129** ticks of let-down, because it can only be served one thing at a time.
+
+```
+uncontended peak let-down = Σ_{i<n} t_i = 60 + 69 = 129 = visitDurationTicks − t_last = 208 − 79
+```
+
+**That is ADR-0026 amendment's own sentence, one field over**: *a stock is only a design dial if
+playing well can pay it down; if some of its fill is structural, the dial has a floor nobody can
+see.* **A ceiling at or below 129 puts the dial under its floor.** I ruled the ceiling against the
+visit's *length* and never asked what the visit's *floor* was — **the identical omission I had just
+ruled against in §1.**
+
+**Accepted**: the refusal becomes `visitDurationTicks − t_last < ceiling < visitDurationTicks`.
+The existing `toleranceTicks` chain narrows it to **[181, 207]** for free, and **all four corners
+measured 0 working / 143–164 starved.** The fixture takes **190**, and the builder states plainly
+that 190 is **a dial inside a derived window, not a derived constant** — ADR-0013 §4 forbids
+manufacturing a derivation for a number that is tuned by play.
+
+### And a discipline worth recording, because the builder applied it against itself
+
+ADR-0028 §1 cites **100 % / 99.6 %** engaged-at-departure. The builder's own arm reads **49.8 % /
+97.5 %** — its arm files under `gaveUp` and seeds three room types per amenity level, so **the
+populations are not the same measurement.** Its ruling: *"The ratio is the finding; I cite mine and
+leave the review's standing on its own instrument."*
+
+> **Two instruments that agree in direction and differ in magnitude have not disagreed. Pooling
+> them would be the error; replacing one with the other would be a second.** CLAUDE.md rule 4,
+> applied by the party who would have benefited from the louder number.
+
+**Both censuses reproduce exactly** (933 / 96 and 372 / 79). **The row-count class is ELEVEN, not
+nine** — the two beyond my list are `outcome.report.test.ts:243`'s **executable
+`expect(reasons).toHaveLength(6)`** and `outcome.test.ts:249`'s title, where *"sixth"* means *one
+beyond the real five* and must become *seventh*. And the era-fenced *"five rows"* set is **13, not
+12, with two sites DUAL-CLASS** — one sentence in both classes. **The builder publishes the needle
+rather than the number**, which is ADR-0024's own rule turned on a count I had asserted.
+
+## ADR-0028 AMENDMENT 2 — the attainment ruling was applied to ONE term and not to the `max` that selects it; and θ-b2 does NOT discharge ADR-0026's owed separation
+
+**Date**: 2026-08-13 · **Amends**: ADR-0028 §1 and its first amendment · **Raised by**:
+`ai-critic` at θ-b2 sweep 1.
+
+### The attainment ruling had a hole one function wide
+
+Amendment 1 tightened the deferred bound 409 → 299 because *"a 112-tick slack hides exactly the
+class the function exists to catch"*, and `countStuckGuests`' entire warrant is **attainment**.
+**That reasoning was applied to the visit term and never to the `max` that chooses between terms.**
+
+`maxGuestLifetimeTicks` returns `max(stay, tolerance, visit) + 1`. The shipped food-court fixture
+declares `stayDurationTicks: 1440` — deliberately, and marked *"KEPT, THOUGH NO GUEST HERE CAN
+REACH IT"* — so **the stay term wins the `max` on lodging-free content and the visit term never
+stands alone.** Measured through the real loader, `--rooms 0 --amenities 1`, arrivals/30:
+
+| | |
+|---|---|
+| `maxGuestLifetimeTicks(FOOD_COURT, …)` | **1441** |
+| observed oldest guest age | **275** |
+| **slack** | **1166** |
+
+**Ten times the slack the amendment refused, in the same commit.** And it is not a fixture quirk:
+`guestRulesSchema` makes `stayDurationTicks` **required on disk**, so *every* food-court document
+written through the real loader gets the loose bound. The consequence is live — **a visitor the
+simulation has genuinely stopped progressing goes unreported by `countStuckGuests`, and therefore
+unrefused by `emitReport`, for 1,441 ticks: nearly seven visit durations, on the one content shape
+this goal exists to enable.**
+
+`guests.ts:780` states the premise that would make it correct — *"such content has no stay to
+bound, so the visit term stands alone"* — and **that premise is false of the fixture in the same
+commit.** `:783`'s *"loose in the direction that cannot hide a leak"* is precisely the phrasing
+amendment 1 refused.
+
+**Ruled**: the term is **selected by the same fact branch 6b selects the terminator by**, not
+maxed over inapplicable-but-declared terms. A blanket `max` over terms that are required on disk
+regardless of applicability is not conservative — **it is unfalsifiable.**
+
+### And the attainment evidence pointed at a file that does not carry it
+
+`guest.visit.test.ts:310` declines to assert attainment on the synthetic fixture — **correctly**,
+because a tolerance there would be a number chosen to make the arm green — and routes it to
+*"`visit.content.test.ts`, which measures over the content that actually ships"*. **That file never
+imports `maxGuestLifetimeTicks`, computes no maximum guest age, and contains neither 297 nor 299.
+Neither figure is an executed assertion anywhere in the tree.**
+
+So amendment 1's accepted condition — *"the arm asserts the bound is attained, not merely
+respected"* — **is unmet, and the sentence claiming otherwise is ADR-0007's fifth amendment: a
+comment offered as evidence, carrying a figure no test pins.** Write the arm (it goes red today,
+which is the point) or withdraw the sentence and record the cost.
+
+### THE ORCHESTRATOR'S ERROR: θ-b2 does not discharge ADR-0026's owed separation, and I said it did
+
+I briefed θ-b2 that its I2 argument *"discharges the separation ADR-0026's amendment left owing"*.
+**It does not.** The owed item is that **θ-b1's** harness figure moved for two causes — the state
+shape **and** θ-b1 editing `determinism-log.ts` itself — never separated in the tree.
+**`determinism-log.ts` is untouched by θ-b2, so θ-b2 simply does not have that confound. Not having
+a confound is not resolving one.** The debt stays open and **must not be marked paid at REFLECT.**
+
+The code comment was more careful than my brief: it separates **shape from behaviour**, which is a
+real control with a real unmoved outcome block. **I read a correct claim as a different, larger
+claim** — slot one, on a debt rather than on a number, which is a new costume for the same error.
+
+### Owed to `PARKING.md`, from the WATCH
+
+`tools/viewer/serve.mjs:19` serves `packages/content/data` from a **hard-coded path**, so a
+`--content <dir>` recording is drawn against the **shipped** tables. Benign here only because the
+fixture is shipped-content-minus-two-rows; **a genuinely different food court would render magenta
+bars with nothing saying why.** ADR-0028 §4 routes this goal's WATCH through that instrument, so
+the exception now carries a caveat: **it is sound for content that is a subset of the shipped
+tables and unsound otherwise.** Files beside the `apps/game` content-switch entry.
+
+## ADR-0029 — A NAP IS A FIXED-DURATION ACTIVITY; A SLEEPING GUEST IS NEVER IDLE; AN AWAKE GUEST IDLE IN ITS ROOM IS FINE
+
+**Date**: 2026-08-13 · **Status**: accepted · **HUMAN RULING** · **Relates to**: ADR-0017 (needs
+are stocks), ADR-0013 (perceptual criteria), ADR-0026 + amendment.
+
+### What was asked and what was answered
+
+The human was asked whether a guest going to bed three times a day reads as *resting* or as *a guest
+that cannot decide*. The answer, verbatim:
+
+> *"Napping should count as resting yes. It should be fixed time and there shouldn't be idleness
+> whilst sleeping/napping, but reasonable for a guest to be idle in the room."*
+
+**Note what that is not.** It is not a re-ratification of the earlier "Resting" verdict — it is the
+first time the question has been answered against a picture in which a napping guest is not drawn
+as idle. **The earlier ruling was given against a build where a guest asleep in its own room drew
+as IDLE for 58 % of its nap.** This ruling supersedes it and stands on its own.
+
+### The three clauses, each with what it obliges
+
+**1. A NAP IS FIXED TIME.** Today rest is a stock that refills at `refillPerTick` until the need
+stops being wanted, so **a nap's length is a function of how depleted rest was** — it varies run to
+run and guest to guest. The ruling makes the nap a **discrete activity with a duration**, the way
+an engagement is. *Owed*: a derivation for that duration from a stated requirement (ADR-0013 §4),
+and a statement of what happens when a fixed nap ends with rest still below its want line.
+
+**2. A SLEEPING GUEST IS NEVER IDLE — in the drawing AND in the metric.** These are two obligations
+and both are live:
+- **Drawing**: `apps/game` and `tools/viewer` must show sleeping as sleeping. The predicate repair
+  at θ-a already stopped a napping guest reading as IDLE; **this ruling makes that a requirement
+  rather than a bug fix, so it gets an assertion.**
+- **Metric**: **every idle-share and idle-run figure in this project must exclude sleeping guests.**
+  That reaches `PARKING.md`'s idle hypothesis, `stock.idle.test.ts`, and **G-028's falsification
+  threshold X, which is written against `idleShareBasisPoints`.**
+
+**3. AN AWAKE GUEST IDLE IN ITS OWN ROOM IS ACCEPTABLE.** This is the clause that retires work
+rather than creating it. WATCH #8's *"a room-holder is motionless 64.9 % of the time"* was carried
+as a concern; **under this ruling it is not a defect** provided the motionless guest is resting or
+is in its own room. **What remains a defect is a guest idle in the LOBBY or a public space with
+needs it cannot get met** — which is the provider cliff, and is G-024's queues.
+
+> **The idle metric was measuring three different things under one name: sleeping, waiting at home,
+> and stranded in public. Only the third is a defect, and it is the one the number was never
+> isolating.**
+
+### Why this is larger than it looks
+
+**It re-scopes a number G-028 was going to be judged on.** `idleShareBasisPoints` currently folds
+all three populations together, so **X — the ceiling G-028's criterion tests against — is a
+threshold on a quantity this ruling says is not the quantity of interest.** G-028 must re-derive it
+over the third population alone, or state why not.
+
+**And it settles an open contradiction rather than adding one.** θ-a's withdrawn *"two-thirds of
+the sitting-still is gone"* failed because the share moved when standing-in-your-room was
+reclassified as resting. **Under this ruling that reclassification is not an artefact to correct
+for — it is the correct classification**, and the reason the share was the wrong statistic is that
+it was pooling populations the design treats differently.
+
+### Not decided here
+
+Whether a fixed nap that ends with rest below its want line triggers another nap immediately (which
+would read as the dithering the original question was about), or leaves the guest short until its
+next opportunity. **That is a perceptual question and it needs a picture, not an argument.**
+
+## ADR-0030 — G-028 REPAIRS THE LADDER BEFORE THE SCORER; and §7.1's guard is RENAMED, not re-scoped
+
+**Date**: 2026-08-13 · **Status**: accepted · **HUMAN RULINGS (two)** · **Relates to**: ADR-0024,
+§7.1's 2026-08-09 split ruling and its 2026-08-08 scored prediction.
+
+### 1. AXIS 1: the instrument is repaired before the scorer. Human ruling.
+
+G-028's first job has stood as *"repair AXIS 1's reversal"* — i.e. rewrite the review function.
+**The evidence says the review function may be telling the truth:**
+
+| configuration | mean review |
+|---|---|
+| 1 room | 391 |
+| 12 rooms, 1 amenity | 378 |
+| **12 rooms, 2 amenities** | **420** |
+
+One provider sustains roughly **8 concurrent guests** (`guests.ts:679` — one at a time, queues are
+G-024's), and **the test ladder adds rooms while holding amenities at one.** So the ladder is not
+building bigger hotels; it is building **progressively worse-provisioned ones**, and a score that
+falls is correct.
+
+**Ruled**: **G-028 repairs the ladder first, and only then asks whether the scorer is wrong.**
+The provisioning is **derived** — one of each amenity per ~8 concurrent guests — not chosen. If the
+ladder reads monotone afterwards, **the scorer needs no repair and G-028's budget goes elsewhere.**
+
+> **A goal whose first job is "fix the thing the instrument is complaining about" should first ask
+> whether the instrument is complaining correctly.** ADR-0024's shape, one level up: the list in
+> front of you is the part somebody noticed.
+
+**And θ-b2 sharpens the provisioning rule rather than merely confirming it**: a *visitor* occupies
+a provider for 208 of its 208 ticks where a lodger sleeps most of its day — **roughly 8× tighter**.
+The ladder's derivation must therefore be per-population, not a single constant.
+
+### 2. §7.1's guard is RENAMED. The 2026-08-08 prediction is DISCHARGED — as half right.
+
+Seven firings: **six prose, one code.** The prediction said that if firings stayed prose, the guard
+*"is a prose-quality instrument wearing a critique-budget costume, and it should be RENAMED AND
+RE-SCOPED."* **Human ruling: rename, do not re-scope.**
+
+**The scope is right and the nickname was wrong.** What the arm actually catches is **not prose
+that reads badly**. It is:
+- an `it(...)` **title** stating superseded figures, where the runner prints them;
+- an assertion **silently unpinned** by a rewrite;
+- a live `Error` message asserting a proposition the build falsifies;
+- a comment cited **as evidence** carrying a figure no test pins.
+
+**Every one is a claim that has lost its pin.** The 2026-08-09 ruling already gave it the right
+name — **UNPINNED-CLAIM ESCALATION** — and then everyone, this orchestrator included, went on
+calling it "the prose arm" in every discussion, including the ADRs recording its firings.
+
+**Ruled**: the arm is **`UNPINNED-CLAIM`**; the other is **`CODE`**. **The word "prose" is retired
+from §7.1**, because it invited exactly the reading that made the prediction fire — that these
+findings are cosmetic. **They are not: two of θ-b2's were false statements about shipped content,
+and one was a withdrawn figure surviving in the docstring of the function its withdrawal was
+about.**
+
+> **A mechanism named for its most common symptom will be judged by that symptom. Name it for what
+> it tests.**
+
+**The prediction is scored and closed**: right that the name was wrong, wrong that the scope was.
+**Its own instruction — record each firing with its subject — is what made the distinction
+visible**, which is the argument for scored predictions rather than for this particular one.
+
+## ADR-0031 — THE FOLD MUST NOT BECOME A SECOND SIMULATOR. Narrow its domain and refuse outside it.
+
+**Date**: 2026-08-13 · **Status**: accepted · **Relates to**: ADR-0024, ADR-0027, §9 (*"if it
+acquires features or defenders, delete it rather than defend it"*) · **Raised by**: `ai-critic` at
+θ-b2 sweep 3, four MAJORs that are one problem.
+
+### The pattern across three sweeps
+
+`visitRoundTicks` predicts, analytically, the order and timing in which a visitor's needs get
+served — and that prediction sets **both endpoints of a bind-time refusal.** Each sweep has found
+it missing one more thing the simulation actually does:
+
+| sweep | what the fold did not reproduce |
+|---|---|
+| 1 | it walked ascending id; the sim picks by pressure |
+| 2 | *(repaired — the fold now reproduces `reserve`'s choice)* |
+| 3 | **it does not clamp the deficit at `capacityTicks`, and the sim does** (`needs.ts:702`) |
+| 3 | **it models only `reserve`'s UNENGAGED pass** — an engaged guest can be taken by a challenger clearing `abandonMarginBasisPoints`, and the fold has no term for the margin at all |
+
+Measured on content the two new guards **admit**: needs reach full at ages 601 / 635 / 669, so the
+true window is **(635, 669)**; the fold derives **(810, …)**. **Disjoint.** And with the *shipped*
+abandon margin the visitor **abandons a need at age 59, makes 62 engagement switches, and that need
+is never full in its entire 1,000-tick life** — against a fold claiming one clean round with each
+need served exactly once. On a third table the refusal prints *"must sit strictly inside (810, 669)"*
+— **an empty window: no ceiling whatsoever binds.**
+
+`assertVisitRoundIsOneCycle` is green through all of it, because no need is served twice *in the
+fold*. **The sweep-2 guard cannot see the sweep-3 class**, and there is no reason to think a
+sweep-3 guard would see a sweep-4 one.
+
+### The ruling
+
+**The fold's domain is NARROWED and ENFORCED. It does not grow a clamp, a margin term, or a
+preemption model.**
+
+Each of those additions is individually correct and jointly fatal: **a function that reproduces
+selection, saturation, preemption and timing is a simulator**, and this project already has one.
+Building a second inside `bindContent` is §9's shape one level over from the render layer — and
+unlike the viewer, this one would be **load-bearing on a refusal**, so it could not be deleted
+later without also deleting the guard.
+
+> **A predictor that must track a simulation to stay correct is a simulation. The escape is not a
+> better predictor — it is a smaller domain, stated and refused at the boundary.**
+
+**What θ-b2 ships**: the fold applies to content where its assumptions **hold**, and `bindContent`
+**refuses** content where they do not — no need saturating while queued behind a longer service, and
+a margin that cannot preempt within a round. **Refusing content nobody has written costs nothing;
+mis-analysing it costs a silent wrong window**, which is the failure the refusal exists to prevent.
+
+### And the duplicated fold is deleted, not synchronised
+
+`visit.content.test.ts:48`'s `roundOf` is a **second copy**, and it is the **pre-sweep-2** one —
+its docstring claims it is *"the same fold … so the criterion and the refusal cannot describe
+different hotels"*, and it returns **73/10/63** where the shipped fold returns **70/34/36**. **They
+already do describe different hotels.** It is green only because both live content sets are uniform
+across their engagement needs, **which is the same reason the original defect shipped.**
+
+**Export the fold from `packages/sim` and have the criterion call it.** ADR-0024's rule about names:
+when the class lives in a duplicated decision, the moves are *call the original* or *delete* — not
+*keep them in step*.
+
+### The prose instance, and it is the fourth in one goal
+
+`content.ts:1513-1530` — the fold's **own** domain block still describes the deleted ascending-order
+version, **present tense, immediately above the repaired code**, including *"in an order this fold
+cannot produce"* (it produces it) and *"no arm in this repository could have seen it"* (an arm
+asserts it). **The repair swept the sibling function's docstring and left the subject function's
+own** — the one a reader consults to decide whether the fold is safe to trust.
+
+**ADR-0027 §3, four times in one goal, by the author who wrote the rule's evidence.** That is not a
+discipline failure; it is the strongest argument yet that **the sweep is the wrong instrument for
+this class and the enumeration is the right one.**
+
+## ADR-0032 — VELOCITY: what is actually consuming the loop, and the four changes
+
+**Date**: 2026-08-13 · **Status**: accepted · **HUMAN RULING**: *"We really need to be speeding up
+development here, we should be past M3 by now."* · **Relates to**: ADR-0018 (the first velocity
+pass), ADR-0019 (parallel tracks), ADR-0024, ADR-0027.
+
+### Where the rounds went, from this milestone's own record
+
+Three goals closed or nearly closed today, each running **3 sweeps plus 1–2 verifications** — the
+maximum the budget allows, every time. Sorting the findings by what they were:
+
+| pass | what it caught | value |
+|---|---|---|
+| **PLAN REVIEW** | **two designs killed before any code** — a rule that would have evicted 77 % of a working hotel's guests, and one that made every visitor vanish mid-meal | **highest in the project, and the cheapest** |
+| **sweep 1** | real code defects — vacuous checks, an unfalsifiable bound, a fold that mispredicts the simulation | high |
+| **sweeps 2–3** | **overwhelmingly one class: a number moved and the prose that mentions it did not** | low per round, and it is where the budget goes |
+
+**The loop is not slow because it is careful. It is slow because sweeps 2 and 3 are mostly spent
+re-reading English.** θ-a's five passes on one prose class is the extreme case; θ-b1's *"the cliff
+moved and the prose did not follow — eight times in one sweep"* is the same thing.
+
+*(Stated as a reading of the record, not a measurement. Nobody has counted findings by class, and
+the honest version of this claim would.)*
+
+### 1. NO DERIVED FIGURE APPEARS IN PROSE. Read it from the assertion, or omit it.
+
+**This is the single largest lever and it removes the class rather than detecting it.** Every
+instance this milestone — 208, 547, 431, 129, 297, 3.37, "six rows", "the four above", "FOUR
+departure branches" — is a **derived number spelled into a comment or a test title**, where nothing
+can keep it honest.
+
+The repair the builders converged on independently is **de-numeralling**: say *"every row"*, not
+*"all six rows"*; cite the assertion, not its value. **Where a figure genuinely must appear in
+prose, it is read out of the shipped bytes or the refusal's own message** — θ-b2 did this for a
+recovered range and it is the model.
+
+> **A number in prose is a claim with no pin. Either the code says it or nobody does.**
+
+### 2. GOALS THAT ARE NAMES ONLY ARE NOT GOALS
+
+**`G-027c` and `G-031b` occur exactly once in the ledger — inside a list of goals not started.** No
+statement, no criteria, no owner. **They have been counted in "M2.5 is nine goals" and in every
+estimate of what remains**, and nobody can say what either is for.
+
+**Ruled**: a goal with no block is **not counted**. M2.5 is **seven goals with four done**, not nine
+with four done, until someone writes a statement and exit criteria for those two. **If a statement
+cannot be written, the goal does not exist and the slot closes.**
+
+### 3. THE REMAINING GOALS RUN IN PARALLEL
+
+ADR-0019 already permits it and θ-a ran alongside G-031a successfully. **G-028 (economy) and the
+render work touch disjoint subsystems and disjoint gates.** Sequencing them is habit, not a
+constraint. **The join is at VERIFY, as ADR-0019 specifies.**
+
+### 4. PLAN REVIEWS STAY. SWEEP 3 IS ON NOTICE.
+
+**Do not cut the plan review to go faster** — it is the cheapest round in the loop and has twice
+saved a goal from shipping a design that measurement destroyed. **What is on notice is sweep 3**:
+if change 1 lands and sweep 3 still returns mostly unpinned-claim findings, the third sweep is
+buying prose quality at a code-review price, and it should become a scanner rather than an agent.
+
+### What this does not change
+
+The findings the sweeps produce are real and several were serious. **Nothing here trades correctness
+for pace** — it removes a category of work by making it unwritable, closes two goals that never
+existed, and stops sequencing work that has no reason to be sequential.
+
+## ADR-0033 — THE BUILD LOOP'S REVIEW SIGNAL IS ABSENT, NOT INVERTED. G-028 is re-aimed and made smaller.
+
+**Date**: 2026-08-13 · **Status**: accepted · **Relates to**: ADR-0030 §1 (ladder before scorer),
+ADR-0032 (velocity) · **Raised by**: `balance-critic`, one measurement pass, no diff.
+
+### ADR-0030's ordering is VINDICATED, and its verdict rule did not fire
+
+The human ruled the ladder is repaired before the scorer. **That was right and it paid**: with
+amenities scaled to a derived rule, **the endpoint inversion disappears — 12 rooms reads 420
+against one room's 391.** A goal that had gone straight at the scorer would have been rewriting a
+function whose sign was being set by its harness.
+
+**But "monotone ⇒ the scorer is exonerated" does not fire.** The re-read is *not* monotone (rung 2
+sits at 376, below rung 1), and the surviving gap is **0.29 of a band where the criterion demands
+more than 1.00.**
+
+### The provisioning rule, derived rather than chosen
+
+**`N_lodger = refillPerTick + 1 = 8`**, and it falls out of **flow conservation**, not out of the
+cycle length: over a closed cycle a need's decay equals its refill, so the served fraction is
+`1/(1 + refillPerTick)` — **independent of capacity and want line.** `N_lobby = toleranceTicks / 60
+= 3`. `N_visitor = visitDurationTicks / 60 = 3.47`. Hence `M = ceil(L/8 + Q/3)` **at the converged
+load**, and that last clause is load-bearing: `ceil` alone has two fixed points at twelve rooms,
+because **a starved hotel suppresses the very concurrency the rule is measured on.**
+
+Validated against the simulation rather than asserted: predicted comfort-provider occupancy
+**0.9837** against measured **0.9824**. The derivation is a **floor** — under contention a guest
+arrives at a provider with a deeper deficit and holds it longer, so demand runs ~10 % above it.
+
+### THE BLOCKER: the review is a one-tick snapshot of a phase-locked population
+
+Every guest arrives on a fixed cadence and stays exactly `stayDurationTicks`, so **every guest
+departs at the same phase of the same deterministic need cycle.** Measured at 12 rooms / 3
+amenities: **all 348 room-holding departures leave with `guest_comfort` at exactly the want line**,
+so the satisfied test is false for the entire hotel and the run collapses to a point mass.
+
+> **One tick moves the whole population a whole band.**
+
+| hotel | `--arrivals` 119 / 120 / 121 / 127 | spread |
+|---|---|---|
+| 12 rooms, 2 amenities | 500 / 420 / 411 / 441 | **0.89 band** |
+| 6 rooms, 2 amenities | 436 / 418 / 418 / 415 | 0.21 |
+| 1 room, 1 amenity | 391 / 391 / 391 / 390 | 0.01 |
+
+**The noise exceeds the signal on exactly the rungs the axis compares** — effect 0.29 band, top-rung
+phase spread 0.89. **At `--arrivals 119` G-019's AXIS 1 criterion PASSES (1.09 band); at 120 it
+fails.** Whether the criterion holds turns on a one-tick change in a cadence nobody derived. Sibling
+symptom, same cause: **going from 2 amenities to 3 LOWERS the mean** (418 → 400). *More provision,
+worse review.*
+
+### And with BOTH axes scaled, the signal is not inverted — it is missing
+
+The ladder holds `--arrivals` at 120, and `stayDurationTicks / 120 = 12` **caps the population**, so
+it cannot test a bigger hotel above twelve rooms at all. `scaling-arms.ts` already carries the
+ruling that a room ladder must scale arrivals with rooms, with `PARKING.md`'s correction that a
+reading taken without it *"was worthless"*. **AXIS 1's ladder is the same defect, unfixed.**
+
+Scaling both: **400 / 400 / 401 / 420 / 400** across a **24× size range** — flat to within 0.20 of a
+band, with the one departure being the phase artefact above.
+
+> **The build loop's review signal is not backwards. It is ABSENT.** Fourteen goals have been
+> reasoning about a number that does not move when the hotel gets better.
+
+### G-028 is re-aimed, and it gets SMALLER
+
+Not *"the mean is inverted, rewrite the scorer"* but: **the mean is a one-tick snapshot of a
+phase-locked population, and the replacement is already named in the code** —
+`recordNeedsAtDeparture`'s own docstring specifies **time spent below the line, a per-need
+accumulator, and a schema bump it explicitly deferred to the next goal.** That is a smaller and
+better-aimed goal than the one on the block, and **the ladder repair is a prerequisite it now has
+arithmetic for.**
+
+### Two corrections, one of them mine
+
+**ADR-0030 §2's "roughly 8× tighter" does not reproduce and is WITHDRAWN, not restated.** Every
+construction gives **~2.31×** — guests per provider 8 against 3.47, or pooled provider-ticks per
+guest-tick 0.375 against 0.865. **The ruling it supported — per-population, not one constant —
+is confirmed by measurement and stands**: a pooled single constant of 8 gives M=1 at the six-room
+rung and leaves the inversion exactly where it was. **The number was decoration on a conclusion
+that had better support elsewhere**, which is the most dangerous kind: nobody checks the arithmetic
+under a claim they already believe.
+
+**"The ladder is CONTENT" (`GOALS.md` digest) is FALSE of this ladder.** AXIS 1's ladder is **four
+CLI flag strings in a test file**, provisioned by `schedule()`'s defaults, and **no gate reads it**.
+The content ladder guarded by `check:ladder` is the *speed* ladder — a different object with a
+similar name, and the digest line has been read as covering both.

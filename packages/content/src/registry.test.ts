@@ -393,14 +393,19 @@ describe('the guest rules table (G-014b)', () => {
     // fourth field this table has acquired that way — see `stayDurationTicksSchema`, which
     // also records that this is the dominant term in the hotel's margin.
     stayDurationTicks: 1_440,
+    // How long a guest that books NO room is in the building (θ-b2). Required on disk for the same
+    // reason again, and INERT on this document: the shipped content declares a lodging need, so no
+    // shipped guest reads it. That is `toleranceTicks`'s standing on a hotel with enough rooms, and
+    // it is why the reason is "a forgotten dial" rather than "a dial that does something here".
+    visitDurationTicks: 208,
     // Where a guest starts wanting a need, and how long it waits for a room before it gives
-    // up (G-027b). Required on disk for the same reason as the four above: the stock model has
+    // up (G-027b). Required on disk for the same reason as every field above: the stock model has
     // no historical value to fall back on for either, so silence is a forgotten dial rather
     // than a statement about an era.
     wantAtBasisPoints: 3_000,
     toleranceTicks: 180,
     // How much dissatisfaction a guest carries before it walks out mid-stay, and how fast that
-    // stock drains (θ-b1). Required on disk for the same reason as the six above — and note the
+    // stock drains (θ-b1). Required on disk for the same reason as every field above — and note the
     // asymmetry with `packages/sim`, which keeps BOTH optional and reads their absence as "this
     // content predates a guest that could leave a room it had". Silence is an era there and a
     // forgotten dial here.
@@ -427,6 +432,7 @@ describe('the guest rules table (G-014b)', () => {
       'reviewScoreMin',
       'reviewScoreMax',
       'stayDurationTicks',
+      'visitDurationTicks',
       'wantAtBasisPoints',
       'toleranceTicks',
       'dissatisfactionCapacityTicks',

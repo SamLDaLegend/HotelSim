@@ -23,7 +23,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Command, ScheduledCommand } from './commands.js';
-import { bindContent, findNeedType, lodgingNeedOf, needTypesInOrder } from './content.js';
+import { bindContent, findNeedType, lodgingNeedOf, needTypesInOrder, visitDurationOf } from './content.js';
 import type { NeedTypeData, RoomTypeData } from './content.js';
 import {
   departedGuests,
@@ -553,15 +553,59 @@ describe('the lodging need, and how the simulation finds it', () => {
     expect(lodgingNeedOf(historical)?.id).toBe('alpha');
   });
 
-  it('is refused when roles are declared and none of them is lodging', () => {
-    // The clause that stops the fallback lying: without it, content that marked every need
-    // `engagement` would silently have its lowest id promoted to the reason people book.
+  it('is ACCEPTED when roles are declared and none of them is lodging — that is a food court', () => {
+    // ======================================================================
+    // THIS TEST ASSERTED THE OPPOSITE UNTIL θ-b2, AND THE REVERSAL IS THE GOAL (ADR-0017 §5).
+    //
+    // It read *"is refused when roles are declared and none of them is lodging"*, on the ground
+    // that such a table would otherwise have its lowest id silently promoted to the reason people
+    // book. **That refusal was the single gate that made lodging-free content unrepresentable**,
+    // and the human's design intent is precisely the content it forbade: *"some guests might not
+    // want to stay at the hotel, maybe they might just want food, or to use the facilities."*
+    //
+    // WHAT THE OLD TEST WAS ACTUALLY PROTECTING (ADR-0027 — enumerate before replacing):
+    //
+    //   (a) the no-roles FALLBACK must not promote a need a designer marked `engagement`
+    //   (b) a table declaring roles must not be read by POSITION
+    //   (c) content a guest can arrive under must have a terminator
+    //
+    // (a) and (b) survive untouched and are asserted below: `lodgingNeedOf` answers `undefined`
+    // rather than promoting `food`, so nothing is promoted and nothing is read by position.
+    // **(c) is the one that needed somewhere to go, and it moved to `assertEveryVisitCanEnd`** —
+    // the arm underneath this one drives it. The refusal did not disappear; it moved to the field
+    // that fixes the problem instead of the field that hid it.
+    // ======================================================================
+    const foodCourt = bindContent({
+      roomTypes: [roomType('cafe', ['food'])],
+      needTypes: [need('food', 20, 1, 'engagement')],
+      guestRules: [
+        { id: 'houseRules', name: 'House Rules', visitDurationTicks: 30, wantAtBasisPoints: 1_000 },
+      ],
+    });
+    // (a) and (b): nothing is promoted, and the answer is the honest `undefined`.
+    expect(lodgingNeedOf(foodCourt)).toBeUndefined();
+    expect(visitDurationOf(foodCourt)).toBe(30);
+  });
+
+  it('and is REFUSED when it declares no visitDurationTicks, because its guests could never leave', () => {
+    // (c), relocated. The failure this replaces is not hypothetical: measured on food-court
+    // content before the field existed, 30 guests arrived over ten simulated days into a fully
+    // provisioned hotel and NOT ONE of them ever left.
+    expect(() =>
+      bindContent({
+        roomTypes: [roomType('cafe', ['food'])],
+        needTypes: [need('food', 20, 1, 'engagement')],
+        guestRules: [{ id: 'houseRules', name: 'House Rules', wantAtBasisPoints: 1_000 }],
+      }),
+    ).toThrow(/declare no visitDurationTicks/);
+    // AND WITH NO GUEST-RULES TABLE AT ALL, just as loudly — the shape `assertEveryStayCanEnd`
+    // refuses one field over, for the same reason.
     expect(() =>
       bindContent({
         roomTypes: [roomType('cafe', ['food'])],
         needTypes: [need('food', 20, 1, 'engagement')],
       }),
-    ).toThrow(/none of them is the lodging need/);
+    ).toThrow(/declares no guest rules at all, so nothing says how long a visit lasts/);
   });
 
   it('is refused when TWO needs claim to be it', () => {

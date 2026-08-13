@@ -107,7 +107,11 @@ describe('ARM 3 — contended: all three ways a guest can end its own stay, at o
     expect(count(contended, 'leftDissatisfied')).toBeGreaterThan(0);
   });
 
-  it('and the conservation law closes over ALL SIX rows', () => {
+  it('and the conservation law closes over EVERY row, whatever the table holds', () => {
+    // (The title said "ALL SIX rows" until θ-b2 made it seven. A count in a test NAME is the
+    // worst place for one: vitest prints it, no assertion checks it, and it has to be re-typed
+    // at every insertion — the row-count claim class this goal enumerated. The fold below never
+    // named a number, so only the title was ever wrong.)
     const departed = contended.guests.departures.reduce((total, row) => total + row.count, 0);
     expect(departed + contended.guests.inHotel).toBe(contended.guests.arrived);
   });

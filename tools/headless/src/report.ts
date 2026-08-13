@@ -373,7 +373,8 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
  * `departures.find(row => row.reason === 'satisfied')?.count ?? 0` gets zero where it used
  * to get the whole hotel's completed stays — the identical failure the v1 -> v2 note
  * describes, one level down the document, and worse for being invisible: the KEY
- * `departures` still exists, the array still has five rows, and every one of them still has
+ * `departures` still exists, the array still has its full complement of rows, and every one of
+ * them still has
  * a `reason` and a `count`. There is nothing for a shape check to catch.
  *
  * That is the argument for spending the bump on a value rename, and it is worth stating
@@ -439,16 +440,51 @@ export function assertSummarySchema(document: unknown, expected: number): void {
  * Throws rather than defaulting: a content set with no lodging room is a content set this
  * runner cannot build a hotel from, and guessing would be the silent fallback §6.1 warns
  * about in a host instead of in a pathfinder.
+ *
+ * ---------------------------------------------------------------------------
+ * IT STILL THROWS, AND THAT IS THE POINT (θ-b2). Optional lodging makes "there is no lodging
+ * room" a legitimate answer for a FOOD COURT, and the cheap repair — return `undefined` and let
+ * callers cope — would have deleted property (b) from every caller at once, including the ones
+ * that genuinely cannot proceed without a hotel.
+ *
+ * WHAT THIS FUNCTION ASSERTS, ENUMERATED BEFORE THE SPLIT WAS WRITTEN (ADR-0027):
+ *
+ *   (a) the room is chosen by WHAT IT PROVIDES, never by `roomTypes[0]` — the G-012 trap that
+ *       would silently have made every hotel a hotel of cafes
+ *   (b) it THROWS rather than defaulting, so a host cannot proceed on a guess
+ *   (c) `amenityRoomTypesOf` excludes exactly this one type and no other
+ *
+ * ALL THREE ARE KEPT. What is added is a second accessor, `lodgingRoomTypeIn`, that ASKS the
+ * question instead of demanding the answer — and (a) is shared rather than copied, so the two can
+ * never disagree about which room that is. Callers that need a hotel keep calling this one and
+ * keep getting the throw; callers that merely need to know keep (a) for free.
+ * ---------------------------------------------------------------------------
  */
 export function lodgingRoomTypeOf(content: BoundContent): RoomTypeData {
-  const lodging = lodgingNeedOf(content);
-  const roomType = lodging === undefined ? undefined : firstRoomTypeProviding(content, lodging.id);
+  const roomType = lodgingRoomTypeIn(content);
   if (roomType === undefined) {
     throw new Error(
       'The injected content defines no room type that provides its lodging need, so there is no hotel to run',
     );
   }
   return roomType;
+}
+
+/**
+ * The room type guests stay in, or `undefined` if this content has none (θ-b2).
+ *
+ * THE SAME QUESTION WITHOUT THE DEMAND, and it exists because `undefined` is now a real answer
+ * about a real content set — a food court has amenities and no bedrooms — rather than the broken
+ * hotel `lodgingRoomTypeOf` refuses. Two reasons produce it and neither is an error here: the
+ * content declares no lodging need at all, or it declares one that no room type provides.
+ *
+ * IT IS THE ONE IMPLEMENTATION OF *"which room is the bedroom"* IN THIS FILE, and
+ * `lodgingRoomTypeOf` is a wrapper over it rather than a second copy — the G-012 trap that
+ * expression closes (never `roomTypes[0]`) is worth exactly one implementation.
+ */
+export function lodgingRoomTypeIn(content: BoundContent): RoomTypeData | undefined {
+  const lodging = lodgingNeedOf(content);
+  return lodging === undefined ? undefined : firstRoomTypeProviding(content, lodging.id);
 }
 
 /**
@@ -477,10 +513,15 @@ export function lodgingRoomTypeOf(content: BoundContent): RoomTypeData {
  * ---------------------------------------------------------------------------
  */
 export function amenityRoomTypesOf(content: BoundContent): readonly RoomTypeData[] {
-  const lodging = lodgingRoomTypeOf(content);
+  // `lodgingRoomTypeIn` SINCE θ-b2, and the change is one character of meaning: "the room type to
+  // leave out, if there is one". Property (c) is unchanged — exactly the bedroom is excluded and
+  // nothing else — and under a food court there is no bedroom, so nothing is excluded and every
+  // room type that serves something is an amenity. That is the right answer rather than a
+  // degenerate one: in a food court, every room IS an amenity.
+  const lodging = lodgingRoomTypeIn(content);
   const amenities: RoomTypeData[] = [];
   for (const roomType of content.content.roomTypes) {
-    if (roomType.id === lodging.id) continue;
+    if (roomType.id === lodging?.id) continue;
     let servesSomething = false;
     for (const needType of needTypesInOrder(content)) {
       if (roomTypeServes(content, roomType.id, needType.id)) servesSomething = true;
@@ -706,7 +747,29 @@ export function schedule(
 ): readonly ScheduledCommand[] {
   // The room guests SLEEP in, chosen by what it provides rather than by its position in
   // the table — see `lodgingRoomTypeOf` for the trap that closes.
-  const entityKind = lodgingRoomTypeOf(content).id;
+  //
+  // ASKED, THEN DEMANDED ONLY IF `--rooms` NEEDS IT (θ-b2). Content with no lodging need is a
+  // FOOD COURT, and `--rooms 0 --amenities N` over it is a perfectly good scenario this runner
+  // should be able to build. `--rooms 6` over it is not: there is nothing to build six of.
+  //
+  // IT REFUSES RATHER THAN SEEDING ZERO ROOMS, which is `lodgingRoomTypeOf`'s own property (b)
+  // applied to the flag instead of to the table. Silently reading `--rooms 6` as `--rooms 0`
+  // would hand back a report about a hotel nobody asked for, and every occupancy figure in it
+  // would be a measurement of a building the operator did not think they were running.
+  const lodgingRoomType = lodgingRoomTypeIn(content);
+  if (rooms > 0 && lodgingRoomType === undefined) {
+    throw new Error(
+      // PARAMETERISED IN BOTH CLAUSES. It read "nothing to build six of" while the first clause
+      // interpolated `rooms` — so the message agreed with itself only at `--rooms 6`, which is
+      // the one value the test happened to pass. A message that names the wrong number is worse
+      // than one that names none, because the reader trusts it.
+      `--rooms ${rooms} was asked for, but the injected content defines no room type that provides a lodging need ` +
+        `— so there is no kind of room for a guest to stay in and nothing to build ${rooms} of. Content like this ` +
+        'is a food court rather than a broken hotel: its guests are visitors who come for the amenities and go ' +
+        'home (visitDurationTicks). Run it with --rooms 0 and as many --amenities as you want.',
+    );
+  }
+  const entityKind = lodgingRoomType?.id;
   const commands: ScheduledCommand[] = [];
   /**
    * The seeded hotel walks ONE index space (G-012): lodging rooms first, then the
@@ -754,7 +817,11 @@ export function schedule(
       commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind: itemId, at } });
     }
   };
-  for (let i = 0; i < rooms; i += 1) seedRoom(entityKind, false);
+  // `entityKind` is defined whenever `rooms > 0` — the refusal above is what makes that true, and
+  // it is asserted here rather than assumed so a future edit that moves the refusal fails loudly.
+  if (entityKind !== undefined) {
+    for (let i = 0; i < rooms; i += 1) seedRoom(entityKind, false);
+  }
   // AND SOMEWHERE TO EAT (G-012). Without an amenity every engagement need a guest forms
   // decays to empty with nothing able to refill it, so a run would report a full vector and
   // satisfy none of it — a hotel that could only disappoint, which is the shape §6.1 puts
@@ -782,7 +849,18 @@ export function schedule(
   // was cash. A refusal in a default-plot run is now about MONEY (or, with `--demolish`
   // interleaved, an occupied cell) — `refused.outOfBounds` is 0, which report.test.ts
   // sweeps across cadences rather than leaving as a claim in this comment (ADR-0007).
-  if (buildEveryTicks > BUILD_OFF) {
+  // `--build` NEEDS A ROOM TYPE TO BUILD, so it is refused under food-court content for the
+  // reason `--rooms` is (θ-b2): the player's expansion tool builds BEDROOMS, and a content set
+  // with none has nothing for it to place. Amenity building is a real feature and it is not this
+  // flag; it goes to `PARKING.md` rather than being improvised here.
+  if (buildEveryTicks > BUILD_OFF && entityKind === undefined) {
+    throw new Error(
+      '--build was asked for, but the injected content defines no room type that provides a lodging need, so the ' +
+        'player has no kind of room to build. This runner expands a hotel by adding bedrooms; a food court needs a ' +
+        'different tool, which does not exist yet.',
+    );
+  }
+  if (buildEveryTicks > BUILD_OFF && entityKind !== undefined) {
     // From zero, on ITS OWN walk (`builtRoomCell`, G-009) rather than continuing the
     // inherited hotel's: the player packs rooms in above, and the two layouts say
     // different things about who laid them out. See `builtRoomCell`.
@@ -816,7 +894,10 @@ export function schedule(
   // therefore exact, and only past it — where every room is one the PLAYER built, and a
   // player builds one room type — does a stride apply again.
   if (demolishEveryTicks > BUILD_OFF) {
-    const idsPerBuiltRoom = 1 + requiredItemsOf(content, entityKind).length;
+    // `requiredItemsOf` of a room type that does not exist is `[]` — its own documented contract
+    // — so a food court's stride is 1: an amenity carries no furniture the seeding loop counted
+    // separately. Demolition needs no lodging room type because it walks IDS, not kinds.
+    const idsPerBuiltRoom = entityKind === undefined ? 1 : 1 + requiredItemsOf(content, entityKind).length;
     let index = 0;
     for (let tick = BUILD_START_TICK; tick < ticks; tick += demolishEveryTicks) {
       const seededId = seededRoomIds[index];
@@ -1570,24 +1651,39 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // this, NO row of the table would have a witness outside the table.
   // `countRoomRevenueTransactions` folds the LEDGER, a different subsystem written by
   // different code for a different purpose, and `payForStay` is the only producer of a
-  // `roomRevenue` transaction, on the satisfied path and nowhere else. The satisfied row
+  // `roomRevenue` transaction, on the CHECKOUT path and nowhere else. The `checkedOut` row
   // and the revenue count agree only if every stay that paid was also counted as one. That
   // is the `countDemolitionRefundTransactions === demolished` shape one subsystem over
   // (`build.ts`), and it is what the deleted `metByRoom + metByItem === met` lacked: a
   // comparison against something that is not one of its own inputs.
   //
-  // IT WITNESSES ONE ROW OF FIVE, AND THE HONEST STATEMENT OF ITS REACH IS THIS:
+  // IT WITNESSES ONE ROW, AND THE HONEST STATEMENT OF ITS REACH IS THIS:
   //
-  //   satisfied  <-> anything            CAUGHT (either side of the swap moves this fold)
-  //   gaveUpWaiting <-> evictedRoomGone  NOT CAUGHT
+  //   checkedOut <-> anything            CAUGHT (either side of the swap moves this fold)
+  //   visitEnded <-> gaveUp              NOT CAUGHT
+  //   gaveUp <-> evictedRoomGone         NOT CAUGHT
   //   evictedRoomGone <-> evictedRoomUnusable      NOT CAUGHT
   //   evictedRoomUnusable <-> evictedCauseUnrecorded  NOT CAUGHT
   //
-  // An eviction writes no transaction, so no cheap second input exists for the other four
-  // rows and none is invented here. What covers the eviction SPLIT is coarser and belongs in
+  // Neither an eviction nor a visit writes a transaction — a visitor books no room, so there is
+  // nothing to charge it for — so no cheap second input exists for the other rows and none is
+  // invented here. What covers the eviction SPLIT is coarser and belongs in
   // a different sentence: the pinned bench goldens (19 / 0 / 0 on the churn arm) and the
   // criterion-2 invocation, which are run-level pins rather than laws. Stated so that a
   // reader does not take "the table is checked" from a check that reaches one row of it.
+  //
+  // IT SAID "ONE ROW OF FIVE" AND NAMED `satisfied` AND `gaveUpWaiting` UNTIL θ-b2 — a count
+  // stale since θ-b1 made the table six, and two row names deleted at G-027a. Missed by θ-b1's
+  // own figure enumeration for the reason ADR-0027 gives: it enumerated a LIST of figures, and
+  // nobody greps for the number five when the number they are changing is six. **The count is
+  // now spelled "one row" rather than "one row of N", so the sentence stops needing a re-type
+  // every time the union grows** — which is the only repair that cannot repeat the class.
+  //
+  // AND IT IS UNCONDITIONAL ACROSS CONTENT SHAPES (θ-b2). A visitor departs into `visitEnded`
+  // rather than `checkedOut`, so this equality holds on a hotel (both sides non-zero) and on a
+  // food court (both sides zero) without being switched off on either. The alternative — firing
+  // the law only when the content declares a lodging need — would have disabled the table's only
+  // witness on exactly the path that goal added; `guests.ts` carries the full argument.
   //
   // WHERE IT RUNS: HERE, AND NOWHERE ELSE. Not at the tick boundary — `stepTick`'s
   // postcondition block asserts the guest store, the conservation law, the need tally and
@@ -1779,6 +1875,12 @@ export function renderText(summary: RunSummary): string {
     // ONE LINE PER NEED TYPE (G-012), ascending by id, whether or not anything happened to
     // it. `L` marks the lodging need — the one the stay is — so a reader can tell at a
     // glance which row is the booking and which are the holiday.
+    //
+    // UNDER FOOD-COURT CONTENT NO ROW IS MARKED, and that is the correct reading rather than a
+    // missing one (θ-b2): there is no booking, every row is the holiday, and the absence of an
+    // `L` anywhere in the block is exactly what tells a reader they are looking at a hotel with
+    // no bedrooms. The column stays rather than being conditionally dropped, because this file's
+    // stability contract makes every column width load-bearing and the golden test pins it.
     // By-room is SUBTRACTED HERE and stored nowhere (G-013 critique round 1). A reader
     // wants both columns; the report needs only one number to print them.
     ...summary.needs.map(

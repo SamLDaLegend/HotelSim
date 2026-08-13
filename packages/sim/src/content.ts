@@ -267,6 +267,25 @@ export type GuestRulesData = {
    */
   readonly stayDurationTicks?: number | undefined;
   /**
+   * HOW LONG A GUEST THAT BOOKS NO ROOM IS IN THE BUILDING, IN TICKS (θ-b2, ADR-0017 §5).
+   *
+   * The twin of `stayDurationTicks`, and a guest reaches exactly one of them: whichever it is
+   * decided by whether the guest formed a LODGING need at all, asked of the guest's own vector
+   * rather than of content (`lodgingNeedStateOf`), so a hotel that serves both is an archetype
+   * table away rather than a rewrite. See `visitDurationTicksSchema` in `packages/content` for the
+   * derivation of the shipped 208 and for why a visit cannot be "leave when satisfied".
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `stayDurationTicks` contract, INCLUDING its refusal.
+   * Absence has no safe reading for content a visitor can arrive under: there is no era in which a
+   * guest could decline to lodge, so nothing to reproduce, and the consequence of a default would
+   * be the same one `stayDurationTicks` refuses — a guest that arrives and never leaves. Measured
+   * before this field existed: 30 arrivals, 30 still resident after ten simulated days, zero
+   * departures of any kind. `assertEveryStayCanEnd` refuses it, keyed on the NEED TABLE being
+   * non-empty rather than on the lodging need, so `SAVE_V1_CONTENT` (no need types at all,
+   * therefore no guest that could arrive) still binds and still ticks.
+   */
+  readonly visitDurationTicks?: number | undefined;
+  /**
    * WHERE A GUEST STARTS WANTING A NEED, as a share of that need's capacity in basis points
    * (G-027b). Pursued from this deficit; pursued until FULL — the hysteresis is the gap
    * between those two lines, and it is also where every need starts at arrival.
@@ -705,6 +724,7 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     reviewScoreMin: min,
     reviewScoreMax: max,
     stayDurationTicks: stay,
+    visitDurationTicks: visit,
     wantAtBasisPoints: wantAt,
     toleranceTicks: tolerance,
     dissatisfactionCapacityTicks: ceiling,
@@ -715,7 +735,14 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     rules.id,
     cloneStockRules(
       rules.id,
-      cloneStayDuration(rules.id, cloneReviewScale(rules.id, rest, min, max), stay),
+      // BOTH DURATIONS THROUGH ONE VALIDATOR (θ-b2), because they are the same quantity measured
+      // for two populations and two copies would be two chances to disagree about what a tick is.
+      cloneDuration(
+        rules.id,
+        cloneDuration(rules.id, cloneReviewScale(rules.id, rest, min, max), stay, 'stayDurationTicks'),
+        visit,
+        'visitDurationTicks',
+      ),
       wantAt,
       tolerance,
     ),
@@ -735,7 +762,7 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
 }
 
 /**
- * The stay-duration half of `cloneGuestRules` (G-027a): a positive integer count of ticks.
+ * The duration half of `cloneGuestRules` (G-027a): a positive integer count of ticks.
  *
  * The `cloneEconomy` discipline exactly: a float, a zero or a negative from a raw host —
  * one that did not come through the zod schema — dies here, at bind time, with the table
@@ -747,16 +774,31 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
  * zero ticks would check a guest out on the tick after it arrived, before it could be served
  * anything, which is not a game anybody means — and unlike `abandonMarginBasisPoints: 0`
  * (G-014b's thrash control) no arm of any goal wants it.
+ *
+ * ---------------------------------------------------------------------------
+ * IT WAS `cloneStayDuration` AND TOOK NO FIELD NAME UNTIL θ-b2. What it asserted then, and still
+ * asserts now for both callers, stated because a generalisation is where a property gets dropped
+ * (ADR-0027): absence STRIPS rather than carries `undefined` · a non-safe-integer is refused ·
+ * anything below 1 is refused · the GUEST RULES TABLE is named in the message · the returned record
+ * is a fresh object rather than a mutation. The field name now appears in the message too, which is
+ * the one property the old form could not have: with two duration fields, "a duration of NaN" would
+ * otherwise not say WHICH.
+ * ---------------------------------------------------------------------------
  */
-function cloneStayDuration(id: ContentId, rest: GuestRulesData, stay: number | undefined): GuestRulesData {
-  if (stay === undefined) return rest;
-  if (!Number.isSafeInteger(stay) || stay < 1) {
+function cloneDuration(
+  id: ContentId,
+  rest: GuestRulesData,
+  ticks: number | undefined,
+  field: 'stayDurationTicks' | 'visitDurationTicks',
+): GuestRulesData {
+  if (ticks === undefined) return rest;
+  if (!Number.isSafeInteger(ticks) || ticks < 1) {
     throw new Error(
-      `bindContent: guest rules "${id}" have a stayDurationTicks of ${String(stay)}; it must be a positive whole ` +
-        'number of ticks. A stay is measured in ticks from the guest\'s arrival, and one tick is one in-game minute.',
+      `bindContent: guest rules "${id}" have a ${field} of ${String(ticks)}; it must be a positive whole ` +
+        'number of ticks. It is measured in ticks from the guest\'s arrival, and one tick is one in-game minute.',
     );
   }
-  return { ...rest, stayDurationTicks: stay };
+  return { ...rest, [field]: ticks };
 }
 
 /**
@@ -1067,12 +1109,51 @@ function assertReviewScaleIsBoundedByTheNeedTable(
  *
  * IT IS ASKED OF EVERY ROW, not only of `firstGuestRules`. A second archetype at M6 that
  * forgot the field would otherwise load and then be discovered by a guest.
+ *
+ * ===========================================================================================
+ * IT NOW ANSWERS FOR THE VISITOR TOO (θ-b2), AND THE FIRST BULLET ABOVE WAS FALSE THE MOMENT A
+ * GUEST COULD ARRIVE UNDER LODGING-FREE CONTENT.
+ *
+ * *"Content with NO lodging need has no guest that could be stuck"* was true only because
+ * `assertLodgingNeedIsUnambiguous` refused such content outright. With that gate lifted, the
+ * sentence became the exact opposite of the truth — **measured before this branch existed: 30
+ * arrivals, 30 still resident after ten simulated days, zero departures of any kind, in a fully
+ * provisioned hotel.** The early return had stopped meaning *"nothing to check"* and started
+ * meaning *"nobody is checking"*.
+ *
+ * WHAT THE OLD FUNCTION ASSERTED, ENUMERATED BEFORE THE REPLACEMENT WAS WRITTEN (ADR-0027):
+ *
+ *   1. lodging need + zero `guestRules` rows            -> refuse           KEPT, unchanged
+ *   2. every row with a lodging need declares `toleranceTicks`              KEPT, unchanged
+ *   3. every row with a lodging need declares `stayDurationTicks`           KEPT, unchanged
+ *   4. NO lodging need -> no refusal at all                                 REPLACED, below
+ *   5. asked of EVERY row, never only `firstGuestRules`                     KEPT, unchanged
+ *   6. `SAVE_V1_CONTENT` keeps binding, fingerprint `8e09fe4f0fa162a3`      KEPT — see below
+ *
+ * ONLY 4 MOVES. It splits, and the split is what protects 6:
+ *
+ *   NO NEED TYPES AT ALL      no guest can be created, because a guest is a need vector and
+ *                             there is nothing to form. Nothing to bound, and this is
+ *                             `SAVE_V1_CONTENT` exactly — two room types, no need types.
+ *   NEEDS BUT NO LODGING NEED a VISITOR can arrive, and `visitDurationTicks` is the only thing
+ *                             that can end its visit. Demanded, per row, exactly as (3) is.
+ *
+ * **6 IS THE TRAP AND IT IS WHY THE SPLIT IS ON THE NEED TABLE RATHER THAN ON THE ROLE.** A
+ * naive *"always demand a duration"* would have demanded one of the permanent v1 fixture, which
+ * declares no `guestRules` at all — and the fixture would have stopped binding, which is the husk
+ * ADR-0006 exists to prevent. The two conditions are indistinguishable through `lodgingNeedId`
+ * alone (both give `undefined`); they are told apart by whether the need table is empty.
+ * ===========================================================================================
  */
 function assertEveryStayCanEnd(
   guestRules: readonly GuestRulesData[],
+  needTypes: readonly NeedTypeData[],
   lodgingNeedId: ContentId | undefined,
 ): void {
-  if (lodgingNeedId === undefined) return;
+  if (lodgingNeedId === undefined) {
+    assertEveryVisitCanEnd(guestRules, needTypes);
+    return;
+  }
   if (guestRules.length === 0) {
     throw new Error(
       `bindContent: this content declares the lodging need "${lodgingNeedId}" and no guest rules at all, so nothing ` +
@@ -1113,6 +1194,137 @@ function assertEveryStayCanEnd(
 }
 
 /**
+ * The visitor's half of `assertEveryStayCanEnd` (θ-b2): content a guest can arrive under and
+ * never leave, because it books no room and so can never check out of one.
+ *
+ * THE SAME REQUIREMENT ONE POPULATION OVER — **the one thing a visit must do is end.** A visitor
+ * reaches neither of the lodging terminators by construction: checkout tests the room it does not
+ * hold, and the lobby give-up tests the lodging need it did not form. Without a visit duration the
+ * only thing left is dissatisfaction, which a hotel that WORKS never generates — so the failure is
+ * not "some guests linger" but "a well-run food court fills up and never empties".
+ *
+ * NOT A HYPOTHETICAL. Measured on this exact content shape before the field existed, ten simulated
+ * days, eight providers of each kind, one arrival every 480 ticks: **30 arrived, 30 live, zero
+ * departures, oldest guest 14,399 ticks old, peak dissatisfaction 0.**
+ *
+ * ASKED OF EVERY ROW and refusing an absent table outright, for the two reasons the lodging half
+ * does: an M6 archetype that forgot the field would otherwise be discovered by a guest, and a
+ * missing table is a historical statement about the MARGIN and about nothing else.
+ *
+ * THE EMPTY NEED TABLE NEVER REACHES HERE — its caller returns first. That is what keeps
+ * `SAVE_V1_CONTENT` binding with its `8e09fe4f0fa162a3` fingerprint, and the reasoning is on the
+ * caller because that is where the split is made.
+ */
+function assertEveryVisitCanEnd(
+  guestRules: readonly GuestRulesData[],
+  needTypes: readonly NeedTypeData[],
+): void {
+  if (needTypes.length === 0) return;
+  if (guestRules.length === 0) {
+    throw new Error(
+      'bindContent: this content defines need types and no lodging need, so a guest arriving under it is a VISITOR ' +
+        'that books no room — and it declares no guest rules at all, so nothing says how long a visit lasts. A ' +
+        'visitor cannot check out — it holds no room — and it is not waiting for one either, because it never ' +
+        'wanted one. The only thing that can end its visit is visitDurationTicks. Declare guest rules carrying it.',
+    );
+  }
+  for (const rules of guestRules) {
+    if (rules.visitDurationTicks !== undefined) continue;
+    throw new Error(
+      `bindContent: guest rules "${rules.id}" declare no visitDurationTicks, but this content defines need types and ` +
+        'NO lodging need — so every guest arriving under it is a VISITOR that books no room. It cannot check out, ' +
+        'because it holds no room to check out OF; it is not waiting in the lobby, because it never wanted a room; ' +
+        'and a visitor the hotel is serving properly accumulates no dissatisfaction either. It would therefore ' +
+        'arrive and stay forever, and the hotel would fill up and never empty. There is no historical value to ' +
+        'fall back on: no era of this simulation had a guest that could decline to lodge.',
+    );
+  }
+}
+
+/**
+ * Refuses a dissatisfaction ceiling a VISITOR could never reach, or could not help reaching
+ * (θ-b2, ADR-0028 §2 as amended).
+ *
+ * THE REQUIREMENT: **the walkout row must separate a food court that works from one that does
+ * not.** It is `assertDissatisfactionOutlastsTheLobby`'s requirement one population over — a
+ * departure reason is the build loop's steering signal, not bookkeeping (ADR-0025 §2) — and it
+ * needs a two-sided window because a visitor can fail it from both ends:
+ *
+ *     visitDurationTicks − t_last   <   dissatisfactionCapacityTicks   <   visitDurationTicks
+ *
+ * The three figures are NOT spelled here (ADR-0032 §1). `assertVisitCeilingIsInTheWindow` computes
+ * both endpoints from `visitRoundOf`, and `visit.content.test.ts` asserts them against the shipped
+ * table — so a reader who wants the numbers reads them off a run, and a reader who wants the RULE
+ * reads it here. Spelling them made this paragraph a second, unpinned copy of the fold.
+ *
+ * THE UPPER BOUND — **a visitor's dissatisfaction cannot exceed its age**, and its age is bounded
+ * by the visit rather than by a 1,440-tick stay. At or above the duration the rule is DEAD.
+ * Measured, 14,400 ticks, arrivals every 30: at a ceiling of 431 the STARVED food court (one
+ * provider per need) and the WORKING one (three per need) both report **zero** walkouts and
+ * identical completed-visit counts. The player is told nothing, by a row that exists to tell them
+ * to build amenities.
+ *
+ * THE LOWER BOUND — a visitor is let down even when everything is free, because it is served ONE
+ * thing at a time and the needs queue behind each other. `visitRoundTicks` derives that floor;
+ * below it a hotel doing everything right evicts everybody. Measured at a ceiling of 104: **476
+ * walkouts and ZERO completed visits with three providers per need.** ADR-0026's amendment names
+ * the class in one line — *if some of the fill is structural, the dial has a floor nobody can see.*
+ *
+ * **AND THE FLOOR IS THE SAME ONE THE LODGING CEILING ALREADY RESTS ON**, by the same fold, and
+ * neither was derived from the other: θ-b1 computed it as the arrival backlog of a resident, this
+ * computes it as the unavoidable let-down of a visitor. The two populations differ in everything
+ * except the thing that generates the number, which is that a guest has one mouth.
+ *
+ * WHY A REFUSAL RATHER THAN A TEST, and it is `assertDissatisfactionOutlastsTheLobby`'s own rule
+ * quoted back: **loud failures get an executed boundary test; silent misfilings get a refusal.**
+ * Both ends of this window are silent — every number still adds up, the conservation law is
+ * untouched, no test goes red, and the player is quietly told the wrong thing for the whole game.
+ *
+ * CONTENT WITH A LODGING NEED IS UNTOUCHED: no visitor can arrive under it, so there is no second
+ * population for the ceiling to serve and the lobby rule is the whole of the constraint. Content
+ * declaring no ceiling is untouched too — the walkout rule does not fire at all there.
+ */
+function assertVisitCeilingIsInTheWindow(
+  guestRules: readonly GuestRulesData[],
+  needTypes: readonly NeedTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  if (lodgingNeedId !== undefined || needTypes.length === 0) return;
+  for (const rules of guestRules) {
+    const ceiling = rules.dissatisfactionCapacityTicks;
+    const visit = rules.visitDurationTicks;
+    // THE WANT LINE IS NOT SKIPPED HERE EITHER — `assertVisitRoundIsAnalysable` runs first and
+    // REFUSES a lodging-free row without one, so by this line it exists. It was skipped, and both
+    // skips together meant such a document got no ceiling check at all.
+    const wantAt = rules.wantAtBasisPoints;
+    if (ceiling === undefined || visit === undefined || wantAt === undefined) continue;
+    // THE MARGIN IS PASSED because the fold's domain includes preemption (ADR-0031 P3), and
+    // `assertVisitRoundIsAnalysable` has already refused any content where it could fire — so
+    // `violation` is `undefined` here by construction and the numbers below are the sequence the
+    // simulation runs. That ordering is the whole reason this rule may trust the fold at all.
+    const round = visitRoundTicks(
+      needTypes,
+      lodgingNeedId,
+      wantAt,
+      rules.abandonMarginBasisPoints ?? ONE_WHOLE_BASIS_POINTS,
+    );
+    const floor = round.total - round.last;
+    if (ceiling > floor && ceiling < visit) continue;
+    throw new Error(
+      `bindContent: guest rules "${rules.id}" have a dissatisfactionCapacityTicks of ${ceiling} against a ` +
+        `visitDurationTicks of ${visit}, and this content declares no lodging need — so every guest is a VISITOR ` +
+        `whose dissatisfaction cannot outlive its own visit. The ceiling must sit strictly inside ` +
+        `(${floor}, ${visit}). At or above ${visit} no visitor can ever reach it, and the walkout row reads the same ` +
+        'in a food court with one table as in one with a hundred — the player is told nothing by the row that ' +
+        `exists to tell them to build more. At or below ${floor} every visitor reaches it, because that is the ` +
+        'let-down one uncontended round of service generates all on its own: a guest is served one thing at a time, ' +
+        'so the needs it did not get to yet are unserved while it eats, and no amount of building removes that. ' +
+        'Both ends fail silently — the counts still add up and the wrong row is the one that fires.',
+    );
+  }
+}
+
+/**
  * Refuses content in which the two guest-initiated departure rows would swap meanings (θ-b1).
  *
  * THE REQUIREMENT: **a guest that never got a room must be counted under "nobody would give it a
@@ -1143,8 +1355,34 @@ function assertEveryStayCanEnd(
  *
  * Content declaring no ceiling is untouched: the rule does not fire at all there, so there is no
  * second row for the first to be confused with.
+ *
+ * ---------------------------------------------------------------------------
+ * AND CONTENT WITH NO LODGING NEED IS NOW UNTOUCHED TOO (θ-b2), BECAUSE THERE IS NO LOBBY.
+ *
+ * Every sentence in the message below is about *"a guest with no room [that] wants lodging,
+ * unserved, on every tick it is here"*. **A visitor never wants lodging at all** — it forms no
+ * such need — so under lodging-free content this refused a document for a reason that could not
+ * happen to it, and said so in a message stating a proposition that was false of the very content
+ * it was refusing. Measured: it rejected the food-court fixture outright at any ceiling below 180.
+ *
+ * WHAT IT STILL ASSERTS, UNCHANGED (ADR-0027): for content that DOES declare a lodging need —
+ * which is every document that has one today, including all shipped content — the ceiling must
+ * still be strictly greater than `toleranceTicks`, still per row, still with both numbers named,
+ * still refusing rather than testing because the failure is a silent misfiling. **Nothing about
+ * the lodging population is relaxed.** The added guard narrows WHICH DOCUMENTS the rule speaks
+ * about; it does not narrow what it says about them.
+ *
+ * THE VISITOR IS NOT LEFT UNGUARDED — `assertVisitCeilingIsInTheWindow` takes that population,
+ * with a two-sided window because a visitor can misfile from both ends. A relaxation that left the
+ * new population with no rule at all would be this class exactly: correct about its own subject,
+ * silently dropping what the thing it replaced was carrying.
+ * ---------------------------------------------------------------------------
  */
-function assertDissatisfactionOutlastsTheLobby(guestRules: readonly GuestRulesData[]): void {
+function assertDissatisfactionOutlastsTheLobby(
+  guestRules: readonly GuestRulesData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  if (lodgingNeedId === undefined) return;
   for (const rules of guestRules) {
     const ceiling = rules.dissatisfactionCapacityTicks;
     const tolerance = rules.toleranceTicks;
@@ -1251,6 +1489,299 @@ function needShareBasisPoints(
   }
   const lodging = lodgingRefill === undefined ? 0 : Math.floor(engagement / lodgingRefill);
   return { engagement, lodging, total: engagement + lodging };
+}
+
+/**
+ * ONE UNCONTENDED ROUND OF SERVICE, in ticks: how long it takes to fill every engagement need
+ * once from its want line, and how much let-down that unavoidably generates (th-b2).
+ *
+ * ONE FOLD, THREE NUMBERS, AND THAT IS WHY IT IS A FUNCTION. `total` is the derivation of
+ * `visitDurationTicks`; `total - last` is the FLOOR of the dissatisfaction range and `total` is
+ * its CEILING (`assertVisitCeilingIsInTheWindow`). Three copies of this arithmetic would be three
+ * chances for the content, the refusal and the criterion to describe different hotels - the
+ * `needShareBasisPoints` discipline one function up, and G-018's duplicated-constant defect.
+ * `visitRoundOf` exports it so a test can call THIS fold rather than keep a second one in step.
+ *
+ * IT REPRODUCES `reserve`'s CHOICE - highest `pressureBasisPoints` among the wanted needs,
+ * compared strictly greater while walking ascending id, so a tie falls to the lower id - and it
+ * does NOT reproduce anything else the guest loop does. That boundary is the whole design and it
+ * is stated as a list below rather than left to be discovered a fourth time.
+ *
+ * ===========================================================================================
+ * WHY THE DOMAIN IS NARROW AND ENFORCED RATHER THAN THE FOLD BEING MADE CLEVERER (ADR-0031).
+ *
+ * Three sweeps each found this function missing one more thing the simulation does: the
+ * ascending-id order (repaired at sweep 2), the DEFICIT CLAMP at `capacityTicks` (`needs.ts`'s
+ * `advanceNeed`), and `reserve`'s ENGAGED pass, where a challenger clearing
+ * `abandonMarginBasisPoints` takes an incumbent mid-service. Measured on content the sweep-2 guard
+ * admitted: true range **(635, 669)** against a derived **(810, ...)** - disjoint - and under the
+ * shipped margin a visitor **abandons a need at age 59, switches 62 times, and that need is never
+ * full in its 1,000-tick life.**
+ *
+ * > **A predictor that must track a simulation to stay correct IS a simulation.** Adding the
+ * > clamp, then the margin, then preemption would build a second simulator inside a refusal -
+ * > HOTELSIM.md section 9's shape one level over from the render layer, and unlike the viewer this
+ * > one could never be deleted without deleting the guard it carries.
+ *
+ * So the escape is a SMALLER DOMAIN, stated and refused at the boundary. The fold is correct on
+ * content satisfying all three properties below, and `assertVisitRoundIsAnalysable` refuses
+ * everything else. Refusing content nobody has written costs nothing; mis-analysing it costs a
+ * silently wrong range, which is the failure the refusal exists to prevent.
+ *
+ *   P1  NO NEED IS SERVED TWICE before every need has been served once. Otherwise "the round"
+ *       has no single last helping and `total - last` stops being the let-down floor.
+ *   P2  NO NEED SATURATES WHILE IT WAITS - its deficit never reaches `capacityTicks` while it is
+ *       queued behind another service. `advanceNeed` CLAMPS there and this fold does not, so past
+ *       that point every number it produces is an overestimate.
+ *   P3  NO SERVICE CAN BE PREEMPTED - no waiting need's pressure reaches the served need's plus
+ *       `abandonMarginBasisPoints` before the service finishes. `reserve`'s engaged pass would
+ *       hand the provider over, and the fold has no term for a service that ends early.
+ *
+ * Each is checked against the sequence this fold walks, not against an assumption about it.
+ * ===========================================================================================
+ */
+function visitRoundTicks(
+  needTypes: readonly NeedTypeData[],
+  lodgingNeedId: ContentId | undefined,
+  wantAtBasisPoints: number,
+  abandonMarginBasisPoints: number,
+): {
+  readonly total: number;
+  readonly last: number;
+  readonly violation: VisitRoundViolation | undefined;
+} {
+  const engagement = needTypes.filter((needType) => needType.id !== lodgingNeedId);
+  if (engagement.length === 0) return { total: 0, last: 0, violation: undefined };
+  // Every need starts AT its want line, which is also its arrival deficit (`formNeedVector`).
+  const wantLine = engagement.map((needType) =>
+    Math.floor((wantAtBasisPoints * needType.capacityTicks) / ONE_WHOLE_BASIS_POINTS),
+  );
+  const deficit = [...wantLine];
+  const served = engagement.map(() => 0);
+  const pressureOf = (index: number): number => {
+    const capacity = engagement[index]!.capacityTicks;
+    if (capacity <= 0 || deficit[index]! <= 0) return 0;
+    return Math.min(
+      Math.floor((deficit[index]! * ONE_WHOLE_BASIS_POINTS) / capacity),
+      MAX_PENDING_PRESSURE_BASIS_POINTS,
+    );
+  };
+  let total = 0;
+  let last = 0;
+  let violation: VisitRoundViolation | undefined;
+  // BOUNDED, so a table nobody anticipated cannot spin here. Each pass serves one need to full,
+  // and a pass that serves an already-served need is recorded rather than silently repeated -
+  // so the loop can only run twice per need before the refusal below has its answer.
+  const passes = engagement.length * 2 + 1;
+  for (let pass = 0; pass < passes && served.some((count) => count === 0); pass += 1) {
+    // THE SIM'S OWN CHOICE, REPRODUCED: highest pressure among the WANTED needs, compared
+    // STRICTLY GREATER while walking in ascending id - so a tie is settled by the lower id, which
+    // is `reserve`'s rule and `compareNeedPriority`'s before it.
+    let bestIndex = -1;
+    let bestPressure = 0;
+    for (let i = 0; i < engagement.length; i += 1) {
+      if (deficit[i]! < wantLine[i]! || deficit[i]! <= 0) continue;
+      const pressure = pressureOf(i);
+      if (pressure <= bestPressure) continue;
+      bestPressure = pressure;
+      bestIndex = i;
+    }
+    // Nothing is wanted. Unreachable from the arrival state - every need starts AT its want line
+    // - and stated rather than assumed, because a table that reached it would otherwise loop.
+    if (bestIndex === -1) break;
+    const ticks = Math.ceil(deficit[bestIndex]! / engagement[bestIndex]!.refillPerTick);
+    for (let i = 0; i < engagement.length; i += 1) deficit[i] = deficit[i]! + ticks;
+    deficit[bestIndex] = 0;
+    served[bestIndex] = served[bestIndex]! + 1;
+    total += ticks;
+    last = ticks;
+    if (violation !== undefined) continue;
+    // P1, and it is asked of the sequence rather than of the arithmetic that produced it.
+    if (served[bestIndex]! > 1) {
+      violation = { kind: 'servedTwice', needId: engagement[bestIndex]!.id };
+      continue;
+    }
+    for (let i = 0; i < engagement.length; i += 1) {
+      if (i === bestIndex) continue;
+      // P2 - the deficit the sim would have CLAMPED. Checked at the end of the interval, which is
+      // where a waiting need is at its emptiest.
+      if (deficit[i]! >= engagement[i]!.capacityTicks) {
+        violation = {
+          kind: 'saturated',
+          needId: engagement[i]!.id,
+          reached: deficit[i]!,
+          against: engagement[i]!.capacityTicks,
+        };
+        break;
+      }
+      // P3 - preemption. `reserve` hands the provider over when a challenger's pressure reaches
+      // the incumbent's plus the margin, and the incumbent's pressure falls to nearly nothing as
+      // its need fills. Taking the incumbent at its infimum of ZERO is the safe over-approximation:
+      // it refuses a little content the model would in fact have handled, and never admits content
+      // it would not. Erring the other way is what puts a wrong range past a refusal.
+      if (deficit[i]! >= wantLine[i]! && pressureOf(i) >= abandonMarginBasisPoints) {
+        violation = {
+          kind: 'preemptible',
+          needId: engagement[i]!.id,
+          reached: pressureOf(i),
+          against: abandonMarginBasisPoints,
+        };
+        break;
+      }
+    }
+  }
+  return { total, last, violation };
+}
+
+/**
+ * Why a content set falls outside `visitRoundTicks`' domain - one shape per property (ADR-0031).
+ *
+ * A RECORD RATHER THAN A BOOLEAN, because the refusal has to tell a designer WHICH assumption
+ * their table broke and with what numbers. `reached` and `against` are the pair the message
+ * compares; what they mean differs per kind and the message says so rather than the field name.
+ */
+type VisitRoundViolation = {
+  readonly kind: 'servedTwice' | 'saturated' | 'preemptible';
+  readonly needId: ContentId;
+  readonly reached?: number;
+  readonly against?: number;
+};
+
+/**
+ * ONE UNCONTENDED ROUND, over bound content - the exported form (ADR-0031).
+ *
+ * IT EXISTS SO NOTHING KEEPS A SECOND COPY IN STEP. `visit.content.test.ts` computed the round
+ * itself, from a docstring claiming it was *"the same fold ... so the criterion and the refusal
+ * cannot describe different hotels"* - and it was the PRE-SWEEP-2 version, returning 73/10/63
+ * where this one returns 70/34/36 on the same table. **They already described different hotels**,
+ * and it went unnoticed because both live content sets are uniform across their engagement needs,
+ * which is exactly why the original defect shipped. ADR-0024: when the class lives in a duplicated
+ * decision, the moves are CALL THE ORIGINAL or DELETE - never keep them in step.
+ *
+ * `violation` is `undefined` for any content `bindContent` accepted, because
+ * `assertVisitRoundIsAnalysable` refuses the rest. It is returned anyway so a caller that builds
+ * content by hand can see why its numbers would be wrong, rather than reading them and believing
+ * them.
+ */
+export function visitRoundOf(bound: BoundContent): {
+  readonly total: number;
+  readonly last: number;
+  readonly violation: VisitRoundViolation | undefined;
+} {
+  return visitRoundTicks(
+    needTypesInOrder(bound),
+    lodgingNeedOf(bound)?.id,
+    wantAtOf(bound),
+    abandonMarginOf(bound),
+  );
+}
+
+
+/**
+ * Refuses content that falls outside `visitRoundTicks`' domain (th-b2, ADR-0031).
+ *
+ * THE DOMAIN IS THREE PROPERTIES AND ALL THREE ARE ENFORCED HERE. They are listed on the fold,
+ * beside the code that has to hold them; this function is where a document that breaks one is
+ * turned away, with the property named and the two numbers that broke it.
+ *
+ *   P1  no need is served twice before every need has been served once
+ *   P2  no need saturates at `capacityTicks` while it waits
+ *   P3  no waiting need can preempt a service through `abandonMarginBasisPoints`
+ *
+ * ===========================================================================================
+ * IT ENFORCED ONE PROPERTY, THEN TWO, AND THE THIRD SWEEP FOUND THE THIRD. THAT IS WHY IT NOW
+ * ENFORCES A DOMAIN RATHER THAN A SYMPTOM (ADR-0031).
+ *
+ *   sweep 1  the domain was stated as "each need served exactly once, IN ASCENDING-ID ORDER" and
+ *            only the first clause was checked - using the fold's own ordering, so on any table
+ *            where the real order differed **the guard validated the fold with the fold.** It
+ *            also refused legal content: `aaa` 1000/10, `bbb` 1000/10, `ccc` 100/10 derives
+ *            73/10/63 by id and 70/34/36 by pressure, so all 27 ceilings in [37, 63] were
+ *            refused, every one of them legal and discriminating.
+ *   sweep 2  the fold was taught `reserve`'s choice, and P1 became a real check.
+ *   sweep 3  the fold still did not CLAMP the deficit and had no term for the MARGIN. On content
+ *            this function accepted, the true range was **(635, 669)** against a derived
+ *            **(810, ...)** - disjoint - and a third table printed *"(810, 669)"*, an empty range
+ *            in which no ceiling at all could bind.
+ *
+ * **A sweep-2 guard could not see the sweep-3 class and a sweep-3 guard would not see the next
+ * one**, so the answer is not another clause: it is a domain small enough to be finished, and a
+ * refusal at its boundary. ADR-0031 rules out growing the fold a clamp, a margin term or a
+ * preemption model - three individually correct additions that jointly make a second simulator,
+ * load-bearing on a refusal and therefore undeletable.
+ * ===========================================================================================
+ *
+ * WHY A REFUSAL AND NOT A COMMENT. `assertVisitCeilingIsInTheWindow` computes both of its
+ * endpoints from this fold, and a wrong range is a SILENT failure: it admits the ceilings that
+ * kill the walkout row and the ceilings that saturate it, both of which leave every count adding
+ * up and tell the player the wrong thing for the whole game. That is the same argument the ceiling
+ * rule makes for its own existence, one layer down - **a refusal whose inputs are unchecked is a
+ * refusal with a hole in it.**
+ *
+ * Content with a lodging need never reaches here: no visitor can arrive under it, so the fold has
+ * no consumer.
+ */
+function assertVisitRoundIsAnalysable(
+  guestRules: readonly GuestRulesData[],
+  needTypes: readonly NeedTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  if (lodgingNeedId !== undefined || needTypes.length === 0) return;
+  for (const rules of guestRules) {
+    // THE WANT LINE IS REQUIRED HERE RATHER THAN SKIPPED, and the earlier form said it was
+    // "refused earlier, by the check that owns that field" - which is FALSE.
+    // `assertEveryNeedIsWantedOnArrival` SKIPS a row whose `wantAtBasisPoints` is undefined, so
+    // both this rule and the ceiling rule skipped it too and a lodging-free document with no want
+    // line got no ceiling check at all: the dead-row case admitted silently, which is the one
+    // thing these two refusals exist to prevent. Unreachable through the loader (the schema
+    // requires it on disk) and reachable through `bindContent` from a raw host, which is exactly
+    // the surface every other refusal in this file is written for.
+    const wantAt = rules.wantAtBasisPoints;
+    if (wantAt === undefined) {
+      throw new Error(
+        `bindContent: guest rules "${rules.id}" declare no wantAtBasisPoints, and this content defines need types ` +
+          'and NO lodging need - so every guest arriving under it is a VISITOR. Where a visitor starts wanting ' +
+          'things is what decides how long its round of service takes, and that number sets both ends of the ' +
+          'dissatisfaction range this content is checked against. Without it neither check can run, and a ceiling ' +
+          'that makes the walkout row unreachable would be accepted in silence. Declare wantAtBasisPoints.',
+      );
+    }
+    const round = visitRoundTicks(needTypes, lodgingNeedId, wantAt, rules.abandonMarginBasisPoints ?? ONE_WHOLE_BASIS_POINTS);
+    const violation = round.violation;
+    if (violation === undefined) continue;
+    const shared =
+      `bindContent: guest rules "${rules.id}" put the want line at ${wantAt} basis points, and under this need ` +
+      'table a visitor\'s round of service is not one this content can be checked against. ';
+    const tail =
+      'The derived visit duration and the dissatisfaction range computed from it would describe a sequence the ' +
+      'simulation does not run - and those numbers back a REFUSAL, so getting them wrong admits exactly the ' +
+      'ceilings that refusal exists to forbid, and nothing goes red.';
+    if (violation.kind === 'servedTwice') {
+      throw new Error(
+        `${shared}A visitor comes back to need "${violation.needId}" a second time before it has been served ` +
+          'everything it came for, so there is no single last helping and the round has no floor. ' +
+          `${tail} Raise capacityTicks or wantAtBasisPoints for "${violation.needId}", or lower a refillPerTick, ` +
+          'so one round of service is over before anything comes due again.',
+      );
+    }
+    if (violation.kind === 'saturated') {
+      throw new Error(
+        `${shared}Need "${violation.needId}" runs all the way down to ${String(violation.reached)} while it waits ` +
+          `its turn, which is at or past its capacityTicks of ${String(violation.against)}. A need stops emptying ` +
+          'there - the simulation holds it - and the arithmetic here does not, so every tick past that point is ' +
+          `counted twice. ${tail} Raise capacityTicks for "${violation.needId}", or shorten the services it queues ` +
+          'behind by raising a refillPerTick.',
+      );
+    }
+    throw new Error(
+      `${shared}Need "${violation.needId}" reaches a pressure of ${String(violation.reached)} basis points while ` +
+        `it waits, which is at or past the abandonMarginBasisPoints of ${String(violation.against)} - so a visitor ` +
+        'would walk away from what it is being served mid-helping and take a provider for that need instead. ' +
+        `The round would end early and this arithmetic has no term for that. ${tail} Raise ` +
+        'abandonMarginBasisPoints so a visitor finishes what it starts, or raise capacityTicks for ' +
+        `"${violation.needId}" so it builds pressure more slowly.`,
+    );
+  }
 }
 
 /**
@@ -1602,26 +2133,47 @@ function isItemRequiredBySomeRoomType(roomTypes: readonly RoomTypeData[], itemId
  *
  * Zero needs is not a violation, for the reason `assertNeedsAreSatisfiable` says so:
  * content that defines no needs is content in which no guest forms one.
+ *
+ * ---------------------------------------------------------------------------
+ * ZERO *LODGING* NEEDS IS NO LONGER A VIOLATION EITHER (θ-b2, ADR-0017 §5), AND THIS FUNCTION WAS
+ * THE ONE GATE THAT MADE LODGING-FREE CONTENT UNREPRESENTABLE. It threw *"One need must be the
+ * reason a guest books a room, or no guest could ever check in"* — and the second half of that
+ * sentence was true and is now the design: **a guest that came for lunch never checks in.**
+ *
+ * It is worth recording HOW the goal that lifts it enumerated its own work and still missed this,
+ * because the shape is ADR-0027's: the plan enumerated **consumers of the lodging need** — 25 of
+ * them — and never enumerated **the refusals that make lodging-free content impossible to write
+ * down**. All 25 were unreachable behind this line. *Enumerating a list is not enumerating a
+ * class, and the list is always the part somebody noticed.*
+ *
+ * WHAT IT STILL ASSERTS, UNCHANGED, stated because a relaxation is exactly where a property gets
+ * dropped: the no-roles fallback still means the lowest id (the pre-M2 historical reading, and
+ * `SAVE_V1_CONTENT` still binds through it) · **two lodging needs is still refused, naming both**
+ * · a table that declares roles is still read by role and never by position. The only proposition
+ * withdrawn is *"a table with roles must name a lodging one"*.
+ *
+ * WHAT NOW STOPS THE FALLBACK LYING, since this clause used to: nothing needs to. The fallback
+ * fires only when NO need declares a role, and a table where every need says `engagement` is now
+ * taken at its word rather than contradicted. `lodgingNeedIn` returns `undefined` there, and every
+ * reader of it treats `undefined` as "this content has no lodging need" — which is a statement the
+ * simulation can act on, where "the designer forgot" was not.
+ *
+ * WHAT REPLACES THE PROTECTION IT WAS ACTUALLY PROVIDING, which is the ADR-0027 question rather
+ * than the ADR-0024 one: this clause was the only thing standing between a designer and content
+ * whose guests could never leave. That job moves to `assertEveryStayCanEnd`, which now demands a
+ * `visitDurationTicks` from exactly the content this clause used to refuse outright. **The refusal
+ * did not go away; it moved to the field that fixes the problem instead of the field that hides it.**
+ * ---------------------------------------------------------------------------
  */
 function assertLodgingNeedIsUnambiguous(needTypes: readonly NeedTypeData[]): void {
-  let declared = 0;
   let lodging = 0;
   let first: ContentId | undefined;
   let second: ContentId | undefined;
   for (const needType of needTypes) {
-    if (needType.role === undefined) continue;
-    declared += 1;
     if (needType.role !== 'lodging') continue;
     lodging += 1;
     if (first === undefined) first = needType.id;
     else if (second === undefined) second = needType.id;
-  }
-  if (declared === 0) return;
-  if (lodging === 0) {
-    throw new Error(
-      'bindContent: this content declares need roles but none of them is the lodging need. ' +
-        'One need must be the reason a guest books a room, or no guest could ever check in.',
-    );
   }
   if (lodging > 1) {
     throw new Error(
@@ -1920,18 +2472,36 @@ export function bindContent(content: SimContent): BoundContent {
   // and it needs both tables normalised — which is why it is here and not in
   // `cloneGuestRules`, where only one of them exists yet.
   assertReviewScaleIsBoundedByTheNeedTable(guestRules ?? [], needTypes ?? []);
-  // THE STAY AGAINST THE NEED TABLE (G-027a), LAST, AND THE ORDER IS DELIBERATE. Both
-  // refusals need the lodging need settled, exactly as the three above do. They come after
+  // THE STAY AGAINST THE NEED TABLE (G-027a), LAST, AND THE ORDER IS DELIBERATE. Every refusal
+  // from here down needs the lodging need settled, exactly as the ones above do. They come after
   // every other cross-table check so that content which is ALREADY broken for an older
   // reason still fails on that reason: a table naming two lodging needs, or a need nothing
   // provides, should say so rather than complain about a missing duration.
-  assertEveryStayCanEnd(guestRules ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  // IT TAKES THE NEED TABLE SINCE θ-b2, and it needs it: "no lodging need" no longer means "no
+  // guest could be stuck", so this has to tell an EMPTY need table (nothing can arrive — the
+  // permanent v1 fixture) from a lodging-free one (a VISITOR can arrive, and only
+  // `visitDurationTicks` can end its visit). Those two are indistinguishable through the lodging
+  // id alone, which is what made the old early return silently wrong.
+  assertEveryStayCanEnd(guestRules ?? [], needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   // AND THE TWO GUEST-INITIATED ROWS AGAINST EACH OTHER (θ-b1). It reads one table rather than
   // two, so it could have lived in `cloneGuestRules` — it is here because it compares two FIELDS
   // of one row and that clone sees each field on its own way past. Placed after
   // `assertEveryStayCanEnd` for the same ordering reason: content missing a terminator outright
   // should say so before content whose two terminators are in the wrong order.
-  assertDissatisfactionOutlastsTheLobby(guestRules ?? []);
+  //
+  // THE TWO OF THEM PARTITION THE POPULATIONS (θ-b2) and neither is left unguarded: the lobby
+  // rule speaks only about content with a lodging need, the window rule only about content
+  // without one, and each says so in its own first line rather than here.
+  assertDissatisfactionOutlastsTheLobby(guestRules ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  // AND THE FOLD'S OWN DOMAIN, BEFORE THE REFUSAL THAT RESTS ON IT (ADR-0031). `visitRoundTicks`
+  // reproduces `reserve`'s choice and NOTHING ELSE the guest loop does — no deficit clamp, no
+  // abandon margin, no preemption — and the ceiling rule below computes BOTH of its endpoints
+  // from it. A table outside that domain gets a wrong range rather than a loud failure, so the
+  // three properties are refused first and the ceiling rule may then trust the numbers.
+  // (This said "assumes each need is served once, IN ID ORDER" — the ordering clause was true of
+  // the sweep-1 fold and has been false since sweep 2 taught it the pressure order.)
+  assertVisitRoundIsAnalysable(guestRules ?? [], needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  assertVisitCeilingIsInTheWindow(guestRules ?? [], needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   // THE TWO REFUSALS `assertStayFitsTheNeedTable` BECAME (G-027b, HOTELSIM.md §5.8: the class is
   // preserved, not deleted). Its requirement — everything a guest forms must be completable
   // inside its stay — has no referent once nothing completes, and it split along the seam its
@@ -2024,7 +2594,14 @@ export function needTypesInOrder(bound: BoundContent): readonly NeedTypeData[] {
 const EMPTY_NEED_TYPES: readonly NeedTypeData[] = Object.freeze([]);
 
 /**
- * THE NEED A GUEST BOOKS A ROOM FOR, or undefined if this content defines no needs.
+ * THE NEED A GUEST BOOKS A ROOM FOR, or undefined if this content has none.
+ *
+ * `undefined` MEANS TWO DIFFERENT THINGS AND θ-b2 ADDED THE SECOND. This line read *"or undefined
+ * if this content defines no needs"*, which was exhaustive only while lodging-free content was
+ * unrepresentable. It is now also undefined for content that defines needs and declares NONE of
+ * them `lodging` — a food court — and that document's guests are VISITORS rather than an absence
+ * of guests. Callers that must tell the two apart ask whether the need table is empty;
+ * `assertEveryStayCanEnd` is the one that has to, and states why.
  *
  * It is the one need a guest BOOKS for: it holds a room for it from check-in to check-out,
  * and failing to get a room for it before its tolerance runs out is what makes a guest leave
@@ -2068,8 +2645,14 @@ function lodgingNeedIn(needTypes: readonly NeedTypeData[]): NeedTypeData | undef
     if (needType.role === 'lodging') return needType;
   }
   // No need declares a role: the historical document, whose lowest id is the lodging need.
-  // The other branch is unreachable past `bindContent` — a table that declares roles and
-  // names no lodging need is refused there — and returns undefined rather than guessing.
+  //
+  // THE OTHER BRANCH IS REACHABLE SINCE θ-b2 AND IS A DESIGN RATHER THAN A REFUSAL. It read
+  // "unreachable past `bindContent` — a table that declares roles and names no lodging need is
+  // refused there", which was true of every build up to θ-b1 and is the sentence that goal
+  // deleted: a table whose needs all say `engagement` is now taken at its word, and `undefined`
+  // is the answer that says so. Every caller reads it as "this content has no lodging need"
+  // rather than as an error, and `assertEveryVisitCanEnd` makes sure such content can still say
+  // when its guests go home.
   return anyDeclared ? undefined : needTypes[0];
 }
 
@@ -2167,6 +2750,25 @@ export function abandonMarginOf(bound: BoundContent): number {
  */
 export function stayDurationOf(bound: BoundContent): number | undefined {
   return firstGuestRules(bound)?.stayDurationTicks;
+}
+
+/**
+ * HOW LONG A VISIT LASTS UNDER THIS CONTENT, in ticks, or `undefined` if it declares none (θ-b2).
+ *
+ * `undefined` RATHER THAN A DEFAULT, for `stayDurationOf`'s reason above and one stronger one: a
+ * missing stay duration at least has an era to fail to reproduce, and this has none at all. There
+ * was never a build in which a guest could decline to lodge, so absence is not a historical
+ * statement about anything — it is a document that has not said. `bindContent` refuses it wherever
+ * a visitor could arrive (`assertEveryStayCanEnd`), so the only content that reaches a tick with
+ * `undefined` here is content with NO NEED TYPES, under which no guest can be created at all.
+ *
+ * IT IS READ PER TICK AND NOT PER GUEST, exactly as `stayDurationOf` is, and the day per-archetype
+ * durations land (M6) both become per-guest lookups together. Which of the two a given guest is
+ * measured against is decided by the guest's OWN vector, not by this function — see
+ * `lodgingNeedStateOf`.
+ */
+export function visitDurationOf(bound: BoundContent): number | undefined {
+  return firstGuestRules(bound)?.visitDurationTicks;
 }
 
 /**
@@ -2374,6 +2976,20 @@ export function providesOf(bound: BoundContent, kind: ContentId): readonly Conte
  * the bench. `MAX_FIT_BASIS_POINTS` is now an alias of this rather than a second literal.
  */
 export const ONE_WHOLE_BASIS_POINTS = 10_000;
+
+/**
+ * The highest pressure a WANTED need can report, in basis points.
+ *
+ * MOVED HERE FROM `utility.ts` AT θ-b2, AND THE MOVE IS THIS FILE'S OWN RULE ABOVE APPLIED A
+ * SECOND TIME. `visitRoundTicks` reproduces `reserve`'s choice of what a visitor is served next,
+ * so it needs the same ceiling `pressureBasisPoints` imposes — and `content.ts` is UPSTREAM of
+ * `utility.ts`, so importing the other way would be a cycle and a private copy would be the
+ * duplicated constant `ONE_WHOLE_BASIS_POINTS` was consolidated to remove. `utility.ts` re-exports
+ * it, so every existing importer is untouched, and the FULL argument for why it is 9,999 — and
+ * why that is now an imposed clamp rather than a consequence — stays there, beside the function
+ * that applies it.
+ */
+export const MAX_PENDING_PRESSURE_BASIS_POINTS = ONE_WHOLE_BASIS_POINTS - 1;
 
 /**
  * The largest fit any content may declare (G-014a).

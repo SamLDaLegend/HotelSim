@@ -151,24 +151,32 @@ describe('the table has one row per reason and nothing else', () => {
     expect(outcomes.departures).toHaveLength(GUEST_DEPARTURE_REASONS.length);
   });
 
-  it('carries six reasons, and every one of them says WHY rather than merely that', () => {
+  it('carries every reason in its canonical order, and each says WHY rather than merely that', () => {
     // The list is pinned so that adding a reason is a deliberate act with a migration
     // attached (see `outcome.save.test.ts`), not a quiet widening. It has been a deliberate act
-    // twice: G-015 split the evictions, and θ-b1 inserted `leftDissatisfied` — AT INDEX 2, not
-    // appended, because `isCutShort` partitions this list and the rows the GUEST ended belong
-    // together at the head. The position is asserted here rather than merely produced.
+    // three times: G-015 split the evictions, θ-b1 inserted `leftDissatisfied` at index 2, and
+    // θ-b2 inserted `visitEnded` at index 1 — none of them appended, because `isCutShort`
+    // partitions this list and the rows the GUEST ended belong together at the head. The
+    // positions are asserted here rather than merely produced.
+    //
+    // (The title said "carries SIX reasons" until θ-b2. A count in a test NAME is the worst
+    // place for one — vitest prints it, no assertion checks it, and it has to be re-typed every
+    // time the union grows. The count that matters is the literal below, which reddens by name.)
     expect([...GUEST_DEPARTURE_REASONS]).toEqual([
       'checkedOut',
+      'visitEnded',
       'gaveUp',
       'leftDissatisfied',
       'evictedRoomGone',
       'evictedRoomUnusable',
       'evictedCauseUnrecorded',
     ]);
-    // THE PARTITION, ASSERTED. The three the guest ended are contiguous at the head and the
+    // THE PARTITION, ASSERTED. The rows the guest ended are contiguous at the head and the
     // three the hotel ended are contiguous at the tail — which is the property `evictedGuests`
-    // folds and the reason the insertion point is not free.
+    // folds and the reason the insertion point is not free. `visitEnded` is not cut short: a
+    // visitor that ran out its clock left when it meant to, exactly as `checkedOut` did.
     expect(GUEST_DEPARTURE_REASONS.map((reason) => isCutShort(reason))).toEqual([
+      false,
       false,
       false,
       false,
@@ -224,7 +232,7 @@ describe('L1: the conservation law, and it can fail', () => {
       departures: full.departures.filter((row) => row.reason !== 'evictedRoomUnusable'),
     };
     expect(() => assertGuestOutcomes(missingZero, store(2))).toThrow(
-      /5 departure row\(s\) against 6 known reason\(s\)/,
+      /6 departure row\(s\) against 7 known reason\(s\)/,
     );
   });
 
@@ -232,7 +240,7 @@ describe('L1: the conservation law, and it can fail', () => {
     const rows: GuestOutcomeRow[] = [...table(10, { checkedOut: 5, gaveUp: 3 }).departures];
     rows.splice(1, 0, { reason: 'checkedOut', count: 0 });
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
-      /7 departure row\(s\) against 6 known reason\(s\)/,
+      /8 departure row\(s\) against 7 known reason\(s\)/,
     );
   });
 
@@ -242,15 +250,15 @@ describe('L1: the conservation law, and it can fail', () => {
     rows[0] = second;
     rows[1] = first;
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
-      /departures\[0\] is "gaveUp" where "checkedOut" belongs/,
+      /departures\[0\] is "visitEnded" where "checkedOut" belongs/,
     );
   });
 
-  it('throws on an unknown reason, so a typo cannot become a silent sixth bucket', () => {
+  it('throws on an unknown reason, so a typo cannot become a silent extra bucket', () => {
     const rows = [...table(10, { checkedOut: 5, gaveUp: 3 }).departures];
-    rows[1] = { reason: 'gaveUpWating' as never, count: 3 };
+    rows[2] = { reason: 'gaveUpWating' as never, count: 3 };
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
-      /departures\[1\] is "gaveUpWating" where "gaveUp" belongs/,
+      /departures\[2\] is "gaveUpWating" where "gaveUp" belongs/,
     );
   });
 
@@ -259,7 +267,7 @@ describe('L1: the conservation law, and it can fail', () => {
       /departures\[0\] \(checkedOut\) must be a non-negative safe integer/,
     );
     expect(() => assertGuestOutcomes(table(10, { gaveUp: 1.5 }), store(2))).toThrow(
-      /departures\[1\] \(gaveUp\) must be a non-negative safe integer/,
+      /departures\[2\] \(gaveUp\) must be a non-negative safe integer/,
     );
   });
 
@@ -436,7 +444,7 @@ describe('the tick keeps the table honest as it goes', () => {
 
   it('returns the SAME rows object on a tick where nobody left', () => {
     // Not a micro-optimisation dressed as a test: this runs 525,600 times in the I5 bench,
-    // and rebuilding a five-row array to add zero to each is the per-tick allocation §6.1
+    // and rebuilding the whole row array to add zero to each is the per-tick allocation §6.1
     // asks sim-critic to hunt. Identity is the only way to say "it did not rebuild".
     const before = stepTick(hotel(1), content, [arrive]);
     const after = stepTick(before, content, []);

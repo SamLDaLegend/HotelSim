@@ -99,7 +99,7 @@
 // large one.**
 //
 // THE CLASS: a claim that a guest holding a room cannot end its own stay, that the resident
-// give-up belongs to a future goal, or that the departure table has five rows.
+// give-up belongs to a future goal, or that the departure table has a particular number of rows.
 //
 // THE NEEDLES ARE DERIVED FROM THE CHANGE, not from the sites anyone noticed — which is the
 // discipline the first build stated and did not follow: it missed a FOURTH live refusal

@@ -264,7 +264,7 @@ describe('THE BRANCH ORDER, and the partition it produces', () => {
 
 describe('THE LIFETIME BOUND IS UNMOVED, and that is a claim rather than an omission', () => {
   it('`maxGuestLifetimeTicks` still reads max(stay, tolerance) + 1', () => {
-    // The stock can only ever SHORTEN a life — it is a fourth reason to leave early and never a
+    // The stock can only ever SHORTEN a life — it is one more reason to leave early and never a
     // reason to stay — so the bound `countStuckGuests` compares against is untouched, including
     // for a ceiling ABOVE the stay, which merely makes the rule unreachable.
     expect(maxGuestLifetimeTicks(contentWith(50), 'rest')).toBe(401);

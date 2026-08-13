@@ -823,6 +823,63 @@ export const reviewScoreSchema = z.int();
 export const stayDurationTicksSchema = z.int().min(1);
 
 /**
+ * HOW LONG A GUEST THAT BOOKS NO ROOM STAYS IN THE BUILDING, IN TICKS (G-027b θ-b2, ADR-0017 §5).
+ *
+ * The other half of ADR-0025's seam. `stayDurationTicks` is how long a guest that LODGES is here;
+ * this is how long a guest that came only for the facilities is here — food, a gym, a spa, a pool.
+ * A guest reaches exactly one of them, decided by whether it formed a lodging need at all, and the
+ * two are separate fields because **they derive from different requirements** and a field with two
+ * derivations is a derivation that will outlive one of its models.
+ *
+ * WHY A VISIT IS A DURATION AND NOT "LEAVE WHEN SATISFIED". ADR-0017 §4 leaves two terminators and
+ * says a stay no longer ends because a need completed — but the stronger reason is that **there is
+ * no tick at which a visitor is satisfied.** Measured on a lone visitor in an empty, fully
+ * provisioned food court: its needs reach full at ages 60, 129 and 208 respectively, and by the
+ * time the third is full the first has decayed back below its want line. **"Everything full at
+ * once" never occurs, at any tick, under any provisioning.** A stock model has no done state, so a
+ * completion terminator is not merely forbidden — it is not expressible.
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE 208 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
+ *
+ * THE REQUIREMENT — **a visitor comes for one round of what it came for, and then goes home.**
+ * It arrives with every need exactly at its want line (`formNeedVector`), and it is served ONE
+ * thing at a time, so the needs are filled in sequence and each waits while the ones before it
+ * are served — accruing one further tick of deficit per tick it waits:
+ *
+ *     d  = wantAtBasisPoints x capacityTicks  = 3,000bp x 1,400 = 420    the arrival deficit
+ *     r  = refillPerTick                      = 7
+ *     t_i = ceil( (d + Σ_{j<i} t_j) / r )
+ *         = ceil(420/7)=60 · ceil(480/7)=69 · ceil(549/7)=79
+ *     visitDurationTicks = Σ t_i             = 60 + 69 + 79            = 208
+ *
+ * THERE IS NO `+1` FOR THE ARRIVAL TICK, and an earlier draft had one. Service begins on the tick
+ * after arrival and runs contiguously, so the completion AGE **is** the sum. (`maxGuestLifetimeTicks`
+ * carries a `+1` for a different mechanism entirely — it makes its limit the first age no correct
+ * simulation can produce, so `>=` counts the first illegal age and nothing before it. Copying that
+ * term into a DURATION makes the visitor furniture for one tick.)
+ *
+ * **THE DERIVATION IS THE UNCONTENDED CASE AND SAYING SO IS PART OF IT.** It assumes a free
+ * provider the tick each need is wanted. A visitor in a busy food court waits, and it is the
+ * DISSATISFACTION stock that answers for that — see `dissatisfactionCapacityTicksSchema`, whose
+ * admissible window this number sets both ends of.
+ *
+ * WHAT IT COSTS TO GET WRONG, MEASURED: at 208 a visitor leaves with its last need exactly full
+ * (deficits `[148, 79, 0]`). At 209 it leaves already decaying (`[149, 80, 1]`). And a visitor that
+ * is never told to go home is not merely late — with nothing else able to end its visit it stays
+ * forever: 30 arrivals, 30 still resident after ten simulated days, zero departures of any kind.
+ * ---------------------------------------------------------------------------
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `role`, `requires`, price, margin, review scale and
+ * stay-duration contract exactly, and INERT ON CONTENT THAT HAS NO VISITORS, which is the same
+ * standing `toleranceTicks` already has on a hotel with enough rooms. The shipped
+ * `guest-rules.json` declares it and no shipped guest reads it; the tick it starts mattering is
+ * the tick a content set stops declaring a lodging need. Silence is a forgotten dial, not an era:
+ * there is no era in which a guest could decline to lodge, so absence cannot be read as history.
+ */
+export const visitDurationTicksSchema = z.int().min(1);
+
+/**
  * WHERE A GUEST STARTS WANTING A NEED, as a fraction of that need's own capacity, in basis
  * points (G-027b, ADR-0017 §1).
  *
@@ -852,8 +909,13 @@ export const stayDurationTicksSchema = z.int().min(1);
  * none of it left.
  *
  * IT IS COUPLED TO A CLAMP, AND THE COUPLING IS ONE BASIS POINT WIDE. The 9,999 above is
- * `MAX_PENDING_PRESSURE_BASIS_POINTS` in `packages/sim/src/utility.ts`, which under the stock
- * model is a CLAMP rather than a consequence of a countdown that stops at one. If it ever became
+ * `MAX_PENDING_PRESSURE_BASIS_POINTS`, DEFINED IN `packages/sim/src/content.ts` beside
+ * `ONE_WHOLE_BASIS_POINTS` and re-exported by `packages/sim/src/utility.ts`, which is where
+ * `pressureBasisPoints` applies it and where the argument for its value lives. (This named only
+ * `utility.ts` until θ-b2 moved the definition upstream so `visitRoundTicks` could reach it
+ * without a cycle or a private copy — half-true afterwards, and this is the cross-package surface
+ * that move owed a sweep.) Under the stock model it is a CLAMP rather than a consequence of a
+ * countdown that stops at one. If it ever became
  * 10,000 the bound becomes 4,000, and 3,999-passes/4,000-fails — the arm this derivation is
  * pinned by — inverts by exactly the basis point it is built around.
  *
@@ -989,6 +1051,40 @@ export const toleranceTicksSchema = z.int().min(1);
  * (`assertDissatisfactionOutlastsTheLobby`), because no schema in this file can see the other
  * field's value at the moment this one is parsed.
  *
+ * ---------------------------------------------------------------------------
+ * AND BOUNDED FROM BOTH SIDES AGAIN ON CONTENT WITH NO LODGING NEED (θ-b2, ADR-0028 §2 as amended).
+ * A VISITOR HAS A SECOND, MUCH NARROWER WINDOW, and it is narrower for a mechanical reason:
+ * **a visitor's dissatisfaction cannot exceed its age**, and its age is bounded by
+ * `visitDurationTicks` rather than by a 1,440-tick stay.
+ *
+ *     visitDurationTicks − t_last   <   dissatisfactionCapacityTicks   <   visitDurationTicks
+ *              208 − 79 = 129       <                190               <         208
+ *
+ * THE UPPER BOUND, and it is the one a one-sided rule would have caught: at or above the duration
+ * the row is **DEAD**. Measured, 14,400 ticks, arrivals every 30 — at a ceiling of 431 the STARVED
+ * food court (1 provider per need) and the WORKING one (3 per need) both report **zero** walkouts
+ * and identical `visitEnded` counts. That is ADR-0025 §2's failure exactly — *"build more
+ * amenities"* made unsayable — arriving through the row θ-b2 adds.
+ *
+ * THE LOWER BOUND, and it is the one that was missed: **it is the same 129 as the lodging arrival
+ * backlog above, by the same fold, and neither was derived from the other.** A lone visitor in an
+ * empty, fully provisioned food court still accumulates 129 ticks of let-down, because it can only
+ * be served one thing at a time. Below that a WORKING food court evicts everybody: measured at a
+ * ceiling of 104, **476 walkouts and ZERO completed visits with three providers per need** — the
+ * mirror image of the defect the upper bound removes. ADR-0026's amendment says why in one line:
+ * *if some of the fill is structural, the dial has a floor nobody can see.*
+ *
+ * `assertVisitCeilingIsInTheWindow` in `packages/sim/src/content.ts` enforces both, for the reason
+ * the lobby rule lives there: this schema cannot see the need table or the visit duration.
+ *
+ * **190 IS A DIAL INSIDE A DERIVED WINDOW, NOT A DERIVED CONSTANT**, and the distinction is
+ * ADR-0013 §4's. The window's two endpoints are derived; where a designer sits inside it is tuned
+ * by play (ADR-0017: these numbers have no old baseline to inherit). Manufacturing a derivation for
+ * it would be a superstition with CI access. What IS asserted is that the whole admissible window
+ * behaves: all four corners of the range the refusals leave — [181, 207] once `toleranceTicks`
+ * narrows it — measured **0 walkouts working, 143–164 of ~473 starved.**
+ * ---------------------------------------------------------------------------
+ *
  * REQUIRED HERE, OPTIONAL IN THE SIM — the `abandonMarginBasisPoints` contract, and absence has the
  * same clean historical reading: content written before θ-b1 declares none because in that era a
  * guest that held a room could not end its own stay at all. `dissatisfactionCapacityOf` answers
@@ -1048,6 +1144,7 @@ export const guestRulesSchema = z
     reviewScoreMin: reviewScoreSchema,
     reviewScoreMax: reviewScoreSchema,
     stayDurationTicks: stayDurationTicksSchema,
+    visitDurationTicks: visitDurationTicksSchema,
     wantAtBasisPoints: wantAtBasisPointsSchema,
     toleranceTicks: toleranceTicksSchema,
     dissatisfactionCapacityTicks: dissatisfactionCapacityTicksSchema,

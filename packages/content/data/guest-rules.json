@@ -6,6 +6,7 @@
     "reviewScoreMin": 1,
     "reviewScoreMax": 5,
     "stayDurationTicks": 1440,
+    "visitDurationTicks": 208,
     "wantAtBasisPoints": 3000,
     "toleranceTicks": 180,
     "dissatisfactionCapacityTicks": 431,

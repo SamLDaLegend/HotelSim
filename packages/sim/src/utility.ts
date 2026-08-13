@@ -107,7 +107,7 @@
 // for — remains UNEXPRESSIBLE rather than merely unlikely. G-014b adds re-evaluation and the
 // content-defined margin that makes abandoning one provider for another deliberate.
 
-import { fitOf, ONE_WHOLE_BASIS_POINTS } from './content.js';
+import { fitOf, MAX_PENDING_PRESSURE_BASIS_POINTS, ONE_WHOLE_BASIS_POINTS } from './content.js';
 import type { BoundContent, NeedTypeData } from './content.js';
 import type { Entity } from './entities.js';
 import type { NeedState } from './needs.js';
@@ -194,7 +194,7 @@ export function pressureBasisPoints(needType: NeedTypeData, need: NeedState): nu
  * "content whose margin is 10,000" the same simulation, which is what lets G-014b's Era-A
  * arm be a CONTENT DOCUMENT rather than a code path nothing on disk can reach.
  */
-export const MAX_PENDING_PRESSURE_BASIS_POINTS = ONE_WHOLE_BASIS_POINTS - 1;
+export { MAX_PENDING_PRESSURE_BASIS_POINTS };
 
 /**
  * The lowest pressure a rival need must reach before a guest abandons what it is doing

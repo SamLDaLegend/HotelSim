@@ -97,7 +97,7 @@ import {
 } from './build.js';
 import type { BuildInput, BuildOutcomes } from './build.js';
 import type { Command, ScheduledCommand } from './commands.js';
-import { hasContentId, isRoomKind, lodgingNeedOf } from './content.js';
+import { hasContentId, isRoomKind, needTypesInOrder } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
@@ -419,7 +419,21 @@ function applyCommand(
       // the intent entered rather than three lines into a system. `bindContent` has
       // already established that every need this content DOES define has a provider, so
       // past this point a guest's need is always one something can satisfy.
-      if (lodgingNeedOf(content) === undefined) {
+      // IT ASKS THE NEED TABLE, NOT THE LODGING NEED (θ-b2). The predicate was
+      // `lodgingNeedOf(content) === undefined` and the message already described the RIGHT
+      // requirement — *"no need type for one to form"* — while testing a narrower thing. Content
+      // with engagement needs and no lodging need can form a perfectly good vector; its guests
+      // are VISITORS (ADR-0017 §5), and refusing them was the second of the two gates that made
+      // lodging-free content unreachable.
+      //
+      // WHAT THE OLD CHECK ASSERTED AND THIS ONE STILL DOES (ADR-0027): a guest is a need vector,
+      // so a guest that could form NO need is a caller or content mistake rather than a replay
+      // artefact, and it fails where the intent entered rather than three lines into a system.
+      // `bindContent` has already established that every need this content DOES define has a
+      // provider, so past this point a guest's need is always one something can satisfy — and
+      // since θ-b2 it has also established that such content declares a `visitDurationTicks`, so
+      // past this point a guest that books no room can still go home.
+      if (needTypesInOrder(content).length === 0) {
         throw new Error(
           'applyCommands: a guest arrived, but the injected content defines no need type for one to form',
         );
