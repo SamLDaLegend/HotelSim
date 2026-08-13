@@ -235,7 +235,12 @@ describe('summary schema 3, and what an older consumer does with it', () => {
     expect(reasons).not.toContain('satisfied');
     expect(reasons).not.toContain('gaveUpWaiting');
     expect(departuresOf(summary, 'satisfied')).toBe(0);
-    expect(reasons).toHaveLength(5);
+    // SIX SINCE θ-b1, and the v3 document carries the new row without a bump: an ADDITIVE row
+    // does not move `SUMMARY_SCHEMA_VERSION` (`report.ts`'s stated policy), because every v3
+    // reason string is still present and still means what it meant. A consumer asking for
+    // `checkedOut` gets the same population it got; only a RENAME breaks that, and a rename is
+    // what the two `not.toContain` lines above are watching for.
+    expect(reasons).toHaveLength(6);
   });
 
   it('ACCEPTS the frozen real v1 document, so the guard is not merely always-throwing', () => {
@@ -351,9 +356,11 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   // invocation whose outcome table has at least four distinct reasons non-zero, and the
   // shape of the hotel decides whether that is even possible:
   //
-  //   `--rooms 6` alone CANNOT DO IT AT ANY SEED. Nothing goes wrong in that hotel — 356
-  //   satisfied, 0 of everything else — and no taxonomy that does not invent behaviour can
-  //   find four reasons in a run where nothing fails.
+  //   `--rooms 6` alone CANNOT DO IT AT ANY SEED — and the REASON has changed twice since this
+  //   was written. It read "nothing goes wrong in that hotel — 356 satisfied, 0 of everything
+  //   else". At θ-b1 plenty goes wrong: 163 check out, 148 never get a bed and 42 walk out of
+  //   one. What that hotel still cannot produce is an EVICTION, because nothing is ever built or
+  //   demolished in it — so it reaches three of six reasons and the criterion needs four.
   //
   //   `evictedRoomUnusable` NEEDS A STOREY ABOVE A DEMOLITION. `roomCell` lays the seeded
   //   hotel along the ground floor, where nothing can lose its support; `builtRoomCell`
@@ -366,7 +373,17 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   //   Retuned per the note's own step 2 rather than weakened to three — `--rooms 12
   //   --build 360 --demolish 1440` puts more guests in more rooms and demolishes underneath
   //   them twice as often, and it buys a margin of TWO on the row that had one.
-  const ARGS = ['--days', '30', '--seed', '7', '--rooms', '12', '--build', '360', '--demolish', '1440'];
+  // RETUNED AGAIN AT θ-b1, BY THE NOTE'S OWN STEP 2, AND THE CRITERION GOT STRICTLY STRONGER.
+  // The union grew a sixth reason, so "at least four non-zero" could now be met without the
+  // hotel doing anything new. `--rooms 30 --amenities 3 --arrivals 60` produces ALL FIVE that a
+  // tick may write — 380 checkedOut, 260 gaveUp, 46 leftDissatisfied, 29 evictedRoomGone,
+  // 3 evictedRoomUnusable — where the inherited invocation produced four and, under this build,
+  // would have produced four different ones (its guests walked out before the demolitions
+  // reached them). The amenity count is the derived one: `ceil((1440 / 60) / 8)` = 3.
+  const ARGS = [
+    '--days', '30', '--seed', '7', '--rooms', '30', '--amenities', '3', '--arrivals', '60',
+    '--build', '360', '--demolish', '1440',
+  ];
 
   it('the pinned invocation exits 0 and reports at least FOUR reasons non-zero', () => {
     const result = runCli([...ARGS, '--json']);
@@ -385,21 +402,23 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
       'evictedRoomGone',
       'evictedRoomUnusable',
       'gaveUp',
+      'leftDissatisfied',
     ]);
-    expect(nonZero).toHaveLength(4);
+    expect(nonZero).toHaveLength(5);
   });
 
-  it('AND THE MARGIN IS ONE — read this first if the test above just went red', () => {
-    // MEASURED, AND NARROW. Three of the four reasons arrive in the dozens or hundreds
-    // (60 / 286 / 11 at G-027a). `evictedRoomUnusable` arrives TWICE: two guests, in two
-    // rooms, whose support was demolished from under them. It was ONE before G-027a, on a
-    // different invocation — see the note on `ARGS` for why that one had to be retuned, and
-    // treat two as barely more headroom than one.
+  it('AND THE MARGIN IS TWO — read this first if the test above just went red', () => {
+    // MEASURED, AND NARROW. Four of the five reasons arrive in the dozens or hundreds — 380 /
+    // 260 / 46 / 29 at θ-b1, where G-027a read 60 / 286 / 11 over four rows.
+    // `evictedRoomUnusable` arrives THREE TIMES: three guests, in three rooms, whose support was
+    // demolished from under them. It was ONE before G-027a and TWO on θ-b1's first invocation —
+    // see the note on `ARGS` for why each of those had to be retuned, and treat three as barely
+    // more headroom than one.
     //
     // SO THE CRITERION HAS NO HEADROOM ON THAT ROW, and the failure mode is a trap for
     // whoever hits it. Change the build cadence, the demolish cadence, the plot, the
     // arrival rate or the stay length and that single episode can stop happening — at which
-    // point the test above goes red saying "three reasons, expected four", and reads
+    // point the test above goes red saying "four reasons, expected five", and reads
     // exactly like a broken eviction split. It almost certainly is not.
     //
     // WHAT TO CHECK, IN ORDER:
@@ -407,17 +426,17 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     //      deterministically on a two-room stack. If those are green, the split works and
     //      this is a schedule change, not a defect.
     //   2  If so, retune THIS invocation until a guest is again in a room whose support is
-    //      demolished — `--build`/`--demolish` cadences and `--rooms` are the levers — and
-    //      re-record the numbers here. Do not weaken the criterion to three.
+    //      demolished — `--build`/`--demolish` cadences, `--rooms` and now `--amenities` are the
+    //      levers — and re-record the numbers here. Do not weaken the criterion to four.
     //
     // The count is asserted so the margin is a FACT IN THE FILE rather than a surprise:
-    // whoever changes the schedule sees the 1 before the red.
+    // whoever changes the schedule sees the 3 before the red.
     const document = JSON.parse(runCli([...ARGS, '--json']).stdout) as {
       guests: { departures: { reason: string; count: number }[] };
     };
     const count = (reason: string): number =>
       document.guests.departures.find((row) => row.reason === reason)?.count ?? -1;
-    expect(count('evictedRoomUnusable')).toBe(2);
+    expect(count('evictedRoomUnusable')).toBe(3);
     // The other three, for contrast: this is what headroom looks like.
     expect(count('checkedOut')).toBeGreaterThan(50);
     expect(count('gaveUp')).toBeGreaterThan(50);
@@ -430,10 +449,13 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     };
     const departed = document.guests.departures.reduce((total, row) => total + row.count, 0);
     expect(departed + document.guests.inHotel).toBe(document.guests.arrived);
-    expect(document.guests.arrived).toBe(360);
+    // 360 -> 720: the retuned invocation halves the arrival interval (see `ARGS`). Derived and
+    // asserted rather than pinned by hand — 43,200 ticks at one arrival every 60, plus the one
+    // at tick 0's offset — so a future retune moves this by arithmetic rather than by editing.
+    expect(document.guests.arrived).toBe(720);
   });
 
-  it('the fifth reason stays zero in every real run, because only a migration writes it', () => {
+  it('the migration-only reason stays zero in every real run, whatever the length of the union', () => {
     const document = JSON.parse(runCli([...ARGS, '--json']).stdout) as {
       guests: { departures: { reason: string; count: number }[] };
     };
@@ -445,29 +467,33 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // which is the only history that can.
   });
 
-  it('the text report shows the same four, so a human sees what the JSON says', () => {
+  it('the text report shows the same five, so a human sees what the JSON says', () => {
     const printed = runCli(ARGS).stdout;
-    for (const reason of ['checkedOut', 'gaveUp', 'evictedRoomGone', 'evictedRoomUnusable']) {
+    for (const reason of ['checkedOut', 'gaveUp', 'leftDissatisfied', 'evictedRoomGone', 'evictedRoomUnusable']) {
       expect(printed).toMatch(new RegExp(`left ${reason}\\s+[1-9]`));
     }
     expect(printed).toMatch(/left evictedCauseUnrecorded\s+0/);
   });
 
-  it('and the default hotel produces only TWO, which is why the criterion needs flags', () => {
+  it('and the default hotel produces only THREE, which is why the criterion needs flags', () => {
     // Recorded as a measurement rather than a claim: this is the invocation the goal block
     // originally named, and it cannot meet the criterion under any correct implementation —
     // nothing is ever built or demolished, so neither eviction reason has a cause.
     //
-    // IT WAS ONE REASON BEFORE G-027a AND IS TWO NOW, which is the same capacity change the
-    // rest of this diff records: six rooms no longer serve twelve arrivals a day, so guests
-    // give up as well as check out. Two of four is still short of the criterion, which is the
-    // point of the arm.
+    // IT WAS ONE REASON BEFORE G-027a AND TWO AFTER IT, which is the same capacity change the
+    // rest of that diff recorded: six rooms no longer serve twelve arrivals a day, so guests
+    // give up as well as check out. **THREE AT θ-b1** — the default hotel has one of each
+    // amenity against ~12 concurrent guests, so some of the guests that DO get a bed walk out
+    // on it. Three of six is still short of the criterion, which is the point of the arm, and
+    // the arm is now also the cheapest demonstration in the repo that the new row occurs
+    // WITHOUT flags.
     const { world, options } = runWorld(['--days', '30', '--seed', '7', '--rooms', '6']);
     const { summary, violations } = buildSummary(world, content, options);
     expect(violations).toEqual([]);
     expect(summary.guests.departures.filter((row) => row.count > 0).map((row) => row.reason)).toEqual([
       'checkedOut',
       'gaveUp',
+      'leftDissatisfied',
     ]);
   });
 });

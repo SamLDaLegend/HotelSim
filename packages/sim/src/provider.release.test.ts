@@ -319,6 +319,9 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
     at: { floor: 0, column: 0 },
     arrivedTick: 0,
     roomEntityId: room,
+    // θ-b1: content on arrival. Nothing in this file is about a guest's mood; the stock is
+    // driven and read in `guest.dissatisfaction.test.ts`.
+    dissatisfaction: 0,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'comfort' },
     needs: [
       { needId: 'comfort', deficit: comfortLeft, metBy: null, abandonCount: 0 },

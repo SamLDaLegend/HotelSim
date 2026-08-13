@@ -41,6 +41,8 @@
 
 import {
   abandonMarginOf,
+  dissatisfactionCapacityOf,
+  dissatisfactionReliefOf,
   findNeedType,
   findRoomType,
   isRoomKind,
@@ -66,6 +68,7 @@ import {
   formNeedVector,
   isNeedWanted,
   recordNeedsAtDeparture,
+  wantsSomethingUnserved,
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 import { recordReview, reviewOf } from './reviews.js';
@@ -186,6 +189,47 @@ export type Guest = {
    * had no vector — and that is a true statement about it rather than a gap to fill in.
    */
   readonly needs: readonly NeedState[];
+  /**
+   * HOW FED UP THIS GUEST IS, in ticks (θ-b1, ADR-0017 4(b), ADR-0026). **0 is content**;
+   * `dissatisfactionCapacityTicks` is out of the door.
+   *
+   * Rises by one on every tick the guest wants something nothing is serving, and falls by
+   * `dissatisfactionReliefPerTick` on every tick it wants nothing it is not getting. Clamped at
+   * both ends. A guest that occasionally misses dinner accumulates some and recovers; one that
+   * never eats saturates and leaves.
+   *
+   * ---------------------------------------------------------------------------
+   * A STOCK, AND THE FIELD IT REPLACED IN THE PLAN WAS A COUNTDOWN WEARING A STOCK'S CLOTHES.
+   * The rejected design was `starvedTicks`: incremented while a need was empty, **reset to zero**
+   * when anything served it. The reset is the defect. It erases the guest's history, so the only
+   * question the field can answer is *"is this hotel saturated right now"* — a yes/no question
+   * about a saturating resource, with no graded region for a content number to be tuned in.
+   * ADR-0026 measured it: 0% of residents evicted at 8.06 concurrent guests and 77.5% at 8.44.
+   *
+   * **NOTHING RESETS THIS FIELD.** It drains, one relief-per-tick at a time, and a guest that has
+   * been let down for two hundred ticks is still carrying most of that an hour later. That is the
+   * whole difference, and it is why the same content produces a spread — measured closed-loop
+   * across the same axis: 0% / 14.3% / 25.8% / 36.1% / 52.1% / 75.2% / 98.9%.
+   * ---------------------------------------------------------------------------
+   *
+   * WHY IT IS STORED AND NOT DERIVED, which is the question to ask of any new state. It is
+   * path-dependent by construction: two guests of the same age in the same room can carry
+   * completely different levels depending on what they were able to get and when. Nothing else in
+   * the world records that history — a departed provider leaves no trace, and `metBy` remembers
+   * only the last one.
+   *
+   * IT IS A GUEST'S FIELD RATHER THAN A NEED'S, deliberately. Per-need dissatisfaction would be
+   * `needTypes.length` more integers in hashed state, one migration default per need, and a
+   * departure rule that had to combine them — and the thing being modelled is the guest's
+   * patience with the HOTEL, which is one quantity. A guest does not leave because of dinner; it
+   * leaves because of the evening.
+   *
+   * NOT CLAMPED TO THE CEILING BY `assertGuestStoreInvariants`, and that is deliberate: content
+   * can legitimately shrink between saves, and a loaded guest carrying more than the new ceiling
+   * is a true statement about the world that wrote it. It departs on its first tick under the new
+   * rules, which is the correct reading of "you have already had enough".
+   */
+  readonly dissatisfaction: number;
 };
 
 export type GuestStore = {
@@ -211,6 +255,7 @@ export type GuestStore = {
  *   gaveUp                stepGuests step 6, a roomless guest reached `toleranceTicks`
  *                         (it read "the lodging need ran out of patience" until θ-a sweep 2,
  *                         which is the countdown model's name for the same row)
+ *   leftDissatisfied      stepGuests step 6, a guest's dissatisfaction stock saturated
  *   evictedRoomGone       stepGuests step 1, the room entity is no longer in the draft
  *   evictedRoomUnusable   stepGuests step 1, the entity is there and is not a valid room
  *   evictedCauseUnrecorded  `migrateV7ToV8` ONLY — see below
@@ -220,9 +265,39 @@ export type GuestStore = {
  * a stay ended on the tick `night_rest` was met — and that terminator no longer exists, so
  * the word would now be a claim about the guest's feelings that nothing computes: a guest
  * checks out having failed every engagement need it formed. `checkedOut` names what the
- * branch observes, which is a clock and a room. `gaveUpWaiting` lost its second word for a
- * narrower reason: it is the only remaining way a guest can end its own stay, and "waiting"
- * over-narrows it the moment ADR-0017 4(b)'s dissatisfaction threshold lands at G-027b.
+ * branch observes, which is a clock and a room.
+ *
+ * ---------------------------------------------------------------------------
+ * `gaveUpWaiting` LOST ITS SECOND WORD IN ANTICIPATION OF A MERGE THAT WAS THEN OVERRULED, AND
+ * BOTH HALVES OF THAT ARE KEPT BECAUSE THE PREDICTION IS THE INTERESTING PART.
+ *
+ * This paragraph said the word "waiting" *"over-narrows it the moment ADR-0017 4(b)'s
+ * dissatisfaction threshold lands at G-027b"* — i.e. that one row would come to cover both ways a
+ * guest ends its own stay. **ADR-0025 §2 overruled that, on the build loop rather than on cost**,
+ * and θ-b1 ships the second row:
+ *
+ *   the guest left because          what the player should build
+ *   nobody would give it a room     MORE ROOMS        -> `gaveUp`
+ *   it had a bed and nothing to do  MORE AMENITIES    -> `leftDissatisfied`
+ *
+ * **Those are opposite instructions.** One counter averages them into a number that tells a
+ * player they are doing badly and not which lever to pull, and the build loop is one of the
+ * project's three named loops. So the narrowing the rename bought is exactly right and the
+ * prediction that it would stop being right was wrong: `gaveUp` still means the lobby, and
+ * "waiting" would still have been the honest half of the name.
+ *
+ * THE TWO CANNOT CROSS, AND IT IS CHECKED RATHER THAN INTENDED. A roomless guest's
+ * dissatisfaction rises exactly as fast as its age, so which row it lands in is decided by which
+ * content number is smaller; `assertDissatisfactionOutlastsTheLobby` refuses content where the
+ * ceiling does not outlast the lobby tolerance.
+ * ---------------------------------------------------------------------------
+ *
+ * `leftDissatisfied` IS INSERTED AT INDEX 2 RATHER THAN APPENDED, and the position is a schema
+ * fact either way — `assertGuestOutcomes` compares row order, and `migrateV13ToV14` inserts at a
+ * frozen index — so it costs nothing to choose the meaningful one. `isCutShort` partitions this
+ * union: the stays the GUEST ended sit contiguously at the head and the three the HOTEL ended sit
+ * contiguously at the tail, which is the order `evictedGuests` folds and the order a reader's eye
+ * expects. Appending would have put a not-cut-short row after the evictions.
  *
  * `evictedCauseUnrecorded` IS NOT WRITABLE BY THE TICK, AND THAT IS A TYPE RULE RATHER
  * THAN A PROMISE. v7 carried a single `evicted` counter with no cause, so a migrated v7
@@ -234,6 +309,7 @@ export type GuestStore = {
 export const GUEST_DEPARTURE_REASONS = Object.freeze([
   'checkedOut',
   'gaveUp',
+  'leftDissatisfied',
   'evictedRoomGone',
   'evictedRoomUnusable',
   'evictedCauseUnrecorded',
@@ -262,11 +338,20 @@ export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnr
  * `evictedCauseUnrecorded` is migration-only and can never reach `depart` — see
  * `GUEST_DEPARTURE_REASONS` — and it is answered anyway, because "the cause was not
  * recorded" does not make the eviction less of one.
+ *
+ * `leftDissatisfied` IS **NOT** CUT SHORT, and it is the row where the question is worth asking
+ * out loud (θ-b1). The guest walked out mid-stay, so its stay was certainly shorter than the
+ * clock said — but this predicate is not about length, it is about AGENCY: G-019 gives a
+ * cut-short stay the floor review because the HOTEL ended it and the guest had no say. A guest
+ * that got fed up and left had all of the say. It reviews on what it actually got, which is
+ * already bad enough (its needs are unmet, by construction — that is why it left), and forcing
+ * the floor on top would double-count the same fact.
  */
 export function isCutShort(reason: GuestDepartureReason): boolean {
   switch (reason) {
     case 'checkedOut':
     case 'gaveUp':
+    case 'leftDissatisfied':
       return false;
     case 'evictedRoomGone':
     case 'evictedRoomUnusable':
@@ -577,6 +662,25 @@ export function lodgingNeedStateOf(content: BoundContent, guest: Guest): NeedSta
  * ENGAGEMENT NEEDS DO NOT EXTEND IT. They are satisfied during the stay and never end it,
  * exactly as at G-004; what changed is that the LODGING need does not end it either.
  *
+ * ---------------------------------------------------------------------------
+ * θ-b1 ADDS A THIRD TERMINATOR AND THIS BOUND DOES NOT MOVE. THAT IS A CLAIM, AND IT IS ASSERTED
+ * RATHER THAN STATED (`guest.dissatisfaction.test.ts` drives a guest to the ceiling and reads its
+ * age against this function's answer).
+ *
+ * `leftDissatisfied` can only ever SHORTEN a life: it is a fourth reason to leave early and never
+ * a reason to stay, so `max(stay, tolerance) + 1` remains an upper bound whatever
+ * `dissatisfactionCapacityTicks` says — including values above the stay, which merely make the
+ * rule unreachable. It also stays ATTAINED, which is the property that makes `countStuckGuests`
+ * a measurement with no slack in it: a guest whose wants are all being met accumulates nothing
+ * and still leaves at exactly `stayDurationTicks`.
+ *
+ * WHAT WOULD CHANGE IT is content with no lodging need — no stay, no tolerance, and the ceiling
+ * the only terminator left. `bindContent` refuses a guest arriving under such content today
+ * (`applyCommands`), and the goal that lifts that (θ-b2, optional lodging) inherits this
+ * paragraph as its work: the third term goes in the `max` on the day a roomless guest is a
+ * design rather than a queue.
+ * ---------------------------------------------------------------------------
+ *
  * `stayDurationTicks` IS ABSENT ONLY FOR CONTENT WITH NO LODGING NEED (`assertEveryStayCanEnd`
  * refuses the rest), and such content has no stay to bound — the tolerance term stands alone,
  * which is the honest answer for a guest that can only ever give up.
@@ -839,6 +943,23 @@ export function assertGuestStoreInvariants(
 
     if (!Number.isSafeInteger(guest.arrivedTick) || guest.arrivedTick < 0) {
       throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer arrivedTick`);
+    }
+    // HOW FED UP IT IS (θ-b1). Content-free, like every other clause here: the CEILING is
+    // content and this validator has none in hand, so what it can say is that the level is a
+    // level — a non-negative whole number of ticks. An absent key is a save that predates the
+    // field, and `migrateV13ToV14` is what turns one into the other; reaching here without it
+    // means bytes this build did not write.
+    //
+    // DELIBERATELY NOT CHECKED AGAINST THE CEILING, even where content is available elsewhere.
+    // A world saved under a more generous ceiling and loaded under a tighter one carries guests
+    // above it, and that is a true statement about those bytes rather than corruption: they
+    // depart on their first tick, which is the honest reading of "you have already had enough".
+    if (!Number.isSafeInteger(guest.dissatisfaction) || guest.dissatisfaction < 0) {
+      throw new Error(
+        `Guest store is invalid: guest ${guest.id} has a dissatisfaction of ${String(guest.dissatisfaction)}; it must ` +
+          'be a non-negative whole number of ticks. It is a stock that fills while the guest wants something nothing ' +
+          'is serving and drains while it does not, so a save carrying anything else was not written by this build.',
+      );
     }
     // WHERE IT IS STANDING (G-023a). `null` is NOT legal here, unlike `Entity.at`: a guest
     // always has a position, so the absent-or-null case is a save this build did not write
@@ -1270,8 +1391,9 @@ function depart(
   if (guest.engagement !== null) release(search, guest.engagement.entityId, engagedRoom, content);
   search.needOutcomes = recordNeedsAtDeparture(content, search.needOutcomes, guest.needs);
   // THE REVIEW, AND IT IS RECORDED HERE FOR THE REASON THE RESERVATIONS ARE RELEASED HERE
-  // (G-019). This is the ONE exit path — all three departure branches in `stepGuests` go
-  // through it — so "every guest that leaves leaves a review" is structural rather than a
+  // (G-019). This is the ONE exit path — all FOUR departure branches in `stepGuests` go
+  // through it, three of them in step 6 since θ-b1 — so "every guest that leaves leaves a
+  // review" is structural rather than a
   // rule three call sites have to remember. It is the same argument G-012 makes for the
   // reservation release and G-015 makes for the outcome row, and it is why the report can
   // assert `Σ reviews === departed` exactly rather than approximately.
@@ -1360,6 +1482,12 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   // per-guest lookups rather than per-tick ones.
   const wantAt = wantAtOf(content);
   const tolerance = toleranceOf(content);
+  // READ ONCE PER TICK, for the reason the four above are. `undefined` here is content that
+  // predates θ-b1, and it turns the whole mechanism off — the loop below asks this ONE question
+  // before it does any per-need work, so such content pays nothing at all for a rule it does not
+  // have. Per-archetype tempers are M6's, and the day they land these become per-guest lookups.
+  const dissatisfactionCapacity = dissatisfactionCapacityOf(content);
+  const dissatisfactionRelief = dissatisfactionReliefOf(content);
 
   const next: Guest[] = [];
   let ledger = input.ledger;
@@ -1368,6 +1496,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   // departures allocates nothing at all (see `addDepartures`).
   let checkedOut = 0;
   let gaveUp = 0;
+  let leftDissatisfied = 0;
   let evictedRoomGone = 0;
   let evictedRoomUnusable = 0;
 
@@ -1497,6 +1626,53 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     );
     if (needs !== guest.needs) guest = { ...guest, needs };
 
+    // ========================================================================
+    // 4b. THE DISSATISFACTION STOCK (θ-b1, ADR-0017 4(b), ADR-0026).
+    //
+    //     +1                on a tick the guest wants something nothing is serving
+    //     -relief           on a tick it wants nothing it is not getting
+    //     clamped into [0, dissatisfactionCapacityTicks]
+    //
+    // IT READS THE FACTS STEP 4 WAS GIVEN, not a second lookup: the same `servedByRoom` and the
+    // same engagement. One derivation, two uses — the discipline `atHome`/`away` above follows,
+    // and the reason "being served" cannot mean one thing to the decay and another to the mood.
+    //
+    // IT IS HERE AND NOT AFTER STEP 5, and the difference is one tick at an engagement boundary
+    // in a case that cannot occur: step 5 releases an engagement only when its need reaches
+    // FULL, and a full need is not wanted, so both readings agree. Placed beside the decay
+    // because that is where the facts are, not because the answer differs.
+    //
+    // NOTHING RESETS IT. `starvedTicks` — the rejected design — was zeroed the moment anything
+    // served the guest, which is what made it a saturation detector rather than a stock
+    // (ADR-0026). The drain is a rate, and it is the only way this number falls.
+    // ========================================================================
+    if (dissatisfactionCapacity !== undefined) {
+      // THE ONE NEED THE GUEST HAS CHOSEN TO LEAVE BEHIND (ADR-0026 as amended). A guest that
+      // HOLDS a room excuses its lodging need: at home that need is being served and is skipped
+      // anyway, and away it is decaying because the guest went out to eat — which is ADR-0017
+      // §2 working exactly as designed, and not something the hotel is doing to it. A guest
+      // holding NO room excuses nothing: not giving it a bed is precisely the hotel's failure.
+      const excused = guest.roomEntityId !== NO_ENTITY ? lodgingNeed?.id ?? null : null;
+      const letDown = wantsSomethingUnserved(
+        content,
+        guest.needs,
+        servedByRoom,
+        guest.engagement?.needId ?? null,
+        wantAt,
+        excused,
+      );
+      // `?? 1` is unreachable through `bindContent`, which refuses half a stock
+      // (`cloneDissatisfaction`); it is the fill rate, which is 1 by definition, so a raw host
+      // that somehow got past that reads as "recovers exactly as fast as it is let down".
+      const relief = dissatisfactionRelief ?? 1;
+      const carried = letDown
+        ? Math.min(dissatisfactionCapacity, guest.dissatisfaction + 1)
+        : Math.max(0, guest.dissatisfaction - relief);
+      // IDENTITY-RETURNING AT BOTH ENDS, the `advanceNeed` property one field over: a contented
+      // guest sitting at 0 and a saturated guest sitting at the ceiling both allocate nothing.
+      if (carried !== guest.dissatisfaction) guest = { ...guest, dissatisfaction: carried };
+    }
+
     // 5. HAS THE ENGAGEMENT FINISHED? Released the moment the need it serves resolves, so
     //    the amenity is free for somebody else from here on in THIS tick — through
     //    `release`, so the short-circuit in `findFreeRoom` cannot swallow it.
@@ -1517,7 +1693,26 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     }
 
     // ========================================================================
-    // 6. DOES THE STAY END? TWO WAYS AND ONLY TWO (ADR-0017 §4).
+    // 6. DOES THE STAY END? TWO WAYS AND ONLY TWO (ADR-0017 §4) — AND THREE BRANCHES, WHICH IS
+    //    NOT A CONTRADICTION AND IS WORTH A LINE BECAUSE IT LOOKS LIKE ONE.
+    //
+    //    ADR-0017's two ways are CHECKOUT and DISSATISFACTION. The second has two branches
+    //    because it has two CAUSES a player can act on: nobody gave the guest a room, or the
+    //    guest had a room and nothing to do. Those are one terminator and two rows (ADR-0025
+    //    §2), and the rows are the build loop's steering signal rather than bookkeeping.
+    //
+    //    THE ORDER OF THE THREE IS LOAD-BEARING, and each is decided by what it must not steal:
+    //      CHECKOUT first     — a guest whose stay is up leaves as a checkout even if it is also
+    //                           fed up. It paid, and `countRoomRevenueTransactions === the
+    //                           checkedOut row` is the one cross-subsystem witness this table
+    //                           has; a mood must not be able to take a row off it.
+    //      THE LOBBY second   — a roomless guest's dissatisfaction rises exactly as fast as its
+    //                           age, so both this branch and the next are true of it at some
+    //                           point. `assertDissatisfactionOutlastsTheLobby` makes the lobby
+    //                           the earlier one, and this ordering makes it also the winner on
+    //                           the tick they coincide.
+    //      DISSATISFACTION last — so it is what is left: a guest that got a room, did not run out
+    //                           the clock, and was not evicted.
     //
     //    CHECKOUT READS THE CLOCK AND THE ROOM. IT READS NO NEED STATE AT ALL, AND THAT IS
     //    THIS GOAL'S WHOLE POINT rather than an implementation detail: until G-027a the
@@ -1575,11 +1770,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //      departs in step 3, before this line, so there is no path on which age and the
     //      unserved run diverge.
     //
-    // THE RESIDENT WHO IS DISSATISFIED IS NOT HERE, AND ITS ABSENCE IS RECORDED RATHER THAN
-    // IMPLIED. ADR-0017 4(b) is the guest that HOLDS a room and leaves because nothing serves
-    // what it came to do — a hotel with beds and no café. That is the next goal's, it needs a
-    // saved counter (an unserved run that survives being interrupted by sleep), and until it
-    // lands `guest.stay.test.ts`'s fourth arm still reports zero give-ups. Deliberately.
+    // THE RESIDENT WHO IS DISSATISFIED IS THE BRANCH BELOW THIS ONE, AND IT ARRIVED IN θ-b1.
+    // This paragraph used to record its absence — *"that is the next goal's, it needs a saved
+    // counter (an unserved run that survives being interrupted by sleep)"* — and the goal that
+    // ran chose a different shape for a measured reason: an unserved RUN resets, and a rule built
+    // on a resetting counter is a saturation detector with no graded region (ADR-0026). What
+    // ships is a stock that drains. The saved field was predicted correctly; its semantics were
+    // not.
     const lodgingUnserved =
       lodgingNeed !== undefined && guest.roomEntityId === NO_ENTITY && tolerance !== undefined;
     if (lodgingUnserved && tick - guest.arrivedTick >= tolerance) {
@@ -1589,6 +1786,40 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       // ran out before one was free").
       depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUp');
       gaveUp += 1;
+      continue;
+    }
+    // ADR-0017 4(b), LANDED. The guest has had enough: it wanted things this hotel did not give
+    // it, often enough and for long enough that the stock reached its ceiling.
+    //
+    // IT ASKS NO QUESTION ABOUT WHAT THE GUEST HOLDS, and that is the difference between this
+    // branch and the one above. A room is not a defence — it is exactly the case ADR-0017 4(b)
+    // names, a hotel with beds and no café — and neither is it a requirement, which is what makes
+    // this the terminator a lodging-free guest will need when θ-b2 lifts the room out of the
+    // model. What it asks is whether the hotel has been failing this guest, which is a fact the
+    // stock already carries.
+    //
+    // `>=` AND NOT `===`, for `checkedOut`'s reason one branch up: a guest loaded from a save
+    // taken under a more generous ceiling arrives here already past it, and an equality would
+    // let it stay forever. `countStuckGuests` would report it either way; the comparison should
+    // not depend on a number in another file.
+    //
+    // AND IT DOES NOT FIRE WHILE THE GUEST IS AT A PROVIDER (ADR-0026 as amended, from a frame).
+    // `ai-critic` watched guest 50 walk into a cafe at tick 6,382, eat for 46 ticks, and vanish
+    // at 6,428 with THIRTEEN TICKS of its meal left — and that was the dominant case rather than
+    // a corner: **210 of 224 walkouts happened while the guest was being served.** A guest that
+    // is being served RIGHT NOW is not one the hotel is failing, whatever it has accumulated, so
+    // it leaves when it is next at liberty.
+    //
+    // IT CANNOT DEFER FOREVER: step 5 releases the engagement on the tick its need reaches full,
+    // so no engagement outlives one filling, and the checkout clock is unconditional either way.
+    // `maxGuestLifetimeTicks` is therefore still `max(stay, tolerance) + 1` and still attained.
+    if (
+      dissatisfactionCapacity !== undefined &&
+      guest.dissatisfaction >= dissatisfactionCapacity &&
+      guest.engagement === null
+    ) {
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'leftDissatisfied');
+      leftDissatisfied += 1;
       continue;
     }
 
@@ -1635,6 +1866,11 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       roomEntityId: NO_ENTITY,
       engagement: null,
       needs: formNeedVector(content),
+      // AND IT WALKS IN CONTENT (θ-b1). Zero is not a default standing in for anything: the
+      // hotel has not had a chance to fail this guest yet, and the first tick it is stepped is
+      // the first tick anything could. A guest that arrives already impatient would be an
+      // archetype, which is M6.
+      dissatisfaction: 0,
     };
     // A guest that has just walked in holds nothing, so there is no incumbent provider to
     // hand over and nothing it could abandon.
@@ -1654,6 +1890,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       outcomes.departures,
       checkedOut,
       gaveUp,
+      leftDissatisfied,
       evictedRoomGone,
       evictedRoomUnusable,
     ),
@@ -1671,22 +1908,34 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
  * The tick's departures, folded into the table once.
  *
  * IDENTITY-RETURNING WHEN NOTHING DEPARTED, which is almost every tick: no allocation, and
- * the outcome object next to it keeps pointing at the same rows. Rebuilding a five-row
+ * the outcome object next to it keeps pointing at the same rows. Rebuilding a six-row
  * array 525,600 times to add zero to each is exactly the per-tick allocation §6.1 asks
  * `sim-critic` to watch for.
  *
  * It walks the rows it was GIVEN rather than `GUEST_DEPARTURE_REASONS`, so a table that is
  * somehow malformed comes out malformed and is refused by `assertGuestOutcomes` at the
  * tick boundary — instead of being silently repaired here, where nothing would report it.
+ *
+ * FIVE POSITIONAL COUNTS AND NOT A TABLE, still, at θ-b1's sixth row. A parameter per reason is
+ * the shape that makes a forgotten row a TYPE ERROR at the call site rather than a zero nobody
+ * notices — which is what happened here: adding `leftDissatisfied` reddened the one call site and
+ * the switch below at once.
  */
 function addDepartures(
   rows: readonly GuestOutcomeRow[],
   checkedOut: number,
   gaveUp: number,
+  leftDissatisfied: number,
   evictedRoomGone: number,
   evictedRoomUnusable: number,
 ): readonly GuestOutcomeRow[] {
-  if (checkedOut === 0 && gaveUp === 0 && evictedRoomGone === 0 && evictedRoomUnusable === 0) {
+  if (
+    checkedOut === 0 &&
+    gaveUp === 0 &&
+    leftDissatisfied === 0 &&
+    evictedRoomGone === 0 &&
+    evictedRoomUnusable === 0
+  ) {
     return rows;
   }
   const next: GuestOutcomeRow[] = [];
@@ -1698,6 +1947,9 @@ function addDepartures(
         break;
       case 'gaveUp':
         added = gaveUp;
+        break;
+      case 'leftDissatisfied':
+        added = leftDissatisfied;
         break;
       case 'evictedRoomGone':
         added = evictedRoomGone;

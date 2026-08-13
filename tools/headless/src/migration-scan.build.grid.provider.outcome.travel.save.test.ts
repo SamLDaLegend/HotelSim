@@ -290,19 +290,49 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     // the gap. A test that simply deleted the old expectation would have removed the only
     // thing watching the two lists at all.
     // ============================================================================
+    // ----------------------------------------------------------------------------
+    // AND IT DIVERGED AGAIN AT θ-b1, THIS TIME IN LENGTH — WHICH THIS ARM'S OWN COMMENT ABOVE
+    // PREDICTED IN THOSE WORDS: *"`GuestDepartureReason` has five members today and M3 will
+    // want a sixth."* It got its sixth one milestone early, and the paragraph three tests up
+    // still says "five rows", which is TRUE OF THE v8 LITERAL and is what that scan reads.
+    //
+    // So the length claim comes out and the POSITIONAL claims stay, re-based on the insertion
+    // point: `leftDissatisfied` went in at index 2, so the three v8 names that no era renamed
+    // now sit at 3, 4 and 5 and are still carried, in order, unrenamed.
+    // ----------------------------------------------------------------------------
     const v8Era = ['satisfied', 'gaveUpWaiting', 'evictedRoomGone', 'evictedRoomUnusable', 'evictedCauseUnrecorded'];
     expect([...GUEST_DEPARTURE_REASONS]).toEqual([
       'checkedOut',
       'gaveUp',
+      'leftDissatisfied',
       'evictedRoomGone',
       'evictedRoomUnusable',
       'evictedCauseUnrecorded',
     ]);
-    expect(GUEST_DEPARTURE_REASONS).toHaveLength(v8Era.length);
+    // THE LIVE LIST IS NOW LONGER, and the v8 literal must not grow with it: a v7 world could
+    // not record a reason that did not exist, and `migrateV13ToV14` is what inserts the row.
+    expect(GUEST_DEPARTURE_REASONS.length).toBeGreaterThan(v8Era.length);
     // The two that were renamed, and the three that were not — stated by position, so a
     // future rename lands here rather than in a run's goldens.
-    expect(GUEST_DEPARTURE_REASONS.slice(2)).toEqual(v8Era.slice(2));
+    expect(GUEST_DEPARTURE_REASONS.slice(3)).toEqual(v8Era.slice(2));
     expect(GUEST_DEPARTURE_REASONS.slice(0, 2)).not.toEqual(v8Era.slice(0, 2));
+  });
+
+  it('and the v14 step is what carries a v13 table forward, by a frozen list and a frozen index', () => {
+    // The θ-b1 half, and the same argument as the v12 arm below: the migration may not read the
+    // live list, so the five names it expects and the index it inserts at are its own literals.
+    // The INDEX is frozen for the same reason the names are — `assertGuestOutcomes` compares row
+    // ORDER, so where the row goes is a fact about the bytes rather than a formatting choice.
+    const code = stripComments(saveSource());
+    const declaration = /V13_MIGRATION_DEPARTURE_ROWS[\s\S]{0,900}?\]\)/.exec(code)?.[0] ?? '';
+    expect(declaration).toContain("'checkedOut'");
+    expect(declaration).toContain("'gaveUp'");
+    expect(declaration).toContain("'evictedCauseUnrecorded'");
+    // AND IT DOES NOT NAME THE ROW IT INSERTS, because a v13 table does not carry one.
+    expect(declaration).not.toContain('leftDissatisfied');
+    expect(declaration).toContain('Object.freeze');
+    expect(code).toMatch(/const V14_MIGRATION_INSERT_AT = 2;/);
+    expect(code).toMatch(/const V14_MIGRATION_INSERTED_REASON = 'leftDissatisfied';/);
   });
 
   it('and the v12 step is what closes that gap, by position and from a frozen pair list', () => {

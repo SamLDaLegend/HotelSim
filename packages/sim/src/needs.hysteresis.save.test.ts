@@ -294,11 +294,20 @@ const PRE_V12_DEPARTURE_LABELS = [
   'evictedCauseUnrecorded',
 ] as const;
 
+/**
+ * The row θ-b1 INSERTED, and where. Frozen here for the reason the labels above are frozen: a
+ * world written back into a pre-v12 SHAPE must have five rows, and this build's table has six.
+ * Dropping it by INDEX rather than by name is deliberate — the index is what `migrateV13ToV14`
+ * inserts at, so this reverses that step rather than guessing at the same answer.
+ */
+const V14_INSERTED_ROW_AT = 2;
+
 const v11Labels = (world: Record<string, unknown>): unknown => {
   const outcomes = world['guestOutcomes'] as { arrived: number; departures: { reason: string; count: number }[] };
+  const withoutV14 = outcomes.departures.filter((_row, index) => index !== V14_INSERTED_ROW_AT);
   return {
     ...outcomes,
-    departures: outcomes.departures.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
+    departures: withoutV14.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
   };
 };
 
@@ -323,7 +332,11 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
         guestOutcomes: v11Labels(withoutV10),
         guests: {
           ...guests,
-          list: guests.list.map((guest) => ({
+          // AND THE v14 FIELD COMES OFF THE GUEST (θ-b1), for the reason `abandonCount` does:
+          // a v8 guest had no mood, and leaving one on would hand `migrateV13ToV14` a value it
+          // correctly refuses to overwrite. The chain puts it back at 0, which is exactly true
+          // of a v8 guest — nothing in that era could accumulate anything.
+          list: guests.list.map(({ dissatisfaction: _mood, ...guest }) => ({
             ...guest,
             needs: (guest['needs'] as Record<string, unknown>[]).map(({ abandonCount: _drop, ...rest }) => rest),
           })),

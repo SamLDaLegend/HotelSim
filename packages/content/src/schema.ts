@@ -897,13 +897,138 @@ export const wantAtBasisPointsSchema = basisPointsSchema;
  * regression from a redefinition. `TARGET_CONCURRENT_GUESTS` is frozen for the same reason, one
  * instrument over.
  *
- * WHAT READS IT TODAY IS THE LODGING CASE ONLY: a guest holding no room has been wanting lodging,
- * unserved, since it arrived, so its unserved run IS its age and no counter is needed. The
- * general form — any need, any guest, including one that HAS a room and cannot get dinner
- * (ADR-0017 4(b)) — is the next goal's, and it is what will ask this number to serve a second
- * axis it was never calibrated for.
+ * WHAT READS IT IS THE LODGING CASE ONLY, AND THAT IS NOW PERMANENT RATHER THAN PROVISIONAL: a
+ * guest holding no room has been wanting lodging, unserved, since it arrived, so its unserved run
+ * IS its age and no counter is needed.
+ *
+ * ---------------------------------------------------------------------------
+ * THE PARAGRAPH BELOW WAS A PREDICTION AND IT WAS RIGHT, SO IT IS RECORDED AS SETTLED RATHER THAN
+ * DELETED (G-027b θ-b1). It read: *"the general form — any need, any guest, including one that HAS
+ * a room and cannot get dinner (ADR-0017 4(b)) — is the next goal's, and it is what will ask this
+ * number to serve a second axis it was never calibrated for."*
+ *
+ * THE SECOND AXIS ARRIVED AND THIS NUMBER WAS NOT ASKED TO SERVE IT. `dissatisfactionCapacityTicks`
+ * below is the resident's own ceiling, with its own derivation from its own two cliffs; 180 is
+ * untouched and still means one thing. The axes are not commensurable and the measurement says so:
+ * axis 1's clock starts at tick 0 and axis 2's cannot start before the arrival backlog stops
+ * filling at age **129**, and a sweep of 180 -> 459 moved the resident population by 7%. (That
+ * age read 208 until ADR-0026's amendment excused the guest's own excursion — see the ceiling's
+ * derivation below, which records the same move.)
+ *
+ * IT IS STILL LOAD-BEARING FOR THE OTHER AXIS, and now for a second reason: `bindContent` refuses
+ * content whose dissatisfaction ceiling does not OUTLAST this number
+ * (`assertDissatisfactionOutlastsTheLobby`), because a guest that never got a room must be counted
+ * under "nobody would give it a room" rather than under "it had a bed and nothing to do". Those are
+ * opposite instructions to a player (ADR-0025 §2).
+ * ---------------------------------------------------------------------------
  */
 export const toleranceTicksSchema = z.int().min(1);
+
+/**
+ * HOW MUCH DISSATISFACTION A GUEST CARRIES BEFORE IT WALKS OUT MID-STAY, IN TICKS (G-027b θ-b1,
+ * ADR-0017 4(b), ADR-0026).
+ *
+ * Dissatisfaction is a STOCK, not a run. It rises by one on every tick the guest wants something
+ * nothing is serving, falls by `dissatisfactionReliefPerTick` on every tick it wants nothing it is
+ * not getting, and the guest leaves when it reaches this ceiling. **A guest that occasionally
+ * misses dinner accumulates some and recovers; one that never eats saturates.**
+ *
+ * WHY A STOCK AND NOT A CONSECUTIVE-TICK RUN, because the run was built first and rejected
+ * (ADR-0026). A run resets to zero when the need is served, which erases the guest's history — so
+ * the predicate can only ever ask *"is this hotel saturated right now"*, which is a yes/no question
+ * about a saturating resource and has no graded region for this number to live in. Measured: one
+ * provider serves one guest at a time, so it sustains 480/60 = 8 concurrent guests, and across that
+ * boundary the run-shaped rule moved from 0% to 77.5% of residents evicted on a 4.7% change in
+ * occupancy. **The cliff was in the shape of the counter, not in the threshold.**
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE 431 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE — AND IT IS PLACED
+ * BETWEEN TWO CLIFFS RATHER THAN CHOSEN BETWEEN TWO OPINIONS.
+ *
+ * THE LOWER CLIFF — 129 ticks, the arrival backlog. A guest arrives AT its want line on every need
+ * and is served one at a time, so even with a free provider for everything it spends its opening
+ * stretch wanting something it is not getting:
+ *
+ *     serving comfort        420 / 7                    = 60 ticks, entertainment and nourishment
+ *                                                         both over their lines and unserved
+ *     serving entertainment  (420 + 60)  / 7   = 68.57  -> 69 ticks, nourishment still unserved
+ *     serving nourishment    (420 + 129) / 7   = 78.43  -> 79 ticks, AND NOTHING FILLS: comfort
+ *                                                         and entertainment are back below their
+ *                                                         lines, and rest is EXCUSED (below)
+ *                                                       -----
+ *                                                         129
+ *
+ * Below that ceiling a PERFECTLY PROVISIONED hotel evicts its guests, which is the failure this
+ * whole model exists to avoid. Executed rather than quoted: `dissatisfaction.content.test.ts`
+ * runs an uncontended hotel and reads the peak out of the field.
+ *
+ * IT WAS 208 IN θ-b1's FIRST BUILD, AND THE 79 TICKS THAT LEFT ARE THE AMENDMENT. That build let
+ * the LODGING need fill the stock while the guest was out eating — so the third visit charged the
+ * hotel for the guest's own excursion, and in a well-provisioned hotel roughly half the stock was
+ * dinner. ADR-0026's amendment excuses it, and the cliff fell with it.
+ *
+ * THE UPPER CLIFF — `stayDurationTicks`, 1,440. A resident nothing serves fills at one per tick
+ * and leaves at age essentially the ceiling; checkout is tested first, so at or above the stay the
+ * rule is DEAD: no resident can ever reach it. Executed from both sides at 1,439 and 1,440.
+ *
+ * THE PLACEMENT — equal multiplicative margin (ADR-0015's rule, one instrument over):
+ *
+ *     round( sqrt(129 x 1440) ) = round(430.999) = 431
+ *     431 / 129 = 3.3411        1440 / 431 = 3.3411        equal to five significant figures
+ *
+ * WHAT THIS NUMBER IS NOT ALLOWED TO BE READ AS: a difficulty knob for an oversubscribed hotel.
+ * Measured closed-loop across the provider-saturation axis, sweeping it 300 -> 1,200 moves the
+ * evicted population 26.4% -> 2.8% in the MARGINAL band and moves it not at all at either end — a
+ * well-provisioned hotel evicts nobody however impatient the guest, and a hotel with no amenities
+ * at all evicts everybody however patient. That is the shape a design dial should have.
+ * ---------------------------------------------------------------------------
+ *
+ * BOUNDED FROM BELOW BY A NUMBER THAT IS NOT IN THIS FILE, exactly as `wantAtBasisPoints` is: it
+ * must exceed `toleranceTicks`, or a guest that never got a room is filed under the wrong departure
+ * reason and the build loop tells the player to build the wrong thing. `bindContent` enforces it
+ * (`assertDissatisfactionOutlastsTheLobby`), because no schema in this file can see the other
+ * field's value at the moment this one is parsed.
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `abandonMarginBasisPoints` contract, and absence has the
+ * same clean historical reading: content written before θ-b1 declares none because in that era a
+ * guest that held a room could not end its own stay at all. `dissatisfactionCapacityOf` answers
+ * `undefined` for it and the branch never fires, which reproduces that era exactly.
+ */
+export const dissatisfactionCapacityTicksSchema = z.int().min(1);
+
+/**
+ * HOW FAST DISSATISFACTION DRAINS WHILE THE HOTEL IS KEEPING UP, IN TICKS PER TICK (G-027b θ-b1).
+ *
+ * THE FILL RATE IS 1 AND IS NOT A FIELD. One tick of being ignored is one tick of dissatisfaction —
+ * that is the unit the ceiling above is denominated in. It is +1 whatever the guest is short of and
+ * however many things it is short of: the guest is either being let down or it is not, and counting
+ * how many WAYS would make a four-need table four times as annoying as a one-need table, which is a
+ * statement about the content's arity rather than about the guest's experience.
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE 1 COMES FROM. A DERIVATION, AND IT IS THE SAME 129 TICKS THE CEILING RESTS ON.
+ *
+ * THE REQUIREMENT: **a guest must recover from the arrival backlog before its next need comes due**,
+ * or a perfectly served guest RATCHETS — each stay cycle leaves a residue, and over a 1,440-tick
+ * stay even a hotel doing everything right eventually saturates one.
+ *
+ *     fill during the backlog                          129 ticks
+ *     the first need re-crosses its want line at       60 + 420 = 480
+ *     so the drain window is                           480 - 129 = 351 ticks
+ *     require  r x 351 >= 129    =>    r >= 0.368    =>    r = 1
+ *
+ * 1 is the smallest integer that satisfies it, which is the conservative direction: the slowest
+ * recovery that still recovers. EXECUTED, and by the same reading that pins the ceiling's lower
+ * cliff — if it ratcheted, the peak over a three-cycle stay would exceed 129. It reads exactly 129,
+ * and a traced guest climbs to it, pays it down to ZERO by about tick 280, and stays there for the
+ * remaining eleven hundred ticks of its stay.
+ * ---------------------------------------------------------------------------
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM, absent-means-the-era-had-none — the pair moves with
+ * `dissatisfactionCapacityTicks` or not at all, exactly as the review scale's two halves do:
+ * half a stock is not a historical statement, it is a designer who stopped typing.
+ */
+export const dissatisfactionReliefPerTickSchema = z.int().min(1);
 
 /**
  * The rules a guest's own behaviour obeys (G-014b), as opposed to the rules of the money
@@ -925,6 +1050,8 @@ export const guestRulesSchema = z
     stayDurationTicks: stayDurationTicksSchema,
     wantAtBasisPoints: wantAtBasisPointsSchema,
     toleranceTicks: toleranceTicksSchema,
+    dissatisfactionCapacityTicks: dissatisfactionCapacityTicksSchema,
+    dissatisfactionReliefPerTick: dissatisfactionReliefPerTickSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
   // cannot separate two stays and so cannot report on either. The relation that actually

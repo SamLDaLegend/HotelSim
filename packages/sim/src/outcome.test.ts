@@ -42,6 +42,7 @@ import {
   evictedGuests,
   GUEST_DEPARTURE_REASONS,
   guestsInOrder,
+  isCutShort,
 } from './guests.js';
 import type { GuestOutcomeRow, GuestOutcomes, GuestStore } from './guests.js';
 import { run, stepTick } from './tick.js';
@@ -124,6 +125,9 @@ const store = (count: number): GuestStore => ({
     roomEntityId: 0,
     engagement: null,
     needs: [],
+    // θ-b1: content. These guests exist to be COUNTED — the conservation law is about the
+    // table, not about how anybody feels.
+    dissatisfaction: 0,
   })),
 });
 
@@ -147,15 +151,30 @@ describe('the table has one row per reason and nothing else', () => {
     expect(outcomes.departures).toHaveLength(GUEST_DEPARTURE_REASONS.length);
   });
 
-  it('carries five reasons, and every one of them says WHY rather than merely that', () => {
+  it('carries six reasons, and every one of them says WHY rather than merely that', () => {
     // The list is pinned so that adding a reason is a deliberate act with a migration
-    // attached (see `outcome.save.test.ts`), not a quiet widening.
+    // attached (see `outcome.save.test.ts`), not a quiet widening. It has been a deliberate act
+    // twice: G-015 split the evictions, and θ-b1 inserted `leftDissatisfied` — AT INDEX 2, not
+    // appended, because `isCutShort` partitions this list and the rows the GUEST ended belong
+    // together at the head. The position is asserted here rather than merely produced.
     expect([...GUEST_DEPARTURE_REASONS]).toEqual([
       'checkedOut',
       'gaveUp',
+      'leftDissatisfied',
       'evictedRoomGone',
       'evictedRoomUnusable',
       'evictedCauseUnrecorded',
+    ]);
+    // THE PARTITION, ASSERTED. The three the guest ended are contiguous at the head and the
+    // three the hotel ended are contiguous at the tail — which is the property `evictedGuests`
+    // folds and the reason the insertion point is not free.
+    expect(GUEST_DEPARTURE_REASONS.map((reason) => isCutShort(reason))).toEqual([
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
     ]);
   });
 
@@ -205,7 +224,7 @@ describe('L1: the conservation law, and it can fail', () => {
       departures: full.departures.filter((row) => row.reason !== 'evictedRoomUnusable'),
     };
     expect(() => assertGuestOutcomes(missingZero, store(2))).toThrow(
-      /4 departure row\(s\) against 5 known reason\(s\)/,
+      /5 departure row\(s\) against 6 known reason\(s\)/,
     );
   });
 
@@ -213,7 +232,7 @@ describe('L1: the conservation law, and it can fail', () => {
     const rows: GuestOutcomeRow[] = [...table(10, { checkedOut: 5, gaveUp: 3 }).departures];
     rows.splice(1, 0, { reason: 'checkedOut', count: 0 });
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
-      /6 departure row\(s\) against 5 known reason\(s\)/,
+      /7 departure row\(s\) against 6 known reason\(s\)/,
     );
   });
 

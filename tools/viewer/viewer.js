@@ -629,6 +629,46 @@ function hud(world, extra) {
     const row = rows.find((r) => r.reason === reason);
     return row === undefined ? '—' : String(row.count);
   };
+
+  /**
+   * ONE ROW PER REASON THE RECORDING ACTUALLY CARRIES — folded, not spelled out (θ-b1).
+   *
+   * IT WAS FIVE LITERAL ROWS UNTIL θ-b1, under a comment arguing that a loop "would render
+   * whatever a recording happened to contain, which is how a disposable viewer grows a
+   * feature". **The cost of that came due immediately.** θ-b1 added `leftDissatisfied` and this
+   * panel had no row for it: on the critic's own recording the final frame printed `arrived 60`
+   * and `in hotel 7` over rows summing to 47 — SIX GUESTS VANISHED WITH NOTHING SAID — and on
+   * the I5 bench workload it is 66 of 75. ADR-0026 restored the WATCH criterion for *a guest
+   * walking out mid-stay* and pointed it at a panel that could not show one.
+   *
+   * `apps/game/src/hud.ts` had already settled this the other way, in the same week, folding
+   * `GUEST_DEPARTURE_REASONS` precisely because spelling them out gives "a renderer that misses
+   * one silently when a reason is added". This is that decision, one instrument over.
+   *
+   * IT FOLDS THE FRAME'S OWN TABLE RATHER THAN A COPY OF THE UNION, because this file is plain
+   * browser JavaScript with no build step and cannot import from `packages/sim` — and a copy of
+   * the list here would be the duplicated constant ADR-0021 is about. A recording is a
+   * `serialise(world)` and its table is the one that world had, which is the honest subject: a
+   * viewer showing a row a RECORDING does not carry would be inventing it.
+   *
+   * A RECORDING WITH NO TABLE AT ALL still gets the pre-G-015 em-dash rows, so nothing that
+   * loaded before loads differently.
+   */
+  const DEPARTURE_LABELS = {
+    checkedOut: 'checked out',
+    gaveUp: 'gave up',
+    leftDissatisfied: 'walked out',
+    evictedRoomGone: 'room gone',
+    evictedRoomUnusable: 'room broke',
+    evictedCauseUnrecorded: 'evicted (old save)',
+  };
+  const departureRows = (outcomes) => {
+    const rows = outcomes.departures;
+    if (!Array.isArray(rows)) {
+      return Object.entries(DEPARTURE_LABELS).map(([reason, label]) => [label, left(outcomes, reason)]);
+    }
+    return rows.map((row) => [DEPARTURE_LABELS[row.reason] ?? row.reason, String(row.count)]);
+  };
   const idx = Number(el('scrub').value);
   el('hud').innerHTML = row([
     ['frame', `${idx} / ${rec.lines.length - 1}`],
@@ -645,23 +685,22 @@ function hud(world, extra) {
     // A row that could only ever read 0 would be a reassurance rather than a measurement.
     ['not drawn', `${extra.offView} off-view · ${extra.unplaced} no position`],
     ['arrived', String(o.arrived)],
-    // FIVE LITERAL ROWS, NOT A LOOP OVER THE TABLE (G-015). A loop would render whatever a
-    // recording happened to contain, which is how a disposable viewer grows a feature; these
-    // are the five reasons this build writes, spelled out, and `left` returns an em-dash for
-    // a recording that predates them rather than a plausible 0.
+    // THE FIRST TWO ROWS WERE RENAMED AT G-027a, AND THE FOLD BELOW CHANGED WHAT A STALE
+    // RECORDING LOOKS LIKE — this paragraph described the behaviour the same hunk replaced.
     //
-    // THE FIRST TWO ROWS WERE RENAMED AT G-027a AND THE EM-DASH NOW MEANS TWO THINGS. It has
-    // always meant "this recording predates the row". It now ALSO means "this recording used
-    // the pre-G-027a spelling" — every committed `watch-*.ndjson` shows an em-dash against
-    // these two rows, because their tables say `satisfied` / `gaveUpWaiting`. That is the
-    // honest direction (a stale recording reads as unknown rather than as zero) and it is
-    // stated here because an em-dash with two meanings is exactly the kind of thing a watcher
-    // would otherwise read as a bug in the viewer.
-    ['checked out', left(o, 'checkedOut')],
-    ['gave up', left(o, 'gaveUp')],
-    ['room gone', left(o, 'evictedRoomGone')],
-    ['room broke', left(o, 'evictedRoomUnusable')],
-    ['evicted (old save)', left(o, 'evictedCauseUnrecorded')],
+    // It said every committed `watch-*.ndjson` "shows an em-dash against those two rows,
+    // because their tables say `satisfied` / `gaveUpWaiting`". TEN of the twelve do carry those
+    // spellings and two carry today's — counted, because "every" was doing work here. It was
+    // true while the rows were
+    // five literals looked up BY NAME. `departureRows` walks the recording's OWN table, so a
+    // pre-G-027a ndjson now renders `satisfied` and `gaveUpWaiting` **with their counts**, under
+    // their era's names — which is a better answer than an em-dash: the number was never
+    // unknown, only spelled differently.
+    //
+    // `left()` IS STILL REACHED, and only from the no-table fallback: an ndjson recorded before
+    // G-015 has no `departures` at all, and there the em-dash keeps its one meaning — "this
+    // recording predates the row" — rather than reading as a plausible 0.
+    ...departureRows(o),
   ]);
 
   // Departed-guest tally from the frame, beside what the guests standing here right now

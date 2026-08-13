@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, G-027a done. M2.5: 2 of 8 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2071,3 +2071,91 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   giving up rather than as being sated, hysteresis needs a served-recently flag and that is a
   model change worth its own goal; if it reads as a guest who has just eaten, this closes.*
   -> **θ-b's WATCH, or the first goal that watches a demolition.**
+
+## Discovered at G-027b θ-b1's plan revision (2026-08-13)
+
+- **AXIS 1'S INVERSION IS AMENITY STARVATION, NOT ROOM COUNT — and this may be the whole repair
+  G-028 is looking for.** Measured on materialised arms, `--days 30 --seed 7`, closed loop:
+
+  **RE-TAKEN 2026-08-13 at sweep 2, because ADR-0026's amendment moved the model underneath the
+  first reading and this entry went on asserting it.** The pre-amendment column (`--rooms 12` at
+  3.37) is **withdrawn, not restated**. Current readings, `pnpm --silent sim:run --days 30
+  --seed 7 <arm> --json`, one deterministic reading per arm, quiet 12-core Win11 box:
+
+  | configuration | mean review (basis points) |
+  |---|---|
+  | `--rooms 1` | **391** |
+  | `--rooms 12 --amenities 1` | **378** |
+  | **`--rooms 12 --amenities 2`** | **420** |
+  | `--rooms 6 --amenities 1` | 354 |
+
+  **The finding is UNCHANGED and slightly strengthened**: twelve rooms with two amenities (420)
+  beats one room (391), and twelve rooms with *one* amenity (378) does not. **What moved is that
+  the twelve-room rung no longer sits at the bottom** — 378 is above the six-room rung's 354, so
+  the ladder is not even monotonically inverted; it is *provision-shaped*.
+
+  **The inversion vanishes when the amenities scale with the rooms.** Twelve rooms with *two* of
+  each amenity beats one room — 4.20 against 3.91 — on both arms. The "more rooms scores worse"
+  reading that has been treated as a defect in the *review function* since G-027a is, at least in
+  part, a defect in **how the test ladder provisions its hotels**: it adds rooms and holds
+  amenities at one, and one provider serves ~8 concurrent guests (`guests.ts:679`, one guest at a
+  time, queues are G-024's). **A twelve-room hotel with one café is not a bigger hotel; it is a
+  worse one, and the score is right to say so.**
+  **Why this is a gift rather than a finding**: G-028's first job is "repair AXIS 1's reversal".
+  If the ladder is the fault, the review function may need no repair at all — and G-028 would
+  otherwise have spent its budget rewriting a scorer that was telling the truth.
+  **FALSIFICATION TEST**: build the ladder with amenities proportional to rooms (one of each per
+  ~8 concurrent guests, derived rather than chosen) and re-read AXIS 1 across the full ladder.
+  *If it still reads inverted, the fault is in the scorer and G-028's original framing stands. If
+  it reads monotone, the scorer is exonerated and the defect is the instrument.*
+  -> **G-028, BEFORE any change to the review function.**
+
+- **THE HOTEL SELF-LIMITS AT ITS AMENITY THROUGHPUT once guests can walk out.** Occupancy grows
+  **sub-linearly** in the arrival rate under the stock and linearly without it. Measured,
+  `--rooms 60 --amenities 1 --seed 7 --days 30`, arrivals 96 / 72 / 48 / 32:
+  base **14.77 / 19.68 / 29.52 / 44.27** against stock **6.40 / 9.20 / 11.41 / 17.13**.
+  **THE STOCK COLUMN IS PRE-AMENDMENT AND IS WITHDRAWN.** At arrivals 96 the post-amendment
+  reading is **8.72**, which `workload.concurrency.test.ts:52` carries as its own re-take of the
+  640 — the amendment gave back occupancy by removing a fill the hotel was never responsible for.
+  **The other three rungs have not been re-taken, so the sub-linearity claim is currently
+  supported by one point and is not established.**
+  **FALSIFICATION TEST**: re-take all four rungs post-amendment, paired against the base arm in
+  one sitting; refuted if the base÷stock ratio stops rising as arrivals fall.
+
+- **OCCUPANCY IS NOT MONOTONE IN THE ARRIVAL CADENCE**, which is why no new literal can repair
+  `workload.concurrency.test.ts`. **THE HYPOTHESIS SURVIVES; THE PAIR THAT MOTIVATED IT DOES NOT.**
+  The original citation — `--arrivals 132` → 8.04 against `--arrivals 120` → 5.13 — was taken
+  before ADR-0026's amendment and is **withdrawn, not restated**.
+
+  **`ai-critic` RAN THIS ITEM'S OWN FALSIFICATION TEST AT SWEEP 2** — the finer sweep it asks for,
+  30 days, rooms 60, seeds 42 and 7 (identical), `schedule(...)` in-process, one deterministic
+  reading each, quiet 12-core Win11 box:
+
+  | arrivals | 132 | 128 | 126 | 124 | **122** | 120 | 96 |
+  |---|---|---|---|---|---|---|---|
+  | concurrent | 7.85 | 7.94 | 8.07 | 7.99 | **6.43** | 7.87 | 8.72 |
+
+  **The non-monotonicity is real and the dip is at 122**, not at 120 — and the originally cited
+  pair (7.85 → 7.87) is *monotone in the claimed direction*. **The parked hypothesis was right for
+  a reason that was wrong**, which is the outcome a falsification test exists to produce and the
+  reason this entry is re-taken rather than deleted.
+  **Owed to the instrument re-take goal**: it decides whether that campaign can be calibrated by
+  choosing a cadence at all — and if it cannot, the campaign needs a different axis, not a
+  different number. **Cite the 122/124 pair or nothing.**
+
+- **THE DISSATISFACTION CEILING IS NON-MONOTONE IN THE DEEPLY-SATURATED BAND.** `--arrivals 168`:
+  C = 300 / **547** / 900 / 1200 gives **46.0 / 36.1 / 30.8 / 55.6 %** walkouts.
+  **WITHDRAWN 2026-08-13 AT SWEEP 3, NOT RESTATED — and it is the last `547` anywhere, which is
+  the tell.** 547 was θ-b1's ceiling *before* ADR-0026's amendment moved the cliff from 208 to
+  129; the shipped ceiling is **431**, and a sweep whose middle column is a retired value is a
+  sweep of a model that no longer exists. **Its three sibling entries in this same block were
+  each re-taken or withdrawn for exactly this reason and this one was not** — and the entry's own
+  text flags it as *"stated by the builder rather than found by a critic"*, which is precisely
+  the entry a reader trusts least and a sweep checks last.
+  **It also named ONE slot.** `--arrivals 168` is a cadence; there was no rooms, no amenities, no
+  days, no seed, and no statement of whether the reading was pre- or post-amendment — which is
+  what made it impossible to re-take rather than merely wrong. More patient guests stay
+  longer, which raises contention, which raises the fill rate. **Stated by the builder rather than
+  found by a critic**, and not diagnosed. **FALSIFICATION TEST**: repeat at C = 700 and 1050; if it
+  fills in monotonically the 1200 reading is noise, and if it does not, the feedback is real and the
+  dial has a usable range rather than a usable direction.

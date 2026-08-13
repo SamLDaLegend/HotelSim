@@ -11,9 +11,12 @@
 // ================================================================================
 // WHICH TWO NEED TYPES CARRY IT, AND WHY IT CANNOT BE `night_rest`
 //
-// At `--rooms 6` the hotel can serve eighteen stays a day against twelve arrivals, so
-// every guest gets a bed: `night_rest` is 356 met and ZERO unmet, and no implementation of
-// this goal could make it otherwise without breaking the hotel. So two ENGAGEMENT needs
+// At `--rooms 6` the hotel could serve eighteen stays a day against twelve arrivals, so every
+// guest got a bed: `night_rest` read 356 met and ZERO unmet, and no implementation of G-013
+// could make it otherwise without breaking the hotel. **THAT STOPPED BEING TRUE AT θ-b1** — a
+// guest can now walk out of a bed it was given, so the row reads 203/150 and the assertions
+// below are the live ones. The paragraph is kept because the REASON is what it is here for. So
+// two ENGAGEMENT needs
 // must carry it, one is the control that is met for everybody, and a table where all three
 // looked alike would be a table with one row wearing three hats.
 //
@@ -22,8 +25,14 @@
 //
 //   at G-012:  entertainment 213/143 and nourishment 214/142 carried it;
 //              comfort was 356/0 — the control.
-//   at G-013:  comfort 178/178 and entertainment 179/177 carry it;
-//              nourishment is 356/0 — the control.
+//   at G-013:  comfort 178/178 and entertainment 179/177 carried it;
+//              nourishment was 356/0 — the control.
+//
+// BOTH ROWS ARE ERA READINGS AND NEITHER DESCRIBES THIS BUILD. At θ-b1 the criterion arm reads
+// comfort 201/152, entertainment 210/143, nourishment 281/72 and night_rest 203/150 — there is
+// no control any more, because every need type is now met for some guests and missed by others.
+// The paragraph is kept for the MECHANISM it records (a second provider swapped which two
+// carry it), which is what it is here for; the live numbers are the assertions below.
 //
 // They swapped because of ONE change and its correction. NOURISHMENT gained a second
 // provider — the café is a room and the vending machine in the games room is an item — so
@@ -57,7 +66,6 @@ import {
 import {
   buildSummary,
   departuresOf,
-  evictedInSummary,
   parseArgs,
   schedule,
 } from './report.js';
@@ -132,21 +140,32 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // The other half of the flip, as numbers rather than as prose. If this ever goes back to
     // zero unmet, either capacity or the stay length has moved and the criterion has become
     // easier rather than the hotel better.
+    // RE-MEASURED AT θ-b1, AND TWICE: 188/165 -> 203/150. A guest that walks out at its
+    // dissatisfaction
+    // ceiling has been AT HOME for most of the 431 ticks it stayed — nothing else can serve it
+    // — so its rest is topped right up when it goes, and the lodging row reads MET for a stay
+    // the hotel plainly failed. That is a true statement about the need and a poor summary of
+    // the visit, and it is G-028's to answer: "met at departure" is a snapshot, and the
+    // stock-shaped replacement is time spent below the line (ADR-0017's consequence list).
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBe(188);
-    expect(lodging?.unmet).toBe(165);
-    expect(departuresOf(summary, 'gaveUp')).toBe(161);
-    expect(departuresOf(summary, 'checkedOut')).toBe(192);
+    expect(lodging?.met).toBe(203);
+    expect(lodging?.unmet).toBe(150);
+    // AND THE THREE WAYS A GUEST CAN LEAVE THIS HOTEL ARE ALL NON-ZERO AT θ-b1, where the
+    // invocation used to produce two. **148 never got a bed, 163 ran out their clock, and 42 got
+    // a bed and walked out on it** — one hotel, three different instructions to a player.
+    expect(departuresOf(summary, 'gaveUp')).toBe(148);
+    expect(departuresOf(summary, 'checkedOut')).toBe(163);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(42);
     // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
     // the countdown, a guest that checked out had by definition completed its lodging need, so
     // the two columns were the same number. "Met" is now a BAND read at the moment of
-    // departure — below the want line — and four of the 192 guests that checked out walked out
-    // of the door with their rest above it, having been away when their clock ran out. The
-    // conservation law is unmoved: 188 + 165 = 353 = every guest that arrived and left.
+    // departure — below the want line — and it is read for EVERY departure, so at θ-b1 it
+    // exceeds `checkedOut` several times over: a guest that leaves dissatisfied has been at
+    // home, and its rest is full when it goes.
     expect((lodging?.met ?? 0) + (lodging?.unmet ?? 0)).toBe(
-      departuresOf(summary, 'gaveUp') + departuresOf(summary, 'checkedOut'),
+      summary.guests.departures.reduce((total, row) => total + row.count, 0),
     );
-    expect(lodging?.met).toBeLessThan(departuresOf(summary, 'checkedOut'));
+    expect(lodging?.met).toBeGreaterThan(departuresOf(summary, 'checkedOut'));
   });
 
   it('tells THREE DIFFERENT STORIES, which is what the criterion above needs to mean anything', () => {
@@ -198,7 +217,10 @@ describe('the criterion invocation prints a per-need table that measures somethi
   it('closes exactly: every row sums to the number of guests that have departed', () => {
     // The conservation law, over a real run of thirty simulated days. A need instance
     // dropped on an exit path — or counted twice — moves one side of this and not the other.
-    const departed = departuresOf(summary, 'checkedOut') + departuresOf(summary, 'gaveUp') + evictedInSummary(summary);
+    // EVERY ROW, FOLDED. This was a sum of three NAMED rows and stopped counting the whole
+    // population the day θ-b1 added a sixth reason — the vacuity shape `GuestOutcomes`'s own
+    // docstring warns about, found in three places in one goal.
+    const departed = summary.guests.departures.reduce((total, row) => total + row.count, 0);
     expect(departed).toBeGreaterThan(0);
     for (const row of summary.needs) {
       expect(row.met + row.unmet, row.needId).toBe(departed);
@@ -218,10 +240,25 @@ describe('the criterion invocation prints a per-need table that measures somethi
 });
 
 describe('a hotel with nothing to do in it', () => {
-  // The negative control, and it is the case a player can build: bedrooms and no
-  // amenities. Every engagement need then fails, which must be a REPORTED outcome rather
-  // than a silence — and the stay must still complete, because an engagement need never
-  // ends one.
+  // ============================================================================
+  // THE NEGATIVE CONTROL, AND θ-b1 REVERSED ITS SECOND CLAIM RATHER THAN MOVING ITS NUMBERS.
+  //
+  // It read: *"the stay must still complete, because an engagement need never ends one"*, and
+  // asserted `checkedOut > 0` and `revenue > 0` under the title **"still serves and charges for
+  // every stay — a failed want is not a failed visit"**.
+  //
+  // AN ENGAGEMENT NEED STILL ENDS NO STAY. What ends one now is the guest's DISSATISFACTION
+  // STOCK reaching its ceiling (ADR-0017 4(b)), and in a hotel with nothing to do that is every
+  // guest, every time: nothing can serve three of the four needs it forms, so the stock rises
+  // by one every tick from the tick after it arrives and saturates at 431 — 30% of the way
+  // through a 1,440-tick stay. **Measured: checkedOut 0, leftDissatisfied 357, revenue 0.**
+  //
+  // So the control is sharper than it was, and it is the same control: a hotel a player can
+  // build, in which every engagement need fails, and in which that failure is a REPORTED
+  // outcome rather than a silence. What changed is that the outcome now has consequences the
+  // player can read — and the row that carries them tells the player to build AMENITIES, which
+  // is the whole reason that row exists (ADR-0025 §2).
+  // ============================================================================
   const { summary, violations } = runInProcess([...CRITERION, '--amenities', '0']);
 
   it('meets the lodging need for everybody and NONE of the engagement needs, for anybody', () => {
@@ -233,15 +270,25 @@ describe('a hotel with nothing to do in it', () => {
     }
   });
 
-  it('still serves and charges for every stay — a failed want is not a failed visit', () => {
-    expect(departuresOf(summary, 'checkedOut')).toBeGreaterThan(0);
-    expect(summary.money.revenuePennies).toBeGreaterThan(0);
+  it('and nobody stays to the end of a stay they are not enjoying — nor is charged for one', () => {
+    // THE INVERSION, STATED BOTH WAYS SO IT CANNOT BE READ AS A WEAKENED ASSERTION. Not one
+    // stay completes, and not one penny is charged — `payForStay` fires on the checkout branch
+    // and on no other, so the two are one fact seen twice.
+    expect(departuresOf(summary, 'checkedOut')).toBe(0);
+    expect(summary.money.revenuePennies).toBe(0);
+    // And they left because they were fed up rather than because they never got a bed: a
+    // roomless guest is `gaveUp`, and those two rows must not be able to swap.
+    expect(departuresOf(summary, 'leftDissatisfied')).toBeGreaterThan(0);
     expect(summary.guests.stuck).toBe(0);
     expect(violations).toEqual([]);
   });
 
   it('and the table still closes, so "everything failed" is counted rather than skipped', () => {
-    const departed = departuresOf(summary, 'checkedOut') + departuresOf(summary, 'gaveUp') + evictedInSummary(summary);
+    // EVERY ROW, FOLDED — not a sum of three named ones. That form silently stopped counting
+    // the day a sixth reason arrived, and `needs.determinism.test.ts` was carrying the same
+    // defect: it is the vacuity shape `GuestOutcomes`'s docstring warns about, in a test
+    // written to check the law.
+    const departed = summary.guests.departures.reduce((total, row) => total + row.count, 0);
     for (const row of summary.needs) expect(row.met + row.unmet, row.needId).toBe(departed);
   });
 });

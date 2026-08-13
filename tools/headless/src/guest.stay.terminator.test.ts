@@ -108,7 +108,7 @@ const at = (tick: number, command: Command): ScheduledCommand => ({ tick, comman
 const hotel = (rooms: number): World =>
   stepTick(createWorld(1, content), content, Array.from({ length: rooms }, (_, i) => spawnRoom(i)));
 
-describe('the stay ends on a clock, and the clock starts at the door', () => {
+describe('CHECKOUT runs on a clock, and the clock starts at the door', () => {
   it('a guest that walked into an empty hotel checks out on exactly arrivedTick + stayDurationTicks', () => {
     // ARRIVAL IS TICK 1: `stepTick` at tick 0 built the room, and the command is scheduled
     // for the next one. The guest reserves on the tick it arrives (`stepGuests` step 7), so
@@ -226,6 +226,9 @@ describe('the stay ends on a clock, and the clock starts at the door', () => {
           arrivedTick: 1_000 - age,
           roomEntityId: 1,
           engagement: null,
+          // θ-b1: content. This file is about the LIFETIME BOUND, and the stock can only ever
+          // shorten a life — so a guest carrying nothing is the case that tests the bound.
+          dissatisfaction: 0,
           needs: [
             { needId: 'rest', deficit: 0, metBy: 'room', abandonCount: 0 },
             { needId: 'snack', deficit: 3, metBy: null, abandonCount: 0 },
@@ -286,12 +289,18 @@ describe('NO DEPARTURE READS NEED STATE TO DECIDE THE STAY IS OVER', () => {
     }
   });
 
-  it('and the give-up branch is a clock too now, so BOTH ways out are clocks', () => {
+  it('and the LOBBY branch is a clock too, which is two of the three ways out', () => {
     // G-027b. This used to be the failing companion: the give-up branch read `isNeedFailed` on
     // the lodging need, so pointing the checkout scan at it went red. It does not any more —
     // the wait ends on `toleranceTicks` from the guest's own `arrivedTick` — which is a
     // strengthening of this whole block rather than a hole in it, and it is asserted here so
     // the change cannot be silent.
+    //
+    // THIS TITLE SAID "BOTH WAYS OUT ARE CLOCKS" UNTIL θ-b1 AND THERE ARE THREE NOW, one of
+    // which is not a clock at all: `leftDissatisfied` reads a STOCK that fills and drains, so a
+    // guest's age tells you nothing about when it fires (ADR-0026). Two of the three still are,
+    // and that is what this case checks. `deleted-vocabulary.test.ts` scans test titles for
+    // exactly this phrase, which is how the sentence was found rather than remembered.
     const start = source.indexOf('if (lodgingUnserved && tick - guest.arrivedTick >= tolerance)');
     expect(start, 'the give-up branch has been rewritten; this scan is pointed at nothing').toBeGreaterThan(0);
     const end = source.indexOf('continue;', start);

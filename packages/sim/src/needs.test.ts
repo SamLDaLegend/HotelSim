@@ -26,8 +26,8 @@ import type { Command, ScheduledCommand } from './commands.js';
 import { bindContent, findNeedType, lodgingNeedOf, needTypesInOrder } from './content.js';
 import type { NeedTypeData, RoomTypeData } from './content.js';
 import {
+  departedGuests,
   departureCountOf,
-  evictedGuests,
   guestsInOrder,
   isResting,
   lodgingNeedStateOf,
@@ -415,8 +415,13 @@ describe('the per-need tally', () => {
     // The conservation law, on a real run: for every need type, met + unmet is the number
     // of guests that have departed. A need dropped on an exit path moves one side only.
     const world = run(hotel(), content, 400, [1, 2, 3, 100, 200].map((tick) => at(tick, arrive)));
-    const departed =
-      departureCountOf(world.guestOutcomes, 'checkedOut') + departureCountOf(world.guestOutcomes, 'gaveUp') + evictedGuests(world.guestOutcomes);
+    // `departedGuests`, THE FOLD — the fourth and last instance of a defect class θ-b1 found in
+    // three other files. It was a sum of three NAMED rows, and the day a sixth reason arrived it
+    // stopped counting the whole population. **This one was LATENT rather than red**: the
+    // fixture here declares no dissatisfaction ceiling, so `leftDissatisfied` is always zero and
+    // the sum happened to be right. That is what the other three were until this goal, and
+    // fixing three of four is a SAMPLE (ADR-0024). A fold cannot forget a row.
+    const departed = departedGuests(world.guestOutcomes);
     expect(departed).toBeGreaterThan(0);
     for (const needType of needTypesInOrder(content)) {
       const row = needOutcomeOf(world.needOutcomes, needType.id);

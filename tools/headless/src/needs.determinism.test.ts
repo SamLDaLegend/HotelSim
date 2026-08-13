@@ -31,8 +31,7 @@ import {
   countOrphanedReservations,
   countStuckGuests,
   createWorld,
-  departureCountOf,
-  evictedGuests,
+  departedGuests,
   guestsInOrder,
   hashState,
   isEngaged,
@@ -105,8 +104,18 @@ describe('the determinism log reaches the need vector', () => {
 
   it('closes the conservation law after 100,000 ticks', () => {
     const world = replayed();
-    const departed =
-      departureCountOf(world.guestOutcomes, 'checkedOut') + departureCountOf(world.guestOutcomes, 'gaveUp') + evictedGuests(world.guestOutcomes);
+    // ========================================================================
+    // `departedGuests`, THE FOLD — AND IT USED TO BE A THREE-TERM SUM OF NAMED ROWS
+    // (`checkedOut + gaveUp + evictedGuests`). θ-b1 added a sixth reason and the sum silently
+    // stopped counting every departure: it read 158 where 1,103 guests had left, and the law
+    // it is asserting became an inequality nobody had stated.
+    //
+    // **That is the exact vacuity shape `GuestOutcomes`'s own docstring warns about** — *"a law
+    // that skips rows is the vacuity shape this table exists to avoid — a mistyped reason would
+    // silently drop out of the sum and nothing would fire"* — reproduced in a test written to
+    // check the law. `departedGuests` folds EVERY row, so a seventh reason cannot repeat this.
+    // ========================================================================
+    const departed = departedGuests(world.guestOutcomes);
     for (const needType of needTypesInOrder(content)) {
       const row = needOutcomeOf(world.needOutcomes, needType.id);
       expect(row, needType.id).toBeDefined();

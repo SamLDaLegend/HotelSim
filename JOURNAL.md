@@ -2,11 +2,15 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, G-027b θ-a and G-031a both code-complete and VERIFIED, both UNCOMMITTED and both
-owing a WATCH. M2.5: 2 of 8 goals done (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v13** · summary **v3** · I2 `9e76bf0fb27494cb` · measure golden
-  `0f013923e178c187` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v14** · summary **v3** · I2 `21938e08d179c60c` · measure golden
+  `5a8cec719d1e9e95` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+  *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
+  as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
+  green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
+  header of a digest certifies nothing about its body**, and this digest's body is where every
+  reader gets the schema version.)*
   (`check:tickcost`, `check:tickcost:proof`, `check:scaling`: one ADR-0015 configuration debt,
   human-accepted, re-take owed) · **all six invariants green** · CI green on three platforms
   (G-022, run #7).
@@ -767,3 +771,114 @@ exists so nothing is *signed off* unobserved — and nothing has been.
 **The honest cost**: if the WATCH turns up something that reads wrong, the repair lands as a
 follow-up commit rather than as an amendment before the work ever entered history. That is a real
 price and it is the one being paid deliberately.
+
+## G-027b θ-b1 — Dissatisfaction is a stock — REFLECT
+
+**DONE.** 3 sweeps (**7 + 8 + 6 MAJOR, no BLOCKER**) plus 2 verifications, **closing on an
+unpinned-claim escalation that consumed no round** (§7.1's seventh firing; six prose, one code).
+Save **v14** · I2 `21938e08d179c60c` · measure golden `5a8cec719d1e9e95`. Every exit criterion
+re-run by the orchestrator.
+
+**THE GOAL WAS SAVED TWICE BEFORE ANY CODE EXISTED, BOTH TIMES BY MEASUREMENT.** The builder
+measured the obvious predicate — *a need is wanted and nobody is serving it* — and killed it:
+`night_rest` alone produces a **208-tick** wanted-unserved run in a healthy hotel against a
+180-tick tolerance, so **the rule would have evicted guests for going to dinner.** Then the critic
+measured the *replacement* at PLAN and killed that too: **a 4.7 % change in occupancy moved
+walkouts from 0 % to 77.5 %**, and tolerance swept across its entire live range moved them 7 %.
+**The margin was a property of the `--rooms 6` arms, not of the rule.**
+
+**AND THE SECOND KILL FOUND THE PROJECT REINTRODUCING WHAT IT HAD JUST DELETED.** `starvedTicks`
+incremented while empty and **reset to zero** when served — *a countdown wearing a stock's
+clothes*, one goal after ADR-0017 removed countdowns from the need model. **The reset erases
+history, so the rule can only ask "is this hotel saturated right now"** — a yes/no question about
+a saturating resource.
+
+> **A binary predicate over a saturating resource has no graded region to be tuned in. The cliff
+> was not in the threshold; it was in the shape of the counter.** (ADR-0026)
+
+The rebuilt rule spreads the 0 %→99 % transition over a **1.8× occupancy range** where the
+run-shaped one spanned 1.047×, and the ceiling became a dial with an **11× swing in the marginal
+band and no effect at either end.**
+
+**THEN THE WATCH FOUND WHAT NO NUMBER HAD.** Tick 6428: guest 50 inside `hotel_cafe` #15,
+engaged, **13 ticks from finishing its meal** — gone at 6429. *A watcher sees a guest walk into
+the café, get served, and vanish mid-meal.* **210 of 224 walkouts (94 %) happened while the guest
+was being served**, and the tick that pushed each over was its own excursion: the only unserved
+need was `night_rest`, unserved **because the guest went out to eat** — which ADR-0017 §2 designed
+in on purpose. **In a well-provisioned hotel 48.4 % of the stock was the guest's own dinner trip,
+and no amount of building removed it.**
+
+> **A stock is only a design dial if playing well can pay it down. If some of its fill is
+> structural, the dial has a floor nobody can see.** (ADR-0026 amendment)
+
+Both halves ruled: the lodging need is excused while the guest is away, and the branch does not
+fire on a tick the guest is engaged. **Verified in the field, not in the argument** — tick 2718,
+guest 13 saturates at its ceiling while in the games room, **sits through ticks 2718–2727** with
+its deficit falling 52 → 3, finishes on 2728 and leaves that tick. **Deferral never exceeded 10
+ticks across 2,880 frames.**
+
+**THE AMENDMENT MOVED EVERY NUMBER DOWNSTREAM OF IT, AND THE PROSE DID NOT FOLLOW — EIGHT TIMES
+IN ONE SWEEP.** The cliff went 208 → 129 and the ceiling 547 → 431. **R1, in the goal that shipped
+R1's scanner.** ADR-0024's method held where reading did not: `547` **12 lines / 8 files → 0**,
+`3.39` → 0, and the surviving `208` turned out to be *correct* — it is the full chase, with the
+fill at 129 on the next line.
+
+**BUT THE ENUMERATION MISSED ONE, AND HOW IT MISSED IT IS THE LESSON.** A test **title** stating
+`1.87 against 0.59` survived every grep, **because nobody greps for a figure nobody has said.**
+The builder's own account: *"I greped 547, 208, 640, 356, 3.37, 3.58 — a list of figures somebody
+had noticed."* Re-run as a **class** — every `it(`/`describe(` title carrying a digit across the
+seven report files — it found three, fixed one and **checked rather than assumed** the other two.
+
+> **Enumerating a list is not enumerating a class. The list is always the part somebody noticed.**
+
+**TWO CHECKS IN THIS GOAL WERE INSPECTING NOTHING, AND THE SECOND WAS FOUND ONLY BY FIXING THE
+FIRST.** `hashOf` serialised the world, and a serialised world carries the content **fingerprint**
+— so *"mutating this field changes the run"* was true of every field whether the model read it or
+not. `reviewScoreMin`, which that file declares as unread, passed the identical arm. Masking the
+fingerprint then revealed **`abandonMarginBasisPoints` bit nowhere at −60** (under a stock the
+incumbent's pressure falls while served, so 5,940 is no easier than 6,000) and that
+**`dissatisfactionReliefPerTick` does not bite in the default hotel** — *reported rather than
+papered over*, with a per-field workload naming where each number is reachable.
+
+**AND THE FIX FOR THE VACUOUS CHECK WAS ITSELF CERTIFIED AGAINST THE WRONG WITNESS.** The
+anti-vacuity arm was green **by numeric coincidence** — `min + floor(k·bands/4)` is a fixed point
+at k ∈ {2,3,4}, and no arm produced a guest below it; `reviewScoreMin` *does* move the simulation
+two arms away. Three layers deep in this project's signature class.
+
+**WHICH PRODUCED THE GOAL'S DURABLE OUTPUT, NAMED BY THE BUILDER AGAINST ITSELF — ADR-0027.**
+*A repair that is correct about its own subject, and silently drops a property the thing it
+replaced was carrying.* **Three instances in one round**, the third found by looking for it: the
+rewritten arm stopped resting on hash equality so **the mask's own certification evaporated**; a
+re-taken comment left the title fourteen lines above it; whole-world equality replaced by four
+named fields left `reviewOutcomes` asserted nowhere — **and, when enumerated properly, the tick,
+the rng, the grid, the entities and the build and loan outcomes too.** The builder's addition is
+the sharpest sentence of the goal:
+
+> **"In every case the replacement was BETTER at its own subject than what it replaced. The
+> improvement is the camouflage."**
+
+**THE ORCHESTRATOR'S OWN ERRORS, AND SLOT ONE ACCOUNTS FOR ALL OF THEM.**
+
+1. **I repeated a builder's hash to the human without re-measuring it.** `02aa190bb4ef2267` was
+   real — **of a different instrument**, the CLI rather than the `commandLog` harness. An "after"
+   from one paired against a "before" from the other.
+2. **My correction of it then committed the same class one layer down**, written *"on this tree
+   returns"* — **present tense, about a hash.** The next fix pass moved it and the sentence went
+   on asserting. **ADR-0008 broken inside the paragraph written to correct a misattributed
+   number.**
+3. **Two `PARKING.md` entries carried pre-amendment readings as this build's**, including the
+   AXIS 1 note handed to G-028.
+4. **I scoped a fix to "one line in the loop"** on the day I wrote ADR-0027; the builder
+   enumerated instead and found six more dropped fields.
+
+**AND `check:stamp` FOUND TWO THINGS NOBODY WAS LOOKING FOR**: G-030 unmarked in `GOALS.md` two
+goals after its own REFLECT said DONE, and **`GOALS.md` recording save v12 against a tree at
+v14** — two schema generations, gate green throughout, **because it compares the as-of LINE and
+never reads the body beneath it.**
+
+**Owed forward**: **the human WATCH** — *can a watcher tell a guest that walked out from one that
+checked out?* · **θ-b2 (optional lodging), 25 enumerated sites** · **AXIS 1 narrowed, not
+deepened** (3.58 → 3.78) and **twelve rooms with two amenities now beats one room, 420 v 391** —
+G-028 should fix the ladder before the scorer · the `arrivalEveryTicks` campaign re-take, now
+carrying that **no cadence restores the calibrated 15**, since the quotient reads 15 at 14.77, at
+6.40 and at 8.72.

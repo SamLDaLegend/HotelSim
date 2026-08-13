@@ -343,6 +343,9 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     at: { floor: 0, column: 0 },
     arrivedTick: over.arrivedTick ?? STAGED_TICK,
     roomEntityId: room,
+    // θ-b1: content on arrival. Nothing in this file is about a guest's mood; the stock is
+    // driven and read in `guest.dissatisfaction.test.ts`.
+    dissatisfaction: 0,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'food' },
     // `metBy` follows the deficit (G-013, G-027b): a need this helper forges as FULL has to
     // say what filled it, or `assertNeedVector` refuses the world before the case under test

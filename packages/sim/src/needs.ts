@@ -395,10 +395,16 @@ export function isNeedFull(need: NeedState): boolean {
 /**
  * Empty: this need has nothing left. **Not terminal either** — being served refills it.
  *
- * The successor to `isNeedFailed`, and it is a level rather than a fate. Its consequence today
- * is that pressure saturates here, so the utility function can no longer separate this need
- * from another that is also empty; the consequence that makes it matter to a guest — leaving
- * because nothing has served it — is the next goal's.
+ * The successor to `isNeedFailed`, and it is a level rather than a fate. Its consequence is that
+ * pressure saturates here, so the utility function can no longer separate this need from another
+ * that is also empty.
+ *
+ * IT IS NOT WHAT MAKES A GUEST LEAVE, AND THIS SENTENCE USED TO SAY IT WOULD BE. It read "the
+ * consequence that makes it matter to a guest — leaving because nothing has served it — is the
+ * next goal's", and that goal ran and chose a different quantity: dissatisfaction fills from the
+ * WANT LINE, not from empty (`wantsSomethingUnserved` below). ADR-0026 is the reason — an
+ * engagement need can only empty once in a 1,440-tick stay, so a rule keyed here would be a step
+ * function with no graded region to be tuned in.
  */
 export function isNeedEmpty(needType: NeedTypeData, need: NeedState): boolean {
   return need.deficit >= needType.capacityTicks;
@@ -489,6 +495,97 @@ export function urgencyOf(content: BoundContent, need: NeedState): number {
  * `reserve` walks the vector in ascending id and keeps the incumbent, which is the same
  * answer this function's last line gave.
  */
+
+/**
+ * IS THE HOTEL LETTING THIS GUEST DOWN RIGHT NOW? True when any need it carries is WANTED, is not
+ * one of the two things the tick is serving, and is not one the guest has CHOSEN to leave behind
+ * (θ-b1, ADR-0017 4(b), ADR-0026 as amended).
+ *
+ * **The one input to the dissatisfaction stock**, and it lives here rather than in `guests.ts` for
+ * the reason every other need predicate does: this module owns what a need IS and when a guest
+ * wants it; that one owns what the guest DOES about it. `guests.ts` calls this with the same
+ * `servedA`/`servedB` pair it has just handed `advanceNeeds`, so "served" means one thing per tick
+ * and there is no second answer to disagree with the first.
+ *
+ * ---------------------------------------------------------------------------
+ * WANTED, NOT EMPTY — WHICH IS THE WHOLE OF ADR-0026 IN ONE PREDICATE.
+ *
+ * The rejected design filled a counter while a need was EMPTY and reset it to zero when anything
+ * served it. Under the shipped table an engagement need decays from its want line to empty in
+ * `1400 - 420 = 980` ticks and a stay is 1,440, so a need can empty at most ONCE per stay and one
+ * serving ends it for good: "how long has this guest been empty" is very nearly a yes/no question,
+ * and a threshold over it is a coin toss on which side of the provider throughput limit the hotel
+ * sits. Measured across that limit, the run-shaped rule moved from 0% of residents evicted to
+ * 77.5% on a 4.7% change in occupancy.
+ *
+ * The want line is crossed and re-crossed several times a stay, so the SHARE of ticks a guest
+ * spends unserved is a continuous quantity that degrades smoothly with contention. That share is
+ * what the stock integrates.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * `excusedNeedId` IS THE AMENDMENT, AND IT IS THE HOTEL'S CULPABILITY MADE EXPLICIT.
+ *
+ * ADR-0017 §2 makes rest decay in AWAY time and nowhere else: being busy is the only thing that
+ * costs a guest its sleep, on purpose. The first build of this predicate then charged that decay
+ * TO THE HOTEL — a guest sitting in the cafe has its lodging need wanted and unserved by
+ * construction, so the stock filled while the hotel was doing everything right.
+ *
+ * IT WAS THE DOMINANT CASE, NOT A CORNER. `ai-critic` measured the share of fill-ticks driven
+ * ONLY by the lodging need while the guest was engaged at a provider: **8.7 % at
+ * `--amenities 1` and 48.4 % at `--amenities 5`.** In a hotel that works, half the stock was the
+ * guest's own dinner trip, and **no amount of building could pay it down**.
+ *
+ * > A stock is only a design dial if playing well can pay it down. If some of its fill is
+ * > structural, the dial has a floor nobody can see.
+ *
+ * So the caller names the one need the guest has chosen to leave behind, and it is the LODGING
+ * need of a guest that HOLDS A ROOM: at home that need is being served and is skipped anyway;
+ * away, it is decaying because the guest went out. A guest holding NO room excuses nothing — the
+ * hotel really is failing to give it a bed — which is why the decision is the caller's, in
+ * `guests.ts`, where what the guest is holding is known.
+ * ---------------------------------------------------------------------------
+ *
+ * BOOLEAN AND NOT A COUNT, deliberately. A guest wanting three things it cannot get is not three
+ * times as let down as one wanting one: the fill rate is a property of the guest's experience, and
+ * a count would make it a property of the content table's arity. See
+ * `dissatisfactionReliefPerTickSchema` in `packages/content`, where the fill rate of 1 is derived.
+ *
+ * EARLY-EXITS ON THE FIRST HIT and RESOLVES THE NEED TYPE BY POSITION, both for the reason
+ * `advanceNeeds` and `reserve` do — this runs for every guest on every tick. Measured paired
+ * against the binary-search spelling of the same predicate: 1.017x against 1.062x/1.094x. The
+ * cheap half of the wanting test (`deficit === 0`) is asked before the type is resolved, exactly
+ * as `reserve` asks it.
+ */
+export function wantsSomethingUnserved(
+  content: BoundContent,
+  needs: readonly NeedState[],
+  servedA: ContentId | null,
+  servedB: ContentId | null,
+  wantAtBasisPoints: number,
+  excusedNeedId: ContentId | null,
+): boolean {
+  const needTypes = needTypesInOrder(content);
+  const maybeAligned = needs.length === needTypes.length;
+  for (let i = 0; i < needs.length; i += 1) {
+    const need = needs[i];
+    if (need === undefined) continue;
+    // A FULL NEED IS NOT WANTED, and this is one integer compare before any type resolution.
+    if (need.deficit === 0) continue;
+    // Something is serving it this tick, so the hotel is not failing the guest on this one.
+    if (need.needId === servedA || need.needId === servedB) continue;
+    // And the guest's own excursion is not the hotel's fault — see the block above.
+    if (need.needId === excusedNeedId) continue;
+    const positional = maybeAligned ? needTypes[i] : undefined;
+    const needType =
+      positional !== undefined && positional.id === need.needId ? positional : findNeedType(content, need.needId);
+    // `beingServed` is FALSE for every need that reaches here — the two served ids are skipped
+    // above by name — so this is the near side of the hysteresis: a need between full and its want
+    // line does not count against the hotel, which is the same line `reserve` will not chase.
+    if (isNeedWanted(needType, need, wantAtBasisPoints, false)) return true;
+  }
+  return false;
+}
 
 /**
  * One tick of the whole vector's stocks.

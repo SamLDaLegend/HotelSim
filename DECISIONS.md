@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, G-027a done. M2.5: 2 of 8 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -1588,3 +1588,353 @@ tense** — it is either renamed or it is a lie. Renamed to `stockFractionOf`.
 it fences, so repairing a hit sometimes *adds* an occurrence. **That is why the count is published
 with the grep that produces it rather than asserted** — a number whose movement needs an
 explanation is only useful if the reader can re-run it. (Re-run by the orchestrator: **392**.)
+
+## ADR-0025 — θ-b's seam is TAKEN; and a departure reason is the BUILD LOOP'S STEERING SIGNAL, so it gets two rows
+
+**Date**: 2026-08-13 · **Status**: accepted · **Relates to**: §5.5 (seams), ADR-0024
+(enumeration), ADR-0017 4(b), G-015 (departure reasons) · **Raised by**: `ai-engineer` at θ-b PLAN.
+
+### 1. The seam is TAKEN. θ-b1 (the resident give-up) then θ-b2 (optional lodging).
+
+§5.5 says a builder offering a seam gets it taken **or** gets a scored prediction of what declining
+costs. **This one is taken, and it is not close.** The builder applied ADR-0024 at PLAN — enumerated
+the lodging-assumption population before writing the plan, from a needle set derived from the change
+rather than from the sites anyone had noticed:
+
+> **25 candidate sites. The block names 4.**
+
+**Six times the estimate**, and the block's 4 was itself a correction of ADR-0018 §6's "a paragraph".
+That is the third time this one sub-goal has been mispriced, each time by someone reading a list
+instead of counting a population.
+
+**And one of the 25 is a hole, not a guard.** `guests.ts:1550` requires `lodgingRoom !== null` to
+check out. Under lodging-free content a guest can never check out (it holds no room) and never give
+up (that path needs a lodging need). **It lives forever.** Optional lodging is therefore not four
+guards being relaxed — it needs the checkout branch re-keyed to the clock with payment, and only
+payment, conditioned on a room. Two more unnamed: `content.ts:978`'s `assertEveryStayCanEnd` early-
+returns on the stated ground that lodging-free content *"has no guest that could be stuck"*, **a
+sentence that becomes false the moment a guest can arrive under it**; and `guests.ts:587` returns 0
+for an undefined need, so `countStuckGuests` would report **every** guest stuck and fail the run.
+
+The halves also differ in everything that makes a goal one goal: **θ-b1 carries a schema bump (v14)
+and no new content; θ-b2 carries no schema and a whole new content shape.** The critic's frame
+differs too — *when does a guest give up* against *what does the code assume exists*.
+
+**θ-b1 goes first**, because it has the sharper proving arm and hands θ-b2 the terminator a
+lodging-free guest will need.
+
+### 2. TWO departure rows, not one. The builder recommended one and invited adjudication.
+
+The builder's case for one row is real: `GUEST_DEPARTURE_REASONS`'s own docstring says `gaveUpWaiting`
+*"lost its second word … the moment ADR-0017 4(b)'s dissatisfaction threshold lands"*, and a second
+row costs a save-migration table row, a summary-schema bump and an `isCutShort` case.
+
+**Overruled, on the loop rather than on the cost.** G-015 split `evictedRoomGone` from
+`evictedRoomUnusable` because they are *"different events to a player"*. Apply that test here:
+
+| the guest left because | what the player should build |
+|---|---|
+| nobody would give it a room | **more rooms** |
+| it had a bed and nothing to do | **more amenities** |
+
+**Those are opposite instructions.** One counter averages them into a number that tells a player
+they are doing badly and not which lever to pull — and the build loop is one of the project's three
+named loops, the one every feature must feed. **A departure reason is not bookkeeping; it is the
+steering signal.**
+
+The argument is stronger, not weaker, for being made now: **AXIS 1 is currently inverted** — one room
+scores 3.90 against twelve rooms' 3.58 — so the build loop's *other* signal is already reading
+backwards pending G-028. Collapsing these two rows would remove the one remaining direct reading of
+*which* scarcity is biting.
+
+**The docstring is not evidence against this.** It was written pre-4(b), predicting a merge that
+nobody had yet tested against the loop. That is R1's shape — a derivation outliving its model — and
+this ADR is its correction, not its violation.
+
+### 3. What is NOT ruled here
+
+The builder proposes **no bind-time refusal** for the reachability bound (`ageAtGiveUp ≤ stayDuration`),
+buying it back with an executed two-sided boundary test over the shipped bytes instead, on the ground
+that content where a stay ends before anything runs dry is a short stay rather than a bug. **Accepted
+as reasoned, and left to the critic to object to** — it is exactly the trade `assertLodgingBecomesWanted`
+went the other way on, and the difference (a dead rule versus a guest stuck forever) is stated.
+
+## ADR-0026 — Dissatisfaction is a STOCK, not a run. The plan is sent back, not built.
+
+**Date**: 2026-08-13 · **Status**: accepted · **Supersedes**: θ-b1's planned design ·
+**Relates to**: ADR-0017 (needs are stocks), ADR-0021, ADR-0024, ADR-0025 · **Raised by**:
+`ai-critic` at plan review, **before any code existed** — which is what §5.6 is for.
+
+### The measurement that decides it
+
+A provider serves **one guest at a time** (`guests.ts:679`; queues are M3's G-024). Closed form on
+shipped bytes: an engagement need fills from its want line in 420/7 = 60 ticks and re-wants 420
+ticks later, so **one provider sustains 480/60 = 8 concurrent guests.** `--amenities 1` seeds one
+comfort and one entertainment provider **regardless of `--rooms`**. Above that throughput, waiting
+is unbounded, so every excess guest crosses **any** tolerance.
+
+| concurrent | max empty run | would give up |
+|---|---|---|
+| 8.06 | 124 | **0 of 246 (0 %)** |
+| 8.44 | 460 | **200 of 258 (77.5 %)** |
+| 14.77 — the I5 bench hotel | 460 | **426 of 450 (94.7 %)** |
+
+**A 4.7 % change in occupancy moves walkouts from 0 % to 77.5 %.** And the tolerance parameter is
+nearly inert: swept 180 → 459, the evicted population moves **7 %**. What decides everything is
+**providers-per-guest**, and nothing in content binding or in any gate can see that quantity —
+`assertNeedDemandIsServiceable` bounds one guest's own time budget and says so.
+
+### The ruling
+
+**A guest's dissatisfaction is a STOCK.** It fills while a need is empty and **drains while needs
+are served**, and the guest leaves when it saturates. It is not a consecutive-tick run.
+
+**Why this is the answer and not a patch.** θ-a's whole thesis is that a need is a level that
+decays and refills, never a countdown that completes. **The planned give-up rule reintroduced a
+countdown** — `starvedTicks`, incremented and reset to zero — one goal after the project deleted
+countdowns from the need model, and the reset-to-zero is exactly what makes it a step function: a
+guest that gets dinner once has its history erased, so the rule can only ever ask *"is this hotel
+saturated right now"*.
+
+> **A binary predicate over a saturating resource has no graded region to be tuned in. The cliff
+> was not in the threshold; it was in the shape of the counter.**
+
+A stock has the graded region by construction: a guest that occasionally misses dinner accumulates
+some dissatisfaction and recovers, and one that never eats saturates. **The same content that
+produces 0 % and 77.5 % on either side of 8.06 concurrent produces a spread under a stock**, which
+is what makes the number a design dial rather than a coin toss.
+
+### What this obliges, and what it does not
+
+1. **The rule is `dissatisfaction`, a stock with a fill rate, a drain rate and a ceiling.** Its
+   numbers get **derived from a stated requirement** — which also discharges MAJOR 3, the finding
+   that θ-a *predicted in writing*: `toleranceTicksSchema` says 180 was preserved for the lobby-wait
+   axis and warned that 4(b) *"is what will ask this number to serve a second axis it was never
+   calibrated for."* **The resident axis gets its own field. It does not borrow 180.**
+2. **`workload.concurrency.test.ts` is fenced IN θ-b1's OWN COMMIT, not deferred.** ADR-0021 §2
+   already ruled that a green gate which has stopped being evidence is worse than a red one, and
+   the assertion `stayDurationTicks / ARRIVAL_EVERY_TICKS === 15` would stay green while measured
+   occupancy fell to ~12. **Deferring also hands the instrument goal an unrepairable premise**: once
+   effective stay is emergent, `stay / arrivals` is not occupancy *in principle*, so no new literal
+   fixes it. Assert the **measured** occupancy — the CLI already prints `in hotel`.
+3. **ADR-0024 applies to this goal's own class, and the count comes first.** Two of the sites are
+   **live `bindContent` error messages** asserting *"a guest that holds a room can never give up"* —
+   the proposition θ-b1 falsifies, on the executable surface a predicate can close. First-pass
+   needles already return 10 hits / 5 files and 15 hits / 8 files against a plan naming a list.
+4. **v14 carries TWO schema changes.** ADR-0025 §2's second departure row must be **inserted at a
+   fixed position by the migration** with its own era argument and frozen literal, because
+   `assertGuestOutcomes` refuses a table whose row count or order differs. The plan's era argument
+   covered only the new field. **`pnpm test:save` cannot pass without it.**
+5. **The WATCH and the three-platform CI criteria are restored** — the plan dropped both, in the
+   goal that produces *the most visible behaviour change this project has attempted*: a guest
+   walking out mid-stay. The recording arm is the **over-subscribed** one, not `--amenities 0`,
+   because the provider cliff is what a watcher would see.
+
+### Corrections the review made to the plan's own arithmetic, kept because they will be re-derived
+
+The closed form is off by one in both terms: measured **980 / 1,159**, not 981 / 1,161, because the
+branch compares `>=` and step 4 decays before step 6. On `guest.stay.test.ts`'s fixture, **45 and
+84**, not 46 and 86. The margin conclusion is unchanged. It matters because the criteria promise an
+*executed* two-sided boundary test, and the temptation on a red assertion is to read the number off
+the run.
+
+**And one column of the plan's table does not reproduce.** The per-need figures do — `night_rest`
+208, nourishment 129, comfort 60, entertainment 60 — so the wanted-unserved predicate is still
+correctly rejected. But the *"residents ≥ 180"* column reads 198 under either natural reading where
+the plan reported 6, and *"it evicts 175 of 198 at one-of-each"* rests on it. **The conclusion
+survives on the per-need figure alone; the column is withdrawn rather than restated.**
+
+### What is NOT ruled here
+
+Whether a hotel *should* haemorrhage guests when oversubscribed. It probably should — that is the
+build loop telling a player they added rooms without adding amenities. **The objection is to the
+step function, not to the consequence.** The graded form is also what G-024's queues will need, and
+G-028's outcome table is already stock-shaped, so all three converge.
+
+## ADR-0025 AMENDMENT — the summary bump named in §2 was WRONG, and the builder caught it against the shipped policy
+
+**Date**: 2026-08-13 · **Amends**: ADR-0025 §2 · **Raised by**: `ai-engineer` at θ-b1's plan revision.
+
+ADR-0025 §2 listed *"a summary-schema bump for the reason strings"* among the costs of ruling two
+departure rows. **That cost does not exist.** `report.ts:355-386` states the shipped policy in as
+many words: *"an ADDITIVE block or field does NOT bump this. A removal, a rename, or a type change
+DOES."* A sixth departure row is additive — nothing renamed, nothing removed, every v3 `reason`
+string still present and still meaning what it meant. The v2 bump removed three fields; the v3 bump
+renamed two values; **neither reading reaches an insertion.** `SUMMARY_SCHEMA_VERSION` stays **3**.
+
+**How I got it wrong, because the mechanism is the reusable part**: I priced the ruling from the
+*shape of the change* — "a new row is a schema change, schemas get bumped" — rather than from the
+policy the schema actually publishes. **I did not re-read the policy before naming it as a cost.**
+That is R1's shape pointed at myself: a rule of thumb outliving the document that would have
+corrected it, in an ADR written the same week the project ruled that documents outlive their models.
+
+**The ruling itself is unaffected** — two rows was argued on the build loop, not on the price — but
+an ADR that overstates a cost makes the *next* reader weigh the trade wrongly, so the correction
+matters more than the arithmetic.
+
+**Guarded rather than asserted**: a test pins that every v3 reason string still resolves in the
+v4-shaped document, so a future *rename* is still caught. And note the asymmetry, which is
+`SUMMARY_SCHEMA_VERSION`'s own and worth stating: **a SAVE bump is owed for any field, because old
+bytes must still load; a report is generated fresh every run.**
+
+## ADR-0026 AMENDMENT — a guest's own excursion is NOT the hotel letting it down
+
+**Date**: 2026-08-13 · **Amends**: ADR-0026 · **Raised by**: `ai-critic` at θ-b1 sweep 1, **with a
+frame reference** (ADR-0013 §3).
+
+### The frame
+
+`--days 5 --seed 7 --rooms 6 --amenities 1`, tick **6428**: guest 50 is inside `hotel_cafe` #15,
+engaged on `guest_nourishment`, dissatisfaction **546**. It sat down at tick 6382 and its
+nourishment deficit has fallen from ~449 to 118 — **it is 13 ticks from finishing its meal.**
+Tick 6429: gone.
+
+> **A watcher sees a guest walk into the café, get served, and vanish mid-meal.**
+
+**It is the dominant case, not a corner: 210 of 224 walkouts (94 %) happen while the guest is
+being served.**
+
+### The mechanism, which is the part worth ruling on
+
+At 6428 the guest's comfort, entertainment and nourishment are all **below** the want line. The
+only wanted-unserved need is **`night_rest`** — unserved *because the guest went out to eat*.
+
+**That is not a bug in the rest model; it is ADR-0017 §2, designed in on purpose**: being busy is
+the only thing that costs rest. θ-b1's `wantsSomethingUnserved` then charges that cost **to the
+hotel**. Measured share of fill-ticks driven *only* by the lodging need while the guest is engaged
+at a provider, 30 days, seed 7:
+
+| | |
+|---|---|
+| `--rooms 6 --amenities 1` | 8.7 % |
+| `--rooms 6 --amenities 5` | **48.4 %** |
+
+**In a hotel that works, half the dissatisfaction is the guest's own dinner trip — and no amount of
+building removes it.** A stock that cannot be paid down by playing well is not a design dial.
+
+### The ruling, both halves
+
+1. **The lodging need does not contribute to dissatisfaction while the guest is legitimately away.**
+   The three-cell decay law ADR-0017 shipped already says rest is *expected* to be unserved when a
+   guest is out; charging that to the hotel **double-counts a cost the model deliberately imposed
+   elsewhere.** The hotel is culpable for a need it will not serve, not for one the guest has
+   chosen to leave behind.
+2. **The departure branch does not fire on a tick the guest is engaged at a provider.** A guest
+   that is *being served right now* is not one the hotel is failing, whatever its accumulated
+   stock. It leaves when it is next at liberty. This is one condition and it removes the
+   mid-meal vanish, which is the perceptual half.
+
+**Both are needed.** (1) alone leaves walkouts landing mid-service for the other needs; (2) alone
+leaves the stock still filling from the guest's own excursions, so a well-provisioned hotel would
+keep evicting.
+
+### Why this is an amendment and not a new decision
+
+ADR-0026 ruled the *shape* of the counter — a stock, not a run — and that ruling stands and was
+right. **What it did not specify is what the stock counts**, and the build's answer ("anything
+wanted that nothing is serving") swept in a cost the design had already charged somewhere else.
+
+> **A stock is only a design dial if playing well can pay it down. If some of its fill is
+> structural, the dial has a floor nobody can see, and the number that looks like patience is
+> partly a constant.**
+
+### Also withdrawn here, because it is the same class
+
+The build reported I2's hash as `9e76bf0fb27494cb → 02aa190bb4ef2267`. **It does not reproduce.**
+`pnpm test:determinism` **at the tree of 2026-08-13 sweep 1** returned `7f6ab9ec42bd2c88`, verified
+by the orchestrator across two invocations of three processes. The orchestrator **repeated the bad
+number to the human** before checking it. **Withdrawn, not restated** (CLAUDE.md rule 5) — G-020a's
+exact shape, *a figure cited as belonging to a tree that never held it*, aimed at the project's
+central tripwire and one REFLECT away from being written into three digests.
+
+**AND THE CORRECTION ITSELF THEN COMMITTED THE SAME CLASS, ONE LAYER DOWN — found by `ai-critic` at
+sweep 2, in the paragraph above.** It was written *"on this tree returns"*, **present tense**, about
+a hash. The next fix pass moved it, and the sentence went on asserting. **ADR-0008's rule, in the
+document that exists to correct a misattributed number**: an artefact describing the past must not
+track the present.
+
+> **A hash is never a property of "this tree". It is a property of a tree, at a moment, under a
+> named instrument — and a correction that omits the moment inherits the defect it is correcting.**
+
+**The real diagnosis, which is the durable part**: `02aa190bb4ef2267` was **not fabricated and not
+wrong**. It is the CLI's `sim:run --ticks 100000 --seed 42 --quiet`, a *different instrument* from
+the `commandLog` harness `test:determinism` drives. An "after" from one was paired against a
+"before" from the other. **Slot one — what the number is a measurement OF — and that is this goal's
+third instance, two of them the orchestrator's.**
+
+Readings are therefore recorded **as pairs taken in one sitting, each naming its instrument**, and
+carry no claim about any later tree:
+
+| instrument | before (HEAD) | after (sweep-1 fixes) |
+|---|---|---|
+| `test:determinism` — harness over `commandLog` | `9e76bf0fb27494cb` | `21938e08d179c60c` |
+| `sim:run --ticks 100000 --seed 42 --quiet` — CLI | `a2cc127cac5c8450` | `51f2bab2206f57de` |
+
+Both "after" figures independently reproduced by the orchestrator. **The harness figure moves for
+two causes — the state shape, and this goal editing `determinism-log.ts` itself — and they are not
+separated anywhere in the tree.** That separation is owed before REFLECT.
+
+## ADR-0027 — A REPAIR INHERITS THE OBLIGATIONS OF WHAT IT REPLACES
+
+**Date**: 2026-08-13 · **Status**: accepted · **Relates to**: ADR-0007 (a check that inspects
+nothing), ADR-0024 (enumerate, don't sweep) · **Raised by**: `ai-engineer` **against itself**, at
+θ-b1's sweep-3 fix pass, and confirmed by `ai-critic` at verification.
+
+### The class
+
+> **A repair that is correct about its own subject, and silently drops a property the thing it
+> replaced was carrying.**
+
+The builder named it unprompted, about its own work: *"Both were caught by the instruments rather
+than by me reading my own diff."* It is written here because **three instances landed in a single
+round**, and the third was found by looking for it.
+
+| # | the repair | what it dropped |
+|---|---|---|
+| 1 | the anti-vacuity arm rewritten to assert *"unread by the stock model"* field by field | it stopped resting on `simHash` equality, so **the mask's own certification evaporated** — with the mask removed the new arm stayed green |
+| 2 | `review.report.test.ts:627`'s comment re-taken to θ-b1's figures | **the `it(...)` TITLE fourteen lines above** still states the θ-a pair, unfenced, where vitest prints it |
+| 3 | whole-world `simHash` equality replaced by four named stock-model fields | `reviewOutcomes` at `SERVED_ARM` is now **asserted nowhere** — the row is true and unpinned |
+
+And the same shape, earlier, in other goals: θ-a's `unmet` docstring left standing **one line below**
+a `met` docstring the same diff rewrote; and `patienceFractionOf` renamed while **its own reference
+179 lines away** was left behind.
+
+### Why it is not just carelessness
+
+**A repair has a subject, and attention follows the subject.** The author of a fix is, by
+construction, thinking about the thing being fixed — so the properties most likely to be dropped
+are the ones the *old* code was carrying **incidentally**: a precondition that made an assertion
+mean something, a second assertion that rode on the first, a title that duplicated a comment.
+**None of those is in the author's field of view, because none of them is the defect.**
+
+That is also why it survives review: a critic verifying a fix reads the fix against the finding,
+and the dropped property was not in the finding either.
+
+### The rule
+
+**When replacing a check, an assertion or a claim, enumerate what the old one was asserting before
+writing the new one — and state which of those properties the replacement still carries.**
+
+Concretely:
+1. **A replaced assertion owes an accounting of the old one's coverage**, not only of the new one's
+   correctness. *"Does my new test pass"* is the wrong question; *"what did the old test forbid
+   that mine now permits"* is the right one.
+2. **Where the dropped property was load-bearing, it gets its own case** — as the mask now does:
+   fingerprints must differ, worlds must be equal once blanked, and **only then** does hash
+   equality mean the mask did the work. **Precondition asserted, not assumed.**
+3. **A repair to prose sweeps every surface carrying the same claim in that file** — title,
+   comment, header, message — because duplication across surfaces is exactly what makes the
+   dropped copy invisible.
+
+### Its relationship to ADR-0024, which is not obvious and matters
+
+ADR-0024 says enumerate the class rather than sample it. **This is the same rule pointed backwards
+in time**: ADR-0024 enumerates the *sites a defect reaches*; this enumerates the *properties a
+replaced thing held*. Both exist because **the mind's default is to work from the list in front of
+it**, and in both cases the list is the sample somebody happened to notice.
+
+θ-b1 demonstrates both in one goal: the figure enumeration (`547` → 0, `3.39` → 0) worked and
+**still missed `review.report.test.ts:613`, because it enumerated a list of FIGURES rather than the
+class of claims** — found by the critic reading for the class instead.
+
+> **Enumerating a list is not enumerating a class. The list is always the part somebody noticed.**

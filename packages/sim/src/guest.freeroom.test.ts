@@ -128,6 +128,9 @@ function guest(id: number, over: GuestOver = {}): Guest {
     at: { floor: 0, column: 0 },
     arrivedTick: over.arrivedTick ?? 0,
     roomEntityId: over.roomEntityId ?? 0,
+    // θ-b1: content on arrival. Nothing in this file is about a guest's mood; the stock is
+    // driven and read in `guest.dissatisfaction.test.ts`.
+    dissatisfaction: 0,
     engagement: null,
     // Strictly ascending by need id, and one entry per need type — the vector `formNeedVector`
     // would have built. `snack` is here to be legal state rather than to be pursued: no lounge

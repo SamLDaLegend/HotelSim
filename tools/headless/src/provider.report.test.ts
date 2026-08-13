@@ -45,7 +45,6 @@ import {
 import {
   buildSummary,
   departuresOf,
-  evictedInSummary,
   parseArgs,
   schedule,
 } from './report.js';
@@ -150,7 +149,9 @@ describe('THE CRITERION: the run reports what delivered every satisfaction (G-01
   });
 
   it('and still closes the G-012 law: every row sums to the guests that have departed', () => {
-    const departed = departuresOf(summary, 'checkedOut') + departuresOf(summary, 'gaveUp') + evictedInSummary(summary);
+    // EVERY ROW, FOLDED — a sum of three named rows stopped counting the whole population the
+    // day θ-b1 added a sixth reason. Same defect, same repair, in three files.
+    const departed = summary.guests.departures.reduce((total, row) => total + row.count, 0);
     expect(departed).toBeGreaterThan(0);
     for (const row of summary.needs) expect(row.met + row.unmet, row.needId).toBe(departed);
   });

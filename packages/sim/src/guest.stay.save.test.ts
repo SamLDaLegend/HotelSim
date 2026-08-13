@@ -251,10 +251,30 @@ describe('v11 -> v12 renames two rows by position and moves nothing else', () =>
   });
 
   it('the row ORDER is the frozen literal\'s and not the live reason list\'s', () => {
-    // ADR-0008 (1). The two agree today on the last three names and disagree on the first
-    // two, which is the day the divergence `V8_MIGRATION_GUEST_OUTCOMES` predicted arrived.
+    // ========================================================================
+    // THIS ASSERTION USED TO COMPARE AGAINST `GUEST_DEPARTURE_REASONS` AND WAS RESTING ON A
+    // COINCIDENCE. It read *"the two agree today on the last three names and disagree on the
+    // first two"* — and the day θ-b1 inserted `leftDissatisfied` at index 2, the live list
+    // stopped agreeing on the LENGTH as well, so a v12 world's five rows could no longer equal
+    // it under any spelling.
+    //
+    // **That is ADR-0008 (1) happening a second time, one version later, and it is exactly what
+    // this test was written to notice.** A migration's output is a function of its input bytes
+    // and ITS OWN ERA; a test that checks it against the era it is running in checks nothing on
+    // the day the two diverge, and passes on every day they do not.
+    //
+    // So it names v12's five rows, in v12's order, and imports the live list only to assert
+    // THAT THEY DIFFER — which is the divergence, asserted rather than described.
+    // ========================================================================
     const outcomes = migrated()['guestOutcomes'] as { departures: { reason: string }[] };
-    expect(outcomes.departures.map((row) => row.reason)).toEqual([...GUEST_DEPARTURE_REASONS]);
+    expect(outcomes.departures.map((row) => row.reason)).toEqual([
+      'checkedOut',
+      'gaveUp',
+      'evictedRoomGone',
+      'evictedRoomUnusable',
+      'evictedCauseUnrecorded',
+    ]);
+    expect([...GUEST_DEPARTURE_REASONS]).not.toEqual(outcomes.departures.map((row) => row.reason));
   });
 
   it('touches nothing else in the world', () => {

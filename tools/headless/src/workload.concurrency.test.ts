@@ -38,9 +38,11 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { stayDurationOf } from '@hotelsim/sim';
+import { createWorld, guestsInOrder, stayDurationOf, stepTick } from '@hotelsim/sim';
+import type { Command } from '@hotelsim/sim';
 import { evaluateGateModule } from './gate-module.js';
 import { loadContent } from './content-loader.js';
+import { schedule } from './report.js';
 import { ARRIVAL_EVERY_TICKS as SCALING_ARRIVALS, ROOMS as SCALING_ROOMS } from './scaling-arms.js';
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -55,24 +57,136 @@ const workload = evaluateGateModule(join(GATES, 'workload.mjs'), [
   'ARRIVAL_EVERY_TICKS',
   'TARGET_CONCURRENT_GUESTS',
   'ROOMS',
+  'SEED',
 ]);
 
 const content = loadContent();
 
+/**
+ * THE OCCUPANCY THE SHIPPED WORKLOAD ACTUALLY HOLDS, in hundredths of a guest, MEASURED.
+ *
+ * An era literal in `TARGET_CONCURRENT_GUESTS`'s sense — a historical fact about a tree, taken by
+ * the goal that moved it — and it is the number the assertions below are written against. It is
+ * re-taken by running the campaign's own workload through the tick and dividing guest-frames by
+ * ticks; the procedure is `measuredConcurrentHundredths` below and nothing else.
+ *
+ * 1477 -> 872 AT θ-b1. ADR-0017 4(b) landed and this benchmark's hotel — sixty bedrooms against
+ * ONE of each amenity — is the provider cliff ADR-0026 measured, so many of its guests now walk
+ * out before their stay clock runs out and it holds a little over half of what it held.
+ *
+ * IT MOVED TWICE INSIDE THIS GOAL, which is why the literal is taken by whoever moves it rather
+ * than derived: the first build read 640, and ADR-0026's amendment — a guest's own excursion is
+ * not the hotel letting it down — gave back 232 hundredths of occupancy by removing a fill the
+ * hotel was never responsible for.
+ */
+const MEASURED_CONCURRENT_HUNDREDTHS = 872;
+
+/**
+ * Guest-frames divided by ticks, over the gate's own hotel, in hundredths.
+ *
+ * THIS FILE OWNS ITS OWN RUN LENGTH, exactly as `bench.workload.golden.test.ts` does and for the
+ * reason `workload.mjs` gives at `MEASURE_DAYS`: that constant is the INSTRUMENT'S arm length,
+ * and coupling a golden to it turns "make the arm longer" into "re-pin a golden". Thirty days is
+ * long enough that the ramp is a small share of the reading. Measured cost: about four seconds,
+ * which makes this the slowest test in the file and is stated rather than discovered.
+ */
+const measuredConcurrentHundredths = (): number => {
+  const ticks = 30 * 1_440;
+  const initial = createWorld(workload.SEED, content);
+  const commands = schedule(ticks, content, initial.grid, workload.ROOMS, workload.ARRIVAL_EVERY_TICKS);
+  const byTick = new Map<number, Command[]>();
+  for (const entry of commands) {
+    const bucket = byTick.get(entry.tick);
+    if (bucket === undefined) byTick.set(entry.tick, [entry.command]);
+    else bucket.push(entry.command);
+  }
+  let world = initial;
+  let frames = 0;
+  for (let i = 0; i < ticks; i += 1) {
+    world = stepTick(world, content, byTick.get(world.tick) ?? []);
+    frames += guestsInOrder(world.guests).length;
+  }
+  return Math.round((frames * 100) / ticks);
+};
+
 describe('the benchmark measures the occupancy its bound was calibrated at', () => {
-  it('THE AXIS IS PINNED: stayDurationTicks / ARRIVAL_EVERY_TICKS === TARGET_CONCURRENT_GUESTS', () => {
-    const stay = stayDurationOf(content);
-    expect(stay, 'the shipped content declares no stay duration').toBeDefined();
+  it('THE AXIS IS PINNED TO A MEASURED OCCUPANCY, NOT TO AN ARITHMETIC ONE', () => {
+    // ========================================================================
+    // THIS ASSERTION READ `stayDurationTicks / ARRIVAL_EVERY_TICKS === TARGET_CONCURRENT_GUESTS`
+    // UNTIL θ-b1, AND ADR-0026 RULED THAT IT HAD TO BE FENCED IN THAT GOAL'S OWN COMMIT.
+    //
+    // The quotient is arithmetic over two content constants. It was TRUE before this goal and it
+    // is TRUE after it — and between those two builds the hotel it describes went from holding
+    // 14.77 concurrent guests to holding 6.40, because departure stopped being a function of the
+    // clock alone — and to 8.72 after ADR-0026's amendment. **A green gate that has stopped
+    // being evidence is worse than a red one** (ADR-0021), and that is what this assertion had
+    // become: it read 15 at every one of those three occupancies.
+    //
+    // AND DEFERRING IT WOULD HAVE HANDED THE INSTRUMENT GOAL AN UNREPAIRABLE PREMISE: once
+    // effective stay is emergent, `stay / arrivals` is not occupancy IN PRINCIPLE — the quotient
+    // is a property of the content table and the occupancy is a property of the run.
+    //
+    // ---------------------------------------------------------------------------
+    // THE 8.04-AT-132 / 5.13-AT-120 PAIR THAT STOOD HERE IS WITHDRAWN. It was taken on θ-b1's
+    // FIRST build; re-measured after ADR-0026's amendment the same two cadences read **7.85 and
+    // 7.87**, which is monotone in the claimed direction and shows nothing. `CLAUDE.md` rule 5:
+    // withdrawn rather than restated.
+    //
+    // THE PROPERTY SURVIVES AT A DIFFERENT CADENCE, and it is cited with the sweep it came from
+    // rather than as an isolated pair — one sitting, `--days 30 --seed 7 --rooms 60
+    // --amenities 1`, occupancy as guest-frames over ticks:
+    //
+    //     arrivals   132    128    124    122    120    116    108     96
+    //     occupancy  7.85   7.94   7.99   6.43   7.87   8.20   8.40   8.72
+    //
+    // **7.99 at 124 against 6.43 at 122**, and back to 7.87 at 120. So a shorter interval can
+    // still LOWER occupancy, and no choice of literal restores a target by division.
+    //
+    // THE ARGUMENT DOES NOT REST ON IT EITHER WAY. What makes the arithmetic proxy unusable is
+    // the arm below: the quotient reads 15 at 14.77, at 6.40 and at 8.72 concurrent guests.
+    // ---------------------------------------------------------------------------
+    //
+    // So the axis is pinned to what the workload DOES. This goes red on any change that moves
+    // the benchmark's occupancy, by name, with the number in hand.
+    // ========================================================================
     expect(
-      (stay ?? 0) / workload.ARRIVAL_EVERY_TICKS,
+      measuredConcurrentHundredths(),
       'THE BENCHMARK HAS BEEN REDEFINED. `tools/gates/workload.mjs` says its honest axis is ' +
-        'CONCURRENT GUESTS, and `tripwire.mjs`\'s bound was calibrated against ' +
-        `${String(workload.TARGET_CONCURRENT_GUESTS)} of them. A stay of ${String(stay)} ticks ` +
-        `against an arrival every ${String(workload.ARRIVAL_EVERY_TICKS)} ticks is a different ` +
-        'hotel, so `check:tickcost` is now comparing two workloads rather than two builds. ' +
-        'Move ARRIVAL_EVERY_TICKS so the quotient is the target again — and do NOT widen the ' +
+        'CONCURRENT GUESTS, and the occupancy this workload actually holds has moved. That is ' +
+        'not necessarily a defect — a content change that alters how long guests stay will do ' +
+        'it — but it means `check:tickcost` is comparing a different hotel than the campaign ' +
+        'was calibrated on. Re-take the literal here IN THE SAME COMMIT, and do NOT widen the ' +
         'bound, which would bury this rather than report it (ADR-0021).',
-    ).toBe(workload.TARGET_CONCURRENT_GUESTS);
+    ).toBe(MEASURED_CONCURRENT_HUNDREDTHS);
+  }, 60_000);
+
+  it('AND THE DIVERGENCE FROM THE CALIBRATED TARGET IS ASSERTED, so it cannot close quietly', () => {
+    // The debt, stated as a predicate. `tripwire.mjs`'s bound was measured against FIFTEEN
+    // concurrent guests; this workload holds 8.72. The re-take goal owns closing that — it also
+    // owns the `arrivalEveryTicks` 32-against-96 refusal — and the day somebody does, THIS LINE
+    // GOES RED and they delete it. A debt nothing asserts can be forgotten in either direction:
+    // deepened silently, or closed without anybody noticing the gate went green.
+    // A BAND RATHER THAN AN INEQUALITY, because `not.toBe` is two-sided against DEEPENING and
+    // KNIFE-EDGE against closing: at 14.99 or 15.01 the debt is closed in substance and a bare
+    // `not.toBe` stays green, so nobody is told to delete this. One per cent either side of the
+    // target is the band, and the day the re-take lands inside it this goes red by name.
+    const target = workload.TARGET_CONCURRENT_GUESTS * 100;
+    const withinOnePercent =
+      Math.abs(MEASURED_CONCURRENT_HUNDREDTHS - target) * 100 <= target;
+    expect(withinOnePercent, 'the occupancy debt has been CLOSED — delete this test').toBe(false);
+  });
+
+  it('and the RETIRED arithmetic proxy is still green, which is the proof it went blind', () => {
+    // ADR-0007's proof-of-bite, pointed at the assertion this file used to make. Both halves
+    // together: the quotient still equals the target, AND the measured occupancy does not. One
+    // predicate cannot see what the other reports.
+    const stay = stayDurationOf(content) ?? 0;
+    expect(stay / workload.ARRIVAL_EVERY_TICKS).toBe(workload.TARGET_CONCURRENT_GUESTS);
+    expect(MEASURED_CONCURRENT_HUNDREDTHS).not.toBe(workload.TARGET_CONCURRENT_GUESTS * 100);
+    // AND IT WAS ALREADY WRONG BEFORE THIS GOAL, by a margin small enough that nobody looked:
+    // the ramp means even a hotel whose guests all run their clocks out holds 14.77 rather than
+    // 15 over a 30-day window. The proxy was never exact; it has now stopped being close.
+    expect(MEASURED_CONCURRENT_HUNDREDTHS).toBeLessThan(1_477);
   });
 
   it('and the quotient is EXACT, so the target is a population rather than a rounding', () => {

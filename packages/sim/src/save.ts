@@ -24,7 +24,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 13;
+export const SAVE_SCHEMA_VERSION = 14;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -1156,6 +1156,154 @@ function migrateV12ToV13(world: unknown): unknown {
 }
 
 /**
+ * THE DEPARTURE ROWS A v13 WORLD CARRIED, FROZEN AT THE MOMENT v14 WAS DEFINED, IN ORDER — and
+ * the index the new row is inserted AT.
+ *
+ * A LITERAL, AND THE THIRD OF ITS KIND (`V8_MIGRATION_GUEST_OUTCOMES`,
+ * `V12_MIGRATION_DEPARTURE_RENAMES`). A migration that walked the live `GUEST_DEPARTURE_REASONS`
+ * would describe whatever this build's table happens to be, so the same v13 bytes would produce
+ * different v14 worlds on different days — ADR-0008's drift, and the reason
+ * `migration-scan.…save.test.ts` forbids this file from naming that constant at all.
+ *
+ * THE INSERTION INDEX IS PART OF THE SCHEMA AND SO IT IS PART OF THE LITERAL.
+ * `assertGuestOutcomes` compares the table positionally, so "insert at 2" is a statement about
+ * the bytes rather than a formatting choice, and freezing it here is what keeps a v13 world
+ * migrating the same way after the live union is reordered again.
+ */
+const V13_MIGRATION_DEPARTURE_ROWS = Object.freeze([
+  'checkedOut',
+  'gaveUp',
+  'evictedRoomGone',
+  'evictedRoomUnusable',
+  'evictedCauseUnrecorded',
+]);
+
+/** Where `leftDissatisfied` goes: immediately after `gaveUp`, ahead of the three evictions. */
+const V14_MIGRATION_INSERT_AT = 2;
+
+/** What the inserted row is called, spelled here rather than read from the live union. */
+const V14_MIGRATION_INSERTED_REASON = 'leftDissatisfied';
+
+/**
+ * v13 -> v14: a world in which a guest holding a room could not end its own stay (θ-b1,
+ * ADR-0017 4(b), ADR-0025, ADR-0026).
+ *
+ * ADR-0006 fires for the THIRTEENTH time, and this step is the first to carry TWO changes at
+ * once. They are stated separately because their era arguments are different, and a reader
+ * checking one should not have to hold the other:
+ *
+ *   guests[].dissatisfaction   ADDED, 0.       A v13 guest accumulated nothing because the
+ *                              quantity did not exist and no branch could read it. 0 is not a
+ *                              default standing in for missing information — it is the value the
+ *                              bytes support, because the v13 tick never wrote any other.
+ *
+ *   departures[2]              INSERTED, 0.    A v13 guest could not leave for dissatisfaction,
+ *                              so the count is 0 EXACTLY rather than by approximation. Unlike
+ *                              `migrateV11ToV12`, which had to argue that two populations
+ *                              coincided under every predicate applied to them, this inserts a
+ *                              row NOBODY COULD HAVE FILLED — a strictly weaker claim, and the
+ *                              conservation law is untouched because 0 adds nothing to the sum.
+ *
+ * THE DIRECTION OF THE FIRST DEFAULT IS STATED BECAUSE IT IS THE ONE THAT COULD HAVE BEEN
+ * DANGEROUS. 0 is the most tolerant value available, so no migrated guest can walk out on the
+ * tick after loading; a migration must not end a stay that the era the bytes came from would
+ * have let run. The alternative — deriving a level from `arrivedTick` — would have been
+ * inventing a history those bytes do not record, because nothing in them says what the guest
+ * was or was not getting.
+ *
+ * THE OVERWRITE GUARDS ARE ONE OF EACH KIND, matching what each half does. The added field
+ * refuses a guest that already carries the key (`Object.keys().includes`, because `JSON.parse`
+ * makes `__proto__` an own key — G-003). The inserted row refuses a table that is not spelled
+ * the way v13 spelled it, which catches a v14 document fed in as v13 — its index 2 already reads
+ * `leftDissatisfied` — and a corrupt table alike.
+ *
+ * NOT TESTED BY THE FIXTURE ALONE, DELIBERATELY, AND FOR BOTH HALVES. The permanent v1 fixture
+ * carries no guests, so the first half would run over an empty list; and it reaches this step
+ * with five ZERO rows, over which any insertion whatsoever looks correct (ADR-0007's exact shape,
+ * and the paragraph `migrateV7ToV8` carries). `guest.dissatisfaction.save.test.ts` drives a
+ * synthetic v13 world with guests carrying needs and with all five counters distinct and
+ * non-zero, and watches each land under its v14 index.
+ */
+function migrateV13ToV14(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its guests cannot be given a mood');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const content: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    // The one way this step could destroy data — overwriting a level somebody already reached —
+    // is the one thing it refuses to do, exactly as all twelve earlier steps refuse.
+    if (Object.keys(guest).includes('dissatisfaction')) {
+      throw new Error(
+        `world.guests.list[${index}] already has a "dissatisfaction" field, so it is not a v13 guest; migrating it would overwrite a real stock level`,
+      );
+    }
+    return { ...guest, dissatisfaction: 0 };
+  });
+
+  const outcomes = world['guestOutcomes'];
+  if (!isRecord(outcomes)) {
+    throw new Error('Save is corrupt: world.guestOutcomes is missing, so its departures cannot gain a row');
+  }
+  if (!Object.keys(outcomes).includes('departures')) {
+    throw new Error('Save is corrupt: world.guestOutcomes has no "departures" field, so it is not a v13 world');
+  }
+  const rows = outcomes['departures'];
+  if (!Array.isArray(rows)) {
+    throw new Error('Save is corrupt: world.guestOutcomes.departures is missing or not an array');
+  }
+  if (rows.length !== V13_MIGRATION_DEPARTURE_ROWS.length) {
+    throw new Error(
+      `Save is corrupt: world.guestOutcomes.departures has ${rows.length} row(s) where a v13 world has ` +
+        `${V13_MIGRATION_DEPARTURE_ROWS.length}; this is not a v13 departure table`,
+    );
+  }
+  // CHECKED BEFORE ANYTHING IS INSERTED, so a table that is not v13's comes out unmodified and
+  // says why — rather than gaining a row in the middle of a shape nobody recognises.
+  const carried = V13_MIGRATION_DEPARTURE_ROWS.map((reason, index) => {
+    const row = rows[index];
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.guestOutcomes.departures[${index}] is not an object`);
+    }
+    if (row['reason'] !== reason) {
+      throw new Error(
+        `world.guestOutcomes.departures[${index}] is "${String(row['reason'])}" where a v13 world carries ` +
+          `"${reason}", so it is not a v13 departure table; inserting a row into it would shift counts onto ` +
+          'reasons that do not describe them',
+      );
+    }
+    const count = row['count'];
+    if (typeof count !== 'number') {
+      throw new Error(
+        `Save is corrupt: world.guestOutcomes.departures[${index}].count is missing or not a number, so this ` +
+          "world's stays cannot be counted",
+      );
+    }
+    return { reason, count };
+  });
+  const departures = [
+    ...carried.slice(0, V14_MIGRATION_INSERT_AT),
+    { reason: V14_MIGRATION_INSERTED_REASON, count: 0 },
+    ...carried.slice(V14_MIGRATION_INSERT_AT),
+  ];
+
+  return {
+    ...world,
+    guests: { ...guests, list: content },
+    guestOutcomes: { ...outcomes, departures },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1176,6 +1324,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 10, to: 11, migrate: migrateV10ToV11 }),
   Object.freeze({ from: 11, to: 12, migrate: migrateV11ToV12 }),
   Object.freeze({ from: 12, to: 13, migrate: migrateV12ToV13 }),
+  Object.freeze({ from: 13, to: 14, migrate: migrateV13ToV14 }),
 ]);
 
 /**
@@ -1457,6 +1606,20 @@ function assertGuest(value: unknown, index: number): asserts value is Guest {
     if (typeof engagement['needId'] !== 'string') {
       throw new Error(`Save is corrupt: world.guests.list[${index}].engagement.needId is not a string`);
     }
+  }
+  // HOW FED UP IT IS (θ-b1). Shape only — what a legal LEVEL is belongs to
+  // `assertGuestStoreInvariants`, shared with the tick rather than written twice. A v13 save
+  // carries no such key and reaches this line only through `migrateV13ToV14`, so a save missing
+  // it here is a save no migration produced.
+  //
+  // LAST, AND THAT POSITION IS LOAD-BEARING RATHER THAN TIDY. It was first, beside `id` and
+  // `arrivedTick`, for one build — and it made every OLDER shape failure report itself as this
+  // one: a hand-built world missing `at`, or a v10 blob fed in without its migration, came back
+  // saying "dissatisfaction is not a number", which is the newest field's name on the oldest
+  // field's defect. `travel.save.test.ts` and `needs.save.test.ts` both caught it by name.
+  // **The newest key checks last, so a save that is broken for an older reason still says so.**
+  if (typeof value['dissatisfaction'] !== 'number') {
+    throw new Error(`Save is corrupt: world.guests.list[${index}].dissatisfaction is not a number`);
   }
 }
 

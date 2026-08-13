@@ -54,11 +54,17 @@ const v12World = () => ({
 
 const step = MIGRATIONS.find((migration) => migration.from === 12);
 
-describe('the chain reaches 13 and the step exists', () => {
-  it('SAVE_SCHEMA_VERSION is 13 and the v12 -> v13 step is in the chain', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(13);
+describe('the v12 -> v13 step exists and the chain has not passed it by', () => {
+  it('the step is in the chain, and the chain still reaches today', () => {
+    // IT ASSERTS THE STEP AND NOT THE ERA (θ-b1). This read `SAVE_SCHEMA_VERSION === 13`, which
+    // is `save.fixture.test.ts`'s job — that file's whole subject is the walk from v1 to today,
+    // and this file's subject is one link in it. A relative assertion wearing an absolute has to
+    // be edited at every bump by somebody who does not own the number, which is how a golden
+    // stops being evidence. What this file owns is that its own step is still there and still
+    // lands where it says.
     expect(step).toBeDefined();
     expect(step?.to).toBe(13);
+    expect(SAVE_SCHEMA_VERSION).toBeGreaterThanOrEqual(13);
   });
 });
 

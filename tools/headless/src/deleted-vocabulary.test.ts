@@ -89,6 +89,58 @@
 // (Join the three pattern lines; they are broken only to fit. `patience` case-insensitively
 // subsumes `patienceTicks`, `patienceRemaining`, `FOOD_PATIENCE` and the bare English word.)
 //
+// ============================================================================
+// AND θ-b1's OWN CLASS, WITH ITS NEEDLE SET AND ITS COMMAND — because publishing one and not
+// the other is the asymmetry `ai-critic` found INSIDE THIS FILE. The R1 block above ships the
+// grep that reproduces its figure; θ-b1's first build published "284 lines over 71 files" and
+// "440 over 77" with no needle set and no command anywhere in the tree, so neither number could
+// be checked and the critic's best reconstruction agreed with neither. **ADR-0024 §3: the
+// after-count is the verification's subject, and a number nobody can check is worse than a
+// large one.**
+//
+// THE CLASS: a claim that a guest holding a room cannot end its own stay, that the resident
+// give-up belongs to a future goal, or that the departure table has five rows.
+//
+// THE NEEDLES ARE DERIVED FROM THE CHANGE, not from the sites anyone noticed — which is the
+// discipline the first build stated and did not follow: it missed a FOURTH live refusal
+// (`content.ts`, "can only leave the second way") sitting between the two it repaired, because
+// no needle described that phrasing. `leave the second way` is in the list below, and the
+// ENUMERATION PREDICATE further down is what makes the next such phrasing unnecessary to guess.
+//
+//   NEEDLES='never give up|cannot give up|can never give up|leave the second way|roomless'
+//   NEEDLES="$NEEDLES"'|give-up branch|GUEST_DEPARTURE_REASONS|departures\.length'
+//   NEEDLES="$NEEDLES"'|five (departure )?(row|reason)|only remaining way|two ways and only two'
+//   NEEDLES="$NEEDLES"'|three departure (sites|branches)|next goal.s|4\(b\)|dissatisf'
+//   grep -rIn --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' \
+//        --include='*.cjs' --include='*.json' --include='*.html' --include='*.css' \
+//        --include='*.md' -E "$NEEDLES" packages tools apps \
+//     | grep -v node_modules | grep -v deleted-vocabulary | wc -l
+//
+// (Join the wrapped pattern lines; they are broken only to fit, exactly as the R1 command is.)
+//
+//   WHAT           lines matching that set, EXCLUDING this file, whose own subject is the set.
+//   OVER WHAT      packages/, tools/ and apps/, at the file types the command globs.
+//   SAMPLE COUNT   one — a population, not a sample.
+//   AGGREGATED     a line count, straight off the command.
+//   REGIME         none applies; the same tree gives the same count anywhere.
+//   WHEN           θ-b1 sweep-3 fixes: **294 lines over 47 files**, run against the tree that
+//                  ships this comment. The command excludes this file, so adding the command
+//                  itself does not move the reading — which is the property that makes it
+//                  re-runnable by a reader rather than only by its author.
+//
+//                  IT READ 288 AT SWEEP 1 AND A READER GOT 289; SWEEP 2 READ 293. The lesson is
+//                  the ADR's own: a census is a property of a TREE at a MOMENT, and sweep 1's
+//                  figure was taken before the last of that round's prose repairs had landed.
+//                  Each reading since has been taken LAST, after every edit in the round — which
+//                  is the only way the published number and the shipped tree can be the same
+//                  measurement — and it rises because a past-tense fence must name what it
+//                  fences.
+//
+// IT IS A CENSUS AND NOT A TARGET, for the R1 block's reason: a past-tense fence must NAME what
+// it fences, so repairing a hit often adds one. What IS driven to zero is the executable half —
+// the two predicates below — and that half is checked rather than counted.
+// ============================================================================
+//
 // It is a COUNT and not a gate, deliberately: it will move with every legitimate paragraph about
 // the era, which is exactly why no CI check can be built on it and why the surfaces below — the
 // two that ARE delimited — are the half that got a predicate.
@@ -133,6 +185,25 @@ const DELETED: readonly string[] = [
   'isNeedMet',
   'isNeedFailed',
   'patience',
+  // ==========================================================================
+  // θ-b1's OWN CLASS, and it is a FALSIFIED PROPOSITION rather than a deleted identifier —
+  // which is why these are phrases. ADR-0017 4(b) landed: a guest that holds a room CAN now end
+  // its own stay, so every live refusal message and every test title asserting the opposite is
+  // a lie with a citation, in exactly the two surfaces this file can see.
+  //
+  // ENUMERATED BEFORE ANY OF IT WAS FIXED (ADR-0024). Over `packages/ tools/ apps/`, tracked
+  // files, the union of the needle set derived from the change was **284 lines across 71
+  // files** — against a goal block that named four. The executable half was THREE sites:
+  // `content.ts:983` and `content.ts:1008`, both live `bindContent` messages, and one title in
+  // `guest.stay.terminator.test.ts`. This list is what keeps that half at zero.
+  //
+  // A PHRASE RATHER THAN A WORD, because the words are all still live: "give up" names the
+  // lobby row and must keep working. What is dead is the CLAIM, and a claim is a phrase.
+  'never give up',
+  'cannot give up',
+  'can never give up',
+  'BOTH ways out are clocks',
+  // ==========================================================================
 ];
 
 /** The two roots the test runner globs. `apps/` is a NAMED ESCAPE below, not an oversight. */
@@ -611,6 +682,47 @@ describe('THE SCAN — no deleted-model vocabulary in a live refusal message or 
   it('finds nothing unregistered', () => {
     const named = offenders.map((site) => `${site.file}:${site.line} (${site.kind}) [${termsIn(site).join(', ')}]`);
     expect(named, `R1 — a deleted field is named where a reader meets it:\n${named.join('\n')}`).toEqual([]);
+  });
+
+  it('AN ENUMERATION OF HOW A VISIT FINISHES NAMES EVERY WAY (θ-b1)', () => {
+    // ========================================================================
+    // THE NEEDLE SET ABOVE WAS DERIVED FROM THE SITES SOMEBODY NOTICED, AND ADR-0024 §1 SAYS TO
+    // DERIVE IT FROM THE CHANGE. It cost exactly what that ADR predicts: a FOURTH live
+    // `bindContent` refusal, sitting BETWEEN the two that were repaired, asserting that a guest
+    // which never gets a room "can only leave the second way — so it would wait in the lobby
+    // forever". None of the phrase needles matches that wording, so the scan reported the
+    // executable half at zero while the binder could still tell a reader the falsified
+    // proposition. `ai-critic` reached it live.
+    //
+    // THIS PREDICATE IS DERIVED FROM THE CHANGE INSTEAD, and the change is that
+    // `GUEST_DEPARTURE_REASONS` GAINED A MEMBER. Any message or title that ENUMERATES how a
+    // visit finishes was therefore made incomplete by construction, whatever words it chose — so
+    // the predicate keys on the enumeration and not on the claim: **a live string saying that a
+    // visit ends must also name dissatisfaction.** That catches all four sites without knowing
+    // how any of them is phrased, and it catches the next one too.
+    //
+    // IT IS NOT A GENERAL RULE ABOUT THE WORD "STAY". It fires only on the enumerating form.
+    // ========================================================================
+    //
+    // CONCATENATED, for the reason this file concatenates its other probes: spelled whole, the
+    // fragment would sit in this file's own source and — since the scan reads test titles — the
+    // predicate would match itself. It did, on the first run.
+    const ENUMERATES = 'stay' + ' ends';
+    const NAMES_THE_NEW_ROW = 'dissatis';
+    const incomplete = sites.filter((site) => {
+      const text = site.text.toLowerCase();
+      return text.includes(ENUMERATES) && !text.includes(NAMES_THE_NEW_ROW);
+    });
+    expect(
+      incomplete.map((site) => `${site.file}:${site.line} (${site.kind})`),
+      'a live string enumerates how a visit finishes and does not name dissatisfaction. ADR-0017 ' +
+        '§4 leaves two terminators and θ-b1 gave the second of them a second ROW, so any such ' +
+        'sentence is now incomplete:',
+    ).toEqual([]);
+    // ANTI-VACUITY: the scan must actually be reading strings that enumerate. If nothing in the
+    // repository says it, this predicate is inspecting nothing (ADR-0007) — and there ARE such
+    // messages, in `assertEveryStayCanEnd`, which is the function the whole class lived in.
+    expect(sites.filter((site) => site.text.toLowerCase().includes(ENUMERATES)).length).toBeGreaterThan(0);
   });
 
   it('and every registration still points at text that exists', () => {

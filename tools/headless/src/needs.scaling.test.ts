@@ -125,7 +125,19 @@ describe('the dense arm really has more providers, and really uses them', () => 
     //
     // "The short-circuit stopped firing", said in a unit a reader can check. No stopwatch is
     // involved and the numbers are deterministic.
-    const served = (amenities: number): number => {
+    // ------------------------------------------------------------------
+    // PER DEPARTED GUEST SINCE θ-b1, AND THE RAW TOTAL WOULD NOW READ BACKWARDS.
+    //
+    // `met` is counted AT DEPARTURE, so the total is (satisfactions per guest) x (guests that
+    // left). A dense hotel keeps its guests: they no longer walk out at their dissatisfaction
+    // ceiling, so FEWER of them have departed by the horizon and the raw total falls even
+    // though every guest is doing better. Measured: dense 90 against sparse 111 — the arm
+    // inverted, while the property it exists to check held.
+    //
+    // The ratio is the honest quantity and it is compared by CROSS-MULTIPLICATION, integer and
+    // lossless, so no float enters a deterministic test.
+    // ------------------------------------------------------------------
+    const served = (amenities: number): { readonly met: number; readonly departed: number } => {
       const world = createWorld(42, FULL);
       const finished = run(
         world,
@@ -135,11 +147,15 @@ describe('the dense arm really has more providers, and really uses them', () => 
       );
       let met = 0;
       for (const needType of needTypesInOrder(FULL)) met += needOutcomeOf(finished.needOutcomes, needType.id)?.met ?? 0;
-      return met;
+      let departed = 0;
+      for (const row of finished.guestOutcomes.departures) departed += row.count;
+      return { met, departed };
     };
     const sparse = served(SPARSE_AMENITIES);
     const dense = served(DENSE_AMENITIES);
-    expect(sparse).toBeGreaterThan(0);
-    expect(dense).toBeGreaterThan(sparse);
+    expect(sparse.met).toBeGreaterThan(0);
+    expect(sparse.departed).toBeGreaterThan(0);
+    expect(dense.departed).toBeGreaterThan(0);
+    expect(dense.met * sparse.departed).toBeGreaterThan(sparse.met * dense.departed);
   });
 });

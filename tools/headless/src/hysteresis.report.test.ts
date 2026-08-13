@@ -198,9 +198,20 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // Sixty rooms and an arrival every 96 ticks: nobody queues for a bed, so every guest lives
     // its whole stay and four providers are heavily oversubscribed. Needs reach the depth the
     // margin needs, and the counter moves. Run here rather than asserted about.
-    const contended = reportOf(['--rooms', '60', '--arrivals', '96', '--seed', '42']);
+    // RETUNED AT θ-b1's AMENDMENT, and the retune is the arm doing its job. `--rooms 60
+    // --arrivals 96` fell to ZERO switches once a guest could leave: at that cadence a guest
+    // that is not being served walks out before a second need has drifted a margin's width past
+    // the one it is holding. Halving the arrival interval puts more guests against the same
+    // providers, so needs reach abandoning depth again — measured 3 switches, and the point of
+    // this arm is that the mechanism is LIVE somewhere a run reaches, not that it is live here.
+    const contended = reportOf(['--rooms', '60', '--arrivals', '48', '--seed', '42']);
     expect(abandonmentsIn(contended)).toBeGreaterThan(0);
-    // 24 AT THIS ARM, WHICH IS `--rooms 60 --arrivals 96 --seed 42` ON TOP OF THE CRITERION'S
+    // 24 -> 3 AT θ-b1, AND THE MECHANISM IS THE SAME ONE THIS ARM IS ABOUT. A need only reaches
+    // abandoning depth if the guest is still here to feel it, and once a guest can leave, most
+    // of the ones being failed do — so there are fewer guest-ticks of deep want to switch on.
+    // The COVERAGE claim is unchanged and is what this arm exists for: the mechanism is on, and
+    // it is non-zero at an arm that runs rather than at one described in prose.
+    // 3 AT THIS ARM, WHICH IS `--rooms 60 --arrivals 48 --seed 42` ON TOP OF THE CRITERION'S
     // OWN `--amenities 2` — `reportOf` prepends `CRITERION` and this call overrides only the
     // rooms, the cadence and the seed. The number is pinned because the arm that produces it is
     // the arm that runs; there is no second reading here.
@@ -212,7 +223,7 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // amenity count, and this file cannot produce one without a second real subprocess for a
     // claim the criterion does not rest on. Rule 5 says withdraw rather than restate, so it is
     // withdrawn and not replaced by a guess.
-    expect(abandonmentsIn(contended)).toBe(24);
+    expect(abandonmentsIn(contended)).toBe(3);
   });
 
   it('and it abandons FAR less than a margin of zero, so the margin is doing the work', () => {
@@ -497,12 +508,37 @@ describe('the amenity sweep that chose this invocation, and what each level show
     };
   };
 
-  it('STARVED (1 amenity of each): the margin costs satisfaction, so it is the wrong pin', () => {
+  it('STARVED (1 amenity of each): the margin changes NOTHING here either, at θ-b1', () => {
+    // ------------------------------------------------------------------
+    // THIS ARM INVERTED AT θ-b1 AND THE SWEEP BELOW IT NOW READS ONE WAY AT EVERY LEVEL.
+    //
+    // It read *"the margin costs satisfaction, so it is the wrong pin"* and asserted
+    // `margin.abandoned > 0` and `margin.met < total.met` at one amenity of each. Measured on
+    // this build, at ALL THREE levels of the sweep, both margins give the SAME numbers:
+    //
+    //     amenities 1    abandoned 0 / 0     met 576 / 576
+    //     amenities 2    abandoned 0 / 0     met 930 / 930
+    //     amenities 3    abandoned 0 / 0     met 867 / 867
+    //
+    // The mechanism is the one the SATURATED arm already recorded, arriving one level down: a
+    // guest only abandons a provider when a SECOND need has drifted a margin's width past the
+    // one being served, and in a hotel this small the guest now leaves at its dissatisfaction
+    // ceiling before that gap can open. So the margin is inert at `--rooms 6` whatever the
+    // amenity count, and the CHOICE of pin rests on the `met` column, which still separates the
+    // three levels — 576 / 930 / 867, with two the best of them.
+    //
+    // ABANDONMENT COVERAGE HAS NOT BEEN LOST, and that is why this arm can be re-expressed
+    // rather than deleted: it lives at the contended arm above (`--rooms 60 --arrivals 48`,
+    // three switches), which is asserted to be non-zero and is the arm that actually runs.
+    // ------------------------------------------------------------------
     const total = at(1, ONE_WHOLE_BASIS_POINTS);
     const margin = at(1, SHIPPED_MARGIN);
     expect(total.abandoned).toBe(0);
-    expect(margin.abandoned).toBeGreaterThan(0);
-    expect(margin.met).toBeLessThan(total.met);
+    expect(margin.abandoned).toBe(0);
+    expect(margin.met).toBe(total.met);
+    // AND THE PIN IS STILL THE RIGHT ONE, which is what this describe block exists to justify:
+    // two amenities of each serve materially more than one.
+    expect(at(2, SHIPPED_MARGIN).met).toBeGreaterThan(margin.met);
   });
 
   it('SATURATED (3 of each): the margin cannot fire at all, and still changes NO outcome', () => {

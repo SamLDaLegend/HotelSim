@@ -112,7 +112,14 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // content at all — so the fingerprint is the same one. THE EVIDENCE IS THIS DOCUMENT:
     // it is compared field by field, and `stateHash` is the ONLY field in it that differs.
     // Four guests are still in the hotel, 24 still arrived, 15 still satisfied.
-    stateHash: 'e1f94931bdab91b5',
+    // MOVED AGAIN AT θ-b1 from `e1f94931bdab91b5` (and again inside that goal, when ADR-0026's
+    // amendment changed what the stock counts), for TWO causes and neither is a behaviour
+    // change IN THIS HOTEL: `Guest.dissatisfaction` is hashed state, and `guest-rules.json`
+    // gains two fields so the content fingerprint moves with it. THE EVIDENCE IS THIS
+    // DOCUMENT: it is compared field by field, and `stateHash` plus the new zero row are the
+    // only things in it that differ. Four guests still in the hotel, 24 still arrived, 4 still
+    // checked out, 16 still gave up.
+    stateHash: '8d173796369a55b2',
   },
   guests: {
     arrived: 24,
@@ -123,6 +130,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     departures: [
       { reason: 'checkedOut', count: 4 },
       { reason: 'gaveUp', count: 16 },
+      { reason: 'leftDissatisfied', count: 0 },
       { reason: 'evictedRoomGone', count: 0 },
       { reason: 'evictedRoomUnusable', count: 0 },
       { reason: 'evictedCauseUnrecorded', count: 0 },
@@ -314,6 +322,13 @@ const GOLDEN_2_DAYS_SEED_42 =
     // the rest give up waiting. Same simulation, three times the stay.
     'left checkedOut             4',
     'left gaveUp                 16',
+    // θ-b1: the sixth row, and it is ZERO here — which is the golden earning its keep. In a
+    // three-room hotel almost nobody gets a bed, and a guest with no bed leaves as `gaveUp`
+    // long before its dissatisfaction could saturate (`assertDissatisfactionOutlastsTheLobby`
+    // is what makes that ordering a rule rather than a coincidence). **Every other count in
+    // this document is unchanged**, which is the hand-checked evidence that the row was added
+    // and no behaviour in THIS hotel moved.
+    'left leftDissatisfied       0',
     'left evictedRoomGone        0',
     'left evictedRoomUnusable    0',
     'left evictedCauseUnrecorded 0',
@@ -342,7 +357,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     510000p',
-    'state hash  e1f94931bdab91b5',
+    'state hash  8d173796369a55b2',
   ].join('\n') + '\n';
 
 /**
@@ -499,7 +514,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  e1f94931bdab91b5']);
+    expect(differing).toEqual(['seed        42', 'state hash  8d173796369a55b2']);
     expect(lines43).toContain('seed        43');
   });
 });

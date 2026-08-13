@@ -399,6 +399,13 @@ describe('the guest rules table (G-014b)', () => {
     // than a statement about an era.
     wantAtBasisPoints: 3_000,
     toleranceTicks: 180,
+    // How much dissatisfaction a guest carries before it walks out mid-stay, and how fast that
+    // stock drains (θ-b1). Required on disk for the same reason as the six above — and note the
+    // asymmetry with `packages/sim`, which keeps BOTH optional and reads their absence as "this
+    // content predates a guest that could leave a room it had". Silence is an era there and a
+    // forgotten dial here.
+    dissatisfactionCapacityTicks: 431,
+    dissatisfactionReliefPerTick: 1,
     ...overrides,
   });
   const parseOneRule = (overrides: Record<string, unknown> = {}): unknown => parseGuestRules([rules(overrides)]);
@@ -422,6 +429,8 @@ describe('the guest rules table (G-014b)', () => {
       'stayDurationTicks',
       'wantAtBasisPoints',
       'toleranceTicks',
+      'dissatisfactionCapacityTicks',
+      'dissatisfactionReliefPerTick',
     ]) {
       const entry = rules();
       delete entry[key];

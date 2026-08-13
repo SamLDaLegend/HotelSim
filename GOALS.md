@@ -2,9 +2,14 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, G-027a done. M2.5: 2 of 8 goals (G-030, G-027a). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-13, M2.5: 4 of 9 goals done (G-030, G-027a, theta-a, theta-b1). Two owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v12** (G-027a) · summary **3** (G-027a) · I2 gate hash `452920cbe5ded417`.
+- **Schemas**: save **v14** (θ-b1) · summary **3** (G-027a, and θ-b1's sixth departure row did
+  **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
+  `21938e08d179c60c` · measure golden `5a8cec719d1e9e95`. *(Re-verified by the orchestrator
+  2026-08-13. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  two schema generations, through two goals, with `check:stamp` green the whole time, because
+  **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
   **SUCCESS**, bare-run hash **`a15d1a9bce32d38f` identical on ubuntu, macOS and Windows**. I2's
   byte-identical-on-every-platform clause — the tripwire the whole design rests on — has now been
@@ -283,7 +288,12 @@ of the archetype work. **The structural admission is not deferred**: G-027 must 
 optional and tolerance a parameter the model reads, which costs a paragraph rather than a goal.
 
 ## G-030 — The hotel is on screen
-Status: **DRY at 3/3, awaiting the ADR-0019 join before commit.** 3 sweeps (**9 findings**:
+Status: **done, DRY at 3/3.** *(Marked done 2026-08-13, late — the block still read "awaiting the
+ADR-0019 join before commit" after the join had happened, the commit had landed at `ab2991c`, and
+the human had returned **three** WATCH verdicts. **Found by `check:stamp` refusing a stamp that
+named G-030 as done**, not by anyone noticing: the gate that keeps four ledgers agreeing is also
+the only thing that reads a goal block against reality. Its REFLECT entry has said DONE since it
+was written.)* 3 sweeps (**9 findings**:
   4 MAJOR + 4 MINOR + 3 NIT) plus 1 verification that did **not** convert. **WATCH passed at
   the third asking** (#5 failed, #6 partial, #7 *"It reads"*). Opens `apps/game` after 23
   goals, superseding `HOTELSIM.md:66` (ADR-0018).
@@ -502,7 +512,14 @@ Critique rounds used: 3/3 — DRY.
   assertions catch and a multiset pin would wave through.
 
 ## G-027b — A need is a stock
-Status: **SPLIT into θ-a and θ-b** (ADR-0019, parallel tracks). θ-a in-progress, sweeps 2/3.
+Status: **SPLIT into θ-a and θ-b** (ADR-0019), and **θ-b split again into θ-b1 / θ-b2** (ADR-0025,
+  seam taken at PLAN on an enumeration finding 25 sites where this block named 4).
+  **θ-a: DONE, DRY at 3/3** — committed `7f0be45`, **owes a human WATCH**.
+  **θ-b1: DONE** — 3 sweeps (7 + 8 + 6 MAJOR, no BLOCKER) + 2 verifications, closing on an
+  unpinned-claim escalation that consumed no round. Save **v14**. Exit criteria verified by the
+  orchestrator: ten green / three ruled red · `vitest run dissatisfaction` **4 files / 45** ·
+  `vitest run stay` 4/50 · **criterion 9's control unmoved at 192/161/0, revenue 1,632,000p**.
+  **θ-b2 (optional lodging): NOT STARTED.**
 Milestone: M2.5
 Owner pair: ai-engineer / ai-critic
 Statement: A need is a level that decays over time and is refilled by being served; it is never

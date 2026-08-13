@@ -189,3 +189,64 @@ describe('the replay is the thing the gate runs', () => {
     expect(world.buildOutcomes.refused.insufficientFunds).toBeGreaterThan(0);
   });
 });
+
+// ============================================================================
+// AND EVERY REASON IS STILL HAPPENING AT THE HORIZON THE GATE COMPARES (θ-b1).
+//
+// `ai-critic` found that this file's non-zero assertions are blind to WHEN. After θ-b1's first
+// amenity pass the harness produced **no checkout in the final 27 % of the run and no give-up in
+// the final 42 %** — `checkedOut` is the row `payForStay` fires on, so the I2 gate's final hash
+// was carrying a hotel that had stopped trading, and every assertion here stayed green because
+// each reason had occurred *somewhere*.
+//
+// `determinism-log.ts` states the rule this enforces, written for the terraces and true of every
+// covered path: **"a reason that is reachable for the first third of the run and gone by the end
+// is a reason the gate's FINAL hash says nothing about."** A count over a whole run cannot see
+// it; the LAST TICK each reason moved can.
+//
+// `evictedRoomUnusable` IS A NAMED EXCEPTION AND NOT AN OVERSIGHT. It is the thinnest row in this
+// log and has been since G-014a — `provider.determinism.test.ts` records it as "one event from
+// vacuous" — and it was ZERO on the tree before this goal. One event cannot also be late; the
+// honest assertion is that it occurs at all, which is made above.
+// ============================================================================
+describe('every departure reason is still occurring at the END of the proof, not only in it', () => {
+  const LAST_QUARTER_STARTS = 75_000;
+
+  /** The tick each departure reason last moved on, over the gate's own horizon. */
+  const lastTickPerReason = (): Map<string, number> => {
+    const initial = createWorld(42, content);
+    const commands = commandLog(100_000, content);
+    const byTick = new Map<number, unknown[]>();
+    for (const entry of commands) {
+      const bucket = byTick.get(entry.tick);
+      if (bucket === undefined) byTick.set(entry.tick, [entry.command]);
+      else bucket.push(entry.command);
+    }
+    let world: World = initial;
+    let previous = new Map<string, number>();
+    const last = new Map<string, number>();
+    for (let i = 0; i < 100_000; i += 1) {
+      world = run(world, content, 1, (byTick.get(world.tick) ?? []).map((command) => ({ tick: world.tick, command })) as never);
+      for (const row of world.guestOutcomes.departures) {
+        if ((previous.get(row.reason) ?? 0) !== row.count) last.set(row.reason, world.tick);
+      }
+      previous = new Map(world.guestOutcomes.departures.map((row) => [row.reason, row.count]));
+    }
+    return last;
+  };
+
+  const last = lastTickPerReason();
+
+  for (const reason of ['checkedOut', 'gaveUp', 'leftDissatisfied', 'evictedRoomGone']) {
+    it(`${reason} still fires in the last quarter of the run`, () => {
+      expect(last.get(reason), `${reason} never fired at all`).toBeDefined();
+      expect(last.get(reason) ?? 0, `${reason} stops before tick ${LAST_QUARTER_STARTS}`).toBeGreaterThan(
+        LAST_QUARTER_STARTS,
+      );
+    });
+  }
+
+  it('and the thin row occurs at all, which is the honest claim for a single event', () => {
+    expect(last.get('evictedRoomUnusable')).toBeDefined();
+  });
+}, 240_000);

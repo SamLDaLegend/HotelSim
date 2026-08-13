@@ -376,6 +376,8 @@ describe('counting guests in invalid rooms', () => {
             arrivedTick: 0,
             roomEntityId: 1,
             engagement: null,
+            // θ-b1: content. This file is about which ROOM is invalid, not about moods.
+            dissatisfaction: 0,
             needs: [{ needId: 'rest', deficit: 1, metBy: null, abandonCount: 0 }],
           },
         ],
@@ -405,6 +407,8 @@ describe('counting guests in invalid rooms', () => {
             arrivedTick: 0,
             roomEntityId: 99,
             engagement: null,
+            // θ-b1: content. This file is about which ROOM is invalid, not about moods.
+            dissatisfaction: 0,
             needs: [{ needId: 'rest', deficit: 1, metBy: null, abandonCount: 0 }],
           },
         ],

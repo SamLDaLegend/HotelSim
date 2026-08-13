@@ -22,8 +22,22 @@ import {
   needTypesInOrder,
   requiredItemsOf,
   roomTypeServes,
+  stayDurationOf,
 } from '@hotelsim/sim';
 import type { BoundContent, RoomTypeData, ScheduledCommand } from '@hotelsim/sim';
+
+/**
+ * HOW OFTEN A GUEST WALKS IN, in ticks — the log's own cadence, named rather than repeated.
+ *
+ * IT WAS A LITERAL IN ONE PLACE UNTIL θ-b1 AND IS NOW READ IN TWO, which is why it has a name:
+ * the amenity pass sizes itself against this log's OCCUPANCY, and occupancy is this number
+ * against `stayDurationTicks`. A second copy of `97` would be G-018's duplicated constant with
+ * a derivation resting on it.
+ *
+ * 211 -> 97 AT G-009, and the reason is coverage rather than pacing — see the arrivals pass
+ * below, which carries the measurement.
+ */
+const ARRIVALS_EVERY_TICKS = 97;
 
 /**
  * A fixed command log. Same seed + same log => same hash, forever (I2).
@@ -297,8 +311,104 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // churn pass are about. `underfoot` below adds their entity count, derived rather than
   // written down.
   // ============================================================================
-  let amenityColumn = 10;
+  // ============================================================================
+  // AND THERE HAS TO BE ENOUGH OF THEM (θ-b1) — ONE OF EACH IS NOT A HOTEL, IT IS A QUEUE.
+  //
+  // ADR-0017 4(b) landed and this log's hotel turned out to be the pathological case: one
+  // provider per engagement need against ~15 concurrent guests. Measured on this log, with the
+  // rule off and on: **`checkedOut` 880 -> 10, `leftDissatisfied` 0 -> 1,057**, and the knock-on
+  // was worse than the number — ten fewer builds could be afforded, so twenty fewer entity ids
+  // were handed out, so the despawn and demolish walks reached further and took away the very
+  // states two coverage tests exist to assert. `provider.determinism.test.ts` said so by name.
+  //
+  // **A HARNESS'S HOTEL MUST NOT BE THE THING UNDER TEST.** This log exists to make release
+  // causes, migrations and the money loop occur inside the 100,000-tick proof; a hotel in which
+  // 95% of guests walk out before anything interesting happens covers less of all three. That is
+  // §6.1's "a need that cannot be satisfied is a bug, not difficulty" applied to a scenario
+  // rather than to content, and it is the same argument `assertNeedDemandIsServiceable` makes.
+  //
+  // THE COUNT IS DERIVED, NOT CHOSEN, and from a relation this codebase already owns. A need is
+  // served for `1/(1 + refillPerTick)` of the time in steady state — `needShareBasisPoints`'s
+  // duty cycle — so ONE PROVIDER SUSTAINS `1 + refillPerTick` CONCURRENT GUESTS. This log's
+  // occupancy is its own two numbers: a stay of `stayDurationTicks` against an arrival every
+  // `ARRIVALS_EVERY_TICKS`. Hence:
+  //
+  //     copies = ceil( (stayDurationTicks / ARRIVALS_EVERY_TICKS) / (1 + refillPerTick) )
+  //
+  // On the shipped tables that is `ceil((1440 / 97) / 8)` = `ceil(1.86)` = **2**, and it is
+  // computed rather than written down so that a designer who changes the stay, the cadence or a
+  // refill rate gets a harness that still covers what it claims to.
+  //
+  // IT IS A CEILING AND NOT A FLOOR, deliberately: the arm that would go quiet is the one where
+  // guests are starved, and this pass exists to stop that. The opposite failure — a hotel so
+  // well provisioned that nobody is ever dissatisfied — is covered elsewhere and would show up
+  // as `leftDissatisfied` falling to zero, which `needs.determinism.test.ts` asserts against.
+  //
+  // COLUMNS STAY EVEN AND KEEP THE SAME STRIDE, so the odd columns between them are still the
+  // doors and the claim above still holds: the spawn diagonal touches floor 0 only at columns
+  // 0, 4, 21, 42 and 63, and 21 is odd. Six rooms reach column 20 rather than 14.
+  // ============================================================================
+  const arrivalsEveryTicks = ARRIVALS_EVERY_TICKS;
+  const concurrentGuests = (stayDurationOf(content) ?? 0) / arrivalsEveryTicks;
+  const copiesFor = (roomType: RoomTypeData): number => {
+    let copies = 1;
+    for (const needType of needTypesInOrder(content)) {
+      if (needType.id === lodgingNeed?.id) continue;
+      if (!roomTypeServes(content, roomType.id, needType.id)) continue;
+      copies = Math.max(copies, Math.ceil(concurrentGuests / (1 + needType.refillPerTick)));
+    }
+    return copies;
+  };
+
+  // ============================================================================
+  // AND THEY COME IN TWO WAVES, FOR THE REASON THE TERRACES DO — MEASURED, NOT ASSUMED.
+  //
+  // The first wave spawns at tick 47 and takes LOW IDS, and the despawn walk (`id = 3k + 1`)
+  // and the demolish walk (`id = 5k + 2`) both climb from the bottom. Sampled across a replay
+  // of this log, live providers per need at ticks 1,000 / 25,000 / 50,000 / 75,000 / 99,999:
+  //
+  //     guest_entertainment    2 -> 1 -> 0 -> 0 -> 0
+  //
+  // **A need with no provider at all for the second half of the run**, which is the state
+  // `assertNeedsAreSatisfiable` refuses in CONTENT and which a scenario can still produce
+  // dynamically. It was invisible before θ-b1 because nothing made a guest act on it; now every
+  // guest in that half saturates, and the log's own claim to cover "needs MET and needs UNMET
+  // for the same need type" over 100,000 ticks was resting on the two needs that happened to
+  // survive.
+  //
+  // The second wave lands late, above everything both walks reach, in the terrace pass's own
+  // words: *"a reason that is reachable for the first third of the run and gone by the end is a
+  // reason the gate's FINAL hash says nothing about."* Same sentence, one subject over.
+  //
+  // COLUMNS 44 UPWARD, AND NONE OF THAT IS INCIDENTAL EITHER: the spawn diagonal touches floor 0
+  // only at columns 0, 4, 21, 42 and 63; the seal hosts are at 29..31 and 34..36; the build
+  // rotation cannot reach floor 0 at all (`buildIndex % 21 === 0` AND `% 3 === 1` has no
+  // solution). `spawnEntity` THROWS on an occupied cell, so a collision fails the gate loudly.
+  // ============================================================================
+  const AMENITY_WAVES: readonly {
+    readonly tick: number;
+    readonly firstColumn: number;
+    readonly copies?: number;
+  }[] = [
+    { tick: 47, firstColumn: 10 },
+    { tick: 30_011, firstColumn: 44 },
+    // A THIRD WAVE, LATE AND DELIBERATELY THIN — ONE OF EACH RATHER THAN THE DERIVED TWO.
+    // Two more of each at this tick made the hotel WORK too well: `leftDissatisfied` stopped at
+    // 60,046 and the final 40 % of the gate's run carried no instance of the row this goal
+    // exists to add. One of each keeps the hotel trading to the horizon while leaving it short
+    // enough that guests still walk out — which is the balance the census below measures rather
+    // than the one this comment asserts.
+    { tick: 62_003, firstColumn: 64, copies: 1 },
+  ];
+
   let amenityEntities = 0;
+  for (const wave of AMENITY_WAVES) {
+    amenityEntities += spawnAmenities(wave.tick, wave.firstColumn, wave.copies);
+  }
+
+  function spawnAmenities(tick: number, firstColumn: number, copies?: number): number {
+  let amenityColumn = firstColumn;
+  let spawned = 0;
   for (const roomType of content.content.roomTypes) {
     if (roomType.id === entityKind) continue;
     // `roomTypeServes`, NOT `roomTypeProvides` (G-013): a room type can serve a need
@@ -312,14 +422,18 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
       if (roomTypeServes(content, roomType.id, needType.id)) servesEngagement = true;
     }
     if (!servesEngagement) continue;
-    const at = { floor: 0, column: amenityColumn };
-    amenityColumn += 2;
-    schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind: roomType.id, at } });
-    amenityEntities += 1;
-    for (const itemId of requiredItemsOf(content, roomType.id)) {
-      schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind: itemId, at } });
-      amenityEntities += 1;
+    for (let copy = 0; copy < (copies ?? copiesFor(roomType)); copy += 1) {
+      const at = { floor: 0, column: amenityColumn };
+      amenityColumn += 2;
+      schedule.push({ tick, command: { kind: 'spawnEntity', entityKind: roomType.id, at } });
+      spawned += 1;
+      for (const itemId of requiredItemsOf(content, roomType.id)) {
+        schedule.push({ tick, command: { kind: 'spawnEntity', entityKind: itemId, at } });
+        spawned += 1;
+      }
     }
+  }
+  return spawned;
   }
   // ============================================================================
   // AN ITEM THAT OUTLIVES THE ROOM IT SERVES IN (G-013) — MEASURED TO BE MISSING, THEN ADDED.
@@ -484,6 +598,33 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     const id = Math.floor((tick - 2_003) / 4_001) * 3 + 1;
     schedule.push({ tick, command: { kind: 'despawnEntity', id } });
   }
+  // ============================================================================
+  // AN ITEM TAKEN OUT FROM UNDER A GUEST USING IT (θ-b1) — release cause (c), AIMED.
+  //
+  // It used to arrive for free: the walk above removes every third id, and with 1,109 guests
+  // engaging low-id amenities for most of the run, one of those despawns always landed inside
+  // somebody's engagement. θ-b1 changed when guests are busy — they leave earlier and engage
+  // less — and the coincidence stopped happening. `provider.determinism.test.ts` said so by
+  // name, which is the whole reason that census exists (G-013).
+  //
+  // SO IT IS AIMED RATHER THAN HOPED FOR, exactly as the two sealing waves above are, and for
+  // the reason their comment gives: *the tick has to land while the item is being used*, which
+  // is a fact about this log that no code here can assert. MEASURED on a replay — every window
+  // in which an item is engaged, sorted by length — item 24 is engaged over ticks
+  // 97,240..97,371 and this despawn lands in the middle of it.
+  //
+  // RE-AIMED AT SWEEP 1, TWICE OVER, AND THE RE-AIMING IS THE COST OF AIMING: ADR-0026's
+  // amendment changed when guests are busy, and the third amenity wave changed which entity ids
+  // exist. Both moved the window out from under the previous tick, and `provider.determinism`'s
+  // census said so by name each time — which is the arrangement working. A LATE window is
+  // chosen deliberately, so that this release cause is one the gate's FINAL hash can carry.
+  //
+  // A DESPAWN SHIFTS NO IDS, which is what makes aiming safe here where it would not be for a
+  // spawn: `nextId` only ever rises, so nothing before this tick moves and the window stays
+  // where it was measured. `provider.determinism.test.ts` verifies the outcome rather than
+  // trusting this paragraph — if a future goal moves the schedule under it, that census fails
+  // by name instead of the coverage disappearing quietly.
+  schedule.push({ tick: 97_300, command: { kind: 'despawnEntity', id: 24 } });
   // ARRIVALS. THE CADENCE MOVED FROM 211 TO 97 AT G-009, and the reason is not pacing —
   // it is that the log has to keep affording a build. Revenue here is capped by ARRIVALS,
   // not by rooms, while upkeep grows with every room the spawn pass adds; once half the
@@ -501,7 +642,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // outnumber the guests waiting for them, which is a property of this log rather than a
   // fault in it: `validity.determinism.test.ts` asserts each outcome is non-zero, which is
   // what the I2 proof actually needs.
-  for (let tick = 101; tick < ticks; tick += 97) {
+  for (let tick = 101; tick < ticks; tick += ARRIVALS_EVERY_TICKS) {
     schedule.push({ tick, command: { kind: 'guestArrives' } });
   }
   // THE PLAYER BUILDS (G-008). Three destinations on a rotation, so all three placement

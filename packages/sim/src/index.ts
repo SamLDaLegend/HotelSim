@@ -35,6 +35,11 @@ export {
   abandonMarginOf,
   bindContent,
   demolitionRefundOf,
+  // θ-b1. Exported for the reason `stayDurationOf` below is: the tests that compute the arms and
+  // the derivations live in `tools/headless`, outside this package, and read the shipped numbers
+  // rather than retyping them.
+  dissatisfactionCapacityOf,
+  dissatisfactionReliefOf,
   findItemType,
   findNeedType,
   findRoomType,

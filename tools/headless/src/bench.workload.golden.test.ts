@@ -226,7 +226,16 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // because guests were SERVED differently rather than because the hotel was built or
     // populated differently. The one column that did move is the abandonment count, and it has
     // its own argument below.
-    expect(hashState(plain)).toBe('0f013923e178c187');
+    //   `0f013923e178c187` -> `5a8cec719d1e9e95`   θ-b1 made dissatisfaction a STOCK a guest
+    //   acts on (ADR-0017 4(b)). TWO causes at once: `Guest.dissatisfaction` is hashed state and
+    //   `guest-rules.json` gains two fields, so the content fingerprint moves too — and unlike
+    //   every earlier move on this row, THE OUTCOMES MOVED AS WELL. This benchmark's hotel is
+    //   sixty bedrooms against ONE of each amenity, which is the provider cliff ADR-0026
+    //   measured: **64 of its 75 guests** now walk out rather than checking out. That is the
+    //   benchmark's hotel being a bad hotel, not the benchmark breaking — see
+    //   `workload.concurrency.test.ts`, which pins the occupancy this workload actually holds
+    //   and asserts, by name, that it has diverged from the campaign's calibrated fifteen.
+    expect(hashState(plain)).toBe('5a8cec719d1e9e95');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -242,7 +251,16 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     expect(plain.guestOutcomes.arrived).toBe(75);
     // 60 of those 75 complete a stay inside five simulated days; the other 15 are the ones
     // still in the hotel at the end, which is the steady-state occupancy by construction.
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(60);
+    // 60 -> 4 AT θ-b1, and the missing 56 are in the new row: `leftDissatisfied` 64. Sixty
+    // bedrooms share one lounge and one games room, one provider serves one guest at a time,
+    // and a guest that is never served saturates at 431 of its 1,440 ticks. The hand-check is
+    // the CONSERVATION of the three, and it is the arithmetic the assertions below execute:
+    // **4 + 64 + 7 still in the hotel = 75 arrived.**
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(4);
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(64);
+    expect(
+      departedGuests(plain.guestOutcomes) + plain.guests.list.length,
+    ).toBe(plain.guestOutcomes.arrived);
     expect(evictedGuests(plain.guestOutcomes)).toBe(0);
     expect(plain.needOutcomes).toHaveLength(4);
     // AND THE ABANDONMENT COUNT IS HAND-CHECKED TOO (G-014b), because it is now part of what
@@ -272,7 +290,14 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // Both say FEWER switches at the same margin, and ten is fewer. It is still non-zero, which
     // matters: the mechanism is live in this 60-room hotel even though the 3-room default run
     // now records none at all (`report.test.ts` carries that reading and its two-sided control).
-    expect(plain.needOutcomes.reduce((total, row) => total + row.abandoned, 0)).toBe(10);
+    // TEN -> ZERO AT θ-b1, AND IT IS THE SAME TWO BRAKES ONE TURN FURTHER ON. Abandoning needs
+    // a guest to be here long enough for a SECOND need to drift a margin's width past the one
+    // being served; in this hotel a guest that is not being served now leaves at 431 ticks
+    // instead of waiting out 1,440, so the drift has less time to happen and the population it
+    // could happen to is smaller. **Zero is a loss of coverage on this row and it is recorded
+    // as one rather than absorbed**: the mechanism is still asserted live at
+    // `hysteresis.report.test.ts`'s contended arm, which is the arm that exists for it.
+    expect(plain.needOutcomes.reduce((total, row) => total + row.abandoned, 0)).toBe(0);
   });
 
   it('and every guest is accounted for', () => {
@@ -323,7 +348,9 @@ describe('the same workload with the player churning the building', () => {
     // finish once: `a8976e5fe2d15acb` -> `0cbe3a1234affebe`. THE SHARP CONTROL HOLDS FOR THE
     // SIXTH TIME: 19 evictions, unchanged, in a goal that changed what being served MEANS and
     // nothing about which rooms the churn schedule demolishes.
-    expect(hashState(churn)).toBe('0cbe3a1234affebe');
+    // SEVENTH TIME AT θ-b1: `0cbe3a1234affebe` -> `dc043d95d351ba49`, for the two causes the
+    // PLAIN row above gives — a new hashed field and a moved content fingerprint.
+    expect(hashState(churn)).toBe('dc043d95d351ba49');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

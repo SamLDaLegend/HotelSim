@@ -247,6 +247,7 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
       expect(Object.keys(guest).sort()).toEqual([
         'arrivedTick',
         'at',
+        'dissatisfaction',
         'engagement',
         'id',
         'needs',
@@ -431,7 +432,21 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
       ...shaped(),
       guests: {
         nextId: 2,
-        list: [{ id: 1, at: { floor: 0, column: 0 }, arrivedTick: 0, roomEntityId: 0, engagement: null, needs }],
+        list: [
+          {
+            id: 1,
+            at: { floor: 0, column: 0 },
+            arrivedTick: 0,
+            roomEntityId: 0,
+            engagement: null,
+            needs,
+            // θ-b1. Present so this case fails on the NEED VECTOR, which is its subject: the
+            // guest-shape checks run in age order and the newest one is last, so a guest
+            // missing this would still be refused — for the wrong reason, and the test would
+            // pass while inspecting a different defect.
+            dissatisfaction: 0,
+          },
+        ],
       },
       guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     });
@@ -470,6 +485,7 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
         departures: [
           { reason: 'checkedOut' as const, count: 5 },
           { reason: 'gaveUp' as const, count: 3 },
+          { reason: 'leftDissatisfied' as const, count: 0 },
           { reason: 'evictedRoomGone' as const, count: 1 },
           { reason: 'evictedRoomUnusable' as const, count: 0 },
           { reason: 'evictedCauseUnrecorded' as const, count: 0 },

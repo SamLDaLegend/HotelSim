@@ -27,12 +27,12 @@ import {
   bindContent,
   createWorld,
   formNeedVector,
+  hashState,
   idleShareBasisPoints,
   lodgingNeedOf,
   needTypesInOrder,
   ONE_WHOLE_BASIS_POINTS,
   run,
-  serialise,
   stayDurationOf,
   toleranceOf,
   wantAtOf,
@@ -46,12 +46,35 @@ const SHIPPED = loadContent();
 
 /** The numbers the stock model reads. THE LIST, and the thing the reflection is compared to. */
 const PER_NEED_TYPE = ['capacityTicks', 'refillPerTick'] as const;
-const PER_GUEST_RULES = ['wantAtBasisPoints', 'toleranceTicks', 'abandonMarginBasisPoints', 'stayDurationTicks'] as const;
+const PER_GUEST_RULES = [
+  'wantAtBasisPoints',
+  'toleranceTicks',
+  'abandonMarginBasisPoints',
+  'stayDurationTicks',
+  // θ-b1. The census grew by two and its own title grew with it — which is the census working:
+  // a criterion naming a COUNT can be satisfied while a number nobody counted is invented, and
+  // this list is what stops that.
+  'dissatisfactionCapacityTicks',
+  'dissatisfactionReliefPerTick',
+] as const;
 
-/** Numeric fields the schemas declare that the MODEL does not read, each with its owner. */
+
+/**
+ * Numeric fields the schemas declare that THE STOCK MODEL does not read, each with its owner.
+ *
+ * "THE STOCK MODEL", NOT "THE SIMULATION" — corrected at θ-b1 sweep 3, and the difference is the
+ * whole of a defect. Both fields below ARE read, on every departure, by `reviews.ts`, and the
+ * result lands in `world.reviewOutcomes`, which is hashed state. What they do not touch is the
+ * thing this census is about: how a need decays, when a guest wants it, when a stay ends.
+ *
+ * The anti-vacuity arm at the bottom of this file asserts exactly that distinction rather than
+ * the wider claim — the stock model's own state comes out byte-identical, and the review rows
+ * move. Written the wider way it was false, and green only because of a fixed point in the
+ * score arithmetic that the two arms it ran on happened to sit inside.
+ */
 const NOT_THE_MODELS: Record<string, string> = {
-  reviewScoreMin: 'reviews (G-019)',
-  reviewScoreMax: 'reviews (G-019)',
+  reviewScoreMin: 'reviews (G-019) — read by `reviews.ts`, not by the stock model',
+  reviewScoreMax: 'reviews (G-019) — read by `reviews.ts`, not by the stock model',
 };
 
 const numericFieldsOf = (shape: Record<string, unknown>): readonly string[] =>
@@ -80,22 +103,92 @@ describe('THE CENSUS — reflected out of the schemas, not counted by hand', () 
     for (const name of PER_GUEST_RULES) expect(declared).toContain(name);
   });
 
-  it('and the total is 2 x needTypes + 4 — TWELVE, not the ten first planned', () => {
+  it('and the total is 2 x needTypes + 6 — FOURTEEN, where θ-a shipped twelve', () => {
     expect(needTypesInOrder(SHIPPED).length).toBe(4);
-    expect(PER_NEED_TYPE.length * needTypesInOrder(SHIPPED).length + PER_GUEST_RULES.length).toBe(12);
+    expect(PER_NEED_TYPE.length * needTypesInOrder(SHIPPED).length + PER_GUEST_RULES.length).toBe(14);
   });
 });
 
-describe('THE EXHAUSTION ARM — every number in the census moves the simulation', () => {
-  const hashOf = (content: BoundContent): string => {
+describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION', () => {
+  // ==========================================================================
+  // IT HASHED `serialise(...)` UNTIL SWEEP 2, AND A SERIALISED WORLD CARRIES `contentHash`.
+  //
+  // That field is the BIND-TIME FINGERPRINT OF THE CONTENT, so it moves for any edit to any
+  // content table whatsoever — and the arm was therefore green for every field on the census
+  // whether the model read it or not. `ai-critic` measured it with the fingerprint masked:
+  //
+  //     dissatisfactionCapacityTicks: 181     raw differs  TRUE    sim differs  TRUE
+  //     dissatisfactionCapacityTicks: 430     raw differs  TRUE    sim differs  false
+  //     dissatisfactionReliefPerTick: 61      raw differs  TRUE    sim differs  FALSE
+  //     reviewScoreMin: 0                     raw differs  TRUE    sim differs  false
+  //
+  // **`reviewScoreMin` is the field THIS FILE declares as one the model does not read, and it
+  // passed. And `dissatisfactionReliefPerTick` — a census member this goal added — moved
+  // nothing.** ADR-0007 exactly: a check that succeeds while inspecting nothing, guarding one of
+  // the two numbers the goal exists to introduce.
+  //
+  // So the subject is `hashState` over the world with `contentHash` MASKED — the simulated
+  // history and nothing about which document produced it — and the anti-vacuity arm below feeds
+  // it a field the model provably does not read and requires it to come back UNMOVED.
+  // ==========================================================================
+  const simHash = (content: BoundContent, arm: Arm): string => {
     const world0 = createWorld(42, content);
-    const commands = schedule(2_000, content, world0.grid, 3, 120);
-    return serialise(run(world0, content, 2_000, commands));
+    const commands = schedule(arm.ticks, content, world0.grid, arm.rooms, 120, 0, 0, 0, arm.amenities);
+    // MASKED, NOT OMITTED: `hashState` over a world with the fingerprint blanked is still every
+    // guest, every need, every counter and every transaction the run produced.
+    return hashState({ ...run(world0, content, arm.ticks, commands), contentHash: '' });
   };
-  const baseline = hashOf(SHIPPED);
 
-  it('a mutation to ANY of the twelve produces a different run', () => {
+  type Arm = { readonly rooms: number; readonly amenities: number; readonly ticks: number };
+
+  /**
+   * The hotel a mutation is judged in, and why there is more than one.
+   *
+   * A NUMBER ONLY MOVES A RUN IN A HOTEL WHERE IT IS REACHABLE, and that is a fact about the
+   * model rather than a weakness in the arm. `dissatisfactionReliefPerTick` is the drain on a
+   * stock: in a three-room hotel with one of each amenity the guests are being let down almost
+   * continuously, so the stock only ever RISES and the drain rate is never consulted. Measured —
+   * it moves nothing there at any value. In a hotel that serves its guests it moves the run at
+   * 2 and at 61.
+   *
+   * That is the honest report and it is better than one workload: it says WHERE each number
+   * lives. Every other member bites in the default hotel.
+   */
+  const DEFAULT_ARM: Arm = { rooms: 3, amenities: 1, ticks: 2_000 };
+  const SERVED_ARM: Arm = { rooms: 60, amenities: 3, ticks: 6_000 };
+
+  /**
+   * How each guest-rules field is mutated, in which hotel, and why — because a mutation chosen
+   * to make a test pass is worth nothing.
+   *
+   * `abandonMarginBasisPoints` GOES TO ZERO rather than down by sixty. The blanket `-60` moved
+   * nothing in any hotel measured: under a stock the incumbent's pressure FALLS while it is
+   * served, so a 5,940-point gap is no easier to open than a 6,000-point one. Zero is the
+   * value G-014b's own thrash control uses and it re-decides on every tie.
+   *
+   * `dissatisfactionCapacityTicks` GOES TO 181, one above the lobby tolerance — the tightest
+   * ceiling `assertDissatisfactionOutlastsTheLobby` admits against the shipped `toleranceTicks`.
+   * At 430 it moves nothing over two thousand ticks, which is what a number one below its
+   * shipped value SHOULD do and is why the mutation is large rather than adjacent.
+   *
+   * `dissatisfactionReliefPerTick` GOES UP, because 1 is the floor `cloneDissatisfaction`
+   * admits: a stock that never drains is a ratchet.
+   */
+  const GUEST_RULES_MUTATION: Record<string, { readonly to: number; readonly arm: Arm }> = {
+    wantAtBasisPoints: { to: 2_940, arm: DEFAULT_ARM },
+    toleranceTicks: { to: 120, arm: DEFAULT_ARM },
+    abandonMarginBasisPoints: { to: 0, arm: DEFAULT_ARM },
+    stayDurationTicks: { to: 1_380, arm: DEFAULT_ARM },
+    dissatisfactionCapacityTicks: { to: 181, arm: DEFAULT_ARM },
+    dissatisfactionReliefPerTick: { to: 61, arm: SERVED_ARM },
+  };
+
+  it('a mutation to ANY of the fourteen produces a different SIMULATION', () => {
     const unmoved: string[] = [];
+    const baseline = new Map<Arm, string>([
+      [DEFAULT_ARM, simHash(SHIPPED, DEFAULT_ARM)],
+      [SERVED_ARM, simHash(SHIPPED, SERVED_ARM)],
+    ]);
     for (const needType of needTypesInOrder(SHIPPED)) {
       for (const field of PER_NEED_TYPE) {
         const mutated = rebound({
@@ -103,18 +196,143 @@ describe('THE EXHAUSTION ARM — every number in the census moves the simulation
             entry.id === needType.id ? ({ ...entry, [field]: entry[field] + 70 } as NeedTypeData) : entry,
           ),
         });
-        if (hashOf(mutated) === baseline) unmoved.push(`${needType.id}.${field}`);
+        if (simHash(mutated, DEFAULT_ARM) === baseline.get(DEFAULT_ARM)) unmoved.push(`${needType.id}.${field}`);
       }
     }
     for (const field of PER_GUEST_RULES) {
+      const plan = GUEST_RULES_MUTATION[field];
+      expect(plan, `${field} is on the census with no mutation planned`).toBeDefined();
       const mutated = rebound({
         guestRules: (SHIPPED.content.guestRules ?? []).map(
-          (entry) => ({ ...entry, [field]: (entry[field] ?? 0) - 60 }) as GuestRulesData,
+          (entry) => ({ ...entry, [field]: plan!.to }) as GuestRulesData,
         ),
       });
-      if (hashOf(mutated) === baseline) unmoved.push(`guestRules.${field}`);
+      if (simHash(mutated, plan!.arm) === baseline.get(plan!.arm)) unmoved.push(`guestRules.${field}`);
     }
     expect(unmoved).toEqual([]);
+  });
+
+  it('AND A FIELD THE STOCK MODEL DOES NOT READ LEAVES THE STOCK MODEL UNTOUCHED', () => {
+    // ========================================================================
+    // THIS ARM WAS GREEN BY NUMERIC COINCIDENCE UNTIL SWEEP 3, AND ITS PREMISE WAS FALSE.
+    //
+    // It asserted that mutating `reviewScoreMin` moved nothing, on the ground that
+    // `NOT_THE_MODELS` lists it as a field "the MODEL does not read". **The simulation reads it
+    // on every departure** — `reviews.ts` maps a guest's met-need count onto the scale and folds
+    // the result into `world.reviewOutcomes`, which is hashed state. The arm survived because
+    // for a four-need vector `min + floor(k x bands / 4)` is a FIXED POINT at k of 2, 3 and 4
+    // between (min 1, bands 5) and (min 0, bands 6) — and neither arm above produces a guest
+    // that met one need or none. `ai-critic` found it and measured the arms that do.
+    //
+    // SO THE CLAIM IS RE-STATED AT THE WIDTH IT IS TRUE AT, and it is a sharper claim rather
+    // than a weaker one: the field is unread BY THE STOCK MODEL, so the stock model's own state
+    // — the guests, their needs, the need tally, the outcome table and the ledger — comes out
+    // BYTE-IDENTICAL, while the review rows move. Measured across all three arms below:
+    //
+    //     rooms 3 amen 1 t=2,000    stock state same    reviewOutcomes same   (the fixed point)
+    //     rooms 60 amen 3 t=6,000   stock state same    reviewOutcomes same   (the fixed point)
+    //     rooms 3 amen 0 t=2,000    stock state same    reviewOutcomes DIFFER
+    //
+    // EVERY CELL OF THAT TABLE IS ASSERTED IN THE LOOP BELOW. It was a report until ADR-0027's
+    // third instance was found in it: the `reviewOutcomes` column at the middle arm was claimed
+    // here and pinned nowhere.
+    //
+    // AND THE THIRD ARM IS WHAT MAKES THIS AN ANTI-VACUITY CHECK AT ALL. A comparison that came
+    // back "same" everywhere would be satisfied by a hash that had been blinded — which is the
+    // very defect this arm exists to catch, one level up. The third arm requires the masked hash
+    // to SEE the change, so the mask is certified against a field that provably moves the world.
+    // ========================================================================
+    const REVIEWED_ARM: Arm = { rooms: 3, amenities: 0, ticks: 2_000 };
+    const withMinScore = (min: number): BoundContent =>
+      rebound({
+        guestRules: (SHIPPED.content.guestRules ?? []).map((entry) => ({ ...entry, reviewScoreMin: min }) as GuestRulesData),
+      });
+    const ranOn = (content: BoundContent, arm: Arm) => {
+      const world0 = createWorld(42, content);
+      return run(world0, content, arm.ticks, schedule(arm.ticks, content, world0.grid, arm.rooms, 120, 0, 0, 0, arm.amenities));
+    };
+    const mutated = withMinScore(0);
+
+    for (const arm of [DEFAULT_ARM, SERVED_ARM, REVIEWED_ARM]) {
+      const base = ranOn(SHIPPED, arm);
+      const other = ranOn(mutated, arm);
+      // THE STOCK MODEL'S OWN STATE, named field by field rather than folded into a hash — so a
+      // failure says WHICH part of the model turned out to read the review scale.
+      expect(other.needOutcomes, 'reviewScoreMin moved the need tally').toEqual(base.needOutcomes);
+      expect(other.guestOutcomes, 'reviewScoreMin moved the outcome table').toEqual(base.guestOutcomes);
+      expect(other.guests, 'reviewScoreMin moved a guest').toEqual(base.guests);
+      expect(other.ledger, 'reviewScoreMin moved the ledger').toEqual(base.ledger);
+      // ----------------------------------------------------------------------
+      // AND EVERYTHING ELSE IN THE WORLD, WHICH THE FOUR NAMED FIELDS HAD SILENTLY STOPPED
+      // COVERING (ADR-0027). This arm replaced a whole-world `simHash` equality; four fields
+      // are sharper about WHICH part of the model moved, and they say nothing about the tick,
+      // the rng, the grid, the entities, the build or loan outcomes — or `reviewOutcomes`,
+      // which the comment table above claims a value for at two arms and nothing asserted.
+      //
+      // So the whole world is compared with exactly TWO fields excluded, each for a stated
+      // reason: `contentHash`, because the two documents genuinely differ and that is the mask
+      // this file exists to justify; and `reviewOutcomes`, because it is the one thing the
+      // field is ALLOWED to move — and it is pinned separately, per arm, immediately below.
+      const exceptReviews = (world: typeof base): unknown => ({ ...world, contentHash: '', reviewOutcomes: [] });
+      expect(exceptReviews(other), 'reviewScoreMin moved the world outside the review rows').toEqual(
+        exceptReviews(base),
+      );
+      // AND THE REVIEW ROWS THEMSELVES, at the two arms where the score arithmetic has a fixed
+      // point and the third where it does not. The comment table above is now asserted rather
+      // than reported: same, same, DIFFER.
+      if (arm === REVIEWED_ARM) {
+        expect(other.reviewOutcomes, 'the third arm must MOVE the review rows or it is vacuous').not.toEqual(
+          base.reviewOutcomes,
+        );
+      } else {
+        expect(other.reviewOutcomes, 'the fixed point this arm rests on has moved').toEqual(base.reviewOutcomes);
+      }
+    }
+
+    // AND IT IS NOT INERT: at an arm where a guest meets one need or none, the scale's floor
+    // reaches the distribution and the masked hash reports it. Both halves are asserted, because
+    // either alone is satisfiable by a blinded comparison.
+    const reviewedBase = ranOn(SHIPPED, REVIEWED_ARM);
+    const reviewedOther = ranOn(mutated, REVIEWED_ARM);
+    expect(reviewedOther.reviewOutcomes).not.toEqual(reviewedBase.reviewOutcomes);
+    expect(simHash(mutated, REVIEWED_ARM)).not.toBe(simHash(SHIPPED, REVIEWED_ARM));
+  });
+
+  it('AND THE MASK IS CERTIFIED — two worlds alike in everything but the fingerprint hash alike', () => {
+    // ========================================================================
+    // WHAT THE MASK BUYS, ASSERTED RATHER THAN TRUSTED. `simHash` blanks `World.contentHash` so
+    // the exhaustion arm measures the SIMULATION rather than the document that produced it. That
+    // is only worth anything if some content edit exists which moves the fingerprint and nothing
+    // else — otherwise the mask is removing a field nobody would have been fooled by.
+    //
+    // `reviewScoreMin` at the default arm is exactly that edit, AND THE PRECONDITION IS CHECKED
+    // RATHER THAN ASSUMED: the two worlds are required to be equal in every hashed field once
+    // the fingerprint is blanked, and their fingerprints are required to differ. Only then does
+    // the equality of `simHash` mean the mask did the work.
+    //
+    // IT IS THE ARM THAT GOES RED IF THE MASK IS EVER REMOVED, which the arm above no longer
+    // does — and that gap is the reason this exists as its own case. Verified by mutation:
+    // deleting `contentHash: ''` from `simHash` turns this red and nothing else.
+    // ========================================================================
+    const world0 = createWorld(42, SHIPPED);
+    const mutatedContent = rebound({
+      guestRules: (SHIPPED.content.guestRules ?? []).map((entry) => ({ ...entry, reviewScoreMin: 0 }) as GuestRulesData),
+    });
+    const runOn = (content: BoundContent): ReturnType<typeof run> =>
+      run(
+        createWorld(42, content),
+        content,
+        DEFAULT_ARM.ticks,
+        schedule(DEFAULT_ARM.ticks, content, world0.grid, DEFAULT_ARM.rooms, 120, 0, 0, 0, DEFAULT_ARM.amenities),
+      );
+    const base = runOn(SHIPPED);
+    const other = runOn(mutatedContent);
+    // THE DOCUMENTS DIFFER...
+    expect(other.contentHash).not.toBe(base.contentHash);
+    // ...AND THE WORLDS DO NOT, once the fingerprint is out of the comparison.
+    expect({ ...other, contentHash: '' }).toEqual({ ...base, contentHash: '' });
+    // ...SO THIS EQUALITY IS THE MASK, and it is the assertion that fails without it.
+    expect(simHash(mutatedContent, DEFAULT_ARM)).toBe(simHash(SHIPPED, DEFAULT_ARM));
   });
 });
 

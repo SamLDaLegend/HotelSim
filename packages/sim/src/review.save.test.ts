@@ -132,7 +132,7 @@ const v9World = (): Record<string, unknown> => {
   };
 };
 
-describe('the chain walks 1 -> ... -> 13, and every link is still observed', () => {
+describe('the chain walks 1 -> ... -> today, and every link is still observed', () => {
   it('ships one step per version, and the 9 -> 10 step is still the ninth of them', () => {
     // The absolute era pin is `save.fixture.test.ts`'s, whose whole subject is the walk from
     // v1 to today. This file's own subject is the 9 -> 10 link, so it says how many steps
@@ -154,6 +154,7 @@ describe('the chain walks 1 -> ... -> 13, and every link is still observed', () 
       [10, 11],
       [11, 12],
       [12, 13],
+      [13, 14],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -302,11 +303,20 @@ const PRE_V12_DEPARTURE_LABELS = [
   'evictedCauseUnrecorded',
 ] as const;
 
+/**
+ * The row θ-b1 INSERTED, and where. Frozen here for the reason the labels above are frozen: a
+ * world written back into a pre-v12 SHAPE must have five rows, and this build's table has six.
+ * Dropping it by INDEX rather than by name is deliberate — the index is what `migrateV13ToV14`
+ * inserts at, so this reverses that step rather than guessing at the same answer.
+ */
+const V14_INSERTED_ROW_AT = 2;
+
 const v11Labels = (world: Record<string, unknown>): unknown => {
   const outcomes = world['guestOutcomes'] as { arrived: number; departures: { reason: string; count: number }[] };
+  const withoutV14 = outcomes.departures.filter((_row, index) => index !== V14_INSERTED_ROW_AT);
   return {
     ...outcomes,
-    departures: outcomes.departures.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
+    departures: withoutV14.map((row, index) => ({ reason: PRE_V12_DEPARTURE_LABELS[index]!, count: row.count })),
   };
 };
 
@@ -331,7 +341,18 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
    */
   const asV9Bytes = (world: World): string => {
     const { reviewOutcomes: _drop, ...rest } = JSON.parse(JSON.stringify(world)) as Record<string, unknown>;
-    return JSON.stringify({ schemaVersion: 9, world: { ...rest, guestOutcomes: v11Labels(rest) } });
+    // AND THE v14 FIELD COMES OFF EVERY GUEST (θ-b1), for the reason `reviewOutcomes` comes off
+    // the world: "the same world written in the v9 SHAPE" means every difference v9 had, and a
+    // v9 guest had no mood. `migrateV13ToV14` refuses a guest that already carries one.
+    const guests = rest['guests'] as { nextId: number; list: Record<string, unknown>[] };
+    const withoutV14 = {
+      ...guests,
+      list: guests.list.map(({ dissatisfaction: _mood, ...guest }) => guest),
+    };
+    return JSON.stringify({
+      schemaVersion: 9,
+      world: { ...rest, guests: withoutV14, guestOutcomes: v11Labels(rest) },
+    });
   };
 
   it('round-trips at v10, which is I6 over the new shape, WITH a review in it', () => {

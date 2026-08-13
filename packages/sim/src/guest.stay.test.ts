@@ -14,32 +14,36 @@
 //   3. CONTENDED             fewer rooms than arrivals
 //                            -> both > 0
 //   4. ROOMS, NO AMENITIES   rooms for everybody, nothing to do
-//                            -> checkedOut > 0, gaveUp === ZERO
+//                            -> checkedOut === ZERO, leftDissatisfied > 0   (θ-b1; see below)
 //
 // ============================================================================
 // ARM 4 IS THE ONE THAT EXISTS TO RECORD A LIMIT RATHER THAN A FEATURE, AND IT IS NOT AN
 // OVERSIGHT. Every guest in it fails every engagement need it forms — there is nowhere to
 // eat, nothing to do — and **not one of them gives up.**
 //
-// That is correct for THIS build and it is not the finished model. ADR-0017 4(b) makes
-// giving up a DISSATISFACTION THRESHOLD read from content: a guest whose wants go unserved
-// long enough leaves. **Neither G-027a nor G-027b implements 4(b)** — the give-up branch is
-// asked only of a guest with NO ROOM (`guests.ts` step 6 tests `roomEntityId === NO_ENTITY`),
-// because a housed guest's lodging need is served every tick it is at home and so it has no
-// unserved run at all. So a guest with a bed and no dinner is, to this build, a guest whose
-// reason for booking is being met perfectly.
+// THE DAY CAME, AND THIS PARAGRAPH IS KEPT IN THE PAST TENSE BECAUSE IT PREDICTED ITSELF.
 //
-// THAT SENTENCE READ "the give-up branch still reads LODGING patience … because a served need's
-// patience REGENERATES" UNTIL θ-a SWEEP 2. The verdict is unchanged and the mechanism behind it
-// is not: there is no patience, and what makes the branch unreachable is a room predicate rather
-// than a countdown that keeps being topped up.
+// It read: *"Neither G-027a nor G-027b implements 4(b) — the give-up branch is asked only of a
+// guest with NO ROOM, because a housed guest's lodging need is served every tick it is at home
+// and so it has no unserved run at all. So a guest with a bed and no dinner is, to this build, a
+// guest whose reason for booking is being met perfectly."* Every word of that was true of the
+// build that wrote it. **θ-b1 IS THE DAY** — and it is this arm that changed, exactly as the
+// paragraph said it would be:
 //
-// The arm is here so that fact is a MEASUREMENT with a name rather than a silence: on the day
-// 4(b) lands — it needs a SAVED unserved-run counter that survives being interrupted by sleep,
-// so it is a schema bump and not a predicate change — this arm's zero becomes non-zero, and the
-// test that changes will be this one, deliberately, rather than a golden somebody re-pins.
-// (This line named G-027b as that day until θ-a sweep 2. G-027b came and went; `guests.ts` step
-// 6 records the same debt, still owed.)
+//   *"on the day 4(b) lands … this arm's zero becomes non-zero, and the test that changes will
+//   be this one, deliberately, rather than a golden somebody re-pins."*
+//
+// ONE HALF OF THE PREDICTION WAS WRONG AND IT IS WORTH MORE THAN THE HALF THAT WAS RIGHT. It
+// said 4(b) *"needs a SAVED unserved-run counter that survives being interrupted by sleep"*. It
+// needed a saved field, and NOT that one: an unserved RUN resets when anything serves the guest,
+// which erases its history and leaves a predicate that can only ask *"is this hotel saturated
+// right now"* — a step function with no graded region a content number could live in (ADR-0026).
+// What ships is a STOCK that fills while the guest is being let down and DRAINS while it is not.
+// The field was predicted; its semantics were the thing that had to be measured.
+//
+// (An earlier version of this paragraph read "the give-up branch still reads LODGING patience …
+// because a served need's patience REGENERATES", corrected at θ-a sweep 2, and named G-027b as
+// the day, corrected in the same pass. Three eras of this one block, all kept.)
 // ============================================================================
 //
 // Content ids here are camelCase (ADR-0003).
@@ -106,6 +110,12 @@ const houseRules: GuestRulesData = {
   // number is where the lodging need's own `patienceTicks` went, so arm 2 fails at the tick it
   // failed at before.
   toleranceTicks: TOLERANCE,
+  // θ-b1. THE FIELDS THIS FILE'S HEADER PREDICTED, so arm 4 flips here rather than only on the
+  // shipped tables. 80 is between the lobby tolerance (40, which it must outlast) and the stay
+  // (120, above which the rule would be dead) — the same two cliffs the shipped 431 is placed
+  // between, at this fixture's scale.
+  dissatisfactionCapacityTicks: 80,
+  dissatisfactionReliefPerTick: 1,
   wantAtBasisPoints: WANT_AT,
 };
 
@@ -151,13 +161,19 @@ function hotel(bedrooms: number, amenities: number): World {
   return run(stepTick(createWorld(7, content), content, build), content, TICKS, [...arrivals]);
 }
 
-type Arm = { readonly checkedOut: number; readonly gaveUp: number; readonly outcomes: GuestOutcomes };
+type Arm = {
+  readonly checkedOut: number;
+  readonly gaveUp: number;
+  readonly leftDissatisfied: number;
+  readonly outcomes: GuestOutcomes;
+};
 
 const armOf = (bedrooms: number, amenities: number): Arm => {
   const world = hotel(bedrooms, amenities);
   return {
     checkedOut: departureCountOf(world.guestOutcomes, 'checkedOut'),
     gaveUp: departureCountOf(world.guestOutcomes, 'gaveUp'),
+    leftDissatisfied: departureCountOf(world.guestOutcomes, 'leftDissatisfied'),
     outcomes: world.guestOutcomes,
   };
 };
@@ -185,9 +201,16 @@ describe('the four arms, computed rather than pinned', () => {
     expect(contended.gaveUp).toBeGreaterThan(0);
   });
 
-  it('4. ROOMS AND NO AMENITIES: guests check out having failed every engagement need, and ZERO give up', () => {
-    expect(noAmenities.checkedOut).toBeGreaterThan(0);
-    // THE RECORDED LIMIT. See this file's header: ADR-0017 4(b) is G-027b's.
+  it('4. ROOMS AND NO AMENITIES: guests LEAVE over it — the arm this file predicted would flip', () => {
+    // THE RECORDED LIMIT, DISCHARGED. This read `checkedOut > 0` and `gaveUp === 0` and carried
+    // the note *"ADR-0017 4(b) is G-027b's"*. 4(b) landed at θ-b1: a guest with a bed and
+    // nothing to do fills its dissatisfaction stock at one per tick from arrival and walks out
+    // at 80 of its 120-tick stay, so nobody here reaches checkout at all.
+    //
+    // `gaveUp` IS STILL ZERO AND THAT IS THE PARTITION, not a leftover: every guest in this arm
+    // gets a room, and the lobby row is only ever written for a guest that did not.
+    expect(noAmenities.leftDissatisfied).toBeGreaterThan(0);
+    expect(noAmenities.checkedOut).toBe(0);
     expect(noAmenities.gaveUp).toBe(0);
 
     // And the guests really did fail their engagement needs — otherwise the zero above would

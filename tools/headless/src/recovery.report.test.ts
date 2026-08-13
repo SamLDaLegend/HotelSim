@@ -83,8 +83,34 @@ const content = loadContent();
  * day and to borrow once a day. It must end with a room that WORKS and a guest who was
  * served — not merely with an entity standing somewhere.
  */
+/**
+ * ---------------------------------------------------------------------------
+ * `--amenities 0` BECAME `--amenities 2` AT θ-b1, AND THE PARAGRAPH ABOVE IS WHY IT IS STILL
+ * THE SAME ARGUMENT. What G-012 fixed was a criterion whose numbers a SEEDING DEFAULT decided;
+ * the repair was to state the flag EXPLICITLY, and 0 was the value that made the reasoning
+ * cleanest at the time. Explicit is the property being preserved here — the value moves and the
+ * reason it is written down does not.
+ *
+ * IT HAS TO MOVE, because ADR-0017 4(b) made `--amenities 0` mean something new: a hotel with
+ * beds and nothing else. Measured at the inherited invocation over the 120-day REPLAY HORIZON
+ * this suite uses — not the criterion's own 1,000 days, and not to be confused with the
+ * 120-tick ARRIVAL INTERVAL that appears in the derivation below: **checkedOut 0, revenue 0,
+ * and FOUR loans drawn** — every guest walked out at its dissatisfaction ceiling
+ * before its stay clock ran out, so no stay ever completed, so nothing was ever charged.
+ * A criterion about whether a hotel can RETURN TO PLAY cannot be measured on a hotel that has
+ * no revenue at any level of play.
+ *
+ * TWO IS DERIVED, not swept: this hotel holds `1440 / 120 = 12` concurrent guests, one provider
+ * serves one guest at a time and sustains `1 + refillPerTick` = 8 of them, and `ceil(12 / 8)` is
+ * 2. Measured at 2 over the same 120-day horizon: **130 checkedOut, revenue 1,105,000p, 0
+ * draws, 120 `notEligible` refusals, and `leftDissatisfied` back to ZERO.** (Three quantities
+ * in this paragraph read 120 and they are three different things — days, ticks between
+ * arrivals, and a refusal count. Named each time rather than left to the reader.) The loan is a last resort again
+ * rather than an income stream, which is the claim this criterion is actually about.
+ * ---------------------------------------------------------------------------
+ */
 const CRITERION_A = [
-  '--days', '1000', '--seed', '7', '--rooms', '0', '--amenities', '0', '--build', '1440', '--loan', '1440',
+  '--days', '1000', '--seed', '7', '--rooms', '0', '--amenities', '2', '--build', '1440', '--loan', '1440',
 ];
 
 /**
@@ -108,6 +134,15 @@ const CRITERION_B = [
   '0',
   // See the block above CRITERION_A: explicit, so this measures the economy rather than
   // G-012's seeding default.
+  //
+  // AND IT STAYS AT ZERO WHERE CRITERION A MOVED TO TWO (θ-b1), WHICH IS THE INTERESTING HALF.
+  // A's subject is REVENUE — a hotel returning to play — and a hotel with no amenities now
+  // completes no stays, so it has none. B's subject is the opposite: that the state is not
+  // ABSORBING, asserted as `entities === 0` and `rooms.valid === 0` at the end. A seeded
+  // amenity is never demolished by the scrapping walk, so at `--amenities 2` this run ends
+  // holding six rooms and "really did return to nothing" is simply false of it. **The two
+  // criteria want different hotels because they are about different claims**, which is the
+  // reason G-011 made them two invocations rather than one.
   '--amenities',
   '0',
   '--build',
@@ -334,9 +369,17 @@ describe('CRITERION A: a hotel with nothing returns to a hotel that works', () =
     // serves 900 stays where it served 1,271. The CRITERION is unaffected — a hotel that
     // started with nothing still ends with rooms that work and guests that paid — and these
     // are the numbers, not the claim.
-    expect(report.rooms.valid).toBe(12);
-    expect(departuresOf(report, 'checkedOut')).toBe(900);
-    expect(report.build.refused.insufficientFunds).toBe(99);
+    //
+    // RE-MEASURED AGAIN AT θ-b1, AND THE MOVEMENT HAS TWO CAUSES PULLING THE SAME WAY. The
+    // invocation now seeds two of each amenity (see the block above `CRITERION_A`), so this
+    // hotel pays six rooms' upkeep from day one AND its guests are actually served: it ends
+    // with 7 working bedrooms rather than 12, and the loan is still never drawn. The CRITERION
+    // is again unaffected — rooms that work, guests that paid, no borrowing — and it is worth
+    // saying that the previous column was measuring a hotel that, under this build, would have
+    // earned nothing at all.
+    expect(report.rooms.valid).toBe(7);
+    expect(departuresOf(report, 'checkedOut')).toBe(130);
+    expect(report.build.refused.insufficientFunds).toBe(119);
     expect(report.loans.drawn).toBe(0);
   });
 });

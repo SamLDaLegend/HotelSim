@@ -554,6 +554,9 @@ describe('buildSummary violations (forged worlds)', () => {
       arrivedTick: world.tick, // age 0 — cannot read as stuck, so the orphan branch is isolated
       roomEntityId: 999_999, // no such entity
       engagement: null,
+      // θ-b1: content on arrival — each of these forgeries isolates ONE violation, and a
+      // guest that walked out is not the one being isolated.
+      dissatisfaction: 0,
       needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
@@ -578,6 +581,9 @@ describe('buildSummary violations (forged worlds)', () => {
       arrivedTick: world.tick - limit,
       roomEntityId: NO_ENTITY, // waiting, not orphaned — isolates the stuck branch
       engagement: null,
+      // θ-b1: content on arrival — each of these forgeries isolates ONE violation, and a
+      // guest that walked out is not the one being isolated.
+      dissatisfaction: 0,
       needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
@@ -621,6 +627,9 @@ describe('buildSummary violations (forged worlds)', () => {
         arrivedTick: world.tick,
         roomEntityId: 999_999,
         engagement: null,
+        // θ-b1: content on arrival — each of these forgeries isolates ONE violation, and a
+        // guest that walked out is not the one being isolated.
+        dissatisfaction: 0,
         needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0 }],
       }),
       ledger: [...world.ledger.filter((_, i) => i !== firstSettlement), foreign],

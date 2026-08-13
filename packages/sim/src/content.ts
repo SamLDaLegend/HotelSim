@@ -284,9 +284,36 @@ export type GuestRulesData = {
    * `abandonMarginBasisPoints`'s is: in the pre-G-027b era the fuse was a countdown on the
    * lodging need itself (`patienceTicks`), so content from that era says nothing about this and
    * `toleranceOf` reproduces it. See `toleranceTicksSchema` for why 180 is PRESERVED rather
-   * than re-derived.
+   * than re-derived — and for why the resident's ceiling below did NOT end up borrowing it.
    */
   readonly toleranceTicks?: number | undefined;
+  /**
+   * How much dissatisfaction a guest carries before it walks out mid-stay, in ticks (θ-b1,
+   * ADR-0017 4(b), ADR-0026). A STOCK's ceiling, not a countdown's length.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK — the `abandonMarginBasisPoints` contract and NOT the
+   * `stayDurationTicks` one, and the difference is the whole reason this field needs no refusal
+   * of its own. Absence has a safe reading that reproduces an era exactly: content written
+   * before θ-b1 could not express a guest that held a room and left, so the branch does not
+   * fire and every stay still ends by checkout or by the lobby giving up. A missing
+   * `stayDurationTicks` had no such reading — it left a guest checked in forever — which is why
+   * that one throws and this one does not.
+   *
+   * See `dissatisfactionCapacityTicksSchema` in `packages/content` for where 431 comes from and
+   * for the two cliffs it is placed between.
+   */
+  readonly dissatisfactionCapacityTicks?: number | undefined;
+  /**
+   * How fast that stock drains while the hotel is keeping up, in ticks per tick (θ-b1).
+   *
+   * THE FILL RATE IS NOT HERE BECAUSE IT IS 1 BY DEFINITION: one tick of being ignored is one
+   * tick of dissatisfaction, which is the unit the ceiling is denominated in.
+   *
+   * The two move together or not at all — half a stock is not a historical statement, it is a
+   * designer who stopped typing, and `cloneGuestRules` refuses it. Same rule the review scale's
+   * two halves obey.
+   */
+  readonly dissatisfactionReliefPerTick?: number | undefined;
 };
 
 /**
@@ -680,13 +707,20 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     stayDurationTicks: stay,
     wantAtBasisPoints: wantAt,
     toleranceTicks: tolerance,
+    dissatisfactionCapacityTicks: ceiling,
+    dissatisfactionReliefPerTick: relief,
     ...rest
   } = rules;
-  const withStay = cloneStockRules(
+  const withStay = cloneDissatisfaction(
     rules.id,
-    cloneStayDuration(rules.id, cloneReviewScale(rules.id, rest, min, max), stay),
-    wantAt,
-    tolerance,
+    cloneStockRules(
+      rules.id,
+      cloneStayDuration(rules.id, cloneReviewScale(rules.id, rest, min, max), stay),
+      wantAt,
+      tolerance,
+    ),
+    ceiling,
+    relief,
   );
   if (margin === undefined) return withStay;
   if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
@@ -767,6 +801,59 @@ function cloneStockRules(
     result = { ...result, toleranceTicks: tolerance };
   }
   return result;
+}
+
+/**
+ * The dissatisfaction half of `cloneGuestRules` (θ-b1): the ceiling and its drain.
+ *
+ * BOTH OR NEITHER, WHERE THE STOCK RULES ABOVE ARE INDEPENDENTLY OPTIONAL, and the test is the
+ * one `cloneReviewScale` applies: do the two mean anything apart? A want line and a lobby
+ * tolerance are separate mechanisms with separate historical readings. A ceiling with no drain
+ * rate is not a stock at all — it is a countdown, which is precisely the shape ADR-0026 rejected
+ * — and a drain rate with no ceiling drains toward a limit nothing compares against. Neither
+ * half has an era to describe on its own, so half-absence is a designer who stopped typing.
+ *
+ * The `cloneStayDuration` discipline for the values themselves: a float, a zero or a negative
+ * from a raw host — one that did not come through the zod schema — dies here, at bind time, with
+ * the table named, rather than inside `stepGuests` as a ceiling no stock can reach. The keys are
+ * STRIPPED when absent, because only the absent form is the "predates θ-b1" statement.
+ *
+ * THE RELATION TO `toleranceTicks` IS NOT CHECKED HERE, and that is the `cloneReviewScale`
+ * precedent one field over: this function sees one table's row at a time, and the relation that
+ * decides the design — the ceiling must OUTLAST the lobby, or the two departure rows swap
+ * meanings — is asked once both are settled, in `assertDissatisfactionOutlastsTheLobby`.
+ */
+function cloneDissatisfaction(
+  id: ContentId,
+  rest: GuestRulesData,
+  ceiling: number | undefined,
+  relief: number | undefined,
+): GuestRulesData {
+  if (ceiling === undefined && relief === undefined) return rest;
+  if (ceiling === undefined || relief === undefined) {
+    throw new Error(
+      `bindContent: guest rules "${id}" declare ${ceiling === undefined ? 'dissatisfactionReliefPerTick' : 'dissatisfactionCapacityTicks'} ` +
+        `and not ${ceiling === undefined ? 'dissatisfactionCapacityTicks' : 'dissatisfactionReliefPerTick'}. Dissatisfaction is a ` +
+        'STOCK and a stock is a ceiling AND a drain: a ceiling alone is a countdown, which is the shape ADR-0026 ' +
+        'rejected, and a drain alone drains toward nothing. Declare both, or neither — content that declares neither ' +
+        'is content from before a guest holding a room could leave, and it still loads.',
+    );
+  }
+  if (!Number.isSafeInteger(ceiling) || ceiling < 1) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a dissatisfactionCapacityTicks of ${String(ceiling)}; it must be a ` +
+        'positive whole number of ticks. It is how much dissatisfaction a guest carries before it walks out, and ' +
+        'dissatisfaction rises by one on every tick the guest wants something nothing is serving.',
+    );
+  }
+  if (!Number.isSafeInteger(relief) || relief < 1) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a dissatisfactionReliefPerTick of ${String(relief)}; it must be a ` +
+        'positive whole number of ticks per tick. A relief of zero would make the stock a ratchet that only ever ' +
+        'rises, so every guest would eventually walk out of every hotel however well it was run.',
+    );
+  }
+  return { ...rest, dissatisfactionCapacityTicks: ceiling, dissatisfactionReliefPerTick: relief };
 }
 
 /**
@@ -940,20 +1027,30 @@ function assertReviewScaleIsBoundedByTheNeedTable(
  * Refuses content in which a guest could book a room and never leave it (G-027a).
  *
  * THE ONE THING A STAY MUST DO IS END. ADR-0017 §4 leaves exactly two terminators — checkout
- * after `stayDurationTicks`, and the guest giving up after `toleranceTicks` of being left
- * wanting — and the second is **unreachable for a guest that HAS a room**: the give-up branch
- * (`guests.ts` step 6) tests `roomEntityId === NO_ENTITY`, because a room serves the lodging
- * need on every tick the guest is at home and so no housed guest has an unserved run at all.
- * So content that declares a lodging need and no stay duration describes a hotel
- * whose guests accumulate without bound: the failure G-027's own goal block names, and §6.1's
- * "a need that cannot be satisfied is a bug, not difficulty" one level up — a STAY that
- * cannot end.
+ * after `stayDurationTicks`, and the guest giving up because it is dissatisfied — and the guest
+ * this function is about can reach NEITHER: with no stay duration there is no clock to run out,
+ * and a guest whose wants are all being met accumulates no dissatisfaction to saturate. So
+ * content that declares a lodging need and no stay duration describes a hotel whose guests
+ * accumulate without bound: the failure G-027's own goal block names, and §6.1's "a need that
+ * cannot be satisfied is a bug, not difficulty" one level up — a STAY that cannot end.
  *
- * THE SENTENCE ABOVE READ "a served need's PATIENCE REGENERATES every tick" UNTIL θ-a SWEEP 2,
- * WHICH IS THE COUNTDOWN MODEL'S WORDING FOR THE SAME REFUSAL. Under a stock there is no
- * patience to regenerate; what makes the give-up branch unreachable is the unserved RUN
- * resetting, and that is a different mechanism reaching the same verdict. It is spelled out
- * because this docstring is one of the four surfaces R1 named — see `needs.ts`'s header.
+ * ---------------------------------------------------------------------------
+ * THIS PARAGRAPH HAS BEEN WRONG TWICE, IN TWO DIFFERENT MODELS, AND BOTH ARE KEPT BECAUSE THE
+ * SHAPE IS THE LESSON (R1 — see `needs.ts`'s header for the four surfaces).
+ *
+ *   until θ-a sweep 2   "a served need's PATIENCE REGENERATES every tick" — the countdown
+ *                       model's wording, in a build that had deleted patience.
+ *   until θ-b1          "the second is UNREACHABLE FOR A GUEST THAT HAS A ROOM: the give-up
+ *                       branch tests `roomEntityId === NO_ENTITY`". True of that build and
+ *                       false of this one. A guest that holds a room CAN now end its own stay
+ *                       — `leftDissatisfied`, ADR-0017 4(b) — and the refusal survives for a
+ *                       narrower reason: a housed guest whose wants are met accumulates
+ *                       nothing, so a hotel that is working still needs the clock.
+ *
+ * THE REFUSAL IS UNCHANGED AND ITS GROUND IS NARROWER, which is the honest way round: it used
+ * to rest on "the other terminator cannot fire here at all" and now rests on "the other
+ * terminator does not fire for a guest nothing is failing".
+ * ---------------------------------------------------------------------------
  *
  * KEYED ON THE LODGING NEED RATHER THAN ON THE NEED TABLE OR ON THE GUEST-RULES TABLE, and
  * both halves of that are load-bearing:
@@ -979,9 +1076,9 @@ function assertEveryStayCanEnd(
   if (guestRules.length === 0) {
     throw new Error(
       `bindContent: this content declares the lodging need "${lodgingNeedId}" and no guest rules at all, so nothing ` +
-        'says how long a stay lasts. A stay ends by checkout or by the guest giving up (ADR-0017), and a guest that ' +
-        'holds a room can never give up — the give-up branch is asked only of a guest with NO room — so such a guest ' +
-        'would check in and never leave. Declare guest rules carrying stayDurationTicks.',
+        'says how long a stay lasts. A stay ends by checkout or because the guest is dissatisfied (ADR-0017), and a ' +
+        'guest whose wants are being met accumulates no dissatisfaction — so a guest in a hotel that WORKS would ' +
+        'check in and never leave. Declare guest rules carrying stayDurationTicks.',
     );
   }
   for (const rules of guestRules) {
@@ -995,19 +1092,71 @@ function assertEveryStayCanEnd(
     if (rules.toleranceTicks === undefined) {
       throw new Error(
         `bindContent: guest rules "${rules.id}" declare no toleranceTicks, but this content declares the lodging ` +
-          `need "${lodgingNeedId}". A stay ends by checkout after stayDurationTicks or by the guest giving up after ` +
-          'toleranceTicks of being left wanting (ADR-0017 §4), and a guest that never gets a room can only leave the ' +
-          'second way — so under these rules it would wait in the lobby forever. The era this replaces fused that ' +
-          'wait with a countdown on the lodging need, which a stock model has no field to restate.',
+          `need "${lodgingNeedId}". A stay ends by checkout after stayDurationTicks or because the guest gave up ` +
+          '(ADR-0017 §4), and a guest that never gets a room cannot check out — it holds no room to check out OF. ' +
+          'It would therefore wait in the lobby until its dissatisfaction saturated, if this content declares a ' +
+          'ceiling, and forever if it does not; either way the row it lands in would be the wrong one, because ' +
+          'nobody ever gave it a bed. The era this replaces fused that wait with a countdown on the lodging need, ' +
+          'which a stock model has no field to restate.',
       );
     }
     if (rules.stayDurationTicks !== undefined) continue;
     throw new Error(
       `bindContent: guest rules "${rules.id}" declare no stayDurationTicks, but this content declares the lodging ` +
-        `need "${lodgingNeedId}". A stay ends by checkout after stayDurationTicks or by the guest giving up ` +
-        '(ADR-0017), and a guest holding a room can never give up, so a guest under these rules would check in and ' +
-        'never leave. There is no historical value to fall back on: the era this replaces ended a stay a fixed time ' +
-        'after the guest got a ROOM, which an arrival-relative clock cannot restate for a guest that queued.',
+        `need "${lodgingNeedId}". A stay ends by checkout after stayDurationTicks or because the guest became ` +
+        'dissatisfied (ADR-0017), and a guest whose wants are being met accumulates no dissatisfaction — so a guest ' +
+        'in a hotel that WORKS would check in and never leave. There is no historical value to fall back on: the era ' +
+        'this replaces ended a stay a fixed time after the guest got a ROOM, which an arrival-relative clock cannot ' +
+        'restate for a guest that queued.',
+    );
+  }
+}
+
+/**
+ * Refuses content in which the two guest-initiated departure rows would swap meanings (θ-b1).
+ *
+ * THE REQUIREMENT: **a guest that never got a room must be counted under "nobody would give it a
+ * room", and never under "it had a bed and nothing to do".** ADR-0025 §2 spends a whole schema row
+ * on that distinction because the two are opposite instructions to a player:
+ *
+ *   the guest left because       what the player should build
+ *   nobody would give it a room  MORE ROOMS          (`gaveUp`)
+ *   it had a bed and nothing to do  MORE AMENITIES   (`leftDissatisfied`)
+ *
+ * A departure reason is not bookkeeping; it is the build loop's steering signal, and one counter
+ * averaging the two tells a player they are doing badly without saying which lever to pull.
+ *
+ * THE ARITHMETIC, WHICH IS WHY THIS IS ONE COMPARISON AND NOT A SIMULATION. A guest with no room
+ * has its lodging need wanted and unserved on every tick — nothing but a room can serve it, and it
+ * has none — so its dissatisfaction rises by one every tick from arrival, exactly as its age does.
+ * It therefore reaches `dissatisfactionCapacityTicks` at that age, and reaches `toleranceTicks` at
+ * that one. `stepGuests` step 6 asks the lobby question first, so the row it lands in is decided
+ * entirely by which number is smaller: strictly greater and the lobby always wins, which is the
+ * outcome the table above requires.
+ *
+ * WHY THIS ONE IS A REFUSAL WHERE THE REACHABILITY BOUND IS NOT (ADR-0025 §3). Content whose
+ * ceiling exceeds the stay is content in which the rule is DEAD, and a dead rule is loud — it
+ * shows up as a zero row that an arm asserts against. A ceiling under the lobby tolerance is a
+ * MISFILING: every number still adds up, the conservation law is untouched, no test goes red, and
+ * the player is quietly told to build the wrong thing for the rest of the game. Loud failures get
+ * an executed boundary test; silent ones get a refusal.
+ *
+ * Content declaring no ceiling is untouched: the rule does not fire at all there, so there is no
+ * second row for the first to be confused with.
+ */
+function assertDissatisfactionOutlastsTheLobby(guestRules: readonly GuestRulesData[]): void {
+  for (const rules of guestRules) {
+    const ceiling = rules.dissatisfactionCapacityTicks;
+    const tolerance = rules.toleranceTicks;
+    if (ceiling === undefined || tolerance === undefined) continue;
+    if (ceiling > tolerance) continue;
+    throw new Error(
+      `bindContent: guest rules "${rules.id}" have a dissatisfactionCapacityTicks of ${ceiling} against a ` +
+        `toleranceTicks of ${tolerance}, and the ceiling must be STRICTLY GREATER. A guest with no room wants ` +
+        'lodging, unserved, on every tick it is here, so its dissatisfaction rises exactly as fast as its age: under ' +
+        'these rules it would saturate before it reached toleranceTicks, and its departure would be recorded as "it ' +
+        'had a bed and nothing to do" when nobody ever gave it a bed. Those two rows tell a player to build opposite ' +
+        'things (ADR-0025 §2), so the one that fires must be the one that happened.',
     );
   }
 }
@@ -1777,6 +1926,12 @@ export function bindContent(content: SimContent): BoundContent {
   // reason still fails on that reason: a table naming two lodging needs, or a need nothing
   // provides, should say so rather than complain about a missing duration.
   assertEveryStayCanEnd(guestRules ?? [], lodgingNeedIn(needTypes ?? [])?.id);
+  // AND THE TWO GUEST-INITIATED ROWS AGAINST EACH OTHER (θ-b1). It reads one table rather than
+  // two, so it could have lived in `cloneGuestRules` — it is here because it compares two FIELDS
+  // of one row and that clone sees each field on its own way past. Placed after
+  // `assertEveryStayCanEnd` for the same ordering reason: content missing a terminator outright
+  // should say so before content whose two terminators are in the wrong order.
+  assertDissatisfactionOutlastsTheLobby(guestRules ?? []);
   // THE TWO REFUSALS `assertStayFitsTheNeedTable` BECAME (G-027b, HOTELSIM.md §5.8: the class is
   // preserved, not deleted). Its requirement — everything a guest forms must be completable
   // inside its stay — has no referent once nothing completes, and it split along the seam its
@@ -2078,6 +2233,39 @@ export function wantLineOf(needType: NeedTypeData, wantAtBasisPoints: number): n
  */
 export function toleranceOf(bound: BoundContent): number | undefined {
   return firstGuestRules(bound)?.toleranceTicks;
+}
+
+/**
+ * How much dissatisfaction a guest carries before it walks out, in ticks (θ-b1), or `undefined`
+ * under content that declares none.
+ *
+ * `undefined` RATHER THAN A DEFAULT, and unlike `toleranceOf` the `undefined` here is REACHABLE BY
+ * SHIPPED-SHAPED CONTENT and is a supported state rather than a corner. Nothing refuses content
+ * that declares a lodging need and no ceiling, because absence has an exact historical reading:
+ * before θ-b1 a guest holding a room could not end its own stay at all, so the branch simply does
+ * not fire and every stay still ends by checkout or by the lobby giving up. That is what keeps the
+ * fifty-two files carrying their own `toleranceTicks` fixtures loading unchanged.
+ *
+ * A DEFAULT WOULD HAVE BEEN AN INVENTION AND A LOUD ONE. Any number chosen here would start
+ * evicting guests out of worlds built by tests that never asked for the rule, which is the
+ * ADR-0008 drift this codebase refuses — and it would do it to the four-arm goldens that exist to
+ * measure exactly this.
+ */
+export function dissatisfactionCapacityOf(bound: BoundContent): number | undefined {
+  return firstGuestRules(bound)?.dissatisfactionCapacityTicks;
+}
+
+/**
+ * How fast that stock drains while the hotel is keeping up, in ticks per tick (θ-b1), or
+ * `undefined` under content that declares none.
+ *
+ * ALWAYS PRESENT WHEN THE CEILING IS — `cloneDissatisfaction` refuses half a stock — so a caller
+ * that has already resolved the ceiling can read this without a second absence case. It is still
+ * typed optional because a caller may reach it first, and because the pair-ness is a bind-time
+ * fact rather than a type-level one.
+ */
+export function dissatisfactionReliefOf(bound: BoundContent): number | undefined {
+  return firstGuestRules(bound)?.dissatisfactionReliefPerTick;
 }
 
 /**

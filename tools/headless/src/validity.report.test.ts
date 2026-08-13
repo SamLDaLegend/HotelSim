@@ -65,7 +65,32 @@ const content = loadContent();
 // the player never packs two rooms hard enough against each other to produce a `noDoor`, and
 // the criterion below needs TWO reasons. 40 seeded rooms restores it (5 noDoor, 22
 // unsupported) without touching the rules this file is about.
-const CRITERION = ['--days', '30', '--seed', '7', '--rooms', '40', '--arrivals', '20', '--build', '1440', '--demolish', '5760'];
+//
+// ---------------------------------------------------------------------------
+// RETUNED AGAIN AT θ-b1, THE SAME WAY AND FOR A DIFFERENT REASON — AND THE AMENITY COUNT IS
+// DERIVED RATHER THAN SWEPT TO GREEN.
+//
+// ADR-0017 4(b) landed and this arm stopped earning anything at all: `--amenities` defaults to
+// ONE OF EACH, this hotel holds `1440 / 20 = 72` concurrent guests, and one provider serves one
+// guest at a time. Measured at the inherited invocation: **checkedOut 0, revenue 0, and only ONE
+// invalidity reason** — 2,126 of 2,160 guests walked out before the player could afford to build
+// anything, so the packing this file is about never happened.
+//
+// The count comes from the relation `needShareBasisPoints` already owns: a need is served for
+// `1/(1 + refillPerTick)` of the time, so ONE PROVIDER SUSTAINS `1 + refillPerTick` = 8
+// CONCURRENT GUESTS, and `ceil(72 / 8)` = **9**. Measured at 9: 1,201 checkedOut, 3 `noDoor`, 21
+// `unsupported`, `leftDissatisfied` back to ZERO — the hotel works again and the subject of this
+// file is untouched. 6 was measured too and is not enough (751 still walk out); the sweep is
+// recorded so the next reader can see the number was derived and then checked, not chosen.
+//
+// **THE INVARIANT THIS PRESERVES IS THAT THE ARM'S HOTEL IS NOT THE THING UNDER TEST.** This
+// file is about which rooms are INVALID and whether a guest is ever served by one; a hotel whose
+// guests all leave before anything is built measures neither.
+// ---------------------------------------------------------------------------
+const CRITERION = [
+  '--days', '30', '--seed', '7', '--rooms', '40', '--arrivals', '20',
+  '--amenities', '9', '--build', '1440', '--demolish', '5760',
+];
 
 function runInProcess(argv: readonly string[]): ReturnType<typeof buildSummary> {
   const options = parseArgs([...argv]);
@@ -204,6 +229,8 @@ describe('the zero CAN be non-zero', () => {
             arrivedTick: 0,
             roomEntityId: 1,
             engagement: null,
+            // θ-b1: content. The subject here is the ROOM's validity.
+            dissatisfaction: 0,
             needs: [{ needId: needType.id, deficit: 5, metBy: null, abandonCount: 0 }],
           },
         ],
