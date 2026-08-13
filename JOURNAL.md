@@ -32,10 +32,24 @@
   back positive every time it ran.** The scanner shipped blind three times (a `/*` inside a string
   literal blanking 2,512 chars; `it.each(` unseen, 14 on disk; **`.ts`-only collection hiding every
   `.mjs` gate and all of `viewer.js`**). **A silent near-miss inside a scanner is the worst kind.**
-- **§7.1's SPLIT TRIGGER IS EARNING ITS KEEP.** Six firings, **five prose / one code**. θ-a's
-  verification returned 2 MAJOR + 4 MINOR, all prose: **no escalation, no round consumed.** The
-  2026-08-08 scored prediction (rename and re-scope the guard if firings stay prose) has
-  **arguably met its condition and is flagged to the human, unacted-on.**
+- **§7.1's SPLIT TRIGGER IS EARNING ITS KEEP.** **Seven firings, six prose / one code**, and three
+  consecutive correct calls. θ-a and θ-b1 both closed on prose-only verifications: **no escalation,
+  no round consumed**, where the pre-split rule would have split two goals whose code was clean.
+  The 2026-08-08 prediction (rename and re-scope if firings stay prose) has met its condition twice
+  over and is **flagged, unacted-on** — but **the evidence has turned**: what the arm keeps catching
+  is *claims that have lost their pin* (an `it(...)` title stating superseded figures where vitest
+  prints them; an assertion silently unpinned by a rewrite), not prose that reads badly. **The guard
+  may be correctly scoped and merely mis-nicknamed "prose" in every discussion of it.**
+- **A REPAIR INHERITS THE OBLIGATIONS OF WHAT IT REPLACES** (ADR-0027, named by `ai-engineer`
+  against its own work). *A repair correct about its own subject that silently drops a property the
+  thing it replaced was carrying.* **Three instances in one round**, plus two in θ-a. **Ask what the
+  old check FORBADE that the new one now permits** — "does my new test pass" is the wrong question.
+  The builder's own diagnosis of why it survives review: **"in every case the replacement was BETTER
+  at its own subject. The improvement is the camouflage."**
+- **ENUMERATING A LIST IS NOT ENUMERATING A CLASS.** ADR-0024's method drove `547` from 12 sites to
+  0 and `3.39` to 0 — **and still missed a stale test title, because nobody greps for a figure
+  nobody has said.** Re-run as a class (every `it(`/`describe(` title carrying a digit) it found
+  three. **The list is always the part somebody noticed.**
 - **A NUMBER'S FIRST SLOT IS WHAT IT IS A MEASUREMENT *OF*, and correcting the other four does not
   protect it.** The orchestrator made this error **twice against one baseline in one day** — the
   values (62.2 %/102 → **61.9 %/96**, withdrawn), then *"two-thirds of the sitting-still is gone"*,

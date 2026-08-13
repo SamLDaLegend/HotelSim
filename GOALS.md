@@ -36,10 +36,15 @@
   GOALS, NOT FOUR** — it grew through three seams taken in one session (G-023, G-027 ε, G-027 θ),
   each argued on evidence and each having paid, because **ADR-0017 turned out roughly twice the
   size the estimate implied and the seams REVEALED that rather than causing it.**
-  **Done (2)**: G-030 ✓ (the game is playable and takes input), G-027a ✓.
-  **In flight (2)**: G-031a — **DRY, owes a real WATCH** · G-027b θ-a — 1,840 passing, re-expressing
-  G-019 to green.
-  **Not started (4)**: θ-b · G-027c · G-031b · G-028.
+  **AND NINE AFTER θ-b SPLIT AGAIN** (ADR-0025, seam taken at PLAN on an enumeration finding **25
+  lodging-assumption sites where the block named 4** — the third mispricing of that one sub-goal,
+  each by someone reading a list instead of counting a population).
+  **Done (4)**: G-030 ✓ · G-027a ✓ · **θ-a ✓** (`7f0be45`) · **θ-b1 ✓** (`d6abef6`, save v14).
+  **Committed but OWING A HUMAN WATCH (2)**: θ-a and G-031a. **The only thing blocking them is a
+  displayed browser pane** — `apps/game` is the WATCH surface (ADR-0023) and it will not composite
+  headless. **θ-b1's WATCH is discharged**: `ai-critic` recorded and scrubbed 2,880 frames, found a
+  guest vanishing mid-meal at tick 6428, and confirmed the repair at tick 2718.
+  **Not started (4)**: **θ-b2 — optional lodging, 25 enumerated sites** · G-027c · G-031b · G-028.
   **THEN M3 RESUMES at G-023b — UNBLOCKED** (960 ticks of slack where its plan pass measured zero)
   → G-024/G-025 → G-026, last in milestone, two critics. **Four M3 goals of its own remain.**
 - **Owed by the human**: M2.5 exit · M3 exit · **a push**, which is the only thing that discharges
