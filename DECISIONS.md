@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify is THIRTEEN GREEN for the first time. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify is THIRTEEN GREEN locally. CI IS UNREAD on the two newest commits. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -3592,3 +3592,36 @@ word and is the difference between a report and a claim.
 route: **not measuring badly, but transmitting an explanation I did not test with the confidence of
 a number I did.** The human has been reading those explanations as verified because I presented
 them that way.
+
+## ADR-0041 AMENDMENT — the bundled deliverable broke CI, and nobody looked for three commits
+
+**Date**: 2026-08-14 · **Amends**: ADR-0041 · **Raised by**: the orchestrator, checking CI before
+stopping for the week.
+
+ADR-0041 recorded that `check:stamp`'s body predicate — a scoped G-032a deliverable — **shipped
+inside `55ca957` under the human's sign-off message**, so its critics were never shown it. The
+argument was about **review attention.** The cost turned out to be larger and simpler.
+
+**CI on `55ca957` failed, and one of its failures is `tools/headless typecheck: Failed` on all three
+platforms.** The three red gate rows in that run are expected — they were red at that commit — but
+**the typecheck failure is not, and it was introduced by the bundled files.** Local `typecheck` is
+green now, so it was repaired somewhere inside G-032a's diff **without anyone knowing they were
+repairing it.**
+
+> **A deliverable committed under another goal's message is not reviewed, not verified against that
+> goal's exit criteria, and — as it turns out — not noticed when it breaks the build.** Three
+> commits passed before anybody looked.
+
+**What made it invisible**: `pnpm verify` runs typecheck first and I ran it repeatedly — but always
+on a **working tree**, never on `55ca957` as committed. **The tree was ahead of the commit the whole
+time.** CI is the only instrument that tests what was actually pushed, and CI was not read for
+three commits.
+
+**The rule ADR-0041 already states is sufficient** — commit a goal's deliverables under that goal,
+stage explicitly rather than with `-A`. **What this amendment adds is the reason it is not
+bookkeeping**: the unreviewed file was also the unbuilt one.
+
+**And it names a gap in this project's own loop.** §5's COMMIT step has no "read CI" clause, and
+`GOALS.md` requires *"CI green on three platforms"* as an M3 exit criterion **per goal** — but
+nothing prompts anyone to look between goals. **Three of today's commits went out unchecked.**
+Whoever resumes M3 should read CI **before** starting the next goal, not at its exit.
