@@ -303,7 +303,9 @@ const ALSO_REGISTERED: ReadonlyMap<string, { readonly proof: string; readonly ti
       'tools/gates/stamp.mjs',
       {
         proof: 'tools/headless/src/ledger-stamp.test.ts',
-        title: 'AND IT BITES — nine mutations, each named, each against an otherwise-valid tree',
+        // De-numeralled at G-032a (ADR-0032 §1): it read "nine mutations" over seven arms. This
+        // census caught the rename by name, which is what a registry of proof titles is for.
+        title: 'AND IT BITES — every mutation named, each against an otherwise-valid tree',
         note:
           '§4.1 as-of stamp. Reads four named ledgers, so a moved subject throws at the read rather ' +
           'than reporting a clean tree — which is why it is here and not in REGISTER.',

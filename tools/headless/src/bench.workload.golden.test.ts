@@ -15,12 +15,18 @@
 // That golden runs THREE rooms, one arrival per 120 ticks, for two days, and it is pinned
 // for a different purpose (stdout formatting and locale-independence). It never reaches:
 //
-//   - THE BENCH'S OWN HOTEL. 60 rooms and an arrival every 32 ticks is the workload
+//   - THE BENCH'S OWN HOTEL. Sixty rooms at `workload.mjs`'s cadence is the workload
 //     `bench.mjs` measures and the workload G-016 optimised. A hash pinned on a three-room
 //     toy would not have been evidence about the thing that changed.
+//     *(This read "an arrival every 32 ticks" until G-032a, naming a cadence `bench.mjs` has
+//     not passed since ADR-0021 moved it to 96 — in the file `bench.mjs` cites BY NAME as the
+//     record of what its workload is. Both halves of that citation were stale at once.)*
 //   - THE EXHAUSTED SHORT-CIRCUIT in `findFreeRoom`. It needs a need with no free provider;
-//     with one amenity of each type against ~15 concurrent guests, the engagement needs are
-//     oversubscribed on nearly every tick here and barely at all there.
+//     with one amenity of each type against this hotel's measured occupancy
+//     (`workload.mjs`'s `TARGET_CONCURRENT_HUNDREDTHS`), the engagement needs are
+//     oversubscribed on nearly every tick here and barely at all there. *(It said "~15
+//     concurrent guests" — the arithmetic proxy θ-b1 proved blind, which read 15 at three
+//     different populations.)*
 //   - EVICTION. Nothing is demolished in either default run, so `evicted` is 0 and the whole
 //     step-3 path in `stepGuests` — including the `depart` this goal rewrote — is never
 //     taken. THE CHURN ARM BELOW EXISTS FOR THAT ONE REASON and evicts 19 guests.
@@ -31,7 +37,9 @@
 // verified proves only that the code agrees with itself):
 //
 //   ticks     7200 = 5 x 1440 (TICKS_PER_DAY)
-//   arrived    225 = arrivals at ticks 1, 33, ... < 7200 = floor((7199 - 1) / 32) + 1
+//   arrived        = arrivals at ticks 1, 1+c, ... < 7200 = floor((7199 - 1) / c) + 1, for
+//                    the shipped cadence c. DERIVED BELOW rather than spelled here: the
+//                    literal "225 ... / 32" survived the cadence move by three goals.
 //   conservation   : every departure row summed + still here = arrived, both arms
 //   need rows    4 = one per need type in the shipped content
 //

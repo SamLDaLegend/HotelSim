@@ -126,10 +126,23 @@ const WARM_UPS = 2;
  * for omitting it and an earlier fix added fresh regime-less numbers to it:
  *
  *   what: the `sim:measure --null` ratio (arms one comment apart, state hashes identical, so
- *   the true value is 1.000) · workload: 60 rooms, an arrival every 32 ticks, seed 42, arm
+ *   the true value is 1.000) · workload: 60 rooms, AN ARRIVAL EVERY 32 TICKS, seed 42, arm
  *   length varied · n=9 per arm, arm lengths interleaved against each other ACROSS TWO
  *   SITTINGS · min..max · REGIME: quiet, no deliberate concurrent load, 12-core developer
  *   machine.
+ *
+ *   **CADENCE 32 IS HISTORY. The shipped workload has been 96 since ADR-0021** (G-027a), and
+ *   these readings are the ARM-LENGTH comparison — 5 days against 30 — which is a comparison
+ *   between two arm lengths at ONE cadence and does not move with it. They are NOT a noise
+ *   ceiling and may not be used as one: that is a claim about a single configuration, and this
+ *   is not the shipped configuration. `tripwire.mjs`'s campaign was re-taken at 96 at G-032a and
+ *   these readings were retired from it under ADR-0015's REPLACE half.
+ *
+ *   THIS BLOCK WAS THE UNFENCED COPY, AND ITS EXISTENCE FALSIFIED A CLAIM MADE ELSEWHERE.
+ *   G-032a deleted `check-tripwire.mjs`'s cross-file agreement guard on the premise that
+ *   `workload.mjs` held the only surviving copy of this measurement. **It did not — this is the
+ *   second, and it was the one carrying no history fence at all.** The guard is restored, over
+ *   both copies.
  *
  * The 30-day arm reads 0.9268 .. 1.0238 against the 5-day arm's 0.9572 .. 1.0984, at 36.5s per
  * reading against 11.8-13.9s — so it is TIGHTER than `--repeat 7` (~83s) and CHEAPER. And it

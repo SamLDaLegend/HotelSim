@@ -55,31 +55,16 @@ const GATES = join(ROOT, 'tools/gates');
  */
 const workload = evaluateGateModule(join(GATES, 'workload.mjs'), [
   'ARRIVAL_EVERY_TICKS',
-  'TARGET_CONCURRENT_GUESTS',
+  'TARGET_CONCURRENT_HUNDREDTHS',
   'ROOMS',
   'SEED',
 ]);
 
 const content = loadContent();
 
-/**
- * THE OCCUPANCY THE SHIPPED WORKLOAD ACTUALLY HOLDS, in hundredths of a guest, MEASURED.
- *
- * An era literal in `TARGET_CONCURRENT_GUESTS`'s sense — a historical fact about a tree, taken by
- * the goal that moved it — and it is the number the assertions below are written against. It is
- * re-taken by running the campaign's own workload through the tick and dividing guest-frames by
- * ticks; the procedure is `measuredConcurrentHundredths` below and nothing else.
- *
- * 1477 -> 872 AT θ-b1. ADR-0017 4(b) landed and this benchmark's hotel — sixty bedrooms against
- * ONE of each amenity — is the provider cliff ADR-0026 measured, so many of its guests now walk
- * out before their stay clock runs out and it holds a little over half of what it held.
- *
- * IT MOVED TWICE INSIDE THIS GOAL, which is why the literal is taken by whoever moves it rather
- * than derived: the first build read 640, and ADR-0026's amendment — a guest's own excursion is
- * not the hotel letting it down — gave back 232 hundredths of occupancy by removing a fill the
- * hotel was never responsible for.
- */
-const MEASURED_CONCURRENT_HUNDREDTHS = 872;
+// (A reader of `tripwire.mjs`'s campaign arms stood here to support the withdrawn
+// noise-comparison arm at the foot of this file. It went with the claim: a parser kept alive for
+// an assertion that no longer exists is dead code with a docstring.)
 
 /**
  * Guest-frames divided by ticks, over the gate's own hotel, in hundredths.
@@ -87,13 +72,34 @@ const MEASURED_CONCURRENT_HUNDREDTHS = 872;
  * THIS FILE OWNS ITS OWN RUN LENGTH, exactly as `bench.workload.golden.test.ts` does and for the
  * reason `workload.mjs` gives at `MEASURE_DAYS`: that constant is the INSTRUMENT'S arm length,
  * and coupling a golden to it turns "make the arm longer" into "re-pin a golden". Thirty days is
- * long enough that the ramp is a small share of the reading. Measured cost: about four seconds,
- * which makes this the slowest test in the file and is stated rather than discovered.
+ * long enough that the ramp is a small share of the reading. Measured cost: about four seconds
+ * per cadence, which makes these the slowest tests in the file and is stated rather than
+ * discovered.
+ *
+ * `cadence` DEFAULTS TO THE SHIPPED ONE and is a parameter only so the census below can ask the
+ * same question of its neighbours. Every other input is the gate's.
  */
-const measuredConcurrentHundredths = (): number => {
+const measured = new Map<number, number>();
+
+/**
+ * MEMOISED, AND THAT IS A COST FIX RATHER THAN A STYLE ONE. Five arms below ask about three
+ * cadences, and a 30-day run of the gate's own hotel costs about eleven seconds. Uncached, this
+ * file alone ran 55s and became the critical path of `pnpm test` — I4's gate — for readings that
+ * are DETERMINISTIC and therefore identical every time. Caching a pure function of a cadence
+ * cannot change an answer; it only stops the same answer being computed six times.
+ */
+const measuredConcurrentHundredths = (cadence: number = workload.ARRIVAL_EVERY_TICKS): number => {
+  const cached = measured.get(cadence);
+  if (cached !== undefined) return cached;
+  const value = measureConcurrentHundredths(cadence);
+  measured.set(cadence, value);
+  return value;
+};
+
+const measureConcurrentHundredths = (cadence: number): number => {
   const ticks = 30 * 1_440;
   const initial = createWorld(workload.SEED, content);
-  const commands = schedule(ticks, content, initial.grid, workload.ROOMS, workload.ARRIVAL_EVERY_TICKS);
+  const commands = schedule(ticks, content, initial.grid, workload.ROOMS, cadence);
   const byTick = new Map<number, Command[]>();
   for (const entry of commands) {
     const bucket = byTick.get(entry.tick);
@@ -142,9 +148,28 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // **7.99 at 124 against 6.43 at 122**, and back to 7.87 at 120. So a shorter interval can
     // still LOWER occupancy, and no choice of literal restores a target by division.
     //
-    // THE ARGUMENT DOES NOT REST ON IT EITHER WAY. What makes the arithmetic proxy unusable is
-    // the arm below: the quotient reads 15 at 14.77, at 6.40 and at 8.72 concurrent guests.
+    // THE ARGUMENT DOES NOT REST ON IT EITHER WAY. What made the arithmetic proxy unusable is
+    // that the quotient read 15 at 14.77, at 6.40 and at 8.72 concurrent guests.
     // ---------------------------------------------------------------------------
+    //
+    // AND AT G-032a THE DEBT THIS ARM RECORDED IS CLOSED, WHICH IS WHY THREE ASSERTIONS LEFT
+    // THIS BLOCK. `tripwire.mjs`'s campaign was re-taken at THIS hotel, so the calibrated
+    // occupancy and the measured one are the same fact and there is one constant for it, in
+    // `workload.mjs`, where every consumer reads it. What went, and why:
+    //
+    //   - "THE DIVERGENCE IS ASSERTED, so it cannot close quietly" — it closed. That arm's own
+    //     instruction was to delete it on the day the re-take landed, and this is that day.
+    //   - "the RETIRED arithmetic proxy is still green, which is the proof it went blind" — the
+    //     proxy is gone from `workload.mjs`, so there is no longer a live predicate to prove
+    //     blind. Keeping a witness to a deleted constant is ADR-0008's class: a thing that
+    //     describes the past written as though it tracked the present.
+    //   - "the quotient is EXACT, so the target is a population rather than a rounding" — it
+    //     guarded `stay % cadence === 0` because the target WAS a quotient. It is a measurement
+    //     now, and a measurement does not need its inputs to divide.
+    //
+    // Deleting three assertions from one block is exactly where ADR-0038 applies, so the whole
+    // `describe` was swept rather than the lines being removed: what survives below is the pin,
+    // its proof-of-bite, the consumer census, and the cadence census this goal adds.
     //
     // So the axis is pinned to what the workload DOES. This goes red on any change that moves
     // the benchmark's occupancy, by name, with the number in hand.
@@ -155,57 +180,39 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
         'CONCURRENT GUESTS, and the occupancy this workload actually holds has moved. That is ' +
         'not necessarily a defect — a content change that alters how long guests stay will do ' +
         'it — but it means `check:tickcost` is comparing a different hotel than the campaign ' +
-        'was calibrated on. Re-take the literal here IN THE SAME COMMIT, and do NOT widen the ' +
-        'bound, which would bury this rather than report it (ADR-0021).',
-    ).toBe(MEASURED_CONCURRENT_HUNDREDTHS);
+        'was calibrated on. Re-take TARGET_CONCURRENT_HUNDREDTHS and the bound campaign ' +
+        'TOGETHER, in the same commit, and do NOT widen the bound — that would bury this rather ' +
+        'than report it (ADR-0021).',
+    ).toBe(workload.TARGET_CONCURRENT_HUNDREDTHS);
   }, 60_000);
 
-  it('AND THE DIVERGENCE FROM THE CALIBRATED TARGET IS ASSERTED, so it cannot close quietly', () => {
-    // The debt, stated as a predicate. `tripwire.mjs`'s bound was measured against FIFTEEN
-    // concurrent guests; this workload holds 8.72. The re-take goal owns closing that — it also
-    // owns the `arrivalEveryTicks` 32-against-96 refusal — and the day somebody does, THIS LINE
-    // GOES RED and they delete it. A debt nothing asserts can be forgotten in either direction:
-    // deepened silently, or closed without anybody noticing the gate went green.
-    // A BAND RATHER THAN AN INEQUALITY, because `not.toBe` is two-sided against DEEPENING and
-    // KNIFE-EDGE against closing: at 14.99 or 15.01 the debt is closed in substance and a bare
-    // `not.toBe` stays green, so nobody is told to delete this. One per cent either side of the
-    // target is the band, and the day the re-take lands inside it this goes red by name.
-    const target = workload.TARGET_CONCURRENT_GUESTS * 100;
-    const withinOnePercent =
-      Math.abs(MEASURED_CONCURRENT_HUNDREDTHS - target) * 100 <= target;
-    expect(withinOnePercent, 'the occupancy debt has been CLOSED — delete this test').toBe(false);
-  });
-
-  it('and the RETIRED arithmetic proxy is still green, which is the proof it went blind', () => {
-    // ADR-0007's proof-of-bite, pointed at the assertion this file used to make. Both halves
-    // together: the quotient still equals the target, AND the measured occupancy does not. One
-    // predicate cannot see what the other reports.
-    const stay = stayDurationOf(content) ?? 0;
-    expect(stay / workload.ARRIVAL_EVERY_TICKS).toBe(workload.TARGET_CONCURRENT_GUESTS);
-    expect(MEASURED_CONCURRENT_HUNDREDTHS).not.toBe(workload.TARGET_CONCURRENT_GUESTS * 100);
-    // AND IT WAS ALREADY WRONG BEFORE THIS GOAL, by a margin small enough that nobody looked:
-    // the ramp means even a hotel whose guests all run their clocks out holds 14.77 rather than
-    // 15 over a 30-day window. The proxy was never exact; it has now stopped being close.
-    expect(MEASURED_CONCURRENT_HUNDREDTHS).toBeLessThan(1_477);
-  });
-
-  it('and the quotient is EXACT, so the target is a population rather than a rounding', () => {
-    // A stay that did not divide by the cadence would give a fractional occupancy and the
-    // assertion above would be comparing a float against 15 — true today by luck, and the
-    // kind of luck that fails silently on the next content edit.
-    const stay = stayDurationOf(content) ?? 0;
-    expect(stay % workload.ARRIVAL_EVERY_TICKS).toBe(0);
-  });
+  it('and the pin CAN FAIL — the same predicate over a hotel one arrival tick away', () => {
+    // ========================================================================
+    // ADR-0007: a check that cannot fail is not a check. The retired proof-of-bite pointed at
+    // the arithmetic proxy, which no longer exists; this one points at the measurement that
+    // replaced it, and it uses the cheapest hotel that is genuinely different — the SAME
+    // workload at 95 arrivals instead of 96.
+    //
+    // It is also the sharpest statement of this goal's own finding: the pin above is exact at
+    // the shipped cadence and WRONG one tick away, so it is a claim about a cadence and not
+    // only about a hotel. That is the census's subject, asserted rather than described.
+    // ========================================================================
+    expect(measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS - 1)).not.toBe(
+      workload.TARGET_CONCURRENT_HUNDREDTHS,
+    );
+  }, 60_000);
 
   it('THE SHIPPED VALUES, PINNED AS THE ERA LITERALS THEY ARE', () => {
-    // The derived relation above cannot notice both numbers moving together — 2,880 against
-    // 192 is also fifteen, and is also a different benchmark. These say which fifteen.
+    // The measurement above cannot notice the whole benchmark being replaced by another one
+    // that happens to hold 8.72 guests. These say WHICH hotel holds it.
     expect(workload.ARRIVAL_EVERY_TICKS).toBe(96);
-    expect(workload.TARGET_CONCURRENT_GUESTS).toBe(15);
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(872);
     expect(stayDurationOf(content)).toBe(1_440);
-    // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed
-    // the occupancy or the hotel queues and the axis stops being arrivals at all.
-    expect(workload.ROOMS).toBeGreaterThan(workload.TARGET_CONCURRENT_GUESTS);
+    // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
+    // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
+    // the comparison is between two quantities in the same unit — the retired version compared
+    // 60 rooms against 15 GUESTS and read correctly only because both were whole guests.
+    expect(workload.ROOMS * 100).toBeGreaterThan(workload.TARGET_CONCURRENT_HUNDREDTHS);
   });
 
   it('AND IT COVERS EVERY CONSUMER, NOT ONE FILE — the MAJOR this pin was first written too narrow for', () => {
@@ -224,9 +231,14 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // ========================================================================
     expect(SCALING_ARRIVALS).toBe(workload.ARRIVAL_EVERY_TICKS);
     expect(SCALING_ROOMS).toBe(workload.ROOMS);
-    // And the axis holds for the scaling arms too, which is the claim that matters — not that
-    // two numbers match, but that both describe the calibrated hotel.
-    expect((stayDurationOf(content) ?? 0) / SCALING_ARRIVALS).toBe(workload.TARGET_CONCURRENT_GUESTS);
+    // THE THIRD LINE HERE WAS THE QUOTIENT AGAIN — `stay / SCALING_ARRIVALS === TARGET` — and it
+    // went with the rest of the proxy at G-032a. It was the weakest of the three anyway: given
+    // the two assertions above it, it could only fail if the stay length moved, which
+    // `stayDurationOf(content)).toBe(1_440)` two blocks up already says. An entailed sibling is
+    // not a pre-existing condition; it is the same defect one line over (ADR-0035, as scoped by
+    // ADR-0038). What the scaling arms owe about their HOTEL is now checked where it belongs —
+    // `scaling-harness.ts` puts the stay duration in the fingerprint and `scaling.mjs` refuses on
+    // it (ADR-0039 §2), which is a check over the arms themselves rather than over a quotient.
   });
 
   it('and the number is WRITTEN DOWN in one place, plus ONE named exception that cannot import', () => {
@@ -329,14 +341,110 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     );
   });
 
-  it('and the assertion can FAIL — the same predicate over the value it replaced', () => {
-    // ADR-0007: a check that cannot fail is not a check. `32` is the literal this goal moved,
-    // and against a 1,440-tick stay it gives 45 rather than 15. If this ever stops throwing,
-    // the pin above has stopped depending on the numbers it claims to.
-    expect((stayDurationOf(content) ?? 0) / 32).not.toBe(workload.TARGET_CONCURRENT_GUESTS);
-    expect((stayDurationOf(content) ?? 0) / 32).toBe(45);
-    // And the pre-G-027a pairing — a 480-tick stay against an arrival every 32 ticks — WAS
-    // the target, which is the fact that makes 32 a broken proxy rather than a wrong number.
-    expect(480 / 32).toBe(workload.TARGET_CONCURRENT_GUESTS);
-  });
+  // ===========================================================================================
+  // THE ARM THAT PROVED THE PROXY BROKEN IS GONE WITH THE PROXY (G-032a).
+  //
+  // It read `stay / 32 === 45, not 15` and `480 / 32 === 15` — a witness that ADR-0021's literal
+  // move was necessary. There is no quotient left for it to be a witness about: the target is a
+  // measurement, and a measurement has no arithmetic to be wrong. The proof-of-bite that
+  // replaces it is "the pin CAN FAIL", above, which runs the LIVE predicate over a hotel one
+  // arrival tick away — a bite over the check that exists rather than over the one that did.
+  // ===========================================================================================
+});
+
+describe('THE CADENCE CENSUS — what one arrival tick does to the axis every gate is read on', () => {
+  // ===========================================================================================
+  // WHY THIS IS HERE AND NOT IN A FILE OF ITS OWN (G-032a, ADR-0039 §3).
+  //
+  // This file already owns the axis, already owns the procedure, and already pays for a 30-day
+  // run. A second file would be a second copy of `measuredConcurrentHundredths`, which is the
+  // duplicated-constant shape the block above spends four paragraphs on.
+  //
+  // WHAT THE CENSUS FOUND, AND IT IS NOT A NUMBER MOVING — IT IS AN EXTREMUM.
+  //
+  //     arrivals   90    91    92    93    94    95   [96]   97    98    99   100   101   102
+  //     occupancy 9.27  9.52  8.68  8.72  8.94  9.00  8.72  8.90  8.75  8.71  8.43  8.52  8.48
+  //
+  // `--rooms 60 --amenities 1 --seed 42`, 30 days, guest-frames over ticks. **Exact integers in,
+  // one division out** — a deterministic count, not a timing, so n=1 is the whole distribution
+  // and there is no aggregation and no regime to state. That is what makes this discriminator
+  // cheap enough to be a test at all.
+  //
+  //   - ±1 tick moves occupancy by ~3%. **NOT compared against the tripwire's noise here, and
+  //     the epitaph at the foot of this file says why that comparison was withdrawn.**
+  //   - and the shipped cadence is a LOCAL MINIMUM, which is the finding. 96 divides 1,440; so
+  //     do the scaling rotation's 20, 60 and 15, and three of those four arms are local minima
+  //     too. **This project chooses round cadences, round cadences phase-lock, and the chosen
+  //     ones are extrema rather than typical points.**
+  //
+  // AND IT IS NOT AN ARTEFACT OF THE ARM LENGTH, which is the first thing a reader should
+  // suspect of a 30-day reading. The same three cadences, same hotel, at four arm lengths:
+  //
+  //     arm      95     96     97    96 is a local minimum   |95-96|/96
+  //      5d     9.15   8.00   8.24          yes                 14.4%
+  //      8d     9.29   8.24   8.72          yes                 12.7%
+  //     10d     9.14   8.43   8.92          yes                  8.4%
+  //     30d     9.00   8.72   8.90          yes                  3.2%
+  //
+  // The property holds at every one, and THE SHIPPED ARM IS THE MOST CONSERVATIVE OF THEM: the
+  // step shrinks as the arm grows, because a longer window averages more of the phase. The arms
+  // below use 30 days for that reason and not because it was already there.
+  //
+  // WHAT IT DOES NOT CLAIM: that divisors are always minima. 120 divides 1,440 and is not one.
+  // `PARKING.md` carries that as a hypothesis with the sweep that would decide it.
+  //
+  // WHY IT IS NOT THE WHOLE CENSUS. The full enumeration perturbs `report.ts`'s arrival loop by
+  // ±1 and runs the suite — it reaches every consumer including tests that pass their own cadence
+  // literal — and it costs two full suite runs. **It lives in
+  // `tools/headless/src/cadence.census.test.ts`, with its count, its permitted set, its findings
+  // and the command that regenerates it (`node tools/gates/cadence-census.mjs --delta +1`).**
+  // What ships HERE is the MECHANISM the count is explained by, which is the part a later reader
+  // needs at the point of use.
+  //
+  // (This block cited *"a published count (`JOURNAL.md`)"* until sweep 1. **`JOURNAL.md` carried
+  // no census.** A docblock naming a record that does not exist is the ADR-0007 shape wearing a
+  // citation, and it is the reason the count is now a file rather than a sentence.)
+  // ===========================================================================================
+
+  it('THE SHIPPED CADENCE IS A LOCAL MINIMUM OF THE AXIS THE BENCHMARK SAYS IT MEASURES', () => {
+    const here = measuredConcurrentHundredths();
+    const below = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS - 1);
+    const above = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS + 1);
+    // ARRIVALS FALL AS THE INTERVAL GROWS, so a monotone axis would put the shipped reading
+    // BETWEEN its neighbours. It is below both. That is the state this arm forbids and a
+    // smooth axis would permit — and it is why a reading taken at one cadence is a claim about
+    // that cadence (ADR-0037 amendment 2, arriving on the instrument side).
+    expect(here, `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`).toBeLessThan(below);
+    expect(here, `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`).toBeLessThan(above);
+  }, 180_000);
+
+  // ===========================================================================================
+  // THE ARM THAT COMPARED THIS AGAINST THE TRIPWIRE'S NOISE IS WITHDRAWN, AND THE WITHDRAWAL IS
+  // THE HONEST OUTCOME OF PRE-REGISTERING A RESPONSE (CLAUDE.md rule 5).
+  //
+  // G-032a's plan claimed the ±1 movement (3.21%) was larger than the instrument's noise ceiling
+  // (2.38%) and therefore that the cadence was the bigger effect. **Both halves of that were
+  // wrong, in the two ways this project has paid for before:**
+  //
+  //   1. **RULE 3.** The 2.38% was the ceiling of the campaign taken at CADENCE 32. Comparing a
+  //      figure measured today against one recorded under another configuration is the
+  //      comparison ADR-0015's REPLACE half exists to forbid — made in the plan that executed
+  //      that half. The re-taken ceiling at cadence 96 is **3.55%**, and 3.21% is BELOW it.
+  //   2. **SLOT 1.** Occupancy movement and timing noise are measurements OF different things —
+  //      a property of the workload against a property of the instrument. The ratio of two such
+  //      numbers was never going to mean what the sentence claimed.
+  //
+  // The arm asserted `movement > noiseCeilingOvershoot`, it went red on the re-taken campaign,
+  // and its own failure message said the response was to say so rather than widen it. This is
+  // saying so.
+  //
+  // **THE QUESTION IT WAS REACHING FOR IS ANSWERED PROPERLY ELSEWHERE, AND WAS MEASURED IN THIS
+  // GOAL**: `tripwire.mjs`'s `CADENCE_OBSERVATIONS` runs the SAME null quantity at 95 and 97 and
+  // finds the shipped cadence is the NOISIEST of the three — a like-for-like comparison, one
+  // instrument, one quantity, three cadences. That is what settles whether a campaign taken at
+  // one cadence is trustworthy, and it needed no cross-quantity ratio at all.
+  //
+  // WHAT SURVIVES UNTOUCHED is the arm above it: occupancy is an exact integer count with no
+  // noise, and 96 is a local minimum of it. That claim never depended on the comparison.
+  // ===========================================================================================
 });

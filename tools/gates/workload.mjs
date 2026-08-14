@@ -27,38 +27,61 @@ export const ROOMS = 60;
 
 /**
  * THE CALIBRATED OCCUPANCY OF THIS BENCHMARK, AND THE ONLY NUMBER IN THIS FILE THAT IS A
- * TARGET RATHER THAN A SETTING (G-027a, human ruling — ADR-0021).
+ * TARGET RATHER THAN A SETTING (G-027a, human ruling — ADR-0021; re-frozen at G-032a).
  *
- * `ARRIVAL_EVERY_TICKS` below is a PROXY for this, and the proxy broke silently. The bound
- * campaign behind `tripwire.mjs` was run against a hotel holding **fifteen concurrent
- * guests**; nothing said so in a form anything could check, so when ADR-0017 tripled the
- * stay length the same literal `32` started meaning FORTY-FIVE and the benchmark quietly
- * became a different benchmark. `check:tickcost` read 2.02x and it was right — the tick was
- * doing three times the guest-work — but the reading described a workload redefinition
- * rather than a regression, which is precisely the distinction a tripwire cannot make.
+ * IN HUNDREDTHS OF A GUEST, AND MEASURED RATHER THAN DIVIDED. It read
+ * `TARGET_CONCURRENT_GUESTS = 15` until G-032a, where 15 was `stayDurationTicks /
+ * ARRIVAL_EVERY_TICKS` — arithmetic over two content constants, which is not occupancy and had
+ * stopped being close to it. θ-b1 caught that: the quotient read 15 at 14.77 concurrent guests,
+ * at 6.40 and at 8.72, because ADR-0017 made departure a function of dissatisfaction rather than
+ * of the clock and the effective stay became EMERGENT. **Once effective stay is emergent, the
+ * quotient is a property of the content table and the occupancy is a property of the run.**
  *
- * WHY 15 AND NOT SOMETHING ELSE: it is not derived from anything, and it must not be. It is
- * the occupancy the noise ceiling and the bound were MEASURED at, so re-deriving it would
- * make the bound describe a hotel nobody calibrated against. It is a historical fact about a
- * campaign (`workload.mjs`'s 30-day null rows, `tripwire.mjs`'s four arms) and it is frozen
- * for the reason ADR-0008 freezes any such fact.
+ * WHY THIS NUMBER AND NOT ANOTHER: it is not derived from anything and it must not be. It is
+ * the occupancy `tripwire.mjs`'s bound campaign was MEASURED at — the G-032a re-take, at this
+ * file's own `ROOMS` / `ARRIVAL_EVERY_TICKS` / `SEED` — so re-deriving it would make the bound
+ * describe a hotel nobody calibrated against. A historical fact about a campaign, frozen for
+ * the reason ADR-0008 freezes any such fact, and moved only by the goal that re-takes the
+ * campaign.
  *
- * IT IS PINNED MECHANICALLY, WHICH IS THE HALF THAT WAS MISSING:
- * `tools/headless/src/workload.concurrency.test.ts` asserts
- * `stayDurationTicks / ARRIVAL_EVERY_TICKS === TARGET_CONCURRENT_GUESTS` against the SHIPPED
- * content. The next content change that moves the stay length reddens that assertion by name
- * instead of quietly redefining what this benchmark measures.
+ * IT IS PINNED MECHANICALLY, AND THE PIN IS A MEASUREMENT: `workload.concurrency.test.ts` runs
+ * this hotel through the tick and divides guest-frames by ticks. It goes red on any change that
+ * moves the benchmark's occupancy, by name, with the number in hand — which the quotient it
+ * replaced could not do at three different occupancies.
+ *
+ * ONE PLACE, NOT TWO. The test used to carry its own `MEASURED_CONCURRENT_HUNDREDTHS` beside
+ * this constant, so the calibrated occupancy and the observed one were two literals that could
+ * disagree — the duplicated-constant shape ADR-0021 exists about, inside the file written to
+ * close ADR-0021. The test now measures against THIS.
  */
-export const TARGET_CONCURRENT_GUESTS = 15;
+export const TARGET_CONCURRENT_HUNDREDTHS = 872;
 
 /**
- * Sets concurrent guests, which is what these measurements actually measure.
+ * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.
  *
- * 32 -> 96 AT G-027a, AND THIS IS A RESTORATION RATHER THAN A RETUNE (ADR-0021, human).
- * `1440 / 96 = 15` puts the benchmark back on the occupancy its bound was calibrated at,
- * where `1440 / 32 = 45` had moved it without anybody choosing to. **THE BOUND DID NOT
- * MOVE** — `tripwire.mjs`'s 1.4557 is untouched, and widening it was refused because it
- * would have buried the fact that the workload's MEANING changed.
+ * ===========================================================================================
+ * THIS DOCBLOCK CONTRADICTED THE CONSTANT TWENTY-THREE LINES ABOVE IT UNTIL G-032a's SWEEP 1.
+ *
+ * It opened *"sets concurrent guests, which is what these measurements actually measure"* and
+ * then said *"`1440 / 96 = 15` puts the benchmark back on the occupancy its bound was calibrated
+ * at"* — while `TARGET_CONCURRENT_HUNDREDTHS` above had just been rewritten to say that quotient
+ * **is not occupancy and had stopped being close to it**, reading 15 at 14.77, at 6.40 and at
+ * 8.72 concurrent guests. Two constants in one file, disagreeing about what the benchmark holds,
+ * with the correction sitting above the claim it corrected.
+ *
+ * It also read *"`tripwire.mjs`'s 1.4557 is untouched"* — **the bound this same commit moved**,
+ * to 1.4640, by re-deriving it from a re-taken campaign.
+ *
+ * ADR-0038 rule 3, verbatim and unheeded: *after correcting a claim, read the two comments either
+ * side of it.* The repair and the defect shared a subject, the fix got the attention, and the
+ * neighbour inherited the assumption.
+ * ===========================================================================================
+ *
+ * 32 -> 96 AT G-027a, AND IT WAS A RESTORATION RATHER THAN A RETUNE (ADR-0021, human). At the
+ * time, the quotient was believed to restore fifteen concurrent guests. **What it restored is
+ * 8.72**, which is what `TARGET_CONCURRENT_HUNDREDTHS` now records, measured. The literal is
+ * right and the reasoning that chose it was not — so the value stays and the justification for it
+ * is now "this is the cadence the shipped campaign was taken at", which is checkable.
  *
  * IT STAYS A LITERAL AND IS NOT DERIVED FROM CONTENT AT RUNTIME, deliberately. This gate is
  * a PAIRED RATIO: `measure.mjs` hands the same `--arrivals` to both arms, and a constant
@@ -112,28 +135,47 @@ export const SEED = 42;
  *   ALTERNATED AND ROTATED, arm lengths against each other, ACROSS TWO SITTINGS — n=4 each in
  *   the first, n=5 each in the second (`CLAUDE.md` rule 1 is satisfied by the pairing WITHIN
  *   each sitting, which is what makes the readings poolable across them) · min..max ·
- *   REGIME: QUIET, no deliberate concurrent load, 12-core developer machine. The same
- *   quantity reads +9.73% under load (12 busy processes on 12 cores) — see `tripwire.mjs`'s
- *   `LOADED_OBSERVATIONS`, and note that a ratio's noise is a property of the machine's load
- *   as much as of the workload:
+ *   REGIME: QUIET, no deliberate concurrent load, 12-core developer machine. Under load the
+ *   same quantity reads materially worse — `tripwire.mjs`'s `LOADED_OBSERVATIONS` carries the
+ *   live figure, and a ratio's noise is a property of the machine's load as much as of the
+ *   workload.
+ *
+ *   *(The `+9.73%` that stood here was the CADENCE-32 loaded reading. G-032a re-measured it and
+ *   `LOADED_OBSERVATIONS` now says something else — so this LIVE cross-reference pointed at a
+ *   number the file it cites no longer holds, four lines above the block correctly fenced as
+ *   history. The figure is not restated here: one place, and it is the array.)*
+ *
+ *   AND THESE TWO ROWS EXIST IN A SECOND FILE. `tools/gates/arm/measure-arm.mjs` carries the
+ *   same measurement; `check-tripwire.mjs` compares them and requires the fence on that copy.
+ *   One measurement, two copies — correct both or neither:
  *
  *     5 days    n=9 interleaved    0.9572 .. 1.0984      11.8-13.9s per reading
  *     30 days   n=9 interleaved    0.9268 .. 1.0238      36.5s per reading
  *
- *   AND THE 30-DAY ROW IS NOW AN ARM OF THE BOUND CAMPAIGN, not merely an argument for the arm
- *   length. It is the same quantity, instrument, hotel and arm length as `tripwire.mjs`'s
- *   nulls, at a larger n, and its 1.0238 is the LARGEST excursion on record — so it sets the
- *   shipped `NOISE_CEILING`. It had been left out because it was filed under "which arm length
- *   to ship"; `sim-critic` found that, and the orchestrator ruled that a reading does not stop
- *   counting because it was written down under a different heading. Admitting it moved the
- *   bound 1.4550 -> 1.4557.
+ *   BOTH ROWS WERE TAKEN AT CADENCE 32, AND AT G-032a THAT MAKES THEM HISTORY.
+ *   ~~The 30-day row is an arm of the bound campaign, and its 1.0238 sets the shipped
+ *   NOISE_CEILING.~~ It was, from G-020b until G-032a. **ADR-0015's REPLACE half retired it**:
+ *   the shipped cadence moved 32 -> 96 (ADR-0021), so this row measures a hotel holding a
+ *   different population and cannot count toward a campaign taken at 96. `tripwire.mjs` carries
+ *   the re-taken arms, and `check-tripwire.mjs` refuses if this one is pasted back in.
  *
- *   THE ROW APPEARS TWICE — here and as an arm in `tripwire.mjs` — AND THAT DUPLICATION IS
- *   CHECKED RATHER THAN TRUSTED. A first draft of this paragraph claimed "change a number on
- *   this row and the gate refuses to start", which was FALSE: the gate reads its own copy, so
- *   the two could drift silently. That is G-018's duplicated-constant defect, written into the
- *   fix for a different instance of it. `check-tripwire.mjs` now asserts the two agree, so the
- *   claim is true of the code rather than of the intention.
+ *   **THE ARGUMENT THEY SUPPORT IS UNAFFECTED, WHICH IS WHY THEY STAY.** It is a comparison
+ *   BETWEEN TWO ARM LENGTHS at one cadence — 5 days against 30 — and its conclusion is that the
+ *   longer arm has the tighter tail at nearly the marginal cost of the ticks. Nothing in that
+ *   depends on which cadence both sides were measured at, so re-taking it would spend an hour
+ *   moving two numbers and changing no decision. **What these rows may NOT be used for is a
+ *   noise ceiling**: that is a claim about one configuration and this is not that configuration.
+ *
+ *   ~~AND THE DUPLICATION THAT USED TO BE CHECKED HERE IS GONE WITH THE ARM. There is ONE copy
+ *   now — this one — so a guard comparing two things would be inspecting one.~~ **WITHDRAWN.**
+ *   `tripwire.mjs`'s copy did go with the retired arm, but `arm/measure-arm.mjs` carries the
+ *   same rows and always did, so the premise was false and the guard it justified deleting has
+ *   been restored over BOTH surviving copies.
+ *
+ *   **It survived nineteen lines below the paragraph added in the same fix saying there are
+ *   two** — one docblock, two answers, and the fix was for an instance of this exact class.
+ *   ADR-0038 rule 3: after correcting a claim, read the two comments either side of it. The
+ *   comment nineteen lines up was read; this one was not.
  *
  *   THE EQUAL-n PAIR IS THE COMPARISON. A max over few samples is systematically smaller
  *   than a max over many, so quoting a short arm's n=19 tail against a long arm's n=5 would

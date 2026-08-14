@@ -982,8 +982,11 @@ export const wantAtBasisPointsSchema = basisPointsSchema;
  * number that decides how long a guest stands in the lobby, and therefore how many guests the
  * hotel holds at once. ADR-0021 is the whole argument: the benchmark's occupancy is a calibrated
  * quantity, and a goal that redefines it while measuring itself against it cannot tell a
- * regression from a redefinition. `TARGET_CONCURRENT_GUESTS` is frozen for the same reason, one
- * instrument over.
+ * regression from a redefinition. `TARGET_CONCURRENT_HUNDREDTHS` is frozen for the same reason,
+ * one instrument over. *(It was `TARGET_CONCURRENT_GUESTS` until G-032a, which replaced a
+ * quotient over two content constants with a MEASURED occupancy — the quotient read 15 at three
+ * different populations. An identifier has no past tense: the name here is renamed rather than
+ * fenced, ADR-0024's corollary.)*
  *
  * WHAT READS IT IS THE LODGING CASE ONLY, AND THAT IS NOW PERMANENT RATHER THAN PROVISIONAL: a
  * guest holding no room has been wanting lodging, unserved, since it arrived, so its unserved run

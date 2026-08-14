@@ -54,23 +54,47 @@
 // ROOM COUNT DOES NOT DRIVE THIS BENCH'S COST, AND CANNOT.
 //
 // G-010's optimisation made tick cost O(guests), not O(rooms): idle rooms are free.
-// Held at `--arrivals 32`, 20, 60 and 120 rooms all measured within 4% of each other.
-// So `--rooms 60` satisfies G-010's exit criterion by its letter while measuring
-// roughly what a 20-room hotel would. That is the SAME defect PARKING.md has now
-// corrected twice — a measurement taken where the thing being scaled does not drive
-// the cost — and it is recorded rather than hidden because the honest axis for this
-// gate is now CONCURRENT GUESTS, which is what `--arrivals` sets.
+// Held at a fixed cadence, 20, 60 and 120 rooms all measured within 4% of each other
+// (measured at G-010, when that cadence was 32). So `--rooms 60` satisfies G-010's
+// exit criterion by its letter while measuring roughly what a 20-room hotel would.
+// That is the SAME defect PARKING.md has now corrected twice — a measurement taken
+// where the thing being scaled does not drive the cost — and it is recorded rather
+// than hidden because the honest axis for this gate is CONCURRENT GUESTS.
 //
-// WHY `--arrivals 32`, NOW THAT ITS ORIGINAL JUSTIFICATION IS GONE. It used to be
+// ---------------------------------------------------------------------------------
+// THE CADENCE IS `ARRIVAL_EVERY_TICKS` AND THIS FILE DOES NOT NAME ITS VALUE (G-032a).
+//
+// Four paragraphs here said `--arrivals 32` — under a heading beginning "WHY
+// `--arrivals 32`" — while `workload.mjs` had passed 96 since ADR-0021. Every one of
+// them was true when written and none was checkable, which is ADR-0032 §1's whole
+// point: **a number in prose is a claim with no pin.** The value is imported below from
+// `workload.mjs`, which is where a reader should read it. *(This said "printed by the gate at
+// every run" — it is not: this gate prints days, elapsed and budget. `check:tickcost` and
+// `check:scaling` do print their cadence. A de-numeralling that replaces a stale figure with a
+// claim about an output that does not exist has moved the defect, not removed it — the shape
+// repaired one file over in `check-tripwire.mjs`, re-introduced by the fix pass for it.)*
+//
+// AND "the honest axis is CONCURRENT GUESTS, which is what `--arrivals` SETS" was the
+// other half of the stale claim. It does not set them — G-027b made departure a
+// function of dissatisfaction rather than of the clock, so occupancy is EMERGENT and
+// the cadence only influences it. `workload.mjs`'s `TARGET_CONCURRENT_HUNDREDTHS`
+// records what this hotel actually holds, measured.
+// ---------------------------------------------------------------------------------
+//
+// WHY THIS CADENCE, NOW THAT ITS ORIGINAL JUSTIFICATION IS GONE. It used to be
 // "chosen for headroom, not for realism", resting on a table of absolutes measured in
 // a session nobody can re-enter — 45% for what ships, 108% at `--arrivals 16`. Those
 // figures are WITHDRAWN, not restated (G-018; `CLAUDE.md` rule 5), and the headroom
 // argument dies with them: against a derived budget this workload is not close to any
 // ceiling, so no gate flakes red and nobody is taught to re-run it. What survives is
-// STRUCTURAL and needs no stopwatch: occupancy is the axis, `--arrivals` sets it, and
+// STRUCTURAL and needs no stopwatch: occupancy is the axis, the cadence INFLUENCES it, and
 // this value is what every pinned golden and every recorded reading was taken at
 // (`tools/headless/src/bench.workload.golden.test.ts`). Changing it invalidates that
 // comparability, so it stays until a goal deliberately re-sizes the workload.
+//
+// *("`--arrivals` SETS it" stood here until G-032a — thirteen lines under the paragraph added
+// in the same commit saying it does not. ADR-0038: the repair and the defect shared a subject,
+// the fix got the attention, and the neighbour kept the assumption.)*
 //
 // AND SINCE G-020a THAT SENTENCE IS TRUE RATHER THAN ASPIRATIONAL. The golden used to
 // declare its own copies of these numbers and never read this gate, so `ROOMS 60 -> 3`
@@ -78,14 +102,20 @@
 // committed hash.
 //
 // THE WORKLOAD DOES NOT MATCH THE REQUIREMENT'S, AND G-018 DID NOT CHANGE IT. The
-// requirement says a 60-room HOTEL; this runs a 60-room SHELL at roughly a quarter
-// occupancy with `--amenities 1` — four providers, where `vitest run scaling` uses
-// twenty. Recorded in PARKING.md; it does not affect the budget, which is a property
-// of the play speed rather than of the building.
+// requirement says a 60-room HOTEL; this runs a 60-room SHELL well under capacity
+// (`workload.mjs`'s `TARGET_CONCURRENT_HUNDREDTHS` is the measured figure; "roughly a quarter"
+// stood here and was an occupancy nothing has held since ADR-0017) with `--amenities 1` — four
+// providers, where the scaling rotation uses twenty. Recorded in PARKING.md; it does not
+// affect the budget, which is a property of the play speed rather than of the building.
 //
 // The room-count-scaling property this gate cannot see is measured instead by
-// `pnpm exec vitest run scaling`, which ties arrival rate to room count so that
+// `pnpm check:scaling`, whose room rotation ties arrival rate to room count so that
 // occupancy is constant and room count is the only variable.
+//
+// *(This cited `pnpm exec vitest run scaling` — a command that has held no stopwatch since
+// G-020c moved the bounds out of the parallel runner. **The sibling citation eight lines up was
+// repaired in this same diff and this one was left**, which is ADR-0038's rule 3 exactly: after
+// correcting a claim, read the two comments either side of it.)*
 // ---------------------------------------------------------------------------------
 
 import { spawnSync } from 'node:child_process';

@@ -116,8 +116,8 @@ const BOUND_CAMPAIGN = Object.freeze({
   // `GOALS.md` (four), `PARKING.md`. Verified with
   // `grep -rn "four slots\|slot 2" --include=*.mjs --include=*.md --exclude-dir=node_modules .`,
   // which now returns only quotations of the superseded wording, each marked as such.
-  what: 'the sim:measure ratio, on null arms and on two real adjacent sim pairs (9af0e50 G-015, a011f38 G-014a)',
-  workload: '60 rooms, an arrival every 32 ticks, seed 42, 30 days = 43,200 ticks',
+  what: 'the sim:measure ratio, on a null arm and on two real adjacent sim pairs (e1623b4 G-028b, 88dc25e G-027b θ-b2)',
+  workload: '60 rooms, an arrival every 96 ticks, seed 42, 30 days = 43,200 ticks',
   // THE CONFIGURATION, AS NUMBERS, BECAUSE ADR-0015's *REPLACE* HALF HAS TO EXECUTE TOO.
   //
   // The ADR says: POOL within a configuration, REPLACE on a configuration change. Round 3 put
@@ -130,41 +130,54 @@ const BOUND_CAMPAIGN = Object.freeze({
   //
   // The display strings above are for a reader. THESE are compared against the imported
   // workload at startup, so a configuration change cannot silently keep the old campaign.
-  configuration: Object.freeze({ rooms: 60, arrivalEveryTicks: 32, seed: 42, days: 30 }),
+  configuration: Object.freeze({ rooms: 60, arrivalEveryTicks: 96, seed: 42, days: 30 }),
   samples: 'each reading is itself a ratio of medians of 6 process-level samples, arms interleaved and alternating; per-arm n below',
-  // THE SITTING IS PER-ARM, because the arms were not all taken in one. The first three were
-  // rotated within a single sitting; the fourth was interleaved against the 5-day arm across
-  // TWO sittings. Pooling across sittings is sound under `CLAUDE.md` rule 2 — each reading is
-  // itself a paired interleaved ratio, which is what makes it portable across sittings — but
-  // the header used to say "one sitting, arms rotated" for all four, describing a method one
-  // of them did not follow.
-  sittings: 'arms 1-3 rotated within one sitting; arm 4 interleaved against the 5-day arm across two sittings',
-  regime: 'QUIET — no deliberate concurrent load, 12-core developer machine; per-arm detail below',
+  sittings: 'all three arms rotated within ONE sitting, the order alternating each round (G-032a)',
+  regime: 'QUIET — no deliberate concurrent load, 12-core developer machine (win32/12cpu); per-arm detail below',
   aggregation: 'largest upward overshoot over the arm’s centre — 1.000 for a null, the median for a fixed real pair',
   // NUMBERS, NOT PROSE. `NOISE_CEILING` is computed from these below, so a reading and the
   // bound cannot disagree. The previous version stored these as display strings from which
   // not even a reader could have re-derived the ceiling arithmetically.
   //
-  // EVERY QUALIFYING READING IS AN ARM, AND CURATION IS THE STEP THAT WAS LEFT AFTER ROUND 1
-  // REMOVED TRANSCRIPTION. The fourth arm below was recorded in `workload.mjs` under the
-  // heading "which arm length to ship" rather than "the bound campaign", and it was left out
-  // for that reason alone — while being the SAME quantity, instrument, hotel and arm length,
-  // at a LARGER n than any campaign arm, and carrying a LARGER excursion than the ceiling
-  // taken without it. `sim-critic` found it; the orchestrator ruled it in on ADR-0015's own
-  // words: an observed excursion counts whatever produced it, and a reading does not stop
-  // counting because it was filed under a different heading.
+  // ===========================================================================================
+  // RE-TAKEN AT G-032a AND THESE READINGS *REPLACE* — NOT ONE OF THE OLD FOUR WAS POOLED.
   //
-  // Admitting it moved the bound 1.4550 -> 1.4557. THAT IS THE MECHANISM WORKING: the first
-  // time in this project a bound has changed because a reading was admitted rather than
-  // because someone edited a number.
+  // ADR-0015's REPLACE half, executed rather than admired: the shipped workload's cadence moved
+  // 32 -> 96 (ADR-0021) and the gate had refused to compare since, for this entire session. A
+  // campaign taken at 32 measures a hotel holding a different population, so pooling it into a
+  // campaign taken at 96 would mix two quantities under one name.
+  //
+  // WHAT WENT, AND WHY IT IS NOT CURATION. All four previous arms were taken at cadence 32,
+  // including the admitted `null, arm-length campaign` row that `sim-critic` found filed under
+  // another heading at G-020b. Retiring it is REPLACE and not the curation that finding was
+  // about: the test is whether a reading measures THIS configuration, and none of them does.
+  // `workload.mjs` keeps that row where it always lived, fenced as a cadence-32 reading, because
+  // the argument it supports is about ARM LENGTH and that argument does not move with cadence.
+  //
+  // THE REAL PAIRS ARE NEWER, AND THAT IS ADR-0015's OWN INSTRUCTION APPLIED TO AN ARM. The old
+  // pairs (9af0e50 G-015, a011f38 G-014a) predate ADR-0017, so at any cadence both their arms
+  // run a 480-tick stay and the pair sits at a third of the shipped hotel's occupancy — noise
+  // measured on a hotel the gate never runs against. e1623b4 and 88dc25e are post-ADR-0017 on
+  // BOTH sides, which is the property that matters: `git-tree.mjs` materialises
+  // `packages/content/data` per arm, so a pair STRADDLING that change would run its two arms at
+  // two different stay lengths and no cadence could put both at one occupancy — ADR-0021's
+  // closing paragraph. These do not straddle it, so that obstruction is not a property of the
+  // campaign; it is a property of the one commit that redefined occupancy.
+  //
+  // AND G-020b's SCORED PREDICTION HAS NOW FAILED ON A SECOND, INDEPENDENT CAMPAIGN. `sim-critic`
+  // predicted at PLAN that a REAL PAIR would set the ceiling, because `--null`'s two arms are one
+  // comment apart. On the shipped G-020b campaign it did not, and on this one it does not either:
+  // the null's +3.55% beats pair-A's +2.52% and pair-B's +1.75%. Recorded rather than dropped,
+  // because it is on the record as a scored prediction and this is its second failure.
+  // **What survives is the structural half, which needs no reading**: `--null`'s spread is a
+  // LOWER BOUND on real-pair noise and never an estimate of it, so sizing on nulls alone would be
+  // sizing on the easiest measurement the instrument can make. The real pairs stay for that
+  // reason, not because they win.
+  // ===========================================================================================
   arms: Object.freeze([
-    Object.freeze({ name: 'null', n: 5, regime: 'quiet', min: 0.9841, max: 1.0146, centre: 1.0 }),
-    Object.freeze({ name: 'pair-A 9af0e50', n: 5, regime: 'quiet', min: 1.0067, max: 1.0882, centre: 1.0639 }),
-    Object.freeze({ name: 'pair-B a011f38', n: 5, regime: 'quiet', min: 1.0018, max: 1.0689, centre: 1.058 }),
-    // `workload.mjs`'s 30-day arm-length readings — the same `--null` quantity, interleaved
-    // against the 5-day arm over two sittings. The largest excursion on record, and the reason
-    // the shipped ceiling is 1.0238 rather than 1.0228405.
-    Object.freeze({ name: 'null, arm-length campaign', n: 9, regime: 'quiet', min: 0.9268, max: 1.0238, centre: 1.0, sittings: 2 }),
+    Object.freeze({ name: 'null', n: 5, regime: 'quiet', min: 0.9802, max: 1.0355, centre: 1.0 }),
+    Object.freeze({ name: 'pair-A e1623b4', n: 5, regime: 'quiet', min: 0.9815, max: 1.0142, centre: 0.9893 }),
+    Object.freeze({ name: 'pair-B 88dc25e', n: 5, regime: 'quiet', min: 0.9808, max: 1.0262, centre: 1.0086 }),
   ]),
 });
 
@@ -175,25 +188,71 @@ const BOUND_CAMPAIGN = Object.freeze({
  * input ADR-0015 makes load-bearing, and a noise figure without its regime is exactly the
  * slot-2 omission this session already withdrew a finding for.
  *
- * Measured here rather than inherited: the `--null` ratio · shipped 30-day arm · quiet and
- * loaded readings ALTERNATED in one sitting · n=3 per regime · min..max and the largest
- * upward overshoot · load = 12 busy processes on 12 cores.
+ * RE-MEASURED AT G-032a WITH THE CAMPAIGN, AND THE FIGURES BELOW ARE THE ARRAY'S OWN. The
+ * `--null` ratio · shipped 30-day arm at the shipped cadence · n=3 · min..max and the largest
+ * upward overshoot · load = `tools/gates/arm/load.mjs --workers 12`, 12 busy processes on 12
+ * cores, taken in the same sitting as the quiet campaign.
  *
- *     quiet    0.9666 .. 0.9911    no upward overshoot     ~35s per reading
- *     loaded   0.9497 .. 1.0973    +9.73%                  ~113s per reading
+ *     quiet    the three campaign arms above    worst overshoot +3.55%
+ *     loaded   0.9347 .. 1.2461                 worst overshoot +24.61%
  *
- * `sim-critic` measured the same contrast independently at n=2 and got +7.96% loaded against
- * no overshoot quiet. Same direction, same order of magnitude, and the builder's own reading
- * is the WORSE of the two, so it is the one recorded here.
- *
- * THE QUIET CAMPAIGN'S +2.284% AND THIS +9.73% ARE THE SAME MEASUREMENT IN TWO REGIMES, which
- * is exactly why the regime is now a slot: a noise figure without it is unpinned, and the
- * factor between them is over 4x.
+ * (This block described the CADENCE-32 campaign until G-032a — *"quiet 0.9666..0.9911, loaded
+ * 0.9497..1.0973, +9.73%"* — sixteen lines above the array that had already been replaced. The
+ * prose and the frozen object disagreed about the subject of the paragraph they shared. Removed
+ * rather than fenced, because those readings measure a different configuration and this is the
+ * one place a reader looks for the live one.)
  *
  * IT DOES NOT MOVE THE SHIPPED BOUND and it is not folded into `NOISE_CEILING`. It IS checked
  * against the bound below, because ADR-0015's first principle is that the gate never fires on
- * noise, and noise it has been OBSERVED producing counts whatever produced it. Margin at the
- * shipped bound: 1.4557 / 1.0973 = 1.327x.
+ * noise, and noise it has been OBSERVED producing counts whatever produced it.
+ *
+ * ===========================================================================================
+ * AND THE MARGIN OVER LOADED NOISE HAS COLLAPSED — SAID OUT LOUD, BECAUSE ADR-0015 REQUIRES THE
+ * CONSEQUENCE AND NOT ONLY THE READING.
+ *
+ *     G-020b, cadence 32     1.4557 / 1.0973 = 1.327x
+ *     G-032a, cadence 96     1.4640 / 1.2461 = 1.175x
+ *
+ * The bound barely moved; the LOADED noise did. ADR-0015: *"a bound whose margin approaches the
+ * loaded noise needs the noise re-measured under load before the bound is trusted"* — the
+ * re-measure is what produced 1.2461, and this is the consequence being written down rather than
+ * left for a reader to divide.
+ *
+ * (It said "by about an eleventh". It is nearer a ninth, and a fraction estimated in prose is
+ * exactly what ADR-0016 deleted its worked example over — three arithmetic errors in three
+ * drafts of a paragraph whose only job was to illustrate a rule the reader can apply in one
+ * division. So the paragraph states the rule and stops.)
+ *
+ * **THE COMPARISON ACROSS CAMPAIGNS IS A RATIO OF RATIOS AND IS OFFERED AS ONE.** `CLAUDE.md`
+ * rule 3 forbids comparing an ABSOLUTE against a figure from another session, and these are not
+ * absolutes: each margin is a bound over a noise figure measured in its own campaign, on the same
+ * machine, by the same instrument. What it does NOT license is any claim about the machine having
+ * got noisier — n=3 loaded, one sitting, and the two campaigns were taken in different sessions
+ * (G-020b and G-032a, five days and a milestone apart).
+ *
+ * WHAT IT MEANS OPERATIONALLY, AND THE PRE-REGISTERED RESPONSE: nothing refuses today —
+ * `MAX_NOISE_CEILING` below still passes, and the ceiling is a QUIET figure so a loud loaded arm
+ * cannot widen the bound. **The brake's quantity is `sqrt(SMALLEST / CEILING)`; when a loaded
+ * overshoot exceeds it, the brake refuses the gate as too noisy.**
+ *
+ * IT IS NOT THE SAME NUMBER AS THE `margin … above noise` FIELD, AND SAYING SO IS ADR-0015 §2's
+ * OWN RULE APPLIED TO ITS OWN FILE. That field is `BOUND / CEILING`, and `BOUND` is the geometric
+ * mean TRUNCATED to four places — so the two agree only up to the truncation and differ in the
+ * fifth decimal, which is inside what the gate prints. **Say the two numbers; do not say "equal"**
+ * is the sentence this file already carries about the pair of margins it prints, and the previous
+ * repair sent a reader to that field for a different quantity while calling it the same one.
+ * `MAX_NOISE_CEILING` below computes the brake from the readings; the field is printed per run.
+ *
+ * NEITHER NUMBER IS SPELLED HERE, and the paragraph has now been wrong about this twice. A
+ * `~1.42` stood in it and rounded the wrong way, admitting a 1.415 the brake already refuses;
+ * the repair then used the word "margin" for the brake's quantity and, one clause later, for
+ * "that margin the gate prints" — and the gate prints TWO, above-noise and below-the-class.
+ * `MAX_NOISE_CEILING` computes the limit and the gate prints both margins by name, so a reader
+ * should take them from a run.
+ *
+ * That is the designed failure and it is a §2.0 escalation with its readings, never a wider
+ * constant.
+ * ===========================================================================================
  *
  * ~~because the bound is derived from the regime the gate actually runs in — `verify.mjs`
  * runs its gates sequentially, one at a time.~~ WITHDRAWN AT ROUND 2. THAT SENTENCE SUBSTITUTES
@@ -216,33 +275,64 @@ const BOUND_CAMPAIGN = Object.freeze({
  * loosen the constant.
  */
 const LOADED_OBSERVATIONS = Object.freeze([
-  Object.freeze({ name: 'null, LOADED (12 busy processes on 12 cores)', min: 0.9497, max: 1.0973, centre: 1.0 }),
+  // RE-TAKEN AT G-032a with the campaign, same cadence, `tools/gates/arm/load.mjs --workers 12`.
+  // n=3, quiet campaign and this taken in one sitting. 0.9347 .. 1.2461, centre 1.0.
+  Object.freeze({ name: 'null, LOADED (12 busy processes on 12 cores)', n: 3, min: 0.9347, max: 1.2461, centre: 1.0 }),
 ]);
 
 /**
- * AND THE CAMPAIGN SETTLED THE ARGUMENT IT WAS RUN TO SETTLE. `sim-critic` predicted at PLAN
- * that `--null` would UNDERSTATE real-pair noise, because its arms are one comment apart —
- * same code, same code path, same JIT shapes — and asked for real pairs in the campaign.
- * MEASURED: the null's upward overshoot is 1.46% and a real pair's is 2.29%. The prediction
- * holds ON THE CAMPAIGN AS FIRST TAKEN — and it DOES NOT HOLD ON THE SHIPPED CAMPAIGN. Scored
- * honestly rather than quietly dropped, because it is on the record as a scored prediction:
+ * THE CADENCE NEIGHBOURS — THE ONE OBSERVATION THIS GOAL EXISTS TO MAKE (G-032a, ADR-0039 §3).
  *
- *   as first taken (3 arms)   null +1.46%  ·  worst real pair +2.284%   -> prediction HELD,
- *                             and NOISE_CEILING was the real pair's
- *   as shipped (4 arms)       the admitted null arm-length campaign is +2.38%, LARGER than
- *                             either -> NOISE_CEILING IS A NULL'S, and the prediction FAILS
- *                             on the shipped data
+ * THE HAZARD, STATED BEFORE THE ANSWER. G-032a's census found that ±1 arrival tick moves this
+ * workload's occupancy by ~3%, and that the shipped cadence is a LOCAL MINIMUM of it. A bound
+ * derived from a campaign taken at ONE cadence is then open to the obvious objection: if the
+ * instrument's noise is a function of the cadence, the ceiling is a fact about tick 96 and not
+ * about this gate.
  *
- * THE COMPARISON THAT WOULD RESCUE IT IS ONE THIS COMMIT FORBIDS: the admitted arm is n=9 and
- * the real pairs are n=5, and a max over more samples is systematically larger — `workload.mjs`
- * makes exactly that argument to insist on equal-n comparisons. So "the null only wins because
- * it had more draws" is unavailable here; it is the same unequal-n reasoning, pointed the other
- * way.
+ * SO IT WAS MEASURED RATHER THAN ARGUED. The same `--null` quantity, the same 30-day arm, the
+ * same sitting, through a COPY of these gates with `ARRIVAL_EVERY_TICKS` patched — the
+ * `check-tripwire.mjs` technique, so nothing in the shipped tree moved and no flag exists for a
+ * caller to pull. n=3 per cadence:
  *
- * WHAT SURVIVES, AND IT IS THE PART THAT MATTERED: sizing on `--null` ALONE would still have
- * been sizing on the easiest measurement the instrument can make, and the real pairs are still
- * in the campaign for that reason. What is withdrawn is the sharper claim that the real pair
- * SETS the ceiling. It set it for one round.
+ *     null @ 95    0.9181 .. 0.9896      max BELOW the shipped cadence's
+ *     null @ 96    0.9802 .. 1.0355      the campaign arm — the WORST of the three
+ *     null @ 97    0.8750 .. 1.0044      max BELOW the shipped cadence's
+ *
+ * **THE SHIPPED CADENCE IS THE NOISIEST OF ITS OWN NEIGHBOURHOOD, so the ceiling taken there is
+ * the conservative one and the objection does not bite.** That is the answer `PARKING.md`'s
+ * discriminator asks for — *re-take any relied-on reading at ±1 arrival tick* — and it closes
+ * for this reading only, which is the only scope the discriminator ever grants.
+ *
+ * THEY ARE OBSERVATIONS AND NOT ARMS, AND THE DISTINCTION IS ADR-0015's OWN. A different cadence
+ * is a different CONFIGURATION, so these readings may not be pooled into the ceiling — that
+ * would be the REPLACE half broken by the very goal executing it. They are checked against the
+ * bound, in the same loop as the loaded regime, because the first principle is that the gate
+ * never fires on noise and an observed excursion counts whatever produced it.
+ *
+ * WHAT THIS DOES NOT SAY: that the cadence is harmless to every reading. It is a claim about
+ * THIS instrument's noise at ±1 tick. The occupancy the workload holds still moves ~3%, and
+ * `workload.concurrency.test.ts` asserts that — the two facts sit either side of the same
+ * question and only one of them is about noise.
+ */
+const CADENCE_OBSERVATIONS = Object.freeze([
+  Object.freeze({ name: 'null @ arrivals 95 (neighbour)', n: 3, min: 0.9181, max: 0.9896, centre: 1.0 }),
+  Object.freeze({ name: 'null @ arrivals 97 (neighbour)', n: 3, min: 0.875, max: 1.0044, centre: 1.0 }),
+]);
+
+/**
+ * THE SCORED PREDICTION IS SCORED IN ONE PLACE, AND IT IS THE ARMS ARRAY ABOVE.
+ *
+ * `sim-critic` predicted at PLAN that a REAL PAIR would set the noise ceiling, because `--null`'s
+ * arms are one comment apart. **A long block here scored it against the CADENCE-32 campaign while
+ * the arms twenty lines up scored it against the cadence-96 one — the same prediction, two
+ * campaigns, two sets of figures, in one file.** A reader meeting the second first would have
+ * taken +1.46% / +2.29% for live readings; a reader meeting this one first would have concluded
+ * the opposite of the shipped data. Collapsed to the arms, where the numbers that settle it live.
+ *
+ * The standing result, for anyone who does not want to read the array: **it has now failed on two
+ * independent campaigns**, and the structural half that survives — a null's spread is a LOWER
+ * BOUND on real-pair noise and never an estimate of it — needs no reading and is why the real
+ * pairs stay. `PARKING.md` carries what a third failure would settle.
  */
 
 /**
@@ -338,7 +428,7 @@ const NOISE_CEILING = Math.max(...BOUND_CAMPAIGN.arms.map(overshootOf));
  * the new figure. The bound cannot drift from the readings in either direction.
  */
 const derived = Math.floor(Math.sqrt(NOISE_CEILING * SMALLEST_KNOWN_REGRESSION) * 1e4) / 1e4;
-const BOUND = 1.4557;
+const BOUND = 1.4640;
 
 if (BOUND !== derived) {
   process.stderr.write(
@@ -366,20 +456,27 @@ if (BOUND !== derived) {
  * defect class, three constants over, in the file that fixed it.
  *
  * THE LIMIT, DERIVED FROM FIGURES ALREADY IN THIS FILE RATHER THAN CHOSEN. Both margins equal
- * `sqrt(SMALLEST / CEILING)`. The gate is worth having only while it can absorb ONE excursion
- * of the size this instrument has actually been observed producing — the worst LOADED overshoot
- * on record, 1.0973. So require
+ * `sqrt(SMALLEST / CEILING)`. The gate is worth having only while it can absorb ONE excursion of
+ * the size this instrument has actually been observed producing — the worst LOADED overshoot on
+ * record. So require
  *
  *     margin >= worst observed loaded overshoot
- *     sqrt(SMALLEST / CEILING) >= 1.0973
- *     CEILING <= SMALLEST / 1.0973^2 = 1.7192
+ *     sqrt(SMALLEST / CEILING) >= that overshoot
+ *     CEILING <= SMALLEST / overshoot^2
  *
- * It is a SANITY BRAKE, not a tight limit, and saying so is the honest part: the shipped
- * ceiling sits at 1.0238, 1.68x inside it, and the binding constraint in normal operation
- * remains `BOUND < SMALLEST`. What this stops is the ratchet running quietly to absurdity —
- * it refuses the 2.0600 demonstration above. If a future campaign ever approaches it, the
- * answer is that THE INSTRUMENT IS TOO NOISY TO GATE and needs fixing, not that the bound
- * should widen.
+ * NO FIGURES ARE SPELLED INTO THIS PARAGRAPH, AND THAT IS DELIBERATE (ADR-0032 §1). It carried
+ * `1.0973`, `1.7192` and `1.0238` — all three from the cadence-32 campaign, all three still
+ * present tense sixteen lines under the array that had replaced them, and the "1.68x inside"
+ * that followed was a division of two retired numbers. **The code below computes every one of
+ * them from the readings, and the gate PRINTS the limit when it refuses.** Read them there.
+ *
+ * It is a SANITY BRAKE, not a tight limit, and saying so is the honest part: the binding
+ * constraint in normal operation remains `BOUND < SMALLEST`. What this stops is the ratchet
+ * running quietly to absurdity — it refuses the 2.0600 demonstration above, which
+ * `check-tripwire.mjs` re-runs every time. If a future campaign ever approaches the limit, the
+ * answer is that THE INSTRUMENT IS TOO NOISY TO GATE and needs fixing, not that the bound should
+ * widen. **The loaded margin has already shrunk once — see `LOADED_OBSERVATIONS`, where that is
+ * stated with both campaigns' figures and its consequence.**
  */
 const MAX_NOISE_CEILING =
   SMALLEST_KNOWN_REGRESSION / Math.max(...LOADED_OBSERVATIONS.map((o) => o.max / o.centre)) ** 2;
@@ -409,7 +506,7 @@ if (NOISE_CEILING > MAX_NOISE_CEILING) {
  * If a future reading ever crosses this, the answer is to re-measure and re-derive — not to
  * widen the bound by hand, which is what this check exists to make impossible.
  */
-for (const observation of [...BOUND_CAMPAIGN.arms, ...LOADED_OBSERVATIONS]) {
+for (const observation of [...BOUND_CAMPAIGN.arms, ...LOADED_OBSERVATIONS, ...CADENCE_OBSERVATIONS]) {
   if (observation.max >= BOUND) {
     process.stderr.write(
       `\nFAIL  I— tick cost — a recorded NOISE reading (${observation.name}, ${observation.max}) is at or above ` +

@@ -95,9 +95,119 @@ const meanOfMiddles = (values: readonly number[]): number => {
   return (upper + lower) / 2;
 };
 
-type AxisReadings = { readonly quiet: readonly number[]; readonly loaded: readonly number[]; readonly rotation: string; readonly direction: boolean };
+type Observation = { readonly value: number; readonly source: string };
+type AxisReadings = {
+  readonly quiet: readonly number[];
+  readonly loaded: readonly number[];
+  readonly rotation: string;
+  readonly direction: boolean;
+  /** Readings the instrument produced outside the pinned campaign arrays. */
+  readonly observations?: readonly Observation[];
+};
+
+/**
+ * THE DIRECTION RULE, AS A CALLABLE PREDICATE (verification pass).
+ *
+ * It was inline in an `it.each` callback, and the arm written to prove it can fail asserted two
+ * properties OF ITS FIXTURE without ever applying it — so the rule could be inverted, or deleted
+ * outright, and that arm stayed green. **The tautology shape this same file names three hundred
+ * lines down, in the arm written to prove a rule is not a word.**
+ *
+ * Hoisted, it is the thing both arms run: the `it.each` asserts it returns nothing for every
+ * shipped axis, and the rogue arm asserts it returns the specific problem. `workload.concurrency
+ * .test.ts` is the in-repo standard for this and it runs the live predicate over a violating
+ * input; this now does the same.
+ */
+const directionProblems = (axis: string, readings: AxisReadings): readonly string[] => {
+  const all = [...readings.quiet, ...readings.loaded];
+  if (all.length === 0) return [`${axis}: no readings to derive a direction from`];
+  const lowest = Math.min(...all);
+  const observations = readings.observations ?? [];
+  const problems: string[] = [];
+
+  // AN OBSERVATION ABOVE THE POOLED FLOOR IS A RE-TAKE, NOT A NOTE. `observations` exists for
+  // readings the campaign arrays do not hold; a HIGH one would move the floor and therefore the
+  // margins, and pooling it by hand is the move `DECLARED_READINGS` refuses.
+  const floor = Math.max(...all);
+  for (const seen of observations) {
+    if (seen.value > floor) {
+      problems.push(
+        `${axis}: observation ${seen.value} exceeds the campaign's worst reading ${floor}. ` +
+          'A high excursion belongs in the floor, which means re-taking the campaign (ADR-0015).',
+      );
+    }
+  }
+
+  if (readings.direction) {
+    if (!(lowest > 1)) problems.push(`${axis} asserts ratio > 1 but its own array holds ${lowest}`);
+    const contrary = observations.filter((seen) => seen.value <= 1);
+    for (const seen of contrary) {
+      problems.push(
+        `${axis} asserts ratio > 1 while recording an observation of ${seen.value} (${seen.source})`,
+      );
+    }
+    return problems;
+  }
+
+  // Declining it needs evidence, and the evidence has to be a NUMBER the file carries: either a
+  // sub-1 reading in the arrays, or a recorded observation. A flag nobody can source is §2.1's
+  // superstition with CI access, and a flag sourced to unchecked prose is the same thing wearing
+  // a citation.
+  if (lowest > 1 && !observations.some((seen) => seen.value <= 1)) {
+    problems.push(
+      `${axis} declines the direction assertion while every recorded reading exceeds 1 ` +
+        `(lowest ${lowest}) and no observation at or below 1 is recorded. Either the readings ` +
+        'support the assertion and it should be ON, or the sub-1 observation that warrants ' +
+        'declining it must be recorded in `observations` as a value, not described in prose.',
+    );
+  }
+  return problems;
+};
 const axisReadings = CAMPAIGN.axes as unknown as Readonly<Record<string, AxisReadings>>;
 const bounds = BOUNDS as unknown as Readonly<Record<string, number>>;
+
+describe('the DIRECTION flag is derived from the readings, not chosen (G-032a sweep 3)', () => {
+  // ===========================================================================================
+  // NOTHING PINNED THIS AND IT DRIFTED TWICE IN ONE COMMIT.
+  //
+  // `direction` asserts a ratio exceeds 1 — that the two arms have not swapped places. It is a
+  // property of the ARMS, so it is a property of the READINGS, and the file's own headline is
+  // that it has no free parameter. It was a free parameter: nothing compared the flag against
+  // the numbers beside it, and G-032a's re-take carried BOTH flags across a campaign that
+  // replaced every reading they rested on.
+  //
+  //   `needs`    kept `true` while the lever collapsed 4-against-1 to 4-against-3 — the shipped
+  //              gate then read 0.9732 on an ordinary `pnpm verify` and went red.
+  //   `density`  kept `false` on the warrant *"0.9915 is in the readings below"* — a number the
+  //              same diff deleted. Its shipped minimum is 1.2453.
+  //
+  // The rule below makes the flag a consequence: an axis may decline the assertion only with a
+  // recorded sub-1 observation, and may carry it only without one. Both instances above go red
+  // here, which is what "derived" has to mean if it is not to be a word.
+  // ===========================================================================================
+  it.each(AXES as readonly string[])('%s: the flag agrees with every reading on record', (axis) => {
+    expect(directionProblems(axis, axisReadings[axis] as AxisReadings)).toEqual([]);
+  });
+
+  it('and the rule can FAIL — the LIVE predicate over a flag flipped', () => {
+    // ADR-0007, and the arm that was a tautology until the verification pass. An `it.each` over
+    // four agreeing axes proves only that four agree; this drives the SAME function over an axis
+    // that does not agree — readings all above 1, direction declined, nothing recorded.
+    const rogue: AxisReadings = { quiet: [1.2, 1.3], loaded: [1.4], rotation: 'needs', direction: false };
+    expect(directionProblems('rogue', rogue)).toHaveLength(1);
+    expect(directionProblems('rogue', rogue)[0]).toContain('declines the direction assertion');
+
+    // AND THE HOLE THE STRING WAIVER LEFT, CLOSED: an asserted-but-contradicted flag, and a
+    // number that is data rather than a sentence. Each of these passed the withdrawn version.
+    const invented: AxisReadings = { ...rogue, observations: [{ value: 0.5, source: 'I decided this' }] };
+    expect(directionProblems('invented', invented)).toEqual([]);
+    const asserted: AxisReadings = { ...invented, direction: true };
+    expect(directionProblems('asserted', asserted)[0]).toContain('while recording an observation');
+    const tooHigh: AxisReadings = { ...rogue, observations: [{ value: 9, source: 'not a low tail' }] };
+    expect(directionProblems('tooHigh', tooHigh).join(' ')).toContain('belongs in the floor');
+    // ...which is exactly the state the arm above refuses, and `density` was in it until sweep 3.
+  });
+});
 
 describe('every bound is exactly its own derivation, recomputed here rather than trusted', () => {
   it.each(AXES as readonly string[])('%s = trunc(quiet median x 1.5, 4dp)', (axis) => {
@@ -277,8 +387,34 @@ describe('the seam: the instrument holds no bound, and the two lists agree', () 
     expect(HARNESS_SOURCE).not.toMatch(/require\(['"][^'"]*scaling-bound/);
     // ...and it renders no verdict: no comparison operator against a bound, and no exit code
     // that depends on a measurement. The one `process.exit` it has is its argument parser's.
-    expect(HARNESS_SOURCE).not.toContain('FAIL');
-    expect(HARNESS_SOURCE).not.toContain('PASS');
+    //
+    // =====================================================================================
+    // COMMENTS ARE STRIPPED FIRST, AND THAT IS A REPAIR RATHER THAN A RELAXATION (G-032a).
+    //
+    // This scanned the RAW source, so it forbade the words `PASS` and `FAIL` in the harness's
+    // PROSE as well as in its code. The cost showed up immediately: a G-032a docblock
+    // explaining that the `rooms` fingerprint *"would have PASSED"* turned this red, and the
+    // first response was to reword the sentence and add a parenthesis explaining the
+    // avoidance — **documenting a prose scanner instead of repairing it.** `sim-critic` called
+    // that the third instance of the shape in this project.
+    //
+    // It is the WEAKER direction that matters: a scanner over comments **steers prose it
+    // cannot enforce and can be walked around in code** by building the string from parts. So
+    // the check now reads what it claims to read — the harness's CODE — using the
+    // `stripComments` idiom `workload.concurrency.test.ts` uses for exactly this reason.
+    //
+    // The property is unchanged and the bite is strictly better: a `PASS` in a string literal
+    // or an identifier still fails, which is what "renders no verdict" means.
+    // =====================================================================================
+    const stripComments = (source: string): string =>
+      source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    const harnessCode = stripComments(HARNESS_SOURCE);
+    expect(harnessCode).not.toContain('FAIL');
+    expect(harnessCode).not.toContain('PASS');
+    // AND THE STRIPPER IS NOT DOING THE WORK. If it emptied the file the two lines above would
+    // pass over nothing — the vacuity this file's own subject is about.
+    expect(harnessCode).toContain('microsecondsPerTick');
+    expect(harnessCode).toContain('fingerprint');
   });
 
   it('every bounded axis is an axis the arms module actually measures, and the reverse', () => {
@@ -322,43 +458,39 @@ describe('the seam: the instrument holds no bound, and the two lists agree', () 
     }
   });
 
-  it('THE CAMPAIGN IS STALE ON EXACTLY ONE AXIS, AND THAT IS DELIBERATE AND SCHEDULED', () => {
+  it('THE CAMPAIGN AND THE SHIPPED WORKLOAD AGREE ON EVERY FIELD — the staleness is DISCHARGED', () => {
     // ========================================================================
-    // THIS ASSERTED AGREEMENT ON ALL FOUR FIELDS UNTIL G-027a, AND THE INVERSION IS THE
-    // HUMAN'S RULING RATHER THAN A REPAIR — the same shape as the v8/v12 reason-list arm in
-    // `migration-scan.build.grid.provider.outcome.travel.save.test.ts`.
+    // THIS ARM WAS THE DEBT MARKER AND G-032a PAYS THE DEBT, SO IT INVERTS BACK.
     //
-    // ADR-0021 moved `ARRIVAL_EVERY_TICKS` 32 -> 96 to restore the benchmark's calibrated
-    // occupancy of fifteen concurrent guests, which ADR-0017's longer stay had silently
-    // redefined to forty-five. `scaling-arms.ts` now imports that constant instead of holding
-    // a second copy, so the arms run at 96 while `scaling-bound.mjs`'s campaign records 32.
+    // It asserted agreement on all four fields until G-027a; ADR-0021 then moved
+    // `ARRIVAL_EVERY_TICKS` 32 -> 96 and the arm was inverted to pin the divergence as a FACT —
+    // *"`check:scaling` IS RED BECAUSE OF THIS AND IS MEANT TO BE"* — because re-taking a
+    // four-axis campaign is a scheduled goal rather than something to slip into that diff.
     //
-    // **`check:scaling` IS RED BECAUSE OF THIS AND IS MEANT TO BE.** ADR-0015 says REPLACE on
-    // a configuration change, the bound is DERIVED from the campaign arms, and re-taking a
-    // four-axis campaign is a scheduled goal rather than something to slip into this diff.
-    // Widening or re-deriving a bound to clear it was refused for the reason ADR-0021 gives:
-    // a green gate measuring a different hotel has stopped being evidence.
+    // **G-032a IS THAT GOAL.** The campaign was re-taken at the shipped configuration and
+    // REPLACES: n=12 quiet and n=8 loaded per axis, all four axes, both rotations. So the
+    // exemption is gone and the assertion goes back to what it always wanted to say — the
+    // campaign and the workload describe one hotel.
     //
-    // WHY THIS TEST DOES NOT SIMPLY STAY RED. A red GATE row says "this campaign owes a
-    // re-take". A red `pnpm test` says "I4, the ledger, is broken", and those are different
-    // claims — conflating them is what teaches people to re-run a suite until it passes. So
-    // the divergence is pinned as a FACT with exactly one permitted axis: a SECOND field
-    // drifting still reddens here, by name, and so does the first one drifting to a value
-    // nobody chose.
+    // AND THE ARITHMETIC PROXY DID NOT COME BACK WITH IT. The retired version asserted
+    // `480 / 32 === 15` and `1440 / 96 === 15` to show both cadences described "the same
+    // hotel". That quotient is the proxy θ-b1 proved blind — it reads 15 at 14.77, 6.40 and
+    // 8.72 concurrent guests — and `workload.mjs`'s target is a MEASURED occupancy now
+    // (`TARGET_CONCURRENT_HUNDREDTHS`). Re-asserting the quotient here would reinstate a
+    // predicate this project deleted two files over, in the goal that deleted it.
+    //
+    // WHAT STILL GUARDS THE THING THE EXEMPTION GUARDED: a second field drifting reddens on the
+    // `toMatchObject` below, a new field reddens on the frozen key list, and the ARMS
+    // themselves — which no field here describes — are covered by the rotation fingerprints,
+    // which since G-032a carry `stayDurationTicks` so content cannot redefine a flag's meaning
+    // unseen (ADR-0039 §2).
     // ========================================================================
-    expect(CAMPAIGN.configuration).toMatchObject({ rooms: ROOMS, seed: SEED, ticks: TICKS });
-
-    // THE ONE PERMITTED DIVERGENCE, asserted BEFORE it is excused, so "they agree" cannot be
-    // reached by quietly ignoring a field.
-    expect(CAMPAIGN.configuration.arrivalEveryTicks).toBe(32);
-    expect(ARRIVAL_EVERY_TICKS).toBe(96);
-    expect(CAMPAIGN.configuration.arrivalEveryTicks).not.toBe(ARRIVAL_EVERY_TICKS);
-
-    // AND IT IS THE OCCUPANCY THAT WAS BEING RESTORED, not an arbitrary number: the campaign's
-    // 32 was fifteen concurrent guests under a 480-tick stay, and 96 is fifteen under 1,440.
-    // Both describe the SAME hotel; only one of them describes it under this build's content.
-    expect(480 / CAMPAIGN.configuration.arrivalEveryTicks).toBe(15);
-    expect(1_440 / ARRIVAL_EVERY_TICKS).toBe(15);
+    expect(CAMPAIGN.configuration).toMatchObject({
+      rooms: ROOMS,
+      seed: SEED,
+      ticks: TICKS,
+      arrivalEveryTicks: ARRIVAL_EVERY_TICKS,
+    });
 
     // AND NO FIELD HAS BEEN ADDED TO THE CAMPAIGN'S CONFIGURATION SINCE THE DIVERGENCE WAS
     // PERMITTED. The first version of this line filtered the key list for `arrivalEveryTicks`

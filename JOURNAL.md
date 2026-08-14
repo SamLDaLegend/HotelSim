@@ -1325,3 +1325,78 @@ width of the whole stay.* **The label survives the redefinition.**
 
 **What this closes**: θ-a, G-031a and G-028b's WATCH obligations, and with them **the last thing
 standing between M2.5 and its exit.**
+
+## G-032a — The instrument debts M2.5 left — REFLECT
+
+**DONE. `pnpm verify` RETURNS THIRTEEN GREEN — "All six invariant gates green" — for the first time
+this session.** 3 sweeps (1 BLOCKER + 16 MAJOR) plus a verification closing on **four
+UNPINNED-CLAIM findings and two undischarged repairs — no round, no split.** Suite **121 files /
+2,124 tests**. Every exit criterion re-run by the orchestrator.
+
+**THE THREE RED ROWS HAD BEEN RED SINCE BEFORE THIS SESSION BEGAN, AND ONE OF THEM WAS CARRYING A
+SECOND DEFECT THE WHOLE TIME.** `check-tripwire.mjs`'s mutation pattern was **LF-only**, while the
+harness compares a git blob (LF) against the working tree (CRLF) — **so on a dirty tree, which is
+every moment an agent is mid-goal, every probe was inert.** The row that proves the tripwire can
+*detect* a regression was proving nothing.
+
+> **A ruled-red row is a place where a new defect arrives silently. The ruling explains the colour,
+> so nobody asks what else is in it.** (ADR-0040)
+
+**§9 predicted this and it is now observed.** Three rows read for a session as *"one ADR-0015
+configuration debt, human-accepted"* — and it is the argument for the goal's ordering, evidenced
+rather than reasoned.
+
+**AND THE GATE'S BLIND GUARD WAS BLIND IN THE ROTATION NOBODY HAD LOOKED AT.** `check:scaling`
+refused at the first rotation and **never reached the second — which would have PASSED**, while
+ADR-0017 had tripled every one of those arms' occupancy. **The fingerprint is spelled in FLAGS. The
+flags did not move; the hotel did.** All four axes re-taken; `stayDurationTicks` is now a
+fingerprint term.
+
+**THE CENSUS IS THE GOAL'S DELIVERABLE AND ITS COUNT WAS WRONG THREE TIMES, EACH ON A TREE THAT DID
+NOT CONTAIN THE FIX.** The published figures were taken before the file publishing them existed —
+**and the census's own anchor guard counted itself**, because the census works by replacing the line
+that guard asserts is present. Settled by a third option neither the orchestrator nor the critic
+proposed: **the guard accepts either spelling**, since its subject is whether the anchor is still
+recognisable. Its verdict on the exemption offered instead: ***"a test that must be excused is a
+test asking the wrong question."***
+
+**Final: `+1` → 13 / 50 / 2 · `−1` → 14 / 53 / 5 · union 14 / 58 / 6, and FIVE ARE PROPERTY-SHAPED
+— inequalities that REVERSE one tick away**, including ADR-0034's amendment and G-028b's
+provisioning monotonicity. **Six rooms is this project's default balance workload.**
+
+**A GATE ASSERTION WAS REMOVED BECAUSE ITS LEVER HAD COLLAPSED, AND IT WAS FOUND BY ASKING FOR
+CAPTURED OUTPUT RATHER THAN A RE-RUN.** I4 went red once and green twice — the shape everyone reads
+as a flake. Captured: `needs 0.9732 — ratio is not above 1`. **A `direction: true` carried across a
+campaign whose lever went from 4-against-1 to 4-against-3** — ADR-0027's class, **in the re-take
+whose whole subject is not doing that**, with the sibling axis having declined that same assertion
+since G-020c in a block the builder had read.
+
+**AND THE FIRST REPAIR MOVED THE FREE PARAMETER RATHER THAN REMOVING IT.** `direction` became
+derived **where the flag is ON** and rested on an unchecked free-text waiver **where it is OFF** —
+`'0.5 — I decided this'` passed. **The number is now data** (`observations: [{ value, source }]`),
+the rule is a callable predicate, and **the rogue arm runs the same function rather than asserting
+properties of its own fixture** — which it did not, and was therefore invariant under every possible
+change to the rule.
+
+**THE ORCHESTRATOR'S ERRORS, AND THEY HAVE A SINGLE ROUTE.** **Four of one sweep's five MAJORs were
+explanations I had relayed to the human as established** — that a reading would move the median (it
+would not), that a regex was LF-only (CR is a LineTerminator), that a load figure was pre-existing
+(no paired arm), that a guard's subject was gone (there were two copies, and the survivor was
+unfenced). **ADR-0042: I verify the readings and relay the reasons, and the reasons are where the
+errors are.** Each was *adjacent* to something true; the sentence about **why** was the part no gate
+checks.
+
+**Plus**: the seam was taken and the block not split — **fourth instance in one session**, in the
+block written because of the first three, *"because taking a seam and recording a seam are two acts
+and only the first has a natural moment"* · `check:stamp`'s body predicate — a scoped deliverable —
+**shipped inside the human's sign-off commit** (ADR-0041), so its critics were never shown it · and
+three ratios in ADR-0040 **withdrawn**, written from a report into the ADR about a check that had
+stopped checking.
+
+**Owed forward**: **G-032b — the merge**, carrying ADR-0015's pre-registered escalation: if it does
+not remove the 1.135×–1.161× drift, **the empirical claim that rule rests on is falsified by this
+project's own output**, and that is an `ESCALATIONS.md` entry, not a wider bound · **G-032c** —
+I3's unquoted-key hole · the needs-history interval, deferred · **the loaded regime is UNOBSERVED
+for this tree** and parked with its paired invocation · the density quiet arm may under-resolve its
+upper tail at n=12 · **and the workload slot forced three re-takes in one session** — worth deciding
+whether it should name the suite at all, or whether the per-arm identity suffices.

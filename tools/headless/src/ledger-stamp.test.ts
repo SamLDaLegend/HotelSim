@@ -80,7 +80,7 @@ const STUB_SOURCES: Readonly<Record<string, string>> = {
 };
 
 /** The digest body line the facts are read from — one line, stating all four. */
-const factsLine = (facts: Partial<typeof STUB> = {}): string => {
+const factsLine = (facts: Partial<Record<keyof typeof STUB, string>> = {}): string => {
   const f = { ...STUB, ...facts };
   return `- **State**: save **v${f.save}** · summary **${f.summary}** · I2 \`${f.i2}\` · measure golden \`${f.golden}\``;
 };
@@ -313,7 +313,10 @@ describe('THE DIGEST BODY, WHICH THIS GATE READ NOTHING OF UNTIL G-032a (ADR-003
   });
 });
 
-describe('AND IT BITES — nine mutations, each named, each against an otherwise-valid tree', () => {
+// DE-NUMERALLED AT G-032a (ADR-0032 §1). This read "nine mutations" over seven arms — a derived
+// figure in prose, nothing keeping it honest, in a file whose whole subject is a check that
+// certifies less than it appears to. Say "every mutation"; the arms are the count.
+describe('AND IT BITES — every mutation named, each against an otherwise-valid tree', () => {
   it('one ledger disagreeing with the other three: the file is named and both texts printed', () => {
     writeLedgers(tree.dir, {
       overrides: {

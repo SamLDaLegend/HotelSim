@@ -23,7 +23,7 @@
 // drift cancels, MEDIAN after a discarded warm-up, and in-process timing of `run()` only so
 // process startup is not in the measurement.
 
-import { createWorld, hashState, run } from '@hotelsim/sim';
+import { createWorld, hashState, run, stayDurationOf } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { schedule } from './report.js';
 import {
@@ -167,9 +167,35 @@ const orders = (ORDERS[options.rotation] ?? []).map((spec) => ({
  * So every arm's own parameters go in the fingerprint, INCLUDING the arm list itself: adding,
  * removing or renaming an arm changes this string, and `scaling-bound.mjs` records what the
  * campaign was taken at.
+ *
+ * ===========================================================================================
+ * AND THE STAY DURATION IS IN IT SINCE G-032a, BECAUSE FLAGS ALONE COULD NOT SEE THE HOTEL MOVE
+ * (ADR-0039 §2).
+ *
+ * Every term above is a FLAG. ADR-0017 tripled `stayDurationTicks` and changed the occupancy of
+ * every arm in this file without moving one character of this string — so `check:scaling`
+ * refused on the `needs` rotation (whose cadence happened to move) and **would have PASSED the
+ * `rooms` rotation**, measuring a hotel holding three times what its campaign was taken at. The
+ * fingerprints were byte-identical; the hotels were not. That is ADR-0021's blind-guard defect —
+ * a guard fed by the thing it is guarding — one rotation over from where ADR-0021 found it.
+ *
+ * `stayDurationTicks` is a CONTENT CONSTANT: exact, free, and no stopwatch. It is read PER ARM
+ * rather than once, because `lodgingOnly` cuts the content and an arm is entitled to a different
+ * table; a single module-level read would be the same "describes one rotation, printed on all of
+ * them" mistake the four scalars above already made once.
+ *
+ * `-` for content with no lodging need at all (a food court, θ-b2): a stay length that does not
+ * exist is written as absent rather than as zero, because 0 is a number a table could hold.
+ * ===========================================================================================
  */
 const fingerprint = arms
-  .map((arm) => `${arm.name}:${arm.rooms}r/${arm.arrivals}a/${arm.amenities}m/${(arm.content.content.needTypes ?? []).length}n`)
+  .map((arm) => {
+    const stay = stayDurationOf(arm.content);
+    return (
+      `${arm.name}:${arm.rooms}r/${arm.arrivals}a/${arm.amenities}m/` +
+      `${(arm.content.content.needTypes ?? []).length}n/${stay ?? '-'}s`
+    );
+  })
   .join(' ');
 
 process.stdout.write(

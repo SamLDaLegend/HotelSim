@@ -3429,3 +3429,166 @@ are cheap and ride along.
 loop — and run the suite. It reaches every consumer *including tests that pass their own cadence
 literal*, which a constant-perturbation would miss. **Whole census ≈3.5 minutes**, with the
 permitted set **pre-registered so the count cannot be padded.**
+
+## ADR-0039 AMENDMENT — §3's headline comparison was a SLOT-ONE ERROR, and the gate it accused was the one telling the truth
+
+**Date**: 2026-08-14 · **Amends**: ADR-0039 §3 · **Raised by**: `sim-engineer` at G-032a's build,
+**against its own plan's headline number.**
+
+§3 recorded: *"±1 arrival tick moves occupancy by +3.2 % — against a tripwire noise ceiling of
+2.38 %. One arrival tick moves the workload's own cost driver by more than the instrument's entire
+noise budget."*
+
+**The 2.38 % was the cadence-32 campaign's ceiling** — the stale one, the reason the row was red.
+**Comparing it against a reading taken at cadence 96 compares a property of the WORKLOAD against a
+property of a retired INSTRUMENT.** CLAUDE.md rule 4, slot one, **made in the plan that was
+executing the REPLACE half of the rule it broke.**
+
+**Re-taken at the shipped workload the ceiling is 3.55 %, and 3.21 % is below it.** The assertion
+built on the comparison **went red exactly as pre-registered and is withdrawn, not widened** — the
+epitaph is in the test.
+
+> **The sentence was "the workload is noisier than the instrument can see." The measurement says the
+> instrument, once it is looking at the right hotel, sees it fine.**
+
+**What survives, and it is still the finding**: **±1 tick moves occupancy by 3.2 %, and 122 → 123
+moves it 26 %.** A single-cadence reading is a single-cadence claim. **What does not survive is the
+comparison to a number belonging to a campaign that had already been retired for being stale.**
+
+**And the ordering hazard was answered by measurement rather than argument.** The same null at
+95 / 96 / 97 reads **0.9896 / 1.0355 / 1.0044** — **the shipped cadence is the noisiest of its own
+neighbourhood**, so the ceiling taken there is the conservative one. Recorded as observations
+against which the bound is checked, **not pooled into it**: a different cadence is a different
+configuration (ADR-0015's REPLACE half).
+
+---
+
+## ADR-0040 — A GATE THAT IS KNOWN RED HIDES ITS OWN DEFECTS. The cost is now collected, not predicted.
+
+**Date**: 2026-08-14 · **Status**: accepted · **Relates to**: §9, ADR-0007, ADR-0015 · **Raised by**:
+`sim-engineer` at G-032a, by fixing the row and finding what was behind it.
+
+§9 warns that *a gate that is known red teaches people to skim the summary.* **That was a
+prediction. It is now an observation, and the defect it hid is worse than the debt that hid it.**
+
+`check-tripwire.mjs`'s `GUEST_LOOP` mutation pattern was **LF-only**. `materialise` reads a git
+revision from the blob (**LF**) and the working tree from disk (**CRLF**), and `--null` measures head
+against head — so **on a dirty tree, which is every moment an agent is mid-goal, every mutation
+probe was inert.** The proof-of-bite row was proving nothing.
+
+**Nobody could see it because the row was already red for an unrelated reason.** Three ruled-red
+rows had been read as *"one ADR-0015 configuration debt, human-accepted"* for an entire session —
+**and one of them was carrying a second, real defect the whole time.**
+
+> **A ruled-red row is a place where a new defect arrives silently. The ruling explains the colour,
+> so nobody asks what else is in it.**
+
+**Repaired** with `\r?\n` built from a normal string and **compiled out of the shipped bytes** — the
+old literal matched the CRLF tree `false`. **The proof now bites: both mutations red, the control green.** *(The three ratios first
+recorded here — 2.27× / 1.69× / 1.00× — are **WITHDRAWN**. `sim-critic` re-ran them and read
+2.14× / 2.09× / 1.03×; the constant arm differs by 24 %. They were three absolutes carrying **no
+sample count, no aggregation and no regime** — three of rule 4's five slots — written into a ledger
+a future reader would compare against, **by the orchestrator, from an agent's report, in the ADR
+about a check that had stopped checking.** The claim that survives needs no stopwatch: both
+mutations red, control green. **A ratio here was never the finding — the finding is that the
+probe fires at all.**)*
+
+**The rule this earns**: **when a gate is ruled red, the ruling names WHICH failure is accepted, and
+the goal that repairs it must report what else was in the row.** An accepted red is a suspended
+check, not a silent one — and this project ran for a session with three of them.
+
+**And it is the argument for G-032's ordering, now evidenced rather than reasoned**: the
+instrument-debt goal went before the circulation goals because the gates had stopped being evidence.
+**They had stopped being evidence in a way nobody had guessed.**
+
+## ADR-0041 — A GOAL'S DELIVERABLE MUST SHIP IN THE GOAL'S OWN COMMIT
+
+**Date**: 2026-08-14 · **Status**: accepted · **Relates to**: §5 COMMIT, ADR-0038 · **Raised by**:
+`sim-critic` at G-032a sweep 2.
+
+**`check:stamp`'s body predicate is a scoped G-032a deliverable** (ADR-0039 §1, and named in the
+goal block). **It shipped inside commit `55ca957`** — 196 lines of `stamp.mjs` and 153 of
+`ledger-stamp.test.ts` — **whose subject line is *"M2.5 signed off, and WATCH #11 discharges three
+goals in one look"* and whose body never mentions G-032a, `check:stamp` or ADR-0039.**
+
+**The orchestrator bundled it while committing the human's sign-off**, because both were in the
+working tree at the same moment and `git add -A` does not ask which goal a file belongs to.
+
+### Why this is more than untidy history
+
+**A critic sweeps the goal's diff.** A deliverable committed under another goal's message **is not
+in that diff**, so it is not swept — and `sim-critic` correctly declined to count it as unswept
+surface, because it could not have known to look. **The goal's own block lists it as in scope while
+its critics were never shown it.**
+
+> **A commit message is the boundary a reviewer's attention is drawn around. Work outside it is work
+> nobody was asked to look at.**
+
+### The rule
+
+**Commit a goal's deliverables under that goal.** Where an unrelated commit must go out mid-goal —
+a human sign-off, a hotfix — **stage explicitly rather than with `-A`**, and if something is swept
+up anyway, **say so in the commit that closes the goal** so the reviewer knows where to look.
+
+**This one is now recorded rather than rewritten**: `55ca957` is pushed, and rewriting shared
+history to tidy an attribution would cost more than the defect. **G-032a's REFLECT names the two
+files and the commit they are actually in**, which is the cheapest honest repair.
+
+### And the ledger already had the general form of this
+
+ADR-0038 says a fix pass is swept like a diff, and the unit is the enclosing block. **This is the
+same rule one level up: the unit of a COMMIT is the goal, and a reviewer's unit is the commit.**
+Both exist because **attention is drawn around a boundary, and work that crosses the boundary
+silently is work that is not looked at.**
+
+## ADR-0042 — THE ORCHESTRATOR RELAYS BUILDER CLAIMS AS FINDINGS, AND THE CRITIC KEEPS CATCHING THEM
+
+**Date**: 2026-08-14 · **Status**: accepted · **Relates to**: CLAUDE.md rule 4, §5 VERIFY
+(*"an agent's report that tests pass is not evidence"*) · **Raised by**: `sim-critic` at G-032a
+sweep 3, where **four of five MAJORs were claims the orchestrator had already repeated to the
+human as established.**
+
+### The four
+
+| what I relayed | what the tree says |
+|---|---|
+| *"the 0.9732 is not pooled, because folding it in would move the median and therefore the bound"* | **it would not.** Median at n=12 is index 6 = 1.1454; inserting it to make n=13 leaves index 6 = 1.1454. Bound unchanged either way — **and `PARKING.md`, in the same commit, states the correct arithmetic** |
+| *"the anchor parse was LF-only, in the goal that wrote ADR-0040"* | **in JavaScript CR is itself a LineTerminator**, so multiline `$` matches before `\r`. The pre-fix spelling worked, and **the claim inflates ADR-0040's instance count** |
+| *"14 tests time out across 10 files under load — pre-existing"* | **5 failures, not 14**, at the stated invocation — and *"pre-existing"* rests on **no paired HEAD arm at all** |
+| *"the cross-file agreement check was removed because there is one copy now"* | **there are two.** `measure-arm.mjs` carries the same four numbers, **and the surviving copy is the unfenced one** |
+
+### The mechanism, and it is not credulity
+
+**§5 VERIFY already says an agent's report that tests pass is not evidence, and I have been running
+every gate myself all session.** What I did not re-derive is the **reasoning attached to the
+numbers** — the *why* rather than the *what*. A builder that has just measured something carefully
+sounds most authoritative exactly where it is explaining what the measurement means, and **the
+explanation is the part no gate checks.**
+
+> **I verify the readings and relay the reasons. The reasons are where the errors are.**
+
+Each of the four is *adjacent to* something true: a reading really was excluded, a regex really was
+changed, the suite really does fail under load, a copy really was deleted. **The claim that failed
+was the sentence about why.**
+
+### The rule
+
+**Before relaying a builder's REASON to the human, ask what would be true if it were false.** Three
+of these four take one line of arithmetic or one grep to check:
+
+```
+node -e "..."                       # does inserting the value move the median?
+grep -rn "0\.9268" --include=*.mjs  # is there really one copy?
+node -e "/…$/m.exec(crlfText)"      # does the old pattern really fail on CRLF?
+```
+
+**And where the reason cannot be checked in a line — "pre-existing", "the same class as", "this is
+why it happened" — relay it as the builder's account rather than as a finding**, which costs one
+word and is the difference between a report and a claim.
+
+### Why this ADR rather than a note
+
+**Nine goals this session recorded slot-one errors, six of them mine.** This names the specific
+route: **not measuring badly, but transmitting an explanation I did not test with the confidence of
+a number I did.** The human has been reading those explanations as verified because I presented
+them that way.

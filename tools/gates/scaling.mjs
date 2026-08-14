@@ -129,7 +129,13 @@ function measure(rotation) {
   }
   const shipped = CAMPAIGN.configuration;
   const ran = reading.workload;
-  const drifted = ['seed', 'ticks'].filter((key) => ran[key] !== shipped[key]);
+  // `arrivalEveryTicks` JOINED THIS LIST AT G-032a (ADR-0039 §2), AND ITS ABSENCE WAS VISIBLE IN
+  // THIS GATE'S OWN OUTPUT. The header below prints `an arrival every ${…arrivalEveryTicks} ticks`
+  // from the CAMPAIGN, and nothing compared it against what the instrument ran — so for a goal
+  // this gate printed "an arrival every 32 ticks" over a rotation running 96. That is the
+  // "instrument measured a different hotel from the one this gate names" refusal `tripwire.mjs`
+  // has carried since G-020b, missing from the gate beside it.
+  const drifted = ['seed', 'ticks', 'arrivalEveryTicks'].filter((key) => ran[key] !== shipped[key]);
   // THE FINGERPRINT IS THE PART THAT ACTUALLY SEES THE ARMS. The scalars above are the need
   // rotation's; only this catches a re-sized room arm, a changed amenity count, or an arm
   // entering or leaving a rotation — which is the workload change this whole gate is built
@@ -241,10 +247,15 @@ for (const axis of axes) {
   );
   // A bound alone is also satisfied by the two arms swapping places, which would mean the arms
   // are not what the file claims they are. G-010's own file carries this assertion for the same
-  // reason and it moves here with the bound — but NOT on every axis: the density ratio's own
-  // quiet spread crosses 1, so asserting a direction there would be asserting something the
-  // instrument has been measured contradicting. Which axes carry it is a property of the
-  // readings and lives with them (`scaling-bound.mjs`, `direction`).
+  // reason and it moves here with the bound — but NOT on every axis. **Which axes carry it is a
+  // property of the READINGS and lives with them** (`scaling-bound.mjs`, `direction`), and since
+  // G-032a that is enforced rather than intended: an axis may decline the assertion only with a
+  // recorded sub-1 observation, and `scaling.bound.test.ts` refuses a flag either way round.
+  //
+  // *(This named DENSITY as the axis whose spread crosses 1. That was true of the cadence-32
+  // campaign and the re-take replaced it — density's shipped minimum is 1.2453. The axis that
+  // declines it now is `needs`, whose lever collapsed to 4-against-3. A duplicated explanation
+  // in a second file, still describing the array it had outlived.)*
   if (wrongDirection) {
     failures.push(`${axis.axis}: ratio ${ratio.ratio.toFixed(4)} is not above 1 — ${ratio.because}`);
   }

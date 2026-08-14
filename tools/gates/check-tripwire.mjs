@@ -107,6 +107,33 @@ const check = (where, condition, what) => {
 const GUEST_LOOP = '  for (const existing of guests.list) {\n    let guest = existing;';
 
 /**
+ * THE SAME TWO LINES AS A PATTERN THAT DOES NOT CARE WHICH NEWLINE IT MEETS — AND THIS IS A
+ * DEFECT G-032a FOUND, NOT A NICETY.
+ *
+ * `materialise` reads a GIT REVISION's bytes from the blob (LF) and the WORKING TREE's bytes
+ * from disk (CRLF on a Windows checkout). `--null` measures head against head, and when the
+ * tree is DIRTY head IS the working tree — so the literal above matched the blob and missed the
+ * file, `mutate` threw "matched nothing in guests.ts", and every mutation probe reported the
+ * gate failing to go red.
+ *
+ * IT BIT ONLY ON A DIRTY TREE, WHICH IS EVERY MOMENT AN AGENT IS MID-GOAL, and it was INVISIBLE
+ * for the whole of the period this row was ruled red for an unrelated reason. **That is the cost
+ * §9 names for a known-red gate, collected**: the cascade masked a second, real defect in the
+ * proof, and the only reason anybody looked was that this goal had to make the row green.
+ *
+ * It is also `stamp.mjs`'s lesson one file over — *"a gate must compare text, not line
+ * endings"* — which that file learned the cheap way and this one did not.
+ *
+ * THE PATTERN IS BUILT FROM A NORMAL STRING, NEVER A TEMPLATE LITERAL. In a template literal the
+ * backslash is consumed and `\r?\n` would compile to `r?n`; `CLAUDE.md` records three instances
+ * of that by three authors, every one inside a scanner. **Group 7 below compiles this function's
+ * output and asserts it matches an LF loop, a CRLF loop and the shipped `guests.ts`** — so the
+ * claim is checked rather than promised.
+ */
+const guestLoopPattern = () =>
+  GUEST_LOOP.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').split('\n').join('\\r?\\n');
+
+/**
  * WHY THE SINK ESCAPES TO A GLOBAL. An accumulation nothing reads is dead code, and V8 is
  * entitled to delete it — a mutation that optimises away would make this gate look blind
  * when it is not. One store to a global per tick cannot be eliminated and costs nothing
@@ -139,7 +166,11 @@ function mutationPatch(edit) {
         '  const files = options.nullEdit ? withNullEdit(fromGit) : fromGit;',
         '  const mutate = (list) => list.map((file) => file.path !== \'packages/sim/src/guests.ts\' ? file : (() => {\n' +
           '    const text = file.bytes.toString(\'utf8\');\n' +
-          '    const after = text.replace(__MUTATION_FROM__, __MUTATION_TO__);\n' +
+          // THE REPLACEMENT ADOPTS THE NEWLINE IT FOUND. Writing LF into a CRLF file would leave
+          // one arm with mixed endings — harmless to the parser, and exactly the kind of
+          // difference that makes a later reader doubt a byte-level digest for no reason.
+          '    const after = text.replace(__MUTATION_FROM__, (matched) =>\n' +
+          '      __MUTATION_TO__.split(\'\\n\').join(matched.includes(\'\\r\\n\') ? \'\\r\\n\' : \'\\n\'));\n' +
           '    if (after === text) throw new InstrumentError(\'the proof\\\'s mutation matched nothing in guests.ts\');\n' +
           '    return { path: file.path, bytes: Buffer.from(after, \'utf8\') };\n' +
           '  })());\n' +
@@ -148,7 +179,7 @@ function mutationPatch(edit) {
       );
       if (injected === source) throw new Error("the proof could not find materialise()'s file selection");
       return injected
-        .replace('__MUTATION_FROM__', JSON.stringify(GUEST_LOOP))
+        .replace('__MUTATION_FROM__', `new RegExp(${JSON.stringify(guestLoopPattern())})`)
         .replace('__MUTATION_TO__', JSON.stringify(edit));
     },
   ];
@@ -359,47 +390,81 @@ check(
   'the campaign readings are no longer numeric, so the ceiling cannot be derived from them',
 );
 
-// THE ADMITTED ARM IS RECORDED IN TWO FILES, AND THEY MUST AGREE.
+// ===========================================================================================
+// THE CROSS-FILE AGREEMENT CHECK IS RETIRED AT G-032a, AND IT IS RETIRED BECAUSE ITS SUBJECT IS
+// GONE — NOT BECAUSE IT WAS INCONVENIENT.
 //
-// `workload.mjs` documents the 30-day arm-length readings as the argument for the shipped arm
-// length; `tripwire.mjs` carries the same readings as a campaign arm because they set the
-// noise ceiling. Two copies of one measurement is the duplicated-constant shape G-018 removed
-// from the bench's budget and G-020a removed from its workload — so it is checked here rather
-// than trusted, and a drift between them is a hard failure. Without this, `workload.mjs` could
-// be corrected and the bound would silently keep deriving from the stale figure.
+// It compared `workload.mjs`'s documented 30-day arm-length row against the SAME measurement
+// carried as a campaign arm in `tripwire.mjs` (`null, arm-length campaign`), because one
+// measurement written in two files is the duplicated-constant shape G-018 and G-020a both
+// removed. **G-032a's re-take retired that arm**: it was taken at cadence 32, so ADR-0015's
+// REPLACE half forbids it counting toward a campaign taken at 96. There is now ONE copy of that
+// measurement, in `workload.mjs`, where it supports an argument about ARM LENGTH that does not
+// move with cadence.
+//
+// A guard whose two subjects have become one subject inspects nothing, and ADR-0007's rule is
+// that such a check must be deleted rather than left to pass.
+//
+// ===========================================================================================
+// AND THE PREMISE WAS FALSE. THE GUARD IS RESTORED (sweep 3).
+//
+// "There is ONE copy now, in `workload.mjs`" was checked against `tripwire.mjs` and nowhere
+// else. **`tools/gates/arm/measure-arm.mjs` carries the same four numbers** — the 5-day and
+// 30-day arm-length rows — and it was the copy with NO history fence, still recording the
+// workload as cadence 32 in the present tense. So the duplication the deleted guard existed for
+// never went away; it moved out of the pair somebody happened to be looking at.
+//
+// **A guard removed because its subject is gone is only sound if somebody looked for the
+// subject.** The two predicates below (the retired arm cannot come back; the row cannot vanish)
+// were the right additions and they stay; what was wrong was deleting the agreement check on a
+// census of two files when the census was of one.
+// ===========================================================================================
 const workloadSource = readFileSync(join(GATES, 'workload.mjs'), 'utf8');
-const documentedRow = /30 days\s+n=(\d+) interleaved\s+([\d.]+) \.\. ([\d.]+)/.exec(workloadSource);
-const admittedArm =
-  /name: 'null, arm-length campaign', n: (\d+), regime: '(\w+)', min: ([\d.]+), max: ([\d.]+), centre: [\d.]+, sittings: (\d+)/.exec(SOURCE);
-check(
-  'tools/gates/workload.mjs',
-  documentedRow !== null && admittedArm !== null,
-  'the 30-day arm-length readings can no longer be read out of both files, so their agreement cannot be checked',
-);
-if (documentedRow !== null && admittedArm !== null) {
+const armSource = readFileSync(join(GATES, 'arm/measure-arm.mjs'), 'utf8');
+
+// THE ARM-LENGTH ROWS, READ OUT OF BOTH FILES AND COMPARED. One measurement, two copies —
+// correct both or neither. The pattern is deliberately loose about spacing and tight about the
+// numbers, because it is the NUMBERS that must agree.
+const armLengthRows = (source) =>
+  [...source.matchAll(/([\d.]+) \.\. ([\d.]+)/g)].map(([, min, max]) => `${min}..${max}`);
+{
+  const inWorkload = armLengthRows(workloadSource);
+  const inArm = armLengthRows(armSource);
+  const shared = inWorkload.filter((row) => inArm.includes(row));
   check(
-    'tools/gates/tripwire.mjs',
-    documentedRow[1] === admittedArm[1] &&
-      Number(documentedRow[2]) === Number(admittedArm[3]) &&
-      Number(documentedRow[3]) === Number(admittedArm[4]),
-    `the admitted campaign arm and workload.mjs's own record of it disagree: ` +
-      `workload.mjs says n=${documentedRow[1]} ${documentedRow[2]}..${documentedRow[3]}, ` +
-      `tripwire.mjs says n=${admittedArm[1]} ${admittedArm[3]}..${admittedArm[4]}. ` +
-      'One measurement, two copies — correct both or neither.',
+    'tools/gates/arm/measure-arm.mjs',
+    shared.length >= 2,
+    'the arm-length readings can no longer be read out of BOTH workload.mjs and measure-arm.mjs, so ' +
+      'their agreement cannot be checked. Two files carry this one measurement; if a copy was ' +
+      'deleted that is fine, but say so here rather than leaving a guard that inspects one file.',
   );
-  // AND THE METHOD, NOT ONLY THE NUMBERS. The guard compared n, min and max, so THE SITTING —
-  // the one slot the two files actually disagreed about for a round — was the one nothing
-  // checked. It is load-bearing rather than cosmetic: the campaign's justification for pooling
-  // across sittings is only needed if there were two, and `workload.mjs` said one while
-  // `tripwire.mjs` said two.
+  // AND THE FENCE, because the numbers agreeing is not the whole claim: a copy that presents a
+  // cadence-32 reading as the live configuration is wrong even when its digits match.
   check(
-    'tools/gates/workload.mjs',
-    (Number(admittedArm[5]) === 2) === /ACROSS TWO SITTINGS/.test(workloadSource),
-    `the two records disagree about the METHOD: tripwire.mjs says sittings=${admittedArm[5]}, ` +
-      `workload.mjs ${/ACROSS TWO SITTINGS/.test(workloadSource) ? 'says two' : 'does not say two'}. ` +
-      'The sitting is the slot these two files got wrong for a round, so it is checked too.',
+    'tools/gates/arm/measure-arm.mjs',
+    /CADENCE 32 IS HISTORY/.test(armSource),
+    'measure-arm.mjs has lost the fence marking its arm-length readings as a cadence-32 measurement. ' +
+      'Unfenced, they read as the shipped workload, and they are not it (ADR-0015 REPLACE).',
   );
 }
+// MATCHED ON THE ARM DECLARATION, NOT ON THE WORDS. The first version of this check read
+// `SOURCE.includes('arm-length campaign')` and fired on the EPITAPH IN `tripwire.mjs` EXPLAINING
+// THE RETIREMENT — a prose scanner reporting the sentence that describes the absence as the
+// presence. One `name:` key away from being a check on the code, which is what it is now.
+check(
+  'tools/gates/tripwire.mjs',
+  !/name: 'null, arm-length campaign'/.test(SOURCE),
+  "the retired `null, arm-length campaign` arm is back in the campaign. It was taken at cadence 32 " +
+    'and the campaign is taken at 96, so admitting it pools two configurations under one name — the ' +
+    "exact move ADR-0015's REPLACE half forbids, and a pooled ceiling only ever loosens.",
+);
+check(
+  'tools/gates/workload.mjs',
+  /30 days\s+n=\d+ interleaved\s+[\d.]+ \.\. [\d.]+/.test(workloadSource),
+  'the 30-day arm-length readings have gone from workload.mjs. They are the only surviving copy of ' +
+    'the measurement that chose MEASURE_DAYS, and that argument is about ARM LENGTH rather than about ' +
+    'the bound — losing it would leave a shipped constant with no derivation behind it (§2.1).',
+);
 
 // A bound that is not its derivation — in EITHER direction — must stop the gate dead. §2.1's
 // rule is "held at or below" and the constant is pinned to the truncated geometric mean, so a
@@ -424,7 +489,7 @@ check(
 // the same demonstration, refused.
 const ratchet = withGateCopy(
   [
-    ['tripwire.mjs', (s) => s.replace('max: 1.0238,', 'max: 2.0600,')],
+    ['tripwire.mjs', (s) => s.replace('max: 1.0355,', 'max: 2.0600,')],
     ['tripwire.mjs', (s) => s.replace(/^const BOUND = [\d.]+;$/m, 'const BOUND = 2.0649;')],
   ],
   (gate) => runTripwire(gate),
@@ -469,7 +534,7 @@ check(
 // written constant — so the gate refuses and names the new figure. If this ever passes, the
 // campaign has been decoupled from the bound again.
 const nudged = withGateCopy(
-  [['tripwire.mjs', (s) => s.replace('max: 1.0882', 'max: 1.1500')]],
+  [['tripwire.mjs', (s) => s.replace('max: 1.0142', 'max: 1.1500')]],
   (gate) => runTripwire(gate),
 );
 check(
@@ -602,6 +667,33 @@ check(
   !/hrtime|Date\.now\(\)/.test(SOURCE),
   'the tripwire has started timing things itself, which would put a second method in the repo',
 );
+
+// THE MUTATION PATTERN MATCHES BOTH NEWLINE CONVENTIONS — THE ASSERTION THIS FILE'S DOCBLOCK
+// PROMISED AND DID NOT HAVE (G-032a sweep 1).
+//
+// `guestLoopPattern`'s comment said the pattern is "read back out of the bytes ... which is what
+// the assertion below this file's probes does". **There was no such assertion.** A docblock
+// naming a mechanism that does not exist, in the file whose entire subject is checks that
+// certify less than they appear to — so the sentence is made true rather than deleted.
+//
+// It is a REAL bite and not a tautology: the pattern is produced by the shipped function, and
+// the subjects are the two forms `materialise` actually hands it — a git blob (LF) and a working
+// tree (CRLF on Windows, LF on Linux). The literal that shipped before G-032a fails the first of
+// these, which is the defect this closes. The live `guests.ts` is read too, so whichever
+// convention THIS platform checked out is covered without the check knowing which it is.
+{
+  const pattern = new RegExp(guestLoopPattern());
+  const lf = GUEST_LOOP;
+  const crlf = GUEST_LOOP.split('\n').join('\r\n');
+  check('tools/gates/check-tripwire.mjs', pattern.test(lf), 'the mutation pattern does not match an LF guest loop — a git blob arm would never be mutated');
+  check('tools/gates/check-tripwire.mjs', pattern.test(crlf), 'the mutation pattern does not match a CRLF guest loop — a dirty working-tree arm would never be mutated, which is the G-032a defect returning');
+  const guests = readFileSync(join(ROOT, 'packages/sim/src/guests.ts'), 'utf8');
+  check(
+    'packages/sim/src/guests.ts',
+    pattern.test(guests),
+    'the mutation pattern matches nothing in the shipped guests.ts on this platform, so every probe below would report the gate failing to bite when the gate is fine',
+  );
+}
 check(
   'tools/gates/tripwire.mjs',
   !/'--head'|'--baseline'/.test(SOURCE),

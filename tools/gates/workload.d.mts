@@ -17,6 +17,7 @@
 
 export const ROOMS: number;
 export const ARRIVAL_EVERY_TICKS: number;
-export const TARGET_CONCURRENT_GUESTS: number;
+/** Hundredths of a guest, MEASURED (G-032a). It was `TARGET_CONCURRENT_GUESTS`, a quotient. */
+export const TARGET_CONCURRENT_HUNDREDTHS: number;
 export const SEED: number;
 export const MEASURE_DAYS: number;

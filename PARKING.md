@@ -2553,3 +2553,130 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   moved, the sentence is stale and the cell's justification needs re-taking; if the drawing is
   what a watcher finds confusing rather than the comment, that is the WATCH's answer, not this
   item's.* -> **the goal that opens `apps/game`, with the human WATCH it already owes.**
+
+## From G-032a — the instrument re-take (2026-08-14)
+
+- **DIVISOR CADENCES PHASE-LOCK, AND THIS PROJECT HAS CHOSEN ONE EVERY TIME.** Measured, exact
+  integers (occupancy = guest-frames ÷ ticks, so n=1 is the whole distribution and there is no
+  regime): the shipped `ARRIVAL_EVERY_TICKS = 96` is a **local minimum** of occupancy against both
+  neighbours, and so are three of the four `rooms`-rotation arms — 20, 60 and 15. **96, 20, 60 and
+  15 all divide 1,440.** The fourth, `saturated-100` at 5, sits on a monotone stretch where the
+  test cannot resolve it.
+  **BUT THE RULE IS NOT UNIVERSAL AND THAT IS WHY THIS IS PARKED RATHER THAN ASSERTED**: 120
+  divides 1,440 and is **not** a local minimum (`--rooms 60 --seed 42`: 118→805, 120→787,
+  121→715, 122→643, 123→812).
+  **FALSIFICATION TEST**: sweep `--arrivals` 60..240 at 60 rooms, label each cadence by whether it
+  divides 1,440, and compare the two populations' mean occupancy. *If divisors are systematically
+  lower, every benchmark constant in this repository has been chosen at the pessimal point of the
+  axis it measures, and the next workload constant should be chosen OFF a divisor. If the two
+  populations are indistinguishable, 120 is the rule and the four are coincidence.*
+  -> **the goal that next chooses a workload constant** (G-024's queue arms are the first).
+
+- **AN LF-ONLY PATTERN MATCHED AGAINST WORKING-TREE BYTES IS INERT ON WINDOWS, AND THE RULED-RED
+  ROW HID ONE FOR THE WHOLE SESSION.** `check-tripwire.mjs`'s `GUEST_LOOP` spanned two lines with
+  `\n`. `materialise` reads a git revision from the BLOB (LF) and the working tree from DISK
+  (CRLF), and `--null` measures head against head — so on a **dirty** tree, which is every moment
+  an agent is mid-goal, the mutation matched nothing and every mutation probe reported the gate
+  failing to bite. **Nobody could see it: the row was already red for the unrelated ADR-0015
+  configuration refusal.** Fixed here (`\r?\n`, built from a normal string, compiled out of the
+  shipped bytes and checked against both conventions). **What is parked is the CLASS**: `stamp.mjs`
+  learned *"a gate must compare text, not line endings"* at G-022 and nothing generalised it.
+  **FALSIFICATION TEST**: scan `tools/` for multi-line string literals used as match patterns
+  (`includes(`, `.replace(`, `indexOf(`) whose subject can be working-tree bytes, and check each
+  against a CRLF fixture. *If others exist, this is a class and wants a scanner in the census; if
+  this was the only one, it closes and the fix stands alone.*
+  -> **G-032c, which is already opening a scanner gate.**
+
+- **`density` IS NOW THE THIN AXIS AND IS THE ONE TO WATCH.** Its pooled floor (loaded max
+  **2.0415**) sits **1.07×** under its ceiling (**2.1856**), where the other three sit at 1.34×,
+  1.28× and 1.30×. Nothing refuses — `bound > floor` holds — but this is the closest this project
+  has come to ADR-0016's crossing, and the pre-registered response is already written in
+  `scaling-bound.mjs`: **more samples per reading and a re-taken campaign, never a wider number.**
+  **FALSIFICATION TEST**: re-take the density axis alone at `--samples 9` and recompute both
+  constraints. *If the loaded max falls and the margin opens, the instrument was under-sampled and
+  the axis is healthy; if it stays, the axis is approaching ungateable and that is a §2.0 finding
+  with its readings rather than a bound to widen.*
+  -> **the next goal that reddens `check:scaling`, or M3 exit, whichever comes first.**
+
+- **THE TICK-COST CAMPAIGN LIVES INSIDE AN EXECUTABLE GATE; THE SCALING CAMPAIGN IS A DATA MODULE.**
+  `scaling-bound.mjs` can be imported and its derivation exercised without a stopwatch, which is
+  why `scaling.bound.test.ts` can recompute every bound. `tripwire.mjs` holds its campaign inline
+  and calls `process.exit` at module scope, so anything wanting to read those readings must PARSE
+  the file — `check-tripwire.mjs` does, and G-032a's census briefly did too before the assertion
+  that needed it was withdrawn. **Two readers of one value is not the duplicated-constant defect,
+  but a third would be a smell.**
+  **FALSIFICATION TEST**: extract `BOUND_CAMPAIGN`, `LOADED_OBSERVATIONS` and
+  `CADENCE_OBSERVATIONS` into `tripwire-campaign.mjs` and have `tripwire.mjs` import them. *If
+  `check-tripwire.mjs`'s parsing assertions can then be replaced by imports with no loss of bite,
+  the asymmetry was accidental and should go; if the parsing is load-bearing — it exists partly to
+  prove the ceiling is not a literal — the split buys nothing and this closes.*
+  -> **G-032b, which is already in `tripwire.mjs` for the merge measurement.**
+
+- **G-020b's SCORED PREDICTION HAS NOW FAILED ON TWO INDEPENDENT CAMPAIGNS.** `sim-critic`
+  predicted at PLAN that a REAL PAIR would set the noise ceiling, because `--null`'s two arms are
+  one comment apart. It failed on G-020b's shipped campaign and it failed again on G-032a's
+  re-take: the null's **+3.55%** beats pair-A's **+2.52%** and pair-B's **+1.75%**. **The
+  structural half still stands and needs no reading** — a null's spread is a LOWER BOUND on
+  real-pair noise, never an estimate of it — so the real pairs stay in the campaign.
+  **FALSIFICATION TEST**: on the next re-take, record which arm sets the ceiling before looking.
+  *Three failures makes the prediction dead and the real pairs become a structural argument only;
+  a success would mean the first two campaigns were unlucky rather than the prediction wrong.*
+  -> **whichever goal re-takes the campaign next.**
+
+- **FIVE PROPERTIES REVERSE ONE ARRIVAL TICK AWAY, AND THREE OF THEM CARRY RULINGS.** G-032a's
+  census perturbs `report.ts`'s arrival loop by ±1 and runs the suite. **The counts, the permitted
+  set and the five findings live in `tools/headless/src/cadence.census.test.ts`**, regenerated by
+  `node tools/gates/cadence-census.mjs --delta +1` — deliberately NOT restated here, because a
+  count copied into a ledger is a third place for it to go stale and this one already went stale
+  once. They are not numbers that moved — they are
+  **inequalities and boolean predicates that flip**:
+  ADR-0034's amendment (*"the WORST engagement need rises when an amenity is added"* — `12 rooms:
+  expected 909 to be greater than 1193`, and at six rooms `1513` against `1606`), G-028b's
+  provisioning monotonicity (`strictlyIncreasing` → **false**), `outcome.report.test.ts`'s `met <
+  departures / 2`, and `hysteresis.report.test.ts`'s `--arrivals 59` neighbour arm (`expected 0 to
+  be greater than 0`).
+  **ADR-0037 amendment 2 already ruled the general form** — *a property quantified over one
+  dimension is a claim about the dimension you swept and a guess about the one you did not* —
+  **these are the survivors it did not reach, found mechanically rather than by reading.**
+  **G-032a DOES NOT REPAIR THEM AND THAT IS ADR-0024's ORDER**: enumerate the class and publish
+  its size; fixing starts after the count exists. They are balance claims.
+  **FALSIFICATION TEST**: for each, re-take the reading across a BAND of cadences rather than a
+  pair — `--arrivals` 90..102 — and record the departure mix beside it. *If the inequality holds
+  everywhere except an isolated tick, it is the phase knife-edge and the arm needs its cadence
+  scoped in its title (ADR-0037 amendment 2's remedy). If it reverses across a contiguous band,
+  the property is not true of the sim and the ruling that rests on it is wrong — which for
+  ADR-0034's amendment would mean the build-loop guidance points the wrong way.*
+  -> **`ai-engineer` / `balance-critic`, before M4's reputation term reads any of them.**
+
+- **THE `needs` AXIS'S CAMPAIGN UNDER-SAMPLES ITS LOW TAIL, AND THE DIRECTION ASSERTION IS WHAT
+  FOUND IT.** G-032a's re-take recorded a quiet spread of **1.0357 .. 1.2446** at n=12. The
+  shipped gate then produced **0.9732** on an ordinary `pnpm verify` — the same instrument, the
+  same configuration, the same 5-sample protocol, and **below every reading in the campaign**.
+  The bound is unaffected (it is built from the median and the MAX, and a low tail moves
+  neither), and the direction assertion came off because of it, with the reading recorded at
+  `scaling-bound.mjs`'s `needs` axis. **But a 21st reading outside the range of the first twenty
+  says the arm's spread is wider than n=12 resolved**, and the collapsed 4-against-3 lever is why:
+  the true ratio now sits close enough to 1 that the instrument's own noise crosses it.
+  **FALSIFICATION TEST**: re-take the `needs` axis alone at `--samples 9` and n=25, quiet, and
+  compare the observed range against 1.0357 .. 1.2446. *If the wider campaign still excludes
+  0.9732, that reading was an excursion the protocol does not normally produce and the campaign is
+  sound; if the range now spans it, n=12 at 5 samples is too thin for this lever and every
+  `needs`-axis figure in the file wants re-taking at the larger n — including the median the bound
+  is pinned to.*
+  -> **the next goal that reddens `check:scaling`, beside the `density` margin item above it.**
+
+- **THE LOADED REGIME IS UNOBSERVED FOR THIS TREE, AND THAT IS STATED RATHER THAN COVERED.**
+  G-032a reported *"14 tests time out across 10 files under 12-worker load, pre-existing"*.
+  **Both halves are withdrawn** (`CLAUDE.md` rule 5): the figure carried no invocation, so it
+  cannot be compared — a re-run at the stated load produced a different count — and
+  *"pre-existing"* rested on **no paired HEAD arm**, which nobody took. What is true is narrower:
+  `hysteresis.report.test.ts`'s four-run arm passed alone and timed out inside one whole-suite
+  run, and its budget was raised to the 60s two siblings already use. **No causal claim survives.**
+  ADR-0015's move when a regime cannot be measured before shipping is to ship, state the regime as
+  unobserved, and owe the observation — this is that.
+  **FALSIFICATION TEST**: `node tools/gates/arm/load.mjs --workers 12 -- pnpm test`, paired
+  against a materialised HEAD, arms alternated, n≥3 each, one sitting, recorded with the machine.
+  *If the timeout count is the same on both arms, the fragility is the suite's and predates
+  G-032a — which is what "pre-existing" claimed without evidence. If this tree times out more,
+  the census's three 30-day simulations are a real cost and belong on a shorter arm.*
+  -> **the goal that next adds simulation work to `pnpm test`, or M3 exit.**

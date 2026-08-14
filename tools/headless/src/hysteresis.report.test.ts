@@ -616,7 +616,33 @@ describe('the amenity sweep that chose this invocation, and what each level show
     const departures = (amenities: number): number =>
       reportOf(['--amenities', String(amenities)]).guests.departures.reduce((t, r) => t + r.count, 0);
     expect(completed(2) * 2).toBeGreaterThan(departures(2) / 2);
-  });
+    // ------------------------------------------------------------------
+    // 60s AT G-032a, MATCHING THE TWO SIBLINGS IN THIS FILE THAT ALREADY CARRY IT — AND THE
+    // REASON IS RESOURCES, NOT A CLAIM.
+    //
+    // This arm SPAWNS FOUR FULL CLI RUNS and was on the 30s default. **No assertion above
+    // changed**: a timeout is a limit on the machine, not a bound on the hotel, and raising one
+    // to a value this file already uses elsewhere is not widening a gate.
+    //
+    // WHAT WAS OBSERVED, AND ONLY THAT: it passed with the file run alone and timed out inside a
+    // `pnpm test` run of the whole suite. **Two claims were withdrawn from this block at sweep 3
+    // because neither was measured:**
+    //
+    //   ~~"the only multi-run arm here left on the 30s default"~~ — false. The `SATURATED (3 of
+    //   each)` arm below spawns runs too and is still on the default; it was seen timing out in
+    //   the same regime. A census of this file's arms was never taken, so "the only" was a guess
+    //   wearing a superlative.
+    //
+    //   ~~"timed out when G-032a's cadence census added three 30-day simulations to the same
+    //   window"~~ — an ATTRIBUTION with no paired arm. The census does add work to the suite and
+    //   the timeout did appear alongside it, which is a coincidence in time and not a cause. A
+    //   paired HEAD arm, alternated, would settle it and none was taken.
+    //
+    // `PARKING.md` has carried *"hysteresis.report.test.ts's load sensitivity"* since G-022, and
+    // this file's behaviour under deliberate load is UNOBSERVED for this tree — stated rather
+    // than covered, which is ADR-0015's move when a regime cannot be measured before shipping.
+    // ------------------------------------------------------------------
+  }, 60_000);
 
   it('SATURATED (3 of each): the margin cannot fire at all, and still changes NO outcome', () => {
     const total = at(3, ONE_WHOLE_BASIS_POINTS);
@@ -682,8 +708,13 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // --workers 12` this one test was measured at 35,025ms and tripped vitest's 30s default,
     // giving `A_NAMED_FAILURE` in 1 of 5 classified runs while every assertion in it held.
     //
-    // 60s matches `needs.determinism:152`, `needs.report:246,266`, `recovery.report:265` and
-    // `validity.report:141` — every other test in this suite that does this much work. It is a
+    // 60s matches the other arms in this suite that do this much work, cited BY NAME because the
+    // line numbers this comment carried had all five drifted — `needs.determinism`'s "IS STILL
+    // SERVING ENGAGEMENTS IN THE SECOND HALF OF THE RUN", `needs.report`'s two CLI arms,
+    // `recovery.report`'s "are all still zero without the economy", `validity.report`'s "exits 0
+    // as a real process". (A line number is a claim that goes stale on somebody else's edit and
+    // that nothing checks; G-032a re-pointed five of these in `scaling-bound.mjs` and left these
+    // five one file over.) It is a
     // DEADLOCK detector, not a performance bound: nothing here asserts a duration, and the
     // global `testTimeout` is untouched, because widening that to fit the slowest machine is
     // the move §9 forbids.

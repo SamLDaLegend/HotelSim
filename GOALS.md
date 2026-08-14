@@ -770,7 +770,48 @@ Critique rounds used: 0/3
 # M3 — Circulation, resumed
 
 ## G-032 — The instrument debts M2.5 left, before circulation touches anything
-Status: **pending — NEXT.** M2.5's exit sign-off is owed by the human and does not block this goal:
+Status: **SPLIT at PLAN into G-032a / G-032b / G-032c** (ADR-0039 §5, seam offered by the builder
+  with a scored prediction and taken). **THIS BLOCK WAS NOT SPLIT WHEN THE SEAM WAS TAKEN — FOURTH
+  INSTANCE IN ONE SESSION**, found by `sim-critic` at G-032a sweep 1, and the third one is recorded
+  two blocks above in the words *"the orchestrator has now done it three times in one session."*
+  **This block was written specifically because of the first three, and then a seam was taken
+  against it without updating it.** The failure is not forgetting the rule; it is that **taking a
+  seam and recording a seam are two acts and only the first has a natural moment.**
+
+  **G-032a — the campaigns.** In: the cadence census and its shipped test · Campaign A
+  (`check:tickcost`) · Campaign B (`check:scaling`, **all four axes, both rotations**) · the
+  `stayDurationTicks` fingerprint term and the cadence cross-check · the `TARGET_CONCURRENT_*`
+  re-freeze · the reserved-hue measurement · `check:stamp`'s body predicate.
+  **Out: everything in G-032b and G-032c below, and the needs-history interval — DEFERRED**, since
+  it is not a gate, is not in `pnpm verify`, and buys no row.
+  **Exit criteria**: `pnpm verify` **THIRTEEN GREEN, stated as a count** *(met — verified by the
+  orchestrator)* · both campaigns re-taken at the shipped workload with **bounds DERIVED from the
+  new readings, never moved by hand** *(met: `BOUND = trunc(sqrt(1.0355 × 2.07), 4) = 1.4640`, and
+  all four scaling bounds exactly `trunc(quiet median × 1.5, 4dp)` — checked by the critic)* ·
+  **the census count PUBLISHED IN THE TREE with its command and its pre-registered permitted set**
+  *(the RUNNER landed at sweep 1 — `tools/gates/cadence-census.mjs` and `cadence.census.test.ts`.
+  **The COUNT is NOT MET at sweep 2**: the published figures were taken on a tree that did not yet
+  contain the file publishing them, so the census's own anchor guard — which necessarily reddens
+  while the census is running, because the census has replaced the line it guards — is missing from
+  every arm. **The same defect sweep 1 caught, inside the repair for it.**)* · the control run
+  standing in for a WATCH *(met, byte-identical)*.
+  **NOTE — `check:stamp`'s body predicate is IN SCOPE and shipped in commit `55ca957`**, under the
+  human's sign-off message rather than under this goal (ADR-0041). Its critics were never shown it.
+  Status: **DONE.** 3 sweeps + a verification closing on UNPINNED-CLAIM findings only. **Thirteen green.**
+
+  **G-032b — the merge.** The `packages/sim` hot-path change removing G-028a's second walk.
+  **Must follow G-032a**, because it needs Campaign A alive to be the instrument that measures it.
+  **Carries ADR-0015's pre-registered escalation**: if the merge does not remove the 1.135×–1.161×
+  drift, the empirical claim that rule rests on has been falsified by this project's own output,
+  and that is an `ESCALATIONS.md` entry rather than a wider bound.
+
+  **G-032c — I3's unquoted-key hole.** Changes what an invariant means, so it gets a sweep that is
+  not competing with campaign arithmetic. The repair is **additive** — keeping the shape rule over
+  string literals and adding a declared-id rule over identifiers and unquoted keys — because keying
+  to declared ids alone would NARROW the invariant.
+
+*(Original G-032 statement and rationale follow.)*
+Status: **superseded by the split above.** M2.5's exit sign-off is owed by the human and does not block this goal:
   it repairs instruments rather than adding behaviour, and **every M3 goal needs a green three-OS CI
   run that three red rows currently prevent being clean.**
 Milestone: M3 (gate goal, the same shape as G-022)
