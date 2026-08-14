@@ -236,6 +236,8 @@ The reason: the four ledgers passed 2,800 lines and JOURNAL.md — which calls i
 
 AMENDED 2026-08-09, BECAUSE THE MECHANISM EXHIBITED THE FAILURE IT WAS BUILT TO PREVENT. At G-020a the four digests read: GOALS "G-015 done", JOURNAL "G-015 done", DECISIONS "as of 2026-08-08, after G-013" (five goals and two human ADRs stale), PARKING "G-018 in progress". THREE FILES, THREE DIFFERENT ANSWERS TO "WHERE ARE WE" — a reader scanning for live state gets a confident, wrong answer, which is the exact defect §4.1 exists to close.
 
+AN ADR AMENDED TWICE WAS WRONG, NOT INCOMPLETE (ruled 2026-08-14, human — ADR-0043 §3). An amendment to an amendment is a decision nobody can hold in one piece, and this project already applies the correct rule to code: repair the class, not the instance. AN ADR REACHING A SECOND AMENDMENT IS SUPERSEDED BY A SINGLE RESTATED ADR saying what is true now, WITH THE ORIGINALS STRUCK AND POINTING FORWARD — not edited. Struck, per this file's own rule that an artefact describing the past must not track the present (ADR-0008).
+
 The cause is precise and worth naming: §4.1 says REWRITTEN EVERY REFLECT, and what was happening was rewritten WHENEVER THAT FILE CHANGED. Those are not the same thing, and the difference is invisible until you read all four side by side.
 
 SO: ALL FOUR DIGESTS CARRY A BYTE-IDENTICAL `*As of …*` LINE, REWRITTEN IN ONE STEP. REFLECT is not complete until they agree. A digest whose as-of line disagrees with another's is a defect of the same standing as a stale figure in a comment — and it is mechanically checkable, so it should be checked rather than trusted. Seeded as an obligation on the next goal that owns a ledger-shaped check; until then the orchestrator re-stamps all four in one edit and says so at REFLECT.
@@ -419,6 +421,16 @@ UNSWEPT at round 3 escalates, and the answer is still splitting the goal. That c
 
 SWEEPS ARE BUDGETED. VERIFICATIONS ARE NOT. The two-state version made a round do double duty — it meant both "a sweep of the diff" and "a fix-verify cycle" — and §5.2's budget of 3 was only ever meant to bound the first. A verification pass examines whether a specific fix discharges a specific finding, and looks at the fix's own diff. It does not consume budget.
 
+SWEEP 3 IS A SCANNER BY DEFAULT (RULED 2026-08-14, HUMAN — ADR-0043 §1, calling ADR-0032 §4's notice). That notice was written with a condition: if the no-derived-figures rule landed and sweep 3 still returned mostly unpinned-claim findings, the third sweep is buying prose quality at a code-review price and should become a scanner. THE CONDITION HAS BEEN MET THREE TIMES — G-028a, G-028b and G-032a each closed on verifications returning UNPINNED-CLAIM findings only.
+
+  WHAT CHANGES: the automatic third agent pass. WHAT DOES NOT: sweeps 1 and 2, and the plan review, which ADR-0032 §4 records as the cheapest round in the loop and which has killed two designs before a line of code existed.
+
+  AN AGENT SWEEP 3 REMAINS AVAILABLE ON REQUEST: a critic that says at sweep 2 that it has diff left gets its third sweep. UNSWEPT at round 3 still escalates and splits the goal — §7.1's three states are unchanged.
+
+  THE SCANNER OWES A PROOF-OF-BITE like every other scanner (M2 exit ruling), IN ADR-0040'S SHAPE: built from a normal string rather than a literal, and shown to bite on a CRLF tree. The last three scanner defects in this project were all predicate errors nobody could see.
+
+  SCORED PREDICTION (human, recorded so it is falsifiable): if the scanner lands and goals still close on agent-found unpinned claims at the same rate, the class was not scanner-shaped and this notice was wrong. Score it at the third goal after it lands.
+
 The guard that stops that becoming an unbounded loop wearing a new label: a verification pass that produces a NEW finding rather than a restatement converts to a sweep and consumes budget. So if a builder's fixes keep spawning findings, the budget burns and the goal escalates properly — which is the signal you would want anyway.
 
 RULED 2026-08-09 (human) — THE TRIGGER IS SPLIT BY SUBJECT, because four firings showed the two cases are not the same animal.
@@ -465,6 +477,12 @@ THE STRUCTURAL POINT, WHICH IS WHY THIS IS A RULE AND NOT A NOTE: the gates chec
 It is cheap, because the technique is already in the repo three times over - `check-tripwire.mjs`, `check-measure.mjs` and `viewer.readonly.test.ts` all copy a gate, break the copy in one named way, and assert it goes red. A proof must fail for the RIGHT reason: G-019 shipped one that removed the scanned subject rather than the mention, so a predicate hard-coded to `false` satisfied it.
 
 M3 — Circulation. Stairs and lifts as queued shared resources. Vertical pathing. Wait time as a first-class satisfaction input. This is where the genre's difficulty actually lives.
+
+  M3 DOES CIRCULATION. THE INSTRUMENT TRACK IS CAPPED (ruled 2026-08-14, human — ADR-0043 §2). G-032b and G-032c finish; after them M3 runs circulation goals only, to G-026. ANY INSTRUMENT DEBT DISCOVERED BETWEEN HERE AND M3 EXIT IS WRITTEN TO AN M3-EXIT GOAL IN G-022'S SHAPE — not built when found. G-022's precedent stands; what moves is where it sits, at the exit rather than the entrance.
+
+  THE EXCEPTION, AND IT IS BOUNDED: an instrument debt that makes a GATE STOP BEING EVIDENCE is not deferrable. ADR-0040 is exactly that case — a ruled-red row carrying a second, silent defect that nothing else would have found. If that shape recurs, ESCALATE RATHER THAN DEFER, AND SAY WHICH OF THE TWO IT IS: a gate that has stopped being evidence, or a debt that merely makes an instrument less good. Naming which, before any work starts, is the burden.
+
+  WHY THE CAP EXISTS: M3 had one goal done and it was an instrument goal; the next two named were instrument goals; and three ADRs written in one day were all real findings and none was circulation. THE LOOP'S OUTPUT HAD SHIFTED FROM THE GAME TO THE LOOP, AND NO RULE NOTICED, BECAUSE EVERY INDIVIDUAL STEP WAS JUSTIFIED.
 
 M4 — Economy. Nightly settlement, staff hiring and wages, upkeep and decay, reputation feeding demand, room pricing. Balance critic runs long simulations and the results are reviewed.
 

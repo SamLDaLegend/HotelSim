@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally. CI: two completed runs RED (both pre-G-032a), three pending — read it before the next goal. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally. ADR-0043 (human ruling) governs M3's shape: sweep 3 is a scanner by default, the instrument track is capped, an ADR amended twice is restated. CI: last completed run RED (pre-G-032a), runs pending — read it before the next goal. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -21,6 +21,13 @@
   now; both were prose first. **A two-halved rule gets one half executed, one admired.**
   **ADR-0016** (G-020c) — a SIGNAL bound is pinned to equality with its derivation and
   **refused beneath the worst reading observed in any measured regime.**
+- **ADR-0043 (human ruling, 2026-08-14) is the governing entry for M3's shape**: sweep 3 is a
+  **scanner by default** (sweeps 1–2 and plan review untouched) · the **instrument track is capped**
+  after G-032b/c, debts deferred to an M3-exit goal in G-022's shape — **except a debt that makes a
+  gate stop being evidence, which escalates rather than defers** · **an ADR reaching a SECOND
+  amendment was wrong, not incomplete**, and is restated once with the originals struck.
+- **STRUCK, do not cite**: ADR-0036 + 2 amendments → **ADR-0044** · ADR-0037 + 2 amendments →
+  **ADR-0045**. Six banners in place. ADR-0025 and ADR-0028 restate only if cited again.
 - **The newer rulings live in the charter, not here** — §2.0, §4.1, §5.5–5.8, §7.1.
 - **Open contradictions**: **three**, in `GOALS.md`'s digest. **I4 is no longer among them** —
   0 gates / 0 defects since G-022, and the three falsified remedies for its defect B are
@@ -2962,6 +2969,10 @@ what it guarded against, and in each case that sentence was arithmetically impos
 
 ## ADR-0036 — THE INVERSION IS IN THE REPORT ROW, NOT IN THE SCORE. And the bind-time floor keeps its number as a labelled dial.
 
+> **STRUCK — SUPERSEDED BY [ADR-0044]. DO NOT CITE THIS BLOCK.** Reached a second amendment;
+> ADR-0043 §3 rules that such an ADR was wrong rather than incomplete, and is replaced by a single
+> restated ADR. Kept unedited as history. **Read ADR-0044 instead.**
+
 **Date**: 2026-08-14 · **Status**: accepted · **Relates to**: ADR-0034 (+ amendments), ADR-0035 ·
 **Raised by**: `economy-engineer` at G-028b PLAN, answering the question ADR-0034's amendment pinned.
 
@@ -3050,6 +3061,9 @@ nobody can ever score well is the losing tail, and it is not recoverable once sh
 
 ## ADR-0036 AMENDMENT — §1'S ANSWER IS WITHDRAWN. The ruled score is the checked-out share rescaled.
 
+> **STRUCK — SUPERSEDED BY [ADR-0044]. DO NOT CITE THIS BLOCK.** (ADR-0043 §3.) Kept unedited as
+> history; its finding is carried forward in ADR-0044 §3.
+
 **Date**: 2026-08-14 · **Amends**: ADR-0036 §1 · **Raised by**: `balance-critic` at G-028b plan
 review, **before a line of code**.
 
@@ -3124,6 +3138,10 @@ invariant to everything a player can build.** *"Nobody can ever score well is no
 the whole population."* The build-loop signal for a lodging-free content set is **exactly zero.**
 
 ## ADR-0037 — THE REVIEW IS THE MEAN OF PER-NEED BANDS. My per-need denominator was falsified; the trade is named.
+
+> **STRUCK — SUPERSEDED BY [ADR-0045]. DO NOT CITE THIS BLOCK.** Reached a second amendment;
+> ADR-0043 §3 rules that such an ADR was wrong rather than incomplete, and is replaced by a single
+> restated ADR. Kept unedited as history. **Read ADR-0045 instead.**
 
 **Date**: 2026-08-14 · **Status**: accepted · **Supersedes**: ADR-0034 §1's *worst need decides* ·
 **Relates to**: ADR-0036 (+ amendment), ADR-0035 · **Raised by**: `economy-engineer` at G-028b plan
@@ -3212,6 +3230,9 @@ The rule was written for assertions; it applies to rulings.
 
 ## ADR-0037 AMENDMENT — the cap's exception is the WRONG one, and it holds where I said it did not
 
+> **STRUCK — SUPERSEDED BY [ADR-0045]. DO NOT CITE THIS BLOCK.** (ADR-0043 §3.) Kept unedited as
+> history; its finding is carried forward in ADR-0045 §1.
+
 **Date**: 2026-08-14 · **Amends**: ADR-0037 §3 · **Raised by**: `balance-critic` at G-028b sweep 1.
 
 ADR-0037 ruled that *a guest that never got a bed can never leave a top review*, **qualified "for any
@@ -3247,6 +3268,9 @@ and never checked the boundary I had written into it.
 
 ## ADR-0036 AMENDMENT 2 — the false necessity claim survived one file over
 
+> **STRUCK — SUPERSEDED BY [ADR-0044]. DO NOT CITE THIS BLOCK.** This is the *second* amendment that
+> triggered ADR-0043 §3. Kept unedited as history; its finding is carried forward in ADR-0044 §2.
+
 `report.ts`'s review-law-A violation message still tells a reader a top review is *"unreachable while
 any need is unmet — that is what this scale is sized for."* **ADR-0036 §2 ruled that necessity false,
 the diff removed it from the bind-time refusal, and `review.scale.test.ts` now asserts against it by
@@ -3259,6 +3283,9 @@ verbatim: the check was applied to what the diff ADDS and not to what it LEAVES*
 fourth instance of that shape in two goals.
 
 ## ADR-0037 AMENDMENT 2 — "never falls on either axis" is a claim about ONE CADENCE, and the mirror of ADR-0036's error
+
+> **STRUCK — SUPERSEDED BY [ADR-0045]. DO NOT CITE THIS BLOCK.** This is the *second* amendment that
+> triggered ADR-0043 §3. Kept unedited as history; its finding is carried forward in ADR-0045 §4.
 
 **Date**: 2026-08-14 · **Amends**: ADR-0037 §3 · **Raised by**: `balance-critic` at G-028b sweep 3.
 
@@ -3641,3 +3668,224 @@ this one.**
 today's ledger is a reading from one machine. **I2's whole point is that a hash must be identical on
 every platform, and that clause has only ever been executed by CI** — twice, at G-022 and at run
 number 8. **A green local verify is a claim about a developer box.**
+
+## ADR-0043 — THE LOOP'S OUTPUT SHIFTED FROM THE GAME TO THE LOOP. Human ruling, 2026-08-14.
+
+**Status**: accepted · **HUMAN RULING** · **Supersedes**: ADR-0032 §4's notice (called) ·
+**Relates to**: ADR-0022, ADR-0040, §7.1, §8.
+
+### 0. The diagnosis, recorded rather than inferred
+
+ADR-0032 opened with the human's ruling of 2026-08-13 — *we should be past M3 by now*. **The
+diagnosis was right and the four changes were right.** What the record shows since:
+
+**M3 has one goal done and it is an instrument goal. The next two named are also instrument goals.
+ADR-0040, ADR-0041 and ADR-0042 were all written on 2026-08-14. Every one is a real finding. None
+of them is circulation.**
+
+> **The finding is not that any goal was wrong. It is that the loop's output has shifted from the
+> game to the loop, and no rule currently notices that, because every individual step is
+> justified.**
+
+**The instrument work is not disowned.** ADR-0040 is the argument in its strongest form: the CRLF
+mutation defect was hiding inside a ruled-red row and nothing else would have found it. **That
+argument has now won three times — G-022, G-032, and ADR-0040's retrospective — and each time it
+wins, the game work waits.**
+
+### 1. THE SWEEP-3 NOTICE IS CALLED. Sweep 3 becomes a scanner.
+
+ADR-0032 §4 put sweep 3 on notice with a stated condition. **That condition has been met three
+times: G-028a, G-028b and G-032a each closed on verifications returning UNPINNED-CLAIM findings
+only.**
+
+**Ruled**: build the scanner; **sweep 3 drops to a scanner pass by default.**
+
+- **Sweeps 1 and 2 are untouched. The plan review is untouched** — ADR-0032 §4 is right that it is
+  the cheapest round in the loop, and it has killed two designs before code.
+- **The scanner owes a proof-of-bite** like every other scanner (M2 exit ruling), **in ADR-0040's
+  shape: built from a normal string, not a literal, and shown to bite on a CRLF tree.** The last
+  three scanner defects here were all predicate errors nobody could see.
+- **An agent sweep 3 remains available on request**: a critic that says at sweep 2 that it has diff
+  left gets its third sweep. **What is dropped is the automatic third pass.**
+
+**Scored prediction (the human's, recorded so it is falsifiable)**: *if the scanner lands and goals
+still close on agent-found unpinned claims at the same rate, the class was not scanner-shaped and
+the notice was wrong.* **Score it at the third goal after it lands.**
+
+### 2. THE INSTRUMENT TRACK IS CAPPED. M3 does circulation.
+
+**G-032b and G-032c finish. Then M3 runs circulation goals only, to G-026.**
+
+**Any instrument debt discovered between here and M3 exit is written to an M3-EXIT goal in G-022's
+shape — not built when found.** G-022's precedent stands; **what moves is where it sits: at the
+exit, not the entrance.**
+
+**THE EXCEPTION, STATED BACK SO IT IS BOUNDED**: *an instrument debt that makes a gate stop being
+evidence is not deferrable.* **ADR-0040 is exactly that case — a ruled-red row carrying a second,
+silent defect.** If that shape recurs, **escalate rather than defer, and say which of the two it
+is**: a gate that has stopped being evidence (not deferrable), or a debt that merely makes an
+instrument less good (deferred to the exit goal). **The burden is to name which, in the escalation,
+before any work starts.**
+
+### 3. AN ADR AMENDED TWICE WAS WRONG, NOT INCOMPLETE.
+
+`DECISIONS.md` carries four ADRs with two amendments each. **An amendment to an amendment is a
+decision nobody can hold in one piece, and this project already applies the correct rule to code:
+repair the class, not the instance.**
+
+**Ruled**: an ADR reaching a **second** amendment is **superseded by a single restated ADR** saying
+what is true now, **with the originals struck and pointing forward — not edited. Struck**, per the
+file's own rule.
+
+**ADR-0036 and ADR-0037 are done now**, both being live and load-bearing on the review scorer.
+**ADR-0025 and ADR-0028 are closed subjects; strike-and-restate only if a goal needs to cite them
+again.**
+
+### 4. WHAT THIS RULING DOES NOT DO — stated back so the bounds are recorded
+
+1. **It does not weaken any invariant, and it does not touch §2.**
+2. **It does not cut the plan review, or sweeps 1 and 2.**
+3. **It does not defer an instrument debt that has stopped a gate being evidence.**
+4. **It does not reopen any sign-off.**
+5. **It does not permit a goal to close on an unswept diff. §7.1's three states are unchanged** —
+   DRY, OPEN, UNSWEPT, and **UNSWEPT at round 3 still escalates and splits the goal.**
+
+### 5. Two corrections to the ruling's own premises, checked against the tree
+
+**G-028 IS ALREADY DONE.** §4 says it *"goes before the M3 circulation goals if it is not already
+done"* — the conditional does not fire. **G-028a closed at `81676e5` and G-028b at `e1623b4`**, both
+in ADR-0033's re-aimed shape (the one-tick snapshot, not the scorer's arithmetic), and **M2.5 was
+signed off by the human at `55ca957`.** The build loop's review signal is repaired and asserted.
+
+**AND THE THREE-OS CI REQUIREMENT IS CURRENTLY UNMET.** *"Every M3 goal still needs a green three-OS
+CI run. That stands."* — **the last completed CI run is RED**, on two commits predating G-032a, with
+three runs pending. **G-032b cannot close on that criterion until CI is read and green**, which
+makes reading it the first act of the next goal rather than a courtesy.
+
+## ADR-0044 — WHERE THE AMENITY INVERSION LIVES, AND WHAT THE BIND-TIME FLOOR IS
+
+**Date**: 2026-08-14 · **Status**: accepted · **SUPERSEDES ADR-0036 and its two amendments**
+(ADR-0043 §3: an ADR reaching a second amendment is restated, not amended again). **Read this
+instead of them.**
+
+### 1. The inversion is in the REPORT ROW, not in the score
+
+Adding an amenity makes the **report's worst engagement row** rise — at four of six room counts,
+with no confound at six rooms (identical departure table, identical `instanceTicks`, capacity
+demonstrably gained). **It does not make any guest's own worst need worse.**
+
+The two statistics are different objects, and `max` does not commute with a population average:
+
+| | fold |
+|---|---|
+| the golden's row | ratio of sums per need, **then max across needs** |
+| the scorer | a per-need band **within a guest**, then a mean over guests |
+
+**The mechanism**: a guest holds one provider at a time, so serving one need better spends the ticks
+it was spending on another. **Ticks move between rows; a guest's personal maximum does not rise.**
+
+**The golden stays green and stays true — it measures a report row.** Its describe must not read as
+a claim about the score.
+
+### 2. The bind-time floor: NUMBER KEPT, WARRANT RESTATED, LABELLED A DIAL
+
+The refusal said a top review must be unreachable while any need is unmet, *"which holds **only
+when** the scale has more scores than there are needs"* — **that necessity is FALSE** under the
+shipped scorer; the property holds at any scale of two or more bands.
+
+**Kept, because deleting a bind-time refusal lets content ship below it silently and permanently.**
+The available warrant is **resolution** — with `B` bands, *met* means *unserved for less than `T/B`
+of the stay* — **which is a content dial, not a derivation (ADR-0013 §4), and it ships labelled as
+one.**
+
+> **Keeping a check whose warrant changed is legitimate. Keeping a message that states a false
+> necessity is not.**
+
+**And that false sentence outlived its own correction**: removed from the refusal and asserted
+against by name, while **the identical claim stayed live in the law-A violation message one file
+over** — ADR-0038's scope clause, which is why the restatement says it once, here.
+
+### 3. What ADR-0036 got wrong, kept because the error is the reusable part
+
+**Its §1 answered that the score is flat on the amenity axis "because that was not your bottleneck."
+That was true and irrelevant.** The score equalled `min + (bands−1) × checkedOutShare` at **27 of 30
+cells** — a threshold test on *did you get a bed*. At one configuration comfort's unserved share fell
+**118×**, with **305 of 356 guests improving and zero worsening**, and the score moved
+**2.0787 → 2.0787**.
+
+> **I checked that it did not FALL and never checked whether it MOVED.** *"It does not punish
+> investment"* and *"it responds to investment"* are different claims, and only the first was
+> measured.
+
+---
+
+## ADR-0045 — THE REVIEW IS THE MEAN OF PER-NEED BANDS
+
+**Date**: 2026-08-14 · **Status**: accepted, **human-confirmed** · **SUPERSEDES ADR-0037 and its
+two amendments** (ADR-0043 §3). **Read this instead of them.**
+
+### 1. The rule
+
+```
+score  = min + floor( sum of band_i over needs / N )
+band_i = min(bands-1, floor((T - u_i) * bands / T))
+```
+
+**Per-need band FIRST, then the mean. The double rounding is the design**, and it is what separates
+this from the pooled score that was rejected: pooling sums *unserved ticks* and bands once, and the
+falsification vector — one need starved 80 % of a stay, three perfect — scores **top**. Banding per
+need first, the same vector scores **4**. **The per-need floor is what costs the starved need its
+band, and removing it IS the rejected score.**
+
+**`met_i` is that need's band being top**, which restores review law A **by construction**:
+`floor(mean) = bands-1` **iff** every band is top. Measured **0 red of 30 cells**, against **11 of
+30 red** if the scorer moves alone — that coupling is why the four things move together.
+
+**A guest that never got a bed can never leave a top review** — lodging band 0 caps the mean.
+**Structural, not content luck.** The bounded exception is a **vector that does not contain the
+lodging need at all** — a v5-migrated guest — **and that is the tested case.** *(The original ADR
+bounded this on need COUNT, which was the wrong variable: at one need the guest scores the FLOOR,
+which is stronger.)*
+
+### 2. THE TRADE, NAMED — human-confirmed, and reversible
+
+> ***"One starved need must cost nearly everything"* and *"the score must respond to what a player
+> builds"* are in DIRECT MEASURED TENSION, and none of eight candidates satisfied both.**
+
+**A guest with one need starved for its whole stay scores 4 of 5.** The runner-up — worst-need-
+decides at eight bands — costs it nearly everything and responds to about **3 % of scale**, and
+above ten bands the top band becomes unreachable so **law A inspects nothing**.
+
+**Ruled for responsiveness, on the loop rather than the vector**, and **confirmed by the human on
+2026-08-14**: a score that is occupancy at 27 of 30 configurations tells a player only whether
+people got rooms. **Severity is a dial; blindness is structural.**
+
+### 3. Why the per-need DENOMINATOR was falsified, since it will be proposed again
+
+Lodging scored against `toleranceTicks` and engagement against the stay reads **flat at its own
+named test**, and **introduces a fall the ruled score does not have.**
+
+> **Every give-up has lodging unserved for exactly its stay, and a give-up departs AT the tolerance
+> — so stay, tolerance and wanted-ticks are the same number for the term that saturates. A guest
+> that never got a bed was failed on lodging for 100 % of every window you can measure it against.
+> The saturation is not a denominator artefact; it is the truth about that guest.**
+
+The third candidate the direction implies — **ticks the need was wanted** — was built and measured
+too, and is deader still.
+
+### 4. What is measured at ONE CADENCE and must be quoted that way
+
+**"The score never falls on either single axis" is scoped to the cadence it was measured at.** Both
+axes fall over a contiguous band of cadences, and the ±1-tick discriminator returns *not a
+confound*. **The repair is real at the shipped cadence — 40/40 grid cells, 9/9 cadences there — and
+"zero falls" unqualified is withdrawn.**
+
+> **A property quantified over one dimension is a claim about the dimension you swept and a guess
+> about the one you did not.**
+
+### 5. Known limits, carried forward rather than buried
+
+**The score saturates above the derived provisioning point** — no quality axis exists in content
+yet · **the visitor population is structurally capped**: on lodging-free content every visitor
+scores the same value at every provisioning level, so **the build-loop signal for a food court is
+exactly zero** · both are parked with their falsification tests.

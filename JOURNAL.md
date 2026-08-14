@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally. CI: two completed runs RED (both pre-G-032a), three pending — read it before the next goal. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally. ADR-0043 (human ruling) governs M3's shape: sweep 3 is a scanner by default, the instrument track is capped, an ADR amended twice is restated. CI: last completed run RED (pre-G-032a), runs pending — read it before the next goal. Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v16** · summary **v4** · I2 `8a83acaf7f81edeb` · measure golden
   `ebb9c3924e373c1e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
