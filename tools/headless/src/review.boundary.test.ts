@@ -328,12 +328,13 @@ describe('THE DIFFERENTIAL — changing the review scale changes the reviews and
     expect(narrow.reviews.distribution).not.toEqual(wide.reviews.distribution);
   });
 
-  it('EVERY guest, need, room, money and build number is identical', () => {
+  it('EVERY guest, room, money and build number is identical — the BEHAVIOURAL half', () => {
     // If any decision in `packages/sim` consulted a review, this is where it would show. The
     // sim's behaviour is a function of the world and the injected content, and the review
-    // scale is the one part of that content nothing may act on.
+    // scale is the one part of that content nothing may ACT on. Every number below is a
+    // consequence of what guests did: who arrived, who left and why, what was built, what was
+    // paid. None of them moves.
     expect(wide.guests).toEqual(narrow.guests);
-    expect(wide.needs).toEqual(narrow.needs);
     expect(wide.rooms).toEqual(narrow.rooms);
     expect(wide.money).toEqual(narrow.money);
     expect(wide.build).toEqual(narrow.build);
@@ -342,7 +343,52 @@ describe('THE DIFFERENTIAL — changing the review scale changes the reviews and
     expect(wide.world.tick).toEqual(narrow.world.tick);
   });
 
-  it('and the two things that ARE allowed to differ are named, not merely excluded', () => {
+  it('AND THE NEED TALLY NOW MOVES WITH THE SCALE, WHICH IS A REAL WEAKENING OF THIS FENCE', () => {
+    /**
+     * ========================================================================
+     * SAID LOUDLY, BECAUSE `expect(wide.needs).toEqual(narrow.needs)` STOOD IN THE ARM ABOVE
+     * UNTIL G-028b AND IT WOULD NOW BE FALSE.
+     *
+     * ADR-0037 makes `met` the top per-need BAND, and the band count IS the review scale's
+     * (`max - min + 1`). So a content document that changes only the review scale changes what
+     * "met" means and therefore what the tally counts. That is not a leak; it is the ruling.
+     *
+     * WHAT THE FENCE STILL FORBIDS, AND IT IS THE PART THAT MATTERED: no DECISION consults a
+     * review. Every number in the arm above is a consequence of guest behaviour and every one
+     * of them is identical across the two scales — the guests did the same things, in the same
+     * order, at the same ticks. What differs is a RECORD taken on the way out, in a unit the
+     * scale defines.
+     *
+     * WHAT IT NO LONGER FORBIDS: a build in which the tally's UNITS depend on a review
+     * parameter. That is now true by design, and this arm asserts it rather than letting it
+     * be discovered as a broken equality — the difference between a stated consequence and a
+     * silent one.
+     *
+     * THE UNSERVED COLUMNS ARE THE CONTROL. `unservedTicks` and `instanceTicks` are counted in
+     * ticks, not in bands, so they must be IDENTICAL across the two scales — and they are.
+     * That is what separates "met changed because its unit changed" from "the simulation
+     * behaved differently", and without it this arm would be indistinguishable from a leak.
+     * ========================================================================
+     */
+    const ticks = (summary: RunSummary) =>
+      summary.needs.map((row) => ({
+        needId: row.needId,
+        unservedTicks: row.unservedTicks,
+        instanceTicks: row.instanceTicks,
+        abandoned: row.abandoned,
+      }));
+    expect(ticks(wide)).toEqual(ticks(narrow));
+    // And the tally really does differ, so this arm is not asserting an equality in disguise.
+    const met = (summary: RunSummary) => summary.needs.map((row) => row.met);
+    expect(met(wide)).not.toEqual(met(narrow));
+    // `met + unmet` is a conservation law and survives the change of unit, on both scales.
+    for (const summary of [wide, narrow]) {
+      const departed = summary.guests.departures.reduce((total, row) => total + row.count, 0);
+      for (const row of summary.needs) expect(row.met + row.unmet, row.needId).toBe(departed);
+    }
+  });
+
+  it('and the THREE things that are allowed to differ are named, not merely excluded', () => {
     /**
      * `stateHash` differs, and it must: the review distribution is hashed world state and
      * the content fingerprint is too, so two different content documents produce two
@@ -350,6 +396,12 @@ describe('THE DIFFERENTIAL — changing the review scale changes the reviews and
      * silently would be excluding the one field that proves the content differed at all.
      *
      * `input` differs in nothing here, because `--content` is not echoed into the summary.
+     *
+     * **AND THERE ARE THREE OF THEM SINCE G-028b, NOT TWO** — this title and this paragraph both
+     * said two for a round after the arm above added the third. The need tally's `met`/`unmet`
+     * columns move with the scale because the band count IS the scale's (ADR-0037); that is
+     * asserted in its own arm above, with the tick columns as the control, so what is excluded
+     * here is excluded by name in both places rather than counted differently in each.
      */
     expect(wide.world.stateHash).not.toBe(narrow.world.stateHash);
     expect(wide.input).toEqual(narrow.input);
@@ -360,9 +412,15 @@ describe('THE DIFFERENTIAL — changing the review scale changes the reviews and
   });
 
   it('THE DIFFERENTIAL BITES: the same guests, re-expressed, are not the same reviews', () => {
-    // The positive control for the comparison above. Both runs departed the same guests with
-    // the same needs met, and the two distributions still differ — so "everything else is
-    // equal" is a statement about a comparison that had something to find.
+    // The positive control for the comparison above. Both runs departed the same guests, having
+    // done the same things at the same ticks, and the two distributions still differ — so
+    // "everything else is equal" is a statement about a comparison that had something to find.
+    //
+    // IT NO LONGER SAYS "WITH THE SAME NEEDS MET", AND THAT CLAUSE WAS FALSIFIED BY THE DIFF
+    // THAT CITES IT (G-028b). `met` is the top per-need band and the band count is the scale's,
+    // so the two arms disagree about `met` by construction — which the arm above asserts. What
+    // is the same about the two runs is what the GUESTS did, and that is what this sentence
+    // now claims.
     const total = (s: RunSummary) => s.reviews.distribution.reduce((sum, row) => sum + row.count, 0);
     expect(total(wide)).toBe(total(narrow));
     expect(wide.reviews.distribution.filter((row) => row.count > 0).length).toBeGreaterThan(1);

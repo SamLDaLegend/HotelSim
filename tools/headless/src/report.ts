@@ -382,11 +382,34 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
  * wrong. A version that moves when a document's MEANING breaks is worth having; one that
  * moves only when a key does is a shape check with a version number.
  *
+ * **4 (G-028b) — THE THIRD BUMP, AND IT IS THE SAME KIND AS THE SECOND.** `needs[].met` and
+ * `needs[].unmet` keep their names, their types and their arithmetic law (`met + unmet ===
+ * departed`), and answer a DIFFERENT QUESTION: they were the count of instances above their
+ * want line at the instant their guest departed, and they are now the count whose per-need BAND
+ * was the top one — an integral over the whole stay (ADR-0037). A consumer that kept reading
+ * schema 3's meaning would draw the opposite conclusion about the same hotel: at twelve rooms
+ * and three amenities `guest_comfort` moves from 0 met to 348 met with nothing about the run
+ * changed. **Nothing is added and nothing is removed, so this is the case the policy above needs
+ * read carefully — and it is the `satisfied -> checkedOut` precedent one level down, where the
+ * KEY survives and the meaning does not.** `reviews.distribution` moves with it, for the same
+ * reason and in the same diff.
+ *
  * Same discipline as SAVE_SCHEMA_VERSION, one integer. (Note the difference in kind: a
  * SAVE bump is owed for ANY field, because an old save must still be readable; a REPORT is
- * generated fresh every run and nothing has to read yesterday's.)
+ * generated fresh every run and nothing has to read yesterday's. **That asymmetry is why this
+ * goal bumps the report and NOT the save**: a v16 world's stored tally is a true record of what
+ * the rule of its era counted, nothing recomputes it, and no decision reads it — so there is
+ * nothing for a migration to make honest. See `needs.unserved.save.test.ts`.
+ *
+ * AND THE ARGUMENT ABOVE IS ABOUT RECOMPUTATION, NOT CONCATENATION, WHICH IS A NARROWER CLAIM
+ * THAN IT LOOKS. `needOutcomes` is APPENDED TO on every departure. A pre-G-028b save that is
+ * loaded and RESUMED therefore accumulates schema-4 rows on top of schema-3 ones, and the `met`
+ * column of the resulting document is part one and part the other while the document declares
+ * itself schema 4. It is latent rather than live — the runner creates every world it reports on
+ * and never loads a save, which is the same sentence that makes review laws B and C safe here —
+ * and it is stated because the day something DOES resume a save, this is the column that lies.)
  */
-export const SUMMARY_SCHEMA_VERSION = 3;
+export const SUMMARY_SCHEMA_VERSION = 4;
 
 /**
  * Refuse a summary document that is not the schema this reader was written against.
@@ -1005,7 +1028,15 @@ export type RunSummary = {
     readonly needId: string;
     /** Whether this is the need guests book a room for. Exactly one row is true. */
     readonly lodging: boolean;
+    /**
+     * Instances whose own per-need BAND was the top one — the hotel left this need unserved for
+     * at most a band's width of that guest's stay (G-028b, ADR-0037, summary schema 4).
+     *
+     * IT WAS A DEPARTURE-INSTANT READING UNTIL SCHEMA 4 and a consumer that still reads it that
+     * way will draw the opposite conclusion about the same hotel. See `SUMMARY_SCHEMA_VERSION`.
+     */
     readonly met: number;
+    /** Instances whose band was anything else. `met + unmet === departed`, per row. */
     readonly unmet: number;
     /**
      * How many of `met` were delivered BY AN ITEM rather than by a room type (G-013).
@@ -1054,15 +1085,22 @@ export type RunSummary = {
      * folded in one branch of `recordNeedsAtDeparture`, so `unservedTicks <= instanceTicks` is
      * checkable and the report can divide once, at the point of printing.
      *
-     * WHY THEY ARE HERE BESIDE `met` AND `unmet`, WHICH ANSWER THE SAME QUESTION DIFFERENTLY.
-     * `met` is a SNAPSHOT — was this need above its want line at the instant its guest walked
-     * out — and every guest in a run departs at the same phase of the same deterministic cycle,
-     * so it is measurably a statement about the arrival cadence as much as about the hotel.
-     * These two are the integral. The goal that makes the REVIEW read the integral moves `met`
-     * with it, because `report.ts`'s review law A compares the two; this goal ships the
-     * measurement and changes no verdict.
+     * WHY THEY ARE HERE BESIDE `met` AND `unmet`, WHICH NOW ANSWER THE SAME QUESTION IN THE SAME
+     * TERMS. Until G-028b `met` was a SNAPSHOT — was this need above its want line at the instant
+     * its guest walked out — and every guest in a run departs at the same phase of the same
+     * deterministic cycle, so it was measurably a statement about the arrival cadence as much as
+     * about the hotel. It printed on the same line as these two and disagreed with them by two
+     * orders of magnitude. **`met` is now the top BAND of the same ratio** (ADR-0037), so the
+     * columns divide the same integers and cannot contradict each other: these are the sum, and
+     * `met` is how many guests' own shares fell inside the best band.
      *
-     * Additive fields, so `SUMMARY_SCHEMA_VERSION` does not move.
+     * THEY REMAIN TWO SUMS AND NOT A SHARE. `unservedShareBasisPoints` is the only division, and
+     * it is the REPORT's — the score does its own, per need, over each guest's own stay. Those
+     * are deliberately not the same division: see `review.test.ts` for the counter-example where
+     * banding this basis-point share disagrees with the score by a whole band.
+     *
+     * Additive fields, so `SUMMARY_SCHEMA_VERSION` did not move for them. It moved at G-028b for
+     * `met` and `unmet` changing meaning, which is a different thing and is argued there.
      */
     readonly unservedTicks: number;
     readonly instanceTicks: number;
@@ -1358,11 +1396,16 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // need types; a SPAN is a different animal, and with no ceiling
   // `reviewScoreMin: 0, reviewScoreMax: 5000000` bound happily and made a one-day run emit
   // 5,000,001 rows and 308,891,476 bytes of JSON in silence (`balance-critic`, G-019).
-  // `assertReviewScaleIsBoundedByTheNeedTable` now refuses a scale wider than the need table can
-  // produce distinct experiences for, so the worst case here is
-  // `needTypes x ONE_WHOLE + 1` rows — absurd content, bounded and refusable, rather than
-  // absurd content that fills a disk. The bound is derived there, not chosen; do not
-  // reintroduce a dense loop over a quantity content can make unbounded.
+  // `assertReviewScaleIsBoundedByTheNeedTable` refuses a scale wider than a guest's own life has
+  // TICKS, so the worst case here is one row per tick of the longest stay the content permits —
+  // absurd content, bounded and refusable, rather than absurd content that fills a disk.
+  //
+  // THE BOUND MOVED AT G-028b AND THIS COMMENT CITED THE DEAD ONE. It used to be
+  // `needTypes x ONE_WHOLE + 1`, by pigeonhole over a sum of quality terms; `qualitySum` is
+  // deleted, so that sum does not exist and neither does its cardinality. The live derivation is
+  // stated where the refusal is, and it is derived from THIS LOOP — one row per admitted score,
+  // against a band that can only take as many values as the stay has ticks. Do not reintroduce a
+  // dense loop over a quantity content can make unbounded.
   const reviewScale = reviewScaleOf(content);
   const reviewRows: { readonly score: number; readonly count: number }[] = [];
   if (reviewScale !== undefined) {
@@ -1781,27 +1824,48 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
     // A — A TOP REVIEW REQUIRES EVERY NEED MET, checked against the NEED TABLE.
     //
     // This is the human's pre-PLAN finding made mechanical. A review function that read only
-    // `night_rest` would, at `--rooms 6 --amenities 0`, emit 356 maximal reviews against a
+    // `night_rest` would, at `--rooms 6 --amenities 0`, emit maximal reviews against a
     // minimum need row of 0, and the run would exit 1. It is not an identity over the review
     // rows: `met` is accumulated per need type by `recordNeedsAtDeparture`, and the
     // top-review count by different code reading a different quantity.
     //
-    // ITS PREMISE IS THE BIND-TIME RULE rather than an assumption made here: `max - min >= N`
-    // is exactly the condition under which a guest missing any need cannot reach the top band
-    // (`assertReviewScaleIsBoundedByTheNeedTable`). Weaken that rule and this law starts firing on
-    // correct runs, which is the right direction for a wrong change.
+    // ITS PREMISE MOVED AT G-028b, AND THE MOVE IS THE REASON THIS GOAL COULD NOT BE SPLIT.
+    // It used to be the BIND-TIME RULE: `max - min >= N` was exactly the condition under which a
+    // guest missing any need could not reach the top band. **It is now arithmetic in the scorer
+    // itself** — a score is the MEAN of per-need bands, each at most `bands - 1`, so it reaches
+    // `bands - 1` only if every band does, and a top band IS `met` (ADR-0037). The two are the
+    // same quantity read twice, which is what makes this law hold by construction at EVERY
+    // scale rather than only above the floor.
     //
-    // IT BITES, AND AT ONE MEASURED CONFIGURATION IT IS AN EQUALITY: `--rooms 1 --amenities 1
-    // --days 30 --seed 7` gives 89 maximal reviews against a least-met row of exactly 89.
+    // AND THAT IS WHY `met` AND `reviewOf` MOVE IN ONE DIFF. Redefining the score alone, leaving
+    // `met` as the departure-instant reading, turns this law red on **11 of 30 measured
+    // configurations** — including a hotel with five of every amenity, and the criterion
+    // ladder's own top rung. Redefining `met` alone does the same thing from the other side.
+    // The coupling is not stylistic; a build with one moved and the other not exits 1 on runs
+    // that are correct.
+    //
+    // IT STILL BITES, AND ITS BITE NO LONGER DEPENDS ON THE SCALE'S WIDTH: a scorer that read
+    // one need would produce top reviews the least-met row cannot cover, on any content.
+    // `scorer.report.test.ts` drives it red by mutation rather than trusting the argument.
+    //
+    // THE MESSAGE BELOW SAID *"unreachable while any need is unmet — that is what this scale is
+    // sized for"* UNTIL SWEEP 1, AND IT WAS A LIVE FALSE CLAIM. ADR-0036 §2 ruled that necessity
+    // false and the same diff removed it from the bind-time refusal in `content.ts`, asserted
+    // against it by name in `review.scale.test.ts` — **and left it standing here.** ADR-0035's
+    // scope clause: the check was applied to what the diff ADDED and not to what it LEFT. The
+    // sentence is not quoted inside the message, deliberately: a runtime error a user reads is
+    // not the place for a historical correction, and quoting it there would make the assertion
+    // that keeps this honest unable to tell a quotation from a claim.
     let leastMet = Number.POSITIVE_INFINITY;
     for (const row of needs) leastMet = Math.min(leastMet, row.met);
     const topReviews = reviewCountOf(world.reviewOutcomes, reviewScale.max);
     if (needs.length > 0 && topReviews > leastMet) {
       violations.push(
         `Review attribution broken at tick ${world.tick}: ${topReviews} guest(s) left the top review of ` +
-          `${reviewScale.max}, but the least-met need was met only ${leastMet} time(s). A top review is ` +
-          'unreachable while any need is unmet — that is what this scale is sized for — so more of them than ' +
-          'that means the review is not reading the whole need vector (G-019).',
+          `${reviewScale.max}, but the least-met need was met only ${leastMet} time(s). A top review is the ` +
+          'MEAN of this guest\'s per-need bands, so it reaches the top only when every one of those bands ' +
+          'does — which is exactly what "met" counts (ADR-0037). This holds at every scale. More top reviews ' +
+          'than that means the review is not reading the whole need vector (G-019).',
       );
     }
     // B — A STAY THE HOTEL CUT SHORT REVIEWS AT THE FLOOR, checked against the DEPARTURE
@@ -1947,10 +2011,13 @@ export function renderText(summary: RunSummary): string {
     // stability contract makes every column width load-bearing and the golden test pins it.
     // By-room is SUBTRACTED HERE and stored nowhere (G-013 critique round 1). A reader
     // wants both columns; the report needs only one number to print them.
-    // AND THE INTEGRAL BESIDE THE SNAPSHOT (G-028a). `met`/`unmet` say where each need stood at
-    // one instant; the share says how much of the stay the hotel spent failing it. Rendered
-    // through `unservedShareBasisPoints`, which is what the tests fold, so the printed number and
-    // the asserted number cannot be two different roundings of the same pair.
+    // AND THE INTEGRAL BESIDE THE COUNT (G-028a, re-aimed at G-028b). The share says how much of
+    // its guests' stays this need spent unserved; `met`/`unmet` count how many of those guests
+    // had a share inside the best band. **They were a departure-INSTANT reading until G-028b and
+    // could disagree with the share by two orders of magnitude on this very line** — 0 met beside
+    // 20 basis points unserved was the measured case. Both are the same two integers now.
+    // Rendered through `unservedShareBasisPoints`, which is what the tests fold, so the printed
+    // number and the asserted number cannot be two different roundings of the same pair.
     ...summary.needs.map(
       (need) =>
         `need ${need.lodging ? 'L' : ' '}     ${need.needId} ${need.met} met, ${need.unmet} unmet ` +

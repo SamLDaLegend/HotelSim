@@ -704,7 +704,14 @@ function hud(world, extra) {
   ]);
 
   // Departed-guest tally from the frame, beside what the guests standing here right now
-  // are doing with the same need — the two halves of "met or failing".
+  // are doing with the same need.
+  //
+  // **THE TWO `met` COLUMNS ANSWER DIFFERENT QUESTIONS SINCE G-028b, AND THIS IS THE INSTRUMENT
+  // THE HUMAN WATCH RUNS THROUGH.** The tally's `met` is the per-need BAND — the hotel served
+  // this need for all but a fifth of that guest's stay (ADR-0037). The `live` column below is
+  // "full RIGHT NOW", a reading at one instant. They can differ by an order of magnitude on one
+  // row, which is precisely the confusion the summary schema bump exists to prevent, so the
+  // header says which is which rather than letting a watcher assume they are the same number.
   const live = new Map();
   for (const guest of world.guests.list) {
     for (const n of guest.needs) {
@@ -715,7 +722,9 @@ function hud(world, extra) {
       else r.pending += 1;
     }
   }
-  let html = '<table><tr><td></td><td class="n">met</td><td class="n">unmet</td><td class="n">byItem</td><td class="n">live</td></tr>';
+  let html =
+    '<table><tr><td></td><td class="n">met (stay)</td><td class="n">unmet</td>' +
+    '<td class="n">byItem</td><td class="n">live (now)</td></tr>';
   for (const n of world.needOutcomes) {
     const l = live.get(n.needId) ?? { met: 0, pending: 0, failed: 0 };
     html +=
@@ -723,7 +732,11 @@ function hud(world, extra) {
       `<td class="n">${n.met}</td><td class="n">${n.unmet}</td><td class="n">${n.metByItem}</td>` +
       `<td class="n">${l.met}/${l.pending}/${l.failed}</td></tr>`;
   }
-  el('needs').innerHTML = `${html}</table><div style="color:#8b93a1">live = met / pending / failed</div>`;
+  el('needs').innerHTML =
+    `${html}</table><div style="color:#8b93a1">` +
+    'met (stay) = departed guests whose need was served for all but a band of their stay &middot; ' +
+    'live (now) = full / pending / failed for guests still here' +
+    '</div>';
 
   /**
    * WHAT THE DEPARTED GUESTS THOUGHT OF THE PLACE (G-019).

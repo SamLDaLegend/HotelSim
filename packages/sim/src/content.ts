@@ -944,91 +944,110 @@ function cloneReviewScale(
 }
 
 /**
- * Refuses content whose review scale cannot express its own need table (G-019).
- *
- * THE ONE INEQUALITY THIS GOAL'S SCALE RESTS ON, and it is derived rather than chosen:
- *
- *   A TOP REVIEW MUST BE UNREACHABLE WHILE ANY NEED IS UNMET.
- *
- * With one weight per need, the best a guest can score having missed one of `N` needs is
- * `ONE_WHOLE x (N-1)/N`, and the top band begins at `ONE_WHOLE x (B-1)/B`. The first is
- * below the second exactly when `B > N` — that is, when `max - min >= N`. So the scale's
- * size is not a taste: it is the smallest one on which "everything went right" and "one
- * thing went wrong" are different answers.
- *
- * REFUSED AT LOAD, WITH THE SAME STANDING AS A NEED NO PROVIDER CLAIMS. A hotel whose
- * reviews cannot tell a perfect stay from a spoiled one is the review-scale form of
- * guaranteed unhappiness, and `assertNeedsAreSatisfiable` two lines up refuses the other
- * form. Better a content set that will not load than a distribution nobody can read.
- *
- * THE SHIPPED SCALE SITS EXACTLY ON THE BOUNDARY — 1..5 against four need types, `5 - 1 = 4`
- * — AND THAT IS WORTH SAYING OUT LOUD RATHER THAN DISCOVERING AT M6: adding a fifth need
- * type refuses ALL content until the scale is widened to 1..6. That is the check working,
- * not a trap; a fifth need on a five-point scale is precisely the case where a guest could
- * miss something and still review at the top.
+ * Refuses content whose review scale cannot express its own need table (G-019, re-warranted at
+ * G-028b).
  *
  * ---------------------------------------------------------------------------
- * AND A CEILING, ADDED AFTER `balance-critic` FOUND A RESOURCE CLIFF BEHIND THE MISSING ONE.
+ * THE FLOOR: `max - min >= N`. THE NUMBER IS KEPT; ITS WARRANT IS NOT THE ONE IT SHIPPED WITH,
+ * AND THE DIFFERENCE IS RECORDED HERE RATHER THAN QUIETLY REPAIRED (ADR-0036 §2).
  *
- * `reviewScoreSchema` carries no bound — correct, for the reason stated there: a *balance*
- * bound on where a scale starts or ends would be the superstition §2.1 forbids. **That
- * reasoning does not cover a resource cliff, and there was one.** The report materialises
- * ONE ROW PER ADMITTED SCORE (the need-table idiom, which is safe when content declares four
- * of something and not when it declares a span), so `reviewScoreMin: 0,
- * reviewScoreMax: 5000000` bound without complaint and a ONE-DAY RUN emitted **5,000,001
- * rows and 308,891,476 bytes of JSON**, on one line in the text report, with no diagnostic
- * anywhere.
+ * IT USED TO BE A NECESSARY CONDITION AND IT NO LONGER IS. Under the deleted met-count scorer,
+ * the best a guest could score having missed one of `N` needs was `ONE_WHOLE x (N-1)/N` against
+ * a top band beginning at `ONE_WHOLE x (B-1)/B`, so *"a top review is unreachable while any need
+ * is unmet"* held EXACTLY WHEN `B > N`. **ADR-0037's mean of per-need bands gives that property
+ * at any scale of two or more bands**: every band is at most `B - 1`, so their mean reaches
+ * `B - 1` only if every one of them does. The refusal's message said *"which holds only when"*,
+ * and that clause is now FALSE rather than merely weakened.
  *
- * THE CEILING IS DERIVED BY PIGEONHOLE RATHER THAN CHOSEN, which is what lets it be a
- * refusal instead of a taste:
+ * SO WHAT DOES IT STILL BUY? **Resolution, and that is a DIAL rather than a derivation** — said
+ * plainly because ADR-0013 §4 forbids manufacturing a derivation for a number that is tuned by
+ * play. With `B` bands, `met` means *"unserved for less than a `B`th of the stay"*
+ * (`metAtDeparture`), so the band count sets the tolerance inside the definition of met: at two
+ * bands a hotel that fails you for half your stay has still "met" your need. Requiring at least
+ * as many bands as needs is a floor on that tolerance, and it is a design choice.
  *
- *   a guest's experience is Σ q over its N needs, each an integer in [0, ONE_WHOLE]
- *   so the sum cannot take more than N x ONE_WHOLE + 1 distinct values
- *   -> a scale wider than that admits more scores than the content can ever distinguish
+ * WHY IT IS KEPT RATHER THAN DELETED, WHICH ADR-0035 WOULD OTHERWISE ASK FOR: a bind-time
+ * refusal that goes away lets content ship below it silently and permanently, and the resolution
+ * argument is real even where it is not a derivation. **Keeping a check whose warrant changed is
+ * legitimate; keeping a message that states a false necessity is not.** The message below is
+ * rewritten accordingly, and `review.scale.test.ts` asserts the property the floor no longer
+ * carries — at a scale the floor would refuse — so nobody re-derives the old claim from the
+ * check's existence.
  *
- * So `max - min <= N x ONE_WHOLE`. For the shipped four-need table that is 40,001 scores:
- * absurd content that now LOADS AND IS BOUNDED, rather than absurd content that silently
- * emits a third of a gigabyte.
- *
- * ---------------------------------------------------------------------------
- * IT IS A NECESSARY CONDITION AND IT IS DELIBERATELY LOOSE. AN EARLIER VERSION OF THIS
- * PARAGRAPH CALLED IT TIGHT, AND THAT WAS FALSE — INCLUDING FOR THE ARM CHOSEN TO SHOW IT.
- *
- * EVERY `q` IS NOW EXTREME — 0 or `ONE_WHOLE` — so a guest's experience takes at most
- * `needCount + 1` values and the reachable count collapses to that. The three arms
- * `review.scale.test.ts` ENUMERATES (it counts, rather than applying this formula):
- *
- *   raw(1, 0, 10000)                         admits 10,001   reaches     2
- *   the shipped shape (N=4)                  admits 40,001   reaches     5
- *   N=1 with the widest lodging need         admits 10,001   reaches     2
- *
- * The bound is therefore tight NOWHERE, and there is no content that would make it tight.
+ * THE SHIPPED SCALE SITS EXACTLY ON THE BOUNDARY — 1..5 against four need types — AND THAT IS
+ * WORTH SAYING OUT LOUD RATHER THAN DISCOVERING AT M6: adding a fifth need type refuses all
+ * content until the scale is widened. Under the new warrant that is a statement about
+ * resolution, not about correctness: a fifth need on a five-point scale would still be unable to
+ * give a top review to a guest it failed.
  *
  * ---------------------------------------------------------------------------
- * THE READINGS ABOVE WERE 201 / 721 / 10,001 UNTIL θ-a SWEEP 2, AND THE TABLE THEY CAME FROM
- * IS A DELETED MODEL. They were a count over the WAIT SHARE, the one non-extreme `q`, which
- * took `patienceTicks + 1` values — and G-027a deleted the wait term (`reviews.ts`'s header)
- * before ADR-0017 §1 deleted `patienceTicks`. The third row's claim — that the bound goes
- * tight when the lodging need's patience reaches `ONE_WHOLE` — cannot even be stated now:
- * there is no patience for a scale to be onto through. `balance-critic` found the ORIGINAL
- * over-claim of tightness at G-019's final round, and the correction it forced is what the
- * rest of this block says; the numbers that carried it did not survive the model.
- * ---------------------------------------------------------------------------
+ * THE CEILING: RE-DERIVED AT G-028b FROM WHAT MATERIALISES ROWS, BECAUSE ITS OLD DERIVATION WAS
+ * DELETED IN THE SAME DIFF.
  *
- * SO THE CLAIM IS RESTATED TO WHAT IT IS: **a sound necessary condition whose purpose is the
- * RESOURCE BOUND, not surjectivity.** Nothing correct is refused, which is the property that
- * matters and is unchanged. What must NOT be said — and the refusal message no longer says
- * it — is that a document passing this bound has no unreachable scores: `0..40000` binds and
- * then renders 40,001 rows of which 39,996 are scores no guest can leave (it read 39,280
- * until θ-a sweep 2, which was 40,001 less the 721 the wait term used to reach). Refusing a
- * document for a defect that passing documents share is an argument that does not survive
- * being written down.
- * ---------------------------------------------------------------------------
+ * It existed for a measured resource cliff: `reviewScoreMin: 0, reviewScoreMax: 5000000` bound
+ * without complaint and a ONE-DAY RUN emitted **5,000,001 rows and 308,891,476 bytes of JSON**,
+ * on one line in the text report, with no diagnostic anywhere. The report materialises ONE ROW
+ * PER ADMITTED SCORE, which is safe when content declares four of something and not when it
+ * declares a span.
  *
- * The floor and the ceiling are different KINDS of statement and share a function only
- * because both are relations against the need table: the floor is exact and load-bearing
- * (the scale must be able to express one distinction), the ceiling is loose and defensive
- * (the scale must not be able to exhaust a disk).
+ * THE OLD BOUND WAS `max - min <= N x ONE_WHOLE`, BY PIGEONHOLE OVER `Σ q` — a guest's
+ * experience was a sum of `N` shares of `ONE_WHOLE`, so it could not take more than
+ * `N x ONE_WHOLE + 1` values. **`qualitySum` is deleted, so that sum does not exist and neither
+ * does its cardinality.** A number whose derivation has been deleted is a superstition with CI
+ * access (ADR-0013 §4), so it is re-derived rather than retained.
+ *
+ * THE NEW DERIVATION, FROM THE ROWS THEMSELVES:
+ *
+ *   the report materialises one row per admitted score
+ *   a score is `min + floor(SUM band / N)`, so it takes one value per band: rows == bands
+ *   a band is `floor((stay - unserved) x bands / stay)` and `unserved` is an INTEGER in
+ *     [0, stay], so a band can take at most `stay + 1` distinct values
+ *   -> a scale with more bands than the longest stay has ticks admits rows NO GUEST CAN LAND IN
+ *
+ * So `max - min <= L`, where `L` is the longest life this content's own rules permit —
+ * `max(stayDurationTicks, visitDurationTicks, toleranceTicks)`, read here from the rules
+ * directly because `guests.ts` imports this module and the reverse would be a cycle.
+ *
+ * IT IS NOT "THE TERMS `maxGuestLifetimeTicks` MAXES OVER", WHICH IS WHAT THIS LINE SAID AND IS
+ * WRONG IN A WAY ADR-0028's SECOND AMENDMENT RULED AGAINST BY NAME. That function does not max
+ * over three declared terms; it **SELECTS** by the same fact branch 6b selects the terminator
+ * by, precisely because a blanket max over terms that are required on disk regardless of
+ * applicability is unfalsifiable rather than conservative. **This bound maxes on purpose and for
+ * the opposite reason**: it is a bound on a DOCUMENT rather than on a guest, so it must cover
+ * every guest the document could produce, and taking the largest declared duration is the
+ * conservative direction here where it was the loose one there. Stated because the two look
+ * identical and are opposite.
+ *
+ * IT IS TIGHTER THAN WHAT IT REPLACES AND THAT IS THE POINT, not a side effect: the old bound
+ * admitted 40,001 scores against a shipped stay of 1,440, so 38,561 of those rows were
+ * unfillable by construction and the cliff it was written for was only two orders of magnitude
+ * away rather than closed. It is still LOOSE — a scale of 1..1441 binds and nothing like it is
+ * sensible — because this is a resource bound and not a taste, and `reviewScoreSchema` carries
+ * no balance bound for the reason stated there.
+ *
+ * CONTENT THAT DECLARES NO DURATION AT ALL FALLS BACK TO THE PRE-G-028b BOUND rather than
+ * escaping the ceiling. The first draft of this block skipped such content on an ADR-0008
+ * argument — no stay, so no `L`, so nothing to compare against — and added *"it also cannot run
+ * anyway"*. **THE SECOND HALF WAS WRONG AND IT IS THE HALF THE HOLE RESTED ON.** A raw host can
+ * hand over a review scale beside no durations at all, and such a document binds, renders and
+ * fills a disk — so the skip reopened the 5,000,001-row cliff on exactly the shape it claimed
+ * was unreachable.
+ *
+ * THE FIRST DRAFT OF THIS RETRACTION CITED THE PERMANENT v1 FIXTURE AS THE WITNESS AND THAT
+ * CITATION IS WITHDRAWN: `SAVE_V1_CONTENT` declares no `guestRules` at all, so it carries no
+ * review scale and never enters this loop on either code path. It witnesses that content
+ * without guest rules binds and ticks — which is true and is not the point. **The shape the
+ * hole was open on is content WITH a scale and WITHOUT a duration**, which only a raw host can
+ * produce, and a raw host is the stated threat model for every refusal in this function.
+ *
+ * AND WHAT THE FALLBACK IS WORTH IS STATED RATHER THAN IMPLIED. Measured: no such document
+ * binds anyway — one with a lodging need is refused for declaring no `toleranceTicks`, one
+ * without is refused for declaring no `visitDurationTicks`. **So this is a second line of
+ * defence that happens to fire first, and it is kept because guard ORDER is not a contract**:
+ * if either terminator refusal moves, or a content shape arrives that needs no duration, this
+ * is the only thing between a raw host and a 5,000,001-row render. `review.scale.test.ts`
+ * drives the throw on both table shapes AND drives the blind spot, so the limitation is a
+ * measured statement rather than an undiscovered gap.
  * ---------------------------------------------------------------------------
  *
  * Content that declares no scale is untouched: it left no reviews, so there is nothing for
@@ -1045,21 +1064,57 @@ function assertReviewScaleIsBoundedByTheNeedTable(
     if (max - min < needTypes.length) {
       throw new Error(
         `bindContent: guest rules "${rules.id}" declare a review scale of ${min}..${max} — ${max - min + 1} score(s) — ` +
-          `against ${needTypes.length} need type(s). A top review must be unreachable while any need is unmet, which ` +
-          `holds only when the scale has MORE scores than there are needs: max - min >= ${needTypes.length}, so the ` +
-          `narrowest scale this table admits is ${min}..${min + needTypes.length}. As written, a guest that missed a ` +
-          'need would review at the top and the scale would say nothing about it.',
+          `against ${needTypes.length} need type(s). The scale must have at least as many bands as there are needs: ` +
+          `max - min >= ${needTypes.length}, so the narrowest scale this table admits is ` +
+          `${min}..${min + needTypes.length}. THIS IS A RESOLUTION FLOOR AND IT IS A DIAL: a band is how much of a ` +
+          'stay a need may go unserved and still count as met, so a scale coarser than the need table makes "met" ' +
+          'mean very little. It is NOT what stops a guest reviewing at the top with a need unmet — the score is the ' +
+          'mean of per-need bands, and that property holds at every scale (ADR-0036 §2, ADR-0037).',
       );
     }
-    const ceiling = needTypes.length * ONE_WHOLE_BASIS_POINTS;
+    // THE LONGEST LIFE THIS CONTENT PERMITS, which is what a band can be a share of. Read from
+    // the rules rather than imported, because `guests.ts` imports this module and the reverse
+    // would be a cycle.
+    //
+    // NOT "the three terms `maxGuestLifetimeTicks` maxes over" — the docblock above retracts
+    // that sentence by name and this copy of it survived the same diff. It is wrong twice: that
+    // function SELECTS by the branch that decides which terminator applies rather than maxing
+    // (ADR-0028 amendment 2 ruled specifically against the max-over-declared-terms form), and
+    // its visit term is the DEFERRED bound rather than the raw duration. This max is a bound on
+    // a DOCUMENT and must cover every guest the document could produce, which is why maxing is
+    // right here and was wrong there.
+    const longestStay = Math.max(
+      rules.stayDurationTicks ?? 0,
+      rules.visitDurationTicks ?? 0,
+      rules.toleranceTicks ?? 0,
+    );
+    // AND A DOCUMENT THAT DECLARES NO DURATION AT ALL IS STILL BOUNDED, WHICH IS A HOLE THIS
+    // GUARD HAD FOR ONE ROUND. `longestStay` is 0 for such a document, so a `longestStay > 0`
+    // condition would let `reviewScoreMin: 0, reviewScoreMax: 5000000` BIND — the exact cliff
+    // this ceiling exists for, reopened on the one shape that has no stay to measure against.
+    // The zod loader requires `stayDurationTicks` on disk and closes the CLI path, but **a RAW
+    // HOST is the stated threat model for every refusal in this function**, and the report's row
+    // loop does not care how the content arrived.
+    //
+    // THE FALLBACK IS THE PRE-G-028b BOUND, KEPT AS A BACKSTOP AND LABELLED AS ONE. Its
+    // pigeonhole derivation died with `qualitySum` and it is NOT re-derived here — what is
+    // claimed for it is only that it is finite, that it scales with the need table rather than
+    // being a literal, and that it is the number this repository already refused above. A
+    // backstop whose provenance is stated is not a superstition; a backstop that is absent is
+    // a disk full of rows.
+    const ceiling = longestStay > 0 ? longestStay : needTypes.length * ONE_WHOLE_BASIS_POINTS;
     if (max - min > ceiling) {
+      const against =
+        longestStay > 0
+          ? `a longest guest life of ${longestStay} tick(s)`
+          : `${needTypes.length} need type(s) and NO declared duration`;
       throw new Error(
         `bindContent: guest rules "${rules.id}" declare a review scale of ${min}..${max} — ${max - min + 1} score(s) — ` +
-          `against ${needTypes.length} need type(s). A guest's experience is a sum of ${needTypes.length} shares of ` +
-          `${ONE_WHOLE_BASIS_POINTS} basis points, so it cannot take more than ${ceiling + 1} values whatever the rest ` +
-          'of the content says, and the report materialises one row per admitted score. This is a bound on the SIZE of ' +
-          'the scale, not a judgement about which scores are reachable — plenty of narrower scales have unreachable ' +
-          `scores too. The widest scale this table admits is ${min}..${min + ceiling}.`,
+          `against ${against}. A need's band is its served share of the stay quantised into those scores, and the ` +
+          'share is an integer count of ticks, so a scale with more bands than the stay has ticks admits scores no ' +
+          'guest can ever land on — and the report materialises ONE ROW PER ADMITTED SCORE. The widest scale this ' +
+          `content admits is ${min}..${min + ceiling}. (This bound is on the SIZE of the scale, not a judgement ` +
+          'about which of the remaining scores are reachable: plenty of narrower scales have unreachable ones too.)',
       );
     }
   }

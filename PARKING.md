@@ -2371,3 +2371,176 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   unchanged, the hazard is version- or filesystem-specific and this closes.*
   -> **belongs beside the mutation recipe in `CLAUDE.md`; three agents will hit it next time a
   paired campaign is owed.**
+
+## From G-028b (the scorer)
+
+- **THE BUILD LOOP SATURATES TWO PURCHASES IN, AND THE MONEY HALF IS WORSE THAN THE REVIEW HALF.**
+  The review half was parked first: at `--rooms 12 --amenities 2` and above every guest leaves the
+  top score, because content has no quality axis — nothing to buy once every need is met.
+  **THE LEDGER SAYS SOMETHING SHARPER AND IT WAS NOT PARKED.** Measured at
+  `--days 1000 --seed 42`, one run per cell, shipped content, quiet 12-core Windows 11 box:
+
+  | build | revenue | upkeep | balance | review distribution |
+  |---|---|---|---|---|
+  | 12 rooms, 2 amenities | 101,898,000p | −39,000,000p | **+63,398,000p** | every guest at the ceiling |
+  | 12 rooms, 3 amenities | identical | −43,500,000p | +58,898,000p | identical |
+  | 12 rooms, 5 amenities | identical | −52,500,000p | +49,898,000p | identical |
+  | 24 rooms, 2 amenities | identical | −69,000,000p | +33,398,000p | identical |
+
+  **So twelve rooms and two amenities is the single correct build, and every purchase after it has
+  negative expected value with no compensating signal at all** — same revenue, same departures, same
+  reviews, more upkeep. The response of the whole build loop is **one room step and two amenity
+  steps wide**. That is a CONTENT gap rather than a scorer defect, and it bears directly on
+  *"the review responds to what a player builds"*: the review is not wrong, it has run out of things
+  to report on.
+
+  **FALSIFICATION TEST — AND IT MUST READ THE LEDGER, NOT ONLY THE DISTRIBUTION.** Add a second-tier
+  provider to a scratch content dir (an item or room type with a higher `refillPerTick`, or a lower
+  `wantAtBasisPoints`), then re-run BOTH
+  `--days 30 --seed 7 --arrivals 120 --rooms 12 --amenities 3` and
+  `--days 1000 --seed 42 --rooms 12 --amenities 3`, and read the review distribution AND
+  `money.balancePennies` against the two-amenity cell. *If the distribution stops being a point mass
+  AND the balance stops falling monotonically, it is a content gap and M6 owns it. If the
+  distribution spreads while the balance still falls, the score has something to say and the money
+  loop does not, which is M4's. If neither moves, it is the aggregation and the scorer owns it.*
+  **The distribution alone cannot tell those three apart, which is why the first version of this item
+  — reading only the distribution — would have returned "content gap" for all three.**
+  `scorer.report.test.ts` asserts the point mass today, so the day content grows a quality axis that
+  arm goes red and this comes due on its own. -> **M4 for the ledger half, M6 for the content half.**
+
+- **THE VISITOR POPULATION MAY BE STRUCTURALLY INCAPABLE OF A GOOD REVIEW**, and no aggregation
+  measured at G-028b fixes it. A visit is short and service is serial, so a perfectly served
+  visitor still spends a large fraction of it wanting something — the same arithmetic ADR-0028's
+  amendment used for the dissatisfaction floor, now setting a CEILING on the review. Every
+  candidate the plan measured has this floor, because subtracting it needs the fold ADR-0031
+  refused to grow. **FALSIFICATION TEST**: run the food-court fixture at several provisioning
+  levels and read the visitor score distribution. *If the best reachable score at zero contention
+  is below the top band, the review scale or the visit duration is mis-sized for lodging-free
+  content.* -> **whichever goal ships a second content set for real.**
+
+- **A ONE-TICK CADENCE ARTEFACT IN THE DEPARTURE MIX, NOT A PROPERTY OF THE SCORER. The falsification
+  test below was RUN and it returned "the population".** At `--arrivals 60 --rooms 6` the mean review
+  dips going from one amenity to two. G-028b's build first pinned that as a limit of the aggregation
+  with a denominator mechanism attached — *"the richer hotel grades its guests over four times as
+  long"* — and **that attribution is withdrawn rather than restated** (`CLAUDE.md` rule 5).
+  Measured at the cadence's own neighbours, `--days 30 --seed 7 --rooms 6`, one run per cell:
+
+  | arrivals | 1 amenity | 2 amenities | lean arm's departures |
+  |---|---|---|---|
+  | 59 | 285 | 331 | 5 / 360 / 359 |
+  | **60** | **348** | **345** | **0 / 10 / 702** |
+  | 61 | 283 | 346 | 2 / 371 / 328 |
+
+  **The score RISES at 59 and at 61 and dips only at 60. The rich arm is stable at all three; the
+  anomaly is entirely in the LEAN arm** — and a denominator effect present either side with the
+  opposite sign cannot be what produces it. What is different at 60 is the departure mix, violently:
+  the lean arm checks out nobody and walks almost everybody out dissatisfied. **This item's own
+  discriminator therefore returns "the population and not the scorer."**
+
+  **RE-PARKED, WITH WHAT WOULD STILL BE WORTH KNOWING**: sweep `--arrivals` from 30 to 240 at six
+  rooms and record the departure mix beside the mean at every step. *If the phase-locked mix has
+  other knife-edges like the one at 60, the cadence is a confound in every balance reading this
+  project takes at six rooms, which is a bigger finding than the dip. If 60 is the only one, it is a
+  curiosity and closes.* **The artefact is pre-existing and is not G-028b's**; what that goal added
+  and then removed was the causal claim. -> **M4, with the reputation term that would read it.**
+
+- **`met` NOW DEPENDS ON THE REVIEW SCALE**, because the band count is `max - min + 1`. Two content
+  documents differing only in `reviewScoreMin` produce different `met` columns and different state
+  hashes. The behavioural fence is unaffected — no decision reads a review, and the departures, the
+  ledger and the build counters are identical — but the need TALLY's unit is now a review parameter.
+  Both `review.boundary.test.ts` and `stock.content.test.ts` state the narrowing and assert the tick
+  columns as the control. **FALSIFICATION TEST**: if a future goal wants the tally scale-independent,
+  the move is a separate content field for the band count. *Adding one is only justified if some
+  consumer needs `met` to be comparable across content sets — nothing does today.* -> **M4.**
+
+## The cadence question, RUN and returned positive (G-028b sweep 2, 2026-08-14)
+
+- **THE ARRIVAL CADENCE IS A CONFOUND IN EVERY SIX-ROOM BALANCE READING THIS PROJECT TAKES.**
+  Parked at sweep 1 with the discriminator *"if the phase-locked mix has other knife-edges like the
+  one at 60, the cadence is a confound"*. **It was run — every integer cadence from 30 to 240,
+  `--days 30 --seed 7 --rooms 6`, one amenity against two, 422 runs — and the answer is "other
+  knife-edges".**
+
+  | | |
+  |---|---|
+  | cadences where the amenity axis FALLS | **two: 35 (2.48 → 2.44) and 60 (3.48 → 3.45)** |
+  | adjacent-cadence lean-arm jumps ≥ 0.25 band | **30→31 (2.67 → 1.61 — LARGER than the 60 spike)**, 34→35, 59→60→61, 210→211 |
+
+  **The 60 spike was not special. It was the one somebody happened to measure.**
+
+  **Why this reaches past G-028b**: six rooms is this project's default balance workload, and a
+  reading taken at one cadence can differ from its neighbour by more than a quarter of a band
+  because the *departure mix* moves discontinuously — at 60 the lean arm reads `0 / 10 / 702`
+  against `5 / 360 / 359` one tick away. **Any balance claim taken at a single cadence is a claim
+  about that cadence.**
+
+  **FALSIFICATION TEST**: for any balance reading this project relies on, re-take it at ±1 arrival
+  tick. *If the reading moves by less than the effect it is being used to demonstrate, the cadence
+  is not a confound for that claim and it closes for that claim only. If it moves by more, the
+  claim needs a cadence sweep rather than a cadence.*
+  -> **the M3 instrument-debt goal, alongside the three campaigns and the tick-cost re-take. This
+  is now the largest of the four, because it does not question one instrument — it questions the
+  workload every instrument is read on.**
+
+- **AND THE PARKED ITEM WORKED EXACTLY AS THE RULE INTENDS.** A hypothesis was parked *with its
+  discriminator*; the next round ran the discriminator; the answer came back positive and the item
+  **came due rather than closing.** That is the fourth time a parked experiment has produced a
+  result nobody planned — and the first where the result was *"the thing you have been measuring
+  on is unstable"* rather than a fact about the feature.
+
+## From G-028b sweep 3 (both critics)
+
+- **A PRE-G-028a SAVE RESUMES WITH AN INVENTED SPOTLESS HISTORY, AND ITS GUESTS DEPART WITH
+  PERFECT REVIEWS.** `migrateV15ToV16` zero-fills `unservedTicks`, and G-028a justified the
+  flattering direction on the warrant *"nothing in `packages/sim` reads any of these three
+  fields."* **G-028b voids that warrant**: `needBandOf` reads it, and **0 is the value that scores
+  the ceiling** — top band on every need, `met` true on every row, the maximum review, whatever
+  the hotel then does. **This is not the mixed schema-3/schema-4 tally column `report.ts`
+  concedes; that is a column part-computed under two rules, this is a history that never
+  happened.** Latent: `deserialise` has no production caller, and the runner creates every world
+  it reports on. The default does not move — every candidate invents something and 0 is already
+  in the shipped fixture and every v16 save written — so what is parked is the exposure, not the
+  choice. **A FOURTH candidate invents nothing and is the one to reach for**: record the tick the
+  counter becomes valid from (`world.tick` is in the bytes at migrate time) and grade a migrated
+  guest over that window alone, declining to grade the unrecorded middle. It loses on blast
+  radius today — a new field on every need moves the save schema, the state hash, the measure
+  golden and the permanent fixture's chain — and it is named so the goal that needs it does not
+  re-derive the list. **FALSIFICATION TEST**: serialise a world mid-run, migrate it v15→v16, resume it to
+  the next departure and compare that guest's review against the same guest in an unbroken run.
+  *If the resumed guest scores higher, the hazard is live the moment anything resumes a save; if
+  it scores the same, the zero-fill is harmless and this closes.* -> **whichever goal gives
+  `deserialise` a caller — M5's load path.**
+
+- **THE SCORE'S NON-DECREASING PROPERTY IS TRUE AT THE DERIVED CADENCE AND FALSE OVER A BAND
+  AROUND 70 ARRIVALS.** G-028b's headline arm swept 40 grid cells and 9 cadences and asserted
+  *"it never falls on either single axis"* — **at `--arrivals 120` only**, which is the cadence
+  the provisioning rule is derived at. Re-measured at 200 days, two amenities, the ROOM axis:
+
+  | arrivals | 3 rooms | 6 rooms | 12 rooms |
+  |---|---|---|---|
+  | 69 | 332 | 363 | **349** |
+  | 70 | 332 | 363 | **336** |
+  | 71 | 333 | 367 | **342** |
+  | 120 | 354 | 409 | 500 |
+
+  **It falls at all three of 69/70/71, so the ±1-tick discriminator returns "not a confound"** —
+  this is a contiguous band, not the phase knife-edge this goal withdrew a different arm for.
+  The arm's title now carries the scope; ADR-0037 amendment 2 records the withdrawal.
+  **FALSIFICATION TEST**: sweep `--arrivals` 60..90 at 3/6/12 rooms and two amenities, at 200 and
+  1000 days, and record the departure mix beside each mean. *If the fall coincides with a change
+  in which departure row dominates, it is the population — the same answer the cadence artefact
+  got, and the two are then one finding. If the mix is stable across the band and the score still
+  falls, the score has a genuine non-monotone region and M4's reputation term must not read it
+  there.* -> **the instrument-debt goal, beside the arrival-cadence confound it now joins.**
+
+- **`apps/game/src/hud.ts:98`'s MOTIVATING MEASUREMENT WAS TAKEN UNDER THE RETIRED DEFINITION.**
+  The HUD's need cell is justified by a reading of `guest_comfort` as *"15 met / 17 unmet"* — a
+  departure-instant count that no longer exists. The cell itself draws `met / (met + unmet)`, so
+  the drawing is correct and the figure explaining why it is drawn that way is not.
+  **`apps/game` is shut for this milestone and was not touched**, which is why this is parked
+  rather than fixed. It is the FOURTH surface the three-package census does not reach — the
+  others being `packages/content`, `tools/viewer` and the ledgers. **FALSIFICATION TEST**: re-run
+  the invocation that comment names and read the comfort row. *If the ratio it describes has
+  moved, the sentence is stale and the cell's justification needs re-taking; if the drawing is
+  what a watcher finds confusing rather than the comment, that is the WATCH's answer, not this
+  item's.* -> **the goal that opens `apps/game`, with the human WATCH it already owes.**

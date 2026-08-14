@@ -701,38 +701,64 @@ export const abandonMarginBasisPointsSchema = basisPointsSchema;
  * derivation in code is the shape in which that document cannot be written.
  * ---------------------------------------------------------------------------
  *
- * WHERE THE SIZE COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE — and a
- * review scale is nothing but thresholds.
+ * WHERE THE SIZE COMES FROM. **A DIAL INSIDE A REFUSAL, NOT A DERIVATION** — and this block
+ * said the opposite for two goals, on the surface a content author reads before writing a
+ * document. Corrected at G-028b (ADR-0036 §2, ADR-0037).
  *
- * THE REQUIREMENT: **a top review must be unreachable while any need is unmet.** A scale on
- * which a guest can miss something and still give full marks says nothing about the thing
- * it missed, which is the whole failure the human found in this goal's headline criterion
- * before it was built.
+ * ---------------------------------------------------------------------------
+ * WHAT IT USED TO SAY, AND WHY EVERY LINE OF IT IS NOW FALSE. Quoted rather than deleted,
+ * because a content author who learned the old rule needs to be told it changed:
+ *
+ *   *"A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE."*
+ *   *"THE REQUIREMENT: a top review must be unreachable while any need is unmet."*
+ *   *"Each need a guest forms carries one equal share of the review … the weight is a COUNT."*
+ *   *"best score having missed one need = ONE_WHOLE x (N-1)/N; the top band begins at
+ *     ONE_WHOLE x (B-1)/B; require the first below the second <=> B > N <=> max - min >= N."*
+ *
+ * **The score is no longer a count of met needs.** It is the MEAN OF PER-NEED BANDS over each
+ * guest's own stay, where a band is the served share of that stay quantised into `B` levels
+ * (ADR-0037). There is no equal share, no `Σq`, and no `(N-1)/N`: `qualitySum` is deleted.
+ *
+ * **And the requirement holds at EVERY scale now, so it is not what sizes this one.** The mean
+ * of `n` bands each at most `B-1` reaches `B-1` only when every band does, and a top band IS
+ * `met` — so *"a top review is unreachable while any need is unmet"* is arithmetic in the
+ * scorer rather than a consequence of the scale's width. ADR-0036 §2 ruled the old *"only
+ * when"* false, not merely weakened.
+ * ---------------------------------------------------------------------------
+ *
+ * WHAT `max - min >= N` STILL BUYS, STATED AS WHAT IT IS. **RESOLUTION, AND IT IS A DIAL.**
+ * With `B` bands, *met* means *"unserved for less than a `B`th of the stay"*, so the band count
+ * sets the tolerance inside the definition of met: at two bands a hotel that fails a guest for
+ * half its stay has still "met" its need. Requiring at least as many bands as needs is a floor
+ * on that tolerance, and ADR-0013 §4 forbids manufacturing a derivation for a number that is
+ * tuned by play — so it ships labelled a dial.
+ *
+ * WHY IT IS STILL A REFUSAL rather than advice: a bind-time check that goes away lets content
+ * ship below it silently and permanently. **Keeping a check whose warrant changed is
+ * legitimate; keeping a message that states a false necessity is not**, which is why the
+ * refusal in `content.ts` was rewritten in the same diff and `review.scale.test.ts` asserts
+ * against the old sentence by name.
  *
  * THE INPUTS, both read off tables rather than written here:
  *
- *   N   = how many need types the content defines                  4 as shipped
- *   B   = how many scores this scale admits, `max - min + 1`        5 as shipped
+ *   N   = how many need types the content defines
+ *   B   = how many scores this scale admits, `max - min + 1`
  *
- * THE ARITHMETIC. Each need a guest forms carries one equal share of the review (see
- * `reviews.ts` for why the weight is a COUNT rather than a ranking, and for the
- * `satisfyTicks` weighting that was measured and rejected). So:
- *
- *   best score having missed one need     ONE_WHOLE x (N-1)/N
- *   the top band begins at                ONE_WHOLE x (B-1)/B
- *   require the first below the second    (N-1)/N < (B-1)/B   <=>   B > N   <=>   max - min >= N
- *
- *   shipped: 5 - 1 = 4 >= 4. EXACTLY ON THE BOUNDARY.
+ * AND A CEILING, `max - min <= L`, where `L` is the longest guest life the rules permit. A band
+ * is an integer count of ticks over the stay, so a scale with more bands than the stay has ticks
+ * admits scores no guest can land on — and the report materialises ONE ROW PER ADMITTED SCORE.
+ * Its predecessor was pigeonhole over the deleted `Σq` and died with it; the live derivation is
+ * in `content.ts` beside the refusal.
  *
  * REFUSED AT LOAD, by `assertReviewScaleIsBoundedByTheNeedTable` in `bindContent`, with the same
- * standing as a need no reachable provider claims: a hotel whose reviews cannot tell a
- * perfect stay from a spoiled one is guaranteed-unhappiness in the instrument rather than
- * in the guest.
+ * standing as a need no reachable provider claims.
  *
  * THE CONSEQUENCE OF SITTING ON THE BOUNDARY, SAID OUT LOUD SO M6 DOES NOT DISCOVER IT:
- * **adding a fifth need type refuses ALL content until this scale widens to 1..6.** That is
- * the check working. A fifth need on a five-point scale is exactly the case where a guest
- * could miss one thing and still review at the top.
+ * **adding a fifth need type refuses ALL content until this scale widens.** That is the check
+ * working — and under the restated warrant it is a statement about RESOLUTION rather than about
+ * correctness: a fifth need on a five-point scale would still be unable to hand a top review to
+ * a guest the hotel failed, but a band would be a fifth of a stay wide while the table asked to
+ * distinguish five needs inside it.
  *
  * REQUIRED HERE, OPTIONAL IN THE SIM — the `role`, `requires`, price and margin contract, and
  * for the same hazard in mirror image. Silence in HISTORY is a true statement: content
@@ -1151,9 +1177,13 @@ export const guestRulesSchema = z
     dissatisfactionReliefPerTick: dissatisfactionReliefPerTickSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
-  // cannot separate two stays and so cannot report on either. The relation that actually
-  // decides the design — `max - min >= needTypes.length` — needs a table this schema never
-  // sees, and lives in `bindContent` where both are in hand.
+  // cannot separate two stays and so cannot report on either. The relation against the need
+  // table — `max - min >= needTypes.length` — needs a table this schema never sees, and lives
+  // in `bindContent` where both are in hand.
+  //
+  // THAT RELATION IS A RESOLUTION DIAL, NOT THE THING THAT DECIDES THE DESIGN, and this comment
+  // called it the latter until G-028b. See the block above `reviewScoreSchema` for what changed
+  // and why the sentence is quoted there rather than deleted.
   .refine((rules) => rules.reviewScoreMax > rules.reviewScoreMin, {
     message:
       'reviewScoreMax must be greater than reviewScoreMin: a review scale with one score cannot ' +

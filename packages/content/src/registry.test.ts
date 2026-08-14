@@ -449,9 +449,15 @@ describe('the guest rules table (G-014b)', () => {
     // reads their absence as "this content left no reviews", which is exactly true of
     // anything written before G-019 — and a document reaching THIS schema was written today.
     //
-    // The relation that decides the design — `max - min >= needTypes.length` — is NOT here,
-    // and cannot be: this schema never sees the need table. It lives in `bindContent`. What
-    // is checkable from one document is that the scale admits more than one score at all.
+    // The relation against the need table — `max - min >= needTypes.length` — is NOT here, and
+    // cannot be: this schema never sees the need table. It lives in `bindContent`. What is
+    // checkable from one document is that the scale admits more than one score at all.
+    //
+    // IT IS NO LONGER "THE RELATION THAT DECIDES THE DESIGN", WHICH IS WHAT THIS LINE SAID.
+    // Under the met-count scorer it was exactly the condition making a top review unreachable
+    // while any need was unmet; ADR-0036 §2 ruled that necessity false, because the mean of
+    // per-need bands gives the property at every scale. What the relation buys now is
+    // RESOLUTION, and it is a labelled dial rather than a derivation (ADR-0013 §4).
     for (const bad of [{ reviewScoreMax: 1 }, { reviewScoreMax: 0 }, { reviewScoreMin: 5, reviewScoreMax: 5 }]) {
       expect(() => parseOneRule(bad)).toThrow(/reviewScoreMax must be greater than reviewScoreMin/);
     }

@@ -78,7 +78,7 @@ function default2Day(): CliResult {
 
 /** The --json document for the same run, shared by the direct-spawn and through-pnpm tests. */
 const GOLDEN_2_DAYS_SEED_42_JSON = {
-  schema: 3,
+  schema: 4,
   input: {
     seed: 42,
     ticks: 2880,
@@ -126,7 +126,18 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // the new branch is unreachable at any value of the new field.** THE EVIDENCE IS THIS
     // DOCUMENT, field by field: `stateHash` and the new zero row are the only things that differ.
     // Four guests still in the hotel, 24 still arrived, 4 still checked out, 16 still gave up.
-    stateHash: '83070924e2b10af8',
+    // MOVED AGAIN AT G-028b from `83070924e2b10af8`, for ONE cause and it IS a behaviour change
+    // — the first in this golden's history that is. `reviewOf` and `met` now read how long the
+    // hotel left each need unserved rather than where the need stood at the departure instant
+    // (ADR-0037), and both `reviewOutcomes` and the `met`/`unmet` columns are hashed state.
+    // **THE CONTROL IS NARROWER HERE THAN AT ANY PREVIOUS MOVE AND THAT IS SAID RATHER THAN
+    // GLOSSED**: the guest block, the ledger, the rooms and the build counters are compared
+    // field by field and are unchanged — 24 still arrived, 4 still checked out, 16 still gave
+    // up, four still in the hotel, the same 7 transactions and the same 510,000p balance —
+    // while the need rows' met/unmet and the review distribution move because their definition
+    // did. `unservedTicks` and `instanceTicks` are counted in ticks and are UNCHANGED, which is
+    // what separates a change of unit from the simulation behaving differently.
+    stateHash: 'f49ac2f2ffefe35e',
   },
   guests: {
     arrived: 24,
@@ -242,9 +253,20 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // denominator is the same for all four rows because every departed guest in this run
     // carried the whole vector, and `night_rest` carries the largest numerator — three rooms
     // against 24 arrivals is a hotel that mostly cannot give anybody a bed.
-    { needId: 'guest_comfort', lodging: false, met: 16, unmet: 4, metByItem: 16, abandoned: 0, unservedTicks: 1_539, instanceTicks: 8_640 },
-    { needId: 'guest_entertainment', lodging: false, met: 16, unmet: 4, metByItem: 0, abandoned: 0, unservedTicks: 1_961, instanceTicks: 8_640 },
-    { needId: 'guest_nourishment', lodging: false, met: 18, unmet: 2, metByItem: 5, abandoned: 0, unservedTicks: 1_254, instanceTicks: 8_640 },
+    //
+    // AND AT G-028b THE `met`/`unmet` SPLIT MOVED BECAUSE ITS QUESTION DID (summary schema 4).
+    // It counted instances above their want line at the departure instant; it counts instances
+    // whose per-need BAND was the top one — unserved for at most a fifth of that guest's stay.
+    // The two tick columns beside it are UNCHANGED, which is the control: the hotel did exactly
+    // what it did before, and the column that moved is the one whose definition moved.
+    //
+    // READ THE COMFORT ROW AGAINST ITS OWN SHARE, because it is the clearest case in the file:
+    // 1,539 unserved ticks of 8,640 is nearly a fifth of the stay, so half the instances that
+    // used to count as met fall outside the top band. `guest_nourishment`, unserved for less,
+    // keeps more of them. That ordering is the whole content of the redefinition.
+    { needId: 'guest_comfort', lodging: false, met: 8, unmet: 12, metByItem: 8, abandoned: 0, unservedTicks: 1_539, instanceTicks: 8_640 },
+    { needId: 'guest_entertainment', lodging: false, met: 8, unmet: 12, metByItem: 0, abandoned: 0, unservedTicks: 1_961, instanceTicks: 8_640 },
+    { needId: 'guest_nourishment', lodging: false, met: 12, unmet: 8, metByItem: 4, abandoned: 0, unservedTicks: 1_254, instanceTicks: 8_640 },
     { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0, unservedTicks: 3_000, instanceTicks: 8_640 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -260,16 +282,20 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     scoreMin: 1,
     scoreMax: 5,
     distribution: [
-      // RE-RECORDED AT G-027b. The distribution moves with the need table above: 16 guests
-      // that used to leave at 2 now leave at 3 or 4, because they were served repeatedly
-      // rather than once. It still conserves against the departure table — 0 + 0 + 9 + 8 + 3 =
-      // 20 = 4 checked out + 16 who gave up — which `buildSummary` asserts rather than
-      // leaving to this literal.
+      // RE-RECORDED AT G-027b, AND AGAIN AT G-028b. The distribution moves with the need table
+      // above, and at G-028b it moves because the scorer does: a review is the mean of per-need
+      // bands over the guest's own stay (ADR-0037) rather than a count of needs met. It still
+      // conserves against the departure table — 0 + 9 + 7 + 0 + 4 = 20 = 4 checked out + 16 who
+      // gave up — which `buildSummary` asserts rather than leaving to this literal.
+      //
+      // THE FOUR AT THE TOP ARE THE FOUR THAT CHECKED OUT, which is the shape this scorer
+      // produces in a hotel short of beds: the guests it housed were served throughout, and the
+      // sixteen it could not house are charged for every tick they went without a room.
       { score: 1, count: 0 },
-      { score: 2, count: 0 },
-      { score: 3, count: 9 },
-      { score: 4, count: 8 },
-      { score: 5, count: 3 },
+      { score: 2, count: 9 },
+      { score: 3, count: 7 },
+      { score: 4, count: 0 },
+      { score: 5, count: 4 },
     ],
   },
   rooms: {
@@ -360,12 +386,12 @@ const GOLDEN_2_DAYS_SEED_42 =
     'stuck       0',
     'orphan res  0',
     'in bad room 0',
-    'need       guest_comfort 16 met, 4 unmet (0 by room, 16 by item), 0 abandoned, 1781 bp unserved',
-    'need       guest_entertainment 16 met, 4 unmet (16 by room, 0 by item), 0 abandoned, 2269 bp unserved',
-    'need       guest_nourishment 18 met, 2 unmet (13 by room, 5 by item), 0 abandoned, 1451 bp unserved',
+    'need       guest_comfort 8 met, 12 unmet (0 by room, 8 by item), 0 abandoned, 1781 bp unserved',
+    'need       guest_entertainment 8 met, 12 unmet (8 by room, 0 by item), 0 abandoned, 2269 bp unserved',
+    'need       guest_nourishment 12 met, 8 unmet (8 by room, 4 by item), 0 abandoned, 1451 bp unserved',
     'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned, 3472 bp unserved',
-    'reviews     1:0, 2:0, 3:9, 4:8, 5:3',
-    'mean x100   370',
+    'reviews     1:0, 2:9, 3:7, 4:0, 5:4',
+    'mean x100   295',
     'ledger      7 transactions',
     'revenue     34000p',
     'upkeep      -24000p',
@@ -381,7 +407,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     510000p',
-    'state hash  83070924e2b10af8',
+    'state hash  f49ac2f2ffefe35e',
   ].join('\n') + '\n';
 
 /**
@@ -538,7 +564,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  83070924e2b10af8']);
+    expect(differing).toEqual(['seed        42', 'state hash  f49ac2f2ffefe35e']);
     expect(lines43).toContain('seed        43');
   });
 });

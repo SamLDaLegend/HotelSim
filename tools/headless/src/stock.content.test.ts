@@ -289,16 +289,27 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
     //
     // SO THE CLAIM IS RE-STATED AT THE WIDTH IT IS TRUE AT, and it is a sharper claim rather
     // than a weaker one: the field is unread BY THE STOCK MODEL, so the stock model's own state
-    // — the guests, their needs, the need tally, the outcome table and the ledger — comes out
-    // BYTE-IDENTICAL, while the review rows move. Measured across all three arms below:
+    // — the guests, their needs, the outcome table and the ledger — comes out BYTE-IDENTICAL,
+    // while the review rows move.
     //
-    //     rooms 3 amen 1 t=2,000    stock state same    reviewOutcomes same   (the fixed point)
-    //     rooms 60 amen 3 t=6,000   stock state same    reviewOutcomes same   (the fixed point)
-    //     rooms 3 amen 0 t=2,000    stock state same    reviewOutcomes DIFFER
+    // ------------------------------------------------------------------------
+    // AND THE NEED TALLY LEFT THAT LIST AT G-028b, WHICH IS A SECOND NARROWING OF THE SAME
+    // CLAIM AND HAS TO BE SAID RATHER THAN QUIETLY DROPPED.
     //
-    // EVERY CELL OF THAT TABLE IS ASSERTED IN THE LOOP BELOW. It was a report until ADR-0027's
-    // third instance was found in it: the `reviewOutcomes` column at the middle arm was claimed
-    // here and pinned nowhere.
+    // ADR-0037 makes `met` the top per-need BAND, and the band count IS `max - min + 1`. So
+    // `reviewScoreMin` now reaches `met` and `unmet` on every row: mutating it changes the UNIT
+    // the tally counts in. The tick columns — `unservedTicks`, `instanceTicks`, `abandoned` —
+    // are counted in ticks and stay identical, and THAT is what separates a change of unit from
+    // the simulation behaving differently. `review.boundary.test.ts` carries the same narrowing
+    // for the same reason, and both name the control.
+    //
+    // The fixed points the old table reported are gone with it: shifting `min` used to shift
+    // every score by the same amount, so at some arms the rows coincided. Changing the band
+    // count changes the QUANTISATION, so the distribution moves wherever the arm produces a
+    // guest whose share sits near a band edge. The loop below no longer claims a fixed point
+    // anywhere; it asserts the invariants that survive, and requires the third arm to move the
+    // masked hash so the mask is still certified against a field that provably moves the world.
+    // ------------------------------------------------------------------------
     //
     // AND THE THIRD ARM IS WHAT MAKES THIS AN ANTI-VACUITY CHECK AT ALL. A comparison that came
     // back "same" everywhere would be satisfied by a hash that had been blinded — which is the
@@ -321,10 +332,23 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
       const other = ranOn(mutated, arm);
       // THE STOCK MODEL'S OWN STATE, named field by field rather than folded into a hash — so a
       // failure says WHICH part of the model turned out to read the review scale.
-      expect(other.needOutcomes, 'reviewScoreMin moved the need tally').toEqual(base.needOutcomes);
       expect(other.guestOutcomes, 'reviewScoreMin moved the outcome table').toEqual(base.guestOutcomes);
       expect(other.guests, 'reviewScoreMin moved a guest').toEqual(base.guests);
       expect(other.ledger, 'reviewScoreMin moved the ledger').toEqual(base.ledger);
+      // THE NEED TALLY'S TICK COLUMNS, which are counted in ticks rather than in bands and so
+      // cannot move with the scale. This is the control for the narrowing above: without it,
+      // "the tally moved" would be indistinguishable from "the guests did something different".
+      const tickColumns = (rows: typeof base.needOutcomes): unknown =>
+        rows.map((row) => ({
+          needId: row.needId,
+          unservedTicks: row.unservedTicks,
+          instanceTicks: row.instanceTicks,
+          abandoned: row.abandoned,
+          resolved: row.met + row.unmet,
+        }));
+      expect(tickColumns(other.needOutcomes), 'reviewScoreMin moved the tally in TICKS').toEqual(
+        tickColumns(base.needOutcomes),
+      );
       // ----------------------------------------------------------------------
       // AND EVERYTHING ELSE IN THE WORLD, WHICH THE FOUR NAMED FIELDS HAD SILENTLY STOPPED
       // COVERING (ADR-0027). This arm replaced a whole-world `simHash` equality; four fields
@@ -336,19 +360,26 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
       // reason: `contentHash`, because the two documents genuinely differ and that is the mask
       // this file exists to justify; and `reviewOutcomes`, because it is the one thing the
       // field is ALLOWED to move — and it is pinned separately, per arm, immediately below.
-      const exceptReviews = (world: typeof base): unknown => ({ ...world, contentHash: '', reviewOutcomes: [] });
+      const exceptReviews = (world: typeof base): unknown => ({
+        ...world,
+        contentHash: '',
+        reviewOutcomes: [],
+        // The two the scale is ALLOWED to reach, both excluded by name and both pinned above:
+        // the review rows, and the tally's band-valued columns.
+        needOutcomes: tickColumns(world.needOutcomes),
+      });
       expect(exceptReviews(other), 'reviewScoreMin moved the world outside the review rows').toEqual(
         exceptReviews(base),
       );
-      // AND THE REVIEW ROWS THEMSELVES, at the two arms where the score arithmetic has a fixed
-      // point and the third where it does not. The comment table above is now asserted rather
-      // than reported: same, same, DIFFER.
+      // AND THE REVIEW ROWS THEMSELVES MOVE AT THE ARM CHOSEN FOR IT. The fixed points the other
+      // two arms used to rest on are gone (see the block above), so what is asserted here is the
+      // half that makes this an anti-vacuity check: a comparison coming back "same" everywhere
+      // would be satisfied by a hash that had been blinded, which is the defect this arm exists
+      // to catch one level up.
       if (arm === REVIEWED_ARM) {
         expect(other.reviewOutcomes, 'the third arm must MOVE the review rows or it is vacuous').not.toEqual(
           base.reviewOutcomes,
         );
-      } else {
-        expect(other.reviewOutcomes, 'the fixed point this arm rests on has moved').toEqual(base.reviewOutcomes);
       }
     }
 
@@ -368,10 +399,21 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
     // is only worth anything if some content edit exists which moves the fingerprint and nothing
     // else — otherwise the mask is removing a field nobody would have been fooled by.
     //
-    // `reviewScoreMin` at the default arm is exactly that edit, AND THE PRECONDITION IS CHECKED
-    // RATHER THAN ASSUMED: the two worlds are required to be equal in every hashed field once
-    // the fingerprint is blanked, and their fingerprints are required to differ. Only then does
-    // the equality of `simHash` mean the mask did the work.
+    // THE EDIT USED TO BE `reviewScoreMin` AND IT NO LONGER QUALIFIES (G-028b). ADR-0037 makes
+    // the band count `max - min + 1`, so that field now reaches the review rows AND the need
+    // tally's `met`/`unmet` — it moves the world, which is the one thing this arm's edit must
+    // not do. It is replaced by the guest rules' DISPLAY NAME: a string carried into the
+    // fingerprint by `cloneGuestRules` exactly as every other table's is, and read by nothing
+    // in `packages/sim` at all.
+    //
+    // THAT IS A STRONGER CERTIFICATION THAN WHAT IT REPLACES, not a weaker one. The old edit was
+    // only ever "unread" by numeric coincidence at two arms — sweep 3 found the premise false —
+    // whereas a display name is unread by construction. If a future goal makes the simulation
+    // read a name, this arm goes red, which is the correct direction.
+    //
+    // THE PRECONDITION IS CHECKED RATHER THAN ASSUMED: the two worlds are required to be equal
+    // in every hashed field once the fingerprint is blanked, and their fingerprints are required
+    // to differ. Only then does the equality of `simHash` mean the mask did the work.
     //
     // IT IS THE ARM THAT GOES RED IF THE MASK IS EVER REMOVED, which the arm above no longer
     // does — and that gap is the reason this exists as its own case. Verified by mutation:
@@ -379,7 +421,9 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
     // ========================================================================
     const world0 = createWorld(42, SHIPPED);
     const mutatedContent = rebound({
-      guestRules: (SHIPPED.content.guestRules ?? []).map((entry) => ({ ...entry, reviewScoreMin: 0 }) as GuestRulesData),
+      guestRules: (SHIPPED.content.guestRules ?? []).map(
+        (entry) => ({ ...entry, name: `${entry.name} (renamed for the mask arm)` }) as GuestRulesData,
+      ),
     });
     const runOn = (content: BoundContent): ReturnType<typeof run> =>
       run(

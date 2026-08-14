@@ -220,10 +220,13 @@ export type NeedState = {
    * How many ticks the HOTEL has left this need unserved while the guest wanted it (G-028a).
    *
    * ------------------------------------------------------------------------------------
-   * IT IS AN INTEGRAL, AND THAT IS THE WHOLE POINT — the departure tally is a SNAPSHOT, and a
-   * snapshot of a population that arrives on a fixed cadence and stays a fixed length reads every
-   * guest at the same phase of the same deterministic cycle. `recordNeedsAtDeparture` has said so
-   * about itself since G-027b and named this field as the replacement it was deferring.
+   * IT IS AN INTEGRAL, AND THAT IS THE WHOLE POINT. **The departure tally WAS a snapshot** — a
+   * reading of a population that arrives on a fixed cadence and stays a fixed length, so every
+   * guest was read at the same phase of the same deterministic cycle. `recordNeedsAtDeparture`
+   * said so about itself from G-027b and named this field as the replacement it was deferring;
+   * **at G-028b it stopped being a snapshot and became this integral**, so the present tense here
+   * described a build that no longer exists and contradicted that function's own docblock 850
+   * lines down in the same file.
    *
    * WHAT COUNTS IS `isNeedUnservedNow` AND NOTHING ELSE, so there is one definition of "the hotel
    * is letting this guest down on this need right now" and the dissatisfaction stock asks the same
@@ -236,10 +239,21 @@ export type NeedState = {
    *                    home it is served anyway; away it is decaying because the guest chose to
    *                    go out, and charging that to the hotel is a floor nobody can pay down.
    *
-   * IT IS WRITE-ONLY INSIDE THE TICK (G-028a's fence). No branch anywhere in this package may
-   * read it to decide anything: this goal ships the instrument, and the goal that makes the
-   * review read it moves `met`, `unmet` and `report.ts`'s review law A in the same diff, because
-   * those three are coupled and a build where one has moved and the others have not exits 1.
+   * **IT WAS WRITE-ONLY INSIDE THE TICK AT G-028a AND IT IS READ AT G-028b.** That goal shipped
+   * the instrument behind a fence and said the goal which made the review read it would move
+   * `met`, `unmet` and `report.ts`'s review law A in the same diff, because the three are coupled
+   * and a build where one has moved and the others have not exits 1. **This is that diff**: all
+   * three moved together (ADR-0037), the coupling was measured at 11 of 30 configurations, and
+   * the fence is gone rather than weakened.
+   *
+   * WHAT READS IT NOW, so nobody has to grep for the readers of a field whose docblock used to
+   * say there were none: `needBandOf` — through `reviewOf`, which averages the bands, and through
+   * `metAtDeparture`, which counts the top ones. Nothing else. It is still never read to decide
+   * anything DURING a tick; what changed is that a departure reads it.
+   *
+   * AND `save.ts`'s v15 -> v16 ZERO-FILL RESTS ON THE FENCE THAT JUST WENT. Its docblock carries
+   * the re-argument; the short form is that 0 is the value which scores the ceiling, so a
+   * migrated guest resumes with a spotless history.
    *
    * NEVER RESET AND NEVER DRAINED, unlike `Guest.dissatisfaction`, which is a mood and recovers.
    * This is a measurement of a stay, so the only thing that ends it is the stay.
@@ -937,10 +951,18 @@ export function abandonNeed(needs: readonly NeedState[], needId: ContentId): rea
 /**
  * SATISFIED: at or above this need's want line, asked with the content in hand (G-027b).
  *
- * THE ONE DEFINITION OF "MET" FOR ANYTHING THAT REPORTS ON A STAY — the departure tally and the
- * review both call it, so a guest cannot be satisfied to the reviewer and unmet to the report.
- * It is a BAND and not a point: a stock sits at exactly full for about one tick per cycle, so
- * "full at departure" would report almost nothing met and say nothing about the stay.
+ * WHAT IT IS NOT, ANY MORE, AND THE SENTENCE THAT USED TO BE HERE IS WHY THIS PARAGRAPH EXISTS.
+ * It read *"THE ONE DEFINITION OF MET FOR ANYTHING THAT REPORTS ON A STAY — the departure tally
+ * and the review both call it"*. **G-028b makes that false**: `met` and the score are now the
+ * per-need BAND (`needBandOf`), an integral over the whole stay, and this is a reading taken at
+ * one instant. The property that sentence was buying — the tally and the review cannot disagree
+ * about a guest — is unchanged and now rests on `needBandOf`, which both call for the same reason.
+ *
+ * WHAT IT IS STILL FOR, and it is why this is a repair rather than a deletion:
+ *   - the WANT-LINE predicate the tests ask directly (`needs.reservations.test.ts`,
+ *     `provider.engagement.test.ts`): *"is this need above its line right now"*;
+ *   - the ERA rule for `met` under content that declares no review scale, where there is no band
+ *     count to express a band with. See `metAtDeparture`.
  *
  * A need whose type this content does not define counts as NOT satisfied — the `urgencyOf`
  * contract, and the same answer the task model gave a need with outstanding provision.
@@ -950,6 +972,110 @@ export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boole
   const needType = findNeedType(content, need.needId);
   if (needType === undefined) return false;
   return need.deficit < wantLineOf(needType, wantAtOf(content));
+}
+
+/**
+ * HOW WELL THE HOTEL SERVED ONE NEED OVER ONE STAY, as a band in `[0, bands - 1]` (G-028b,
+ * ADR-0037). **THE ONE PLACE A NEED BECOMES A BAND**, and both readers of that question call it:
+ * `reviewOf` averages these, and `recordNeedsAtDeparture` calls the top one `met`.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY IT LIVES HERE AND NOT IN `reviews.ts`, WHICH IS WHERE THE SCORE LIVES. `reviews.ts` imports
+ * this module; this module importing it back is a cycle, and `.dependency-cruiser.cjs` makes that
+ * an ERROR. The tally is in this file and the tally needs the band, so the band comes here and the
+ * scorer reaches for it — the same direction `isNeedSatisfiedIn` was reached for before it.
+ *
+ * IT TAKES `bands` RATHER THAN CONTENT for the same reason: the band count is derived from the
+ * REVIEW SCALE, and `reviewScaleOf` is `reviews.ts`'s. One integer crosses the boundary instead of
+ * an import.
+ *
+ * THE ARITHMETIC, AND IT IS ONE INTEGER DIVISION PER NEED:
+ *
+ *   band = floor( (stayTicks - unservedTicks) x bands / stayTicks )
+ *
+ * — the SERVED share of the stay, quantised. A need nothing ever served has `unservedTicks ==
+ * stayTicks` and lands in band 0; a need never failed lands one PAST the top and is clamped.
+ *
+ * THE CLAMP IS REACHABLE AND REACHABLE ONLY AT `unservedTicks == 0` (ADR-0035, which asks what a
+ * line forbids that its neighbours permit). `served == stayTicks` makes the quotient exactly
+ * `bands`, one past the last band, and every other input is strictly below it. Without the clamp
+ * that guest's score leaves the scale — `recordReview` would insert a row `assertReviewOutcomes`
+ * cannot place, and `reviewCountOf(rows, scale.max)` would silently miss it. It is not defensive
+ * padding: a perfectly served need is the ordinary case in a well-provisioned hotel.
+ *
+ * `stayTicks <= 0` ANSWERS THE TOP BAND, and it is a postcondition rather than a case. Arrivals
+ * are appended AFTER the loop over existing guests, so a guest created on tick t is not stepped
+ * until t + 1 and cannot reach any departure branch before then — `depart` states the same fact
+ * about the same number. A guest that was here for no time was failed for no time, and the
+ * alternative is a division by zero reaching the tally as NaN.
+ *
+ * AND THE LOWER CLAMP FORBIDS A STATE ITS NEIGHBOURS PERMIT, WHICH IS WHY IT IS THERE AND NOT
+ * DECORATION (ADR-0035). `unservedTicks > stayTicks` makes `served` negative and the quotient
+ * below 0 — a band off the bottom of the scale, which `recordReview` would insert as a row
+ * `assertReviewOutcomes` accepts and `reviewCountOf(rows, scale.min)` never finds, so review law
+ * B would compare an eviction count against a floor-review count that had silently moved off the
+ * floor.
+ *
+ * WHERE IT COMES FROM, AND THE FIRST VERSION OF THIS PARAGRAPH CALLED A CHOICE AN IMPOSSIBILITY.
+ * It said the state was *"not reachable through the tick"* because `accumulateUnservedTicks`
+ * runs at most once per tick per need. **That is true of the CALLER this build ships and it is
+ * not a property of the function**: `needBandOf` takes the stay as a parameter, so any caller
+ * passing a window shorter than the one the counter ran in produces it — and there is such a
+ * caller one design decision away, since a mid-stay reader (a HUD, a viewer, a queue metric)
+ * would naturally pass the stay SO FAR. The eviction branch already runs the two windows one
+ * tick out of step for the same reason.
+ *
+ * IT IS ALSO REACHABLE THROUGH A LOADED SAVE: `assertNeedVector` bounds `unservedTicks`
+ * non-negative and integral and has no stay to bound it against, because the stay is not state a
+ * guest carries. **So the clamp guards a live parameter choice and a forged save, not an
+ * impossibility**, and `review.scorer.test.ts` drives the consequence rather than the arithmetic.
+ * ---------------------------------------------------------------------------
+ */
+export function needBandOf(bands: number, stayTicks: number, unservedTicks: number): number {
+  if (stayTicks <= 0) return bands - 1;
+  const served = stayTicks - unservedTicks;
+  const band = Math.floor((served * bands) / stayTicks);
+  return band >= bands ? bands - 1 : band < 0 ? 0 : band;
+}
+
+/**
+ * MET: this need's own band is the TOP band (G-028b, ADR-0037).
+ *
+ * Equivalently, and this is the form worth carrying because it needs no division:
+ * **`unservedTicks x bands <= stayTicks`** — the hotel failed the guest on this need for at most
+ * one band's width of its stay.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY `met` HAD TO MOVE WITH THE SCORE, MEASURED RATHER THAN ARGUED (ADR-0034 §2, ADR-0036). The
+ * old `met` was the departure-INSTANT reading, and the population departs at one phase of one
+ * deterministic cycle: at twelve rooms and three amenities `guest_comfort` was recorded met for
+ * **0 of 348** guests while the hotel had served it for all but a fraction of every stay. The
+ * report printed both numbers on one line, disagreeing by two orders of magnitude. They divide the
+ * same two integers now, so they cannot.
+ *
+ * AND `report.ts`'s REVIEW LAW A COUPLES THEM: it refuses a run where more guests left the top
+ * review than the least-met need was met. Moving the score alone turns **11 of 30** measured
+ * configurations red — including criterion 9's own control and the criterion ladder's top rung.
+ * With `met` on this rule, **0 of 30**, and by construction rather than by luck: see `reviewOf`.
+ *
+ * CONTENT THAT DECLARES NO REVIEW SCALE KEEPS THE ERA RULE, AND THAT IS ADR-0008 RATHER THAN A
+ * HEDGE. Such content is from before reviews existed; it has no band count, so it cannot express
+ * a band, and it produces no reviews at all — so there is no law A to couple to and nothing for
+ * the two definitions to disagree about. The coupling this goal introduces is exactly
+ * co-extensive with the scale's existence, which is why the branch is on the scale and not on
+ * anything else. Inventing a band count for such content would be the dishonest default ADR-0008
+ * forbids, and re-reading its stored tally under a rule its era never applied would make a false
+ * statement about a run that already happened.
+ * ---------------------------------------------------------------------------
+ */
+export function metAtDeparture(
+  content: BoundContent,
+  bands: number | undefined,
+  need: NeedState,
+  stayTicks: number,
+): boolean {
+  if (bands === undefined) return isNeedSatisfiedIn(content, need);
+  return needBandOf(bands, stayTicks, need.unservedTicks) === bands - 1;
 }
 
 /**
@@ -964,45 +1090,41 @@ export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boole
  * `met + unmet` advances by exactly one per row per departing guest that carried that
  * need. That is the identity `assertNeedOutcomes` bounds and the report checks exactly.
  *
- * IT TAKES CONTENT SINCE G-027b, AND THAT IS WHAT "MET" NOW COSTS. Under a task model "met"
- * was `progressRemaining === 0`, readable from the need alone. Under a stock it is a BAND and
- * not a point: a need sits at exactly full for about one tick per cycle, so counting "full at
- * departure" would report ~0 met for every engagement need and say nothing about the stay. Met
- * is therefore "at or above the want line when the guest left" — satisfied, not wanting — which
- * needs the capacity and the line, both content. `depart` already holds content, so no call
- * site gains a lookup.
+ * MET IS THE PER-NEED BAND NOW, NOT THE DEPARTURE INSTANT (G-028b, ADR-0037). `metAtDeparture`
+ * above owns the rule and states why it had to move in the same diff as the score. What this
+ * function contributes is that the move happens HERE, in the one fold, so every row's `met` is
+ * the same question asked of the same two integers the same row already carries.
  *
- * IT IS A SNAPSHOT AND IT IS HONEST ABOUT BEING ONE. "Was satisfied when it left" is a weaker
- * statement than "was satisfied throughout", and the stock-shaped replacement — time spent
- * unserved — is a per-need accumulator, which is saved state and was deferred to the goal that
- * paid for a schema bump. **That goal is G-028a and the accumulator is `unservedTicks`.** It is
- * folded here, beside the snapshot, and this is the paragraph that says why both are present:
+ * IT IS NO LONGER A SNAPSHOT, AND THE PARAGRAPHS THAT SAID IT WAS ARE PAST-TENSED RATHER THAN
+ * SOFTENED — in BOTH places, which is the correction. This one said they were *"gone"*; one of
+ * them was 850 lines up, on `NeedState.unservedTicks`, still present tense. "Was satisfied when
+ * it left" is a weaker statement than "was satisfied throughout"; the stock-shaped replacement
+ * was named here at G-027b, shipped as `unservedTicks` at G-028a behind a write-only fence, and
+ * read for the first time by this goal. The snapshot column has not been kept beside the
+ * integral: there is one answer per row now, and it is the integral.
  *
  * ---------------------------------------------------------------------------
- * THE SNAPSHOT COLUMNS ARE UNTOUCHED IN THIS GOAL, AND THAT IS A DECISION RATHER THAN AN
- * OVERSIGHT (ADR-0034 §2). `met` and `unmet` are what `report.ts`'s review law A compares the
- * top-review count against, and the review is what produces that count — so redefining `met`
- * without redefining the score, or the score without `met`, makes a build that exits 1 on a
- * well-provisioned hotel. The two move together, in the goal that changes the scorer. Until then
- * this function reports BOTH: what was true at the instant the guest left, and how long the
- * hotel spent failing it. The first is measured to be a phase artefact at the shipped cadence;
- * the second is what replaces it.
- *
  * WHAT THE OLD SPELLING ASSERTED AND WHAT THIS ONE STILL ASSERTS (ADR-0027, by class rather than
  * by call site):
  *
  *   KEPT  every instance counted exactly once — `met + unmet` advances by one per row per
  *         departing guest that carried the need, which is the identity the report checks exactly.
- *   KEPT  `metByItem <= met`, with by-room derived rather than stored.
+ *   KEPT  `metByItem <= met`, with by-room derived rather than stored. It survives the
+ *         redefinition for a reason worth stating rather than assuming: a need the band rule
+ *         calls met was served for all but a band's width of the stay, so something served it and
+ *         `metBy` is not null. `needs.scorer.test.ts` drives the pair rather than trusting it.
  *   KEPT  `abandoned` folded once, on the way out, so no row can exist before a departure.
  *   KEPT  one merge of two ascending lists: one pass, one allocation, rows created on first use.
- *   KEPT  ONE definition of "met", shared with the review through `isNeedSatisfiedIn`, so the
- *         tally and the review cannot disagree about a guest.
- *   ADDED `unservedTicks` and `instanceTicks`, which advance on the same instances and by
- *         construction cannot advance on any others — they are folded in the same branch.
+ *   KEPT  ONE definition of "met", shared with the review — through `needBandOf` now, where it
+ *         used to be through `isNeedSatisfiedIn`. The property is the one that mattered and it is
+ *         unchanged: the tally and the review cannot disagree about a guest.
+ *   KEPT  `unservedTicks` and `instanceTicks` advancing on the same instances, in the same branch.
+ *   MOVED `met` and `unmet` from the departure instant to the per-need band.
  *
- * WHAT IT NOW PERMITS THAT THE OLD ONE FORBADE: nothing. Every counter above still moves exactly
- * when it moved before, and this goal adds no reader for the two new ones outside the report.
+ * WHAT IT NOW PERMITS THAT THE OLD ONE FORBADE: a need BELOW its want line at the instant its
+ * guest walked out is counted MET, provided the hotel served it for all but a band's width of the
+ * stay. That is the change, stated as a permission rather than as an improvement — and it is the
+ * one that takes `guest_comfort` from 0 of 348 to 348 of 348 at twelve rooms and three amenities.
  * ---------------------------------------------------------------------------
  *
  * `stayTicks` IS THE DENOMINATOR AND THE CALLER COMPUTES IT, from the departing guest's own
@@ -1010,18 +1132,40 @@ export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boole
  * this guest in, and a guest that gave up in the lobby has a short one. Passed rather than
  * derived here because this module cannot see a guest (`guests.ts` owns that type, and a
  * circular import is an error in `.dependency-cruiser.cjs`).
+ *
+ * `bands` IS PASSED FOR THE SAME REASON: this module cannot reach `reviewScaleOf` without a
+ * circular import, so the caller derives the number and hands it over.
+ *
+ * IT IS ONE DERIVATION SITE, NOT ONE LOOKUP — AND THE FIRST VERSION OF THIS COMMENT CLAIMED THE
+ * WRONG ONE. It said the scale was *"read ONCE and handed to both readers"*; `depart` reads it
+ * for `bands` and `reviewOf` reads it again for `min`, so the code does exactly the two lookups
+ * the sentence said it prevented. **The property that is real, and the one that matters, is that
+ * `reviewScaleOf` is the ONLY place `bands` is derived from content anywhere** — it is a pure
+ * function of content, so any number of calls give one answer, and `needBandOf` is the only
+ * consumer of that answer in either reader.
+ *
+ * `review.boundary.test.ts`'s source scan fences every NAME `reviews.ts` exports to six files and
+ * asserts the set is exactly those six, **which holds the set of FILES and not the count of
+ * derivations** — the first version of this paragraph claimed the second. A `bands` spelled from
+ * `reviewScoreMax - reviewScoreMin + 1` against raw content fields names no export, returns zero
+ * hits from that predicate, and is invisible to it in any file including the six allowed. What
+ * keeps the number single is that `reviewScaleOf` is the only function deriving it and
+ * `reviews.ts` is a leaf; the scan is what keeps the callers countable.
+ *
+ * `undefined` is content that declares no review scale — see `metAtDeparture`.
  */
 export function recordNeedsAtDeparture(
   content: BoundContent,
   outcomes: readonly NeedOutcome[],
   needs: readonly NeedState[],
   stayTicks: number,
+  bands: number | undefined,
 ): readonly NeedOutcome[] {
   if (needs.length === 0) return outcomes;
-  // ONE DEFINITION, NOT A SECOND COPY OF THE COMPARISON. `isNeedSatisfiedIn` is what the review
-  // asks too, so the tally and the review cannot disagree about a guest — which is the property
-  // `metByItem <= met` and `Σ reviews === departed` both quietly depend on.
-  const satisfied = (need: NeedState): boolean => isNeedSatisfiedIn(content, need);
+  // ONE DEFINITION, NOT A SECOND COPY OF THE COMPARISON. `metAtDeparture` folds `needBandOf`,
+  // which is what `reviewOf` averages, so the tally and the review cannot disagree about a guest
+  // — the property `metByItem <= met` and review law A both rest on.
+  const satisfied = (need: NeedState): boolean => metAtDeparture(content, bands, need, stayTicks);
   const merged: NeedOutcome[] = [];
   let i = 0;
   let j = 0;
@@ -1080,12 +1224,25 @@ export function recordNeedsAtDeparture(
  * `metByItem` cannot disagree about whether it was satisfied. `assertNeedOutcomes` bounds
  * `metByItem <= met`, and this is what makes that true at the site rather than by luck.
  *
- * WHAT IT CAN UNDER-COUNT, SAID RATHER THAN DISCOVERED (G-027b). `metBy` is what LAST SERVED
- * the need, so a need that is above its line because an item served it reads `item` exactly.
- * A need that reached its line and was never served at all — impossible today, because a guest
- * arrives AT the line and only serving moves it down — would read `null` and count into `met`
- * without counting here. The inequality holds in the direction that matters and the gap is
- * unreachable through the tick.
+ * WHAT IT CAN UNDER-COUNT, RE-ARGUED AT G-028b BECAUSE THE PREMISE IT RESTED ON IS GONE.
+ *
+ * It read: *"a need that reached its line and was never served at all — impossible today,
+ * because a guest arrives AT the line and only serving moves it down — would read `null` and
+ * count into `met` without counting here."* **`met` is not about the line any more.** It is the
+ * top per-need BAND, so the want-line argument no longer connects to it at all.
+ *
+ * **AND THE GAP IS REACHABLE NOW, THROUGH THE LODGING NEED, WHICH IS EXCUSED RATHER THAN
+ * SERVED.** A guest holding a room accrues no `unservedTicks` on lodging even on the ticks it is
+ * out of that room (ADR-0026 as amended), so a guest that holds a room and is never actually IN
+ * it ends with `unservedTicks` low enough for the top band — counted into `met` — while `metBy`
+ * is whatever last served it, which may be `null`. **So a row can count into `met` and into the
+ * derived by-room column having been served by no room at all.**
+ *
+ * IT IS A CONSERVATIVE GAP AND IT IS THE SAME DIRECTION AS BEFORE: `metByItem` UNDER-counts, so
+ * `metByItem <= met` holds and the by-room column absorbs the difference. What is no longer true
+ * is that the gap is unreachable — it is reachable, it is small, and it belongs to the lodging
+ * row rather than to an engagement one. `needs.scorer.test.ts` drives the pair it can drive and
+ * says which half is structural.
  */
 function byItem(need: NeedState, met: boolean): number {
   return met && need.metBy === 'item' ? 1 : 0;

@@ -68,15 +68,21 @@ describe('ARM 1 — a hotel that works notices nothing', () => {
 
   it('AND EVERY COUNT IS THE ONE HEAD PRODUCED — the criterion this goal is judged hardest on', () => {
     // Measured against the commit before this one, at this invocation: 192 checkedOut, 161
-    // gaveUp, 0 evictions, and a review distribution of 0/0/0/353/0. A moved HASH is expected —
-    // `Guest.dissatisfaction` is hashed state and `guest-rules.json` gained two fields — and a
-    // moved COUNT on this arm would be a defect in this goal rather than a consequence of it.
+    // gaveUp, 0 evictions. A moved HASH is expected — `Guest.dissatisfaction` is hashed state
+    // and `guest-rules.json` gained two fields — and a moved COUNT on this arm would be a
+    // defect in this goal rather than a consequence of it.
+    //
+    // THE REVIEW DISTRIBUTION IS NOT A COUNT IN THAT SENSE, AND IT MOVED AT G-028b. ADR-0037
+    // replaced the scorer, so the same 353 departures are re-expressed on the same scale: the
+    // 192 the hotel housed at the ceiling, the 161 it did not below them. The DEPARTURES are
+    // what this arm is about and they are untouched — which is the claim, and it is stronger
+    // for having a moving neighbour beside it.
     expect(count(wellProvisioned, 'checkedOut')).toBe(192);
     expect(count(wellProvisioned, 'gaveUp')).toBe(161);
     expect(count(wellProvisioned, 'evictedRoomGone')).toBe(0);
     expect(count(wellProvisioned, 'evictedRoomUnusable')).toBe(0);
     expect(wellProvisioned.guests.arrived).toBe(360);
-    expect(wellProvisioned.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 0, 353, 0]);
+    expect(wellProvisioned.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 161, 0, 192]);
     expect(wellProvisioned.money.revenuePennies).toBe(1_632_000);
   });
 });

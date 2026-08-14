@@ -148,6 +148,8 @@ const meanShare = (values: readonly number[]): number =>
   Math.round(values.reduce((total, value) => total + value, 0) / values.length);
 const strictlyDecreasing = (values: readonly number[]): boolean =>
   values.every((value, index) => index === 0 || value < values[index - 1]!);
+const strictlyIncreasing = (values: readonly number[]): boolean =>
+  values.every((value, index) => index === 0 || value > values[index - 1]!);
 const spread = (values: readonly number[]): number => Math.max(...values) - Math.min(...values);
 
 describe('the provisioning rule is derived from content, and the ladder is built from it', () => {
@@ -236,27 +238,29 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     }
   });
 
-  it('GOLDEN (G-028a): the shipped REVIEW mean is not monotone over the same four runs', () => {
+  it('AND THE REVIEW MEAN NOW AGREES WITH IT — the golden this file shipped, DISCHARGED', () => {
     // ============================================================================
-    // THE CONTRAST, AND IT IS THE WHOLE REASON THIS FILE EXISTS. Same four runs, same content,
-    // same cadence. The share falls at every rung; the review mean does not — it falls at the
-    // second rung and recovers, which is ADR-0033's finding seen through the shipped scorer.
+    // WHAT THIS ARM SAID AT G-028a, AND WHAT DISCHARGED IT.
     //
-    // NO FIGURE IS SPELLED HERE (ADR-0032 §1). The band-sized effect ADR-0033 recorded was read
-    // off the four-CLI-flag ladder this file exists to replace, so quoting it beside a DERIVED
-    // ladder would be a number attached to the wrong referent as well as an unpinned one. What
-    // the effect is on THIS ladder is what the assertions below compute.
+    // It was a GOLDEN: *"the shipped REVIEW mean is not monotone over the same four runs"*,
+    // asserting `nonDecreasing === false` and pinning the shape — the mean fell at the second
+    // rung and recovered. It existed so the goal that replaced the scorer had something exact
+    // to replace, and so that nobody read a green run of this file as evidence that the review
+    // was fixed.
     //
-    // THIS IS A GOLDEN, NOT A CRITERION: it asserts what the model does today so that the goal
-    // which replaces the scorer has something exact to replace, and so that nobody reads a green
-    // run of this file as evidence that the review is fixed. It is not.
+    // G-028b REPLACED THE SCORER (ADR-0037) AND THE GOLDEN IS NOW FALSE, WHICH IS THE ANSWER
+    // ARRIVING RATHER THAN A REGRESSION — the words G-028a's own describe used for this case.
+    // So it is INVERTED rather than deleted: the same four runs, the same fold, the opposite
+    // verdict. A build that reintroduced the non-monotonicity would go red here.
+    //
+    // NO FIGURE IS SPELLED (ADR-0032 §1). What the effect is on THIS ladder is computed below.
     // ============================================================================
     const reviewMeans = LADDER.map((summary) => meanReviewHundredths(summary)!);
-    const nonDecreasing = reviewMeans.every((value, index) => index === 0 || value >= reviewMeans[index - 1]!);
-    expect(nonDecreasing).toBe(false);
-    // The shape, so a build that merely dented monotonicity is distinguishable from this one.
-    expect(reviewMeans[1]!).toBeLessThan(reviewMeans[0]!);
-    expect(reviewMeans[reviewMeans.length - 1]!).toBeGreaterThan(reviewMeans[0]!);
+    expect(strictlyIncreasing(reviewMeans)).toBe(true);
+    // And it agrees with the SHARE, which is the contrast this file was built to draw: the
+    // statistic and the score now move together over the same runs.
+    const means = LADDER.map((summary) => meanShare(sharesIn(summary)));
+    expect(strictlyDecreasing(means)).toBe(true);
   });
 });
 
@@ -428,14 +432,31 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
   const top = ROOM_LADDER[ROOM_LADDER.length - 1]!;
   const phases = CADENCES.map((cadence) => at(top, amenitiesFor(top), cadence));
 
-  it('the review mean moves MORE than the whole ladder effect; the share moves a fraction of it', () => {
-    const ladderReviewEffect = Math.abs(
-      meanReviewHundredths(LADDER[LADDER.length - 1]!)! - meanReviewHundredths(LADDER[0]!)!,
-    );
+  it('the share moves a fraction of its own ladder effect, and the review is CLAMPED here', () => {
+    // ========================================================================
+    // WHAT THIS ARM ASSERTED AT G-028a: the review mean's phase spread EXCEEDED the whole
+    // ladder effect, which was ADR-0033's blocker — whether the axis held turned on a one-tick
+    // change in a cadence nobody derived.
+    //
+    // IT IS NO LONGER MEASURABLE AT THIS RUNG, AND THAT IS NOT THE SAME AS BEING FIXED.
+    // ADR-0034 §3(a) is explicit about this trap and caught an earlier claim of mine in it:
+    // **the top rung is SATURATED**, so every guest is in the top band and the spread is zero
+    // by clamping rather than by robustness. A ratio taken against a clamped zero would be a
+    // number about the ceiling of the scale, not about phase noise.
+    //
+    // So the review half is asserted as what it IS — a clamp, with the saturation named — and
+    // no ratio is claimed from it. The SHARE half is untouched and still carries the finding:
+    // the integral is phase-robust where the snapshot was not.
+    // ========================================================================
     const reviewPhaseSpread = spread(phases.map((summary) => meanReviewHundredths(summary)!));
-    // The noise exceeds the signal, which is the finding: whether the axis holds turns on a
-    // one-tick change in a cadence nobody derived.
-    expect(reviewPhaseSpread).toBeGreaterThan(ladderReviewEffect);
+    expect(reviewPhaseSpread).toBe(0);
+    // And it is zero BECAUSE the rung is saturated, which is the precondition that makes the
+    // reading a clamp. Without this line the zero above reads as robustness.
+    for (const summary of phases) {
+      const occupied = summary.reviews.distribution.filter((row) => row.count > 0);
+      expect(occupied).toHaveLength(1);
+      expect(occupied[0]!.score).toBe(summary.reviews.scoreMax);
+    }
 
     const ladderShareEffect =
       meanShare(sharesIn(LADDER[0]!)) - meanShare(sharesIn(LADDER[LADDER.length - 1]!));
@@ -495,19 +516,35 @@ describe('the report divides the two columns once, and the sim bounds them', () 
   });
 });
 
-describe('THE FENCE: this goal ships an instrument and changes no verdict', () => {
-  it('criterion 9 s control run is unmoved — the same departures and the same revenue', () => {
-    // The write-only fence, stated where it can fail. Nothing in `packages/sim` reads
-    // `unservedTicks`, so a run's departures, its ledger and its need tally are the ones HEAD
-    // produced; only the state hash moves. If a future edit lets the counter reach a decision,
-    // this is the arm that goes red.
+describe('THE CONTROL: the departures this counter does not decide', () => {
+  it('criterion 9 s control run keeps its departures and its revenue', () => {
+    // ========================================================================
+    // THIS BLOCK WAS G-028a's WRITE-ONLY FENCE AND THREE OF ITS CLAUSES ARE FALSE SINCE G-028b.
+    // The diff that falsified them rewrote the comment two lines below and left these.
+    //
+    //   *"this goal ships an instrument and changes no verdict"*  — the verdict is what G-028b
+    //       changed; the review distribution below is re-pinned to prove it.
+    //   *"Nothing in `packages/sim` reads `unservedTicks`"*      — `needBandOf` reads it, through
+    //       `reviewOf` and `metAtDeparture` (ADR-0037).
+    //   *"its need tally is the one HEAD produced"*              — `met` and `unmet` are the
+    //       per-need band now and move with the scale.
+    //
+    // WHAT SURVIVES IS THE HALF THAT MATTERS AND IT IS WHY THE ARM IS KEPT: **no branch in
+    // `packages/sim` reads the counter to decide anything DURING a tick.** The departures, the
+    // ledger and the build counters are what a decision would move, and they are unmoved — while
+    // the distribution, which is a record taken on the way out, moves. If a future edit lets the
+    // counter reach a decision, this is still the arm that goes red.
+    // ========================================================================
     const control = run(['--days', '30', '--seed', '7', '--rooms', '6', '--amenities', '5']);
     const count = (reason: string): number =>
       control.guests.departures.find((row) => row.reason === reason)?.count ?? 0;
     expect([count('checkedOut'), count('gaveUp'), count('leftDissatisfied')]).toEqual([192, 161, 0]);
     expect(control.money.revenuePennies).toBe(1_632_000);
-    // And the review distribution it produces is the one the snapshot scorer produces, because
-    // this goal did not touch the scorer.
-    expect(control.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 0, 353, 0]);
+    // AND THE REVIEW DISTRIBUTION MOVES, WHICH IS THE OTHER HALF OF THE CLAIM AND IS NEW AT
+    // G-028b. This arm read `[0, 0, 0, 353, 0]` while the counter was fenced — the snapshot
+    // scorer's point mass. The fence is unchanged and the scorer is not: departures and revenue
+    // hold, the distribution moves, and asserting only the first would let a goal that shipped
+    // nothing pass. `scorer.report.test.ts` carries the same pair as its own criterion.
+    expect(control.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 161, 0, 192]);
   });
 });

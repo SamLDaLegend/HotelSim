@@ -74,7 +74,7 @@ import {
   wantsSomethingUnserved,
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
-import { recordReview, reviewOf } from './reviews.js';
+import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
 import type { ReviewOutcomeRow } from './reviews.js';
 import {
   createValidityContext,
@@ -1659,7 +1659,30 @@ function depart(
   // long was this guest here" that varies by exit path — is the thing `reason` is a parameter to
   // avoid (see below).
   const stayTicks = tick - guest.arrivedTick;
-  search.needOutcomes = recordNeedsAtDeparture(content, search.needOutcomes, guest.needs, stayTicks);
+  // ONE DERIVATION SITE FOR THE BAND COUNT (G-028b). `met` and the review are the same per-need
+  // band under ADR-0037, so they must be quantised on the same number: a build where they could
+  // disagree is a build where `report.ts`'s review law A compares two different questions and
+  // exits 1 on a correct run.
+  //
+  // THIS COMMENT SAID "ONE SCALE, READ ONCE, HANDED TO BOTH READERS" UNTIL SWEEP 2 AND THE CODE
+  // DOES NOT DO THAT. The line below reads the scale for `bands`, and `reviewOf` reads it again
+  // for `min` — the two lookups the sentence claimed to prevent, in the diff that claimed it.
+  // **What is true is that `reviewScaleOf` is the only place `bands` is derived from content
+  // anywhere**, and it is a pure function of content, so the number cannot differ between them.
+  // `review.boundary.test.ts` fences every export of `reviews.ts` to six named files — **and what that scan does and does not
+  // hold is worth being exact about, because the first version of this comment over-reached.**
+  // It fences every NAME `reviews.ts` exports to six files and asserts the set is exactly those
+  // six — so a seventh FILE calling `reviewScaleOf` turns it red. It does NOT see a `bands`
+  // spelled from `reviewScoreMax - reviewScoreMin + 1` against raw content fields: that names no
+  // export, returns zero hits from the shipped predicate, and is invisible to the fence in any
+  // file including the six allowed. **What is mechanically held is the SET OF FILES; what keeps
+  // the number single inside them is that `reviewScaleOf` is the only function that derives it
+  // and review is a leaf module with nothing else to reach for.**
+  // `undefined` is content
+  // that declares no review scale — the historical case, which leaves no review at all and keeps
+  // the era's own definition of `met` (`metAtDeparture`).
+  const bands = reviewScaleOf(content)?.bands;
+  search.needOutcomes = recordNeedsAtDeparture(content, search.needOutcomes, guest.needs, stayTicks, bands);
   // THE REVIEW, AND IT IS RECORDED HERE FOR THE REASON THE RESERVATIONS ARE RELEASED HERE
   // (G-019). This is the ONE exit path — EVERY departure branch in `stepGuests` goes through
   // it, the eviction in step 3 and the rest in step 6 — so "every guest that leaves leaves a
@@ -1684,10 +1707,14 @@ function depart(
   // `undefined` under content that declares no review scale, in which case nothing is
   // recorded and the distribution stays empty — the historical case, not a failure.
   //
-  // IT NO LONGER TAKES THE TWO TICKS (G-027a). The wait axis is gone, so the guest's arrival
-  // and departure ticks say nothing about its experience; passing them anyway would leave a
-  // review function that LOOKS like it reads the clock. See `reviews.ts`'s header.
-  const score = reviewOf(content, guest.needs, isCutShort(reason));
+  // IT TAKES THE STAY LENGTH AGAIN AT G-028b, AND NOT THE TWO TICKS. G-027a removed both with
+  // the argument that *"the guest's arrival and departure ticks say nothing about its
+  // experience"* — true of a WAIT, which is what that era was computing from them, and false of
+  // the window an integral is taken over. What crosses now is `stayTicks`, the same local the
+  // tally above divides by, so the review and the tally are shares of one denominator. The
+  // clock-reading the old sentence was guarding against is still forbidden: this function gets a
+  // duration, never a tick.
+  const score = reviewOf(content, guest.needs, isCutShort(reason), stayTicks);
   if (score !== undefined) search.reviewOutcomes = recordReview(search.reviewOutcomes, score);
 }
 
@@ -1855,6 +1882,30 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    knocked your room down" and "your room is still there and stopped working" are
     //    different events to a player, and a single `evicted` counter could not tell them
     //    apart — WATCH #1's whole method is looking at a run and asking what happened.
+    // AND THE EVICTED GUEST'S NUMERATOR IS ONE TICK SHORTER THAN ITS DENOMINATOR (G-028b).
+    // This branch departs at step 3; `accumulateUnservedTicks` runs at step 4c, so an evicted
+    // guest is never counted on the tick it is evicted on while `stayTicks` includes it.
+    // `depart`'s own note has said so since G-028a in the direction that mattered then — the
+    // bound `unservedTicks <= instanceTicks` stays true — and G-028b makes the share LOAD-BEARING
+    // rather than reported, so it is worth saying what it costs: an evicted guest's bands are
+    // computed over a window one tick longer than the one its counters ran in, which understates
+    // its neglect by at most one tick of a stay. **Two docblocks call the review and the tally
+    // "shares of the same denominator" and that is exactly true of both** — `stayTicks` is
+    // computed once, a few lines into `depart`, and the identical local goes to both readers.
+    // What differs is the NUMERATOR's window, and only for this one exit path.
+    //
+    // AND IT IS DISCHARGED FOR ONE OF THE TWO READERS, NOT BOTH, WHICH IS THE HALF THE FIRST
+    // VERSION OF THIS COMMENT MISSED. `reviewOf` floors on `cutShort`, so the mismatched
+    // numerator cannot reach an evicted guest's SCORE — it is the scale's minimum whatever the
+    // bands say. **`recordNeedsAtDeparture` takes no `cutShort`**, so `metAtDeparture` computes
+    // the band from that numerator and nothing floors it: an evicted guest's tally row is
+    // decided by a count that ran one tick short of the window it is divided by.
+    //
+    // THE COST IS BOUNDED AND CONSERVATIVE, WHICH IS WHY IT IS A COST STATEMENT AND NOT A
+    // DEFECT. One tick of a stay understates neglect, so a row can only be counted MET where a
+    // matched window might have counted it unmet — and `report.ts`'s review law A compares top
+    // reviews against the LEAST-met row, so a `met` that is too high only ever loosens the law.
+    // It cannot make a correct run exit 1, and it cannot hide a scorer that reads one need.
     if (lodgingLost !== null) {
       depart(search, content, guest, null, engagedRoom, lodgingLost, tick);
       if (lodgingLost === 'evictedRoomGone') evictedRoomGone += 1;

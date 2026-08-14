@@ -646,6 +646,44 @@ Out of scope: `reviewOf`, `met`/`unmet`, law A, the bind-time floor — **all fo
   measurement, which has now fired**).
 Critique rounds used: **3/3**
 
+## G-028b — The scorer reads the integral
+Status: **done.** 3 sweeps (1 BLOCKER + 12 MAJOR, two critics) + two plan reviews + a verification closing on six UNPINNED-CLAIM findings — no round, no split. **M2.5 IS COMPLETE, 7 of 7.** *(This block was written late — the **THIRD INSTANCE of
+  a goal split in dispatch and whole in the ledger** — `balance-critic` found at sweep 3 that no
+  `G-028b` block existed, so three sweeps were charged against a block reading `0/3` and **VERIFY
+  had only G-028's UN-SPLIT criteria to run**, one of which this build deliberately relocated and
+  one of which another goal discharged. G-028a's own block priced this in its own words and called
+  itself the second instance. **The orchestrator has now done it three times in one session.**
+Milestone: M2.5 — **LAST GOAL IN THE MILESTONE**, so §7.1's second critic from a different pair
+  joined the final round (`sim-critic`, world-and-persistence frame — it found the save-layer MAJOR
+  the matched pair had not been looking for, which is G-008's precedent repeating).
+Owner pair: economy-engineer / balance-critic
+Statement: The review reads the integral instead of a departure-instant snapshot.
+  `score = min + floor(Σ band_i / N)`, `met` redefined on the same per-need band — **and the four
+  coupled things move together, because review law A binds them: 11 of 30 grid cells go RED if
+  `reviewOf` moves alone.**
+Exit criteria:
+  - `pnpm exec vitest run scorer` — **3 files, named before BUILD**: `packages/sim/src/
+    review.scorer.test.ts`, `packages/sim/src/needs.scorer.test.ts`, `tools/headless/src/
+    scorer.report.test.ts`. Matched nothing at HEAD.
+  - **AXIS 1'S REVERSAL IS REPAIRED** — G-019's original claim restored word for word, clearing the
+    one-step floor **on the provisioned ladder and not on the un-provisioned one** (ADR-0030 §1
+    executed), both readings asserted side by side. *Scoped to the shipped cadence*, ADR-0037
+    amendment 2.
+  - **THE DISTRIBUTION IS NOT A POINT MASS**, at `--rooms 3 --amenities 1` — the hotel a player
+    starts in — with **three bands clearing the derived floor** (one guest per simulated day),
+    **stable across every cadence from 114 to 130**, always the same three. *Relocated from a
+    configuration where the criterion's own named failure — a band carried by two guests —
+    reproduced literally.*
+  - **THE CONTROL IS TWO CLAIMS**: departures **192 / 161 / 0** and revenue **1,632,000p** hold;
+    the review distribution **moves**, `4:353` → `3:161, 5:192`. Asserted in three places.
+  - **Summary schema 3 → 4** (meaning breaks; `met` keeps its name, type and arithmetic law and
+    answers a different question). **Save stays v16.**
+  - `pnpm verify` — **ten green, three ruled red** · CI green on three platforms · **a human WATCH**,
+    owed on `hud.ts`'s "needs met" bar, which changes MEANING rather than value.
+Out of scope: the money-loop cliff (M4) · the merged-walk optimisation · the cadence confound (the
+  instrument-debt goal) · `apps/game`.
+Critique rounds used: **3/3**
+
 ## G-028 — Outcomes and reviews are stock-shaped
 Status: pending
 Milestone: M2.5

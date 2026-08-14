@@ -503,10 +503,21 @@ describe('the per-need tally', () => {
       abandonCount,
       unservedTicks,
     });
+    // `bands` IS `undefined` HERE, AND DELIBERATELY: this file's content declares no review
+    // scale, so `met` takes the ERA rule (`metAtDeparture`) — the want-line reading this arm was
+    // written against. It is the branch nothing else in the suite drives to a tally, and leaving
+    // it uncovered while the band branch is exercised everywhere else is how a historical
+    // definition rots. The band branch has its own arm below.
     let tally = createNeedOutcomes();
-    tally = recordNeedsAtDeparture(content, tally, [state('zeta', true, 2, 11)], 100);
-    tally = recordNeedsAtDeparture(content, tally, [state('alpha', false, 7, 20), state('zeta', false, 3, 30)], 200);
-    tally = recordNeedsAtDeparture(content, tally, [state('mid', true)], 50);
+    tally = recordNeedsAtDeparture(content, tally, [state('zeta', true, 2, 11)], 100, undefined);
+    tally = recordNeedsAtDeparture(
+      content,
+      tally,
+      [state('alpha', false, 7, 20), state('zeta', false, 3, 30)],
+      200,
+      undefined,
+    );
+    tally = recordNeedsAtDeparture(content, tally, [state('mid', true)], 50, undefined);
     expect(tally).toEqual([
       { needId: 'alpha', met: 0, unmet: 1, metByItem: 0, abandoned: 7, unservedTicks: 20, instanceTicks: 200 },
       { needId: 'mid', met: 1, unmet: 0, metByItem: 0, abandoned: 0, unservedTicks: 0, instanceTicks: 50 },
@@ -514,10 +525,53 @@ describe('the per-need tally', () => {
     ]);
   });
 
+  it('and with a BAND COUNT in hand, met is the band and the want line is not consulted at all', () => {
+    // ========================================================================
+    // THE TWO DEFINITIONS OF `met`, DRIVEN OVER THE SAME INPUT (G-028b, ADR-0037).
+    //
+    // `food` is BELOW its want line — deficit 5 against a line of 20 is not the failure here;
+    // `isNeedSatisfiedIn` calls a deficit of 5 satisfied. What separates the two rules is the
+    // SECOND state: a need at deficit 5 (satisfied to the era rule) that the hotel left unserved
+    // for most of the stay. The era rule counts it met; the band rule does not.
+    //
+    // This is the state the redefinition exists for — the measured `0 of 348` case in miniature
+    // — and it is the one an arm that only checked the extremes would miss.
+    // ========================================================================
+    const lately = (needId: string, unservedTicks: number): NeedState => ({
+      needId,
+      deficit: 5,
+      metBy: 'room',
+      abandonCount: 0,
+      unservedTicks,
+    });
+    const stay = 100;
+    const bands = 5;
+    // Unserved for four fifths of the stay: band 1 of 5, so NOT met under the band rule.
+    const neglected = recordNeedsAtDeparture(content, createNeedOutcomes(), [lately('food', 80)], stay, bands);
+    expect(neglected).toEqual([
+      { needId: 'food', met: 0, unmet: 1, metByItem: 0, abandoned: 0, unservedTicks: 80, instanceTicks: 100 },
+    ]);
+    // The ERA rule, same input, opposite answer — which is what makes the branch a real branch.
+    const era = recordNeedsAtDeparture(content, createNeedOutcomes(), [lately('food', 80)], stay, undefined);
+    expect(era[0]!.met).toBe(1);
+    // And a need served for all but a band's width IS met, though it sits below its want line at
+    // the instant the guest walks out. `metByItem` follows `met`, so the pair cannot drift.
+    const served = recordNeedsAtDeparture(
+      content,
+      createNeedOutcomes(),
+      [{ ...lately('food', 20), metBy: 'item' as const }],
+      stay,
+      bands,
+    );
+    expect(served).toEqual([
+      { needId: 'food', met: 1, unmet: 0, metByItem: 1, abandoned: 0, unservedTicks: 20, instanceTicks: 100 },
+    ]);
+  });
+
   it('returns its input unchanged for a guest carrying no needs at all', () => {
     // The stay is passed and ignored, which is the point: a guest with no needs contributes to
     // no row, so there is no denominator for it to land in either.
-    const tally = recordNeedsAtDeparture(content, createNeedOutcomes(), [], 1_440);
+    const tally = recordNeedsAtDeparture(content, createNeedOutcomes(), [], 1_440, 5);
     expect(tally).toEqual([]);
   });
 });

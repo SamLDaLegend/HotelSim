@@ -1,24 +1,28 @@
 // G-019 — THE REVIEW SCALE IS REFUSED AT LOAD IF IT CANNOT EXPRESS ITS OWN NEED TABLE.
+// RE-WARRANTED AT G-028b (ADR-0036 §2, ADR-0037).
 //
 //   pnpm exec vitest run review
 //
-// The one inequality this goal's scale rests on, and it is derived rather than chosen:
+// ============================================================================
+//  BOTH BOUNDS CHANGED THEIR REASONS IN ONE DIFF, AND NEITHER CHANGED FOR THE SAME REASON.
 //
-//   A TOP REVIEW MUST BE UNREACHABLE WHILE ANY NEED IS UNMET.
+//  THE FLOOR `max - min >= N` KEEPS ITS NUMBER AND LOSES ITS NECESSITY. It used to be exactly
+//  the condition under which *a top review is unreachable while any need is unmet*, because the
+//  score was a count of met needs. The score is the MEAN OF PER-NEED BANDS now, which has that
+//  property at every scale — so the floor is a RESOLUTION DIAL, and `a top review is
+//  unreachable while any need is unmet` is asserted in `review.test.ts` AT A SCALE THIS FLOOR
+//  WOULD REFUSE, which is the only way to show the floor is not what carries it.
 //
-// With one equal share per need, the best a guest can score having missed one of N needs is
-// ONE_WHOLE x (N-1)/N, and the top band begins at ONE_WHOLE x (B-1)/B. The first is below
-// the second exactly when B > N — that is, when `max - min >= N`.
+//  THE CEILING CHANGED ITS NUMBER, because its derivation was deleted. It was pigeonhole over
+//  `Σ q` — and `qualitySum` is gone, so the sum it counted the values of does not exist. It is
+//  re-derived from what materialises rows: one row per admitted score, a band is an integer
+//  count of ticks over the stay, so a scale with more bands than the longest stay has ticks
+//  admits rows no guest can land on. `max - min <= longest life`.
 //
-// IT IS REFUSED AT LOAD, with the same standing as a need no reachable provider claims: a
-// hotel whose reviews cannot tell a perfect stay from a spoiled one is guaranteed
-// unhappiness in the instrument rather than in the guest.
-//
-// ADR-0007 ASKS FOR TWO THINGS AND THIS FILE OWES BOTH: the check must be reached from the
-// real path (it is — `bindContent`, which every host calls), and there must be a case
-// proving it can fail. The case is `balance-critic`'s: a scale one band too narrow, driven
-// through the real function, together with the DEMONSTRATION of what it prevents — the same
-// content one band wider scores a top review with a need unmet.
+//  ADR-0007 ASKS FOR TWO THINGS AND THIS FILE OWES BOTH: the check must be reached from the
+//  real path (it is — `bindContent`, which every host calls), and there must be a case proving
+//  it can fail. Both bounds have one, and the ceiling's is the measured resource cliff.
+// ============================================================================
 //
 // Content ids here are camelCase (ADR-0003).
 
@@ -89,10 +93,10 @@ function raw(
   };
 }
 
-describe('the scale must have MORE scores than the content has needs', () => {
+describe('the scale must have at least as many bands as the content has needs', () => {
   it('binds when it does — the shipped shape, exactly on the boundary', () => {
-    // 4 need types, 1..5: max - min = 4 >= 4. One band of headroom over "everything met",
-    // which is precisely what the derivation asks for and no more.
+    // 4 need types, 1..5: max - min = 4 >= 4. One band per need, which is what the resolution
+    // floor asks for and no more.
     expect(() => bindContent(raw(4, 1, 5))).not.toThrow();
     expect(reviewScaleOf(bindContent(raw(4, 1, 5)))).toEqual({ min: 1, max: 5, bands: 5 });
   });
@@ -102,123 +106,52 @@ describe('the scale must have MORE scores than the content has needs', () => {
     expect(() => bindContent(raw(4, 1, 4))).toThrow(/narrowest scale this table admits is 1\.\.5/);
   });
 
-  it('and the refusal is a MEASUREMENT: at bands === needs, a guest missing one reviews at the TOP', () => {
+  it('and the refusal NO LONGER claims to be what keeps a top review honest — it says so itself', () => {
     /**
-     * ADR-0007's second half. Without this the refusal above is a message nobody has shown
-     * to be about anything.
+     * ========================================================================
+     * THE MESSAGE IS PART OF THE CHECK, AND THIS ARM IS WHY (ADR-0030 §2's UNPINNED-CLAIM
+     * class: a live `Error` message asserting a proposition the build falsifies).
      *
-     * THE REFUSED DOCUMENT CANNOT BE BOUND — that is the point of the check — so the case
-     * is driven through the DENOMINATOR INSTEAD, which is the same arithmetic seen from the
-     * other side. `reviewOf` divides by the length of the guest's OWN vector (see
-     * `qualitySum`: a migrated guest is reviewed on the needs it formed, not on the table's
-     * length). So a four-need guest under a four-band scale is exactly the shape
-     * `bindContent` refuses, and it is expressible: bind three needs against 1..4 — legal,
-     * `4 - 1 = 3 >= 3` — and hand the function a vector of four.
+     * Until G-028b the refusal said the property held *"only when the scale has MORE scores
+     * than there are needs"*. Under ADR-0037's mean of per-need bands that clause is FALSE at
+     * every scale, and the arm below in `review.test.ts` proves it by scoring a narrow scale.
+     * A refusal that states a false necessity teaches the next reader the wrong model of the
+     * scorer, so the sentence is asserted here rather than left to a sweep.
+     * ========================================================================
+     */
+    expect(() => bindContent(raw(4, 1, 4))).toThrow(/RESOLUTION FLOOR AND IT IS A DIAL/);
+    expect(() => bindContent(raw(4, 1, 4))).toThrow(/the score is the mean of per-need bands/);
+    expect(() => bindContent(raw(4, 1, 4))).not.toThrow(/holds only when/);
+  });
+
+  it('and the property the floor USED to carry survives the floor being refused', () => {
+    /**
+     * THE DEMONSTRATION, RE-AIMED. It used to be: at `bands === needs`, a guest missing one
+     * need reviews at the TOP — the thing the floor prevented. Under the mean of bands that is
+     * no longer true, and the arm asserts the new fact instead of quietly disappearing.
+     *
+     * The refused document cannot be bound — that is the point of the check — so the case is
+     * driven through the DENOMINATOR, which is the same arithmetic seen from the other side:
+     * `reviewOf` divides by the length of the guest's OWN vector, so a four-need guest under a
+     * four-band scale is exactly the shape `bindContent` refuses, and it is expressible by
+     * binding three needs against 1..4 and handing the function a vector of four.
      */
     const fourBands = bindContent(raw(3, 1, 4));
     expect(reviewScaleOf(fourBands)?.bands).toBe(4);
     const fourNeeds = formNeedVector(bindContent(raw(4, 1, 5)));
-    // G-027b: FULL is `deficit === 0` and the one that is missing is EMPTY, so both ends are
-    // named rather than one — `formNeedVector` under a table with no want line already builds
-    // every need full.
+    const STAY = 1_000;
     const threeOfFour = fourNeeds.map((state, index) =>
-      index === 3 ? { ...state, deficit: 200, metBy: null } : { ...state, deficit: 0, metBy: 'room' as const },
+      index === 3
+        ? { ...state, unservedTicks: STAY, deficit: 200, metBy: null }
+        : { ...state, unservedTicks: 0, deficit: 0, metBy: 'room' as const },
     );
-    // bands === needs: three of four is 7,500 of one whole against a top band beginning at
-    // 7,500, so the guest that missed something gives FULL MARKS.
-    expect(reviewOf(fourBands, threeOfFour, false)).toBe(4);
-    expect(reviewOf(fourBands, threeOfFour, false)).toBe(reviewScaleOf(fourBands)?.max);
-    // bands > needs — the legal shape — and the same experience is strictly below the top.
+    // bands === needs, the shape the floor refuses: three perfect needs give band 3 each, the
+    // starved one gives 0, so the mean is 9/4 -> 2 and the guest scores 3 of 4. **NOT the top.**
+    expect(reviewOf(fourBands, threeOfFour, false, STAY)).toBe(3);
+    expect(reviewOf(fourBands, threeOfFour, false, STAY)).toBeLessThan(reviewScaleOf(fourBands)!.max);
+    // And on the legal shape, likewise below the top — the floor buys resolution, not this.
     const fiveBands = bindContent(raw(4, 1, 5));
-    expect(reviewOf(fiveBands, threeOfFour, false)).toBe(4);
-    expect(reviewOf(fiveBands, threeOfFour, false)).toBeLessThan(reviewScaleOf(fiveBands)!.max);
-  });
-
-  it('AND NO MORE SCORES THAN THE NEED TABLE CAN EVER DISTINGUISH — the ceiling, by pigeonhole', () => {
-    /**
-     * `balance-critic`'s MINOR 2. A guest's experience is a sum of N shares of `ONE_WHOLE`,
-     * so it cannot take more than `N x ONE_WHOLE + 1` values; a scale wider than that admits
-     * more scores than the content can ever distinguish, and the report materialises one row
-     * per admitted score. **The bound is on the SIZE of the scale.** What it is NOT is a
-     * claim that everything below it is surjective — see the next two tests, which measure
-     * how far from surjective the shipped table is.
-     */
-    for (const needs of [1, 2, 4]) {
-      const widest = needs * ONE_WHOLE_BASIS_POINTS;
-      expect(() => bindContent(raw(needs, 0, widest))).not.toThrow();
-      expect(() => bindContent(raw(needs, 0, widest + 1))).toThrow(/cannot take more than/);
-      expect(() => bindContent(raw(needs, 0, widest + 1))).toThrow(
-        new RegExp(`widest scale this table admits is 0\\.\\.${widest}`),
-      );
-    }
-  });
-
-  it('and the ceiling is what closes the RESOURCE CLIFF the missing bound left open', () => {
-    // The measured case: 0..5,000,000 validated, bound, and made a one-day run emit
-    // 308,891,476 bytes of JSON in silence. It is now refused by name at load.
-    expect(() => bindContent(raw(4, 0, 5_000_000))).toThrow(/review scale of 0\.\.5000000/);
-    expect(() => bindContent(raw(4, 0, 5_000_000))).toThrow(/cannot take more than 40001 values/);
-  });
-
-  it('THE CEILING IS LOOSE, AND G-027a MADE IT LOOSER — counted rather than described', () => {
-    /**
-     * THIS TEST REPLACED ONE THAT ASSERTED THE BOUND WAS TIGHT. It was not, and it was not
-     * tight for the very arm it used: only the LODGING need could contribute a non-extreme
-     * share, through the WAIT term, which took `patienceTicks + 1` values rather than
-     * `ONE_WHOLE + 1`. `balance-critic` found that at G-019's final round.
-     *
-     * ========================================================================
-     * G-027a DELETED THE WAIT TERM, AND WITH IT THE LAST SOURCE OF A NON-EXTREME SHARE.
-     * Every `q` is now 0 or `ONE_WHOLE`, so a guest's experience takes at most
-     * `needCount + 1` values and the reachable score count collapses to that — 5 for the
-     * shipped four-need table, against a ceiling of 40,001.
-     *
-     * The numbers below fell from 201 / 721 / 10,001 to 2 / 5 / 2. **That is the loosening,
-     * measured**, and it is left as the file's headline rather than tidied away: the ceiling
-     * is a RESOURCE bound and was never a surjectivity claim, and this is the goal that made
-     * the gap between the two enormous. The reachable count is still ENUMERATED rather than
-     * computed from a formula, so it stays a measurement of the shipped function.
-     * ========================================================================
-     */
-    const reachableScores = (content: BoundContent): number => {
-      const needs = formNeedVector(content);
-      const scores = new Set<number>();
-      for (let metCount = 0; metCount <= needs.length; metCount += 1) {
-        const vector = needs.map((need, i) =>
-          i < metCount ? { ...need, deficit: 0, metBy: 'room' as const } : { ...need, deficit: 200, metBy: null },
-        );
-        const score = reviewOf(content, vector, false);
-        if (score !== undefined) scores.add(score);
-      }
-      return scores.size;
-    };
-
-    // THE ARM THE OLD TEST USED: one need type against a 10,001-score scale. It reached 201
-    // while the wait term existed; it reaches 2 now — met and unmet, and nothing between.
-    const arm = bindContent(raw(1, 0, ONE_WHOLE_BASIS_POINTS));
-    expect(reachableScores(arm)).toBe(2);
-
-    // AND THE SHIPPED SHAPE at its own ceiling: four needs, so five reachable scores.
-    const shipped = bindContent(raw(4, 0, 4 * ONE_WHOLE_BASIS_POINTS));
-    expect(reachableScores(shipped)).toBe(5);
-    expect(reachableScores(shipped)).toBe((shipped.content.needTypes ?? []).length + 1);
-
-    // THE ARM THAT USED TO BE TIGHT IS NO LONGER TIGHT ANYWHERE, and that is the point: a
-    // lodging need whose patience reaches ONE_WHOLE used to make the bound exact, because the
-    // wait share could take every value. Nothing can now.
-    const wasTight = bindContent(raw(1, 0, ONE_WHOLE_BASIS_POINTS, 4, ONE_WHOLE_BASIS_POINTS));
-    expect(reachableScores(wasTight)).toBe(2);
-    expect(reachableScores(wasTight)).toBeLessThan(ONE_WHOLE_BASIS_POINTS + 1);
-  });
-
-  it('so a scale that BINDS can still carry scores nobody can leave — stated, not hidden', () => {
-    // The sharp end of the paragraph above, and the reason the refusal message no longer
-    // claims otherwise: `0..40000` passes the ceiling and then admits 40,001 scores of which
-    // 39,280 are unreachable. Refusing a document for a defect that passing documents share
-    // is an argument that does not survive being written down.
-    expect(() => bindContent(raw(4, 0, 4 * ONE_WHOLE_BASIS_POINTS, 480, 180))).not.toThrow();
-    // 40,001 admitted against 5 reachable since G-027a, where it was 40,001 against 721.
-    expect(40_001 - 5).toBe(39_996);
+    expect(reviewOf(fiveBands, threeOfFour, false, STAY)).toBeLessThan(reviewScaleOf(fiveBands)!.max);
   });
 
   it('scales up and down with the need table rather than being a fixed number', () => {
@@ -229,11 +162,184 @@ describe('the scale must have MORE scores than the content has needs', () => {
   });
 
   it('THE SHIPPED SCALE SITS ON THE BOUNDARY, so a fifth need type would refuse all content', () => {
-    // Said out loud rather than discovered at M6. This is the check working: a fifth need on
-    // a five-point scale is exactly the case where a guest could miss one thing and still
-    // review at the top.
+    // Said out loud rather than discovered at M6. Under the re-stated warrant this is a
+    // statement about RESOLUTION: a fifth need on a five-point scale would still be unable to
+    // hand a top review to a guest it failed, but a band would be a fifth of a stay wide while
+    // the table asked to distinguish five needs in it.
     expect(() => bindContent(raw(5, 1, 5))).toThrow();
     expect(() => bindContent(raw(5, 1, 6))).not.toThrow();
+  });
+});
+
+describe('THE CEILING: no more bands than the longest stay has ticks', () => {
+  it('binds exactly at the longest life, and refuses one past it, naming the widest that works', () => {
+    // `raw` declares a 1,000-tick stay and a 200-tick tolerance, so the longest life is 1,000.
+    // The bound is `max - min <= 1000`, and both sides of it are driven.
+    expect(() => bindContent(raw(4, 0, 1_000))).not.toThrow();
+    expect(() => bindContent(raw(4, 0, 1_001))).toThrow(/against a longest guest life of 1000 tick\(s\)/);
+    expect(() => bindContent(raw(4, 0, 1_001))).toThrow(/widest scale this content admits is 0\.\.1000/);
+  });
+
+  it('and it tracks the CONTENT s own longest life rather than a constant', () => {
+    // The same need table with a shorter stay admits a narrower scale. This is what makes the
+    // bound derived rather than typed: change the duration and the ceiling moves with it.
+    const shortStay = (stay: number, max: number): SimContent => {
+      const content = raw(4, 0, max);
+      return {
+        ...content,
+        guestRules: [{ ...content.guestRules![0]!, stayDurationTicks: stay, toleranceTicks: 20 }],
+      };
+    };
+    expect(() => bindContent(shortStay(300, 300))).not.toThrow();
+    expect(() => bindContent(shortStay(300, 301))).toThrow(/longest guest life of 300 tick\(s\)/);
+    // And the TOLERANCE counts too, because a guest that gives up in the lobby is scored over
+    // the time it waited — so the longest life is the max of the terms, not the stay alone.
+    const longTolerance = (): SimContent => {
+      const content = raw(4, 0, 900);
+      return {
+        ...content,
+        guestRules: [{ ...content.guestRules![0]!, stayDurationTicks: 400, toleranceTicks: 900 }],
+      };
+    };
+    expect(() => bindContent(longTolerance())).not.toThrow();
+  });
+
+  it('AND A DOCUMENT WITH NO DURATION AT ALL IS STILL BOUNDED — the backstop, driven', () => {
+    /**
+     * ========================================================================
+     * ADR-0007's second half, on the guard added at sweep 1 to close a hole sweep 1 found.
+     *
+     * THE HOLE: the ceiling was conditioned on `longestStay > 0`, so a document declaring a
+     * review scale and NO duration escaped it entirely — and that is the one shape with no stay
+     * to measure a band against. `reviewScoreMin: 0, reviewScoreMax: 5000000` bound happily,
+     * which is the exact cliff the ceiling exists for, reopened on the shape it claimed was
+     * unreachable.
+     *
+     * THE FIX WAS A FALLBACK AND IT SHIPPED WITHOUT AN ARM FOR A ROUND. Removing it again would
+     * have turned nothing red, in the file whose own header says *"there must be a case proving
+     * it can fail. Both bounds have one."* That sentence was true of the two derived bounds and
+     * false of the backstop underneath them.
+     *
+     * IT TAKES A RAW HOST, and that is the stated threat model for every refusal in
+     * `assertReviewScaleIsBoundedByTheNeedTable`: `guestRulesSchema` requires `stayDurationTicks`
+     * on disk, so the zod loader cannot produce this document and `bindContent` is what stands
+     * between a raw host and the report's row loop.
+     * ========================================================================
+     */
+    const noDuration = (min: number, max: number): SimContent => {
+      const content = raw(4, min, max);
+      return {
+        ...content,
+        // Every duration removed: no stay, no visit, no tolerance.
+        guestRules: [{ id: 'rules', name: 'rules', reviewScoreMin: min, reviewScoreMax: max } as never],
+      };
+    };
+    // The cliff, refused by name, and the message says which branch refused it.
+    expect(() => bindContent(noDuration(0, 5_000_000))).toThrow(/NO declared duration/);
+    expect(() => bindContent(noDuration(0, 5_000_000))).toThrow(/review scale of 0\.\.5000000/);
+    // ONE TICK EITHER SIDE OF THE BACKSTOP, so the arm cannot be satisfied by a guard that
+    // refuses every scale. Below it the refusal comes from a DIFFERENT guard — see the blind
+    // spot below — so what is asserted is that the message changes rather than that it stops.
+    const backstop = 4 * ONE_WHOLE_BASIS_POINTS;
+    expect(() => bindContent(noDuration(0, backstop + 1))).toThrow(/NO declared duration/);
+    expect(() => bindContent(noDuration(0, backstop))).not.toThrow(/NO declared duration/);
+
+    // ========================================================================
+    // AND THE BLIND SPOT, MEASURED RATHER THAN LEFT AS A GAP. The backstop's ACCEPTING side
+    // cannot be exhibited at all: a document with no duration is refused a few guards later for
+    // having no TERMINATOR — no `toleranceTicks` if it declares a lodging need, no
+    // `visitDurationTicks` if it does not — so no such document binds whatever its scale.
+    //
+    // **SO THE BACKSTOP IS A SECOND LINE OF DEFENCE THAT HAPPENS TO FIRE FIRST, AND SAYING SO
+    // IS THE POINT.** It is not load-bearing today and it is kept because guard ORDER is not a
+    // contract: if the terminator refusals move, or a content shape arrives that needs no
+    // duration, this is the only thing between a raw host and a 5,000,001-row render. An
+    // ADR-0007 check with a stated blind spot is a real check; one whose blind spot is
+    // undiscovered is not.
+    // ========================================================================
+    expect(() => bindContent(noDuration(1, 5))).toThrow(/declare no toleranceTicks/);
+    const engagementOnly = (min: number, max: number): SimContent => {
+      const content = noDuration(min, max);
+      return {
+        ...content,
+        needTypes: (content.needTypes ?? []).map((entry) => ({ ...entry, role: 'engagement' as const })),
+      };
+    };
+    expect(() => bindContent(engagementOnly(1, 5))).toThrow(/declare no visitDurationTicks/);
+    // And the SAME lodging-free table with an absurd scale is stopped by the backstop first,
+    // which is what "fires first" means and is the only observable the order has.
+    expect(() => bindContent(engagementOnly(0, 5_000_000))).toThrow(/NO declared duration/);
+  });
+
+  it('and it CLOSES the resource cliff it was written for, which is the measured case', () => {
+    // 0..5,000,000 validated, bound, and made a one-day run emit 308,891,476 bytes of JSON in
+    // silence. It is refused by name at load, and now by four orders of magnitude rather than
+    // by two: the old pigeonhole bound admitted 40,001 scores against a 1,000-tick stay.
+    expect(() => bindContent(raw(4, 0, 5_000_000))).toThrow(/review scale of 0\.\.5000000/);
+    expect(() => bindContent(raw(4, 0, 5_000_000))).toThrow(/longest guest life of 1000 tick\(s\)/);
+    // The scale the OLD ceiling admitted — `N x ONE_WHOLE` — is now refused, and that is the
+    // tightening rather than a side effect: 40,001 rows against a 1,000-tick stay is 39,001
+    // rows no guest could ever land on.
+    expect(() => bindContent(raw(4, 0, 4 * ONE_WHOLE_BASIS_POINTS))).toThrow(/longest guest life/);
+  });
+
+  it('IT IS A BOUND ON SIZE AND NOT A PROMISE OF SURJECTIVITY, and both halves are COUNTED', () => {
+    /**
+     * ========================================================================
+     * THE BOUND IS A RESOURCE BOUND AND HAS NEVER BEEN A SURJECTIVITY CLAIM. This file has
+     * carried an arm saying so since `balance-critic` found the original over-claim of
+     * tightness at G-019's final round, and the claim is re-counted here rather than carried
+     * across, because the model underneath it changed twice since.
+     *
+     * WHAT THE RE-COUNT FOUND, AND IT IS THE OPPOSITE OF THE OLD READING. Under the met-count
+     * scorer the ceiling was loose EVERYWHERE — 40,001 admitted against 5 reachable. Under the
+     * mean of per-need bands it is TIGHT for a full-length stay at both arms below, because a
+     * band is a share of TIME and time has as many values as the stay has ticks. The first
+     * draft of this arm asserted the four-need table was loose; it is not, and the measurement
+     * said so.
+     *
+     * WHAT IS STILL TRUE IS THE STATEMENT THE ARM EXISTS FOR: the ceiling bounds the SIZE of
+     * the scale and promises nothing about which rows a given run can fill. The witness is the
+     * POPULATION rather than the content — the same bound that is tight for a guest staying
+     * the full duration leaves almost every row dead for a guest evicted on its third tick,
+     * and a real run contains both.
+     * ========================================================================
+     */
+    const reachableScores = (content: BoundContent, stay: number): number => {
+      const needs = formNeedVector(content);
+      const scores = new Set<number>();
+      // Every per-need band, on every need, over the stay — the input the score actually reads.
+      for (let unserved = 0; unserved <= stay; unserved += 1) {
+        for (let served = 0; served <= needs.length; served += 1) {
+          const vector = needs.map((need, i) => ({
+            ...need,
+            unservedTicks: i < served ? 0 : unserved,
+            deficit: i < served ? 0 : 200,
+            metBy: i < served ? ('room' as const) : null,
+          }));
+          const score = reviewOf(content, vector, false, stay);
+          if (score !== undefined) scores.add(score);
+        }
+      }
+      return scores.size;
+    };
+    const STAY = 1_000;
+
+    // TIGHT, at a single need: the band IS the score, so every admitted score is reachable.
+    expect(reachableScores(bindContent(raw(1, 0, STAY)), STAY)).toBe(STAY + 1);
+    // TIGHT at four needs too, which the first draft of this arm got wrong: the mean of four
+    // bands still covers every value, because each band ranges over the whole stay.
+    expect(reachableScores(bindContent(raw(4, 0, STAY)), STAY)).toBe(STAY + 1);
+    // And the shipped SCALE reaches every score it admits: 1..5 over four needs, no dead rows.
+    expect(reachableScores(bindContent(raw(4, 1, 5)), STAY)).toBe(5);
+
+    // LOOSE FOR A POPULATION THE SAME CONTENT PRODUCES. A guest evicted on its third tick has
+    // four possible unserved values, so its bands take four values and the scores it can leave
+    // are a handful of the thousand the scale admits. The rows are not dead in the content;
+    // they are dead for that guest — which is exactly why the bound is on size.
+    const wide = bindContent(raw(4, 0, STAY));
+    expect(reachableScores(wide, 3)).toBeLessThan(STAY + 1);
+    expect(reachableScores(wide, 3)).toBeGreaterThan(1);
   });
 
   it('IGNORES a supplied band count entirely — the third symbol has no way in', () => {
@@ -250,6 +356,7 @@ describe('the scale must have MORE scores than the content has needs', () => {
      * and CHANGES NO SCORE, because `reviewScaleOf` derives `bands` from `min` and `max`
      * and there is no code path that could consult anything else.
      */
+    const STAY = 1_000;
     const withBands = bindContent({
       ...raw(4, 1, 5),
       guestRules: [
@@ -266,12 +373,19 @@ describe('the scale must have MORE scores than the content has needs', () => {
     });
     expect(reviewScaleOf(withBands)).toEqual({ min: 1, max: 5, bands: 5 });
     const clean = bindContent(raw(4, 1, 5));
-    const all = formNeedVector(clean).map((state) => ({ ...state, deficit: 0, metBy: 'room' as const }));
-    const three = all.map((state, index) => (index === 3 ? { ...state, deficit: 200, metBy: null } : state));
-    expect(reviewOf(withBands, all, false)).toBe(reviewOf(clean, all, false));
-    expect(reviewOf(withBands, three, false)).toBe(reviewOf(clean, three, false));
+    const all = formNeedVector(clean).map((state) => ({
+      ...state,
+      unservedTicks: 0,
+      deficit: 0,
+      metBy: 'room' as const,
+    }));
+    const three = all.map((state, index) =>
+      index === 3 ? { ...state, unservedTicks: STAY, deficit: 200, metBy: null } : state,
+    );
+    expect(reviewOf(withBands, all, false, STAY)).toBe(reviewOf(clean, all, false, STAY));
+    expect(reviewOf(withBands, three, false, STAY)).toBe(reviewOf(clean, three, false, STAY));
     // And under the document it named, the guest that missed a need still does NOT reach 5.
-    expect(reviewOf(withBands, three, false)).toBe(4);
+    expect(reviewOf(withBands, three, false, STAY)).toBe(4);
   });
 });
 

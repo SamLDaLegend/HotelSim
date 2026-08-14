@@ -242,7 +242,7 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     expect(abandonmentsIn(thrash)).toBeGreaterThan(1_000);
   });
 
-  it('and the shipped margin BUYS something: more needs met than either neighbour', () => {
+  it('and the shipped margin BUYS something, measured on a quantity the stay does not skew', () => {
     // The half a counter cannot say. Abandonment is not an end in itself — it is triage, and
     // the test of triage is whether more wants get met. Total commitment makes a guest finish
     // what it started while another need burns down; thrash makes it finish nothing.
@@ -252,10 +252,16 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // margin never fires, so the two arms are the same simulation. The thrash arm is still
     // strictly worse, and that is the term with content in it: a guest that re-decides every
     // tick meets less than one that commits.
+    //
+    // ALL THREE MOVED AGAIN AT G-028b, AND FOR A DIFFERENT REASON: `met` counts a per-need BAND
+    // now rather than a departure-instant reading (ADR-0037), so these totals are a different
+    // quantity over the same runs. The equality and the ordering below are what this arm is
+    // about and neither depends on the unit; the literals are re-taken rather than reasoned
+    // about, because a total whose definition changed cannot be adjusted by argument.
     const engagementMet = (summary: Summary): number =>
       summary.needs.filter((row) => !row.lodging).reduce((total, row) => total + row.met, 0);
-    expect(engagementMet(shipped)).toBe(1_875);
-    expect(engagementMet(eraA)).toBe(1_875);
+    expect(engagementMet(shipped)).toBe(1_095);
+    expect(engagementMet(eraA)).toBe(1_095);
     // AND THE THRASH ARM NOW MEETS MORE THAN EITHER, WHICH REVERSES G-014b's FINDING. Recorded
     // rather than hidden inside a re-pin: under a stock a guest that re-decides every tick is
     // topping up whatever is emptiest, and topping up is cheap — 60 ticks buys a whole visit's
@@ -264,7 +270,7 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // is the premise the stock model removes. It is left failing-shaped rather than deleted:
     // the assertion below states the new ordering and names it as a reversal, so a later goal
     // that wants the old one has something to argue with.
-    expect(engagementMet(thrash)).toBe(2_081);
+    expect(engagementMet(thrash)).toBe(1_862);
     expect(engagementMet(shipped)).toBe(engagementMet(eraA));
     expect(engagementMet(thrash)).toBeGreaterThan(engagementMet(shipped));
   });
@@ -417,9 +423,9 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // shipped arm are the same simulation. It is pinned rather than collapsed, because the day
     // the margin becomes reachable here again the two tables separate and this says so.
     expect(table(eraA)).toEqual({
-      guest_comfort: [519, 192, 0],
-      guest_entertainment: [645, 66, 0],
-      guest_nourishment: [711, 0, 0],
+      guest_comfort: [711, 0, 0],
+      guest_entertainment: [192, 519, 0],
+      guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
     // MOVED AT G-027b, EVERY ROW, AND THE DIRECTION IS THE MODEL RATHER THAN A REGRESSION:
@@ -427,10 +433,19 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // and `night_rest` is unchanged at 192/519 because the lodging row counts guests that got a
     // room at all. `abandoned` is zero across the table — see criterion 2's block for why the
     // margin is contention-gated under this content, and for where the coverage moved.
+    //
+    // MOVED AGAIN AT G-028b, AND THE `met` COLUMN IS A DIFFERENT QUESTION RATHER THAN A
+    // DIFFERENT ANSWER (ADR-0037). It counts instances whose own per-need BAND was the top one
+    // — the hotel served this need for all but a band's width of that guest's stay — where it
+    // used to read the departure instant. `night_rest` is unmoved at 192/519, which is the row
+    // that anchors the table: the guests who got a room got it promptly, so both definitions
+    // agree about them. The engagement rows separate, and they separate the way an integral
+    // separates from a snapshot — comfort is served throughout and now reads met for everybody,
+    // the other two are served late and now read unmet for the guests who waited.
     expect(table(shipped)).toEqual({
-      guest_comfort: [519, 192, 0],
-      guest_entertainment: [645, 66, 0],
-      guest_nourishment: [711, 0, 0],
+      guest_comfort: [711, 0, 0],
+      guest_entertainment: [192, 519, 0],
+      guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
     // AND THE THRASH ARM MEETS MORE THAN EITHER, WHICH IS THE REVERSAL criterion 2 RECORDS:
@@ -438,11 +453,19 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // abandonment counts fell by an order of magnitude for the same reason the margin stopped
     // firing — pressures move by 7 basis points a tick where they used to move by 33.
     expect(table(thrash)).toEqual({
-      guest_comfort: [705, 6, 1_452],
-      guest_entertainment: [665, 46, 1_151],
-      guest_nourishment: [711, 0, 1_284],
+      guest_comfort: [631, 80, 1_452],
+      guest_entertainment: [522, 189, 1_151],
+      guest_nourishment: [709, 2, 1_284],
       night_rest: [192, 519, 0],
     });
+    // AND THE ABANDONMENT COLUMN IS UNTOUCHED BY G-028b, WHICH IS THE CONTROL FOR THE ROWS
+    // ABOVE. `abandoned` is counted in switches, not in bands, so a redefinition of `met`
+    // cannot reach it — and it does not. Without this the moved `met` column would be
+    // indistinguishable from the simulation behaving differently.
+    const abandonments = (summary: Summary): number[] =>
+      summary.needs.map((row) => row.abandoned);
+    expect(abandonments(thrash)).toEqual([1_452, 1_151, 1_284, 0]);
+    expect(abandonments(shipped)).toEqual([0, 0, 0, 0]);
   });
 
   it('and the LODGING need is never abandoned, in any arm', () => {
@@ -516,16 +539,21 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // `margin.abandoned > 0` and `margin.met < total.met` at one amenity of each. Measured on
     // this build, at ALL THREE levels of the sweep, both margins give the SAME numbers:
     //
-    //     amenities 1    abandoned 0 / 0     met 576 / 576
-    //     amenities 2    abandoned 0 / 0     met 930 / 930
-    //     amenities 3    abandoned 0 / 0     met 867 / 867
+    //     amenities 1    abandoned 0 / 0     met identical
+    //     amenities 2    abandoned 0 / 0     met identical
+    //     amenities 3    abandoned 0 / 0     met identical
+    //
+    // THE FIGURES ARE NOT SPELLED (ADR-0032 §1) AND THEY MOVED AGAIN AT G-028b, because `met`
+    // counts a per-need band now rather than a departure-instant reading. What the sweep is
+    // about — the two margins give the SAME numbers at every level, so the margin is inert
+    // here — is a statement about equality and does not depend on the unit.
     //
     // The mechanism is the one the SATURATED arm already recorded, arriving one level down: a
     // guest only abandons a provider when a SECOND need has drifted a margin's width past the
     // one being served, and in a hotel this small the guest now leaves at its dissatisfaction
     // ceiling before that gap can open. So the margin is inert at `--rooms 6` whatever the
     // amenity count, and the CHOICE of pin rests on the `met` column, which still separates the
-    // three levels — 576 / 930 / 867, with two the best of them.
+    // three levels, with two the best of them — asserted below rather than spelled here.
     //
     // ABANDONMENT COVERAGE HAS NOT BEEN LOST, and that is why this arm can be re-expressed
     // rather than deleted: it lives at the contended arm above (`--rooms 60 --arrivals 48`,
@@ -536,9 +564,58 @@ describe('the amenity sweep that chose this invocation, and what each level show
     expect(total.abandoned).toBe(0);
     expect(margin.abandoned).toBe(0);
     expect(margin.met).toBe(total.met);
-    // AND THE PIN IS STILL THE RIGHT ONE, which is what this describe block exists to justify:
-    // two amenities of each serve materially more than one.
-    expect(at(2, SHIPPED_MARGIN).met).toBeGreaterThan(margin.met);
+    // ------------------------------------------------------------------
+    // AND THE PIN IS STILL THE RIGHT ONE — BUT NOT VIA THE `met` COLUMN ANY MORE, AND THE
+    // REASON IS A PROPERTY OF THE NEW DEFINITION THAT A LATER READER MUST NOT REDISCOVER.
+    //
+    // This line read `at(2).met > at(1).met` — *"two amenities of each serve materially more
+    // than one"*. Under G-028b's band rule that comparison is UNSOUND HERE, and it is unsound
+    // in a way that has nothing to do with the hotel: `met` is now a share of each guest's OWN
+    // stay, and the two arms have different stay-length distributions. At one amenity almost
+    // every guest walks out dissatisfied after a few hundred ticks, so its needs are graded over
+    // a short window and are easy to keep inside a band; at two, a large group completes a
+    // full-length stay and is graded over the whole of it.
+    //
+    // **THE SENTENCE ANNOUNCING THAT NO RATIO IS SPELLED SPELLED TWO, AND THE LIVE ONE WAS
+    // UNREPRODUCIBLE.** It said "four times as long", then corrected itself to 3.3. Neither
+    // survives measurement: the two arms' MEAN stays differ by about a twentieth, and the
+    // full-stay-to-lean-mean figure is under three. **The quantity that actually differs is the
+    // stay DISTRIBUTION, not its mean** — one arm has a large population of full-length stays
+    // and the other has none — and that is read out of the run below rather than described.
+    //
+    // Third time in this goal that a derived figure in prose was wrong, and the second inside a
+    // sentence forbidding derived figures in prose.
+    //
+    // **A stay-normalised count is not comparable across arms whose stays differ.** So the
+    // claim is asserted on the quantity that IS comparable and is the one the sentence was
+    // always about: how many guests actually completed a stay.
+    // ------------------------------------------------------------------
+    const completed = (amenities: number, extra: readonly string[] = []): number => {
+      const summary = reportOf(['--amenities', String(amenities), ...extra]);
+      return summary.guests.departures.find((row) => row.reason === 'checkedOut')?.count ?? 0;
+    };
+    expect(completed(2)).toBeGreaterThan(completed(1));
+    // `expect(completed(1)).toBe(0)` STOOD HERE AND IS GONE. It pinned the exact class this goal
+    // withdrew a different arm for: at arrivals 58/59/60/61/62 the one-amenity arm completes
+    // 6 / 5 / 0 / 2 / 6 stays, so the zero is a one-tick phase artefact of the criterion's own
+    // cadence rather than a property of the hotel.
+    //
+    // ITS REPLACEMENT WAS `completed(1) * 4 < completed(2)`, WHICH AT THIS CADENCE IS `0 * 4 <
+    // 192` — entailed by the line above it, and resting on the very zero the paragraph above
+    // calls an artefact. **So the robustness is asserted where the zero is not**: at a
+    // NEIGHBOURING cadence the lean arm completes stays and the comparison still holds by a wide
+    // margin, which is what says the claim is about the amenity count rather than about the
+    // phase. No multiple is chosen — the margin is folded from the two runs.
+    const leanNeighbour = completed(1, ['--arrivals', '59']);
+    const richNeighbour = completed(2, ['--arrivals', '59']);
+    expect(leanNeighbour).toBeGreaterThan(0);
+    expect(richNeighbour).toBeGreaterThan(leanNeighbour * 10);
+    // AND THE STAY DISTRIBUTIONS DIFFER, which is the mechanism the comment above names and the
+    // one the `met` column could not be compared across: the richer arm's completed stays are a
+    // large share of its departures and the lean arm's are a handful.
+    const departures = (amenities: number): number =>
+      reportOf(['--amenities', String(amenities)]).guests.departures.reduce((t, r) => t + r.count, 0);
+    expect(completed(2) * 2).toBeGreaterThan(departures(2) / 2);
   });
 
   it('SATURATED (3 of each): the margin cannot fire at all, and still changes NO outcome', () => {

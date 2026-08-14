@@ -211,15 +211,53 @@ describe('L1 and L2, driven to the point where they fire', () => {
   });
 });
 
-describe('summary schema 3, and what an older consumer does with it', () => {
-  it('is 3, and the document says so', () => {
+describe('summary schema 4, and what an older consumer does with it', () => {
+  it('is 4, and the document says so', () => {
     // 2 -> 3 AT G-027a: `guests.departures[].reason` renames two of its five values. The
     // policy note on `SUMMARY_SCHEMA_VERSION` argues why a value rename inside a kept key is
     // the breaking kind, and it is the harder case than v1 -> v2 was: nothing is missing, so
     // no shape check anywhere can catch it.
-    expect(SUMMARY_SCHEMA_VERSION).toBe(3);
+    //
+    // 3 -> 4 AT G-028b: `needs[].met` and `needs[].unmet` keep their names, their types and
+    // their arithmetic law, and answer a DIFFERENT QUESTION — the per-need band over the whole
+    // stay rather than the reading at the departure instant (ADR-0037). **It is the same KIND
+    // of bump as 2 -> 3 and it is harder still**: a schema-3 consumer finds every key present,
+    // every count plausible, and every conservation law intact, and draws the opposite
+    // conclusion about the same hotel. There is nothing for a shape check to catch, which is
+    // exactly what the version is for.
+    expect(SUMMARY_SCHEMA_VERSION).toBe(4);
     const { world, options } = runWorld(['--days', '2', '--seed', '42']);
-    expect(buildSummary(world, content, options).summary.schema).toBe(3);
+    expect(buildSummary(world, content, options).summary.schema).toBe(4);
+  });
+
+  it('THE MEANING OF `met` IS WHAT MOVED, AND THE COLUMNS BESIDE IT ARE THE WITNESS', () => {
+    // ========================================================================
+    // The property THIS bump exists for, driven rather than described — and it is the hardest
+    // of the three bumps to catch, because nothing is missing and nothing is renamed.
+    //
+    // A schema-3 consumer reads `met` as "instances above their want line when their guest
+    // left". Under schema 4 the same key counts instances the hotel served for all but a
+    // band's width of the stay. The tick columns beside it are unchanged and are counted in
+    // ticks rather than bands, so THEY are what a consumer can use to tell which definition it
+    // is looking at without trusting the version — and the fact that they can disagree with a
+    // schema-3 reading of `met` is the whole hazard.
+    // ========================================================================
+    const { world, options } = runWorld(['--days', '2', '--seed', '42']);
+    const { summary } = buildSummary(world, content, options);
+    for (const row of summary.needs) {
+      expect(row.met + row.unmet, row.needId).toBe(departuresInSummary(summary));
+      expect(row.unservedTicks, row.needId).toBeLessThanOrEqual(row.instanceTicks);
+    }
+    // AND A ROW EXISTS WHERE THE AGGREGATE AND THE COUNT POINT DIFFERENT WAYS, or this bump is
+    // bookkeeping. The comfort row's POOLED share sits inside the top band — `unserved x bands
+    // <= instance` — while most of its individual instances do not, because `met` is decided
+    // per guest over that guest's own stay and a ratio of sums is not a sum of ratios. A
+    // consumer that inferred "met" from the printed share would get this row backwards, which
+    // is precisely the hazard the version is protecting and precisely why the two columns are
+    // published side by side rather than one being derived from the other.
+    const comfort = summary.needs.find((row) => row.needId === 'guest_comfort')!;
+    expect(comfort.unservedTicks * 5).toBeLessThanOrEqual(comfort.instanceTicks);
+    expect(comfort.met).toBeLessThan(departuresInSummary(summary) / 2);
   });
 
   it('THE RENAMED REASONS ARE ABSENT FROM v3, NOT ZERO — the property THIS bump exists for', () => {
@@ -260,9 +298,10 @@ describe('summary schema 3, and what an older consumer does with it', () => {
   it('REFUSES the current document to a v1 consumer, naming both versions', () => {
     const { world, options } = runWorld(['--days', '2', '--seed', '42']);
     const current = JSON.parse(JSON.stringify(buildSummary(world, content, options).summary)) as unknown;
-    expect(() => assertSummarySchema(current, 1)).toThrow(/schema 3, not the schema 1 this consumer reads/);
-    // And to a v2 consumer, which is the reader this bump is about.
-    expect(() => assertSummarySchema(current, 2)).toThrow(/schema 3, not the schema 2 this consumer reads/);
+    expect(() => assertSummarySchema(current, 1)).toThrow(/schema 4, not the schema 1 this consumer reads/);
+    expect(() => assertSummarySchema(current, 2)).toThrow(/schema 4, not the schema 2 this consumer reads/);
+    // And to a v3 consumer, which is the reader THIS bump is about.
+    expect(() => assertSummarySchema(current, 3)).toThrow(/schema 4, not the schema 3 this consumer reads/);
     // And the current reader accepts the current document, or the check is pointed at
     // nothing.
     expect(() => assertSummarySchema(current, SUMMARY_SCHEMA_VERSION)).not.toThrow();
@@ -276,7 +315,7 @@ describe('summary schema 3, and what an older consumer does with it', () => {
     expect((ERA_A_TOTAL_COMMITMENT as { schema: number }).schema).toBe(2);
     expect(() => assertSummarySchema(ERA_A_TOTAL_COMMITMENT, 2)).not.toThrow();
     expect(() => assertSummarySchema(ERA_A_TOTAL_COMMITMENT, SUMMARY_SCHEMA_VERSION)).toThrow(
-      /schema 2, not the schema 3 this consumer reads/,
+      /schema 2, not the schema 4 this consumer reads/,
     );
   });
 

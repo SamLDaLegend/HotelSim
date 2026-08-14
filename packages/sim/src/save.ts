@@ -1428,14 +1428,58 @@ function migrateV14ToV15(world: unknown): unknown {
  *
  * THE DIRECTION IS STATED BECAUSE IT IS THE ONE THAT COULD MISLEAD. 0 is the most FLATTERING
  * value: a guest mid-stay when the save was taken resumes as though the hotel had never failed
- * it, so its eventual row understates neglect rather than inventing it. The alternative — deriving
- * a count from `arrivedTick` and the deficit — would be inventing a history those bytes do not
- * record, because nothing in them says what was or was not being served. That is the drift
- * ADR-0008 forbids, and it is the same call `migrateV13ToV14` made about a mood.
+ * it. The alternative — deriving a count from `arrivedTick` and the deficit — would be inventing
+ * a history those bytes do not record, because nothing in them says what was or was not being
+ * served. That is the drift ADR-0008 forbids, and it is the same call `migrateV13ToV14` made
+ * about a mood.
  *
- * IT ALSO CANNOT CHANGE A LOADED WORLD'S BEHAVIOUR, which is worth saying once: nothing in
- * `packages/sim` reads any of these three fields. A v15 world migrated to v16 therefore ticks
- * identically to the way it ticked before, and the only observable difference is its hash.
+ * ---------------------------------------------------------------------------
+ * AND THE WARRANT THAT MADE "FLATTERING" HARMLESS IS VOID SINCE G-028b. READ THIS BEFORE
+ * REASONING ABOUT THIS DEFAULT.
+ *
+ * This block said: *"IT ALSO CANNOT CHANGE A LOADED WORLD'S BEHAVIOUR … nothing in
+ * `packages/sim` reads any of these three fields."* **`unservedTicks` is read now** — by
+ * `needBandOf`, through `reviewOf` and `metAtDeparture` (ADR-0037) — and **0 is not a neutral
+ * value there, it is the value that scores the CEILING**: a need with no unserved ticks lands in
+ * the top band, counts as `met`, and a guest whose whole vector reads 0 leaves the maximum
+ * review whatever the hotel does for the rest of its stay.
+ *
+ * **SO THE FLATTERING DIRECTION IS NO LONGER AN UNDERSTATEMENT OF NEGLECT; IT IS AN INVENTED
+ * HISTORY.** Every guest alive when a pre-G-028a save was written resumes with a clean slate and
+ * departs with a perfect review. That is a different and worse hazard than the mixed
+ * schema-3/schema-4 tally column `report.ts` concedes, and it is not the same finding.
+ *
+ * WHY THE DEFAULT DOES NOT MOVE ANYWAY, RE-ARGUED RATHER THAN INHERITED. The four candidates:
+ *
+ *   0 (SHIPPED)      invents a spotless history for a stay whose middle is unrecorded.
+ *   the stay so far  invents the OPPOSITE history — that nothing was ever served — and is
+ *                    equally unsupported by the bytes. It is not more honest for being harsher.
+ *   refuse the save  invents nothing, and destroys every v15 save in existence to protect a
+ *                    code path with no production caller.
+ *   RECORD THE TICK  invents nothing either, and is the one that would actually work: store the
+ *   THE COUNTER IS   tick the counter becomes valid from — `world.tick` is in the bytes at
+ *   VALID FROM       migrate time — and grade a migrated guest over that window alone. **It
+ *                    DECLINES to grade the unrecorded middle rather than asserting anything
+ *                    about it**, which is exactly what ADR-0008 asks for.
+ *
+ * **SO "EVERY CANDIDATE INVENTS SOMETHING" IS TOO STRONG AND THE FOURTH IS THE COUNTER-EXAMPLE**
+ * — it was missing from the first version of this list, which then leaned on that premise to say
+ * ADR-0008 could not decide the question. It can, and it prefers the fourth.
+ *
+ * **THE TIEBREAK IS BLAST RADIUS AND THE FOURTH LOSES ON IT ANYWAY**: it is a new field on every
+ * need of every guest, so it moves the save schema, the state hash, the measure golden and the
+ * permanent fixture's migration chain — to protect a code path with no production caller. 0 is
+ * kept because it is already in the shipped fixture and in every v16 save this repository has
+ * written. **The conclusion and the tiebreak survive; the premise underneath them did not**, and
+ * the fourth candidate is named here so that whichever goal gives `deserialise` a caller reaches
+ * for it rather than re-deriving the list. `PARKING.md` carries it with the test that settles
+ * whether the exposure is real.
+ *
+ * WHO IS EXPOSED: nothing today. `deserialise` has no production caller — the runner creates
+ * every world it reports on and never loads a save, which is the same sentence that makes
+ * `report.ts`'s review laws B and C safe. **The day something resumes a save, this is the field
+ * that lies, and `PARKING.md` carries it with the test that settles it.**
+ * ---------------------------------------------------------------------------
  *
  * THE OVERWRITE GUARDS ARE ONE PER FIELD and they are `Object.keys().includes` rather than
  * `in` — `JSON.parse` makes `__proto__` an own key (G-003). A v16 document fed in as v15 is

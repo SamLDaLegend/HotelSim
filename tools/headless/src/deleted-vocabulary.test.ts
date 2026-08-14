@@ -525,15 +525,20 @@ const REGISTERED: readonly { readonly where: string; readonly fragment: string; 
     fragment: 'refuses a need with no progressRemaining to carry',
     why: 'The refusal arm of the same migration.',
   },
-  {
-    where: 'packages/sim/src/review.test.ts',
-    fragment: 'weighting that was REJECTED would break that',
-    why:
-      'A frozen counter-example from G-019: the four weights are typed in as history because the ' +
-      'table they came from no longer exists. The title is past-tense and the body says so at ' +
-      'length. Registered rather than reworded, because the rejected idea is NAMED BY the field ' +
-      'it weighted by and renaming it would lose the reference.',
-  },
+  /*
+   * `review.test.ts`'s `weighting that was REJECTED would break that` WAS REGISTERED HERE AND
+   * IS GONE AT G-028b. NAMED, NOT SILENTLY DROPPED.
+   *
+   * It exempted a frozen G-019 counter-example whose title had to name `satisfyTicks`: a
+   * per-need WEIGHTING of met flags, whose spread let the top band survive a missing need. The
+   * arm is retired with the met-count scorer it falsified — ADR-0037's score is a mean of
+   * per-need BANDS, and a starved need's band is 0, so there is no weight to apply to it and
+   * the rejected idea cannot be expressed against the shipped function at all.
+   *
+   * THE EXEMPTION HAD TO GO WITH IT, and the arm below is what made that mandatory rather than
+   * tidy: an entry that sits over nothing is an exemption nobody can see has stopped applying,
+   * which is this file's own subject one level up.
+   */
 ];
 
 const isRegistered = (site: Site): boolean =>

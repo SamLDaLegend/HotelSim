@@ -140,16 +140,19 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // The other half of the flip, as numbers rather than as prose. If this ever goes back to
     // zero unmet, either capacity or the stay length has moved and the criterion has become
     // easier rather than the hotel better.
-    // RE-MEASURED AT θ-b1, AND TWICE: 188/165 -> 203/150. A guest that walks out at its
-    // dissatisfaction
-    // ceiling has been AT HOME for most of the 431 ticks it stayed — nothing else can serve it
-    // — so its rest is topped right up when it goes, and the lodging row reads MET for a stay
-    // the hotel plainly failed. That is a true statement about the need and a poor summary of
-    // the visit, and it is G-028's to answer: "met at departure" is a snapshot, and the
-    // stock-shaped replacement is time spent below the line (ADR-0017's consequence list).
+    // RE-MEASURED AT θ-b1, AND TWICE: 188/165 -> 203/150. **AND ANSWERED AT G-028b: 196/157.**
+    //
+    // The paragraph here used to end *"it is G-028's to answer: 'met at departure' is a
+    // snapshot, and the stock-shaped replacement is time spent below the line"*. That goal ran.
+    // `met` is the per-need BAND now (ADR-0037), so the lodging row counts the guests the hotel
+    // housed promptly enough rather than the guests whose rest happened to be topped up at the
+    // instant they walked out — and the seven-guest difference is precisely the population the
+    // old paragraph complained about: a guest that walked out at its dissatisfaction ceiling
+    // having been at home for most of a short stay. It reads UNMET now, which is the better
+    // summary of the visit the paragraph asked for.
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBe(203);
-    expect(lodging?.unmet).toBe(150);
+    expect(lodging?.met).toBe(196);
+    expect(lodging?.unmet).toBe(157);
     // AND THE THREE WAYS A GUEST CAN LEAVE THIS HOTEL ARE ALL NON-ZERO AT θ-b1, where the
     // invocation used to produce two. **148 never got a bed, 163 ran out their clock, and 42 got
     // a bed and walked out on it** — one hotel, three different instructions to a player.

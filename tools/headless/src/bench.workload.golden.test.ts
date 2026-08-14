@@ -252,7 +252,16 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   fingerprint does not move, and the outcome block below — arrivals, checkouts, evictions,
     //   the need rows — is unchanged. That block is the control, and it is the whole argument
     //   that this move is the shape and not the simulation.
-    expect(hashState(plain)).toBe('b42ccbb81e1539c4');
+    //   `b42ccbb81e1539c4` -> `ebb9c3924e373c1e`   G-028b made the review and `met` read that
+    //   counter (ADR-0037). ONE cause and it IS a behaviour change, unlike every move above it:
+    //   `reviewOutcomes` and the `met`/`unmet` columns of `needOutcomes` are both hashed state
+    //   and both are computed differently now. **The control is therefore a NARROWER block than
+    //   it has been at any previous move, and that is stated rather than glossed**: arrivals,
+    //   checkouts, evictions and the departure table are unchanged — nothing decides anything
+    //   from a review, which `review.boundary.test.ts` enforces from two directions — while the
+    //   need rows' met/unmet legitimately move. The outcome assertions below are what say which
+    //   half is which.
+    expect(hashState(plain)).toBe('ebb9c3924e373c1e');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -372,7 +381,11 @@ describe('the same workload with the player churning the building', () => {
     //   with no reachable behaviour change under content that declares a lodging need.
     // MOVED AT G-028a WITH ITS SIBLING ABOVE, for the same one reason and with the same control:
     // the churn arm's own outcome assertions below are unchanged.
-    expect(hashState(churn)).toBe('0a083a4acfd22026');
+    // MOVED AGAIN AT G-028b WITH ITS SIBLING, `0a083a4acfd22026` -> `5a359e8723c227f3`, for the
+    // one cause the plain row gives — the scorer and `met` now read the unserved counter. THE
+    // SHARP CONTROL HOLDS FOR THE EIGHTH TIME: 19 evictions, unchanged, in a goal that changed
+    // what a review MEANS and nothing about which rooms the churn schedule demolishes.
+    expect(hashState(churn)).toBe('5a359e8723c227f3');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

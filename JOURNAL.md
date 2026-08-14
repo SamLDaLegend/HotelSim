@@ -1157,3 +1157,135 @@ and it **cannot land without answering the amenity inversion** · the merged-wal
 `PARKING.md` with three campaigns · the `apps/game` WATCH for θ-a and G-031a · **the money-loop
 cliff** (revenue saturates at twelve rooms, so every room past it is pure upkeep) — M4's, with the
 invocation that regenerates it.
+
+## G-028b — WATCH: the scorer, read as a player reads it
+
+**Surface**: the report's own text render, at four configurations, plus the departure table beside
+it. `apps/game` is untouched (ADR-0023's exception applies exactly as at θ-b2: the claim being made
+is about a printed number, and the printed number is the surface). Invocation for every cell:
+`pnpm --silent sim:run --days 30 --seed 7 --arrivals 120 --rooms R --amenities A`.
+
+**What a player sees, and it is the repair.** At one room the hotel turns away 326 of 358 guests
+and the reviews now sit at the bottom of the scale. The build before this one gave that hotel a
+better mean than a twelve-room one, and **261 of those turned-away guests left four stars** — a
+guest that never got a bed rating the place 4 of 5. Nobody would have believed that screen.
+
+**The five-band configuration reads as a hotel with three different problems**, which is the best
+thing in the run: at six rooms with one amenity the distribution occupies every score the scale
+admits, and the three departure rows underneath it — checked out, gave up waiting, walked out
+dissatisfied — are three different instructions to a player. That is the configuration the
+not-a-point-mass criterion now names.
+
+**WHAT LOOKS ODD, AND IT IS THE RULING'S OWN COST MADE VISIBLE.** At six rooms with two amenities
+the distribution is `3:161, 5:192`: the guests the hotel housed give it five stars, and **the 161
+it never housed give it three**. Three out of five, from somebody who stood in the lobby until
+their patience ran out and left. It is arithmetically right — their three engagement needs were
+served in a 180-tick wait and only lodging failed, so the mean of four bands is three — and it is
+**more generous than a watching player would expect**. ADR-0037 §4 named this trade and ruled for
+responsiveness; this is what it looks like on a screen rather than in a table. If the human wants
+severity, the costed runner-up is in that ADR and the diff is smaller, not larger.
+
+**And at twelve rooms every guest gives five stars and there is nothing left to buy** — parked, with
+the experiment that would settle whether it is the content or the aggregation.
+
+**Nothing else read as wrong on this surface.** The departure table is unmoved at every cell, which
+is the fence holding; revenue is unmoved; and the `met` column now agrees with the unserved share
+printed beside it on the same line, where before it could disagree with it by two orders of
+magnitude.
+
+**AND THE WATCH IS NOT DISCHARGED. A HUMAN STILL HAS TO LOOK, ON A SURFACE THIS GOAL DID NOT OPEN.**
+`apps/game/src/hud.ts` draws `met / (met + unmet)` per need, and the redefinition moves it harder
+than the report does — the label reads *needs met* and the number under it now answers a different
+question. At criterion 9's control **two of the three engagement rows read 192/353**, where the
+assertion this diff deleted recorded exactly one row below 353; and at `--rooms 6 --arrivals 60` the
+entertainment cell reads **0/712** beside a printed mean of 3.48, which is a bar at zero next to a
+review score of three and a half. Whether that reads as a hotel failing its guests or as a broken
+HUD is a perceptual question and it needs a picture (ADR-0013).
+
+`apps/game` is untouched by this goal and stays shut, so **this is named rather than answered**.
+**Three goals now owe a human WATCH on that surface** — θ-a, G-031a, and this one — and this is the
+first of the three where the number on screen changes meaning rather than value. The earlier two owe
+a look at behaviour; this one owes a look at a LABEL.
+
+## G-028b — The scorer reads the integral — REFLECT
+
+**DONE. M2.5 IS COMPLETE — seven of seven.** 3 sweeps (**1 BLOCKER + 12 MAJOR** across two critics)
+plus **two plan reviews that between them overturned the orchestrator's ruling twice before a line
+of code existed**, and a verification closing on **six UNPINNED-CLAIM findings — no round, no
+split**. Summary schema **3 → 4**, save **v16 unchanged**. Every exit criterion re-run by the
+orchestrator: `scorer` 3 files / 28 · `review` 6 / 124 · `outcome` 4 / 94 · `unserved` 3 / 42.
+
+**AXIS 1 IS REPAIRED, AND THAT IS THE MILESTONE'S POINT.** G-019's original claim reads word for
+word again — *the mean is monotone in room count and the top-band share is not* — clearing the
+one-step floor **on the provisioned ladder and failing on the un-provisioned one**, both asserted
+side by side. **The human's ladder-before-scorer ruling (ADR-0030) is what made that possible**: a
+goal that had gone straight at the scorer would have rewritten a function whose sign was being set
+by its harness.
+
+**THE PLAN REVIEW OVERTURNED THE ORCHESTRATOR TWICE, BOTH TIMES WITH A MEASUREMENT.**
+1. **"The score does not fall on the amenity axis" was true and irrelevant.** It equalled
+   `min + (bands−1) × checkedOutShare` **at 27 of 30 cells** — a threshold test on *did you get a
+   bed*. At 3 rooms, 1→2 amenities: comfort's unserved share fell **118×**, **305 of 356 guests'
+   worst engagement need improved, zero worsened**, and the score moved **2.0787 → 2.0787.**
+   **I checked that it did not FALL and never checked whether it MOVED.**
+2. **My replacement — per-need denominators — was flat at its own named test and introduced a fall
+   the original did not have.** The refutation is structural: *every give-up has lodging unserved
+   for exactly its stay, and a give-up departs at the tolerance, so stay, tolerance and
+   wanted-ticks are the same number for the term that saturates.*
+
+> **A guest that never got a bed was failed on lodging for 100 % of every window you can measure it
+> against. The saturation is not a denominator artefact; it is the truth about that guest.**
+
+**AND THE REFRAME WAS THE FINDING.** At three rooms **260 of 356 guests never get a bed**, so the
+amenity signal lives **entirely in the lobby population** — and any aggregation pinning that
+population at the floor is blind to amenities exactly where amenities are cheapest. That turned an
+arithmetic question into a design one, which is why it belonged at PLAN.
+
+**THE RULING (ADR-0037) NAMES A TRADE RATHER THAN HIDING ONE.** *"One starved need must cost nearly
+everything"* and *"the score must respond to what a player builds"* are in **direct measured
+tension**, and **none of eight candidates satisfied both.** Ruled for responsiveness **on the loop
+rather than the vector** — severity is a dial worth 3 % of scale, and above ten bands the top band
+is unreachable so **law A inspects nothing**; blindness is structural. **The runner-up is costed and
+the human may overturn it.**
+
+**THE SECOND CRITIC EARNED §7.1'S RULE, AND IT IS G-008'S PRECEDENT REPEATING.** `sim-critic`, from
+a world-and-persistence frame, found what three rounds of the matched pair had no reason to look
+for: **`migrateV15ToV16` justifies its zero-fill with "nothing reads these fields" — false as of
+this diff, and 0 is the value that scores the CEILING.** Every guest alive when an older save was
+written would resume with a clean slate and **depart with a perfect review**. *"Not a mixed column,
+an invented history."* **G-028a chose that flattering default on the warrant this diff voided, and
+neither file was swept.**
+
+**AND THE MATCHED PAIR FOUND THE MIRROR OF MY OWN ERROR.** ADR-0037 §3 claimed *"zero falls"*
+unqualified — **measured at one cadence.** Both axes fall over a contiguous band, and the ±1-tick
+discriminator returns *not a confound.*
+
+> **That critic checked one statistic and never checked the other. This arm checks both axes at one
+> cadence. A property quantified over one dimension is a claim about the dimension you swept and a
+> guess about the one you did not.**
+
+**A PARKED HYPOTHESIS RETURNED A RESULT NOBODY PLANNED, FOR THE FOURTH TIME — AND THE FIRST ABOUT
+THE INSTRUMENT RATHER THAN THE FEATURE.** The build reported a scoring dip, attributed it to the
+aggregation, and parked it **with its discriminator**. The critic ran it: **422 runs, every integer
+cadence.** *60 was not special — it was the one somebody measured.* Arrivals 35 also falls, and
+**30→31 is a larger jump.** **Six rooms is this project's default balance workload**, so the arrival
+cadence is now a confound in every reading taken on it.
+
+**THE POINT-MASS CRITERION MOVED TO THE HOTEL A PLAYER STARTS IN** — three rooms, one amenity,
+three bands clearing the derived floor, **stable across every cadence from 114 to 130, always the
+same three.** It was relocated from a configuration where **the criterion's own named failure — a
+band carried by two guests — reproduced literally.**
+
+**THE ORCHESTRATOR'S ERRORS.**
+1. **I accepted "flat because that was not your bottleneck" without measuring whether it moved.**
+2. **My replacement ruling was falsified at its own named test.**
+3. **"Zero falls" was a claim about one cadence.**
+4. **There was no `G-028b` block — the THIRD instance in one session**, after G-028a's own block had
+   already recorded the second **in its own words.** Three sweeps were charged against a block
+   reading `0/3`, with VERIFY holding only the un-split criteria.
+
+**Owed forward**: **the human WATCH**, three goals deep, and this one owes a look at a **label**
+rather than at behaviour — `hud.ts`'s "needs met" bar changes meaning without changing shape ·
+**M2.5's exit sign-off** · **the cadence confound**, now the largest item in the instrument-debt
+goal · the money-loop cliff (M4) · the visitor ceiling (M6) · **and the scoring trade, which the
+human may overturn for the costed runner-up.**

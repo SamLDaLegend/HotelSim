@@ -2,12 +2,18 @@
 //
 //   pnpm exec vitest run unserved
 //
-// The departure tally is a SNAPSHOT: where each need stood at the instant its guest walked
-// out. Every guest in a run arrives on a fixed cadence and stays a fixed length, so every one
-// of them departs at the same phase of the same deterministic cycle — which makes that snapshot
-// a statement about the arrival cadence as much as about the hotel. `unservedTicks` is the
-// integral instead: one counter per need, incremented on every tick the hotel is failing that
-// need, never drained.
+// The departure tally WAS a SNAPSHOT: where each need stood at the instant its guest walked out.
+// Every guest in a run arrives on a fixed cadence and stays a fixed length, so every one of them
+// departed at the same phase of the same deterministic cycle — which made that snapshot a
+// statement about the arrival cadence as much as about the hotel. `unservedTicks` is the integral
+// instead: one counter per need, incremented on every tick the hotel is failing that need, never
+// drained.
+//
+// **AT G-028b THE TALLY BECAME THE INTEGRAL TOO** (ADR-0037): `met` is the top per-need band, so
+// there is no snapshot left to contrast this counter with. The paragraph is past-tensed rather
+// than deleted because the contrast is why this file's arms are shaped the way they are — and
+// because this header is run by `vitest run unserved`, which is the criterion that would have
+// printed the false present tense.
 //
 // WHAT THIS FILE PINS, AND THE ORDER IS THE ARGUMENT:
 //
