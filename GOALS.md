@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii BLOCKED and now also holds a COVERAGE REGRESSION: enabling travel at ANY speed (1/3/12 all ~39-41k) extinguishes gaveUp for the last 60 percent of the I2 horizon, so the cause is the presence gate and not the dial. Also blocked on re-taking occupancy+bound together, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii: the gaveUp finding is RESOLVED and its cause CORRECTED — travel is not defective; the determinism workload's late-run give-up coverage rests on ONE lucky crossing at tick 98,446 and is fragile today without travel. Remaining blocker is the tickcost bound, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -1473,6 +1473,58 @@ Carried forward: `check:tickcost`'s acceptance bar is **`verdict=MEASURED`** (`I
   workload), or guests are being served in a way that quietly prevents the wait from ever
   reaching tolerance (a defect in G-023b-i). **They are distinguishable — one shows free rooms
   late in the run and the other does not — and neither has been checked.**
+
+
+
+  ### THE `gaveUp` DIAGNOSIS, RESOLVED — AND IT CORRECTS THE ENTRY ABOVE
+
+  The two candidates were named as distinguishable *"by whether free rooms exist late in the
+  run"*, and neither had been checked. **Checked now. It is the benign one, and travel is not
+  defective — but the reason matters more than the verdict.**
+
+  Both arms stepped to 100,000 ticks on the gate's own command log, seed 42, reading the hotel at
+  fixed marks:
+
+  | at tick 99,000 | travel OFF | travel ON (speed 3) |
+  |---|---|---|
+  | guests / roomless | 15 / **2** | 16 / **2** |
+  | oldest roomless wait | **153** (tolerance 180) | **153** |
+  | `gaveUp` total | 65 | 44 |
+  | last `gaveUp` tick | **98,446** | 41,410 |
+
+  **THE LATE-RUN HOTEL IS STRUCTURALLY IDENTICAL IN BOTH ARMS** — the same two roomless guests,
+  waiting the same 153 ticks against the same tolerance of 180. Nothing is stuck, nothing is
+  starved, and no guest is being served in a way that prevents its wait from maturing.
+
+  > **THE BASELINE'S PASS RESTS ON ONE EVENT.** `gaveUp` reaches 64 by tick 41,895 and then fires
+  > **exactly once more in the remaining 58,000 ticks**, at 98,446. That single crossing is the
+  > whole of what puts the shipped tree over the 75,000 bar.
+
+  **SO THE ASSERTION IS MEASURING LUCK, AND THAT IS TRUE TODAY WITHOUT TRAVEL.** Late in this
+  workload the hotel holds a couple of guests waiting just under tolerance; whether any one of
+  them crosses 180 before the horizon ends is a coin-flip that any small dynamic shift decides.
+  The speed sweep says the same thing from the other side: **38,888 / 41,410 / 40,246 across a
+  12× change in travel time is no dose-response at all** — if travel were *causing* this, the
+  slowest arm would differ from the fastest.
+
+  **THE ENTRY ABOVE IS CORRECTED ON ITS CAUSE, NOT ITS SEVERITY.** It read *"requiring a guest to
+  BE somewhere before it is served changes the late-run dynamics enough to extinguish an entire
+  departure reason"*, and offered a defect in G-023b-i as a live candidate. **Both are withdrawn.**
+  The presence gate does not extinguish give-ups; **it perturbs a knife-edge that was already
+  one event from falling**, and the perturbation could as easily have come from a content tweak
+  or a scheduling change.
+
+  **WHAT IS ACTUALLY OWED, AND IT IS NOW A DIFFERENT AND SMALLER JOB**: the determinism workload
+  needs to *generate* give-up pressure late in the run rather than hope for it — sustained
+  demand against a bounded room supply — so the reason is exercised by construction. **That is a
+  repair to `determinism-log.ts`'s command log, not to `packages/sim`, and it is worth doing
+  whether or not travel ever ships**, because the gate's final hash currently covers the give-up
+  path by one lucky crossing.
+
+  **This is the argument for looking rather than deferring.** The finding was recorded as
+  possibly-a-defect-in-travel and blocking; it is neither. It is a pre-existing fragility in a
+  gate's workload, which travel merely walked into — and the goal that turns travel on can now
+  proceed on it once the bound question is settled.
 
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing

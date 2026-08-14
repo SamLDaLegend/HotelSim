@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii BLOCKED and now also holds a COVERAGE REGRESSION: enabling travel at ANY speed (1/3/12 all ~39-41k) extinguishes gaveUp for the last 60 percent of the I2 horizon, so the cause is the presence gate and not the dial. Also blocked on re-taking occupancy+bound together, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii: the gaveUp finding is RESOLVED and its cause CORRECTED — travel is not defective; the determinism workload's late-run give-up coverage rests on ONE lucky crossing at tick 98,446 and is fragile today without travel. Remaining blocker is the tickcost bound, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
