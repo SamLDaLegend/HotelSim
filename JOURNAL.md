@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN. G-023b-i ships the travel MECHANISM but shipped content declares no speed yet — turning it on moves 44 goldens, measured, and is G-023b-ii. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN. G-023b-ii STARTED NOT CLOSED: travel measured correct (outcomes unmoved, experience worse) but two assertions are not re-pins — a derived cliff and its measurement disagree (129 vs 139), and the idle-share contention inequality INVERTS because its lever now confounds distance. Travel stays OFF in shipped content. ONE OPEN ESCALATION (2026-08-14): the tickcost bound. Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v16** · summary **v4** · I2 `8a83acaf7f81edeb` · measure golden
   `ebb9c3924e373c1e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**

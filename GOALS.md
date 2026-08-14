@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN. G-023b-i ships the travel MECHANISM but shipped content declares no speed yet — turning it on moves 44 goldens, measured, and is G-023b-ii. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN. G-023b-ii STARTED NOT CLOSED: travel measured correct (outcomes unmoved, experience worse) but two assertions are not re-pins — a derived cliff and its measurement disagree (129 vs 139), and the idle-share contention inequality INVERTS because its lever now confounds distance. Travel stays OFF in shipped content. ONE OPEN ESCALATION (2026-08-14): the tickcost bound. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -1290,7 +1290,7 @@ needs it fixed. Nothing models a stairwell until G-024, so there is no route to 
 countdown-era vocabulary the stock model deleted. Renamed to tolerance.
 
 ## G-023b-ii — Travel is measured, and turned on
-Status: **pending — carries G-023b-i's 44 measured golden re-pins.**
+Status: **STARTED, NOT CLOSED.** Two of the 44 are not re-pins — see the finding below.
 Milestone: M3
 Statement: declare `guestCellsPerTick` in shipped content, re-pin the goldens it moves **with a
   judgement on each rather than a bulk accept**, add the journey instrument and the far/near
@@ -1301,6 +1301,66 @@ Carried forward: `check:tickcost`'s acceptance bar is **`verdict=MEASURED`** (`I
   it may have to normalise per journey and say so · **`optional('circulation.json')` is NO LONGER
   OWED**: the speed went into `guest-rules.json`, which `measure-arm.mjs` already loads, so that
   carried-forward item is discharged by not needing to exist.
+
+
+
+  **STARTED, AND IT FOUND TWO COLLAPSED DERIVATIONS BEFORE TOUCHING A SINGLE GOLDEN. NOT
+  CLOSED — see the finding.** `guestCellsPerTick: 3` was declared in shipped content, the tree
+  measured, and the value reverted. **The mechanism from G-023b-i remains committed and green;
+  travel is still OFF in shipped content.**
+
+  **FIRST, THE BEHAVIOUR IS RIGHT, AND THIS IS THE PART THAT WOULD HAVE BEEN A RE-PIN.**
+  Paired, both arms in one sitting, same invocation
+  (`--days 30 --seed 7 --rooms 6 --amenities 5`, quiet `win32/12cpu`):
+
+  | | travel OFF | travel ON |
+  |---|---|---|
+  | checkedOut / gaveUp | 192 / 161 | **192 / 161** |
+  | revenue / balance | 1,632,000p / 1,007,000p | **identical** |
+  | comfort · entertainment · nourishment unserved | 18 · 705 · 1,503 bp | 151 · 883 · 1,737 bp |
+  | reviews | 3:161, 5:192 | **2:161**, 5:192 |
+  | mean ×100 | 409 | 363 |
+
+  **Outcomes do not move; experience does.** No cliff, no lost guests, no lost revenue — travel
+  costs satisfaction and nothing else, which is **ADR-0017's promise holding as measured rather
+  than as argued.** The 161 who never get a bed now score 2 rather than 3, because the needs they
+  *could* have had met went unserved while they walked. That is the design working.
+
+  **AND THEN TWO ASSERTIONS TURNED OUT NOT TO BE RE-PINS.**
+
+  **(1) A DERIVED CLIFF AND ITS MEASUREMENT HAVE COME APART.**
+  `dissatisfaction.content.test.ts` derives the dissatisfaction backlog peak arithmetically —
+  *"the fill is the chase MINUS its last leg"* — and asserts the derivation and a 60-room
+  measurement are **the same number**. With travel on, **the derivation still yields 129 and the
+  measurement yields 139.** The arithmetic models a chase between providers and **does not model
+  the legs between them**, because when it was written there were none. The ceiling (431) still
+  clears both comfortably, so nothing is at risk — but re-pinning 139 while the derivation beside
+  it still says 129 would leave **a derived number and a measured number disagreeing in the same
+  test**, which is the ADR-0007 class dressed as a green row.
+
+  **(2) AN INEQUALITY INVERTED, AND ITS LEVER HAS COLLAPSED.** `stock.idle.test.ts` asserts
+  *"CONTENTION only pushes it down, which is what makes the ceiling a ceiling"*. With travel on,
+  the free-flow arm's idle share falls **861 → 271 bp** and the contended arm reads **484** —
+  so **contended is now HIGHER than free-flow and the inequality reverses.** The two arms differ
+  in room count *and in geometry*, and geometry cost nothing until this goal. **The comparison
+  now confounds contention with distance**, which is exactly the shape G-032a spent a sweep
+  unpicking (`direction: true` carried across a campaign whose lever changed). **The 3× fall in
+  the free-flow arm is also larger than the whole-hotel readings above would predict and is worth
+  a look on its own** before anything is re-pinned.
+
+  > **Re-pinning either of these would be coverage added to satisfy a number rather than to pin
+  > behaviour — a §9 stop condition, and the goal stops on it rather than through it.**
+
+  **WHAT IS OWED, AND IT IS ANALYSIS RATHER THAN A DIFF**: extend the backlog derivation to
+  include travel legs (or state plainly that it bounds the no-travel case and pin both numbers
+  with that reading); and re-cut the idle-share arms so contention is the only thing that varies
+  between them, or replace the claim with one the new world can actually support. **Only then are
+  the remaining ~42 goldens a re-pin.**
+
+  **43 of the 44 are the same story as the table above**: `review.report` (13), `cli.stdout` (6),
+  `bench.workload.golden` (5), `unserved.report` (4), `hysteresis.report` (4),
+  `workload.concurrency` (2), `outcome.report` (2), `needs.report` (2), plus one each in
+  `validity.determinism`, `scorer.report` and `dissatisfaction.report`.
 
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing
