@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 running under ADR-0043. G-032a, G-033 and G-032b done — pnpm verify FOURTEEN ROWS GREEN, I2 hash unmoved. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, three options, human call. Next: G-032c, then circulation. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043. G-032a, G-033, G-032b, G-032c done — THE INSTRUMENT TRACK IS NOW CAPPED and M3 runs circulation only, to G-026. pnpm verify FOURTEEN ROWS GREEN. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, human call. Next: G-023b (RE-PLAN needed after ADR-0017). Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -839,6 +839,7 @@ Status: **SPLIT at PLAN into G-032a / G-032b / G-032c** (ADR-0039 §5, seam offe
   not competing with campaign arithmetic. The repair is **additive** — keeping the shape rule over
   string literals and adding a declared-id rule over identifiers and unquoted keys — because keying
   to declared ids alone would NARROW the invariant.
+  Status: **DONE.** See the REFLECT below.
 
 *(Original G-032 statement and rationale follow.)*
 Status: **superseded by the split above.** M2.5's exit sign-off is owed by the human and does not block this goal:
@@ -934,6 +935,59 @@ Critique rounds used: 0/3
   merged spelling honest, and that is a better role than deletion. **The sweeps did not run in
   their agent form** (see G-033's REFLECT — the harness forbids spawning them and §9 forbids the
   orchestrator writing feature code; that conflict is a human call and is now twice recorded).
+
+
+  **G-032c — I3's unquoted-key hole. DONE.** `pnpm verify` fourteen rows green. `check:content`
+  now has two halves; suite 122 files / 2,138 tests.
+
+  **THE HOLE WAS DEMONSTRATED BEFORE IT WAS REPAIRED, because "RED at HEAD" is itself a claim
+  that needs evidence.** This file was written into `packages/sim/src`:
+
+  ```ts
+  export const table = { single_bed: 1, arm_chair: 2 };
+  export const single_bed = 3;
+  ```
+
+  **Three declared content IDs inside the sim, and `check:content` printed `ok  I3 content is
+  data`.** ADR-0003's convention is *"a snake_case STRING LITERAL is a content ID"*, and the scan
+  read string literals — so an unquoted object key and a binding walked straight past an
+  invariant gate.
+
+  **THE REPAIR IS ADDITIVE, AND THE TWO HALVES ASK DIFFERENT QUESTIONS.** That is the design, not
+  an implementation detail:
+
+  | | judged on | catches |
+  |---|---|---|
+  | **string literal** | **SHAPE** — any snake_case literal, declared or not | a content ID being **invented** in code |
+  | **identifier / unquoted key** | **DECLARATION** — only names `packages/content/data` actually declares | a declared ID being **spelled** in code |
+
+  **Keying the whole invariant to declared ids would have NARROWED it**: a brand-new ID invented
+  in code is declared nowhere, so a declared-id rule cannot see it — and that is I3's original
+  case, pinned by its own test. **And a SHAPE rule over identifiers was refused for the mirror
+  reason**: ordinary snake_case identifiers are common, so it would fire on all of them and grow
+  the allow-list, which is how a gate becomes a waiver file.
+
+  **NO PATTERN IS BUILT FROM A NAME.** Declared ids go into a `Set` and the source is tokenised
+  into identifiers, so membership is a lookup. **There is no interpolated pattern to get wrong** —
+  the defect `CLAUDE.md` devotes a section to (three goals, three authors, `\w` collapsing to a
+  bare `w` in a template literal) is designed out rather than guarded against.
+
+  **THE NEW HALF'S SUBJECT IS A LIST READ OFF DISK, SO AN EMPTY LIST REFUSES (ADR-0007).** If no
+  declared ids can be read, the gate reports that it would inspect nothing rather than passing —
+  the exact vacuity this project has now been bitten by more than once.
+
+  **Six new bite tests**, including the two that keep the halves honest: **a quoted declared id is
+  reported ONCE, not twice** (string literals are blanked before the identifier walk — a gate that
+  counts one defect twice teaches people to skim), and **an ordinary snake_case identifier that is
+  not content does not fire**, which is the whole reason the new half reads declaration.
+
+  **The instrument track is now CAPPED per ADR-0043 §2.** G-032b and G-032c are done; from here M3
+  runs circulation only, to G-026, and instrument debts found on the way go to the M3-exit goal in
+  G-022's shape — **except a debt that makes a gate stop being evidence, which escalates.** This
+  goal is a fair example of that exception's shape had it been found later: an invariant gate
+  that was silent over three leaks is not "a debt", and it would not have been deferrable.
+
+  **Sweeps did not run in their agent form** — third recording of the same conflict; see G-033.
 
 ## G-033 — Sweep 3 becomes a scanner: the unpinned-claim gate
 Status: **done.** Built and swept by the orchestrator alone — see the escalation-shaped note in REFLECT.

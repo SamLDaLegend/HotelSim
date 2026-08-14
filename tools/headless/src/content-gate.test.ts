@@ -26,7 +26,7 @@
 // probe makes check:content fail, by name, pointing at the file.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -84,6 +84,63 @@ describe('I3 gate — check:content', () => {
     // the convention would violate it — including this one.
     const { status } = gateWithProbe('// standard_room is a content id\nexport const ok = 1;\n');
     expect(status).toBe(0);
+  });
+
+  // =======================================================================================
+  // THE UNQUOTED-KEY HALF (G-032c). A content ID does not have to be a string literal to be
+  // in the code, and until this goal it did not have to be caught either: the file in the
+  // first test below was written into packages/sim/src, the gate was run, and it printed
+  // "ok  I3 content is data" over three leaks. The repair is ADDITIVE — shape over string
+  // literals, DECLARATION over identifiers — because keying the whole invariant to declared
+  // ids would NARROW it, and a shape rule over identifiers would fire on every ordinary
+  // snake_case name and grow the allow-list into a waiver file.
+  // =======================================================================================
+
+  it('BITES — a declared content ID as an UNQUOTED KEY, which was invisible before G-032c', () => {
+    const { status, output } = gateWithProbe('export const table = { single_bed: 1 };\n');
+    expect(status).not.toBe(0);
+    expect(output).toContain('single_bed');
+    expect(output).toContain('identifier or unquoted key');
+  });
+
+  it('BITES — a declared content ID as a BINDING', () => {
+    const { status, output } = gateWithProbe('export const arm_chair = 3;\n');
+    expect(status).not.toBe(0);
+    expect(output).toContain('arm_chair');
+  });
+
+  it('the two halves ask DIFFERENT questions, and the shape half still catches the undeclared', () => {
+    // `penthouse_suite` is declared NOWHERE — it is invented in code, which is I3's original
+    // case. A declared-id rule cannot see it, and that is exactly why nothing was replaced.
+    const { status, output } = gateWithProbe('export const x = "penthouse_suite";\n');
+    expect(status).not.toBe(0);
+    expect(output).toContain('penthouse_suite');
+    expect(output).not.toContain('identifier or unquoted key');
+  });
+
+  it('does NOT fire on an ordinary snake_case identifier that is not declared content', () => {
+    // The whole reason the new half reads declaration rather than shape. If this fired, the
+    // repair would be a machine for growing the allow-list.
+    const { status } = gateWithProbe('export const some_local_thing = 1;\n');
+    expect(status).toBe(0);
+  });
+
+  it('does NOT double-report: a QUOTED declared id is the shape half only', () => {
+    // String literals are blanked before the identifier walk, so `"single_bed"` is one
+    // violation and not two. A gate that counts one defect twice teaches people to skim.
+    const { output } = gateWithProbe('export const x = "single_bed";\n');
+    const hits = output.split('single_bed').length - 1;
+    expect(hits, `expected one report, got ${hits}\n${output}`).toBe(1);
+  });
+
+  it('refuses when it can read no declared ids at all, rather than passing vacuously', () => {
+    // ADR-0007: a check that succeeds while inspecting nothing is not a check. The declared
+    // half's subject is a list read off disk, so an empty list must be loud. Asserted through
+    // the gate's own message rather than by emptying the content directory, which would be a
+    // mutation of the repository for a property the code states directly.
+    const source = readFileSync(join(ROOT, 'tools/gates/check-content.mjs'), 'utf8');
+    expect(source).toContain('DECLARED_IDS.size === 0');
+    expect(source).toContain('would inspect nothing');
   });
 
   it('leaves no probe file behind', () => {
