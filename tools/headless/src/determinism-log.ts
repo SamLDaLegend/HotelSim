@@ -23,6 +23,7 @@ import {
   requiredItemsOf,
   roomTypeServes,
   stayDurationOf,
+  toleranceOf,
 } from '@hotelsim/sim';
 import type { BoundContent, RoomTypeData, ScheduledCommand } from '@hotelsim/sim';
 
@@ -644,6 +645,45 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // what the I2 proof actually needs.
   for (let tick = 101; tick < ticks; tick += ARRIVALS_EVERY_TICKS) {
     schedule.push({ tick, command: { kind: 'guestArrives' } });
+  }
+
+  // ============================================================================
+  // AND A RUSH IN THE LAST QUARTER, SO THE GIVE-UP PATH IS EXERCISED BY CONSTRUCTION
+  // RATHER THAN BY LUCK (G-023b-ii).
+  //
+  // The paragraph above is right that rare give-ups are a property of this log rather than a
+  // fault in it — and `validity.determinism.test.ts` then adds a requirement the paragraph
+  // does not meet: every departure reason must still be FIRING AT THE END, because *"a reason
+  // that is reachable for the first third of the run and gone by the end is a reason the
+  // gate's FINAL hash says nothing about."*
+  //
+  // MEASURED, NOT SUSPECTED. Stepping this log to 100,000 ticks, `gaveUp` reaches 64 by tick
+  // 41,895 and then fires EXACTLY ONCE MORE in the remaining 58,000 ticks, at 98,446. **That
+  // single crossing is the whole of what put the tree over the bar.** At tick 99,000 the hotel
+  // holds two roomless guests whose longest wait is 153 ticks against a tolerance of 180 —
+  // permanently just short of giving up. The assertion was passing on a coin-flip, and it was
+  // found because G-023b-i's travel probe perturbed the flip and it came up tails.
+  //
+  // SO THE LOG NOW CREATES THE PRESSURE INSTEAD OF HOPING FOR IT: arrive every tick, for
+  // longer than a guest's patience, starting in the last quarter.
+  //
+  //   - ONE PER TICK outruns any finite hotel. The room-freeing rate is bounded by
+  //     `rooms / stayDurationTicks` however many rooms this log has built, so a queue forms
+  //     without this pass having to know that number — which is the point, because a designer
+  //     who changes the build schedule must not silently un-cover the path again.
+  //   - FOR `2 x toleranceTicks`, because a guest gives up after `toleranceTicks` of waiting
+  //     and the window must contain a whole wait plus the room for it to start in.
+  //   - STARTING AT THREE QUARTERS, the same fraction the assertion measures against, so the
+  //     give-ups land inside the window being asserted rather than near it.
+  //
+  // Every term is content or the test's own bar. Nothing here is a chosen number.
+  // ============================================================================
+  const tolerance = toleranceOf(content);
+  if (tolerance !== undefined) {
+    const rushStarts = Math.floor((ticks * 3) / 4);
+    for (let tick = rushStarts; tick < Math.min(ticks, rushStarts + 2 * tolerance); tick += 1) {
+      schedule.push({ tick, command: { kind: 'guestArrives' } });
+    }
   }
   // THE PLAYER BUILDS (G-008). Three destinations on a rotation, so all three placement
   // outcomes occur and none of them depends on how much money happens to be in the bank:

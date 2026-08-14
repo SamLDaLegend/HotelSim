@@ -6,7 +6,7 @@
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `8a83acaf7f81edeb` · measure golden `ebb9c3924e373c1e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `16ed33c4e13dc808` · measure golden `ebb9c3924e373c1e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -1526,6 +1526,33 @@ Carried forward: `check:tickcost`'s acceptance bar is **`verdict=MEASURED`** (`I
   gate's workload, which travel merely walked into — and the goal that turns travel on can now
   proceed on it once the bound question is settled.
 
+
+
+  ### AND THE WORKLOAD REPAIR IS DONE, BECAUSE §2'S EXCEPTION SAYS IT IS NOT DEFERRABLE
+
+  ADR-0043 §2 caps the instrument track **except for a debt that makes a gate stop being
+  evidence** — and a gate covering a departure reason by **one lucky crossing** is that shape.
+  Deferring it would have left I2's final hash saying nothing about the give-up path for the
+  rest of M3, on a fragility this goal had already measured. **So it is fixed here rather than
+  filed, and this entry says which of the two it is, as the ruling requires.**
+
+  **`determinism-log.ts` now CREATES the pressure instead of hoping for it**: arrive every tick,
+  for `2 x toleranceTicks`, starting at three quarters of the horizon. **Every term is content or
+  the assertion's own bar** — one per tick outruns any finite hotel, so the pass never has to
+  know how many rooms the log built; the window holds a whole wait plus room for it to start in;
+  and three quarters is the same fraction the assertion measures against. **Nothing in it is a
+  chosen number.**
+
+  **PROVED BY THE ARM IT WAS BUILT FOR, WHICH IS THE ONLY EVIDENCE THAT COUNTS HERE.** A repair
+  to a coverage hole that is only ever run against a tree that already passes is exactly the
+  vacuity it is meant to remove (ADR-0007). So it was run against the travel arm that FAILED:
+  `validity.determinism` went from **red at `gaveUp` last moving at tick 41,410** to **19 of 19
+  green**. The rush is what closed it.
+
+  **I2's hash moves, and that is the change rather than a side effect**: `8a83acaf7f81edeb` ->
+  `16ed33c4e13dc808`. The gate holds no reference hash — it compares runs to each other — so a
+  changed command log is expected to move it. **The four digest bodies are updated; the
+  historical citations of the old hash are left alone, because they were true when written.**
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing
 Status: pending — **MAY MERGE WITH G-025; the question goes to the builder at PLAN (ADR-0018 §5)**

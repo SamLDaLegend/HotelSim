@@ -4,7 +4,7 @@
 
 *As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii: the gaveUp finding is RESOLVED and its cause CORRECTED — travel is not defective; the determinism workload's late-run give-up coverage rests on ONE lucky crossing at tick 98,446 and is fragile today without travel. Remaining blocker is the tickcost bound, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v16** · summary **v4** · I2 `8a83acaf7f81edeb` · measure golden
+- **State**: save **v16** · summary **v4** · I2 `16ed33c4e13dc808` · measure golden
   `ebb9c3924e373c1e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
