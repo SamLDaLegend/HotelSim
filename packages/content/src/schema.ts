@@ -1016,6 +1016,36 @@ export const wantAtBasisPointsSchema = basisPointsSchema;
 export const toleranceTicksSchema = z.int().min(1);
 
 /**
+ * HOW MANY CELLS A GUEST COVERS IN ONE TICK (G-023b-i).
+ *
+ * ------------------------------------------------------------------------------------------
+ * OPTIONAL, AND ABSENCE HAS AN EXACT HISTORICAL READING: a guest that arrives where it is
+ * going on the tick it decides to go — which is what every build before G-023b-i did, because
+ * `placed()` teleported. So content written before this field keeps its behaviour and its
+ * hashes to the byte, and no migration is needed for it. **That is the whole reason this is
+ * optional rather than defaulted in code**: a default in `packages/sim` would be a content
+ * number living in the simulation (I3), and a default in the schema would silently change what
+ * old content means.
+ *
+ * IT IS A DIAL, AND IT SHIPS LABELLED AS ONE (ADR-0013 §4, the ADR-0044 pattern). There is no
+ * requirement anybody has stated from which "3" can be derived; what CAN be derived is a
+ * FLOOR, and that is what the type enforces:
+ *
+ *   **A journey must not be able to exhaust a guest's patience on its own.** Travel now spends
+ *   `toleranceTicks`, so a speed low enough that crossing the plot outlasts tolerance would
+ *   re-introduce the cliff ADR-0017 was written to dissolve — a guest timing out because it
+ *   walked, not because the hotel failed it. The plot is 23 floors x 80 columns, so the worst
+ *   journey is 101 cells; against a tolerance of 180 ticks, any speed of 1 or more clears it.
+ *
+ * **`.positive()` IS THEREFORE A DERIVED BOUND AND `3` IS A PREFERENCE.** Saying which is
+ * which is the point of ADR-0013 §4; a number nobody can source is a superstition with CI
+ * access, and a number whose warrant is "it feels right to walk a room in a few ticks" is
+ * fine as long as it does not pretend to be anything else.
+ * ------------------------------------------------------------------------------------------
+ */
+export const guestCellsPerTickSchema = z.int().positive().optional();
+
+/**
  * HOW MUCH DISSATISFACTION A GUEST CARRIES BEFORE IT WALKS OUT MID-STAY, IN TICKS (G-027b θ-b1,
  * ADR-0017 4(b), ADR-0026).
  *
@@ -1178,6 +1208,7 @@ export const guestRulesSchema = z
     toleranceTicks: toleranceTicksSchema,
     dissatisfactionCapacityTicks: dissatisfactionCapacityTicksSchema,
     dissatisfactionReliefPerTick: dissatisfactionReliefPerTickSchema,
+    guestCellsPerTick: guestCellsPerTickSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
   // cannot separate two stays and so cannot report on either. The relation against the need

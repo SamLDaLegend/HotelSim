@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043. G-032a, G-033, G-032b, G-032c done — INSTRUMENT TRACK CAPPED, M3 now runs circulation only. pnpm verify FOURTEEN ROWS GREEN. G-023b RE-PLANNED and split into i/ii, seam taken and recorded; BUILD not started. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, human call. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN. G-023b-i ships the travel MECHANISM but shipped content declares no speed yet — turning it on moves 44 goldens, measured, and is G-023b-ii. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -1217,6 +1217,91 @@ after this one, which on the stated order is **G-023b** · the comment-scope cou
 every run and **a fall in it is the cheapest available evidence** on whether the unenforced half
 is decaying · the pin is **file-scoped deliberately**, and an instance escaping that scope is the
 evidence for tightening it, which should happen then rather than now.
+
+
+## G-023b-i — Transit exists
+Status: **DONE, with a SEAM TAKEN and its cost MEASURED — the mechanism ships, shipped content
+does not yet declare a speed.** `pnpm verify` fourteen rows green.
+Milestone: M3
+Owner pair: sim-engineer / sim-critic (built by the orchestrator — see G-033's REFLECT)
+
+**THE DESIGN CHANGED AGAINST ITS OWN RE-PLAN, WHICH WAS WRITTEN AN HOUR EARLIER, AND THE PLAN
+WAS WRONG.** The re-plan specified a `transitTicks` countdown, save schema **v17** and a 16→17
+migration. **BUILD took a different shape: transit is `at` itself, stepped one tick at a time.**
+
+- **A guest mid-journey is SOMEWHERE.** A countdown says *"arrives in 4 ticks"* and leaves the
+  guest standing at its origin. Stepping puts it in the corridor — where a watching player would
+  expect it (§5 WATCH), and what the viewer can already draw.
+- **It adds NO hashed state, so there is no v17 and no migration.** `at` is already hashed and
+  saved (G-023a). **Writing a migration to satisfy a criterion I wrote an hour earlier would
+  have been invention** — the ADR-0007 class, aimed at my own exit criteria.
+- **A countdown needs a stored destination, and the destination changes mid-journey** whenever a
+  walking guest is handed a room. Recomputing the target every tick and stepping toward whatever
+  it is *now* is correct under that change by construction.
+
+**PRESENCE IS A CELL COMPARISON NOW, AND WITHOUT IT THE GOAL IS VACUOUS.** Holding a room and
+standing in it were the same fact while `placed()` teleported. `hasArrivedAt` gates the bed and
+the amenity through one predicate, so the decay, the mood and G-028a's measurement cannot
+disagree about where the guest is. **The tick's own comment predicted this line would have to
+change and said so a goal in advance** — *"on that day this becomes a cell comparison"*.
+
+**THE TRIPWIRE CAUGHT MY REGRESSION, AND IT WAS THE ERROR THIS FILE WARNS ABOUT THREE TIMES.**
+The first spelling of that predicate was an arrow function declared **inside the guest loop** —
+a closure allocated per guest per tick, the shape G-010 spent a goal removing. **`check:tickcost`
+returned ratio 1.5889 against a 1.4640 bound.** Hoisting it to a module-level function with
+scalars in and a boolean out: **0.9952.** *(Paired, 6 samples per arm, interleaved, medians,
+quiet `win32/12cpu`, 60 rooms / arrival every 96 / seed 42 / 30 days.)* **The whole regression was
+the closure.**
+
+> Worth reading against the open escalation: **a 1.59× was caught loudly. A 1.17× would have
+> passed.** The bound works; what it reaches is the question.
+
+**THE SEAM: THE MECHANISM SHIPS, TURNING IT ON DOES NOT — AND THE COST IS MEASURED, NOT GUESSED.**
+`guestCellsPerTick` was added to shipped `guest-rules.json` and the suite run: **44 tests went
+red** across the headless report goldens — bench workload hashes, CLI stdout goldens, the
+dissatisfaction, hysteresis, needs, outcome and review report pins. Every one needs a judgement
+about whether its new number is *right*, not merely different, and that judgement is the WATCH
+step rather than a re-pin. **The value was reverted and this is recorded as G-023b-i's seam
+(§5.5), with its price in hand rather than estimated.**
+
+**SO WHAT IS TRUE TODAY, STATED PLAINLY RATHER THAN IMPLIED**: the game's shipped content still
+declares no speed, so **guests still arrive instantly in the hotel anybody would actually run.**
+The mechanism is complete, tested and inert. **"Going somewhere takes time" is half-delivered and
+the other half is the goal below.**
+
+**ABSENCE HAS AN EXACT HISTORICAL READING, AND IT IS ASSERTED RATHER THAN CLAIMED.**
+`guestCellsPerTick` absent means arriving is instantaneous — every build before this one — so
+presence gates nothing and such content behaves to the byte as it did. **Found by the suite
+rather than by reasoning**: the first spelling gated presence unconditionally and three
+hand-built worlds went red, in which a guest holds a provider it never walked to. The right
+reading was not *"stale fixtures"* but *"a build with no travel must behave as it always did"*.
+
+**The speed is a DIAL and ships labelled as one** (ADR-0013 §4, the ADR-0044 pattern). What is
+derivable is a **floor**, and the type enforces it: travel spends `toleranceTicks`, so a speed at
+which crossing the plot outlasts tolerance would re-introduce the cliff ADR-0017 dissolved. Plot
+23 floors × 80 columns → worst journey 101 cells; tolerance 180 ticks; **any speed of 1 or more
+clears it, and that bound is pinned by a test that walks the whole plot.**
+
+**The axis order is arbitrary and says so** — vertical then horizontal, fixed only because I2
+needs it fixed. Nothing models a stairwell until G-024, so there is no route to be faithful to.
+**G-024 is what replaces `stepTowards`.**
+
+**`deleted-vocabulary` also bit**: a new test title said *"outlast patience"*, and `patience` is
+countdown-era vocabulary the stock model deleted. Renamed to tolerance.
+
+## G-023b-ii — Travel is measured, and turned on
+Status: **pending — carries G-023b-i's 44 measured golden re-pins.**
+Milestone: M3
+Statement: declare `guestCellsPerTick` in shipped content, re-pin the goldens it moves **with a
+  judgement on each rather than a bulk accept**, add the journey instrument and the far/near
+  differential, and record a WATCH observation of guests actually walking.
+Carried forward: `check:tickcost`'s acceptance bar is **`verdict=MEASURED`** (`INCOMPARABLE`
+  passes and would satisfy the criterion vacuously) · the far/near differential **may not hold
+  `journeys` equal**, because spreading providers lengthens every hold and changes contention, so
+  it may have to normalise per journey and say so · **`optional('circulation.json')` is NO LONGER
+  OWED**: the speed went into `guest-rules.json`, which `measure-arm.mjs` already loads, so that
+  carried-forward item is discharged by not needing to exist.
+
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing
 Status: pending — **MAY MERGE WITH G-025; the question goes to the builder at PLAN (ADR-0018 §5)**

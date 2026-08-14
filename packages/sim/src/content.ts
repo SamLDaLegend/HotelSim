@@ -333,6 +333,15 @@ export type GuestRulesData = {
    * two halves obey.
    */
   readonly dissatisfactionReliefPerTick?: number | undefined;
+  /**
+   * How many cells a guest covers in one tick (G-023b-i).
+   *
+   * ABSENT MEANS INSTANTANEOUS, and that is the exact behaviour of every build before
+   * G-023b-i: `placed()` teleported a guest to whatever it held. So content written without
+   * this field keeps its outcomes and its hashes to the byte. There is deliberately NO default
+   * in this package -- a default here would be a content number living in the simulation (I3).
+   */
+  readonly guestCellsPerTick?: number | undefined;
 };
 
 /**
@@ -2923,6 +2932,19 @@ export function dissatisfactionCapacityOf(bound: BoundContent): number | undefin
  */
 export function dissatisfactionReliefOf(bound: BoundContent): number | undefined {
   return firstGuestRules(bound)?.dissatisfactionReliefPerTick;
+}
+
+/**
+ * HOW MANY CELLS A GUEST COVERS IN ONE TICK, or `undefined` for content that does not say
+ * (G-023b-i).
+ *
+ * `undefined` IS NOT A MISSING VALUE TO BE FILLED IN, it is the statement "arriving is
+ * instantaneous" -- the behaviour of every build before this one. `stepTowards` reads it that
+ * way, so the absence case is a branch rather than a fallback constant, and no content number
+ * appears in `packages/sim` (I3).
+ */
+export function guestSpeedOf(bound: BoundContent): number | undefined {
+  return firstGuestRules(bound)?.guestCellsPerTick;
 }
 
 /**

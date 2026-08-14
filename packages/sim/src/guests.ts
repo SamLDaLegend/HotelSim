@@ -46,6 +46,7 @@ import {
   findNeedType,
   findRoomType,
   isRoomKind,
+  guestSpeedOf,
   lodgingNeedOf,
   needTypesInOrder,
   ONE_WHOLE_BASIS_POINTS,
@@ -1552,6 +1553,12 @@ function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean
 type RoomSearch = {
   readonly input: GuestTickInput;
   /**
+   * How many cells a guest covers in one tick, or `undefined` for content that does not say
+   * (G-023b-i). READ ONCE PER TICK, for the reason `lodgingNeed` and `stayDuration` are: it is
+   * one array index behind two optional chains and it is the same answer for every guest.
+   */
+  readonly speed: number | undefined;
+  /**
    * Rooms currently held, as bedrooms OR as engagements. Membership only: never iterated,
    * never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
    */
@@ -1770,6 +1777,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   const search: RoomSearch = {
     input,
     held,
+    speed: guestSpeedOf(content),
     exhausted: null,
     needOutcomes: input.needOutcomes,
     reviewOutcomes: input.reviewOutcomes,
@@ -1952,15 +1960,42 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // the lodging need decays only while it is true. One derivation, two uses, no chance of the
     // serving rule and the decay rule disagreeing about where the guest is.
     // ========================================================================
-    const atHome = guest.roomEntityId !== NO_ENTITY && guest.engagement === null;
+    // PRESENCE IS A CELL COMPARISON NOW (G-023b-i), AND THE BLOCK ABOVE PREDICTED IT WOULD BE:
+    // *"G-023b gives a guest a position independent of what it holds — in transit it is at
+    // neither end — and on that day this becomes a cell comparison."* This is that day.
+    //
+    // **WITHOUT THIS, THE WHOLE GOAL IS VACUOUS.** Holding a room and standing in it were the
+    // same fact while `placed()` teleported. Now a guest can hold a room it is still walking to,
+    // and if serving were still decided by what it HOLDS, travel would cost exactly nothing —
+    // the guest would be resting in its bed from the corridor. `arrivedAt` is the one predicate,
+    // used for the bed and for the amenity, so the two cannot disagree about where the guest is.
+    //
+    // AN UNPLACED HOST COUNTS AS ARRIVED, which is not a special case for travel but the
+    // pre-existing rule kept: `standingCell` already falls through an unplaced entity, so a
+    // guest cannot walk to a room that is nowhere and would otherwise never be served at all.
+    // CONTENT THAT DECLARES NO SPEED IS ALWAYS ARRIVED, AND THAT IS THE PROMISE THE SCHEMA
+    // MAKES RATHER THAN A CONVENIENCE. `guestCellsPerTick` absent means arriving is
+    // instantaneous, so under such content a guest IS wherever it is going, and gating serving
+    // on a cell comparison would change outcomes for content that says nothing about travel.
+    // Found by the suite: three tests build a world by hand in which a guest already holds a
+    // provider it never walked to, and they went red. The right reading of that is not "stale
+    // fixtures" — it is that a build with no travel must behave as it always did, to the byte.
+    const atHome =
+      guest.roomEntityId !== NO_ENTITY && guest.engagement === null && hasArrivedAt(search.speed, guest.at, lodgingRoom);
     const servedByRoom = atHome ? lodgingNeed?.id ?? null : null;
+    const atAmenity = guest.engagement !== null && hasArrivedAt(search.speed, guest.at, engagedRoom);
     const engagedKind: ProviderKind =
       engagedRoom !== null && !isRoomKind(content, engagedRoom.kind) ? 'item' : 'room';
+    // THE ENGAGED NEED IS SERVED ONLY ONCE THE GUEST HAS ARRIVED, for the same reason the bed
+    // is: a guest walking to the cafe is not eating. `servedEngagement` is derived ONCE and used
+    // by the decay, the mood and the measurement, so all three answer "what is this hotel doing
+    // for this guest right now" identically.
+    const servedEngagement = atAmenity ? guest.engagement?.needId ?? null : null;
     const needs = advanceNeeds(
       content,
       guest.needs,
       servedByRoom,
-      guest.engagement?.needId ?? null,
+      servedEngagement,
       engagedKind,
       !atHome,
       lodgingNeed?.id,
@@ -1996,7 +2031,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // HOISTED OUT OF THE STOCK'S BRANCH AT G-028a, because two things read it now and only one
     // of them is optional. Its value is unchanged and so is every guest's mood.
     const excused = guest.roomEntityId !== NO_ENTITY ? lodgingNeed?.id ?? null : null;
-    const engagedNeedId = guest.engagement?.needId ?? null;
+    const engagedNeedId = servedEngagement;
 
     // THE WALK, ONCE (G-032b). It counts 4c's per-need ticks and reports 4b's one-bit mood
     // through `unservedWalk`, from a single pass over the vector. The two used to be separate
@@ -2758,5 +2793,78 @@ function reserve(
  */
 function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entity | null, search: RoomSearch): Guest {
   const at = standingCell(lodgingRoom, engagedProvider, search.input.entities.bounds);
-  return cellsEqual(guest.at, at) ? guest : { ...guest, at: { floor: at.floor, column: at.column } };
+  if (cellsEqual(guest.at, at)) return guest;
+  const next = stepTowards(guest.at, at, search.speed);
+  return cellsEqual(guest.at, next) ? guest : { ...guest, at: next };
+}
+
+/**
+ * ONE TICK OF WALKING (G-023b-i). **THE ONLY PLACE A GUEST'S CELL CHANGES DURING A TICK.**
+ *
+ * ------------------------------------------------------------------------------------------
+ * TRANSIT IS `at` ITSELF, AND THERE IS NO SECOND FIELD. This is the design change this goal
+ * made against its own re-plan, which had specified a `transitTicks` countdown and a save
+ * schema bump to v17. Stepping the cell instead is strictly better and the plan was wrong:
+ *
+ *   - **A guest mid-journey is somewhere.** A countdown says "arrives in 4 ticks" and leaves
+ *     the guest standing at its origin; stepping puts it in the corridor, which is where a
+ *     watching player would expect to see it (§5 WATCH) and what the viewer can already draw.
+ *   - **It adds NO hashed state, so there is no v17 and no 16->17 migration.** `at` is already
+ *     hashed and already saved (G-023a). A migration written to satisfy a criterion I wrote an
+ *     hour earlier would have been invention.
+ *   - **A countdown needs a destination stored beside it**, or it must re-derive one every
+ *     tick and hope it has not changed. The destination CAN change mid-journey — a waiting
+ *     guest is given a room while it is walking to the cafe — and a stored one would go stale
+ *     silently. Recomputing the target every tick and stepping toward whatever it is now is
+ *     correct under that change by construction.
+ *
+ * SPEED ABSENT MEANS INSTANTANEOUS, which is exactly what every build before this one did.
+ * That is why `undefined` is a branch here rather than a defaulted constant: a default in this
+ * package would be a content number living in the simulation (I3).
+ *
+ * THE AXIS ORDER IS ARBITRARY AND SAYS SO. Vertical first, then horizontal, because it must be
+ * SOME fixed order for I2 and there is no reason yet to prefer one — nothing models a stairwell
+ * until G-024, so no route exists to be faithful to. **When G-024 lands, this function is what
+ * it replaces**, and the order stops being arbitrary because a guest will have to reach the
+ * stairs before it can use them.
+ * ------------------------------------------------------------------------------------------
+ */
+/**
+ * HAS THIS GUEST ACTUALLY REACHED THE THING IT IS HOLDING? (G-023b-i.)
+ *
+ * A MODULE-LEVEL FUNCTION AND NOT A CLOSURE IN THE TICK, AND THE FIRST SPELLING WAS THE
+ * CLOSURE. It was an arrow function declared inside the guest loop, so it allocated once per
+ * guest per tick — the allocation shape G-010 spent a goal removing, warned about in three
+ * comments in this file, and written anyway. **`check:tickcost` measured it: ratio 1.5889
+ * against a 1.4640 bound.** Hoisting it is the whole repair. Scalars in, boolean out, nothing
+ * captured.
+ *
+ * CONTENT THAT DECLARES NO SPEED IS ALWAYS ARRIVED — `guestCellsPerTick` absent means arriving
+ * is instantaneous, so presence gates nothing and such content behaves as every build before
+ * this one did, to the byte. AN UNPLACED HOST ALSO COUNTS AS ARRIVED, which is not a travel
+ * special case but the pre-existing rule kept: `standingCell` already falls through an unplaced
+ * entity, so a guest cannot walk to a room that is nowhere and would otherwise never be served.
+ */
+export function hasArrivedAt(speed: number | undefined, guestAt: Cell, host: Entity | null): boolean {
+  if (speed === undefined) return true;
+  if (host === null || !isPlaced(host)) return true;
+  return cellsEqual(guestAt, host.at);
+}
+
+export function stepTowards(from: Cell, to: Cell, cellsPerTick: number | undefined): Cell {
+  if (cellsPerTick === undefined) return { floor: to.floor, column: to.column };
+  let budget = cellsPerTick;
+  let floor = from.floor;
+  let column = from.column;
+
+  const floorGap = to.floor - floor;
+  const floorStep = Math.min(Math.abs(floorGap), budget);
+  floor += floorGap >= 0 ? floorStep : -floorStep;
+  budget -= floorStep;
+
+  const columnGap = to.column - column;
+  const columnStep = Math.min(Math.abs(columnGap), budget);
+  column += columnGap >= 0 ? columnStep : -columnStep;
+
+  return { floor, column };
 }
