@@ -260,6 +260,7 @@ describe('NO need can reach one whole, so a margin of one whole is total commitm
     deficit,
     metBy: deficit === 0 ? 'room' : null,
     abandonCount: 0,
+    unservedTicks: 0,
   });
 
   it('STEP 1 — an EMPTY need is still scored, so the old ceiling has nothing to rest on', () => {
@@ -916,12 +917,13 @@ describe('abandonNeed is the one place the count moves, and it refuses a FULL ne
     deficit,
     metBy: deficit === 0 ? 'room' : null,
     abandonCount: 0,
+    unservedTicks: 0,
   });
 
   it('increments a need that is still wanted by one and leaves its deficit alone', () => {
     const before = [state(5)];
     const after = abandonNeed(before, 'aaa');
-    expect(after[0]).toEqual({ ...before[0], abandonCount: 1 });
+    expect(after[0]).toEqual({ ...before[0], abandonCount: 1, unservedTicks: 0 });
     expect(after).not.toBe(before);
   });
 
@@ -950,7 +952,11 @@ describe('assertNeedVector refuses a corrupt abandonCount, like every other coun
   // driven by `needs.hysteresis.save.test.ts`'s unmigrated-v8 world; the corrupt-VALUE case
   // was not driven by anything until this block.
   const vector = (abandonCount: unknown): unknown[] => [
-    { needId: 'aaa', deficit: 5, metBy: null, abandonCount },
+    { needId: 'aaa', deficit: 5, metBy: null, abandonCount, unservedTicks: 0 },
+  ];
+  /** The same vector with the OTHER counter under test, so one helper cannot mask the other. */
+  const counted = (unservedTicks: unknown): unknown[] => [
+    { needId: 'aaa', deficit: 5, metBy: null, abandonCount: 0, unservedTicks },
   ];
 
   it('refuses a negative, a fraction and a non-number, naming the field and the guest', () => {
@@ -965,6 +971,30 @@ describe('assertNeedVector refuses a corrupt abandonCount, like every other coun
   it('and accepts 0 and any positive integer, because a guest may change its mind often', () => {
     for (const good of [0, 1, 99]) {
       expect(() => assertNeedVector(vector(good), 41), String(good)).not.toThrow();
+    }
+  });
+
+  // AND `unservedTicks` IS THE SAME KIND OF FIELD, SO IT GETS THE SAME THREE CASES (G-028a).
+  // The block's title says "like every other counter on a need", and a counter added without
+  // its cases here would make that sentence false the day it shipped.
+  it('refuses a negative, a fraction, a non-number and a MISSING unservedTicks', () => {
+    for (const bad of [-1, 1.5, Number.NaN, '2']) {
+      expect(() => assertNeedVector(counted(bad), 41), String(bad)).toThrow(
+        /negative or non-integer unservedTicks/,
+      );
+    }
+    expect(() => assertNeedVector(counted(-1), 41)).toThrow(/guest 41/);
+    // The missing key is a DIFFERENT message from a corrupt value, because at load an absent
+    // key and a 0 are different statements — only this case can tell a v16 world from a v15
+    // one that skipped its migration.
+    expect(() => assertNeedVector([{ needId: 'aaa', deficit: 5, metBy: null, abandonCount: 0 }], 41)).toThrow(
+      /has no unservedTicks field/,
+    );
+  });
+
+  it('and accepts 0 and any positive integer, because a hotel may fail a guest for a long time', () => {
+    for (const good of [0, 1, 99]) {
+      expect(() => assertNeedVector(counted(good), 41), String(good)).not.toThrow();
     }
   });
 });
@@ -989,6 +1019,8 @@ describe('a tally row cannot carry an abandonment before a guest that formed the
     unmet: 0,
     metByItem: 0,
     abandoned: 0,
+    unservedTicks: 0,
+    instanceTicks: 0,
     ...over,
   });
 

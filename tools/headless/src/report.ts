@@ -1045,6 +1045,27 @@ export type RunSummary = {
      * An additive field, so `SUMMARY_SCHEMA_VERSION` does not move.
      */
     readonly abandoned: number;
+    /**
+     * How many ticks the hotel left this need unserved, summed over the guests that carried
+     * it, and how many ticks of stay those same guests had (G-028a).
+     *
+     * TWO SUMS AND NOT A SHARE, and the division belongs to whoever reads them. A stored share
+     * would be a rounding taken per departure that nothing could re-derive; these are integers
+     * folded in one branch of `recordNeedsAtDeparture`, so `unservedTicks <= instanceTicks` is
+     * checkable and the report can divide once, at the point of printing.
+     *
+     * WHY THEY ARE HERE BESIDE `met` AND `unmet`, WHICH ANSWER THE SAME QUESTION DIFFERENTLY.
+     * `met` is a SNAPSHOT — was this need above its want line at the instant its guest walked
+     * out — and every guest in a run departs at the same phase of the same deterministic cycle,
+     * so it is measurably a statement about the arrival cadence as much as about the hotel.
+     * These two are the integral. The goal that makes the REVIEW read the integral moves `met`
+     * with it, because `report.ts`'s review law A compares the two; this goal ships the
+     * measurement and changes no verdict.
+     *
+     * Additive fields, so `SUMMARY_SCHEMA_VERSION` does not move.
+     */
+    readonly unservedTicks: number;
+    readonly instanceTicks: number;
   }[];
   /**
    * WHAT EVERY DEPARTED GUEST THOUGHT OF THE PLACE (G-019). The distribution, and nothing
@@ -1323,6 +1344,8 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       unmet: row?.unmet ?? 0,
       metByItem: row?.metByItem ?? 0,
       abandoned: row?.abandoned ?? 0,
+      unservedTicks: row?.unservedTicks ?? 0,
+      instanceTicks: row?.instanceTicks ?? 0,
     };
   });
 
@@ -1622,6 +1645,21 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
           'abandon anything (G-014b).',
       );
     }
+    // AND THE DENOMINATOR IS EXACT HERE WHERE THE SIM CAN ONLY BOUND IT (G-028a). `depart` adds
+    // one guest's whole stay to this row on the tick it counts that guest's instance, and the
+    // runner never loads a save, so every departed guest in this world contributed both — which
+    // makes `instanceTicks === 0` reachable only when NOTHING has departed with this need. The
+    // sim asserts the inequality `unservedTicks <= instanceTicks` at every commit and every load;
+    // this is the half it cannot state, and it is the half that catches a stay counted into the
+    // wrong row. The `met + unmet === departed` law above is exactly this argument one column
+    // over, which is why they are checked in the same loop.
+    if (row.instanceTicks === 0 && departed > 0 && row.met + row.unmet > 0) {
+      violations.push(
+        `Need accounting broken at tick ${world.tick}: need "${row.needId}" records ${row.met + row.unmet} resolved ` +
+          'instance(s) and 0 ticks of stay. A departing guest contributes its stay to the same row it contributes ' +
+          'its instance to, so a row cannot hold one without the other (G-028a).',
+      );
+    }
     if (row.abandoned > 0 && nothingToSwitchTo) {
       violations.push(
         `Abandonment broken at tick ${world.tick}: need "${row.needId}" records ${row.abandoned} abandonment(s), but ` +
@@ -1821,6 +1859,32 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
 }
 
 /**
+ * What share of its guests' stays this need spent unserved, in basis points (G-028a).
+ *
+ * ONE DIVISION, AT THE POINT OF READING, AND THE ROUNDING RULE IS `floor`. The sim stores two
+ * integers and divides nowhere; this is the only place the pair becomes a share, so a share that
+ * appears twice in a report is the same rounding of the same numbers rather than two of them.
+ * `floor` rather than round because this reads as "at least this much of the stay went unserved",
+ * and a share rounded UP past a band boundary would report neglect nobody measured.
+ *
+ * A row nobody has departed with reads 0 rather than dividing by zero: `instanceTicks` is 0
+ * exactly when no guest carrying this need has left, and "no guest has reported on it" is what
+ * the zero says. Every other row has a denominator of at least one tick per instance, because a
+ * guest created on tick t is not stepped until t + 1 and cannot depart before it is stepped
+ * (`depart` in `guests.ts`).
+ *
+ * Exported for the same reason `meanReviewHundredths` is: the tests fold what the report prints
+ * rather than keeping a second copy of the arithmetic.
+ */
+export function unservedShareBasisPoints(need: {
+  readonly unservedTicks: number;
+  readonly instanceTicks: number;
+}): number {
+  if (need.instanceTicks <= 0) return 0;
+  return Math.floor((need.unservedTicks * ONE_WHOLE_BASIS_POINTS) / need.instanceTicks);
+}
+
+/**
  * The mean review, in hundredths of a score, or `null` if nobody has left one (G-019).
  *
  * A FOLD OVER THE ROWS THE REPORT ALREADY CARRIES, computed at print time and stored
@@ -1883,10 +1947,15 @@ export function renderText(summary: RunSummary): string {
     // stability contract makes every column width load-bearing and the golden test pins it.
     // By-room is SUBTRACTED HERE and stored nowhere (G-013 critique round 1). A reader
     // wants both columns; the report needs only one number to print them.
+    // AND THE INTEGRAL BESIDE THE SNAPSHOT (G-028a). `met`/`unmet` say where each need stood at
+    // one instant; the share says how much of the stay the hotel spent failing it. Rendered
+    // through `unservedShareBasisPoints`, which is what the tests fold, so the printed number and
+    // the asserted number cannot be two different roundings of the same pair.
     ...summary.needs.map(
       (need) =>
         `need ${need.lodging ? 'L' : ' '}     ${need.needId} ${need.met} met, ${need.unmet} unmet ` +
-        `(${need.met - need.metByItem} by room, ${need.metByItem} by item), ${need.abandoned} abandoned`,
+        `(${need.met - need.metByItem} by room, ${need.metByItem} by item), ${need.abandoned} abandoned, ` +
+        `${unservedShareBasisPoints(need)} bp unserved`,
     ),
     // THE REVIEW DISTRIBUTION (G-019), one column per score the scale admits, ascending —
     // zeros included, for the reason the need table prints a row nothing resolved.

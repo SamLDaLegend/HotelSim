@@ -231,7 +231,7 @@ describe('the zero CAN be non-zero', () => {
             engagement: null,
             // θ-b1: content. The subject here is the ROOM's validity.
             dissatisfaction: 0,
-            needs: [{ needId: needType.id, deficit: 5, metBy: null, abandonCount: 0 }],
+            needs: [{ needId: needType.id, deficit: 5, metBy: null, abandonCount: 0, unservedTicks: 0 }],
           },
         ],
       },

@@ -159,6 +159,7 @@ export {
 export type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 export {
   abandonNeed,
+  accumulateUnservedTicks,
   advanceNeeds,
   assertNeedOutcomes,
   assertNeedVector,
@@ -173,6 +174,11 @@ export {
   needOutcomeOf,
   recordNeedsAtDeparture,
   urgencyOf,
+  // G-028a. On the surface for the reason `stayDurationOf` is: the arms that measure ADR-0029's
+  // stranded-in-public population have to ask the SHIPPED question about a guest standing in the
+  // lobby, and a test that spelled the three exclusions itself would be a second definition of
+  // the predicate this goal exists to make single.
+  wantsSomethingUnserved,
 } from './needs.js';
 export type { ReviewOutcomeRow, ReviewScale } from './reviews.js';
 // `experienceBasisPoints` is DELIBERATELY ABSENT (G-019, `balance-critic` MINOR 4). It is a

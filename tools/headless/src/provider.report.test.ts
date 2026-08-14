@@ -375,7 +375,7 @@ describe('the criterion invocation through a real process (G-013)', () => {
     const needLines = text.stdout.split('\n').filter((line) => /^need (L| ) /.test(line));
     expect(needLines).toHaveLength((content.content.needTypes ?? []).length);
     for (const line of needLines) {
-      expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\), \d+ abandoned$/);
+      expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\), \d+ abandoned, \d+ bp unserved$/);
     }
   });
 });

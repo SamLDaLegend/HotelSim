@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5: 6 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2, G-028a). Only G-028b remains — last in milestone, second critic. Two goals owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2323,3 +2323,51 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   and the render goal owes a mark per reason.*
 
 
+
+## Discovered at G-028a (2026-08-14)
+
+- **THE SECOND WALK OVER THE NEED VECTOR COSTS ~1.15× OF TICK TIME, AND THE PARK HAS FIRED WITH
+  NUMBERS RATHER THAN A GUESS.** `accumulateUnservedTicks` walks the vector separately from
+  `advanceNeeds`. **Two independent paired measurements, each with HEAD materialised as a
+  worktree, both arms in one sitting, warm-up discarded:**
+
+  | who | HEAD | this build | ratio |
+  |---|---|---|---|
+  | `economy-engineer`, medians of 5, 6 alternating rounds | 6,560 ms | 7,443 ms | **1.135×** |
+  | `balance-critic`, medians of 9, 9 alternating rounds | 6,415 ms (6,358–6,791) | 7,427 ms (7,279–8,045) | **1.158×** |
+
+  *What: whole-process wall time. Workload: the I5 workload, `--days 365 --seed 42 --rooms 60
+  --arrivals 96`, shipped content. Regime: one quiet 12-core Windows 11 developer box, both arms
+  interleaved.* **Distributions do not overlap in either campaign** — HEAD's worst is faster than
+  this build's best. **The regression is real and the two ratios agree within noise, which is the
+  finding; neither absolute transfers.**
+  **Why the merge was declined here and is right to decline**: it touches the decay path, and the
+  write-only fence is the property G-028a's seam is judged on. The identity it would rest on is
+  **already swept** at `needs.unserved.test.ts:176`, so this is a result waiting for a goal rather
+  than a note. **At ~1.9 % of I5's derived 389,333 ms budget there is ~52× headroom**, so nothing
+  is at risk today.
+  **AND THE GATE THAT WOULD HAVE CAUGHT IT IS DEAD FOR AN UNRELATED REASON.** `check:tickcost` is
+  one of the three ruled-red ADR-0015 configuration refusals (`arrivalEveryTicks: campaign 32,
+  shipped workload 96`) — **so the goal that ships a tick-cost regression is the goal whose
+  tick-cost gate declines to compare.** Both critics measured it by hand instead. That is the
+  strongest argument yet for the re-take goal's priority.
+  **FALSIFICATION TEST**: merge the two walks into `advanceNeeds` and re-measure paired. *If the
+  ratio does not return to ~1.00, the second walk was not the cost and the cause is elsewhere —
+  most likely the per-tick allocation the counter forces on a need that would otherwise identity-
+  return.* -> **the M3 instrument-debt goal, alongside the three campaigns it already carries.**
+
+- **`git worktree remove --force` RECURSES THROUGH A WINDOWS JUNCTION AND DELETES FROM THE SHARED
+  pnpm STORE.** Found by `balance-critic` doing exactly what the tick-cost measurement above
+  requires: materialise HEAD as a worktree, junction `node_modules` into it so the arm can run.
+  **It removed 11 entries from `node_modules/.pnpm` twice**, each time repaired with
+  `pnpm install --frozen-lockfile`.
+  **This is the mutation recipe's blast-radius problem in a new costume**: the recipe says never
+  `git checkout --` because it is unrecoverable, and this is a delete that reaches **outside the
+  thing being deleted** — into a store every worktree in the repo shares.
+  **THE SAFE ORDER**: unlink every junction with `rm <link>` (**never** `rm -rf`, **never**
+  `git worktree remove`), verify zero symlinks remain, **then** delete the plain directory.
+  **FALSIFICATION TEST**: create a worktree, junction `node_modules`, run
+  `git worktree remove --force`, then count `node_modules/.pnpm` entries. *If the count is
+  unchanged, the hazard is version- or filesystem-specific and this closes.*
+  -> **belongs beside the mutation recipe in `CLAUDE.md`; three agents will hit it next time a
+  paired campaign is owed.**

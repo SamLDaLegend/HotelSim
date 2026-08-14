@@ -253,7 +253,7 @@ describe('v6 -> v7 refuses to destroy what it cannot have written (G-013)', () =
 
 describe('the metBy invariant is enforced at load, in the direction that survives (G-013)', () => {
   const vector = (deficit: number, metBy: unknown): unknown[] => [
-    { needId: 'rest', deficit, metBy, abandonCount: 0 },
+    { needId: 'rest', deficit, metBy, abandonCount: 0, unservedTicks: 0 },
   ];
 
   it('refuses a FULL need that records nothing that served it', () => {
@@ -279,7 +279,7 @@ describe('the metBy invariant is enforced at load, in the direction that survive
   it('refuses an attribution that is neither a room nor an item, and a missing key', () => {
     expect(() => assertNeedVector(vector(0, 'wizard'), 1)).toThrow(/metBy "wizard"/);
     expect(() =>
-      assertNeedVector([{ needId: 'rest', deficit: 0, abandonCount: 0 }], 1),
+      assertNeedVector([{ needId: 'rest', deficit: 0, abandonCount: 0, unservedTicks: 0 }], 1),
     ).toThrow(/has no metBy field/);
   });
 
@@ -292,10 +292,10 @@ describe('the metBy invariant is enforced at load, in the direction that survive
   it('and the tally refuses more item deliveries than satisfactions', () => {
     // By-room is DERIVED as `met - metByItem`, so this is the clause that stops the report
     // printing a negative count.
-    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 3, abandoned: 0 }], 5)).toThrow(
+    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 3, abandoned: 0, unservedTicks: 0, instanceTicks: 0 }], 5)).toThrow(
       /but only 2 met/,
     );
-    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 2, abandoned: 0 }], 5)).not.toThrow();
+    expect(() => assertNeedOutcomes([{ needId: 'rest', met: 2, unmet: 0, metByItem: 2, abandoned: 0, unservedTicks: 0, instanceTicks: 0 }], 5)).not.toThrow();
   });
 });
 

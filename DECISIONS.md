@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5: 6 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2, G-028a). Only G-028b remains — last in milestone, second critic. Two goals owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -2595,3 +2595,367 @@ under a claim they already believe.
 CLI flag strings in a test file**, provisioned by `schedule()`'s defaults, and **no gate reads it**.
 The content ladder guarded by `check:ladder` is the *speed* ladder — a different object with a
 similar name, and the digest line has been read as covering both.
+
+## ADR-0033 AMENDMENT — "the signal is ABSENT" was read off a CONTROL. And the golden I quoted was stale.
+
+**Date**: 2026-08-14 · **Amends**: ADR-0033 · **Raised by**: `economy-engineer` at G-028 PLAN, with
+the measurements attached.
+
+### 1. The scaled ladder is a CONTROL, not the criterion — so "flat" was the right answer
+
+ADR-0033 read the arrivals-scaled ladder (**400 / 400 / 401 / 420 / 400** across a 24× size range)
+as *"the build loop's review signal is ABSENT"*. **That reading was wrong, and the correction is
+better than the finding.**
+
+**Scaling rooms AND arrivals together holds provision-per-guest constant.** A hotel twice the size
+serving twice the guests with twice the providers is **the same hotel**, and a size-invariant score
+**should** read flat. Measured on exact-ratio rungs (`L/8` an integer): the integral reads
+**2616 / 2615 / 2488 basis points unserved — flat to 5 %** across 3×, while the snapshot on the same
+rungs reads **391 / 382 / 435**, non-monotone, 0.53 band. **The snapshot is the one reading noise
+there.**
+
+> **The build-loop criterion is the FIXED-DEMAND ladder, where a bigger hotel serves the same
+> arrivals better. The scaled ladder is the control that says the score is not merely counting
+> guests.** ADR-0033 pointed the criterion at the control and concluded the signal was gone.
+
+**What survives ADR-0033 intact, and it is the load-bearing half**: the snapshot is a one-tick
+reading of a phase-locked population, the phase noise (0.89 band) exceeds the effect (0.29), and
+`guest_comfort` unserved for **21 basis points of a stay** is recorded **met for 0 of 348 guests**.
+The diagnosis stands; the sentence drawn from the control does not.
+
+**And the replacement is measured, not proposed**: under the integral, AXIS 1 moves **1.82 bands**
+where the snapshot moves 0.29, and the phase spread at the top rung goes to **zero** — 500 / 500 /
+500 / 500 across the cadences that gave the snapshot 500 / 420 / 411 / 441. **Signal against worst
+phase noise: 16.5×, against today's 0.33×.**
+
+### 2. THE MEASURE GOLDEN I HAVE BEEN QUOTING ALL SESSION IS STALE
+
+`GOALS.md`, `JOURNAL.md` and every brief I wrote carried the measure golden as
+`5a8cec719d1e9e95`. **The shipped assertion is `bab5925fb9c5df13`**, and
+`bench.workload.golden.test.ts` records the move at θ-b2 **in its own history comment**.
+
+**How I got it**: I read the gate's output through `grep -oE "[0-9a-f]{16}" | head -2` and took the
+**first sixteen-hex string in the stream** rather than the figure the gate reports. `check:measure`
+prints its golden in a sentence; I never read the sentence.
+
+> **Slot one, on a hash: I did not ask what the sixteen hex characters I had captured were the hash
+> OF.** Fifth instance this milestone and the fourth of mine — and the first where the wrong number
+> came from the *extraction*, not from the source. **A regex that matches a shape is not a
+> measurement; it is a shape.**
+
+Corrected in both digests. **This is also the second time a body-of-digest fact drifted while
+`check:stamp` stayed green** — that gate compares the as-of line and never reads the body, and the
+schema version did the same thing two goals earlier.
+
+### 3. The seam is TAKEN — G-028a (instrument) then G-028b (scorer)
+
+§5.5: a builder that offers a seam gets it taken or a scored prediction. **Taken, and the pricing is
+mechanical rather than argued**: `NeedState` literals occur **66 times across 22 files**, and 16-hex
+state-hash pins in **14 files** — roughly **25 files of mechanical diff before one balance number
+moves.** Undivided, **sweep 1 would be reading hash re-pins instead of reading the migration and the
+write-only fence**, which are the two places a defect could hide.
+
+**G-028a changes no behaviour** — the accumulator is write-only inside the tick, so departures,
+need tallies, ledger and revenue are identical and only the state hash moves. **That property is
+what makes the split safe**, and it is itself the first thing its critic should try to break.
+
+## ADR-0034 — THE REVIEW IS PER-NEED, WORST NEED DECIDES. And the pooled ladder is withdrawn.
+
+**Date**: 2026-08-14 · **Status**: accepted · **Relates to**: ADR-0027, ADR-0031, ADR-0033 (+
+amendment) · **Raised by**: `balance-critic` at G-028a plan review — **two BLOCKERs and six MAJORs
+before a line of code.**
+
+### 1. The pooled score reintroduces the defect the module was built to avoid
+
+`band = floor((n·T − U)·bands/(n·T))` **pools unserved ticks across needs**, and `reviews.ts`'s own
+header records that as the reason the weighted score was rejected: *"a guest could miss any single
+amenity need and still review at the top … three-quarters of the need vector contributes nothing."*
+
+Arithmetic on the shipped table: **a guest whose one need is unserved for 80 % of its stay, with the
+other three perfect, scores the TOP band.** The shipped snapshot costs that same guest a band. **The
+new statistic would be worse than the one it replaces at the thing the module exists to protect.**
+
+**Ruled: per-need band, worst need decides.** Strictly increasing at every rung (**136 / 208 / 318 /
+500**, endpoint gap **3.64 bands** against pooled's 1.82), it **preserves "a top review requires
+every need met"**, and it introduces no constant either. It is also the reading a player would
+recognise: **a guest who could not sleep does not care that the café was good.**
+
+### 2. Law A would have gone red, and the plan's own ADR-0027 accounting missed it
+
+`report.ts`'s review law A — `topReviews > leastMet` ⇒ `emitReport` exits 1 — **goes red on the
+criterion ladder's own top rung under BOTH aggregations.** And the bind-time floor's refusal message
+says *"A top review must be unreachable while any need is unmet"* — **the graded score falsifies
+that sentence**, leaving a refusal enforcing a property the scorer no longer has.
+
+**The plan enumerated the six properties `recordNeedsAtDeparture` asserts and concluded only one
+moves. The properties that break are in `report.ts` and `content.ts`.**
+
+> **Enumerating a list is not enumerating a class** — ADR-0031's closing line, one goal old, turned
+> on the plan that cited it. **An ADR-0027 accounting scoped to one function is a list.**
+
+Worst-need-decides **restores law A by construction**, which is the second reason to prefer it.
+
+### 3. TWO CORRECTIONS TO MY OWN AMENDMENT, AND THE SECOND IS WORSE
+
+**(a) "The phase spread goes to zero" is a CLAMP, not a measurement.** The score reads 500 / 500 /
+500 / 500 because **every guest is inside the top band** — the run sits at 5.3 % of a 20 %-wide
+band. **You cannot measure noise at a saturated point.** At the unsaturated 12 rooms / 1 amenity the
+graded score's spread is **0.19 band against the snapshot's 0.10 — noisier.** The 16.5× survives as
+1.82/0.11 off a different rung; the sentence beside it does not.
+
+**(b) The graded score is an occupancy statistic.** To within **0.02 band at every rung** it is
+`3 + 2 × (checked-out share)`; the distributions are two-point and **the two points are the
+departure reasons.** Drop the lodging need from numerator and denominator and **the axis inverts at
+rung 2.**
+
+And the part that indicts my amendment directly: I called the scaled ladder *"the control that says
+the score is not merely counting guests."* **It cannot be — occupancy share is size-invariant, so a
+pure occupancy statistic reads flat on that control too.** ADR-0007's shape, **in the control**.
+
+The control that *does* discriminate holds occupancy at 100 % and varies provisioning: **415 / 500 /
+500 / 500.** Above the derived provisioning point **the score is blind**, which is the saturation
+the plan parked — and it collides with G-028's own *"the distribution is not a point mass"*
+criterion, which the plan did not name.
+
+### 4. The money loop is a cliff, and the dominant strategy is DO NOT BUILD
+
+Measured at 1000 days: **revenue is exactly 0p at 3, 6, 12, 30 and 60 rooms** below the amenity
+cliff, with balance falling monotonically to **−154,000,000p**. `payForStay` is reached only from
+the `checkedOut` branch and dissatisfaction ends a stay at 431 ticks, so **an under-provisioned
+guest pays nothing rather than less** — building bedrooms has **negative marginal revenue at every
+room count below the cliff**, and the runner can only build bedrooms.
+
+**And ADR-0033's derived rule PREDICTS the cliff**: 45 lodgers ⇒ M = 6, and **6 is exactly where
+balance turns positive** (+146M against 2 amenities' −158.5M). That is independent validation of a
+derivation made for another purpose. **Parked for M4 with its arithmetic; it is not G-028's.**
+
+### 5. My digest was stale in the sentence my own amendment repaired
+
+The amendment corrected the measure golden in that line, wrote *"Corrected in both digests"*, **and
+left `save v14` and I2 `21938e08d179c60c` standing beside it** — against a tree at v15 and
+`a37d293a4c052e5e`. **In the same paragraph that names the schema version as the thing which "did
+the same thing two goals earlier."**
+
+> **ADR-0027, by the author who ruled it, on the third consecutive occasion, inside the correction
+> of the second.** A repair correct about its subject that leaves what is beside it — and the
+> improvement is the camouflage.
+
+Corrected against the tree, not against memory.
+
+## ADR-0029 AMENDMENT — the ruling's own qualifier inspects nothing
+
+**Date**: 2026-08-14 · **Amends**: ADR-0029 §3 · **Raised by**: `economy-engineer` at G-028a plan
+revision 2, and it survived two proposed fixes before anyone noticed the shape.
+
+ADR-0029 (human) ruled that a sleeping guest is never idle, an awake guest idle **in its own room**
+is acceptable, and **only a guest stranded in public with needs it cannot get met** is a defect.
+The plan's first discharge was found vacuous at its leading arm — zero stranded guest-ticks at 12
+rooms / 2 amenities, because every guest holds a room. **The suggested repair — use 6 rooms / 5
+amenities instead — is also zero.** Measured:
+
+| configuration | public guest-ticks | stranded guest-ticks |
+|---|---|---|
+| 12 rooms / 2 amenities | **0** | 0 |
+| 6 rooms / 5 amenities | **0** | 0 |
+| 6 rooms / 2 amenities | 93 | **93** |
+| 3 rooms / 1 amenity | 8,230 | **8,230** |
+
+**The two columns are identical in every configuration, and that is the finding.**
+
+> **A roomless, unengaged guest ALWAYS has an unmet need — its own lodging need — by construction.
+> So "with needs it cannot get met" is true of every member of the population it is supposed to
+> narrow. The qualifier inspects nothing.** ADR-0007's shape, inside a ruling's predicate rather
+> than inside a check.
+
+**The ruling's substance is untouched and correct**: sleeping is not idleness, at-home-awake is not
+a defect, and the third population is the one that matters. **What fails is the attempt to define
+that population by what its members want**, when wanting is what makes them members.
+
+**Repair, and it is simpler than what it replaces**: the measurable quantity is **public-and-
+unengaged guest-ticks**, in absolute counts, two-sided — **zero in a hotel provisioned to the
+derived rule at full occupancy, non-zero in a starved one**, with the starved arm carrying
+ADR-0007's obligation to prove the instrument can fire. **No share, no denominator, no chosen
+constant.** The old `X = 2,500` basis-point ceiling does not return: a run over this population is
+bounded by `toleranceTicks`, so a run-length ceiling would be near-vacuous by arithmetic.
+
+**Worth recording about how it was found**: two people proposed a better *arm* before anyone asked
+whether the *predicate* could ever separate. **When a criterion is vacuous at two independently
+chosen configurations, the next question is about the predicate, not the third configuration.**
+
+## ADR-0034 AMENDMENT — worst-need-decides INVERTS on the amenity axis, and G-028b must confront it before the scorer ships
+
+**Date**: 2026-08-14 · **Amends**: ADR-0034 §1 · **Raised by**: `balance-critic` at G-028a sweep 2.
+
+### The measurement
+
+ADR-0034 ruled the review onto **worst need decides**, on the strength of a ladder that moves rooms
+and amenities **together**. On the **amenity axis alone**, the worst-need statistic **gets worse when
+a player builds an amenity** — at four of six room counts:
+
+**The figures are NOT reproduced here (ADR-0032 §1), and that is a correction.** They were first
+written into this ADR as a table, and `balance-critic` found at G-028a's closing verification that
+**seven of its eight cells no longer matched the tree** — signs all surviving, magnitudes drifted
+(the twelve-room lean maximum read 807 where the tree says 818, and the orchestrator's own brief
+quoted 818 while pointing G-028b at a ledger saying 807).
+
+**That happened ONE ROUND after amendment 2 was written for exactly this failure** — and the
+diagnosis is the sharp part: **§4's cliff was re-measured and reproduces to the penny, while this
+table had its slots RESTORED WITHOUT BEING RE-RUN.** Restoring a citation is not re-taking a
+measurement, and the two look identical in a diff.
+
+> **A figure in an ADR is a claim with no pin. The obligation belongs in the ledger; the numbers
+> belong in the arm that computes them.**
+
+**The measurement now lives in `tools/headless/src/unserved.report.test.ts`'s golden**, which folds
+it from the shipped table on every run and **cannot go stale**. It asserts the worst engagement need
+rises, the engagement sum and mean fall, the six-room pair has no confound, and — the claim this
+amendment exists for — **the row that improves is the one that was already best served.**
+
+**What G-028b owes is unchanged and is stated without a number**: *why does worst-need-decides
+survive a player who builds an amenity, when the extra provider goes where there was no shortage?*
+**Run the golden; it prints the current answer.**
+
+**The six-room pair has no confound**: departures are **6,540 / 5,453 / 0 in both arms** and mean
+stay is **867.1 ticks in both**. The hotel gained strictly more capacity and the statistic got
+strictly worse.
+
+**The mechanism is visible in the rows**: comfort **477 → 18** while nourishment **1,229 → 1,500**.
+**A guest holds one provider at a time**, so serving one need better spends the ticks it was
+spending on another. **The SUM falls (2,251 → 2,222) and the MAX rises.**
+
+### Why this is not simply a defect in the ruling
+
+**It is the same shape ADR-0033 found in the snapshot** — *more provision, worse review* — arriving
+in the replacement through a different mechanism. But there is a reading on which it is **correct
+feedback**: at six rooms, comfort was already fine at 477 and the player added *more comfort*, while
+the actual bottleneck was nourishment. **A score that falls is saying "you built the wrong thing."**
+
+The objection is that it says so **by punishing investment**, and a build loop that can make your
+score drop when you spend money is a loop players stop trusting.
+
+### The ruling: NOT re-decided here, and G-028b cannot land without answering it
+
+**I am not re-ruling the scorer on one sweep's data**, and I am not deferring it either. **The
+inversion ships as a known-shape golden in G-028a** — a pinned record of what the statistic does on
+the amenity axis, so it is in the tree, in front of the goal that builds the scorer.
+
+**G-028b's plan must answer one question with a measurement**: *why does worst-need-decides survive
+a player who builds an amenity?* Acceptable answers include that the inversion is correct feedback
+and should be visible; that the statistic needs the provisioning rule as context; or that a third
+aggregation beats both. **What is not acceptable is discovering it after the scorer lands** — which
+is the expensive order, and the whole reason this is being pinned now.
+
+> **The ladder that made the ruling moved two axes together. The axis a PLAYER moves is one at a
+> time.** A criterion swept along a diagonal is not evidence about the moves the game actually
+> offers.
+
+### And the arm's title overclaims
+
+`unserved.report.test.ts`'s describe generalises a diagonal result to *"a better-provisioned hotel
+leaves less unserved"*. **Re-title it to what it tests** — monotone along the derived provisioning
+diagonal — and let the golden carry the rest. ADR-0032's class: a claim wider than its predicate.
+
+## ADR-0034 AMENDMENT 2 — the cliff and the inversion tables were UNRUNNABLE, and both are obligations somebody else has to answer
+
+**Date**: 2026-08-14 · **Amends**: ADR-0034 §4 and its first amendment · **Raised by**:
+`balance-critic` at G-028a sweep 3.
+
+### §4's cliff does not reproduce from what is written
+
+§4 states: *"Measured at 1000 days: revenue is exactly 0p at 3, 6, 12, 30 and 60 rooms below the
+amenity cliff, with balance falling monotonically to −154,000,000p."* Re-measured at 1000 days on
+the **shipped default cadence**: revenue is 0p **only at zero amenities**; at one amenity it is
+27,795,000p / 44,761,000p / 19,584,000p / 19,584,000p for 3 / 6 / 12 / 30 rooms, and the most
+negative balance in the grid is **−74,500,000p**.
+
+**The original figures were not wrong. They were taken at the 45-lodger cadence — which §4's own
+next paragraph names, and which the citation does not.** So a reader who re-runs the sentence gets
+different numbers and cannot tell whether the claim, the tree or their invocation has moved.
+
+**The same gap is in the first amendment's inversion table**: no days, no seed, no cadence, and **no
+statement of the fold** — which is precisely what MAJOR 2 below turns on, because ratio-of-sums and
+mean-of-ratios give different answers over the same rows.
+
+> **Both of these are numbers a LATER GOAL is contractually obliged to answer** — §4 *"parked for M4
+> with its arithmetic"*, the amendment *"G-028b's plan must answer"* — **and neither can be re-run
+> from what is written. An obligation whose evidence cannot be reproduced is not an obligation; it
+> is a rumour with a due date.**
+
+**Slots, restored**: §4's cliff — `--days 1000`, seed 42, **`--arrivals 32` (the 45-lodger
+cadence)**, shipped content, one deterministic run per cell, balance and revenue in pennies, quiet
+12-core Windows 11 box. The amendment's table — `--days 30 --seed 7 --arrivals 120`, shipped
+content, one run per cell, **per-need share as ratio-of-sums**, and **the mean column is the
+ENGAGEMENT mean, not the all-rows mean**.
+
+### And the fold matters more than the workload here
+
+The amendment's `mean` column reads 750 → 741 and 709 → 453. Those are the **engagement** means. The
+all-rows mean over the same runs reads 984 → 976 and 529 → 340. **Both fall, so the sign survived —
+but only because the lodging row happens to be constant in both pairs.** A table that names neither
+the fold nor the row set was one content change away from being cited for a statistic it never
+measured.
+
+### The rule this earns
+
+> **A number parked as an obligation carries its invocation, not just its slots.** The five slots
+> tell a reader what a figure means; **an obligation needs the command that regenerates it**,
+> because the person who must answer it was not there when it was taken.
+
+## ADR-0035 — AN ASSERTION MUST NAME A STATE ITS NEIGHBOURS PERMIT AND IT FORBIDS
+
+**Date**: 2026-08-14 · **Status**: accepted · **Relates to**: ADR-0007, ADR-0027, ADR-0032 ·
+**Raised by**: `ai-engineer` **against itself**, at G-028a's closing pass, after the third instance
+in three rounds.
+
+### The evidence
+
+G-028a produced an assertion that cannot fail **in three consecutive rounds, and in two of them the
+new one arrived inside the fix for its predecessor.**
+
+| round | the assertion | why it could not fail |
+|---|---|---|
+| sweep 1 | `stranded <= public` | both counters incremented in the same branch |
+| sweep 3 | a golden's fourth clause, added *"so it cannot pass for the wrong reason"* | entailed by clauses 1 and 2 |
+| verification | three constants asserted against **the same pure expression that defines them** | falsifiable only by a typo in its own copy |
+
+The last is the sharpest: the fix pass **deleted one member of a four-member family and left three**
+— one of them the arm carrying the derivation that fix had just added — **five lines above an
+epitaph describing the deleted one in exactly those terms.**
+
+### The rule
+
+> **For each assertion, name a state its neighbours permit and it forbids. If you cannot, it is
+> decoration and it comes out.**
+
+Cheap, mechanical, and it catches every instance above without measuring anything.
+
+### The failure mode, which is the part worth transferring
+
+The builder's own account, and it is exact:
+
+> *"I applied it to my own new clauses last round and it found three; I did not apply it to the
+> lines I was leaving in place."*
+
+**The check gets applied to what a diff ADDS and not to what a diff LEAVES.** That is ADR-0027 in a
+new costume — a repair correct about its subject that inherits the assumptions of its neighbours —
+and it explains why the class survived three rounds of people actively hunting it.
+
+**So the rule has a scope clause**: when a fix touches an assertion, **the whole `it()` block is in
+scope**, not the line being repaired. An entailed sibling is not a pre-existing condition; it is the
+same defect one line over.
+
+### Why an entailed assertion is worse than no assertion
+
+**It reads as rigour.** A reviewer counting checks sees four and infers four properties are pinned.
+`ADR-0007`'s class is a check that inspects nothing; **this is the sub-class where the check was
+added on purpose, by someone who knew the rule, to close a gap a critic had just named.** Every
+instance above was written in the fix for a finding about vacuity.
+
+> **The instinct that adds an assertion to look thorough is the same instinct that should notice it
+> forbids nothing. It fires once.**
+
+### What it does not mean
+
+**Redundancy for readability is fine where it is stated.** What is forbidden is an assertion whose
+*docblock claims a property it cannot enforce* — every instance here carried a sentence explaining
+what it guarded against, and in each case that sentence was arithmetically impossible.

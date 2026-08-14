@@ -47,17 +47,23 @@ const v14World = (): Record<string, unknown> => ({
 
 const migrated = (): Record<string, unknown> => step!.migrate(v14World()) as Record<string, unknown>;
 
-describe('the chain reaches v15, and the fixture still walks the whole of it', () => {
+describe('the chain carries the 14 -> 15 step, and the fixture still walks the whole of it', () => {
   it('ships the 14 -> 15 step and the path is gapless', () => {
     expect(step).toBeDefined();
-    expect(SAVE_SCHEMA_VERSION).toBe(15);
+    // RELATIVE, NOT ABSOLUTE (`save.fixture.test.ts` owns the era pin): this file's subject is
+    // the 14 -> 15 link, so what it asserts is that the link is present in a gapless chain of
+    // whatever length the era requires.
+    expect(SAVE_SCHEMA_VERSION).toBeGreaterThanOrEqual(15);
     expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - 1);
+    expect(MIGRATIONS.some((entry) => entry.from === 14 && entry.to === 15)).toBe(true);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
   it('and the permanent v1 fixture loads through it, unregenerated (ADR-0006)', () => {
     const loaded = deserialise(SAVE_V1_BYTES);
-    expect((JSON.parse(serialise(loaded)) as { schemaVersion: number }).schemaVersion).toBe(15);
+    expect((JSON.parse(serialise(loaded)) as { schemaVersion: number }).schemaVersion).toBe(
+      SAVE_SCHEMA_VERSION,
+    );
     // ITS FINGERPRINT DID NOT MOVE. This goal adds a content FIELD, and a v1-era document that
     // declares no guest rules at all cannot have gained one.
     expect(loaded.contentHash).toBe('8e09fe4f0fa162a3');

@@ -24,7 +24,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 15;
+export const SAVE_SCHEMA_VERSION = 16;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -1407,6 +1407,110 @@ function migrateV14ToV15(world: unknown): unknown {
 }
 
 /**
+ * v15 -> v16: a world in which nothing counted how long the hotel left a need unserved (G-028a).
+ *
+ * ADR-0006 fires for the FIFTEENTH time. TWO changes, stated separately because their era
+ * arguments are different even though both write a zero:
+ *
+ *   guests[].needs[].unservedTicks   ADDED, 0.   A v15 guest accumulated nothing because the
+ *                                    quantity did not exist and no branch could write one. 0 is
+ *                                    not a default standing in for missing information — it is
+ *                                    the value the bytes support, because the v15 tick never
+ *                                    wrote any other. `migrateV13ToV14`'s argument verbatim, one
+ *                                    field down.
+ *
+ *   needOutcomes[].unservedTicks     ADDED, 0.   Same era argument, and the pair is added
+ *   needOutcomes[].instanceTicks                 TOGETHER rather than one now and one later: the
+ *                                    report divides one by the other, so a row carrying a
+ *                                    numerator and no denominator would be a shape no arithmetic
+ *                                    can read. 0/0 is "this era measured nothing", which is
+ *                                    exactly true, and `assertNeedOutcomes`'s bound holds on it.
+ *
+ * THE DIRECTION IS STATED BECAUSE IT IS THE ONE THAT COULD MISLEAD. 0 is the most FLATTERING
+ * value: a guest mid-stay when the save was taken resumes as though the hotel had never failed
+ * it, so its eventual row understates neglect rather than inventing it. The alternative — deriving
+ * a count from `arrivedTick` and the deficit — would be inventing a history those bytes do not
+ * record, because nothing in them says what was or was not being served. That is the drift
+ * ADR-0008 forbids, and it is the same call `migrateV13ToV14` made about a mood.
+ *
+ * IT ALSO CANNOT CHANGE A LOADED WORLD'S BEHAVIOUR, which is worth saying once: nothing in
+ * `packages/sim` reads any of these three fields. A v15 world migrated to v16 therefore ticks
+ * identically to the way it ticked before, and the only observable difference is its hash.
+ *
+ * THE OVERWRITE GUARDS ARE ONE PER FIELD and they are `Object.keys().includes` rather than
+ * `in` — `JSON.parse` makes `__proto__` an own key (G-003). A v16 document fed in as v15 is
+ * refused by them rather than silently zeroed, which is the one way this step could destroy data.
+ *
+ * NOT TESTED BY THE FIXTURE ALONE, AND HERE THAT IS MANDATORY RATHER THAN STYLISTIC: the
+ * permanent v1 fixture carries an EMPTY guest list and an empty need tally, so both loops would
+ * run over nothing and every assertion about them would pass while inspecting zero rows —
+ * ADR-0007's exact shape. `needs.unserved.save.test.ts` drives a synthetic v15 world whose guests
+ * carry full need vectors and whose tally carries distinct non-zero counters.
+ */
+function migrateV15ToV16(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its needs cannot gain a counter');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const migratedGuests: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    const needs = guest['needs'];
+    if (!Array.isArray(needs)) {
+      throw new Error(
+        `Save is corrupt: world.guests.list[${index}].needs is missing or not an array, so this guest has no needs to count against`,
+      );
+    }
+    const migratedNeeds = needs.map((need, needIndex) => {
+      if (!isRecord(need)) {
+        throw new Error(`Save is corrupt: world.guests.list[${index}].needs[${needIndex}] is not an object`);
+      }
+      if (Object.keys(need).includes('unservedTicks')) {
+        throw new Error(
+          `world.guests.list[${index}].needs[${needIndex}] already has an "unservedTicks" field, so it is not a v15 ` +
+            'need; migrating it would overwrite a real count',
+        );
+      }
+      return { ...need, unservedTicks: 0 };
+    });
+    return { ...guest, needs: migratedNeeds };
+  });
+
+  const outcomes = world['needOutcomes'];
+  if (!Array.isArray(outcomes)) {
+    throw new Error('Save is corrupt: world.needOutcomes is missing or not an array');
+  }
+  const migratedOutcomes: unknown[] = outcomes.map((row, index) => {
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.needOutcomes[${index}] is not an object`);
+    }
+    for (const field of ['unservedTicks', 'instanceTicks']) {
+      if (Object.keys(row).includes(field)) {
+        throw new Error(
+          `world.needOutcomes[${index}] already has a "${field}" field, so it is not a v15 tally row; migrating it ` +
+            'would overwrite a real total',
+        );
+      }
+    }
+    return { ...row, unservedTicks: 0, instanceTicks: 0 };
+  });
+
+  return {
+    ...world,
+    guests: { ...guests, list: migratedGuests },
+    needOutcomes: migratedOutcomes,
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1429,6 +1533,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 12, to: 13, migrate: migrateV12ToV13 }),
   Object.freeze({ from: 13, to: 14, migrate: migrateV13ToV14 }),
   Object.freeze({ from: 14, to: 15, migrate: migrateV14ToV15 }),
+  Object.freeze({ from: 15, to: 16, migrate: migrateV15ToV16 }),
 ]);
 
 /**

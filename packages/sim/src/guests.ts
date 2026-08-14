@@ -64,6 +64,7 @@ import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import {
   abandonNeed,
+  accumulateUnservedTicks,
   advanceNeeds,
   assertNeedVector,
   findNeedState,
@@ -1640,10 +1641,25 @@ function depart(
   lodgingRoom: Entity | null,
   engagedRoom: Entity | null,
   reason: TickDepartureReason,
+  tick: number,
 ): void {
   if (guest.roomEntityId !== NO_ENTITY) release(search, guest.roomEntityId, lodgingRoom, content);
   if (guest.engagement !== null) release(search, guest.engagement.entityId, engagedRoom, content);
-  search.needOutcomes = recordNeedsAtDeparture(content, search.needOutcomes, guest.needs);
+  // HOW LONG THERE WAS TO FAIL THIS GUEST IN — the denominator of `unservedTicks` (G-028a).
+  //
+  // IT IS AT LEAST 1 AND THAT IS STRUCTURAL, not an assumption: arrivals are appended AFTER the
+  // loop over existing guests, so a guest created on tick t is not stepped until t + 1 and
+  // cannot reach any departure branch before then. The report divides by this.
+  //
+  // FOR THE EVICTION BRANCH IT COUNTS ONE TICK THE ACCUMULATOR DID NOT RUN ON, said rather than
+  // discovered: step 3 evicts before step 4 accumulates, so an evicted guest's denominator
+  // includes the tick it was evicted on and its numerator does not. The bound stays true in the
+  // direction that matters (`unservedTicks <= instanceTicks`) and the share is understated by at
+  // most one tick of a stay for that one branch. The alternative — a second definition of "how
+  // long was this guest here" that varies by exit path — is the thing `reason` is a parameter to
+  // avoid (see below).
+  const stayTicks = tick - guest.arrivedTick;
+  search.needOutcomes = recordNeedsAtDeparture(content, search.needOutcomes, guest.needs, stayTicks);
   // THE REVIEW, AND IT IS RECORDED HERE FOR THE REASON THE RESERVATIONS ARE RELEASED HERE
   // (G-019). This is the ONE exit path — EVERY departure branch in `stepGuests` goes through
   // it, the eviction in step 3 and the rest in step 6 — so "every guest that leaves leaves a
@@ -1840,7 +1856,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     //    different events to a player, and a single `evicted` counter could not tell them
     //    apart — WATCH #1's whole method is looking at a run and asking what happened.
     if (lodgingLost !== null) {
-      depart(search, content, guest, null, engagedRoom, lodgingLost);
+      depart(search, content, guest, null, engagedRoom, lodgingLost, tick);
       if (lodgingLost === 'evictedRoomGone') evictedRoomGone += 1;
       else evictedRoomUnusable += 1;
       continue;
@@ -1913,21 +1929,18 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // served the guest, which is what made it a saturation detector rather than a stock
     // (ADR-0026). The drain is a rate, and it is the only way this number falls.
     // ========================================================================
+    // THE ONE NEED THE GUEST HAS CHOSEN TO LEAVE BEHIND (ADR-0026 as amended). A guest that
+    // HOLDS a room excuses its lodging need: at home that need is being served and is skipped
+    // anyway, and away it is decaying because the guest went out to eat — which is ADR-0017
+    // §2 working exactly as designed, and not something the hotel is doing to it. A guest
+    // holding NO room excuses nothing: not giving it a bed is precisely the hotel's failure.
+    //
+    // HOISTED OUT OF THE STOCK'S BRANCH AT G-028a, because two things read it now and only one
+    // of them is optional. Its value is unchanged and so is every guest's mood.
+    const excused = guest.roomEntityId !== NO_ENTITY ? lodgingNeed?.id ?? null : null;
+    const engagedNeedId = guest.engagement?.needId ?? null;
     if (dissatisfactionCapacity !== undefined) {
-      // THE ONE NEED THE GUEST HAS CHOSEN TO LEAVE BEHIND (ADR-0026 as amended). A guest that
-      // HOLDS a room excuses its lodging need: at home that need is being served and is skipped
-      // anyway, and away it is decaying because the guest went out to eat — which is ADR-0017
-      // §2 working exactly as designed, and not something the hotel is doing to it. A guest
-      // holding NO room excuses nothing: not giving it a bed is precisely the hotel's failure.
-      const excused = guest.roomEntityId !== NO_ENTITY ? lodgingNeed?.id ?? null : null;
-      const letDown = wantsSomethingUnserved(
-        content,
-        guest.needs,
-        servedByRoom,
-        guest.engagement?.needId ?? null,
-        wantAt,
-        excused,
-      );
+      const letDown = wantsSomethingUnserved(content, guest.needs, servedByRoom, engagedNeedId, wantAt, excused);
       // `?? 1` is unreachable through `bindContent`, which refuses half a stock
       // (`cloneDissatisfaction`); it is the fill rate, which is 1 by definition, so a raw host
       // that somehow got past that reads as "recovers exactly as fast as it is let down".
@@ -1939,6 +1952,36 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       // guest sitting at 0 and a saturated guest sitting at the ceiling both allocate nothing.
       if (carried !== guest.dissatisfaction) guest = { ...guest, dissatisfaction: carried };
     }
+
+    // ========================================================================
+    // 4c. THE SAME FACT, KEPT PER NEED AND NEVER DRAINED (G-028a).
+    //
+    // `letDown` above is a MOOD: one bit for the whole guest, drained by `relief`, and it decides
+    // whether this stay ends early. `unservedTicks` is a MEASUREMENT: one counter per need, never
+    // drained, and nothing in this package reads it. Both ask the same question through the same
+    // predicate — `wantsSomethingUnserved` is a fold over `isNeedUnservedNow`, and this is the
+    // same walk keeping a count — so the number a departing guest reports and the mood it was in
+    // cannot describe different hotels.
+    //
+    // IT IS OUTSIDE THE STOCK'S BRANCH, and that is the whole reason `excused` moved up. A mood
+    // is optional: `dissatisfactionCapacityTicks` is content, and content that declares none has
+    // guests that never walk out. A measurement is not optional — a report about a hotel run
+    // under such content must still be able to say how long its guests went unserved, and a
+    // counter that silently stopped counting for some content sets would be a hole exactly where
+    // nobody would look for one.
+    //
+    // IT IS DELIBERATELY A SECOND WALK OF THE VECTOR rather than a merge with the branch above,
+    // and `accumulateUnservedTicks` carries the argument: the merged spelling re-derives
+    // `letDown` from whether this call allocated, and G-028a's promise is that nothing but the
+    // state hash moves. **The walk is not free and `PARKING.md` carries what it costs**, from two
+    // paired campaigns rather than from an estimate; the merge goes to the goal that owns the
+    // tick-cost re-take, with its falsification test attached.
+    //
+    // THE SAME ARGUMENTS, IN THE SAME ORDER, FROM THE SAME LOCALS. Anything else would be a
+    // second answer to "what is this hotel doing for this guest right now".
+    // ========================================================================
+    const measured = accumulateUnservedTicks(content, guest.needs, servedByRoom, engagedNeedId, wantAt, excused);
+    if (measured !== guest.needs) guest = { ...guest, needs: measured };
 
     // 5. HAS THE ENGAGEMENT FINISHED? Released the moment the need it serves resolves, so
     //    the amenity is free for somebody else from here on in THIS tick — through
@@ -2021,7 +2064,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       // later in this same loop can take it, even though it arrived later, because the room
       // genuinely is empty now.
       ledger = payForStay(ledger, tick, lodgingRoom.kind, content);
-      depart(search, content, guest, lodgingRoom, engagedRoom, 'checkedOut');
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'checkedOut', tick);
       checkedOut += 1;
       continue;
     }
@@ -2097,7 +2140,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       tick - guest.arrivedTick >= visitDuration &&
       guest.engagement === null
     ) {
-      depart(search, content, guest, lodgingRoom, engagedRoom, 'visitEnded');
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'visitEnded', tick);
       visitEnded += 1;
       continue;
     }
@@ -2134,7 +2177,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       // `gaveUp` names what happened rather than how it felt, and it is what `migrateV7ToV8`
       // maps v7's `unsatisfied` counter onto (whose own doc comment read "patience for a room
       // ran out before one was free").
-      depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUp');
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUp', tick);
       gaveUp += 1;
       continue;
     }
@@ -2168,7 +2211,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       guest.dissatisfaction >= dissatisfactionCapacity &&
       guest.engagement === null
     ) {
-      depart(search, content, guest, lodgingRoom, engagedRoom, 'leftDissatisfied');
+      depart(search, content, guest, lodgingRoom, engagedRoom, 'leftDissatisfied', tick);
       leftDissatisfied += 1;
       continue;
     }

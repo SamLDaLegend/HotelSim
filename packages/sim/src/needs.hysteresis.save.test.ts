@@ -35,6 +35,7 @@
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
+import { withoutCounters } from './fixtures/without-counters.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { SAVE_V1_BYTES } from './fixtures/save-v1.js';
@@ -209,10 +210,16 @@ describe('v8 -> v9 defaults BOTH new fields from the era, and invents nothing', 
     // about a shape no version of it was ever contemporary with. The tally is unaffected by
     // that step, so it is still asked of this step's own output, which is where `abandoned`
     // lands.
+    //
+    // AND SINCE G-028a THE TALLY IS ASKED AT THE END OF THE CHAIN TOO, for exactly the reason
+    // the vector already was: this build's tally row carries the two counter columns, and only
+    // the v15 -> v16 step writes them. Asking today's validator of a v9 tally would be asking it
+    // about a shape no version of it was contemporary with — the sentence above, one column over.
     const migrated = step.migrate(v8World()) as MigratedWorld;
-    expect(() => assertNeedOutcomes(migrated.needOutcomes, 3)).not.toThrow();
     const toStock = MIGRATIONS.find((migration) => migration.from === 12)!.migrate;
-    const current = toStock(migrated) as MigratedWorld;
+    const toCounters = MIGRATIONS.find((migration) => migration.from === 15)!.migrate;
+    const current = toCounters(toStock(migrated)) as MigratedWorld;
+    expect(() => assertNeedOutcomes(current.needOutcomes, 3)).not.toThrow();
     expect(() => assertNeedVector(current.guests.list[0]!.needs, 1)).not.toThrow();
     expect(current.guests.list[0]!.needs.every((entry) => entry.abandonCount === 0)).toBe(true);
   });
@@ -357,11 +364,17 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
           // of a v8 guest — nothing in that era could accumulate anything.
           list: guests.list.map(({ dissatisfaction: _mood, ...guest }) => ({
             ...guest,
-            needs: (guest['needs'] as Record<string, unknown>[]).map(({ abandonCount: _drop, ...rest }) => rest),
+            // `unservedTicks` comes off with it (G-028a): a v8 need had no counter, and leaving
+            // one on would hand `migrateV15ToV16` a field it correctly refuses to overwrite.
+            // EVERY field this build adds to a need has to be stripped here, and a new one that
+            // is not shows up as that refusal rather than as a wrong hash.
+            needs: (guest['needs'] as Record<string, unknown>[]).map(
+              ({ abandonCount: _drop, unservedTicks: _counter, ...rest }) => rest,
+            ),
           })),
         },
         needOutcomes: (json['needOutcomes'] as Record<string, unknown>[]).map(
-          ({ abandoned: _drop, ...rest }) => rest,
+          ({ abandoned: _drop, unservedTicks: _unserved, instanceTicks: _stay, ...rest }) => rest,
         ),
       },
     });
@@ -377,12 +390,16 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
     // both sides carry the same empty distribution. Asserted rather than assumed.
     expect(totalReviews(world.reviewOutcomes)).toBe(0);
     const migrated = deserialise(asV8Bytes(world));
-    expect(hashState(migrated)).toBe(hashState(world));
+    // MODULO THE G-028a COUNTERS, which a v8 world could not carry and this chain will not
+    // invent — see `withoutCounters`. Both halves are asserted, so the exclusion is not a hole.
+    expect(hashState(withoutCounters(migrated))).toBe(hashState(withoutCounters(world)));
+    expect(migrated.needOutcomes.every((row) => row.unservedTicks === 0 && row.instanceTicks === 0)).toBe(true);
+    expect(world.needOutcomes.some((row) => row.instanceTicks > 0)).toBe(true);
     // DEEP EQUALITY RATHER THAN BYTES, for the reason `outcome.save.test.ts` states at the
     // same assertion: `serialise` preserves insertion order and `hashState` sorts, so a key
     // the migration appends lands elsewhere than `createWorld` declares it. `toEqual` is
     // order-independent and structural, and so is stronger than either.
-    expect(migrated).toEqual(world);
+    expect(withoutCounters(migrated)).toEqual(withoutCounters(world));
   });
 
   it('and the same world at v9 round-trips, which is I6 over the new shape', () => {

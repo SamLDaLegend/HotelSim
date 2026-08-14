@@ -295,8 +295,8 @@ describe('THE WANT LINE, AND WHAT IT IS A FRACTION OF', () => {
   });
 
   it('a want line of 0 reads "wanted iff not full" — the era before the stock model', () => {
-    const barely = { needId: SNACK.id, deficit: 1, metBy: null, abandonCount: 0 } as const;
-    const full = { needId: SNACK.id, deficit: 0, metBy: 'room', abandonCount: 0 } as const;
+    const barely = { needId: SNACK.id, deficit: 1, metBy: null, abandonCount: 0, unservedTicks: 0 } as const;
+    const full = { needId: SNACK.id, deficit: 0, metBy: 'room', abandonCount: 0, unservedTicks: 0 } as const;
     expect(isNeedWanted(SNACK, barely, 0, false)).toBe(true);
     expect(isNeedWanted(SNACK, full, 0, false)).toBe(false);
     // And at the shipped line the same barely-dented need is NOT wanted: that gap is the

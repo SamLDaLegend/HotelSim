@@ -357,12 +357,14 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
         deficit: over.food ?? MEAL,
         metBy: (over.food ?? MEAL) === 0 ? 'room' : null,
         abandonCount: 0,
+        unservedTicks: 0,
       },
       {
         needId: 'rest',
         deficit: over.rest ?? MEAL,
         metBy: (over.rest ?? MEAL) === 0 ? 'room' : null,
         abandonCount: 0,
+        unservedTicks: 0,
       },
     ],
   });

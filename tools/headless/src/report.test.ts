@@ -412,8 +412,12 @@ const distinct: RunSummary = {
     // no two numbers here may coincide. The by-room column the renderer prints is
     // `met - metByItem`, computed at print time and stored nowhere (G-013 round 1), so the
     // expected lines below carry 140-134=6 and 142-136=6 rather than a third sentinel.
-    { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141, metByItem: 134, abandoned: 144 },
-    { needId: 'betaNeed', lodging: false, met: 142, unmet: 143, metByItem: 136, abandoned: 145 },
+    // The two G-028a columns take sentinels of their own, and the SHARE the renderer folds from
+    // them is a third distinct number per row rather than a coincidence of the first two: a
+    // renderer dividing the wrong pair, or printing a stored column instead of the quotient,
+    // moves the expected line.
+    { needId: 'alphaNeed', lodging: true, met: 140, unmet: 141, metByItem: 134, abandoned: 144, unservedTicks: 160, instanceTicks: 3_200 },
+    { needId: 'betaNeed', lodging: false, met: 142, unmet: 143, metByItem: 136, abandoned: 145, unservedTicks: 162, instanceTicks: 2_400 },
   ],
   // DISTINCT PER ROW for the reason the departure rows are (G-019), and the SCORES are not
   // 1..3: a renderer that printed a row's index instead of its score, or the scale bounds
@@ -487,8 +491,8 @@ describe('renderers', () => {
         'stuck       115',
         'orphan res  116',
         'in bad room 132',
-        'need L     alphaNeed 140 met, 141 unmet (6 by room, 134 by item), 144 abandoned',
-        'need       betaNeed 142 met, 143 unmet (6 by room, 136 by item), 145 abandoned',
+        'need L     alphaNeed 140 met, 141 unmet (6 by room, 134 by item), 144 abandoned, 500 bp unserved',
+        'need       betaNeed 142 met, 143 unmet (6 by room, 136 by item), 145 abandoned, 675 bp unserved',
         // The review distribution, one column per score the scale admits (G-019), and the
         // mean in integer HUNDREDTHS — folded at print time and stored nowhere, so no
         // sentinel above expresses it: (7x146 + 8x147 + 9x150) / 443 = 801 hundredths.
@@ -557,7 +561,7 @@ describe('buildSummary violations (forged worlds)', () => {
       // θ-b1: content on arrival — each of these forgeries isolates ONE violation, and a
       // guest that walked out is not the one being isolated.
       dissatisfaction: 0,
-      needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0 }],
+      needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0, unservedTicks: 0 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.orphanedReservations).toBe(1);
@@ -565,6 +569,39 @@ describe('buildSummary violations (forged worlds)', () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]).toMatch(/1 orphaned reservation\(s\)/);
     expect(violations[0]).toMatch(/G-004/);
+  });
+
+  it('a tally row with resolved instances and NO stay produces the G-028a violation', () => {
+    // ========================================================================
+    // THE ONE VIOLATION IN THIS BLOCK THAT A REAL RUN CANNOT REACH, DRIVEN LIKE THE REST OF THEM.
+    // `depart` folds a guest's stay into the same row, in the same branch, that it folds the
+    // guest's instance into — so a row holding one without the other is unreachable through the
+    // tick, which is exactly why it is checked here rather than trusted (ADR-0007's second half:
+    // a case proving the branch can fail).
+    //
+    // AND IT IS THE ONLY THING THAT WOULD SAY SO ON A MIGRATED WORLD. A v15 world carried no
+    // counters, so `migrateV15ToV16` writes zeroes and every row of it reports 0 bp unserved —
+    // which reads exactly like a hotel that served everybody perfectly. This guard is what
+    // separates "nothing was measured" from "nothing went wrong" the moment such a world has a
+    // departure in it. The runner never loads a save, so nothing else would.
+    // ========================================================================
+    const { world, options } = defaultRun(2);
+    expect(world.needOutcomes.length).toBeGreaterThan(0);
+    const forged: World = {
+      ...world,
+      needOutcomes: world.needOutcomes.map((row) => ({ ...row, unservedTicks: 0, instanceTicks: 0 })),
+    };
+    const { violations } = buildSummary(forged, content, options);
+    // One per row that resolved something, and every one names the row and both quantities.
+    const resolved = world.needOutcomes.filter((row) => row.met + row.unmet > 0);
+    expect(resolved.length).toBeGreaterThan(0);
+    expect(violations).toHaveLength(resolved.length);
+    for (const violation of violations) {
+      expect(violation).toMatch(/resolved instance\(s\) and 0 ticks of stay/);
+      expect(violation).toMatch(/G-028a/);
+    }
+    // And the unforged world raises none of them, so the arm is measuring the forgery.
+    expect(buildSummary(world, content, options).violations).toEqual([]);
   });
 
   it('a guest older than its own worst-case lifetime produces the stuck violation', () => {
@@ -584,7 +621,7 @@ describe('buildSummary violations (forged worlds)', () => {
       // θ-b1: content on arrival — each of these forgeries isolates ONE violation, and a
       // guest that walked out is not the one being isolated.
       dissatisfaction: 0,
-      needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0 }],
+      needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0, unservedTicks: 0 }],
     });
     const { summary, violations } = buildSummary(forged, content, options);
     expect(summary.guests.stuck).toBe(1);
@@ -630,7 +667,7 @@ describe('buildSummary violations (forged worlds)', () => {
         // θ-b1: content on arrival — each of these forgeries isolates ONE violation, and a
         // guest that walked out is not the one being isolated.
         dissatisfaction: 0,
-        needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0 }],
+        needs: [{ needId: needType.id, deficit: 1, metBy: null, abandonCount: 0, unservedTicks: 0 }],
       }),
       ledger: [...world.ledger.filter((_, i) => i !== firstSettlement), foreign],
     };

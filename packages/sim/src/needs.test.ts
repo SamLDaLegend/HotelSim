@@ -145,12 +145,14 @@ describe('a guest forms one instance of EVERY need the content defines', () => {
       deficit: 20,
       metBy: null,
       abandonCount: 0,
+      unservedTicks: 0,
     });
     expect(findNeedState(guest.needs, 'rest')).toEqual({
       needId: 'rest',
       deficit: 10,
       metBy: null,
       abandonCount: 0,
+      unservedTicks: 0,
     });
   });
 
@@ -209,9 +211,36 @@ describe('a need nothing ever serves runs down ON ITS OWN and does not end the s
     // and it is the whole subject of the goal.
     const world = run(noAmenities(), content, 200, [at(1, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
-    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 1, unmet: 0, metByItem: 0, abandoned: 0 });
-    expect(needOutcomeOf(world.needOutcomes, 'food')).toEqual({ needId: 'food', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
-    expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({ needId: 'fun', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
+    // AND THE SAME SPLIT IN THE G-028a COLUMNS, which is what makes them worth carrying beside
+    // the snapshot: the need the hotel served reads a zero numerator over the whole stay, and
+    // the two it never served read a numerator this guest accumulated a tick at a time.
+    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({
+      needId: 'rest',
+      met: 1,
+      unmet: 0,
+      metByItem: 0,
+      abandoned: 0,
+      unservedTicks: 0,
+      instanceTicks: 60,
+    });
+    expect(needOutcomeOf(world.needOutcomes, 'food')).toEqual({
+      needId: 'food',
+      met: 0,
+      unmet: 1,
+      metByItem: 0,
+      abandoned: 0,
+      unservedTicks: 60,
+      instanceTicks: 60,
+    });
+    expect(needOutcomeOf(world.needOutcomes, 'fun')).toEqual({
+      needId: 'fun',
+      met: 0,
+      unmet: 1,
+      metByItem: 0,
+      abandoned: 0,
+      unservedTicks: 60,
+      instanceTicks: 60,
+    });
   });
 
   it('EMPTY IS NOT TERMINAL: a café that appears late still fills a need that ran right out', () => {
@@ -247,7 +276,20 @@ describe('a need nothing ever serves runs down ON ITS OWN and does not end the s
     const world = run(hotel([]), content, 120, [at(1, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(needOutcomeOf(world.needOutcomes, 'rest')).toEqual({ needId: 'rest', met: 0, unmet: 1, metByItem: 0, abandoned: 0 });
+    // THE NUMERATOR IS THE WHOLE DENOMINATOR, and that equality is the accumulator's meaning in
+    // its purest form: a guest holding no room excuses nothing (ADR-0026 as amended), nothing
+    // ever serves it, so every tick of its stay is a tick the hotel left it wanting a bed.
+    const rest = needOutcomeOf(world.needOutcomes, 'rest')!;
+    expect(rest).toEqual({
+      needId: 'rest',
+      met: 0,
+      unmet: 1,
+      metByItem: 0,
+      abandoned: 0,
+      unservedTicks: 100,
+      instanceTicks: 100,
+    });
+    expect(rest.unservedTicks).toBe(rest.instanceTicks);
   });
 });
 
@@ -304,7 +346,7 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // One need where the content defines three — lengths differ, so the positional path is
     // skipped entirely. Without a working fallback the capacity would be unknown and the need
     // would be HELD at 99 rather than decaying to its clamp.
-    const migrated: readonly NeedState[] = [{ needId: 'rest', deficit: 99, metBy: null, abandonCount: 0 }];
+    const migrated: readonly NeedState[] = [{ needId: 'rest', deficit: 99, metBy: null, abandonCount: 0, unservedTicks: 0 }];
     const advanced = decay(migrated);
     expect(advanced[0]?.deficit).toBe(100);
     expect(decay(advanced)[0]?.deficit).toBe(100);
@@ -316,9 +358,9 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // type positionally would find this need ALREADY past a 200-tick clamp and freeze it at
     // 399, so the assertion below is what separates the two reads.
     const shifted: readonly NeedState[] = [
-      { needId: 'fun', deficit: 399, metBy: null, abandonCount: 0 },
-      { needId: 'rest', deficit: 50, metBy: null, abandonCount: 0 },
-      { needId: 'zzz', deficit: 10, metBy: null, abandonCount: 0 },
+      { needId: 'fun', deficit: 399, metBy: null, abandonCount: 0, unservedTicks: 0 },
+      { needId: 'rest', deficit: 50, metBy: null, abandonCount: 0, unservedTicks: 0 },
+      { needId: 'zzz', deficit: 10, metBy: null, abandonCount: 0, unservedTicks: 0 },
     ];
     const advanced = decay(shifted);
     expect(advanced[0]?.deficit).toBe(400);
@@ -335,7 +377,7 @@ describe('a need type is resolved by position, and the fallback is REAL (G-016)'
     // this is where it would show, rather than in a state hash nobody can attribute.
     let aligned = formNeedVector(content);
     let misaligned: readonly NeedState[] = [...aligned, {
-      needId: 'zzz', deficit: 500, metBy: null, abandonCount: 0,
+      needId: 'zzz', deficit: 500, metBy: null, abandonCount: 0, unservedTicks: 0,
     }];
     for (let tick = 0; tick < 100; tick += 1) {
       aligned = advanceNeeds(content, aligned, 'rest', 'food', 'room', true, 'rest');
@@ -368,18 +410,18 @@ describe('a bad need vector is still refused, and the message still names the gu
     ['not an array', 42],
     ['empty', []],
     ['a hole', [null]],
-    ['an empty needId', [{ needId: '', deficit: 1, metBy: null, abandonCount: 0 }]],
+    ['an empty needId', [{ needId: '', deficit: 1, metBy: null, abandonCount: 0, unservedTicks: 0 }]],
     [
       'out of order',
       [
-        { needId: 'rest', deficit: 1, metBy: null, abandonCount: 0 },
-        { needId: 'food', deficit: 1, metBy: null, abandonCount: 0 },
+        { needId: 'rest', deficit: 1, metBy: null, abandonCount: 0, unservedTicks: 0 },
+        { needId: 'food', deficit: 1, metBy: null, abandonCount: 0, unservedTicks: 0 },
       ],
     ],
-    ['a negative deficit', [{ needId: 'rest', deficit: -1, metBy: null, abandonCount: 0 }]],
-    ['a missing metBy', [{ needId: 'rest', deficit: 1, abandonCount: 0 }]],
-    ['a metBy that is not a provider kind', [{ needId: 'rest', deficit: 1, metBy: 'ghost', abandonCount: 0 }]],
-    ['a full need nothing served', [{ needId: 'rest', deficit: 0, metBy: null, abandonCount: 0 }]],
+    ['a negative deficit', [{ needId: 'rest', deficit: -1, metBy: null, abandonCount: 0, unservedTicks: 0 }]],
+    ['a missing metBy', [{ needId: 'rest', deficit: 1, abandonCount: 0, unservedTicks: 0 }]],
+    ['a metBy that is not a provider kind', [{ needId: 'rest', deficit: 1, metBy: 'ghost', abandonCount: 0, unservedTicks: 0 }]],
+    ['a full need nothing served', [{ needId: 'rest', deficit: 0, metBy: null, abandonCount: 0, unservedTicks: 0 }]],
     ['a missing abandonCount', [{ needId: 'rest', deficit: 1, metBy: null }]],
     ['a negative abandonCount', [{ needId: 'rest', deficit: 1, metBy: null, abandonCount: -1 }]],
   ];
@@ -405,7 +447,7 @@ describe('a bad need vector is still refused, and the message still names the gu
 
   it('and a good vector is accepted, so the guard is not simply always throwing', () => {
     expect(() =>
-      assertNeedVector([{ needId: 'rest', deficit: 4, metBy: null, abandonCount: 0 }], 41),
+      assertNeedVector([{ needId: 'rest', deficit: 4, metBy: null, abandonCount: 0, unservedTicks: 0 }], 41),
     ).not.toThrow();
   });
 });
@@ -449,25 +491,33 @@ describe('the per-need tally', () => {
     // `abandonCount` varies per state (G-014b), so this also pins that the fold ADDS the
     // departing guest's own history into the row rather than overwriting it: `zeta` is
     // recorded twice, carrying 2 then 3, and comes out at 5.
-    const state = (needId: string, met: boolean, abandonCount = 0): NeedState => ({
+    // AND `unservedTicks` IS THE SAME PROPERTY ONE COLUMN OVER (G-028a): `zeta` is recorded
+    // twice and comes out carrying the SUM of both counts, against a denominator that adds both
+    // stays. Every value below is distinct so that a fold which overwrote instead of adding, or
+    // which put a numerator in a denominator, changes the expectation rather than surviving it.
+    // (The figures live in the expectation and nowhere else — ADR-0032 §1.)
+    const state = (needId: string, met: boolean, abandonCount = 0, unservedTicks = 0): NeedState => ({
       needId,
       deficit: met ? 0 : 5,
       metBy: met ? 'room' : null,
       abandonCount,
+      unservedTicks,
     });
     let tally = createNeedOutcomes();
-    tally = recordNeedsAtDeparture(content, tally, [state('zeta', true, 2)]);
-    tally = recordNeedsAtDeparture(content, tally, [state('alpha', false, 7), state('zeta', false, 3)]);
-    tally = recordNeedsAtDeparture(content, tally, [state('mid', true)]);
+    tally = recordNeedsAtDeparture(content, tally, [state('zeta', true, 2, 11)], 100);
+    tally = recordNeedsAtDeparture(content, tally, [state('alpha', false, 7, 20), state('zeta', false, 3, 30)], 200);
+    tally = recordNeedsAtDeparture(content, tally, [state('mid', true)], 50);
     expect(tally).toEqual([
-      { needId: 'alpha', met: 0, unmet: 1, metByItem: 0, abandoned: 7 },
-      { needId: 'mid', met: 1, unmet: 0, metByItem: 0, abandoned: 0 },
-      { needId: 'zeta', met: 1, unmet: 1, metByItem: 0, abandoned: 5 },
+      { needId: 'alpha', met: 0, unmet: 1, metByItem: 0, abandoned: 7, unservedTicks: 20, instanceTicks: 200 },
+      { needId: 'mid', met: 1, unmet: 0, metByItem: 0, abandoned: 0, unservedTicks: 0, instanceTicks: 50 },
+      { needId: 'zeta', met: 1, unmet: 1, metByItem: 0, abandoned: 5, unservedTicks: 41, instanceTicks: 300 },
     ]);
   });
 
   it('returns its input unchanged for a guest carrying no needs at all', () => {
-    const tally = recordNeedsAtDeparture(content, createNeedOutcomes(), []);
+    // The stay is passed and ignored, which is the point: a guest with no needs contributes to
+    // no row, so there is no denominator for it to land in either.
+    const tally = recordNeedsAtDeparture(content, createNeedOutcomes(), [], 1_440);
     expect(tally).toEqual([]);
   });
 });

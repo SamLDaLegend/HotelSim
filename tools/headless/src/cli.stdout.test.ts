@@ -126,7 +126,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // the new branch is unreachable at any value of the new field.** THE EVIDENCE IS THIS
     // DOCUMENT, field by field: `stateHash` and the new zero row are the only things that differ.
     // Four guests still in the hotel, 24 still arrived, 4 still checked out, 16 still gave up.
-    stateHash: 'd21f2a04f787dc80',
+    stateHash: '83070924e2b10af8',
   },
   guests: {
     arrived: 24,
@@ -235,10 +235,17 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // more often than one that could finish a task once. Every engagement need moves from
     // roughly half met to four fifths met. `night_rest` does not move at all — 4 met, 16 unmet
     // — because it is capacity that decides it: three rooms against 24 arrivals over two days.
-    { needId: 'guest_comfort', lodging: false, met: 16, unmet: 4, metByItem: 16, abandoned: 0 },
-    { needId: 'guest_entertainment', lodging: false, met: 16, unmet: 4, metByItem: 0, abandoned: 0 },
-    { needId: 'guest_nourishment', lodging: false, met: 18, unmet: 2, metByItem: 5, abandoned: 0 },
-    { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0 },
+    //
+    // AND THE TWO G-028a COLUMNS JOIN THEM WITHOUT MOVING ANY OF THEM. The counters are new
+    // state that nothing in the simulation reads, so every figure above and below is the one
+    // this golden already carried; what moved is the state hash and these four pairs. The
+    // denominator is the same for all four rows because every departed guest in this run
+    // carried the whole vector, and `night_rest` carries the largest numerator — three rooms
+    // against 24 arrivals is a hotel that mostly cannot give anybody a bed.
+    { needId: 'guest_comfort', lodging: false, met: 16, unmet: 4, metByItem: 16, abandoned: 0, unservedTicks: 1_539, instanceTicks: 8_640 },
+    { needId: 'guest_entertainment', lodging: false, met: 16, unmet: 4, metByItem: 0, abandoned: 0, unservedTicks: 1_961, instanceTicks: 8_640 },
+    { needId: 'guest_nourishment', lodging: false, met: 18, unmet: 2, metByItem: 5, abandoned: 0, unservedTicks: 1_254, instanceTicks: 8_640 },
+    { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0, unservedTicks: 3_000, instanceTicks: 8_640 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
   // beside it, each standing on the ground. Zero invalid rooms here is the assertion that
@@ -353,10 +360,10 @@ const GOLDEN_2_DAYS_SEED_42 =
     'stuck       0',
     'orphan res  0',
     'in bad room 0',
-    'need       guest_comfort 16 met, 4 unmet (0 by room, 16 by item), 0 abandoned',
-    'need       guest_entertainment 16 met, 4 unmet (16 by room, 0 by item), 0 abandoned',
-    'need       guest_nourishment 18 met, 2 unmet (13 by room, 5 by item), 0 abandoned',
-    'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned',
+    'need       guest_comfort 16 met, 4 unmet (0 by room, 16 by item), 0 abandoned, 1781 bp unserved',
+    'need       guest_entertainment 16 met, 4 unmet (16 by room, 0 by item), 0 abandoned, 2269 bp unserved',
+    'need       guest_nourishment 18 met, 2 unmet (13 by room, 5 by item), 0 abandoned, 1451 bp unserved',
+    'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned, 3472 bp unserved',
     'reviews     1:0, 2:0, 3:9, 4:8, 5:3',
     'mean x100   370',
     'ledger      7 transactions',
@@ -374,7 +381,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     510000p',
-    'state hash  d21f2a04f787dc80',
+    'state hash  83070924e2b10af8',
   ].join('\n') + '\n';
 
 /**
@@ -531,7 +538,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  d21f2a04f787dc80']);
+    expect(differing).toEqual(['seed        42', 'state hash  83070924e2b10af8']);
     expect(lines43).toContain('seed        43');
   });
 });

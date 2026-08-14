@@ -136,8 +136,8 @@ function guest(id: number, over: GuestOver = {}): Guest {
     // would have built. `snack` is here to be legal state rather than to be pursued: no lounge
     // is ever built below, so nothing can serve it.
     needs: [
-      { needId: 'rest', deficit: restDeficit, metBy: restDeficit === 0 ? 'room' : null, abandonCount: 0 },
-      { needId: 'snack', deficit: WANT_LINE, metBy: null, abandonCount: 0 },
+      { needId: 'rest', deficit: restDeficit, metBy: restDeficit === 0 ? 'room' : null, abandonCount: 0, unservedTicks: 0 },
+      { needId: 'snack', deficit: WANT_LINE, metBy: null, abandonCount: 0, unservedTicks: 0 },
     ],
   };
 }

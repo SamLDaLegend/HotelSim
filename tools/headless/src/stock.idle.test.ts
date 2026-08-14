@@ -26,6 +26,30 @@
 // can run the other way, which is why X is a ceiling rather than a prediction.
 // ============================================================================
 
+// ############################################################################
+//  ADR-0029 (HUMAN) RE-SCOPED WHAT THIS FILE MEASURES, AND ONE HALF OF IT IS NOW A DIFFERENT
+//  POPULATION. READ THIS BEFORE READING A NUMBER BELOW.
+//
+//  The ruling, verbatim in its consequences: a SLEEPING guest is never idle; an AWAKE guest idle
+//  IN ITS OWN ROOM is acceptable; **only a guest stranded in PUBLIC with needs it cannot get met
+//  is a defect.** The idle share was pooling all three under one name.
+//
+//  So the X and N arms below measure the SECOND population — a room-holder that wants nothing —
+//  and under this ruling that is not a defect at all. They are kept, and retitled for what they
+//  are: a derivation and its execution, pinning that the model's duty cycle is what the content
+//  rates say it is. Nothing in them is a pass/fail statement about the game any more.
+//
+//  THE THIRD POPULATION GETS ITS OWN ARMS, AND MEASURING IT PRODUCED A FINDING THAT CHANGES THE
+//  SHAPE OF THE CRITERION. A guest standing in public with no room ALWAYS wants something
+//  unserved — its own lodging need, which nothing is serving and which no room-holder's excusal
+//  covers. So "with needs it cannot get met" is true of every member of the population it was
+//  meant to narrow: the qualifier inspects nothing. That is asserted below rather than argued,
+//  and it is why the criterion is a two-sided EXISTENCE claim in absolute guest-ticks — zero in a
+//  hotel provisioned to the derived rule, non-zero in a starved one — rather than a ceiling on a
+//  share. A ceiling over a population that is empty whenever the hotel is adequate would be
+//  ADR-0007's shape wearing a threshold.
+// ############################################################################
+
 import { describe, expect, it } from 'vitest';
 import {
   createWorld,
@@ -39,8 +63,10 @@ import {
   ONE_WHOLE_BASIS_POINTS,
   stayDurationOf,
   stepTick,
+  toleranceOf,
   wantAtOf,
   wantLineOf,
+  wantsSomethingUnserved,
 } from '@hotelsim/sim';
 import type { BoundContent, Guest } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
@@ -72,7 +98,14 @@ const stepTheBox = (
   arrivalEveryTicks: number,
   amenities: number,
   ticks: number,
-): { readonly idleBasisPoints: number; readonly longestRunTicks: number; readonly frames: number } => {
+): {
+  readonly idleBasisPoints: number;
+  readonly longestRunTicks: number;
+  readonly frames: number;
+  readonly publicTicks: number;
+  readonly strandedTicks: number;
+  readonly longestStrandedRunTicks: number;
+} => {
   let world = createWorld(7, content);
   const commands = schedule(ticks, content, world.grid, rooms, arrivalEveryTicks, 0, 0, 0, amenities);
   const byTick = new Map<number, ReturnType<typeof schedule>[number]['command'][]>();
@@ -83,6 +116,15 @@ const stepTheBox = (
   }
   let frames = 0;
   let idle = 0;
+  // ADR-0029's THIRD POPULATION, counted in the same walk: awake, holding no room, engaged with
+  // nothing — standing in public — and, separately, doing so while wanting something unserved.
+  let publicTicks = 0;
+  let strandedTicks = 0;
+  // PER GUEST, because the bound this population has is a bound on ONE guest's wait: it gives up
+  // at `toleranceTicks`. A total over every guest has no bound at all — a hotel can strand any
+  // number of them — so the total is the wrong quantity to compare against content.
+  const strandedRuns = new Map<number, number>();
+  let longestStranded = 0;
   const runs = new Map<number, number>();
   let longest = 0;
   for (let t = 0; t < ticks; t += 1) {
@@ -90,9 +132,28 @@ const stepTheBox = (
     for (const guest of guestsInOrder(world.guests)) {
       if (guest.roomEntityId === NO_ENTITY) {
         runs.delete(guest.id);
+        // (a guest that later gets a room leaves this branch, and its stranded run ends below)
+        if (guest.engagement === null) {
+          publicTicks += 1;
+          // THE SHIPPED PREDICATE, not a fourth spelling of its three exclusions. A guest with no
+          // room excuses nothing (ADR-0026 as amended) and has no lodging room serving it, so the
+          // served slots are its engagement — which is null on every tick counted here.
+          if (wantsSomethingUnserved(content, guest.needs, null, null, wantAtOf(content), null)) {
+            strandedTicks += 1;
+            const streak = (strandedRuns.get(guest.id) ?? 0) + 1;
+            strandedRuns.set(guest.id, streak);
+            if (streak > longestStranded) longestStranded = streak;
+          } else {
+            strandedRuns.set(guest.id, 0);
+          }
+        } else {
+          // Engaged with something: in public, but not stranded, so the run ends.
+          strandedRuns.set(guest.id, 0);
+        }
         continue;
       }
       frames += 1;
+      strandedRuns.set(guest.id, 0);
       if (wantsNothing(content, guest)) {
         idle += 1;
         const run = (runs.get(guest.id) ?? 0) + 1;
@@ -107,10 +168,13 @@ const stepTheBox = (
     idleBasisPoints: frames === 0 ? 0 : Math.round((idle * ONE_WHOLE_BASIS_POINTS) / frames),
     longestRunTicks: longest,
     frames,
+    publicTicks,
+    strandedTicks,
+    longestStrandedRunTicks: longestStranded,
   };
 };
 
-describe('X — the idle share, from content and then from a stepped world', () => {
+describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and then stepped', () => {
   it('the ceiling is computed from the shipped rates and is 25.00%', () => {
     // X = 1 − (Σ over ENGAGEMENT needs 1/(1+r)) × (1 + 1/r_lodging). The lodging term is NOT
     // 1/(1+r): rest decays only in AWAY time, and away time is what the engagement needs
@@ -149,7 +213,7 @@ describe('X — the idle share, from content and then from a stepped world', () 
   });
 });
 
-describe('N — the longest idle run, in FRAMES, with the stride carried', () => {
+describe('N — the longest AT-HOME idle run, in FRAMES, with the stride carried', () => {
   const nTicks = (): number => {
     const lodging = lodgingNeedOf(content);
     // OVER THE NEEDS THAT DECAY IN WALL TIME, AND THE LODGING NEED IS NOT ONE OF THEM. An idle
@@ -185,5 +249,82 @@ describe('N — the longest idle run, in FRAMES, with the stride carried', () =>
     // line and the one above carried came from a pair no re-measurement could reproduce, and it
     // is withdrawn rather than restated).
     expect(Math.floor(box.longestRunTicks / RECORD_STRIDE) + 1).toBeLessThan(43);
+  });
+});
+
+// ============================================================================
+//  ADR-0029's THIRD POPULATION — THE ONE THE RULING CALLS A DEFECT.
+// ============================================================================
+
+describe('the stranded guest: in public, awake, and not getting what it came for', () => {
+  /**
+   * Two hotels, chosen by the provisioning rule rather than by hand.
+   *
+   * PROVISIONED: enough beds for the cadence's whole demand, and amenities to match, so nobody
+   * ever stands in the lobby. STARVED: a third of the beds, so guests arrive, wait and give up.
+   * The pair is the two-sided form — a criterion that only ever asserted the zero could be met by
+   * an instrument that counted nobody, which is exactly the failure ADR-0029's own predicate
+   * turned out to have.
+   */
+  const provisioned = (): ReturnType<typeof stepTheBox> => stepTheBox(12, 120, 2, STAY * 2);
+  const starved = (): ReturnType<typeof stepTheBox> => stepTheBox(3, 120, 1, STAY * 2);
+
+  it('IS EMPTY in a hotel provisioned to the derived rule — nobody is ever left standing', () => {
+    const box = provisioned();
+    expect(box.strandedTicks).toBe(0);
+    // AND THE ZERO IS NOT AN ARTEFACT OF AN EMPTY RUN: the hotel is full of guests the whole
+    // time, they simply all have rooms. Without this the arm would pass on a hotel with no
+    // guests in it at all.
+    expect(box.frames).toBeGreaterThan(0);
+  });
+
+  it('AND IS NOT EMPTY in a starved one, which is what proves the instrument can fire', () => {
+    // ADR-0007's companion case, and the half that a one-sided ceiling never had.
+    const box = starved();
+    expect(box.strandedTicks).toBeGreaterThan(0);
+    // ========================================================================
+    // AND ONE GUEST'S WAIT IS BOUNDED BY THE CONTENT'S OWN PATIENCE, asserted over the quantity
+    // the bound is about: the LONGEST RUN one guest accumulates, against `toleranceTicks` read
+    // off the table.
+    //
+    // THE WARRANT IS NARROWER THAN IT LOOKS AND THE NARROWING IS LOAD-BEARING. `stepGuests` gives
+    // up on a roomless guest at `tick - arrivedTick >= tolerance` ONLY WHERE THE CONTENT DECLARES
+    // A LODGING NEED (`guests.ts`, the `lodgingUnserved` guard). Under the food-court content
+    // θ-b2 shipped there is no such branch: a roomless VISITOR lives out its visit, which the
+    // shipped table makes longer than its tolerance, and this bound would be false of it. This
+    // arm runs on the shipped hotel content, where the guard holds — which is why the bound is
+    // read off `toleranceOf` rather than asserted as a property of the simulation.
+    //
+    // THE LINE IT REPLACES COULD NOT FAIL: `strandedTicks < publicTicks + 1` is arithmetic on two
+    // counters incremented in the same branch, true for any content and any hotel, while the
+    // comment above it warranted this proposition instead.
+    //
+    // AND THE ANTI-VACUITY GUARD IS THE `strandedTicks` LINE ABOVE, not a second `> 0` here: a run
+    // is only ever counted inside the branch that counts a stranded tick, so `longestRun > 0` is
+    // implied by `strandedTicks > 0` — the same two-counters shape this comment condemns. One
+    // witness, stated once, at the top of the arm.
+    // ========================================================================
+    expect(box.longestStrandedRunTicks).toBeLessThanOrEqual(toleranceOf(content)!);
+  });
+
+  it('and the qualifier "with needs it cannot get met" inspects NOTHING — measured, not argued', () => {
+    // ============================================================================
+    // THE FINDING THAT SHAPED THE CRITERION. A guest in public holds no room, so its lodging
+    // need is unserved by construction AND unexcused by construction — ADR-0026's excusal is
+    // conditional on holding a room. There is therefore no such thing as a guest standing in the
+    // lobby with nothing it wants, and the ruling's narrowing clause selects every member of the
+    // population it was meant to narrow.
+    //
+    // ASSERTED ON BOTH HOTELS, INCLUDING THE ONE WHERE BOTH COUNTS ARE ZERO — 0 === 0 is a true
+    // instance of the identity and a vacuous witness of it, which is why the starved arm above
+    // pins the non-zero side separately.
+    //
+    // IF THIS EVER GOES RED the qualifier has started to matter, and the criterion above should
+    // become a share of public time rather than a count of it.
+    // ============================================================================
+    for (const box of [provisioned(), starved()]) {
+      expect(box.strandedTicks).toBe(box.publicTicks);
+    }
+    expect(starved().publicTicks).toBeGreaterThan(0);
   });
 });

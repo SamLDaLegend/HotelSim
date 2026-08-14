@@ -36,6 +36,7 @@
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
+import { withoutCounters } from './fixtures/without-counters.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { SAVE_V1_BYTES, SAVE_V1_CONTENT_FINGERPRINT } from './fixtures/save-v1.js';
@@ -126,8 +127,12 @@ const v9World = (): Record<string, unknown> => {
       ),
     },
     needOutcomes: [
-      { needId: 'food', met: 2, unmet: 2, metByItem: 0, abandoned: 0 },
-      { needId: 'rest', met: 3, unmet: 1, metByItem: 0, abandoned: 0 },
+      // The G-028a columns are present so that this fixture fails on the REVIEW TABLE, which is
+      // its subject: `assertWorldShape` checks the tally before it reaches `reviewOutcomes`, so a
+      // row missing them would refuse this world for the wrong reason and the test would pass
+      // while inspecting a different defect (the `dissatisfaction: 0` note in `needs.save.test.ts`).
+      { needId: 'food', met: 2, unmet: 2, metByItem: 0, abandoned: 0, unservedTicks: 0, instanceTicks: 0 },
+      { needId: 'rest', met: 3, unmet: 1, metByItem: 0, abandoned: 0, unservedTicks: 0, instanceTicks: 0 },
     ],
   };
 };
@@ -156,6 +161,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed', 
       [12, 13],
       [13, 14],
       [14, 15],
+      [15, 16],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -361,14 +367,31 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
     // AND THE v14 FIELD COMES OFF EVERY GUEST (θ-b1), for the reason `reviewOutcomes` comes off
     // the world: "the same world written in the v9 SHAPE" means every difference v9 had, and a
     // v9 guest had no mood. `migrateV13ToV14` refuses a guest that already carries one.
+    //
+    // AND THE v16 COUNTERS COME OFF EVERY NEED AND EVERY TALLY ROW (G-028a), same argument:
+    // a v9 need had no counter and a v9 tally row had no denominator. `migrateV15ToV16` refuses
+    // a need or a row that already carries one, so a field left on here surfaces as that refusal.
     const guests = rest['guests'] as { nextId: number; list: Record<string, unknown>[] };
     const withoutV14 = {
       ...guests,
-      list: guests.list.map(({ dissatisfaction: _mood, ...guest }) => guest),
+      list: guests.list.map(({ dissatisfaction: _mood, ...guest }) => ({
+        ...guest,
+        needs: (guest['needs'] as Record<string, unknown>[]).map(
+          ({ unservedTicks: _counter, ...need }) => need,
+        ),
+      })),
     };
+    const tallyWithoutV16 = (rest['needOutcomes'] as Record<string, unknown>[]).map(
+      ({ unservedTicks: _unserved, instanceTicks: _stay, ...row }) => row,
+    );
     return JSON.stringify({
       schemaVersion: 9,
-      world: { ...rest, guests: withoutV14, guestOutcomes: v11Labels(rest) },
+      world: {
+        ...rest,
+        guests: withoutV14,
+        needOutcomes: tallyWithoutV16,
+        guestOutcomes: v11Labels(rest),
+      },
     });
   };
 
@@ -390,9 +413,16 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
     expect(migrated.reviewOutcomes).toEqual([]);
     expect(world.reviewOutcomes).not.toEqual([]);
     expect(hashState(migrated)).not.toBe(hashState(world));
-    // Everything else about them is identical, so the reviews are the whole of the
-    // difference rather than one difference among several.
-    expect({ ...migrated, reviewOutcomes: world.reviewOutcomes }).toEqual(world);
+    // Everything else about them is identical EXCEPT the counters a v9 world could not carry,
+    // and those are put back the same way and for the same reason (G-028a): the migration
+    // defaults them to zero because that is what the bytes support, so a lived world's real
+    // counts are a second thing the migration does not invent. Restoring both is what makes
+    // this "the reviews and the counters, and nothing else".
+    expect(withoutCounters({ ...migrated, reviewOutcomes: world.reviewOutcomes })).toEqual(
+      withoutCounters(world),
+    );
+    expect(migrated.needOutcomes.every((row) => row.unservedTicks === 0 && row.instanceTicks === 0)).toBe(true);
+    expect(world.needOutcomes.some((row) => row.instanceTicks > 0)).toBe(true);
   });
 
   it('and the review it carries is the one the guest actually left', () => {

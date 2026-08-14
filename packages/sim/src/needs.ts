@@ -216,6 +216,36 @@ export type NeedState = {
    * ------------------------------------------------------------------------------------
    */
   readonly abandonCount: number;
+  /**
+   * How many ticks the HOTEL has left this need unserved while the guest wanted it (G-028a).
+   *
+   * ------------------------------------------------------------------------------------
+   * IT IS AN INTEGRAL, AND THAT IS THE WHOLE POINT — the departure tally is a SNAPSHOT, and a
+   * snapshot of a population that arrives on a fixed cadence and stays a fixed length reads every
+   * guest at the same phase of the same deterministic cycle. `recordNeedsAtDeparture` has said so
+   * about itself since G-027b and named this field as the replacement it was deferring.
+   *
+   * WHAT COUNTS IS `isNeedUnservedNow` AND NOTHING ELSE, so there is one definition of "the hotel
+   * is letting this guest down on this need right now" and the dissatisfaction stock asks the same
+   * one (`wantsSomethingUnserved` is a fold over it). Three exclusions live in that predicate and
+   * every one of them is somebody's ruling rather than a convenience:
+   *
+   *   NOT WANTED       a need below its want line is not being pursued (the hysteresis).
+   *   BEING SERVED     the room or the engagement is serving it this tick.
+   *   EXCUSED          ADR-0026 as amended: the lodging need of a guest that HOLDS a room. At
+   *                    home it is served anyway; away it is decaying because the guest chose to
+   *                    go out, and charging that to the hotel is a floor nobody can pay down.
+   *
+   * IT IS WRITE-ONLY INSIDE THE TICK (G-028a's fence). No branch anywhere in this package may
+   * read it to decide anything: this goal ships the instrument, and the goal that makes the
+   * review read it moves `met`, `unmet` and `report.ts`'s review law A in the same diff, because
+   * those three are coupled and a build where one has moved and the others have not exits 1.
+   *
+   * NEVER RESET AND NEVER DRAINED, unlike `Guest.dissatisfaction`, which is a mood and recovers.
+   * This is a measurement of a stay, so the only thing that ends it is the stay.
+   * ------------------------------------------------------------------------------------
+   */
+  readonly unservedTicks: number;
 };
 
 /**
@@ -291,6 +321,28 @@ export type NeedOutcome = {
    *           checked — the same argument G-012 makes for the reservation release.
    */
   readonly abandoned: number;
+  /**
+   * Σ `NeedState.unservedTicks` over the instances counted in this row (G-028a).
+   *
+   * A SUM AND NOT A SHARE, and the division is the report's. Two integers on disk with the
+   * division at the point of reading is the `ReviewScale.bands` discipline: a stored share
+   * would be a second rounding, taken per departure, that nothing could re-derive.
+   */
+  readonly unservedTicks: number;
+  /**
+   * Σ stay length over the same instances — the DENOMINATOR `unservedTicks` is a share of.
+   *
+   * PER ROW RATHER THAN ONE FIGURE ON THE WORLD, because a row counts the guests that carried
+   * THIS need: a guest migrated from v5 formed one need, so its stay belongs to one row and not
+   * to the other three. One world-level total would silently divide by stays that never
+   * contributed to the numerator.
+   *
+   * `unservedTicks <= instanceTicks` is the bound `assertNeedOutcomes` carries. It is a real
+   * check rather than an identity: the numerator is accumulated per tick inside the tick loop
+   * and the denominator is computed once at departure from the guest's own arrival tick, so
+   * nothing but agreement between the two makes it hold.
+   */
+  readonly instanceTicks: number;
 };
 
 /**
@@ -376,6 +428,11 @@ export function formNeedVector(content: BoundContent): readonly NeedState[] {
       metBy: null,
       // Nothing has been walked out on yet either (G-014b).
       abandonCount: 0,
+      // And the hotel has not had a tick in which to let this guest down yet (G-028a). A guest
+      // is created DURING its arrival tick, after that tick's decay pass has already run, so
+      // the tick it walks in on cannot have gone unserved — the same `- 1` the closed form in
+      // this file's header applies to the deficit, for the same reason.
+      unservedTicks: 0,
     });
   }
   return needs;
@@ -570,21 +627,120 @@ export function wantsSomethingUnserved(
   for (let i = 0; i < needs.length; i += 1) {
     const need = needs[i];
     if (need === undefined) continue;
-    // A FULL NEED IS NOT WANTED, and this is one integer compare before any type resolution.
-    if (need.deficit === 0) continue;
-    // Something is serving it this tick, so the hotel is not failing the guest on this one.
-    if (need.needId === servedA || need.needId === servedB) continue;
-    // And the guest's own excursion is not the hotel's fault — see the block above.
-    if (need.needId === excusedNeedId) continue;
-    const positional = maybeAligned ? needTypes[i] : undefined;
-    const needType =
-      positional !== undefined && positional.id === need.needId ? positional : findNeedType(content, need.needId);
-    // `beingServed` is FALSE for every need that reaches here — the two served ids are skipped
-    // above by name — so this is the near side of the hysteresis: a need between full and its want
-    // line does not count against the hotel, which is the same line `reserve` will not chase.
-    if (isNeedWanted(needType, need, wantAtBasisPoints, false)) return true;
+    if (isNeedUnservedNow(content, needTypes, maybeAligned ? i : -1, need, servedA, servedB, wantAtBasisPoints, excusedNeedId)) {
+      return true;
+    }
   }
   return false;
+}
+
+/**
+ * IS THE HOTEL LETTING THIS GUEST DOWN ON **THIS** NEED RIGHT NOW? (G-028a.)
+ *
+ * THE ONE DEFINITION, AND IT WAS THE LOOP BODY ABOVE UNTIL THIS GOAL. `wantsSomethingUnserved`
+ * is now a fold over it and `accumulateUnservedTicks` is the same walk keeping a counter, so the
+ * mood a guest is in and the measurement of what the hotel did to it cannot answer this question
+ * differently. Extracting it rather than writing a second copy is ADR-0021's proxy rule: the
+ * alternative was a fourth spelling of the same three exclusions inside the thing that counts them.
+ *
+ * THE CHEAP HALF IS STILL ASKED FIRST — `deficit === 0`, one integer compare, before any type
+ * resolution — because that ordering was measured rather than assumed (see the block above) and
+ * this predicate runs for every need of every guest on every tick. The type is therefore resolved
+ * HERE rather than by the caller: a caller that resolved it first, to pass it in, would have paid
+ * for the lookup on the needs this returns `false` for without asking.
+ *
+ * `positionalIndex` is the index in the guest's vector, or -1 when the vector cannot be aligned
+ * with the content table at all — the `advanceNeeds` convention, passed as a number so that no
+ * closure and no options object is allocated per need per tick.
+ *
+ * `beingServed` is FALSE at the `isNeedWanted` call by construction: the two served ids are
+ * skipped by name above. That is the near side of the hysteresis — a need between full and its
+ * want line does not count against the hotel, which is the same line `reserve` will not chase.
+ */
+function isNeedUnservedNow(
+  content: BoundContent,
+  needTypes: readonly NeedTypeData[],
+  positionalIndex: number,
+  need: NeedState,
+  servedA: ContentId | null,
+  servedB: ContentId | null,
+  wantAtBasisPoints: number,
+  excusedNeedId: ContentId | null,
+): boolean {
+  // A FULL NEED IS NOT WANTED, and this is one integer compare before any type resolution.
+  if (need.deficit === 0) return false;
+  // Something is serving it this tick, so the hotel is not failing the guest on this one.
+  if (need.needId === servedA || need.needId === servedB) return false;
+  // And the guest's own excursion is not the hotel's fault (ADR-0026 as amended).
+  if (need.needId === excusedNeedId) return false;
+  const positional = positionalIndex === -1 ? undefined : needTypes[positionalIndex];
+  const needType =
+    positional !== undefined && positional.id === need.needId ? positional : findNeedType(content, need.needId);
+  return isNeedWanted(needType, need, wantAtBasisPoints, false);
+}
+
+/**
+ * One tick of every need's `unservedTicks`. **THE ONE PLACE THAT COUNTER MOVES** (G-028a).
+ *
+ * Returns the same array by reference when the hotel served (or owed) everything this guest
+ * wanted, and reuses every entry that did not move — the `advanceNeeds` contract, for the same
+ * reason: this runs for every live guest on every tick.
+ *
+ * ---------------------------------------------------------------------------
+ * THE REFERENCE RESULT IS THE DISSATISFACTION INPUT, AND THAT IS AN IDENTITY RATHER THAN A
+ * COINCIDENCE: this allocates a new vector if and only if some need satisfied
+ * `isNeedUnservedNow`, which is exactly the condition `wantsSomethingUnserved` returns `true`
+ * for. `needs.unserved.test.ts` drives both over the same inputs and asserts they cannot
+ * disagree.
+ *
+ * IT IS NOT WIRED THAT WAY AT THE CALL SITE, DELIBERATELY, AND THIS GOAL IS WHY. G-028a promises
+ * that nothing but the state hash moves; step 4b's `letDown` is what decides whether a guest
+ * walks out, so re-deriving it from an allocation in the diff that introduces the allocation
+ * would put the one property the seam rests on at risk to save a walk of a four-element array.
+ *
+ * THE COST OF DECLINING IT IS MEASURED RATHER THAN GUESSED, AND `PARKING.md` CARRIES IT: two
+ * independent paired campaigns, both arms interleaved in one sitting, non-overlapping
+ * distributions, agreeing on the ratio. The merge is a result waiting for a goal rather than a
+ * note, because the identity it would rest on — a new vector comes back exactly when the guest
+ * wants something unserved — is already SWEPT in `needs.unserved.test.ts` rather than assumed.
+ * ---------------------------------------------------------------------------
+ *
+ * IT DOES NOT CLAMP. `capacityTicks` bounds a deficit because a stock is finite; the time a
+ * hotel spends failing a guest is bounded only by the stay, and `assertNeedOutcomes` carries
+ * that bound where the stay length is known.
+ */
+export function accumulateUnservedTicks(
+  content: BoundContent,
+  needs: readonly NeedState[],
+  servedA: ContentId | null,
+  servedB: ContentId | null,
+  wantAtBasisPoints: number,
+  excusedNeedId: ContentId | null,
+): readonly NeedState[] {
+  const needTypes = needTypesInOrder(content);
+  const maybeAligned = needs.length === needTypes.length;
+  let next: NeedState[] | null = null;
+  for (let i = 0; i < needs.length; i += 1) {
+    const need = needs[i];
+    if (need === undefined) continue;
+    const unserved = isNeedUnservedNow(
+      content,
+      needTypes,
+      maybeAligned ? i : -1,
+      need,
+      servedA,
+      servedB,
+      wantAtBasisPoints,
+      excusedNeedId,
+    );
+    if (!unserved) {
+      if (next !== null) next.push(need);
+      continue;
+    }
+    if (next === null) next = needs.slice(0, i);
+    next.push({ ...need, unservedTicks: need.unservedTicks + 1 });
+  }
+  return next ?? needs;
 }
 
 /**
@@ -710,6 +866,11 @@ function advanceNeed(
       // need, and a counter that decay quietly cleared would under-report exactly the guest the
       // margin is tuned against — one that keeps changing its mind (G-014b).
       abandonCount: need.abandonCount,
+      // Carried, and NOT incremented here (G-028a). Decay and neglect are different questions:
+      // a need decays on every tick nothing serves it, including ticks the guest does not want
+      // it and ticks its own excursion caused — and only `accumulateUnservedTicks` knows which
+      // of those the hotel is answerable for. One writer, in one place.
+      unservedTicks: need.unservedTicks,
     };
   }
   // Served. A full need being topped up is the FIRST identity-return end: a sleeping guest whose
@@ -726,6 +887,9 @@ function advanceNeed(
     // against the cafe — the same answer the transition rule gave, for the same reason.
     metBy: servedBy,
     abandonCount: need.abandonCount,
+    // Carried. A served tick is one this need is NOT unserved on, which is a statement the
+    // accumulator makes by not incrementing rather than one made twice here.
+    unservedTicks: need.unservedTicks,
   };
 }
 
@@ -810,13 +974,48 @@ export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boole
  *
  * IT IS A SNAPSHOT AND IT IS HONEST ABOUT BEING ONE. "Was satisfied when it left" is a weaker
  * statement than "was satisfied throughout", and the stock-shaped replacement — time spent
- * below the line — is a per-need accumulator, which is saved state and therefore the next
- * goal's schema bump rather than this one's.
+ * unserved — is a per-need accumulator, which is saved state and was deferred to the goal that
+ * paid for a schema bump. **That goal is G-028a and the accumulator is `unservedTicks`.** It is
+ * folded here, beside the snapshot, and this is the paragraph that says why both are present:
+ *
+ * ---------------------------------------------------------------------------
+ * THE SNAPSHOT COLUMNS ARE UNTOUCHED IN THIS GOAL, AND THAT IS A DECISION RATHER THAN AN
+ * OVERSIGHT (ADR-0034 §2). `met` and `unmet` are what `report.ts`'s review law A compares the
+ * top-review count against, and the review is what produces that count — so redefining `met`
+ * without redefining the score, or the score without `met`, makes a build that exits 1 on a
+ * well-provisioned hotel. The two move together, in the goal that changes the scorer. Until then
+ * this function reports BOTH: what was true at the instant the guest left, and how long the
+ * hotel spent failing it. The first is measured to be a phase artefact at the shipped cadence;
+ * the second is what replaces it.
+ *
+ * WHAT THE OLD SPELLING ASSERTED AND WHAT THIS ONE STILL ASSERTS (ADR-0027, by class rather than
+ * by call site):
+ *
+ *   KEPT  every instance counted exactly once — `met + unmet` advances by one per row per
+ *         departing guest that carried the need, which is the identity the report checks exactly.
+ *   KEPT  `metByItem <= met`, with by-room derived rather than stored.
+ *   KEPT  `abandoned` folded once, on the way out, so no row can exist before a departure.
+ *   KEPT  one merge of two ascending lists: one pass, one allocation, rows created on first use.
+ *   KEPT  ONE definition of "met", shared with the review through `isNeedSatisfiedIn`, so the
+ *         tally and the review cannot disagree about a guest.
+ *   ADDED `unservedTicks` and `instanceTicks`, which advance on the same instances and by
+ *         construction cannot advance on any others — they are folded in the same branch.
+ *
+ * WHAT IT NOW PERMITS THAT THE OLD ONE FORBADE: nothing. Every counter above still moves exactly
+ * when it moved before, and this goal adds no reader for the two new ones outside the report.
+ * ---------------------------------------------------------------------------
+ *
+ * `stayTicks` IS THE DENOMINATOR AND THE CALLER COMPUTES IT, from the departing guest's own
+ * arrival tick. It is not a wait and it is not read as one: it is how long there WAS to fail
+ * this guest in, and a guest that gave up in the lobby has a short one. Passed rather than
+ * derived here because this module cannot see a guest (`guests.ts` owns that type, and a
+ * circular import is an error in `.dependency-cruiser.cjs`).
  */
 export function recordNeedsAtDeparture(
   content: BoundContent,
   outcomes: readonly NeedOutcome[],
   needs: readonly NeedState[],
+  stayTicks: number,
 ): readonly NeedOutcome[] {
   if (needs.length === 0) return outcomes;
   // ONE DEFINITION, NOT A SECOND COPY OF THE COMPARISON. `isNeedSatisfiedIn` is what the review
@@ -841,6 +1040,8 @@ export function recordNeedsAtDeparture(
         unmet: satisfied(need) ? 0 : 1,
         metByItem: byItem(need, satisfied(need)),
         abandoned: need.abandonCount,
+        unservedTicks: need.unservedTicks,
+        instanceTicks: stayTicks,
       });
       j += 1;
       continue;
@@ -858,6 +1059,12 @@ export function recordNeedsAtDeparture(
       // The guest's whole history of walking out on this need, added once, on the way out —
       // which is what keeps `met + unmet === departed` true of the same row (G-014b).
       abandoned: row.abandoned + need.abandonCount,
+      // Numerator and denominator advance in the SAME branch as `met + unmet` (G-028a), so a
+      // row can never carry a stay it did not count an instance for, or an instance whose stay
+      // it did not count. That is what makes `unservedTicks <= instanceTicks` checkable rather
+      // than hopeful.
+      unservedTicks: row.unservedTicks + need.unservedTicks,
+      instanceTicks: row.instanceTicks + stayTicks,
     });
     i += 1;
     j += 1;
@@ -1020,6 +1227,25 @@ export function assertNeedVector(needs: unknown, guestId: number): asserts needs
         `Guest store is invalid: ${describeGuest} has a negative or non-integer abandonCount on need "${entry.needId}"`,
       );
     }
+    // `unservedTicks` IS HASHED STATE, so the key is always present (G-028a) — the `metBy` and
+    // `abandonCount` precedent, and the same reason: at LOAD an absent key and a 0 are different
+    // statements, and only the check can tell a v16 world from a v15 one that skipped its
+    // migration. There is no cross-field clause and that is not an omission: nothing in a need's
+    // own numbers bounds how long the hotel left it unserved. The stay does, and this validator
+    // runs where no guest is in hand — the reason it has never bounded a deficit against
+    // `capacityTicks` either. `assertNeedOutcomes` carries that bound, at departure, per row.
+    const unservedTicks: number | undefined = entry.unservedTicks;
+    if (unservedTicks === undefined) {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} has no unservedTicks field on need "${entry.needId}". A need the ` +
+          'hotel has never failed carries 0, so the key is always present (it is hashed state).',
+      );
+    }
+    if (!Number.isSafeInteger(unservedTicks) || unservedTicks < 0) {
+      throw new Error(
+        `Guest store is invalid: ${describeGuest} has a negative or non-integer unservedTicks on need "${entry.needId}"`,
+      );
+    }
   }
 }
 
@@ -1064,6 +1290,21 @@ export function assertNeedOutcomes(outcomes: readonly NeedOutcome[], departed: n
     assertTallyCounter('unmet', row.needId, row.unmet);
     assertTallyCounter('metByItem', row.needId, row.metByItem);
     assertTallyCounter('abandoned', row.needId, row.abandoned);
+    assertTallyCounter('unservedTicks', row.needId, row.unservedTicks);
+    assertTallyCounter('instanceTicks', row.needId, row.instanceTicks);
+    // AND THE HOTEL CANNOT FAIL A GUEST FOR LONGER THAN THE GUEST WAS HERE (G-028a). Both sides
+    // advance in the same branch of `recordNeedsAtDeparture` — the numerator accumulated one tick
+    // at a time inside the tick loop, the denominator computed once from the guest's arrival tick
+    // — so nothing but agreement between those two makes this hold, which is what stops it being
+    // an identity. It is the `metByItem <= met` clause one column over: the report divides these,
+    // and a numerator over its denominator would print a share above one whole.
+    if (row.unservedTicks > row.instanceTicks) {
+      throw new Error(
+        `Need outcomes are invalid: need "${row.needId}" records ${row.unservedTicks} unserved tick(s) against ` +
+          `${row.instanceTicks} tick(s) of stay. A need cannot go unserved for longer than its guests were here, ` +
+          'and the report divides one by the other.',
+      );
+    }
     // AND THE ITEM SHARE CANNOT EXCEED THE WHOLE (G-013). By-room is DERIVED as
     // `met - metByItem`, so this is the clause that keeps the derived number from going
     // negative — a row claiming more item deliveries than satisfactions would make the

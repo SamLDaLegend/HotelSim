@@ -245,7 +245,14 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   new field. The control is the outcome block below — arrivals, checkouts, evictions and
     //   the need rows are all unmoved, which is what says the shape moved and the simulation
     //   did not.
-    expect(hashState(plain)).toBe('bab5925fb9c5df13');
+    //   `bab5925fb9c5df13` -> `b42ccbb81e1539c4`   G-028a gave every need a counter for how
+    //   long the hotel leaves it unserved, and gave every tally row that counter and its
+    //   denominator. ONE cause, and it is a state-SHAPE change with no behaviour in it: nothing
+    //   in `packages/sim` reads any of the three fields, the content files are untouched so the
+    //   fingerprint does not move, and the outcome block below — arrivals, checkouts, evictions,
+    //   the need rows — is unchanged. That block is the control, and it is the whole argument
+    //   that this move is the shape and not the simulation.
+    expect(hashState(plain)).toBe('b42ccbb81e1539c4');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -363,7 +370,9 @@ describe('the same workload with the player churning the building', () => {
     //   `dc043d95d351ba49` -> `6a2bcb431c45e2f7`   θ-b2, for the reason the plain arm moved:
     //   a seventh departure row in hashed state and a new content field in the fingerprint,
     //   with no reachable behaviour change under content that declares a lodging need.
-    expect(hashState(churn)).toBe('6a2bcb431c45e2f7');
+    // MOVED AT G-028a WITH ITS SIBLING ABOVE, for the same one reason and with the same control:
+    // the churn arm's own outcome assertions below are unchanged.
+    expect(hashState(churn)).toBe('0a083a4acfd22026');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

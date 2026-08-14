@@ -31,6 +31,7 @@
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
+import { withoutCounters } from './fixtures/without-counters.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
 import { SAVE_V1_BYTES, SAVE_V1_CONTENT } from './fixtures/save-v1.js';
@@ -394,11 +395,15 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
       ...guests,
       list: guests.list.map((guest) => ({
         ...guest,
-        needs: (guest['needs'] as Record<string, unknown>[]).map(({ abandonCount: _drop, ...need }) => need),
+        // AND THE v16 COUNTER COMES OFF WITH IT (G-028a): a v7 need had none, and
+        // `migrateV15ToV16` refuses one that already carries a count.
+        needs: (guest['needs'] as Record<string, unknown>[]).map(
+          ({ abandonCount: _drop, unservedTicks: _counter, ...need }) => need,
+        ),
       })),
     };
     const tallyWithoutV9 = (json['needOutcomes'] as Record<string, unknown>[]).map(
-      ({ abandoned: _drop, ...row }) => row,
+      ({ abandoned: _drop, unservedTicks: _unserved, instanceTicks: _stay, ...row }) => row,
     );
     const { reviewOutcomes: _noReviews, ...withoutV10 } = json;
     return JSON.stringify({
@@ -439,7 +444,11 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     expect(evictedGuests(world.guestOutcomes)).toBe(0);
     expect(totalReviews(world.reviewOutcomes)).toBe(0);
     const migrated = deserialise(asV7Bytes(world));
-    expect(hashState(migrated)).toBe(hashState(world));
+    // MODULO THE G-028a COUNTERS, which a v7 world could not carry and this chain will not
+    // invent — see `withoutCounters`. Both halves are asserted, so the exclusion is not a hole.
+    expect(hashState(withoutCounters(migrated))).toBe(hashState(withoutCounters(world)));
+    expect(migrated.needOutcomes.every((row) => row.unservedTicks === 0 && row.instanceTicks === 0)).toBe(true);
+    expect(world.needOutcomes.some((row) => row.instanceTicks > 0)).toBe(true);
     /**
      * DEEP EQUALITY RATHER THAN BYTE EQUALITY, AND THE CHANGE IS A CORRECTION (G-019).
      *
@@ -454,7 +463,7 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
      * for the question this test asks. The weaker byte claim is dropped rather than propped
      * up by making the migration place a key to satisfy a test.
      */
-    expect(migrated).toEqual(world);
+    expect(withoutCounters(migrated)).toEqual(withoutCounters(world));
   });
 
   it('and the same world at v8 round-trips, which is I6 over the new shape', () => {

@@ -2,12 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5: 6 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2, G-028a). Only G-028b remains — last in milestone, second critic. Two goals owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v14** (θ-b1) · summary **3** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v16** (G-028a) · summary **3** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `21938e08d179c60c` · measure golden `5a8cec719d1e9e95`. *(Re-verified by the orchestrator
-  2026-08-13. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `2568fb4336c95267` · measure golden `b42ccbb81e1539c4`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -43,13 +42,13 @@
   **AND NINE AFTER θ-b SPLIT AGAIN** (ADR-0025, seam taken at PLAN on an enumeration finding **25
   lodging-assumption sites where the block named 4** — the third mispricing of that one sub-goal,
   each by someone reading a list instead of counting a population).
-  **Done (4)**: G-030 ✓ · G-027a ✓ · **θ-a ✓** (`7f0be45`) · **θ-b1 ✓** (`d6abef6`, save v14).
-  **Committed but OWING A HUMAN WATCH (2)**: θ-a and G-031a. **The only thing blocking them is a
-  displayed browser pane** — `apps/game` is the WATCH surface (ADR-0023) and it will not composite
-  headless. **θ-b1's WATCH is discharged**: `ai-critic` recorded and scrubbed 2,880 frames, found a
-  guest vanishing mid-meal at tick 6428, and confirmed the repair at tick 2718.
-  **In flight (1)**: **θ-b2 — optional lodging**, sweeps spent, in verification.
-  **Not started (1)**: **G-028** — and its FIRST job is now the LADDER, not the scorer (ADR-0030).
+  **Done (5)**: G-030 ✓ · G-027a ✓ · **θ-a ✓** (`7f0be45`) · **θ-b1 ✓** (`d6abef6`) ·
+  **θ-b2 ✓** (`88dc25e`, save v15). **All pushed through `88dc25e`.**
+  **OWING A HUMAN WATCH (2)**: θ-a and G-031a — `apps/game` is the WATCH surface (ADR-0023) and it
+  will not composite while the browser pane is hidden. **θ-b1's and θ-b2's WATCHes are discharged**
+  from scrubbed recordings; **neither cites the viewer's drawing**, which is known stale.
+  **Not started (1)**: **G-028**, and ADR-0033 re-aimed it — **the review signal is ABSENT, not
+  inverted**, so the job is the one-tick snapshot, not the scorer's arithmetic.
   **STRUCK — NAMES ONLY, NEVER GOALS (ADR-0032 §2)**: ~~G-027c~~ · ~~G-031b~~. **Each occurred
   exactly once in the whole ledger — in this list.** No statement, no criteria, no owner, and both
   were being counted in "M2.5 is nine goals" and in every estimate of what remained. **A goal with
@@ -608,6 +607,44 @@ Critique rounds used: 0/3
   **AND WHY THIS ONE IS STILL THE HARDER HALF**: `R1` lands here in full — `hysteresis.bound.test.ts`
   computes the abandon margin's bound from `patienceTicks` and `satisfyTicks` as a **countdown**
   model, and **will keep passing while both fields have changed meaning.** Re-derive it here.
+
+## G-028a — The instrument: time unserved is recorded
+Status: **done.** 3 sweeps + a plan review (2 BLOCKERs pre-code) + a verification closing on four UNPINNED-CLAIM findings — no round, no split. **The seam was taken at ADR-0033 §3 and this block is late** —
+  `balance-critic` found at sweep 1 that no `G-028a` existed anywhere in `GOALS.md`, so **no goal
+  was `in-progress`, the sweep was charging a budget nothing recorded, and VERIFY had no criteria
+  to run.** That is the failure this ledger priced in its own words one goal ago (G-027b's block):
+  *"A goal that is split in dispatch and whole in the ledger will be verified against the whole."*
+  **Second instance, same session, same orchestrator.** ADR-0032 §2 struck two goals for existing
+  only as names; this one existed only as an ADR.
+Milestone: M2.5
+Owner pair: economy-engineer / balance-critic · **second critic from a different pair in the final
+  round** (§7.1 — G-028 is the last goal in M2.5)
+Statement: A per-need counter records **how long a need went wanted and unserved**, and the report
+  carries it. **Nothing reads it to decide anything** — `met`, `unmet`, `reviewOf`, review law A and
+  the bind-time floor are untouched, because law A **couples** them to the score and they move
+  together in G-028b.
+Exit criteria:
+  - `pnpm exec vitest run unserved` — **3 files, named before BUILD**: `packages/sim/src/
+    needs.unserved.test.ts`, `packages/sim/src/needs.unserved.save.test.ts`,
+    `tools/headless/src/unserved.report.test.ts`. The filter matched **nothing** at HEAD.
+  - **THE WRITE-ONLY FENCE, AND IT IS THE PROPERTY THIS SEAM IS JUDGED ON.** No branch in
+    `packages/sim` decides anything from the counter. **The fence is the BEHAVIOURAL control, not a
+    token scan**: criterion 9's arm reads **192 / 161 / 0**, revenue **1,632,000p**, review
+    distribution unchanged. Proved to bite by mutation — a branch reading the counter turns the
+    departure split to `0 / 0 / 357` and revenue to `0`.
+  - **THE LODGING-DROPPED FALSIFICATION SHIPS AS AN ARM**, on the mean **and on the worst-served
+    need**: the ladder must still fall with lodging removed from both sides. **This is the check
+    that would have caught the pooled score the first plan carried** (ADR-0034).
+  - **ADR-0029's amendment, executed**: `strandedTicks === publicTicks`, two-sided in **absolute
+    guest-ticks** — zero in a hotel provisioned to the derived rule at full occupancy, non-zero in
+    a starved one, with the starved arm proving the instrument can fire.
+  - **Save v15 → v16**, migration driven by a **synthetic** v15 world carrying guests — mandatory,
+    not stylistic: the permanent v1 fixture's guest list is empty.
+  - `pnpm verify` — **ten green, three ruled red** · CI green on three platforms.
+Out of scope: `reviewOf`, `met`/`unmet`, law A, the bind-time floor — **all four coupled, all four
+  G-028b's** · the money-loop cliff (M4) · the merged-walk optimisation (**parked with its
+  measurement, which has now fired**).
+Critique rounds used: **3/3**
 
 ## G-028 — Outcomes and reviews are stock-shaped
 Status: pending

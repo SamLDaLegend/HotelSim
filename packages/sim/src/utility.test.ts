@@ -172,6 +172,7 @@ const spent = (needId: string, _capacityTicks: number, burned: number): NeedStat
   deficit: burned,
   metBy: null,
   abandonCount: 0,
+  unservedTicks: 0,
 });
 
 describe('pressure is the fraction of a need\'s OWN capacity already drawn down', () => {

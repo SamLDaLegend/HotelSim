@@ -230,8 +230,8 @@ describe('CHECKOUT runs on a clock, and the clock starts at the door', () => {
           // shorten a life — so a guest carrying nothing is the case that tests the bound.
           dissatisfaction: 0,
           needs: [
-            { needId: 'rest', deficit: 0, metBy: 'room', abandonCount: 0 },
-            { needId: 'snack', deficit: 3, metBy: null, abandonCount: 0 },
+            { needId: 'rest', deficit: 0, metBy: 'room', abandonCount: 0, unservedTicks: 0 },
+            { needId: 'snack', deficit: 3, metBy: null, abandonCount: 0, unservedTicks: 0 },
           ],
         },
       ],

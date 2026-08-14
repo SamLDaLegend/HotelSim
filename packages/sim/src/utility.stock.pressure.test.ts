@@ -34,7 +34,7 @@ const needType = (capacityTicks: number, refillPerTick = 7): NeedTypeData => ({
   refillPerTick,
 });
 
-const at = (deficit: number): NeedState => ({ needId: 'snack', deficit, metBy: null, abandonCount: 0 });
+const at = (deficit: number): NeedState => ({ needId: 'snack', deficit, metBy: null, abandonCount: 0, unservedTicks: 0 });
 
 describe('THE CLAMP, at the state the old proof made unreachable', () => {
   it('an EMPTY need reads 9,999 and not one whole', () => {

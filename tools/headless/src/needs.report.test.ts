@@ -326,7 +326,7 @@ describe('the same invocation through a real process', () => {
     const needLines = result.stdout.split('\n').filter((line) => /^need (L| ) /.test(line));
     expect(needLines).toHaveLength((content.content.needTypes ?? []).length);
     for (const line of needLines) {
-      expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\), \d+ abandoned$/);
+      expect(line).toMatch(/^need (L| ) +\S+ \d+ met, \d+ unmet \(\d+ by room, \d+ by item\), \d+ abandoned, \d+ bp unserved$/);
     }
     // Exactly one row is marked as the lodging need.
     expect(needLines.filter((line) => line.startsWith('need L'))).toHaveLength(1);

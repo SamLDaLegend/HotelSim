@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-13, M2.5: 5 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2). Two owe a human WATCH. G-028 remains, re-aimed by ADR-0033. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5: 6 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2, G-028a). Only G-028b remains — last in milestone, second critic. Two goals owe a human WATCH. Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v14** · summary **v3** · I2 `21938e08d179c60c` · measure golden
-  `5a8cec719d1e9e95` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v16** · summary **v3** · I2 `2568fb4336c95267` · measure golden
+  `b42ccbb81e1539c4` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -793,6 +793,17 @@ unpinned-claim escalation that consumed no round** (§7.1's seventh firing; six 
 Save **v14** · I2 `21938e08d179c60c` · measure golden `5a8cec719d1e9e95`. Every exit criterion
 re-run by the orchestrator.
 
+*(**RESTORED 2026-08-14. The orchestrator overwrote this line with θ-b2's figures**, using a
+blanket search-and-replace to repair the rolling digest and hitting a historical entry that was
+already correct. `git log -S"21938e08d179c60c"` returns **`d6abef6` — θ-b1's own commit** — and
+`bench.workload.golden.test.ts` records `0f013923e178c187 → 5a8cec719d1e9e95` at θ-b1, with the
+move to `bab5925fb9c5df13` at θ-b2. The damage was visible in the line itself: **`v14` beside
+v15's numbers.** Found by `balance-critic`, not by me.*
+*ADR-0008, broken by the person enforcing it: **an artefact describing the past must not track the
+present.** A digest is a rolling claim about now; a REFLECT entry is a record of a moment. **They
+must never be repaired by the same edit** — and `sed`-style substitution over a ledger cannot tell
+them apart, which is the whole reason the two live in one file under different rules.)*
+
 **THE GOAL WAS SAVED TWICE BEFORE ANY CODE EXISTED, BOTH TIMES BY MEASUREMENT.** The builder
 measured the obvious predicate — *a need is wanted and nobody is serving it* — and killed it:
 `night_rest` alone produces a **208-tick** wanted-unserved run in a healthy hotel against a
@@ -1065,3 +1076,84 @@ prose** — which fired on its first day, on this goal, in a test title the runn
 draws the v13 picture** — parked, and it narrows ADR-0028 §4's own WATCH routing · **departure reason
 is not legible on screen** (human, WATCH #10) — seven rows in the data, one appearance to a player ·
 **G-028 is re-aimed by ADR-0033**: the review signal is **absent, not inverted**.
+
+## G-028a — The instrument: time unserved is recorded — REFLECT
+
+**DONE.** 3 sweeps (4 + 1 + 2 MAJOR, **no BLOCKER in code**) plus a plan review that returned
+**2 BLOCKERs before a line existed**, and a verification closing on **four UNPINNED-CLAIM findings —
+no round, no split**. Save **v16** · I2 `2568fb4336c95267` · measure golden `b42ccbb81e1539c4`.
+Every exit criterion re-run by the orchestrator.
+
+**THE SEAM IS WHAT MADE IT CHEAP, AND THE PRICING WAS MECHANICAL RATHER THAN ARGUED.** `NeedState`
+literals occur in **29 files**, hash pins in **20** — ~25 files of mechanical diff before one
+balance number moves. Undivided, **sweep 1 would have read hash re-pins instead of the migration
+and the fence.** G-028b now inherits a working instrument and a pinned question.
+
+**THE FENCE HELD UNDER REAL ATTACK.** *No branch in `packages/sim` decides anything from the
+counter* — verified across **twelve configurations** including eviction-by-demolition, loans, zero
+rooms and zero amenities, all byte-identical to HEAD once the state hash and the two new columns
+are stripped. **And the arm bites**: a branch reading the counter turns the departure split
+`192/161/0` → `0/0/357` and revenue to **zero**.
+
+**THE GOAL REPORTED A PERFORMANCE REGRESSION RATHER THAN BURYING IT.** Tick cost **1.135× ·
+1.158× · 1.161×**, three independent paired campaigns, HEAD materialised as a worktree, arms
+interleaved, **distributions non-overlapping in every one.** The builder declined to merge the two
+walks because that touches the decay path and the fence is what the seam is judged on. **The park
+fired with numbers instead of a guess.** And the irony is recorded: **the gate that would have
+caught it — `check:tickcost` — is one of the three ruled-red ADR-0015 refusals, so the goal that
+ships a tick-cost regression is the goal whose tick-cost gate declines to compare.** Both critics
+measured it by hand.
+
+**THE HUMAN'S RULING TURNED OUT TO CONTAIN A VACUITY, AND IT SURVIVED TWO PROPOSED FIXES.**
+ADR-0029 said only a guest *stranded in public with needs it cannot get met* is a defect. Measured:
+**public guest-ticks and stranded guest-ticks are identical in every configuration** — *a roomless,
+unengaged guest always has an unmet need, its own lodging need, by construction.* **The qualifier
+was true of every member of the population it was meant to narrow.** Two of us proposed a better
+*arm* before anyone asked whether the *predicate* could separate.
+
+> **When a criterion is vacuous at two independently chosen configurations, the next question is
+> about the predicate, not the third configuration.**
+
+**AND THE SCORING RULE INVERTS ON THE AXIS A PLAYER ACTUALLY MOVES.** Adding an amenity makes the
+worst-served need **worse**, at four of six room counts, with **no confound at six rooms** —
+identical departure table, identical `instanceTicks` on every row, capacity demonstrably gained.
+The mechanism: **a guest holds one provider at a time, so serving one need better spends the ticks
+it was spending on another.** The sum falls; the max rises.
+
+> **The ladder that made the ruling moved two axes together. The axis a player moves is one at a
+> time.**
+
+Not re-decided on one sweep's data and not deferred: **it ships as a golden**, in the tree, in
+front of the goal that builds the scorer.
+
+**THE DEFINING DEFECT WAS AN ASSERTION THAT CANNOT FAIL — THREE ROUNDS RUNNING, TWICE INSIDE THE
+FIX FOR ITS PREDECESSOR**, and it produced **ADR-0035**: *name a state its neighbours permit and it
+forbids, or it comes out.* The builder's diagnosis is the transferable half — *"I applied it to my
+own new clauses and it found three; I did not apply it to the lines I was leaving in place."*
+**The check gets applied to what a diff ADDS and not to what it LEAVES.**
+
+**THE ORCHESTRATOR'S ERRORS, AND THE FIRST TWO ARE THE WORST OF THE SESSION.**
+1. **I overwrote append-only history.** Repairing the rolling digest with a blanket substitution, I
+   hit θ-b1's REFLECT entry — which was correct — leaving **`v14` beside v15's numbers.** ADR-0008
+   broken by the person enforcing it. **A digest and a REFLECT live in one file under opposite
+   rules, and a `sed`-style substitution cannot tell them apart.** Every later digest edit was
+   scoped to the first 4,000 characters.
+2. **There was no `G-028a` block.** The seam was taken in an ADR and never landed in the goal
+   ledger — **so no goal was `in-progress`, a sweep charged a budget nothing recorded, and VERIFY
+   had no criteria.** The ledger had priced this failure **in its own words one goal earlier.**
+3. **My proposed fix for the golden was itself entailed**, and would have gone **red at twelve
+   rooms**, where the bottleneck *improves* and a different need takes over. The builder found the
+   claim that holds at both rungs: **the row that was best served is the row that moves.**
+4. **ADR-0034's inversion table stopped reproducing** — seven of eight cells — **one round after I
+   wrote the amendment against exactly that.** The diagnosis is the useful part: **§4's cliff was
+   re-measured and reproduces to the penny; this table had its slots RESTORED WITHOUT BEING
+   RE-RUN.** Fixed by deleting the figures and pointing at the golden that computes them.
+
+> **A figure in an ADR is a claim with no pin. The obligation belongs in the ledger; the numbers
+> belong in the arm that computes them.**
+
+**Owed forward**: **G-028b — the scorer**, last in M2.5, **second critic from a different pair**,
+and it **cannot land without answering the amenity inversion** · the merged-walk optimisation, in
+`PARKING.md` with three campaigns · the `apps/game` WATCH for θ-a and G-031a · **the money-loop
+cliff** (revenue saturates at twelve rooms, so every room past it is pure upkeep) — M4's, with the
+invocation that regenerates it.

@@ -60,7 +60,7 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v15', () => {
+  it('is a v1 blob, and this build now writes v16', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
@@ -72,13 +72,14 @@ describe('I6 stored v1 save fixture', () => {
     // G-023a, when a guest gained a position, an ELEVENTH at G-027a, a TWELFTH at G-027b when a
     // need stopped being a countdown and became a stock, a THIRTEENTH at θ-b1 when a guest
     // gained a mood and the departure table gained a row, and a FOURTEENTH at θ-b2 when lodging
-    // became optional and the table gained another).
+    // became optional and the table gained another, and a FIFTEENTH at G-028a when every need
+    // gained a counter for how long the hotel left it unserved).
     //
     // THE ONE ABSOLUTE ERA PIN IN THE REPO SINCE G-014b. The other four were relative
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(15);
+    expect(SAVE_SCHEMA_VERSION).toBe(16);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 

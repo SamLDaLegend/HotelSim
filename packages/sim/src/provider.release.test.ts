@@ -324,8 +324,8 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
     dissatisfaction: 0,
     engagement: engagedWith === null ? null : { entityId: engagedWith, needId: 'comfort' },
     needs: [
-      { needId: 'comfort', deficit: comfortLeft, metBy: null, abandonCount: 0 },
-      { needId: 'rest', deficit: 36, metBy: null, abandonCount: 0 },
+      { needId: 'comfort', deficit: comfortLeft, metBy: null, abandonCount: 0, unservedTicks: 0 },
+      { needId: 'rest', deficit: 36, metBy: null, abandonCount: 0, unservedTicks: 0 },
     ],
   });
 
