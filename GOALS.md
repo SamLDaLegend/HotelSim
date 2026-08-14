@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii BLOCKED: turning travel on moves occupancy 872 to 848, and the gate requires re-taking TARGET_CONCURRENT_HUNDREDTHS and the tickcost bound campaign in ONE commit — that bound is exactly what the 2026-08-14 escalation is open on. The idle-share arm re-cut LANDED. Also found: the shipped cadence 96 is no longer a local minimum. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii BLOCKED and now also holds a COVERAGE REGRESSION: enabling travel at ANY speed (1/3/12 all ~39-41k) extinguishes gaveUp for the last 60 percent of the I2 horizon, so the cause is the presence gate and not the dial. Also blocked on re-taking occupancy+bound together, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -1423,6 +1423,56 @@ Carried forward: `check:tickcost`'s acceptance bar is **`verdict=MEASURED`** (`I
 
   **This is a real dependency and not a budget judgement**: the gate names the coupling, and the
   coupled number is under an open human decision.
+
+
+
+  ### THE `gaveUp` CUT-OFF, INVESTIGATED — AND IT IS THE DEFECT CLASS THAT TEST EXISTS FOR
+
+  The third reading was left "unresolved and nobody has looked". **Looked at now, and it is the
+  most serious thing this goal has found.**
+
+  `validity.determinism.test.ts` enforces a rule `determinism-log.ts` states outright:
+
+  > ***"a reason that is reachable for the first third of the run and gone by the end is a reason
+  > the gate's FINAL hash says nothing about."***
+
+  It exists because `ai-critic` once caught the harness producing **no give-up in the final 42 %**
+  of the run, so **I2's final hash was carrying a hotel that had stopped trading** while every
+  count-based assertion stayed green. **Turning travel on reproduces that class.** `gaveUp` last
+  moves at tick **41,410** of 100,000, against a requirement of 75,000.
+
+  **AND THE SPEED DIAL DOES NOT MOVE IT, WHICH IS THE INFORMATIVE PART.** Swept in one sitting,
+  same seed, same command log, one arm per speed:
+
+  | `guestCellsPerTick` | last `gaveUp` tick |
+  |---|---|
+  | 1 (slowest that clears the derived floor) | **38,888** |
+  | 3 (the shipped candidate) | **41,410** |
+  | 12 (fast enough to cross the plot in ~9 ticks) | **40,246** |
+  | *absent (teleport, shipped today)* | *> 75,000 — the test passes* |
+
+  **A 12× change in travel time moves the cut-off by under 7 %, and removing the mechanism
+  entirely moves it past the bar.** So the cause is **not how long guests walk**. It is the
+  presence gate itself — `hasArrivedAt`, which is live whenever a speed is declared and absent
+  when one is not. **Something about requiring a guest to BE somewhere before it is served
+  changes the late-run dynamics enough to extinguish an entire departure reason.**
+
+  > **This is a coverage regression in the determinism proof, not a golden.** Shipping travel as
+  > it stands would hand I2 a final hash that says nothing about the give-up path — the exact
+  > thing this test was written to make impossible, arriving through the door it does not watch.
+
+  **WHAT IT IS NOT**: it is not the speed value, so it cannot be tuned away by picking a
+  different dial; and it is not visible in any whole-hotel count — the 30-day paired table above
+  shows `gaveUp` at **161 in both arms**. **A run-total cannot see a reason that stops; only the
+  last tick it moved can.** That is the rule, doing its job, on the first real change since it
+  was written.
+
+  **OWED BEFORE TRAVEL SHIPS**: find out why the presence gate extinguishes give-ups late in the
+  run. Two candidates worth separating, neither tested: the hotel reaches a provisioning state
+  where nobody waits past tolerance (benign, and the test's bar is then the wrong shape for this
+  workload), or guests are being served in a way that quietly prevents the wait from ever
+  reaching tolerance (a defect in G-023b-i). **They are distinguishable — one shows free rooms
+  late in the run and the other does not — and neither has been checked.**
 
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing
