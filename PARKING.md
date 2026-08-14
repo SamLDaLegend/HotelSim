@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 running under ADR-0043. G-032a and G-033 done — pnpm verify FOURTEEN ROWS GREEN, CI green on all three OS. Sweep 3 is now check:unpinned; its scored prediction reads at G-023b. Next: G-032b (carries ADR-0015's pre-registered escalation), G-032c, then circulation. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 running under ADR-0043. G-032a, G-033 and G-032b done — pnpm verify FOURTEEN ROWS GREEN, I2 hash unmoved. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, three options, human call. Next: G-032c, then circulation. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2364,6 +2364,22 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   ratio does not return to ~1.00, the second walk was not the cost and the cause is elsewhere —
   most likely the per-tick allocation the counter forces on a need that would otherwise identity-
   return.* -> **the M3 instrument-debt goal, alongside the three campaigns it already carries.**
+
+  > **RUN AT G-032b (2026-08-14). THE TEST CAME BACK NEGATIVE, AND THE NOTE'S OWN ALTERNATIVE IS
+  > WHAT IS LEFT.** The merge landed and **the ratio did not return to ~1.00**. Six campaigns in
+  > one sitting, arms interleaved, 6 samples each, medians, quiet `win32/12cpu`: merged over
+  > two-walks **0.9425 · 0.9472 · 0.9674**; no-counter-at-all over two-walks **0.8516 · 0.8528 ·
+  > 0.8778**. Composing the medians — same base arm, same sitting — **the counter costs 1.173× and
+  > after the merge it costs 1.111×, so the merge removed about a THIRD of it.** The redundant
+  > walk was never the bulk; **the per-need object allocated on a need that would otherwise
+  > identity-return is**, exactly as parked.
+  >
+  > **This is the case for parking a hypothesis WITH its test.** The note named the alternative
+  > cause a goal in advance, so a negative result arrived as a finding rather than as confusion —
+  > and it fired the pre-registered escalation on the same day. **The remaining 1.111× is not
+  > chased here**: removing it is a design change to the need vector, and doing it inside the goal
+  > that discovered it is how one goal becomes two. Parked again, with `ESCALATIONS.md`
+  > (2026-08-14, the tripwire bound) as its live entry.
 
 - **`git worktree remove --force` RECURSES THROUGH A WINDOWS JUNCTION AND DELETES FROM THE SHARED
   pnpm STORE.** Found by `balance-critic` doing exactly what the tick-cost measurement above

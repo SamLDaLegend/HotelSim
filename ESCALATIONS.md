@@ -1118,3 +1118,111 @@ concurrent population, moving back when the population did.
   gate that flakes red teaches people to re-run it"*; a gate that is **known** red teaches people
   to skim the summary. **Every VERIFY between now and the re-take must state the row count green
   AND name these two as the ruled exceptions**, or the exception has become the habit.
+
+## 2026-08-14 — OPEN — THE TRIPWIRE'S BOUND CANNOT CATCH THE SMALLEST REGRESSION THIS PROJECT HAS SHIPPED
+
+**Raised**: G-032b · **Asked of the human**: which of the three options below. **Do not widen or
+narrow the bound to clear this — that is the decision being escalated.**
+
+**ON WHETHER THE LOOP STOPS.** This file says a written entry stops the loop until the human
+resolves it, and I am not overriding that on my own authority. But the defect is a gate that is
+too **WIDE**, not code that is wrong: nothing shipped is at risk, `pnpm verify` is green on every
+row, and the remaining M3 goals do not touch this bound. **My reading is that M3 continues while
+this stays open, and I am stating that rather than assuming it.** If that reading is wrong, say
+so and I stop.
+
+### It was pre-registered, and it fired
+
+G-032b was written carrying ADR-0015's pre-registered escalation: *"if the merge does not remove
+the 1.135×–1.161× drift, the empirical claim that rule rests on has been falsified by this
+project's own output, and that is an `ESCALATIONS.md` entry rather than a wider bound."*
+`PARKING.md`'s falsification test was attached at G-028a and states the alternative in advance:
+*"If the ratio does not return to ~1.00, the second walk was not the cost and the cause is
+elsewhere — most likely the per-tick allocation the counter forces on a need that would otherwise
+identity-return."*
+
+**The merge landed. The ratio did not return to ~1.00. The parked note's own alternative is what
+is left.**
+
+### The measurement
+
+*What: `check:tickcost`'s paired ratio, head arm over base arm. Workload: 60 rooms, an arrival
+every 96 ticks, seed 42, 30 days = 43,200 ticks. Sample count: 6 per arm per campaign, arms
+interleaved and alternating, three campaigns per row. Aggregation: median of the measured ratios
+within a campaign; the three campaign medians are quoted individually below. **Regime: one quiet
+12-core Windows 11 developer box, `win32/12cpu`, all six campaigns in ONE SITTING.***
+
+| arm pair | campaigns | median |
+|---|---|---|
+| **merged** (one walk) over **two walks** | 0.9425 · 0.9472 · 0.9674 | **0.9472** |
+| **no counter at all** over **two walks** | 0.8516 · 0.8528 · 0.8778 | **0.8528** |
+
+Both rows are against the same base arm, measured in the same sitting, so they compose:
+
+- **The `unservedTicks` counter costs `1 / 0.8528` = 1.173× of tick time.**
+- **After the merge it costs `0.9472 / 0.8528` = 1.111×.**
+- **The merge removed about a THIRD of it.** The redundant predicate walk was never the bulk;
+  what remains is the per-need object the counter allocates on a need that would otherwise
+  identity-return — which is what the park predicted.
+
+**Nothing here is compared against a figure from another session.** G-028a's 1.135× and 1.158×
+are consistent with the 1.173× re-measured above, but the finding is the pair of ratios taken
+here, not their agreement with a stored number (`CLAUDE.md` rule 3).
+
+### What is falsified, and it is a gate threshold, so it is not mine to change
+
+`check:tickcost`'s bound is **1.4640 = sqrt(1.035500 noise ceiling × 2.07 smallest known
+regression)** — ADR-0015's rule, and the gate prints that derivation on every run.
+
+> **`2.07` IS NO LONGER THE SMALLEST KNOWN REGRESSION. `1.173` IS, AND THIS PROJECT SHIPPED IT.**
+
+Re-deriving on the observed value gives `sqrt(1.0355 × 1.173)` ≈ **1.102**, which is **below** the
+shipped 1.4640. Stated plainly:
+
+> **A 1.173× regression passes the tripwire comfortably. The gate whose job is to catch a
+> tick-cost regression would have waved G-028a's through even if it had not been red for an
+> unrelated reason** — and it *was* red, so both critics measured it by hand instead, which is
+> how it was caught at all.
+
+**ADR-0013 §4 says a threshold must be derivable from a stated requirement. It still is — the
+derivation is sound and the INPUT has changed.** ADR-0015's own rule is REPLACE on a
+configuration change, and "the smallest known regression" moving is a change to the derivation's
+input, not to the workload.
+
+### Why the loop did not just narrow it
+
+Three reasons, and the third is the one that makes this a human call rather than a judgement:
+
+1. **`CLAUDE.md`: never edit a gate to make a build pass — and never to make one fail, by the
+   same argument.** Changing an invariant or a gate threshold is a human decision, always.
+2. **A 1.102 bound is close to the worst recorded LOADED noise, which is 1.2461.** The gate
+   prints both. A bound beneath the noise of a regime the project actually runs in (CI is a
+   shared runner, not this box) is a gate that fires on weather. **The quiet-regime bound and the
+   loaded-regime noise now overlap, and no ratio taken on this box transfers to a 2-vCPU runner.**
+3. **The pre-registration named this outcome and said what it becomes**: an escalation, *"rather
+   than a wider bound"*. It did not authorise a narrower one either.
+
+### The options, stated so the call is cheap
+
+- **(a) Narrow to the re-derived 1.102** and accept that CI's loaded regime may make it flap —
+  which needs a LOADED noise campaign nobody has run on the runner. Currently unmeasured.
+- **(b) Keep 1.4640 and record openly that the tripwire catches doublings, not the ~1.2×
+  regressions this project actually produces** — honest, and makes the gate's real reach legible
+  instead of implied.
+- **(c) Split the bound by regime**: a tight bound where the regime is measured, the wide bound
+  elsewhere. Most work, and it is the only option that makes the gate mean the same thing on both
+  machines.
+
+**Recommendation: (b) now, (c) when a runner-regime campaign exists.** (a) alone buys sensitivity
+this project cannot currently verify it can afford, and an instrument that fires on weather stops
+being read — which is §9's own stop condition and precisely how three rows went unread for a
+session.
+
+### What was NOT done, deliberately
+
+The remaining 1.111× was **not** chased. Removing it means not allocating a per-need object when
+the counter increments, which is a real design change to the need vector, and doing it inside the
+goal that discovered the finding is how a goal becomes two. **At ~1.9 % of I5's derived budget
+there is ample headroom and nothing is at risk today.** It is parked with this entry as its
+falsification test.
+

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 running under ADR-0043. G-032a and G-033 done — pnpm verify FOURTEEN ROWS GREEN, CI green on all three OS. Sweep 3 is now check:unpinned; its scored prediction reads at G-023b. Next: G-032b (carries ADR-0015's pre-registered escalation), G-032c, then circulation. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 running under ADR-0043. G-032a, G-033 and G-032b done — pnpm verify FOURTEEN ROWS GREEN, I2 hash unmoved. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, three options, human call. Next: G-032c, then circulation. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -833,6 +833,7 @@ Status: **SPLIT at PLAN into G-032a / G-032b / G-032c** (ADR-0039 §5, seam offe
   **Carries ADR-0015's pre-registered escalation**: if the merge does not remove the 1.135×–1.161×
   drift, the empirical claim that rule rests on has been falsified by this project's own output,
   and that is an `ESCALATIONS.md` entry rather than a wider bound.
+  Status: **DONE — and the escalation fired.** See the REFLECT below.
 
   **G-032c — I3's unquoted-key hole.** Changes what an invariant means, so it gets a sweep that is
   not competing with campaign arithmetic. The repair is **additive** — keeping the shape rule over
@@ -878,6 +879,61 @@ Critique rounds used: 0/3
   taking them first found **two real cross-platform defects no work on this machine could have
   surfaced.** M2.5 has left four debts and a red `verify` row that has been red long enough to stop
   being read — **which is §9's own stop condition about a known-red gate teaching people to skim.**
+
+
+  **G-032b — the merge. DONE, AND IT RAISED THE ESCALATION IT WAS PRE-REGISTERED TO RAISE.**
+  `pnpm verify` fourteen rows green; **I2 hash `8a83acaf7f81edeb`, UNMOVED** — G-028a's promise
+  that nothing but the state hash moves, kept by a change that did not move even that. Suite
+  122 files / 2,131 tests.
+
+  **The merge**: step 4's walk over a guest's needs now answers both questions — 4c's per-need
+  count and 4b's one-bit mood — in one pass. They were two walks over the same array, with the
+  same predicate, the same arguments and the same locals.
+
+  **THE FLAG IS EXPLICIT AND NOT RE-DERIVED FROM THE ALLOCATION, WHICH IS THE ONE DESIGN CALL
+  HERE.** `result !== needs` is true exactly when some need was unserved; the identity is real and
+  is swept at `needs.unserved.test.ts:176`, and G-028a's own note proposed exactly that spelling.
+  **It is still refused**: it makes a BEHAVIOURAL decision — whether this guest walks out — depend
+  on an ALLOCATION decision, and allocation strategy is what a later goal changes for speed while
+  believing it has not touched behaviour. **The day somebody makes that function always copy,
+  every guest in the hotel becomes permanently let down and nothing in the diff would say so.**
+  The flag costs one boolean, in a holder allocated **once per tick** beside the other read-once
+  values — not per guest, which is the shape G-010 spent a goal removing.
+
+  **THE PRE-REGISTERED ESCALATION FIRED — see `ESCALATIONS.md` (2026-08-14).** `PARKING.md`'s
+  falsification test said: merge and re-measure paired; if the ratio does not return to ~1.00, the
+  second walk was not the cost. **It did not return to ~1.00.**
+
+  *What: `check:tickcost`'s paired ratio. Workload: 60 rooms, arrival every 96 ticks, seed 42, 30
+  days. Samples: 6 per arm per campaign, interleaved and alternating, three campaigns per row.
+  Aggregation: median of measured ratios. **Regime: quiet `win32/12cpu`, all six campaigns in ONE
+  SITTING.***
+
+  | arm pair | campaigns | median |
+  |---|---|---|
+  | merged over two-walks | 0.9425 · 0.9472 · 0.9674 | **0.9472** |
+  | no counter at all over two-walks | 0.8516 · 0.8528 · 0.8778 | **0.8528** |
+
+  **The counter costs 1.173×; after the merge, 1.111×. The merge removed about a third.** The
+  per-need object allocated on a need that would otherwise identity-return is the rest — the
+  alternative the park named a goal in advance.
+
+  **AND THAT FALSIFIES THE TRIPWIRE'S INPUT, WHICH IS THE ACTUAL ESCALATION.** The bound is
+  `1.4640 = sqrt(1.0355 noise ceiling × 2.07 smallest known regression)`. **2.07 is no longer the
+  smallest known regression — 1.173 is, and this project shipped it.** Re-deriving gives ≈1.102,
+  *below* the shipped bound: **a 1.173× regression passes the tripwire comfortably, so the gate
+  whose job is catching tick-cost regressions would have waved G-028a's through even had it not
+  been red for an unrelated reason.** Three options are laid out in the entry; **the bound was not
+  touched**, because a gate threshold is a human decision and the pre-registration said *"an
+  `ESCALATIONS.md` entry rather than a wider bound"* — and it did not authorise a narrower one
+  either. Note the collision the entry turns on: the re-derived 1.102 sits **beneath the worst
+  recorded LOADED noise, 1.2461**, and CI is a shared runner, not this box.
+
+  **Also**: `wantsSomethingUnserved` is no longer called by the sim and is now a test oracle — kept
+  deliberately, since `needs.unserved.test.ts` driving it against the merged walk is what keeps the
+  merged spelling honest, and that is a better role than deletion. **The sweeps did not run in
+  their agent form** (see G-033's REFLECT — the harness forbids spawning them and §9 forbids the
+  orchestrator writing feature code; that conflict is a human call and is now twice recorded).
 
 ## G-033 — Sweep 3 becomes a scanner: the unpinned-claim gate
 Status: **done.** Built and swept by the orchestrator alone — see the escalation-shaped note in REFLECT.

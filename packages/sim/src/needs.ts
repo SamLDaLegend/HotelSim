@@ -730,10 +730,12 @@ export function accumulateUnservedTicks(
   servedB: ContentId | null,
   wantAtBasisPoints: number,
   excusedNeedId: ContentId | null,
+  out?: UnservedWalk,
 ): readonly NeedState[] {
   const needTypes = needTypesInOrder(content);
   const maybeAligned = needs.length === needTypes.length;
   let next: NeedState[] | null = null;
+  let letDown = false;
   for (let i = 0; i < needs.length; i += 1) {
     const need = needs[i];
     if (need === undefined) continue;
@@ -751,10 +753,41 @@ export function accumulateUnservedTicks(
       if (next !== null) next.push(need);
       continue;
     }
+    letDown = true;
     if (next === null) next = needs.slice(0, i);
     next.push({ ...need, unservedTicks: need.unservedTicks + 1 });
   }
+  if (out !== undefined) out.letDown = letDown;
   return next ?? needs;
+}
+
+/**
+ * THE SECOND ANSWER THIS WALK ALREADY KNEW (G-032b) — carried out explicitly rather than
+ * inferred.
+ *
+ * `stepGuests` used to ask the same question twice per guest per tick: step 4b called
+ * `wantsSomethingUnserved` to decide whether the guest's mood worsens, and step 4c called
+ * `accumulateUnservedTicks` to count the same ticks per need. Same predicate, same arguments,
+ * same locals — the merge was parked at G-028a with its cost measured rather than estimated.
+ *
+ * WHY A MUTABLE HOLDER AND NOT A RETURNED PAIR. Returning `{ needs, letDown }` allocates an
+ * object for every guest on every tick, which is the allocation shape G-010 spent a goal
+ * removing. This holder is created ONCE PER TICK in `stepGuests`, beside the other read-once
+ * values, and is written and read before the next guest is visited. It never crosses a tick
+ * boundary and nothing reads it later, so it adds no state to hash (I2) and no order
+ * dependence.
+ *
+ * WHY NOT RE-DERIVE IT FROM THE RETURN, WHICH WOULD NEED NO HOLDER AT ALL. Because
+ * `result !== needs` is TRUE exactly when some need was unserved — the identity is real, it is
+ * swept in `needs.unserved.test.ts`, and G-028a's own note proposed it. It is still refused.
+ * That spelling makes a BEHAVIOURAL decision — whether this guest walks out — depend on an
+ * ALLOCATION decision, and the allocation strategy is the sort of thing a later goal changes
+ * for speed without believing it has touched behaviour. The day somebody makes this function
+ * always copy, every guest in the hotel becomes permanently let down and nothing in the diff
+ * would say so. An explicit flag costs one boolean and cannot be broken that way.
+ */
+export interface UnservedWalk {
+  letDown: boolean;
 }
 
 /**

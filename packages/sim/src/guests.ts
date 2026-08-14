@@ -71,7 +71,7 @@ import {
   formNeedVector,
   isNeedWanted,
   recordNeedsAtDeparture,
-  wantsSomethingUnserved,
+  type UnservedWalk,
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
@@ -1797,6 +1797,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   // have. Per-archetype tempers are M6's, and the day they land these become per-guest lookups.
   const dissatisfactionCapacity = dissatisfactionCapacityOf(content);
   const dissatisfactionRelief = dissatisfactionReliefOf(content);
+  // ALLOCATED ONCE PER TICK, for the reason the six above are read once (G-032b). Step 4's walk
+  // over a guest's needs answers two questions — the per-need count and the one-bit mood — and
+  // this is where it puts the second one. Written and read inside one guest's step, never across
+  // guests and never across ticks, so it is scratch space rather than state: nothing hashes it
+  // (I2) and no iteration order can reach it. A returned pair would allocate per guest per tick,
+  // which is the shape G-010 spent a goal removing.
+  const unservedWalk: UnservedWalk = { letDown: false };
 
   const next: Guest[] = [];
   let ledger = input.ledger;
@@ -1990,8 +1997,26 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // of them is optional. Its value is unchanged and so is every guest's mood.
     const excused = guest.roomEntityId !== NO_ENTITY ? lodgingNeed?.id ?? null : null;
     const engagedNeedId = guest.engagement?.needId ?? null;
+
+    // THE WALK, ONCE (G-032b). It counts 4c's per-need ticks and reports 4b's one-bit mood
+    // through `unservedWalk`, from a single pass over the vector. The two used to be separate
+    // walks over the same array with the same predicate and the same arguments; G-028a declined
+    // the merge deliberately and parked what declining it cost, and this is the goal that owns
+    // the tick-cost re-take. The measurement moved UP here, above the mood, so that the mood can
+    // read it — the code below is the same arithmetic on the same boolean.
+    const measured = accumulateUnservedTicks(
+      content,
+      guest.needs,
+      servedByRoom,
+      engagedNeedId,
+      wantAt,
+      excused,
+      unservedWalk,
+    );
+    if (measured !== guest.needs) guest = { ...guest, needs: measured };
+
     if (dissatisfactionCapacity !== undefined) {
-      const letDown = wantsSomethingUnserved(content, guest.needs, servedByRoom, engagedNeedId, wantAt, excused);
+      const letDown = unservedWalk.letDown;
       // `?? 1` is unreachable through `bindContent`, which refuses half a stock
       // (`cloneDissatisfaction`); it is the fill rate, which is 1 by definition, so a raw host
       // that somehow got past that reads as "recovers exactly as fast as it is let down".
@@ -2005,34 +2030,26 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     }
 
     // ========================================================================
-    // 4c. THE SAME FACT, KEPT PER NEED AND NEVER DRAINED (G-028a).
+    // 4c. WAS 4c. THE WALK ABOVE IS BOTH, AND THE DISTINCTION IT DREW STILL HOLDS (G-032b).
     //
-    // `letDown` above is a MOOD: one bit for the whole guest, drained by `relief`, and it decides
-    // whether this stay ends early. `unservedTicks` is a MEASUREMENT: one counter per need, never
-    // drained, and nothing in this package reads it. Both ask the same question through the same
-    // predicate — `wantsSomethingUnserved` is a fold over `isNeedUnservedNow`, and this is the
-    // same walk keeping a count — so the number a departing guest reports and the mood it was in
-    // cannot describe different hotels.
+    // `letDown` is a MOOD: one bit for the whole guest, drained by `relief`, deciding whether
+    // this stay ends early. `unservedTicks` is a MEASUREMENT: one counter per need, never
+    // drained, and nothing in this package reads it. THEY ARE STILL DIFFERENT QUANTITIES —
+    // merging the walk did not merge the concepts, and the mood is still the only one of the two
+    // that any guest's behaviour depends on.
     //
-    // IT IS OUTSIDE THE STOCK'S BRANCH, and that is the whole reason `excused` moved up. A mood
-    // is optional: `dissatisfactionCapacityTicks` is content, and content that declares none has
-    // guests that never walk out. A measurement is not optional — a report about a hotel run
-    // under such content must still be able to say how long its guests went unserved, and a
-    // counter that silently stopped counting for some content sets would be a hole exactly where
-    // nobody would look for one.
+    // WHAT THE MERGE PRESERVED, because it is the reason `excused` was hoisted at G-028a: the
+    // MEASUREMENT IS OUTSIDE THE STOCK'S BRANCH and still runs for content that declares no
+    // dissatisfaction capacity at all. A mood is optional — such content has guests that never
+    // walk out. A report about a hotel run under it must still be able to say how long its guests
+    // went unserved, and a counter that silently stopped counting for some content sets would be
+    // a hole exactly where nobody would look for one. That is why the walk moved UP to where the
+    // measurement already was, rather than the measurement moving DOWN into the mood's branch.
     //
-    // IT IS DELIBERATELY A SECOND WALK OF THE VECTOR rather than a merge with the branch above,
-    // and `accumulateUnservedTicks` carries the argument: the merged spelling re-derives
-    // `letDown` from whether this call allocated, and G-028a's promise is that nothing but the
-    // state hash moves. **The walk is not free and `PARKING.md` carries what it costs**, from two
-    // paired campaigns rather than from an estimate; the merge goes to the goal that owns the
-    // tick-cost re-take, with its falsification test attached.
-    //
-    // THE SAME ARGUMENTS, IN THE SAME ORDER, FROM THE SAME LOCALS. Anything else would be a
-    // second answer to "what is this hotel doing for this guest right now".
+    // THE SAME ARGUMENTS, IN THE SAME ORDER, FROM THE SAME LOCALS — now unavoidably so, because
+    // there is one call. G-028a's note said the two "cannot describe different hotels" and swept
+    // the identity in `needs.unserved.test.ts`; it is now structural rather than swept.
     // ========================================================================
-    const measured = accumulateUnservedTicks(content, guest.needs, servedByRoom, engagedNeedId, wantAt, excused);
-    if (measured !== guest.needs) guest = { ...guest, needs: measured };
 
     // 5. HAS THE ENGAGEMENT FINISHED? Released the moment the need it serves resolves, so
     //    the amenity is free for somebody else from here on in THIS tick — through
