@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043. G-032a, G-033, G-032b, G-032c done — THE INSTRUMENT TRACK IS NOW CAPPED and M3 runs circulation only, to G-026. pnpm verify FOURTEEN ROWS GREEN. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, human call. Next: G-023b (RE-PLAN needed after ADR-0017). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043. G-032a, G-033, G-032b, G-032c done — INSTRUMENT TRACK CAPPED, M3 now runs circulation only. pnpm verify FOURTEEN ROWS GREEN. G-023b RE-PLANNED and split into i/ii, seam taken and recorded; BUILD not started. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, human call. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -234,7 +234,7 @@ Critique rounds used: **1/3 — DRY.** 1 sweep (2 MAJOR + 3 MINOR, all fixed) + 
   goal makes **visible**. ADR-0017 is what fixes it.
 
 ## G-023b — Going somewhere takes time
-Status: **pending — RE-PLAN REQUIRED after ADR-0017.** Blocked on G-023a and on M2.5.
+Status: **RE-PLANNED 2026-08-14 and SPLIT into G-023b-i / G-023b-ii** (see the re-plan below). Blockers cleared: G-023a done, M2.5 signed off.
 Milestone: M3
 Owner pair: ai-engineer / ai-critic
 Statement: Moving to a provider takes ticks proportional to the distance.
@@ -262,6 +262,83 @@ Statement: Moving to a provider takes ticks proportional to the distance.
   `check:measure` goes red, the G-014b precedent being in that same file · and the far/near
   differential **may not be able to hold `journeys` equal**, because spreading providers lengthens
   every hold and changes contention, so it may have to normalise per journey and say so.
+
+  ---
+
+  ### RE-PLAN, 2026-08-14 (the one this block has been waiting for)
+
+  **The old plan died at §5.6 and the new one starts from ADR-0017, not from a corrected number.**
+  The BLOCKER was never the arithmetic — `guestCellsPerTick = 12` was internally correct. **The
+  model was wrong**: under a completion deadline the three engagement needs summed to *exactly*
+  the lodging window, so the travel budget was **zero at every speed short of teleportation**, and
+  the measurement showed a **cliff** (356 met → 0 met on a one-tick change), not a knife-edge.
+
+  **ADR-0017 dissolves the constraint rather than loosening it.** Needs are stocks and nothing has
+  a completion deadline, so **travel is simply time not spent doing something else**. A guest that
+  walks for twenty ticks arrives with a slightly emptier stock and a slightly worse review. There
+  is no cliff to fall off because there is no deadline to miss. **This is why the goal is
+  re-planned rather than re-derived.**
+
+  **THE DESIGN, IN ONE SENTENCE**: a guest that decides to go somewhere enters **transit** for
+  `ceil(distance / speed)` ticks, during which it holds nothing, is served by nothing, and is
+  `away`.
+
+  **The four consequences, stated now so they are not discovered at VERIFY:**
+
+  1. **`unservedTicks` ACCRUES DURING TRAVEL, and that is correct rather than tolerated.** The
+     hotel is not meeting that need while the guest walks. G-028a's counter and the review that
+     reads it will both move, so **every review golden moves** — which is expected and gets an
+     argument, not a repair.
+  2. **The lodging need decays in transit**, because `away` is true and ADR-0017 §2 makes activity
+     the only thing that costs rest. A guest crossing the hotel to eat pays for it in rest, which
+     is the mechanism working, not a defect.
+  3. **Contention changes shape.** A provider is held for the hold *plus* nobody else's travel, so
+     spreading providers lengthens journeys and **cannot hold `journeys` equal** — carried forward
+     from the old plan and still true. The far/near differential **normalises per journey and says
+     so.**
+  4. **The I2 hash moves and the save schema goes to v17.** Both are expected; a moved *count*
+     that is not one of the three above is a defect in this goal.
+
+  **THE SEAM IS TAKEN, AND IT IS RECORDED HERE RATHER THAN IN A COMMIT MESSAGE.** `ai-critic`
+  offered simulation-versus-instrument, keeping the second save migration out of the same diff;
+  the old block marked it *provisionally accepted, re-assess at the re-plan*. **Re-assessed and
+  TAKEN**:
+
+  - **G-023b-i — transit exists.** A guest travels, the clock is content, the state is hashed and
+    saved at **v17** with a real 16→17 migration. **No instrument, no counter, no report row.**
+  - **G-023b-ii — travel is measured.** The journey instrument, the far/near differential, and
+    `check:measure`'s arm learning `optional('circulation.json')`.
+
+  **Why taken this time, when G-013's identical seam was declined and cost nine instances of one
+  defect class**: the two halves move **different global sequences**. Half one moves
+  `SAVE_SCHEMA_VERSION` and the I2 hash; half two moves neither and re-pins goldens that half one
+  has already settled. Landing them together means every instrument figure is measured against a
+  hash that the same diff is still moving — **the exact confound G-032a spent three sweeps
+  unpicking.** *(Recorded per §5.5: this block is the record, and a seam taken without one is the
+  failure this session has now made five times.)*
+
+  **CARRIED FORWARD FROM THE OLD PLAN, so nothing is re-derived:**
+  - `check:tickcost`'s acceptance bar is **`verdict=MEASURED`**. `INCOMPARABLE` passes the gate
+    and would satisfy the criterion **vacuously** (ADR-0007).
+  - `optional('circulation.json')` must be taught to `tools/gates/arm/measure-arm.mjs` or
+    `check:measure` goes red — the G-014b precedent is in that same file.
+  - The far/near differential may not hold `journeys` equal; see consequence 3.
+
+  **Exit criteria for G-023b-i — commands, not adjectives:**
+  - `pnpm exec vitest run travel` green.
+  - **TRANSIT IS IN THE HASHED STATE**, asserted through `hashState` on two worlds differing only
+    in a guest's remaining transit ticks — not by asserting a field exists (G-023a's precedent).
+  - Save **v17** with a real 16→17 migration; the permanent v1 fixture a **zero-line diff** walking
+    1→17; `SAVE_V1_CONTENT_FINGERPRINT` unmoved.
+  - **THE SPEED IS CONTENT** (`circulation.json`), validated by the Zod schema, and
+    `pnpm check:content` green — a speed hardcoded in the sim is an I3 violation, and G-032c's new
+    declared-id half now catches the spelling as well as the literal.
+  - **THE THREE EXPECTED MOVEMENTS ARE ARGUED, THE REST ARE DEFECTS.** Review distribution,
+    `unservedTicks` and the I2 hash may move; arrivals, revenue and balance may not.
+  - `pnpm verify` green, all fourteen rows. Three-OS CI green (ADR-0043 §4).
+
+  **NOT STARTED. The plan is the deliverable of this entry**; BUILD begins at the next sitting.
+
 
 ---
 

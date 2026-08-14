@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043. G-032a, G-033, G-032b, G-032c done — THE INSTRUMENT TRACK IS NOW CAPPED and M3 runs circulation only, to G-026. pnpm verify FOURTEEN ROWS GREEN. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, human call. Next: G-023b (RE-PLAN needed after ADR-0017). Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043. G-032a, G-033, G-032b, G-032c done — INSTRUMENT TRACK CAPPED, M3 now runs circulation only. pnpm verify FOURTEEN ROWS GREEN. G-023b RE-PLANNED and split into i/ii, seam taken and recorded; BUILD not started. ONE OPEN ESCALATION (2026-08-14): the tickcost bound cannot catch the 1.173x regression this project shipped; bound untouched, human call. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
