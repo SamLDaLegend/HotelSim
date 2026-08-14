@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify is THIRTEEN GREEN locally. CI IS UNREAD on the two newest commits. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally. CI: two completed runs RED (both pre-G-032a), three pending — read it before the next goal. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -3625,3 +3625,19 @@ bookkeeping**: the unreviewed file was also the unbuilt one.
 `GOALS.md` requires *"CI green on three platforms"* as an M3 exit criterion **per goal** — but
 nothing prompts anyone to look between goals. **Three of today's commits went out unchecked.**
 Whoever resumes M3 should read CI **before** starting the next goal, not at its exit.
+
+### ADR-0041 amendment — the CI reading, completed
+
+**Checked again before stopping**: **two completed runs, both RED — `55ca957` and `40ddd36`, both
+predating G-032a** — and **three still in progress** (`16ef890`, `ba9f09a`, `da0a94f`), which are
+the commits carrying G-032a's repairs and the only ones that could show thirteen green on a remote.
+
+**So the last confirmed CI state of this project is RED**, on two commits whose failures are
+explained — the three ruled-red gates, which were genuinely red at those commits, plus the
+typecheck defect this amendment records. **Nothing yet confirms the repair on any platform but
+this one.**
+
+**Recorded this way deliberately.** `pnpm verify` is thirteen green *locally*, and every reading in
+today's ledger is a reading from one machine. **I2's whole point is that a hash must be identical on
+every platform, and that clause has only ever been executed by CI** — twice, at G-022 and at run
+number 8. **A green local verify is a claim about a developer box.**

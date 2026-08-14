@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify is THIRTEEN GREEN locally. CI IS UNREAD on the two newest commits. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally. CI: two completed runs RED (both pre-G-032a), three pending — read it before the next goal. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

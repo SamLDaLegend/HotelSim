@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify is THIRTEEN GREEN locally. CI IS UNREAD on the two newest commits. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally. CI: two completed runs RED (both pre-G-032a), three pending — read it before the next goal. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
