@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5: 6 of 7 goals done (G-030, G-027a, theta-a, theta-b1, theta-b2, G-028a). Only G-028b remains — last in milestone, second critic. Two goals owe a human WATCH. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 IS COMPLETE — 7 of 7 goals done, closing with G-028b. Owed by the human: M2.5 exit, and a WATCH on apps/game that three goals now share. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
