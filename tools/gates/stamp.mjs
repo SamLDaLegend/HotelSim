@@ -41,6 +41,24 @@
 // "old" mechanical means ordering goal IDs across G-020a/b/c and reconciling them with
 // JOURNAL's headings, which is a bigger check than the defect it would catch. Parked with
 // its falsification test rather than half-built.
+//
+// ===========================================================================================
+// AND UNTIL G-032a IT CHECKED THE HEADER AND NOTHING UNDER IT (ADR-0039 §1).
+//
+// The stamp is one LINE. Every number a reader actually uses — the save schema, the summary
+// schema, the I2 hash, the measure golden — lives in the BODY of the digest beneath it. **That
+// body has now gone stale four times with this gate green every time**, most recently inside
+// the session that ruled the predicate in: `GOALS.md` was hand-corrected to `summary **4**` and
+// `JOURNAL.md` was left reading `summary **v3**`, so the fourth hand-repair was itself
+// incomplete and this predicate went red on the shipped tree the moment it existed.
+//
+//   > A gate that checks a document's header certifies nothing about its body — and the body
+//   > is where every reader gets the numbers.
+//
+// THIS IS AN ADDED PREDICATE, NOT A LOOSENED ONE. §9 forbids editing a gate to make a build
+// pass; this edit makes a green gate red on the tree it was written against, which is the only
+// direction a gate may be moved by an agent.
+// ===========================================================================================
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -169,6 +187,160 @@ function shapeViolations(where, stamp, done) {
   return out;
 }
 
+/**
+ * The digest REGION — from the `## DIGEST` heading to the `---` that closes it.
+ *
+ * Bounded deliberately: `GOALS.md` states `save v15` and `save v12` further down its own file
+ * as history, and a scan that read the whole document would compare a fact against an epitaph.
+ * §4.1 defines the digest as the block above the append-only history, and that is the block a
+ * reader takes live numbers from, so that is the block this checks.
+ */
+function digestOf(text) {
+  const lines = splitLines(text);
+  const first = lines.findIndex((line) => /^##\s+DIGEST\b/.test(line));
+  if (first === -1) return null;
+  let last = first + 1;
+  while (last < lines.length && lines[last].trim() !== '---') last += 1;
+  return lines.slice(first, last).join('\n');
+}
+
+/** A named constant read out of the tree, or a loud failure naming the file it could not read. */
+function shippedConstant(file, pattern, what) {
+  let source;
+  try {
+    source = readFileSync(join(ROOT, file), 'utf8');
+  } catch (error) {
+    throw new Error(`check:stamp cannot read ${file} to learn ${what}: ${error.message}`);
+  }
+  const found = pattern.exec(source);
+  if (found === null) {
+    throw new Error(
+      `check:stamp cannot find ${what} in ${file}. The constant moved or was renamed; ` +
+        'point this pattern at it rather than deleting the check.',
+    );
+  }
+  return found[1];
+}
+
+/**
+ * THE FACTS A DIGEST STATES, AND WHERE THE TREE KEEPS EACH ONE.
+ *
+ * FIRST MATCH WINS, AND THE DIRECTION THAT IS SOUND IN IS THE ONE THAT MATTERS. A digest may
+ * mention a fact twice — `GOALS.md`'s schema line states `save **v16**` and then, in a
+ * parenthetical about how this class was caught last time, `save v12`. Taking the first match
+ * means a digest whose FIRST statement of a fact is correct passes even if a later historical
+ * mention differs, and a digest whose first statement is wrong fails. **A reader reads the
+ * first one.** The failure this cannot see is a correct value followed by a wrong live one;
+ * the failure it exists for — a stale first statement — it sees exactly.
+ *
+ * IT PRINTS WHAT IT READ, so a pattern that matched the wrong text is visible rather than
+ * silent. That is the whole difference between this and a scan nobody can audit.
+ */
+const FACTS = [
+  {
+    what: 'the save schema version',
+    inDigest: /\bsave\s+\*{0,2}v(\d+)/i,
+    shipped: () =>
+      shippedConstant('packages/sim/src/save.ts', /^export const SAVE_SCHEMA_VERSION = (\d+);$/m, 'SAVE_SCHEMA_VERSION'),
+    source: 'packages/sim/src/save.ts',
+  },
+  {
+    what: 'the summary schema version',
+    inDigest: /\bsummary\s+\*{0,2}v?(\d+)/i,
+    shipped: () =>
+      shippedConstant(
+        'tools/headless/src/report.ts',
+        /^export const SUMMARY_SCHEMA_VERSION = (\d+);$/m,
+        'SUMMARY_SCHEMA_VERSION',
+      ),
+    source: 'tools/headless/src/report.ts',
+  },
+  {
+    what: 'the measure golden',
+    inDigest: /measure golden\s+`?([0-9a-f]{16})`?/i,
+    // The same literal `check-measure.mjs` parses. Two gates READING one fact is not the
+    // duplicated-constant defect ADR-0021 names — that is one VALUE written twice, and this
+    // value is written once, in the golden.
+    shipped: () =>
+      shippedConstant(
+        'tools/headless/src/bench.workload.golden.test.ts',
+        /expect\(hashState\(plain\)\)\.toBe\('([0-9a-f]+)'\);/,
+        "the PLAIN arm's hash",
+      ),
+    source: 'tools/headless/src/bench.workload.golden.test.ts',
+  },
+  {
+    what: 'the I2 gate hash',
+    inDigest: /\bI2\b[\s\S]{0,24}?`([0-9a-f]{16})`/,
+    // ===================================================================================
+    // THE ONE FACT THIS GATE CANNOT VERIFY, REGISTERED RATHER THAN QUIETLY OMITTED.
+    //
+    // The I2 hash is not a literal anywhere in the tree: `determinism.mjs` compares runs to
+    // each other and pins no reference (`PARKING.md`, G-009). So there is nothing to read it
+    // from, and computing it here would run 100,000 ticks inside a gate that costs a fifth of
+    // a second — duplicating the `test:determinism` row that runs in the same `pnpm verify`.
+    //
+    // What IS checkable is that the four digests agree about it, and that is checked. The
+    // control for the value itself is one command, and it is named so a reader is not left
+    // inferring coverage from silence (ADR-0024: state the half a predicate cannot close, with
+    // its control).
+    // ===================================================================================
+    shipped: null,
+    source: 'node tools/gates/determinism.mjs — the value is derived, not stored',
+  },
+];
+
+/**
+ * Every digest that STATES a fact must state it correctly, and at least one must state it.
+ *
+ * THE "AT LEAST ONE" CLAUSE IS THE ANTI-BLINDING HALF. Without it the cheapest way to make
+ * this predicate green is to delete the sentence, which is ADR-0007's class arriving through
+ * the door marked "tidying the digest". A short digest is permitted; a digest set in which
+ * NOBODY states the save schema is not.
+ */
+function factViolations(digests) {
+  const out = [];
+  for (const fact of FACTS) {
+    const stated = [];
+    for (const { where, digest } of digests) {
+      const found = fact.inDigest.exec(digest);
+      if (found !== null) stated.push({ where, value: found[1] });
+    }
+    if (stated.length === 0) {
+      out.push({
+        where: 'the four digests',
+        what:
+          `none of them states ${fact.what}, so this check inspected nothing for it (ADR-0007).\n` +
+          `    A reader takes that number from the digest. Source of truth: ${fact.source}.`,
+      });
+      continue;
+    }
+    const disagreeing = stated.filter((entry) => entry.value !== stated[0].value);
+    for (const entry of disagreeing) {
+      out.push({
+        where: entry.where,
+        what:
+          `states ${fact.what} as "${entry.value}" and ${stated[0].where} states "${stated[0].value}".\n` +
+          '    §4.1: the digests carry one set of live numbers, not four.',
+      });
+    }
+    if (fact.shipped === null) continue;
+    const shipped = fact.shipped();
+    for (const entry of stated) {
+      if (entry.value !== shipped) {
+        out.push({
+          where: entry.where,
+          what:
+            `states ${fact.what} as "${entry.value}"; the tree says "${shipped}" (${fact.source}).\n` +
+            '    THE DIGEST BODY IS STALE. This is the class ADR-0039 §1 records going stale four\n' +
+            '    times with this gate green, and it is why the gate now reads the body.',
+        });
+      }
+    }
+  }
+  return out;
+}
+
 // --- the two modes ------------------------------------------------------------------
 
 const argv = process.argv.slice(2);
@@ -220,6 +392,7 @@ if (setIndex !== -1) {
 
 const violations = [];
 const stamps = [];
+const digests = [];
 
 for (const name of LEDGERS) {
   const where = rel(ROOT, join(ROOT, name));
@@ -229,6 +402,15 @@ for (const name of LEDGERS) {
   } catch (error) {
     violations.push({ where, what: `cannot be read: ${error.message}` });
     continue;
+  }
+  const digest = digestOf(text);
+  if (digest === null) {
+    violations.push({
+      where,
+      what: 'carries no "## DIGEST" heading, so its body cannot be read (§4.1).',
+    });
+  } else {
+    digests.push({ where, digest });
   }
   const stamp = findStamp(text);
   if (stamp === null) {
@@ -261,8 +443,22 @@ if (stamps.length === LEDGERS.length) {
   violations.push(...shapeViolations(first.where, first.stamp, done));
 }
 
+// THE BODY, NOT ONLY THE HEADER (ADR-0039 §1).
+if (digests.length === LEDGERS.length) violations.push(...factViolations(digests));
+
 if (violations.length === 0) {
+  // WHAT IT READ, PRINTED. A scan whose matches nobody can see is a scan nobody can audit —
+  // and this one takes the FIRST match of an anchored noun out of free prose, which is exactly
+  // the kind of match that deserves to be shown rather than trusted.
+  const read1 = (fact) => {
+    const found = digests.map(({ digest }) => fact.inDigest.exec(digest)).find((m) => m !== null);
+    return `${fact.what.replace(/^the /, '')} ${found[1]}`;
+  };
   process.stdout.write(`  ok  ledger stamp — ${LEDGERS.length} digests agree: ${stamps[0].stamp.text}\n`);
+  process.stdout.write(`      digest body: ${FACTS.map(read1).join(' · ')}\n`);
+  process.stdout.write(
+    '      (the I2 hash is checked for AGREEMENT only — its value is derived; control: node tools/gates/determinism.mjs)\n',
+  );
 } else {
   finish('ledger as-of stamp (§4.1)', violations);
 }

@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 IS COMPLETE — 7 of 7 goals done, closing with G-028b. Owed by the human: M2.5 exit, and a WATCH on apps/game that three goals now share. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 IS COMPLETE AND SIGNED OFF — 7 of 7, closing with G-028b, and WATCH #11 discharged all three owed WATCHes. M3 is under way. Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v16** · summary **v3** · I2 `2568fb4336c95267` · measure golden
-  `b42ccbb81e1539c4` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v16** · summary **v4** · I2 `8a83acaf7f81edeb` · measure golden
+  `ebb9c3924e373c1e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -1289,3 +1289,39 @@ rather than at behaviour — `hud.ts`'s "needs met" bar changes meaning without 
 **M2.5's exit sign-off** · **the cadence confound**, now the largest item in the instrument-debt
 goal · the money-loop cliff (M4) · the visitor ceiling (M6) · **and the scoring trade, which the
 human may overturn for the costed runner-up.**
+
+## WATCH #11 — the human looked, and all three answers came back positive (2026-08-14)
+
+**Surface**: `apps/game` at `localhost:5180`, the picture of record (ADR-0023). **This discharges the
+WATCH owed by θ-a, G-031a and G-028b** — three goals, one look.
+
+**(a) "Does a napping guest read as resting?" → *"Yes it does."*** **This is the first time that
+ruling has been tested against a correct picture.** ADR-0029 was given against a build where a guest
+asleep in its own room **drew as IDLE for 58 % of its nap** — 432 of 749 frames, longest span 179
+consecutive ticks. The predicate repair landed at θ-a; **the ruling now stands on an observation
+rather than on a number.**
+
+**(b) "Can you tell a guest that walked out from one that checked out?" → *"Yes, very easy to see
+with the bar underneath now."*** **THIS REVERSES WATCH #10**, where the answer was no.
+
+**Nothing about the departure rows changed between the two answers. The SURFACE changed.** WATCH #10
+was taken through the viewer; this one through `apps/game`, where `drawLobbyFuse` puts a shrinking
+bar under a guest whose patience is running out. **The distinction was always in the data and was
+never on the screen the human was shown.**
+
+> **A perceptual finding is about a surface, not about a build. The same question, the same tick,
+> two surfaces, opposite answers — and the ledger recorded the first as a property of the game.**
+
+**Recorded precisely, because the answer is about the mark that exists**: the fuse marks the **lobby
+wait**, so it separates `gaveUp` from `checkedOut`. **`leftDissatisfied` (a resident who walked out
+mid-stay) and `visitEnded` carry no mark of their own** — those are newer rows and the human was not
+asked about them. `PARKING.md`'s entry is narrowed to them rather than closed outright.
+
+**(c) "Does the needs-met bar still tell you what it is showing?" → *"Yes I can see the needs are
+being met (or not)."*** The bar changed **meaning without changing shape** — at five of every
+amenity, Entertainment reads **192/353 where it read 353/353** — because the old number asked *was
+this above its line when the guest left* and the new one asks *was it served for all but a band's
+width of the whole stay.* **The label survives the redefinition.**
+
+**What this closes**: θ-a, G-031a and G-028b's WATCH obligations, and with them **the last thing
+standing between M2.5 and its exit.**

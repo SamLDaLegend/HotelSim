@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 IS COMPLETE — 7 of 7 goals done, closing with G-028b. Owed by the human: M2.5 exit, and a WATCH on apps/game that three goals now share. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 IS COMPLETE AND SIGNED OFF — 7 of 7, closing with G-028b, and WATCH #11 discharged all three owed WATCHes. M3 is under way. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2243,17 +2243,26 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   goal name to be unique**, and two blocks headed `G-027b θ-b2` on the same date were both
   correct-looking.)*
 
-- **A DEPARTING GUEST LOOKS THE SAME WHATEVER MADE IT LEAVE** (human, WATCH #10, 2026-08-13).
-  Seven departure rows, one appearance. **ADR-0025 §2 spent a schema row keeping "nobody would give
-  me a room" distinct from "I had a bed and nothing to do", because they are opposite instructions
-  to a player — build rooms, or build amenities. That distinction is live in the data and absent
-  from the screen**, so the build loop's steering signal reaches the report and not the person.
-  **The human routed it themselves**: *"this will be easier to show when we get to visualising the
-  game."* Render track, not the sim.
-  **FALSIFICATION TEST**: show a watcher a recording containing at least three departure reasons
-  and ask which guests left for which. *If they can sort them without reading the outcome table,
-  this closes. If they cannot, the row split is doing its job in the ledger and not in the game,
-  and the render goal owes a mark per reason.*
+- ~~**A DEPARTING GUEST LOOKS THE SAME WHATEVER MADE IT LEAVE**~~ **NARROWED 2026-08-14 BY WATCH
+  #11, AND THE REVERSAL IS THE FINDING.** Asked the same question a second time, the human answered
+  **"yes, very easy to see with the bar underneath now."** WATCH #10 answered **no**.
+
+  **Nothing about the departure rows changed between the two answers. The SURFACE changed** — #10
+  was taken through the viewer, #11 through `apps/game`, where `drawLobbyFuse` draws a shrinking bar
+  under a guest whose patience is running out. **The distinction was always in the data and was
+  never on the screen the human was shown**, so the first answer was recorded as a property of the
+  game and was a property of the instrument.
+
+  > **A perceptual finding is about a surface, not about a build.** Same question, same tick, two
+  > surfaces, opposite answers.
+
+  **WHAT REMAINS, stated precisely rather than closed outright**: the fuse marks the **lobby wait**,
+  so it separates `gaveUp` from `checkedOut`. **`leftDissatisfied` — a resident who walks out
+  mid-stay — and `visitEnded` carry no mark of their own**, and the human was not asked about them.
+  **FALSIFICATION TEST**: show a watcher a hotel producing all three of `checkedOut`,
+  `leftDissatisfied` and `visitEnded`, and ask which guests left for which. *If they can sort them
+  without reading the outcome table, this closes entirely. If they can only sort the roomless ones,
+  the fuse is doing the whole job and the two resident rows still owe a mark.*
 
 - ~~**A 2-PIXEL MARK IS NOT A MARK**~~ **WITHDRAWN THE SAME HOUR — THE MARK WORKS.** The human
   reported not seeing the lobby fuse; the orchestrator filed it as a perceptual defect and as

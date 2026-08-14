@@ -56,7 +56,42 @@ const PENDING_BLOCK = [
   '',
 ].join('\n');
 
-function ledgerText(name: Ledger, stamp: string, goalBlock: string, newline = '\n'): string {
+/**
+ * THE SYNTHETIC TREE'S CONSTANTS ARE DELIBERATELY NOT THIS REPOSITORY'S (G-032a, ADR-0039 §1).
+ *
+ * The gate reads the save schema, the summary schema and the measure golden OUT OF THE TREE. If
+ * it instead carried a memory of HotelSim's own numbers — or if a later edit replaced the reads
+ * with literals — every arm below would still pass against a tree stating 16 / 4 /
+ * `ebb9c3924e373c1e`. Stating 77 / 9 / `0123456789abcdef` here means the CONTROL only passes if
+ * the gate genuinely read these files.
+ */
+const STUB = {
+  save: '77',
+  summary: '9',
+  golden: '0123456789abcdef',
+  i2: 'fedcba9876543210',
+} as const;
+
+/** The three files the gate learns the tree's facts from, in the shapes it parses. */
+const STUB_SOURCES: Readonly<Record<string, string>> = {
+  'packages/sim/src/save.ts': `export const SAVE_SCHEMA_VERSION = ${STUB.save};\n`,
+  'tools/headless/src/report.ts': `export const SUMMARY_SCHEMA_VERSION = ${STUB.summary};\n`,
+  'tools/headless/src/bench.workload.golden.test.ts': `    expect(hashState(plain)).toBe('${STUB.golden}');\n`,
+};
+
+/** The digest body line the facts are read from — one line, stating all four. */
+const factsLine = (facts: Partial<typeof STUB> = {}): string => {
+  const f = { ...STUB, ...facts };
+  return `- **State**: save **v${f.save}** · summary **${f.summary}** · I2 \`${f.i2}\` · measure golden \`${f.golden}\``;
+};
+
+function ledgerText(
+  name: Ledger,
+  stamp: string,
+  goalBlock: string,
+  newline = '\n',
+  facts: string = factsLine(),
+): string {
   const body = [
     `# ${name.replace('.md', '')}`,
     '',
@@ -64,7 +99,7 @@ function ledgerText(name: Ledger, stamp: string, goalBlock: string, newline = '\
     '',
     stamp,
     '',
-    '- a bullet, so the digest has a body',
+    facts,
     '',
     '---',
     '',
@@ -78,13 +113,19 @@ type Tree = { readonly dir: string; readonly gate: string };
 
 let tree: Tree;
 
-function makeTree(): Tree {
+function makeTree(options: { readonly omitSource?: string } = {}): Tree {
   const dir = mkdtempSync(join(tmpdir(), 'hotelsim-stamp-bite-'));
   mkdirSync(join(dir, 'tools/gates/lib'), { recursive: true });
   // Copied, not rewritten: `readFileSync` -> `writeFileSync` of the same buffer. The sha256
   // test below is what turns "copied" from a comment into an assertion.
   writeFileSync(join(dir, 'tools/gates/stamp.mjs'), readFileSync(GATE));
   writeFileSync(join(dir, 'tools/gates/lib/scan.mjs'), readFileSync(SCAN_LIB));
+  // The three files the digest-body predicate reads its truth from (G-032a).
+  for (const [path, source] of Object.entries(STUB_SOURCES)) {
+    if (path === options.omitSource) continue;
+    mkdirSync(join(dir, dirname(path)), { recursive: true });
+    writeFileSync(join(dir, path), source, 'utf8');
+  }
   return { dir, gate: join(dir, 'tools/gates/stamp.mjs') };
 }
 
@@ -96,15 +137,19 @@ function writeLedgers(
     readonly goalBlock?: string;
     readonly newline?: string;
     readonly overrides?: Partial<Record<Ledger, string>>;
+    /** Per-file digest body line, so one ledger can state a fact the others do not. */
+    readonly facts?: Partial<Record<Ledger, string>>;
+    readonly factsAll?: string;
   } = {},
 ): void {
   const stamp = options.stamp ?? GOOD_STAMP;
   const goalBlock = options.goalBlock ?? DONE_BLOCK;
   for (const name of LEDGERS) {
     const override = options.overrides?.[name];
+    const facts = options.facts?.[name] ?? options.factsAll ?? factsLine();
     writeFileSync(
       join(dir, name),
-      override ?? ledgerText(name, stamp, goalBlock, options.newline ?? '\n'),
+      override ?? ledgerText(name, stamp, goalBlock, options.newline ?? '\n', facts),
       'utf8',
     );
   }
@@ -165,6 +210,106 @@ describe('THE CONTROL — a valid tree, so a red arm below means the mutation an
     const lf = runGate(tree.gate);
     expect(lf.status).toBe(0);
     expect(lf.output).toBe(crlf.output);
+  });
+
+  it('AND THE CONTROL PROVES THE FACTS ARE READ FROM THE TREE, not remembered', () => {
+    // The synthetic tree states 77 / 9 / `0123456789abcdef` — none of them this repository's.
+    // A gate carrying HotelSim's own numbers, or one whose reads were replaced by literals,
+    // is red here. That is the state this arm forbids and the four above permit.
+    writeLedgers(tree.dir);
+    const { status, output } = runGate(tree.gate);
+    expect(status).toBe(0);
+    expect(output).toContain(`save schema version ${STUB.save}`);
+    expect(output).toContain(`summary schema version ${STUB.summary}`);
+    expect(output).toContain(`measure golden ${STUB.golden}`);
+  });
+});
+
+describe('THE DIGEST BODY, WHICH THIS GATE READ NOTHING OF UNTIL G-032a (ADR-0039 §1)', () => {
+  // ===========================================================================================
+  // The body went stale FOUR TIMES with this gate green. The fourth correction — made in the
+  // session that ruled the predicate in — left `JOURNAL.md` at `summary **v3**` while the tree
+  // was at 4, and the predicate below went red on the shipped tree the moment it existed.
+  // ===========================================================================================
+
+  it('A STALE FACT IS REFUSED, and the refusal names the tree value and the file that reads it', () => {
+    writeLedgers(tree.dir, { factsAll: factsLine({ summary: '8' }) });
+    const { status, output } = runGate(tree.gate);
+    expect(status).toBe(1);
+    expect(output).toContain('the summary schema version');
+    expect(output).toContain(`the tree says "${STUB.summary}"`);
+    expect(output).toContain('tools/headless/src/report.ts');
+  });
+
+  it('and it is refused for EVERY fact the tree can be read for, not just the one that bit', () => {
+    // ADR-0035: three constants asserted against one predicate is one assertion wearing three
+    // hats. Each fact gets its own mutation, so a predicate that only ever learned to read
+    // `summary` cannot pass this block.
+    for (const [facts, needle] of [
+      [factsLine({ save: '78' }), 'the save schema version'],
+      [factsLine({ golden: 'deadbeefdeadbeef' }), 'the measure golden'],
+    ] as const) {
+      writeLedgers(tree.dir, { factsAll: facts });
+      const { status, output } = runGate(tree.gate);
+      expect(status, needle).toBe(1);
+      expect(output).toContain(needle);
+    }
+  });
+
+  it('TWO DIGESTS DISAGREEING is refused even when one of them is right — the G-032a instance', () => {
+    // `GOALS.md` said summary 4 and `JOURNAL.md` said v3, on the same tree, on the same day.
+    // Neither the agreement check nor the tree check alone is enough: this arm holds the tree
+    // check satisfied for three files and moves only the fourth.
+    writeLedgers(tree.dir, { facts: { 'JOURNAL.md': factsLine({ summary: '8' }) } });
+    const { status, output } = runGate(tree.gate);
+    expect(status).toBe(1);
+    expect(output).toContain('JOURNAL.md');
+    expect(output).toContain('one set of live numbers, not four');
+  });
+
+  it('THE I2 HASH IS CHECKED FOR AGREEMENT, which is all a derived value permits', () => {
+    // It is in no file, so there is nothing to compare it against — `determinism.mjs` pins no
+    // reference. What is checkable is that the four say the same thing, and that is checked
+    // rather than skipped because the value is out of reach.
+    writeLedgers(tree.dir, { facts: { 'PARKING.md': factsLine({ i2: '1111111111111111' }) } });
+    const { status, output } = runGate(tree.gate);
+    expect(status).toBe(1);
+    expect(output).toContain('the I2 gate hash');
+  });
+
+  it('DELETING THE SENTENCE DOES NOT MAKE IT GREEN — the anti-blinding half', () => {
+    // The cheapest way to satisfy a fact checker is to stop stating the fact. That is
+    // ADR-0007's class arriving through the door marked "tidying the digest".
+    writeLedgers(tree.dir, { factsAll: '- a bullet that states no facts at all' });
+    const { status, output } = runGate(tree.gate);
+    expect(status).toBe(1);
+    expect(output).toContain('inspected nothing for it');
+  });
+
+  it('A LATER HISTORICAL MENTION IS PERMITTED, and that is the first-match rule stated deliberately', () => {
+    // `GOALS.md` states `save **v16**` and then, in a parenthetical about how this very class
+    // was caught last time, `save v12`. First match wins, and the direction that is sound in is
+    // the one that matters: a digest whose FIRST statement is right is what a reader reads.
+    // This arm exists so that rule is a decision rather than an accident of regex order.
+    writeLedgers(tree.dir, {
+      factsAll: `${factsLine()} *(this line once read save v12, which is history and not a live number)*`,
+    });
+    const { status } = runGate(tree.gate);
+    expect(status).toBe(0);
+  });
+
+  it('AND A SOURCE IT CANNOT READ IS A LOUD FAILURE, never a quiet pass', () => {
+    // A gate that shrugs when it cannot find its subject is green while inspecting nothing —
+    // the defect this whole file exists downstream of.
+    const bare = makeTree({ omitSource: 'packages/sim/src/save.ts' });
+    try {
+      writeLedgers(bare.dir);
+      const { status, output } = runGate(bare.gate);
+      expect(status).not.toBe(0);
+      expect(output).toContain('packages/sim/src/save.ts');
+    } finally {
+      rmSync(bare.dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 IS COMPLETE — 7 of 7 goals done, closing with G-028b. Owed by the human: M2.5 exit, and a WATCH on apps/game that three goals now share. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 IS COMPLETE AND SIGNED OFF — 7 of 7, closing with G-028b, and WATCH #11 discharged all three owed WATCHes. M3 is under way. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -3343,3 +3343,89 @@ repair leaves standing beside it**. They are adjacent and they are not the same 
 is about *time* (a property the old code carried), the second about *space* (a line the fix did not
 look at). **Both exist because attention follows the subject, and the subject is never the whole
 unit that has to be true.**
+
+## ADR-0039 — `check:stamp` GETS A PREDICATE OVER THE DIGEST'S BODY; and G-032's seam is taken
+
+**Date**: 2026-08-14 · **Status**: accepted · **Relates to**: §4.1, ADR-0021, ADR-0038 ·
+**Raised by**: `sim-engineer` at G-032 PLAN, having measured the tree rather than quoted the ledger.
+
+### 1. The digest body has now gone stale FOUR TIMES and the gate has been green every time
+
+At G-032's plan the four digests read summary schema **3**, measure golden **`b42ccbb81e1539c4`**
+and I2 **`2568fb4336c95267`**, while the tree read **4**, **`ebb9c3924e373c1e`** and
+**`8a83acaf7f81edeb`**. **`check:stamp` was green throughout, because it compares the as-of LINE
+and never reads the body beneath it.**
+
+**That is the failure the digest itself records having had at v12-against-v14, recurred** — and the
+orchestrator has now caused it four times in one session, each time by updating the stamp and not
+the facts under it.
+
+**Ruled**: `stamp.mjs` gains a predicate that **reads the schema/hash line and compares it against
+the shipped constants**. `SUMMARY_SCHEMA_VERSION`, `SAVE_SCHEMA_VERSION`, the measure golden and the
+I2 hash are all readable from the tree. **One predicate closes the machine-readable half of a class
+that four human corrections did not.**
+
+> **A gate that checks a document's header certifies nothing about its body — and the body is where
+> every reader gets the numbers.** Fourth statement of this, first time it becomes executable.
+
+### 2. THE `rooms` ROTATION'S CAMPAIGN IS AS STALE AS THE `needs` ONE, AND THE GATE CANNOT SEE IT
+
+**`check:scaling` refuses at the first rotation and never reaches the second — and had it reached
+it, it would have PASSED.** The `rooms` fingerprint is **byte-identical** to its campaign's, while
+ADR-0017 **tripled the stay length** and changed every one of those arms' occupancy.
+
+**The fingerprint is spelled in FLAGS. The flags did not move; the hotel did.** ADR-0021's
+blind-guard defect, **still live, in the rotation nobody had looked at** — and the gate even *prints*
+`an arrival every 32 ticks` while the instrument runs 96.
+
+**Ruled**: the fingerprint gains **`stayDurationTicks` from the bound content** — a content
+constant, exact, free, no stopwatch — and `scaling.mjs` gains the arrival-cadence cross-check
+`tripwire.mjs` has and it lacks. **All four axes are re-taken, not the two the gate can see**:
+refusing to re-take an axis because its fingerprint still matches **is** the green gate that has
+stopped being evidence.
+
+### 3. THE BENCHMARK CONSTANTS SIT AT LOCAL MINIMA OF THE AXIS THEY MEASURE
+
+Measured: **±1 arrival tick moves occupancy by +3.2 % and +2.1 % at the shipped cadence — against a
+tripwire noise ceiling of 2.38 %.** One arrival tick moves the workload's own cost driver by more
+than the instrument's entire noise budget. And **122 → 123 is +26 % in one tick.**
+
+**Three of the four `rooms`-rotation arms sit at a local minimum against both neighbours**, and
+20, 60, 15 and 96 **all divide 1,440**.
+
+> **This project chooses round cadences. Round cadences phase-lock. The chosen ones are extrema
+> rather than typical points.**
+
+Parked with its falsification test — 120 is a divisor and is *not* a minimum, so the rule is not
+universal and the sweep decides it.
+
+### 4. ADR-0015's OWN PRE-REGISTERED TRIGGER HAS FIRED
+
+ADR-0015 justifies the tripwire's blind spot on one empirical claim: *"every performance defect in
+twenty goals was 2.07×, 3.9× or 6.6×, and not one was a 10 % creep. **If this project ever produces
+a drift-scale regression, this rule is the thing that has to change** — not the bound inside it."*
+
+**G-028a produced 1.135× / 1.158× / 1.161×, three independent paired campaigns, distributions
+non-overlapping in every one.** The plan pre-registers **both branches before the measurement**: if
+the merge removes it, the premise survives; **if it does not, the class the gate declines to catch
+is a class this project demonstrably produces, and that is an `ESCALATIONS.md` entry — a human
+decision, not a diff.** That is the right shape and it is accepted as written.
+
+### 5. The seam is TAKEN
+
+G-032 as written is **six subjects with six failure modes**: an enumeration over the whole test
+surface · two measurement campaigns with derived bounds · a `packages/sim` hot-path change · a
+change to what an **invariant** gate means · a render-adjacent measurement · a stamp repair.
+**ADR-0038's class produced seven instances across the last two goals on smaller diffs.**
+
+**Taken as offered**: **G-032a** (the enumeration, both campaigns, the fingerprint pin, the
+`TARGET` re-freeze) → **G-032b** (the merge, which *must* follow because it needs Campaign A alive
+to be measured) → **G-032c** (I3's unquoted-key hole, which changes what an invariant means).
+**The needs-history interval is deferred** — it is not a gate, not in `pnpm verify`, buys no row,
+and is the most expensive item in the list. The reserved-hue measurement and the stamp predicate
+are cheap and ride along.
+
+**And the census method is the plan's best idea**: perturb **one line** — `report.ts`'s arrival
+loop — and run the suite. It reaches every consumer *including tests that pass their own cadence
+literal*, which a constant-perturbation would miss. **Whole census ≈3.5 minutes**, with the
+permitted set **pre-registered so the count cannot be padded.**

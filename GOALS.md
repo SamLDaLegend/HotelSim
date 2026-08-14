@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 IS COMPLETE — 7 of 7 goals done, closing with G-028b. Owed by the human: M2.5 exit, and a WATCH on apps/game that three goals now share. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 IS COMPLETE AND SIGNED OFF — 7 of 7, closing with G-028b, and WATCH #11 discharged all three owed WATCHes. M3 is under way. Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v16** (G-028a) · summary **3** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `2568fb4336c95267` · measure golden `b42ccbb81e1539c4`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `8a83acaf7f81edeb` · measure golden `ebb9c3924e373c1e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -44,7 +44,7 @@
   each by someone reading a list instead of counting a population).
   **Done (5)**: G-030 ✓ · G-027a ✓ · **θ-a ✓** (`7f0be45`) · **θ-b1 ✓** (`d6abef6`) ·
   **θ-b2 ✓** (`88dc25e`, save v15). **All pushed through `88dc25e`.**
-  **OWING A HUMAN WATCH (2)**: θ-a and G-031a — `apps/game` is the WATCH surface (ADR-0023) and it
+  **CLOSED 2026-08-14 by WATCH #11**: θ-a and G-031a — `apps/game` is the WATCH surface (ADR-0023) and it
   will not composite while the browser pane is hidden. **θ-b1's and θ-b2's WATCHes are discharged**
   from scrubbed recordings; **neither cites the viewer's drawing**, which is known stale.
   **Not started (1)**: **G-028**, and ADR-0033 re-aimed it — **the review signal is ABSENT, not
@@ -56,7 +56,11 @@
   either, it gets a block and rejoins; if not, the slot is closed and was always empty.
   **THEN M3 RESUMES at G-023b — UNBLOCKED** (960 ticks of slack where its plan pass measured zero)
   → G-024/G-025 → G-026, last in milestone, two critics. **Four M3 goals of its own remain.**
-- **Owed by the human**: M2.5 exit · M3 exit · **the two WATCHes**. *(The push was DISCHARGED
+- **Owed by the human**: M3 exit. *(**M2.5 EXIT: SIGNED OFF 2026-08-14.** And **WATCH #11 discharged
+  all three owed WATCHes in one look** — napping reads as resting, the departure distinction **IS**
+  visible via the lobby fuse, and the needs-met bar survives its redefinition. **ADR-0037's scoring
+  ruling is human-confirmed**: responsiveness over severity. **ADR-0015's blind-spot call is
+  delegated to the orchestrator** — *"whatever is best for the progress of the project"*.)* *(The push was DISCHARGED
   2026-08-13: `ab2991c..9f89c31`.)*
 - **Owed by goals**: **G-027b derives N and X at PLAN, before BUILD** — the idle-run bound and
   idle-share ceiling that G-028's criterion and `PARKING.md`'s hypothesis both rest on; baseline
@@ -764,6 +768,46 @@ Critique rounds used: 0/3
 ---
 
 # M3 — Circulation, resumed
+
+## G-032 — The instrument debts M2.5 left, before circulation touches anything
+Status: **pending — NEXT.** M2.5's exit sign-off is owed by the human and does not block this goal:
+  it repairs instruments rather than adding behaviour, and **every M3 goal needs a green three-OS CI
+  run that three red rows currently prevent being clean.**
+Milestone: M3 (gate goal, the same shape as G-022)
+Owner pair: sim-engineer / sim-critic
+Statement: `pnpm verify` returns to **thirteen green**, and the four measurement debts M2.5
+  accumulated are discharged **with campaigns, not with adjustments**.
+Exit criteria:
+  - **THE THREE RULED-RED ROWS GO GREEN OR THEIR REFUSAL IS RE-DERIVED.** `check:tickcost`,
+    `check:tickcost:proof` and `check:scaling` have declined to compare since the workload moved to
+    `arrivalEveryTicks: 96` — **three rows, two causes, human-accepted, and red for this entire
+    session.** ADR-0015's rule is POOL within a configuration, REPLACE on a configuration change:
+    **the campaigns are re-taken at the shipped workload, not re-pointed at the old one.**
+  - **THE CADENCE CONFOUND IS THE LARGEST ITEM AND IT COMES FIRST**, because every other campaign
+    here is read on the workload it questions. **Six rooms is this project's default balance
+    workload**, and 422 runs found the amenity axis falls at two cadences with adjacent-cadence
+    jumps larger than the one anybody had measured. **It does not question one instrument — it
+    questions the workload every instrument is read on.** Falsification test is in `PARKING.md`:
+    re-take any relied-on reading at ±1 arrival tick.
+  - **THE TICK-COST REGRESSION IS PRICED**, not assumed: three independent paired campaigns put
+    G-028a's second walk at **1.135× / 1.158× / 1.161×**, distributions non-overlapping in every
+    one. **The merge into `advanceNeeds` is the candidate; the identity it rests on is already
+    swept.** And note the irony recorded at G-028a: **the gate that would have caught it is one of
+    the three that are red.**
+  - **`PARKING.md`'s needs-history interval** (two arms no longer poolable) — the third campaign,
+    sized by `ai-critic` at G-022.
+  - **I3's unquoted-key hole** and the **0.05° reserved-hue margin**, both owed since G-030.
+  - `pnpm verify` — **thirteen green, and the count stated as a count** · CI green on three
+    platforms · **a WATCH is NOT owed**: this goal changes no guest, room or economy behaviour, and
+    that claim gets a control run rather than a sentence.
+Out of scope: the money-loop cliff (M4) · the visitor ceiling (M6) · the scoring trade (a human
+  call, costed at ADR-0037 §4) · `apps/game`.
+Critique rounds used: 0/3
+
+  **WHY IT GOES BEFORE G-023b.** G-022's precedent: M3's prerequisites were instrument debts, and
+  taking them first found **two real cross-platform defects no work on this machine could have
+  surfaced.** M2.5 has left four debts and a red `verify` row that has been red long enough to stop
+  being read — **which is §9's own stop condition about a known-red gate teaching people to skim.**
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing
 Status: pending — **MAY MERGE WITH G-025; the question goes to the builder at PLAN (ADR-0018 §5)**
