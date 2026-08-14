@@ -175,7 +175,7 @@ const stepTheBox = (
 };
 
 describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and then stepped', () => {
-  it('the ceiling is computed from the shipped rates and is 25.00%', () => {
+  it('the ceiling is computed from the shipped rates, and this test does not write it down', () => {
     // X = 1 − (Σ over ENGAGEMENT needs 1/(1+r)) × (1 + 1/r_lodging). The lodging term is NOT
     // 1/(1+r): rest decays only in AWAY time, and away time is what the engagement needs
     // generate. Substituting the wall-time duty there is precisely the defect this file's

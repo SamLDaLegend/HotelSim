@@ -287,6 +287,19 @@ const REGISTER: ReadonlyMap<string, { readonly proof: string; readonly title: st
         note: 'This file. It walks the tree, so by its own definition it is a scanner and owes its own proof.',
       },
     ],
+    [
+      'tools/gates/check-unpinned.mjs',
+      {
+        proof: 'tools/headless/src/unpinned.scan.test.ts',
+        title: 'BITES — a stale figure in a printed claim, on CRLF and on LF',
+        note:
+          'ADR-0043 §1, G-033. Sweep 3 became a scanner, and this register is what the ruling ' +
+          'meant by a proof of bite: the shipped NUMBER pattern was rewritten into a TEMPLATE ' +
+          'LITERAL on a sha256-guarded copy, both bite arms went red, and the file was restored ' +
+          'byte-identical. The proof spawns the gate rather than importing its predicate, so the ' +
+          'exit code CI reads is the thing under test.',
+      },
+    ],
   ]);
 
 /**

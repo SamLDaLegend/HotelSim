@@ -114,7 +114,7 @@ describe('THE CRITERION: the run reports what delivered every satisfaction (G-01
     for (const row of both) expect(row.lodging).toBe(false);
   });
 
-  it('THE LODGING NEED IS ALWAYS 100% BY ROOM, and it could not be otherwise', () => {
+  it('THE LODGING NEED IS ALWAYS MET BY ROOM AND NEVER BY AN ITEM, and it could not be otherwise', () => {
     // Not a coincidence of this hotel: `findFreeRoom` searches ROOMS for the lodging need,
     // and `bindContent` refuses content in which an item provides it. If this ever goes
     // non-zero, something has let a guest sleep in the furniture.

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally and CI GREEN on all three OS (run 31819183916, and the three before it). ADR-0043 (human ruling) governs M3's shape: sweep 3 is a scanner by default, the instrument track is capped, an ADR amended twice is restated. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 running under ADR-0043. G-032a and G-033 done — pnpm verify FOURTEEN ROWS GREEN, CI green on all three OS. Sweep 3 is now check:unpinned; its scored prediction reads at G-023b. Next: G-032b (carries ADR-0015's pre-registered escalation), G-032c, then circulation. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

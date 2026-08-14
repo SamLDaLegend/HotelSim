@@ -210,7 +210,7 @@ describe('the books close after the day\'s business', () => {
     expect(() => runSettlement({ ...ready, committed: true })).toThrow(/already committed this tick/);
   });
 
-  it('records that it ran on EVERY tick, not only the one in 1,440 it acts on', () => {
+  it('records that it ran on EVERY tick, not only the one tick a day it acts on', () => {
     // The flag is the whole defence: settlement acts once a day, so a dropped phase
     // is invisible to everything except a per-tick witness (ADR-0007). On a quiet
     // tick it runs, sets the flag, and touches nothing else — not even by allocation.
@@ -265,7 +265,7 @@ describe('the balance is the fold, and the fold is fully explained', () => {
 });
 
 describe('the upkeep rate is content, validated at the boundary', () => {
-  it('rejects a float or negative rate from a raw host, at bind time rather than tick 1,439', () => {
+  it('rejects a float or negative rate from a raw host, at bind time rather than at the day\'s last tick', () => {
     // The zod schema catches this for file content; `bindContent` is the check for
     // hosts that inject built objects and never pass through zod (ADR-0001). Money
     // that is not integer pence must die at the boundary (ADR-0002).

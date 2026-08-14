@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify THIRTEEN GREEN locally and CI GREEN on all three OS (run 31819183916, and the three before it). ADR-0043 (human ruling) governs M3's shape: sweep 3 is a scanner by default, the instrument track is capped, an ADR amended twice is restated. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 running under ADR-0043. G-032a and G-033 done — pnpm verify FOURTEEN ROWS GREEN, CI green on all three OS. Sweep 3 is now check:unpinned; its scored prediction reads at G-023b. Next: G-032b (carries ADR-0015's pre-registered escalation), G-032c, then circulation. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -878,6 +878,158 @@ Critique rounds used: 0/3
   taking them first found **two real cross-platform defects no work on this machine could have
   surfaced.** M2.5 has left four debts and a red `verify` row that has been red long enough to stop
   being read — **which is §9's own stop condition about a known-red gate teaching people to skim.**
+
+## G-033 — Sweep 3 becomes a scanner: the unpinned-claim gate
+Status: **done.** Built and swept by the orchestrator alone — see the escalation-shaped note in REFLECT.
+Milestone: M3
+Critique rounds used: 0/3
+
+**Statement.** ADR-0043 §1 (human) calls ADR-0032 §4's notice: sweep 3 drops to a scanner pass by
+default. This goal builds the scanner. **It goes FIRST in M3, and that placement needs its own
+argument because §0's diagnosis is that instrument work has been crowding out the game:**
+
+- Sweep 3 is now *defined* as a scanner pass. Until the scanner exists, a goal's third sweep either
+  reverts to an agent — costing exactly what the notice was called to stop — or is skipped, which
+  §7.1 forbids. **Every goal after this one closes differently because of it.**
+- **The scored prediction is only scorable if it lands first.** §1 says read it *"at the third goal
+  after it lands"*. At position 1, G-032b / G-032c / G-023b score it inside M3. After circulation,
+  there are not three goals left and the prediction becomes prose — §5.5's own failure mode.
+
+**What it detects, and the detection rule is ADR-0032 §1, not a new invention.** *"A number in prose
+is a claim with no pin. Either the code says it or nobody does."* The four recorded shapes
+(ADR's rename entry) are all one thing — **a figure sitting in a prose position that nothing in the
+surrounding code pins**:
+
+| prose position | example from the record |
+|---|---|
+| an `it(...)` / `describe(...)` title | a title stating superseded figures, where the runner prints them |
+| a comment cited as evidence | a withdrawn figure surviving in the docstring of the function its withdrawal was about |
+| a live `Error` / refusal message | a message asserting a proposition the build falsifies |
+
+**THE PREDICATE**: a numeric token in a prose position, which does not appear anywhere in the CODE
+of its enclosing scope, is UNPINNED.
+
+**Which numbers count, and the threshold is derived from the recorded instance set rather than
+chosen.** ADR-0032 §1 lists every instance this milestone: `208, 547, 431, 129, 297, 3.37`. The
+smallest integer is **129 — three digits**; the only non-integer is **3.37 — a decimal**. So the
+gate considers **integers of three or more digits, and any number with a decimal point**, and
+ignores 0–99. **That is a stated derivation, not a superstition with CI access (ADR-0013 §4).**
+A one- or two-digit number is nearly always an input or an index, and firing on those would produce
+the waiver file this project has twice ruled against.
+
+**Exit criteria — commands, not adjectives:**
+
+- `pnpm check:unpinned` exits 0 on a clean tree and prints the count it inspected.
+- `pnpm check:unpinned:proof` is the **PROOF OF BITE**, and ADR-0043 §1 specifies its shape:
+  **built from a normal string, not a template literal** (ADR-0040's class — `` `\w` `` in a
+  template literal compiles to a bare `w`), and **shown to bite on a CRLF tree**, because this
+  repo's working tree is CRLF and `check-tripwire.mjs` shipped an LF-only pattern that made every
+  probe inert. The proof runs the real gate over a materialised fixture, asserts RED, restores,
+  asserts GREEN. **Never `git checkout --`; never a stash over the repo** (ADR-0022).
+- The regex that does the work is **read back out of the shipped file and compiled**, not retyped —
+  the third instance of the template-literal defect sat four lines below a correct spelling.
+- `pnpm verify` green, all rows.
+- Three-OS CI green (ADR-0043 §4 — not relaxed).
+
+**Out of scope, deliberately**: the markdown ledgers. `DECISIONS.md`, `JOURNAL.md`, `GOALS.md` and
+`PARKING.md` are *history* — they are supposed to contain the figures that were true when written,
+and ADR-0043 §3 is an argument against editing old entries to keep them current. **Scanning them
+would create pressure to rewrite history, which is the opposite of what this project wants.** The
+gate scans `packages/**` and `tools/**` source only.
+
+**Scored prediction, carried from ADR-0043 §1 and read at the THIRD goal after this lands**
+(G-023b, on the order above): *if goals still close on agent-found unpinned claims at the same rate,
+the class was not scanner-shaped and the notice was wrong.*
+
+**Seam**: none offered at PLAN. If one is offered during BUILD it gets taken or gets a written
+prediction of what declining it costs, scored at REFLECT (§5.5) — **and it gets RECORDED IN THIS
+BLOCK, which is the fifth-instance failure this session.**
+
+
+### G-033 — REFLECT
+
+**DONE. `pnpm verify` returns FOURTEEN ROWS GREEN, "All six invariant gates green".**
+`check:unpinned` is the fourteenth row and a `—` row: it enforces ADR-0032 §1, which is a
+project rule, not a §2 invariant, and minting a seventh invariant is a human decision (§9).
+
+**THE FIRST RUN RETURNED 1,722 FINDINGS ACROSS 189 FILES — 1,608 IN COMMENTS, 114 IN STRINGS —
+AND THAT NUMBER IS EVIDENCE ABOUT THE RULE RATHER THAN A BACKLOG.** It arrived before the scored
+prediction's three goals were up, and it says the class is **half scanner-shaped**:
+
+- **The comment scope is the ledger argument again.** This project's house style is long
+  evidentiary comment headers recording what was measured and why — the same writing as
+  `DECISIONS.md`, in a different file, and supposed to carry the figures that were true when
+  written. A gate firing on 1,608 of them gets waived wholesale (**a waiver file, which this
+  project has twice ruled is not a check**) or drives deletion of the project's reasoning.
+- **The printed positions are different IN KIND, and that is the separating property.** A test
+  title and an `Error` message are **printed at run time as the thing standing in for the
+  assertion**. A stale title lies to everyone reading the output, CI included. ADR-0032 §1's own
+  leading shape is *"an `it(...)` title stating superseded figures, WHERE THE RUNNER PRINTS
+  THEM."*
+
+So the gate enforces the printed positions and **reports the comment count on every run** rather
+than dropping it silently — the narrowing stays visible and re-checkable instead of becoming a
+scope choice nobody can find.
+
+**FOUR GENUINE FINDINGS AT HEAD, one of them the exact ruled shape.** `stock.idle.test.ts`
+printed a percentage in its title while the code asserted **basis points** — a rescaling, so any
+rewrite of the unit would have silently unpinned it, which is the recorded "assertion silently
+unpinned by a rewrite" verbatim. Also two settlement titles spelling a per-day tick figure, and a
+report title spelling a percentage the code holds as a boolean and a zero. All four de-numeralled,
+which is ADR-0032 §1's own model repair.
+
+**AND ONE FALSE POSITIVE, WHICH IS WHY THE FIRST RUN MATTERED.** `WCAG 2.2 SC 1.4.11` read as the
+quantities `2.2` and `1.4` — **and the second is a FRAGMENT of a three-part clause, so it was not
+even the number on the page.** A standard's clause is not a measurement; three patterns now blank
+those before extraction.
+
+**TWO THINGS I CHANGED MID-GOAL, RECORDED BECAUSE THE SECOND CHANGED AN EXIT CRITERION.**
+
+1. **The scope narrowing above** was decided by measurement rather than at PLAN, where I had
+   written "comments and titles" without having run it.
+2. **THE PROOF MECHANISM CHANGED, AND WITH IT AN EXIT CRITERION.** The block asked for
+   `pnpm check:unpinned:proof`. I built it, it passed, and I then **deleted it**: the
+   `scanner.census.test.ts` register is the mechanism this project **already** built for exactly
+   this obligation, it fails if a proof is deleted or renamed, and it is **derived from the tree
+   rather than from a list somebody remembered to update**. Two mechanisms enforcing one rule is
+   the instrument sprawl ADR-0043 §2 was ruled to stop. **The obligation is met more strongly,
+   not less — but an exit criterion moved, and that is worth reading as a criterion I wrote
+   before understanding what the project already had.**
+
+**THE CENSUS CAUGHT ME, WHICH IS THE POINT OF IT.** `pnpm test` went red the moment the gate
+landed: `scanner.census.test.ts` derives every tree-walking scanner from the source and refuses
+one without a registered proof. I had added a scanner and not registered it. **The proof now
+SPAWNS the gate rather than importing its predicate** — a `--root` argument exists so it can walk
+a materialised tree — because importing proves a function works and spawning proves **the gate**
+works, exit code included, which is the part CI reads.
+
+**WATCHED FAILING, on a sha256-guarded copy.** The shipped `NUMBER` pattern was rewritten into a
+**template literal** — the ADR-0040 defect exactly — and both bite arms went red
+(`CRLF: a stale figure in a test title is CAUGHT — got []`). Restored byte-identical:
+`19c10343…443f7` before and after. **Never `git checkout --`, never a stash over the repo**
+(ADR-0022).
+
+**AND THE GATE'S OWN COMMIT PRODUCED AN INSTANCE THE GATE CANNOT SEE.** Adding the row made
+`verify.mjs`'s header — *"`check:ladder` IS THE THIRTEENTH ROW"* — false, **in the same commit
+that shipped the scanner for that defect class**. It is in a comment, which the gate reports and
+does not enforce, so a human caught it a minute later, not the scanner. **That is a fair reading
+of where the edge is and it is recorded rather than tidied away**; the paragraph no longer writes
+the count down at all, since the table below it is the count.
+
+**THE SWEEPS DID NOT RUN IN THEIR NORMAL FORM, AND THIS IS THE ESCALATION-SHAPED PART.** The
+charter has feature code written by `.claude/agents/` builders matched to critics, and §9 makes
+"the orchestrator is writing feature code instead of orchestrating" a stop condition. **This
+session's harness forbids spawning agents unless the human asks for one.** So this goal was built
+and swept by the orchestrator alone. **It is recorded, not papered over: the two rules are in
+direct conflict, and which one gives is a human call, not mine.** What partially substituted:
+the scanner census is an adversarial check the project already had, and it did find a real
+omission in this diff.
+
+**Owed forward**: **the scored prediction (ADR-0043 §1) is now live** — read it at the third goal
+after this one, which on the stated order is **G-023b** · the comment-scope count is reported on
+every run and **a fall in it is the cheapest available evidence** on whether the unenforced half
+is decaying · the pin is **file-scoped deliberately**, and an instance escaping that scope is the
+evidence for tightening it, which should happen then rather than now.
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing
 Status: pending — **MAY MERGE WITH G-025; the question goes to the builder at PLAN (ADR-0018 §5)**

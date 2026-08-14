@@ -13,18 +13,21 @@ import { escapeAnnotation, tail } from './lib/annotate.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-// The `—` column is for checks that are NOT §2 invariants. `typecheck` has always been one
-// of those, `check:measure` (G-020a) is the second, G-020b's tick-cost tripwire and its proof
-// are the third and fourth, G-020c's `check:scaling` is the fifth, G-022's `check:stamp` is
-// the sixth, and G-030's `check:ladder` is the seventh.
+// The `—` column is for checks that are NOT §2 invariants: `typecheck` has always been one,
+// and every instrument since G-020a has joined it. THE COUNT IS NOT WRITTEN DOWN HERE, and
+// that is deliberate rather than lazy — the table below is the count, and this paragraph used
+// to say "check:ladder IS THE THIRTEENTH ROW" until G-033 added two and made it false in the
+// same commit that shipped the gate for exactly that defect. `check:unpinned` does not fire on
+// comments by ruling, so it did not catch this one; a human did, one minute later. That is a
+// fair reading of where the scanner's edge is, and it is recorded rather than tidied away.
 //
-// `check:ladder` IS THE THIRTEENTH ROW, AND IT IS A `—` ROW FOR THE REASON THE PARAGRAPH
-// BELOW GIVES ABOUT THE TRIPWIRE. It enforces a human ruling (§2.1.1 format rule 2: nothing
-// may compute one play-speed rung from another) over `apps/game`, which G-030 opened under
-// ADR-0018. That makes it a check with a bound and a verdict, not an invariant: minting a
-// seventh §2 invariant is a human decision (§9), and nobody has made one. Ruled at G-030's
-// PLAN, where the alternative — folding the arm into `check:content` to keep twelve rows —
-// was refused because it would have put the proof inside the gate it proves.
+// `check:ladder` IS A `—` ROW FOR THE REASON THE PARAGRAPH BELOW GIVES ABOUT THE TRIPWIRE. It
+// enforces a human ruling (§2.1.1 format rule 2: nothing may compute one play-speed rung from
+// another) over `apps/game`, which G-030 opened under ADR-0018. That makes it a check with a
+// bound and a verdict, not an invariant: minting a seventh §2 invariant is a human decision
+// (§9), and nobody has made one. Ruled at G-030's PLAN, where the alternative — folding the
+// arm into `check:content` to keep the table shorter — was refused because it would have put
+// the proof inside the gate it proves.
 //
 // WHY `check:stamp` IS A ROW HERE AND NOT A TEST INSIDE `pnpm test` (G-022, orchestrator
 // ruling). `review.boundary.test.ts:26-29` set the opposite precedent — ride I4 rather than
@@ -59,7 +62,15 @@ const GATES = [
   ['—', 'check:scaling', 'rooms, needs and provider density scale as claimed (G-020c, out of I4)'],
   ['—', 'check:stamp', 'the four ledger digests carry one byte-identical as-of line (§4.1, G-022)'],
   ['—', 'check:ladder', 'no render code computes one play speed from another (§2.1.1, G-030)'],
+  ['—', 'check:unpinned', 'no quantity printed as a claim that its own file does not pin (ADR-0032 §1, G-033)'],
 ];
+// `check:unpinned` HAS NO `:proof` ROW OF ITS OWN, AND THAT IS THE OPPOSITE OF AN OVERSIGHT.
+// Its proof is `unpinned.scan.test.ts`, registered in `scanner.census.test.ts` — the mechanism
+// this project ALREADY built for exactly this obligation, and which fails if the proof is
+// deleted or renamed. G-033 wrote a second, parallel proof as a standalone gate row first and
+// then deleted it: two mechanisms enforcing one rule is the instrument sprawl ADR-0043 §2 was
+// ruled to stop, and the census is the stronger of the two because it is derived from the tree
+// rather than from a list somebody remembered to update.
 
 // IN CI, CAPTURE EACH ROW'S OUTPUT SO A RED ONE CAN SPEAK; EVERYWHERE ELSE, STREAM IT.
 //
