@@ -199,14 +199,48 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // at its want line, so its one and only stay carries a debt it never re-incurs.
     expect(box.idleBasisPoints).toBeLessThanOrEqual(ceiling);
     // Pinned as a range rather than a point so a tuning change moves it visibly without
-    // reddening on the third decimal. Measured 861 at the shipped table.
+    // reddening on the third decimal.
+    //
+    // THE RANGE MOVED DOWN AT G-023b-ii AND THE REASON IS THE GOAL: travel converts idle time
+    // into TRAVEL time. A guest walking to the cafe is neither idle nor being served, so a
+    // build in which going somewhere takes time has strictly less idleness than one in which
+    // arriving is instantaneous. Measured 861 before travel and 271 after, at the shipped
+    // table — the ceiling is unmoved, because it is computed from the refill rates and travel
+    // is not one of them, which is exactly why the gap below is asserted and not the value.
     expect(box.idleBasisPoints).toBeGreaterThan(500);
     expect(box.idleBasisPoints).toBeLessThan(1_200);
     expect(ceiling - box.idleBasisPoints).toBeGreaterThan(1_000);
   });
 
   it('and CONTENTION only pushes it down, which is what makes the ceiling a ceiling', () => {
-    const free = stepTheBox(2, STAY * 3, 3, STAY);
+    // ==================================================================================
+    // THE ARMS WERE RE-CUT AT G-023b-ii, AND THE OLD PAIR WAS MEASURING TWO THINGS.
+    //
+    // It compared `stepTheBox(2, STAY * 3, 3, STAY)` against `stepTheBox(6, 60, 2, STAY * 2)`
+    // — arms differing in ROOM COUNT, AMENITY COUNT, ARRIVAL RATE and DURATION, of which only
+    // the arrival rate is contention. That was harmless while distance was free: room and
+    // amenity counts changed what a guest competed for and not how far it walked.
+    //
+    // **FOUND BY A PROBE, AND THE PROBE'S CONFIGURATION IS NOT THE SHIPPED ONE — say so, or
+    // this comment is an unpinned claim.** G-023b-ii declared `guestCellsPerTick: 3` in shipped
+    // content, ran the suite, and reverted it; travel is OFF in the tree this test ships in.
+    // Under that probe the inequality INVERTED — free-flow fell to 271 bp while the contended
+    // arm read 484, so "contended is lower" reversed. The cause was not contention: the free
+    // arm had THREE amenities spread across the plot against the contended arm's two, so its
+    // guest walked further for the same needs. **The lever had collapsed** — ADR-0027's class,
+    // and the shape G-032a spent a sweep unpicking when a `direction` flag outlived the
+    // campaign that justified it.
+    //
+    // **THE CONFOUND WAS ALWAYS THERE; TRAVEL ONLY MADE IT VISIBLE.** Room and amenity counts
+    // were never contention, and the arms are re-cut here rather than left for the goal that
+    // turns travel on — a comparison that measures two things measures neither, whether or not
+    // today's numbers happen to come out in the right order.
+    //
+    // SO THE ARMS NOW DIFFER IN ONE THING. Same rooms, same amenities, same duration; only the
+    // arrival cadence changes, which is the definition of contention. Whatever the geometry
+    // costs, it costs BOTH arms identically, so it cannot be what the comparison reports.
+    // ==================================================================================
+    const free = stepTheBox(6, STAY * 3, 2, STAY * 2);
     const contended = stepTheBox(6, 60, 2, STAY * 2);
     expect(contended.idleBasisPoints).toBeLessThanOrEqual(free.idleBasisPoints);
     expect(contended.idleBasisPoints).toBeLessThan(idleShareBasisPoints(content));

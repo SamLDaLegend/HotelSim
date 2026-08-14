@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN. G-023b-ii STARTED NOT CLOSED: travel measured correct (outcomes unmoved, experience worse) but two assertions are not re-pins — a derived cliff and its measurement disagree (129 vs 139), and the idle-share contention inequality INVERTS because its lever now confounds distance. Travel stays OFF in shipped content. ONE OPEN ESCALATION (2026-08-14): the tickcost bound. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii BLOCKED: turning travel on moves occupancy 872 to 848, and the gate requires re-taking TARGET_CONCURRENT_HUNDREDTHS and the tickcost bound campaign in ONE commit — that bound is exactly what the 2026-08-14 escalation is open on. The idle-share arm re-cut LANDED. Also found: the shipped cadence 96 is no longer a local minimum. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -1290,7 +1290,7 @@ needs it fixed. Nothing models a stairwell until G-024, so there is no route to 
 countdown-era vocabulary the stock model deleted. Renamed to tolerance.
 
 ## G-023b-ii — Travel is measured, and turned on
-Status: **STARTED, NOT CLOSED.** Two of the 44 are not re-pins — see the finding below.
+Status: **STARTED, NOT CLOSED — BLOCKED on the open escalation.** One repair landed; the rest is coupled to the tickcost bound, which is under a human decision.
 Milestone: M3
 Statement: declare `guestCellsPerTick` in shipped content, re-pin the goldens it moves **with a
   judgement on each rather than a bulk accept**, add the journey instrument and the far/near
@@ -1361,6 +1361,68 @@ Carried forward: `check:tickcost`'s acceptance bar is **`verdict=MEASURED`** (`I
   `bench.workload.golden` (5), `unserved.report` (4), `hysteresis.report` (4),
   `workload.concurrency` (2), `outcome.report` (2), `needs.report` (2), plus one each in
   `validity.determinism`, `scorer.report` and `dissatisfaction.report`.
+
+
+
+  ### G-023b-ii, second pass — one repair LANDED, and a HARD DEPENDENCY found
+
+  **The two "collapsed derivations" were worked rather than left. One is repaired and shipped;
+  the other is repairable but blocked, and the blocker is the open escalation.**
+
+  **LANDED: the idle-share arms are re-cut, and the confound was always there.** The pair compared
+  `stepTheBox(2, STAY*3, 3, STAY)` against `stepTheBox(6, 60, 2, STAY*2)` — arms differing in
+  **room count, amenity count, arrival cadence and duration**, of which only the cadence is
+  contention. **Room and amenity counts were never contention**, so the comparison measured two
+  things and reported one. Travel only made it visible: under the probe the inequality inverted
+  (free-flow 271 bp against contended 484). **Re-cut to differ in cadence alone — same rooms,
+  same amenities, same duration — and it passes with travel off, which is the tree it ships in.**
+  A comparison that measures two things measures neither, whether or not today's numbers happen
+  to come out in the right order.
+
+  **WORKED AND THEN REVERTED: the backlog derivation.** The repair is known and was written:
+  assert the derived chase (**129**) as a FLOOR, pin the measurement (**139**), and bound the
+  excess, since the arithmetic models a chase between providers and not the legs between them.
+  **And the six-room arm does not move at all** — 179 either way — **which is evidence rather
+  than luck: its peak belongs to guests queueing for a bed, and a guest with no room is going
+  nowhere.** Travel raises the backlog of guests being SERVED and leaves the backlog of guests
+  being IGNORED where it was. It is reverted only because it cannot ship while travel is off.
+
+  ### THE BLOCKER, AND THE GATE SAYS IT IN ITS OWN WORDS
+
+  `workload.concurrency.test.ts` refuses, and its message is the instruction:
+
+  > *"THE BENCHMARK HAS BEEN REDEFINED. `tools/gates/workload.mjs` says its honest axis is
+  > CONCURRENT GUESTS, and the occupancy this workload actually holds has moved… **Re-take
+  > `TARGET_CONCURRENT_HUNDREDTHS` and the bound campaign TOGETHER, in the same commit, and do
+  > NOT widen the bound** — that would bury this rather than report it (ADR-0021)."*
+
+  **Turning travel on moves occupancy 872 → 848, so it requires re-taking the tick-cost bound
+  campaign. The derivation of that bound is exactly what the 2026-08-14 escalation is open on.**
+  Re-taking it now would either bake in the 2.07 input the escalation says is falsified, or
+  quietly settle a question that was escalated **because it is not an agent call**.
+
+  **AND THE SHIPPED CADENCE STOPS BEING A LOCAL MINIMUM.** Measured under the probe:
+  **95 → 831, 96 → 848, 97 → 866** — monotone through the shipped cadence, where 96 was
+  previously the minimum. `arrivalEveryTicks: 96` was chosen for that property. **G-032a's
+  cadence census exists for exactly this**, and this is its first firing on a real change.
+
+  **A THIRD READING, UNRESOLVED AND RECORDED RATHER THAN GUESSED AT**: under the probe,
+  `gaveUp` stops firing at tick 41,410 where the test requires it past 75,000. That may be a
+  hotel reaching a steady state in which everyone is eventually housed, or something subtler.
+  **Nobody has looked, and this entry does not pretend otherwise.**
+
+  ### WHAT G-023b-ii NEEDS, IN ORDER
+
+  1. **The human's call on the tripwire bound** (`ESCALATIONS.md`, 2026-08-14). Everything below
+     waits on it, because the re-take must not bury the question.
+  2. Re-take `TARGET_CONCURRENT_HUNDREDTHS` **and** the bound campaign in one commit.
+  3. Re-derive or re-choose `arrivalEveryTicks` now that 96 is not a local minimum.
+  4. Understand the `gaveUp` cut-off before pinning anything that depends on it.
+  5. Then the backlog-derivation repair above, and only then the ~38 remaining goldens — which
+     ARE mechanical, and whose behaviour is already measured and shown correct in the table above.
+
+  **This is a real dependency and not a budget judgement**: the gate names the coupling, and the
+  coupled number is under an open human decision.
 
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing

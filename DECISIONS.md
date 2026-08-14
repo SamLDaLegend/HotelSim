@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN. G-023b-ii STARTED NOT CLOSED: travel measured correct (outcomes unmoved, experience worse) but two assertions are not re-pins — a derived cliff and its measurement disagree (129 vs 139), and the idle-share contention inequality INVERTS because its lever now confounds distance. Travel stays OFF in shipped content. ONE OPEN ESCALATION (2026-08-14): the tickcost bound. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. pnpm verify FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii BLOCKED: turning travel on moves occupancy 872 to 848, and the gate requires re-taking TARGET_CONCURRENT_HUNDREDTHS and the tickcost bound campaign in ONE commit — that bound is exactly what the 2026-08-14 escalation is open on. The idle-share arm re-cut LANDED. Also found: the shipped cadence 96 is no longer a local minimum. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
