@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 IS COMPLETE AND SIGNED OFF — 7 of 7, closing with G-028b, and WATCH #11 discharged all three owed WATCHes. M3 is under way. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify is THIRTEEN GREEN for the first time. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -768,6 +768,35 @@ Critique rounds used: 0/3
 ---
 
 # M3 — Circulation, resumed
+
+## G-032a — The campaigns, and the defect the red rows were hiding
+Status: **done.** 3 sweeps (1 BLOCKER + 16 MAJOR) + a verification closing on UNPINNED-CLAIM
+  findings only — no round, no split. **`pnpm verify` returns THIRTEEN GREEN**, first time this
+  session. Commit `16ef890`.
+Milestone: M3 (gate goal)
+Owner pair: sim-engineer / sim-critic
+Statement: Both measurement campaigns re-taken at the shipped workload, the cadence census
+  published and runnable, and the three ruled-red rows returned to green — **with what one of them
+  was hiding recorded rather than repaired quietly.**
+Exit criteria — all met and re-run by the orchestrator:
+  - `pnpm verify` **THIRTEEN GREEN**, stated as a count · suite **121 files / 2,124 tests**.
+  - **Bounds DERIVED, never moved**: `BOUND = trunc(sqrt(1.0355 × 2.07), 4)`, all four scaling
+    bounds exactly `trunc(quiet median × 1.5, 4dp)` — checked independently by the critic.
+  - **The census published IN THE TREE with its command**: `+1` → 13/50/2 · `−1` → 14/53/5 ·
+    union **14 / 58 / 6**, five of them **inequalities that reverse one arrival tick away**.
+  - The control run standing in for a WATCH: **192 / 161 / 0**, revenue **1,632,000p**,
+    distribution **`3:161, 5:192`** — byte-identical.
+  - **`check:stamp`'s body predicate** — shipped in `55ca957` under the human's sign-off message
+    rather than under this goal (ADR-0041), swept at round 3.
+Out of scope: the merge (**G-032b**) · I3's unquoted-key hole (**G-032c**) · the needs-history
+  interval (deferred — not a gate, buys no row).
+Critique rounds used: **3/3**
+
+  **AND THE BLOCK ITSELF WAS THE FIFTH INSTANCE.** G-032a was written as a bullet INSIDE G-032's
+  block rather than as a block of its own, so **`check:stamp` refused to name it done because it
+  could not see a goal there at all.** The four earlier instances were seams taken and not
+  recorded; this one was recorded and **not in a shape the ledger's own gate reads.** The gate
+  caught it, which is the argument for the gate.
 
 ## G-032 — The instrument debts M2.5 left, before circulation touches anything
 Status: **SPLIT at PLAN into G-032a / G-032b / G-032c** (ADR-0039 §5, seam offered by the builder

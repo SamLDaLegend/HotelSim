@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 IS COMPLETE AND SIGNED OFF — 7 of 7, closing with G-028b, and WATCH #11 discharged all three owed WATCHes. M3 is under way. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-14, M2.5 COMPLETE AND SIGNED OFF; M3 under way with G-032a done — pnpm verify is THIRTEEN GREEN for the first time. Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v16** · summary **v4** · I2 `8a83acaf7f81edeb` · measure golden
   `ebb9c3924e373c1e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
