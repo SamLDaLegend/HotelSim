@@ -1,6 +1,18 @@
 1. Mission
 
-Build a casual, cartoon-styled hotel building and management simulator. Side-on cross-section view (think SimTower / Project Highrise), not isometric.
+Build a casual, cartoon-styled hotel building and management simulator. ISOMETRIC FLOORPLAN VIEW, in the Theme Hospital / RollerCoaster Tycoon tradition — multi-floor, ONE FLOOR RENDERED AT A TIME, floors switchable, with a cityscape behind and below. THE NOSTALGIC REGISTER IS THE POINT, NOT A SIDE EFFECT.
+
+AND ROOMS ARE DESIGNED BY THE PLAYER, NOT PLACED FROM A CATALOGUE. The player draws a room's footprint, places items inside it, and the room is scored on what it contains — function from required equipment, quality from size and decor, in the shape Two Point Hospital uses. A room TYPE is a constraint set in content; a room INSTANCE is the player's drawing, and that is world state (ADR-0046 §4).
+
+RULED 2026-08-16, HUMAN — ADR-0046, the largest ruling in the project. This paragraph read "Side-on cross-section view (think SimTower / Project Highrise), not isometric" from before the first line of code until goal 33, and it superseded itself only when a human looked at the screen. Every criterion, ADR and goal resting on the old sentence is superseded with it.
+
+WHAT IT COST TO FIND OUT, AND WHY THE RULE BELOW EXISTS. Six invariants, thirteen gates, fifty-seven ADRs, determinism proved byte-identical on three platforms twice, nineteen goals of instrument discipline — and THE THING THAT WAS WRONG WAS THE SECOND SENTENCE OF THIS SECTION. ADR-0013 established that a perceptual criterion needs a perceptual check; the gap one level up is that A DESIGN DECISION HAD NO CHECK AT ALL — not a weak one, NONE — because every goal, gate, critic and WATCH takes this charter as given.
+
+THE MILESTONE QUESTION (ADR-0046 §1, and it belongs in §9 as a stop condition):
+
+  A CHARTER DECISION THAT NO GOAL CAN QUESTION IS NOT SETTLED — IT IS UNEXAMINED. At each milestone exit the human is asked ONE question that is not about the code: DOES THE THING ON SCREEN STILL LOOK LIKE THE GAME WE MEANT TO BUILD?
+
+It is cheap, it is a human call by construction, and it would have caught this at M2.5's sign-off instead of four goals into M3. DO NOT LET IT BECOME A MECHANISM: one question, at exit, answered by the human. IF IT GROWS A SCANNER, IT HAS BEEN MISUNDERSTOOD.
 
 The game is three nested feedback loops. Every design and code decision should be traceable to one of them:
 
@@ -501,6 +513,16 @@ M5 — Render. Pixi cross-section view, camera, build tools, HUD, speed controls
 M6 — Content and feel. Room and item variety, guest archetypes, notifications, sound hooks, tutorial. Driven by playtest findings rather than a feature list.
 
 9. Stop conditions and anti-patterns
+
+THE MILESTONE QUESTION (RULED 2026-08-16, HUMAN — ADR-0046 §1). At each milestone exit, before sign-off, the human is asked ONE question that is not about the code:
+
+  DOES THE THING ON SCREEN STILL LOOK LIKE THE GAME WE MEANT TO BUILD?
+
+WHY IT IS HERE. A charter decision that no goal can question is not settled — IT IS UNEXAMINED. §1's projection was wrong from before the first line of code and survived thirty-two goals, six invariants, thirteen gates and two three-platform determinism proofs, because every one of those instruments takes the charter as given. ADR-0013 said a perceptual criterion needs a perceptual check; this is the same argument one level up, aimed at the charter rather than at a criterion.
+
+ONE QUESTION, AT EXIT, ANSWERED BY THE HUMAN. If it grows a scanner, a rubric or a checklist, it has been misunderstood and the growth is itself the anti-pattern.
+
+AND A BEHAVIOURAL GOAL THAT SHIPS WITH NO INSTRUMENT TO WATCH IT IS AN ESCALATION, NOT A RECORDED DEBT (ADR-0046 §7). ADR-0023 made apps/game the surface of record; when the surface of record is invalid, the next behavioural goal has no WATCH at all, which is precisely the state ADR-0013 was written to end.
 
 Halt and escalate if you catch any of these:
 

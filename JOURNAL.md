@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii: the gaveUp finding is RESOLVED and its cause CORRECTED — travel is not defective; the determinism workload's late-run give-up coverage rests on ONE lucky crossing at tick 98,446 and is fragile today without travel. Remaining blocker is the tickcost bound, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0046 (HUMAN) rules the game ISOMETRIC and rooms PLAYER-DESIGNED. M3 as planned is VOID; apps/game is a write-off; packages/sim survives, which is I1 earning its keep. ADR-0047 rules the decision register, PROPOSED pending accept/overrule. M0-M2.5 sign-offs NOT reopened; all six invariants unchanged. G-033 and the rest of the pre-ruling work stand at fourteen rows green. NO BUILD STARTS until the human signs off the revised milestone plan. Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v16** · summary **v4** · I2 `16ed33c4e13dc808` · measure golden
   `ebb9c3924e373c1e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**

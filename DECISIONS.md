@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii: the gaveUp finding is RESOLVED and its cause CORRECTED — travel is not defective; the determinism workload's late-run give-up coverage rests on ONE lucky crossing at tick 98,446 and is fragile today without travel. Remaining blocker is the tickcost bound, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0046 (HUMAN) rules the game ISOMETRIC and rooms PLAYER-DESIGNED. M3 as planned is VOID; apps/game is a write-off; packages/sim survives, which is I1 earning its keep. ADR-0047 rules the decision register, PROPOSED pending accept/overrule. M0-M2.5 sign-offs NOT reopened; all six invariants unchanged. G-033 and the rest of the pre-ruling work stand at fourteen rows green. NO BUILD STARTS until the human signs off the revised milestone plan. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -3889,3 +3889,343 @@ confound*. **The repair is real at the shipped cadence — 40/40 grid cells, 9/9
 yet · **the visitor population is structurally capped**: on lodging-free content every visitor
 scores the same value at every provisioning level, so **the build-loop signal for a food court is
 exactly zero** · both are parked with their falsification tests.
+
+
+## ADR-0046 — THE GAME IS AN ISOMETRIC FLOORPLAN SIM, AND ROOMS ARE DESIGNED BY THE PLAYER
+
+**Date**: 2026-08-16 · **Status**: accepted · **HUMAN RULING**, and the largest in the project.
+**Supersedes** `HOTELSIM.md` §1's *"Side-on cross-section view (think SimTower / Project
+Highrise), not isometric"* and every criterion, ADR and goal resting on it.
+
+### 0. The decision
+
+**The game is an isometric floorplan sim in the Theme Hospital / RollerCoaster Tycoon tradition.**
+Multi-floor, **one floor rendered at a time**, floors switchable, cityscape behind and below.
+**The nostalgic register is the point, not a side effect.**
+
+**And rooms are designed by the player, not placed from a catalogue.** The player draws a room's
+footprint, places items inside it, and the room is scored on what it contains — **function from
+required equipment, quality from size and decor**, in the shape Two Point Hospital uses.
+
+### 1. THE FINDING THAT MATTERS MORE THAN THE DECISION
+
+> **This project has verified everything except whether it was building the right game.**
+
+Six invariants. Thirteen gates. Fifty-seven ADRs. Determinism proved byte-identical on three
+platforms, twice. Nineteen goals of instrument discipline. **And the thing that turned out to be
+wrong was a projection choice made before the first line of code, which nothing in the loop was
+ever pointed at.**
+
+ADR-0013 established that a perceptual criterion needs a perceptual check. **The gap one level up
+is that a design decision had no check at all — not a weak one, NONE.** §1 named the view in its
+second paragraph and no goal, gate, critic or WATCH has ever been able to question it, **because
+every one of them takes the charter as given.**
+
+**THE RULE THIS EARNS, AND IT GOES IN §9 RATHER THAN BEING RECORDED AS AN APOLOGY:**
+
+> **A charter decision that no goal can question is not settled — it is UNEXAMINED. At each
+> milestone exit, the human is asked one question that is not about the code: DOES THE THING ON
+> SCREEN STILL LOOK LIKE THE GAME WE MEANT TO BUILD?**
+
+Cheap, a human call by construction, and **it would have caught this at M2.5's sign-off instead
+of four goals into M3.** It is the ADR-0013 argument applied to the charter rather than to a
+criterion. **It must not become a large mechanism: one question, at exit, answered by the human.
+If it grows a scanner, it has been misunderstood.**
+
+### 2. WHAT SURVIVES — MOST OF IT, and the temptation is to over-estimate the damage
+
+**`packages/sim` largely survives, and that is I1 doing exactly the job it was written for.**
+Needs, utility scoring, the provider registry, satisfaction and patience, the append-only ledger,
+reviews and the scorer, save/migration machinery, determinism, the tick scheduler, the outcome
+tables — **none of it knows what a camera is. Nineteen goals of simulation work is not lost.**
+
+**`packages/content` survives structurally** — the Zod schemas, injection (ADR-0001), integer
+pence (ADR-0002), snake_case IDs (ADR-0003) all stand. What changes is **what a room type is**.
+
+**The loop, the gates and the ledgers are untouched.** All six invariants stand exactly as
+written. ADR-0007's six amendments, §5.5–5.8, §7.1's three states, ADR-0015/0016, ADR-0024,
+ADR-0027, ADR-0040/0041/0042 — **none of that was about the projection.**
+
+### 3. WHAT DIES, stated plainly so it is not mourned twice
+
+- **`apps/game` is a write-off.** G-030 and G-031a are lost **as code**. **Their DESIGNS are
+  not**: the queued-command ghosts, the recorded-refusal flash, the transport strip reading the
+  content ladder, the HUD's `last`/`refused` fields, and **the deliberate choice not to grey out
+  illegal moves** are all good and all portable. **Rebuild them; do not redesign them.**
+- **The computed palette is superseded in its current form** — see §6.
+- **`tools/viewer`** was already disposable by ADR-0013's own terms and its drawing is already
+  known stale. **It costs nothing.**
+- **M3 as currently planned is VOID.** G-023b, G-024, G-025 and G-026 all assume a
+  one-dimensional floor. **They are rewritten, not amended.**
+
+**M0, M1, M1.5, M2 and M2.5 sign-offs are NOT reopened.**
+
+### 4. THE TWO REAL MODEL CHANGES — done together, because splitting pays the migration twice
+
+**4.1 The grid gains an axis.** `(floor, x)` becomes `(floor, x, y)`. **A floor is a plan, not a
+strip.** Build validity is reworked — supported, enclosed, has a door, holds required items —
+**the rules surviving and their implementation changing.** This is a save migration. **ADR-0006
+holds: the v1 fixture is permanent and is not regenerated.** Seventeen migrations deep is not a
+reason to break the chain; **it is the reason the chain is worth something.**
+
+**4.2 A room becomes an INSTANCE, not a definition.**
+
+- A **room type** becomes a **constraint set**: min/max footprint, required items, forbidden
+  adjacencies, what need it can serve.
+- A **room instance** carries its own player-drawn footprint, its own placed items, and a
+  **derived quality score folded from what is inside it.**
+
+**I3 is not weakened and ADR-0003 stands.** Types and constraints stay in `packages/content` as
+JSON. **The instance — the player's drawing — is world state, and has always belonged there.**
+
+**The scoring formula is CONTENT, not code.** Weights, thresholds and band boundaries go in JSON
+like every other balance number. **This is I3's whole point and the first mechanic where a
+designer will want to tune without a rebuild.**
+
+**`placeItem` is promoted out of M6 to the CENTRE of this work.** It stops being a late
+convenience and becomes **the primary player verb.**
+
+**4.3 What this buys.** The room scorer feeds the guest loop **through machinery that already
+exists**: providers sit inside rooms as items, reviews already read per-need satisfaction
+(ADR-0034/0037), room quality is already a concept. **Two Point's scoring is a formula over
+placed items, and the provider registry is already the right substrate. This is less new
+mechanism than it looks.**
+
+### 5. CIRCULATION, RE-SCOPED
+
+Pathfinding stops being trivial, **and that was the honest cost of the original choice.** It is
+now **A\* over a single floor's tile grid, plus stair and lift nodes joining floors** — a
+well-understood problem, **per-floor rather than volumetric.**
+
+**Multi-floor is kept and lifts stay meaningful**, because guests genuinely cross floors even
+though only one is drawn at a time. **M3's STATEMENT is unchanged** — stairs and lifts as queued
+shared resources, wait time a first-class satisfaction input. **Its GOALS are not.** Everything
+M3 already learned is retained: ADR-0017/0018's feel work, the dwell term, G-023a's *"a guest is
+somewhere"*. **The grid underneath changes; the findings do not.**
+
+### 6. ART DIRECTION, decided now rather than at the milestone
+
+ADR-0014 still holds — placeholder art, real art a separate track, M5 waits on neither. **What
+changes is the projection.**
+
+- **2:1 isometric tiles. Pick the dimensions ONCE, before any asset exists.**
+- **Placeholder art is flat coloured isometric prisms** — the same discipline as the current
+  rectangles, in the new projection.
+- **The computed contrast ladder survives as the FALLBACK, not the rule.** Content gains an
+  optional sprite reference; the renderer prefers a sprite and falls back to the computed colour.
+  **This keeps ADR-0014's "real art is a separate track" true IN CODE rather than only in prose**
+  — the game can ship with half the room types drawn and half as prisms and nothing breaks.
+  `palette.contrast.test.ts` continues to assert over everything still using the fallback.
+- **Guests are drawn GREYSCALE with strong silhouettes and tinted at runtime.** The renderer
+  encodes guest state in colour, and **a sprite with baked colour destroys that.** Pixi's `tint`
+  does it for free.
+- Floors switchable, drawn one at a time, cityscape parallax behind and below.
+- **Sprites packed into a texture atlas.** One GPU texture, not a hotel full of PNGs.
+
+**Do not buy or commission anything yet** — art bought against the current build is art bought
+against the wrong spec.
+
+### 7. THE INSTRUMENT PROBLEM THIS CREATES
+
+**Both WATCH surfaces are about to be invalid.** ADR-0023 made `apps/game` the surface of record
+and it is being written off; `tools/viewer` is already stale. **So the next behavioural goal has
+no instrument, which is precisely the state ADR-0013 was written to end.**
+
+> **RULED: the isometric floorplan view is restored EARLY, as its own goal, BEFORE the room model
+> work lands.** Not a polished renderer — **the WATCH surface, in G-030's shape**, which proved
+> it can be done in one goal. Coloured prisms, floor switching, guests, the HUD fields worth
+> keeping.
+>
+> **A behavioural goal that ships with no instrument to watch it is an ESCALATION, not a recorded
+> debt.**
+
+### 8. Ordering constraints the plan must satisfy
+
+1. **G-032c lands FIRST.** I3's unquoted-key hole is a known gap in an invariant gate, and **the
+   content schema is about to be rewritten** — the moment when the most new content surface in
+   the project's history gets written. **Repairing a content gate after rewriting the content
+   model is the wrong order.**
+2. **G-032b stands** (a `packages/sim` hot-path merge; the sim survives). **Take it or park it
+   explicitly with a reason — do not let it drift.**
+3. **G-028** is game work whose subject survives. **Rule on before-or-after the grid change and
+   say why.**
+4. Then: **grid depth and build validity → isometric view restored (§7) → room drawing and item
+   placement → room scoring → circulation.**
+5. **M4 stays blocked on scenario capital.**
+
+**The measurement campaigns need re-taking again** — the grid change and pathfinding alter what
+the workload means, which is **ADR-0015's REPLACE-on-configuration-change case**, already ruled
+and precedented at G-032a. **Schedule it at the EXIT in G-022's shape; do not let it become the
+entrance.** ADR-0043 §2 stands, with its exception for a gate that has stopped being evidence.
+
+**Every goal still needs a green three-OS CI run. The I2 hash will move with the migration —
+expected; what is not acceptable is it moving UNVERIFIED.**
+
+### 9. WHAT THIS RULING DOES NOT DO — stated back so the bounds are recorded
+
+- **It does not weaken any invariant.** All six stand exactly as written.
+- **It does not reopen M0, M1, M1.5, M2 or M2.5 sign-off.**
+- **It does not change the loop, the critic protocol, the gates or any process ADR.**
+- **It does not discard `packages/sim`.**
+- **It does not permit new scope beyond what is written here.** Anything else surfaced goes to
+  `PARKING.md`.
+- **It does not make §1's new milestone question into a mechanism.** One question, at exit,
+  answered by the human.
+
+### 10. Two premise checks against the tree, recorded rather than quietly satisfied
+
+- **The ruling is right that G-031a shipped, and `GOALS.md` is WRONG about it.** My first reading
+  of the tree said G-031a did not exist, because the only block is `## G-031 — The player acts`
+  and **it still reads `Status: pending`**. The commit history says otherwise: `7f0be45` —
+  *"needs are stocks (G-027b θ-a) + the playable surface (G-031a)"* — and `GOALS.md:47` records
+  WATCH #11 closing against θ-a **and G-031a** by name. **A goal shipped, was watched, and its
+  block was never updated; the ledger has been carrying it as unstarted ever since.** That is the
+  seam-not-recorded failure of this session in its most consequential form yet — **this ruling's
+  own damage assessment was nearly mis-scoped by it**, in both directions. Repaired as part of
+  the write-off rather than left, since the block is about to be rewritten anyway.
+- **`apps/game` is not empty** — G-030 shipped it and `check:ladder` scans it. **Writing it off
+  therefore removes a `verify` row's subject**, and the row must be re-pointed or re-derived
+  rather than left scanning a deleted directory. Tracked in the plan below, not assumed.
+
+---
+
+## ADR-0047 — THE DECISION REGISTER, RULED. The blocking set, and what is parked.
+
+**Date**: 2026-08-16 · **Status**: **PROPOSED — awaiting the human's accept/overrule.**
+**Companion to ADR-0046**, which carries the ruling itself. The human wrote the register *before*
+the ruling *"so the ruling is made once"* and asked for recommendations to accept or overrule.
+
+**THE ORGANISING PRINCIPLE IS THE HUMAN'S AND IT IS RIGHT**: a decision blocks if it constrains
+**the save schema, the grid, or the art pipeline**. Everything else is a balance number and
+belongs in content, where it moves at any time. **The blocking set is decided here; the rest is
+parked with a falsification test.**
+
+### A — GRAPHICS PIPELINE
+
+**A1 — authoring route. ACCEPTED: 3D-rendered sprites for the real track, procedural coloured
+prisms as placeholder (no assets at all).** It is the only route where camera rotation and walk
+cycles are **additive rather than multiplicative**, and A5/A6 both depend on that being true.
+*Not blocking today* because the placeholder track needs no assets — but it constrains A5, so it
+is settled now rather than discovered.
+
+**A2 — tile dimensions. ACCEPTED with the derivation the ruling demands, since §2.1 forbids a
+number nobody can source.**
+
+- **2:1 ratio, 128×64 logical, authored at 2× (256×128) for high-DPI.**
+- **Wall height 64px** — *derived, not chosen*: at 2:1, a tile's 64px height is the projection of
+  one grid unit, so a one-unit wall is 64px and **a wall is exactly as tall as its tile is deep.**
+  That makes the floor band `64 × (rows) + 64` and keeps every vertical rhythm an integer
+  multiple of one number. **The alternative — a "looks right" wall height — is the superstition
+  §2.1 names.**
+- **This is unrecoverable if wrong, so it ships as pinned constants with the derivation beside
+  them and a test that asserts the ratio**, in the shape `speed-ladder` uses for the play speeds.
+
+**A3 — depth sorting. ACCEPTED, and it gets a test rather than a debugging session.** Sort by
+`(x + y)` per floor with an **explicit within-tile layer index: floor → wall → item → guest →
+overlay**. **Multi-tile items are FORBIDDEN until a goal handles them properly**, and that
+prohibition is a check, not a comment — otherwise the first bed that spans two tiles is a visual
+bug nobody can reproduce from a save. *This is the one Part A item I would most expect to bite
+late, which is the argument for pinning it before any sprite exists.*
+
+**A4 — seeing into a room. ACCEPTED: draw the two far walls (north and west), leave south and
+east open.** Free, it is the nostalgic register the ruling asks for, and **it removes the problem
+rather than managing it.** Noted interaction with A5: if the camera rotates, *"far"* rotates too,
+which is why the wall-drawing rule is written as a function of orientation from the start even
+while only one orientation ships.
+
+**A5 — camera rotation. ACCEPTED: build rotation-capable, ship ONE orientation.** Tile addressing
+stays rotation-agnostic so rotation is a later **feature, not a rewrite**. Decided now because it
+constrains A1 and A4, **not because it needs to exist at launch.**
+
+**A6 — guest sprites. ACCEPTED, and one half of it is load-bearing rather than aesthetic.**
+**Greyscale with strong silhouettes, tinted at runtime** — the renderer encodes guest state in
+colour, and **a sprite with baked colour destroys a visual language the sim already feeds.**
+**Four facings ship; eight is a render setting, not a redraw**, which is A1 paying for itself
+immediately. Walk cycles land with movement, not before.
+
+**A7 — zoom/resolution. PARKED**, with the ruling's own reason: decide when the renderer is
+rebuilt. *Falsification test: if the atlas has to be re-packed to add a zoom level, it should
+have been decided at A2.*
+
+### B — WORLD MODEL (all blocking; these set the save schema)
+
+**B1 — footprints. ACCEPTED: rectangles first, stored as a shape that could generalise.** Two
+corners in the save; **the storage shape is a polygon-capable representation holding a rectangle**,
+so arbitrary shapes are a later goal rather than a later migration. *Arbitrary polyominoes
+multiply validity, scoring, pathing and rendering cost simultaneously — four subsystems, one
+mechanic.*
+
+**B2 — corridors. ACCEPTED: EXPLICIT.** The human calls this the most consequential entry in the
+register and **that is correct**. It is what makes the building loop a spatial puzzle rather than
+a menu, **and the room-design mechanic needs a reason for space to be scarce** — without scarcity,
+"bigger is better" has no counterweight and B7's pricing has nothing to trade against. It also
+makes pathing well-defined, which §5 now needs.
+
+**B3 — plot. ACCEPTED: fixed plot, expandable upward, BOUNDS STORED rather than constant.**
+Storing them is the whole decision — buying land becomes an M4 economy feature instead of a
+migration. *(`grid.ts` already stores bounds rather than hardcoding them, so this is continuity.)*
+
+**B4 — editable rooms. ACCEPTED: yes, mutable.** Central to a design-and-score loop, and
+**retrofitting mutability into a write-once schema is the painful direction.**
+
+**B5 — condition / cleanliness. ACCEPTED: reserve the field now, build at M4.** *This is the one
+place I would push back slightly on scope and the ruling already anticipates it* — reserving a
+field is free, building housekeeping is a milestone. **Reserved, not built.**
+
+**B6 — access rule. ACCEPTED: rooms carry public / guests-of-this-room / staff-only, content-
+defined per room type.** This was already parked from the current build as an edge case; **player-
+designed rooms turn it into a certainty** — someone will put a vending machine in a bedroom on
+purpose.
+
+**B7 — pricing granularity. ACCEPTED: per room INSTANCE.** The natural consequence of bespoke
+rooms, **it is what makes the scoring mechanic pay off directly**, and it is a schema change so it
+is decided now. *Note it lands on `packages/sim`'s existing per-stay charge, which already prices
+from a room — so this is a field moving, not a mechanism arriving.*
+
+**B8 — multi-floor. ACCEPTED in all three parts**: adding a floor costs money (**the build loop
+needs a large sink**); stairs cheap/slow/unbounded vs lifts expensive/fast/queued, **already M3's
+scoped difficulty**; and **a floor-count patience input** that makes lifts necessary rather than
+optional. The third is a **content number** and ships as one.
+
+### C — GAMEPLAY
+
+**C1 — sandbox or scenarios. RULED NOW, BUILT AT M6: SCENARIOS.** The ruling is right that this is
+not deferrable, and there is a second reason it should be settled today: **it resolves the
+`--rooms N` contamination this project has carried since M1.** Starting capital and starting
+provisioning become **scenario fields, which are content (I3)** — so the harness stops injecting
+world shape through a CLI flag and starts declaring it as data. **M4's "blocked on scenario
+capital" stops being a blocker and becomes a dependency with a known shape.**
+
+**C2 — scoring inputs. SHAPE PINNED NOW, NUMBERS AT M4.** The fields that must exist: **function**
+(binary gate on required items), **size** (diminishing returns, with an upkeep cost so bigger is a
+trade), **decor** (attractiveness-carrying optional items), **condition** (B5, reserved),
+**adjacency** (penalties and bonuses). **Every weight, threshold and band boundary is content
+(I3)** — and ADR-0045's per-need banding is the precedent for how such a fold is written and
+falsified.
+
+**C3 — what the score DOES. ACCEPTED all three, and the ruling asks which is PRIMARY.**
+**Recommendation: SATISFACTION is primary**, with price ceiling and reputation secondary. Reason,
+and it is mechanical rather than taste: **satisfaction is the one the existing sim can already
+consume** — reviews read per-need satisfaction today (ADR-0034/0045) — so it is the shortest path
+from a room score to an observable consequence, **and it makes the build loop about throughput,
+which is what a hotel with scarce corridors and queued lifts is already about.** Price-primary
+would make the game about margin and would lean on an economy that is M4's, not M3's.
+
+**C4 — staff roles. NAMED, NOT BUILT**: housekeeping (B5), reception (C5), maintenance, porters.
+Named because **each is a room requirement and a pathing consumer**, so M3's circulation must be
+able to carry them.
+
+**C5 — reception as a queue point. PARKED with its test**, but flagged: it is a queue, and M3 is
+the milestone that builds queues. *Falsification test: if M3's queue machinery cannot express a
+check-in desk without changing shape, it was scoped too narrowly and this should have been in it.*
+
+**C6, C7 — PARKED** (archetypes M6, already parked; bookings / day-night / seasons all balance-
+shaped, M4 or later).
+
+### The bound this ADR puts on itself
+
+**Everything above that is not in the blocking set is a `PARKING.md` entry with a falsification
+test, not a plan.** ADR-0046 §9 says this ruling permits no new scope, and **a register is not a
+backlog**: nothing here is scheduled by being written down. The blocking set exists because the
+save schema, the grid and the art pipeline are expensive to change afterwards — **that is the
+whole reason any of it is being decided today rather than when it is built.**

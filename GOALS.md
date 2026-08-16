@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-14, M2.5 SIGNED OFF; M3 under ADR-0043, instrument track CAPPED. Done: G-032a, G-033, G-032b, G-032c, G-023b-i. FOURTEEN ROWS GREEN, travel OFF in shipped content. G-023b-ii: the gaveUp finding is RESOLVED and its cause CORRECTED — travel is not defective; the determinism workload's late-run give-up coverage rests on ONE lucky crossing at tick 98,446 and is fragile today without travel. Remaining blocker is the tickcost bound, which the open 2026-08-14 escalation owns. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0046 (HUMAN) rules the game ISOMETRIC and rooms PLAYER-DESIGNED. M3 as planned is VOID; apps/game is a write-off; packages/sim survives, which is I1 earning its keep. ADR-0047 rules the decision register, PROPOSED pending accept/overrule. M0-M2.5 sign-offs NOT reopened; all six invariants unchanged. G-033 and the rest of the pre-ruling work stand at fourteen rows green. NO BUILD STARTS until the human signs off the revised milestone plan. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -536,7 +536,11 @@ Critique rounds used: 0/3
   than defend it if it grows features. This goal is the renderer; the viewer stays disposable.
 
 ## G-031 — The player acts
-Status: pending
+Status: **G-031a SHIPPED at `7f0be45` and this block never said so** — it read `pending` while a 
+  goal had already landed and been watched (WATCH #11, `GOALS.md:47`). **Found by ADR-0046's own 
+  damage assessment**, which nearly mis-scoped the write-off in both directions because of it. 
+  **Superseded by ADR-0046: `apps/game` is a write-off and this goal is rewritten, not amended.** 
+  Its DESIGN survives and is portable — see ADR-0046 §3.
 Milestone: M2.5
 Owner pair: render-engineer / render-critic
 Statement: The player builds a room, demolishes one, and changes speed, through the existing
