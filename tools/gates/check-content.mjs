@@ -18,6 +18,7 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import {
+  assertSubject,
   collectFiles,
   finish,
   isTsSource,
@@ -151,7 +152,7 @@ const violations = [];
  * it does not have.
  */
 const DECLARED_IDS = new Set();
-for (const file of collectFiles(CONTENT_DATA, (p) => p.endsWith('.json'))) {
+for (const file of assertSubject(collectFiles(CONTENT_DATA, (p) => p.endsWith('.json')), 'I3 content data', CONTENT_DATA)) {
   try {
     for (const { id } of collectIds(JSON.parse(read(file)))) DECLARED_IDS.add(id);
   } catch {
@@ -172,7 +173,7 @@ if (DECLARED_IDS.size === 0) {
 }
 
 for (const root of CODE_ROOTS) {
-  for (const file of collectFiles(root, isTsSource)) {
+  for (const file of assertSubject(collectFiles(root, isTsSource), `I3 code scan (${rel(ROOT, root)})`, root)) {
     const where = rel(ROOT, file);
     const source = stripComments(read(file));
 
@@ -223,7 +224,7 @@ for (const root of CODE_ROOTS) {
 
 // The other half of I3: content that IS in packages/content must be well-formed JSON
 // with snake_case ids, so the convention above stays true in both directions.
-for (const file of collectFiles(CONTENT_DATA, (p) => p.endsWith('.json'))) {
+for (const file of assertSubject(collectFiles(CONTENT_DATA, (p) => p.endsWith('.json')), 'I3 content data', CONTENT_DATA)) {
   const where = rel(ROOT, file);
   let parsed;
   try {

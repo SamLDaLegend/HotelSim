@@ -162,6 +162,26 @@ describe('the unpinned-claim scanner — a quantity printed as a claim that its 
     expect(out).toContain('1');
   });
 
+  it('REFUSES A TREE WITH NOTHING IN IT — proof of SUBJECT, not proof of bite', () => {
+    // ADR-0047 amendment §3 (human): a scanner gate that inspects zero files FAILS.
+    //
+    // Every scanner in this project has a proof-of-BITE and none had a proof-of-SUBJECT. Those
+    // are different claims: the census proves each gate CAN go red, and nothing proved any of
+    // them still has anything to look AT. The second is ADR-0007's founding case.
+    //
+    // It stopped being hypothetical at ADR-0046: `apps/game` is a write-off and `check:ladder`
+    // scans it, so had the emptying and the re-pointing landed in different goals, that row
+    // would have reported green over an empty directory for the length of the rebuild.
+    //
+    // THIS TEST IS THE GUARD'S OWN PROOF OF BITE, because a proof-of-subject that was never
+    // watched failing would be the very class it exists to close, one level up.
+    const dir = materialise('empty-subject', [[join('packages', '.keep'), '']]);
+    const { status, out } = runGate(dir);
+    expect(status, `the gate passed over a tree with no source in it
+${out}`).toBe(1);
+    expect(out).toContain('SCANNED ZERO FILES');
+  });
+
   it('the derived threshold admits what ADR-0032 §1 listed and rejects below it', () => {
     // 208, 547, 431, 129, 297, 3.37 — smallest integer three digits, only non-integer a
     // decimal. The threshold is read off that instance list rather than chosen (ADR-0013 §4).

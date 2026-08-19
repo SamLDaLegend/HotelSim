@@ -141,3 +141,34 @@ export function finish(gateName, violations) {
   process.stderr.write('\n');
   process.exit(1);
 }
+
+/**
+ * A SCANNER GATE THAT INSPECTS ZERO FILES FAILS (ADR-0047 amendment §3, human ruling).
+ *
+ * ---------------------------------------------------------------------------------------
+ * EVERY SCANNER IN THIS PROJECT HAS A PROOF-OF-BITE. NONE HAD A PROOF-OF-SUBJECT.
+ *
+ * `scanner.census.test.ts` refuses a tree-walking gate that has no registered test showing it
+ * going red — so we know each one CAN fail. Nothing checked that any of them still has anything
+ * to look AT. Those are different claims, and the second is the one ADR-0007 was founded on: a
+ * check that succeeds while inspecting nothing is not a check.
+ *
+ * IT STOPPED BEING HYPOTHETICAL AT ADR-0046. `apps/game` is a write-off, and `check:ladder`
+ * scans `apps/game`. Had the emptying and the re-pointing landed in different goals, that row
+ * would have reported green over an empty directory for the length of the largest rebuild in the
+ * project — a gate deliberately carried in the state it exists to prevent.
+ *
+ * SO THE GUARD IS GENERAL RATHER THAN A REPAIR TO THAT ONE ROW. One line per gate, at the point
+ * where the walk returns, naming the root it expected to find something under.
+ * ---------------------------------------------------------------------------------------
+ */
+export function assertSubject(files, label, root) {
+  if (files.length > 0) return files;
+  console.error(`\n  FAIL  ${label} — SCANNED ZERO FILES.\n`);
+  console.error(`      Expected source under: ${root}`);
+  console.error('      A scanner that inspects nothing reports green, which is ADR-0007\'s founding');
+  console.error('      case. Either the directory moved and this gate was not re-pointed, or the');
+  console.error('      filter no longer matches anything. Both are defects in the gate, not in the');
+  console.error('      tree it was aimed at.\n');
+  process.exit(1);
+}

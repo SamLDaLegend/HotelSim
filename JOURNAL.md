@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0046 (HUMAN) rules the game ISOMETRIC and rooms PLAYER-DESIGNED. M3 as planned is VOID; apps/game is a write-off; packages/sim survives, which is I1 earning its keep. ADR-0047 rules the decision register, PROPOSED pending accept/overrule. M0-M2.5 sign-offs NOT reopened; all six invariants unchanged. G-033 and the rest of the pre-ruling work stand at fourteen rows green. NO BUILD STARTS until the human signs off the revised milestone plan. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0047 is ACCEPTED (human), with wall height left PROVISIONAL until it is watched. M3 is rewritten by ADR-0046: grid depth, then the isometric WATCH surface, then room drawing, scoring, circulation and exit instruments; the review goal is restored to the numbered table after the view returns. The proof-of-SUBJECT guard is LANDED across four gates with its own bite test; check:ladder keeps its stronger per-root one, which predates it. G-033 and the pre-ruling work stand at fourteen rows green. No build starts until the human says go. Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v16** · summary **v4** · I2 `16ed33c4e13dc808` · measure golden
   `ebb9c3924e373c1e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**

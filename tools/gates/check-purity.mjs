@@ -16,7 +16,7 @@
 
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { collectFiles, finish, imports, isTestFile, isTsSource, read, rel, stripComments } from './lib/scan.mjs';
+import { assertSubject, collectFiles, finish, imports, isTestFile, isTsSource, read, rel, stripComments } from './lib/scan.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SIM_SRC = join(ROOT, 'packages/sim/src');
@@ -80,7 +80,7 @@ const violations = [];
 }
 
 // --- 2 & 3. per-file scan ---------------------------------------------------------
-for (const file of collectFiles(SIM_SRC, isTsSource)) {
+for (const file of assertSubject(collectFiles(SIM_SRC, isTsSource), 'I1 purity', SIM_SRC)) {
   const where = rel(ROOT, file);
   const isTest = isTestFile(file);
   const source = stripComments(read(file));

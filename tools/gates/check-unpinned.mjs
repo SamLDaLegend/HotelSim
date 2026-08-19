@@ -61,7 +61,7 @@
 
 import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
-import { collectFiles } from './lib/scan.mjs';
+import { assertSubject, collectFiles } from './lib/scan.mjs';
 
 const REPO_ROOT = new URL('../..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
@@ -340,7 +340,11 @@ export function censusSource(source) {
 // ---------------------------------------------------------------------------------------
 
 export function run() {
-  const files = ROOTS.flatMap((dir) => collectFiles(`${ROOT}/${dir}`, isScannable));
+  const files = assertSubject(
+    ROOTS.flatMap((dir) => collectFiles(`${ROOT}/${dir}`, isScannable)),
+    'check:unpinned',
+    ROOTS.map((dir) => `${ROOT}/${dir}`).join(', '),
+  );
   const findings = [];
   let commentScope = 0;
   for (const file of files) {

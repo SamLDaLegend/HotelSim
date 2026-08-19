@@ -323,6 +323,9 @@ export function violationsIn(where, raw) {
 const violations = [];
 const counts = [];
 for (const root of ROOTS) {
+  // NOT `assertSubject` — this gate had a proof-of-subject BEFORE the shared one existed, and
+  // its own is stronger: it counts PER ROOT (see the block below), where the shared helper
+  // would pass on one root's files while another was misspelt and contributed nothing.
   const files = collectFiles(join(ROOT, root), isScannable);
   counts.push({ root, count: files.length });
   for (const file of files) {

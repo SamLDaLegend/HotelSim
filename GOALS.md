@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0046 (HUMAN) rules the game ISOMETRIC and rooms PLAYER-DESIGNED. M3 as planned is VOID; apps/game is a write-off; packages/sim survives, which is I1 earning its keep. ADR-0047 rules the decision register, PROPOSED pending accept/overrule. M0-M2.5 sign-offs NOT reopened; all six invariants unchanged. G-033 and the rest of the pre-ruling work stand at fourteen rows green. NO BUILD STARTS until the human signs off the revised milestone plan. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0047 is ACCEPTED (human), with wall height left PROVISIONAL until it is watched. M3 is rewritten by ADR-0046: grid depth, then the isometric WATCH surface, then room drawing, scoring, circulation and exit instruments; the review goal is restored to the numbered table after the view returns. The proof-of-SUBJECT guard is LANDED across four gates with its own bite test; check:ladder keeps its stronger per-root one, which predates it. G-033 and the pre-ruling work stand at fourteen rows green. No build starts until the human says go. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -770,7 +770,10 @@ Out of scope: the money-loop cliff (M4) · the merged-walk optimisation · the c
 Critique rounds used: **3/3**
 
 ## G-028 — Outcomes and reviews are stock-shaped
-Status: pending
+Status: **SUPERSEDED — the live block is the M3 one below, re-aimed by ADR-0033 and placed
+  after G-035 by ADR-0046.** This header read `pending` while G-028a and G-028b had both
+  shipped under it. **Two blocks for one goal is the G-031a class again**, so this one points
+  forward rather than being deleted — the history beneath it is real.
 Milestone: M2.5
 Owner pair: ai-engineer / **balance-critic** · second critic `ai-critic` (last in milestone)
 Statement: The outcome table and the review function describe a stock rather than a task. "Met"
@@ -1663,3 +1666,192 @@ and stop.
   more than a dozen. Silence reads as coverage, which is the failure this project keeps
   paying for.
 - **M4 REMAINS BLOCKED ON SCENARIO CAPITAL** (ADR-0013 §5) regardless of M3's outcome.
+
+---
+
+# M3 — REWRITTEN 2026-08-16 by ADR-0046. The building has depth, and the player draws it.
+
+> **The previous M3 is VOID.** G-023b, G-024, G-025 and G-026 all assumed a one-dimensional floor.
+> They are **rewritten, not amended**. What those goals LEARNED is retained — ADR-0017/0018's feel
+> work, the dwell term, G-023a's *"a guest is somewhere"*, G-023b-i's presence gate and its
+> measured finding that outcomes do not move while experience does. **The grid underneath them
+> changes; the findings do not.**
+
+**Milestone statement, unchanged from the old M3 because ADR-0046 §5 preserved it**: stairs and
+lifts are queued shared resources, and wait time is a first-class satisfaction input.
+
+**M3 exits with THE MILESTONE QUESTION** (§9, ADR-0046 §1), asked of the human before sign-off:
+**does the thing on screen still look like the game we meant to build?**
+
+## G-032c — I3's unquoted-key hole
+Status: **DONE** (`e2100b8`). **Re-confirmed as M3's first goal by ADR-0046 §8.1** — a known gap in
+  an invariant gate, immediately before **the largest content-surface rewrite in the project**.
+  Repairing a content gate *after* rewriting the content model is the wrong order; it happens to
+  have landed already.
+
+## G-032b — the walk merge
+Status: **DONE** (`d6e6e1e`). **TAKEN, not parked** — ADR-0046 §8.2 required an explicit call. It is
+  `packages/sim` hot-path, the sim survives ADR-0046 untouched, and it is already committed;
+  **parking it would mean un-shipping working code.** Its one loose end is the tick-cost bound,
+  which is the open escalation, and campaign re-takes sit at the **exit** — so it gates nothing.
+
+## G-034 — A floor is a plan, not a strip
+Status: **PLANNED, not started.** Awaiting the human's go.
+Milestone: M3
+Owner pair: sim-engineer / sim-critic
+Statement: `(floor, x)` becomes `(floor, x, y)`. Build validity is reworked — supported, enclosed,
+  has a door, holds required items — **the rules surviving and their implementation changing.**
+
+**THE TWO MODEL CHANGES LAND TOGETHER** (ADR-0046 §4): splitting the axis from the room-instance
+model **pays the migration twice.** But the room-DRAWING verb is G-036 — this goal moves the grid
+and the schema, not the player's hands.
+
+**IN SCOPE**
+- The third axis, through `grid.ts`, the entity store, placement and the save.
+- **Build validity reworked for a plan**: supported (something beneath, or ground), enclosed,
+  reachable through a door, holds its required items.
+- **B1 rectangles**, stored in a representation that *could* generalise to a polyomino — so
+  arbitrary shapes are a later GOAL rather than a later MIGRATION.
+- **B2 explicit corridors.** The human named this the register's most consequential entry and it
+  is: without scarce space, "bigger is better" has no counterweight and B7's pricing has nothing
+  to trade against.
+- **B3 stored bounds, per floor.** `grid.ts` already stores rather than hardcodes, so this is
+  continuity — and it makes buying land an M4 feature instead of a migration.
+- **B5's condition field RESERVED** (not built — housekeeping is M4).
+- **`check:ladder` IS RE-POINTED IN THIS COMMIT.** See below. Non-negotiable.
+
+**OUT OF SCOPE**: room drawing and `placeItem` (G-036) · scoring (G-037) · pathfinding (G-038) ·
+the isometric renderer (G-035) · housekeeping, access rules and per-instance pricing beyond
+reserving their fields.
+
+**`check:ladder` IS RE-POINTED IN THE SAME COMMIT THAT EMPTIES `apps/game` (ADR-0047 amdt §3).**
+Ruled by the human **against my own plan**, which had deferred it to G-039: *"then for five goals
+`check:ladder` scans a directory with nothing in it and reports green"* — **ADR-0007's founding
+case, carried deliberately through the largest rebuild in the project.** `apps/game/src` holds 15
+source files today and the gate scans them.
+
+**The general guard is ALREADY LANDED, ahead of this goal**: `assertSubject` in
+`tools/gates/lib/scan.mjs`, wired into `check:purity`, `check:content`, `check:unpinned` and
+`determinism.mjs`, with its own proof of bite. **`check:ladder` keeps its own stronger per-root
+guard, which predates the shared one** — see ADR-0047 amdt §3's correction.
+
+**Exit criteria — commands, not adjectives:**
+- `pnpm exec vitest run grid` and `run build` green.
+- **A CELL'S THIRD AXIS IS IN THE HASHED STATE**, asserted through `hashState` on two worlds
+  differing only in a `y` — not by asserting a field exists (G-023a's precedent).
+- Save **v17** with a real 16→17 migration; **the permanent v1 fixture a ZERO-LINE DIFF walking
+  1→17** (ADR-0006 holds — seventeen deep is the reason the chain is worth something, not a reason
+  to break it); `SAVE_V1_CONTENT_FINGERPRINT` unmoved.
+- **`pnpm check:ladder` green against its NEW subject and RED against an empty one** — the existing
+  `ladder-arithmetic.test.ts` dead-root test is the proof and must still pass.
+- `pnpm verify` green, all rows. **Three-OS CI green.**
+- **The I2 hash WILL move with the migration. Expected; moving UNVERIFIED is not** — it is
+  re-derived and the four digest bodies updated in the same commit.
+
+**Seam offered at PLAN**: none yet. If the builder offers one it is **taken, or gets a written
+prediction of what declining it costs, scored at REFLECT (§5.5) — AND RECORDED IN THIS BLOCK**,
+which is this session's most-repeated failure.
+
+## G-035 — The isometric view, restored as the WATCH surface
+Status: **PLANNED.** **Goes before the room model** (ADR-0046 §7).
+Milestone: M3
+Owner pair: render-engineer / render-critic
+Statement: The hotel is on screen in 2:1 isometric, one floor at a time, floors switchable — **in
+  G-030's shape, which proved it can be done in one goal.** Coloured prisms, guests, and the HUD
+  fields worth keeping.
+
+**WHY IT IS HERE AND NOT LATER.** ADR-0023 made `apps/game` the surface of record; ADR-0046 writes
+it off, and `tools/viewer` is already stale. **So from G-034 until this lands there is NO valid
+WATCH surface, and a behavioural goal shipping without one is an ESCALATION, not a recorded debt.**
+
+**PORTED, NOT REDESIGNED** (ADR-0046 §3): the queued-command ghosts, the recorded-refusal flash,
+the transport strip reading the content ladder, the HUD's `last`/`refused` fields, and **the
+deliberate choice NOT to grey out illegal moves.**
+
+**A2–A6 LAND HERE**: 2:1 tiles at **128×64 logical, authored 2×** · **depth sort by `(x + y)` with
+an explicit within-tile layer index (floor → wall → item → guest → overlay), and multi-tile items
+FORBIDDEN until a goal handles them — enforced, not commented** · **two far walls (north and
+west)**, written as a function of orientation from the start · **rotation-capable, one orientation
+shipped** · **guests greyscale with runtime tint**, four facings.
+
+**WALL HEIGHT IS PROVISIONAL, AND THAT IS A HUMAN RULING (ADR-0047 amdt §1).** The derivation —
+64px, because at 2:1 a tile's screen height is one grid unit — is correct in form. **But wall
+height is a PERCEPTUAL property with a mathematical derivation, and ADR-0013 says a perceptual
+criterion needs a perceptual check.** The human's own precedent: *"I predicted 48s/day would read
+sluggish, you watched it, it read brisk. The arithmetic was fine and the inference from arithmetic
+to feel was wrong."* **Ship it, look at it, then lock it.** Tile dimensions stay locked now — the
+atlas depends on them.
+
+**Exit criteria**: the hotel renders · floors switch · a guest is visible and tinted by state ·
+**depth sorting has a TEST, not a screenshot** · `pnpm check:ladder` green on the new tree · **a
+recording exists and `JOURNAL.md` carries a WATCH entry** (§5 WATCH, ADR-0013).
+
+## G-028 — Outcomes and reviews are stock-shaped (ADR-0033's re-aimed shape)
+Status: **PLANNED — after G-035, before G-037.** **It was RULED IN PROSE AND LEFT OUT OF THE
+  NUMBERED TABLE — the G-031a class, one message after catching G-031a, inside the write-up of the
+  catch.** §5.8 applies to a repair as much as to a diff, and the first place to look for a known
+  class is the document making the fix. Restored here.
+Milestone: M3
+
+**WHY AFTER G-035.** Its subject survives ADR-0046 — the review signal is `packages/sim` and
+camera-free — **but it is a BEHAVIOURAL goal, and between G-034 and G-035 there is no valid WATCH
+surface at all.** Running it before the view is restored would deliberately create the state
+ADR-0013 exists to end, and it would be watched, if at all, on a renderer drawing the wrong
+projection. **The counter-argument — that it is pure sim and tests alone would do — is precisely
+the argument ADR-0013 was written to reject.**
+
+**AND IT SITS UPSTREAM OF ITS OWN NEW INPUT, STATED HERE RATHER THAN DISCOVERED** (human, ADR-0047
+amdt §2): C3 makes **satisfaction primary**, so **room score → satisfaction rate → reviews.**
+Landing G-028 before G-037 is fine, **but it WILL need a re-sweep when scoring lands.** Scheduled,
+not a surprise.
+
+## G-036 — The player draws a room
+Status: **PLANNED.**
+Statement: the player draws a footprint and places items inside it. **`placeItem` is promoted out
+  of M6 to the PRIMARY PLAYER VERB** (ADR-0046 §4.2).
+
+A room **type** becomes a **constraint set** in content — min/max footprint, required items,
+forbidden adjacencies, what need it serves. A room **instance** carries the player's drawing and
+its placed items, and **that is world state, which is where it has always belonged.** **I3 is not
+weakened and ADR-0003 stands.**
+**B4 (rooms are editable) and B6 (access rule: public / guests-of-this-room / staff-only) land
+here** — B6 was already parked as an edge case, and **player-designed rooms turn it into a
+certainty: somebody will put a vending machine in a bedroom on purpose.**
+
+## G-037 — A room is scored on what is in it
+Status: **PLANNED.** The fold over placed items, in the shape Two Point uses.
+**Inputs pinned now because they determine what fields exist** (C2): **function** (binary gate on
+required items) · **size** (diminishing returns, with an upkeep cost so bigger is a trade) ·
+**decor** (attractiveness-carrying optional items) · **condition** (B5, field reserved at G-034,
+built at M4) · **adjacency** (penalties and bonuses).
+**EVERY WEIGHT, THRESHOLD AND BAND BOUNDARY IS JSON (I3)** — the first mechanic where a designer
+will want to tune without a rebuild, and **ADR-0045's per-need banding is the precedent for how
+such a fold is written and falsified.**
+**B7 per-INSTANCE pricing lands here.** **C3: satisfaction is PRIMARY**, price ceiling and
+reputation secondary — because satisfaction is the consequence the existing sim can already
+consume, which makes it the shortest path from a room score to something observable.
+**Triggers G-028's re-sweep.**
+
+## G-038 — Circulation
+Status: **PLANNED.** A* over a single floor's tile grid, plus stair and lift nodes joining floors —
+**per-floor rather than volumetric.** M3's statement lands here: stairs cheap/slow/unbounded, lifts
+expensive/fast/queued, **wait time a first-class satisfaction input.**
+**B8 lands here**, including a floor-count patience input that makes lifts necessary rather than
+optional — **a content number, shipped as one.**
+**C4's staff roles are NAMED but not built** — housekeeping, reception, maintenance, porters —
+because each is a room requirement and a pathing consumer, and this goal must be able to carry
+them.
+
+## G-039 — M3 exit instruments
+Status: **PLANNED.** G-022's shape, at the **EXIT and not the entrance** (ADR-0043 §2, re-affirmed
+by ADR-0046 §8).
+**Carries**: every measurement campaign re-take — **the grid change and pathfinding alter what the
+workload MEANS, which is ADR-0015's REPLACE-on-configuration-change case, already ruled and
+precedented at G-032a** · the tick-cost bound, once the human's escalation is answered · the
+cadence, which G-023b-ii measured is **no longer a local minimum** · the backlog-derivation repair
+(129 as a floor, the measurement pinned, the excess bounded) · the ~38 report goldens.
+**PLUS THE G-031a GAP** (ADR-0047 amdt §4): `check:stamp` verifies the four digests agree **with
+each other**, and **nothing verifies a goal block's status against git** — which is how a shipped,
+watched goal sat at `pending` and nearly mis-scoped a ruling in both directions. **A commit
+referencing a goal ID implies its block is not `pending`.** A cheap scanner and **a line in this
+goal, not a goal of its own.**

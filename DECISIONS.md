@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0046 (HUMAN) rules the game ISOMETRIC and rooms PLAYER-DESIGNED. M3 as planned is VOID; apps/game is a write-off; packages/sim survives, which is I1 earning its keep. ADR-0047 rules the decision register, PROPOSED pending accept/overrule. M0-M2.5 sign-offs NOT reopened; all six invariants unchanged. G-033 and the rest of the pre-ruling work stand at fourteen rows green. NO BUILD STARTS until the human signs off the revised milestone plan. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0047 is ACCEPTED (human), with wall height left PROVISIONAL until it is watched. M3 is rewritten by ADR-0046: grid depth, then the isometric WATCH surface, then room drawing, scoring, circulation and exit instruments; the review goal is restored to the numbered table after the view returns. The proof-of-SUBJECT guard is LANDED across four gates with its own bite test; check:ladder keeps its stronger per-root one, which predates it. G-033 and the pre-ruling work stand at fourteen rows green. No build starts until the human says go. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4229,3 +4229,82 @@ test, not a plan.** ADR-0046 §9 says this ruling permits no new scope, and **a 
 backlog**: nothing here is scheduled by being written down. The blocking set exists because the
 save schema, the grid and the art pipeline are expensive to change afterwards — **that is the
 whole reason any of it is being decided today rather than when it is built.**
+
+---
+
+## ADR-0047 AMENDMENT — ACCEPTED, wall height stays provisional, and three fixes to the plan
+
+**Date**: 2026-08-16 · **Status**: **ACCEPTED** (was PROPOSED) · **HUMAN RULING.**
+
+### 1. Wall height is PERCEPTUAL and is not locked yet
+
+The derivation stands and is the right *form* — at 2:1 a tile's screen height is one grid unit, so
+a one-unit wall is 64px. **But wall height is a perceptual property with a mathematical
+derivation, and ADR-0013 says a perceptual criterion needs a perceptual check.**
+
+> **The human's own recent record is the argument**: *"I predicted 48s/day would read sluggish,
+> you watched it, it read brisk. The arithmetic was fine and the inference from arithmetic to
+> feel was wrong."*
+
+**Ruled**: derive it as proposed, **ship G-035 with it, LOOK at it, then lock it.** Tile
+dimensions **stay locked now** — the atlas depends on them. **Wall height is one constant in the
+renderer and costs nothing to leave provisional for one goal.**
+
+**A DERIVATION IS NOT A PERCEPTUAL CHECK, EVEN WHEN IT IS CORRECT.** §2.1 demands a number be
+sourceable; ADR-0013 demands a *perceptual* number be seen. **Those are two requirements and
+satisfying the first has twice now been mistaken for satisfying the second.**
+
+### 2. G-028 was ruled in prose and absent from the table — my own defect class, one message on
+
+The placement (after G-035) is accepted. **But the numbered plan ran G-032c → G-032b → G-034 →
+G-035 → G-036 → G-037 → G-038 → G-039 and G-028 was not in it.**
+
+> **That is the G-031a defect class — a decision that exists in one record and not the other —
+> committed ONE MESSAGE AFTER catching G-031a, in the write-up of the catch.** §5.8 applies to a
+> repair as much as to a diff: **a fix on a known class must state where else that class lives**,
+> and the first place to look is the document making the fix.
+
+**And a substantive consequence to state in the block rather than discover**: C3 makes
+satisfaction primary, so **room score → satisfaction rate → reviews**. That puts **G-028 upstream
+of its own new input.** Landing it before G-037 is fine; **it will need a re-sweep when scoring
+lands, and the block says so up front.**
+
+### 3. `check:ladder` is re-pointed in the SAME COMMIT that empties `apps/game`
+
+**Not at the exit.** If `apps/game` empties at G-034 and the gate is not re-pointed until G-039,
+then **for five goals `check:ladder` scans an empty directory and reports green** — a gate that
+passes while inspecting nothing, which is **ADR-0007's founding case, carried deliberately through
+the largest rebuild in the project.**
+
+**AND THE RULE THAT GENERALISES, WHICH IS THE POINT**: 
+
+> **A SCANNER GATE THAT INSPECTS ZERO FILES FAILS.**
+>
+> **Every scanner here has a proof-of-BITE; none has a proof-of-SUBJECT.** One line per gate, and
+> it closes the class rather than this instance.
+>
+> **CORRECTION, FOUND WHILE BUILDING IT: "none" WAS WRONG. `check:ladder` HAS HAD ONE SINCE
+> G-030**, with a registered test — *"THE DEAD ROOT — a scan with nothing to scan must not
+> report a clean tree"* — and its guard is **stronger than the shared one**, because it counts
+> PER ROOT: *"a single total stays comfortably non-zero while one root is misspelt and
+> contributes nothing."* The shared helper wrapped it, pre-empted its message and turned that
+> test RED, which is how this was found. **`check:ladder` keeps its own; the shared guard goes
+> to the gates that had nothing.**
+>
+> **AND THE CORRECTION IS THE MORE USEFUL FINDING.** The rule was already discovered in this
+> project, written inside one gate, given a test — **and never generalised to the other five.**
+> That is not a missing rule; it is **a rule found once and left where it was found.**
+> `check:ladder` is the model the shared guard was generalised FROM, not the gap it fills.
+
+### 4. The gap that let G-031a drift
+
+`check:stamp` verifies the four digests agree **with each other**. **Nothing verifies a goal
+block's status against what is in git** — which is how a shipped, watched goal sat at `pending`
+and nearly mis-scoped a ruling in both directions.
+
+**Mechanically checkable**: a commit referencing a goal ID implies its block is not `pending`.
+**A line in G-039, not a goal of its own.**
+
+### 5. Scope
+
+**G-032c plus a realistic G-034 plan.** Nothing further this sitting.

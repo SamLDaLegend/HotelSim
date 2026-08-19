@@ -19,7 +19,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { collectFiles, finish, isTestFile, isTsSource, read, rel, stripComments } from './lib/scan.mjs';
+import { assertSubject, collectFiles, finish, isTestFile, isTsSource, read, rel, stripComments } from './lib/scan.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SIM_SRC = join(ROOT, 'packages/sim/src');
@@ -38,7 +38,7 @@ const BANNED = [
 const violations = [];
 
 // --- 1. static scan ---------------------------------------------------------------
-for (const file of collectFiles(SIM_SRC, isTsSource)) {
+for (const file of assertSubject(collectFiles(SIM_SRC, isTsSource), 'I2 determinism static scan', SIM_SRC)) {
   if (isTestFile(file)) continue;
   const where = rel(ROOT, file);
   const source = stripComments(read(file));
