@@ -90,9 +90,11 @@
 import {
   applyBuildRoom,
   applyDemolishRoom,
+  applyDrawRoom,
+  applyPlaceItem,
   assertBuildOutcomes,
   describeOccupied,
-  roomAt,
+  roomOverlapping,
   totalBuildOutcomes,
 } from './build.js';
 import type { BuildInput, BuildOutcomes } from './build.js';
@@ -103,7 +105,7 @@ import { hasContentId, isRoomKind, needTypesInOrder } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
-import { assertCell } from './grid.js';
+import { assertCell, UNIT_FOOTPRINT } from './grid.js';
 import {
   assertGuestOutcomes,
   assertGuestStoreInvariants,
@@ -366,7 +368,17 @@ function applyCommand(
       // reachable, which is the only reason it was ever findable. Two rooms on one cell
       // still throws.
       if (isRoomKind(content, command.entityKind)) {
-        const sitting = roomAt(entities, content, command.at);
+        // RECTANGLE AGAINST RECTANGLE SINCE G-036b, and the generalisation is why this reads
+        // `roomOverlapping` rather than `roomAt`: a seeded 3x1 room whose origin cell is free
+        // and whose body lies across a standing room would otherwise be spawned, and the
+        // structural door would have produced a world the player verb refuses. Absent
+        // footprint means one cell, so every existing scenario's meaning is byte-identical.
+        const sitting = roomOverlapping(
+          entities,
+          content,
+          command.at,
+          command.footprint ?? UNIT_FOOTPRINT,
+        );
         if (sitting !== undefined) {
           throw new Error(
             `applyCommands: cannot spawn "${command.entityKind}" — ${describeOccupied(command.at, sitting, state.world.grid)}. ` +
@@ -377,7 +389,7 @@ function applyCommand(
       // The cell is validated by `draftSpawn` against the draft's own bounds, which are
       // this world's plot. Out of bounds throws, for the same reason an unknown kind
       // does: the caller is holding the world whose plot it just ignored.
-      draftSpawn(entities, command.entityKind, command.at);
+      draftSpawn(entities, command.entityKind, command.at, command.footprint ?? UNIT_FOOTPRINT);
       return;
     case 'despawnEntity':
       draftDespawn(entities, command.id);
@@ -388,6 +400,33 @@ function applyCommand(
       // this is the plumbing, the same split `runGuests` has over `stepGuests`.
       accumulator.buildCommands += 1;
       const result = applyBuildRoom(buildInput(state, entities, accumulator), command.roomType, command.at);
+      accumulator.ledger = result.ledger;
+      accumulator.outcomes = result.outcomes;
+      accumulator.balance = result.balance;
+      return;
+    }
+    case 'drawRoom': {
+      // THE PLAYER DRAWS (G-036b). Same plumbing as `buildRoom` above, which is the same
+      // function at `UNIT_FOOTPRINT` — see `applyDrawRoom` for why this is a second command
+      // rather than a wider one, and why that leaves no 1x1 special case behind.
+      accumulator.buildCommands += 1;
+      const result = applyDrawRoom(
+        buildInput(state, entities, accumulator),
+        command.roomType,
+        command.at,
+        command.footprint,
+      );
+      accumulator.ledger = result.ledger;
+      accumulator.outcomes = result.outcomes;
+      accumulator.balance = result.balance;
+      return;
+    }
+    case 'placeItem': {
+      // A BUILD-FAMILY COMMAND, so the per-tick law below covers it: exactly one outcome is
+      // recorded, whether the item landed or the placement was refused. It books no
+      // transaction, so unlike its siblings it leaves the ledger by reference.
+      accumulator.buildCommands += 1;
+      const result = applyPlaceItem(buildInput(state, entities, accumulator), command.itemType, command.at);
       accumulator.ledger = result.ledger;
       accumulator.outcomes = result.outcomes;
       accumulator.balance = result.balance;

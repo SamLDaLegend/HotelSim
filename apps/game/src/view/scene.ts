@@ -53,6 +53,7 @@ import {
   entranceCell,
   findItemType,
   findRoomType,
+  footprintCovers,
   isPlaced,
   NO_ENTITY,
   roomCellsOf,
@@ -69,7 +70,18 @@ import { centreOf, isCorridorCell, toCanvas } from './camera.js';
 import type { View } from './camera.js';
 import { assertSingleTile, createCollector, depthOf, LAYER } from './depth.js';
 import { drawGuest, facingOf, guestGeometry, needVectorWidth } from './guest.js';
-import { cornerOf, edgeOf, farSidesOf, toView, WALL_HEIGHT } from './iso.js';
+import {
+  cornerOf,
+  edgeOf,
+  farSidesOf,
+  ITEM_ANCHOR_RISE,
+  ITEM_PLATE_PAD,
+  ITEM_SIZE,
+  neighbourAcross,
+  toView,
+  WALL_HEIGHT,
+} from './iso.js';
+import type { Side } from './iso.js';
 import { createPalette, INK } from './palette.js';
 import type { Palette } from './palette.js';
 import { shade } from './primitives.js';
@@ -155,16 +167,49 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
     // show every floor as open plan and paint a disconnected room as working.
     const validity = createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
 
+    // ==================================================================================
+    // A ROOM IS INDEXED BY EVERY CELL IT COVERS (G-036b), which is the renderer's half of the
+    // same repair `validity.ts`'s placement index made. This map was keyed on `entity.at`, so
+    // a 3x2 room appeared on ONE tile and the other five drew as bare plot — the room would
+    // have been half-invisible rather than loudly wrong.
+    //
+    // AND THE BADGE CELL IS DECIDED HERE, ONCE PER ROOM. A footprint's per-tile drawables are
+    // the floor, the walls and the hatch; its badge, its occupancy pips and its invalidity
+    // word are ONE thing about ONE room and are drawn on the tile NEAREST THE CAMERA — the
+    // near lip, which is the one part of a room nothing standing in it can cover.
+    //
+    // NEAREST IS DERIVED FROM THE PROJECTION rather than taken as "largest column and row".
+    // At the shipped orientation those are the same tile, and at a rotated one they are not;
+    // `depthOf` is the same function the draw order uses, so this cannot drift from it
+    // (ADR-0047 A5's rule: rotation-capable, one orientation shipped).
+    // ==================================================================================
     const rooms = new Map<string, Entity>();
+    const badgeCells = new Map<number, string>();
     const items = new Map<string, Entity[]>();
     for (const entity of world.entities.list) {
       if (!isPlaced(entity)) continue;
-      const key = keyOf(entity.at);
       // ONE PREDICATE FOR "THIS IS A ROOM", SHARED WITH THE PICKER (G-031a). The room the
       // player clicks is by construction the room the player can see, because the same
       // function decided both.
-      if (isRoomEntity(content, entity)) rooms.set(key, entity);
-      else {
+      if (isRoomEntity(content, entity)) {
+        let nearest: Cell | undefined;
+        let nearestDepth = Number.NEGATIVE_INFINITY;
+        // `roomCellsOf` is the SIMULATION's own answer about which cells a room occupies, so
+        // the picture and the rules cannot disagree about where a room is.
+        for (const cell of roomCellsOf(entity)) {
+          rooms.set(keyOf(cell), entity);
+          const depth = depthOf(cell.column, cell.row, view.orientation);
+          if (depth > nearestDepth) {
+            nearestDepth = depth;
+            nearest = cell;
+          }
+        }
+        if (nearest !== undefined) badgeCells.set(entity.id, keyOf(nearest));
+      } else {
+        // AN ITEM IS ONE TILE, AND THAT IS STILL ENFORCED (ADR-0047 A3). `placeItem` cannot
+        // create a wider one and the sim has no other player route to it; a hand-built save
+        // can, and `drawItems` throws on it rather than drawing it wrongly.
+        const key = keyOf(entity.at);
         const bucket = items.get(key);
         if (bucket === undefined) items.set(key, [entity]);
         else bucket.push(entity);
@@ -216,15 +261,28 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
         }
 
         if (room !== undefined) {
-          roomsHere += 1;
-          // MULTI-TILE FOOTPRINTS ARE REFUSED, NOT DRAWN WRONGLY (ADR-0047 A3). `roomCellsOf`
-          // is the simulation's own answer and returns one cell today; when G-036 gives rooms
-          // player-drawn footprints this throws, loudly, at the first frame — which is the
-          // point. A comment would not have.
-          assertSingleTile(roomCellsOf(content, room), `room ${room.id} (${room.kind})`);
+          // COUNTED ONCE PER ROOM, NOT ONCE PER TILE (G-036b). `SceneReport.rooms` is what the
+          // HUD prints and what `record-frames.ts` puts in every caption; counting covered
+          // tiles instead would have quietly inflated every census in the project's history
+          // the moment a room got wider than one cell.
+          const isBadgeCell = badgeCells.get(room.id) === key;
+          if (isBadgeCell) roomsHere += 1;
           const invalidity = roomInvalidity(validity, room);
-          if (invalidity !== null) invalidRooms += 1;
-          drawRoom(collector, labels, view, content, appearances, palette, room, cell, invalidity, holders.get(room.id) ?? 0, depth);
+          if (invalidity !== null && isBadgeCell) invalidRooms += 1;
+          drawRoom(
+            collector,
+            labels,
+            view,
+            content,
+            appearances,
+            palette,
+            room,
+            cell,
+            invalidity,
+            holders.get(room.id) ?? 0,
+            depth,
+            isBadgeCell,
+          );
         }
 
         const inside = items.get(key);
@@ -312,6 +370,25 @@ function drawTile(
 }
 
 /**
+ * WHETHER THIS ROOM'S OWN RECTANGLE CONTINUES ACROSS `side` FROM `cell` (G-036b).
+ *
+ * THE ONE THING A MULTI-TILE ROOM NEEDS THAT A ONE-TILE ROOM DID NOT. A footprint is drawn as
+ * per-tile drawables — that is what ADR-0047 A3 requires and what `depth.ts` says the owning
+ * goal must do — but a wall on every tile edge would slice a 3x2 room into six cubicles. A
+ * wall goes up only where the room ENDS, so the outline a watcher sees is the rectangle the
+ * player drew.
+ *
+ * `footprintCovers` is the SIMULATION's rectangle test, not a second one: the renderer decides
+ * where a wall goes from the same predicate `coversCell` uses to decide where a door goes, so
+ * the picture and the rule agree about the room's outline by construction.
+ */
+function continuesAcross(room: Entity, cell: Cell, side: Side): boolean {
+  if (room.at === null) return false;
+  const beside = neighbourAcross(cell.column, cell.row, side);
+  return footprintCovers(room.at, room.footprint, { floor: cell.floor, column: beside.column, row: beside.row });
+}
+
+/**
  * A ROOM AS A PRISM: its floor, its two FAR walls, its badge, its pips, and — if it does not
  * work — the hatch, the alarm outline and the WORD.
  *
@@ -319,6 +396,20 @@ function drawTile(
  * left open. `farSidesOf` derives which two those are FROM THE PROJECTION, so when the camera
  * can rotate the walls rotate with it — the interaction A4 names, handled at the point it is
  * created rather than at the point it would bite.
+ *
+ * ==========================================================================================
+ * CALLED ONCE PER COVERED TILE SINCE G-036b, AND WHAT IS PER-TILE VERSUS PER-ROOM IS THE WHOLE
+ * OF THE CHANGE:
+ *
+ *   PER TILE   the floor diamond · the far walls, but only where the ROOM ends (see
+ *              `continuesAcross`) · the invalid hatch and tint, so a broken room is red across
+ *              its whole area rather than in one corner
+ *   PER ROOM   the badge, the occupancy pips and the invalidity WORD, all drawn on the tile
+ *              nearest the camera, because they are one statement about one room and three
+ *              copies of a badge is not a bigger room, it is a bug
+ *
+ * `isBadgeCell` is decided in `build` from `depthOf`, so it rotates with the camera.
+ * ==========================================================================================
  */
 function drawRoom(
   collector: ReturnType<typeof createCollector<Primitive>>,
@@ -332,6 +423,7 @@ function drawRoom(
   invalidity: string | null,
   held: number,
   depth: number,
+  isBadgeCell: boolean,
 ): void {
   const base = colourOf(appearances.room(room.kind));
   const ink = palette.inkOn(base);
@@ -339,6 +431,9 @@ function drawRoom(
   const height = WALL_HEIGHT * view.scale;
 
   for (const side of farSidesOf(view.orientation)) {
+    // NO WALL BETWEEN A ROOM AND ITSELF. Without this a wide room is drawn as a grid of
+    // cubicles and the footprint the player drew is invisible.
+    if (continuesAcross(room, cell, side)) continue;
     const [a, b] = edgeOf(tile.u, tile.v, side, view.orientation);
     const foot0 = toCanvas(view, a);
     const foot1 = toCanvas(view, b);
@@ -394,6 +489,10 @@ function drawRoom(
     }
     collector.add(depth, LAYER.overlay, { kind: 'poly', points, stroke: { width: 3, colour: INK.alarm } });
   }
+
+  // EVERYTHING BELOW IS ONE STATEMENT ABOUT ONE ROOM, so it is drawn on one tile — the one
+  // nearest the camera. Three copies of a badge is not a bigger room, it is a bug.
+  if (!isBadgeCell) return;
 
   // LET TO SOMEBODY, WHETHER OR NOT THAT SOMEBODY IS STANDING HERE — and under one-floor-at-a-
   // time, whether or not that somebody is on this floor at all. See the header.
@@ -470,17 +569,32 @@ function drawItems(
   depth: number,
 ): void {
   const centre = centreOf(view, cell.column, cell.row);
-  const size = Math.max(6, Math.round(12 * view.scale));
+  // THE THREE NUMBERS COME FROM `iso.ts` SINCE G-036b, and they are there rather than here
+  // because they are HALF of the wall-height question: a wall covers the near
+  // `WALL_HEIGHT / TILE_HEIGHT` of the tile behind it, so whether this band is visible depends
+  // on both constants and on neither alone. Keeping them apart is how 64 shipped.
+  const size = Math.max(6, Math.round(ITEM_SIZE * view.scale));
   items.forEach((item, i) => {
     if (!isPlaced(item)) return;
-    const x = centre.x - size + i * (size + 4);
-    const y = centre.y - Math.round(16 * view.scale);
+    // MULTI-TILE ITEMS ARE STILL FORBIDDEN, AND THE CHECK MOVED HERE RATHER THAN BEING DELETED
+    // (ADR-0047 A3, G-036b). Its old call site was the ROOM, where its docblock said "when
+    // G-036 gives rooms player-drawn footprints THIS THROWS, LOUDLY, AT THE FIRST FRAME — which
+    // is the point". This is the goal that handles them: a room is now split into per-tile
+    // drawables with their own depths, which is exactly what `depth.ts` said the owning goal
+    // owed. The PROHIBITION is untouched for the half nobody has handled — an item spanning two
+    // tiles still has two depths and no correct place in the draw order — and `placeItem`
+    // cannot create one, so what reaches here is a hand-built save, which is precisely the
+    // input a check earns its keep on.
+    assertSingleTile(roomCellsOf(item), `item ${item.id} (${item.kind})`);
+    const pad = ITEM_PLATE_PAD;
+    const x = centre.x - size + i * (size + 2 * pad);
+    const y = centre.y - Math.round(ITEM_ANCHOR_RISE * view.scale);
     collector.add(depth, LAYER.item, {
       kind: 'rect',
-      x: x - 2,
-      y: y - 2,
-      w: size + 4,
-      h: size + 4,
+      x: x - pad,
+      y: y - pad,
+      w: size + 2 * pad,
+      h: size + 2 * pad,
       fill: INK.soot,
     });
     collector.add(depth, LAYER.item, {

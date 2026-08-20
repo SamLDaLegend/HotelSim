@@ -65,6 +65,12 @@ export const FOOD_COURT_ROOM_TYPES = [
     demolitionRefundBasisPoints: 5000,
     provides: ['guest_entertainment'],
     requires: ['vending_machine'],
+    // REQUIRED ON DISK SINCE G-036b, like the two prices and `requires` above: this fixture is
+    // WRITTEN OUT and read back through `roomTypeSchema`, so it has to look like a document a
+    // designer edits today rather than like history. The shipped values, so this arm differs
+    // from the shipped table in what it was always meant to differ in — the room TYPES present.
+    minFootprintCells: 1,
+    maxFootprintCells: 24,
     fitBasisPoints: 7500,
   },
   {
@@ -77,6 +83,12 @@ export const FOOD_COURT_ROOM_TYPES = [
     demolitionRefundBasisPoints: 5000,
     provides: ['guest_nourishment'],
     requires: [],
+    // REQUIRED ON DISK SINCE G-036b, like the two prices and `requires` above: this fixture is
+    // WRITTEN OUT and read back through `roomTypeSchema`, so it has to look like a document a
+    // designer edits today rather than like history. The shipped values, so this arm differs
+    // from the shipped table in what it was always meant to differ in — the room TYPES present.
+    minFootprintCells: 1,
+    maxFootprintCells: 24,
     fitBasisPoints: 7500,
   },
   {
@@ -89,6 +101,12 @@ export const FOOD_COURT_ROOM_TYPES = [
     demolitionRefundBasisPoints: 5000,
     provides: [],
     requires: ['arm_chair'],
+    // REQUIRED ON DISK SINCE G-036b, like the two prices and `requires` above: this fixture is
+    // WRITTEN OUT and read back through `roomTypeSchema`, so it has to look like a document a
+    // designer edits today rather than like history. The shipped values, so this arm differs
+    // from the shipped table in what it was always meant to differ in — the room TYPES present.
+    minFootprintCells: 1,
+    maxFootprintCells: 24,
   },
 ] as const;
 

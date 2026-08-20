@@ -18,7 +18,7 @@ import { createCorridors } from './corridors.js';
 import { bindContent } from './content.js';
 import { beginEntityDraft } from './entities.js';
 import type { EntityStore } from './entities.js';
-import { createGridBounds, GROUND_FLOOR } from './grid.js';
+import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell } from './grid.js';
 import {
   departureCountOf,
@@ -88,8 +88,8 @@ function oneRoomHotel(): EntityStore {
   return {
     nextId: 3,
     list: [
-      { id: 1, kind: 'bedroom', at: cell(GROUND_FLOOR, 0) },
-      { id: 2, kind: 'bed', at: cell(GROUND_FLOOR, 0) },
+      { id: 1, kind: 'bedroom', at: cell(GROUND_FLOOR, 0), footprint: UNIT_FOOTPRINT },
+      { id: 2, kind: 'bed', at: cell(GROUND_FLOOR, 0), footprint: UNIT_FOOTPRINT },
     ],
   };
 }

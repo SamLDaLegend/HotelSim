@@ -32,7 +32,7 @@ import { bindContent } from './content.js';
 import { createCorridors, withCorridor } from './corridors.js';
 import type { Corridors } from './corridors.js';
 import type { Entity, EntityStore } from './entities.js';
-import { createGridBounds, GROUND_FLOOR } from './grid.js';
+import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import {
   countInvalidRooms,
@@ -70,7 +70,7 @@ const planOf = (...cells: readonly Cell[]): Corridors => cells.reduce(withCorrid
 type Spec = readonly [kind: string, at: Cell | null];
 
 function storeOf(...specs: readonly Spec[]): EntityStore {
-  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at }));
+  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at, footprint: UNIT_FOOTPRINT }));
   return { nextId: specs.length + 1, list };
 }
 
@@ -265,7 +265,7 @@ describe('the rule is depth-capable, on a plot with rows (G-034a)', () => {
 
 describe('the reason is legible and behaves like the other four', () => {
   it('describes itself in a sentence naming the room', () => {
-    const room: Entity = { id: 7, kind: 'bedroom', at: cell(GROUND_FLOOR, 10) };
+    const room: Entity = { id: 7, kind: 'bedroom', at: cell(GROUND_FLOOR, 10), footprint: UNIT_FOOTPRINT };
     const sentence = describeRoomInvalidity(room, 'noCorridor');
     expect(sentence).toContain('Room 7');
     expect(sentence).toContain('corridor');

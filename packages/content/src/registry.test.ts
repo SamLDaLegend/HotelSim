@@ -36,6 +36,14 @@ const roomType = (overrides: Record<string, unknown> = {}): Record<string, unkno
   // type that requires nothing is strictly easier to make valid than one that does.
   // `[]` is the sayable version of "no furniture".
   requires: ['single_bed'],
+  // Required on disk since G-036b, and the dominance reason a third time: silence ships a
+  // room type with NO UPPER SIZE, which is strictly dominant on the axis G-037 is about the
+  // moment a room is scored on how big it is. Silence in HISTORY is a different statement —
+  // content written before footprints could only describe one-cell rooms — which is why
+  // `RoomTypeData` in packages/sim keeps both keys OPTIONAL and the frozen v1 fixture keeps
+  // its `8e09fe4f0fa162a3` fingerprint.
+  minFootprintCells: 1,
+  maxFootprintCells: 6,
   ...overrides,
 });
 
@@ -61,6 +69,8 @@ describe('parseContent — the happy path', () => {
       constructionCostPence: 250_000,
       demolitionRefundBasisPoints: 5_000,
       requires: ['single_bed'],
+      minFootprintCells: 1,
+      maxFootprintCells: 6,
     });
   });
 
@@ -233,6 +243,29 @@ describe('new content on disk must state both of its prices (G-008)', () => {
       /demolitionRefundBasisPoints/,
     );
     expect(() => parseOne({ demolitionRefundBasisPoints: 0 })).not.toThrow();
+  });
+
+  it('rejects a room type that omits either footprint bound, and demands a whole cell (G-036b)', () => {
+    // THE DOMINANCE ARGUMENT A THIRD TIME, and this one is the largest content addition the
+    // project has made. Silence on disk ships a room type with NO UPPER SIZE — strictly
+    // dominant the moment G-037 scores a room on how big it is, exactly as a missing price was
+    // at G-008 and a missing `requires` at G-009.
+    for (const key of ['minFootprintCells', 'maxFootprintCells']) {
+      expect(() => parseContent([roomTypeWithout(key)])).toThrow(ContentError);
+      expect(() => parseContent([roomTypeWithout(key)])).toThrow(new RegExp(key));
+    }
+    // A BOUND IS A COUNT OF CELLS: whole, and at least one. A maximum of 0 is a room type no
+    // draw could satisfy; a minimum of 0 is vacuous, which would make "absent" and "0" two
+    // spellings of one thing in hashed content — the absence-is-not-emptiness confusion every
+    // optional field in this schema is written to avoid.
+    for (const bad of [0, -1, 2.5, '2']) {
+      expect(() => parseOne({ minFootprintCells: bad })).toThrow(/minFootprintCells/);
+      expect(() => parseOne({ maxFootprintCells: bad })).toThrow(/maxFootprintCells/);
+    }
+    // And the companion ADR-0007 asks for: a legal band is accepted, so the checks above are
+    // not simply always on. A square room type — min and max both 1 — is sayable.
+    expect(() => parseOne({ minFootprintCells: 1, maxFootprintCells: 1 })).not.toThrow();
+    expect(() => parseOne({ minFootprintCells: 4, maxFootprintCells: 40 })).not.toThrow();
   });
 
   it('bounds the refund rate to 0..10000 basis points, and demands an integer', () => {

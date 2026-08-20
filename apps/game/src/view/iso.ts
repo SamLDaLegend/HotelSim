@@ -12,11 +12,13 @@
 //   TILE DIMENSIONS ARE LOCKED. 2:1, 128x64 logical, authored at 2x. The atlas depends on
 //   them, so they are settled before any asset exists (ADR-0047 A2).
 //
-//   WALL HEIGHT IS PROVISIONAL. Its DERIVATION is sound and is stated below. But wall
-//   height is a PERCEPTUAL property, and ADR-0013 says a perceptual criterion needs a
-//   perceptual check. The human's own precedent is the argument: "I predicted 48s/day would
-//   read sluggish, you watched it, it read brisk. The arithmetic was fine and the inference
-//   from arithmetic to feel was wrong." Ship it, look at it, THEN lock it.
+//   WALL HEIGHT WAS PROVISIONAL AND IS NOT ANY MORE. It shipped at 64, WATCH #13 looked at
+//   it, and the look produced a finding rather than a confirmation: a 64px wall covers the
+//   ENTIRE tile behind it, so a room with a room in front of it showed none of its own
+//   contents. It is 24 now, derived from a stated requirement and measured on the shipped
+//   scenario — see `WALL_HEIGHT`. The human's own precedent is why the LOOK had to happen at
+//   all: "I predicted 48s/day would read sluggish, you watched it, it read brisk. The
+//   arithmetic was fine and the inference from arithmetic to feel was wrong."
 // ---------------------------------------------------------------------------------------
 
 /** Tile width in LOGICAL pixels. Locked (ADR-0047 A2). */
@@ -39,26 +41,104 @@ export const TILE_HEIGHT = 64;
 export const ASSET_SCALE = 2;
 
 /**
- * WALL HEIGHT, IN LOGICAL PIXELS. **PROVISIONAL — NOT LOCKED. (ADR-0047 amendment §1,
- * HUMAN RULING.)**
+ * WALL HEIGHT, IN LOGICAL PIXELS. **IT MOVED, 64 -> 24, AND IT IS NO LONGER PROVISIONAL**
+ * (ADR-0047 A2, amendment §1, G-036a's WATCH #13, G-036b).
  *
- * THE DERIVATION, which is correct in form: at 2:1 a tile's screen HEIGHT is the projection
- * of one grid unit of depth, so one grid unit of HEIGHT is the same 64 pixels. A wall is
- * then exactly as tall as its tile is deep, and every vertical rhythm in the picture is an
- * integer multiple of one number.
+ * ==========================================================================================
+ * ADR-0047 amdt §1 (HUMAN) SAID: *"derive it as proposed, ship it, LOOK at it, then lock it"*.
+ * It shipped at 64, WATCH #13 looked at it, and the look produced a FINDING rather than a
+ * confirmation. This is the edit that ruling authorises.
  *
- * WHY THAT IS NOT ENOUGH, AND IT IS THE ADR-0013 ARGUMENT: §2.1 demands a number be
- * SOURCEABLE and ADR-0013 demands a PERCEPTUAL number be SEEN. Those are two requirements,
- * and satisfying the first has twice been mistaken for satisfying the second. **This
- * constant is shipped to be looked at. It is not settled, and it must not be quoted as
- * settled.** When a human has watched a floor and said whether the rooms read as rooms, it
- * is locked here in one edit — or it moves.
+ * **WHAT THE OLD DERIVATION GOT RIGHT AND WHAT IT LEFT OUT.** At 2:1 a tile's screen height is
+ * the projection of one grid unit of depth, so a wall one grid unit tall is 64px and "a wall is
+ * exactly as tall as its tile is deep". That is sound geometry, and it is **an argument about
+ * one wall in isolation**. What it never asked is what that wall does to the tile BEHIND it —
+ * and the answer, exactly, is:
+ *
+ *   > A WALL COVERS THE NEAR `H / TILE_HEIGHT` OF THE TILE BEHIND IT, measured down the screen
+ *   > from that tile's near corner. **At H = 64 that is the whole tile.**
+ *
+ * So the old value did not merely occlude a little. It was the unique value at which a room
+ * with a room in front of it shows NOTHING of its own floor.
+ *
+ * **WATCH #13 NAMED TWO CANDIDATE REPAIRS — a shorter wall, or a front-anchored item — AND THE
+ * SECOND IS FALSIFIED.** Measured on the shipped scenario at scale 1.000, one arm per anchor,
+ * same world and same code path: at H = 64 the shipped anchor `centre.y - 16` shows **3 of 9**
+ * item plates on floor 1, and moving the anchor to `centre.y`, `+8` or `+16` shows **3 of 9**
+ * in every case. Moving an item toward the near lip cannot help, because the near lip is the
+ * MOST occluded band rather than the least: the occluding wall stands ON the tile's near edge
+ * and rises from there. WATCH #13 offered the two as equals; they are not.
+ *
+ * **SO: A SHORTER WALL, AND THE NUMBER IS DERIVED FROM A STATED REQUIREMENT.**
+ *
+ *   REQUIREMENT — an item standing in a room must be fully visible when a room stands directly
+ *   in front of it. Stated by WATCH #13 (*"a WATCH surface in which 21 of 24 rooms show none of
+ *   their contents cannot show the next two goals' mechanic"*), and load-bearing rather than
+ *   cosmetic: `placeItem` is G-036b's primary player verb and G-037 scores a room on what is in
+ *   it.
+ *
+ *   GEOMETRY — the occluding wall's top edge, at horizontal offset `dx` from the tile's centre,
+ *   sits `HALF_HEIGHT - |dx| / 2 - H` below that centre. `ITEM_ANCHOR_RISE`, `ITEM_SIZE` and
+ *   `ITEM_PLATE_PAD` below put the item's plate between `centre.y - 18` and `centre.y - 2`,
+ *   reaching `|dx| = 14`. The binding case is the plate's lower outer corner.
+ *
+ *   **COMPUTED RATHER THAN HAND-DERIVED, AND THE HAND DERIVATION WAS WRONG BY TWO.**
+ *   `tools/headless/src/wall-height.occlusion.test.ts` builds the actual wall polygon from
+ *   `edgeOf` and the actual plate from the three constants below, and walks every integer
+ *   height: **the first height at which any part of the band is covered is 28.** The first
+ *   version of this paragraph reasoned to `H < 30`, because it measured the item SQUARE and the
+ *   visible thing is the PLATE around it. The test is the authority and the number here follows
+ *   it — which is the whole reason the criterion is a computation rather than a sentence.
+ *
+ * **24 IS A PREFERENCE INSIDE THAT BOUND AND SHIPS LABELLED AS ONE** (ADR-0013 §4). It is
+ * `TILE_HEIGHT * 3 / 8`, it leaves the far five eighths of every tile clear, and it sits 4px
+ * inside the bound rather than on it. What can be said about the two ends comes from LOOKING at
+ * rendered frames of the shipped scenario rather than from arithmetic: at **16** the walls read
+ * as kerbs and the enclosure WATCH #13 credited to the old value is gone; at **27** the
+ * criterion holds by one pixel, which is not a margin.
+ *
+ * **THE VERTICAL-RHYTHM ARGUMENT SURVIVES IN THE FORM THAT WAS TRUE.** ADR-0047 A2 wanted every
+ * vertical measure to be an exact rational of one number; 24 is `TILE_HEIGHT * 3 / 8` and
+ * `HALF_HEIGHT * 3 / 4`, so no atlas dimension moves. **TILE DIMENSIONS ARE UNTOUCHED** — A2
+ * locked those, and this is the one constant it deliberately left free.
+ * ==========================================================================================
  */
-export const WALL_HEIGHT = 64;
+export const WALL_HEIGHT = 24;
 
 /** Half a tile, which is what every projection line below is actually written in terms of. */
 const HALF_WIDTH = TILE_WIDTH / 2;
-const HALF_HEIGHT = TILE_HEIGHT / 2;
+export const HALF_HEIGHT = TILE_HEIGHT / 2;
+
+/**
+ * WHERE A THING STANDING IN A ROOM IS DRAWN, RELATIVE TO ITS TILE'S CENTRE (G-036b).
+ *
+ * ==========================================================================================
+ * THESE THREE NUMBERS LIVED AS LITERALS INSIDE `drawItems` UNTIL G-036b, AND THAT IS WHERE
+ * `WALL_HEIGHT` WENT WRONG. Wall height and item anchor are not two independent choices: a
+ * wall of height H covers the near `H / TILE_HEIGHT` of the tile behind it, so whether a room's
+ * contents are visible is a fact about **both** numbers and neither one alone. With the anchor
+ * hidden in the renderer, the wall height was derived from the tile in isolation, shipped at 64
+ * — the unique value that covers the WHOLE tile behind it — and the consequence was not found
+ * until a human looked at a frame (WATCH #13).
+ *
+ * SO THEY SIT BESIDE `WALL_HEIGHT`, in the module that owns the projection, and
+ * `iso-depth.test.ts` computes the clearance from these and the wall quad rather than asserting
+ * a number. `scene.ts` reads them, so the picture and the check cannot drift apart.
+ *
+ * IT ALSO PUTS THEM ON THE RIGHT SIDE OF THE `tools/` FENCE. `.dependency-cruiser.cjs` lets
+ * `tools/` reach `palette.ts`, `iso.ts` and `depth.ts` and nothing else in `apps/`, because
+ * anything else drags Pixi and the DOM into the sim-side test tree. A criterion about the
+ * relationship between two projection constants belongs in the module the fence already
+ * trusts — moving the fence to reach the criterion would have been the wrong repair.
+ * ==========================================================================================
+ */
+export const ITEM_ANCHOR_RISE = 16;
+
+/** The side of the coloured square an item is drawn as, at scale 1. */
+export const ITEM_SIZE = 12;
+
+/** How far the dark plate under an item extends past it on every side. */
+export const ITEM_PLATE_PAD = 2;
 
 /**
  * Which way the camera is looking, in 90-degree steps.

@@ -48,6 +48,7 @@ import { run, stepTick } from './tick.js';
 import { compareProviderPreference, MAX_FIT_BASIS_POINTS, pressureBasisPoints } from './utility.js';
 import { createWorld } from './world.js';
 import type { World } from './world.js';
+import { UNIT_FOOTPRINT } from './grid.js';
 
 const roomType = (
   id: string,
@@ -376,7 +377,7 @@ describe('the provider comparator is TOTAL and EXPLICIT — fit descending, then
   // comparator that returns 0 for two distinct providers would hand the order to whatever
   // the sort algorithm does with equal elements. That is the Set-iteration hazard wearing
   // a different hat, so the comparator is total by construction and this says so.
-  const provider = (id: number, kind: string) => ({ id, kind, at: null });
+  const provider = (id: number, kind: string) => ({ id, kind, at: null, footprint: UNIT_FOOTPRINT });
 
   it('puts the higher fit first whatever the ids', () => {
     const cafe = provider(9, 'cafe');

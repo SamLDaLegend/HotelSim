@@ -60,7 +60,7 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v18', () => {
+  it('is a v1 blob, and this build now writes v19', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
@@ -83,7 +83,7 @@ describe('I6 stored v1 save fixture', () => {
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(18);
+    expect(SAVE_SCHEMA_VERSION).toBe(19);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -96,15 +96,19 @@ describe('I6 stored v1 save fixture', () => {
     const before = (JSON.parse(SAVE_V1_BYTES) as { world: Record<string, unknown> }).world;
     const after = (JSON.parse(serialise(deserialise(SAVE_V1_BYTES))) as { world: Record<string, unknown> }).world;
     for (const key of Object.keys(before)) {
-      // `entities` is the one v1 field a later migration touches, and it touches it in
-      // exactly one way: every entity gains `at: null` (G-007). Checked field by field
-      // rather than waved past, so a migration that changed anything ELSE about an
-      // entity would fail here.
+      // `entities` is the one v1 field later migrations touch, and they touch it in exactly
+      // TWO ways: every entity gains `at: null` (G-007, the 2 -> 3 step) and every entity
+      // gains a one-cell `footprint` (G-036b, the 18 -> 19 step). Checked field by field
+      // rather than waved past, so a migration that changed anything ELSE about an entity
+      // would fail here — and the LITERAL below is the point of the test: it says what a v1
+      // entity becomes, rather than reading it back out of the code that produced it.
       if (key === 'entities') {
         const beforeStore = before[key] as { nextId: number; list: Record<string, unknown>[] };
         const afterStore = after[key] as { nextId: number; list: Record<string, unknown>[] };
         expect(afterStore.nextId).toBe(beforeStore.nextId);
-        expect(afterStore.list).toEqual(beforeStore.list.map((entity) => ({ ...entity, at: null })));
+        expect(afterStore.list).toEqual(
+          beforeStore.list.map((entity) => ({ ...entity, at: null, footprint: { columns: 1, rows: 1 } })),
+        );
         continue;
       }
       expect(after[key]).toEqual(before[key]);

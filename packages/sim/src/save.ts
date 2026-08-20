@@ -25,7 +25,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 18;
+export const SAVE_SCHEMA_VERSION = 19;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -219,8 +219,23 @@ function migrateV2ToV3(world: unknown): unknown {
  * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`
  * forbids this file from naming `createBuildOutcomes` or `BUILD_REFUSAL_REASONS` in
  * executable code.
+ *
+ * ==========================================================================================
+ * THE PREDICTION CAME TRUE AT G-036b, AND THE TYPE ANNOTATION HAD TO GO WITH IT. The paragraph
+ * above said `BuildRefusalReason` "WILL grow"; it grew by three (`footprintTooLarge`,
+ * `footprintTooSmall`, `notInRoom`) and `BuildOutcomes` gained `placed`. So this literal no
+ * longer satisfies today's `BuildOutcomes` — which is the divergence the docblock predicted,
+ * arriving exactly as described, and the annotation was the only thing forcing the two
+ * together.
+ *
+ * IT IS TYPED AS ITS OWN ERA'S SHAPE NOW. Annotating it `BuildOutcomes` again — or, worse,
+ * adding today's keys to it — would restore the drift this comment exists to forbid: the same
+ * v3 bytes would start producing a v4 world carrying counters for refusals that did not exist
+ * when they were written. What carries a v4 world forward to today's shape is
+ * `migrateV18ToV19`, which is where a field added in 2026 belongs.
+ * ==========================================================================================
  */
-const V4_MIGRATION_BUILD_OUTCOMES: BuildOutcomes = Object.freeze({
+const V4_MIGRATION_BUILD_OUTCOMES = Object.freeze({
   built: 0,
   demolished: 0,
   refused: Object.freeze({ insufficientFunds: 0, noSuchRoom: 0, occupied: 0, outOfBounds: 0 }),
@@ -1818,6 +1833,124 @@ function migrateV17ToV18(world: unknown): unknown {
 }
 
 /**
+ * THE FOOTPRINT EVERY HISTORICAL ENTITY GETS, FROZEN AT THE MOMENT v19 WAS DEFINED.
+ *
+ * A LITERAL, and it must stay one, for the reason `V4_MIGRATION_BUILD_OUTCOMES` gives at
+ * length: `UNIT_FOOTPRINT` in `grid.ts` holds the same two numbers today and the two are
+ * allowed to diverge. A migration's output must be a pure function of its input bytes and of
+ * its own era. The source scan in
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts` is what
+ * keeps this file from reaching for the live constant.
+ */
+const V19_MIGRATION_FOOTPRINT = Object.freeze({ columns: 1, rows: 1 });
+
+/**
+ * THE BUILD COUNTERS A v18 WORLD IS CARRIED ONTO, frozen the same way and for the same reason.
+ *
+ * SEVEN REFUSAL REASONS RATHER THAN FOUR, because the union grew by three in this goal, and
+ * `placed` because `placeItem` is new. Every one of them is ZERO, and zero is the true count
+ * rather than a placeholder: a v18 world is not a world whose new counters were left out of
+ * the file, it is a world in which **the rules and the command did not exist**, so no draw was
+ * ever refused for size, no item was ever placed in the wrong cell, and no item was ever
+ * placed at all. That is the v3 -> v4 step's argument verbatim, and it is the stronger kind —
+ * nothing here is unknown.
+ */
+const V19_MIGRATION_BUILD_OUTCOMES = Object.freeze({
+  built: 0,
+  demolished: 0,
+  placed: 0,
+  refused: Object.freeze({
+    footprintTooLarge: 0,
+    footprintTooSmall: 0,
+    insufficientFunds: 0,
+    noSuchRoom: 0,
+    notInRoom: 0,
+    occupied: 0,
+    outOfBounds: 0,
+  }),
+});
+
+/**
+ * v18 -> v19: a world that predates player-drawn footprints (G-036b, ADR-0046 §4.2).
+ *
+ * ==========================================================================================
+ * THE HISTORICAL READING, WHICH IS THE ONLY NON-INVENTIVE ONE: **a v18 room had no footprint
+ * and occupied one cell.** Not "a footprint we do not know" — the concept did not exist, so
+ * every room, every item and every unplaced entity in every world ever written by this project
+ * took up exactly its own cell, and `{ columns: 1, rows: 1 }` states that fact rather than
+ * choosing a default. A migrated world's validity verdicts are therefore byte-identical to the
+ * ones its bytes described: the same cells are covered, the same neighbours are free, the same
+ * rooms are grounded. That is the same test `migrateV16ToV17` had to pass for the row axis and
+ * `migrateV17ToV18` for corridors, and it is the reason this step needs no plot change either.
+ *
+ * IT CARRIES TWO FIELDS, NOT ONE, AND THE SECOND IS THE ONE A READER WOULD MISS. Every entity
+ * gains `footprint`; `buildOutcomes` gains `placed` and three refusal counters. Without the
+ * second half a v18 world would load with `placed: undefined`, `totalBuildOutcomes` would fold
+ * it into `NaN`, and the per-tick law in `applyCommands` would compare `NaN` against a command
+ * count on the first tick that built anything — a defect three subsystems from its cause.
+ * `assertBuildOutcomes` checks `placed` and rejects an unknown refusal key, so this step is
+ * FORCED rather than remembered.
+ *
+ * THE ONE WAY THIS STEP COULD DESTROY DATA — overwriting a footprint somebody drew — is the
+ * one thing it refuses to do, exactly as all eighteen earlier steps refuse.
+ * `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an own key
+ * (G-003).
+ * ==========================================================================================
+ */
+function migrateV18ToV19(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const entities = world['entities'];
+  if (!isRecord(entities)) {
+    throw new Error('Save is corrupt: world.entities is missing or not an object');
+  }
+  const list = entities['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.entities.list is missing or not an array');
+  }
+  const migratedList = list.map((entity: unknown, index: number): unknown => {
+    if (!isRecord(entity)) {
+      throw new Error(`Save is corrupt: world.entities.list[${index}] is not an object`);
+    }
+    if (Object.keys(entity).includes('footprint')) {
+      throw new Error(
+        `world.entities.list[${index}] already has a "footprint" field, so it is not a v18 entity; ` +
+          'migrating it would overwrite a real drawn footprint',
+      );
+    }
+    return { ...entity, footprint: V19_MIGRATION_FOOTPRINT };
+  });
+  const outcomes = world['buildOutcomes'];
+  if (!isRecord(outcomes)) {
+    throw new Error('Save is corrupt: world.buildOutcomes is missing or not an object');
+  }
+  if (Object.keys(outcomes).includes('placed')) {
+    throw new Error(
+      'world.buildOutcomes already has a "placed" field, so it is not a v18 world; migrating it would ' +
+        'overwrite a real count of placed items',
+    );
+  }
+  const refused = outcomes['refused'];
+  if (!isRecord(refused)) {
+    throw new Error('Save is corrupt: world.buildOutcomes.refused is missing or not an object');
+  }
+  return {
+    ...world,
+    entities: { ...entities, list: migratedList },
+    buildOutcomes: {
+      ...outcomes,
+      placed: V19_MIGRATION_BUILD_OUTCOMES.placed,
+      // THE NEW COUNTERS FIRST, THE SAVE'S OWN COUNTS SECOND, so a v18 world's real
+      // `occupied` and `outOfBounds` tallies survive and only the three reasons that did not
+      // exist are written. Spreading the era literal the other way round would silently zero
+      // a player's recorded refusal history.
+      refused: { ...V19_MIGRATION_BUILD_OUTCOMES.refused, ...refused },
+    },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1843,6 +1976,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 15, to: 16, migrate: migrateV15ToV16 }),
   Object.freeze({ from: 16, to: 17, migrate: migrateV16ToV17 }),
   Object.freeze({ from: 17, to: 18, migrate: migrateV17ToV18 }),
+  Object.freeze({ from: 18, to: 19, migrate: migrateV18ToV19 }),
 ]);
 
 /**
@@ -2057,6 +2191,37 @@ function assertEntity(value: unknown, index: number): asserts value is Entity {
       if (typeof at[key] !== 'number') {
         throw new Error(`Save is corrupt: world.entities.list[${index}].at.${key} is not a number`);
       }
+    }
+  }
+  // ==========================================================================================
+  // THE FOOTPRINT (G-036b, v19), AND THIS CLAUSE IS OWED RATHER THAN OPTIONAL.
+  //
+  // `save.test.ts`'s field-coverage generator reads `WORLD_KEYS`, which is TOP-LEVEL ONLY — so
+  // it generates a "refuses a save with no world.entities" case and NOTHING about a field
+  // inside an entity. A v19 save missing `footprint` would therefore load: `roomCellsOf` would
+  // read `undefined.columns` and throw somewhere unrelated, or — with the wrong kind of
+  // defensive coding downstream — fold over nothing and let `computeRoomInvalidity` answer
+  // "vacuously fine", which is the failure mode `validity.ts` already names for `unplaced`.
+  // `footprint.save.test.ts` drives every branch below, because a clause nothing exercises is
+  // the ADR-0007 shape inside the check written to prevent it.
+  //
+  // PRESENT AND A RECORD OF TWO NUMBERS. Shape only here, exactly as `at` is shape-only:
+  // `assertEntityStoreInvariants` owns what a LEGAL footprint is — positive, integral, on the
+  // plot — against the plot the SAVE carries, and that definition is shared with the tick
+  // rather than written twice. A FRACTIONAL extent is not caught here and must not be expected
+  // to be, for the reason the `at.row` note above gives: a float is finite, so `canonicalise`
+  // will not catch it either.
+  // ==========================================================================================
+  if (!Object.keys(value).includes('footprint')) {
+    throw new Error(`Save is corrupt: world.entities.list[${index}].footprint is missing`);
+  }
+  const footprint = value['footprint'];
+  if (!isRecord(footprint)) {
+    throw new Error(`Save is corrupt: world.entities.list[${index}].footprint is not a footprint`);
+  }
+  for (const axis of ['columns', 'rows'] as const) {
+    if (typeof footprint[axis] !== 'number') {
+      throw new Error(`Save is corrupt: world.entities.list[${index}].footprint.${axis} is not a number`);
     }
   }
 }

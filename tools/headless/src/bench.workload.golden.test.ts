@@ -302,7 +302,18 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   so a room's distance from the door costs nothing — and because every room in the plate
     //   has the same free lane beside it that it had when the plate was a line. Sixty rooms in
     //   a different arrangement, serving the same guests in the same order.
-    expect(hashState(plain)).toBe('fbbb35b464f13368');
+    //   `fbbb35b464f13368` -> `4955bc697f128ae5`   G-036b gave a room INSTANCE a footprint.
+    //   TWO causes, both shape and neither behavioural: every entity gained a `footprint` and
+    //   `buildOutcomes` gained `placed` plus three refusal counters (save v19), AND
+    //   `World.contentHash` moved because `room-types.json` gained `minFootprintCells` and
+    //   `maxFootprintCells` — the largest content-field addition this project has made.
+    //   **THE CONTROL IS THE FULL BLOCK AGAIN**: arrivals, checkouts, `leftDissatisfied`,
+    //   evictions, the departure table, the need rows and the abandonment count are every one
+    //   of them UNCHANGED. They can be, because every room this workload builds is ONE CELL —
+    //   `--rooms` seeds through `spawnEntity` with no footprint and `--build` dispatches
+    //   `buildRoom`, which IS `drawRoom` at `UNIT_FOOTPRINT` — so a footprint-aware placement
+    //   index returns exactly what the origin-keyed one returned, cell for cell.
+    expect(hashState(plain)).toBe('4955bc697f128ae5');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -443,7 +454,13 @@ describe('the same workload with the player churning the building', () => {
     // THE SHARP CONTROL HOLDS FOR THE ELEVENTH TIME: 19 evictions, unchanged, in the goal that
     // gave the plot depth and re-laid every layout in the tree — the churn schedule demolishes
     // the same rooms out from under the same guests.
-    expect(hashState(churn)).toBe('c06e0719c4b65235');
+    // MOVED AT G-036b WITH ITS SIBLING, `c06e0719c4b65235` -> `eb25a99e0fbedbc2`, for the two
+    // causes the plain row gives and no third one: this arm builds, but it builds through
+    // `buildRoom`, which is `drawRoom` at one cell, so not one rectangle in this workload is
+    // wider than the rectangles it has always had. THE SHARP CONTROL HOLDS FOR THE TWELFTH
+    // TIME: 19 evictions, unchanged, in the goal that made a room a rectangle — the churn
+    // schedule demolishes the same rooms out from under the same guests.
+    expect(hashState(churn)).toBe('eb25a99e0fbedbc2');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

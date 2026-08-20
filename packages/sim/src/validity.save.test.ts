@@ -28,7 +28,7 @@ import {
   SAVE_V1_CONTENT,
   SAVE_V1_CONTENT_FINGERPRINT,
 } from './fixtures/save-v1.js';
-import { createGridBounds, GROUND_FLOOR } from './grid.js';
+import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell } from './grid.js';
 import { balanceOf, sumByReason } from './ledger.js';
 import {
@@ -80,26 +80,26 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
 /** A world holding one room of every invalidity reason, and one that works. */
 function worldOfEveryReason(): World {
   const list: Entity[] = [
-    { id: 1, kind: 'bedroom', at: null }, //                        unplaced
-    { id: 2, kind: 'bedroom', at: cell(9, 10) }, //                 unsupported
-    { id: 3, kind: 'bed', at: cell(9, 10) },
-    { id: 4, kind: 'bedroom', at: cell(GROUND_FLOOR, 20) }, //      missingItem
-    { id: 5, kind: 'bedroom', at: cell(GROUND_FLOOR, 30) }, //      noDoor
-    { id: 6, kind: 'bed', at: cell(GROUND_FLOOR, 30) },
-    { id: 7, kind: 'bedroom', at: cell(GROUND_FLOOR, 29) },
-    { id: 8, kind: 'bed', at: cell(GROUND_FLOOR, 29) },
-    { id: 9, kind: 'bedroom', at: cell(GROUND_FLOOR, 31) },
-    { id: 10, kind: 'bed', at: cell(GROUND_FLOOR, 31) },
+    { id: 1, kind: 'bedroom', at: null, footprint: UNIT_FOOTPRINT }, //                        unplaced
+    { id: 2, kind: 'bedroom', at: cell(9, 10), footprint: UNIT_FOOTPRINT }, //                 unsupported
+    { id: 3, kind: 'bed', at: cell(9, 10), footprint: UNIT_FOOTPRINT },
+    { id: 4, kind: 'bedroom', at: cell(GROUND_FLOOR, 20), footprint: UNIT_FOOTPRINT }, //      missingItem
+    { id: 5, kind: 'bedroom', at: cell(GROUND_FLOOR, 30), footprint: UNIT_FOOTPRINT }, //      noDoor
+    { id: 6, kind: 'bed', at: cell(GROUND_FLOOR, 30), footprint: UNIT_FOOTPRINT },
+    { id: 7, kind: 'bedroom', at: cell(GROUND_FLOOR, 29), footprint: UNIT_FOOTPRINT },
+    { id: 8, kind: 'bed', at: cell(GROUND_FLOOR, 29), footprint: UNIT_FOOTPRINT },
+    { id: 9, kind: 'bedroom', at: cell(GROUND_FLOOR, 31), footprint: UNIT_FOOTPRINT },
+    { id: 10, kind: 'bed', at: cell(GROUND_FLOOR, 31), footprint: UNIT_FOOTPRINT },
     // THE THIRD BLOCKER, BEHIND ROOM 5 (G-036a). The shipped plot has depth, so a room walled
     // in east and west has a free cell at row 1 and is not sealed at all — room 5 came back
     // VALID and this world stopped containing a `noDoor`. Room 5 stands on the plot's FRONT
     // row, so the cell in front of it is off the plot and three blockers are what it takes.
-    { id: 11, kind: 'bedroom', at: cell(GROUND_FLOOR, 30, 1) },
-    { id: 12, kind: 'bed', at: cell(GROUND_FLOOR, 30, 1) },
-    { id: 13, kind: 'bedroom', at: cell(GROUND_FLOOR, 50) }, //     valid
-    { id: 14, kind: 'bed', at: cell(GROUND_FLOOR, 50) },
-    { id: 15, kind: 'bedroom', at: cell(GROUND_FLOOR, 60) }, //     noCorridor
-    { id: 16, kind: 'bed', at: cell(GROUND_FLOOR, 60) },
+    { id: 11, kind: 'bedroom', at: cell(GROUND_FLOOR, 30, 1), footprint: UNIT_FOOTPRINT },
+    { id: 12, kind: 'bed', at: cell(GROUND_FLOOR, 30, 1), footprint: UNIT_FOOTPRINT },
+    { id: 13, kind: 'bedroom', at: cell(GROUND_FLOOR, 50), footprint: UNIT_FOOTPRINT }, //     valid
+    { id: 14, kind: 'bed', at: cell(GROUND_FLOOR, 50), footprint: UNIT_FOOTPRINT },
+    { id: 15, kind: 'bedroom', at: cell(GROUND_FLOOR, 60), footprint: UNIT_FOOTPRINT }, //     noCorridor
+    { id: 16, kind: 'bed', at: cell(GROUND_FLOOR, 60), footprint: UNIT_FOOTPRINT },
   ];
   // AND THE PLAN THAT MAKES TWO OF THOSE ROOMS DIFFER (G-034b). The ground floor is PLANNED —
   // it carries corridors — so every room on it has to open onto one, and the corridor at

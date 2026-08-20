@@ -8,7 +8,9 @@
     "constructionCostPence": 250000,
     "demolitionRefundBasisPoints": 5000,
     "provides": ["night_rest"],
-    "requires": ["single_bed"]
+    "requires": ["single_bed"],
+    "minFootprintCells": 1,
+    "maxFootprintCells": 6
   },
   {
     "id": "hotel_lounge",
@@ -19,7 +21,9 @@
     "constructionCostPence": 250000,
     "demolitionRefundBasisPoints": 5000,
     "provides": [],
-    "requires": ["arm_chair"]
+    "requires": ["arm_chair"],
+    "minFootprintCells": 1,
+    "maxFootprintCells": 24
   },
   {
     "id": "games_room",
@@ -31,6 +35,8 @@
     "demolitionRefundBasisPoints": 5000,
     "provides": ["guest_entertainment"],
     "requires": ["vending_machine"],
+    "minFootprintCells": 1,
+    "maxFootprintCells": 24,
     "fitBasisPoints": 7500
   },
   {
@@ -43,6 +49,8 @@
     "demolitionRefundBasisPoints": 5000,
     "provides": ["guest_nourishment"],
     "requires": [],
+    "minFootprintCells": 1,
+    "maxFootprintCells": 24,
     "fitBasisPoints": 7500
   }
 ]

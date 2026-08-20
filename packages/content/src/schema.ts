@@ -309,6 +309,66 @@ export const fitBasisPointsSchema = basisPointsSchema.optional();
  */
 export const spriteRefSchema = z.string().min(1);
 
+/**
+ * HOW BIG A ROOM OF THIS TYPE MAY BE DRAWN, IN CELLS (G-036b, ADR-0046 §4.2).
+ *
+ * ---------------------------------------------------------------------------
+ * A ROOM TYPE IS A CONSTRAINT SET NOW, AND THESE ARE ITS TWO SIZE CLAUSES. ADR-0046 §4.2:
+ * "a room type becomes a constraint set: min/max footprint, required items, forbidden
+ * adjacencies, what need it can serve"; the player draws the rectangle and the type says
+ * which rectangles are acceptable. `drawRoom` refuses a draw outside the band and RECORDS
+ * the refusal (`footprintTooSmall` / `footprintTooLarge`) rather than throwing.
+ *
+ * AREA, NOT AXES. "At least four cells" is one number a designer can hold; "at least two
+ * columns and two rows" is two numbers that forbid a 1x8 room nobody objected to. Area is
+ * also the quantity that survives camera rotation (ADR-0047 A5) and the quantity G-037's
+ * size term will read.
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `requires` and price contract exactly, and BOTH
+ * halves matter more in this field than in any other in this file:
+ *
+ *   SILENCE ON DISK is an oversight that ships a room type with NO UPPER SIZE. Today that
+ *   buys nothing, because nothing scores a room on how big it is; the moment G-037 does, an
+ *   unbounded room type is strictly dominant on the axis the whole mechanic is about. That
+ *   is the shape a missing `constructionCostPence` had at G-008 and a missing `requires`
+ *   had at G-009, arriving a third time.
+ *
+ *   SILENCE IN HISTORY is a true statement, and it is what protects the permanent v1
+ *   fixture. `SAVE_V1_CONTENT` never passes through this schema; it is a frozen literal,
+ *   and a REQUIRED field would stop it typechecking while adding the field would move its
+ *   `8e09fe4f0fa162a3` fingerprint — which is the `contentHash` INSIDE the frozen bytes, so
+ *   the fixture would load and never tick again (ADR-0006). `RoomTypeData` in
+ *   `packages/sim/src/content.ts` therefore keeps both keys optional, reading absence as
+ *   "at least one cell" and "no maximum" — the only readings content that predates
+ *   footprints supports, since every room it could describe was one cell.
+ *
+ * AT LEAST 1, NOT AT LEAST 0. A maximum of 0 is a room type no draw could satisfy and a
+ * minimum of 0 is vacuous, which would make "absent" and "0" two spellings of one thing in
+ * hashed content — the absence-is-not-emptiness confusion every optional field here is
+ * written to avoid. `bindContent` refuses both, and refuses a minimum above the maximum.
+ *
+ * THE SHIPPED NUMBERS ARE DIALS AND SHIP LABELLED AS DIALS (ADR-0013 §4). Nothing anybody has
+ * stated derives them, and §2.1's derivation requirement is about GATE THRESHOLDS rather than
+ * about balance numbers, so what is offered here is the CONSEQUENCE rather than a proof:
+ *
+ *   EVERY MINIMUM IS 1, which is the permissive end of the range, and it is chosen so that a
+ *   one-cell `buildRoom` stays legal for every room type. That is not a preference — it is
+ *   forced: `buildRoom` IS `drawRoom` at one cell, and every harness, golden and recorded
+ *   replay in this project builds one-cell rooms. A minimum above 1 on any shipped type would
+ *   make an existing command start being refused, which is a behaviour change wearing a
+ *   balance number. The rule is still exercised, by a discriminating test on synthetic
+ *   content; what is not exercised is a shipped type refusing a shipped draw, and that is a
+ *   fact about the values rather than about the rule.
+ *
+ *   THE MAXIMA SAY WHAT KIND OF SPACE EACH TYPE IS. 6 for a bedroom and 24 for the amenities:
+ *   a bedroom is a cell or two with a bed in it and an amenity is a hall people move around
+ *   in, and 24 is three of the shipped plot's eight rows across its full depth. The number
+ *   that will actually be argued about is the one G-037 gives it a job — a size term in the
+ *   room score — and it is content precisely so that argument is a JSON edit.
+ * ---------------------------------------------------------------------------
+ */
+export const footprintCellsSchema = z.int().min(1);
+
 export const roomTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
@@ -320,6 +380,8 @@ export const roomTypeSchema = z.strictObject({
   provides: z.array(contentIdSchema).optional(),
   requires: z.array(contentIdSchema),
   fitBasisPoints: fitBasisPointsSchema,
+  minFootprintCells: footprintCellsSchema,
+  maxFootprintCells: footprintCellsSchema,
   sprite: spriteRefSchema.optional(),
 });
 

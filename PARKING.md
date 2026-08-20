@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. THE WALL-HEIGHT RULING IS DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED rather than rejected: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished; it becomes a derived per-instance fold at the scoring goal. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2783,3 +2783,64 @@ implies and this goal did not build.
   rows' walls bury them, then either `WALL_HEIGHT` is too tall for a deep plate or the camera
   owes a cutaway — and the 64px reading taken at depth 3 was taken at the wrong depth.*
   -> **G-036b**, which puts a player-drawn room on that surface and has to look at it anyway.
+
+## From G-036b — the player draws a room (2026-08-20)
+
+- **THE DEPTH-8 HYPOTHESIS IS DISCHARGED, POSITIVE, BY THE GOAL IT WAS POINTED AT.** G-036a
+  parked *"the WATCH surface shows three of the plot's eight rows, and nobody has seen eight"*
+  with its test — *raise `LODGING_ROWS` to 8, record, and look* — and predicted two ways it could
+  fail: *"either `WALL_HEIGHT` is too tall for a deep plate or the camera owes a cutaway"*.
+  **RUN.** `LODGING_ROWS = 8` gives a 3-wide by 8-deep plate, 24 rooms on floor 1, 88 corridors
+  declared, and **every one of the 24 beds is visible with the back rows legible.** The camera
+  owes no cutaway and the wall height is fine at the plot's full depth. *(The scenario itself
+  stays at 3: the depth of the SHIPPED layout is a separate question from whether the projection
+  survives depth, and this test only ever asked the second.)* **Sixth parked hypothesis settled by
+  a goal running someone else's experiment.** Closed.
+
+- **AN ITEM COSTS NOTHING, AND `placeItem` IS NOW THE PRIMARY PLAYER VERB.** `applyPlaceItem`
+  books no transaction: an item price is a designer's number and `ItemTypeData` has no such
+  field, so inventing one here would ship a price nobody balanced — and booking it as
+  `construction` would break `countConstructionTransactions(ledger) === built`, the
+  cross-subsystem law G-008's evidence rests on. **FALSIFICATION TEST**: *if a run can raise a
+  hotel's satisfaction by placing items and never move the balance, the item price is
+  load-bearing and belongs in content.* That run becomes possible the moment a room is scored on
+  what is in it. -> **G-037**, which builds the scorer, or M4 with the rest of the prices.
+
+- **A FOOTPRINT IS A SINGLE RECTANGLE, WHICH IS NARROWER THAN ADR-0047 B1 ASKED FOR.** B1 wanted
+  *"a polygon-capable representation holding a rectangle, so arbitrary shapes are a later goal
+  rather than a later migration"*; what shipped is an origin plus an extent, which is B1's "two
+  corners in the save" and not its polygon clause. The reason is the standard this project
+  already applies to a content field with no consumer: nothing can produce a two-part footprint,
+  no rule reads a second part, and no test could falsify the code that walks one.
+  **FALSIFICATION TEST**: *when an L-shaped room is actually wanted, count what the migration
+  costs — one field's shape, on a chain that runs eighteen steps and is exercised on every load
+  — against what a year of carrying an unexercised `parts` array cost.* If the migration is the
+  cheaper number, this call was right. -> whichever goal wants a non-rectangular room.
+
+- **`layCorridor` STAYS ONE CELL, AND THE DAY THAT STOPS BEING RIGHT HAS A NAME.** Asked the same
+  question `buildRoom` was asked and answered differently: a corridor is a DECLARATION about a
+  cell — idempotent, free, entity-less — so drawing a rectangle of corridor is N idempotent
+  no-ops, which N commands already are. A rectangle form would buy bytes in a log and cost a
+  second entry point in the one command whose design note is *"it does not ask what is standing
+  there"*. **FALSIFICATION TEST**: *the day a corridor gains a COST, ask whether that cost is per
+  CELL or per DRAW. If it is per draw, a rectangle is a thing the log has to be able to express
+  and the cell form cannot express it.* -> the goal that prices circulation, M4 or later.
+
+- **THE THIRD ITEM ON A TILE HAS A CORNER CLIPPED, AND IT IS THE ITEM LAYOUT RATHER THAN THE
+  WALL.** `drawItems` marches items RIGHTWARD from the tile centre, so item index 2 sits where
+  the front-right neighbour's wall foot is already high: measured at the shipped wall height, one
+  of its five probes is covered (`wall-height.occlusion.test.ts` asserts exactly that, so it is a
+  recorded fact rather than a silence). Indices 0 and 1 are entirely clear, and **no shipped room
+  type requires more than one item** — so this is a state only `placeItem` produces, and it is a
+  clipped corner on a dark plate rather than a hidden item. **FALSIFICATION TEST**: *if
+  `drawItems` ever lays items out within the tile's own diamond instead of marching them off its
+  right edge, that expectation drops to 0 and the general arm above covers it.* No wall height
+  inside the useful range fixes it. -> a render-layout goal, with G-037's decor items.
+
+- **AN ITEM'S CELL IS THE PLAYER'S CHOICE AND NOTHING READS IT.** `placeItem` takes a cell, and
+  WHERE in a room an item stands is now a decision a player makes — but `hostRoomOf` only asks
+  which room covers it, so every cell of a room is the same cell to every rule. **FALSIFICATION
+  TEST**: *if G-037's scorer or G-038's pathing ever reads an item's position relative to the
+  room's — a bed against a wall, a queue point by the door — then position is state that matters
+  and the editing verbs owe it a move command.* Until then a player who cares where the bed is,
+  is expressing a preference the simulation cannot see. -> **G-036c**, which owns the moving.

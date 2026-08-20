@@ -113,19 +113,38 @@ export function sortDrawables<T>(items: readonly Drawable<T>[]): readonly Drawab
 }
 
 /**
- * MULTI-TILE ITEMS ARE FORBIDDEN UNTIL A GOAL HANDLES THEM, AND THIS THROWS RATHER THAN
- * SAYING SO IN A COMMENT (ADR-0047 A3, and it is the ADR's own wording: "that prohibition is
- * a check, not a comment").
+ * A DRAWABLE OCCUPIES ONE TILE, AND THIS THROWS RATHER THAN SAYING SO IN A COMMENT (ADR-0047
+ * A3, and it is the ADR's own wording: "that prohibition is a check, not a comment").
  *
  * WHY IT MATTERS AT ALL: everything above sorts by ONE depth per drawable. A thing that
- * spans two tiles has two depths and no single correct position in this order — the first bed
- * that spans two tiles is a visual bug nobody can reproduce from a save, because it depends
- * on what else happens to be standing on the other tile. G-036 gives rooms player-drawn
- * footprints and G-037 scores what is in them; ONE OF THOSE GOALS OWNS SPLITTING A FOOTPRINT
- * INTO PER-TILE DRAWABLES. Until then the renderer refuses the input rather than drawing it
- * wrongly.
+ * spans two tiles has two depths and no single correct position in this order — a visual bug
+ * nobody can reproduce from a save, because it depends on what else happens to be standing on
+ * the other tile.
  *
- * IT THROWS RATHER THAN SKIPPING. A skipped room is a room the player cannot see and cannot
+ * ==========================================================================================
+ * THE ROOM HALF WAS DISCHARGED AT G-036b; THE ITEM HALF STANDS. This docblock used to read
+ * "when G-036 gives rooms player-drawn footprints THIS THROWS, LOUDLY, AT THE FIRST FRAME —
+ * which is the point", and the goal arrived. **It was answered by doing the work the sentence
+ * demanded, not by moving the check off the room**: `scene.ts` now splits a footprint into
+ * per-tile drawables with their own depths — one floor diamond and one hatch per covered tile,
+ * walls only where the rectangle ENDS, and the badge on the tile nearest the camera — which is
+ * exactly what the sentence above says the owning goal owes.
+ *
+ * SO THE CALL SITE MOVED FROM THE ROOM TO THE ITEM, AND THE RULE DID NOT MOVE AT ALL. That
+ * distinction is ADR-0050's: a check that pins a SYMPTOM has to be re-edited by every goal
+ * that changes the workload, and each edit looks like a goal touching a check to go green. The
+ * STRUCTURAL clause here — a drawable occupies one tile — is what survived; what changed is
+ * which drawables are still unhandled. Multi-tile ITEMS are still unhandled and still
+ * forbidden, `placeItem` in the sim cannot create one, and the only remaining route is a
+ * hand-built save — which is precisely the input a check earns its keep on.
+ *
+ * WHAT WOULD DISCHARGE THE ITEM HALF, stated so the next goal does not have to guess: a
+ * two-tile bed needs a rule for which tile it sorts on, and the honest answer is the same one
+ * a room got — split it, and give each piece its own depth. That is a goal about ART (a sprite
+ * cut into per-tile pieces), not about the sim, which is why it did not land here.
+ * ==========================================================================================
+ *
+ * IT THROWS RATHER THAN SKIPPING. A skipped thing is a thing the player cannot see and cannot
  * be told about, which is §6.1's "UI that cannot express a state the sim can reach" wearing
  * a shrug. A throw arrives with the entity id and the cell count, at the frame it first
  * happens.
@@ -134,7 +153,7 @@ export function assertSingleTile(cells: readonly unknown[], what: string): void 
   if (cells.length === 1) return;
   throw new Error(
     `${what} occupies ${cells.length} tiles, and the isometric renderer draws one tile per drawable (ADR-0047 A3). ` +
-      `Multi-tile footprints are forbidden until a goal splits them into per-tile drawables with their own depths; ` +
-      `until then a room spanning two tiles has two depths and no correct place in the draw order.`,
+      `Rooms were split into per-tile drawables at G-036b; ITEMS have not been, so a multi-tile item is still ` +
+      `refused rather than drawn wrongly — it has two depths and no correct place in the draw order.`,
   );
 }

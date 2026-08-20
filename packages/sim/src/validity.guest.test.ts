@@ -20,7 +20,7 @@ import { createCorridors } from './corridors.js';
 import type { Command } from './commands.js';
 import { bindContent } from './content.js';
 import { entitiesInOrder, getEntity } from './entities.js';
-import { createGridBounds, GROUND_FLOOR } from './grid.js';
+import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell } from './grid.js';
 import {
   countGuestsInInvalidRooms,
@@ -373,7 +373,7 @@ describe('counting guests in invalid rooms', () => {
       ...createWorld(1, content),
       entities: {
         nextId: 2,
-        list: [{ id: 1, kind: 'bedroom', at: cell(9, 10) }], // floating, unfurnished
+        list: [{ id: 1, kind: 'bedroom', at: cell(9, 10), footprint: UNIT_FOOTPRINT }], // floating, unfurnished
       },
       guests: {
         nextId: 2,

@@ -134,7 +134,18 @@ function extentOf(world: World, floor: number): Extent {
   };
   include(entrance);
   for (const entity of world.entities.list) {
-    if (isPlaced(entity)) include(entity.at);
+    if (!isPlaced(entity)) continue;
+    // BOTH CORNERS OF THE RECTANGLE, NOT JUST THE ORIGIN (G-036b). The camera frames what is
+    // OCCUPIED, so a room whose origin is on screen and whose far corner is not would be drawn
+    // running off the edge of the picture — and `build` in `scene.ts` iterates
+    // `view.minColumn..maxColumn`, so the tiles past the edge would not be drawn at all: half a
+    // room, silently. A rectangle is a box, so its two corners bound every cell of it.
+    include(entity.at);
+    include({
+      floor: entity.at.floor,
+      column: entity.at.column + entity.footprint.columns - 1,
+      row: entity.at.row + entity.footprint.rows - 1,
+    });
   }
   for (const guest of world.guests.list) include(guest.at);
   for (const cell of world.corridors) include(cell);

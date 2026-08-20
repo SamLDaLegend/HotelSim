@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. THE WALL-HEIGHT RULING IS DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED rather than rejected: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished; it becomes a derived per-instance fold at the scoring goal. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v18** · summary **v4** · I2 `0826588d36865609` · measure golden
-  `fbbb35b464f13368` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v19** · summary **v4** · I2 `17a77351290e686d` · measure golden
+  `4955bc697f128ae5` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -1505,3 +1505,64 @@ look produced a finding that names two candidate repairs and does not decide bet
 `LODGING_ROWS = 3`, argued as the smallest depth with a middle row). So **the reading above is taken
 at depth 3, and only a scratch probe has ever seen depth 8.** Parked with its falsification test and
 pointed at G-036b.
+
+## WATCH #14 — G-036b. A room is one space now, and every bed is visible.
+
+**Frames**: `apps/game/recording/`, 26 SVG frames, seed 7, ticks 0–4320 every 720 (gitignored —
+derived). Read by the builder through a scratch rasteriser it wrote, because none exists on this
+machine and **an unrasterised SVG is an assertion rather than a look.**
+
+**FLOOR −1 IS THE HEADLINE: three multi-tile rooms, each a 1×3 rectangle with ONE continuous wall
+along its north and west edges, one badge each, and its item visible in the middle cell. No internal
+cubicle walls.** WATCH #13 saw those as *"three coloured slabs"* that were secretly nine separate
+rooms; **they are now three rooms that each ARE one space.** 0 invalid, guests standing in them.
+
+**Floors 0 and 1: nine one-cell bedrooms in a 3×3 plate, and EVERY ONE OF THE NINE BEDS IS VISIBLE
+— it was three.** The contrast between one-cell bedrooms upstairs and three-cell halls below is what
+makes the footprint legible as a player decision rather than as a rendering detail.
+
+### The wall-height call is MADE, and one of WATCH #13's two candidates is FALSIFIED
+
+**WATCH #13 offered a shorter wall OR a front-anchored item as equals. They are not.** Paired arms,
+floor 1, items visible over items emitted:
+
+| arm | visible / emitted |
+|---|---|
+| H=64, anchor `centre.y − 16` (shipped) | **3 / 9** |
+| H=64, anchor `centre.y`, `+8`, `+16` | **3 / 9 in every case** |
+| H=48, H=32 | 3 / 9 |
+| **H=28, 24, 20, 16** | **9 / 9** |
+
+> **The near lip is the MOST occluded band, not the least** — the occluding wall stands on the tile's
+> near edge and rises from there. **Moving the item forward moves it further under the wall.**
+
+**`WALL_HEIGHT` 64 → 24, AND IT IS NO LONGER PROVISIONAL** (ADR-0047 amdt §1 discharged). The old
+derivation was **sound about one wall in isolation and never asked what it does to the tile behind**:
+a wall covers the near `H / TILE_HEIGHT` of that tile, so **64 was the unique value showing nothing
+of it.** The new bound is **computed rather than asserted** — a test builds the real wall polygon
+from `edgeOf` and the real item band from the constants and walks every integer height; **the first
+bad height is 28.** The hand derivation said 30 and **was wrong by two** (it measured the square,
+not the plate); **the test is the authority and the code follows it.** 24 is `TILE_HEIGHT × 3/8`,
+four pixels inside the bound, **labelled a preference with both ends looked at** — 16 reads as a
+kerb, 27 holds by a pixel.
+
+**Two things fell out of that, and both are the general lesson.** `ITEM_ANCHOR_RISE`, `ITEM_SIZE`
+and `ITEM_PLATE_PAD` moved out of `scene.ts` into `iso.ts`, because **keeping them apart from
+`WALL_HEIGHT` is how 64 shipped** — visibility is a fact about both constants and neither file could
+see the other's. And the first version of the test **broke the `tools-may-reach-only-pure-view-
+modules` fence**; **moving a fence to reach a criterion is the wrong repair**, so the criterion moved
+to the module the fence already trusts — which made it *stronger*, universal over all four
+orientations rather than a census of one layout.
+
+### A parked hypothesis was run and closed POSITIVE
+
+G-036a parked *"nobody has seen depth 8"* with its test and predicted two failure modes.
+**Run: `LODGING_ROWS = 8` gives 24 rooms on floor 1, 88 corridors, and all 24 beds visible with the
+back rows legible.** The camera owes no cutaway and the wall height holds at full depth. **Closed.**
+
+### One limitation measured rather than asserted away
+
+**A THIRD item on one tile has one corner of its plate clipped**, because `drawItems` marches items
+rightward off the tile. Items 0 and 1 are clear; no shipped room type requires more than one item;
+**and no wall height in the useful range fixes it — it is the item layout, not the wall.** Asserted
+as a fact and parked with its test, because `placeItem` will make three-item rooms ordinary.

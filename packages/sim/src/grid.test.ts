@@ -24,27 +24,7 @@ import {
   isPlaced,
 } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
-import {
-  assertGridBounds,
-  cellBack,
-  cellBelow,
-  cellFront,
-  cellLeft,
-  cellRight,
-  cellsEqual,
-  compareCells,
-  createGridBounds,
-  DEFAULT_MAX_COLUMN,
-  DEFAULT_MAX_FLOOR,
-  DEFAULT_MAX_ROW,
-  DEFAULT_MIN_COLUMN,
-  DEFAULT_MIN_FLOOR,
-  DEFAULT_MIN_ROW,
-  describeBounds,
-  describeCell,
-  entranceCell,
-  isWithinBounds,
-} from './grid.js';
+import { assertGridBounds, cellBack, cellBelow, cellFront, cellLeft, cellRight, cellsEqual, compareCells, createGridBounds, DEFAULT_MAX_COLUMN, DEFAULT_MAX_FLOOR, DEFAULT_MAX_ROW, DEFAULT_MIN_COLUMN, DEFAULT_MIN_FLOOR, DEFAULT_MIN_ROW, describeBounds, describeCell, entranceCell, isWithinBounds, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import { deserialise, serialise } from './save.js';
 import { run, stepTick } from './tick.js';
@@ -562,8 +542,8 @@ describe('nothing this build creates is unplaced', () => {
 
   it('recognises an unplaced entity when one is constructed directly', () => {
     // `isPlaced` must actually distinguish the two, or the checks above are vacuous.
-    const placed: Entity = { id: 1, kind: 'alpha', at: cell(0, 0) };
-    const unplaced: Entity = { id: 2, kind: 'alpha', at: null };
+    const placed: Entity = { id: 1, kind: 'alpha', at: cell(0, 0), footprint: UNIT_FOOTPRINT };
+    const unplaced: Entity = { id: 2, kind: 'alpha', at: null, footprint: UNIT_FOOTPRINT };
     expect(isPlaced(placed)).toBe(true);
     expect(isPlaced(unplaced)).toBe(false);
   });

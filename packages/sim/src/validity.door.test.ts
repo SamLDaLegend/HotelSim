@@ -54,7 +54,7 @@ import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
-import { createGridBounds, GROUND_FLOOR } from './grid.js';
+import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import { countInvalidRooms, createValidityContext, roomInvalidity, storeEntities } from './validity.js';
 
@@ -112,7 +112,7 @@ const DEEP: GridBounds = { minFloor: -1, maxFloor: 3, minColumn: 0, maxColumn: 6
 type Spec = readonly [kind: string, at: Cell | null];
 
 function storeOf(...specs: readonly Spec[]): EntityStore {
-  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at }));
+  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at, footprint: UNIT_FOOTPRINT }));
   return { nextId: specs.length + 1, list };
 }
 

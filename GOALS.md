@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. THE WALL-HEIGHT RULING IS DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED rather than rejected: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished; it becomes a derived per-instance fold at the scoring goal. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v18** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v19** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `0826588d36865609` · measure golden `fbbb35b464f13368`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `17a77351290e686d` · measure golden `4955bc697f128ae5`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2288,7 +2288,7 @@ knife-edge row, sanctioned by that file's own procedure, and worth watching if i
 time.
 
 ## G-036b — The player draws a room
-Status: **PLANNED.** Follows G-036a; on a one-row plot every footprint is a 1×N strip.
+Status: **done.** WATCH #14 recorded; the wall-height ruling is DISCHARGED and 64 is no longer provisional.
 Milestone: M3 · Owner pair: sim-engineer / sim-critic
 
 Statement: a room instance carries a player-drawn footprint; `placeItem` becomes the primary player
@@ -2350,7 +2350,45 @@ a second command leaves `buildRoom` a 1×1 special case that must stay exercised
 now, expensive to discover at BUILD.** `layCorridor` has the same question one field over.
 
 
-## G-037 — A room is scored on what is in it
+## G-036c — A room can be edited, and it can be private
+Status: **PLANNED.** Follows G-036b; **both rules need a footprint model that does not exist yet.**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+Statement: **B4** — a room's footprint and contents are mutable world state, so a player can resize
+  a room and move an item. **B6** — a room carries an access rule, content-defined per room type.
+
+**WHY THEY ARE TOGETHER AND SEPARATE FROM G-036b**: both are *rules over a footprint*, and neither
+can be written before one exists. **B6 is also the one that stops being an edge case the moment
+players draw rooms** — it was parked when a stranger walking into a bedroom was a content accident;
+**with player-designed rooms somebody will put a vending machine in a bedroom on purpose.**
+
+**B6's ACCESS VALUES ARE camelCase, RULED AT PLAN.** `public / guests_of_this_room / staff_only`
+are **snake_case, which is I3's content-ID convention** — the sim must branch on them, so
+`check:content` fires and the only exits are a waiver file or a rename after the content is
+written. `RoomInvalidityReason`'s `noDoor`/`missingItem` is the precedent already in the tree.
+**Free now, a content migration later.**
+
+**B4 owes the mutability question an answer at PLAN**: whether a resize is a new command or a
+re-issued draw, and what happens to items that fall outside a shrunk footprint. **Retrofitting
+mutability into a write-once schema is the painful direction** (ADR-0047 B4), which is why the
+footprint ships mutable-capable at G-036b even though nothing edits it until here.
+
+## G-037 — A room is scored on what is in it, and it holds what it can fit
+
+**CAPACITY IS DERIVED HERE TOO (ADR-0051, human).** `capacity` is still a room-TYPE field, so a
+room the player drew nine cells wide holds exactly what a one-cell room of the same type holds.
+**ADR-0046 §4.2's inversion is half-finished**: footprint moved to the instance at G-036b and price
+at ADR-0047 B7; **capacity did not move and nobody noticed**, because the field kept working and no
+gate asks whether a number belongs to the TYPE or to the THING.
+
+**It is the same fold over the same inputs** — function, size, decor, condition, adjacency —
+**answering a different question. Two folds over one input list, not two mechanisms**, which is why
+it lands here rather than beside here. **Derived at read time from footprint and placed items, so
+no save field and no migration**; caching it in state for tick cost would be a separate decision
+with its own migration, and is parked rather than assumed.
+
+**And it is what makes room SIZE mean something for occupancy**: three games rooms side by side
+should be one big games room the player furnishes, and a bedroom with a king bed should sleep two.
+**Capacity-per-type quietly makes size cosmetic — the opposite of ADR-0046's premise.**
 Status: **PLANNED.** The fold over placed items, in the shape Two Point uses.
 **Inputs pinned now because they determine what fields exist** (C2): **function** (binary gate on
 required items) · **size** (diminishing returns, with an upkeep cost so bigger is a trade) ·

@@ -158,6 +158,53 @@ export type RoomTypeData = {
    * What silence must not be is PARTIAL, and that is the half `bindContent` refuses.
    */
   readonly fitBasisPoints?: number | undefined;
+  /**
+   * THE FEWEST CELLS A ROOM OF THIS TYPE MAY BE DRAWN AS (G-036b, ADR-0046 §4.2).
+   *
+   * A ROOM TYPE IS A CONSTRAINT SET NOW, AND THIS IS ONE OF ITS TWO SIZE CLAUSES. The player
+   * draws the rectangle; the type says which rectangles are acceptable. `applyDrawRoom` in
+   * `build.ts` refuses a smaller draw as `footprintTooSmall` and RECORDS it — a refusal, never
+   * a throw, because it is the player's move that is wrong and not the caller's arithmetic.
+   *
+   * IN CELLS OF AREA, NOT IN COLUMNS OR ROWS. "At least four cells" is one number a designer
+   * can reason about; "at least two columns and two rows" is two numbers that forbid a 1x8
+   * room for no reason anybody stated. Area also survives camera rotation (ADR-0047 A5) and
+   * survives the day a footprint stops being a rectangle, where an axis bound would not.
+   *
+   * OPTIONAL, AND ABSENCE HAS AN EXACT HISTORICAL READING — the `provides` /
+   * `nightlyUpkeepPence` / `requires` contract, and the one that matters most in this goal.
+   * **A room type written before footprints existed could only ever be built one cell**, and
+   * one cell satisfies "at least one cell", so absence reads as `1` and changes NO verdict for
+   * any world or content set that predates this change. That is what keeps the permanent v1
+   * fixture's fingerprint at `8e09fe4f0fa162a3` (ADR-0006): `SAVE_V1_CONTENT` is a frozen
+   * literal, a REQUIRED field would stop it typechecking, and adding the field to it would
+   * move the fingerprint — which is the `contentHash` INSIDE the frozen bytes, so the fixture
+   * would load and never tick again. `footprint.save.test.ts` asserts the fingerprint unmoved.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK, for the reason set out on `nightlyUpkeepPence`.
+   */
+  readonly minFootprintCells?: number | undefined;
+  /**
+   * THE MOST CELLS A ROOM OF THIS TYPE MAY BE DRAWN AS (G-036b, ADR-0046 §4.2).
+   *
+   * The mirror of `minFootprintCells`, refused as `footprintTooLarge`, and the clause that
+   * makes space scarce PER ROOM TYPE rather than only per plot. ADR-0047 B2 is explicit that
+   * "the room-design mechanic needs a reason for space to be scarce — without scarcity,
+   * 'bigger is better' has no counterweight"; the plot bound is one counterweight and this is
+   * the other, and this one is a designer's dial rather than a fact about the board.
+   *
+   * OPTIONAL, AND ABSENCE READS AS UNBOUNDED — which, for content that predates footprints, is
+   * not a permissive reading but the only non-inventive one: no such content ever expressed a
+   * maximum, and every room built under it was one cell, so an unbounded maximum and a maximum
+   * of one produce identical verdicts on every world those bytes can describe. `0` is not a
+   * meaningful value and `bindContent` refuses it, because a room that may cover no cells is a
+   * room type nobody can build.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK. Silence on disk ships a room type with no upper size, and
+   * once G-037 scores a room on its size that is the dominant-strategy shape G-008 closed for
+   * prices and G-009 closed for `requires`.
+   */
+  readonly maxFootprintCells?: number | undefined;
 };
 
 /**
@@ -649,6 +696,22 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
   // visits with nothing pointing at the file that caused it.
   const fit = roomType.fitBasisPoints;
   assertFitValue('room type', roomType.id, fit);
+  // The two SIZE clauses (G-036b). A footprint bound is a count of cells, so it is a positive
+  // integer for the reason every quantity here is: a fractional minimum is a typo, and a typo
+  // that loads silently is a refusal a player meets with nothing pointing at the file that
+  // caused it. The RELATIONSHIP between the two is checked here as well, because a maximum
+  // below the minimum is a room type nobody can ever draw — content that loads and produces a
+  // verb whose every result is a refusal, which is ADR-0007's shape wearing a dial.
+  const minCells = roomType.minFootprintCells;
+  const maxCells = roomType.maxFootprintCells;
+  assertFootprintBound('minFootprintCells', roomType.id, minCells);
+  assertFootprintBound('maxFootprintCells', roomType.id, maxCells);
+  if (minCells !== undefined && maxCells !== undefined && minCells > maxCells) {
+    throw new Error(
+      `bindContent: room type "${roomType.id}" has minFootprintCells ${minCells} above maxFootprintCells ` +
+        `${maxCells}, so no footprint a player could draw would be accepted and the room type could never be built`,
+    );
+  }
   // Every optional key is STRIPPED when it holds undefined, not carried: an absent
   // key and a key holding `undefined` are different documents to the fingerprint, and
   // only the absent form is the "predates this field" statement (see the field docs).
@@ -659,6 +722,8 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
     constructionCostPence: _rawCost,
     demolitionRefundBasisPoints: _rawRefund,
     fitBasisPoints: _rawFit,
+    minFootprintCells: _rawMinCells,
+    maxFootprintCells: _rawMaxCells,
     ...rest
   } = roomType;
   const withUpkeep: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
@@ -666,10 +731,12 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
   const withRefund: RoomTypeData =
     refund === undefined ? withCost : { ...withCost, demolitionRefundBasisPoints: refund };
   const withFit: RoomTypeData = fit === undefined ? withRefund : { ...withRefund, fitBasisPoints: fit };
+  const withMin: RoomTypeData = minCells === undefined ? withFit : { ...withFit, minFootprintCells: minCells };
+  const withMax: RoomTypeData = maxCells === undefined ? withMin : { ...withMin, maxFootprintCells: maxCells };
   const base: RoomTypeData =
     rawProvides === undefined
-      ? withFit
-      : { ...withFit, provides: cloneIdList('room type', roomType.id, 'provides', 'need', rawProvides) };
+      ? withMax
+      : { ...withMax, provides: cloneIdList('room type', roomType.id, 'provides', 'need', rawProvides) };
   return rawRequires === undefined
     ? base
     : { ...base, requires: cloneIdList('room type', roomType.id, 'requires', 'item', rawRequires) };
@@ -700,6 +767,27 @@ function cloneItemType(itemType: ItemTypeData): ItemTypeData {
  * three goals later with nothing pointing at the content file that caused it. Rejected at
  * bind time, with the type named, on the one path every host goes through.
  */
+/**
+ * A declared footprint bound is a positive integer, or absent (G-036b).
+ *
+ * POSITIVE RATHER THAN NON-NEGATIVE, and the zero case is the one worth naming. A maximum of
+ * 0 is a room type that may cover no cells, so no draw could ever satisfy it; a minimum of 0
+ * is vacuous, and a vacuous bound is a dial nobody can tell from an absent one — which makes
+ * "absence means 1" and "0 means 1" two spellings of one thing in hashed content, exactly the
+ * absence-is-not-emptiness confusion every optional field in this file is written to avoid.
+ * Both are refused with the room type named, at bind time, on the one path every host uses.
+ */
+function assertFootprintBound(field: string, ownerId: ContentId, value: number | undefined): void {
+  if (value === undefined) return;
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(
+      `bindContent: room type "${ownerId}" has a ${field} of ${String(value)}; it must be a whole number of ` +
+        'cells, at least 1. A bound of 0 is a room type covering no cells, which no draw could satisfy, and ' +
+        'absence already means "no bound" (see RoomTypeData).',
+    );
+  }
+}
+
 function assertFitValue(owner: string, ownerId: ContentId, fit: number | undefined): void {
   if (fit === undefined) return;
   if (!Number.isInteger(fit) || fit < 0 || fit > MAX_FIT_BASIS_POINTS) {
@@ -2635,6 +2723,37 @@ export function findItemType(bound: BoundContent, id: ContentId): ItemTypeData |
  */
 export function requiredItemsOf(bound: BoundContent, roomTypeId: ContentId): readonly ContentId[] {
   return findRoomType(bound, roomTypeId)?.requires ?? EMPTY_IDS;
+}
+
+/**
+ * THE SMALLEST FOOTPRINT THIS ROOM TYPE ACCEPTS, in cells (G-036b).
+ *
+ * ABSENCE READS AS ONE CELL, AND THAT IS THE HISTORICAL READING RATHER THAN A DEFAULT. Content
+ * written before footprints existed could only describe rooms of one cell, so "at least one"
+ * is the strongest claim those bytes support and the weakest that is true of them — see
+ * `RoomTypeData.minFootprintCells`. The reading is spelled HERE, once, so no rule has to
+ * remember it, and `applyDrawRoom` never sees an `undefined`.
+ *
+ * One is also the structural floor: `assertFootprint` in `grid.ts` refuses a footprint of zero
+ * columns outright, so this bound can never be looser than the type system already is.
+ */
+export function minFootprintCellsOf(bound: BoundContent, roomTypeId: ContentId): number {
+  return findRoomType(bound, roomTypeId)?.minFootprintCells ?? 1;
+}
+
+/**
+ * THE LARGEST FOOTPRINT THIS ROOM TYPE ACCEPTS, in cells, or `undefined` for unbounded
+ * (G-036b).
+ *
+ * `undefined` RATHER THAN A LARGE NUMBER, and it is the same argument `EMPTY_IDS` makes one
+ * function up: "no maximum" and "a maximum of `Number.MAX_SAFE_INTEGER`" are different
+ * statements, and the second one is a magic constant that would eventually be compared,
+ * printed or migrated. The plot itself already bounds every real draw (`footprintWithinBounds`),
+ * so unbounded here means "this type adds no bound of its own", which is exactly what content
+ * predating this field says.
+ */
+export function maxFootprintCellsOf(bound: BoundContent, roomTypeId: ContentId): number | undefined {
+  return findRoomType(bound, roomTypeId)?.maxFootprintCells;
 }
 
 /** Shared empty list, so `requiredItemsOf` allocates nothing on the hot path. Frozen

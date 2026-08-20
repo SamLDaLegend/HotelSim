@@ -23,7 +23,7 @@ import {
   NO_ENTITY,
 } from './entities.js';
 import type { Entity, EntityId, EntityStore } from './entities.js';
-import { createGridBounds } from './grid.js';
+import { createGridBounds, UNIT_FOOTPRINT } from './grid.js';
 import { hashJson } from './hash.js';
 
 /**
@@ -213,7 +213,12 @@ describe('entity store — commit', () => {
 
 describe('entity store — invariants', () => {
   const bad = (store: EntityStore): (() => void) => (): void => assertEntityStoreInvariants(store, bounds);
-  const entity = (id: number, kind = 'alpha'): Entity => ({ id, kind, at: { floor: 0, column: 0, row: 0 } });
+  const entity = (id: number, kind = 'alpha'): Entity => ({
+    id,
+    kind,
+    at: { floor: 0, column: 0, row: 0 },
+    footprint: UNIT_FOOTPRINT,
+  });
 
   it('accepts a store the simulation could actually have produced', () => {
     const { store } = spawnAll(createEntityStore(), ['alpha', 'beta']);

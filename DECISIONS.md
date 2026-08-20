@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. THE WALL-HEIGHT RULING IS DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED rather than rejected: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished; it becomes a derived per-instance fold at the scoring goal. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4478,3 +4478,59 @@ goal that changes the workload updates a fact rather than weakening a check.
 a count**, not a symptom string — `ladder-arithmetic`'s dead root, `unpinned.scan`'s CRLF arms,
 `content-gate`'s two halves, `purity-gate`, `determinism-gate`. **The two `INCOMPARABLE` probes were
 the only symptom-pinned pair, and both are now repaired.** Swept, not assumed.
+
+---
+
+## ADR-0051 — CAPACITY IS A PROPERTY OF THE ROOM, NOT OF ITS TYPE. The inversion is half-finished.
+
+**Date**: 2026-08-16 · **Status**: accepted · **HUMAN**, raised from looking at G-036b's frames.
+
+**The observation, and it is a live contradiction rather than a future feature:**
+
+> *"Each room regardless of type currently appears to be single occupancy, but capacity will vary
+> based on room size and what's inside it — a guest room with a king size bed would have a capacity
+> of 2, a 4×4 restaurant with 4 tables would have a higher capacity."*
+
+**`capacity` IS STILL A ROOM-TYPE FIELD** — `content.ts:37`, and `room-types.json` carries `2` for
+the bedroom and `8` for each amenity. **So a room the player drew nine cells wide holds exactly what
+a one-cell room of the same type holds.**
+
+**ADR-0046 §4.2 NAMED THIS INVERSION AND WE ONLY FINISHED HALF OF IT.** *"A room TYPE becomes a
+constraint set; a room INSTANCE carries its own footprint, its own placed items, and a derived
+quality score."* **Footprint moved to the instance at G-036b. Price moved to the instance at
+ADR-0047 B7. Capacity did not move, and nobody noticed** — because the schema field kept working
+and no gate asks whether a number belongs to the type or to the thing.
+
+### The ruling
+
+**Capacity becomes DERIVED, per instance, from what the room contains.** A room type's `capacity`
+stops being the answer and becomes at most a bound.
+
+**It is the same fold as the quality score, over the same inputs**, which is why it belongs with it
+rather than beside it: **G-037 already folds function, size, decor, condition and adjacency over a
+room's placed items.** Capacity is that fold answering a different question. **Two folds over one
+input list, not two mechanisms.**
+
+**And it changes what the player is deciding**, which is the point the human is making: three games
+rooms side by side **should be one big games room the player furnishes**, and a bedroom's size
+should decide whether it sleeps one or two. **Capacity-per-type quietly makes room size cosmetic
+for occupancy — which is the opposite of ADR-0046's premise that the player designs the room.**
+
+### Where it lands, and what it costs
+
+**G-037**, whose statement already is *"a room is scored on what is in it"*. It is a **content
+change plus a fold**, not a schema change: the per-instance number is derived at read time from the
+footprint and the placed items, exactly as the quality score is, so **no save field and no
+migration.** *(If a later goal wants capacity cached in state for tick cost, that is a separate
+decision with a separate migration — parked, not assumed.)*
+
+**Every weight and threshold is content (I3)**, like the rest of the fold: items declare what
+occupancy they contribute, room types declare their bound.
+
+### What this exposes about the ledger, recorded because it is the fourth of its kind
+
+**Nothing was going to catch this.** `capacity` is a valid field with a valid schema, read by working
+code, covered by tests. **The defect is that it answers at the wrong LEVEL**, and no gate in this
+project asks that question. **It was caught by a person looking at rooms on a screen and noticing
+they all held one guest** — the third time in two days the milestone question has found something
+thirteen green rows could not, after the plot-depth gap and the missing lobby.

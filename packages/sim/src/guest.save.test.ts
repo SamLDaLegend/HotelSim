@@ -237,7 +237,15 @@ describe('the 1 -> 2 step itself', () => {
       // pass while measuring something else. Empty, which is what an era with no word for a
       // corridor declared.
       corridors: [],
-      entities: { ...store, list: store.list.map((entity) => ({ ...entity, at: null })) },
+      // AND A FOOTPRINT ON EVERY ENTITY SINCE v19 (G-036b), for the third time and with the
+      // identical failure mode: `assertEntity` reaches `footprint` before `assertWorldShape`
+      // reaches the guests, so a document without one is refused for the wrong field and the
+      // assertion below would pass while measuring something else. One cell, which is what
+      // an era with no word for a footprint could describe.
+      entities: {
+        ...store,
+        list: store.list.map((entity) => ({ ...entity, at: null, footprint: { columns: 1, rows: 1 } })),
+      },
     };
     const withoutGuests = {
       migrations: [{ from: 1, to: 2, migrate: (): unknown => asIfV3 }],

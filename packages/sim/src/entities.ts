@@ -15,8 +15,8 @@
 // G-007: an entity carries its own position, and that field is the ONLY record of it.
 // See the header of `grid.ts` for why there is no cell -> entity back-pointer.
 
-import { assertCell, isWithinBounds } from './grid.js';
-import type { Cell, GridBounds } from './grid.js';
+import { assertCell, assertFootprint, footprintWithinBounds, isWithinBounds, UNIT_FOOTPRINT } from './grid.js';
+import type { Cell, Footprint, GridBounds } from './grid.js';
 
 /**
  * An id owned by `packages/content` and injected by the host.
@@ -68,6 +68,28 @@ export type Entity = {
    * provider — belongs to G-009, which inherits the concept rather than inventing it.
    */
   readonly at: Cell | null;
+  /**
+   * HOW MUCH SPACE THIS ENTITY TAKES UP, measured from `at` (G-036b, ADR-0046 §4.2).
+   *
+   * THE PLAYER'S DRAWING, AND IT IS WORLD STATE RATHER THAN CONTENT. ADR-0046 §4.2 splits the
+   * two exactly: a room TYPE is a constraint set and stays in `packages/content` as JSON; the
+   * INSTANCE — the rectangle this particular room was drawn as — "is world state, and has
+   * always belonged there". So I3 is not weakened by this field; it is what I3's line was
+   * always drawn around.
+   *
+   * REQUIRED ON EVERY ENTITY, INCLUDING ITEMS AND INCLUDING UNPLACED ONES. An item is a
+   * `UNIT_FOOTPRINT` thing standing inside a room's rectangle, which is what it already was;
+   * an unplaced entity carries `UNIT_FOOTPRINT` and covers nothing, because `at` is null and
+   * every rule that expands a footprint reads `at` first. See `Footprint` in `grid.ts` for why
+   * a required field with a reserved value beats an optional one whose absence means 1x1 —
+   * short version, `canonicalise` throws on `undefined` and this is hashed state.
+   *
+   * OVERLAP IS NOT POLICED HERE, for the reason `draftSpawn` gives: what may share a cell is
+   * a CONTENT-scoped question (rooms may not overlap, an item inside a room shares its cells
+   * on purpose) and this store has no content. What IS policed here is that the rectangle is
+   * a rectangle and that all of it is on the plot — see `assertEntityStoreInvariants`.
+   */
+  readonly footprint: Footprint;
 };
 
 /** True when this entity occupies a cell. The one definition of "placed". */
@@ -177,6 +199,28 @@ export function assertEntityStoreInvariants(store: EntityStore, bounds: GridBoun
         );
       }
     }
+    // THE FOOTPRINT IS A RECTANGLE, AND ALL OF IT IS ON THE PLOT (G-036b).
+    //
+    // TWO CHECKS AND NOT ONE, because they fail for two reasons and a save can carry either.
+    // `assertFootprint` refuses a footprint that is not a pair of positive integers — a
+    // fractional extent is finite, so `canonicalise` in `hash.ts` does not throw on it, and
+    // every rule downstream would compute a rectangle with a fractional far corner. The bounds
+    // half is the one the origin check above CANNOT see: a 1x1 entity at the last column of
+    // the plot is legal and a 4x1 entity at the same origin hangs three cells off the edge,
+    // with an origin that passes every test written before this goal.
+    //
+    // AGAINST THIS STORE'S OWN PLOT, which for a load is the plot the SAVE carries. The rule
+    // `at` already follows, one field over.
+    assertFootprint(entity.footprint, `Entity store is invalid: entity id ${entity.id}`);
+    if (at !== null && !footprintWithinBounds(at, entity.footprint, bounds)) {
+      throw new Error(
+        `Entity store is invalid: entity id ${entity.id} is ${entity.footprint.columns}x${entity.footprint.rows} ` +
+          `at floor ${at.floor}, column ${at.column}, row ${at.row}, so it reaches to column ` +
+          `${at.column + entity.footprint.columns - 1}, row ${at.row + entity.footprint.rows - 1}, ` +
+          `which is outside the plot (floors ${bounds.minFloor}..${bounds.maxFloor}, ` +
+          `columns ${bounds.minColumn}..${bounds.maxColumn}, rows ${bounds.minRow}..${bounds.maxRow})`,
+      );
+    }
     if (entity.id >= store.nextId) {
       throw new Error(
         `Entity store is invalid: entity id ${entity.id} is at or above nextId ${store.nextId}, so the next spawn would collide`,
@@ -242,20 +286,51 @@ export function beginEntityDraft(store: EntityStore, bounds: GridBounds): Entity
  * on purpose, so a blanket ban written here would be a decision made in the wrong goal
  * with the wrong information. `grid.test.ts` pins the current permissiveness so that
  * changing it is a visible decision rather than a silent discovery.
+ *
+ * THE FOOTPRINT DEFAULTS TO ONE CELL, AND THAT DEFAULT IS A STATEMENT RATHER THAN A
+ * CONVENIENCE (G-036b). Every entity in this simulation before v19 occupied exactly its own
+ * cell, and every ITEM still does — so a caller that names no rectangle is saying "this thing
+ * takes up its cell", which is true of every one of the hundreds of existing call sites and
+ * of `migrateV18ToV19`'s reading of history. A caller that DRAWS says so with an argument.
+ *
+ * A rectangle that is not a rectangle THROWS, and a rectangle that hangs off the plot throws,
+ * both for `assertCell`'s reason: the caller is holding the world whose plot it just ignored.
+ * A player's oversized or overlapping draw is `applyDrawRoom`'s recorded refusal, not this.
  */
-export function draftSpawn(draft: EntityDraft, kind: ContentId, at: Cell): EntityId {
+export function draftSpawn(
+  draft: EntityDraft,
+  kind: ContentId,
+  at: Cell,
+  footprint: Footprint = UNIT_FOOTPRINT,
+): EntityId {
   if (typeof kind !== 'string' || kind.length === 0) {
     throw new Error('draftSpawn: kind must be a non-empty content id');
   }
   assertCell(at, draft.bounds, 'draftSpawn');
+  assertFootprint(footprint, 'draftSpawn');
+  if (!footprintWithinBounds(at, footprint, draft.bounds)) {
+    throw new Error(
+      `draftSpawn: a ${footprint.columns}x${footprint.rows} footprint at floor ${at.floor}, column ${at.column}, ` +
+        `row ${at.row} reaches outside the plot (columns ${draft.bounds.minColumn}..${draft.bounds.maxColumn}, ` +
+        `rows ${draft.bounds.minRow}..${draft.bounds.maxRow})`,
+    );
+  }
   const id = draft.nextId;
   if (!Number.isSafeInteger(id + 1)) {
     throw new Error(`draftSpawn: entity ids are exhausted at ${id}; the next id would not be a safe integer`);
   }
   draft.nextId = id + 1;
   // Copied, not held: the caller's object must not be able to move an entity after the
-  // fact. `canonicalise` would hash the change and nothing would have staged it.
-  draft.added.push({ id, kind, at: { floor: at.floor, column: at.column, row: at.row } });
+  // fact. `canonicalise` would hash the change and nothing would have staged it. The
+  // footprint is copied for the identical reason — a caller keeping a reference to a
+  // mutable `{columns, rows}` could resize a room after it was committed, which is exactly
+  // the write-once-versus-mutable question G-036c has to answer deliberately.
+  draft.added.push({
+    id,
+    kind,
+    at: { floor: at.floor, column: at.column, row: at.row },
+    footprint: { columns: footprint.columns, rows: footprint.rows },
+  });
   return id;
 }
 

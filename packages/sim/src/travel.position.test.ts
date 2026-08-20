@@ -30,7 +30,7 @@ import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { entitiesInOrder } from './entities.js';
 import type { Entity } from './entities.js';
-import { assertGridBounds, createGridBounds, entranceCell, isWithinBounds } from './grid.js';
+import { assertGridBounds, createGridBounds, entranceCell, isWithinBounds, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import { assertGuestStoreInvariants, guestsInOrder, isEngaged, isResting, standingCell } from './guests.js';
 import type { Guest } from './guests.js';
@@ -151,8 +151,8 @@ describe('1. the entrance is a total function of the plot (G-023a)', () => {
 
 describe('2. the placement rule, on its own (G-023a)', () => {
   const bounds = createGridBounds();
-  const placed = (id: number, at: Cell): Entity => ({ id, kind: 'bedroom', at });
-  const unplaced = (id: number): Entity => ({ id, kind: 'bedroom', at: null });
+  const placed = (id: number, at: Cell): Entity => ({ id, kind: 'bedroom', at, footprint: UNIT_FOOTPRINT });
+  const unplaced = (id: number): Entity => ({ id, kind: 'bedroom', at: null, footprint: UNIT_FOOTPRINT });
 
   it('puts a guest at the provider it is engaged with, ahead of the room it holds', () => {
     // ENGAGEMENT FIRST, because that is what the guest is DOING. It holds the bedroom for

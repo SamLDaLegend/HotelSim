@@ -1466,9 +1466,22 @@ export type RunSummary = {
   readonly build: {
     readonly built: number;
     readonly demolished: number;
+    /**
+     * Items placed by a `placeItem` command (G-036b).
+     *
+     * ADDITIVE, so `SUMMARY_SCHEMA_VERSION` does NOT move — the policy on that constant, and
+     * the same call `corridors` got at G-034b. No key changes meaning and none is removed.
+     */
+    readonly placed: number;
     readonly refused: {
+      /** G-036b. The drawn rectangle was larger than the room type allows. */
+      readonly footprintTooLarge: number;
+      /** G-036b. The drawn rectangle was smaller than the room type allows. */
+      readonly footprintTooSmall: number;
       readonly insufficientFunds: number;
       readonly noSuchRoom: number;
+      /** G-036b. `placeItem` named a cell no room covers. */
+      readonly notInRoom: number;
       readonly occupied: number;
       readonly outOfBounds: number;
     };
@@ -1756,9 +1769,15 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
     build: {
       built: world.buildOutcomes.built,
       demolished: world.buildOutcomes.demolished,
+      // ADDITIVE, so `SUMMARY_SCHEMA_VERSION` does NOT move (G-036b) — the policy that
+      // constant states, and the `corridors` precedent from G-034b.
+      placed: world.buildOutcomes.placed,
       refused: {
+        footprintTooLarge: world.buildOutcomes.refused.footprintTooLarge,
+        footprintTooSmall: world.buildOutcomes.refused.footprintTooSmall,
         insufficientFunds: world.buildOutcomes.refused.insufficientFunds,
         noSuchRoom: world.buildOutcomes.refused.noSuchRoom,
+        notInRoom: world.buildOutcomes.refused.notInRoom,
         occupied: world.buildOutcomes.refused.occupied,
         outOfBounds: world.buildOutcomes.refused.outOfBounds,
       },
@@ -2314,8 +2333,19 @@ export function renderText(summary: RunSummary): string {
     `upkeep      ${summary.money.upkeepPennies}p`,
     `built       ${summary.build.built}`,
     `demolished  ${summary.build.demolished}`,
-    `refused     ${summary.build.refused.insufficientFunds} funds, ${summary.build.refused.occupied} occupied, ` +
-      `${summary.build.refused.outOfBounds} off plot, ${summary.build.refused.noSuchRoom} no room`,
+    // G-036b: `placed` is its own line rather than a column of `built`, for the reason
+    // `BuildOutcomes` gives — the per-tick law only fails usefully while each counter is moved
+    // by one kind of command.
+    `placed      ${summary.build.placed}`,
+    // AND THE REFUSAL LINE GAINS THREE COLUMNS IN THE SAME CHANGE (G-036b). A refusal reason
+    // the CLI cannot print is a rule nobody running the harness can see — which is exactly the
+    // condition `noCorridor` was in before G-035 put corridors on screen. The order is the
+    // order `BUILD_REFUSAL_REASONS` sorts in, so a reason added and forgotten here is one
+    // grep away rather than invisible.
+    `refused     ${summary.build.refused.footprintTooLarge} too big, ${summary.build.refused.footprintTooSmall} too small, ` +
+      `${summary.build.refused.insufficientFunds} funds, ${summary.build.refused.notInRoom} not in room, ` +
+      `${summary.build.refused.occupied} occupied, ${summary.build.refused.outOfBounds} off plot, ` +
+      `${summary.build.refused.noSuchRoom} no room`,
     `building    ${summary.money.constructionPennies}p`,
     `capital     ${summary.money.startingCapitalPennies}p`,
     `refunds     ${summary.money.demolitionRefundPennies}p`,

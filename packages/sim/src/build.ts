@@ -67,12 +67,30 @@
 // `settlement.ts` have, for the same cycle reason. No randomness: every function here is
 // a pure function of world state, injected content and the command's own arguments.
 
-import { demolitionRefundOf, findRoomType, isRoomKind, requiredItemsOf } from './content.js';
+import {
+  demolitionRefundOf,
+  findItemType,
+  findRoomType,
+  isRoomKind,
+  maxFootprintCellsOf,
+  minFootprintCellsOf,
+  requiredItemsOf,
+} from './content.js';
 import type { BoundContent } from './content.js';
 import { draftDespawn, draftFindEntity, draftForEach, draftSpawn, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId } from './entities.js';
-import { assertCell, cellsEqual, describeBounds, describeCell, isWithinBounds } from './grid.js';
-import type { Cell, GridBounds } from './grid.js';
+import {
+  assertCell,
+  assertFootprint,
+  describeBounds,
+  describeCell,
+  describeFootprint,
+  footprintArea,
+  footprintWithinBounds,
+  footprintsOverlap,
+  UNIT_FOOTPRINT,
+} from './grid.js';
+import type { Cell, Footprint, GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { standsInRoom } from './validity.js';
@@ -87,13 +105,39 @@ import { standsInRoom } from './validity.js';
  * exist is simulation structure; what a room costs is a designer's number.
  */
 export type BuildRefusalReason =
+  /**
+   * The drawn footprint covers more cells than this room type allows (G-036b).
+   *
+   * `maxFootprintCellsOf` is the bound and it is CONTENT: what a room type's largest legal
+   * shape is, is a designer's number. Absence of the field means unbounded, so this refusal is
+   * unreachable for content that predates footprints — which is the exact historical reading,
+   * not a grace period.
+   */
+  | 'footprintTooLarge'
+  /** The drawn footprint covers fewer cells than this room type allows (G-036b). The mirror
+   *  of `footprintTooLarge`; absence of `minFootprintCells` reads as 1, so it is unreachable
+   *  for content that predates footprints. */
+  | 'footprintTooSmall'
   /** The charge would take the balance below zero. */
   | 'insufficientFunds'
   /** Demolish named an id that is not a live room. */
   | 'noSuchRoom'
-  /** A room already stands on that cell. */
+  /**
+   * `placeItem` named a cell that no room covers (G-036b).
+   *
+   * AN ITEM GOES IN A ROOM, and that is the player's rule rather than a structural one:
+   * `spawnEntity` still puts a bed in a corridor, because a host setting up a scenario is
+   * allowed to describe any world a save could hold, and `validity.ts` is explicit that an
+   * item in a free cell must not seal the room beside it. What this refuses is a PLAYER
+   * spending on furniture that could never provide anything — an item's provision is entirely
+   * borrowed from its host room (`isProviding`), so an unhosted item is dead the moment it
+   * lands.
+   */
+  | 'notInRoom'
+  /** A room already covers a cell of the drawn footprint. RECTANGLE OVERLAP since G-036b,
+   *  not an origin-cell comparison — see `roomOverlapping`. */
   | 'occupied'
-  /** The cell is not on this world's plot. */
+  /** Some cell of the footprint is not on this world's plot. */
   | 'outOfBounds';
 
 /**
@@ -102,8 +146,11 @@ export type BuildRefusalReason =
  * type error in BOTH directions, not a comment somebody has to remember.
  */
 const BUILD_REFUSAL_REASON_SET: Readonly<Record<BuildRefusalReason, true>> = Object.freeze({
+  footprintTooLarge: true,
+  footprintTooSmall: true,
   insufficientFunds: true,
   noSuchRoom: true,
+  notInRoom: true,
   occupied: true,
   outOfBounds: true,
 });
@@ -165,10 +212,22 @@ export function isBuildRefusalReason(value: string): value is BuildRefusalReason
  *   agree only if every successful build did both. The CLI reports it and exits non-zero.
  */
 export type BuildOutcomes = {
-  /** Rooms placed by a `buildRoom` command. Never decreases. */
+  /** Rooms placed by a `buildRoom` or `drawRoom` command. Never decreases. */
   readonly built: number;
   /** Rooms removed by a `demolishRoom` command. Never decreases. */
   readonly demolished: number;
+  /**
+   * Items placed by a `placeItem` command (G-036b). Never decreases.
+   *
+   * ITS OWN COUNTER RATHER THAN A SECOND MEANING FOR `built`, and the reason is the per-tick
+   * law rather than tidiness: that law compares the number of build-family COMMANDS against
+   * the number of recorded OUTCOMES, and it only fails usefully while each counter is moved
+   * by one kind of thing. Folding item placements into `built` would also break
+   * `countConstructionTransactions(ledger) === built`, the cross-subsystem law, because a
+   * placed item books no `construction` transaction — see `applyPlaceItem` for why it books
+   * nothing at all yet.
+   */
+  readonly placed: number;
   /** Refusals, by reason. Every key of `BuildRefusalReason` is present, always. */
   readonly refused: Readonly<Record<BuildRefusalReason, number>>;
 };
@@ -177,7 +236,16 @@ export function createBuildOutcomes(): BuildOutcomes {
   return {
     built: 0,
     demolished: 0,
-    refused: { insufficientFunds: 0, noSuchRoom: 0, occupied: 0, outOfBounds: 0 },
+    placed: 0,
+    refused: {
+      footprintTooLarge: 0,
+      footprintTooSmall: 0,
+      insufficientFunds: 0,
+      noSuchRoom: 0,
+      notInRoom: 0,
+      occupied: 0,
+      outOfBounds: 0,
+    },
   };
 }
 
@@ -199,7 +267,7 @@ export function totalRefusals(outcomes: BuildOutcomes): number {
  * in this codebase is a fold (I4's argument, applied past money).
  */
 export function totalBuildOutcomes(outcomes: BuildOutcomes): number {
-  return outcomes.built + outcomes.demolished + totalRefusals(outcomes);
+  return outcomes.built + outcomes.demolished + outcomes.placed + totalRefusals(outcomes);
 }
 
 /**
@@ -215,6 +283,13 @@ export function assertBuildOutcomes(outcomes: BuildOutcomes): void {
   for (const [field, value] of [
     ['built', outcomes.built],
     ['demolished', outcomes.demolished],
+    // `placed` IS CHECKED HERE, AND THAT IS WHAT MAKES THE v18 -> v19 MIGRATION OWE IT
+    // (G-036b). Without this line a v18 world would load with `placed: undefined`, every
+    // arithmetic law would fold it into `NaN`, and `totalBuildOutcomes` would compare NaN
+    // against a command count on the first tick that built anything — a defect three
+    // subsystems from its cause. With it, the migration is forced to state what a world that
+    // never had the command placed: nothing.
+    ['placed', outcomes.placed],
   ] as const) {
     if (!Number.isSafeInteger(value) || value < 0) {
       throw new Error(
@@ -288,18 +363,45 @@ function withRefusal(outcomes: BuildOutcomes, reason: BuildRefusalReason): Build
  * then `added`, both ascending by construction). Nothing sorts, so there is no
  * comparator here to get wrong (I2).
  *
- * Multi-cell footprints are parked to G-009 — the goal that needs a room to have extent
- * in order to compute enclosure, and therefore the goal that can falsify them. THIS
- * FUNCTION IS THE SINGLE SITE THAT GENERALISES when they land: one loop, one predicate.
+ * ==========================================================================================
+ * IT GENERALISED AT G-036b, AND THE SIGNATURE CHANGED WITH IT — this function had nominated
+ * itself as "THE SINGLE SITE THAT GENERALISES when multi-cell footprints land: one loop, one
+ * predicate", and that turned out to be true of the loop and false of the SHAPE.
+ *
+ * A PER-CELL QUESTION CANNOT EXPRESS THE RULE A DRAWING VERB NEEDS. `cellsEqual(entity.at,
+ * cell)` asks two wrong things at once: it asks about the standing room's ORIGIN rather than
+ * its body, and it asks about ONE cell of the new room rather than its body. A player draws a
+ * 3x1 room whose origin is a free cell and whose second and third cells lie across an existing
+ * room; the origin-versus-origin comparison accepts that draw, and the world then holds two
+ * rooms overlapping in a state the simulation believes it refused. So the question is
+ * RECTANGLE AGAINST RECTANGLE, `footprintsOverlap` is the one predicate, and the 1x1 caller
+ * passes `UNIT_FOOTPRINT` and gets a byte-identical answer on every world that predates this.
+ *
+ * `roomAt` IS KEPT AS THE ONE-CELL SPELLING because it is the question `spawnEntity` and a host
+ * holding a cell actually ask, and because a caller that had to construct a `UNIT_FOOTPRINT` to
+ * ask "what is standing here" would eventually construct the wrong one. It is a call, not a
+ * copy: there is still exactly one definition of occupancy in this file.
+ * ==========================================================================================
  */
-export function roomAt(draft: EntityDraft, content: BoundContent, cell: Cell): Entity | undefined {
+export function roomOverlapping(
+  draft: EntityDraft,
+  content: BoundContent,
+  at: Cell,
+  footprint: Footprint,
+): Entity | undefined {
   return draftFindEntity(
     draft,
     (entity) =>
       isPlaced(entity) &&
-      cellsEqual(entity.at, cell) &&
+      footprintsOverlap(entity.at, entity.footprint, at, footprint) &&
       findRoomType(content, entity.kind) !== undefined,
   );
+}
+
+/** The room covering `cell`, or undefined. `roomOverlapping` asked about one cell — the
+ *  question `spawnEntity` asks and the question a host holding a cell asks. */
+export function roomAt(draft: EntityDraft, content: BoundContent, cell: Cell): Entity | undefined {
+  return roomOverlapping(draft, content, cell, UNIT_FOOTPRINT);
 }
 
 /**
@@ -398,20 +500,88 @@ function refuse(input: BuildInput, reason: BuildRefusalReason): BuildResult {
  * because a refusal that quietly consumed an id would make replay diverge from intent.
  */
 export function applyBuildRoom(input: BuildInput, roomType: ContentId, at: Cell): BuildResult {
+  // THE VERB IS PASSED THROUGH SO THE MESSAGE NAMES THE COMMAND THE CALLER ISSUED. A host
+  // that dispatched `buildRoom` and got back "drawRoom: floor must be a safe integer" is being
+  // told about a command it did not send, which is the `assertCell`/`what` argument one level
+  // up: the message's job is to point at the caller's own line.
+  return applyDrawRoom(input, roomType, at, UNIT_FOOTPRINT, 'buildRoom');
+}
+
+/**
+ * THE PLAYER DRAWS A ROOM (G-036b, ADR-0046 §4.2). NEVER THROWS FOR A REFUSABLE REASON.
+ *
+ * ==========================================================================================
+ * A SECOND COMMAND RATHER THAN A WIDER `buildRoom`, RULED AT PLAN, AND THE THING THAT MAKES IT
+ * NOT A FORK IS THAT `applyBuildRoom` IS DEFINED AS THIS FUNCTION.
+ *
+ * The alternative — widening `buildRoom` to carry a rectangle — rewrites every scheduled
+ * command in `tools/headless/src/report.ts` and `determinism-log.ts` and changes the meaning of
+ * every recorded replay in the tree. **A command log is a durable artefact (I2): adding a
+ * command leaves every existing log meaning exactly what it meant; widening one does not.**
+ *
+ * The stated cost of the second-command route was that it "leaves `buildRoom` a 1x1 special
+ * case that must stay exercised", and that cost is not paid here, because there is no second
+ * code path to exercise: `applyBuildRoom` above is one line, and it is a call to this. The 1x1
+ * case is the general case at `UNIT_FOOTPRINT`, run on every tick of every harness and every
+ * golden in the project. It is the `spawnEntity` / `buildRoom` table from this file's header
+ * applied one level down — two doors, one rule.
+ *
+ * `layCorridor` WAS ASKED THE SAME QUESTION AND ANSWERED DIFFERENTLY, ON PURPOSE. A corridor is
+ * a DECLARATION about a cell: idempotent, free, entity-less, and with no rule that a rectangle
+ * could express and a repeated cell could not — drawing a corridor rectangle is N idempotent
+ * no-ops, which N commands already are. A rectangle form would buy bytes in a log and cost a
+ * second entry point in the one command whose design note is "it does not ask what is standing
+ * there". It becomes a real question the day a corridor gains a COST, because a cost is either
+ * per cell or per draw and those differ; parked with exactly that test.
+ * ==========================================================================================
+ *
+ * THE FIVE REFUSALS, IN THE ORDER THEY ARE CHECKED. `outOfBounds` and the two SIZE refusals
+ * come before `occupied` for the reason `outOfBounds` already came first: a rectangle that is
+ * not a legal shape on this plot is not a rectangle whose collisions are worth reporting, and
+ * a refusal reason that depended on what happened to be standing nearby would be a worse
+ * diagnosis of the same mistake. SIZE before OCCUPANCY specifically, because size is a property
+ * of the draw alone and occupancy is a property of the draw against the world — the same
+ * "structure before access" ordering `computeRoomInvalidity` uses.
+ */
+export function applyDrawRoom(
+  input: BuildInput,
+  roomType: ContentId,
+  at: Cell,
+  footprint: Footprint,
+  /** The command name to use in a THROWN message. Never affects a verdict — see
+   *  `applyBuildRoom`, the only caller that passes anything but the default. */
+  verb = 'drawRoom',
+): BuildResult {
   if (findRoomType(input.content, roomType) === undefined) {
     throw new Error(
-      `buildRoom: unknown room type "${roomType}" — it is not defined in the injected content`,
+      `${verb}: unknown room type "${roomType}" — it is not defined in the injected content`,
     );
   }
   // Integer-ness only. `assertCell` would also throw on a cell off the plot, which is
   // precisely what this command must NOT do, so the bounds half is asked separately
   // below and answered with a refusal.
-  assertCell({ floor: at.floor, column: at.column, row: at.row }, UNBOUNDED, 'buildRoom');
+  assertCell({ floor: at.floor, column: at.column, row: at.row }, UNBOUNDED, verb);
+  // A footprint that is not a pair of positive integers THROWS, and that is `assertCell`'s
+  // reasoning one field over: a 2.5-column rectangle is not a small room, it is not a room,
+  // and a player dragging over a grid cannot produce one. A rectangle that is too big or too
+  // small for the room TYPE is the player's move and is refused below.
+  assertFootprint(footprint, verb);
 
-  if (!isWithinBounds(at, input.bounds)) {
+  if (!footprintWithinBounds(at, footprint, input.bounds)) {
     return refuse(input, 'outOfBounds');
   }
-  if (roomAt(input.entities, input.content, at) !== undefined) {
+  // THE SIZE RULES, AND THEY ARE THE ROOM TYPE'S RATHER THAN THE SIMULATION'S (I3). A missing
+  // minimum reads as one cell and a missing maximum as unbounded, so on content that predates
+  // footprints neither branch is reachable — see `minFootprintCellsOf`.
+  const area = footprintArea(footprint);
+  if (area < minFootprintCellsOf(input.content, roomType)) {
+    return refuse(input, 'footprintTooSmall');
+  }
+  const maximum = maxFootprintCellsOf(input.content, roomType);
+  if (maximum !== undefined && area > maximum) {
+    return refuse(input, 'footprintTooLarge');
+  }
+  if (roomOverlapping(input.entities, input.content, at, footprint) !== undefined) {
     return refuse(input, 'occupied');
   }
   const cost = constructionCostOf(input.content, roomType);
@@ -419,17 +589,27 @@ export function applyBuildRoom(input: BuildInput, roomType: ContentId, at: Cell)
     return refuse(input, 'insufficientFunds');
   }
 
-  draftSpawn(input.entities, roomType, at);
+  draftSpawn(input.entities, roomType, at, footprint);
   // AND ITS FURNITURE (G-009). A room the player builds arrives with the items its type
   // requires, standing in it, so it is a valid provider the moment it exists.
   //
-  // WHY FURNISHING BELONGS TO THIS COMMAND. At M1 the player buys a ROOM; choosing what
-  // goes in it is item variety, which is M6, and it needs a `placeItem` command that does
-  // not exist. The alternative — building a room that is invalid until furnished, with no
-  // way to furnish it — is a build command whose every result is useless. The honest cost
-  // of this choice is recorded rather than hidden: `missingItem` is NOT reachable by a
-  // player at M1, only by a host scenario or a save, and M6's `placeItem` is what changes
-  // that (PARKING.md).
+  // WHY FURNISHING STILL BELONGS TO THIS COMMAND NOW THAT `placeItem` EXISTS (G-036b). At
+  // G-009 the argument was that choosing what goes in a room needs a `placeItem` that did not
+  // exist; it exists now, and this is kept anyway, deliberately. A room that arrives
+  // UNFURNISHED is `missingItem` — it houses nobody while costing upkeep — so a draw whose
+  // result is a broken room would make the primary player verb produce a dead room by default,
+  // and the player would have to know a second verb to undo it. The REQUIRED items arrive with
+  // the room; everything else a player chooses to put in it is `placeItem`'s.
+  //
+  // WHAT DID CHANGE: `missingItem` is reachable by a player now. Demolishing a bed with no
+  // room and re-drawing is not the route — items are not separately demolishable — but a
+  // drawn room whose type requires an item the content later stops defining, and any
+  // host-seeded or migrated room, both reach it, and `placeItem` is now the fix a player has.
+  //
+  // THE ITEMS STAND AT THE ORIGIN CELL, which is inside the footprint by construction. Nothing
+  // reads an item's position except `hostRoomOf`, which asks which room COVERS it — so a
+  // required item is hosted from any cell of the rectangle, and the origin is simply the one
+  // cell every footprint has. `placeItem` is how a player moves furniture off it.
   //
   // NO EXTRA CHARGE. One `construction` transaction per build, unconditionally, is what
   // keeps `countConstructionTransactions === built` exact; what an item costs is a
@@ -449,6 +629,84 @@ export function applyBuildRoom(input: BuildInput, roomType: ContentId, at: Cell)
     ledger: appendTransaction(input.ledger, { tick: input.tick, amount: 0 - cost, reason: 'construction' }),
     outcomes: { ...input.outcomes, built: input.outcomes.built + 1 },
     balance: input.balance - cost,
+  };
+}
+
+/**
+ * THE PLAYER PLACES AN ITEM IN A ROOM (G-036b, ADR-0046 §4.2). NEVER THROWS FOR A REFUSABLE
+ * REASON.
+ *
+ * ==========================================================================================
+ * `placeItem` IS PROMOTED OUT OF M6 TO THE CENTRE OF THIS WORK (ADR-0046 §4.2): "it stops
+ * being a late convenience and becomes the primary player verb". A drawn room is an empty
+ * rectangle; what makes it a games room rather than a shape is what stands in it, and G-037
+ * scores exactly that.
+ *
+ * THE ONE REFUSAL THAT IS NEW IS `notInRoom`, AND IT IS A PLAYER RULE RATHER THAN A STRUCTURAL
+ * ONE. `spawnEntity` still puts a bed in a corridor — a host describing a scenario may describe
+ * any world a save could hold, and `validity.ts` depends on that being legal ("a bed in the
+ * corridor must not close the room next to it"). What a PLAYER may not do is spend on furniture
+ * that could never serve anybody: an item's provision is entirely BORROWED from the room it
+ * stands in (`isProviding` in `validity.ts`), so an unhosted item is dead the moment it lands
+ * and the player has no way to be told why. Refusing it is the recorded, legible form of that.
+ *
+ * THE HOST ROOM IS ASKED WITH `roomAt`, WHICH IS FOOTPRINT-AWARE, AND THAT IS THE WHOLE
+ * MECHANIC. An item placed at ANY cell of a multi-cell room is inside it — which is the
+ * failure `Placement` in `validity.ts` records at length, because with an origin-keyed index
+ * this verb produced dead furniture silently, with every gate green.
+ *
+ * IT CHARGES NOTHING, AND THAT IS A STATED GAP RATHER THAN A DESIGN. What an item costs is a
+ * designer's number and therefore content (I3), and there is no such field on `ItemTypeData`;
+ * inventing one here would ship a price nobody balanced, and booking it as `construction` would
+ * break `countConstructionTransactions(ledger) === built`, the cross-subsystem law this file's
+ * evidence rests on. Parked with its falsification test: **if a run can raise a hotel's
+ * satisfaction by placing items and never move the balance, the item price is load-bearing and
+ * belongs in content.** That run becomes possible the moment G-037 scores a room on what is in
+ * it, which is the next goal.
+ * ==========================================================================================
+ */
+export function applyPlaceItem(input: BuildInput, itemType: ContentId, at: Cell): BuildResult {
+  // A ROOM TYPE IS NOT AN ITEM TYPE, and it is asked FIRST so the message is the accurate one.
+  // Asked second, a room type absent from the item table would come back as "unknown item
+  // type", which is true and useless — the caller's mistake is the verb, not the id. Content
+  // is also free to define an id in BOTH tables, and there the order is the difference between
+  // a named refusal and a free room spawned through a verb that charges nothing.
+  if (isRoomKind(input.content, itemType)) {
+    throw new Error(
+      `placeItem: "${itemType}" is a ROOM type, and a room is drawn rather than placed; see drawRoom`,
+    );
+  }
+  // An unknown item type throws, for the reason an unknown room type does: `beginTick` has
+  // already established that this world and this content belong together, so a kind that is
+  // not in either table is a caller bug and not a player's move.
+  if (findItemType(input.content, itemType) === undefined) {
+    throw new Error(
+      `placeItem: unknown item type "${itemType}" — it is not defined in the injected content`,
+    );
+  }
+  assertCell({ floor: at.floor, column: at.column, row: at.row }, UNBOUNDED, 'placeItem');
+
+  if (!footprintWithinBounds(at, UNIT_FOOTPRINT, input.bounds)) {
+    return refuse(input, 'outOfBounds');
+  }
+  if (roomAt(input.entities, input.content, at) === undefined) {
+    return refuse(input, 'notInRoom');
+  }
+
+  draftSpawn(input.entities, itemType, at, UNIT_FOOTPRINT);
+  // AN ITEM IS ONE CELL, AND THAT IS ENFORCED HERE RATHER THAN LEFT TO THE RENDERER. ADR-0047
+  // A3 forbids multi-tile items until a goal handles them — a thing spanning two tiles has two
+  // depths and no correct place in the draw order — and `assertSingleTile` in
+  // `apps/game/src/view/depth.ts` still throws on one. This is the simulation half of that
+  // prohibition: the player verb cannot create one.
+  //
+  // THE LEDGER AND THE BALANCE ARE RETURNED BY REFERENCE, exactly as a refusal returns them:
+  // this command books no transaction, so an item placement allocates no log. See the note
+  // above for why there is no price and what would falsify that.
+  return {
+    ledger: input.ledger,
+    outcomes: { ...input.outcomes, placed: input.outcomes.placed + 1 },
+    balance: input.balance,
   };
 }
 
@@ -550,7 +808,7 @@ export function applyDemolishRoom(input: BuildInput, id: EntityId): BuildResult 
   draftForEach(input.entities, (entity) => {
     if (entity.id === room.id) return;
     if (isRoomKind(input.content, entity.kind)) return;
-    if (standsInRoom(input.content, room, entity)) furniture.push(entity.id);
+    if (standsInRoom(room, entity)) furniture.push(entity.id);
   });
   // Cannot return false: `draftFindEntity` just found it live in this same draft. Kept as
   // the postcondition of that search rather than as evidence anything was checked — the
@@ -619,8 +877,17 @@ const UNBOUNDED: GridBounds = Object.freeze({
 
 /** Human-readable, for the `spawnEntity` occupied-cell throw. Never parsed, never hashed. */
 export function describeOccupied(cell: Cell, sitting: Entity, bounds: GridBounds): string {
+  // THE OCCUPIER'S SIZE AND ORIGIN ARE NAMED SINCE G-036b, and it is the difference between a
+  // usable message and a puzzle: with rectangles, the room in the way is very often NOT
+  // standing on the cell that was asked about. "column 5 is occupied by entity 7" sends the
+  // reader to look for a room at column 5 and find nothing; "occupied by entity 7, a 3x2 at
+  // column 3" says where to look.
+  const where =
+    sitting.at === null
+      ? 'unplaced'
+      : `${describeFootprint(sitting.footprint)} at ${describeCell(sitting.at)}`;
   return (
-    `${describeCell(cell)} is already occupied by entity ${sitting.id} ("${sitting.kind}") ` +
+    `${describeCell(cell)} is already occupied by entity ${sitting.id} ("${sitting.kind}", ${where}) ` +
     `on this plot (${describeBounds(bounds)})`
   );
 }

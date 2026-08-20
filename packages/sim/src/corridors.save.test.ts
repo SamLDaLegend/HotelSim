@@ -301,11 +301,18 @@ describe('v17 -> v18 declares no circulation, because a v17 world named none (G-
 //  reasons and three working rooms.
 // ============================================================================
 describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT (G-034b)', () => {
-  const migratedWorld = (): { entities: EntityStore; grid: GridBounds; corridors: readonly Cell[] } => {
-    const world = migrate();
-    assertWorldShape(world);
-    return world;
-  };
+  /**
+   * THE WHOLE CHAIN, NOT THE ONE STEP, AND THE DIFFERENCE STARTED MATTERING AT G-036b.
+   *
+   * This read `step.migrate(v17World())` and then `assertWorldShape` — which was true while
+   * 18 was the current version and became FALSE the moment 19 existed, because the output of
+   * the 17 -> 18 step is a v18 world and `assertWorldShape` validates against today. The claim
+   * this describe block makes is *"the verdicts a v17 world's bytes described survive into the
+   * present"*, and the present is reached by `deserialise`, so that is what it now walks. It is
+   * also the path a real save takes, which is the stronger reason.
+   */
+  const migratedWorld = (): { entities: EntityStore; grid: GridBounds; corridors: readonly Cell[] } =>
+    deserialise(v17Blob());
 
   it('computes the SAME tally from the migrated world that the v17 bytes described', () => {
     const world = migratedWorld();
@@ -365,7 +372,28 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
     // The migration and the current writer agree about the same history. If the step wrote
     // anything but an empty plan — or wrote it under a different key — these two would differ.
     const loaded = deserialise(v17Blob());
-    const byHand = { ...(v17World() as unknown as typeof loaded), corridors: [] };
+    const era = v17World();
+    const eraEntities = era['entities'] as { nextId: number; list: Record<string, unknown>[] };
+    const eraOutcomes = era['buildOutcomes'] as Record<string, unknown>;
+    const eraRefused = eraOutcomes['refused'] as Record<string, unknown>;
+    // WRITTEN IN BY HAND, WHICH IS THE POINT: this is what the later steps in the chain claim a
+    // pre-corridor world becomes, spelled as literals rather than read back out of the code
+    // that produced it. `corridors: []` is the 17 -> 18 step; the one-cell footprint and the
+    // four v19 build counters are the 18 -> 19 step (G-036b). If any step wrote something else
+    // — or wrote it under a different key — these two hashes would differ.
+    const byHand = {
+      ...(era as unknown as typeof loaded),
+      corridors: [],
+      entities: {
+        ...eraEntities,
+        list: eraEntities.list.map((entity) => ({ ...entity, footprint: { columns: 1, rows: 1 } })),
+      },
+      buildOutcomes: {
+        ...eraOutcomes,
+        placed: 0,
+        refused: { ...eraRefused, footprintTooLarge: 0, footprintTooSmall: 0, notInRoom: 0 },
+      },
+    } as unknown as typeof loaded;
     expect(hashState(loaded)).toBe(hashState(byHand));
   });
 

@@ -28,7 +28,7 @@ import { bindContent } from './content.js';
 import type { RoomTypeData } from './content.js';
 import { beginEntityDraft, entitiesInOrder, getEntity } from './entities.js';
 import type { Entity, EntityDraft } from './entities.js';
-import { createGridBounds } from './grid.js';
+import { createGridBounds, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell } from './grid.js';
 import {
   countOrphanedReservations,
@@ -348,7 +348,10 @@ describe('occupancy: what "occupied" means', () => {
     // class as a cell off the plot, so the same response.
     expect(() =>
       stepTick(createWorld(1, content), content, [spawnAt('priced', cell(0, 0)), spawnAt('free', cell(0, 0))]),
-    ).toThrow(/floor 0, column 0, row 0 is already occupied by entity 1 \("priced"\)/);
+      // THE OCCUPIER'S SIZE AND ORIGIN ARE NAMED SINCE G-036b: with rectangles the room in
+      // the way is very often not standing on the cell that was asked about, so the message
+      // says where to look. The cell being asked about is still first.
+    ).toThrow(/floor 0, column 0, row 0 is already occupied by entity 1 \("priced", 1x1 at floor 0, column 0, row 0\)/);
   });
 
   it('buildRoom onto the same cell REFUSES, and records why', () => {
@@ -383,8 +386,8 @@ describe('occupancy: what "occupied" means', () => {
       {
         nextId: 3,
         list: [
-          { id: 1, kind: 'priced', at: cell(4, 4) },
-          { id: 2, kind: 'aLamp', at: cell(4, 4) } satisfies Entity,
+          { id: 1, kind: 'priced', at: cell(4, 4), footprint: UNIT_FOOTPRINT },
+          { id: 2, kind: 'aLamp', at: cell(4, 4), footprint: UNIT_FOOTPRINT } satisfies Entity,
         ],
       },
       createGridBounds(),
@@ -411,7 +414,7 @@ describe('occupancy: what "occupied" means', () => {
     // nowhere, so it can block no cell — otherwise loading an old save would silently
     // fence off a cell the player never touched.
     const draft = beginEntityDraft(
-      { nextId: 2, list: [{ id: 1, kind: 'priced', at: null }] },
+      { nextId: 2, list: [{ id: 1, kind: 'priced', at: null, footprint: UNIT_FOOTPRINT }] },
       createGridBounds(),
     );
     expect(roomAt(draft, content, cell(0, 0))).toBeUndefined();
@@ -462,7 +465,11 @@ describe('the refusal reason union', () => {
     // The `TRANSACTION_REASONS` discipline, verbatim. `.includes` never `in`, because
     // `JSON.parse` makes `__proto__` an own key (the G-003 lesson).
     expect([...BUILD_REFUSAL_REASONS]).toEqual([...BUILD_REFUSAL_REASONS].sort());
-    expect(BUILD_REFUSAL_REASONS).toHaveLength(4);
+    // SEVEN SINCE G-036b: `footprintTooLarge`, `footprintTooSmall` and `notInRoom` joined
+    // the four G-008 shipped. COUNTED rather than `toBeGreaterThan(0)` — G-034b's lesson —
+    // so a reason added and forgotten in `BUILD_REFUSAL_REASON_SET` fails here as well as
+    // in the type.
+    expect(BUILD_REFUSAL_REASONS).toHaveLength(7);
     expect(isBuildRefusalReason('occupied')).toBe(true);
     expect(isBuildRefusalReason('__proto__')).toBe(false);
     expect(isBuildRefusalReason('toString')).toBe(false);

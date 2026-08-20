@@ -171,6 +171,23 @@ const FORBIDDEN_IN_SAVE_TS = [
   'standingCell',
   'GROUND_FLOOR',
   'isPlaced',
+  // G-036b. `migrateV18ToV19` states WHAT A v18 ENTITY OCCUPIED: one cell, because the concept
+  // of a footprint did not exist and every entity ever written by this project took up exactly
+  // its own cell. `UNIT_FOOTPRINT` in `grid.ts` holds the same two numbers as
+  // `V19_MIGRATION_FOOTPRINT` today, so ADR-0008 (3) applies exactly: no value assertion can
+  // tell the two implementations apart, and the freeze becomes observable only on the day the
+  // live constant moves. THE DAY HAS A NAME: ADR-0047 B1 wants the storage shape to generalise
+  // past a rectangle, and `grid.ts` records that generalisation as a migration this project is
+  // willing to pay. On the day `Footprint` gains a field, a step that spread the live constant
+  // would start writing that field into worlds whose bytes never mentioned it.
+  //
+  // `footprintCells` and `isUnitFootprint` are the back doors: the first is how you would
+  // build the same object from the plot, the second is how you would decide whether to write
+  // one — and a migration asking the current era's predicate about another era's bytes has the
+  // direction of history backwards.
+  'UNIT_FOOTPRINT',
+  'footprintCells',
+  'isUnitFootprint',
 ] as const;
 
 /**

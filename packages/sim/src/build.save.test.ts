@@ -337,9 +337,17 @@ describe('a lived-in build history survives a round trip', () => {
     nightlyUpkeepPence: 2_500,
     constructionCostPence: 1_000,
     provides: ['rest'],
+    // A SIZE BAND WITH ROOM ON BOTH SIDES OF IT (G-036b), so BOTH size refusals are reachable
+    // from this one room type. The band has to exclude 1 for `footprintTooSmall` to be
+    // producible at all — which is also why `buildRoom` is not used to seed this world's
+    // rooms any more: `buildRoom` IS `drawRoom` at one cell, so under a minimum of 2 it is
+    // refused, which is the rule biting exactly as it should.
+    minFootprintCells: 2,
+    maxFootprintCells: 6,
   });
   const content = bindContent({
     roomTypes: [roomType('roomA')],
+    itemTypes: [{ id: 'aChair', name: 'a chair' }],
     // G-027b: `capacityTicks` is time-to-empty (the deleted `patienceTicks`, carried); a refill
     // is a whole tick, so 12/20 floors at 1. No guest arrives in this file.
     needTypes: [{ id: 'rest', name: 'rest', capacityTicks: 12, refillPerTick: 1 }],
@@ -350,7 +358,14 @@ describe('a lived-in build history survives a round trip', () => {
   });
   /** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
 const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
-  const build = (at: Cell): Command => ({ kind: 'buildRoom', roomType: 'roomA', at });
+  /** A 1x2 draw, which is the smallest this content accepts. */
+  const draw = (at: Cell, columns = 1, rows = 2): Command => ({
+    kind: 'drawRoom',
+    roomType: 'roomA',
+    at,
+    footprint: { columns, rows },
+  });
+  const place = (at: Cell): Command => ({ kind: 'placeItem', itemType: 'aChair', at });
 
   /** A world where every counter is non-zero, so nothing round-trips by being empty. */
   function lived(): World {
@@ -358,17 +373,28 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
       ...createWorld(11, content),
       ledger: [{ tick: 0, amount: 5_000, reason: 'roomRevenue' }],
     };
-    return run(funded, content, 10, [
-      { tick: 0, command: build(cell(0, 0)) },
-      { tick: 1, command: build(cell(0, 0)) }, // occupied
-      { tick: 2, command: build(cell(99, 0)) }, // off the plot
+    return run(funded, content, 14, [
+      { tick: 0, command: draw(cell(0, 0)) },
+      // OCCUPIED, AND IT IS AN OVERLAP RATHER THAN A COLLISION ON THE ORIGIN (G-036b). The
+      // room above covers rows 0 and 1 at column 0; this draw's ORIGIN is row 1, which the
+      // origin-keyed test that shipped before this goal would have called free.
+      { tick: 1, command: draw(cell(0, 0, 1)) },
+      { tick: 2, command: draw(cell(99, 0)) }, // off the plot
       { tick: 3, command: { kind: 'demolishRoom', id: 404 } }, // no such room
-      { tick: 4, command: build(cell(0, 1)) },
-      { tick: 5, command: build(cell(0, 2)) },
-      { tick: 6, command: build(cell(0, 3)) },
-      { tick: 7, command: build(cell(0, 4)) },
-      { tick: 8, command: build(cell(0, 5)) }, // out of money by now
-      { tick: 9, command: { kind: 'demolishRoom', id: 1 } },
+      // BOTH SIZE REFUSALS, from the same room type's own band of 2..6 cells.
+      { tick: 4, command: draw(cell(0, 8), 1, 1) }, // footprintTooSmall
+      { tick: 5, command: draw(cell(0, 8), 4, 2) }, // footprintTooLarge — 8 cells
+      // AN ITEM IN A ROOM, AND ONE NOWHERE. The first stands at the room's non-origin cell,
+      // so it is hosted only because the placement index covers rectangles; the second is on
+      // bare plot and is refused.
+      { tick: 6, command: place(cell(0, 0, 1)) },
+      { tick: 7, command: place(cell(0, 40)) }, // notInRoom
+      { tick: 8, command: draw(cell(0, 2)) },
+      { tick: 9, command: draw(cell(0, 4)) },
+      { tick: 10, command: draw(cell(0, 6)) },
+      { tick: 11, command: draw(cell(0, 10)) },
+      { tick: 12, command: draw(cell(0, 12)) }, // out of money by now
+      { tick: 13, command: { kind: 'demolishRoom', id: 1 } },
     ]);
   }
 
@@ -376,6 +402,10 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
     const world = lived();
     expect(world.buildOutcomes.built).toBeGreaterThan(0);
     expect(world.buildOutcomes.demolished).toBeGreaterThan(0);
+    // `placed` IS FOLDED IN HERE RATHER THAN LEFT TO A NEW TEST (G-036b): this is the one
+    // assertion in the repo that walks EVERY build counter, and a counter it does not name is
+    // a counter that could round-trip by being empty.
+    expect(world.buildOutcomes.placed).toBeGreaterThan(0);
     for (const reason of BUILD_REFUSAL_REASONS) {
       expect(world.buildOutcomes.refused[reason]).toBeGreaterThan(0);
     }
@@ -398,7 +428,7 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
 
   it('still refuses correctly after a reload, so the counters are not write-only', () => {
     const saved = deserialise(serialise(lived()));
-    const after = stepTick(saved, content, [build(cell(0, 1))]);
+    const after = stepTick(saved, content, [draw(cell(0, 2))]);
     expect(after.buildOutcomes.refused.occupied).toBe(saved.buildOutcomes.refused.occupied + 1);
   });
 });

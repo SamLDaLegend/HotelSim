@@ -86,6 +86,8 @@ import {
   cellsEqual,
   compareCells,
   describeCell,
+  footprintCells,
+  footprintCovers,
   GROUND_FLOOR,
   isWithinBounds,
 } from './grid.js';
@@ -211,8 +213,9 @@ export type ValidityContext = {
    */
   readonly corridors: Corridors;
   readonly forEach: EntityVisitor;
-  /** Placed entities sorted by cell then id. Null until the first question. */
-  index: readonly PlacedEntity[] | null;
+  /** One entry per COVERED CELL of every placed entity, sorted by cell then id. Null until
+   *  the first question. See `Placement` for what changed at G-036b and why. */
+  index: readonly Placement[] | null;
   /**
    * Ids of rooms whose floor-below chain REACHES THE EARTH. Built with the index, in one
    * ascending-floor pass. LOOKUP ONLY — never iterated, never ordered (I2).
@@ -380,9 +383,53 @@ export function tickValidityContext(
   return fresh;
 }
 
-/** An entity that is somewhere. The index holds only these, so no lookup has to remember
+/** An entity that is somewhere. Only these reach the index, so no lookup has to remember
  *  to skip the unplaced. */
 type PlacedEntity = Entity & { readonly at: Cell };
+
+/**
+ * ONE COVERED CELL OF ONE PLACED ENTITY — the unit the placement index is built out of
+ * since G-036b.
+ *
+ * ==========================================================================================
+ * THE INDEX WAS KEYED ON THE ORIGIN CELL AND EVERY LOOKUP THROUGH IT BROKE SILENTLY THE
+ * MOMENT A FOOTPRINT EXCEEDED 1x1.
+ *
+ * It used to hold the ENTITY, sorted by `entity.at`, and `roomAtIn` walked while
+ * `cellsEqual(entry.at, cell)`. **A room COVERING a cell but ORIGINATING elsewhere was not
+ * found.** Three consequences, none of them visible to any test or gate that existed before
+ * this goal:
+ *
+ *   - `groundedRooms` reported a room standing on a WIDE room `unsupported` unless it happened
+ *     to sit on that room's origin cell.
+ *   - the door walk read a wide neighbour's non-origin cells as FREE, so a room sealed in on
+ *     all four sides by one wide neighbour got a PHANTOM DOOR and reported valid.
+ *   - `hostRoomOf` gave an item placed anywhere but the origin NO HOST, so `isProviding`
+ *     answered false — `placeItem`, this goal's primary player verb, silently producing dead
+ *     furniture that costs money and serves nobody.
+ *
+ * AND I2 CANNOT BACKSTOP ANY OF IT. `tools/gates/determinism.mjs` compares runs to each other
+ * and holds no reference hash, so a CONSISTENTLY wrong verdict leaves the gate green — the
+ * same limit `ValidityCache` above records clause by clause.
+ *
+ * SO THE INDEX HOLDS ONE ENTRY PER COVERED CELL. A 2x3 room contributes six entries, all
+ * pointing at the same `entity`. The lookups are unchanged in shape — binary search to the
+ * first entry at a cell, walk while the cell matches — and now they find a room by any cell it
+ * covers, which is the one definition of "occupied" the whole file rests on.
+ *
+ * WHAT IT COSTS, STATED RATHER THAN DISCOVERED. The index is now
+ * `sum over placed entities of footprint area` rather than `count of placed entities`, and the
+ * sort is O(A log A) in that total area. That is still LINEAR IN OCCUPIED AREA and there is no
+ * pass over all entities per entity anywhere: a room contributes its own cells and nobody
+ * else's. On every world this build has ever benched — where every entity is 1x1 — A is
+ * exactly the old n and the cost is byte-identical.
+ * ==========================================================================================
+ */
+type Placement = {
+  /** The covered cell. The index's sort key, ahead of the entity id. */
+  readonly at: Cell;
+  readonly entity: PlacedEntity;
+};
 
 /** O(1). Builds nothing — a tick that asks no validity question pays nothing. */
 export function createValidityContext(
@@ -408,29 +455,40 @@ export function createValidityContext(
 }
 
 /**
- * The placement index: every PLACED entity, sorted by cell and then by id.
+ * The placement index: EVERY COVERED CELL of every placed entity, sorted by cell and then
+ * by entity id.
  *
  * Unplaced entities are left out entirely rather than sorted to one end. They occupy no
  * cell, so there is no cell at which anyone could find them, and including them would
  * mean every lookup had to remember to skip them.
  *
  * The secondary sort on id is what makes the order TOTAL. Several entities may share a
- * cell — an item stands inside a room on purpose — and `Array.prototype.sort` is only
- * required to be stable, not to be deterministic across engines for equal keys. An order
- * that is merely stable in V8 is not an order (I2).
+ * cell — an item stands inside a room on purpose, and since G-036b a wide room covers cells
+ * that other things also stand on — and `Array.prototype.sort` is only required to be
+ * stable, not to be deterministic across engines for equal keys. An order that is merely
+ * stable in V8 is not an order (I2).
+ *
+ * ONE ENTRY PER COVERED CELL SINCE G-036b — see `Placement` for the three silent failures the
+ * origin-keyed version produced and for what the change costs.
  */
-function placementIndex(ctx: ValidityContext): readonly PlacedEntity[] {
+function placementIndex(ctx: ValidityContext): readonly Placement[] {
   const existing = ctx.index;
   if (existing !== null) return existing;
-  const placed: PlacedEntity[] = [];
+  const placed: Placement[] = [];
   ctx.forEach((entity) => {
-    if (isPlaced(entity)) placed.push(entity);
+    if (!isPlaced(entity)) return;
+    // `footprintCells` emits in `compareCells` order, so each entity's own run of entries is
+    // already sorted and its ORIGIN is first. `groundedRooms` below depends on that second
+    // half; the sort below does not depend on either.
+    for (const cell of footprintCells(entity.at, entity.footprint)) {
+      placed.push({ at: cell, entity });
+    }
   });
   placed.sort((a, b) => {
     const byCell = compareCells(a.at, b.at);
     // Ids are safe integers well inside the subtraction's range, and this branch is
-    // reached only for two entities in the same cell, which is a handful at most.
-    return byCell !== 0 ? byCell : a.id - b.id;
+    // reached only for two entries in the same cell, which is a handful at most.
+    return byCell !== 0 ? byCell : a.entity.id - b.entity.id;
   });
   ctx.index = placed;
   ctx.grounded = groundedRooms(ctx, placed);
@@ -473,16 +531,49 @@ function placementIndex(ctx: ValidityContext): readonly PlacedEntity[] {
  * drives a grounded case at mixed rows, which is what goes red under a floor-descending
  * comparator; `grid.test.ts` pins the rank itself as a convention.
  *
- * Written to fold over `roomCellsOf` rather than `room.at`, so a multi-cell footprint
- * needs EVERY cell either at the earth or over a grounded room — the partially-supported
- * case that lands with width (M6) needs no change here.
+ * Written to fold over `roomCellsOf` rather than `room.at`, so a multi-cell footprint needs
+ * EVERY cell either at the earth or over a grounded room — the partially-supported case.
+ * G-036b makes that reachable for the first time: a 3x1 room whose left two cells stand on a
+ * room and whose third hangs over open plot is `unsupported`, and it is the whole room that is
+ * unsupported rather than a third of it, because a room is one entity.
+ *
+ * ==========================================================================================
+ * WHAT ONE-ENTRY-PER-COVERED-CELL DOES TO THE ONE-PASS ARGUMENT — asked at PLAN, answered
+ * here, because the old argument rested on ONE ENTRY PER ENTITY and that is no longer true.
+ *
+ * THE ARGUMENT SURVIVES INTACT, AND THE REASON IS THE ONE G-034a'S MUTATION PROBE ALREADY
+ * ESTABLISHED: the precondition is that FLOOR IS COMPARED ASCENDING, and nothing about the
+ * RANK of the two horizontal axes enters into it. `cellBelow` preserves both horizontal axes,
+ * so the cell below a room differs from it in the floor and in nothing else. Multiplying the
+ * entries WITHIN a floor cannot disturb an ordering ACROSS floors: every entry on floor f-1
+ * still precedes every entry on floor f, so when a room asks whether the thing beneath it is
+ * grounded, that answer is still already final rather than pending.
+ *
+ * WHAT DID CHANGE, AND IT IS THE ONE NEW OBLIGATION: a room now appears in the index once per
+ * covered cell, so a naive walk would EVALUATE it several times. That is not merely wasteful —
+ * a partial re-evaluation would `grounded.add` a room the first pass had rejected. The guard is
+ * to evaluate a room at its ORIGIN ENTRY only, and it is exact rather than heuristic for two
+ * reasons that are both properties of the type rather than of this loop:
+ *
+ *   - a `Footprint` has no floor extent, so all of a room's entries lie on ONE floor and the
+ *     origin entry is inside the same floor stretch as the rest;
+ *   - `footprintCells` emits in `compareCells` order, so the origin — smallest column, then
+ *     smallest row — is the FIRST of a room's entries under this sort.
+ *
+ * `validity.footprint.test.ts` pins both halves: a wide room over a wide room is grounded, and
+ * a wide room half over open plot is not.
+ * ==========================================================================================
  */
-function groundedRooms(ctx: ValidityContext, index: readonly PlacedEntity[]): Set<EntityId> {
+function groundedRooms(ctx: ValidityContext, index: readonly Placement[]): Set<EntityId> {
   const grounded = new Set<EntityId>();
-  for (const entity of index) {
+  for (const entry of index) {
+    const entity = entry.entity;
+    // ONCE PER ROOM, AT ITS ORIGIN ENTRY. See the block above for why that is the first entry
+    // of every footprint and why evaluating twice would be wrong rather than merely slow.
+    if (!cellsEqual(entry.at, entity.at)) continue;
     if (!isRoomKind(ctx.content, entity.kind)) continue;
     let carried = true;
-    for (const cell of roomCellsOf(ctx.content, entity)) {
+    for (const cell of roomCellsOf(entity)) {
       if (cell.floor <= GROUND_FLOOR) continue;
       const below = roomAtIn(ctx, index, cellBelow(cell));
       // `below` was visited earlier in this same pass — it is one floor down, and the
@@ -498,7 +589,7 @@ function groundedRooms(ctx: ValidityContext, index: readonly PlacedEntity[]): Se
 }
 
 /** Index of the first entry standing at or after `cell`. Binary search, O(log n). */
-function lowerBound(index: readonly PlacedEntity[], cell: Cell): number {
+function lowerBound(index: readonly Placement[], cell: Cell): number {
   let low = 0;
   let high = index.length;
   while (low < high) {
@@ -537,13 +628,16 @@ function roomAtCell(ctx: ValidityContext, cell: Cell): Entity | undefined {
  */
 function roomAtIn(
   ctx: ValidityContext,
-  index: readonly PlacedEntity[],
+  index: readonly Placement[],
   cell: Cell,
 ): PlacedEntity | undefined {
   for (let i = lowerBound(index, cell); i < index.length; i += 1) {
     const entry = index[i];
     if (entry === undefined || !cellsEqual(entry.at, cell)) break;
-    if (isRoomKind(ctx.content, entry.kind)) return entry;
+    // COVERING, NOT ORIGINATING (G-036b). The entry's cell IS a covered cell of the entity,
+    // because that is what the index is built out of — so a room found here may well have its
+    // origin somewhere else, and that is the whole repair. See `Placement`.
+    if (isRoomKind(ctx.content, entry.entity.kind)) return entry.entity;
   }
   return undefined;
 }
@@ -557,38 +651,41 @@ function isGrounded(ctx: ValidityContext, room: Entity): boolean {
   return ctx.grounded?.has(room.id) ?? false;
 }
 
-/** Whether an entity of kind `kind` stands on `cell`. */
+/** Whether an entity of kind `kind` covers `cell`. */
 function kindAtCell(ctx: ValidityContext, cell: Cell, kind: ContentId): boolean {
   const index = placementIndex(ctx);
   for (let i = lowerBound(index, cell); i < index.length; i += 1) {
     const entry = index[i];
     if (entry === undefined || !cellsEqual(entry.at, cell)) break;
-    if (entry.kind === kind) return true;
+    if (entry.entity.kind === kind) return true;
   }
   return false;
 }
 
 /**
- * The cells a room occupies. ONE CELL TODAY, and this is the single seam that changes
- * when it is more.
+ * The cells a room occupies. THE SEAM THAT G-036b WALKED THROUGH.
  *
- * Multi-cell footprints (`widthCells` as content) are parked to M6, deliberately: the
- * enclosure rule below is PER CELL — every cell of the footprint needs a floor beneath
- * it — so extent adds the partially-supported case and changes nothing else. Every rule
- * in this module iterates this function rather than reading `room.at`, so landing width
- * later is a function body and a content field, and still no migration: the stored shape
- * stays one origin cell per entity.
+ * It returned `[room.at]` for thirty-five goals and carried an unused `content` parameter,
+ * because the plan of record was that extent would be a property of the room TYPE. ADR-0046
+ * §4.2 ruled otherwise and it is the better answer: **a room type is a constraint set, and the
+ * footprint is the player's drawing, which is world state.** So the parameter is GONE rather
+ * than left unused — an unused parameter that names the wrong owner is a comment that
+ * typechecks, and the next reader would have gone looking in content for a rectangle that
+ * lives on the entity.
+ *
+ * The enclosure rule below is PER CELL — every cell of the footprint needs a floor beneath it
+ * — so extent added the partially-supported case and changed no other rule's shape. Every rule
+ * in this module iterates this function or `footprintCovers` rather than reading `room.at`.
  *
  * Returns `[]` for an unplaced room, which is why `unplaced` is checked before anything
  * that iterates this — a rule folding over no cells would answer "vacuously fine".
+ *
+ * IT ALLOCATES, AND THE HOT PREDICATES DO NOT USE IT. `coversCell` and `standsInRoom` below
+ * answer their questions against the RECTANGLE in O(1); this is for the callers that genuinely
+ * need to visit every cell.
  */
-export function roomCellsOf(content: BoundContent, room: Entity): readonly Cell[] {
-  // `content` is a parameter because a footprint is a property of the room TYPE, and
-  // reading it is the only line that changes when width lands. It is deliberately unused
-  // today rather than absent: adding it later would touch every call site instead of
-  // this function body, which is the whole point of having a seam.
-  void content;
-  return room.at === null ? EMPTY_CELLS : [room.at];
+export function roomCellsOf(room: Entity): readonly Cell[] {
+  return room.at === null ? EMPTY_CELLS : footprintCells(room.at, room.footprint);
 }
 
 const EMPTY_CELLS: readonly Cell[] = Object.freeze([]);
@@ -600,13 +697,14 @@ const EMPTY_CELLS: readonly Cell[] = Object.freeze([]);
  * `build.ts`, which must remove the items a demolished room was holding. Two
  * implementations of "inside" would eventually disagree, and the way that shows up is a
  * bed left standing in an empty cell that furnishes the next room built there for free.
+ *
+ * O(1) SINCE G-036b, and `applyDemolishRoom` is why that matters: it asks this of EVERY live
+ * entity, so a linear scan over the room's cells would make demolishing an NxM room
+ * O(entities x area) — the shape the tick-cost tripwire cannot see. `coversCell` below is the
+ * one rectangle-contains test and this is its second caller.
  */
-export function standsInRoom(content: BoundContent, room: Entity, entity: Entity): boolean {
-  if (entity.at === null) return false;
-  for (const cell of roomCellsOf(content, room)) {
-    if (cellsEqual(cell, entity.at)) return true;
-  }
-  return false;
+export function standsInRoom(room: Entity, entity: Entity): boolean {
+  return entity.at !== null && coversCell(room, entity.at);
 }
 
 /**
@@ -657,7 +755,7 @@ export function roomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
 function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidityReason | null {
   if (room.at === null) return 'unplaced';
 
-  const cells = roomCellsOf(ctx.content, room);
+  const cells = roomCellsOf(room);
 
   // ENCLOSED: every cell of the footprint has a floor beneath it, ALL THE WAY DOWN TO THE
   // EARTH. At or below ground the earth is the floor; above it, another room is — and
@@ -718,7 +816,7 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   for (const cell of cells) {
     for (const beside of [cellLeft(cell), cellRight(cell), cellFront(cell), cellBack(cell)]) {
       if (!isWithinBounds(beside, ctx.bounds)) continue;
-      if (coversCell(ctx.content, room, beside)) continue;
+      if (coversCell(room, beside)) continue;
       if (roomAtCell(ctx, beside) !== undefined) continue;
       // A DOOR: this cell is on the plot, is not the room's own, and no room stands on it.
       hasDoor = true;
@@ -824,12 +922,22 @@ function plannedFloorsOf(corridors: Corridors): Set<number> {
   return floors;
 }
 
-/** Whether `cell` is part of this room's own footprint. */
-function coversCell(content: BoundContent, room: Entity, cell: Cell): boolean {
-  for (const own of roomCellsOf(content, room)) {
-    if (cellsEqual(own, cell)) return true;
-  }
-  return false;
+/**
+ * Whether `cell` is part of this room's own footprint. A RECTANGLE-CONTAINS TEST, NOT A SCAN,
+ * and the complexity is the point (G-036b).
+ *
+ * It was a linear scan over `roomCellsOf`, which cost nothing while `roomCellsOf` returned one
+ * cell. It is called from inside the door walk's NEIGHBOUR LOOP — once per neighbour of every
+ * cell of the room — so as a scan the door rule would be **O(area^2) per room**: a 10x10 room
+ * is 40,000 cell comparisons per room per validity computation, paid on the hottest question in
+ * the simulation. `footprintCovers` answers it in four integer comparisons whatever the size.
+ *
+ * IT LANDS AGAINST AN OPEN ESCALATION whose bound already cannot catch this project's smallest
+ * known regression, which is exactly why the complexity is fixed at the moment the rectangle
+ * arrives rather than left for a tripwire that would not fire.
+ */
+function coversCell(room: Entity, cell: Cell): boolean {
+  return room.at !== null && footprintCovers(room.at, room.footprint, cell);
 }
 
 /** Whether this room works. The predicate the guest loop asks before reserving. */
@@ -883,6 +991,20 @@ export function validRoomsOf(ctx: ValidityContext): readonly Entity[] {
  *
  * An UNPLACED item has no host, which is why `isProviding` answers false for one rather
  * than asking about a cell that does not exist.
+ *
+ * ==========================================================================================
+ * THE LOOKUP IS FOOTPRINT-AWARE SINCE G-036b, AND THIS IS THE CALL SITE THAT MADE THE INDEX
+ * REPAIR A BLOCKER RATHER THAN A TIDY-UP.
+ *
+ * `placementIndex` used to be keyed on the ORIGIN cell, so an item standing anywhere in a
+ * multi-cell room except its origin got NO HOST — and `isProviding` therefore answered false.
+ * `placeItem` is this goal's primary player verb; a player placing a vending machine in the
+ * middle of the café they just drew would have got dead furniture, silently, with every gate
+ * green (I2 holds no reference hash, so a consistently wrong verdict stays green).
+ *
+ * `validity.footprint.test.ts` drives exactly that: an item placed at each covered cell of a
+ * 3x2 room in turn, asserting a host and `isProviding` for every one of the six.
+ * ==========================================================================================
  */
 function hostRoomOf(ctx: ValidityContext, item: Entity): Entity | undefined {
   return item.at === null ? undefined : roomAtCell(ctx, item.at);

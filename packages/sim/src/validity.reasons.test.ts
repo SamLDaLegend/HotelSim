@@ -19,7 +19,7 @@ import { createCorridors, withCorridor } from './corridors.js';
 import type { Corridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
-import { createGridBounds, GROUND_FLOOR } from './grid.js';
+import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell } from './grid.js';
 import {
   countInvalidRooms,
@@ -68,7 +68,7 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
 type Spec = readonly [kind: string, at: Cell | null];
 
 function storeOf(...specs: readonly Spec[]): EntityStore {
-  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at }));
+  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at, footprint: UNIT_FOOTPRINT }));
   return { nextId: specs.length + 1, list };
 }
 
@@ -216,7 +216,7 @@ describe('the union itself', () => {
   });
 
   it('describes every member, distinctly', () => {
-    const room: Entity = { id: 3, kind: 'bedroom', at: cell(1, 2) };
+    const room: Entity = { id: 3, kind: 'bedroom', at: cell(1, 2), footprint: UNIT_FOOTPRINT };
     const sentences = ROOM_INVALIDITY_REASONS.map((reason) => describeRoomInvalidity(room, reason));
     expect(new Set(sentences).size).toBe(ROOM_INVALIDITY_REASONS.length);
     for (const sentence of sentences) expect(sentence.endsWith('.')).toBe(true);

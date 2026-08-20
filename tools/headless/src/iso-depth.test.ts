@@ -56,7 +56,7 @@ import type { Drawable, LayerIndex } from '../../../apps/game/src/view/depth.js'
 const COLUMNS = [-2, -1, 0, 1, 2, 3];
 const ROWS = [-2, -1, 0, 1, 2, 3];
 
-describe('the tile dimensions are LOCKED and the wall height is PROVISIONAL', () => {
+describe('the tile dimensions are LOCKED and so, since G-036b, is the wall height', () => {
   it('is 2:1, at 128 by 64 logical pixels', () => {
     // ADR-0047 A2, accepted with the derivation §2.1 demands. The atlas depends on these, so
     // they are settled before any asset exists — which is exactly why they are asserted here
@@ -70,18 +70,34 @@ describe('the tile dimensions are LOCKED and the wall height is PROVISIONAL', ()
     expect(ASSET_SCALE).toBe(2);
   });
 
-  it('states the wall-height derivation — one grid unit — and does not claim it is settled', () => {
-    // THE DERIVATION IS PINNED; THE DECISION IS NOT. At 2:1 a tile's screen height is the
-    // projection of one grid unit of depth, so one grid unit of HEIGHT is the same number.
-    // This asserts the arithmetic held. **It does not assert the number is right**, because
-    // wall height is a PERCEPTUAL property and ADR-0013 says a perceptual criterion needs a
-    // perceptual check — a human looking at a floor. ADR-0047's amendment rules it provisional
-    // for exactly this goal: ship it, look at it, then lock it.
+  it('keeps a wall clear of the CENTRE of the tile behind it — the structural clause', () => {
+    // ==================================================================================
+    // THIS ASSERTION MOVED AT G-036b, AND IT MOVED THE WAY ADR-0050 SAYS AN ASSERTION SHOULD.
     //
-    // So when a human says the walls are too tall, THIS ASSERTION IS THE ONE THAT MOVES, and
-    // it moves with the constant. It is here to stop the number drifting by accident, not to
-    // defend it.
-    expect(WALL_HEIGHT).toBe(TILE_HEIGHT);
+    // It used to read `expect(WALL_HEIGHT).toBe(TILE_HEIGHT)` and its own comment predicted its
+    // fate: *"when a human says the walls are too tall, THIS ASSERTION IS THE ONE THAT MOVES,
+    // and it moves with the constant."* It did move — 64 -> 24 — and swapping one literal for
+    // another would have left behind exactly what ADR-0050 forbids: a check that has to be
+    // re-edited by every goal that touches the constant, and that therefore teaches the reader
+    // to wave such edits through.
+    //
+    // So it splits, as ADR-0050 requires, into a STRUCTURAL clause and today's fact.
+    //
+    // THE STRUCTURAL CLAUSE, which survives any future revision of the number: a wall covers
+    // the near `WALL_HEIGHT / TILE_HEIGHT` of the tile BEHIND it, measured down the screen from
+    // that tile's near corner. A room's contents are drawn in that tile's FAR half
+    // (`drawItems` anchors above the centre), so a wall that reaches the centre hides them. At
+    // `WALL_HEIGHT === TILE_HEIGHT` it covered the whole tile, which is what WATCH #13 measured
+    // as "9 item plates emitted and 3 visible". `wall-height.occlusion.test.ts` drives the
+    // consequence on a real frame; this is the arithmetic behind it.
+    expect(WALL_HEIGHT).toBeLessThan(TILE_HEIGHT / 2);
+
+    // AND TODAY'S FACT, which documents what happens to be true now rather than defending it.
+    // 24 is `TILE_HEIGHT * 3/8`: an exact rational of the LOCKED tile, so no atlas dimension
+    // moves (ADR-0047 A2), with 6px of margin under the item-visibility bound rather than
+    // sitting on it. See `WALL_HEIGHT`'s own docblock for the derivation and the sweep.
+    expect(WALL_HEIGHT).toBe(24);
+    expect(WALL_HEIGHT * 8).toBe(TILE_HEIGHT * 3);
   });
 });
 

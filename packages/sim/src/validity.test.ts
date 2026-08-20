@@ -19,14 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
-import {
-  cellBelow,
-  cellLeft,
-  cellRight,
-  compareCells,
-  createGridBounds,
-  GROUND_FLOOR,
-} from './grid.js';
+import { cellBelow, cellLeft, cellRight, compareCells, createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import {
   countInvalidRooms,
@@ -85,7 +78,7 @@ type Spec = readonly [kind: string, at: Cell | null];
 
 /** A store holding exactly these entities, ids ascending in the order given. */
 function storeOf(...specs: readonly Spec[]): EntityStore {
-  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at }));
+  const list: Entity[] = specs.map(([kind, at], index) => ({ id: index + 1, kind, at, footprint: UNIT_FOOTPRINT }));
   return { nextId: specs.length + 1, list };
 }
 
@@ -153,14 +146,16 @@ describe('a valid room', () => {
     expect(reasonFor(storeOf(['cupboard', cell(GROUND_FLOOR, 4)]), 0)).toBeNull();
   });
 
-  it('occupies exactly the cell it stands on, today', () => {
-    // `roomCellsOf` is the seam multi-cell footprints land on (parked to M6). Every rule
-    // in this module iterates it, so widening a room later is a function body rather
-    // than four rules that each learned about width separately.
+  it('occupies exactly the cell it stands on when its footprint is one cell', () => {
+    // `roomCellsOf` WAS the seam multi-cell footprints would land on, and G-036b walked
+    // through it: the cells come from the INSTANCE's own rectangle now, and the `content`
+    // parameter is gone because a footprint turned out to be world state rather than a
+    // property of the room type (ADR-0046 §4.2). This case is the degenerate one, and it is
+    // kept rather than replaced: every world before v19 and every item still lives in it.
     const store = storeOf(['bedroom', cell(2, 9)]);
     const room = store.list[0];
     if (room === undefined) throw new Error('test bug');
-    expect(roomCellsOf(content, room)).toEqual([cell(2, 9)]);
+    expect(roomCellsOf(room)).toEqual([cell(2, 9)]);
   });
 });
 
@@ -526,10 +521,11 @@ describe('required items', () => {
   });
 
   it('knows which entities stand in a room', () => {
-    const room: Entity = { id: 1, kind: 'bedroom', at: cell(GROUND_FLOOR, 3) };
-    expect(standsInRoom(content, room, { id: 2, kind: 'bed', at: cell(GROUND_FLOOR, 3) })).toBe(true);
-    expect(standsInRoom(content, room, { id: 2, kind: 'bed', at: cell(GROUND_FLOOR, 4) })).toBe(false);
-    expect(standsInRoom(content, room, { id: 2, kind: 'bed', at: null })).toBe(false);
+    const room: Entity = { id: 1, kind: 'bedroom', at: cell(GROUND_FLOOR, 3), footprint: UNIT_FOOTPRINT };
+    const bed = (at: Cell | null): Entity => ({ id: 2, kind: 'bed', at, footprint: UNIT_FOOTPRINT });
+    expect(standsInRoom(room, bed(cell(GROUND_FLOOR, 3)))).toBe(true);
+    expect(standsInRoom(room, bed(cell(GROUND_FLOOR, 4)))).toBe(false);
+    expect(standsInRoom(room, bed(null))).toBe(false);
   });
 });
 
@@ -640,7 +636,7 @@ describe('counting invalid rooms', () => {
 
 describe('the reason is legible', () => {
   it('describes every reason in a sentence naming the room', () => {
-    const room: Entity = { id: 7, kind: 'bedroom', at: cell(3, 4) };
+    const room: Entity = { id: 7, kind: 'bedroom', at: cell(3, 4), footprint: UNIT_FOOTPRINT };
     for (const reason of ROOM_INVALIDITY_REASONS) {
       const text = describeRoomInvalidity(room, reason);
       expect(text.length).toBeGreaterThan(20);

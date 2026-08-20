@@ -29,7 +29,7 @@ import { bindContent } from './content.js';
 import { beginEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
 import { departureCountOf, evictedGuests } from './guests.js';
-import { createGridBounds, GROUND_FLOOR } from './grid.js';
+import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import { stepTick } from './tick.js';
 import {
@@ -88,7 +88,7 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
 function storeOf(...specs: readonly (readonly [string, Cell])[]): EntityStore {
   return {
     nextId: specs.length + 1,
-    list: specs.map(([kind, at], index) => ({ id: index + 1, kind, at })),
+    list: specs.map(([kind, at], index) => ({ id: index + 1, kind, at, footprint: UNIT_FOOTPRINT })),
   };
 }
 

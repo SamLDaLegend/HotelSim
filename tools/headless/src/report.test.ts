@@ -599,7 +599,16 @@ const distinct: RunSummary = {
   build: {
     built: 126,
     demolished: 127,
-    refused: { insufficientFunds: 128, noSuchRoom: 129, occupied: 130, outOfBounds: 131 },
+    placed: 132,
+    refused: {
+      footprintTooLarge: 133,
+      footprintTooSmall: 134,
+      insufficientFunds: 128,
+      noSuchRoom: 129,
+      notInRoom: 135,
+      occupied: 130,
+      outOfBounds: 131,
+    },
     constructionTransactions: 126,
     refundTransactions: 127,
   },
@@ -646,7 +655,11 @@ describe('renderers', () => {
         'upkeep      -119p',
         'built       126',
         'demolished  127',
-        'refused     128 funds, 130 occupied, 131 off plot, 129 no room',
+        'placed      132',
+        // G-036b: three new columns, and every number in this file is DISTINCT on purpose —
+        // a renderer that put a field in the wrong column would be invisible against a row
+        // of zeroes, which is why this fixture never uses one.
+        'refused     133 too big, 134 too small, 128 funds, 135 not in room, 130 occupied, 131 off plot, 129 no room',
         'building    -125p',
         'capital     139p',
         'refunds     140p',

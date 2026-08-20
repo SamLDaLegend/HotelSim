@@ -8,7 +8,7 @@
 // the three in `tick.ts` — not wherever they happen to arrive.
 
 import type { ContentId, EntityId } from './entities.js';
-import type { Cell } from './grid.js';
+import type { Cell, Footprint } from './grid.js';
 
 export type Command =
   /** Does nothing, deterministically. Pins that a no-effect command is still a defined
@@ -30,7 +30,32 @@ export type Command =
    * determinism harness, and to set up the state a scenario STARTS in — the hotel the
    * player inherited. **A host acting for a player reaches for `buildRoom` instead.**
    */
-  | { readonly kind: 'spawnEntity'; readonly entityKind: ContentId; readonly at: Cell }
+  | {
+      readonly kind: 'spawnEntity';
+      readonly entityKind: ContentId;
+      readonly at: Cell;
+      /**
+       * HOW BIG THE THING IS, or absent for one cell (G-036b).
+       *
+       * OPTIONAL, AND ABSENCE IS THE STRUCTURAL READING RATHER THAN A DEFAULT: every entity
+       * this project ever spawned before v19 took up exactly its own cell, and every ITEM
+       * still does. So the hundreds of existing call sites keep meaning what they meant and
+       * every recorded command log keeps replaying to the same world — the property that made
+       * `drawRoom` a new command rather than a wider `buildRoom`, applied to the primitive.
+       *
+       * IT EXISTS BECAUSE THE STRUCTURAL DOOR MUST BE ABLE TO DESCRIBE ANY WORLD A SAVE CAN
+       * HOLD. A save can hold a 3x2 room; a scenario that seeds "the hotel the player
+       * inherited" has to be able to seed one, and `apps/game/src/scenario.ts` now does. A
+       * primitive that could not express a legal state would push scenario authors onto the
+       * player verb, which charges money and refuses — the wrong tool with the wrong failure
+       * mode.
+       *
+       * A footprint that is not a pair of positive integers THROWS, and so does one that
+       * reaches off the plot, and so does one that overlaps a standing room. Caller bugs, all
+       * three, for the reason the cell already is: the caller is holding the world it ignored.
+       */
+      readonly footprint?: Footprint;
+    }
   /** Removes one entity. Unknown or already-removed ids are a deterministic no-op. The
    *  primitive beneath `demolishRoom`, which records a refusal instead. */
   | { readonly kind: 'despawnEntity'; readonly id: EntityId }
@@ -50,6 +75,54 @@ export type Command =
    * share its cells.
    */
   | { readonly kind: 'buildRoom'; readonly roomType: ContentId; readonly at: Cell }
+  /**
+   * THE PLAYER DRAWS A ROOM (G-036b, ADR-0046 §4.2). The primary building verb.
+   *
+   * `buildRoom` above is THIS COMMAND AT ONE CELL — `applyBuildRoom` is a one-line call to
+   * `applyDrawRoom` — so the two are not two rules and there is no 1x1 special case to keep
+   * exercised. What made it a second command rather than a wider `buildRoom` is that a command
+   * log is a durable artefact (I2): adding a command leaves every recorded log meaning exactly
+   * what it meant, and widening one silently changes all of them.
+   *
+   * It refuses, recording the reason in `World.buildOutcomes` and never throwing, when any
+   * cell of the rectangle is off the plot, when the rectangle is smaller or larger than the
+   * ROOM TYPE allows (both are content numbers — `minFootprintCells`, `maxFootprintCells`),
+   * when it OVERLAPS a standing room, or when the charge would take the balance below zero.
+   * **Overlap is rectangle against rectangle**: a draw whose origin is free and whose body
+   * lies across an existing room is refused, which a per-cell test could not express.
+   *
+   * A footprint that is not a pair of positive integers THROWS. A 2.5-column rectangle is not
+   * a small room, it is not a room, and a player dragging over a grid cannot produce one —
+   * `assertCell`'s reasoning about a fractional coordinate, one field over.
+   */
+  | {
+      readonly kind: 'drawRoom';
+      readonly roomType: ContentId;
+      /** The rectangle's origin: its smallest column and smallest row. */
+      readonly at: Cell;
+      readonly footprint: Footprint;
+    }
+  /**
+   * THE PLAYER PUTS AN ITEM IN A ROOM (G-036b). Promoted out of M6 by ADR-0046 §4.2, which
+   * makes it "the primary player verb" alongside the drawing one: a drawn room is an empty
+   * rectangle until something stands in it, and G-037 scores a room on exactly that.
+   *
+   * BY CELL, NOT BY ROOM ID, and the two are not equivalent once a room is a rectangle: WHERE
+   * in the room an item stands is the player's choice and is the thing G-036c's editing verbs
+   * will move. The host room is derived from the cell by the same footprint-aware lookup
+   * `validity.ts` uses, so an item placed at any cell of a multi-cell room is inside it.
+   *
+   * REFUSED, RECORDED, NEVER THROWN when the cell is off the plot or when NO ROOM COVERS IT.
+   * The second is a player rule rather than a structural one — `spawnEntity` will still put a
+   * bed in a corridor, because a scenario must be able to describe any world a save can hold —
+   * and it exists because an item's provision is entirely borrowed from its host room, so an
+   * unhosted item is furniture that can never serve anybody.
+   *
+   * IT COSTS NOTHING YET, and that is a gap with a name rather than a design: an item price is
+   * a designer's number and `ItemTypeData` has no such field. See `applyPlaceItem` for the
+   * parked question and what would falsify it.
+   */
+  | { readonly kind: 'placeItem'; readonly itemType: ContentId; readonly at: Cell }
   /**
    * THE PLAYER DEMOLISHES A ROOM (G-008), AND GETS PART OF THE BUILD COST BACK (G-011).
    *

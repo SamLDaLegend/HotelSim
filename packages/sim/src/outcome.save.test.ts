@@ -34,6 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { withoutCounters } from './fixtures/without-counters.js';
 import { onEraPlot, stripDepth } from './without-depth.js';
 import { stripCorridors } from './without-corridors.js';
+import { stripFootprints } from './without-footprints.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
 import { SAVE_V1_BYTES, SAVE_V1_CONTENT } from './fixtures/save-v1.js';
@@ -417,7 +418,7 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     );
     // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v7 floor was a
     // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
-    const { reviewOutcomes: _noReviews, ...withoutV10 } = stripCorridors(stripDepth(json));
+    const { reviewOutcomes: _noReviews, ...withoutV10 } = stripFootprints(stripCorridors(stripDepth(json)));
     return JSON.stringify({
       schemaVersion: 7,
       world: {

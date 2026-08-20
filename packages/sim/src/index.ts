@@ -8,6 +8,8 @@ export type { BuildInput, BuildOutcomes, BuildRefusalReason, BuildResult } from 
 export {
   applyBuildRoom,
   applyDemolishRoom,
+  applyDrawRoom,
+  applyPlaceItem,
   assertBuildOutcomes,
   BUILD_REFUSAL_REASONS,
   constructionCostOf,
@@ -17,6 +19,7 @@ export {
   describeOccupied,
   isBuildRefusalReason,
   roomAt,
+  roomOverlapping,
   totalBuildOutcomes,
   totalRefusals,
 } from './build.js';
@@ -52,7 +55,9 @@ export {
   itemTypeProvides,
   lodgingNeedOf,
   MAX_FIT_BASIS_POINTS,
+  maxFootprintCellsOf,
   minConstructionCostOf,
+  minFootprintCellsOf,
   needTypesInOrder,
   ONE_WHOLE_BASIS_POINTS,
   providesOf,
@@ -95,9 +100,10 @@ export {
 } from './entities.js';
 export type { Corridors } from './corridors.js';
 export { assertCorridors, createCorridors, hasCorridorAt, withCorridor } from './corridors.js';
-export type { Cell, GridBounds } from './grid.js';
+export type { Cell, Footprint, GridBounds } from './grid.js';
 export {
   assertCell,
+  assertFootprint,
   assertGridBounds,
   boundsEqual,
   cellBelow,
@@ -112,9 +118,18 @@ export {
   DEFAULT_MIN_FLOOR,
   describeBounds,
   describeCell,
+  describeFootprint,
   entranceCell,
+  footprintArea,
+  footprintCells,
+  footprintCovers,
+  footprintsEqual,
+  footprintsOverlap,
+  footprintWithinBounds,
   GROUND_FLOOR,
+  isUnitFootprint,
   isWithinBounds,
+  UNIT_FOOTPRINT,
 } from './grid.js';
 export type {
   Engagement,

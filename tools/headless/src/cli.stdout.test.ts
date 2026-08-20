@@ -137,7 +137,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // while the need rows' met/unmet and the review distribution move because their definition
     // did. `unservedTicks` and `instanceTicks` are counted in ticks and are UNCHANGED, which is
     // what separates a change of unit from the simulation behaving differently.
-    stateHash: '9256cb64df99e768',
+    stateHash: '4ca14d55f98ad071',
   },
   guests: {
     arrived: 24,
@@ -336,7 +336,20 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   build: {
     built: 0,
     demolished: 0,
-    refused: { insufficientFunds: 0, noSuchRoom: 0, occupied: 0, outOfBounds: 0 },
+    // G-036b. `placed` and the three new refusal reasons are ADDITIVE, so
+    // `SUMMARY_SCHEMA_VERSION` stays at 4 — the policy that constant states, and the call
+    // `corridors` got at G-034b. The default run issues neither `drawRoom` nor `placeItem`,
+    // so every one of them is zero for a structural reason.
+    placed: 0,
+    refused: {
+      footprintTooLarge: 0,
+      footprintTooSmall: 0,
+      insufficientFunds: 0,
+      noSuchRoom: 0,
+      notInRoom: 0,
+      occupied: 0,
+      outOfBounds: 0,
+    },
     constructionTransactions: 0,
     refundTransactions: 0,
   },
@@ -397,7 +410,14 @@ const GOLDEN_2_DAYS_SEED_42 =
     'upkeep      -24000p',
     'built       0',
     'demolished  0',
-    'refused     0 funds, 0 occupied, 0 off plot, 0 no room',
+    // G-036b: TWO NEW LINES AND FOUR NEW COLUMNS, and neither is a behaviour change. `placed`
+    // is `placeItem`'s counter and the refusal line gains the three reasons the size rules and
+    // `placeItem` introduced. Every one reads 0 here for a structural reason rather than a
+    // contingent one: this run issues no `drawRoom` and no `placeItem` at all, so no size rule
+    // and no host rule can fire. A CLI that could not PRINT a refusal reason would be a rule
+    // nobody running the harness could see — the condition `noCorridor` was in before G-035.
+    'placed      0',
+    'refused     0 too big, 0 too small, 0 funds, 0 not in room, 0 occupied, 0 off plot, 0 no room',
     'building    0p',
     'capital     500000p',
     'refunds     0p',
@@ -439,7 +459,22 @@ const GOLDEN_2_DAYS_SEED_42 =
     // the same 510,000p. **THIS LINE IS THE PLOT'S TWO NEW EDGES AND NOTHING ELSE**, which is
     // the tightest control this golden has carried: the hotel is identical and the world it
     // stands in is two integers bigger.
-    'state hash  9256cb64df99e768',
+    //
+    // G-036b: ONE LINE MOVED FOR THE STATE AND TWO WERE ADDED FOR THE REPORT, AND THE CONTROL
+    // SEPARATES THEM. `9256cb64df99e768` -> `4ca14d55f98ad071`, and the hash moves for TWO
+    // hashed-state reasons at once: every entity gained a `footprint` and `buildOutcomes`
+    // gained `placed` plus three refusal counters (save v19), AND `World.contentHash` moved
+    // because `room-types.json` gained `minFootprintCells` and `maxFootprintCells` — the
+    // largest content-field addition this project has made.
+    //
+    // **EVERY COUNT ABOVE IS BYTE-IDENTICAL** — the same 6 valid rooms, the same 0/0/0/0/0
+    // invalidity tally, the same 24 arrivals, the same 4/16 split, the same four need rows to
+    // the basis point, the same 7 transactions and the same 510,000p. That is the control, and
+    // it is what makes "this goal changed the SHAPE of a room and nothing this hotel does" a
+    // checked claim: the shipped CLI hotel draws nothing, places nothing, and every room in it
+    // is one cell, so a footprint-aware placement index gives it the answers the origin-keyed
+    // one gave. The two ADDED lines are new columns of the same report, both reading 0.
+    'state hash  4ca14d55f98ad071',
   ].join('\n') + '\n';
 
 /**
@@ -596,7 +631,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  9256cb64df99e768']);
+    expect(differing).toEqual(['seed        42', 'state hash  4ca14d55f98ad071']);
     expect(lines43).toContain('seed        43');
   });
 });

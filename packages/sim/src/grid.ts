@@ -523,3 +523,225 @@ export function assertCell(cell: Cell, bounds: GridBounds, what: string, subject
 function subjectOf(what: string, subject: number | undefined): string {
   return subject === undefined ? what : `${what} ${subject}`;
 }
+
+// =========================================================================================
+// FOOTPRINTS (G-036b, ADR-0046 §4.2, ADR-0047 B1).
+//
+//   A ROOM INSTANCE CARRIES A PLAYER-DRAWN FOOTPRINT. Until this goal a room was one cell
+//   and `roomCellsOf` in `validity.ts` was the seam that said so; the shape it produced was
+//   always `[room.at]`. It now has extent, and this file owns the GEOMETRY of that extent
+//   because a footprint is a fact about the coordinate space and nothing else: it imports
+//   nothing, it knows no content and it holds no state.
+//
+// A RECTANGLE, AND THE SHAPE IS AN ORIGIN PLUS AN EXTENT. `Entity.at` is the origin — the
+// cell with the smallest column and the smallest row — and `Footprint` is how far the room
+// reaches from it. That is ADR-0047 B1's "two corners in the save" exactly: the far corner is
+// `(at.column + columns - 1, at.row + rows - 1)`, and origin-plus-extent is a bijection with
+// corner-plus-corner that cannot express an inverted rectangle at all.
+//
+// WHAT B1 ALSO ASKED FOR AND WHAT THIS DELIBERATELY IS NOT. B1's second clause reads "the
+// storage shape is a polygon-capable representation holding a rectangle, so arbitrary shapes
+// are a later goal rather than a later migration" — a LIST of rectangles, or a cell list. That
+// is not shipped here, and the reason is the same standard `GOALS.md` applies to the adjacency
+// field one paragraph over: A REPRESENTATION WITH NO CONSUMER SHIPS UNEXERCISED. Nothing in
+// this build can produce a two-part footprint, no rule reads a second part, and no test could
+// falsify the code that walks one. The cost of being wrong is ONE migration on a field whose
+// migration chain is nineteen steps long and exercised on every load — this project's cheapest
+// kind of change, and the one ADR-0006 says is worth something precisely because it is paid
+// rather than avoided. Recorded as a departure rather than taken silently.
+//
+// EVERY ENTITY CARRIES ONE, INCLUDING ITEMS AND INCLUDING UNPLACED ENTITIES, and the
+// alternative was weighed against the failure it invites: an optional footprint whose absence
+// means 1x1 puts an "absence is not emptiness" reading into HASHED state, where `canonicalise`
+// throws on `undefined` and every rule that folds over a footprint would need the branch. A
+// required field with a `UNIT_FOOTPRINT` value is the `NO_ENTITY` / `at: Cell | null` pattern
+// this codebase already uses: a reserved value, not a missing key.
+//
+// I2: two integers per rectangle, no float anywhere, no Set, no Map, and every function below
+// is a pure function of its arguments. `footprintCells` is the ONE place a rectangle is
+// expanded into an ordered list, and it emits column-major then row so the order matches
+// `compareCells` — see the note there.
+// =========================================================================================
+
+/**
+ * HOW FAR A ROOM REACHES FROM ITS ORIGIN CELL, on the two horizontal axes.
+ *
+ * ALWAYS ON ONE STOREY. There is no `floors` field and there must not be one: a room that
+ * spanned storeys would break `groundedRooms`' one-pass argument, which rests on every cell of
+ * a room being visited within one floor's stretch of the placement index (see `validity.ts`).
+ * A stairwell is a connection between floors, not a room with a floor extent, and it is M3's
+ * own goal.
+ *
+ * MUTABLE-CAPABLE BY CONSTRUCTION, WHICH IS G-036c'S REQUIREMENT ARRIVING EARLY (ADR-0047 B4:
+ * "retrofitting mutability into a write-once schema is the painful direction"). Nothing edits
+ * a footprint in this build. What makes editing cheap later is that this is plain data on the
+ * entity with no derived copy anywhere: the placement index in `validity.ts` is rebuilt from
+ * it, `roomCellsOf` computes from it, and no cell -> entity back-pointer exists (see this
+ * file's header). A resize is therefore a new `Entity` value and an index rebuild, which is
+ * what every spawn already costs.
+ */
+export type Footprint = {
+  /** Cells along the COLUMN axis, at least 1. */
+  readonly columns: number;
+  /** Cells along the ROW axis, at least 1. */
+  readonly rows: number;
+};
+
+/**
+ * ONE CELL: what every entity in every world before v19 occupied, and what an item occupies.
+ *
+ * FROZEN AND SHARED, because it is read on the spawn path of every entity in the simulation
+ * and a fresh object per spawn would be an allocation per entity for a value that is the same
+ * two numbers every time. It is safe to share for the reason `EMPTY_IDS` in `content.ts` is:
+ * `Footprint` is deeply readonly, and `Object.freeze` makes that structural rather than a
+ * promise. It is also exactly what `migrateV18ToV19` writes into every historical entity —
+ * see the note there for why that is the reading of the bytes rather than a convenience.
+ */
+export const UNIT_FOOTPRINT: Footprint = Object.freeze({ columns: 1, rows: 1 });
+
+/** Whether this footprint is the one-cell one, by VALUE. Never `===` on the object, for the
+ *  reason `cellsEqual` exists: a migrated world and a fresh spawn carry two objects. */
+export function isUnitFootprint(footprint: Footprint): boolean {
+  return footprint.columns === 1 && footprint.rows === 1;
+}
+
+/** Value equality on footprints. The `cellsEqual` contract, one dimension over. */
+export function footprintsEqual(a: Footprint, b: Footprint): boolean {
+  return a.columns === b.columns && a.rows === b.rows;
+}
+
+/** How many cells this footprint covers. The quantity a room type's size constraints are
+ *  expressed in, so that "min 2" reads as "at least two cells" rather than as an axis. */
+export function footprintArea(footprint: Footprint): number {
+  return footprint.columns * footprint.rows;
+}
+
+/**
+ * WHETHER `cell` IS INSIDE THE RECTANGLE `at` + `footprint`. O(1), AND THE COMPLEXITY IS THE
+ * WHOLE REASON THIS FUNCTION EXISTS RATHER THAN A SCAN.
+ *
+ * `coversCell` in `validity.ts` used to be a linear scan over `roomCellsOf`, which cost
+ * nothing while a room was one cell. Inside the door walk's neighbour loop that scan is
+ * O(area) per neighbour of every cell, so the door rule becomes O(area^2) PER ROOM — a 10x10
+ * room is 40,000 cell comparisons per room per validity computation, and the tick-cost
+ * tripwire's bound already cannot see this project's smallest known regression. A rectangle
+ * knows whether it contains a point without being expanded into one, so this is four integer
+ * comparisons and a floor check, whatever the room's size.
+ */
+export function footprintCovers(at: Cell, footprint: Footprint, cell: Cell): boolean {
+  return (
+    cell.floor === at.floor &&
+    cell.column >= at.column &&
+    cell.column < at.column + footprint.columns &&
+    cell.row >= at.row &&
+    cell.row < at.row + footprint.rows
+  );
+}
+
+/**
+ * WHETHER TWO FOOTPRINTS SHARE ANY CELL. O(1), by axis separation.
+ *
+ * THE OCCUPANCY TEST THE DRAWING VERB NEEDS, and the reason the per-cell question `roomAt` in
+ * `build.ts` used to ask could not stay: a player draws a room whose ORIGIN is free and whose
+ * BODY lies across an existing one. Asking only about the origin accepts that draw, and the
+ * two rooms then overlap in a world the simulation believes it refused.
+ *
+ * Two rectangles intersect unless one is entirely past the other on some axis, which is what
+ * the four clauses below say — a formulation that is exact for the degenerate 1x1 case as
+ * well, so `spawnEntity`'s pre-existing "a room already stands there" throw keeps its meaning
+ * byte for byte on every world that predates footprints.
+ */
+export function footprintsOverlap(
+  aAt: Cell,
+  aFootprint: Footprint,
+  bAt: Cell,
+  bFootprint: Footprint,
+): boolean {
+  if (aAt.floor !== bAt.floor) return false;
+  if (aAt.column + aFootprint.columns <= bAt.column) return false;
+  if (bAt.column + bFootprint.columns <= aAt.column) return false;
+  if (aAt.row + aFootprint.rows <= bAt.row) return false;
+  if (bAt.row + bFootprint.rows <= aAt.row) return false;
+  return true;
+}
+
+/**
+ * EVERY CELL THE RECTANGLE COVERS, IN `compareCells` ORDER.
+ *
+ * THE ORDER IS NOT COSMETIC AND IT IS ASSERTED BY A TEST. `placementIndex` in `validity.ts`
+ * holds ONE ENTRY PER COVERED CELL since G-036b and sorts them with `compareCells`; emitting
+ * them already-sorted per entity keeps that sort's input close to ordered, and — the part that
+ * is load-bearing — it makes the ORIGIN the first cell of every footprint. `groundedRooms`
+ * uses exactly that fact to evaluate a room once, at its first entry in the index, rather than
+ * once per covered cell. Column-major then row, because `compareCells` compares floor, then
+ * column, then row.
+ *
+ * ALLOCATES. It is the expansion, and the rules that can avoid expanding do:
+ * `footprintCovers` and `footprintsOverlap` above answer their questions on the rectangle.
+ * The callers that genuinely need every cell — building the index, the enclosure fold, the
+ * door walk — need every cell.
+ */
+export function footprintCells(at: Cell, footprint: Footprint): readonly Cell[] {
+  const cells: Cell[] = [];
+  for (let column = at.column; column < at.column + footprint.columns; column += 1) {
+    for (let row = at.row; row < at.row + footprint.rows; row += 1) {
+      cells.push({ floor: at.floor, column, row });
+    }
+  }
+  return cells;
+}
+
+/**
+ * Whether every cell of this rectangle is on the plot. Inclusive at all six edges, like
+ * `isWithinBounds`, which it reduces to exactly for a `UNIT_FOOTPRINT`.
+ *
+ * ASKED OF THE FAR CORNER RATHER THAN OF EVERY CELL, so the cost does not grow with the room:
+ * a rectangle whose origin and whose far corner are both on the plot has every cell on it,
+ * because a plot is itself a box.
+ */
+export function footprintWithinBounds(at: Cell, footprint: Footprint, bounds: GridBounds): boolean {
+  return (
+    isWithinBounds(at, bounds) &&
+    isWithinBounds(
+      { floor: at.floor, column: at.column + footprint.columns - 1, row: at.row + footprint.rows - 1 },
+      bounds,
+    )
+  );
+}
+
+/**
+ * Throws unless `footprint` is a pair of positive safe integers.
+ *
+ * A CALLER BUG, NOT A REFUSAL, for the reason `assertCell` gives about a fractional
+ * coordinate: a footprint of 2.5 columns is not a small footprint, it is not a footprint at
+ * all, and a player cannot produce one because a drag over a grid yields integers. The
+ * player-facing SIZE rules — a room type's minimum and maximum — are a different question,
+ * asked in `build.ts` and answered with a recorded refusal.
+ *
+ * ZERO IS REFUSED HERE AND NOT LEFT TO THE SIZE RULES. A zero-column footprint covers no
+ * cells, so `roomCellsOf` folds over nothing and `computeRoomInvalidity` answers "vacuously
+ * fine" — the failure mode `validity.ts` already names for an unplaced room, arriving through
+ * a second door. Refusing it at the type's own edge is what stops that door existing.
+ */
+export function assertFootprint(footprint: Footprint, what: string): void {
+  if (typeof footprint !== 'object' || footprint === null) {
+    throw new Error(`${what}: footprint must be an object with columns and rows`);
+  }
+  for (const axis of ['columns', 'rows'] as const) {
+    const value = footprint[axis];
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(`${what}: footprint ${axis} must be a safe integer, got ${String(value)}`);
+    }
+    if (value < 1) {
+      throw new Error(
+        `${what}: footprint ${axis} must be at least 1, got ${String(value)}; ` +
+          'a room covering no cell is not a small room',
+      );
+    }
+  }
+}
+
+/** Human-readable, for error messages only. Never parsed, never hashed, never an id. */
+export function describeFootprint(footprint: Footprint): string {
+  return `${footprint.columns}x${footprint.rows}`;
+}

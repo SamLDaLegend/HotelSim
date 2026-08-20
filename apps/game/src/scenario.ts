@@ -73,10 +73,33 @@ const LODGING_FLOORS = 2;
 const LODGING_ROWS = 3;
 
 /**
- * How many of each amenity room type, in the basement — ONE PER LODGING ROW since G-036a, so
- * the amenity floor is a plate rather than a line and switching floors compares like with like.
+ * HOW DEEP ONE AMENITY ROOM IS, IN ROWS — AND SINCE G-036b IT IS ONE ROOM RATHER THAN THREE.
+ *
+ * ==========================================================================================
+ * THIS IS THE FOOTPRINT THE RECORDING EXISTS TO SHOW, and it is a change of MODEL rather than
+ * of layout: G-036a put three separate one-cell cafés in a column and WATCH #13 recorded the
+ * result as *"three coloured slabs… the first frame in this project where a TYPE of space
+ * reads as an area rather than as a dot"*. It read as an area and it was not one — three
+ * rooms, three badges, three upkeep charges, three doors.
+ *
+ * IT IS NOW ONE ROOM, 1 COLUMN WIDE AND THIS MANY ROWS DEEP, drawn as one rectangle with one
+ * badge and one outline. The cells occupied are exactly the cells the three copies occupied,
+ * so the corridor lanes, the floor extent and the camera framing are unchanged — **the only
+ * thing that changes is whether the hotel BELIEVES it is one room**, which is the mechanic
+ * this goal ships and the thing a watcher has to be able to see.
+ *
+ * ALONG THE ROW AXIS RATHER THAN THE COLUMN AXIS, and that is forced rather than chosen: the
+ * column axis carries the corridor lanes (`COLUMNS_PER_ROOM`), so a two-column amenity would
+ * be drawn across the walkway that gives it its door. The row axis takes no stride
+ * (`ROWS_PER_ROOM`), so it is the axis with room to grow.
+ *
+ * THE LODGING FLOORS ARE DELIBERATELY LEFT AT ONE CELL. A frame in which everything is wide
+ * says nothing about whether width is legible; the contrast between one-cell bedrooms upstairs
+ * and a three-cell café below is what a watcher reads the footprint FROM. It also keeps this
+ * recording comparable with WATCH #13's item-visibility count, which was taken on floor 1.
+ * ==========================================================================================
  */
-const AMENITIES_EACH = LODGING_ROWS;
+const AMENITY_ROWS = LODGING_ROWS;
 
 /**
  * A CORRIDOR CELL BETWEEN ROOMS, and it is a validity rule rather than a look.
@@ -183,12 +206,15 @@ function lodgingCell(index: number, entrance: Cell): Cell {
  * nothing, and a room at or below grade is grounded by the earth so it needs nothing built
  * under it.
  */
-function amenityCell(index: number, bounds: GridBounds, entrance: Cell, perRow: number): Cell {
+function amenityCell(index: number, bounds: GridBounds, entrance: Cell): Cell {
   return {
     floor: Math.max(bounds.minFloor, entrance.floor - 1),
-    column: entrance.column + COLUMNS_PER_ROOM * (index % perRow),
-    // The same plate as the lodging floors, one storey down (G-036a).
-    row: entrance.row + ROWS_PER_ROOM * Math.floor(index / perRow),
+    column: entrance.column + COLUMNS_PER_ROOM * index,
+    // THE NEAR EDGE, because the room now reaches back from here rather than being one of
+    // three copies stacked into the depth (G-036b). `Entity.at` is a rectangle's ORIGIN — its
+    // smallest column and smallest row — so an amenity's origin is its front-left cell and its
+    // footprint carries the rest.
+    row: entrance.row,
   };
 }
 
@@ -225,8 +251,7 @@ function amenityCell(index: number, bounds: GridBounds, entrance: Cell, perRow: 
 function corridorCommands(
   entrance: Cell,
   bounds: GridBounds,
-  amenities: number,
-  amenitiesPerRow: number,
+  amenityColumns: number,
 ): readonly Command[] {
   const commands: Command[] = [];
   const lay = (floor: number, column: number, row: number): void => {
@@ -253,9 +278,14 @@ function corridorCommands(
   // walkway is every ODD one. Mirrored, and derived from the same stride rather than written
   // out — a change to `COLUMNS_PER_ROOM` moves the rooms and the corridors together.
   const amenityFloor = Math.max(bounds.minFloor, entrance.floor - 1);
-  const amenityRows = Math.ceil(amenities / Math.max(1, amenitiesPerRow));
-  for (let i = 0; i < amenitiesPerRow; i += 1) {
-    for (const row of rows(amenityRows)) lay(amenityFloor, entrance.column + COLUMNS_PER_ROOM * i + 1, row);
+  // THE LANE RUNS THE FULL DEPTH OF THE AMENITY ROOM (G-036b). It used to run the depth of the
+  // amenity PLATE — `ceil(copies / perRow)` rows of one-cell rooms — and the two happen to be
+  // the same number, because the plate's depth is exactly what one wide room now occupies.
+  // Derived from `AMENITY_ROWS` rather than from a copy count, so widening the room moves the
+  // room and its walkway together; a lane one cell short would leave the back of every amenity
+  // with no declared walkway beside it and the whole basement would read `noCorridor`.
+  for (let i = 0; i < amenityColumns; i += 1) {
+    for (const row of rows(AMENITY_ROWS)) lay(amenityFloor, entrance.column + COLUMNS_PER_ROOM * i + 1, row);
   }
   return commands;
 }
@@ -272,32 +302,47 @@ function corridorCommands(
 export function seedCommands(content: BoundContent, bounds: GridBounds): readonly Command[] {
   const entrance = entranceCell(bounds);
   const commands: Command[] = [];
-  const place = (entityKind: string, at: Cell): void => {
-    commands.push({ kind: 'spawnEntity', entityKind, at });
+  /**
+   * A ROOM AND THE FURNITURE ITS TYPE REQUIRES.
+   *
+   * THE FURNITURE STANDS AT `itemCell`, WHICH IS NOT THE ROOM'S ORIGIN FOR A WIDE ROOM
+   * (G-036b), and that is the point rather than a detail. An item's provision is entirely
+   * BORROWED from the room COVERING its cell (`isProviding` in `validity.ts`), so a vending
+   * machine in the middle of a three-cell games room is a live test of the footprint-aware
+   * placement index — running on every frame of every recording, on the shipped scenario,
+   * rather than only in a unit test. Under the origin-keyed index this goal replaced, that
+   * machine had no host and the games room would have shown `missingItem` on the first frame.
+   */
+  const place = (entityKind: string, at: Cell, footprint?: { columns: number; rows: number }, itemCell = at): void => {
+    commands.push(
+      footprint === undefined
+        ? { kind: 'spawnEntity', entityKind, at }
+        : { kind: 'spawnEntity', entityKind, at, footprint },
+    );
     for (const itemId of requiredItemsOf(content, entityKind)) {
-      commands.push({ kind: 'spawnEntity', entityKind: itemId, at });
+      commands.push({ kind: 'spawnEntity', entityKind: itemId, at: itemCell });
     }
   };
   const lodging = lodgingRoomTypeOf(content);
   for (let i = 0; i < LODGING_ROOMS_PER_ROW * LODGING_ROWS * LODGING_FLOORS; i += 1) {
     place(lodging.id, lodgingCell(i, entrance));
   }
-  // ONE COLUMN PER AMENITY TYPE, ONE ROW PER COPY (G-036a), so the basement is a plate of the
-  // same shape as the floors above it and each type stands together rather than interleaved.
+  // ONE COLUMN PER AMENITY TYPE, AND ONE ROOM PER COLUMN, `AMENITY_ROWS` DEEP (G-036b). It was
+  // one room per column PER ROW before this goal — three copies pretending to be a hall. Each
+  // type still stands together rather than interleaved, and the cells occupied are unchanged.
   const amenityTypes = amenityRoomTypesOf(content);
-  let amenityIndex = 0;
-  for (let copy = 0; copy < AMENITIES_EACH; copy += 1) {
-    for (let type = 0; type < amenityTypes.length; type += 1) {
-      const amenity = amenityTypes[type];
-      if (amenity === undefined) continue;
-      place(amenity.id, amenityCell(amenityIndex, bounds, entrance, amenityTypes.length));
-      amenityIndex += 1;
-    }
+  for (let type = 0; type < amenityTypes.length; type += 1) {
+    const amenity = amenityTypes[type];
+    if (amenity === undefined) continue;
+    const at = amenityCell(type, bounds, entrance);
+    // THE MIDDLE ROW, so the furniture is inside the rectangle but NOT at its origin.
+    const middle = { floor: at.floor, column: at.column, row: at.row + Math.floor(AMENITY_ROWS / 2) };
+    place(amenity.id, at, { columns: 1, rows: AMENITY_ROWS }, middle);
   }
   // AFTER THE ROOMS, AND THE ORDER IS STATED BECAUSE IT IS ASKED. It makes no difference to
   // the result — a corridor is a declaration about a cell and says nothing about what stands
   // there — but a reader should not have to work that out from `corridors.ts` to be sure.
-  commands.push(...corridorCommands(entrance, bounds, amenityIndex, amenityTypes.length));
+  commands.push(...corridorCommands(entrance, bounds, amenityTypes.length));
   return commands;
 }
 
