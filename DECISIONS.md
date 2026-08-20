@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-035 is done and THE GAME HAS BEEN SEEN IN ITS OWN PROJECTION for the first time — WATCH #12, in a real browser, isometric, floors switchable, guests tinted by state. The no-WATCH-surface escalation is RESOLVED. M3 has grid depth, corridors and the view; next is the review goal, then room drawing, scoring, circulation and exit instruments. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-035 is done and the game has been SEEN in its own projection (WATCH #12, real browser, isometric, floors switchable, guests tinted by state). The no-WATCH escalation is RESOLVED. G-028 is CLOSED AS ALREADY DISCHARGED by G-028a and G-028b — checked against ADR-0033 rather than built, and restoring it as pending was the G-031a class inside the repair for the G-031a class. Plot depth is now G-036's first NAMED deliverable; it was previously one comment in another goal's REFLECT. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at

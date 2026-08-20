@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-035 is done and THE GAME HAS BEEN SEEN IN ITS OWN PROJECTION for the first time — WATCH #12, in a real browser, isometric, floors switchable, guests tinted by state. The no-WATCH-surface escalation is RESOLVED. M3 has grid depth, corridors and the view; next is the review goal, then room drawing, scoring, circulation and exit instruments. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-035 is done and the game has been SEEN in its own projection (WATCH #12, real browser, isometric, floors switchable, guests tinted by state). The no-WATCH escalation is RESOLVED. G-028 is CLOSED AS ALREADY DISCHARGED by G-028a and G-028b — checked against ADR-0033 rather than built, and restoring it as pending was the G-031a class inside the repair for the G-031a class. Plot depth is now G-036's first NAMED deliverable; it was previously one comment in another goal's REFLECT. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v18** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2104,10 +2104,29 @@ atlas depends on them.
 recording exists and `JOURNAL.md` carries a WATCH entry** (§5 WATCH, ADR-0013).
 
 ## G-028 — Outcomes and reviews are stock-shaped (ADR-0033's re-aimed shape)
-Status: **PLANNED — after G-035, before G-037.** **It was RULED IN PROSE AND LEFT OUT OF THE
-  NUMBERED TABLE — the G-031a class, one message after catching G-031a, inside the write-up of the
-  catch.** §5.8 applies to a repair as much as to a diff, and the first place to look for a known
-  class is the document making the fix. Restored here.
+Status: **done — DISCHARGED BY G-028a AND G-028b, AND RESTORING IT TO THE TABLE AS *PENDING* WAS
+  THE G-031a CLASS INSIDE THE REPAIR FOR THE G-031a CLASS.**
+
+  **CHECKED AGAINST ADR-0033 RATHER THAN BUILT.** The re-aim specifies exactly three things —
+  *"time spent below the line, a per-need accumulator, and a schema bump it explicitly deferred to
+  the next goal"* — and all three are in the tree: `NeedState.unservedTicks` (G-028a), the per-need
+  `unservedTicks` row on the outcome table, and the schema, now at v18 through two further goals.
+  G-028b then made the scorer read the integral. **There is no fourth thing.**
+
+  **SO THE HONEST ACT IS TO CLOSE IT, NOT TO INVENT WORK THAT FILLS IT.** §9 lists coverage added
+  to satisfy a number rather than to pin behaviour; a GOAL run to satisfy a plan rather than to
+  change the game is the same error one level up.
+
+  **AND THE WAY THIS WAS MISSED IS THE FINDING.** The placement ruling (after G-035, before G-037)
+  was correct and is preserved below. What was wrong is that it was restored as **pending** —
+  a status asserted from the ruling's prose without checking the tree, **one message after
+  catching G-031a for exactly that, in the block written to record the catch.** Fourth instance,
+  and the first one where the repair itself carried the defect.
+
+  **The re-sweep obligation SURVIVES and is the live part**: C3 makes satisfaction primary, so
+  room score → satisfaction rate → reviews puts this work upstream of its own new input.
+  **G-037 re-sweeps it.** That is scheduled below, and it is what G-039's status-against-git
+  scanner would have caught here.
 Milestone: M3
 
 **WHY AFTER G-035.** Its subject survives ADR-0046 — the review signal is `packages/sim` and
