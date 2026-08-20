@@ -82,7 +82,7 @@ const content = bindContent({
 const spawn = (entityKind: string, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor: 0, column },
+  at: { floor: 0, column, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
@@ -175,7 +175,7 @@ describe('settlement reads the draft — the same visibility rule guests live by
   it('refuses an entity whose kind the content does not define, rather than billing it 0', () => {
     const world = createWorld(3, content);
     const draft = beginEntityDraft(world.entities, world.grid);
-    draftSpawn(draft, 'ghostRoom', { floor: 0, column: 0 });
+    draftSpawn(draft, 'ghostRoom', { floor: 0, column: 0, row: 0 });
     expect(() => nightlyUpkeepOf(draft, content)).toThrow(/is not in the injected content/);
   });
 });

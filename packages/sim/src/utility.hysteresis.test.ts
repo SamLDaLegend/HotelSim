@@ -207,7 +207,7 @@ const twoNeeds = (margin: number | undefined, extra: Partial<SimContent> = {}): 
 const spawn = (entityKind: string, column: number, floor = 0): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor, column },
+  at: { floor, column, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
@@ -471,7 +471,9 @@ describe('two providers of the CHALLENGER need, tied on fit: the lower entity id
       expect(chosen.id).toBe(Math.min(...roomBs.map((entity) => entity.id)));
       // The half that makes two orders worth running: under "first found" the same CELL would
       // win both times.
-      expect(chosen.at).toEqual(label === 'left then right' ? { floor: 0, column: 4 } : { floor: 0, column: 6 });
+      expect(chosen.at).toEqual(
+        label === 'left then right' ? { floor: 0, column: 4, row: 0 } : { floor: 0, column: 6, row: 0 },
+      );
     });
   }
 });

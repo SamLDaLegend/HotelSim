@@ -248,7 +248,7 @@ describe('the 3 -> 4 step invents no history', () => {
     expect(fixtureContent.fingerprint).toBe(SAVE_V1_CONTENT_FINGERPRINT);
     const world = deserialise(SAVE_V1_BYTES);
     const advanced = run(world, fixtureContent, 1_000, [
-      { tick: 5_500, command: { kind: 'buildRoom', roomType: 'fixtureRoom', at: { floor: 0, column: 0 } } },
+      { tick: 5_500, command: { kind: 'buildRoom', roomType: 'fixtureRoom', at: { floor: 0, column: 0, row: 0 } } },
     ]);
     expect(advanced.tick).toBe(SAVE_V1_TICK + 1_000);
     // Free to build, because content that predates construction cost omits the key.
@@ -348,7 +348,8 @@ describe('a lived-in build history survives a round trip', () => {
     // `toleranceTicks`, the other way out, carrying the lodging need's old `patienceTicks`.
     guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 12 }],
   });
-  const cell = (floor: number, column: number): Cell => ({ floor, column });
+  /** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
   const build = (at: Cell): Command => ({ kind: 'buildRoom', roomType: 'roomA', at });
 
   /** A world where every counter is non-zero, so nothing round-trips by being empty. */

@@ -132,7 +132,7 @@ const content = bindContent({
 const spawn = (entityKind: string, floor: number, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor, column },
+  at: { floor, column, row: 0 },
 });
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 const demolish = (id: number): Command => ({ kind: 'demolishRoom', id });
@@ -234,7 +234,7 @@ describe('(b) THE HOST ROOM GOES INVALID — the item survives and serves nobody
     const world = armed(stage(0));
     const chairId = idOf(world, 'chair');
     const after = stepTick(world, content, [despawn(idOf(world, 'cellar'))]);
-    expect(getEntity(after.entities, chairId)?.at).toEqual({ floor: 1, column: 0 });
+    expect(getEntity(after.entities, chairId)?.at).toEqual({ floor: 1, column: 0, row: 0 });
     expect(only(after).engagement).toBe(null);
     healthy(after);
   });
@@ -316,7 +316,7 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
     // G-023a: a guest is somewhere. The doorway — this file is about what a RELEASE does,
     // and nothing in the simulation reads a position (`travel.position.test.ts` owns the
     // placement rule).
-    at: { floor: 0, column: 0 },
+    at: { floor: 0, column: 0, row: 0 },
     arrivedTick: 0,
     roomEntityId: room,
     // θ-b1: content on arrival. Nothing in this file is about a guest's mood; the stock is

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0048 (human): a solved problem that never propagated is its own class, and REFLECT gains one standing question pointed SIDEWAYS — does anything else here have this problem? The grid goal is SPLIT at PLAN, seam offered and TAKEN: first the y-axis, validity and v17 with check:ladder re-pointed in the same commit; then corridors, connectivity and v18. ADR-0046 §4's done-together clause is superseded and points forward. Agent roster verified selectable, sim-critic write-toolless. G-033 and the pre-ruling work stand at fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-034a is done: the grid has a third axis, save v17, and the shipped plot stays ONE ROW DEEP so the goal changes no behaviour — only the hash. Fourteen rows green, every row re-run by the orchestrator. The plan review found two BLOCKERs before any code, and the BUILD then corrected the plan review: floor-ASCENDING is the precondition, floor-FIRST is a convention, and it ships labelled as one. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

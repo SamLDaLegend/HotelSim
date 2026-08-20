@@ -88,6 +88,17 @@ const FORBIDDEN_IN_SAVE_TS = [
   'DEFAULT_MAX_FLOOR',
   'DEFAULT_MIN_COLUMN',
   'DEFAULT_MAX_COLUMN',
+  // G-034a. `migrateV16ToV17` states THE DEPTH A v16 WORLD HAD: one row, because a v16 floor
+  // was a strip and the axis did not exist. `V17_MIGRATION_ROW` is a `0` sitting beside a
+  // `DEFAULT_MIN_ROW` that is also 0, which is a standing invitation to deduplicate — and this
+  // one has a NAMED DAY on which it would bite. G-036 gives the player a verb that can draw
+  // into the depth, and the shipped plot is widened on the day it does. A step that read the
+  // live constants would, from that day, migrate the SAME v16 bytes onto a DEEPER plot: every
+  // migrated room would gain free cells at row+1, and a room that was `noDoor` when those bytes
+  // were written would come back VALID. Not a drifting counter — a migration REWRITING A
+  // VALIDITY VERDICT.
+  'DEFAULT_MIN_ROW',
+  'DEFAULT_MAX_ROW',
   'createBuildOutcomes',
   'BUILD_REFUSAL_REASONS',
   'createLoanOutcomes',
@@ -208,6 +219,8 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(source).toContain('V8_MIGRATION_GUEST_OUTCOMES');
     expect(source).toContain('migrateV10ToV11');
     expect(source).toContain('V11_MIGRATION_ENTRANCE_FLOOR');
+    expect(source).toContain('migrateV16ToV17');
+    expect(source).toContain('V17_MIGRATION_ROW');
   });
 
   it('names none of the current-plot identifiers in executable code', () => {
@@ -413,20 +426,41 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     // But on the day it is written the two have to agree, or a migrated guest is placed
     // somewhere this build would never have put it.
     expect(GROUND_FLOOR).toBe(0);
-    expect(entranceCell(createGridBounds())).toEqual({ floor: 0, column: 0 });
+    expect(entranceCell(createGridBounds())).toEqual({ floor: 0, column: 0, row: 0 });
   });
 
-  it('freezes the plot as four integer literals rather than a derived value', () => {
+  it('freezes the plot as EXACTLY four integer literals rather than a derived value', () => {
     // The positive half. The two tests above say what `save.ts` must NOT do; this says
     // what it must do, so deleting `V3_MIGRATION_BOUNDS` altogether is not a way to make
     // the scan pass.
+    //
+    // EXACTLY FOUR, AND `toContain` COULD NOT SAY THAT (G-034a). Every assertion here was a
+    // `toContain`, so a v3 plot WIDENED — an extra edge, a sixth key, a deeper row range —
+    // would have passed every one of them while claiming to be frozen. That is history
+    // drifting with the build through the one door the identifier scan cannot watch, because
+    // an added key names no forbidden identifier. v17 gave `GridBounds` two more edges and
+    // this literal must NOT have gained them: a v3 world had four, and `migrateV16ToV17` is
+    // what carries it the rest of the way, one era at a time.
     const code = stripComments(saveSource());
-    const declaration = /V3_MIGRATION_BOUNDS[\s\S]{0,400}?\}\)/.exec(code)?.[0] ?? '';
-    expect(declaration).toContain('minFloor: -2');
-    expect(declaration).toContain('maxFloor: 20');
-    expect(declaration).toContain('minColumn: 0');
-    expect(declaration).toContain('maxColumn: 79');
+    const declaration = /V3_MIGRATION_BOUNDS[\s\S]{0,700}?\}\)/.exec(code)?.[0] ?? '';
     expect(declaration).toContain('Object.freeze');
+    const keys = [...declaration.matchAll(/^\s*([A-Za-z]\w*):\s*(-?\d+),/gm)].map((m) => `${m[1]!}: ${m[2]!}`);
+    expect(keys).toEqual(['minFloor: -2', 'maxFloor: 20', 'minColumn: 0', 'maxColumn: 79']);
+  });
+
+  it('freezes the v17 row as ONE integer literal, and the plot it writes is one row deep', () => {
+    // The positive half for v17, and the same argument `V4_MIGRATION_BUILD_OUTCOMES` makes:
+    // deleting the constant and calling `createGridBounds()` would make the identifier scan
+    // pass by removing its subject, so the shape is asserted here too.
+    const code = stripComments(saveSource());
+    expect(/const V17_MIGRATION_ROW = 0;/.test(code)).toBe(true);
+    // And it is what the step writes into the plot, on BOTH edges — `minRow === maxRow` is the
+    // whole non-invention argument, and a step that wrote a range would be claiming a depth
+    // those bytes never had.
+    const body = /function migrateV16ToV17[\s\S]*?\n\}/.exec(code)?.[0] ?? '';
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).toContain('minRow: V17_MIGRATION_ROW, maxRow: V17_MIGRATION_ROW');
+    expect(body).toContain('row: V17_MIGRATION_ROW');
   });
 });
 
@@ -438,6 +472,25 @@ describe('the scan itself can fail', () => {
   it('catches a direct call to createGridBounds', () => {
     const bad = 'function migrateV2ToV3(w) {\n  return { ...w, grid: createGridBounds() };\n}';
     expect(scan(bad)).toEqual([{ name: 'createGridBounds', line: 2 }]);
+  });
+
+  it('catches the G-034a back door: reading the LIVE row constants for the v17 depth', () => {
+    // `V17_MIGRATION_ROW` is a `0` beside a `DEFAULT_MIN_ROW` that is also 0 — the same
+    // standing invitation to deduplicate `V11_MIGRATION_ENTRANCE_FLOOR` carries, with a NAMED
+    // day on which it bites: G-036 widens the shipped plot, and from that day a step reading
+    // these would migrate the same v16 bytes onto a DEEPER plot and turn a `noDoor` room
+    // VALID — a migration rewriting a validity verdict. Both constants, because taking only
+    // one of them is the same defect wearing a different hat.
+    const bad = [
+      'function migrateV16ToV17(w) {',
+      '  const grid = { ...w.grid, minRow: DEFAULT_MIN_ROW, maxRow: DEFAULT_MAX_ROW };',
+      '  return { ...w, grid };',
+      '}',
+    ].join('\n');
+    expect(scan(bad)).toEqual([
+      { name: 'DEFAULT_MIN_ROW', line: 2 },
+      { name: 'DEFAULT_MAX_ROW', line: 2 },
+    ]);
   });
 
   it('catches a direct call to createBuildOutcomes', () => {

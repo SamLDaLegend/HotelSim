@@ -137,7 +137,7 @@ const content: BoundContent = bindContent({
 const spawn = (kind: string, index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: kind,
-  at: { floor: 0, column: index * 2 },
+  at: { floor: 0, column: index * 2, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });

@@ -172,7 +172,7 @@ describe('the v1 fixture, through the real migration', () => {
     expect(fixtureContent.fingerprint).toBe(SAVE_V1_CONTENT_FINGERPRINT);
     const world = deserialise(SAVE_V1_BYTES);
     const advanced = run(world, fixtureContent, 1_000, [
-      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0 } } },
+      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0, row: 0 } } },
     ]);
     expect(advanced.tick).toBe(SAVE_V1_TICK + 1_000);
     expect(entitiesInOrder(advanced.entities).map((entity) => entity.id)).toEqual([2, 4, 5, 6]);
@@ -225,7 +225,12 @@ describe('the 1 -> 2 step itself', () => {
     const store = asIs['entities'] as { nextId: number; list: Record<string, unknown>[] };
     const asIfV3 = {
       ...asIs,
-      grid: { minFloor: -2, maxFloor: 20, minColumn: 0, maxColumn: 79 },
+      // Six edges since v17 (G-034a): this hand-made document is fed to `deserialise` at the
+      // CURRENT version, so it has to be shaped like one this build wrote — a v16-shaped plot
+      // here would be refused for a missing `minRow` and the assertion below would pass on
+      // the wrong defect, which is the failure mode the `dissatisfaction` note in `save.ts`
+      // records one field over.
+      grid: { minFloor: -2, maxFloor: 20, minColumn: 0, maxColumn: 79, minRow: 0, maxRow: 0 },
       entities: { ...store, list: store.list.map((entity) => ({ ...entity, at: null })) },
     };
     const withoutGuests = {
@@ -266,7 +271,7 @@ describe('a v2 world with guests in it', () => {
   const spawnRoom = (index: number): Command => ({
     kind: 'spawnEntity',
     entityKind: 'roomA',
-    at: { floor: 0, column: index * 2 },
+    at: { floor: 0, column: index * 2, row: 0 },
   });
   const arrive: Command = { kind: 'guestArrives' };
 

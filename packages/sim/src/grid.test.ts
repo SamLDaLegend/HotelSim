@@ -26,12 +26,23 @@ import {
 import type { Entity, EntityStore } from './entities.js';
 import {
   assertGridBounds,
+  cellBack,
+  cellBelow,
+  cellFront,
+  cellLeft,
+  cellRight,
   cellsEqual,
+  compareCells,
   createGridBounds,
   DEFAULT_MAX_COLUMN,
   DEFAULT_MAX_FLOOR,
+  DEFAULT_MAX_ROW,
   DEFAULT_MIN_COLUMN,
   DEFAULT_MIN_FLOOR,
+  DEFAULT_MIN_ROW,
+  describeBounds,
+  describeCell,
+  entranceCell,
   isWithinBounds,
 } from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
@@ -76,7 +87,8 @@ const content = bindContent({
   ],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 const spawnAt = (entityKind: string, at: Cell): Command => ({ kind: 'spawnEntity', entityKind, at });
 const bounds = createGridBounds();
 
@@ -122,12 +134,177 @@ describe('coordinates', () => {
     }
   });
 
-  it('rejects a plot with no floors or no columns', () => {
+  it('rejects a plot with no floors, no columns or no rows', () => {
     expect(() => assertGridBounds({ ...bounds, minFloor: 5, maxFloor: 4 })).toThrow(/minFloor/);
     expect(() => assertGridBounds({ ...bounds, minColumn: 5, maxColumn: 4 })).toThrow(/minColumn/);
+    expect(() => assertGridBounds({ ...bounds, minRow: 5, maxRow: 4 })).toThrow(/minRow/);
     expect(() => assertGridBounds({ ...bounds, maxFloor: 1.5 })).toThrow(/safe integer/);
     expect(() => assertGridBounds({ ...bounds, minColumn: Number.NaN })).toThrow(/safe integer/);
+    expect(() => assertGridBounds({ ...bounds, maxRow: 0.5 })).toThrow(/safe integer/);
+    expect(() => assertGridBounds({ ...bounds, minRow: undefined as unknown as number })).toThrow(/safe integer/);
     expect(() => assertGridBounds(bounds)).not.toThrow();
+    // AND `minRow === maxRow` IS LEGAL, which is not incidental — it is what the shipped
+    // plot is, and a validator that refused it would refuse every world this build makes.
+    expect(() => assertGridBounds({ ...bounds, minRow: 3, maxRow: 3 })).not.toThrow();
+  });
+});
+
+// ============================================================================
+//  A FLOOR IS A PLAN, NOT A STRIP (G-034a, ADR-0046 §4.1).
+//
+//  The coordinate space gained a third axis. THE SHIPPED PLOT DID NOT GAIN DEPTH, and the
+//  two are separate decisions asserted separately below: the axis exists, is ordered, is
+//  bounded and is hashed, and the default plot is one row deep so nothing the simulation
+//  does can differ. Depth is exercised by FIXTURE — a plot passed in by a test — never by
+//  the shipped default.
+// ============================================================================
+
+/** A plot with real depth. THE ONLY WAY DEPTH IS EXERCISED, and it is never the default. */
+const DEEP: GridBounds = { minFloor: -1, maxFloor: 3, minColumn: 0, maxColumn: 6, minRow: 0, maxRow: 4 };
+
+describe('the third axis', () => {
+  it('is called `row`, to match `column`', () => {
+    // A NAMING TEST, AND IT EARNS ITS PLACE. `floor`/`column`/`y` would be two vocabularies
+    // for one coordinate system, and the cost is paid by every reader forever. This is the
+    // cheapest possible guard against the rename drifting back.
+    const some = cell(1, 2, 3);
+    expect(Object.keys(some).sort()).toEqual(['column', 'floor', 'row']);
+    expect(some.row).toBe(3);
+    expect(Object.keys(createGridBounds()).sort()).toEqual([
+      'maxColumn',
+      'maxFloor',
+      'maxRow',
+      'minColumn',
+      'minFloor',
+      'minRow',
+    ]);
+  });
+
+  it('LEAVES THE SHIPPED PLOT ONE ROW DEEP, which is what makes this goal behaviour-free', () => {
+    // THE LOAD-BEARING ASSERTION OF THE WHOLE CHANGE. Every claim that G-034a changes no
+    // journey, no verdict and no outcome rests on this one fact, so it is pinned directly
+    // rather than left to be inferred from the goldens that depend on it.
+    expect(DEFAULT_MIN_ROW).toBe(DEFAULT_MAX_ROW);
+    expect(bounds.minRow).toBe(bounds.maxRow);
+    // And the door is on that row, because `entranceCell` reads the plot it is given.
+    expect(entranceCell(bounds).row).toBe(bounds.minRow);
+  });
+
+  it('is bounded at both edges, and one step past either is off the plot', () => {
+    expect(isWithinBounds(cell(0, 0, DEEP.minRow), DEEP)).toBe(true);
+    expect(isWithinBounds(cell(0, 0, DEEP.maxRow), DEEP)).toBe(true);
+    expect(isWithinBounds(cell(0, 0, DEEP.minRow - 1), DEEP)).toBe(false);
+    expect(isWithinBounds(cell(0, 0, DEEP.maxRow + 1), DEEP)).toBe(false);
+    // On the SHIPPED plot there is one row, so row 1 is off it. This is the clause the
+    // 4-neighbour door rule degenerates through — see `validity.door.test.ts`.
+    expect(isWithinBounds(cell(0, 0, 0), bounds)).toBe(true);
+    expect(isWithinBounds(cell(0, 0, 1), bounds)).toBe(false);
+  });
+
+  it('makes two cells that differ only in `row` DIFFERENT cells', () => {
+    expect(cellsEqual(cell(1, 2, 0), cell(1, 2, 0))).toBe(true);
+    expect(cellsEqual(cell(1, 2, 0), cell(1, 2, 1))).toBe(false);
+  });
+
+  it('IS RANKED AFTER `floor`, which is the declared convention and is asserted as one', () => {
+    // ==================================================================================
+    // THE ASSERTION NOTHING ELSE IN THE SUITE CAN MAKE — every pre-existing order
+    // assertion in this repo lives at one row, where the rank of `row` is invisible.
+    //
+    // WHAT IT IS AND IS NOT EVIDENCE FOR, because G-034a's plan claimed more for it than a
+    // probe supports. The plan said the rank is what makes `groundedRooms` a sound one-pass
+    // algorithm. It is not: `cellBelow` preserves both horizontal axes, so the cell below a
+    // room differs from it in the FLOOR and nothing else, and any lexicographic order with
+    // floor ascending visits it first. Re-spelling `compareCells` as `(row, floor, column)`
+    // and running the whole sim suite fails exactly three tests — this one and the two
+    // comparator-order cases in `validity.test.ts` — and NO validity test at all. Making
+    // floor DESCENDING fails eleven, nine of them enclosure and grounded-tower cases.
+    //
+    // So this pins a CONVENTION, deliberately and knowing that is what it is: a convention
+    // nothing asserts is a convention that drifts, and a reader left to work out which
+    // orderings are safe will get it wrong in the expensive direction. The real precondition
+    // — floor compared ASCENDING — is stated where it is relied on, in `compareCells` and in
+    // `groundedRooms`.
+    //
+    // I2 backstops neither: the gate compares runs to each other and holds no reference
+    // hash, so a CONSISTENTLY wrong verdict leaves it green.
+    // ==================================================================================
+    expect(compareCells(cell(0, 0, 5), cell(1, 0, 0))).toBe(-1);
+    expect(compareCells(cell(1, 0, 0), cell(0, 0, 5))).toBe(1);
+    // And column outranks row, for the same reason stated one axis down.
+    expect(compareCells(cell(0, 0, 5), cell(0, 1, 0))).toBe(-1);
+    // Row is the tiebreak when floor and column agree, and it is a real one.
+    expect(compareCells(cell(0, 0, 0), cell(0, 0, 1))).toBe(-1);
+    expect(compareCells(cell(0, 0, 1), cell(0, 0, 0))).toBe(1);
+    expect(compareCells(cell(0, 0, 1), cell(0, 0, 1))).toBe(0);
+    // Sorted, the rank is visible as an order rather than as three comparisons.
+    expect([cell(1, 0, 0), cell(0, 9, 0), cell(0, 0, 9), cell(0, 0, 1)].sort(compareCells)).toEqual([
+      cell(0, 0, 1),
+      cell(0, 0, 9),
+      cell(0, 9, 0),
+      cell(1, 0, 0),
+    ]);
+  });
+
+  it('has four neighbours on a storey, and `cellBelow` is not one of them', () => {
+    const here = cell(2, 3, 1);
+    expect(cellLeft(here)).toEqual(cell(2, 2, 1));
+    expect(cellRight(here)).toEqual(cell(2, 4, 1));
+    expect(cellFront(here)).toEqual(cell(2, 3, 0));
+    expect(cellBack(here)).toEqual(cell(2, 3, 2));
+    expect(cellBelow(here)).toEqual(cell(1, 3, 1));
+    // The four are distinct cells and all four stay on the same storey — a `cellFront`
+    // that changed floor would be a stairwell, not a neighbour.
+    const beside = [cellLeft(here), cellRight(here), cellFront(here), cellBack(here)];
+    expect(new Set(beside.map((c) => `${c.floor}:${c.column}:${c.row}`)).size).toBe(4);
+    for (const c of beside) expect(c.floor).toBe(here.floor);
+  });
+
+  it('is named in the messages a human reads, so a bad row says which axis it is', () => {
+    expect(describeCell(cell(1, 2, 3))).toContain('row 3');
+    expect(describeBounds(DEEP)).toContain('rows 0..4');
+  });
+
+  it('REFUSES a fractional row, which `canonicalise` would not have caught', () => {
+    // A float is FINITE, so `hash.ts` accepts it and the round trip carries it happily.
+    // `assertCell` is the only thing between `row: 0.5` and a world that hashes fine and
+    // addresses a cell that does not exist. The other two longhand axis checks —
+    // `assertEntity` and `assertGuest` in `save.ts` — carry the same clause, driven by
+    // `grid.test.ts` below and `travel.position.test.ts`; missing ONE of the three is
+    // silent, which is why each is asserted rather than one standing for all.
+    const fresh = (): World => createWorld(1, content);
+    expect(() => stepTick(fresh(), content, [spawnAt('alpha', { floor: 0, column: 0, row: 0.5 })])).toThrow(
+      /row must be a safe integer/,
+    );
+    expect(() => stepTick(fresh(), content, [spawnAt('alpha', { floor: 0, column: 0, row: Number.NaN })])).toThrow(
+      /row must be a safe integer/,
+    );
+    // And a whole row that is simply off the plot fails as what it is, AFTER the integer
+    // check — the ordering `assertCell` has had since G-007, now on three axes.
+    expect(() => stepTick(fresh(), content, [spawnAt('alpha', cell(0, 0, 1))])).toThrow(
+      /floor 0, column 0, row 1 is outside the plot/,
+    );
+  });
+
+  it('IS IN THE HASHED STATE: two worlds differing only in a row hash differently', () => {
+    // G-023a's precedent, and the exit criterion for this goal spelled as a command rather
+    // than as an adjective: NOT "assert the field exists", but "two worlds that differ in
+    // nothing but a row are different worlds". It needs a plot with depth to be expressible
+    // at all, which is why `DEEP` exists — on the shipped plot there is no second row to put
+    // the second world's room on, and that is the point rather than a limitation.
+    const deepWorld = (row: number): World =>
+      stepTick({ ...createWorld(1, content), grid: DEEP }, content, [spawnAt('alpha', cell(0, 3, row))]);
+    expect(hashState(deepWorld(0))).toBe(hashState(deepWorld(0)));
+    expect(hashState(deepWorld(0))).not.toBe(hashState(deepWorld(2)));
+    // The other half ADR-0007 asks for: the DEPTH OF THE PLOT is hashed too, so a world on a
+    // deeper plot is a different world even when everything standing on it is identical.
+    const shallow: World = { ...createWorld(1, content), grid: { ...DEEP, maxRow: DEEP.maxRow - 1 } };
+    expect(hashState(shallow)).not.toBe(hashState({ ...createWorld(1, content), grid: DEEP }));
+    // And it survives the round trip, which is the I6 half.
+    const world = deepWorld(2);
+    expect(hashState(deserialise(serialise(world)))).toBe(hashState(world));
+    expect(deserialise(serialise(world)).grid).toEqual(DEEP);
+    expect(entitiesInOrder(deserialise(serialise(world)).entities)[0]!.at).toEqual(cell(0, 3, 2));
   });
 });
 
@@ -145,10 +322,11 @@ describe('placement', () => {
   it('copies the caller\'s cell rather than holding it', () => {
     // Otherwise a host that reused one mutable object for a batch of spawns would move
     // entities after the fact, and `canonicalise` would hash a change nothing staged.
-    const mutable = { floor: 1, column: 1 };
+    const mutable = { floor: 1, column: 1, row: 0 };
     const world = stepTick(createWorld(1, content), content, [spawnAt('alpha', mutable)]);
     mutable.floor = 9;
     mutable.column = 9;
+    mutable.row = 9;
     expect(entitiesInOrder(world.entities)[0]!.at).toEqual(cell(1, 1));
   });
 
@@ -169,7 +347,7 @@ describe('placement', () => {
     // recorded refusal; this is the structural floor beneath that, not that feature.
     const fresh = (): World => createWorld(1, content);
     expect(() => stepTick(fresh(), content, [spawnAt('alpha', cell(999, 0))])).toThrow(
-      /floor 999, column 0 is outside the plot/,
+      /floor 999, column 0, row 0 is outside the plot/,
     );
     expect(() => stepTick(fresh(), content, [spawnAt('alpha', cell(0, -1))])).toThrow(/outside the plot/);
     expect(() => stepTick(fresh(), content, [spawnAt('alpha', cell(DEFAULT_MIN_FLOOR - 1, 0))])).toThrow(
@@ -209,7 +387,7 @@ describe('placement', () => {
     // half where the identical rule produces a recorded refusal instead of a throw.
     expect(() =>
       stepTick(createWorld(1, content), content, [spawnAt('alpha', cell(0, 0)), spawnAt('beta', cell(0, 0))]),
-    ).toThrow(/floor 0, column 0 is already occupied/);
+    ).toThrow(/floor 0, column 0, row 0 is already occupied/);
 
     // And the positive half, so "refuses everything" is not a way to pass: two rooms one
     // column apart are fine, and both keep the cell they were given.
@@ -373,7 +551,7 @@ describe('placements survive a round trip', () => {
     // The reason the plot is world state rather than a build constant: a save carries
     // its own, and this build does not overwrite it. Editing the defaults therefore
     // cannot silently reinterpret an existing save.
-    const narrow: GridBounds = { minFloor: 0, maxFloor: 1, minColumn: 0, maxColumn: 3 };
+    const narrow: GridBounds = { minFloor: 0, maxFloor: 1, minColumn: 0, maxColumn: 3, minRow: 0, maxRow: 0 };
     const world: World = {
       ...createWorld(1, content),
       grid: narrow,
@@ -389,7 +567,7 @@ describe('placements survive a round trip', () => {
       world: { grid: GridBounds; entities: { list: { at: Cell }[] } };
     };
     // The plot the SAVE carries, shrunk under a room that the save also carries.
-    blob.world.grid = { minFloor: 0, maxFloor: 1, minColumn: 0, maxColumn: 5 };
+    blob.world.grid = { minFloor: 0, maxFloor: 1, minColumn: 0, maxColumn: 5, minRow: 0, maxRow: 0 };
     expect(() => deserialise(JSON.stringify(blob))).toThrow(/outside the plot/);
   });
 
@@ -401,8 +579,16 @@ describe('placements survive a round trip', () => {
       mutate(blob.world.entities.list[0]!);
       return (): World => deserialise(JSON.stringify(blob));
     };
-    expect(corrupt((entity) => { entity['at'] = { floor: 0.5, column: 0 }; })).toThrow(/non-integer position/);
+    expect(corrupt((entity) => { entity['at'] = { floor: 0.5, column: 0, row: 0 }; })).toThrow(/non-integer position/);
+    // THE THIRD AXIS, AND IT IS NOT A REPEAT OF THE LINE ABOVE (G-034a). A fractional ROW is
+    // finite, so `canonicalise` in `hash.ts` does not throw on it and the round trip carries
+    // it happily; if `assertEntityStoreInvariants` had gained `row` in its typeof clause but
+    // not in its integer clause, every line here would still pass. It is asserted on each of
+    // the three longhand axis checks — here, in `assertCell` (`grid.test.ts` above) and in
+    // `assertGuest` (`travel.position.test.ts`) — because missing ONE of them is silent.
+    expect(corrupt((entity) => { entity['at'] = { floor: 0, column: 0, row: 0.5 }; })).toThrow(/non-integer position/);
     expect(corrupt((entity) => { entity['at'] = { floor: 0 }; })).toThrow(/at\.column is not a number/);
+    expect(corrupt((entity) => { entity['at'] = { floor: 0, column: 0 }; })).toThrow(/at\.row is not a number/);
     expect(corrupt((entity) => { entity['at'] = 7; })).toThrow(/neither null nor a cell/);
     // MISSING is not the same as null. `null` is a statement the writer made; an absent
     // key is a save this build did not write and cannot vouch for.

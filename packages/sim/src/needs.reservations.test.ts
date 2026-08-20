@@ -100,12 +100,12 @@ const content = bindContent({
 const spawnBedroom = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'bedroom',
-  at: { floor: 0, column: index * 2 },
+  at: { floor: 0, column: index * 2, row: 0 },
 });
 const spawnCafe = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'cafe',
-  at: { floor: 0, column: 40 + index * 2 },
+  at: { floor: 0, column: 40 + index * 2, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
@@ -271,8 +271,8 @@ describe('exit path — the provider stopped existing', () => {
     const start = run(hotel(1, 1), content, 3, [at(1, arrive)]);
     const cafe = entitiesInOrder(start.entities)[1]!;
     expect(isEngaged(only(start))).toBe(true);
-    const left: Command = { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 39 } };
-    const right: Command = { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 41 } };
+    const left: Command = { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 39, row: 0 } };
+    const right: Command = { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 41, row: 0 } };
 
     const after = stepTick(start, content, [left, right]);
     expect(only(after).engagement).toBeNull();
@@ -340,7 +340,7 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
     // G-023a: a guest is somewhere. The doorway — nothing in this file reads a position,
     // and `stepGuests` re-states it from what the guest holds on every tick. The placement
     // rule is pinned in `travel.position.test.ts`.
-    at: { floor: 0, column: 0 },
+    at: { floor: 0, column: 0, row: 0 },
     arrivedTick: over.arrivedTick ?? STAGED_TICK,
     roomEntityId: room,
     // θ-b1: content on arrival. Nothing in this file is about a guest's mood; the stock is

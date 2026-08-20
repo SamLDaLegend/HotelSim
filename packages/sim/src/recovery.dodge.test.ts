@@ -348,7 +348,7 @@ describe('3. the simulation: 100 nights, a dodger against a holder, through the 
     ],
   });
 
-  const cell = (index: number) => ({ floor: 0, column: index * 2 });
+  const cell = (index: number) => ({ floor: 0, column: index * 2, row: 0 });
 
   /** Builds the hotel once and leaves it standing. Pays upkeep every night. */
   function holdSchedule(): ScheduledCommand[] {

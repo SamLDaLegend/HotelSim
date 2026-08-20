@@ -153,19 +153,27 @@ export function assertEntityStoreInvariants(store: EntityStore, bounds: GridBoun
     // the one this build would create. `null` is legal and means unplaced; see `Entity.at`.
     const at = entity.at;
     if (at !== null) {
-      if (typeof at !== 'object' || typeof at.floor !== 'number' || typeof at.column !== 'number') {
+      if (
+        typeof at !== 'object' ||
+        typeof at.floor !== 'number' ||
+        typeof at.column !== 'number' ||
+        typeof at.row !== 'number'
+      ) {
         throw new Error(
           `Entity store is invalid: entity id ${entity.id} has a position that is not a cell`,
         );
       }
-      if (!Number.isSafeInteger(at.floor) || !Number.isSafeInteger(at.column)) {
+      if (!Number.isSafeInteger(at.floor) || !Number.isSafeInteger(at.column) || !Number.isSafeInteger(at.row)) {
         throw new Error(
-          `Entity store is invalid: entity id ${entity.id} has a non-integer position (floor ${String(at.floor)}, column ${String(at.column)})`,
+          `Entity store is invalid: entity id ${entity.id} has a non-integer position ` +
+            `(floor ${String(at.floor)}, column ${String(at.column)}, row ${String(at.row)})`,
         );
       }
       if (!isWithinBounds(at, bounds)) {
         throw new Error(
-          `Entity store is invalid: entity id ${entity.id} stands at floor ${at.floor}, column ${at.column}, which is outside the plot (floors ${bounds.minFloor}..${bounds.maxFloor}, columns ${bounds.minColumn}..${bounds.maxColumn})`,
+          `Entity store is invalid: entity id ${entity.id} stands at floor ${at.floor}, column ${at.column}, ` +
+            `row ${at.row}, which is outside the plot (floors ${bounds.minFloor}..${bounds.maxFloor}, ` +
+            `columns ${bounds.minColumn}..${bounds.maxColumn}, rows ${bounds.minRow}..${bounds.maxRow})`,
         );
       }
     }
@@ -247,7 +255,7 @@ export function draftSpawn(draft: EntityDraft, kind: ContentId, at: Cell): Entit
   draft.nextId = id + 1;
   // Copied, not held: the caller's object must not be able to move an entity after the
   // fact. `canonicalise` would hash the change and nothing would have staged it.
-  draft.added.push({ id, kind, at: { floor: at.floor, column: at.column } });
+  draft.added.push({ id, kind, at: { floor: at.floor, column: at.column, row: at.row } });
   return id;
 }
 

@@ -32,6 +32,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { withoutCounters } from './fixtures/without-counters.js';
+import { stripDepth } from './without-depth.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
 import { SAVE_V1_BYTES, SAVE_V1_CONTENT } from './fixtures/save-v1.js';
@@ -368,7 +369,7 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
   /** A world lived forward under this build: one room, one guest, one completed stay. */
   const lived = (): World => {
     const world = stepTick(createWorld(1, content), content, [
-      { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0 } },
+      { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0, row: 0 } },
     ]);
     return run(world, content, 40, [{ tick: 1, command: { kind: 'guestArrives' } }]);
   };
@@ -405,7 +406,9 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     const tallyWithoutV9 = (json['needOutcomes'] as Record<string, unknown>[]).map(
       ({ abandoned: _drop, unservedTicks: _unserved, instanceTicks: _stay, ...row }) => row,
     );
-    const { reviewOutcomes: _noReviews, ...withoutV10 } = json;
+    // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v7 floor was a
+    // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
+    const { reviewOutcomes: _noReviews, ...withoutV10 } = stripDepth(json);
     return JSON.stringify({
       schemaVersion: 7,
       world: {

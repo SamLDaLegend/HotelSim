@@ -146,7 +146,7 @@ const content = bindContent(table(7_500, 5_000, 2_500, 7_500));
 const spawn = (entityKind: string, floor: number, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor, column },
+  at: { floor, column, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });

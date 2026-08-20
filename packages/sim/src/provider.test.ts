@@ -87,7 +87,7 @@ const content = bindContent({
 const spawn = (entityKind: string, floor: number, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor, column },
+  at: { floor, column, row: 0 },
 });
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 
@@ -127,7 +127,7 @@ describe('an item provides only while it stands inside a VALID room (G-013)', ()
     const after = stepTick(world, content, [despawn(supportId)]);
     const ctx = ctxOf(after);
     const chair = getEntity(after.entities, chairId)!;
-    expect(chair.at).toEqual({ floor: 1, column: 0 });
+    expect(chair.at).toEqual({ floor: 1, column: 0, row: 0 });
     expect(isProviding(ctx, chair)).toBe(false);
     expect(providersFor(ctx, 'comfort')).toEqual([]);
   });

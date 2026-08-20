@@ -118,7 +118,7 @@ const hotelContent = bindContent({
   ],
 });
 
-const spawn = (kind: string, column: number): Command => ({ kind: 'spawnEntity', entityKind: kind, at: { floor: 0, column } });
+const spawn = (kind: string, column: number): Command => ({ kind: 'spawnEntity', entityKind: kind, at: { floor: 0, column, row: 0 } });
 const arrive: Command = { kind: 'guestArrives' };
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
 

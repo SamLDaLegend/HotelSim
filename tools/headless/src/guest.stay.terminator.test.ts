@@ -100,7 +100,7 @@ const content = bindContent({
 const spawnRoom = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'roomA',
-  at: { floor: 0, column: index * 2 },
+  at: { floor: 0, column: index * 2, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
@@ -222,7 +222,7 @@ describe('CHECKOUT runs on a clock, and the clock starts at the door', () => {
       list: [
         {
           id: 1,
-          at: { floor: 0, column: 0 },
+          at: { floor: 0, column: 0, row: 0 },
           arrivedTick: 1_000 - age,
           roomEntityId: 1,
           engagement: null,

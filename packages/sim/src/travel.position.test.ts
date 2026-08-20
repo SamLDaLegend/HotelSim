@@ -86,9 +86,9 @@ const content = bindContent(DEFINITIONS);
 // THREE CELLS THAT CANNOT BE MISTAKEN FOR EACH OTHER, and none of them is the entrance.
 // A bedroom at (0, 0) would make "in its room" and "in the doorway" the same assertion,
 // which is how a placement test passes while the placement is wrong.
-const BEDROOM: Cell = { floor: 0, column: 3 };
-const CAFE: Cell = { floor: -1, column: 6 };
-const DOOR: Cell = { floor: 0, column: 0 };
+const BEDROOM: Cell = { floor: 0, column: 3, row: 0 };
+const CAFE: Cell = { floor: -1, column: 6, row: 0 };
+const DOOR: Cell = { floor: 0, column: 0, row: 0 };
 
 const spawn = (entityKind: string, at: Cell): Command => ({ kind: 'spawnEntity', entityKind, at });
 const arrives: ScheduledCommand = { tick: 1, command: { kind: 'guestArrives' } };
@@ -104,7 +104,7 @@ const onlyGuest = (world: World): Guest => {
 
 describe('1. the entrance is a total function of the plot (G-023a)', () => {
   it('is the ground floor at the left edge on the plot this build creates', () => {
-    expect(entranceCell(createGridBounds())).toEqual({ floor: 0, column: 0 });
+    expect(entranceCell(createGridBounds())).toEqual({ floor: 0, column: 0, row: 0 });
   });
 
   it('CLAMPS ONTO A PLOT THAT HAS NO GROUND FLOOR, which is a plot the checks allow', () => {
@@ -113,13 +113,13 @@ describe('1. the entrance is a total function of the plot (G-023a)', () => {
     // floor 0 is not on it. Unclamped, every guest in such a world would stand outside its
     // own building and `assertGuestStoreInvariants` would refuse to load a save this build
     // had just written.
-    const sky: GridBounds = { minFloor: 3, maxFloor: 5, minColumn: 2, maxColumn: 9 };
+    const sky: GridBounds = { minFloor: 3, maxFloor: 5, minColumn: 2, maxColumn: 9, minRow: 0, maxRow: 0 };
     expect(() => assertGridBounds(sky)).not.toThrow();
-    expect(entranceCell(sky)).toEqual({ floor: 3, column: 2 });
+    expect(entranceCell(sky)).toEqual({ floor: 3, column: 2, row: 0 });
 
     // And the other side of the clamp: a plot entirely underground.
-    const buried: GridBounds = { minFloor: -6, maxFloor: -2, minColumn: 0, maxColumn: 4 };
-    expect(entranceCell(buried)).toEqual({ floor: -2, column: 0 });
+    const buried: GridBounds = { minFloor: -6, maxFloor: -2, minColumn: 0, maxColumn: 4, minRow: 0, maxRow: 0 };
+    expect(entranceCell(buried)).toEqual({ floor: -2, column: 0, row: 0 });
   });
 
   it('lands on the plot for every plot, including a single-cell one', () => {
@@ -127,11 +127,11 @@ describe('1. the entrance is a total function of the plot (G-023a)', () => {
     // can fail to produce a cell puts `at: null` back into the type through the back door.
     const plots: readonly GridBounds[] = [
       createGridBounds(),
-      { minFloor: 3, maxFloor: 5, minColumn: 2, maxColumn: 9 },
-      { minFloor: -6, maxFloor: -2, minColumn: 0, maxColumn: 4 },
-      { minFloor: 0, maxFloor: 0, minColumn: 0, maxColumn: 0 },
-      { minFloor: 7, maxFloor: 7, minColumn: 41, maxColumn: 41 },
-      { minFloor: -1, maxFloor: 40, minColumn: 12, maxColumn: 13 },
+      { minFloor: 3, maxFloor: 5, minColumn: 2, maxColumn: 9, minRow: 0, maxRow: 0 },
+      { minFloor: -6, maxFloor: -2, minColumn: 0, maxColumn: 4, minRow: 0, maxRow: 0 },
+      { minFloor: 0, maxFloor: 0, minColumn: 0, maxColumn: 0, minRow: 0, maxRow: 0 },
+      { minFloor: 7, maxFloor: 7, minColumn: 41, maxColumn: 41, minRow: 0, maxRow: 0 },
+      { minFloor: -1, maxFloor: 40, minColumn: 12, maxColumn: 13, minRow: 0, maxRow: 0 },
     ];
     for (const plot of plots) {
       expect(() => assertGridBounds(plot)).not.toThrow();
@@ -143,8 +143,8 @@ describe('1. the entrance is a total function of the plot (G-023a)', () => {
     // A save carries its own plot (`GridBounds`), so a world played on a narrower one gets
     // its own door. This is the property that lets the migration state the same rule over
     // the bytes of an old save without reading a live constant (ADR-0008).
-    const narrow: GridBounds = { minFloor: -2, maxFloor: 20, minColumn: 30, maxColumn: 40 };
-    expect(entranceCell(narrow)).toEqual({ floor: 0, column: 30 });
+    const narrow: GridBounds = { minFloor: -2, maxFloor: 20, minColumn: 30, maxColumn: 40, minRow: 0, maxRow: 0 };
+    expect(entranceCell(narrow)).toEqual({ floor: 0, column: 30, row: 0 });
     expect(entranceCell(narrow)).not.toEqual(entranceCell(createGridBounds()));
   });
 });
@@ -295,7 +295,7 @@ describe('4. the position is part of the HASHED state (G-023a)', () => {
     const guest = onlyGuest(world);
     expect(guest.at).toEqual(BEDROOM);
 
-    const elsewhere: Cell = { floor: 2, column: 40 };
+    const elsewhere: Cell = { floor: 2, column: 40, row: 0 };
     const moved: World = {
       ...world,
       guests: { ...world.guests, list: [{ ...guest, at: elsewhere }] },
@@ -312,11 +312,11 @@ describe('4. the position is part of the HASHED state (G-023a)', () => {
     const guest = onlyGuest(world);
     const right: World = {
       ...world,
-      guests: { ...world.guests, list: [{ ...guest, at: { floor: BEDROOM.floor, column: BEDROOM.column + 1 } }] },
+      guests: { ...world.guests, list: [{ ...guest, at: { floor: BEDROOM.floor, column: BEDROOM.column + 1, row: 0 } }] },
     };
     const up: World = {
       ...world,
-      guests: { ...world.guests, list: [{ ...guest, at: { floor: BEDROOM.floor + 1, column: BEDROOM.column } }] },
+      guests: { ...world.guests, list: [{ ...guest, at: { floor: BEDROOM.floor + 1, column: BEDROOM.column, row: 0 } }] },
     };
     expect(new Set([hashState(world), hashState(right), hashState(up)]).size).toBe(3);
   });
@@ -359,16 +359,31 @@ describe('5. a save without a position is refused, rather than placed a tick lat
     expect(corrupt((guest) => { guest['at'] = null; })).toThrow(/at is missing or not a cell/);
   });
 
-  it('refuses a cell that is not two numbers', () => {
+  it('refuses a cell that is not THREE numbers', () => {
     expect(corrupt((guest) => { guest['at'] = { floor: 0 }; })).toThrow(/at\.column is not a number/);
     expect(corrupt((guest) => { guest['at'] = { floor: 'ground', column: 0 }; })).toThrow(/at\.floor is not a number/);
+    // THE THIRD AXIS SINCE v17 (G-034a). `assertGuest` in `save.ts` checks the three axes in a
+    // longhand list, and this is the case that says `row` is in it: a v16-shaped cell reaching
+    // a v17 build is a save no migration produced, and it is refused BY NAME rather than
+    // arriving at `assertGuestStoreInvariants` as an `undefined` that reports itself as "not a
+    // cell" — the newest field's defect wearing the oldest field's message.
+    expect(corrupt((guest) => { guest['at'] = { floor: 0, column: 0 }; })).toThrow(/at\.row is not a number/);
   });
 
-  it('refuses a position off the plot, or a fractional one', () => {
+  it('refuses a position off the plot, or a fractional one — ON ANY OF THE THREE AXES', () => {
     // Checked against the plot THIS SAVE carries, through the same `assertCell` the tick
     // uses when it spawns — so "a cell this simulation can address" has one definition.
-    expect(corrupt((guest) => { guest['at'] = { floor: 99, column: 0 }; })).toThrow(/outside the plot/);
-    expect(corrupt((guest) => { guest['at'] = { floor: 0, column: 0.5 }; })).toThrow(/column must be a safe integer/);
+    expect(corrupt((guest) => { guest['at'] = { floor: 99, column: 0, row: 0 }; })).toThrow(/outside the plot/);
+    expect(corrupt((guest) => { guest['at'] = { floor: 0, column: 0.5, row: 0 }; })).toThrow(/column must be a safe integer/);
+    // A FRACTIONAL ROW, AND IT IS NOT A REPEAT OF THE LINE ABOVE (G-034a). A float is FINITE, so
+    // `canonicalise` in `hash.ts` accepts it and the round trip carries it happily; and `row` is
+    // a NUMBER, so `assertGuest`'s shape check above accepts it too. `assertCell`'s own longhand
+    // row clause is the only thing between `row: 0.5` and a guest standing on a cell that does
+    // not exist — and missing ONE of the three longhand checks is silent, which is why each of
+    // `assertCell`, `assertEntity` and `assertGuest` is driven separately (`grid.test.ts`).
+    expect(corrupt((guest) => { guest['at'] = { floor: 0, column: 0, row: 0.5 }; })).toThrow(/row must be a safe integer/);
+    // And a whole row that is simply off this save's own one-row plot.
+    expect(corrupt((guest) => { guest['at'] = { floor: 0, column: 0, row: 1 }; })).toThrow(/outside the plot/);
   });
 
   it('and the tick-boundary check refuses the same world, so load and commit agree', () => {
@@ -376,7 +391,7 @@ describe('5. a save without a position is refused, rather than placed a tick lat
     // `stepTick`, which is what stops the two definitions of a valid store from drifting.
     const world = run(hotel(spawn('bedroom', BEDROOM)), content, 30, [arrives]);
     const guest = onlyGuest(world);
-    const off = { ...world.guests, list: [{ ...guest, at: { floor: 99, column: 0 } }] };
+    const off = { ...world.guests, list: [{ ...guest, at: { floor: 99, column: 0, row: 0 } }] };
     expect(() => assertGuestStoreInvariants(off, world.entities, world.grid)).toThrow(/outside the plot/);
     expect(() => assertGuestStoreInvariants(world.guests, world.entities, world.grid)).not.toThrow();
     // And through the front door, on a world that is otherwise perfectly well formed.

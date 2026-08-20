@@ -99,13 +99,13 @@ const content = bindContent({
 const spawnRoom = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'roomA',
-  at: { floor: 0, column: index * 2 },
+  at: { floor: 0, column: index * 2, row: 0 },
 });
 /** A room ABOVE another, so demolishing the lower one takes the upper one's support away. */
 const spawnRoomAbove = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'roomA',
-  at: { floor: 1, column: index * 2 },
+  at: { floor: 1, column: index * 2, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
@@ -120,7 +120,7 @@ const store = (count: number): GuestStore => ({
     id: i + 1,
     // G-023a: a guest is somewhere. These guests hold nothing, so the doorway is also what
     // the placement rule would give them.
-    at: { floor: 0, column: 0 },
+    at: { floor: 0, column: 0, row: 0 },
     arrivedTick: 0,
     roomEntityId: 0,
     engagement: null,

@@ -55,6 +55,7 @@ import type { ReviewOutcomeRow } from './reviews.js';
 import { run, stepTick } from './tick.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
+import { stripDepth } from './without-depth.js';
 
 /** The 9 -> 10 step itself. Index 8, the ninth link. */
 const step = MIGRATIONS[8]!;
@@ -162,6 +163,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed', 
       [13, 14],
       [14, 15],
       [15, 16],
+      [16, 17],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -347,8 +349,8 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
   /** A world lived forward under this build: one room, one café, one completed stay. */
   const lived = (): World => {
     const world = stepTick(createWorld(1, content), content, [
-      { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0 } },
-      { kind: 'spawnEntity', entityKind: 'cafe', at: { floor: 0, column: 2 } },
+      { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0, row: 0 } },
+      { kind: 'spawnEntity', entityKind: 'cafe', at: { floor: 0, column: 2, row: 0 } },
     ]);
     return run(world, content, 60, [{ tick: 1, command: { kind: 'guestArrives' } }]);
   };
@@ -363,7 +365,11 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
    * a table it correctly refuses, which is the guard working rather than a test to relax.
    */
   const asV9Bytes = (world: World): string => {
-    const { reviewOutcomes: _drop, ...rest } = JSON.parse(JSON.stringify(world)) as Record<string, unknown>;
+    // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v9 floor was a
+    // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
+    const { reviewOutcomes: _drop, ...rest } = stripDepth(
+      JSON.parse(JSON.stringify(world)) as Record<string, unknown>,
+    );
     // AND THE v14 FIELD COMES OFF EVERY GUEST (θ-b1), for the reason `reviewOutcomes` comes off
     // the world: "the same world written in the v9 SHAPE" means every difference v9 had, and a
     // v9 guest had no mood. `migrateV13ToV14` refuses a guest that already carries one.

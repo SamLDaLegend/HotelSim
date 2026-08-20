@@ -269,7 +269,7 @@ describe('the 4 -> 5 step invents no history, and INVENTS NO MONEY', () => {
     expect(fixtureContent.fingerprint).toBe(SAVE_V1_CONTENT_FINGERPRINT);
     const world = deserialise(SAVE_V1_BYTES);
     const advanced = run(world, fixtureContent, 2_000, [
-      { tick: 5_500, command: { kind: 'buildRoom', roomType: 'fixtureRoom', at: { floor: 0, column: 0 } } },
+      { tick: 5_500, command: { kind: 'buildRoom', roomType: 'fixtureRoom', at: { floor: 0, column: 0, row: 0 } } },
       // A draw under content that offers no loan: refused and RECORDED, never thrown, which
       // is what keeps an old save runnable rather than crashing on a command it predates.
       { tick: 5_501, command: { kind: 'drawLoan' } },

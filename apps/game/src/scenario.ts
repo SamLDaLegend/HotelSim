@@ -127,6 +127,10 @@ function lodgingCell(index: number, entrance: Cell): Cell {
   return {
     floor: entrance.floor + floor,
     column: entrance.column + COLUMNS_PER_ROOM * column + 1,
+    // The entrance's own row (G-034a) — the shipped plot has exactly one, and reading it
+    // from the entrance rather than writing `0` keeps this host on whatever plot the sim
+    // hands it. Minimal change: `apps/game` is not this goal's subject.
+    row: entrance.row,
   };
 }
 
@@ -143,6 +147,7 @@ function amenityCell(index: number, bounds: GridBounds, entrance: Cell): Cell {
   return {
     floor: Math.max(bounds.minFloor, entrance.floor - 1),
     column: entrance.column + COLUMNS_PER_ROOM * index,
+    row: entrance.row,
   };
 }
 

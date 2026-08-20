@@ -100,17 +100,17 @@ const hotel = (content: ReturnType<typeof contentWith>, beds: number, amenities:
     ...Array.from({ length: beds }, (_, i) => ({
       kind: 'spawnEntity' as const,
       entityKind: 'bedroom',
-      at: { floor: 0, column: i * 2 },
+      at: { floor: 0, column: i * 2, row: 0 },
     })),
     ...Array.from({ length: amenities }, (_, i) => ({
       kind: 'spawnEntity' as const,
       entityKind: 'cafe',
-      at: { floor: 0, column: 40 + i * 4 },
+      at: { floor: 0, column: 40 + i * 4, row: 0 },
     })),
     ...Array.from({ length: amenities }, (_, i) => ({
       kind: 'spawnEntity' as const,
       entityKind: 'arcade',
-      at: { floor: 0, column: 42 + i * 4 },
+      at: { floor: 0, column: 42 + i * 4, row: 0 },
     })),
   ];
   return run(stepTick(world, content, spawns), content, ticks, [{ tick: 1, command: { kind: 'guestArrives' } }]);

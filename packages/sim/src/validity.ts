@@ -70,7 +70,19 @@ import { findRoomType, isRoomKind, providesOf, requiredItemsOf, roomTypeProvides
 import type { BoundContent } from './content.js';
 import { draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
-import { boundsEqual, cellBelow, cellLeft, cellRight, cellsEqual, compareCells, describeCell, GROUND_FLOOR, isWithinBounds } from './grid.js';
+import {
+  boundsEqual,
+  cellBack,
+  cellBelow,
+  cellFront,
+  cellLeft,
+  cellRight,
+  cellsEqual,
+  compareCells,
+  describeCell,
+  GROUND_FLOOR,
+  isWithinBounds,
+} from './grid.js';
 import type { Cell, GridBounds } from './grid.js';
 import { compareProviderPreference } from './utility.js';
 
@@ -388,6 +400,22 @@ function placementIndex(ctx: ValidityContext): readonly PlacedEntity[] {
  * being paid for. A per-room `supported(below)` recursion would have been O(n x height)
  * and would have arrived in the goal immediately before G-010 measures tick cost.
  *
+ * WHAT THIS FUNCTION ACTUALLY NEEDS FROM `compareCells`, STATED AT THE STRENGTH A PROBE
+ * SUPPORTS (G-034a). It needs the cell BELOW to be visited before the cell above — and
+ * `cellBelow` preserves both horizontal axes, so the two differ in the floor and in nothing
+ * else. **The requirement is therefore that floor is compared ASCENDING; the rank of floor
+ * against the two horizontal axes does not enter into it.** G-034a's plan asserted the
+ * rank was the precondition; a mutation probe over the whole sim suite says otherwise —
+ * `(row, floor, column)` fails 3 tests and NONE of them is a validity test, while a
+ * floor-DESCENDING comparator fails 11, nine of them enclosure and grounded-tower cases.
+ * The correction is recorded in `compareCells`'s own docblock rather than left as a
+ * comment that would go on asserting the stronger claim.
+ *
+ * I2 CANNOT CATCH EITHER MISTAKE: the gate compares runs to each other and holds no
+ * reference hash, so a consistently wrong verdict leaves it green. `validity.test.ts`
+ * drives a grounded case at mixed rows, which is what goes red under a floor-descending
+ * comparator; `grid.test.ts` pins the rank itself as a convention.
+ *
  * Written to fold over `roomCellsOf` rather than `room.at`, so a multi-cell footprint
  * needs EVERY cell either at the earth or over a grounded room — the partially-supported
  * case that lands with width (M6) needs no change here.
@@ -589,9 +617,34 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // A cell of the room's own footprint is not a door either, which is why the check
   // skips them: with a footprint wider than one cell, the neighbour of one cell is the
   // room itself, and it must not count as somewhere to open into.
+  //
+  // ==========================================================================
+  // FOUR NEIGHBOURS, NOT TWO, BECAUSE A FLOOR IS A PLAN AND NOT A STRIP (G-034a).
+  //
+  // This probed `cellLeft`/`cellRight` only, and on a strip those WERE the neighbours.
+  // On a plan they are half of them, and the missing half is not a refinement: a room
+  // with a wall to the east and a wall to the west and OPEN SPACE IN FRONT OF IT would
+  // be reported `noDoor` — a room a player can walk into, refused.
+  //
+  // THE 2-NEIGHBOUR SPELLING TYPECHECKS AND PASSES EVERYTHING. `cellLeft`/`cellRight`
+  // copy the row through unchanged, so the compiler cannot tell, and every pre-existing
+  // seal test lives on a one-row plot where front and back are off the plot anyway.
+  // `validity.door.test.ts` pins the discriminating case on a plot with depth.
+  //
+  // AND ON THE SHIPPED ONE-ROW PLOT THIS DEGENERATES TO THE OLD RULE EXACTLY, through
+  // `isWithinBounds`: `cellFront`/`cellBack` of a cell whose row is both `minRow` and
+  // `maxRow` are off the plot, so they are skipped by the very first line of the loop —
+  // the same line that already skipped a cell beyond the left edge. That is what keeps
+  // every migrated world's validity verdicts identical across 16 -> 17.
+  //
+  // THE PROBE ORDER IS FIXED AND DOES NOT MATTER TO THE ANSWER: this asks whether ANY
+  // neighbour is open, so it is an existential over a fixed-length array literal, not an
+  // iteration whose order could pick a winner (I2). It is left/right/front/back because
+  // that is the order the two axes are declared in.
+  // ==========================================================================
   let hasDoor = false;
   for (const cell of cells) {
-    for (const beside of [cellLeft(cell), cellRight(cell)]) {
+    for (const beside of [cellLeft(cell), cellRight(cell), cellFront(cell), cellBack(cell)]) {
       if (!isWithinBounds(beside, ctx.bounds)) continue;
       if (coversCell(ctx.content, room, beside)) continue;
       if (roomAtCell(ctx, beside) !== undefined) continue;

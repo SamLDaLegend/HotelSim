@@ -96,6 +96,25 @@ const ARRIVALS_EVERY_TICKS = 97;
  * Verified by replaying this log and reading the tallies, in
  * `validity.determinism.test.ts` — not assumed here.
  */
+/**
+ * THE ONLY ROW THE SHIPPED PLOT HAS (G-034a).
+ *
+ * `createGridBounds()` returns a plot one row deep — `minRow === maxRow === 0` — so every
+ * cell in this log has to be on it or `applyBuildRoom` refuses the build and `spawnEntity`
+ * throws. A LITERAL rather than an import of `DEFAULT_MIN_ROW`, and the reason is what this
+ * log IS: a command log whose whole value is that it does not move. Reading the live
+ * constant would silently re-aim every cell in it on the day G-036 widens the plot, which
+ * would move the I2 hash on a change that says nothing about determinism, and it would move
+ * it in a way whose only symptom is a number in four digests.
+ *
+ * WHAT DEPENDS ON THE LOG STAYING ONE ROW DEEP, and it is not tidiness: the terrace waves
+ * and the sky tower below produce `noDoor` and `unsupported` verdicts by SEALING rooms
+ * shoulder to shoulder along one axis. Give those rooms a second axis with free cells on it
+ * and every one of them acquires a door — `validity.determinism.test.ts` reads those tallies
+ * and they would go to zero, silently, while the gate stayed green.
+ */
+const SHIPPED_ROW = 0;
+
 export function commandLog(ticks: number, content: BoundContent): readonly ScheduledCommand[] {
   // The kind comes from the LOADED CONTENT, not from a literal. So the 100,000-tick
   // determinism proof now covers the content path end to end: if the loader broke, or
@@ -116,7 +135,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // What a room of this kind needs to work, from the room type's own `requires` — never
   // from a literal (I3, ADR-0003).
   const furniture = requiredItemsOf(content, entityKind);
-  const furnish = (tick: number, at: { floor: number; column: number }, into: ScheduledCommand[]): void => {
+  const furnish = (tick: number, at: { floor: number; column: number; row: number }, into: ScheduledCommand[]): void => {
     for (const itemId of furniture) {
       into.push({ tick, command: { kind: 'spawnEntity', entityKind: itemId, at } });
     }
@@ -171,7 +190,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   let churnTick = 1;
   let churnRoomId = 1;
   for (let cycle = 0; cycle < churnCycles; cycle += 1) {
-    const at = { floor: 20, column: 0 };
+    const at = { floor: 20, column: 0, row: SHIPPED_ROW };
     schedule.push({ tick: churnTick, command: { kind: 'buildRoom', roomType: entityKind, at } });
     schedule.push({ tick: churnTick + 1, command: { kind: 'demolishRoom', id: churnRoomId } });
     churnTick += 2;
@@ -206,7 +225,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // rooms that genuinely work.
   let spawnIndex = 0;
   for (let tick = 13; tick < ticks; tick += 1009) {
-    const at = { floor: spawnIndex % 21, column: spawnIndex % 80 };
+    const at = { floor: spawnIndex % 21, column: spawnIndex % 80, row: SHIPPED_ROW };
     const furnished = spawnIndex % 2 === 0;
     spawnIndex += 1;
     schedule.push({ tick, command: { kind: 'spawnEntity', entityKind, at } });
@@ -238,7 +257,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     for (let tick = firstTick; tick < ticks && terrace < count; tick += step) {
       const left = 60 + terrace * 4; // a clear column between terraces, so they stay apart
       for (const column of [left, left + 1, left + 2]) {
-        const at = { floor, column };
+        const at = { floor, column, row: SHIPPED_ROW };
         schedule.push({ tick, command: { kind: 'spawnEntity', entityKind, at } });
         furnish(tick, at, schedule);
       }
@@ -277,7 +296,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // Under the local rule the top three served those guests; under the transitive rule
   // none of them does. That difference is what the state hash records.
   for (const floor of [3, 4, 5, 6]) {
-    const at = { floor, column: 79 };
+    const at = { floor, column: 79, row: SHIPPED_ROW };
     schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind, at } });
     furnish(47, at, schedule);
   }
@@ -424,7 +443,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     }
     if (!servesEngagement) continue;
     for (let copy = 0; copy < (copies ?? copiesFor(roomType)); copy += 1) {
-      const at = { floor: 0, column: amenityColumn };
+      const at = { floor: 0, column: amenityColumn, row: SHIPPED_ROW };
       amenityColumn += 2;
       schedule.push({ tick, command: { kind: 'spawnEntity', entityKind: roomType.id, at } });
       spawned += 1;
@@ -560,7 +579,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // than this comment is what holds the coverage.
   if (secondHost !== undefined) {
     const seal = (host: number, spawnTick: number, sealTick: number): void => {
-      const at = { floor: 0, column: host };
+      const at = { floor: 0, column: host, row: SHIPPED_ROW };
       schedule.push({ tick: spawnTick, command: { kind: 'spawnEntity', entityKind: secondHost.id, at } });
       // Only entities that exist BEFORE the `underfoot` walk starts at tick 1,601 are ones
       // that walk has to step over, so wave 2 contributes nothing to the offset.
@@ -574,7 +593,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
       // cause (b). Furnished, so the blockers are valid rooms rather than a second kind of
       // broken thing.
       for (const column of [host - 1, host + 1]) {
-        const beside = { floor: 0, column };
+        const beside = { floor: 0, column, row: SHIPPED_ROW };
         schedule.push({ tick: sealTick, command: { kind: 'spawnEntity', entityKind, at: beside } });
         furnish(sealTick, beside, schedule);
       }
@@ -703,10 +722,10 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   for (let tick = 307; tick < ticks; tick += 1_303) {
     const at =
       buildIndex % 3 === 0
-        ? { floor: 5 + (buildIndex % 15), column: 40 + (buildIndex % 39) }
+        ? { floor: 5 + (buildIndex % 15), column: 40 + (buildIndex % 39), row: SHIPPED_ROW }
         : buildIndex % 3 === 1
-          ? { floor: buildIndex % 21, column: buildIndex % 80 }
-          : { floor: 900, column: 0 };
+          ? { floor: buildIndex % 21, column: buildIndex % 80, row: SHIPPED_ROW }
+          : { floor: 900, column: 0, row: SHIPPED_ROW };
     buildIndex += 1;
     schedule.push({ tick, command: { kind: 'buildRoom', roomType: entityKind, at } });
   }

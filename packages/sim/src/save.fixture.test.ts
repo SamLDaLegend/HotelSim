@@ -60,7 +60,7 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v16', () => {
+  it('is a v1 blob, and this build now writes v17', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
@@ -73,13 +73,15 @@ describe('I6 stored v1 save fixture', () => {
     // need stopped being a countdown and became a stock, a THIRTEENTH at θ-b1 when a guest
     // gained a mood and the departure table gained a row, and a FOURTEENTH at θ-b2 when lodging
     // became optional and the table gained another, and a FIFTEENTH at G-028a when every need
-    // gained a counter for how long the hotel left it unserved).
+    // gained a counter for how long the hotel left it unserved, and a SIXTEENTH at G-034a when
+    // a floor stopped being a strip and became a plan — `Cell` gained `row` and the plot gained
+    // `minRow`/`maxRow`, one row deep, because a v16 floor had exactly one row).
     //
     // THE ONE ABSOLUTE ERA PIN IN THE REPO SINCE G-014b. The other four were relative
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(16);
+    expect(SAVE_SCHEMA_VERSION).toBe(17);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -120,7 +122,7 @@ describe('I6 stored v1 save fixture', () => {
   it('continues to simulate from where it was saved', () => {
     const world = deserialise(SAVE_V1_BYTES);
     const advanced = run(world, content, 1_000, [
-      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0 } } },
+      { tick: 5_500, command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0, row: 0 } } },
     ]);
     expect(advanced.tick).toBe(SAVE_V1_TICK + 1_000);
     expect(advanced.entities.nextId).toBe(7);

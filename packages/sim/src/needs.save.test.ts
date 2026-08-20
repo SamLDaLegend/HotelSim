@@ -459,7 +459,7 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
         list: [
           {
             id: 1,
-            at: { floor: 0, column: 0 },
+            at: { floor: 0, column: 0, row: 0 },
             arrivedTick: 0,
             roomEntityId: 0,
             engagement: null,
@@ -557,8 +557,8 @@ describe('the need vector round-trips out of a real run', () => {
   // round trip of an EMPTY hotel agrees about nothing, which is the vacuity this avoids.
   const lived = () =>
     run(createWorld(5, content), content, 100, [
-      { tick: 0, command: { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0 } } },
-      { tick: 0, command: { kind: 'spawnEntity', entityKind: 'cafe', at: { floor: 0, column: 2 } } },
+      { tick: 0, command: { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0, row: 0 } } },
+      { tick: 0, command: { kind: 'spawnEntity', entityKind: 'cafe', at: { floor: 0, column: 2, row: 0 } } },
       ...[1, 2, 30, 60, 90].map((tick) => ({ tick, command: { kind: 'guestArrives' } as const })),
     ]);
 

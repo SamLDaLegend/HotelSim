@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0048 (human): a solved problem that never propagated is its own class, and REFLECT gains one standing question pointed SIDEWAYS — does anything else here have this problem? The grid goal is SPLIT at PLAN, seam offered and TAKEN: first the y-axis, validity and v17 with check:ladder re-pointed in the same commit; then corridors, connectivity and v18. ADR-0046 §4's done-together clause is superseded and points forward. Agent roster verified selectable, sim-critic write-toolless. G-033 and the pre-ruling work stand at fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-034a is done: the grid has a third axis, save v17, and the shipped plot stays ONE ROW DEEP so the goal changes no behaviour — only the hash. Fourteen rows green, every row re-run by the orchestrator. The plan review found two BLOCKERs before any code, and the BUILD then corrected the plan review: floor-ASCENDING is the precondition, floor-FIRST is a convention, and it ships labelled as one. Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v17** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `16ed33c4e13dc808` · measure golden `ebb9c3924e373c1e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `dfab8a8e36302c02` · measure golden `0c34f5daea71e8de`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -1227,7 +1227,7 @@ evidence for tightening it, which should happen then rather than now.
 
 
 ## G-023b-i — Transit exists
-Status: **DONE, with a SEAM TAKEN and its cost MEASURED — the mechanism ships, shipped content
+Status: **done, with a SEAM TAKEN and its cost MEASURED — the mechanism ships, shipped content
 does not yet declare a speed.** `pnpm verify` fourteen rows green.
 Milestone: M3
 Owner pair: sim-engineer / sim-critic (built by the orchestrator — see G-033's REFLECT)
@@ -1684,13 +1684,13 @@ lifts are queued shared resources, and wait time is a first-class satisfaction i
 **does the thing on screen still look like the game we meant to build?**
 
 ## G-032c — I3's unquoted-key hole
-Status: **DONE** (`e2100b8`). **Re-confirmed as M3's first goal by ADR-0046 §8.1** — a known gap in
+Status: **done** (`e2100b8`). **Re-confirmed as M3's first goal by ADR-0046 §8.1** — a known gap in
   an invariant gate, immediately before **the largest content-surface rewrite in the project**.
   Repairing a content gate *after* rewriting the content model is the wrong order; it happens to
   have landed already.
 
 ## G-032b — the walk merge
-Status: **DONE** (`d6e6e1e`). **TAKEN, not parked** — ADR-0046 §8.2 required an explicit call. It is
+Status: **done** (`d6e6e1e`). **TAKEN, not parked** — ADR-0046 §8.2 required an explicit call. It is
   `packages/sim` hot-path, the sim survives ADR-0046 untouched, and it is already committed;
   **parking it would mean un-shipping working code.** Its one loose end is the tick-cost bound,
   which is the open escalation, and campaign re-takes sit at the **exit** — so it gates nothing.
@@ -1715,7 +1715,7 @@ Status: **split into G-034a / G-034b.** **G-013 is the precedent and it is not b
   apply.** *"Sixteen clean migrations say the chain is cheap; an unsweepable diff isn't."*
 
 ## G-034a — A floor is a plan, not a strip
-Status: **PLAN REVIEWED — OPEN, scope objection UPHELD, plan revised. Not started.**
+Status: **done.** Plan review OPEN (2 BLOCKERs, 8 MAJORs) discharged into the plan, then built.
 Milestone: M3
 Owner pair: sim-engineer / sim-critic
 Statement: `(floor, x)` becomes `(floor, x, y)`. Build validity is reworked — supported, enclosed,
@@ -1747,13 +1747,17 @@ and the schema, not the player's hands.
   B3, which says bounds stored rather than constant *and `grid.ts` already stores them, so this is
   continuity*. A keyed collection is not continuity: a `Map` serialises to `{}` through
   `canonicalise`, so the bounds vanish from BOTH the hash and the save. See the review below.
-- **`check:ladder` IS RE-POINTED IN THIS COMMIT.** See below. Non-negotiable.
+- **`check:ladder` IS NOT TOUCHED HERE — the block was WRONG and the builder caught it.**
+  The human's ruling is *"re-point it in the same commit that EMPTIES the directory"*, and
+  **`apps/game` is emptied at G-035, not here.** This block and ADR-0048 §2 both said G-034a,
+  which would have re-pointed a gate away from a directory that still holds 16 live files.
+  **Moved to G-035.** `check:ladder` still reports `apps/game: 16 files`.
 
 **OUT OF SCOPE**: room drawing and `placeItem` (G-036) · scoring (G-037) · pathfinding (G-038) ·
 the isometric renderer (G-035) · housekeeping, access rules and per-instance pricing beyond
 reserving their fields.
 
-**`check:ladder` IS RE-POINTED IN THE SAME COMMIT THAT EMPTIES `apps/game` (ADR-0047 amdt §3).**
+**`check:ladder`'s RE-POINT MOVED TO G-035 (see the IN SCOPE note above).** The rule is unchanged —
 Ruled by the human **against my own plan**, which had deferred it to G-039: *"then for five goals
 `check:ladder` scans a directory with nothing in it and reports green"* — **ADR-0007's founding
 case, carried deliberately through the largest rebuild in the project.** `apps/game/src` holds 15
@@ -1898,6 +1902,81 @@ about it.** That is ADR-0048 §1's standing question firing on its first outing 
 comparator and an id tiebreak; `grounded`/`memo`/`providers` are lookup-only; `validRoomsOf` walks
 entity order, not cell order. **None of that needs to change for an extra axis, provided the
 comparator stays floor-first.**
+
+
+
+### G-034a — REFLECT
+
+**DONE. `pnpm verify` FOURTEEN ROWS GREEN, every row re-run by the orchestrator rather than
+relayed.** Suite **125 files / 2,182 tests**. Save **v17**; the permanent v1 fixture a **zero-line
+diff** (`git status packages/sim/src/fixtures/` empty). **I2 `16ed33c4e13dc808 → dfab8a8e36302c02`,
+re-derived twice.** Measure golden, bench PLAIN/CHURN and the CLI 2-day golden all moved —
+**state-shape only: every behavioural line in the CLI golden is byte-identical.**
+
+**THE PLAN REVIEW PAID FOR ITSELF AND THEN THE BUILD CORRECTED THE PLAN REVIEW.** That is the whole
+value of running both with their domain prompts loaded, and it is the first time this project has
+had it.
+
+**`sim-critic` said ranking `row` above `floor` would make a supported room report `unsupported`.
+IT DOES NOT, AND `sim-engineer` MEASURED IT RATHER THAN ASSUMING IT.** `cellBelow` preserves **both**
+horizontal axes, so a room and its support **always share a column AND a row** — therefore any
+lexicographic order with **floor ascending** already visits the support first. Measured across the
+whole sim suite: `(row, floor, column)` fails **3** tests, **none of them a validity test**;
+**floor-DESCENDING fails 11, nine of them enclosure or grounded cases.**
+
+> **The real precondition is the DIRECTION. The rank is a CONVENTION.** Both are now pinned, and
+> **the convention is labelled as one** in `grid.ts`, `validity.ts`, `grid.test.ts` and
+> `validity.test.ts` — because a convention shipped as a precondition is a false necessity, which
+> is ADR-0044 §2's class exactly.
+
+**And the requested test was not constructible, which was said rather than faked**: *"a grounded
+case whose supporting room sits at a different row from the room above it"* cannot exist — support
+is the cell **directly** below and shares the row. The nearest expressible thing was built instead
+(a grounded tower at row 3 beside an unrelated ground room at row 0, plus its off-by-one-row
+falsifier), **and it bites on floor-descending, not on the rank.**
+
+**THE CONSTRAINT THAT MADE THIS GOAL BEHAVIOUR-FREE HELD.** The shipped plot stays one row deep, so
+`noDoor` is still produced by the existing one-dimensional seal layouts, journeys are unchanged, the
+speed floor's derivation survives untouched, and **there is nothing to WATCH** — the CLI golden's
+6 valid rooms, 0/0/0/0 invalidity tally, 24 arrivals and 4/16 split are byte-identical and **only
+the hash line moved.** `determinism-log.ts` now names `SHIPPED_ROW` as **a literal rather than an
+import of `DEFAULT_MIN_ROW`**, with the argument written down: reading the live constant would
+silently re-aim every cell in the log the day G-036 widens the plot, **moving the I2 hash on a
+change that says nothing about determinism.**
+
+**FOUR MUTATION PROBES, all restored sha256-identical, none via `git checkout --` or a stash**
+(ADR-0022): the 2-neighbour door rule → **4 red, and nothing else in the repo**, which is exactly
+the vacuity the review predicted; `compareCells` row-first → 3 red; floor-descending → 11 red;
+all three longhand row checks removed → 4 red.
+
+**THE BLOCK WAS WRONG ABOUT `check:ladder` AND THE BUILDER SAID SO INSTEAD OF OBEYING IT.** This
+block and ADR-0048 §2 both read *"`check:ladder` IS RE-POINTED IN THIS COMMIT — non-negotiable"*.
+**The human's rule is *"re-point it in the same commit that EMPTIES the directory"*, and `apps/game`
+is emptied at G-035, not here.** Obeying the block would have aimed a gate away from a tree still
+holding **16 live files** — **manufacturing the exact dead-root state the rule exists to prevent.**
+Both records amended; the re-point moves to G-035.
+
+> **A builder that reads its instructions against the ruling they came from, and reports the
+> conflict rather than picking one, is the behaviour §5.3 is for.**
+
+**Two instructed boundaries were crossed, both flagged rather than hidden**: `apps/game` took **3
+mechanical sites** (`Cell.row` is required and `pnpm typecheck` is an exit criterion) — no
+behaviour, no gate change; and **two digest bodies were edited** because `check:stamp` reads the
+body and was red on the schema version and the measure golden, so `verify` could not be green
+without it. **Three facts changed, named individually.** Owned here rather than reverted.
+
+**Also taken**: the v3 era-literal scan tightened from `toContain` to an **exact key set** —
+`toContain` would have let the frozen v3 plot be widened silently, **which is history drifting with
+the build** · `V3_MIGRATION_BOUNDS` lost its `GridBounds` annotation, because **that annotation was
+a live-build reference wearing a type's clothes**: the day the plot type grew two edges, the
+compiler demanded the frozen v3 literal grow them too.
+
+**Owed forward**: the ladder re-point at **G-035** · B1 footprints at **G-036** (seam taken at PLAN)
+· corridors at **G-034b**, and `grid.ts`'s no-back-pointer decision held, so a corridor can still be
+a new question asked of the same record · **the tripwire escalation is now materially stale** and is
+marked so in place — an extra axis in `compareCells` per binary-search step and a door rule going
+from two probes to four is the largest hot-path change since G-010, and `check:tickcost` passed
+against a bound the escalation says cannot catch this project's regressions.
 
 
 ## G-034b — Corridors: space is scarce, and a room must connect to something

@@ -134,7 +134,7 @@ const ROOM_STRIDE = 2;
 const spawnRoom = (index: number): Command => ({
   kind: 'spawnEntity',
   entityKind: 'roomA',
-  at: { floor: 0, column: index * ROOM_STRIDE },
+  at: { floor: 0, column: index * ROOM_STRIDE, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });

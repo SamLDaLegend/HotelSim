@@ -290,6 +290,11 @@ export function builtRoomCell(index: number, bounds: GridBounds, startFloor: num
   return {
     floor: startFloor + Math.floor(index / perFloor),
     column: bounds.minColumn + (index % perFloor),
+    // THE PLOT'S OWN ROW, not a literal 0 (G-034a). The shipped plot is one row deep, so
+    // this is the only row there is; reading it from the bounds is what keeps this layout
+    // on a plot that a later goal makes deeper, and keeps the terraces here SHOULDER TO
+    // SHOULDER on one row so the `noDoor` verdicts this walk exists to produce still occur.
+    row: bounds.minRow,
   };
 }
 
@@ -333,6 +338,7 @@ export function amenityCell(index: number, bounds: GridBounds): Cell {
   return {
     floor: GROUND_FLOOR - 1 - Math.floor(index / perFloor),
     column: bounds.minColumn + (index % perFloor) * COLUMNS_PER_ROOM,
+    row: bounds.minRow,
   };
 }
 
@@ -345,6 +351,7 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
   return {
     floor: GROUND_FLOOR + Math.floor(index / roomsPerFloor),
     column: bounds.minColumn + (index % roomsPerFloor) * COLUMNS_PER_ROOM,
+    row: bounds.minRow,
   };
 }
 

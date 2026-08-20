@@ -219,6 +219,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
       [13, 14],
       [14, 15],
       [15, 16],
+      [16, 17],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -402,7 +403,21 @@ describe('a v10 blob loads, and a v10 world without the step does not (G-023a)',
   it('and a v10 world WITHOUT the migration fails at load, so the step is doing work', () => {
     // ADR-0007's companion case. "The migrated world loads" says nothing unless the
     // unmigrated one does not — otherwise the step could be the identity function.
-    expect(() => assertWorldShape(v10World())).toThrow(/guests\.list\[0\]\.at is missing or not a cell/);
+    expect(() => assertWorldShape(v10World())).toThrow(/Save is corrupt/);
+    // AND THE CLAIM IS PINNED IN TWO HALVES SINCE v17 (G-034a), which is the shape
+    // `guest.save.test.ts` has carried since G-007 for the same structural reason.
+    // `assertWorldShape` checks the world's fields oldest-first, so the bare v10 world above
+    // is now refused for the OLDER defect — a plot with four edges where this build wants six
+    // — and asserting the guest message against it would have gone on passing while inspecting
+    // something else entirely. So the guest clause is driven where it is the only thing wrong:
+    // a world this build itself produced, with one guest's position taken back off it.
+    const current = JSON.parse(serialise(deserialise(v10Blob()))) as { world: Record<string, unknown> };
+    const guests = current.world['guests'] as { nextId: number; list: Record<string, unknown>[] };
+    const [first, ...others] = guests.list;
+    const { at: _tookItBack, ...positionless } = first!;
+    expect(() =>
+      assertWorldShape({ ...current.world, guests: { ...guests, list: [positionless, ...others] } }),
+    ).toThrow(/guests\.list\[0\]\.at is missing or not a cell/);
   });
 
   it('loads, and what it becomes hashes the same however it is reached', () => {
@@ -416,11 +431,14 @@ describe('a v10 blob loads, and a v10 world without the step does not (G-023a)',
     // the chain and the invariant checks are exercised on the result too — a cell off the
     // plot or a missing one would be refused by `assertGuestStoreInvariants` on the way in.
     expect(guestsInOrder(deserialise(v10Blob()).guests).map((guest) => guest.at)).toEqual([
-      { floor: -1, column: 6 },
-      { floor: 0, column: 9 },
-      { floor: 0, column: 0 },
-      { floor: 0, column: 0 },
-      { floor: 2, column: 12 },
+      // ROW 0 ON EVERY ONE OF THEM, AND IT COMES FROM `migrateV16ToV17` (G-034a). A v10 world
+      // had no third axis at all, so this is the one reading its bytes support — and the door
+      // these guests were derived onto is on the same row for the same reason.
+      { floor: -1, column: 6, row: 0 },
+      { floor: 0, column: 9, row: 0 },
+      { floor: 0, column: 0, row: 0 },
+      { floor: 0, column: 0, row: 0 },
+      { floor: 2, column: 12, row: 0 },
     ]);
   });
 

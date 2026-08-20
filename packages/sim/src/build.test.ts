@@ -87,7 +87,8 @@ const content = bindContent({
   ],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 const build = (roomTypeId: string, at: Cell): Command => ({ kind: 'buildRoom', roomType: roomTypeId, at });
 const demolish = (id: number): Command => ({ kind: 'demolishRoom', id });
 const spawnAt = (entityKind: string, at: Cell): Command => ({ kind: 'spawnEntity', entityKind, at });
@@ -347,7 +348,7 @@ describe('occupancy: what "occupied" means', () => {
     // class as a cell off the plot, so the same response.
     expect(() =>
       stepTick(createWorld(1, content), content, [spawnAt('priced', cell(0, 0)), spawnAt('free', cell(0, 0))]),
-    ).toThrow(/floor 0, column 0 is already occupied by entity 1 \("priced"\)/);
+    ).toThrow(/floor 0, column 0, row 0 is already occupied by entity 1 \("priced"\)/);
   });
 
   it('buildRoom onto the same cell REFUSES, and records why', () => {

@@ -34,7 +34,7 @@ import { hashJson } from './hash.js';
 const bounds = createGridBounds();
 
 /** Distinct cells, so no test accidentally depends on two entities sharing one. */
-const cellFor = (n: number): { floor: number; column: number } => ({ floor: 0, column: n % 80 });
+const cellFor = (n: number): { floor: number; column: number; row: number } => ({ floor: 0, column: n % 80, row: 0 });
 
 /** Apply one batch of operations to a store, the way a single tick would. */
 function mutate(store: EntityStore, ops: (draft: ReturnType<typeof beginEntityDraft>) => void): EntityStore {
@@ -213,7 +213,7 @@ describe('entity store — commit', () => {
 
 describe('entity store — invariants', () => {
   const bad = (store: EntityStore): (() => void) => (): void => assertEntityStoreInvariants(store, bounds);
-  const entity = (id: number, kind = 'alpha'): Entity => ({ id, kind, at: { floor: 0, column: 0 } });
+  const entity = (id: number, kind = 'alpha'): Entity => ({ id, kind, at: { floor: 0, column: 0, row: 0 } });
 
   it('accepts a store the simulation could actually have produced', () => {
     const { store } = spawnAll(createEntityStore(), ['alpha', 'beta']);

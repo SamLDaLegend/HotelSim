@@ -181,13 +181,13 @@ describe('through the real tick, a borrowed hotel repays itself out of trade', (
   function scheduleFor(): ScheduledCommand[] {
     const commands: ScheduledCommand[] = [
       // Spend every penny on one room, so the hotel is broke with one room standing.
-      { tick: 1, command: { kind: 'buildRoom', roomType: 'roomA', at: { floor: 0, column: 0 } } },
+      { tick: 1, command: { kind: 'buildRoom', roomType: 'roomA', at: { floor: 0, column: 0, row: 0 } } },
       // Scrap it: reserves are then 125,000p, below the 250,000p a room costs, so the
       // hotel is stuck — and the draw on the next tick is granted.
       { tick: 2, command: { kind: 'demolishRoom', id: 1 } },
       { tick: 3, command: { kind: 'drawLoan' } },
       // Back into business with the borrowed money.
-      { tick: 4, command: { kind: 'buildRoom', roomType: 'roomA', at: { floor: 0, column: 0 } } },
+      { tick: 4, command: { kind: 'buildRoom', roomType: 'roomA', at: { floor: 0, column: 0, row: 0 } } },
     ];
     for (let tick = 5; tick < ticks; tick += 120) {
       commands.push({ tick, command: { kind: 'guestArrives' } });

@@ -91,7 +91,8 @@ const content = bindContent({
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 const spawn = (entityKind: string, at: Cell): Command => ({ kind: 'spawnEntity', entityKind, at });
 const build = (roomType: string, at: Cell): Command => ({ kind: 'buildRoom', roomType, at });
 const demolish = (id: number): Command => ({ kind: 'demolishRoom', id });
@@ -403,7 +404,7 @@ describe('counting guests in invalid rooms', () => {
             id: 1,
             // G-023a: the doorway. Its reservation names an entity that does not exist, so
             // there is no cell to stand in and the entrance is what the rule falls back to.
-            at: { floor: 0, column: 0 },
+            at: { floor: 0, column: 0, row: 0 },
             arrivedTick: 0,
             roomEntityId: 99,
             engagement: null,

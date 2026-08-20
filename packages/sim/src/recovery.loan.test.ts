@@ -87,7 +87,7 @@ function draftWith(rooms: number): EntityDraft {
   const store: EntityStore = { nextId: 1, list: [] };
   const draft = beginEntityDraft(store, bounds);
   for (let i = 0; i < rooms; i += 1) {
-    draftSpawn(draft, 'roomA', { floor: 0, column: i * 2 });
+    draftSpawn(draft, 'roomA', { floor: 0, column: i * 2, row: 0 });
   }
   return draft;
 }
@@ -114,8 +114,8 @@ describe('what a hotel is worth, and therefore whether it is stuck', () => {
       economy: [economy()],
     });
     const draft = beginEntityDraft({ nextId: 1, list: [] }, bounds);
-    draftSpawn(draft, 'roomA', { floor: 0, column: 0 });
-    draftSpawn(draft, 'bedA', { floor: 0, column: 0 });
+    draftSpawn(draft, 'roomA', { floor: 0, column: 0, row: 0 });
+    draftSpawn(draft, 'bedA', { floor: 0, column: 0, row: 0 });
     expect(liquidationValueOf(draft, furnished)).toBe(REFUND);
   });
 });
@@ -158,7 +158,7 @@ describe('THE BI-IMPLICATION: a loan is available exactly when the hotel cannot 
               balance: drawn.balance,
             },
             'roomA',
-            { floor: 0, column: 40 },
+            { floor: 0, column: 40, row: 0 },
           );
           // Only claimable when the hotel was not ALREADY so deep in the red that one loan
           // cannot lift it — and that is a real limit, stated rather than hidden: a loan is
@@ -185,7 +185,7 @@ describe('THE BI-IMPLICATION: a loan is available exactly when the hotel cannot 
                 balance,
               },
               'roomA',
-              { floor: 0, column: 40 },
+              { floor: 0, column: 40, row: 0 },
             );
             expect(built.outcomes.built).toBe(1);
           }
@@ -277,7 +277,7 @@ describe('drawing a loan', () => {
         balance: -1,
       },
       'roomA',
-      { floor: 0, column: 40 },
+      { floor: 0, column: 40, row: 0 },
     );
     expect(refused.outcomes.refused.insufficientFunds).toBe(1);
   });
@@ -376,7 +376,7 @@ describe('THE ABSORBING-STATE SEARCH: every degenerate corner still has a move',
         balance: balanceOf(ledger),
       },
       'roomA',
-      { floor: 0, column: 60 },
+      { floor: 0, column: 60, row: 0 },
     );
     if (build.outcomes.built > 0) return true;
     const loan = applyDrawLoan(loanInput(ledger, draftWith(rooms), content));

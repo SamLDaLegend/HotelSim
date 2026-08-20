@@ -26,7 +26,7 @@ import {
   createGridBounds,
   GROUND_FLOOR,
 } from './grid.js';
-import type { Cell } from './grid.js';
+import type { Cell, GridBounds } from './grid.js';
 import {
   countInvalidRooms,
   createValidityContext,
@@ -77,7 +77,8 @@ const content = bindContent({
   ],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
 type Spec = readonly [kind: string, at: Cell | null];
 
@@ -163,6 +164,51 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
       ...workingRoom(cell(1, 4)),
     );
     expect(reasonFor(store, 2)).toBe('unsupported');
+  });
+
+  it('CARRIES A ROOM WHOSE SUPPORT IS ON A DIFFERENT ROW FROM THE ROOM ABOVE IT (G-034a)', () => {
+    // ==================================================================================
+    // THE ONE-PASS ALGORITHM, DRIVEN ON A PLOT WITH DEPTH (G-034a).
+    //
+    // `groundedRooms` walks the placement index once and reads the answer for the cell
+    // BELOW as already final. Every other enclosure case in this file lives on row 0, so
+    // none of them has ever run that walk over an index whose cells differ in three axes.
+    // This one does: two ground rooms at different rows, and a tower on one of them.
+    //
+    // WHAT IT PINS, AT THE STRENGTH A MUTATION PROBE SUPPORTS. G-034a's plan said a case
+    // like this would go red under a comparator that ranks `row` above `floor`. It does
+    // NOT, and the correction is recorded rather than papered over: `cellBelow` preserves
+    // BOTH horizontal axes, so a room and its support always share a row and a column, and
+    // any lexicographic order with floor ASCENDING visits the support first. Measured over
+    // the whole sim suite — `(row, floor, column)` fails 3 tests, none of them a validity
+    // test; floor DESCENDING fails 11, and this case is one of them. **The direction is the
+    // precondition. The rank is a convention**, pinned as one in `grid.test.ts`.
+    // ==================================================================================
+    const deep: GridBounds = { minFloor: -1, maxFloor: 3, minColumn: 0, maxColumn: 6, minRow: 0, maxRow: 4 };
+    const ctx = (store: EntityStore, index: number): string | null => {
+      const entity = store.list[index];
+      if (entity === undefined) throw new Error(`test bug: no entity at index ${index}`);
+      return roomInvalidity(createValidityContext(content, deep, storeEntities(store)), entity);
+    };
+    // Ground room at row 3; the room ON TOP OF IT is at row 3 too — the support is directly
+    // below, which is the rule — but the store also holds an unrelated ground room at row 0,
+    // so the index contains cells whose row order and floor order disagree.
+    const store = storeOf(
+      ...workingRoom(cell(GROUND_FLOOR, 2, 0)),
+      ...workingRoom(cell(GROUND_FLOOR, 4, 3)),
+      ...workingRoom(cell(1, 4, 3)),
+    );
+    expect(ctx(store, 4)).toBeNull();
+    expect(countInvalidRooms(store, deep, content).unsupported).toBe(0);
+
+    // AND THE SAME TOWER WITH ITS SUPPORT MOVED ONE ROW ACROSS IS `unsupported`, so the rule
+    // is reading the cell directly below rather than "some room on the floor below".
+    const offByOneRow = storeOf(
+      ...workingRoom(cell(GROUND_FLOOR, 2, 0)),
+      ...workingRoom(cell(GROUND_FLOOR, 4, 2)),
+      ...workingRoom(cell(1, 4, 3)),
+    );
+    expect(ctx(offByOneRow, 4)).toBe('unsupported');
   });
 
   it('REFUSES a room held up by an item rather than a room', () => {
@@ -565,7 +611,11 @@ describe('the reason is legible', () => {
 });
 
 describe('the cell helpers the rules are written in terms of', () => {
-  it('orders cells by floor, then column', () => {
+  it('orders cells by floor, then column, then row', () => {
+    // FLOOR OUTRANKS ROW, and `grid.test.ts` states the case in the form `groundedRooms`
+    // needs it in. Restated here beside the column rank because this is the file whose
+    // one-pass algorithm depends on it.
+    expect(compareCells(cell(0, 0, 5), cell(1, 0, 0))).toBe(-1);
     expect(compareCells(cell(0, 5), cell(1, 0))).toBe(-1);
     expect(compareCells(cell(1, 0), cell(0, 5))).toBe(1);
     expect(compareCells(cell(2, 3), cell(2, 4))).toBe(-1);
@@ -575,7 +625,19 @@ describe('the cell helpers the rules are written in terms of', () => {
   });
 
   it('is a total order: antisymmetric, transitive, and agrees with cellsEqual', () => {
-    const cells = [cell(-2, 79), cell(0, 0), cell(0, 5), cell(1, 0), cell(20, 79), cell(-2, 0)];
+    // TWO OF THESE DIFFER ONLY IN `row` (G-034a), so the total-order properties are checked
+    // over a set the third axis can actually separate. Without them every pair agreed on row
+    // and the tiebreak was never reached — a total order asserted over a projection of itself.
+    const cells = [
+      cell(-2, 79),
+      cell(0, 0),
+      cell(0, 0, 1),
+      cell(0, 0, 4),
+      cell(0, 5),
+      cell(1, 0),
+      cell(20, 79),
+      cell(-2, 0),
+    ];
     for (const a of cells) {
       for (const b of cells) {
         // Written as a sum rather than `toBe(-compareCells(b, a))`, because negating a
@@ -584,7 +646,7 @@ describe('the cell helpers the rules are written in terms of', () => {
         // same care `appendTransaction` takes about `-0` for money (ADR-0002).
         expect(compareCells(a, b) + compareCells(b, a)).toBe(0);
         expect(Object.is(compareCells(a, b), -0)).toBe(false);
-        expect(compareCells(a, b) === 0).toBe(a.floor === b.floor && a.column === b.column);
+        expect(compareCells(a, b) === 0).toBe(a.floor === b.floor && a.column === b.column && a.row === b.row);
         for (const c of cells) {
           if (compareCells(a, b) < 0 && compareCells(b, c) < 0) {
             expect(compareCells(a, c)).toBeLessThan(0);
@@ -594,9 +656,9 @@ describe('the cell helpers the rules are written in terms of', () => {
     }
   });
 
-  it('sorts a list into floor-then-column order and nothing else', () => {
-    const sorted = [cell(1, 0), cell(0, 9), cell(0, 1), cell(-1, 4)].sort(compareCells);
-    expect(sorted).toEqual([cell(-1, 4), cell(0, 1), cell(0, 9), cell(1, 0)]);
+  it('sorts a list into floor-then-column-then-row order and nothing else', () => {
+    const sorted = [cell(1, 0), cell(0, 9), cell(0, 1, 2), cell(0, 1), cell(-1, 4)].sort(compareCells);
+    expect(sorted).toEqual([cell(-1, 4), cell(0, 1), cell(0, 1, 2), cell(0, 9), cell(1, 0)]);
   });
 
   it('names the neighbouring cells without asking what is in them', () => {

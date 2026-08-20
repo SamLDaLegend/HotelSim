@@ -212,8 +212,28 @@ describe('the 2 -> 3 step invents no history', () => {
     // read a file, and the sim may not (I1: `types: []`, and `check-purity.mjs` allows no
     // non-relative import but `vitest`). It carries `grid` and `save` in its name so both
     // of this goal's vitest filters run it beside these tests.
+    //
+    // THE FROZEN FOUR ARE ASSERTED ON THE TRUNCATED CHAIN SINCE G-034a, and that is not a
+    // cosmetic move. v17 gives a plot two more edges, so the fully migrated world carries SIX
+    // integers; asserting the v3 literal against the end of the whole walk would have meant
+    // editing this literal every time a later step touched the plot, which is the frozen
+    // constant tracking the build by the back door. `TO_V3` stops the chain where the claim is.
+    expect(migrateSaveWorld(v1World(), 1, TO_V3)).toMatchObject({
+      grid: { minFloor: -2, maxFloor: 20, minColumn: 0, maxColumn: 79 },
+    });
+    // And the v3 plot has EXACTLY those four edges — no depth, because the axis did not exist.
+    expect(Object.keys((migrateSaveWorld(v1World(), 1, TO_V3) as { grid: object }).grid).sort()).toEqual([
+      'maxColumn',
+      'maxFloor',
+      'minColumn',
+      'minFloor',
+    ]);
+    // What the WHOLE walk produces is that plot carried forward one era at a time: v17 adds
+    // the depth a v3 world could not have had, and it adds it ONE ROW DEEP, because a world
+    // whose floors were strips has exactly one row (`migrateV16ToV17`).
     const world = deserialise(SAVE_V1_BYTES);
-    expect(world.grid).toEqual({ minFloor: -2, maxFloor: 20, minColumn: 0, maxColumn: 79 });
+    expect(world.grid).toEqual({ minFloor: -2, maxFloor: 20, minColumn: 0, maxColumn: 79, minRow: 0, maxRow: 0 });
+    expect(world.grid.minRow).toBe(world.grid.maxRow);
   });
 
   it('carries every v2 field through value for value, adding exactly one key', () => {
@@ -296,7 +316,7 @@ describe('the migrated world is a world, not a husk', () => {
     const advanced = run(world, fixtureContent, 1_000, [
       {
         tick: 5_500,
-        command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0 } },
+        command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0, row: 0 } },
       },
     ]);
     expect(advanced.tick).toBe(SAVE_V1_TICK + 1_000);
@@ -310,12 +330,12 @@ describe('the migrated world is a world, not a husk', () => {
     const advanced = run(deserialise(SAVE_V1_BYTES), fixtureContent, 10, [
       {
         tick: 5_001,
-        command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 4, column: 9 } },
+        command: { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 4, column: 9, row: 0 } },
       },
     ]);
     const placed = entitiesInOrder(advanced.entities).filter(isPlaced);
     expect(placed).toHaveLength(1);
-    expect(placed[0]!.at).toEqual({ floor: 4, column: 9 });
+    expect(placed[0]!.at).toEqual({ floor: 4, column: 9, row: 0 });
     expect(entitiesInOrder(advanced.entities).filter((entity) => !isPlaced(entity))).toHaveLength(3);
   });
 

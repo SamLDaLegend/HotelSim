@@ -43,7 +43,7 @@ import type { World } from './world.js';
 const spawn = (entityKind: string, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor: 0, column },
+  at: { floor: 0, column, row: 0 },
 });
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 

@@ -48,7 +48,7 @@ const bound = bindContent(contentOf(roomType('alpha'), roomType('beta')));
 const spawn = (entityKind: string, column = 0): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor: 0, column },
+  at: { floor: 0, column, row: 0 },
 });
 
 const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {

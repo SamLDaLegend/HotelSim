@@ -197,5 +197,11 @@ export function cellAt(layout: Layout, x: number, y: number): Cell {
   return {
     floor: layout.extent.maxFloor - Math.floor((y - MARGIN) / layout.cellHeight),
     column: layout.extent.minColumn + Math.floor((x - GUTTER) / layout.cellWidth),
+    // G-034a: the grid gained a third axis and this side-on view has no screen coordinate
+    // for it. `0` is the only row the shipped plot has, so this is not a lossy projection
+    // today — but it IS one the moment the plot gains depth, which is why this renderer is
+    // written off and replaced by the isometric view at G-035 (ADR-0046 §3). Minimal
+    // change, deliberately: `apps/game` is not this goal's subject.
+    row: 0,
   };
 }

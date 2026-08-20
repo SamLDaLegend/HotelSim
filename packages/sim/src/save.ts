@@ -24,7 +24,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 16;
+export const SAVE_SCHEMA_VERSION = 17;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -104,13 +104,29 @@ function migrateV1ToV2(world: unknown): unknown {
  * history would drift with the build and the pinned hash of the migrated fixture would
  * become a tripwire on an unrelated change rather than on this migration. Freezing them
  * here costs one copied literal and buys a migration that means the same thing forever.
+ *
+ * ==========================================================================
+ * AND IT IS FOUR INTEGERS, NOT SIX, WHICH IS WHY IT IS NO LONGER TYPED `GridBounds`
+ * (G-034a). A v3 plot HAD four edges; the third axis did not exist until v17. Annotating
+ * this literal with the CURRENT plot type was itself a live-build reference wearing a
+ * type's clothes: the day `GridBounds` gained `minRow`/`maxRow`, the annotation demanded
+ * that this frozen v3 literal gain them too — history dragged forward by a compiler error,
+ * which is exactly the drift ADR-0008 forbids and the one route the source scan cannot
+ * see, because a type annotation names no forbidden identifier.
+ *
+ * The type is spelled out as the four keys of the era instead, so the literal is still
+ * checked — a typo in `maxColumn` is still an error — while being unable to track the
+ * live shape. `migrateV16ToV17` is what carries a v3 world the rest of the way, one step
+ * per era, which is the whole point of the chain.
+ * ==========================================================================
  */
-const V3_MIGRATION_BOUNDS: GridBounds = Object.freeze({
-  minFloor: -2,
-  maxFloor: 20,
-  minColumn: 0,
-  maxColumn: 79,
-});
+const V3_MIGRATION_BOUNDS: Readonly<Record<'minFloor' | 'maxFloor' | 'minColumn' | 'maxColumn', number>> =
+  Object.freeze({
+    minFloor: -2,
+    maxFloor: 20,
+    minColumn: 0,
+    maxColumn: 79,
+  });
 
 /**
  * v2 -> v3: a world that predates the building grid (G-007).
@@ -1555,6 +1571,163 @@ function migrateV15ToV16(world: unknown): unknown {
 }
 
 /**
+ * THE ROW A v16 WORLD WAS ON, FROZEN AT THE MOMENT v17 WAS DEFINED.
+ *
+ * A LITERAL, and it must stay one. `DEFAULT_MIN_ROW` in `grid.ts` holds the same `0` today
+ * and `createGridBounds()` builds the same one-row plot; the two are ALLOWED to diverge
+ * later and that divergence is correct rather than a bug to repair (ADR-0008 (1)).
+ *
+ * AND THIS ONE HAS A NAMED DAY. G-036 gives the player a verb that can draw into the
+ * depth, and the shipped plot is widened on the day it does — `DEFAULT_MAX_ROW` stops being
+ * 0. A migration that read the live constants would, on that day, start migrating the SAME
+ * v16 bytes onto a DEEPER plot: every migrated room would gain free cells at row+1, and a
+ * room that was `noDoor` when those bytes were written would come back VALID. That is not a
+ * drifting counter, it is a migration REWRITING A VALIDITY VERDICT, which is why the freeze
+ * here is worth more than the one-line deduplication it forbids.
+ *
+ * THE MIGRATED VALUE IS NOT INVENTED, AND IT HAS EXACTLY ONE HISTORICAL READING. A v16 world
+ * WAS A STRIP: a floor had one row, because the coordinate system had no second horizontal
+ * axis at all. So `minRow === maxRow` is not a default chosen for convenience, it is the
+ * only statement those bytes support about their own plot — the `migrateV3ToV4` position
+ * ("nothing is unknown here") rather than the `migrateV2ToV3` one ("invent nothing").
+ *
+ * The guard is structural, because the values coincide today and no assertion can tell the
+ * implementations apart: the source scan in
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`
+ * forbids this file from naming `createGridBounds`, `DEFAULT_MIN_ROW` or `DEFAULT_MAX_ROW`
+ * in executable code (ADR-0008 (3)).
+ */
+const V17_MIGRATION_ROW = 0;
+
+/**
+ * v16 -> v17: a world whose floors were strips rather than plans (G-034a, ADR-0046 §4.1).
+ *
+ * ADR-0006 fires for the SIXTEENTH time. `Cell` gains `row` and `GridBounds` gains
+ * `minRow`/`maxRow`, so the permanent v1 fixture describes a world this build cannot load,
+ * and the answer is this step. `fixtures/save-v1.ts` HAS A ZERO-LINE DIFF in this change;
+ * the walk is 1 -> ... -> 16 -> 17.
+ *
+ * WHAT IT WRITES, AND WHY EVERY VALUE IS A FACT ABOUT THE BYTES RATHER THAN A CHOICE:
+ *
+ *   the plot          ->  `minRow: 0, maxRow: 0`. ONE ROW DEEP, because a v16 floor WAS one
+ *                         row deep — the axis did not exist, so no v16 fact can contradict
+ *                         this and none can support anything wider.
+ *   every entity      ->  `at.row = 0` for a placed entity; an UNPLACED entity is left
+ *                         exactly as it is. `at: null` is the state every entity carried out
+ *                         of the v2 -> v3 chain, and a cell must not be invented for one now
+ *                         for the reason that step gives at length.
+ *   every guest       ->  `at.row = 0`, with no null branch: `Guest.at` is non-nullable by
+ *                         construction since v11, so a guest without a cell is bytes no
+ *                         migration produced and is refused rather than repaired.
+ *
+ * AND THE PROOF THAT IT INVENTS NOTHING IS A PROPERTY OF THE RULES, NOT AN ASSERTION ABOUT
+ * INTENT: on a one-row plot the new 4-neighbour door rule DEGENERATES to the 2-neighbour
+ * rule it replaces, because `cellFront`/`cellBack` of a cell at the only row are off the
+ * plot and `isWithinBounds` skips them. So every migrated world keeps its EXACT validity
+ * verdicts — same `noDoor`, same `unsupported`, same tallies. Any deeper migrated plot would
+ * silently rewrite them, which is the case `V17_MIGRATION_ROW` is frozen against.
+ *
+ * Reads no content and no live constant, so the same v16 bytes produce the same v17 world
+ * however the shipped plot changes afterwards (ADR-0008; see `V17_MIGRATION_ROW` for the
+ * freeze and the scan that enforces it).
+ *
+ * NOT TESTED BY THE PERMANENT v1 FIXTURE, AND SAYING SO IS THE POINT. Every entity carried
+ * out of `migrateV2ToV3` has `at: null` and the fixture's guest list is empty, so this step
+ * walks the fixture with a ZERO-LINE DIFF while inspecting no cell at all — it would report
+ * success having touched only `world.grid`. That is ADR-0007's exact shape, and it is the
+ * paragraph `migrateV10ToV11` already carries one axis over. `grid.depth.save.test.ts`
+ * drives a HAND-WRITTEN v16 world with placed entities, unplaced entities and guests through
+ * every branch above, and asserts its validity tallies are UNCHANGED across 16 -> 17.
+ */
+function migrateV16ToV17(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const grid = world['grid'];
+  if (!isRecord(grid)) {
+    throw new Error('Save is corrupt: world.grid is missing, so its floors cannot be given a depth');
+  }
+  // The one way this step could destroy data — overwriting a plot somebody already gave a
+  // depth — is the one thing it refuses to do, exactly as all fifteen earlier steps refuse.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an own
+  // key (G-003).
+  for (const edge of ['minRow', 'maxRow']) {
+    if (Object.keys(grid).includes(edge)) {
+      throw new Error(
+        `world.grid already has a "${edge}" field, so it is not a v16 plot; migrating it would overwrite a real depth`,
+      );
+    }
+  }
+
+  const entities = world['entities'];
+  if (!isRecord(entities)) {
+    throw new Error('Save is corrupt: world.entities is missing, so its placements cannot be carried onto a plan');
+  }
+  const entityList = entities['list'];
+  if (!Array.isArray(entityList)) {
+    throw new Error('Save is corrupt: world.entities.list is missing or not an array');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its positions cannot be carried onto a plan');
+  }
+  const guestList = guests['list'];
+  if (!Array.isArray(guestList)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+
+  /** The same refusal, one level down: a cell that already names a row is not a v16 cell. */
+  const deepen = (at: Record<string, unknown>, where: string): Record<string, unknown> => {
+    if (Object.keys(at).includes('row')) {
+      throw new Error(
+        `${where} already has a "row" field, so it is not a v16 cell; migrating it would overwrite a real position`,
+      );
+    }
+    // Copied, never shared, and rebuilt rather than spread onto: `worldToJson` is an identity
+    // cast, so two entities must not end up holding one cell object (`migrateV10ToV11`).
+    return { ...at, row: V17_MIGRATION_ROW };
+  };
+
+  const migratedEntities: unknown[] = entityList.map((entity, index) => {
+    if (!isRecord(entity)) {
+      throw new Error(`Save is corrupt: world.entities.list[${index}] is not an object`);
+    }
+    const at = entity['at'];
+    // UNPLACED STAYS UNPLACED. An entity that is nowhere has no cell to deepen, and giving
+    // it one would invent the history `migrateV2ToV3` refused to invent.
+    if (at === null) return { ...entity };
+    if (!isRecord(at)) {
+      throw new Error(
+        `Save is corrupt: world.entities.list[${index}].at is neither null nor a cell, so it cannot be carried onto a plan`,
+      );
+    }
+    return { ...entity, at: deepen(at, `world.entities.list[${index}].at`) };
+  });
+
+  const migratedGuests: unknown[] = guestList.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    const at = guest['at'];
+    // NO NULL BRANCH, and its absence is the rule rather than an omission: `Guest.at` has
+    // been non-nullable since v11, so a guest standing nowhere is bytes no migration wrote.
+    if (!isRecord(at)) {
+      throw new Error(
+        `Save is corrupt: world.guests.list[${index}].at is missing or not a cell, so it cannot be carried onto a plan`,
+      );
+    }
+    return { ...guest, at: deepen(at, `world.guests.list[${index}].at`) };
+  });
+
+  return {
+    ...world,
+    grid: { ...grid, minRow: V17_MIGRATION_ROW, maxRow: V17_MIGRATION_ROW },
+    entities: { ...entities, list: migratedEntities },
+    guests: { ...guests, list: migratedGuests },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1578,6 +1751,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 13, to: 14, migrate: migrateV13ToV14 }),
   Object.freeze({ from: 14, to: 15, migrate: migrateV14ToV15 }),
   Object.freeze({ from: 15, to: 16, migrate: migrateV15ToV16 }),
+  Object.freeze({ from: 16, to: 17, migrate: migrateV16ToV17 }),
 ]);
 
 /**
@@ -1783,7 +1957,12 @@ function assertEntity(value: unknown, index: number): asserts value is Entity {
     if (!isRecord(at)) {
       throw new Error(`Save is corrupt: world.entities.list[${index}].at is neither null nor a cell`);
     }
-    for (const key of ['floor', 'column'] as const) {
+    // THREE AXES SINCE v17, AND THE THIRD IS ADDED HERE RATHER THAN LEFT TO THE VALIDATOR
+    // BELOW (G-034a). A cell missing `row` would reach `assertEntityStoreInvariants` as
+    // `undefined`, which reports itself as "a position that is not a cell" — the newest
+    // field's defect wearing the oldest field's message, which is the mistake the
+    // `dissatisfaction` note in `assertGuest` records.
+    for (const key of ['floor', 'column', 'row'] as const) {
       if (typeof at[key] !== 'number') {
         throw new Error(`Save is corrupt: world.entities.list[${index}].at.${key} is not a number`);
       }
@@ -1812,7 +1991,12 @@ function assertGuest(value: unknown, index: number): asserts value is Guest {
   if (!isRecord(at)) {
     throw new Error(`Save is corrupt: world.guests.list[${index}].at is missing or not a cell`);
   }
-  for (const key of ['floor', 'column'] as const) {
+  // Three axes since v17 (G-034a), for the reason `assertEntity` gives one field up. A
+  // FRACTIONAL row is not caught here and must not be expected to be: this is a shape check,
+  // `assertGuestStoreInvariants` owns what a legal position is, and a float is finite so
+  // `canonicalise` will not catch it either — which is why `assertCell` grew its own longhand
+  // row clause in the same change.
+  for (const key of ['floor', 'column', 'row'] as const) {
     if (typeof at[key] !== 'number') {
       throw new Error(`Save is corrupt: world.guests.list[${index}].at.${key} is not a number`);
     }
@@ -1932,7 +2116,10 @@ export function assertWorldShape(value: unknown): asserts value is World {
   if (!isRecord(grid)) {
     throw new Error('Save is corrupt: world.grid is missing');
   }
-  for (const key of ['minFloor', 'maxFloor', 'minColumn', 'maxColumn'] as const) {
+  // SIX EDGES SINCE v17 (G-034a). A plot missing `minRow`/`maxRow` would otherwise reach
+  // `assertGridBounds` as `undefined`, fail its safe-integer clause, and be reported as an
+  // invalid plot rather than as an un-migrated one.
+  for (const key of ['minFloor', 'maxFloor', 'minColumn', 'maxColumn', 'minRow', 'maxRow'] as const) {
     if (typeof grid[key] !== 'number') {
       throw new Error(`Save is corrupt: world.grid.${key} is missing or not a number`);
     }

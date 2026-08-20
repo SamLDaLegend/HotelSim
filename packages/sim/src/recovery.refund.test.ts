@@ -63,7 +63,7 @@ describe('demolishing a room returns part of what it cost', () => {
 
   it('appends exactly one demolitionRefund transaction per successful demolition', () => {
     const start = input(content, COST);
-    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0 });
+    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0, row: 0 });
     const after = applyDemolishRoom({ ...start, ...built, entities: start.entities }, 1);
     const appended = after.ledger.slice(built.ledger.length);
     expect(appended).toEqual([{ tick: 5, amount: 125_000, reason: 'demolitionRefund' }]);
@@ -76,17 +76,17 @@ describe('demolishing a room returns part of what it cost', () => {
     // spend it. Without the threading, a player would have to wait a tick to reuse their
     // own money and the refund would be a different, worse mechanic.
     const start = input(content, COST);
-    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0 });
+    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0, row: 0 });
     expect(built.balance).toBe(0);
 
     // Building again, broke, is refused — this is the state the refund rescues.
-    const refusedFirst = applyBuildRoom({ ...start, ...built }, 'roomA', { floor: 0, column: 5 });
+    const refusedFirst = applyBuildRoom({ ...start, ...built }, 'roomA', { floor: 0, column: 5, row: 0 });
     expect(refusedFirst.outcomes.refused.insufficientFunds).toBe(1);
 
     // Scrap it, then build somewhere else in the same tick, out of the refund.
     const scrapped = applyDemolishRoom({ ...start, ...built }, 1);
     expect(scrapped.balance).toBe(125_000);
-    const rebuilt = applyBuildRoom({ ...start, ...scrapped }, 'roomA', { floor: 0, column: 5 });
+    const rebuilt = applyBuildRoom({ ...start, ...scrapped }, 'roomA', { floor: 0, column: 5, row: 0 });
     // 125,000p does not cover a 250,000p room: HALF a room back, not a free one. The point
     // is that the money moved, not that it is enough.
     expect(rebuilt.outcomes.refused.insufficientFunds).toBe(1);
@@ -94,7 +94,7 @@ describe('demolishing a room returns part of what it cost', () => {
 
     // Two demolitions DO fund one rebuild, which is the real shape of the closure:
     // consolidate two rooms into one somewhere better.
-    const two = applyBuildRoom({ ...start, ...scrapped, balance: 250_000 }, 'roomA', { floor: 0, column: 7 });
+    const two = applyBuildRoom({ ...start, ...scrapped, balance: 250_000 }, 'roomA', { floor: 0, column: 7, row: 0 });
     expect(two.balance).toBe(0);
     expect(two.outcomes.built).toBe(scrapped.outcomes.built + 1);
     expect(two.outcomes.refused.insufficientFunds).toBe(0);
@@ -106,7 +106,7 @@ describe('demolishing a room returns part of what it cost', () => {
     // watched and fail on exactly the no-refund worlds where nothing else would notice.
     const free = contentWith({ demolitionRefundBasisPoints: 0 });
     const start = input(free, COST);
-    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0 });
+    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0, row: 0 });
     const after = applyDemolishRoom({ ...start, ...built }, 1);
     expect(after.ledger.slice(built.ledger.length)).toEqual([
       { tick: 5, amount: 0, reason: 'demolitionRefund' },
@@ -123,7 +123,7 @@ describe('demolishing a room returns part of what it cost', () => {
       roomTypes: [{ id: 'roomA', name: 'roomA', capacity: 2, nightlyRatePence: 8_500 }],
     });
     const start = input(old, 0);
-    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0 });
+    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0, row: 0 });
     const after = applyDemolishRoom({ ...start, ...built }, 1);
     expect(sumByReason(after.ledger, 'demolitionRefund')).toBe(0);
     expect(after.outcomes.demolished).toBe(1);
@@ -150,7 +150,7 @@ describe('demolishing a room returns part of what it cost', () => {
       itemTypes: [{ id: 'bedA', name: 'bedA' }],
     });
     const start = input(furnished, COST);
-    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0 });
+    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0, row: 0 });
     const after = applyDemolishRoom({ ...start, ...built }, 1);
     // One room and one bed went in; exactly one refund, of the room's fraction, came out.
     expect(countDemolitionRefundTransactions(after.ledger)).toBe(1);
@@ -163,7 +163,7 @@ describe('demolishing a room returns part of what it cost', () => {
     const cost = COST;
     const refund = demolitionRefundOf(content, 'roomA');
     const start = input(content, cost);
-    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0 });
+    const built = applyBuildRoom(start, 'roomA', { floor: 0, column: 0, row: 0 });
     const after = applyDemolishRoom({ ...start, ...built }, 1);
     expect(balanceOf(after.ledger)).toBe(refund - cost);
     expect(balanceOf(after.ledger)).toBeLessThan(0);

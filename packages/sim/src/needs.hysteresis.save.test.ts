@@ -36,6 +36,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { withoutCounters } from './fixtures/without-counters.js';
+import { stripDepth } from './without-depth.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { SAVE_V1_BYTES } from './fixtures/save-v1.js';
@@ -279,7 +280,7 @@ describe('a migrated v8 world and a v9 world with the same history are the SAME 
   /** A world lived forward under this build: one room, one guest, one completed stay. */
   const lived = (): World => {
     const world = stepTick(createWorld(1, content), content, [
-      { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0 } },
+      { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0, row: 0 } },
     ]);
     return run(world, content, 60, [{ tick: 1, command: { kind: 'guestArrives' } }]);
   };
@@ -337,9 +338,16 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
   };
 };
 
-  /** The same world with the two v9 fields stripped off, stamped as v8. */
+  /**
+   * The same world with the two v9 fields stripped off, stamped as v8.
+   *
+   * AND WITH THE v17 DEPTH OFF THE PLOT AND OFF EVERY POSITION (G-034a) — `stripDepth`, which
+   * is shared because "which fields a pre-v17 era could not carry" is one decision. The chain
+   * puts all three back at 0, exactly what those bytes said, so this strip costs the identity
+   * nothing; leaving them on instead hands `migrateV16ToV17` values it correctly refuses.
+   */
   const asV8Bytes = (world: World): string => {
-    const json = JSON.parse(JSON.stringify(world)) as Record<string, unknown>;
+    const json = stripDepth(JSON.parse(JSON.stringify(world)) as Record<string, unknown>);
     const guests = json['guests'] as { nextId: number; list: Record<string, unknown>[] };
     // THE v10 FIELD COMES OFF TOO (G-019), for the reason the v9 fields come off below: "the
     // same world written in the v8 SHAPE" means every field v8 did not have, and leaving
@@ -424,9 +432,9 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
       ],
     });
     const seeded = stepTick(createWorld(5, busy), busy, [
-      { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0 } },
-      { kind: 'spawnEntity', entityKind: 'cafe', at: { floor: 0, column: 2 } },
-      { kind: 'spawnEntity', entityKind: 'gamesRoom', at: { floor: 0, column: 4 } },
+      { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0, row: 0 } },
+      { kind: 'spawnEntity', entityKind: 'cafe', at: { floor: 0, column: 2, row: 0 } },
+      { kind: 'spawnEntity', entityKind: 'gamesRoom', at: { floor: 0, column: 4, row: 0 } },
     ]);
     const world = run(seeded, busy, 30, [{ tick: seeded.tick, command: { kind: 'guestArrives' } }]);
     const live = world.guests.list[0]!.needs.reduce((total, entry) => total + entry.abandonCount, 0);

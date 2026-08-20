@@ -137,7 +137,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // while the need rows' met/unmet and the review distribution move because their definition
     // did. `unservedTicks` and `instanceTicks` are counted in ticks and are UNCHANGED, which is
     // what separates a change of unit from the simulation behaving differently.
-    stateHash: 'f49ac2f2ffefe35e',
+    stateHash: '69840e789db92894',
   },
   guests: {
     arrived: 24,
@@ -407,7 +407,16 @@ const GOLDEN_2_DAYS_SEED_42 =
     'debt        0p',
     'settlements 2',
     'balance     510000p',
-    'state hash  f49ac2f2ffefe35e',
+    // G-034a: THE ONLY LINE THAT MOVED, AND THAT IS THE FINDING RATHER THAN THE REPAIR.
+    // `f49ac2f2ffefe35e` -> `69840e789db92894`, because `Cell` gained `row` and `GridBounds`
+    // gained `minRow`/`maxRow`, and all three are hashed state (ADR-0046 §4.1). Every other
+    // line above is BYTE-IDENTICAL — the same 6 valid rooms, the same 0/0/0/0 invalidity
+    // tallies, the same 24 arrivals and 4/16 split, the same 7 transactions and the same
+    // balance — which is the control for the claim that this goal changed the SHAPE of the
+    // state and nothing the simulation does. It holds because the shipped plot stays ONE ROW
+    // DEEP: no journey is longer, and the new 4-neighbour door rule degenerates to the old
+    // 2-neighbour one through `isWithinBounds` when front and back are off the plot.
+    'state hash  69840e789db92894',
   ].join('\n') + '\n';
 
 /**
@@ -564,7 +573,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  f49ac2f2ffefe35e']);
+    expect(differing).toEqual(['seed        42', 'state hash  69840e789db92894']);
     expect(lines43).toContain('seed        43');
   });
 });

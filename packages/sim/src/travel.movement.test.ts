@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { stepTowards } from './guests.js';
 import type { Cell } from './grid.js';
 
-const at = (floor: number, column: number): Cell => ({ floor, column });
+const at = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
 describe('stepTowards — one tick of walking', () => {
   it('covers exactly the declared number of cells and no more', () => {

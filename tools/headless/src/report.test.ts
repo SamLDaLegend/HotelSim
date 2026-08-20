@@ -188,9 +188,9 @@ describe('the build walk stays on the plot', () => {
     // inherited hotel is laid out one room, one corridor. The stride is imported rather
     // than copied, so the test cannot disagree with the runner about what it is.
     expect(COLUMNS_PER_ROOM).toBe(2);
-    expect(roomCell(0, PLOT)).toEqual({ floor: 0, column: 0 });
-    expect(roomCell(1, PLOT)).toEqual({ floor: 0, column: 2 });
-    expect(roomCell(2, PLOT)).toEqual({ floor: 0, column: 4 });
+    expect(roomCell(0, PLOT)).toEqual({ floor: 0, column: 0, row: PLOT.minRow });
+    expect(roomCell(1, PLOT)).toEqual({ floor: 0, column: 2, row: PLOT.minRow });
+    expect(roomCell(2, PLOT)).toEqual({ floor: 0, column: 4, row: PLOT.minRow });
     // No two inherited rooms are ever neighbours, which is the property that makes them
     // valid. Checked against the sim's own rule in the golden run, not only here.
     for (let i = 1; i < 40; i += 1) {
@@ -201,14 +201,18 @@ describe('the build walk stays on the plot', () => {
     // starts floor 1.
     const perFloor = Math.floor((PLOT.maxColumn - PLOT.minColumn + 1) / COLUMNS_PER_ROOM);
     expect(perFloor).toBe(40);
-    expect(roomCell(perFloor - 1, PLOT)).toEqual({ floor: 0, column: PLOT.maxColumn - 1 });
-    expect(roomCell(perFloor, PLOT)).toEqual({ floor: 1, column: PLOT.minColumn });
+    expect(roomCell(perFloor - 1, PLOT)).toEqual({ floor: 0, column: PLOT.maxColumn - 1, row: PLOT.minRow });
+    expect(roomCell(perFloor, PLOT)).toEqual({ floor: 1, column: PLOT.minColumn, row: PLOT.minRow });
     // Injective, so no seeded room can land on another (the sim throws on a spawn into an
     // occupied cell, and refuses a build into one).
     const seen = new Set<string>();
     for (let i = 0; i < perFloor * 4; i += 1) {
       const cell = roomCell(i, PLOT);
-      seen.add(`${cell.floor}:${cell.column}`);
+      // THE KEY CARRIES ALL THREE AXES SINCE G-034a. Two cells that differ only in `row` are
+      // different cells, and a two-axis key would report them as a collision — which on the
+      // one-row plot this walks is a distinction with no instance, and on a deeper plot would
+      // be an injectivity claim quietly proved over the wrong equality.
+      seen.add(`${cell.floor}:${cell.column}:${cell.row}`);
     }
     expect(seen.size).toBe(perFloor * 4);
   });
@@ -220,11 +224,11 @@ describe('the build walk stays on the plot', () => {
     // against a run that can go wrong in more than one way.
     const above = builtRoomStartFloor(HOTEL_ROOMS);
     expect(above).toBe(GROUND_FLOOR + 1);
-    expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: 0 });
-    expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: 1 });
+    expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: 0, row: PLOT.minRow });
+    expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: 1, row: PLOT.minRow });
     const perFloor = PLOT.maxColumn - PLOT.minColumn + 1;
-    expect(builtRoomCell(perFloor - 1, PLOT, above)).toEqual({ floor: 1, column: PLOT.maxColumn });
-    expect(builtRoomCell(perFloor, PLOT, above)).toEqual({ floor: 2, column: PLOT.minColumn });
+    expect(builtRoomCell(perFloor - 1, PLOT, above)).toEqual({ floor: 1, column: PLOT.maxColumn, row: PLOT.minRow });
+    expect(builtRoomCell(perFloor, PLOT, above)).toEqual({ floor: 2, column: PLOT.minColumn, row: PLOT.minRow });
     // Never floor 0, so it cannot collide with the inherited hotel for any `--rooms` that
     // fits on one floor.
     for (let i = 0; i < perFloor * 3; i += 1) {
@@ -244,7 +248,7 @@ describe('the build walk stays on the plot', () => {
     // The rule is the existing comment's own reasoning extended to the case it did not
     // cover: the player builds on the ground unless the ground is already spoken for.
     expect(builtRoomStartFloor(0)).toBe(GROUND_FLOOR);
-    expect(builtRoomCell(0, PLOT, builtRoomStartFloor(0))).toEqual({ floor: 0, column: 0 });
+    expect(builtRoomCell(0, PLOT, builtRoomStartFloor(0))).toEqual({ floor: 0, column: 0, row: PLOT.minRow });
     // And every inherited-hotel invocation is untouched, which is what keeps G-009's
     // pinned criterion byte-identical.
     for (const rooms of [1, 3, 20, 200]) {
@@ -554,7 +558,7 @@ describe('buildSummary violations (forged worlds)', () => {
   it('an orphaned reservation produces the guest violation, and the printed count agrees', () => {
     const { world, options } = defaultRun(2);
     const forged = withForgedGuest(world, {
-      at: { floor: 0, column: 0 }, // G-023a: holding nothing that exists, so the doorway
+      at: { floor: 0, column: 0, row: 0 }, // G-023a: holding nothing that exists, so the doorway
       arrivedTick: world.tick, // age 0 — cannot read as stuck, so the orphan branch is isolated
       roomEntityId: 999_999, // no such entity
       engagement: null,
@@ -608,7 +612,7 @@ describe('buildSummary violations (forged worlds)', () => {
     const { world, options } = defaultRun(2);
     const limit = maxGuestLifetimeTicks(content, needType.id);
     const forged = withForgedGuest(world, {
-      at: { floor: 0, column: 0 }, // G-023a: waiting in the doorway, which is where it is
+      at: { floor: 0, column: 0, row: 0 }, // G-023a: waiting in the doorway, which is where it is
       // `world.tick - limit` — ONE tick past the oldest age a live guest can legitimately
       // have, which is `limit - 1` (see `countStuckGuests`). This read `- limit - 1` with the
       // same comment, which was two ticks past and therefore did not say what it did: an
@@ -660,7 +664,7 @@ describe('buildSummary violations (forged worlds)', () => {
     const firstSettlement = world.ledger.findIndex((transaction) => transaction.reason === 'upkeep');
     const forged: World = {
       ...withForgedGuest(world, {
-        at: { floor: 0, column: 0 }, // G-023a
+        at: { floor: 0, column: 0, row: 0 }, // G-023a
         arrivedTick: world.tick,
         roomEntityId: 999_999,
         engagement: null,

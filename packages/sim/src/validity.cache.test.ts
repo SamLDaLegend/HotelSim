@@ -79,7 +79,8 @@ const content = bindContent({
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
 /** A committed store holding exactly these entities, ids ascending in the order given. */
 function storeOf(...specs: readonly (readonly [string, Cell])[]): EntityStore {
@@ -259,13 +260,13 @@ describe('clause 5 — `boundsEqual`: the same plot', () => {
     // Two rooms side by side at columns 0 and 1. On a WIDE plot, room 3 has column 2 free
     // to its right: a door. (Room 1 is sealed either way — the plot edge on its left, room
     // 3 on its right — which is what makes room 3 the single thing that moves.)
-    const wide: GridBounds = { minFloor: 0, maxFloor: 4, minColumn: 0, maxColumn: 4 };
+    const wide: GridBounds = { minFloor: 0, maxFloor: 4, minColumn: 0, maxColumn: 4, minRow: 0, maxRow: 0 };
     const store = storeOf(['bedroom', cell(0, 0)], ['bed', cell(0, 0)], ['bedroom', cell(0, 1)], ['bed', cell(0, 1)]);
     expect(validRoomIds(store, wide, cache)).toEqual([3]);
     // On a plot exactly two columns wide, room 3's only free side is off the edge of the
     // world, so it is `noDoor` too. A save carries its own plot (`GridBounds`), so a host
     // stepping two worlds with one cache can reach exactly this.
-    const narrow: GridBounds = { minFloor: 0, maxFloor: 4, minColumn: 0, maxColumn: 1 };
+    const narrow: GridBounds = { minFloor: 0, maxFloor: 4, minColumn: 0, maxColumn: 1, minRow: 0, maxRow: 0 };
     expect(validRoomIds(store, narrow, cache)).toEqual([]);
   });
 });

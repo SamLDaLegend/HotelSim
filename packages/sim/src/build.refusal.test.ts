@@ -53,7 +53,8 @@ const content = bindContent({
   guestRules: [{ id: 'houseRules', name: 'House Rules', stayDurationTicks: 20, toleranceTicks: 12 }],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 const build = (roomTypeId: string, at: Cell): Command => ({ kind: 'buildRoom', roomType: roomTypeId, at });
 const demolish = (id: number): Command => ({ kind: 'demolishRoom', id });
 const spawnAt = (entityKind: string, at: Cell): Command => ({ kind: 'spawnEntity', entityKind, at });
@@ -116,7 +117,7 @@ describe('refused: the cell is off the plot', () => {
     // world actually has, or a loaded save would accept placements it cannot address.
     const narrow: World = {
       ...worldWithCash(COST * 2),
-      grid: { minFloor: 0, maxFloor: 1, minColumn: 0, maxColumn: 1 },
+      grid: { minFloor: 0, maxFloor: 1, minColumn: 0, maxColumn: 1, minRow: 0, maxRow: 0 },
     };
     const after = stepTick(narrow, content, [build('priced', cell(0, 1)), build('priced', cell(5, 5))]);
     expect(after.buildOutcomes.built).toBe(1);

@@ -79,7 +79,8 @@ const content = bindContent({
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
 /** Exactly ONE working room, so the hotel is full the moment anybody is in it. */
 function oneRoomHotel(): EntityStore {
@@ -125,7 +126,7 @@ function guest(id: number, over: GuestOver = {}): Guest {
     // where anybody is standing — these cases are about which room a scan finds, and
     // `stepGuests` re-states the position from what the guest holds on every tick anyway.
     // The rule itself is pinned in `travel.position.test.ts`, not here.
-    at: { floor: 0, column: 0 },
+    at: { floor: 0, column: 0, row: 0 },
     arrivedTick: over.arrivedTick ?? 0,
     roomEntityId: over.roomEntityId ?? 0,
     // θ-b1: content on arrival. Nothing in this file is about a guest's mood; the stock is

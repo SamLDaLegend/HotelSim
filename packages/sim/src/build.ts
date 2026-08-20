@@ -406,7 +406,7 @@ export function applyBuildRoom(input: BuildInput, roomType: ContentId, at: Cell)
   // Integer-ness only. `assertCell` would also throw on a cell off the plot, which is
   // precisely what this command must NOT do, so the bounds half is asked separately
   // below and answered with a refusal.
-  assertCell({ floor: at.floor, column: at.column }, UNBOUNDED, 'buildRoom');
+  assertCell({ floor: at.floor, column: at.column, row: at.row }, UNBOUNDED, 'buildRoom');
 
   if (!isWithinBounds(at, input.bounds)) {
     return refuse(input, 'outOfBounds');
@@ -613,6 +613,8 @@ const UNBOUNDED: GridBounds = Object.freeze({
   maxFloor: Number.MAX_SAFE_INTEGER,
   minColumn: Number.MIN_SAFE_INTEGER,
   maxColumn: Number.MAX_SAFE_INTEGER,
+  minRow: Number.MIN_SAFE_INTEGER,
+  maxRow: Number.MAX_SAFE_INTEGER,
 });
 
 /** Human-readable, for the `spawnEntity` occupied-cell throw. Never parsed, never hashed. */

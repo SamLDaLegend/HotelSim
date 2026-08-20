@@ -253,7 +253,7 @@ describe('and the hotel cannot fail a guest for longer than the guest was here',
 //  THROUGH THE TICK, which is where the two halves the report divides are produced.
 // ============================================================================
 
-const spawn = (kind: string, column: number): Command => ({ kind: 'spawnEntity', entityKind: kind, at: { floor: 0, column } });
+const spawn = (kind: string, column: number): Command => ({ kind: 'spawnEntity', entityKind: kind, at: { floor: 0, column, row: 0 } });
 const arrive: Command = { kind: 'guestArrives' };
 const on = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
 const hotel = (kinds: readonly string[]): World =>

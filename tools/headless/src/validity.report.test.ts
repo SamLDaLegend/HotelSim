@@ -217,7 +217,7 @@ describe('the zero CAN be non-zero', () => {
       entities: {
         nextId: 2,
         // One room, on floor 9, with nothing beneath it and no bed in it.
-        list: [{ id: 1, kind: roomType.id, at: { floor: 9, column: 10 } }],
+        list: [{ id: 1, kind: roomType.id, at: { floor: 9, column: 10, row: 0 } }],
       },
       guests: {
         nextId: 2,
@@ -225,7 +225,7 @@ describe('the zero CAN be non-zero', () => {
           {
             id: 1,
             // G-023a: standing in the room it holds, invalid though that room is.
-            at: { floor: 9, column: 10 },
+            at: { floor: 9, column: 10, row: 0 },
             arrivedTick: 0,
             roomEntityId: 1,
             engagement: null,

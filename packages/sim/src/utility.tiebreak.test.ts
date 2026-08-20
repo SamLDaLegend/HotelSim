@@ -99,7 +99,7 @@ const content = bindContent({
 const spawn = (entityKind: string, floor: number, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor, column },
+  at: { floor, column, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const at = (tick: number, command: Command): ScheduledCommand => ({ tick, command });
@@ -135,8 +135,8 @@ describe('two cafes of the same kind, tied on fit, on two insertion orders', () 
 
     // The half that makes the two orders worth running: if this were "leftmost cell" or
     // "whichever the walk found first", the chosen cell would be the same in both worlds.
-    expect(engagedEntity(a).at).toEqual({ floor: 0, column: 2 });
-    expect(engagedEntity(b).at).toEqual({ floor: 0, column: 4 });
+    expect(engagedEntity(a).at).toEqual({ floor: 0, column: 2, row: 0 });
+    expect(engagedEntity(b).at).toEqual({ floor: 0, column: 4, row: 0 });
   });
 
   it('and the candidate list itself is ordered the same way, ascending by id', () => {

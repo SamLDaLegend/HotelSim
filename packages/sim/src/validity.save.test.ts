@@ -72,7 +72,8 @@ const content = bindContent({
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
 /** A world holding one room of every invalidity reason, and one that works. */
 function worldOfEveryReason(): World {

@@ -2822,11 +2822,17 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
  * That is why `undefined` is a branch here rather than a defaulted constant: a default in this
  * package would be a content number living in the simulation (I3).
  *
- * THE AXIS ORDER IS ARBITRARY AND SAYS SO. Vertical first, then horizontal, because it must be
- * SOME fixed order for I2 and there is no reason yet to prefer one — nothing models a stairwell
- * until G-024, so no route exists to be faithful to. **When G-024 lands, this function is what
- * it replaces**, and the order stops being arbitrary because a guest will have to reach the
- * stairs before it can use them.
+ * THE AXIS ORDER IS ARBITRARY AND SAYS SO. Vertical first, then column, then row, because it
+ * must be SOME fixed order for I2 and there is no reason yet to prefer one — nothing models a
+ * stairwell until G-024, so no route exists to be faithful to. **When G-024 lands, this function
+ * is what it replaces**, and the order stops being arbitrary because a guest will have to reach
+ * the stairs before it can use them.
+ *
+ * THE ROW AXIS IS WALKED LAST AND CHANGES NO SHIPPED JOURNEY (G-034a). The shipped plot is one
+ * row deep, so `to.row - from.row` is always 0 there and this function returns exactly what it
+ * returned before the axis existed — which is why the worst journey on the default plot is
+ * still 22 floors + 79 columns = 101 cells, the number `travel.movement.test.ts` pins and the
+ * number `packages/content/src/schema.ts` derives the guest speed floor from.
  * ------------------------------------------------------------------------------------------
  */
 /**
@@ -2852,10 +2858,11 @@ export function hasArrivedAt(speed: number | undefined, guestAt: Cell, host: Ent
 }
 
 export function stepTowards(from: Cell, to: Cell, cellsPerTick: number | undefined): Cell {
-  if (cellsPerTick === undefined) return { floor: to.floor, column: to.column };
+  if (cellsPerTick === undefined) return { floor: to.floor, column: to.column, row: to.row };
   let budget = cellsPerTick;
   let floor = from.floor;
   let column = from.column;
+  let row = from.row;
 
   const floorGap = to.floor - floor;
   const floorStep = Math.min(Math.abs(floorGap), budget);
@@ -2865,6 +2872,11 @@ export function stepTowards(from: Cell, to: Cell, cellsPerTick: number | undefin
   const columnGap = to.column - column;
   const columnStep = Math.min(Math.abs(columnGap), budget);
   column += columnGap >= 0 ? columnStep : -columnStep;
+  budget -= columnStep;
 
-  return { floor, column };
+  const rowGap = to.row - row;
+  const rowStep = Math.min(Math.abs(rowGap), budget);
+  row += rowGap >= 0 ? rowStep : -rowStep;
+
+  return { floor, column, row };
 }

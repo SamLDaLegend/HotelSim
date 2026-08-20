@@ -83,7 +83,8 @@ const content = bindContent({
   ],
 });
 
-const cell = (floor: number, column: number): Cell => ({ floor, column });
+/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 const build = (roomType: string, at: Cell): Command => ({ kind: 'buildRoom', roomType, at });
 const demolish = (id: number): Command => ({ kind: 'demolishRoom', id });
 const spawn = (entityKind: string, at: Cell): Command => ({ kind: 'spawnEntity', entityKind, at });

@@ -64,7 +64,7 @@ const content = bindContent({
 const spawn = (entityKind: string, column: number): Command => ({
   kind: 'spawnEntity',
   entityKind,
-  at: { floor: 0, column },
+  at: { floor: 0, column, row: 0 },
 });
 const arrive: Command = { kind: 'guestArrives' };
 const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });

@@ -269,7 +269,19 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   from a review, which `review.boundary.test.ts` enforces from two directions — while the
     //   need rows' met/unmet legitimately move. The outcome assertions below are what say which
     //   half is which.
-    expect(hashState(plain)).toBe('ebb9c3924e373c1e');
+    //   `ebb9c3924e373c1e` -> `0c34f5daea71e8de`   G-034a gave the grid a third axis
+    //   (ADR-0046 §4.1). ONE cause, and it is a state-SHAPE change with NO BEHAVIOUR IN IT:
+    //   `Cell` gains `row` and `GridBounds` gains `minRow`/`maxRow`, so every cell and the plot
+    //   itself are two and one integers wider in hashed state. **The shipped plot stays ONE ROW
+    //   DEEP**, which is what makes the no-behaviour claim checkable rather than asserted:
+    //   every cell in this workload has `row: 0`, `stepTowards` walks an axis whose gap is
+    //   always zero, and the 4-neighbour door rule degenerates to the 2-neighbour one through
+    //   `isWithinBounds` because front and back are off the plot. The content files are
+    //   untouched so the fingerprint does not move. THE CONTROL IS THE FULL BLOCK AGAIN, not
+    //   the narrow one G-028b needed: arrivals, checkouts, evictions, the departure table AND
+    //   the need rows are all unchanged, which is the whole argument that the shape moved and
+    //   the simulation did not.
+    expect(hashState(plain)).toBe('0c34f5daea71e8de');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -393,7 +405,12 @@ describe('the same workload with the player churning the building', () => {
     // one cause the plain row gives — the scorer and `met` now read the unserved counter. THE
     // SHARP CONTROL HOLDS FOR THE EIGHTH TIME: 19 evictions, unchanged, in a goal that changed
     // what a review MEANS and nothing about which rooms the churn schedule demolishes.
-    expect(hashState(churn)).toBe('5a359e8723c227f3');
+    // MOVED AT G-034a WITH ITS SIBLING, `5a359e8723c227f3` -> `92e656437b7c1b07`, for the one
+    // cause the plain row gives — a cell gained a third coordinate and the plot gained two
+    // edges, with the shipped plot still one row deep so nothing behavioural can differ. THE
+    // SHARP CONTROL HOLDS FOR THE NINTH TIME: 19 evictions, unchanged, in a goal that rewrote
+    // the door rule's arity and nothing about which rooms the churn schedule demolishes.
+    expect(hashState(churn)).toBe('92e656437b7c1b07');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
