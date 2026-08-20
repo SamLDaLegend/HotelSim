@@ -1715,7 +1715,7 @@ Status: **split into G-034a / G-034b.** **G-013 is the precedent and it is not b
   apply.** *"Sixteen clean migrations say the chain is cheap; an unsweepable diff isn't."*
 
 ## G-034a — A floor is a plan, not a strip
-Status: **IN PROGRESS.**
+Status: **PLAN REVIEWED — OPEN, scope objection UPHELD, plan revised. Not started.**
 Milestone: M3
 Owner pair: sim-engineer / sim-critic
 Statement: `(floor, x)` becomes `(floor, x, y)`. Build validity is reworked — supported, enclosed,
@@ -1726,20 +1726,27 @@ model **pays the migration twice.** But the room-DRAWING verb is G-036 — this 
 and the schema, not the player's hands.
 
 **IN SCOPE**
-- The third axis, through `grid.ts`, the entity store, placement and the save.
+- The third axis — named **`row`**, to match `column` — through `grid.ts`, the entity store,
+  placement, the save, **AND THE GUEST STORE AND TRAVEL**: `standingCell`, `placed`,
+  `hasArrivedAt`, `stepTowards`, `assertGuestStoreInvariants`, `assertGuest`, and the guest arm
+  of the migration — which cannot be avoided, because `Guest.at` is non-nullable by construction.
+- **THE SHIPPED DEFAULT PLOT STAYS ONE ROW DEEP.** Depth is exercised by FIXTURE. This is the
+  constraint that keeps G-034a behaviour-free — see the review below for the four findings it
+  dissolves at once.
 - **Build validity reworked for a plan**: supported (something beneath, or ground), enclosed,
   reachable through a door, holds its required items.
 - **B1 rectangles**, stored in a representation that *could* generalise to a polyomino — so
   arbitrary shapes are a later GOAL rather than a later MIGRATION.
 - **B2 corridors: THE CONCEPT IS RESERVED, NOT BUILT** — a constraint on this goal from ADR-0048 §2:
   *"the cell representation must not preclude corridors."* A cell carries the room it is part of, or
-  none; **walkability is G-034b's field, and this goal must leave room for it rather than make it.**
+  **THE RECTANGLE IS STORED ON THE ROOM AND `roomAtCell` STAYS DERIVED — NO CELL IS A CONTAINER.**
   The human named B2 the register's most consequential entry and it is — without scarce space,
   "bigger is better" has no counterweight and B7's pricing has nothing to trade against — **which is
   the argument for it getting its own sweep rather than riding in on this one.**
-- **B3 stored bounds, per floor.** `grid.ts` already stores rather than hardcodes, so this is
-  continuity — and it makes buying land an M4 feature instead of a migration.
-- **B5's condition field RESERVED** (not built — housekeeping is M4).
+- **B3 stored bounds: SIX INTEGERS ON ONE PLOT. "Per floor" is STRUCK** — it was not ADR-0047
+  B3, which says bounds stored rather than constant *and `grid.ts` already stores them, so this is
+  continuity*. A keyed collection is not continuity: a `Map` serialises to `{}` through
+  `canonicalise`, so the bounds vanish from BOTH the hash and the save. See the review below.
 - **`check:ladder` IS RE-POINTED IN THIS COMMIT.** See below. Non-negotiable.
 
 **OUT OF SCOPE**: room drawing and `placeItem` (G-036) · scoring (G-037) · pathfinding (G-038) ·
@@ -1770,9 +1777,128 @@ guard, which predates the shared one** — see ADR-0047 amdt §3's correction.
 - **The I2 hash WILL move with the migration. Expected; moving UNVERIFIED is not** — it is
   re-derived and the four digest bodies updated in the same commit.
 
-**Seam offered at PLAN**: none yet. If the builder offers one it is **taken, or gets a written
-prediction of what declining it costs, scored at REFLECT (§5.5) — AND RECORDED IN THIS BLOCK**,
-which is this session's most-repeated failure.
+**SEAM OFFERED AT PLAN AND TAKEN — `sim-critic`, §5.6.** This block read *"Seam offered at PLAN:
+none yet"* until the review, **which was true when written and false by the time it was read.**
+**B1's stored footprints move to G-036**: nothing in G-034a can produce a footprint other than 1x1,
+so every multi-cell branch would ship unexercised — ADR-0007's founding shape, inside the goal that
+rewrites the validity rules. See the PLAN REVIEW section below.
+
+
+### PLAN REVIEW, §5.6 — `sim-critic`, before any code. Verdict **OPEN**, scope objection UPHELD.
+
+**2 BLOCKERs and 8 MAJORs, on a plan, with no diff to sweep.** This is the pass ADR-0032 calls
+*"the highest in the project, and the cheapest"*, and it is the first goal in the project where the
+matched critic saw the plan with its domain prompt loaded. **Every finding below changed the plan.**
+
+**THE SECOND SEAM IS NAMED AND TAKEN — B1 FOOTPRINTS MOVE TO G-036.** *"Stored footprints have no
+verb that can make one bigger than 1×1, so every multi-cell branch ships unexercised."*
+`roomCellsOf`, `groundedRooms`'s partial-support case, `coversCell`'s own-footprint door exclusion,
+`standsInRoom`, and `roomAt`'s occupancy test would all be written and **none of them reachable —
+ADR-0007's founding shape, inside the goal that rewrites the validity rules.** The dependency runs
+one way, it is a different rule system (*where is a cell* vs *what is a room*), and **G-036 already
+pays a room-instance migration, so the footprint rides one being paid anyway.** Taken, not declined.
+
+> **`Seam offered at PLAN: none yet` was true when written and false by the time it was read.**
+> That is the sentence §5.5 exists to prevent, caught by the review it was waiting for.
+
+**AND THE PLAN GAINED A CONSTRAINT THAT DISSOLVES FOUR FINDINGS AT ONCE: THE SHIPPED DEFAULT PLOT
+STAYS ONE ROW DEEP.** G-034a adds the axis, hashes it, saves it, migrates it and rewrites validity
+to be depth-CAPABLE — **but no shipped world uses the depth until there is a verb that can.**
+
+- **`noDoor` stays producible** (BLOCKER 1). The three one-dimensional seal layouts —
+  `determinism-log.ts`'s basement terraces and seal pass, `report.ts`'s shoulder-to-shoulder
+  `builtRoomCell` — **still seal, because on a one-row plot the 4-neighbour rule degenerates to the
+  2-neighbour rule through `isWithinBounds`.** Four tests that would have gone red do not.
+- **No journey length changes** (MAJOR, `stepTowards`), so the give-up path `ef1f361` just finished
+  making the I2 log exercise is untouched.
+- **The speed floor's derivation survives** (MAJOR): *"23 floors × 80 columns, worst journey 101
+  cells, tolerance 180"* is still true, so `travel.movement.test.ts`'s `toBe(101)` is not edited to
+  a new number while the warrant beside it still says the old one — **§2.1's exact failure, avoided
+  rather than repaired.**
+- **AND IT ANSWERS THE WATCH CONTRADICTION** (MAJOR) instead of arguing round it. The block had no
+  WATCH criterion while `GOALS.md` two screens down says a behavioural goal without one is an
+  **escalation**. With the default plot one row deep, **G-034a changes no guest, room or economy
+  behaviour at all** — same verdicts, same journeys, same outcomes. **Only the hash moves.** The
+  depth is opened where there is a surface to watch it on.
+
+**Depth is exercised by FIXTURE, not by the shipped default**, which is what keeps the new rules
+from being written-and-unreachable.
+
+### The findings that became criteria
+
+**THE MIGRATION'S INVENTED VALUE HAS A HISTORICAL READING, AND IT IS THE ONLY ONE** (BLOCKER 2).
+**A v16 world WAS a strip: a floor had one row.** So `migrateV16ToV17` sets `minRow === maxRow` and
+puts every entity and guest on that row. **Nothing is invented, because the bytes already say the
+plot has no depth** — and the proof it is non-inventive is that on a one-row plot the door rule
+degenerates, so **every migrated world keeps its exact validity verdicts.** Any deeper migrated plot
+silently rewrites them: *a room that was `noDoor` gains free cells at row±1 and becomes VALID — a
+migration rewriting a validity verdict.*
+
+**AND THE PERMANENT v1 FIXTURE CANNOT CATCH THAT**, because every entity carried out of
+`migrateV2ToV3` has `at: null` — **so the fixture walks 1→17 with a zero-line diff while the step
+inspects nothing**, which is the paragraph `migrateV10ToV11` already carries. **A hand-written v16
+world driven through the step is therefore a criterion, not a nicety.** v17 owes `migrateV10ToV11`'s
+three mechanisms: a frozen era literal, a source scan forbidding `save.ts` from naming the live rule
+(ADR-0008), and that hand-written world.
+
+**`compareCells` MUST KEEP FLOOR FIRST, AND NOTHING IN THE SUITE PINS IT** (MAJOR). `groundedRooms`
+is a one-pass algorithm resting on exactly one property: *"walking it in order visits every room on
+floor f−1 before any room on floor f."* Order the new axis ahead of `floor` and **a room at
+(floor 1, row 0) sorts before a room at (floor 0, row 1)**, so a supported room reports
+`unsupported`. **Every existing order assertion still passes**, because they all live at one row.
+**And I2 does not backstop it** — the gate compares runs to each other and holds no reference hash,
+so a *consistently wrong* verdict leaves it green. Criterion: assert floor outranks the new axis,
+and a grounded case whose supporting room is at a different row from the room above it.
+
+**THE DOOR RULE'S ARITY IS THE PLAN'S OWN "HAS A DOOR" RESTING ON A VACUOUS CHECK** (MAJOR).
+`cellLeft`/`cellRight` **typecheck unchanged in 2D** — they copy the new axis through — so a
+2-neighbour rule on a 2D plot compiles, passes every test, and is wrong. Criterion: `cellFront`/
+`cellBack` beside the existing two, and **the discriminating case pinned — a room sealed east and
+west with free cells north and south is VALID** — as a test that goes red under the 2-neighbour
+spelling.
+
+**A CELL MUST NOT BECOME A CONTAINER, AND THAT IS THE CONCRETE FORM OF ADR-0048's CORRIDOR
+CONSTRAINT** (MAJOR). The block said *"a cell carries the room it is part of, or none"* — **that is
+the spelling that PRECLUDES corridors**, and it reverses `grid.ts`'s founding decision that cell
+contents are derived and no back-pointer exists. **A corridor is a property of a cell no entity
+occupies; a field typed `EntityId | null` has two readings and a corridor is neither** — so G-034b
+would have to widen the meaning of an existing hashed field, and **v17 saves carry `null` for cells
+a v18 build must split into "empty" and "corridor" from bytes that do not say.** A migration with no
+reading in history — **the invention BLOCKER 2 is about, one goal later.** Plus: demolish gains a
+cleanup step `grid.ts:14` says exists precisely because there is none to forget, and room membership
+becomes authoritative in two places that hash perfectly while disagreeing.
+**Criterion: the rectangle is stored on the ROOM; `roomAtCell` stays DERIVED. No cell is a
+container.**
+
+**THE GUEST STORE AND TRAVEL WERE MISSING FROM IN SCOPE** (MAJOR) — `standingCell`, `placed`,
+`hasArrivedAt`, `stepTowards`, `assertGuestStoreInvariants`, `assertGuest`, and the guest arm of the
+migration, which cannot be avoided because `Guest.at` is non-nullable by construction. **Named.**
+
+**"PER FLOOR" WAS NOT ADR-0047 B3** (MAJOR). The ADR says *bounds stored rather than constant, and
+`grid.ts` already stores them, so this is continuity* — **no per-floor clause.** As a keyed
+collection it stops being continuity and becomes three defects: a `Map` serialises to `{}` through
+`canonicalise`, so the bounds **vanish from both the hash and the save** while `assertWorldShape`
+waves it through; `boundsEqual` becomes a structural comparison whose iteration order matters; and a
+record keyed by floor number iterates ascending for `"0"`/`"10"` and insertion-order for `"-2"`, so
+**basements iterate last, in a different order from the one `canonicalise` sorts by.**
+**Resolved: SIX INTEGERS ON ONE PLOT. "Per floor" is struck.**
+
+**Also taken**: the axis is named **`row`**, to match `column` — `floor`/`column`/`y` is two
+vocabularies (NIT) · the three longhand axis lists in `assertCell`, `assertEntity` and `assertGuest`
+each get a bad-row test, because **missing one is silent and `canonicalise` will not save you, since
+a float is finite** (MINOR) · the v3 era-literal scan is tightened to an exact key set, because
+`toContain` would let the frozen v3 plot be widened and **that is history drifting with the build**
+(MINOR) · and **one line goes into `ESCALATIONS.md`: its own *"the remaining M3 goals do not touch
+this bound"* is now stale** — an extra axis in `compareCells` (per binary-search step in the hottest
+lookup in the sim) and a door rule going from two probes to four is the largest hot-path change
+since G-010, and **a 1.4640 bound against a 1.173 smallest-known-regression would say very little
+about it.** That is ADR-0048 §1's standing question firing on its first outing (MINOR).
+
+**What the review confirmed rather than found**: `placementIndex` already sorts with a total
+comparator and an id tiebreak; `grounded`/`memo`/`providers` are lookup-only; `validRoomsOf` walks
+entity order, not cell order. **None of that needs to change for an extra axis, provided the
+comparator stays floor-first.**
+
 
 ## G-034b — Corridors: space is scarce, and a room must connect to something
 Status: **PLANNED.** Follows G-034a; **the dependency runs one way** (ADR-0048 §2).

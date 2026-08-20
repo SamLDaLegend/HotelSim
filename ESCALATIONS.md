@@ -1128,6 +1128,15 @@ narrow the bound to clear this — that is the decision being escalated.**
 resolves it, and I am not overriding that on my own authority. But the defect is a gate that is
 too **WIDE**, not code that is wrong: nothing shipped is at risk, `pnpm verify` is green on every
 row, and the remaining M3 goals do not touch this bound. **My reading is that M3 continues while
+
+**STALE AS OF 2026-08-16, and this is ADR-0048 §1's standing question firing on its first outing.**
+`sim-critic`'s G-034a plan review: *"G-034a touches it materially — an extra axis in `compareCells`
+(called per binary-search step in the hottest lookup in the sim), a door rule going from two
+neighbour probes to four, and a footprint fold replacing `[room.at]`. The bound is 1.4640 against a
+smallest-known-regression of 1.173, so `check:tickcost` green would say very little about the
+largest hot-path change since G-010."* **The claim that the remaining M3 goals do not touch this
+bound was true of the OLD M3 and is false of the one ADR-0046 wrote.** The decision is unchanged
+and still the human's; what has changed is that it is no longer cost-free to leave open.
 this stays open, and I am stating that rather than assuming it.** If that reading is wrong, say
 so and I stop.
 
