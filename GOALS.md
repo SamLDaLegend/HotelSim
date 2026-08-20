@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-035 is done and the game has been SEEN in its own projection (WATCH #12, real browser, isometric, floors switchable, guests tinted by state). The no-WATCH escalation is RESOLVED. G-028 is CLOSED AS ALREADY DISCHARGED by G-028a and G-028b — checked against ADR-0033 rather than built, and restoring it as pending was the G-031a class inside the repair for the G-031a class. Plot depth is now G-036's first NAMED deliverable; it was previously one comment in another goal's REFLECT. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, C5 is BROUGHT FORWARD into circulation by human ruling (ADR-0049) — reception becomes a queue point, so the lobby gets a reason to exist rather than only being drawable. G-035 is done and the game has been SEEN in its own projection (WATCH #12). G-028 closed as already discharged. Plot depth is now G-036's first NAMED deliverable. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v18** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2201,10 +2201,27 @@ reputation secondary — because satisfaction is the consequence the existing si
 consume, which makes it the shortest path from a room score to something observable.
 **Triggers G-028's re-sweep.**
 
-## G-038 — Circulation
+## G-038 — Circulation, and the lobby gets a reason to exist
 Status: **PLANNED.** A* over a single floor's tile grid, plus stair and lift nodes joining floors —
 **per-floor rather than volumetric.** M3's statement lands here: stairs cheap/slow/unbounded, lifts
 expensive/fast/queued, **wait time a first-class satisfaction input.**
+**C5 IS BROUGHT FORWARD INTO THIS GOAL (ADR-0049, human).** Reception as a QUEUE POINT: arrival
+gains a spatial cost, and a guest checks in somewhere rather than materialising served.
+
+**WHY IT MOVED, and the reason is a person looking at the screen.** WATCH #12 put the game in its
+own projection for the first time and the human said it had no lobby. Depth plus drawing (G-036)
+makes a lobby EXPRESSIBLE; **nothing in M3 made it MEAN anything** — no check-in, no queue, no
+reason to go there. **A room that is only a shape is decoration**, and an entrance hall that is
+decoration is a hole where the game's first five minutes should be.
+
+**AND IT RUNS C5'S PARKED FALSIFICATION TEST RATHER THAN DEFERRING IT AGAIN**: *if M3's queue
+machinery cannot express a check-in desk without changing shape, it was scoped too narrowly.*
+**Either answer is a result.** It lands here because stairs and lifts already force the queue
+machinery to exist — a check-in desk is a third consumer of it, not a fourth mechanism.
+
+**IT DOES NOT BRING C4's STAFF WITH IT.** A queue point is a place a guest waits and is served; **a
+receptionist who walks, tires and costs wages is M4's.** C4 stays named-not-built.
+
 **B8 lands here**, including a floor-count patience input that makes lifts necessary rather than
 optional — **a content number, shipped as one.**
 **C4's staff roles are NAMED but not built** — housekeeping, reception, maintenance, porters —

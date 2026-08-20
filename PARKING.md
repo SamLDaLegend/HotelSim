@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-035 is done and the game has been SEEN in its own projection (WATCH #12, real browser, isometric, floors switchable, guests tinted by state). The no-WATCH escalation is RESOLVED. G-028 is CLOSED AS ALREADY DISCHARGED by G-028a and G-028b — checked against ADR-0033 rather than built, and restoring it as pending was the G-031a class inside the repair for the G-031a class. Plot depth is now G-036's first NAMED deliverable; it was previously one comment in another goal's REFLECT. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, C5 is BROUGHT FORWARD into circulation by human ruling (ADR-0049) — reception becomes a queue point, so the lobby gets a reason to exist rather than only being drawable. G-035 is done and the game has been SEEN in its own projection (WATCH #12). G-028 closed as already discharged. Plot depth is now G-036's first NAMED deliverable. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

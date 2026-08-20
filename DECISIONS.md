@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-035 is done and the game has been SEEN in its own projection (WATCH #12, real browser, isometric, floors switchable, guests tinted by state). The no-WATCH escalation is RESOLVED. G-028 is CLOSED AS ALREADY DISCHARGED by G-028a and G-028b — checked against ADR-0033 rather than built, and restoring it as pending was the G-031a class inside the repair for the G-031a class. Plot depth is now G-036's first NAMED deliverable; it was previously one comment in another goal's REFLECT. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, C5 is BROUGHT FORWARD into circulation by human ruling (ADR-0049) — reception becomes a queue point, so the lobby gets a reason to exist rather than only being drawable. G-035 is done and the game has been SEEN in its own projection (WATCH #12). G-028 closed as already discharged. Plot depth is now G-036's first NAMED deliverable. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4388,3 +4388,56 @@ shared-migration argument: the view cannot wait on the room model.**
 > class", recorded rather than left to sit there contradicting the plan.** A decision that exists
 > in one record and not the other, which is the G-031a class, now caught three times in three
 > messages by three different readings. **§4 points forward from here.**
+
+---
+
+## ADR-0049 — C5 IS BROUGHT FORWARD INTO M3. A lobby gets a reason to exist.
+
+**Date**: 2026-08-16 · **Status**: accepted · **HUMAN RULING**, in answer to a scope question this
+goal raised rather than one the human had to find.
+
+**C5 was PARKED by ADR-0047** — reception as a queue point, deferred with its falsification test:
+*"if M3's queue machinery cannot express a check-in desk without changing shape, it was scoped too
+narrowly and this should have been in it."*
+
+**RULED: bring it forward, into G-038**, where the queue machinery has to exist anyway for stairs
+and lifts.
+
+### Why the question came up at all, and it is ADR-0046 §1 working
+
+**The human looked at WATCH #12 and said the hotel had no lobby.** That was fair and it was not
+answerable from the plan: depth plus drawing (G-036) makes a lobby **EXPRESSIBLE** — a player can
+draw a big room by the entrance — but **nothing in M3 made it MEAN anything.** No check-in, no
+queue, no reason for a guest to go there. **A room that is only a shape is decoration**, and a
+building sim whose entrance hall is decoration has a hole where its first five minutes should be.
+
+> **The milestone question found this one goal after being written, and it found it by someone
+> looking at a screen rather than by any gate.** That is twice now in one sitting — the plot-depth
+> gap and this — and both were invisible to thirteen green rows.
+
+### What it changes, and it is smaller than it sounds
+
+**The falsification test STOPS BEING DEFERRED AND STARTS BEING RUN.** If G-038's queue machinery
+can express a check-in desk without changing shape, the park was right to call it cheap; **if it
+cannot, that is the finding the park was written to produce**, and it arrives inside the milestone
+that can act on it rather than one later.
+
+**It does NOT bring C4's staff roles with it.** Reception as a QUEUE POINT is a place a guest waits
+and is served; **a receptionist who walks, tires and costs wages is M4's**, and C4 stays named-not-
+built. **Arrival gaining a spatial cost is the mechanic; staffing it is the economy.**
+
+**And it does not reopen ADR-0046 §9's no-new-scope bound** — that bound sends surfaced items to
+`PARKING.md`, and C5 was a deferral with a falsification test attached, which is the same act.
+The human has taken it back, which is what a park is for.
+
+> **CORRECTION, CHECKED BEFORE THIS ADR SHIPPED: C5 IS NOT IN `PARKING.md`.** I wrote *"this did go
+> to `PARKING.md`, as C5"* and then looked — **there is no C5 entry there.** It exists only in
+> ADR-0047's register. **Same class as the three caught this sitting: a claim about the tree
+> asserted from memory**, and the fourth time the rule about referents has fired on the referent
+> being the repository itself.
+>
+> **The substance is unaffected** — a decision register entry marked *PARKED with its
+> falsification test* defers just as effectively as a `PARKING.md` line. **What it exposes is that
+> ADR-0047 parked eleven items and wrote NONE of them into `PARKING.md`**, so §9's *"PARKING.md has
+> stopped growing"* stop condition has been reading clean while an entire register accumulated
+> elsewhere. **That is a real gap and it goes to G-039**, not here.
