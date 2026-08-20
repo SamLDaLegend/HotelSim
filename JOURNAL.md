@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-034b is done: a cell can be a corridor, connectivity is a validity rule, save v18. The shipped default run is byte-identical below the hash line; the rule bites only where corridors are DECLARED. Fourteen rows green, every row re-run by the orchestrator. An ESCALATION is open — G-034b is behavioural and ADR-0046 §7 says a behavioural goal with no WATCH surface escalates rather than recording a debt. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-035 is done and THE GAME HAS BEEN SEEN IN ITS OWN PROJECTION for the first time — WATCH #12, in a real browser, isometric, floors switchable, guests tinted by state. The no-WATCH-surface escalation is RESOLVED. M3 has grid depth, corridors and the view; next is the review goal, then room drawing, scoring, circulation and exit instruments. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **State**: save **v18** · summary **v4** · I2 `c9f6bb07d25b089b` · measure golden
   `c7a049822580b39e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
@@ -1400,3 +1400,62 @@ I3's unquoted-key hole · the needs-history interval, deferred · **the loaded r
 for this tree** and parked with its paired invocation · the density quiet arm may under-resolve its
 upper tail at n=12 · **and the workload slot forced three re-takes in one session** — worth deciding
 whether it should name the suite at all, or whether the per-arm identity suffices.
+
+## WATCH #12 — G-035. THE FIRST TIME ANYBODY HAS SEEN THIS GAME IN ITS OWN PROJECTION.
+
+**Watched by the orchestrator in a real browser at `http://localhost:5180`, on the shipped dev
+server, at 2026-08-16.** Not the SVG recording — the Pixi path, which is the half the builder could
+not verify. Frames: floor 0 at tick ~740, floor 0 at tick 1343, floor −1 at tick 1639.
+
+**IT RENDERS, AND THE BUILDER'S EVIDENCE GAP IS CLOSED RATHER THAN INHERITED.** `sim`/`render`
+reported *"`await app.init(...)` never resolves on this machine"* under headless Edge with four
+different backends, and **shipped the gap as a stated gap rather than claiming the WATCH.** That was
+the right call and it was also environmental: **it initialises fine in a real browser.** `fps 143`,
+`tick 1639`, no console errors.
+
+**WHAT IS ON SCREEN AND WORKING:**
+
+- **2:1 isometric, one floor at a time, floors switchable** — the floor strip reads `2 · 1 2 · 0 2 ·
+  -1 3`, **counts beside each floor**, and clicking `-1` swaps the whole scene.
+- **Two far walls per room**, north-west lit and north-east shadowed. It reads as the genre it is
+  meant to.
+- **Guests are visibly TINTED BY STATE**, which is the thing a baked-colour sprite would have
+  destroyed: on floor −1 the guest in the café is teal, the one in the lounge dark red, two in the
+  games room white and grey. **Same greyscale artwork, four different colours.** ADR-0046 §6's
+  argument, working.
+- **Need bars above each head**; room badges `SR1 / SR3 / SR5`, `GR13 / C15 / L16`.
+- **`off this floor 5 guest(s)`** in the HUD — the field that makes one-floor-at-a-time honest
+  rather than a lie by omission.
+- The transport strip reads the content ladder: `pause · Fast 30/s · Working 12/s · Careful 5/s`,
+  with **`one tick = one in-game minute`** spelled out.
+- The economy is live: `day 2 03:19`, `cash £4,975.00`, `stays 14 arrived · 2 checked out · 5 gave
+  up`.
+
+### WHAT LOOKS WRONG, AND IT IS ONE THING
+
+> **THE HOTEL DOES NOT READ AS A BUILDING. IT READS AS A STRING OF HUTS ON A PATH.**
+
+Three rooms march down a diagonal ribbon of corridor paving with **open plot on both sides and
+nothing above or below them.** It is geometrically correct — **the shipped plot is ONE ROW DEEP by
+G-034a's own load-bearing constraint** — and it is exactly what that constraint costs, seen for the
+first time. Each room's far wall also covers roughly half the corridor tile behind it, which the
+builder predicted.
+
+**This is NOT a defect to fix here.** It is the visible consequence of a deliberate decision, and
+the thing that resolves it is **G-036 opening the plot's depth** so a floor is a plan rather than a
+line. **Recorded so that when depth lands, there is a before.**
+
+**AND IT IS THE FIRST READING WALL HEIGHT IS PROVISIONAL FOR** (ADR-0047 amdt §1, human). At one row
+deep, walls this tall are what makes rooms occlude the path behind them. **Do not lock 64px against
+THIS picture** — the judgement is not available until the plot has depth, so the provisional flag
+outlives this goal and that is now evidence rather than caution.
+
+**Second, smaller**: the two floors are jarringly different in saturation — floor 0's bedrooms are
+near-white pastels, floor −1's amenities are hot pink, gold and bright green. That is the computed
+palette ranking luminance **within a role**, working as designed, but **a player switching floors
+sees a mood change that means nothing.** Parked with its test: if the sprite track lands and the
+saturation gap persists, the ranking is wrong rather than the art.
+
+**Nothing read as stupid in the behavioural sense** — no guest stuck in a wall, no room drawn
+behind the thing in front of it, no guest teleporting between floors on the switch. **The depth
+sort holds on the picture as well as in its test.**

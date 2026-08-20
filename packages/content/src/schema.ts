@@ -284,6 +284,31 @@ export const fitBasisPointsSchema = basisPointsSchema.optional();
  * statement "scrapping this returns nothing".
  * ---------------------------------------------------------------------------
  */
+/**
+ * AN OPTIONAL REFERENCE TO A SPRITE IN THE ATLAS (ADR-0046 §6, G-035).
+ *
+ * ---------------------------------------------------------------------------
+ * "THE COMPUTED CONTRAST LADDER SURVIVES AS THE **FALLBACK**, NOT THE RULE."
+ *
+ * The renderer prefers a sprite when the atlas has one and falls back to the colour it
+ * computes from the contrast ladder when it does not. **There are no sprites yet, so
+ * everything on screen today uses the fallback** — but the SEAM has to exist in code, or
+ * ADR-0014's "real art is a separate track" is true only in prose. With it, the game can
+ * ship with half the room types drawn and half as coloured prisms and nothing breaks.
+ *
+ * IT IS A PLAIN STRING AND NOT A CONTENT ID, deliberately. A content id names a thing the
+ * simulation reasons about (ADR-0003); this names a PICTURE, which the simulation has no
+ * opinion on and `packages/sim` never sees. It is validated as non-empty and nothing more,
+ * because what a valid atlas key looks like is the atlas's business and there is no atlas.
+ *
+ * WHAT KEEPS `palette.contrast.test.ts` HONEST: it asserts over everything still using the
+ * fallback, which today is everything. A room type that gains a sprite leaves that
+ * population; one that has none must still clear the contrast floor. That is the property
+ * ADR-0046 §6 names, and it is the reason this field is optional rather than defaulted.
+ * ---------------------------------------------------------------------------
+ */
+export const spriteRefSchema = z.string().min(1);
+
 export const roomTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
@@ -295,6 +320,7 @@ export const roomTypeSchema = z.strictObject({
   provides: z.array(contentIdSchema).optional(),
   requires: z.array(contentIdSchema),
   fitBasisPoints: fitBasisPointsSchema,
+  sprite: spriteRefSchema.optional(),
 });
 
 /**
@@ -560,6 +586,10 @@ export const itemTypeSchema = z.strictObject({
   // item ranks on the same scale — see `fitBasisPointsSchema`, which also states why
   // `single_bed` may not carry one (it provides nothing, so nothing could ever read it).
   fitBasisPoints: fitBasisPointsSchema,
+  // AND AN OPTIONAL PICTURE SINCE G-035 — see `spriteRefSchema`. An item is drawn by the
+  // same prefer-sprite-else-fallback rule a room is, so the field is on both tables or the
+  // seam only half exists.
+  sprite: spriteRefSchema.optional(),
 });
 
 /** The whole `need-types.json` document. A top-level array, for the same reason. */

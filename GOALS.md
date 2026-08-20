@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-034b is done: a cell can be a corridor, connectivity is a validity rule, save v18. The shipped default run is byte-identical below the hash line; the rule bites only where corridors are DECLARED. Fourteen rows green, every row re-run by the orchestrator. An ESCALATION is open — G-034b is behavioural and ADR-0046 §7 says a behavioural goal with no WATCH surface escalates rather than recording a debt. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-035 is done and THE GAME HAS BEEN SEEN IN ITS OWN PROJECTION for the first time — WATCH #12, in a real browser, isometric, floors switchable, guests tinted by state. The no-WATCH-surface escalation is RESOLVED. M3 has grid depth, corridors and the view; next is the review goal, then room drawing, scoring, circulation and exit instruments. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v18** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2070,7 +2070,7 @@ See `ESCALATIONS.md` (2026-08-16).
 
 
 ## G-035 — The isometric view, restored as the WATCH surface
-Status: **PLANNED.** **Goes before the room model** (ADR-0046 §7).
+Status: **done.** WATCH #12 recorded — the game was watched in a real browser, in its own projection, for the first time.
 Milestone: M3
 Owner pair: render-engineer / render-critic
 Statement: The hotel is on screen in 2:1 isometric, one floor at a time, floors switchable — **in

@@ -295,6 +295,24 @@ export const INK = {
   skyBand: 0x151a22,
   /** The plot's floor divisions. */
   floorLine: 0x2b3444,
+  /**
+   * CIRCULATION — WHERE THE PLAN SAYS PEOPLE WALK (G-035, and G-034b is why it must be
+   * visible at all: *a room reported `noCorridor` looks identical to a working one unless
+   * the plan is on screen*).
+   *
+   * ACHROMATIC ON PURPOSE, AND IT IS A LEGIBILITY ARGUMENT RATHER THAN A TASTE ONE. Every
+   * room type's colour comes off the ladder above, which spreads HUE evenly round the circle
+   * — so every room on screen is saturated. A corridor is grey. "Room or walkway" is then a
+   * SATURATION question rather than a which-grey-is-which one, and it keeps working at twelve
+   * room types, where the hue wheel has already given up (see this file's opening arithmetic).
+   *
+   * Two tones, above and below grade, for the same reason the ground has two: with one floor
+   * on screen there is no street line to see, so the ground itself has to say which side of it
+   * you are on.
+   */
+  corridor: 0x5a6472,
+  corridorBelow: 0x4a4640,
+  corridorEdge: 0x8a94a3,
   /** Street level. The heaviest line on screen. */
   grade: 0xc79a4a,
   /** The building's own edge, drawn round the built extent. */

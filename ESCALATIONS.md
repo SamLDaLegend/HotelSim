@@ -1238,7 +1238,18 @@ falsification test.
 
 ---
 
-## 2026-08-16 — OPEN — G-034b SHIPPED A BEHAVIOURAL CHANGE WITH NO WATCH SURFACE
+## 2026-08-16 — RESOLVED — G-034b SHIPPED A BEHAVIOURAL CHANGE WITH NO WATCH SURFACE
+
+**RESOLVED at G-035, by option (a) plus the condition ending.** The isometric view landed one
+goal later and **WATCH #12 watched it in a real browser** — corridors are drawn as paving, and a
+room that cannot reach one is floor-tinted alarm red, hatched and labelled `noCorridor`, **with
+the tile beside it dark plot rather than paving, so the picture says WHY.** G-034b's rule is now
+watchable and was watched.
+
+**THE STANDING PRECEDENT IS (b), AS RECOMMENDED, AND IT IS NOT NARROWED.** *"The shipped default
+is unchanged"* is a weaker claim than *"nothing changed"*, and §7 is not being rewritten to suit
+the first goal that found it inconvenient. **The next behavioural goal without an instrument
+waits for one.** The human may still overrule this reading; nothing depends on it now.
 
 **Raised**: G-034b, by the orchestrator · **Asked of the human**: whether this stands, or whether
 G-034b should have waited for G-035.

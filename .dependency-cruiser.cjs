@@ -55,15 +55,45 @@ module.exports = {
       // NOTHING ELSE MAY CROSS, AND THE REASON IS CONCRETE: the next test to reach into the
       // render layer would import `view/scene.ts`, which pulls Pixi — and therefore a WebGL
       // renderer and a DOM — into the test tree that `packages/sim` shares. §3's "the render
-      // layer is playtested, not unit tested" survives exactly as long as this stays one
-      // module wide.
-      name: 'tools-may-reach-only-the-palette',
+      // layer is playtested, not unit tested" survives exactly as long as this fence holds.
+      //
+      // ---------------------------------------------------------------------------------
+      // WIDENED AT G-035 FROM ONE FILE TO THREE, AND THE PROPERTY IS UNCHANGED RATHER THAN
+      // RELAXED. Said at length because "never edit a gate to make a build pass" is a stop
+      // condition (§9) and a reader is entitled to check that this is not that.
+      //
+      // WHAT THE RULE PROTECTS is in its own comment above: NO PIXI AND NO DOM IN THE
+      // SIM-SIDE TEST TREE. It was written when exactly one module satisfied that, so it
+      // named the module. G-035 adds two that satisfy it identically — `view/iso.ts` (the
+      // 2:1 projection: integer arithmetic, imports NOTHING AT ALL) and `view/depth.ts`
+      // (the draw order: imports `iso.ts` and nothing else). Neither can reach Pixi,
+      // because neither imports anything that could.
+      //
+      // WHY THEY HAVE TO BE REACHABLE. ADR-0047 A3 is a human ruling with one sentence in
+      // it: depth sorting "GETS A TEST RATHER THAN A DEBUGGING SESSION", and that is an
+      // exit criterion of G-035. The alternative is a copy of the projection inside
+      // `tools/`, which is a second definition of where a tile is — the defect class this
+      // project has paid for more often than any other.
+      //
+      // AND THE PROPERTY IS NOW CHECKED RATHER THAN TRUSTED. A path list says which files
+      // are allowed; it cannot say they are still pure. `tools/headless/src/
+      // view-fence.test.ts` reads all three off disk and asserts their imports stay inside
+      // this set — so the day somebody writes `import { Graphics } from 'pixi.js'` into
+      // `iso.ts`, something goes red here rather than a WebGL context quietly appearing in
+      // the simulation's own test run.
+      // ---------------------------------------------------------------------------------
+      name: 'tools-may-reach-only-pure-view-modules',
       severity: 'error',
       comment:
-        'Only apps/game/src/view/palette.ts may be imported from tools/ (G-030). Anything ' +
-        'else drags Pixi and the DOM into the sim-side test tree.',
+        'Only the pure, dependency-free modules in apps/game/src/view may be imported from ' +
+        'tools/ (G-030, widened G-035): palette.ts, iso.ts, depth.ts. Anything else drags ' +
+        'Pixi and the DOM into the sim-side test tree. That the three are still pure is ' +
+        'asserted by tools/headless/src/view-fence.test.ts.',
       from: { path: '^tools/' },
-      to: { path: '^apps/', pathNot: '^apps/game/src/view/palette\\.ts$' },
+      to: {
+        path: '^apps/',
+        pathNot: '^apps/game/src/view/(palette|iso|depth)\\.ts$',
+      },
     },
     {
       name: 'no-circular',

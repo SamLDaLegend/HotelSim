@@ -84,6 +84,16 @@ export type HudState = {
   readonly queued: number;
   /** The last one the simulation answered, or `null` if the player has not acted yet. */
   readonly lastAction: ResolvedAction | null;
+  /**
+   * Guests standing on a floor that is not the one being drawn (G-035).
+   *
+   * ONE FLOOR AT A TIME MEANS MOST OF THE HOTEL IS OFF SCREEN, and §6.1's first render defect
+   * is "UI that cannot express a state the sim can reach". A guest nobody can see and nobody
+   * is told about is exactly that. The floor switcher carries the per-floor counts; this cell
+   * carries the total, so a watcher looking at an empty floor knows whether the hotel is empty
+   * or whether they are on the wrong floor.
+   */
+  readonly guestsElsewhere: number;
 };
 
 const cell = (key: string, value: string): string =>
@@ -209,7 +219,8 @@ export function renderHud(host: HTMLElement, state: HudState): void {
     ...buildCells(world),
     cell('tick', String(world.tick)),
     cell('fps', String(Math.round(state.fps))),
-    state.crowdedOut > 0 ? cell('not drawn', `${state.crowdedOut} guest(s) — cell too narrow`) : '',
+    state.crowdedOut > 0 ? cell('not drawn', `${state.crowdedOut} guest(s) — tile too narrow`) : '',
+    state.guestsElsewhere > 0 ? cell('off this floor', `${state.guestsElsewhere} guest(s)`) : '',
     state.queued > 0 ? cell('queued', `${state.queued} waiting for the next tick`) : '',
     // THE LAST MOVE, AND IT NEVER EXPIRES. A message that fades is a message a player can
     // miss by looking at the building instead of the bar — and the one thing they most need
@@ -389,4 +400,64 @@ export function renderTools(
   save.title = 'the seed, the command log and the state hash — G-031b replays it headless';
   save.addEventListener('click', handlers.onExport);
   host.append(save);
+}
+
+export type FloorHandlers = {
+  readonly onSelect: (floor: number) => void;
+};
+
+/**
+ * THE FLOOR SWITCHER (G-035) — one button per floor, with how many guests are standing on it.
+ *
+ * ---------------------------------------------------------------------------------------
+ * "MULTI-FLOOR, ONE FLOOR RENDERED AT A TIME, FLOORS SWITCHABLE" (`HOTELSIM.md` §1). This is
+ * the control that makes the second half of that sentence true, and it carries a second job
+ * that is not decoration.
+ *
+ * THE GUEST COUNT IS ON THE BUTTON BECAUSE OF §6.1'S FIRST ENTRY. Drawing one floor hides
+ * every guest on every other one, and "a UI that cannot express a state the sim can reach" is
+ * the defect this layer is judged against. With the count, an empty-looking hotel is
+ * distinguishable from a hotel the player is looking at the wrong floor of — one glance,
+ * no arithmetic.
+ *
+ * THE FLOORS COME FROM `floorsOf`, WHICH READS THE WORLD. Not from `DEFAULT_MIN_FLOOR`, and
+ * not from a range this file picks: a save carries its own plot, and the shipped constants do
+ * not describe every world (G-023a's own defect, kept as a rule).
+ *
+ * DESCENDING, so the top of the building is at the top of the list. That is the one place
+ * this control is allowed to have an opinion, and it is the same opinion a lift panel has.
+ * ---------------------------------------------------------------------------------------
+ */
+export function renderFloors(
+  host: HTMLElement,
+  floors: readonly number[],
+  selected: number,
+  guestsOn: (floor: number) => number,
+  handlers: FloorHandlers,
+): void {
+  host.replaceChildren();
+
+  const label = document.createElement('span');
+  label.className = 'k';
+  label.textContent = 'floor';
+  host.append(label);
+
+  for (const floor of [...floors].sort((a, b) => b - a)) {
+    const button = document.createElement('button');
+    const name = document.createElement('span');
+    name.textContent = String(floor);
+    const count = guestsOn(floor);
+    button.append(name);
+    if (count > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'u';
+      badge.textContent = ` ${count}`;
+      badge.title = `${count} guest(s) standing on floor ${floor}`;
+      button.append(badge);
+    }
+    button.title = floor < 0 ? `basement ${-floor}` : `floor ${floor}`;
+    button.classList.toggle('on', floor === selected);
+    button.addEventListener('click', () => handlers.onSelect(floor));
+    host.append(button);
+  }
 }

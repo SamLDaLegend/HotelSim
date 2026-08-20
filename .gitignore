@@ -14,3 +14,9 @@ coverage/
 # to prove the I3 gate actually bites. They are removed in a `finally`; this pattern is
 # the second line of defence, so a probe that survives a hard kill cannot be committed.
 *.gate-probe.ts
+
+# SVG frame recordings from `pnpm --filter @hotelsim/game record` (G-035). Same rule as the
+# ndjson above and for the same reason: a recording is a derived artefact of a seed and a
+# command log, it is regenerated in seconds, and a run of 2,880 ticks writes twenty-six
+# frames plus a contact sheet. Watch it, write what you saw in `JOURNAL.md`, delete it.
+recording/

@@ -33,6 +33,10 @@ export {
   speedLadderSchema,
   speedRungNameSchema,
   speedRungSchema,
+  // G-035, ADR-0046 §6: the optional sprite reference that makes the computed contrast
+  // ladder a FALLBACK rather than the rule. Exported so a host can validate an atlas key
+  // with the same schema the tables use.
+  spriteRefSchema,
 } from './schema.js';
 export type { ContentRegistry } from './registry.js';
 export {

@@ -63,3 +63,39 @@ export function loadContent(): BoundContent {
 export function loadSpeedLadder(): readonly SpeedRung[] {
   return parseSpeedLadder(speedLadderJson, 'speed-ladder.json');
 }
+
+/**
+ * THE OPTIONAL SPRITE REFERENCES, keyed by content id (G-035, ADR-0046 §6).
+ *
+ * ---------------------------------------------------------------------------------------
+ * WHY IT IS A SECOND FUNCTION AND NOT A FIELD ON `BoundContent`.
+ *
+ * `BoundContent` is the simulation's shape (`packages/sim/src/content.ts` declares
+ * `RoomTypeData` structurally), and **`packages/sim` may not gain a field about pictures**.
+ * I1 is that the sim knows nothing about a renderer, and a `sprite` key on the type the tick
+ * loop reads would be exactly that knowledge — one field away from the boundary the whole
+ * design rests on. So the reference lives on `packages/content`'s own `RoomType`, which the
+ * SIM never sees and the HOST does, and this function is where the host reads it.
+ *
+ * IT PARSES THE TABLES A SECOND TIME, ONCE, AT STARTUP. That is a deliberate trade against
+ * threading a second return value through `loadContent`: the tables are two small JSON
+ * documents, this runs once before a world exists, and the alternative complicates the one
+ * function in this layer whose job is "content that reaches the renderer earns no laxer path
+ * into the simulation than content that reaches the CLI". Same parsers, same schemas, same
+ * all-or-nothing discipline — a document that fails here failed above too.
+ *
+ * TODAY IT RETURNS AN EMPTY MAP, because no shipped table declares a sprite and there is no
+ * atlas to hold one (ADR-0046 §6: "do not buy or commission anything yet"). The SEAM is the
+ * deliverable — see `view/appearance.ts`.
+ * ---------------------------------------------------------------------------------------
+ */
+export function loadSpriteRefs(): ReadonlyMap<string, string> {
+  const refs = new Map<string, string>();
+  for (const roomType of parseContent(roomTypesJson, 'room-types.json').roomTypes) {
+    if (roomType.sprite !== undefined) refs.set(roomType.id, roomType.sprite);
+  }
+  for (const itemType of parseItemTypes(itemTypesJson, 'item-types.json')) {
+    if (itemType.sprite !== undefined) refs.set(itemType.id, itemType.sprite);
+  }
+  return refs;
+}

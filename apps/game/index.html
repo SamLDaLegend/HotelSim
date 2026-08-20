@@ -29,6 +29,7 @@
       }
       #hud,
       #tools,
+      #floors,
       #transport {
         display: flex;
         flex-wrap: wrap;
@@ -95,6 +96,10 @@
         <!-- The build tools sit under the HUD and above the stage: the player reads the
              cash, picks a room, then clicks the building. -->
         <div id="tools"></div>
+        <!-- ONE FLOOR IS DRAWN AT A TIME (HOTELSIM.md §1, ADR-0046), so the switcher is a
+             first-class control rather than a corner of the toolbar. It sits directly above
+             the stage because it changes what the stage shows and nothing else. -->
+        <div id="floors"></div>
       </div>
       <div id="stage"></div>
       <div>

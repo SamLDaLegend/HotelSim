@@ -1,37 +1,48 @@
-// THE RENDER LAYER (G-030). A live simulation, drawn as a side-on cross-section.
+// THE RENDER LAYER (G-030, G-031a — rebuilt in ISOMETRIC at G-035).
 //
 // ---------------------------------------------------------------------------------------
-// WHY THIS DIRECTORY IS OPEN, BECAUSE THE CHARTER SAID IT WOULD NOT BE UNTIL M5.
+// WHY THIS FILE EXISTS TWICE, WHICH IS THE LARGEST RULING IN THE PROJECT.
 //
-// ADR-0018 (human, 2026-08-12) supersedes `HOTELSIM.md:66`. §9's stop condition is not in
-// the way and never was: it names work on the render layer before **M0** sign-off, which
-// happened 2026-08-07. The argument is evidence rather than preference — ADR-0017, the
-// largest design change in this project, came from the human's intuition about how the game
-// should FEEL, arrived at goal 23, and re-opened behaviour in four earlier goals. Design
-// feedback is the scarce input here, and playing is how it is generated.
+// ADR-0046 (human, 2026-08-16) supersedes `HOTELSIM.md` §1's "side-on cross-section view,
+// not isometric" — a projection choice made before the first line of code, which nothing in
+// the loop was ever pointed at, and which survived thirty-two goals because every gate,
+// critic and WATCH takes the charter as given. `apps/game` was written off as CODE. Its
+// DESIGN was not: the queued-command ghosts, the recorded-refusal flash, the transport strip
+// reading the content ladder, the HUD's `last` and `refused` fields, and the deliberate
+// choice NOT to grey out illegal moves are all rebuilt here rather than redesigned (§3).
 //
-// THE RULE THAT DEFINES THIS LAYER, AND G-031a ADDS THE SECOND HALF:
+// AND WHY IT IS THIS GOAL RATHER THAN A LATER ONE. ADR-0023 made `apps/game` the surface of
+// record; writing it off left the project with NO VALID WATCH SURFACE, and ADR-0046 §7 rules
+// that a behavioural goal shipping without an instrument is an ESCALATION rather than a
+// recorded debt. There has been an open escalation since 2026-08-16 for exactly that. THIS
+// GOAL ENDS THAT CONDITION; that is its purpose, and polish is not.
+//
+// THE RULE THAT DEFINES THIS LAYER, UNCHANGED BY THE PROJECTION:
 //
 //   Render reads state. Input dispatches commands. Neither ever mutates the sim.
 //
-// G-030 read state and dispatched nothing. G-031a lets the player build and demolish, and
 // EVERY PLAYER ACTION IS AN EXISTING COMMAND — `buildRoom` and `demolishRoom`, both defined
-// since G-008, neither changed here. This goal adds no simulation behaviour: no field on
-// `World`, no argument to `stepTick`, no migration, no new rule about what a legal placement
-// is. If it had needed one, the goal's own first criterion says it stops.
+// since G-008, neither changed here. No field on `World`, no argument to `stepTick`, no
+// migration, no new rule about what a legal placement is.
 //
-// THE SPEED CONTROL AND PAUSE ARE PLAYER ACTIONS AND ARE NOT COMMANDS, which is why the
-// criterion is worded about actions that change simulation state. They change HOW MANY ticks
-// are run, never WHAT a tick does — and the proof is mechanical rather than asserted: they
-// do not appear in `session.log`, because the only things that enter it are the commands
-// `commandsFor` hands to a tick.
+// THE SPEED CONTROL, PAUSE AND THE FLOOR SWITCHER ARE PLAYER ACTIONS AND ARE NOT COMMANDS.
+// They change HOW MANY ticks are run and WHAT IS DRAWN, never WHAT a tick does — and the
+// proof is mechanical rather than asserted: none of them appears in `session.log`, because
+// the only things that enter it are the commands `commandsFor` hands to a tick.
 // ---------------------------------------------------------------------------------------
 
-import { createWorld } from '@hotelsim/sim';
+import { createWorld, entranceCell } from '@hotelsim/sim';
 import { Application } from 'pixi.js';
-import { loadContent, loadSpeedLadder } from './content.js';
+import { loadContent, loadSpeedLadder, loadSpriteRefs } from './content.js';
 import { advance, createDriver, restIdle } from './driver.js';
-import { renderGuestPositions, renderHud, renderTools, renderTransport, wordsOf } from './hud.js';
+import {
+  renderFloors,
+  renderGuestPositions,
+  renderHud,
+  renderTools,
+  renderTransport,
+  wordsOf,
+} from './hud.js';
 import { actionAt, attachPointer, toolLabel } from './input.js';
 import type { Point, Tool } from './input.js';
 import { fastestRung, rungById } from './ladder.js';
@@ -45,11 +56,13 @@ import {
   observeTick,
   recordFrame,
 } from './session.js';
-import { createScene } from './view/scene.js';
+import { cellAt, floorsOf, guestsOnFloor, viewFor } from './view/camera.js';
+import type { View } from './view/camera.js';
+import { SHIPPED_ORIENTATION } from './view/iso.js';
 import { createOverlay } from './view/overlay.js';
-import { cellAt } from './view/layout.js';
-import type { Layout } from './view/layout.js';
+import { createPainter } from './view/paint.js';
 import { INK } from './view/palette.js';
+import { createScene } from './view/scene.js';
 
 /**
  * The seed the hotel opens on.
@@ -57,7 +70,7 @@ import { INK } from './view/palette.js';
  * 7 because it is the seed this project's own observations were taken at — ADR-0017's
  * measurements and G-017's watched recording are both `--seed 7`, so a first play session is
  * comparable with the notes that exist. It is a scenario choice, not a balance number; when
- * the player can start a game (G-031 and beyond) it becomes theirs to pick.
+ * the player can start a game (C1's scenarios, M6) it becomes theirs to pick.
  */
 const SEED = 7;
 
@@ -76,10 +89,12 @@ const hudHost = hostElement('hud');
 const transportHost = hostElement('transport');
 const guestsHost = hostElement('guests');
 const toolsHost = hostElement('tools');
+const floorsHost = hostElement('floors');
 
 // Content first, and a failure here throws before a world exists — the ordering `cli.ts:61`
 // uses, for the reason it gives: a half-loaded registry must never reach a tick.
 const content = loadContent();
+const sprites = loadSpriteRefs();
 const rungs = loadSpeedLadder();
 
 const world = createWorld(SEED, content);
@@ -88,34 +103,52 @@ const driver = createDriver(world);
 const session = createSession();
 
 const app = new Application();
-await app.init({ background: INK.background, antialias: false, resizeTo: stage, autoDensity: true, resolution: window.devicePixelRatio });
+await app.init({
+  background: INK.background,
+  antialias: true,
+  resizeTo: stage,
+  autoDensity: true,
+  resolution: window.devicePixelRatio,
+});
 stage.append(app.canvas);
 
-const scene = createScene(content);
-app.stage.addChild(scene.container);
+const scene = createScene(content, sprites);
+const painter = createPainter(app.renderer);
+app.stage.addChild(painter.container);
 const overlay = createOverlay();
-app.stage.addChild(overlay.container);
 
 // ---------------------------------------------------------------------------------------
-// TRANSPORT STATE — the whole of what this layer remembers between frames, and none of it
-// is simulation state. A reload would lose the selected rung and nothing else; a room's
-// occupancy, a guest's cell and the balance all live in the world, which is what makes this
-// layer replaceable (I1: "if the human later wants Godot, only apps/game is thrown away").
+// TRANSPORT AND CAMERA STATE — the whole of what this layer remembers between frames, and
+// none of it is simulation state. A reload would lose the selected rung, the tool, the
+// pointer and WHICH FLOOR IS BEING LOOKED AT, and nothing else; a room's occupancy, a guest's
+// cell and the balance all live in the world, which is what makes this layer replaceable
+// (I1: "if the human later wants Godot, only apps/game is thrown away").
 
 let selectedRungId: string | null = fastestRung(rungs)?.id ?? null;
 let paused = false;
 let fps = 0;
-// AND THE PLAYER'S OWN UI STATE, which is the rest of what this layer remembers: which tool
-// is held and where the pointer is. A reload loses both. What the player BUILT is in the
-// world, because it got there by being a command.
 let tool: Tool = null;
 // THE POINTER IS KEPT IN PIXELS, NEVER AS A CELL. A cell resolved at `pointermove` is
-// resolved against the layout as it was then, and the layout is rebuilt every frame from the
-// world's extent — so a build that grows the extent moves the click target out from under a
+// resolved against the camera as it was then, and the camera is rebuilt every frame from the
+// floor's extent — so a build that grows the extent moves the click target out from under a
 // motionless pointer while the outline stays put. Both are resolved below, in the frame,
-// through the layout that frame is drawing with. See `input.ts` for the measurement.
+// through the view that frame is drawing with.
 let pointer: Point | null = null;
-let layout: Layout | null = null;
+let view: View | null = null;
+
+/**
+ * WHICH FLOOR IS ON SCREEN. Render state, and the one piece of it this projection adds.
+ *
+ * It opens on the ENTRANCE'S floor rather than on the highest or the lowest, because that is
+ * where an arriving guest stands and therefore where the guest loop is visible from tick one.
+ * `entranceCell` is a total function of the world's own bounds (G-023a), so this is right on
+ * a plot that does not contain floor 0.
+ */
+let floor = ((): number => {
+  const available = floorsOf(driver.world);
+  const wanted = entranceCell(driver.world.grid).floor;
+  return available.includes(wanted) ? wanted : (available[0] ?? wanted);
+})();
 
 function transport(): void {
   renderTransport(transportHost, rungs, selectedRungId, paused, {
@@ -135,6 +168,16 @@ function transport(): void {
 }
 transport();
 
+function floors(): void {
+  renderFloors(floorsHost, floorsOf(driver.world), floor, (n) => guestsOnFloor(driver.world, n), {
+    onSelect: (picked) => {
+      floor = picked;
+      floors();
+    },
+  });
+}
+floors();
+
 // ---------------------------------------------------------------------------------------
 // THE PLAYER'S TOOLS AND THE POINTER.
 //
@@ -152,10 +195,6 @@ function tools(): void {
       tools();
     },
     onExport: () => {
-      // A download rather than a console log: this file is G-031b's fixture, and a human
-      // following the WATCH card should end up with it on disk without being asked to open
-      // devtools. `URL.revokeObjectURL` on the next frame — the click has already been
-      // delivered by then.
       const blob = new Blob([exportSession(session, SEED, driver.world)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -173,17 +212,16 @@ attachPointer(app.canvas, {
     pointer = point;
   },
   onClick: (point) => {
-    // Resolved against the layout the LAST FRAME DREW — the picture the player was looking
-    // at, and the same `Layout` OBJECT the outline was drawn on. Not the same call: this is
-    // a second `cellAt` on a second point source, and what makes the two agree is that
-    // `layout` is assigned in exactly one place (see the frame, below).
-    if (layout === null) return;
-    // A `pointerdown` can arrive with no `pointermove` before it — touch, pen, or the
-    // pointer re-entering after `pointerleave` — and then the outline was showing nothing.
-    // Adopting the click's own point means the next frame draws the outline where the click
-    // just went, rather than leaving the player with no picture of what they hit.
+    // Resolved against the view the LAST FRAME DREW — the picture the player was looking at,
+    // and the same `View` OBJECT the outline was drawn on. Not the same call: this is a second
+    // `cellAt` on a second point source, and what makes the two agree is that `view` is
+    // assigned in exactly one place (see the frame, below).
+    if (view === null) return;
+    // A `pointerdown` can arrive with no `pointermove` before it — touch, pen, or the pointer
+    // re-entering after `pointerleave` — and then the outline was showing nothing. Adopting
+    // the click's own point means the next frame draws the outline where the click just went.
     pointer = point;
-    const action = actionAt(driver.world, content, tool, cellAt(layout, point.x, point.y));
+    const action = actionAt(driver.world, content, tool, cellAt(view, point.x, point.y));
     if (action !== null) enqueue(session, action);
   },
   onCancel: () => {
@@ -193,10 +231,10 @@ attachPointer(app.canvas, {
   },
 });
 
-// A HIDDEN TAB IS PAUSED. The companion half of `MAX_BACKLOG_SECONDS` in `driver.ts`: a
-// game that runs on while nobody is looking spends simulated days the player never saw, and
-// then the clamp has to decide how much of that to throw away. Not watching is a clearer
-// answer than either.
+// A HIDDEN TAB IS PAUSED. The companion half of `MAX_BACKLOG_SECONDS` in `driver.ts`: a game
+// that runs on while nobody is looking spends simulated days the player never saw, and then
+// the clamp has to decide how much of that to throw away. Not watching is a clearer answer
+// than either.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && !paused) {
     paused = true;
@@ -206,11 +244,25 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('keydown', (event) => {
-  if (event.key !== ' ') return;
+  if (event.key === ' ') {
+    event.preventDefault();
+    paused = !paused;
+    restIdle(driver);
+    transport();
+    return;
+  }
+  // FLOORS ON THE ARROW KEYS, so a watcher can walk the building without leaving the picture.
+  // It moves to the next floor THAT EXISTS rather than by one number, because the plot is 23
+  // floors deep and almost all of them are empty.
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
   event.preventDefault();
-  paused = !paused;
-  restIdle(driver);
-  transport();
+  const available = floorsOf(driver.world);
+  const at = available.indexOf(floor);
+  const next = available[at + (event.key === 'ArrowUp' ? 1 : -1)];
+  if (next !== undefined) {
+    floor = next;
+    floors();
+  }
 });
 
 // ---------------------------------------------------------------------------------------
@@ -222,14 +274,15 @@ window.addEventListener('keydown', (event) => {
 // looked up from the ladder every frame by ID — no rung's value is held anywhere in this
 // layer (see `ladder.ts`).
 
+let lastFloorsDrawn = -1;
+
 app.ticker.add(() => {
   fps = app.ticker.FPS;
   const rung = selectedRungId === null ? undefined : rungById(rungs, selectedRungId);
   const speed = paused || rung === undefined ? null : rung.ticksPerRealSecond;
   // EVERY FRAME RECORDS WHAT IT SPENT, INCLUDING THE ONES THAT SPENT NOTHING. A paused or
   // stalled frame earns zero ticks and that zero is part of the witness: a log whose frames
-  // all consumed the same number of ticks did not come out of a real-time driver, and
-  // G-031b's replay is what asserts it.
+  // all consumed the same number of ticks did not come out of a real-time driver.
   let spent = 0;
   if (speed === null) restIdle(driver);
   else {
@@ -245,35 +298,45 @@ app.ticker.add(() => {
   recordFrame(session, spent);
   expireFlashes(session, driver.world.tick);
 
-  const report = scene.draw(
-    driver.world,
-    app.renderer.width / app.renderer.resolution,
-    app.renderer.height / app.renderer.resolution,
-  );
-  // THE ONLY ASSIGNMENT TO `layout` IN THIS FILE, AND THE POINTER FIX RESTS ON THAT BEING
-  // TRUE. The outline below and the click handler above each call `cellAt` themselves — two
-  // calls, two point sources — so what makes them agree is that they read one `Layout`
-  // object, written here and nowhere else. A second assignment (a resize handler is the
-  // obvious candidate) would let a click resolve against a layout the player never saw,
-  // which is the defect the pixel-not-cell change repaired. If one is ever needed, it goes
-  // through this line.
-  layout = report.layout;
-  overlay.draw(report.layout, {
-    hovered: pointer === null ? null : cellAt(report.layout, pointer.x, pointer.y),
+  const width = app.renderer.width / app.renderer.resolution;
+  const height = app.renderer.height / app.renderer.resolution;
+  // THE ONLY ASSIGNMENT TO `view` IN THIS FILE, AND THE POINTER FIX RESTS ON THAT BEING TRUE.
+  // The outline below and the click handler above each call `cellAt` themselves — two calls,
+  // two point sources — so what makes them agree is that they read one `View` object, written
+  // here and nowhere else. A second assignment (a resize handler is the obvious candidate)
+  // would let a click resolve against a camera the player never saw.
+  view = viewFor(driver.world, floor, SHIPPED_ORIENTATION, width, height);
+  const frame = scene.build(driver.world, view);
+  const marks = overlay.build(view, {
+    hovered: pointer === null ? null : cellAt(view, pointer.x, pointer.y),
     toolLabel: toolLabel(tool),
     queued: session.queue,
     flashes: session.flashes,
     words: wordsOf,
   });
+  painter.paint(frame.shapes, marks.shapes, [...frame.labels, ...marks.labels]);
+
   renderHud(hudHost, {
     world: driver.world,
     content,
-    crowdedOut: report.crowdedOut,
-    invalidRooms: report.invalidRooms,
-    rooms: report.rooms,
+    crowdedOut: frame.report.crowdedOut,
+    invalidRooms: frame.report.invalidRooms,
+    rooms: frame.report.rooms,
+    guestsElsewhere: frame.report.guestsElsewhere,
     fps,
     queued: session.queue.length,
     lastAction: session.last,
   });
   renderGuestPositions(guestsHost, driver.world, GUEST_POSITIONS_SHOWN);
+
+  // THE FLOOR SWITCHER IS REBUILT WHEN THE SET OF FLOORS CHANGES, NOT EVERY FRAME. It carries
+  // live guest counts, so it does have to be refreshed — but replacing a row of DOM buttons
+  // sixty times a second makes them unclickable, which is the sort of defect that reads as
+  // "the UI is broken" and is actually a redraw policy. Once a simulated hour is enough for a
+  // count that changes when somebody walks through a door.
+  const beat = Math.floor(driver.world.tick / 60);
+  if (beat !== lastFloorsDrawn) {
+    lastFloorsDrawn = beat;
+    floors();
+  }
 });

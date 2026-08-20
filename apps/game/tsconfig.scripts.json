@@ -1,0 +1,9 @@
+{
+  "//": "THE RECORDER'S OWN TSCONFIG (G-035). `tsconfig.json` is the BROWSER build: DOM lib, `types: []`, no Node. `scripts/record-frames.ts` writes files, so it needs Node types and must not be allowed to drag them into the app. Two configs is the cheap way to say that; `apps/game`'s `typecheck` runs both, so neither is unchecked.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts"]
+}

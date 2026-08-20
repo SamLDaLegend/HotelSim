@@ -152,6 +152,60 @@ function amenityCell(index: number, bounds: GridBounds, entrance: Cell): Cell {
 }
 
 /**
+ * THE CORRIDORS THE PLAN DECLARES, on every floor this scenario builds on (G-035, G-034b).
+ *
+ * ---------------------------------------------------------------------------------------
+ * THEY WERE ALWAYS THERE AND NOBODY HAD WRITTEN THEM DOWN. `COLUMNS_PER_ROOM` above puts an
+ * empty column between every pair of rooms and calls it a corridor in prose — `report.ts` has
+ * said the same since G-009: *"the empty column between them IS the corridor until M3 gives
+ * corridors an identity of their own."* G-034b gave them one. This is the host saying out
+ * loud what its layout has always meant.
+ *
+ * WHY IT MATTERS TO THE VIEW, WHICH IS THIS GOAL'S SUBJECT. G-034b's REFLECT records that **a
+ * room reported `noCorridor` looks identical to a working one unless the plan is on screen**,
+ * and a WATCH surface that cannot show why a room is invalid is not doing its job. A hotel
+ * that declares no corridors is OPEN PLAN — every floor walkable everywhere, the rule
+ * dormant, nothing to draw and nothing to learn. Declaring them turns the rule on, gives the
+ * renderer something to draw, and makes `noCorridor` a state a player can reach by building
+ * somewhere silly and can fix by building somewhere sensible.
+ *
+ * IT CHANGES NO EXISTING VERDICT ON THE SHIPPED LAYOUT, and that is checkable rather than
+ * hoped for: every room this file places has a declared corridor beside it by construction —
+ * the corridors go exactly in the gaps the room stride leaves. If that ever stopped being
+ * true, every room on the floor would report `noCorridor` at once and the HUD would say so on
+ * the first frame.
+ *
+ * `layCorridor` IS AN EXISTING COMMAND AND NO SIMULATION BEHAVIOUR IS ADDED HERE. It is
+ * idempotent, it costs nothing (a corridor's price is a designer's number and there is none
+ * yet), and it takes no entity id — so it moves no id and changes nobody's provider choice,
+ * which is the property `corridors.ts` was designed around.
+ * ---------------------------------------------------------------------------------------
+ */
+function corridorCommands(entrance: Cell, bounds: GridBounds, amenities: number): readonly Command[] {
+  const commands: Command[] = [];
+  const lay = (floor: number, column: number): void => {
+    if (column < bounds.minColumn || column > bounds.maxColumn) return;
+    if (floor < bounds.minFloor || floor > bounds.maxFloor) return;
+    commands.push({ kind: 'layCorridor', at: { floor, column, row: entrance.row } });
+  };
+  // THE LODGING FLOORS: rooms sit on the ODD offsets (`lodgingCell` adds 1), so the walkway is
+  // every EVEN one — including the entrance's own column, which is the lobby.
+  for (let floor = 0; floor < LODGING_FLOORS; floor += 1) {
+    for (let i = 0; i <= LODGING_ROOMS_PER_FLOOR; i += 1) {
+      lay(entrance.floor + floor, entrance.column + COLUMNS_PER_ROOM * i);
+    }
+  }
+  // THE AMENITY FLOOR: amenities sit on the EVEN offsets (`amenityCell` adds none), so the
+  // walkway is every ODD one. Mirrored, and derived from the same stride rather than written
+  // out — a change to `COLUMNS_PER_ROOM` moves the rooms and the corridors together.
+  const amenityFloor = Math.max(bounds.minFloor, entrance.floor - 1);
+  for (let i = 0; i < amenities; i += 1) {
+    lay(amenityFloor, entrance.column + COLUMNS_PER_ROOM * i + 1);
+  }
+  return commands;
+}
+
+/**
  * The commands that stand the hotel up, all at tick 0.
  *
  * Rooms carry their furniture, read from the injected content per room type — an amenity
@@ -180,6 +234,10 @@ export function seedCommands(content: BoundContent, bounds: GridBounds): readonl
       amenityIndex += 1;
     }
   }
+  // AFTER THE ROOMS, AND THE ORDER IS STATED BECAUSE IT IS ASKED. It makes no difference to
+  // the result — a corridor is a declaration about a cell and says nothing about what stands
+  // there — but a reader should not have to work that out from `corridors.ts` to be sure.
+  commands.push(...corridorCommands(entrance, bounds, amenityIndex));
   return commands;
 }
 

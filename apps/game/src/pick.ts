@@ -2,7 +2,7 @@
 //
 // Two questions, both answered by READING state and neither by deciding anything:
 //
-//   which cell is under this point   -> `cellAt` in `view/layout.ts`, the projection's own
+//   which cell is under this point   -> `cellAt` in `view/camera.ts`, the projection's own
 //                                       inverse, because a second description of where a
 //                                       cell is would drift from the first
 //   which room stands on that cell   -> here

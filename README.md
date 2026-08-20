@@ -1,7 +1,9 @@
 # HotelSim
 
-A casual, cartoon-styled hotel building and management sim. **Side-on cross-section** view
-(SimTower / Project Highrise), not isometric.
+A casual, cartoon-styled hotel building and management sim. **Isometric floorplan view**
+(Theme Hospital / RollerCoaster Tycoon) — multi-floor, **one floor drawn at a time**, floors
+switchable. *(Ruled 2026-08-16, ADR-0046: this line read "side-on cross-section, not
+isometric" from before the first line of code until goal 33.)*
 
 `HOTELSIM.md` is the source of truth for how this project is built and what may not change.
 `CLAUDE.md` is the short form. This file is the commands.
@@ -14,12 +16,33 @@ pnpm dev            # opens the game in a browser: http://localhost:5180
 ```
 
 `pnpm dev` starts Vite on `apps/game` and opens a window showing the shipped hotel running
-in real time. **Placeholder art** — flat coloured rectangles with clear silhouettes
-(ADR-0014); real art is a separate track and nothing waits on it.
+in real time. **Placeholder art** — flat coloured isometric prisms with clear silhouettes
+(ADR-0014, ADR-0046 §6); real art is a separate track and nothing waits on it.
 
-What you can do in it today (G-031a): **watch, choose a speed, and build.** The transport
-strip carries one button per rung of the play-speed ladder, labelled by content, plus pause
-(`space`).
+**Tiles are 2:1, 128x64 logical, authored at 2x** (ADR-0047 A2 — locked). **Wall height is
+64px and is PROVISIONAL**: the derivation is sound, but wall height is a *perceptual*
+property and ADR-0013 says a perceptual criterion needs a perceptual check. It ships to be
+looked at (ADR-0047 amendment §1, human ruling).
+
+What you can do in it today (G-031a, rebuilt in isometric at G-035): **watch, choose a
+speed, switch floors, and build.** The transport strip carries one button per rung of the
+play-speed ladder, labelled by content, plus pause (`space`).
+
+**Only one floor is drawn at a time.** Guests on other floors are not on screen, so the
+floor strip carries a per-floor guest count and the HUD says how many are elsewhere — a
+state the simulation can reach must be a state the UI can express.
+
+### Recording a run
+
+```bash
+pnpm --filter @hotelsim/game record -- --ticks 2880 --every 480 --out ./recording
+```
+
+Steps the shipped scenario headlessly, builds **the same frames the browser builds**
+(`view/scene.ts` returns primitives; `view/paint.ts` draws them with Pixi and
+`scripts/svg.ts` draws them as SVG), and writes one `.svg` per floor per sampled tick plus a
+`contact-sheet.html`. **It is off by default, on nobody's path, and no gate runs it.** It is
+not a viewer and must not grow into one — the browser is the viewer.
 
 ### Playing
 
@@ -30,6 +53,7 @@ strip carries one button per rung of the play-speed ladder, labelled by content,
 | **demolish**, then click a room | queues a `demolishRoom` and refunds part of what it cost |
 | `Escape`, or **none** | put the tool down. No tool is held at start, so a stray click does nothing |
 | **export session** | downloads the seed, the command log and the state hash |
+| the **floor** strip, or the up/down arrows | switches which floor is drawn. The number beside a floor is how many guests are standing on it |
 
 **Every player action is one of the simulation's existing commands**, and the speed control
 is deliberately not among them: changing speed changes how many ticks are run, never what a
