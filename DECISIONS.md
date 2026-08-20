@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036c is done: rooms are editable and can be private, save v20. B6 bites — one string of content different, and the same hotel at the same seed produces different engagement and a divergent hash. A shrunk room DROPS items and both alternatives were driven rather than argued. ADR-0052 (human): wall visibility becomes a CONTROL with three positions, amending ADR-0047 A4 — 24 stays the default, and none of WATCH #14's measurement is withdrawn; what changes is the conclusion drawn from it. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-16, G-036c is done and the scoring goal is SPLIT at PLAN into three after four BLOCKERs. The big one CORRECTS ADR-0051: capacity has NO READER — one in the whole tree, a test re-asserting its own schema — and capacity 99 on every room type gives a byte-identical report. Making it mean anything is MULTI-OCCUPANCY inside a throwing invariant, and the shipped schema forbids strangers sharing a room by name. ESCALATED: does a party mechanic enter M3, or does capacity wait for the archetype work? Also measured before any code: the review channel is binary per tick and at 12 rooms every guest is already at the ceiling, so a quality fold that raises rates cannot improve a zero. Fourteen rows green. Unreliable: 1 gate, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4592,3 +4592,66 @@ reading to watch its own mechanic** — which is the trigger, not the calendar.
 a neighbouring room's floor may read as mud rather than as glass. **Parked with its falsification
 test — build all three positions, look at the same frame in each, and if transparent is not legible
 it ships as two positions rather than being tuned until it is.**
+
+---
+
+## ADR-0053 — ADR-0051's PREMISE WAS FALSE. `capacity` has no reader, and the fix is a MECHANISM.
+
+**Date**: 2026-08-16 · **Status**: accepted · **Corrects ADR-0051**, found by `ai-critic` at G-037's
+plan review, before any code.
+
+### What ADR-0051 said, and what the tree says
+
+ADR-0051 said capacity *"is still a room-TYPE field… **the field kept working** and no gate asks
+whether a number belongs to the TYPE or to the THING."*
+
+> **IT HAS NEVER WORKED.** `grep -rn "\.capacity[^T]"` over `packages`, `tools` and `apps` returns
+> **exactly one reader**: `content-loader.test.ts:66`, a test re-asserting the schema's own
+> `z.int().min(1)`. **Nothing in `packages/sim` reads it.**
+
+**Occupancy is `search.held` — a MEMBERSHIP set — and `claimEntity` THROWS** on a second holder
+(*"entity N is held by more than one guest"*), while `countOrphanedReservations` counts one as an
+**orphan**. **A room holds one guest by enforced invariant, whatever its type says.**
+
+**Measured, not reasoned** — capacity set to 99 on all four shipped room types, mutation restored
+sha256-identical: `sim:run --days 30 --seed 7 --rooms 6 --amenities 3` produced a **byte-identical
+report** — arrived 360, checkedOut 192, gaveUp 161, identical need rows, identical review
+distribution, identical ledger — with only the state hash moving, and that only because
+`contentHash` is the content fingerprint. **Six bedrooms × 99 housed nobody extra.** Under `pnpm
+test`: **8 red of 2,449, every one a hash literal. Zero behavioural assertions moved.**
+
+### So the correction, and it changes the size of the work
+
+**This is not "the same fold answering a different question".** Deriving a number nothing consumes
+changes nothing. **Making it consume requires MULTI-OCCUPANCY**: `held` becoming a count,
+`claimEntity`'s throw becoming a bound, `countOrphanedReservations` re-defined, `findFreeRoom`'s
+per-tick `exhausted` memo re-derived (it means *"no free provider"* where free means *unheld*), and
+`buildRoomSearch` rebuilding counts rather than membership.
+
+> **A new mechanism inside a throwing store invariant, not a fold. It is its own goal.**
+
+### AND THE SHIPPED SCHEMA ALREADY FORBIDS THE MOTIVATING EXAMPLE
+
+`schema.ts:153-155`, and it is reasoned rather than incidental:
+
+> *"`capacity` is the size of the **party** a room holds, NOT a count of unrelated bookings. A party
+> is one guest at M0. **Two strangers sharing a room is not what this number means and would read as
+> stupid to a watching player (§6.1).**"*
+
+**There is no party concept anywhere in `packages/sim`** — guests spawn individually. So *"a king
+size bed gives capacity 2"*, implemented over today's guest model, **is two strangers in one bed**,
+which that file forbids by name.
+
+**The human's design intent is not overruled** — a bigger room holding more people is right, and it
+is what makes room size mean something. **What is ruled is that it needs a PARTY / GROUP-ARRIVAL
+mechanic first**, and that mechanic is nowhere in M3. **Capacity-that-means-something is therefore
+downstream of a goal nobody has written**, and pretending otherwise would ship a derived number with
+no consumer — the exact shape this project refused for `forbidden adjacencies` two goals ago.
+
+### What this says about how the error happened
+
+**ADR-0051 was written from a screen observation plus a grep of the schema, and never asked who
+READS the field.** The observation was correct — every room does hold one guest. **The explanation
+was invented**, and it was plausible enough that nobody checked, including me. **Fourth time this
+session that a claim about the tree was asserted from memory**, and the first where the claim was
+load-bearing for a goal's scope.

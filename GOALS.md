@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036c is done: rooms are editable and can be private, save v20. B6 bites — one string of content different, and the same hotel at the same seed produces different engagement and a divergent hash. A shrunk room DROPS items and both alternatives were driven rather than argued. ADR-0052 (human): wall visibility becomes a CONTROL with three positions, amending ADR-0047 A4 — 24 stays the default, and none of WATCH #14's measurement is withdrawn; what changes is the conclusion drawn from it. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-16, G-036c is done and the scoring goal is SPLIT at PLAN into three after four BLOCKERs. The big one CORRECTS ADR-0051: capacity has NO READER — one in the whole tree, a test re-asserting its own schema — and capacity 99 on every room type gives a byte-identical report. Making it mean anything is MULTI-OCCUPANCY inside a throwing invariant, and the shipped schema forbids strangers sharing a room by name. ESCALATED: does a party mechanic enter M3, or does capacity wait for the archetype work? Also measured before any code: the review channel is binary per tick and at 12 rooms every guest is already at the ceiling, so a quality fold that raises rates cannot improve a zero. Fourteen rows green. Unreliable: 1 gate, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2435,35 +2435,121 @@ re-issued draw, and what happens to items that fall outside a shrunk footprint. 
 mutability into a write-once schema is the painful direction** (ADR-0047 B4), which is why the
 footprint ships mutable-capable at G-036b even though nothing edits it until here.
 
-## G-037 — A room is scored on what is in it, and it holds what it can fit
+## G-037 — SPLIT at PLAN, 2026-08-16. Four BLOCKERs; the seam is named and TAKEN.
+Status: **split into G-037a / G-037b / G-037c.** `ai-critic`'s plan review, before any code.
 
-**CAPACITY IS DERIVED HERE TOO (ADR-0051, human).** `capacity` is still a room-TYPE field, so a
-room the player drew nine cells wide holds exactly what a one-cell room of the same type holds.
-**ADR-0046 §4.2's inversion is half-finished**: footprint moved to the instance at G-036b and price
-at ADR-0047 B7; **capacity did not move and nobody noticed**, because the field kept working and no
-gate asks whether a number belongs to the TYPE or to the THING.
+**THE DEPENDENCY RUNS ONE WAY**: capacity and pricing both need the fold to exist and neither is
+expressible before it. **They touch disjoint surfaces** — the fold is content plus a derived read,
+capacity is the guest store's invariants, pricing is the save. **G-036 was split for less, and
+G-013 is the cited case of declining a named seam and paying nine instances of one defect class.**
 
-**It is the same fold over the same inputs** — function, size, decor, condition, adjacency —
-**answering a different question. Two folds over one input list, not two mechanisms**, which is why
-it lands here rather than beside here. **Derived at read time from footprint and placed items, so
-no save field and no migration**; caching it in state for tick cost would be a separate decision
-with its own migration, and is parked rather than assumed.
+## G-037a — A room is scored on what is in it
+Status: **PLANNED, not started.**
+Milestone: M3 · Owner pair: ai-engineer / ai-critic
+Statement: the quality fold — **function, size, decor, adjacency** — over a workload that expresses
+  it, wired to ONE consequence. Every weight and threshold is content (I3).
 
-**And it is what makes room SIZE mean something for occupancy**: three games rooms side by side
-should be one big games room the player furnishes, and a bedroom with a king bed should sleep two.
-**Capacity-per-type quietly makes size cosmetic — the opposite of ADR-0046's premise.**
-Status: **PLANNED.** The fold over placed items, in the shape Two Point uses.
-**Inputs pinned now because they determine what fields exist** (C2): **function** (binary gate on
-required items) · **size** (diminishing returns, with an upkeep cost so bigger is a trade) ·
-**decor** (attractiveness-carrying optional items) · **condition** (B5, field reserved at G-034,
-built at M4) · **adjacency** (penalties and bonuses).
-**EVERY WEIGHT, THRESHOLD AND BAND BOUNDARY IS JSON (I3)** — the first mechanic where a designer
-will want to tune without a rebuild, and **ADR-0045's per-need banding is the precedent for how
-such a fold is written and falsified.**
-**B7 per-INSTANCE pricing lands here.** **C3: satisfaction is PRIMARY**, price ceiling and
-reputation secondary — because satisfaction is the consequence the existing sim can already
-consume, which makes it the shortest path from a room score to something observable.
-**Triggers G-028's re-sweep.**
+**THERE IS NO WORKLOAD IN THIS PROJECT IN WHICH A ROOM HAS MORE THAN ONE CELL OR MORE THAN ONE
+ITEM, so every measurement would be taken at the fold's DEGENERATE POINT.** The CLI harness
+schedules `buildRoom` only — 1×1, auto-furnished with its one required item. The I2 log says it
+outright: *no `drawRoom`, no `placeItem`, no `resizeRoom`, no `moveItem`.* `sim:bench`,
+`check:scaling` and `check:tickcost` all run the same path. **So the 100,000-tick proof would agree
+byte-for-byte across three platforms about a fold that never runs**, and every golden would stay
+green because size = 1 cell and decor = none on every room.
+
+> **This is G-036a's finding one axis over** — *widening the bound alone changes nothing on screen* —
+> **and there the block ruled the LAYOUTS were the substance of the goal.** Here the block did not
+> mention a workload at all. **Which harness gains multi-cell, multi-item rooms is an exit
+> criterion**, and it pays G-036c's price knowingly: a command log is a durable artefact and adding
+> verbs to it moves the I2 hash.
+
+**AND THE SCORE CANNOT REACH SATISFACTION THROUGH THE REVIEW AS THE CHANNEL IS BUILT.**
+`accumulateUnservedTicks` is **binary per tick** — a guest engaged with the worst conceivable
+provider records **zero** unserved ticks. `advanceNeed` takes a `ProviderKind`, **not an entity**,
+and `refill` is a property of the **need**, not the provider. So *the score feeds the rate* reaches
+`reviewOf` only through contention — **ADR-0044 §1's mechanism verbatim**, measured there to move
+report rows and **not** any guest's own worst need.
+
+**THE SATURATION IS MEASURED BEFORE THE CODE EXISTS**, nine runs, three seeds by three provisioning
+cells, exact deterministic counts: at `--rooms 3 --amenities 1` gives `2:177, 3:83, 5:96`; at 6/3
+gives `3:161, 5:192` (**exactly the departure table**); at **12/5 gives `5:348` — every guest at the
+ceiling, unserved zero on all four needs.** Scores 1 and 4 are **never attained at any cell**, and
+the three seeds are byte-identical, so **the axis that moves this system is provisioning, not seed.**
+
+> **A QUALITY FOLD THAT RAISES RATES CANNOT IMPROVE A ZERO.** Its only expressible direction is
+> downward, in the under-provisioned population the review already discriminates. **That is
+> ADR-0044 §3's threshold-test-in-quality-clothes, reproduced BEFORE the code exists.**
+
+**SO THE RULING OWED AT PLAN IS: is today's `refillPerTick` the FLOOR (decor adds — and the fold is
+inert against the measurements above) or the CEILING (bare rooms subtract — and every golden and
+campaign moves, deliberately)?** One of the two, in `DECISIONS.md`, before BUILD.
+
+**THE FALSIFICATION TEST IS ALREADY WRITTEN AND PRE-REGISTERED.** `scorer.report.test.ts:324` —
+`expect(distinctScores(at(12, 3))).toBe(1)` — whose own comment says *"the day content grows a
+quality axis, this arm goes red and the parked item comes due on its own."* **Its going RED is an
+exit criterion**, and `PARKING.md`'s parked invocation must be run **with its ledger half**, because
+its own note records that a distribution-only reading *"would have returned 'content gap' for all
+three"* of its candidate causes.
+
+**IT CANNOT BE WATCHED WITHOUT AN ITEM-LAYOUT REPAIR, and that is in scope.** A derived score is not
+in the recording — `record.ts` writes `serialise(world)` and a derived field is not in the save; a
+number in a HUD is not a perceptual check (ADR-0013). The one perceptual candidate is **a room's
+contents**, and `drawItems` marches items rightward **with no wrap and no bound** — WATCH #14
+already measured a third item's plate clipping and parked it *because `placeItem` will make
+three-item rooms ordinary.* **This is the goal that makes them ordinary.** Same argument G-036b took
+for `assertSingleTile`. **If the answer were "nothing visible", ADR-0046 §7 makes that an
+escalation, not a debt.**
+
+**Also owed**: C2's `condition` axis is listed as *"B5, field reserved at G-034"* and **it was never
+reserved — no `condition` or `cleanliness` field exists anywhere.** Strike the parenthetical or
+reserve it here with G-036b's exact-historical-reading rule · **axis and band spellings are
+camelCase, ruled at PLAN** for the reason B6 was (`check:content` judges snake_case by shape) ·
+**reputation is named-not-built**, and reading a review is *mechanically fenced* by a source scan,
+so a future builder must not read a red fence as a defect · and **the caching decision is stated at
+PLAN with its measurement plan**, because a derived-at-read-time fold lands on the hottest loop in
+the sim, guarded by a bound under an OPEN escalation for being too wide to catch it.
+
+## G-037b — Capacity, and a room that holds more than one guest
+Status: **PLANNED — and BLOCKED on a mechanic nobody has written. See ADR-0053.**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+
+**`capacity` HAS NO READER.** Not a field at the wrong level — **a field nothing consumes.** One
+reader in the whole tree, a test re-asserting its own schema. Occupancy is `search.held`, a
+**membership** set; `claimEntity` **throws** on a second holder. **Measured: capacity 99 on every
+room type produces a byte-identical report.**
+
+**SO THIS IS MULTI-OCCUPANCY, A NEW MECHANISM INSIDE A THROWING INVARIANT** — `held` becomes a
+count, the throw becomes a bound, `countOrphanedReservations` is re-defined, and `findFreeRoom`'s
+`exhausted` memo means something new.
+
+**AND THE SHIPPED SCHEMA FORBIDS THE MOTIVATING EXAMPLE**: *"capacity is the size of the PARTY a
+room holds, NOT a count of unrelated bookings… two strangers sharing a room would read as stupid to
+a watching player."* **There is no party concept in `packages/sim`.** So this goal is downstream of
+**a party / group-arrival mechanic that is nowhere in M3** — that is the escalation, and it is the
+human's call whether it enters M3 or waits.
+
+**Whichever goal makes capacity live RE-TAKES THE OCCUPANCY PIN AND THE TRIPWIRE CAMPAIGN IN ONE
+COMMIT** (`TARGET_CONCURRENT_HUNDREDTHS`), **and adds a COUNTED assertion on `gaveUp`** — because in
+the capacity-99 mutation every one of the eight reds was a hash literal: **nothing in the suite
+asserts that occupancy responds to capacity at all.**
+
+## G-037c — A room is priced by what it is, not by its type
+Status: **PLANNED.** Follows G-037a.
+Milestone: M3 · Owner pair: economy-engineer / balance-critic
+
+**B7 IS NOT "A FIELD MOVING".** `payForStay` charges `roomType.nightlyRatePence` — the only price
+site in the sim. A per-**instance** price is world state, hence a save field, hence **v21 plus a
+migration**; ADR-0047 B7 says so itself. **The G-037 block's "no save field and no migration" was
+scoped to capacity and read as covering both.**
+
+**AND IT MUST RULE THE QUESTION THAT DECIDES WHETHER THE FOLD MEANS ANYTHING: does the lodging
+search consult the room score?** `reserve`'s docblock rules it must not — *"a fit term with no price
+term would make the most expensive suite strictly preferred, which is the dominant-strategy shape
+`balance-critic` hunts"* — **and `bindContent` REFUSES a fit on a room type that only lodges, so it
+is enforced rather than intended.** If that stands, **a player who furnishes a bedroom beautifully
+changes nothing about which room a guest takes** — guests pick the lowest free entity id. If it
+falls, this goal must supply the price term, which is the M4 economy the ruling deferred.
+**Both answers are expensive to discover at BUILD.**
 
 ## G-038 — Circulation, and the lobby gets a reason to exist
 Status: **PLANNED.** A* over a single floor's tile grid, plus stair and lift nodes joining floors —

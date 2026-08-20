@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036c is done: rooms are editable and can be private, save v20. B6 bites — one string of content different, and the same hotel at the same seed produces different engagement and a divergent hash. A shrunk room DROPS items and both alternatives were driven rather than argued. ADR-0052 (human): wall visibility becomes a CONTROL with three positions, amending ADR-0047 A4 — 24 stays the default, and none of WATCH #14's measurement is withdrawn; what changes is the conclusion drawn from it. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-16, G-036c is done and the scoring goal is SPLIT at PLAN into three after four BLOCKERs. The big one CORRECTS ADR-0051: capacity has NO READER — one in the whole tree, a test re-asserting its own schema — and capacity 99 on every room type gives a byte-identical report. Making it mean anything is MULTI-OCCUPANCY inside a throwing invariant, and the shipped schema forbids strangers sharing a room by name. ESCALATED: does a party mechanic enter M3, or does capacity wait for the archetype work? Also measured before any code: the review channel is binary per tick and at 12 rooms every guest is already at the ceiling, so a quality fold that raises rates cannot improve a zero. Fourteen rows green. Unreliable: 1 gate, 0 defects.*
 
 - **State**: save **v20** · summary **v4** · I2 `dcc8c18446799e78` · measure golden
   `013816cc3168aee0` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**

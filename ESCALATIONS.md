@@ -1350,3 +1350,47 @@ output re-run under load rather than a re-run that only says green.
 **Recommendation**: G-039 owns it — it is the instrument goal, it already owns campaign re-takes,
 and this needs `verify` to keep per-row output rather than a fresh investigation today. **Nothing is
 blocked**; the tree is green and every row has passed on re-run.
+
+---
+
+## 2026-08-16 — OPEN — CAPACITY NEEDS A PARTY MECHANIC, AND THAT IS NOT IN M3
+
+**Raised**: G-037 plan review · **Asked of the human**: does a party / group-arrival mechanic enter
+M3, or does capacity wait?
+
+**The human's design intent is not in question and is not overruled**: *"capacity will vary based on
+room size and what's inside it — a guest room with a king size bed would have a capacity of 2, a 4×4
+restaurant with 4 tables would have a higher capacity."* **A bigger room holding more people is
+right, and it is what makes room size mean something for occupancy rather than only for score.**
+
+**Two facts from the tree stand between that intent and any code** (ADR-0053):
+
+1. **`capacity` HAS NO READER.** One in the whole repository — a test re-asserting its own schema.
+   **Measured: capacity 99 on every shipped room type produces a byte-identical report.** Occupancy
+   is a membership set and `claimEntity` **throws** on a second holder. So making capacity mean
+   anything is **multi-occupancy: a new mechanism inside a throwing store invariant.**
+
+2. **THE SHIPPED SCHEMA FORBIDS THE MOTIVATING EXAMPLE, WITH A REASON.** *"`capacity` is the size of
+   the PARTY a room holds, NOT a count of unrelated bookings… **two strangers sharing a room would
+   read as stupid to a watching player (§6.1)**."* **There is no party concept anywhere in
+   `packages/sim`** — guests spawn individually. So *a king bed sleeps two*, over today's guest
+   model, **is two strangers in one bed.**
+
+### The options
+
+- **(a) Party mechanic enters M3**, as its own goal before G-037b: guests arrive as groups of 1..N,
+  a room holds one party, and capacity bounds the party. **Honest, and it is a real feature** —
+  arrivals, the guest store and every occupancy pin move.
+- **(b) Capacity waits for M6's archetype work**, where group travel belongs anyway, and G-037b is
+  struck from M3. **M3 then delivers the quality fold and pricing, and room SIZE affects score and
+  price but not headcount.**
+- **(c) Overturn the schema's ruling** and let strangers share. **I recommend against it**: it is a
+  reasoned §6.1 call, and the thing it protects against is exactly what a watching player would
+  notice first.
+
+**Recommendation: (b).** It keeps M3 finishable, it puts the mechanic where the archetype work
+already lives, and **it costs the human nothing they have asked for** — size still drives quality
+and price, which is most of what "the player decides the size" was about. **(a) is defensible if
+group arrivals are wanted sooner; it is a goal, not a field.**
+
+**Nothing is blocked today.** G-037a and G-037c proceed either way; only G-037b waits on this.
