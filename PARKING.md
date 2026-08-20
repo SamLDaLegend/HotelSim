@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. THE WALL-HEIGHT RULING IS DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED rather than rejected: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished; it becomes a derived per-instance fold at the scoring goal. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. The wall-height ruling is DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished. AN INTERMITTENT ROW IS NOW ESCALATED and the count is corrected. Fourteen rows green on re-run. Unreliable: 1 gate, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

@@ -1313,3 +1313,40 @@ surface is narrow and provably so, and treat the next such case as waiting for i
 
 **Nothing is blocked.** Fourteen rows green, and M3 continues to G-035 — which is the goal that
 ends this condition.
+
+---
+
+## 2026-08-16 — OPEN — AN INTERMITTENT ROW IS OBSERVED, AND THE DIGEST SAYS THERE ARE NONE
+
+**Raised**: G-036b, by the orchestrator · **Asked of the human**: §2.0 makes an intermittent gate
+its own escalation. This is that entry.
+
+**TWO INDEPENDENT SIGHTINGS, NEITHER OF THEM CONCLUSIVE ON ITS OWN:**
+
+- `sim-engineer` reported `tools/headless/src/scorer.report.test.ts` **failing once in four
+  full-suite runs and passing in isolation** (20.6s — load-sensitive), not recurring, and **not
+  caused by its diff.**
+- The orchestrator ran `pnpm verify` immediately after and it went **RED**, then **GREEN on an
+  immediate re-run with no change to the tree.**
+
+**AND I DID NOT CAPTURE WHICH ROW FAILED, WHICH IS A DEFECT IN MY OWN EVIDENCE.** The command was
+`pnpm verify 2>&1 | tail -3`, so all that survives is the failure footer. **The two sightings are
+consistent with one load-sensitive test, but I cannot prove they are the same thing**, and saying
+they are would be exactly the inference this project keeps getting wrong.
+
+> **`CLAUDE.md` already carries the rule this broke**: *"a guard is only as good as the question it
+> asks."* The `&&` chain after `verify` tested **`tail`'s** exit code, not `verify`'s — **so the
+> commit went out on a red run.** Second instance of that precise defect this session, both mine.
+> The tree is green now and the commit is sound, but it was sound by luck.
+
+**THE DIGEST'S `Unreliable: 0 gates` IS THEREFORE FALSE** and is corrected to `1 gate`. §2.0 requires
+the count carry its noun and be honest; **a flake that is known and uncounted is worse than one
+nobody has seen, because the count is what the next reader trusts.**
+
+**What is NOT claimed**: that the row is `scorer.report`; that it is timing rather than a real
+non-determinism; or that it is new. **All three are open**, and the cheap next step is a captured-
+output re-run under load rather than a re-run that only says green.
+
+**Recommendation**: G-039 owns it — it is the instrument goal, it already owns campaign re-takes,
+and this needs `verify` to keep per-row output rather than a fresh investigation today. **Nothing is
+blocked**; the tree is green and every row has passed on re-run.
