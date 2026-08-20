@@ -32,6 +32,7 @@
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
+import { createCorridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
 import { entitiesInOrder } from './entities.js';
@@ -119,7 +120,7 @@ const V16_ENTITIES: readonly { readonly id: number; readonly kind: string; reado
 ];
 
 /** THE TALLY THOSE BYTES DESCRIBE, read off the layout above by hand under the v16 rule. */
-const V16_TALLY = { missingItem: 1, noDoor: 1, unplaced: 1, unsupported: 1 } as const;
+const V16_TALLY = { missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unsupported: 1 } as const;
 
 const needs = (): readonly unknown[] => [
   { needId: 'rest', deficit: 40, metBy: 'room', abandonCount: 0, unservedTicks: 3 },
@@ -204,11 +205,39 @@ type Migrated = {
 };
 const migrate = (): Migrated => step.migrate(v16World()) as Migrated;
 
+/**
+ * EVERY TOP-LEVEL KEY A v17 WORLD HAD, frozen at the moment v18 was defined (G-034b).
+ *
+ * A LITERAL for the reason every era value in `save.ts` is one: this file's subject is what the
+ * 16 -> 17 step produces, and that is a fact about v17 rather than about whatever `World` looks
+ * like today. Sorted, because the assertion below sorts.
+ */
+const V17_WORLD_KEYS: readonly string[] = Object.freeze([
+  'buildOutcomes',
+  'contentHash',
+  'entities',
+  'grid',
+  'guestOutcomes',
+  'guests',
+  'ledger',
+  'loanOutcomes',
+  'needOutcomes',
+  'reviewOutcomes',
+  'rng',
+  'tick',
+]);
+
 describe('the chain walks 1 -> ... -> today, and every link is still observed (G-034a)', () => {
   it('ships one step per version, and the 16 -> 17 step is the sixteenth of them', () => {
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(SAVE_SCHEMA_VERSION).toBe(17);
+    // RELATIVE, NOT ABSOLUTE, SINCE G-034b. This read `toBe(17)`, which made a file that does
+    // not own the current era go red at the next bump — the shape `save.fixture.test.ts` calls
+    // *"a relative assertion wearing an absolute"*, and it names itself as the ONE absolute era
+    // pin in the repo. The claim this file actually makes is that its own step is the sixteenth
+    // link and that the chain is gapless, and both survive v18 unedited.
+    expect(SAVE_SCHEMA_VERSION).toBeGreaterThanOrEqual(17);
     expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
+    expect(MIGRATIONS.indexOf(step)).toBe(15);
     expect([step.from, step.to]).toEqual([16, 17]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -238,13 +267,19 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
     expect(guestsInOrder(fixture.guests)).toEqual([]);
   });
 
-  it('adds no top-level key: `World` still has exactly the twelve it had', () => {
+  it('adds no top-level key: a v17 world has exactly the twelve a v16 world had', () => {
     // The second schema bump to reshape something INSIDE a field rather than add one beside it
     // (the first was v10 -> v11). `save.test.ts`'s field-coverage generator is unmoved for the
     // same reason.
-    expect(WORLD_KEYS).toHaveLength(12);
+    //
+    // AGAINST v17's OWN KEY SET, FROZEN HERE, NOT AGAINST `WORLD_KEYS` (G-034b). It compared
+    // against the live list, and v18 added `corridors` — so it went red on a goal that did not
+    // touch this step, and the tempting repair is to let the live list back in. `travel.save`
+    // wrote down why that is wrong one bump earlier: *"a v10 world does not have a v12 field —
+    // that is the entire point of freezing the base"*. What THIS step must not do is add a
+    // thirteenth key; what v18 does afterwards is v18's business.
     expect([...WORLD_KEYS]).toEqual([...WORLD_KEYS].sort());
-    expect(Object.keys(migrate() as unknown as Record<string, unknown>).sort()).toEqual([...WORLD_KEYS]);
+    expect(Object.keys(migrate() as unknown as Record<string, unknown>).sort()).toEqual([...V17_WORLD_KEYS]);
   });
 });
 
@@ -371,7 +406,7 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT, which is what makes it non
     // under test on both sides of the assertion.
     // ==================================================================================
     const loaded = deserialise(v16Blob());
-    expect(countInvalidRooms(loaded.entities, loaded.grid, content)).toEqual(V16_TALLY);
+    expect(countInvalidRooms(loaded.entities, loaded.grid, createCorridors(), content)).toEqual(V16_TALLY);
   });
 
   it('and a DEEPER plot flips one of them, so the tally above is not true of any plot', () => {
@@ -379,7 +414,7 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT, which is what makes it non
     // assertion above would be evidence about nothing.
     const loaded = deserialise(v16Blob());
     const deeper = { ...loaded.grid, maxRow: loaded.grid.maxRow + 1 };
-    expect(countInvalidRooms(loaded.entities, deeper, content)).toEqual({
+    expect(countInvalidRooms(loaded.entities, deeper, createCorridors(), content)).toEqual({
       ...V16_TALLY,
       noDoor: 0, // entity 2 gains a door in front of it
     });

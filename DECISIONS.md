@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-034a is done: the grid has a third axis, save v17, and the shipped plot stays ONE ROW DEEP so the goal changes no behaviour — only the hash. Fourteen rows green, every row re-run by the orchestrator. The plan review found two BLOCKERs before any code, and the BUILD then corrected the plan review: floor-ASCENDING is the precondition, floor-FIRST is a convention, and it ships labelled as one. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-034b is done: a cell can be a corridor, connectivity is a validity rule, save v18. The shipped default run is byte-identical below the hash line; the rule bites only where corridors are DECLARED. Fourteen rows green, every row re-run by the orchestrator. An ESCALATION is open — G-034b is behavioural and ADR-0046 §7 says a behavioural goal with no WATCH surface escalates rather than recording a debt. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at

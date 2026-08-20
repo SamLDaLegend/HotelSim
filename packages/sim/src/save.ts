@@ -7,6 +7,7 @@
 
 import { assertBuildOutcomes } from './build.js';
 import type { BuildOutcomes } from './build.js';
+import { assertCorridors } from './corridors.js';
 import { assertEntityStoreInvariants } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
 import { assertGridBounds } from './grid.js';
@@ -24,7 +25,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 17;
+export const SAVE_SCHEMA_VERSION = 18;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -1728,6 +1729,95 @@ function migrateV16ToV17(world: unknown): unknown {
 }
 
 /**
+ * WHAT A v17 WORLD DECLARED ABOUT CIRCULATION, FROZEN AT THE MOMENT v18 WAS DEFINED:
+ * NOTHING, BECAUSE THE CONCEPT DID NOT EXIST.
+ *
+ * A LITERAL, and it must stay one. `createCorridors()` in `corridors.ts` returns the same
+ * empty plan today and the two are ALLOWED to diverge later — the day a scenario opens with
+ * a corridor lane pre-drawn, a step that read the live constructor would start migrating the
+ * SAME v17 bytes onto a world whose plan somebody else chose (ADR-0008 (1)). The guard is
+ * structural, because the values coincide today and no assertion can tell the two
+ * implementations apart: the source scan in
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts`
+ * forbids this file from naming `createCorridors` in executable code (ADR-0008 (3)).
+ *
+ * AND IT CARRIES NO TYPE ANNOTATION, which is G-034a's correction applied on the day it was
+ * written rather than a goal later: `V3_MIGRATION_BOUNDS` had one, and that annotation was *a
+ * live-build reference wearing a type's clothes* — the day `GridBounds` grew two edges, the
+ * compiler demanded the frozen v3 literal grow them too. `readonly Cell[]` would do exactly
+ * that to this one the day a cell gains an axis.
+ */
+const V18_MIGRATION_CORRIDORS = Object.freeze([]);
+
+/**
+ * v17 -> v18: a world that had no word for a corridor (G-034b, ADR-0047 B2).
+ *
+ * ADR-0006 fires for the SEVENTEENTH time. `World` gains `corridors`, `assertWorldShape`
+ * rejects unknown top-level keys and demands the known ones, so the permanent v1 fixture
+ * describes a world this build cannot load, and the answer is this step. `fixtures/save-v1.ts`
+ * HAS A ZERO-LINE DIFF in this change; the walk is 1 -> ... -> 17 -> 18.
+ *
+ * ==========================================================================
+ * THE HISTORICAL READING, WHICH IS THE WHOLE OF THIS STEP AND IS NOT "NOTHING WAS THERE".
+ *
+ * A v17 world genuinely declared no corridor — but it did not therefore have NO CIRCULATION.
+ * It had circulation everywhere: the door rule of that era asked only for *"a free cell
+ * beside it on its floor"*, so EVERY cell no room stood on was somewhere a guest could be,
+ * and `report.ts` has said so in the tree since G-009 — *"the empty column between them IS
+ * the corridor until M3 gives corridors an identity of their own."*
+ *
+ * `isDeclaredWalkway` in `validity.ts` is written to say exactly that: A FLOOR WITH NO DECLARED
+ * CORRIDOR IS OPEN PLAN, and every cell of it that no room stands on is circulation. So the
+ * empty plan this step writes is not a shrug and not a default — it is the v17 rule, carried
+ * onto v18's vocabulary without loss.
+ *
+ * AND THE PROOF THAT IT REWRITES NO VERDICT IS A PROPERTY OF THE RULES RATHER THAN A
+ * MEASUREMENT OF ONE WORLD. On an open-plan floor circulation reduces to *"no room
+ * stands on `cell`"*, which is the exact predicate the door walk already applies to pick its
+ * door cells — so `hasDoor` implies `hasCirculation`, so `noCorridor` cannot fire, on ANY
+ * migrated world. Every other check is untouched. Therefore every v17 world keeps its exact
+ * validity verdicts: same `unsupported`, same `noDoor`, same `missingItem`, same tallies,
+ * same providers, same guests served.
+ *
+ * WHAT THE ALTERNATIVE WOULD HAVE COST, recorded because it is the tempting one. Had
+ * the rule required a declared corridor unconditionally, this step would have had to
+ * INVENT the corridors of a world whose bytes do not name them — and it could not even do
+ * that honestly, because deciding which neighbouring cells were walkable means knowing which
+ * entities are ROOMS, which is a CONTENT question, and a migration may not read content
+ * (ADR-0008 (2)). The only reachable alternative was an empty plan under a rule that then
+ * declares every room in every existing save unreachable: a migration silently rewriting the
+ * validity verdict of every hotel anybody has ever saved. That is the BLOCKER `sim-critic`
+ * caught on the v17 step, one goal on, and it is refused the same way.
+ * ==========================================================================
+ *
+ * Reads no content and no live constant, so the same v17 bytes produce the same v18 world
+ * however the shipped world changes afterwards (ADR-0008; see `V18_MIGRATION_CORRIDORS`).
+ *
+ * NOT TESTED BY THE PERMANENT v1 FIXTURE, AND SAYING SO IS THE POINT. The fixture's world
+ * holds entities that are all unplaced and no guests at all, so this step walks it with a
+ * ZERO-LINE DIFF while inspecting no cell and no room — it would report success having added
+ * one empty array. That is ADR-0007's exact shape, and it is the paragraph `migrateV16ToV17`
+ * and `migrateV10ToV11` both carry. `corridors.save.test.ts` drives a HAND-BUILT v17 world
+ * with supported, doored, furnished, sealed and floating rooms through this step and asserts
+ * its validity tallies are UNCHANGED across 17 -> 18, reason by reason.
+ */
+function migrateV17ToV18(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way this step could destroy data — overwriting a plan somebody already drew —
+  // is the one thing it refuses to do, exactly as all sixteen earlier steps refuse.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an own
+  // key (G-003).
+  if (Object.keys(world).includes('corridors')) {
+    throw new Error(
+      'world already has a "corridors" field, so it is not a v17 world; migrating it would overwrite a real corridor plan',
+    );
+  }
+  return { ...world, corridors: V18_MIGRATION_CORRIDORS };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1752,6 +1842,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 14, to: 15, migrate: migrateV14ToV15 }),
   Object.freeze({ from: 15, to: 16, migrate: migrateV15ToV16 }),
   Object.freeze({ from: 16, to: 17, migrate: migrateV16ToV17 }),
+  Object.freeze({ from: 17, to: 18, migrate: migrateV17ToV18 }),
 ]);
 
 /**
@@ -2129,6 +2220,15 @@ export function assertWorldShape(value: unknown): asserts value is World {
   // A save's plot is its own, which is what stops a change to the default constants
   // from silently reinterpreting every existing save.
   assertGridBounds(grid as unknown as GridBounds);
+
+  // WHERE THE PLAN SAYS PEOPLE WALK (G-034b). Validated AFTER the plot, because every cell in
+  // it is checked against that plot — and against the plot THIS SAVE carries rather than this
+  // build's default, for the reason the entity store is (see below).
+  //
+  // The order check inside is not a formality: `worldToJson` is an identity cast, so the
+  // ARRAY'S ORDER is part of the state hash, and a save carrying the same corridors in a
+  // different sequence would load happily and hash differently from the world that wrote it.
+  assertCorridors(value['corridors'], grid as unknown as GridBounds);
 
   const entities = value['entities'];
   if (!isRecord(entities)) {

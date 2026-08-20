@@ -281,7 +281,17 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   the narrow one G-028b needed: arrivals, checkouts, evictions, the departure table AND
     //   the need rows are all unchanged, which is the whole argument that the shape moved and
     //   the simulation did not.
-    expect(hashState(plain)).toBe('0c34f5daea71e8de');
+    //   `0c34f5daea71e8de` -> `c7a049822580b39e`   G-034b made a cell able to be a CORRIDOR
+    //   (ADR-0047 B2). TWO causes, both shape: `World` gained `corridors`, and this runner's
+    //   seeded hotel now DECLARES the corridor it has always had — the empty column between
+    //   every pair of rooms, which `report.ts` has called a corridor in a comment since G-009.
+    //   **THE CONTROL IS THE FULL BLOCK AGAIN AND IT IS THE WHOLE ARGUMENT**: arrivals,
+    //   checkouts, `leftDissatisfied`, evictions, the departure table, the need rows and the
+    //   abandonment count are every one of them unchanged, because a room that already had a
+    //   free cell beside it keeps its verdict when that cell is named. The plain arm builds
+    //   nothing, so the player's own corridor blocks (`playerCorridorCells`) never fire here;
+    //   the churn arm below is where they do, and its 19 evictions are unchanged too.
+    expect(hashState(plain)).toBe('c7a049822580b39e');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -410,7 +420,13 @@ describe('the same workload with the player churning the building', () => {
     // edges, with the shipped plot still one row deep so nothing behavioural can differ. THE
     // SHARP CONTROL HOLDS FOR THE NINTH TIME: 19 evictions, unchanged, in a goal that rewrote
     // the door rule's arity and nothing about which rooms the churn schedule demolishes.
-    expect(hashState(churn)).toBe('92e656437b7c1b07');
+    // MOVED AT G-034b WITH ITS SIBLING, `92e656437b7c1b07` -> `09496f8d672da4e9`, for the two
+    // causes the plain row gives PLUS one this arm alone reaches: it builds, so the player lays
+    // a corridor on each floor it builds on and packs rooms between them. THE SHARP CONTROL
+    // HOLDS FOR THE TENTH TIME: 19 evictions, unchanged, in the goal that made connectivity a
+    // validity rule — the churn schedule demolishes the same rooms out from under the same
+    // guests, and the rooms it demolishes were connected before and after.
+    expect(hashState(churn)).toBe('09496f8d672da4e9');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

@@ -426,9 +426,18 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   // 3 evictedRoomUnusable — where the inherited invocation produced four and, under this build,
   // would have produced four different ones (its guests walked out before the demolitions
   // reached them). The amenity count is the derived one: `ceil((1440 / 60) / 8)` = 3.
+  // RETUNED AGAIN AT G-034b, BY THE NOTE'S OWN STEP 2, AND THE CAUSE WAS THE ONE THE NOTE
+  // PREDICTED: *"change the build cadence... and that single episode can stop happening."* This
+  // goal changed the player's LAYOUT rather than a cadence — a corridor every eight columns, with
+  // the rooms packed between — and the inherited `--build 360` fell to ONE episode where it had
+  // three. `outcome.test.ts` drives both eviction reasons deterministically and stayed green
+  // throughout, which is step 1 of the note answered: the split works, this was a schedule
+  // change. `--build 720` restores the margin to THREE against the same seed, the same hotel and
+  // the same demolition cadence — the smallest edit that puts a guest back upstairs when the
+  // floor beneath it goes.
   const ARGS = [
     '--days', '30', '--seed', '7', '--rooms', '30', '--amenities', '3', '--arrivals', '60',
-    '--build', '360', '--demolish', '1440',
+    '--build', '720', '--demolish', '1440',
   ];
 
   it('the pinned invocation exits 0 and reports at least FOUR reasons non-zero', () => {

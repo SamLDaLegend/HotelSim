@@ -15,6 +15,11 @@
 //     covered too. A harness in which nothing worked would prove only that failure is
 //     deterministic, which is the mirror image of the hole G-004 found.
 //
+// SINCE G-034b THERE ARE FIVE REASONS AND THE HARNESS PRODUCES FOUR OF THEM. The log declares
+// circulation on its ground floor and WITHHOLDS three cells of it, so `noCorridor` is produced
+// by rooms a guest would otherwise have taken — the sky-tower argument applied to a rule whose
+// consequence, like every other validity verdict, the hash can only see indirectly.
+//
 // `unplaced` is deliberately NOT expected: its only producer is the v2 -> v3 migration,
 // and a harness that starts from `createWorld` can never contain one. That is asserted
 // rather than left implicit, so the day something starts producing unplaced rooms in a
@@ -56,7 +61,7 @@ const TICKS = 40_000;
 
 describe('the I2 harness reaches rooms that do not work', () => {
   const world = replay(TICKS);
-  const tally = countInvalidRooms(world.entities, world.grid, content);
+  const tally = countInvalidRooms(world.entities, world.grid, world.corridors, content);
 
   it('contains rooms with nothing beneath them', () => {
     expect(tally.unsupported).toBeGreaterThan(0);
@@ -70,6 +75,29 @@ describe('the I2 harness reaches rooms that do not work', () => {
     // The basement terraces. If the door rule were deleted this would go to zero while
     // the two above stayed green, so it is not covered by them.
     expect(tally.noDoor).toBeGreaterThan(0);
+  });
+
+  it('CONTAINS A ROOM WHOSE DOOR OPENS ONTO NOWHERE ANYBODY WALKS (G-034b)', () => {
+    // The fourth reason a placement can produce, and the log withholds three ground-floor
+    // corridor cells to produce it — see `determinism-log.ts` for which and why. The sky
+    // tower's argument applies here word for word: validity is DERIVED, so the state hash can
+    // only see this rule's CONSEQUENCE, and the consequence exists only if the room it refuses
+    // is one a guest would otherwise have taken. The first room this log ever spawns is one of
+    // the three, which is the lowest-id lodging room in the hotel.
+    expect(tally.noCorridor).toBeGreaterThan(0);
+  });
+
+  it('and the harness DECLARES a corridor plan at all, so the rule is not vacuous there', () => {
+    // A floor with no corridor on it is OPEN PLAN and every free cell is circulation — which is
+    // what every world before this goal was. So a harness that declared nothing would exercise
+    // the new rule's TRIVIAL branch only, and the tally above would be 0 for a reason that says
+    // nothing about connectivity. The plan is hashed state, so this is also the claim that the
+    // I2 gate's final hash carries it.
+    expect(world.corridors.length).toBeGreaterThan(0);
+    // Sorted and unique, which is what `assertCorridors` demands of a save and what
+    // `withCorridor` keeps true through a run.
+    const keys = world.corridors.map((at) => `${at.floor}:${at.column}:${at.row}`);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it('contains no unplaced room, because only a migration can make one', () => {
@@ -104,7 +132,7 @@ describe('the I2 harness reaches rooms that do not work', () => {
     );
     expect(underneath).toEqual([]);
     // And every storey of it — not merely the bottom one — is invalid.
-    const ctx = createValidityContext(content, world.grid, storeEntities(world.entities));
+    const ctx = createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
     for (const room of stack) {
       expect(roomInvalidity(ctx, room)).toBe('unsupported');
     }
@@ -142,7 +170,7 @@ describe('and it reaches rooms that do work', () => {
   it('leaves no guest in an invalid room', () => {
     // The exit criterion, measured inside the determinism harness's own world rather
     // than only in the CLI's.
-    expect(countGuestsInInvalidRooms(world.guests, world.entities, world.grid, content)).toBe(0);
+    expect(countGuestsInInvalidRooms(world.guests, world.entities, world.grid, world.corridors, content)).toBe(0);
   });
 });
 

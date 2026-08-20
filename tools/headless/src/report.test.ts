@@ -30,6 +30,8 @@ import {
   buildSummary,
   builtRoomCell,
   builtRoomStartFloor,
+  PLAYER_COLUMNS_PER_BLOCK,
+  playerCorridorCells,
   COLUMNS_PER_ROOM,
   departuresInSummary,
   departuresOf,
@@ -224,11 +226,38 @@ describe('the build walk stays on the plot', () => {
     // against a run that can go wrong in more than one way.
     const above = builtRoomStartFloor(HOTEL_ROOMS);
     expect(above).toBe(GROUND_FLOOR + 1);
-    expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: 0, row: PLOT.minRow });
-    expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: 1, row: PLOT.minRow });
-    const perFloor = PLOT.maxColumn - PLOT.minColumn + 1;
-    expect(builtRoomCell(perFloor - 1, PLOT, above)).toEqual({ floor: 1, column: PLOT.maxColumn, row: PLOT.minRow });
-    expect(builtRoomCell(perFloor, PLOT, above)).toEqual({ floor: 2, column: PLOT.minColumn, row: PLOT.minRow });
+    // PACKED INTO BLOCKS SINCE G-034b, and the two properties below are the ones the layout
+    // exists for. The player draws a corridor every eight columns (`playerCorridorCells`) and
+    // fills the seven between: the rooms at each end of a block are connected, the five in the
+    // middle are walled in, and the blocks are OFFSET BY ONE so their end rooms land over the
+    // inherited hotel's rooms rather than over the corridors between them.
+    const stubs = playerCorridorCells(1, PLOT);
+    expect(stubs[0]).toEqual({ floor: 1, column: PLOT.minColumn + 1, row: PLOT.minRow });
+    expect(stubs[1]).toEqual({ floor: 1, column: PLOT.minColumn + 1 + PLAYER_COLUMNS_PER_BLOCK, row: PLOT.minRow });
+    expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 2, row: PLOT.minRow });
+    expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 3, row: PLOT.minRow });
+    // The last room of the first block, then the first of the second: the walk steps OVER the
+    // next corridor rather than onto it.
+    const perBlock = PLAYER_COLUMNS_PER_BLOCK - 1;
+    expect(builtRoomCell(perBlock - 1, PLOT, above).column).toBe(PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK);
+    expect(builtRoomCell(perBlock, PLOT, above).column).toBe(PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK + 2);
+    // AND NO ROOM IS EVER BUILT ON A CORRIDOR, which is the property the connected rooms rest
+    // on: a room standing on a declared corridor closes it — the cell stops being a DOOR — so a walk that
+    // wrapped onto one would take the door away from the rooms beside it.
+    const stubColumns = new Set(stubs.map((cell) => cell.column));
+    const blocks = stubs.length;
+    const perFloor = blocks * perBlock;
+    for (let i = 0; i < perFloor * 3; i += 1) {
+      expect(stubColumns.has(builtRoomCell(i, PLOT, above).column)).toBe(false);
+    }
+    expect(builtRoomCell(perFloor - 1, PLOT, above).floor).toBe(1);
+    expect(builtRoomCell(perFloor, PLOT, above)).toEqual({ floor: 2, column: PLOT.minColumn + 2, row: PLOT.minRow });
+    // THE END ROOMS SIT OVER THE INHERITED HOTEL, not over its corridors — the offset-by-one,
+    // stated as the property rather than as the arithmetic. `roomCell` strides by two from
+    // `minColumn`, so a supported column is an even offset.
+    for (const stub of stubs) {
+      expect((stub.column + 1 - PLOT.minColumn) % COLUMNS_PER_ROOM).toBe(0);
+    }
     // Never floor 0, so it cannot collide with the inherited hotel for any `--rooms` that
     // fits on one floor.
     for (let i = 0; i < perFloor * 3; i += 1) {
@@ -248,7 +277,11 @@ describe('the build walk stays on the plot', () => {
     // The rule is the existing comment's own reasoning extended to the case it did not
     // cover: the player builds on the ground unless the ground is already spoken for.
     expect(builtRoomStartFloor(0)).toBe(GROUND_FLOOR);
-    expect(builtRoomCell(0, PLOT, builtRoomStartFloor(0))).toEqual({ floor: 0, column: 0, row: PLOT.minRow });
+    expect(builtRoomCell(0, PLOT, builtRoomStartFloor(0))).toEqual({
+      floor: 0,
+      column: PLOT.minColumn + 2,
+      row: PLOT.minRow,
+    });
     // And every inherited-hotel invocation is untouched, which is what keeps G-009's
     // pinned criterion byte-identical.
     for (const rooms of [1, 3, 20, 200]) {
@@ -264,7 +297,14 @@ describe('the build walk stays on the plot', () => {
     // per column (so the full width) but starts on floor 1 (so one storey fewer). Derived
     // from the plot rather than written down, so the next change to either is not a magic
     // number somebody has to remember to edit.
-    const cells = PLOT.maxFloor * (PLOT.maxColumn - PLOT.minColumn + 1); // floor 1 upward
+    //
+    // NARROWER SINCE G-034b, and it is derived here rather than re-typed: one column in eight
+    // is the player's own corridor and one more is the offset the blocks start at, so the walk
+    // has nine blocks of seven per floor rather than eighty columns. The arithmetic is the
+    // subject; 1,260 is just what it comes to today.
+    const perBlock = PLAYER_COLUMNS_PER_BLOCK - 1;
+    const blocks = playerCorridorCells(1, PLOT).length;
+    const cells = PLOT.maxFloor * blocks * perBlock; // floor 1 upward, less each block's corridor
     const commands = schedule(cells * 3, content, PLOT, HOTEL_ROOMS, TICKS_PER_DAY, 1);
     const builds = commands.filter((c) => c.command.kind === 'buildRoom');
     expect(builds).toHaveLength(cells); // the player's walk starts from its own zero
@@ -272,6 +312,25 @@ describe('the build walk stays on the plot', () => {
       if (command.kind !== 'buildRoom') throw new Error('filtered to buildRoom');
       expect(isWithinBounds(command.at, PLOT)).toBe(true);
     }
+    // AND ONE CORRIDOR STUB PER FLOOR THE WALK REACHED, on the plot, never twice on a floor.
+    // Without this the walk could have stopped laying them after the first floor and every
+    // room above would be `noCorridor` — which is a coverage claim this file can make cheaply
+    // and the golden run cannot make at all.
+    // The seeded hotel lays a lane too — on floor 0 and in the basements, beside each room it
+    // seeds — so the player's stubs are the corridors above the ground, and there is exactly
+    // one per floor the walk reached, all of them on `minColumn`.
+    const playerStubs = commands.flatMap(({ command }) =>
+      command.kind === 'layCorridor' && command.at.floor > GROUND_FLOOR ? [command.at] : [],
+    );
+    const stubColumns = new Set(playerCorridorCells(1, PLOT).map((cell) => cell.column));
+    for (const at of playerStubs) {
+      expect(stubColumns.has(at.column)).toBe(true);
+      expect(isWithinBounds(at, PLOT)).toBe(true);
+    }
+    const stubFloors = [...new Set(playerStubs.map((at) => at.floor))];
+    expect(stubFloors).toHaveLength(PLOT.maxFloor);
+    // One full set of blocks per floor the walk reached, and no floor stubbed twice.
+    expect(playerStubs).toHaveLength(stubFloors.length * blocks);
   });
 
   it('SWEEP: no cadence blames the plot for what money is doing', () => {
@@ -439,7 +498,7 @@ const distinct: RunSummary = {
   },
   rooms: {
     valid: 133,
-    invalid: { missingItem: 134, noDoor: 135, unplaced: 136, unsupported: 137 },
+    invalid: { missingItem: 134, noCorridor: 138, noDoor: 135, unplaced: 136, unsupported: 137 },
   },
   money: {
     transactions: 117,
@@ -482,7 +541,7 @@ describe('renderers', () => {
         'need types  108',
         'entities    109',
         'rooms ok    133',
-        'rooms bad   136 unplaced, 137 unsupported, 135 no door, 134 no item',
+        'rooms bad   136 unplaced, 137 unsupported, 135 no door, 138 no corridor, 134 no item',
         'arrived     110',
         // One line per row, in table order, each carrying its own distinct sentinel — so a
         // renderer that printed the rows in the wrong order, or printed one twice, fails here.

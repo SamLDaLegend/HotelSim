@@ -12,6 +12,8 @@ import { createBuildOutcomes } from './build.js';
 import type { BuildOutcomes } from './build.js';
 import { firstEconomy } from './content.js';
 import type { BoundContent } from './content.js';
+import { createCorridors } from './corridors.js';
+import type { Corridors } from './corridors.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
 import { createGridBounds } from './grid.js';
@@ -114,6 +116,28 @@ export type World = {
    */
   readonly grid: GridBounds;
   /**
+   * WHERE THE PLAN SAYS PEOPLE WALK (G-034b, ADR-0047 B2): every cell declared a corridor,
+   * ascending by `compareCells`.
+   *
+   * A SET OF COORDINATES, NOT A THING AND NOT A BACK-POINTER. It says nothing about what
+   * stands anywhere, so it cannot drift from the entities — the property `grid.ts`'s header
+   * is about, kept by storing a player DECISION about space rather than a second record of
+   * contents. `corridors.ts` carries the decision and the two shapes it was chosen over.
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, which is why it is a field. An empty cell beside a
+   * room and a corridor beside a room are the same bytes everywhere else in `World`; the
+   * difference is exactly what a player drew, and before this goal there was nowhere to
+   * write it down. `report.ts` has carried the consequence in a comment since G-009 —
+   * *"the empty column between them IS the corridor until M3 gives corridors an identity of
+   * their own"* — and this is that identity.
+   *
+   * IT SITS BESIDE `grid` RATHER THAN INSIDE IT on purpose. `GridBounds` is six integers
+   * that never change within a run; this changes whenever the player draws. Putting a
+   * mutable list inside the plot would make `boundsEqual` — the `ValidityCache`'s reuse
+   * clause — a deep comparison over a growing array, on the hottest predicate in the tick.
+   */
+  readonly corridors: Corridors;
+  /**
    * What the player's build commands have done, counted (G-008).
    *
    * NOT DERIVABLE FROM ANYTHING ELSE, which is why it is a field rather than a fold. A
@@ -167,6 +191,7 @@ export type World = {
 const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   buildOutcomes: true,
   contentHash: true,
+  corridors: true,
   entities: true,
   grid: true,
   guestOutcomes: true,
@@ -242,6 +267,12 @@ export function createWorld(seed: number, content: BoundContent): World {
     // default to the same value honestly, having no content and so no scale to read.
     reviewOutcomes: createReviewOutcomes(),
     grid: createGridBounds(),
+    // EMPTY, AND THAT IS A STATEMENT RATHER THAN A DEFAULT (G-034b). A new hotel is a bare
+    // plot: nobody has drawn a corridor on it, so every floor is OPEN PLAN and every cell no
+    // room stands on is circulation — which is exactly what this simulation meant before
+    // corridors existed, and is why opening a world under this build changes no verdict.
+    // See `corridors.ts` and `computeRoomInvalidity`.
+    corridors: createCorridors(),
     buildOutcomes: createBuildOutcomes(),
     loanOutcomes: createLoanOutcomes(),
   };

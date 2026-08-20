@@ -137,7 +137,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // while the need rows' met/unmet and the review distribution move because their definition
     // did. `unservedTicks` and `instanceTicks` are counted in ticks and are UNCHANGED, which is
     // what separates a change of unit from the simulation behaving differently.
-    stateHash: '69840e789db92894',
+    stateHash: '609eab77f24306e3',
   },
   guests: {
     arrived: 24,
@@ -300,7 +300,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   },
   rooms: {
     valid: 6,
-    invalid: { missingItem: 0, noDoor: 0, unplaced: 0, unsupported: 0 },
+    invalid: { missingItem: 0, noCorridor: 0, noDoor: 0, unplaced: 0, unsupported: 0 },
   },
   money: {
     // 18 rather than 17 since G-011, and the one extra is the opening capital. A hotel
@@ -359,7 +359,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'need types  4',
     'entities    11',
     'rooms ok    6',
-    'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no item',
+    'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no corridor, 0 no item',
     'arrived     24',
     // G-027a: `satisfied` and `gaveUpWaiting` became `checkedOut` and `gaveUp` (ADR-0017),
     // and the SPLIT moved with them — 4 and 16 where it was 15 and 5. A stay is 1,440 ticks
@@ -416,7 +416,16 @@ const GOLDEN_2_DAYS_SEED_42 =
     // state and nothing the simulation does. It holds because the shipped plot stays ONE ROW
     // DEEP: no journey is longer, and the new 4-neighbour door rule degenerates to the old
     // 2-neighbour one through `isWithinBounds` when front and back are off the plot.
-    'state hash  69840e789db92894',
+    //
+    // G-034b: TWO LINES MOVED, AND THE SECOND ONE IS THE SAME CONTROL AGAIN.
+    // `69840e789db92894` -> `609eab77f24306e3`, because `World` gained `corridors` and the
+    // seeded hotel now DECLARES the corridor it always had — both hashed state. `rooms bad`
+    // gained a column and reads 0 in it. **Every other line is byte-identical**: the same 6
+    // valid rooms, the same 24 arrivals, the same 4/16 split, the same 7 transactions, the
+    // same 510,000p. The shipped hotel is laid out one room, one corridor, so declaring
+    // that corridor changes no verdict — which is the whole argument that this goal changed
+    // the RULES without changing what the shipped hotel does.
+    'state hash  609eab77f24306e3',
   ].join('\n') + '\n';
 
 /**
@@ -573,7 +582,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  69840e789db92894']);
+    expect(differing).toEqual(['seed        42', 'state hash  609eab77f24306e3']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -867,7 +876,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     };
     rooms: {
       valid: number;
-      invalid: { missingItem: number; noDoor: number; unplaced: number; unsupported: number };
+      invalid: { missingItem: number; noCorridor: number; noDoor: number; unplaced: number; unsupported: number };
     };
     money: {
       revenuePennies: number;
@@ -906,24 +915,32 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // below is the same fact from the other side: 12 refusals where there were 5. This is
     // pricing behaviour changing because the STAY changed, which is exactly the trap
     // `stayDurationTicksSchema` warns about, and it is NOT a licence to raise the rate.
-    expect(summary().build.built).toBe(3);
-    expect(summary().build.constructionTransactions).toBe(3);
-    expect(summary().money.constructionPennies).toBe(-750_000);
+    // FOUR WHERE THERE WERE THREE, AND IT IS THE LAYOUT RATHER THAN THE PRICE (G-034b). The
+    // player's walk now packs into blocks between its own corridors, offset one column from
+    // the plot's edge, so the rooms it builds first sit OVER the inherited hotel rather than
+    // over the gaps between it — two of them work where none did, the hotel earns more, and
+    // the cash test lets one more build through. Nothing about construction cost moved.
+    expect(summary().build.built).toBe(4);
+    expect(summary().build.constructionTransactions).toBe(4);
+    expect(summary().money.constructionPennies).toBe(-1_000_000);
   });
 
   it('matches the hand-derived closed form, penny for penny', () => {
     const s = summary();
     const satisfied = s.guests.departures.find((row) => row.reason === 'checkedOut')?.count ?? -1;
     expect(satisfied * 8_500).toBe(s.money.revenuePennies);
-    expect(s.money.revenuePennies).toBe(824_500);
+    expect(s.money.revenuePennies).toBe(1_088_000);
     // TWO ROOM TYPES PAY UPKEEP SINCE G-012, so the closed form has two terms: the
     // bedrooms at 2,500p and the three inherited amenities at 1,500p, standing for all 30
     // nights. The bedroom term is 154 room-nights at G-027a, down from 262, because only
     // three rooms are ever built and they arrive later — a room-night is only paid once the
     // room exists. Both terms are derived rather than captured, which is what makes this a
     // check and not a snapshot.
-    expect(s.money.upkeepPennies).toBe(154 * -2_500 + 3 * 30 * -1_500);
-    expect(s.money.upkeepPennies).toBe(-520_000);
+    // 154 -> 166 ROOM-NIGHTS AT G-034b, for the reason `build.built` moved: one more room is
+    // built, and it is built earlier, so there are more room-nights to pay for. The two terms
+    // are still derived rather than captured, which is what makes this a check.
+    expect(s.money.upkeepPennies).toBe(166 * -2_500 + 3 * 30 * -1_500);
+    expect(s.money.upkeepPennies).toBe(-550_000);
     // The capital is a transaction like any other, and it is the only one of G-011's new
     // reasons this run produces: nothing is demolished, so nothing is refunded, and the
     // hotel is never stuck, so nothing is borrowed.
@@ -936,8 +953,8 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // (G-013): the lounge's arm chair and the games room's vending machine. The café
     // requires nothing, so the amenities contribute 3 rooms + 2 items rather than 3 + 0.
     // `rooms.valid` is the number a reader wants, and it is neither 13 nor 31.
-    expect(s.world.entities).toBe((3 + 3) * 2 + 3 + 2);
-    expect(s.world.entities).toBe(17);
+    expect(s.world.entities).toBe((3 + 4) * 2 + 3 + 2);
+    expect(s.world.entities).toBe(19);
     // AND EIGHT OF THE TEN ROOMS THE PLAYER BUILT DO NOT WORK. The player's walk packs
     // rooms onto the floor above, over the corridors of the hotel below, so most of them
     // have nothing underneath — and with ten built rather than nine, two are now adjacent
@@ -947,12 +964,22 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // player now pays 250,000p apiece for eight rooms that house nobody and still cost
     // 2,500p a night each. Recovery money buys a bigger mistake faster; the terminator for
     // that spiral is still M4's.
-    expect(s.rooms.invalid.unsupported).toBe(2);
-    expect(s.rooms.invalid.noDoor).toBe(1);
+    //
+    // G-034b MOVED WHICH ONES FAIL AND WHY, and the shape is the point rather than the
+    // numbers: the player's blocks are offset so their end rooms land over the inherited
+    // hotel, so TWO of the four now work and three of the ten cells the walk touched are in
+    // mid-air. `noDoor` is 0 here because this run never builds two rooms hard against each
+    // other — the criterion invocation in `validity.report.test.ts` is where packing happens.
+    expect(s.rooms.invalid.unsupported).toBe(3);
+    expect(s.rooms.invalid.noDoor).toBe(0);
+    expect(s.rooms.invalid.noCorridor).toBe(0);
     // Three inherited bedrooms that work, plus the three basement amenities, which always
     // do. All three of the player's builds are duds — the ratio of waste to spend is what
     // ADR-0009 describes, and a thinner margin does not make the walk any wiser.
-    expect(s.rooms.valid).toBe(3 + 3);
+    // Three inherited bedrooms, three basement amenities, and ONE of the player's four —
+    // 3 + 3 until this goal, and the extra one is a room the player built over the hotel it
+    // inherited rather than over the gaps in it.
+    expect(s.rooms.valid).toBe(3 + 3 + 1);
     expect(s.guests.inInvalidRooms).toBe(0);
   });
 
@@ -967,7 +994,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
       s.money.upkeepPennies +
       s.money.constructionPennies;
     expect(folded).toBe(s.money.balancePennies);
-    expect(folded).toBe(54_500);
+    expect(folded).toBe(38_000);
   });
 
   it('records refusals as OUTCOMES on a real run, without ever exiting non-zero', () => {
@@ -975,7 +1002,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // `buildRoom` that threw on an unaffordable build would make this exit 1 with a stack
     // trace; one that silently skipped would report 0 here. THIS IS THE EXIT CRITERION'S
     // "refusal is a recorded outcome rather than a throw", measured through the CLI.
-    expect(summary().build.refused.insufficientFunds).toBe(12);
+    expect(summary().build.refused.insufficientFunds).toBe(11);
     expect(summary().build.built + summary().build.refused.insufficientFunds).toBe(15);
     expect(runCli(BUILD_ARGS).status).toBe(0);
   });
@@ -990,7 +1017,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     const g = summary().guests;
     expect(departures(g) + g.inHotel).toBe(g.arrived);
     expect(g.arrived).toBe(360);
-    expect(left(g, 'checkedOut')).toBe(97);
+    expect(left(g, 'checkedOut')).toBe(128);
     expect(g.stuck).toBe(0);
     expect(g.orphanedReservations).toBe(0);
   });

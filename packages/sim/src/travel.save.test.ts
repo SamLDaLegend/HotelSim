@@ -198,6 +198,29 @@ type MigratedGuest = { readonly id: number; readonly at: { readonly floor: numbe
 const migratedGuests = (world: Record<string, unknown>): readonly MigratedGuest[] =>
   (step.migrate(world) as { guests: { list: MigratedGuest[] } }).guests.list;
 
+/**
+ * EVERY TOP-LEVEL KEY A v11 WORLD HAD, frozen at the moment v18 was defined (G-034b).
+ *
+ * The literal this file's own comment asked for one bump before it was needed: *"the correct
+ * response is to compare against the v10 key set of the day (this literal list, moved here) and
+ * let the v11 -> v12 step be what supplies the new one."* v12 through v17 reshaped fields rather
+ * than adding them, so the day arrived at v18. Sorted, because the assertion sorts.
+ */
+const V11_WORLD_KEYS: readonly string[] = Object.freeze([
+  'buildOutcomes',
+  'contentHash',
+  'entities',
+  'grid',
+  'guestOutcomes',
+  'guests',
+  'ledger',
+  'loanOutcomes',
+  'needOutcomes',
+  'reviewOutcomes',
+  'rng',
+  'tick',
+]);
+
 describe('the chain walks 1 -> ... -> today, and every link is still observed (G-023a)', () => {
   it('ships one step per version, and the 10 -> 11 step is still the tenth of them', () => {
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
@@ -220,6 +243,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
       [14, 15],
       [15, 16],
       [16, 17],
+      [17, 18],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -250,7 +274,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
     });
   });
 
-  it('adds no top-level key, so `World` still has exactly the twelve it had', () => {
+  it('adds no top-level key, so a v11 world has exactly the twelve a v10 world had', () => {
     // The first schema bump since G-007 to reshape something INSIDE a field rather than add
     // one beside it. `save.fixture.test.ts` asserts the same fact from the other side, by
     // counting the fields the fixture gains across the whole walk.
@@ -260,10 +284,14 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
     // the correct response is to compare against the v10 key set of the day (this literal
     // list, moved here) and let the v11 -> v12 step be what supplies the new one. Adding it
     // above would put back exactly the forward hazard the freeze removed.
-    expect(WORLD_KEYS).toHaveLength(12);
+    //
+    // G-034b IS THAT DAY, AND THE PARAGRAPH ABOVE IS WHAT WAS DONE. v18 added `corridors`, so
+    // the comparison moved off the live `WORLD_KEYS` and onto v11's own key set, frozen below.
+    // `WORLD_KEYS` is still read for the one claim that IS about today — that it is sorted, the
+    // property `assertWorldShape` and the field-coverage generator both rest on.
     expect([...WORLD_KEYS]).toEqual([...WORLD_KEYS].sort());
     const migrated = step.migrate(v10World()) as Record<string, unknown>;
-    expect(Object.keys(migrated).sort()).toEqual([...WORLD_KEYS]);
+    expect(Object.keys(migrated).sort()).toEqual([...V11_WORLD_KEYS]);
   });
 });
 

@@ -75,6 +75,7 @@ import {
   type UnservedWalk,
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
+import type { Corridors } from './corridors.js';
 import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
 import type { ReviewOutcomeRow } from './reviews.js';
 import {
@@ -1085,6 +1086,7 @@ export function countGuestsInInvalidRooms(
   guests: GuestStore,
   entities: EntityStore,
   bounds: GridBounds,
+  corridors: Corridors,
   content: BoundContent,
 ): number {
   let count = 0;
@@ -1106,7 +1108,7 @@ export function countGuestsInInvalidRooms(
         else {
           // Allocated only once a guest is actually holding something, so an empty hotel
           // pays nothing — the `assertGuestStoreInvariants` discipline.
-          validity ??= createValidityContext(content, bounds, storeEntities(entities));
+          validity ??= createValidityContext(content, bounds, corridors, storeEntities(entities));
           if (!isValidRoom(validity, room)) count += 1;
         }
       }
@@ -1119,7 +1121,7 @@ export function countGuestsInInvalidRooms(
         // being served by an item whose room has lost its floor is the same defect as a
         // guest sleeping in that room, and the tick releases both on the same tick for the
         // same reason.
-        validity ??= createValidityContext(content, bounds, storeEntities(entities));
+        validity ??= createValidityContext(content, bounds, corridors, storeEntities(entities));
         if (!isProviding(validity, provider)) count += 1;
       }
     }

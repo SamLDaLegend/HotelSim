@@ -37,6 +37,7 @@
 import { describe, expect, it } from 'vitest';
 import { withoutCounters } from './fixtures/without-counters.js';
 import { stripDepth } from './without-depth.js';
+import { stripCorridors } from './without-corridors.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
 import { SAVE_V1_BYTES } from './fixtures/save-v1.js';
@@ -347,7 +348,7 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
    * nothing; leaving them on instead hands `migrateV16ToV17` values it correctly refuses.
    */
   const asV8Bytes = (world: World): string => {
-    const json = stripDepth(JSON.parse(JSON.stringify(world)) as Record<string, unknown>);
+    const json = stripCorridors(stripDepth(JSON.parse(JSON.stringify(world)) as Record<string, unknown>));
     const guests = json['guests'] as { nextId: number; list: Record<string, unknown>[] };
     // THE v10 FIELD COMES OFF TOO (G-019), for the reason the v9 fields come off below: "the
     // same world written in the v8 SHAPE" means every field v8 did not have, and leaving

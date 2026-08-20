@@ -286,7 +286,7 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
     // ever sees the end. A release cause that leaves no trace in the final state is one the
     // I2 gate cannot witness at all, which is the G-009 sky-tower lesson.
     const world = replayed();
-    const validity = createValidityContext(content, world.grid, storeEntities(world.entities));
+    const validity = createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
     const stranded = entitiesInOrder(world.entities).filter(
       (entity) =>
         !isRoomKind(content, entity.kind) &&

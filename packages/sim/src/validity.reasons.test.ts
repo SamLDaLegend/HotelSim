@@ -15,6 +15,8 @@
 // leaked content ID (ADR-0003), and `check:content` scans test files.
 
 import { describe, expect, it } from 'vitest';
+import { createCorridors, withCorridor } from './corridors.js';
+import type { Corridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
 import { createGridBounds, GROUND_FLOOR } from './grid.js';
@@ -75,6 +77,13 @@ type Construction = {
   readonly reason: RoomInvalidityReason;
   readonly how: string;
   readonly store: EntityStore;
+  /**
+   * The corridor plan this world was drawn under (G-034b). Absent means NONE DECLARED, which
+   * is not the same as "no circulation": a floor with no corridor on it is OPEN PLAN and all
+   * its free space is walkable, which is why the four constructions that predate this goal
+   * still produce exactly the reasons they always did.
+   */
+  readonly corridors?: Corridors;
 };
 
 const furnished = (at: Cell): readonly Spec[] => [
@@ -114,25 +123,36 @@ const CONSTRUCTIONS: readonly Construction[] = [
     how: 'a room whose type requires a bed, with no bed standing in it',
     store: storeOf(['bedroom', cell(GROUND_FLOOR, 4)]),
   },
+  {
+    reason: 'noCorridor',
+    how: 'a room with free cells beside it on a floor whose corridor is somewhere else',
+    // THE DISCRIMINATING SHAPE, AND EVERY PART OF IT IS DOING WORK. The room is supported (the
+    // earth), furnished (its bed), and has a door (columns 3 and 5 are empty), so all three
+    // earlier checks pass and this is the only reason left. The corridor at column 10 is what
+    // makes the floor PLANNED — without it the floor is open plan, every free cell is
+    // circulation, and this same store is a perfectly valid room. That pair is the rule.
+    store: storeOf(...furnished(cell(GROUND_FLOOR, 4))),
+    corridors: withCorridor(createCorridors(), cell(GROUND_FLOOR, 10)),
+  },
 ];
 
-function reasonOf(store: EntityStore): RoomInvalidityReason | null {
+function reasonOf(store: EntityStore, corridors: Corridors = createCorridors()): RoomInvalidityReason | null {
   const room = store.list[0];
   if (room === undefined) throw new Error('test bug: the construction has no room');
-  return roomInvalidity(createValidityContext(content, BOUNDS, storeEntities(store)), room);
+  return roomInvalidity(createValidityContext(content, BOUNDS, corridors, storeEntities(store)), room);
 }
 
 describe('every invalidity reason is reachable by a world constructed here', () => {
   for (const construction of CONSTRUCTIONS) {
     it(`produces ${construction.reason} from ${construction.how}`, () => {
-      expect(reasonOf(construction.store)).toBe(construction.reason);
+      expect(reasonOf(construction.store, construction.corridors)).toBe(construction.reason);
     });
   }
 
   it('produces EVERY reason in the union, and no reason outside it', () => {
     // The criterion itself. Sorted with the same explicit comparator the union uses, so
     // this compares sets rather than insertion orders.
-    const produced = CONSTRUCTIONS.map((construction) => reasonOf(construction.store)).sort((a, b) =>
+    const produced = CONSTRUCTIONS.map((construction) => reasonOf(construction.store, construction.corridors)).sort((a, b) =>
       String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0,
     );
     expect(produced).toEqual([...ROOM_INVALIDITY_REASONS]);
@@ -145,7 +165,16 @@ describe('every invalidity reason is reachable by a world constructed here', () 
 
   it('shows in the tally, one room invalid for one reason each', () => {
     for (const construction of CONSTRUCTIONS) {
-      const tally = countInvalidRooms(construction.store, BOUNDS, content);
+      const tally = countInvalidRooms(
+        construction.store,
+        BOUNDS,
+        // THE CONSTRUCTION'S OWN PLAN (G-034b). A literal empty plan here would have made this
+        // test disagree with the one above about the same world — the tally would count the
+        // `noCorridor` room as valid, on an open-plan floor, while `reasonOf` called it
+        // invalid. Two answers from one store is exactly what a shared parameter prevents.
+        construction.corridors ?? createCorridors(),
+        content,
+      );
       expect(tally[construction.reason]).toBe(1);
       expect(totalInvalidRooms(tally)).toBeGreaterThanOrEqual(1);
     }

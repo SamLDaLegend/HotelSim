@@ -19,6 +19,7 @@
 // leaked content ID (ADR-0003), and `check:content` scans test files.
 
 import { describe, expect, it } from 'vitest';
+import { createCorridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { Entity } from './entities.js';
 import { entitiesInOrder } from './entities.js';
@@ -40,6 +41,7 @@ import {
 } from './save.js';
 import { run } from './tick.js';
 import { countInvalidRooms, ROOM_INVALIDITY_REASONS, totalInvalidRooms } from './validity.js';
+import { withCorridor } from './corridors.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
@@ -90,8 +92,29 @@ function worldOfEveryReason(): World {
     { id: 10, kind: 'bed', at: cell(GROUND_FLOOR, 31) },
     { id: 11, kind: 'bedroom', at: cell(GROUND_FLOOR, 50) }, //     valid
     { id: 12, kind: 'bed', at: cell(GROUND_FLOOR, 50) },
+    { id: 13, kind: 'bedroom', at: cell(GROUND_FLOOR, 60) }, //     noCorridor
+    { id: 14, kind: 'bed', at: cell(GROUND_FLOOR, 60) },
   ];
-  return { ...createWorld(9, content), entities: { nextId: 13, list } };
+  // AND THE PLAN THAT MAKES TWO OF THOSE ROOMS DIFFER (G-034b). The ground floor is PLANNED —
+  // it carries corridors — so every room on it has to open onto one, and the corridor at
+  // column 51 is the only difference between room 11 (valid) and room 13 (`noCorridor`):
+  // identical type, identical bed, identical earth beneath, identical free cells beside.
+  // That is what makes this world a test of the rule rather than of a layout.
+  //
+  // Columns 28 and 32 are the SEAL CLUSTER'S OWN CORRIDORS, and they are here so that this
+  // world still says exactly what it said before this goal: rooms 7 and 9 are the scenery that
+  // walls room 5 in, they were valid, and they stay valid. Without them the ground floor's plan
+  // would silently convert two of this world's valid rooms into `noCorridor` ones and the
+  // `noDoor` room would be the only thing left unchanged — a fixture rewritten by a rule rather
+  // than a fixture testing one.
+  return {
+    ...createWorld(9, content),
+    entities: { nextId: 15, list },
+    corridors: [cell(GROUND_FLOOR, 28), cell(GROUND_FLOOR, 32), cell(GROUND_FLOOR, 51)].reduce(
+      withCorridor,
+      createCorridors(),
+    ),
+  };
 }
 
 describe('validity adds nothing to the save', () => {
@@ -102,6 +125,11 @@ describe('validity adds nothing to the save', () => {
     expect([...WORLD_KEYS]).toEqual([
       'buildOutcomes',
       'contentHash',
+      // G-034b. WHERE THE PLAN SAYS PEOPLE WALK — a record of what the player DREW, not a
+      // cached property of the building, which is what this test is about. It is listed here
+      // for the reason `reviewOutcomes` is: being in `World` is correct for it, and the test
+      // asks whether validity itself leaked a field, not whether the type ever grows.
+      'corridors',
       'entities',
       'grid',
       'guestOutcomes',
@@ -137,7 +165,11 @@ describe('validity adds nothing to the save', () => {
 
   it('writes no validity field into the bytes', () => {
     const json = serialise(worldOfEveryReason());
-    for (const word of ['valid', 'invalid', 'unsupported', 'noDoor', 'missingItem', 'unplaced']) {
+    // `noCorridor` is in the list and `corridors` is deliberately NOT: the world's own corridor
+    // PLAN is saved state (it is what the player drew), while the VERDICT computed from it must
+    // not be — which is the distinction this whole file is about, and the reason the two words
+    // sit on opposite sides of it (G-034b).
+    for (const word of ['valid', 'invalid', 'unsupported', 'noDoor', 'noCorridor', 'missingItem', 'unplaced']) {
       expect(json).not.toContain(word);
     }
   });
@@ -147,9 +179,10 @@ describe('a world full of invalid rooms', () => {
   it('is one every reason is represented in', () => {
     // The subject of the round trip below is a world that actually exercises the rules.
     // Without this the tests after it would be round-tripping an ordinary hotel.
-    const tally = countInvalidRooms(worldOfEveryReason().entities, BOUNDS, content);
+    const world = worldOfEveryReason();
+    const tally = countInvalidRooms(world.entities, BOUNDS, world.corridors, content);
     for (const reason of ROOM_INVALIDITY_REASONS) expect(tally[reason]).toBeGreaterThan(0);
-    expect(totalInvalidRooms(tally)).toBe(4);
+    expect(totalInvalidRooms(tally)).toBe(5);
   });
 
   it('serialises, deserialises and re-hashes identically', () => {
@@ -163,8 +196,13 @@ describe('a world full of invalid rooms', () => {
     // The hash proves the bytes match; this proves the MEANING does. A derived property
     // that came back different would be a save that loaded into a different hotel.
     const world = worldOfEveryReason();
-    expect(countInvalidRooms(deserialise(serialise(world)).entities, BOUNDS, content)).toEqual(
-      countInvalidRooms(world.entities, BOUNDS, content),
+    const restored = deserialise(serialise(world));
+    // EACH WORLD AGAINST ITS OWN PLAN, and the restored one's plan is itself a round trip:
+    // if `corridors` fell out of the save, this comparison would be a planned floor against an
+    // open-plan one and the restored hotel would come back with a valid room where the original
+    // had a `noCorridor` (G-034b).
+    expect(countInvalidRooms(restored.entities, BOUNDS, restored.corridors, content)).toEqual(
+      countInvalidRooms(world.entities, BOUNDS, world.corridors, content),
     );
   });
 
@@ -177,9 +215,10 @@ describe('a world full of invalid rooms', () => {
 
   it('keeps ticking, and keeps every room where it was', () => {
     const advanced = run(worldOfEveryReason(), content, 100);
-    expect(entitiesInOrder(advanced.entities)).toHaveLength(12);
-    expect(countInvalidRooms(advanced.entities, BOUNDS, content)).toEqual({
+    expect(entitiesInOrder(advanced.entities)).toHaveLength(14);
+    expect(countInvalidRooms(advanced.entities, BOUNDS, advanced.corridors, content)).toEqual({
       missingItem: 1,
+      noCorridor: 1,
       noDoor: 1,
       unplaced: 1,
       unsupported: 1,
@@ -212,8 +251,9 @@ describe('the permanent v1 fixture', () => {
     // deliberately refuses to invent positions, so every room it carries stands nowhere.
     // This is the only producer of that reason outside a hand-built world.
     const world = deserialise(SAVE_V1_BYTES);
-    expect(countInvalidRooms(world.entities, BOUNDS, fixtureContent)).toEqual({
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), fixtureContent)).toEqual({
       missingItem: 0,
+      noCorridor: 0,
       noDoor: 0,
       unplaced: 3,
       unsupported: 0,

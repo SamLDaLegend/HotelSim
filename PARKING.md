@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-034a is done: the grid has a third axis, save v17, and the shipped plot stays ONE ROW DEEP so the goal changes no behaviour — only the hash. Fourteen rows green, every row re-run by the orchestrator. The plan review found two BLOCKERs before any code, and the BUILD then corrected the plan review: floor-ASCENDING is the precondition, floor-FIRST is a convention, and it ships labelled as one. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-034b is done: a cell can be a corridor, connectivity is a validity rule, save v18. The shipped default run is byte-identical below the hash line; the rule bites only where corridors are DECLARED. Fourteen rows green, every row re-run by the orchestrator. An ESCALATION is open — G-034b is behavioural and ADR-0046 §7 says a behavioural goal with no WATCH surface escalates rather than recording a debt. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2696,3 +2696,72 @@ Everything here was cut from G-030 deliberately, or found by it and not fixed by
   G-032a — which is what "pre-existing" claimed without evidence. If this tree times out more,
   the census's three 30-day simulations are a real cost and belong on a shorter arm.*
   -> **the goal that next adds simulation work to `pnpm test`, or M3 exit.**
+
+## Deferred out of G-034b (2026-08-20)
+
+Raised by `sim-engineer` at PLAN and BUILD, and deliberately kept out of the diff. Corridors are
+now a stored plan, a validity rule and a save version; everything below is the surface that plan
+implies and this goal did not build.
+
+- **`clearCorridor` — a plan that can only GROW.** `layCorridor` is the whole verb: a cell can be
+  declared and never undeclared. Nothing in this goal needs removal — the rule only ever READS
+  the plan — but a player redrawing a floor obviously does, and B4 (ADR-0047: rooms are editable)
+  makes it a certainty rather than an edge case. It is one function beside `withCorridor` and one
+  command case; what it needs from a goal is the DECISION about what happens to the rooms that
+  were reaching circulation through it, which is a design question and not a plumbing one.
+  **FALSIFICATION TEST**: attempt to express "the player rubs out a corridor and the two rooms
+  beside it go dark" as a command log against this build. *If it can be done with `layCorridor`
+  alone it was never needed; if the only route is editing `World.corridors` from outside the
+  command log, then the plan is write-only state and I2's "anything that cannot be expressed as a
+  command cannot exist" is being bent.* -> **G-036**, with the drawing verbs.
+
+- **A PLAYER-FACING corridor verb, with its refusals RECORDED.** `layCorridor` is the PRIMITIVE:
+  a cell off the plot THROWS, exactly as `spawnEntity` does, because the caller is holding the
+  world whose plot it ignored. The player's version — the one a UI dispatches, which records
+  `outOfBounds` in `World.buildOutcomes` instead of throwing — is the same split `buildRoom` has
+  over `spawnEntity`, and it belongs with the goal that gives the player a drawing tool.
+  **FALSIFICATION TEST**: point a UI at `layCorridor` and drag off the edge of the plot. *If the
+  run survives, the primitive was enough; if it throws, the player-facing verb is owed and this
+  entry was right.* -> **G-036**.
+
+- **WHAT A CORRIDOR COSTS.** Nothing, today. The scarcity this mechanic creates is SPACE, which
+  is ADR-0047 B2's whole argument (*"without scarce space, bigger is better has no
+  counterweight"*), and a price is a designer's number and therefore content (I3). Adding one is
+  a field on the economy table plus a transaction, not a shape change.
+  **FALSIFICATION TEST**: play a build loop with free corridors. *If the optimal move is to
+  declare every cell on the floor a corridor and then build into it, space is not scarce enough
+  on its own and the price is doing work the geometry cannot.* -> **G-037**, with per-instance
+  pricing, or M4 with the economy.
+
+- **CIRCULATION IS NOT REACHABILITY, AND THIS GOAL DOES NOT PRETEND OTHERWISE.** A room must open
+  onto a cell the plan calls a walkway. Whether that walkway CONNECTS to the entrance — through
+  other corridors, stairs and lifts — is a flood fill, and `PARKING.md` named it *"a THIRD thing
+  and not this one"* at G-009 before either existed. Two corridor cells at opposite ends of a
+  floor with rooms on both are all valid here and one of them is unreachable.
+  **FALSIFICATION TEST**: build a hotel whose only corridor is a single cell in the middle of a
+  sealed block of rooms, and watch a guest walk to it. *If travel gets there, reachability is
+  already trivially true and the flood fill buys nothing; if the guest teleports through rooms,
+  that is `stepTowards` and not this rule.* -> **G-038**, with pathfinding.
+
+- **A CORRIDOR IN MID-AIR IS LEGAL.** Nothing requires a declared cell to be supported, so a plan
+  may name a walkway on floor 12 above nothing at all — and a room beside it counts as connected.
+  Rooms are governed (`unsupported` is checked first, so such a room is invalid anyway *if it is
+  the room* that floats), but the corridor itself is not.
+  **FALSIFICATION TEST**: declare a corridor at (floor 12, column 40) on an empty plot and put a
+  supported room beside it. *If the room reports valid, corridors need their own support rule and
+  it is a real gap; if no reachable layout can produce a supported room beside an unsupported
+  corridor, the case is unreachable and the rule would inspect nothing.* -> **G-038**, where
+  circulation stops being a per-cell fact and becomes a graph.
+
+- **THE HISTORICAL ARMS ARE ALL INCOMPARABLE NOW, and that is stated rather than discovered.** An
+  arm materialises `packages/sim/src` from a revision and drives it with HEAD's workload
+  (`ARM_PATHS`), and HEAD's workload lays corridors — so every pre-G-034b revision stops at
+  `applyCommand: unhandled command layCorridor` and `sim:measure` reports INCOMPARABLE. The
+  instrument is working (that verdict is what it is for), and the two proof-of-bite probes in
+  `check-measure.mjs` / `check-tripwire.mjs` were re-pointed at the new name in this commit.
+  **FALSIFICATION TEST**: `node tools/gates/measure.mjs --head <any pre-G-034b revision>`. *If it
+  reports a RATIO, the workload did not really change and the re-point was wrong; if it reports
+  INCOMPARABLE naming `layCorridor`, the campaigns cannot be compared across this change and are
+  re-taken rather than continued* — ADR-0015's REPLACE-on-configuration-change case.
+  -> **G-039**, which already owns every campaign re-take.
+

@@ -1235,3 +1235,70 @@ goal that discovered the finding is how a goal becomes two. **At ~1.9 % of I5's 
 there is ample headroom and nothing is at risk today.** It is parked with this entry as its
 falsification test.
 
+
+---
+
+## 2026-08-16 — OPEN — G-034b SHIPPED A BEHAVIOURAL CHANGE WITH NO WATCH SURFACE
+
+**Raised**: G-034b, by the orchestrator · **Asked of the human**: whether this stands, or whether
+G-034b should have waited for G-035.
+
+**ADR-0046 §7 is explicit and I am not arguing round it in the week it was written:**
+
+> *"from G-034 until this lands there is NO valid WATCH surface, and a behavioural goal shipping
+> without one is an ESCALATION, not a recorded debt."*
+
+**G-034b is behavioural.** `sim-engineer` flagged it and declined to pick a side, which was right.
+
+### What is and is not unwatched, stated precisely rather than defensively
+
+**The shipped game is byte-identical below the hash line**: 6 valid rooms, `0/0/0/0/0` invalidity
+tally, 24 arrivals, 4/16 split, 96 checkouts, 510,000p. **The new rule bites only where corridors
+are DECLARED**, and today the only things that declare them are the harnesses.
+
+**So the honest reading is narrow — and narrow is not none.** What moved: the criterion arms and
+the `--build` arms, because those hotels declare corridors. **The capability is live**, and it will
+bite the moment content or a player declares one.
+
+### Why I raised it rather than reasoning my way past it
+
+**G-034a earned its "no WATCH owed" by being genuinely behaviour-free** — the shipped plot stayed
+one row deep, and *every* outcome was byte-identical. **G-034b cannot make that claim**, and the
+difference is exactly one step: *"the shipped default is unchanged"* is a weaker statement than
+*"nothing changed"*, and stringing weaker-but-still-defensible steps together is **§0's diagnosis
+of how this project got four goals into an M3 built on the wrong projection.**
+
+> **Every individual step is justified. That is the failure mode, not the defence.**
+
+### The mitigations that exist, so the human is choosing with them in hand
+
+- **`tools/viewer` now draws corridors** and is bumped to schema 18, because `viewer.readonly.test.ts`
+  demands every `World` key be drawn or exempted — *and a room reported `noCorridor` looks identical
+  to a working one unless the plan is on screen.* **But the viewer is written off by ADR-0046 §3 and
+  draws side-on, not isometric**, so it is not the surface of record.
+- **The rule was measured before it was chosen.** An unconditional connectivity rule failed **216
+  tests across 33 files in `packages/sim` alone**; the shipped rule reads history instead —
+  **a floor with no declared corridor is OPEN PLAN**, which is what the sim meant for thirty-three
+  goals.
+- **The migration provably rewrites no verdict**, structurally rather than by sampling: on an
+  open-plan floor circulation reduces to *"no room stands here"*, which is the predicate the door
+  walk already applies, **so `hasDoor` implies `hasCirculation` and `noCorridor` cannot fire on any
+  migrated world.** Witnessed on a hand-built v17 world, then **falsified on the same world** — one
+  corridor declared elsewhere changes three verdicts.
+
+### The options
+
+- **(a) Let it stand**, and G-035's WATCH covers corridors when the view lands. Cheapest, and the
+  unwatched surface is genuinely narrow.
+- **(b) Rule that G-034b should have waited**, and take it as precedent that §7 binds even when the
+  shipped default is unchanged.
+- **(c) Narrow §7 in writing** — a behavioural goal whose SHIPPED default is byte-identical records
+  a debt rather than escalating. **This is the option I distrust**, because it is the rule bending
+  to the first goal that found it inconvenient.
+
+**Recommendation: (a) now, and (b) as the standing precedent** — let this one stand because the
+surface is narrow and provably so, and treat the next such case as waiting for its instrument.
+**Not (c).**
+
+**Nothing is blocked.** Fourteen rows green, and M3 continues to G-035 — which is the goal that
+ends this condition.

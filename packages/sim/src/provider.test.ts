@@ -15,6 +15,7 @@
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
+import { createCorridors } from './corridors.js';
 import type { Command } from './commands.js';
 import { bindContent } from './content.js';
 import type { ItemTypeData, NeedTypeData, RoomTypeData } from './content.js';
@@ -94,7 +95,7 @@ const despawn = (id: number): Command => ({ kind: 'despawnEntity', id });
 const worldOf = (...commands: readonly Command[]): World =>
   stepTick(createWorld(3, content), content, [...commands]);
 
-const ctxOf = (world: World) => createValidityContext(content, BOUNDS, storeEntities(world.entities));
+const ctxOf = (world: World) => createValidityContext(content, BOUNDS, createCorridors(), storeEntities(world.entities));
 
 const ids = (entities: readonly Entity[]): readonly number[] => entities.map((entity) => entity.id);
 

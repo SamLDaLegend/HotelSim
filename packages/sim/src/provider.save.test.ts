@@ -43,6 +43,7 @@ import {
 } from './save.js';
 import { createWorld, hashState } from './world.js';
 import { stripDepth } from './without-depth.js';
+import { stripCorridors } from './without-corridors.js';
 
 const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   id,
@@ -89,8 +90,8 @@ const v6World = (): Record<string, unknown> => {
   // the strip is only needed now; the earlier steps reshape fields the v6 shape already had.
   // AND THE v17 DEPTH COMES OFF (G-034a): a v6 plot had four edges, not six, because the row
   // axis did not exist — and `migrateV16ToV17` refuses a plot that already names one.
-  const { reviewOutcomes: _laterThanV6, ...base } = stripDepth(
-    createWorld(3, content) as unknown as Record<string, unknown>,
+  const { reviewOutcomes: _laterThanV6, ...base } = stripCorridors(
+    stripDepth(createWorld(3, content) as unknown as Record<string, unknown>),
   );
   return {
     ...base,

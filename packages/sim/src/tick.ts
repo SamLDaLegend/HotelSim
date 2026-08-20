@@ -97,10 +97,13 @@ import {
 } from './build.js';
 import type { BuildInput, BuildOutcomes } from './build.js';
 import type { Command, ScheduledCommand } from './commands.js';
+import { withCorridor } from './corridors.js';
+import type { Corridors } from './corridors.js';
 import { hasContentId, isRoomKind, needTypesInOrder } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
+import { assertCell } from './grid.js';
 import {
   assertGuestOutcomes,
   assertGuestStoreInvariants,
@@ -283,6 +286,14 @@ type CommandAccumulator = {
   loanOutcomes: LoanOutcomes;
   /** How many `drawLoan` commands this log contained. The left side of the loan law. */
   loanCommands: number;
+  /**
+   * The corridor plan as this tick's commands have left it (G-034b).
+   *
+   * Threaded exactly as `ledger` is: replaced by value, never mutated, and returned by
+   * REFERENCE when nothing declared anything — which is what keeps the idle-tick guarantee
+   * below and what lets the `ValidityCache` compare plans by identity.
+   */
+  corridors: Corridors;
 };
 
 /** The one place the balance is folded, and the one place it is folded only once. */
@@ -412,6 +423,23 @@ function applyCommand(
       accumulator.balance = result.balance;
       return;
     }
+    case 'layCorridor':
+      // THE PLAN SAYS PEOPLE WALK HERE (G-034b). The cell is checked for integer-ness and
+      // for being on the plot by `assertCell`, and a failure THROWS, because this is the
+      // structural door and the caller is holding the world whose plot it just ignored —
+      // `spawnEntity`'s contract exactly, and the same argument `draftSpawn` makes.
+      //
+      // NOTHING ELSE IS ASKED. What is standing on the cell is the validity walk's question,
+      // asked on every query rather than once here; see `commands.ts` for why one definition
+      // beats a refusal rule and a predicate that could drift apart.
+      //
+      // NOT A BUILD-FAMILY COMMAND: it charges nothing, records no outcome and consumes no
+      // id, so neither per-tick law below has anything to say about it. A corridor that
+      // COSTS money is a designer's number and therefore content (`PARKING.md`); a corridor
+      // whose refusal is RECORDED is the player-facing verb, and that is G-036's.
+      assertCell(command.at, state.world.grid, 'layCorridor');
+      accumulator.corridors = withCorridor(accumulator.corridors, command.at);
+      return;
     case 'guestArrives':
       // Checked here rather than in the guest system, alongside `spawnEntity`'s
       // unknown-kind check and for the same reason: a guest that could form no need is
@@ -479,6 +507,7 @@ export function applyCommands(state: TickState): TickState {
   }
   const accumulator: CommandAccumulator = {
     arrivingGuests: 0,
+    corridors: state.world.corridors,
     ledger: state.world.ledger,
     outcomes: state.world.buildOutcomes,
     balance: 0,
@@ -559,13 +588,18 @@ export function applyCommands(state: TickState): TickState {
   const world =
     accumulator.ledger === state.world.ledger &&
     accumulator.outcomes === state.world.buildOutcomes &&
-    accumulator.loanOutcomes === state.world.loanOutcomes
+    accumulator.loanOutcomes === state.world.loanOutcomes &&
+    // BY IDENTITY, and `withCorridor` is what makes that exact rather than conservative: a
+    // `layCorridor` on a cell already declared returns the same array, so a host issuing one
+    // on a blind cadence still gets the idle-tick guarantee (G-034b).
+    accumulator.corridors === state.world.corridors
       ? state.world
       : {
           ...state.world,
           ledger: accumulator.ledger,
           buildOutcomes: accumulator.outcomes,
           loanOutcomes: accumulator.loanOutcomes,
+          corridors: accumulator.corridors,
         };
 
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
@@ -633,7 +667,17 @@ export function runGuests(state: TickState): TickState {
     // Either way it costs nothing on a quiet tick, because the index is built on the first
     // question asked and `stepGuests` returns before asking any if the hotel is empty — the
     // same lazy contract `cashOnHand` has for the balance fold (I4, I5).
-    validity: tickValidityContext(state.cache, state.content, state.world.grid, state.entities),
+    validity: tickValidityContext(
+      state.cache,
+      state.content,
+      state.world.grid,
+      // THIS TICK'S PLAN, not the one the tick opened with: `applyCommands` has already
+      // written a `layCorridor` back into `state.world`, so a corridor drawn on tick t is
+      // circulation for the guests of tick t — the same no-lag rule a room built this tick
+      // already has (G-034b).
+      state.world.corridors,
+      state.entities,
+    ),
     arriving: state.arrivingGuests,
   });
   // An untouched guest loop returns its inputs by reference, so an idle tick allocates

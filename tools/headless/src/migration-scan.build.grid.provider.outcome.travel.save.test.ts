@@ -99,6 +99,13 @@ const FORBIDDEN_IN_SAVE_TS = [
   // VALIDITY VERDICT.
   'DEFAULT_MIN_ROW',
   'DEFAULT_MAX_ROW',
+  // G-034b. `migrateV17ToV18` states WHAT A v17 WORLD DECLARED ABOUT CIRCULATION: nothing,
+  // because the concept did not exist. `createCorridors()` returns the same empty plan today,
+  // so no assertion can tell the two implementations apart — ADR-0008 (3)'s case exactly. The
+  // day it would bite has a name too: a scenario that opens with a corridor lane already drawn
+  // (ADR-0047 C1, M6) makes the live constructor return something, and a step that read it
+  // would start migrating the SAME v17 bytes onto a plan somebody else chose.
+  'createCorridors',
   'createBuildOutcomes',
   'BUILD_REFUSAL_REASONS',
   'createLoanOutcomes',
@@ -446,6 +453,26 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(declaration).toContain('Object.freeze');
     const keys = [...declaration.matchAll(/^\s*([A-Za-z]\w*):\s*(-?\d+),/gm)].map((m) => `${m[1]!}: ${m[2]!}`);
     expect(keys).toEqual(['minFloor: -2', 'maxFloor: 20', 'minColumn: 0', 'maxColumn: 79']);
+  });
+
+  it('freezes the v18 corridor plan as an EMPTY literal, and writes exactly that', () => {
+    // The positive half for v18, and the same argument `V4_MIGRATION_BUILD_OUTCOMES` and
+    // `V17_MIGRATION_ROW` make: deleting the constant and calling `createCorridors()` would
+    // make the identifier scan pass by REMOVING ITS SUBJECT, so the shape is asserted here too.
+    //
+    // AND THE EMPTINESS IS THE WHOLE STEP. A v17 world declared no corridor, so every floor of
+    // it is OPEN PLAN under v18's rule and every cell no room stands on is circulation — which
+    // is what v17's door rule already meant. A step that wrote ANY cell here would be inventing
+    // circulation the bytes do not name, and `corridors.save.test.ts` is where the consequence
+    // is measured: a hand-built v17 world's validity tallies, reason by reason, unchanged.
+    const code = stripComments(saveSource());
+    expect(/const V18_MIGRATION_CORRIDORS = Object\.freeze\(\[\]\);/.test(code)).toBe(true);
+    const body = /function migrateV17ToV18[\s\S]*?\n\}/.exec(code)?.[0] ?? '';
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).toContain('corridors: V18_MIGRATION_CORRIDORS');
+    // AND IT REFUSES A WORLD THAT ALREADY HAS ONE, which is the guard every step carries and
+    // the only way this one could destroy data.
+    expect(body).toContain("Object.keys(world).includes('corridors')");
   });
 
   it('freezes the v17 row as ONE integer literal, and the plot it writes is one row deep', () => {

@@ -201,7 +201,12 @@ export function createScene(content: BoundContent): Scene {
     // Validity is asked ONCE per frame over the committed entity store — the same rule the
     // simulation applies, not a second implementation of it. Two definitions of "this room
     // works" would eventually disagree, and the player would be shown the wrong one.
-    const validity = createValidityContext(content, world.grid, storeEntities(world.entities));
+    // G-034b: the world's OWN corridor plan, never an empty one. A renderer that passed
+    // `[]` here would show every floor as open plan and paint a disconnected room as
+    // working — a second definition of validity, which is the one thing this line exists
+    // not to be. (Mechanical: `apps/game` is written off by ADR-0046 and rebuilt at G-035;
+    // this keeps `pnpm typecheck` honest until the day it is emptied.)
+    const validity = createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
 
     const rooms = new Map<string, Entity>();
     const items = new Map<string, Entity[]>();

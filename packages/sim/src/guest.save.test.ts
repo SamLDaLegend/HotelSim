@@ -231,6 +231,12 @@ describe('the 1 -> 2 step itself', () => {
       // the wrong defect, which is the failure mode the `dissatisfaction` note in `save.ts`
       // records one field over.
       grid: { minFloor: -2, maxFloor: 20, minColumn: 0, maxColumn: 79, minRow: 0, maxRow: 0 },
+      // AND A CORRIDOR PLAN SINCE v18 (G-034b), for the same reason and with the same failure
+      // mode: `assertWorldShape` reaches `corridors` before it reaches the guests, so a
+      // document without one is refused for the wrong field and the assertion below would
+      // pass while measuring something else. Empty, which is what an era with no word for a
+      // corridor declared.
+      corridors: [],
       entities: { ...store, list: store.list.map((entity) => ({ ...entity, at: null })) },
     };
     const withoutGuests = {

@@ -3,6 +3,10 @@
 //   A room is valid only if it is enclosed, has a door, and holds its required items.
 //   An invalid room is not a provider, and the reason it is invalid is legible.
 //
+//   AND SINCE G-034b IT MUST ALSO REACH CIRCULATION: a door that opens onto nowhere anybody
+//   walks is not a way in. That rule is the ROOM IN A BUILDING rather than the room in
+//   isolation — see `isDeclaredWalkway`, and ADR-0048 §2 for why the two are different systems.
+//
 // WHAT "ENCLOSED" MEANS HERE, AND WHY IT IS NOT A SYNONYM FOR "PLACED LEGALLY".
 //
 // There are no wall entities and there is no wall content. So the question is not "what
@@ -68,6 +72,8 @@
 
 import { findRoomType, isRoomKind, providesOf, requiredItemsOf, roomTypeProvides } from './content.js';
 import type { BoundContent } from './content.js';
+import { hasCorridorAt } from './corridors.js';
+import type { Corridors } from './corridors.js';
 import { draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 import {
@@ -101,6 +107,18 @@ import { compareProviderPreference } from './utility.js';
 export type RoomInvalidityReason =
   /** A required item of this room type does not stand in it. */
   | 'missingItem'
+  /**
+   * The room has a door, and nothing it opens onto is circulation (G-034b).
+   *
+   * A DIFFERENT CLAIM FROM `noDoor`, AND KEEPING THEM APART IS DELIBERATE. `PARKING.md`
+   * predicted this as the door predicate NARROWING — *"from 'a free cell' to 'a corridor
+   * cell'"* — which would have folded both failures into `noDoor`. They are two mistakes a
+   * player makes for two reasons and fixes two ways: `noDoor` is *you have walled it in*,
+   * this is *you have not connected it*. Folding them would also have made every existing
+   * `noDoor` assertion in the harnesses silently start measuring a different thing, which
+   * is the one outcome a new rule must not produce.
+   */
+  | 'noCorridor'
   /** Every neighbouring cell on this floor is another room, or off the plot. */
   | 'noDoor'
   /** The room occupies no cell at all, so none of the other questions can be asked. */
@@ -115,6 +133,7 @@ export type RoomInvalidityReason =
  */
 const ROOM_INVALIDITY_REASON_SET: Readonly<Record<RoomInvalidityReason, true>> = Object.freeze({
   missingItem: true,
+  noCorridor: true,
   noDoor: true,
   unplaced: true,
   unsupported: true,
@@ -182,6 +201,15 @@ export function draftEntities(draft: EntityDraft): EntityVisitor {
 export type ValidityContext = {
   readonly content: BoundContent;
   readonly bounds: GridBounds;
+  /**
+   * The corridor plan this context is answering against (G-034b).
+   *
+   * READ-ONLY AND HELD BY REFERENCE, exactly like `content`: the `ValidityCache` reuse
+   * predicate compares it by IDENTITY, so a context must never be reused across a tick that
+   * declared a corridor. `withCorridor` returns the same array when nothing changed, which
+   * is what keeps a blind-cadence `layCorridor` from dropping the cache every tick.
+   */
+  readonly corridors: Corridors;
   readonly forEach: EntityVisitor;
   /** Placed entities sorted by cell then id. Null until the first question. */
   index: readonly PlacedEntity[] | null;
@@ -190,6 +218,18 @@ export type ValidityContext = {
    * ascending-floor pass. LOOKUP ONLY — never iterated, never ordered (I2).
    */
   grounded: Set<EntityId> | null;
+  /**
+   * The floors that have at least one declared corridor. LOOKUP ONLY — never iterated,
+   * never ordered (I2). Null until the first circulation question.
+   *
+   * DERIVED BY WALKING THE ARRAY, NOT BY BINARY-SEARCHING IT, and that is a decision rather
+   * than an oversight. A search would rest on corridors being sorted FLOOR-FIRST — and
+   * G-034a's build measured that floor-first is a CONVENTION and only floor-ASCENDING is a
+   * precondition (`compareCells`). Resting a second rule on the convention would quietly
+   * promote it to a precondition, which is ADR-0044 §2's class. One O(corridors) walk per
+   * entity set, amortised by the cache over every tick that changed nothing.
+   */
+  plannedFloors: Set<number> | null;
   /** Answers already computed. LOOKUP ONLY — never iterated (I2). */
   memo: Map<EntityId, RoomInvalidityReason | null> | null;
   /**
@@ -248,6 +288,7 @@ export type ValidityContext = {
  *          AND `draftIsClean(draft)`           (this tick has staged no spawn or despawn)
  *          AND `context.content === content`   (identity, the rule `stepTick` already keeps)
  *          AND `boundsEqual(context.bounds, bounds)`
+ *          AND `context.corridors === corridors` (identity; G-034b)
  *
  * and it is stored ONLY when the draft is clean, so what a cache holds is always exactly
  * "the context of `builtFrom`" and never a context of a half-staged world.
@@ -257,8 +298,13 @@ export type ValidityContext = {
  * between ticks (an idle tick returns `base` by reference, which is what makes reuse safe
  * at all). The predicate reads both. A committed `EntityStore` is never mutated, so there
  * is no third door. That is the structural argument; the empirical one is that each of the
- * five clauses above has a case in `validity.cache.test.ts` that goes red when that clause
+ * six clauses above has a case in `validity.cache.test.ts` that goes red when that clause
  * alone is deleted. A cache nothing witnesses is worse than no cache.
+ *
+ * AND SINCE G-034b THE ENTITY SET IS NO LONGER THE WHOLE INPUT. A `layCorridor` changes an
+ * answer this context caches while staging no spawn and no despawn, so the membership
+ * clauses cannot see it — the corridor clause is the one that does, and it is checked by
+ * identity because the plan is replaced wholesale whenever it changes (`withCorridor`).
  *
  * WHAT THE I2 GATE DOES AND DOES NOT ADD — stated exactly, because it is easy to overclaim
  * and this comment used to. `tools/gates/determinism.mjs` compares runs TO EACH OTHER and
@@ -299,6 +345,7 @@ export function tickValidityContext(
   cache: ValidityCache | null,
   content: BoundContent,
   bounds: GridBounds,
+  corridors: Corridors,
   draft: EntityDraft,
 ): ValidityContext {
   const clean = draftIsClean(draft);
@@ -309,12 +356,19 @@ export function tickValidityContext(
       cache.builtFrom === draft.base &&
       clean &&
       cached.content === content &&
-      boundsEqual(cached.bounds, bounds)
+      boundsEqual(cached.bounds, bounds) &&
+      // THE SIXTH CLAUSE (G-034b). A corridor laid this tick changes which rooms are valid
+      // WITHOUT touching entity membership, so every clause above can hold while the answer
+      // has changed — `applyCommands` runs before `runGuests`, so the stale context would be
+      // consulted on the very tick the player drew. IDENTITY, the rule `content` already
+      // keeps, and it is exact rather than conservative because `withCorridor` returns the
+      // same array when the cell was already declared.
+      cached.corridors === corridors
     ) {
       return cached;
     }
   }
-  const fresh = createValidityContext(content, bounds, draftEntities(draft));
+  const fresh = createValidityContext(content, bounds, corridors, draftEntities(draft));
   // Kept only when it describes `draft.base` exactly. On a tick that staged a spawn or a
   // despawn the fresh context describes the DRAFT, which no later tick will ever see —
   // `commitEntityDraft` will hand the next tick a new store object — so caching it would
@@ -334,14 +388,17 @@ type PlacedEntity = Entity & { readonly at: Cell };
 export function createValidityContext(
   content: BoundContent,
   bounds: GridBounds,
+  corridors: Corridors,
   forEach: EntityVisitor,
 ): ValidityContext {
   return {
     content,
     bounds,
+    corridors,
     forEach,
     index: null,
     grounded: null,
+    plannedFloors: null,
     memo: null,
     validRooms: null,
     providers: null,
@@ -642,16 +699,35 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // iteration whose order could pick a winner (I2). It is left/right/front/back because
   // that is the order the two axes are declared in.
   // ==========================================================================
+  //
+  // AND SINCE G-034b THE SAME WALK ANSWERS A SECOND QUESTION: is any of those door cells
+  // CIRCULATION? Two answers out of one pass, because the door cells are exactly the
+  // candidates — a cell that is not a door cannot be the way in, whatever the plan says
+  // about it. The two are reported separately (`noDoor` vs `noCorridor`) and the door
+  // question is answered first, because having somewhere to open into is a precondition of
+  // that somewhere being a walkway.
   let hasDoor = false;
+  let hasCirculation = false;
   for (const cell of cells) {
     for (const beside of [cellLeft(cell), cellRight(cell), cellFront(cell), cellBack(cell)]) {
       if (!isWithinBounds(beside, ctx.bounds)) continue;
       if (coversCell(ctx.content, room, beside)) continue;
       if (roomAtCell(ctx, beside) !== undefined) continue;
+      // A DOOR: this cell is on the plot, is not the room's own, and no room stands on it.
       hasDoor = true;
-      break;
+      // AND CIRCULATION IS A DOOR CELL THE PLAN CALLS A WALKWAY. The "nothing is standing
+      // here" half of that is the line above rather than a second clause inside
+      // `isDeclaredWalkway`, and the difference is not stylistic: the door test and the
+      // circulation test ask the SAME question about occupancy, so asking it twice would be
+      // two definitions of one fact — and a mutation probe says the second copy is dead code.
+      // Written this way, a room built across a declared corridor closes it because that cell
+      // stops being a DOOR, which is a thing the tick already computes.
+      if (isDeclaredWalkway(ctx, beside)) {
+        hasCirculation = true;
+        break;
+      }
     }
-    if (hasDoor) break;
+    if (hasCirculation) break;
   }
   if (!hasDoor) return 'noDoor';
 
@@ -667,7 +743,78 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
     if (!held) return 'missingItem';
   }
 
+  // CONNECTED: one of those door cells is somewhere people walk (G-034b, ADR-0047 B2).
+  //
+  // WHY IT IS ASKED LAST, AND THE ORDER IS A DECISION WITH A CONSEQUENCE. Every check above
+  // is a property of THE ROOM IN ISOLATION — placed, supported, shelled, equipped — and this
+  // is the only one that is a property of THE ROOM IN A BUILDING. That is ADR-0048 §2's own
+  // distinction, the one the goal was split along, and it puts the boundary between the two
+  // rule systems in the order of this function rather than only in a comment.
+  //
+  // THE CONSEQUENCE, STATED SO IT IS A CHOICE RATHER THAN A SIDE EFFECT: an unfurnished room
+  // with no corridor beside it still reports `missingItem`. Ask this question earlier and it
+  // would DISPLACE `missingItem` and `unsupported` verdicts wherever both are true — the
+  // harness tallies that assert those reasons non-zero would keep passing while counting
+  // something else, or stop passing for a reason that has nothing to do with furniture.
+  // Every pre-G-034b verdict in this codebase is preserved by asking it here.
+  //
+  // It costs nothing to defer: the answer was computed by the door walk above, which was
+  // being paid for anyway, so the cost order the docblock claims is undisturbed.
+  if (!hasCirculation) return 'noCorridor';
+
   return null;
+}
+
+/**
+ * WHETHER THE PLAN CALLS `cell` A WALKWAY (G-034b).
+ *
+ * HALF OF "CIRCULATION", AND THE OTHER HALF IS THE DOOR TEST THAT EVERY CALLER HAS ALREADY
+ * APPLIED: circulation is a cell the plan calls a walkway AND that no room is standing on. The
+ * occupancy half is not repeated here, and that is a measured decision rather than a taste —
+ * spelled with both clauses, a mutation probe that deleted the occupancy one turned NO TEST RED
+ * in the whole suite, because `computeRoomInvalidity`'s walk skips a cell with a room on it one
+ * line earlier. A second copy of a live rule that no reachable input can exercise is the
+ * ADR-0007 shape, inside the goal that adds it.
+ *
+ * WHAT THAT KEEPS TRUE: a room built across a declared corridor CLOSES it, because the cell
+ * stops being a door — and the corridor is there again when the room goes, because nothing ever
+ * removed it. That is what makes the stored plan a DECLARATION rather than an occupancy, and it
+ * is why no door in the codebase has to refuse a corridor under a room (see `corridors.ts`).
+ *
+ * OPEN PLAN IS THE OTHER READING THIS FUNCTION CARRIES, AND IT IS HISTORY RATHER THAN A GRACE
+ * PERIOD. A floor nobody has drawn a corridor on has not been PARTITIONED into
+ * walkway and back-of-house, so all of its free space is walkable — which is exactly what
+ * this simulation meant for thirty-three goals, and what `report.ts` has said in the tree
+ * since G-009: *"the empty column between them IS the corridor until M3 gives corridors an
+ * identity of their own."* Draw one corridor on a floor and you have said where people walk
+ * on it; from then on the rooms of that floor have to open onto it.
+ *
+ * PER FLOOR, NOT PER WORLD, AND THAT IS THE LOAD-BEARING HALF OF THE CHOICE. Per world, a
+ * corridor drawn in the basement would invalidate rooms on floor twelve — a non-local effect
+ * with no reading a player could recover. Per floor matches the rule it refines (the door
+ * rule is already *"somewhere ON THIS FLOOR to open into"*) and matches how circulation is
+ * scoped everywhere else in this project: ADR-0046 §5 makes M3's pathfinding *"A* over a
+ * SINGLE FLOOR's tile grid, plus stair and lift nodes"*, per-floor rather than volumetric.
+ *
+ * WHAT IT DELIBERATELY IS NOT: reachability. Whether a walkable cell CONNECTS to the
+ * entrance is a flood fill over stairs and lifts, and `PARKING.md` named it as *"a THIRD
+ * thing and not this one"* before this goal existed. It lands with pathfinding (G-038).
+ */
+function isDeclaredWalkway(ctx: ValidityContext, cell: Cell): boolean {
+  return isOpenPlan(ctx, cell.floor) || hasCorridorAt(ctx.corridors, cell);
+}
+
+/** Whether no corridor has been declared on this floor. See `isDeclaredWalkway`. */
+function isOpenPlan(ctx: ValidityContext, floor: number): boolean {
+  const planned = (ctx.plannedFloors ??= plannedFloorsOf(ctx.corridors));
+  return !planned.has(floor);
+}
+
+/** The floors carrying at least one declared corridor. LOOKUP ONLY — never iterated (I2). */
+function plannedFloorsOf(corridors: Corridors): Set<number> {
+  const floors = new Set<number>();
+  for (const cell of corridors) floors.add(cell.floor);
+  return floors;
 }
 
 /** Whether `cell` is part of this room's own footprint. */
@@ -905,6 +1052,8 @@ export function describeRoomInvalidity(room: Entity, reason: RoomInvalidityReaso
   switch (reason) {
     case 'missingItem':
       return `${what} is missing an item it requires, so it is not equipped to serve anybody.`;
+    case 'noCorridor':
+      return `${what} has a door, but nothing it opens onto is a corridor, so nobody can walk to it.`;
     case 'noDoor':
       return `${what} has no free cell beside it on its floor, so it has no door and nobody can get in.`;
     case 'unplaced':
@@ -931,11 +1080,13 @@ export function describeRoomInvalidity(room: Entity, reason: RoomInvalidityReaso
 export function countInvalidRooms(
   entities: EntityStore,
   bounds: GridBounds,
+  corridors: Corridors,
   content: BoundContent,
 ): RoomInvalidityTally {
-  const ctx = createValidityContext(content, bounds, storeEntities(entities));
+  const ctx = createValidityContext(content, bounds, corridors, storeEntities(entities));
   const tally: Record<RoomInvalidityReason, number> = {
     missingItem: 0,
+    noCorridor: 0,
     noDoor: 0,
     unplaced: 0,
     unsupported: 0,

@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-034a is done: the grid has a third axis, save v17, and the shipped plot stays ONE ROW DEEP so the goal changes no behaviour — only the hash. Fourteen rows green, every row re-run by the orchestrator. The plan review found two BLOCKERs before any code, and the BUILD then corrected the plan review: floor-ASCENDING is the precondition, floor-FIRST is a convention, and it ships labelled as one. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-034b is done: a cell can be a corridor, connectivity is a validity rule, save v18. The shipped default run is byte-identical below the hash line; the rule bites only where corridors are DECLARED. Fourteen rows green, every row re-run by the orchestrator. An ESCALATION is open — G-034b is behavioural and ADR-0046 §7 says a behavioural goal with no WATCH surface escalates rather than recording a debt. Unreliable: 0 gates, 0 defects.*
 
-- **Schemas**: save **v17** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v18** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `dfab8a8e36302c02` · measure golden `0c34f5daea71e8de`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `c9f6bb07d25b089b` · measure golden `c7a049822580b39e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -1980,7 +1980,7 @@ against a bound the escalation says cannot catch this project's regressions.
 
 
 ## G-034b — Corridors: space is scarce, and a room must connect to something
-Status: **PLANNED.** Follows G-034a; **the dependency runs one way** (ADR-0048 §2).
+Status: **done.** See REFLECT below. An ESCALATION is open on its WATCH surface.
 Milestone: M3
 Owner pair: sim-engineer / sim-critic
 Statement: A cell can be a corridor. **Connectivity becomes a validity rule** — a room must reach
@@ -2000,6 +2000,74 @@ grid rewrite for a critic's attention.
 connectivity is asserted on a built hotel, not on a hand-made fixture · save **v18** with a real
 17→18 migration and **the v1 fixture a zero-line diff walking 1→18** · `pnpm verify` green ·
 three-OS CI green · the I2 hash re-derived and the four digests updated in the same commit.
+
+
+### G-034b — REFLECT
+
+**done. Fourteen rows green, every row re-run by the orchestrator.** Suite **128 files / 2,244
+tests**. Save **v18**, v1 fixture a **zero-line diff** walking 1→18. **I2 `dfab8a8e36302c02` →
+`c9f6bb07d25b089b`**, re-derived four times.
+
+**THE REPRESENTATION HELD THE LINE ADR-0048 DREW.** A corridor is **a derived predicate over an
+explicit stored set** — `World.corridors`, strictly ascending by `compareCells`. **Not an entity,
+not a cell→room back-pointer.** The first reason is measurable rather than aesthetic: **an entity
+costs an id, and an id is behaviour** — declaring the corridors the harnesses already have
+implicitly would renumber every room spawned afterwards and change which room every guest takes
+(lowest-id-wins). **As coordinates it moves no id at all**, which is what let every existing verdict
+survive.
+
+**AND THE LOAD-BEARING READING IS HISTORICAL, NOT INVENTED: a floor with no declared corridor is
+OPEN PLAN.** That is what the sim meant for thirty-three goals and what `report.ts` has said since
+G-009 — *"the empty column between them IS the corridor."* **Measured before it was chosen**: an
+unconditional rule fails **216 tests across 33 files in `packages/sim` alone.** Per **floor**, not
+per world.
+
+**THE MIGRATION REWRITES NO VERDICT, AND THE PROOF IS STRUCTURAL RATHER THAN SAMPLED.** On an
+open-plan floor circulation reduces to *"no room stands here"* — the exact predicate the door walk
+already applies — **so `hasDoor` implies `hasCirculation` and `noCorridor` cannot fire on ANY
+migrated world.** Witnessed on a hand-built v17 world carrying all four earlier reasons, **then
+falsified on the same world**: one corridor declared elsewhere on the floor changes three verdicts.
+
+**THE HARNESS CORRIDOR LIST WAS WRONG ONCE, AND THE WAY IT WAS WRONG IS THE FINDING.** The first
+attempt was a hand-written column literal. It missed three amenity waves, and **checkouts fell from
+187 to 12 at 40,000 ticks WHILE EVERY `toBeGreaterThan(0)` STAYED GREEN.** The shipped version
+derives the plan from the log's own commands and withholds three named cells. **A non-zero
+assertion cannot see a hotel that has stopped working — only a count that moved can**, which is the
+same lesson `validity.determinism.test.ts` was written for and it arrived from the other direction.
+
+**A VACUOUS CLAUSE OF THE BUILDER'S OWN, CAUGHT BY ITS OWN MUTATION PROBE AND REMOVED.** Circulation
+was first spelled as two clauses in one predicate; **deleting the occupancy clause turned no test
+red**, because the door walk skips a room-occupied cell one line earlier. **Found by probing rather
+than by reading.**
+
+**TWO GATE FILES WERE EDITED IN THE GOAL THAT REDDENED THEM, AND THAT IS ACCEPTED ON ITS
+ARGUMENT.** `check-measure.mjs` and `check-tripwire.mjs` assert an old revision reports
+`INCOMPARABLE` **naming `roomTypeServes`**; HEAD's workload now lays corridors, so a pre-G-034b sim
+stops at `unhandled command layCorridor` **before** reaching that function. **The property under
+test is unchanged — *a revision the harness cannot drive reports INCOMPARABLE and NAMES what
+stopped it*. Only which command stops it first moved, because the workload gained one.** Not §9's
+forbidden case, which is editing a gate to make a *failing build* pass; this is an assertion
+tracking a real change, argued in place. **Consequence parked: every historical arm is now
+INCOMPARABLE — ADR-0015's REPLACE case, G-039's to re-take.**
+
+**AND `PARKING.md` PREDICTED THIS DIFFERENTLY.** It expected the door predicate to **narrow** —
+*"from a free cell to a corridor cell"*, one predicate. **Both were kept instead**, so `noDoor`
+still means what it meant and the harness assertions still measure what they measured. **The parked
+hypothesis was refined rather than followed, and the refinement is recorded where the prediction
+was.**
+
+**Also**: G-015's pinned five-reason invocation retuned by its own written procedure
+(`--build 360 → 720`) after the new layout dropped `evictedRoomUnusable` from 3 to 1 · one
+mechanical `apps/game` site · the viewer bumped to schema 18 and **now draws corridors**, because a
+room reported `noCorridor` looks identical to a working one unless the plan is on screen.
+
+**ESCALATION RAISED, AND IT IS THE ORCHESTRATOR'S CALL THAT IT SHOULD BE.** G-034b is behavioural
+and ADR-0046 §7 says a behavioural goal with no WATCH surface **escalates rather than recording a
+debt**. The shipped default run is byte-identical below the hash line and the rule bites only where
+corridors are declared — **narrow, but not none.** G-034a earned its exemption by being genuinely
+behaviour-free; **G-034b cannot make that claim, and the difference is exactly one weakened step.**
+See `ESCALATIONS.md` (2026-08-16).
+
 
 ## G-035 — The isometric view, restored as the WATCH surface
 Status: **PLANNED.** **Goes before the room model** (ADR-0046 §7).

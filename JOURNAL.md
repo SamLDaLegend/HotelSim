@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-034a is done: the grid has a third axis, save v17, and the shipped plot stays ONE ROW DEEP so the goal changes no behaviour — only the hash. Fourteen rows green, every row re-run by the orchestrator. The plan review found two BLOCKERs before any code, and the BUILD then corrected the plan review: floor-ASCENDING is the precondition, floor-FIRST is a convention, and it ships labelled as one. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-034b is done: a cell can be a corridor, connectivity is a validity rule, save v18. The shipped default run is byte-identical below the hash line; the rule bites only where corridors are DECLARED. Fourteen rows green, every row re-run by the orchestrator. An ESCALATION is open — G-034b is behavioural and ADR-0046 §7 says a behavioural goal with no WATCH surface escalates rather than recording a debt. Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v17** · summary **v4** · I2 `dfab8a8e36302c02` · measure golden
-  `0c34f5daea71e8de` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v18** · summary **v4** · I2 `c9f6bb07d25b089b` · measure golden
+  `c7a049822580b39e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the

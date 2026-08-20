@@ -24,6 +24,7 @@
 // Content ids here are camelCase (ADR-0003).
 
 import { describe, expect, it } from 'vitest';
+import { createCorridors } from './corridors.js';
 import type { Command, ScheduledCommand } from './commands.js';
 import { bindContent } from './content.js';
 import type { ItemTypeData, NeedTypeData, RoomTypeData } from './content.js';
@@ -141,7 +142,7 @@ describe('two cafes of the same kind, tied on fit, on two insertion orders', () 
 
   it('and the candidate list itself is ordered the same way, ascending by id', () => {
     for (const world of [leftFirst, rightFirst]) {
-      const ctx = createValidityContext(content, BOUNDS, storeEntities(world.entities));
+      const ctx = createValidityContext(content, BOUNDS, createCorridors(), storeEntities(world.entities));
       const order = ids(providersFor(ctx, 'food'));
       expect(order).toEqual([...order].sort((x, y) => x - y));
       expect(order).toHaveLength(2);
@@ -175,7 +176,7 @@ describe('a ROOM and an ITEM tied on fit — "lowest id", not "rooms first"', ()
 
   it('and the candidate list interleaves the two kinds by id, in both orders', () => {
     for (const world of [machineFirst, cafeFirst]) {
-      const ctx = createValidityContext(content, BOUNDS, storeEntities(world.entities));
+      const ctx = createValidityContext(content, BOUNDS, createCorridors(), storeEntities(world.entities));
       const order = ids(providersFor(ctx, 'food'));
       expect(order).toEqual([...order].sort((x, y) => x - y));
       expect(order).toHaveLength(2);

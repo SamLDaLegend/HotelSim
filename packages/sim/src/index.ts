@@ -93,6 +93,8 @@ export {
   isPlaced,
   NO_ENTITY,
 } from './entities.js';
+export type { Corridors } from './corridors.js';
+export { assertCorridors, createCorridors, hasCorridorAt, withCorridor } from './corridors.js';
 export type { Cell, GridBounds } from './grid.js';
 export {
   assertCell,

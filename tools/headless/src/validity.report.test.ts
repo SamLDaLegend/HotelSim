@@ -125,6 +125,12 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // (`unsupported`) and packs rooms hard against each other (`noDoor`).
     expect(summary.rooms.invalid.unsupported).toBeGreaterThan(0);
     expect(summary.rooms.invalid.noDoor).toBeGreaterThan(0);
+    // AND CONNECTIVITY (G-034b). The player draws a corridor every eight columns and packs
+    // rooms between them, so a run produces all three of the reasons a placement can reach:
+    // rooms in mid-air, rooms walled in by their neighbours, and rooms whose door opens onto
+    // a cell nobody walks in. `noCorridor` is checked LAST of the four, so a room counted here
+    // is one that is supported, furnished and doored — the rule biting on its own.
+    expect(summary.rooms.invalid.noCorridor).toBeGreaterThan(0);
   });
 
   it('and reports ZERO guests in any of them', () => {
@@ -164,10 +170,16 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     const stdout = result.stdout.toString('utf8');
     expect(stdout).toContain('in bad room 0');
     // Two reasons, on the face of the report a human reads.
-    expect(stdout).toMatch(/rooms bad {3}0 unplaced, \d+ unsupported, \d+ no door, 0 no item/);
-    const line = /rooms bad {3}0 unplaced, (\d+) unsupported, (\d+) no door/.exec(stdout);
+    expect(stdout).toMatch(
+      /rooms bad {3}0 unplaced, \d+ unsupported, \d+ no door, \d+ no corridor, 0 no item/,
+    );
+    const line = /rooms bad {3}0 unplaced, (\d+) unsupported, (\d+) no door, (\d+) no corridor/.exec(stdout);
     expect(Number(line?.[1])).toBeGreaterThan(0);
     expect(Number(line?.[2])).toBeGreaterThan(0);
+    // THE THIRD REASON, ON THE FACE OF THE REPORT A HUMAN READS (G-034b). A room the player
+    // built with a door onto space nobody walks in — produced by the same layout that produces
+    // the other two, in the same run, rather than by a fixture.
+    expect(Number(line?.[3])).toBeGreaterThan(0);
   }, 60_000);
 });
 
@@ -177,7 +189,18 @@ describe('the shipped hotel still works', () => {
     // than break it. If `requires` named an item the seeding did not place, or the layout
     // packed rooms shoulder to shoulder, this is where it would show.
     const { summary, violations } = runInProcess(['--days', '30', '--seed', '42']);
-    expect(summary.rooms.invalid).toEqual({ missingItem: 0, noDoor: 0, unplaced: 0, unsupported: 0 });
+    // ALL FIVE ZERO, INCLUDING THE NEW ONE (G-034b). The seeded hotel now DECLARES the corridor
+    // it always had — the empty column between every pair of rooms — so its ground floor is
+    // planned rather than open, and every room on it is judged against a plan. Zero is therefore
+    // a measurement here rather than a floor's worth of open space: delete the lane from
+    // `schedule` and every one of these rooms reports `noCorridor`.
+    expect(summary.rooms.invalid).toEqual({
+      missingItem: 0,
+      noCorridor: 0,
+      noDoor: 0,
+      unplaced: 0,
+      unsupported: 0,
+    });
     // Three bedrooms and one of each amenity since G-012 — the amenities are in the
     // basement, which is grounded by the earth, corridored, and requires no furniture, so
     // they are valid on the same terms as the bedrooms above them.

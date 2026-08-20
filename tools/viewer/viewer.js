@@ -206,7 +206,7 @@ const rec = { lines: [], cache: new Map(), everyTicks: 1, extent: null };
  * mis-draw. A stale copy here refuses every recording, including the good ones, which is a
  * five-minute repair with a message pointing at it.
  */
-const VIEWER_SCHEMA_VERSION = 17;
+const VIEWER_SCHEMA_VERSION = 18;
 
 function frameAt(i) {
   const hit = rec.cache.get(i);
@@ -352,6 +352,21 @@ function draw(world) {
   ctx.moveTo(MARGIN, g.y(0) + g.ch);
   ctx.lineTo(right, g.y(0) + g.ch);
   ctx.stroke();
+
+  // WHERE THE PLAN SAYS PEOPLE WALK (G-034b). Drawn BEFORE the entities, so a room built over
+  // a declared corridor covers it — which is what the simulation says about that cell too
+  // (a declared cell with a room standing on it is not somewhere anybody can walk).
+  //
+  // It is here rather than on the exemption list in `viewer.readonly.test.ts` because this
+  // field decides a VERDICT a watcher can see: a room reported invalid for `noCorridor` looks
+  // identical to a working one unless the corridors are on screen, which is the G-019 shape
+  // that check was written for — an instrument blind to the subject of the question being
+  // asked of it.
+  ctx.fillStyle = '#2a3340';
+  for (const at of world.corridors) {
+    if (at.floor < g.minF || at.floor > g.maxF) continue;
+    ctx.fillRect(g.x(at.column) + 1, g.y(at.floor) + 1, g.cw - 2, g.ch - 2);
+  }
 
   // Where each entity stands, and who is inside it.
   const cells = new Map();

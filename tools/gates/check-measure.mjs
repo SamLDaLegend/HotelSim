@@ -402,14 +402,23 @@ check(
   `a docs-only commit did not report IDENTICAL (exit ${identical.status})`,
 );
 
+// AND THE NAME IN THAT LAST CLAIM MOVED AT G-034b, WHICH IS THE CLAIM WORKING RATHER THAN
+// WEAKENING. An arm materialises `packages/sim/src` from the revision and drives it with HEAD's
+// workload (`ARM_PATHS`), and HEAD's workload now lays CORRIDORS — so a pre-G-034b simulation
+// stops at `applyCommand: unhandled command layCorridor` BEFORE it can reach the function G-013
+// added. The property under test is unchanged: *a revision the harness cannot drive reports
+// INCOMPARABLE and NAMES what stopped it*. Only the name of the first thing to stop it moved,
+// because the workload gained a command. (The wider consequence — every historical arm is now
+// INCOMPARABLE, so the measurement campaigns are re-taken rather than compared across this
+// change — is ADR-0015's REPLACE-on-configuration-change case, and G-039 owns it.)
 const incomparable = runMeasure(['--head', 'e870147']);
 if (incomparable.stdout.includes('INCOMPARABLE')) verdictsSeen.add('INCOMPARABLE (api moved)');
 check(
   'tools/gates/measure.mjs',
   incomparable.status === 0 &&
     incomparable.stdout.includes('INCOMPARABLE') &&
-    incomparable.stdout.includes('roomTypeServes'),
-  `a revision the harness cannot drive did not report INCOMPARABLE naming the missing function (exit ${incomparable.status})`,
+    incomparable.stdout.includes('layCorridor'),
+  `a revision the harness cannot drive did not report INCOMPARABLE naming what stopped it (exit ${incomparable.status})`,
 );
 
 const missing = runMeasure(['--head', 'nosuchrevision']);

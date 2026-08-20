@@ -13,6 +13,7 @@
 
 import {
   constructionCostOf,
+  isRoomKind,
   demolitionRefundOf,
   firstEconomy,
   findItemType,
@@ -790,6 +791,88 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     schedule.push({ tick, command: { kind: 'guestArrives' } });
     schedule.push({ tick, command: { kind: 'demolishRoom', id: underfoot } });
     underfoot += 1;
+  }
+  // ============================================================================
+  // WHERE PEOPLE WALK ON THE GROUND FLOOR (G-034b), AND THE TWO CELLS DELIBERATELY LEFT OFF
+  // THE PLAN.
+  //
+  // THE FOURTH INVALIDITY REASON HAS THE SAME COVERAGE PROBLEM THE OTHER THREE HAVE, AND THE
+  // SKY TOWER'S ANSWER APPLIES TO IT WORD FOR WORD. Validity is DERIVED, so no field carries
+  // `noCorridor` and the state hash can only ever see its CONSEQUENCE: a room a guest would
+  // have taken and cannot. A disconnected room nobody would have reached anyway is a room
+  // whose rule the gate cannot witness — *"a tower placed late changed nothing, because guests
+  // take the lowest-id valid free room and this hotel is almost never short of one."*
+  //
+  // SO THE GROUND FLOOR IS PLANNED AND TWO CELLS OF THE PLAN ARE WITHHELD:
+  //
+  //   column 1   the door of the FIRST room this log ever spawns (floor 0, column 0, tick 13,
+  //              furnished, on the earth). It is the lowest-id lodging room in the hotel, so
+  //              it is the room every arriving guest would otherwise take, and it is
+  //              `noCorridor` from the moment the first guest walks in at tick 101.
+  //   columns 41
+  //   and 43     the two doors of the room at column 42, spawned at tick 42,391 with an id far
+  //              above anything the despawn walk reaches — so the reason is still being
+  //              produced AT THE HORIZON the gate compares, which is the argument the second
+  //              terrace wave already makes for `noDoor`.
+  //   columns 53
+  //   and 55     the two doors of the amenity at column 54, and this pair is the one that
+  //              makes the reason present IN THE MIDDLE of the run as well as at both ends.
+  //              MEASURED, not assumed: with only the two withholdings above, `noCorridor` is
+  //              1 at tick 100,000 and **0 at tick 40,000** — the first room has been picked
+  //              apart by the despawn walk by then and the second is not spawned until tick
+  //              42,391. 40,000 is the horizon `validity.determinism.test.ts` reads, so the
+  //              suite would have been asserting a reason the world it inspects does not
+  //              contain. This amenity is spawned before 40,000 and is never despawned.
+  //
+  // EVERYTHING ELSE ON THE GROUND FLOOR KEEPS ITS EXACT VERDICT. Declaring any corridor on
+  // floor 0 makes the WHOLE FLOOR planned — open plan is a per-floor property
+  // (`isDeclaredWalkway`) — so every other ground-floor room needs its door declared or it changes
+  // reason for a change this goal did not intend. Both horizontal neighbours are declared, not
+  // one: the seal pass's blockers at columns 29 and 31 open OUTWARD, away from the host they
+  // wall in, so a lane on one side only would report them `noCorridor` while the thing they
+  // exist to seal reported the same. And a declared cell with a room standing on it is not
+  // circulation, so the seal still seals: the host at column 30 is valid until tick 6,800 and
+  // `noDoor` after it, exactly as before this goal.
+  //
+  // DERIVED FROM THIS LOG'S OWN COMMANDS, NOT FROM A HAND-WRITTEN COLUMN LIST, AND THAT IS A
+  // CORRECTION RATHER THAN A PREFERENCE. The list was written first, from the passes above,
+  // and it was WRONG: it missed the three amenity waves at columns 18 and 44..54, so six
+  // engagement providers lost their doors at once and the hotel's checkouts fell from 187 to
+  // 12 over 40,000 ticks — while every `toBeGreaterThan(0)` in `validity.determinism.test.ts`
+  // stayed green, because each reason still occurred somewhere. That is the θ-b1 failure mode
+  // exactly, and a pass added by a later goal would have reproduced it silently. Reading the
+  // schedule is not the `SHIPPED_ROW` hazard: that one is about reading a LIVE CONSTANT which
+  // can move without this log moving, and this reads the log itself — the same thing `furnish`
+  // already does by placing furniture wherever a room is placed.
+  //
+  // AT TICK 0, BEFORE ANYTHING IS BUILT ON IT: the ground floor's circulation is planned once,
+  // never edited, so the corridor set is constant for the whole run and every ground-floor
+  // verdict is a function of what was built rather than of when the plan was drawn.
+  // ============================================================================
+  const WITHHELD_COLUMNS: readonly number[] = [1, 41, 43, 53, 55];
+  // The plot's own columns, as a literal, for `SHIPPED_ROW`'s reason — this log is written
+  // against the plot it was written against, and `layCorridor` THROWS off it.
+  const FIRST_COLUMN = 0;
+  const LAST_COLUMN = 79;
+  const planned = new Set<number>();
+  for (const entry of schedule) {
+    const command = entry.command;
+    const at = command.kind === 'spawnEntity' ? command.at : command.kind === 'buildRoom' ? command.at : undefined;
+    const kind = command.kind === 'spawnEntity' ? command.entityKind : command.kind === 'buildRoom' ? command.roomType : undefined;
+    if (at === undefined || kind === undefined) continue;
+    if (at.floor !== 0 || !isRoomKind(content, kind)) continue;
+    for (const column of [at.column - 1, at.column + 1]) {
+      if (column < FIRST_COLUMN || column > LAST_COLUMN) continue;
+      if (WITHHELD_COLUMNS.includes(column)) continue;
+      planned.add(column);
+    }
+  }
+  // SORTED ASCENDING WITH AN EXPLICIT COMPARATOR before anything is emitted. `layCorridor` is
+  // idempotent and the corridor plan sorts itself, so the world would be identical either way
+  // — but a Set walked in insertion order is a habit this project does not keep (I2), and the
+  // command log is the artefact whose stability the whole gate rests on.
+  for (const column of [...planned].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    schedule.push({ tick: 0, command: { kind: 'layCorridor', at: { floor: 0, column, row: SHIPPED_ROW } } });
   }
   return schedule;
 }

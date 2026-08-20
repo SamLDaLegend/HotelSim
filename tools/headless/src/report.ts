@@ -286,16 +286,102 @@ export const COLUMNS_PER_ROOM = 2;
  * ---------------------------------------------------------------------------
  */
 export function builtRoomCell(index: number, bounds: GridBounds, startFloor: number): Cell {
-  const perFloor = bounds.maxColumn - bounds.minColumn + 1; // packed: one room, one column
+  // PACKED INTO BLOCKS BETWEEN THE PLAYER'S OWN CORRIDORS SINCE G-034b. Every eighth column is
+  // a corridor (`playerCorridorCells`) and the walk fills the seven between, block by block,
+  // then up. See `PLAYER_COLUMNS_PER_BLOCK` for what each part of that buys.
+  const blocks = blocksPerFloor(bounds);
+  const perBlock = roomsPerBlock(bounds);
+  const perFloor = blocks * perBlock;
+  const onFloor = index % perFloor;
   return {
     floor: startFloor + Math.floor(index / perFloor),
-    column: bounds.minColumn + (index % perFloor),
+    // The block's corridor is at `minColumn + 1 + block * 8`, so its rooms start one past it.
+    column:
+      bounds.minColumn + 2 + Math.floor(onFloor / perBlock) * PLAYER_COLUMNS_PER_BLOCK + (onFloor % perBlock),
     // THE PLOT'S OWN ROW, not a literal 0 (G-034a). The shipped plot is one row deep, so
     // this is the only row there is; reading it from the bounds is what keeps this layout
     // on a plot that a later goal makes deeper, and keeps the terraces here SHOULDER TO
     // SHOULDER on one row so the `noDoor` verdicts this walk exists to produce still occur.
     row: bounds.minRow,
   };
+}
+
+/**
+ * HOW WIDE A BLOCK OF THE PLAYER'S ROOMS IS, corridor included (G-034b).
+ *
+ * DERIVED FROM WHAT THE LAYOUT HAS TO PRODUCE, not chosen for looks — §2.1's rule applied to a
+ * host's layout number:
+ *
+ *   AT LEAST 4, or the block has no MIDDLE room and `noDoor` stops being reachable from a
+ *   CLI run at all. A corridor, then rooms: at 4 the block is corridor + 3 rooms, and the
+ *   middle one has a room hard against both sides. That reason is `validity.report.test.ts`'s
+ *   pinned criterion and it must survive this goal.
+ *
+ *   A DIVISOR OF THE SHIPPED PLOT'S WIDTH (80), so no floor ends in a ragged part-block whose
+ *   last room's verdict depends on arithmetic nobody meant. 4, 8, 10, 16, 20 all qualify.
+ *
+ *   AND AS FEW CORRIDORS AS THAT ALLOWS, because the point of this layout is a player who
+ *   under-provides circulation: 8 gives one corridor to seven rooms, of which two work (the
+ *   ones at the ends of the block) and five are walled in. A smaller block would make the
+ *   player's floor mostly work, which is the opposite of what this walk is for.
+ */
+export const PLAYER_COLUMNS_PER_BLOCK = 8;
+
+/**
+ * How many whole blocks fit across the plot, allowing for the one column the layout is offset
+ * by. At least one, so a narrow test plot still walks rather than dividing to zero.
+ */
+function blocksPerFloor(bounds: GridBounds): number {
+  return Math.max(1, Math.floor((bounds.maxColumn - bounds.minColumn) / PLAYER_COLUMNS_PER_BLOCK));
+}
+
+/** How many rooms fill one block: the block's width less its corridor, or what the plot allows. */
+function roomsPerBlock(bounds: GridBounds): number {
+  return Math.min(PLAYER_COLUMNS_PER_BLOCK - 1, bounds.maxColumn - bounds.minColumn - 1);
+}
+
+/**
+ * WHERE THE PLAYER PUTS THE CORRIDORS ON A FLOOR THEY ARE BUILDING ON (G-034b): the first
+ * column of each block, and nothing else.
+ *
+ * A THIRD MISTAKE FOR THE RULES TO TEACH, in the same spirit as the two `builtRoomCell`
+ * already stages. The player draws ONE corridor stub at the end of the floor and then packs
+ * rooms away from it — so the first room off the stub works, and everything past it is either
+ * walled in (`noDoor`) or, wherever the packed row has a gap, perfectly shaped and connected
+ * to nothing (`noCorridor`). The gaps are not contrived: this schedule is generated before the
+ * run and cannot observe a refusal, so every build the player cannot afford leaves a hole in
+ * the row — which is exactly the room whose door opens onto space nobody walks in.
+ *
+ * IT IS WHAT KEEPS TWO OLDER CRITERIA ALIVE, and that is the load-bearing half rather than the
+ * new reason. Declaring any corridor on this floor makes the whole floor PLANNED, so from that
+ * moment every room on it has to reach circulation:
+ *
+ *   G-011's RECOVERY CASE. A player building from nothing (`--rooms 0`, so the walk starts on
+ *   the ground) must be able to build a room that WORKS, or `--days 1000 --rooms 0 --build` ends
+ *   with 0 satisfied guests and G-011's exit criterion becomes unmeetable by a correct
+ *   implementation. The first room of every block is beside a corridor, so the first build of
+ *   the run is already connected.
+ *
+ *   G-015's `evictedRoomUnusable`. MEASURED, and it is why this layout is blocks rather than
+ *   one stub per floor: with a single corridor at the near column, every packed room past the
+ *   first was `noDoor` or `noCorridor`, so no guest was ever IN one of the player's rooms when
+ *   its support was demolished — and the pinned five-reason invocation fell to four with
+ *   `evictedRoomUnusable` at 0. The reason was not broken; there was nobody upstairs to evict.
+ *   Two working rooms per block puts them back.
+ *
+ * AND THE BLOCK IS OFFSET BY ONE COLUMN, WHICH IS THE PART THAT LOOKS LIKE A TYPO AND IS NOT.
+ * The inherited hotel walks a stride of two FROM `minColumn` (`roomCell`), so the columns it can
+ * hold a floor up are the EVEN ones. Put a block boundary on an even column and both of the
+ * block's working rooms land over the corridors of the hotel below — connected, furnished, and
+ * in mid-air, so `unsupported` swallows them and the eviction case dies again for a second
+ * reason. Offset by one and every block's end rooms sit over rooms. Measured both ways.
+ */
+export function playerCorridorCells(floor: number, bounds: GridBounds): readonly Cell[] {
+  const cells: Cell[] = [];
+  for (let block = 0; block < blocksPerFloor(bounds); block += 1) {
+    cells.push({ floor, column: bounds.minColumn + 1 + block * PLAYER_COLUMNS_PER_BLOCK, row: bounds.minRow });
+  }
+  return cells;
 }
 
 /**
@@ -846,6 +932,26 @@ export function schedule(
       nextEntityId += 1;
       commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind: itemId, at } });
     }
+    // AND THE CORRIDOR IT OPENS ONTO (G-034b). The cell to the right is the one both seeded
+    // layouts already leave empty at their stride of two — `roomCell` and `amenityCell` both
+    // say so in as many words, and `report.ts` has called it "the corridor" in a comment since
+    // G-009. This is that comment becoming state: the inherited hotel was laid out by somebody
+    // who knew what they were doing, and what they drew is now written down rather than implied
+    // by an absence.
+    //
+    // NOTHING MOVES. Every seeded room stands exactly where it stood, keeps its verdict and
+    // keeps its entity id — a corridor is a coordinate in `World.corridors`, not an entity, so
+    // it consumes no id and cannot renumber the room after it. That is the whole reason the
+    // corridor plan is a stored set rather than a placed thing; see `corridors.ts`.
+    //
+    // GUARDED, because `layCorridor` THROWS off the plot: at the shipped stride the cell to the
+    // right of the last room on a floor is the plot's own edge column, which is on it — but a
+    // test may pass a plot one column wide, and a scenario should not fail to build because its
+    // corridor would be outside the world.
+    const lane = { floor: at.floor, column: at.column + 1, row: at.row };
+    if (isWithinBounds(lane, bounds)) {
+      commands.push({ tick: 0, command: { kind: 'layCorridor', at: lane } });
+    }
   };
   // `entityKind` is defined whenever `rooms > 0` — the refusal above is what makes that true, and
   // it is asserted here rather than assumed so a future edit that moves the refusal fails loudly.
@@ -900,11 +1006,26 @@ export function schedule(
     // something that actually stands up.
     const startFloor = builtRoomStartFloor(rooms);
     let index = 0;
+    // The floors this walk has already put a corridor stub on (G-034b). Membership only —
+    // never iterated, never ordered, and it decides no outcome; it exists so the stub is laid
+    // ONCE per floor rather than on every build. (`layCorridor` is idempotent, so a repeat
+    // would be harmless — but a schedule carrying eight hundred no-op commands is a schedule
+    // whose command count no longer says what the player did.)
+    const stubbed = new Set<number>();
     for (let tick = BUILD_START_TICK; tick < ticks; tick += buildEveryTicks) {
       const at = builtRoomCell(index, bounds, startFloor);
       // The SIM's own bounds predicate, not a copy of it, so the runner and the simulation
       // cannot disagree about where the plot ends.
       if (!isWithinBounds(at, bounds)) break;
+      if (!stubbed.has(at.floor)) {
+        stubbed.add(at.floor);
+        // ON THE SAME TICK AS THE FIRST BUILD ON THAT FLOOR, and BEFORE it in the log: commands
+        // apply in order within a tick, so the room the player builds first is connected from
+        // the moment it exists rather than one tick later. See `playerCorridorCells`.
+        for (const stub of playerCorridorCells(at.floor, bounds)) {
+          commands.push({ tick, command: { kind: 'layCorridor', at: stub } });
+        }
+      }
       commands.push({ tick, command: { kind: 'buildRoom', roomType: entityKind, at } });
       index += 1;
     }
@@ -1155,6 +1276,8 @@ export type RunSummary = {
     readonly valid: number;
     readonly invalid: {
       readonly missingItem: number;
+      /** The room has a door and nothing it opens onto is circulation (G-034b). */
+      readonly noCorridor: number;
       readonly noDoor: number;
       readonly unplaced: number;
       readonly unsupported: number;
@@ -1361,11 +1484,15 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // The building, as the sim itself judges it (G-009). Counted by the sim against the
   // world's OWN plot — `world.grid`, not this build's default — so a save carrying a
   // different plot is reported against the plot it was played on.
-  const invalidRooms = countInvalidRooms(world.entities, world.grid, content);
+  // AND AGAINST ITS OWN CORRIDOR PLAN (G-034b), for the same reason and with a sharper
+  // edge: a report that passed an empty plan would call every floor open plan and count a
+  // disconnected room as working. `world.corridors`, never a literal.
+  const invalidRooms = countInvalidRooms(world.entities, world.grid, world.corridors, content);
   const guestsInInvalidRooms = countGuestsInInvalidRooms(
     world.guests,
     world.entities,
     world.grid,
+    world.corridors,
     content,
   );
   // Rooms, not entities: the furniture is not a room, and counting it as one would make
@@ -1465,6 +1592,12 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       valid: validRooms,
       invalid: {
         missingItem: invalidRooms.missingItem,
+        // ADDITIVE, so `SUMMARY_SCHEMA_VERSION` does NOT move (G-034b) — the policy on that
+        // constant, applied rather than re-argued: a key arriving beside the others breaks no
+        // consumer, and a version that moves whenever anything is added stops distinguishing
+        // anything. What WOULD have bumped it is folding this into `noDoor`, which is one of
+        // the reasons the two reasons stayed apart.
+        noCorridor: invalidRooms.noCorridor,
         noDoor: invalidRooms.noDoor,
         unplaced: invalidRooms.unplaced,
         unsupported: invalidRooms.unsupported,
@@ -1992,7 +2125,8 @@ export function renderText(summary: RunSummary): string {
     `entities    ${summary.world.entities}`,
     `rooms ok    ${summary.rooms.valid}`,
     `rooms bad   ${summary.rooms.invalid.unplaced} unplaced, ${summary.rooms.invalid.unsupported} unsupported, ` +
-      `${summary.rooms.invalid.noDoor} no door, ${summary.rooms.invalid.missingItem} no item`,
+      `${summary.rooms.invalid.noDoor} no door, ${summary.rooms.invalid.noCorridor} no corridor, ` +
+      `${summary.rooms.invalid.missingItem} no item`,
     `arrived     ${summary.guests.arrived}`,
     // ONE LINE PER DEPARTURE REASON (G-015), in the sim's canonical order, whether or not
     // anything ended that way — the same argument the need table makes for printing a row

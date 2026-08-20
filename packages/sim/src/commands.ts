@@ -68,6 +68,35 @@ export type Command =
    */
   | { readonly kind: 'demolishRoom'; readonly id: EntityId }
   /**
+   * THE PLAN SAYS PEOPLE WALK HERE (G-034b, ADR-0047 B2).
+   *
+   * Declares one cell a corridor. Idempotent — declaring a cell that is already declared is
+   * a deterministic no-op, not a refusal and not a throw — and it costs nothing: what a
+   * corridor COSTS is a designer's number and therefore content, and there is none yet
+   * (`PARKING.md`).
+   *
+   * THIS IS THE PRIMITIVE, NOT THE PLAYER'S DRAWING, and the split is `spawnEntity`'s
+   * exactly. A cell off the plot THROWS, because the caller is holding the world whose plot
+   * it just ignored; a player-facing verb that RECORDS that as a refusal lands with the
+   * other drawing verbs (G-036), where a UI exists to dispatch it. Reach for this in tests,
+   * in the determinism harness, and to declare the circulation a scenario STARTS with —
+   * which is what the CLI's inherited hotel has always had implicitly, in the empty column
+   * between two rooms.
+   *
+   * IT DOES NOT ASK WHAT IS STANDING THERE. A corridor is a DECLARATION about a cell, not a
+   * thing placed in it, so there is nothing to collide with: the validity walk in
+   * `validity.ts` is the one place that asks whether a room is in the way, and it asks on
+   * every query rather than once at the moment of drawing. Two rules — a refusal here and a
+   * predicate there — would be two definitions of the same fact, and the way that shows up
+   * is a corridor that survives the demolition of the room built over it in one of them and
+   * not the other. See the header of `corridors.ts`.
+   *
+   * THERE IS NO `clearCorridor` YET, deliberately, and `PARKING.md` carries it with its
+   * test: a plan that can only grow is enough for a rule that only reads it, and removal
+   * belongs with the editing verbs (G-036, ADR-0047 B4).
+   */
+  | { readonly kind: 'layCorridor'; readonly at: Cell }
+  /**
    * One guest walks in (G-004).
    *
    * NO PAYLOAD. A guest has no archetype (M6) and no party size at M0, so there is
