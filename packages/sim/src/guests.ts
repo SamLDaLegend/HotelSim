@@ -80,6 +80,7 @@ import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
 import type { ReviewOutcomeRow } from './reviews.js';
 import {
   createValidityContext,
+  guestAccessTo,
   isProviding,
   isValidRoom,
   providersFor,
@@ -1495,7 +1496,19 @@ function payForStay(
  * asked once per entity set rather than once per candidate per tick: the candidates come
  * from `validRoomsOf`, which IS the invalid rooms already filtered out.
  */
-function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean): Entity | null {
+function findFreeRoom(
+  search: RoomSearch,
+  needId: ContentId,
+  forLodging: boolean,
+  /**
+   * The room this guest is lodging in, or `NO_ENTITY` (G-036c, ADR-0047 B6).
+   *
+   * THE ONE PER-GUEST INPUT THIS FUNCTION HAS EVER TAKEN, and it is why the exhausted memo
+   * below had to learn a new clause. Everything else here — the candidate list, `held`,
+   * validity — is the same for every guest on this tick.
+   */
+  lodgingRoomId: EntityId,
+): Entity | null {
   // THE SHORT-CIRCUIT (G-010, sharpened by G-012). If a scan for this need already came up
   // empty and NOTHING THAT PROVIDES IT HAS BEEN RELEASED SINCE, the answer is still empty
   // and the scan is skipped.
@@ -1535,14 +1548,43 @@ function findFreeRoom(search: RoomSearch, needId: ContentId, forLodging: boolean
   const candidates = forLodging
     ? validRoomsProviding(search.input.validity, needId)
     : providersFor(search.input.validity, needId);
+  // ============================================================================
+  // AND THE ACCESS RULE (G-036c, ADR-0047 B6). THE ONE PLACE B6 BITES.
+  //
+  // A guest does not engage a provider whose room excludes it: a vending machine somebody put
+  // in bedroom 3 serves the guest in bedroom 3, and a staff-only room serves nobody. That is
+  // the difference between a rule and a field with no consumer, which is the standard this
+  // project applied to `forbidden adjacencies` one goal ago and refused.
+  //
+  // WHY THE MEMO NEEDS A NEW CLAUSE, AND IT IS A CORRECTNESS BUG IF IT DOES NOT GET ONE.
+  // `exhausted` records "no free provider of this need" ONCE PER TICK and every later guest
+  // reads it. That is exact while the candidate set is the same for all of them — which is
+  // precisely what a per-GUEST denial breaks: guest 1 cannot use bedroom 3's machine, and
+  // without the clause it would mark the need exhausted for the whole hotel, including for the
+  // guest who is actually lodging in bedroom 3. **A guest standing in the lobby beside its own
+  // vending machine**, which is §6.1's literal case and the same defect `release` exists to
+  // prevent one field over.
+  //
+  // `closedToGuests` DOES NOT SUPPRESS THE MEMO, and the split is why `guestAccessTo` returns
+  // three verdicts rather than two: a staff-only room is closed to every guest in the building,
+  // so a scan that found only those really did find nothing for anybody, and the short-circuit
+  // stays as sharp as it was. Only `reservedForItsOwnGuest` is per-guest.
+  // ============================================================================
+  let deniedThisGuestOnly = false;
   for (const room of candidates) {
     if (search.held.has(room.id)) continue;
+    const access = guestAccessTo(search.input.validity, room, lodgingRoomId, forLodging);
+    if (access === 'reservedForItsOwnGuest') {
+      deniedThisGuestOnly = true;
+      continue;
+    }
+    if (access === 'closedToGuests') continue;
     return room;
   }
   // Allocated only when a scan actually fails, so a hotel that is never full pays nothing —
   // the `assertGuestStoreInvariants` discipline. Lookup only: never iterated, never
   // ordered, never hashed (I2).
-  (search.exhausted ??= new Set<ContentId>()).add(needId);
+  if (!deniedThisGuestOnly) (search.exhausted ??= new Set<ContentId>()).add(needId);
   return null;
 }
 
@@ -2585,7 +2627,13 @@ function reserve(
     // room stays total for the whole stay (`stepGuests`), so a guest whose rest fills does not
     // hand its bed back at noon.
     if (lodging !== undefined && isNeedWanted(findNeedType(content, lodgingNeedId), lodging, wantAt, false)) {
-      const room = findFreeRoom(search, lodgingNeedId, true);
+      // `NO_ENTITY` IS NOT A PLACEHOLDER HERE, IT IS THE FACT (G-036c): this branch runs only
+      // while the guest holds no room, and `guestAccessTo` exempts the LODGING search from
+      // `guestsOfThisRoom` for exactly that reason — lodging is how a guest becomes a guest of
+      // the room, so gating it on already being one would make every bedroom carrying the rule
+      // unbookable. `staffOnly` still bites here, and should: no guest books a bed in the
+      // linen store.
+      const room = findFreeRoom(search, lodgingNeedId, true, NO_ENTITY);
       if (room !== null) {
         search.held.add(room.id);
         result = { ...result, roomEntityId: room.id };
@@ -2717,7 +2765,13 @@ function reserve(
     // own tie rule, preserved deliberately rather than inherited: see the header note in
     // `utility.ts` on why fit is not allowed to settle it.
     if (pressure <= bestPressure) continue;
-    const provider = findFreeRoom(search, need.needId, false);
+    // `result.roomEntityId` RATHER THAN `guest.roomEntityId`, AND THE DIFFERENCE IS ONE TICK
+    // (G-036c). The lodging branch above may have just assigned a room to `result`, and reading
+    // the parameter instead would mean a guest that checked in this tick could not use its own
+    // room's vending machine until the next one — a guest walking past the thing it just
+    // rented. `reserve` never reassigns a room a guest already holds, so this value is final
+    // for the rest of the guest's stay.
+    const provider = findFreeRoom(search, need.needId, false, result.roomEntityId);
     if (provider === null) continue;
     bestPressure = pressure;
     bestNeed = need;

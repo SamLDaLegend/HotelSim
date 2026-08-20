@@ -23,7 +23,7 @@ import { BUILD_REFUSAL_REASONS, createBuildOutcomes, totalBuildOutcomes } from '
 import type { Command } from './commands.js';
 import { bindContent } from './content.js';
 import type { RoomTypeData } from './content.js';
-import { entitiesInOrder } from './entities.js';
+import { entitiesInOrder, getEntity } from './entities.js';
 import {
   SAVE_V1_BYTES,
   SAVE_V1_CONTENT,
@@ -366,6 +366,26 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
     footprint: { columns, rows },
   });
   const place = (at: Cell): Command => ({ kind: 'placeItem', itemType: 'aChair', at });
+  /** A redraw of an existing room's rectangle (G-036c). */
+  const resize = (id: number, at: Cell, columns = 1, rows = 2): Command => ({
+    kind: 'resizeRoom',
+    id,
+    at,
+    footprint: { columns, rows },
+  });
+  /**
+   * THE IDS THE SCHEDULE BELOW LANDS ON, written out because three commands name one.
+   *
+   * Ids are handed out by the store in command order and never reused, so they are a function
+   * of the log — which is what makes naming them here a derivation rather than a guess. The
+   * refused commands consume none (`applyDrawRoom` allocates nothing on a refusal, which is
+   * itself a pinned property), so: the first draw is 1, the first placed item is 2, the four
+   * later draws are 3..6, and the two spawned support rooms are 7 and 8.
+   */
+  const FIRST_ROOM = 1;
+  const LOWER_ROOM = 7;
+  const UPPER_ROOM = 8;
+  const EDITED_ITEM = 9;
 
   /** A world where every counter is non-zero, so nothing round-trips by being empty. */
   function lived(): World {
@@ -373,7 +393,7 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
       ...createWorld(11, content),
       ledger: [{ tick: 0, amount: 5_000, reason: 'roomRevenue' }],
     };
-    return run(funded, content, 14, [
+    return run(funded, content, 22, [
       { tick: 0, command: draw(cell(0, 0)) },
       // OCCUPIED, AND IT IS AN OVERLAP RATHER THAN A COLLISION ON THE ORIGIN (G-036b). The
       // room above covers rows 0 and 1 at column 0; this draw's ORIGIN is row 1, which the
@@ -394,7 +414,38 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
       { tick: 10, command: draw(cell(0, 6)) },
       { tick: 11, command: draw(cell(0, 10)) },
       { tick: 12, command: draw(cell(0, 12)) }, // out of money by now
-      { tick: 13, command: { kind: 'demolishRoom', id: 1 } },
+      { tick: 13, command: { kind: 'demolishRoom', id: FIRST_ROOM } },
+      // ======================================================================================
+      // AND THE EDITING VERBS (G-036c). Both support rooms arrive through `spawnEntity` rather
+      // than `drawRoom`, deliberately: the hotel is broke by tick 12 — that is how
+      // `insufficientFunds` is reached above — so a priced draw here would either be refused or
+      // would need the seeded revenue raised, which would stop tick 12 refusing. The structural
+      // door charges nothing and changes no counter, so this section adds the five v20 tallies
+      // and moves nothing that was already being asserted.
+      //
+      // A TOWER, BECAUSE SUPPORT IS THE CHEAPEST COLLATERAL BREAK TO STAGE: the upper room
+      // stands on the lower one, and pulling the lower one out from under it is exactly the
+      // damage `breaksAnotherRoom` exists to refuse — a room the player is not editing, two
+      // storeys away, invalidated by a drag.
+      {
+        tick: 14,
+        command: { kind: 'spawnEntity', entityKind: 'roomA', at: cell(0, 20), footprint: { columns: 1, rows: 2 } },
+      },
+      {
+        tick: 15,
+        command: { kind: 'spawnEntity', entityKind: 'roomA', at: cell(1, 20), footprint: { columns: 1, rows: 2 } },
+      },
+      // REFUSED: sliding the lower room two columns over leaves the upper one in mid-air.
+      { tick: 16, command: resize(LOWER_ROOM, cell(0, 22)) },
+      // ACCEPTED: widening it keeps the upper room's cells covered, so nothing else breaks.
+      { tick: 17, command: resize(LOWER_ROOM, cell(0, 20), 2, 2) },
+      { tick: 18, command: place(cell(0, 21)) },
+      { tick: 19, command: { kind: 'moveItem', id: EDITED_ITEM, to: cell(0, 21, 1) } },
+      // ACCEPTED, AND IT DROPS THE FURNITURE THE SHRINK CUT OFF: the item is standing at
+      // column 21, which this rectangle no longer covers.
+      { tick: 20, command: resize(LOWER_ROOM, cell(0, 20), 1, 2) },
+      { tick: 21, command: { kind: 'moveItem', id: 404, to: cell(0, 20) } }, // noSuchItem
+      // ======================================================================================
     ]);
   }
 
@@ -406,9 +457,22 @@ const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column,
     // assertion in the repo that walks EVERY build counter, and a counter it does not name is
     // a counter that could round-trip by being empty.
     expect(world.buildOutcomes.placed).toBeGreaterThan(0);
+    // AND THE THREE v20 COUNTERS, FOLDED IN HERE FOR THE SAME REASON (G-036c): this is the one
+    // assertion in the repo that walks EVERY build counter, and a counter it does not name is a
+    // counter that could round-trip by being empty.
+    expect(world.buildOutcomes.resized).toBeGreaterThan(0);
+    expect(world.buildOutcomes.moved).toBeGreaterThan(0);
+    expect(world.buildOutcomes.displaced).toBeGreaterThan(0);
     for (const reason of BUILD_REFUSAL_REASONS) {
       expect(world.buildOutcomes.refused[reason]).toBeGreaterThan(0);
     }
+    // AND THE UPPER ROOM IS STILL STANDING ON SOMETHING, which is what says the refusal at
+    // tick 16 was a refusal rather than an edit that happened to be counted. Without this the
+    // block above would pass just as well if `breaksAnotherRoom` were recorded AND applied.
+    const upper = getEntity(world.entities, UPPER_ROOM);
+    const lower = getEntity(world.entities, LOWER_ROOM);
+    expect(lower?.at).toEqual(cell(0, 20));
+    expect(upper?.at).toEqual(cell(1, 20));
   });
 
   it('re-hashes identically after serialise -> deserialise (I6)', () => {

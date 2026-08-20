@@ -124,6 +124,62 @@ export type Command =
    */
   | { readonly kind: 'placeItem'; readonly itemType: ContentId; readonly at: Cell }
   /**
+   * THE PLAYER REDRAWS A ROOM THEY ALREADY BUILT (G-036c, ADR-0047 B4). A room's footprint is
+   * mutable world state, and this is the verb that changes it.
+   *
+   * A THIRD COMMAND RATHER THAN A RE-ISSUED `drawRoom`, and G-036b's reason applies here MORE
+   * strongly rather than inverting. There, widening `buildRoom` would have changed a signature;
+   * here, teaching `drawRoom` to mean "resize whatever is in the way" would change a MEANING —
+   * every recorded log in this project contains draws aimed at occupied cells on purpose (that
+   * is how `occupied` is exercised inside the I2 gate), and every one of those refusals would
+   * silently become an edit. **The bytes would not change and the hotel they describe would.**
+   * A resize is not expressible as a draw in any case: it must keep the ENTITY ID, which is the
+   * handle every guest reservation and every hosted item holds.
+   *
+   * IT CARRIES AN ORIGIN AS WELL AS AN EXTENT, because dragging a room's left or back edge
+   * inward moves the origin — half of all resizes are inexpressible without it. So this is
+   * "re-draw this room's rectangle", one rule, rather than two verbs distinguished by which
+   * edge the player grabbed.
+   *
+   * REFUSED, RECORDED, NEVER THROWN when the id is not a live room, when the rectangle leaves
+   * the plot, when it is outside the room TYPE's size band, when it OVERLAPS another room, or
+   * when it would make a room OTHER THAN THIS ONE invalid — `breaksAnotherRoom`. A player may
+   * still break the room they are editing; that is `drawRoom`'s standing permission and this
+   * verb keeps it. See `applyResizeRoom` for why those two are not the same rule.
+   *
+   * ITEMS THE SHRINK CUTS OFF ARE DROPPED, and the drop is counted in
+   * `World.buildOutcomes.displaced` — a recorded effect rather than silence. `applyDemolishRoom`
+   * already removes a room's furniture with it, and a shrink is a partial demolition.
+   *
+   * IT COSTS NOTHING, which is a stated gap rather than a design: a per-cell price is a
+   * designer's number and there is no such field. See `applyResizeRoom` for what would falsify
+   * that. A footprint that is not a pair of positive integers THROWS, as it does for `drawRoom`.
+   */
+  | {
+      readonly kind: 'resizeRoom';
+      readonly id: EntityId;
+      /** The rectangle's new origin: its smallest column and smallest row. */
+      readonly at: Cell;
+      readonly footprint: Footprint;
+    }
+  /**
+   * THE PLAYER MOVES A PIECE OF FURNITURE (G-036c, ADR-0047 B4). The other half of B4: a room's
+   * CONTENTS are mutable world state too.
+   *
+   * BY ENTITY ID AND A DESTINATION CELL — the id because that is the simulation's own handle
+   * (`demolishRoom`'s reasoning), the cell because where in a room a thing stands is the
+   * player's choice.
+   *
+   * REFUSED, RECORDED, NEVER THROWN when the id is not a live item (a live ROOM id lands here
+   * too: a room is redrawn, not carried), when the cell is off the plot, when NO ROOM COVERS IT
+   * — `placeItem`'s rule word for word, because an item's provision is borrowed entirely from
+   * its host room — or when carrying it out would leave the room behind `missingItem`.
+   *
+   * It is also the player's recovery route for a shrink: move the furniture, then resize. That
+   * is what makes dropping the cut-off items a choice rather than a forfeit.
+   */
+  | { readonly kind: 'moveItem'; readonly id: EntityId; readonly to: Cell }
+  /**
    * THE PLAYER DEMOLISHES A ROOM (G-008), AND GETS PART OF THE BUILD COST BACK (G-011).
    *
    * The refund is `demolitionRefundBasisPoints` of the room type's construction cost — a

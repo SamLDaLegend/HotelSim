@@ -72,8 +72,25 @@ const ARRIVALS_EVERY_TICKS = 97;
  *     the builds are priced against revenue that arrives unevenly;
  *   - noSuchRoom refusals, from demolitions aimed at ids that are not live rooms.
  *
- * So `World.buildOutcomes` is non-zero in every counter by tick 100,000, and all of it is
- * hashed state. Verified by replaying the log and reading the counters, not assumed.
+ * So the five counters those passes drive — `built`, `demolished`, and the `occupied`,
+ * `outOfBounds`, `noSuchRoom` and `insufficientFunds` refusals — are non-zero by tick 100,000,
+ * and all of it is hashed state. Verified by replaying the log and reading the counters
+ * (`validity.determinism.test.ts`), not assumed.
+ *
+ * WHAT THIS LOG DOES *NOT* DRIVE, NAMED RATHER THAN LEFT AS AN IMPLICATION. This paragraph read
+ * *"non-zero in EVERY counter"* until G-036c, and it stopped being true at G-036b without
+ * anybody noticing — which is the class §5.8 exists for, and the reason it is repaired here
+ * rather than quietly widened. The log issues no `drawRoom`, no `placeItem`, no `resizeRoom` and
+ * no `moveItem`, so `placed`, `moved`, `resized`, `displaced` and the four refusals those verbs
+ * reach are all ZERO in it.
+ *
+ * That is a deliberate scope line and not a debt to pay by editing this file. **A command log is
+ * a durable artefact**: adding a verb to it moves the I2 hash for a reason that says nothing
+ * about determinism, and the property those verbs need — that a REFUSAL is recorded rather than
+ * thrown, and that an edit is a pure function of the log — is already covered by the unit suites
+ * that drive them through the real tick (`build.resize.test.ts`, `build.save.test.ts`). What
+ * only this harness can prove is that a hundred thousand ticks of the SAME log agree across
+ * three processes, and that claim is about the ticking rather than about which verbs it uses.
  *
  * INVALID ROOMS ARE HERE FOR A REASON THAT IS THE INVERSE OF G-005'S (G-009). Settlement
  * was free to cover because it is unconditional. Validity is the opposite twice over: it

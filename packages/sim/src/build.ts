@@ -77,7 +77,15 @@ import {
   requiredItemsOf,
 } from './content.js';
 import type { BoundContent } from './content.js';
-import { draftDespawn, draftFindEntity, draftForEach, draftSpawn, isPlaced } from './entities.js';
+import {
+  draftDespawn,
+  draftFindEntity,
+  draftForEach,
+  draftReplace,
+  draftSpawn,
+  isPlaced,
+  NO_ENTITY,
+} from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId } from './entities.js';
 import {
   assertCell,
@@ -86,6 +94,7 @@ import {
   describeCell,
   describeFootprint,
   footprintArea,
+  footprintCovers,
   footprintWithinBounds,
   footprintsOverlap,
   UNIT_FOOTPRINT,
@@ -93,7 +102,9 @@ import {
 import type { Cell, Footprint, GridBounds } from './grid.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
-import { standsInRoom } from './validity.js';
+import { createValidityContext, draftEntities, roomInvalidity, standsInRoom } from './validity.js';
+import type { EntityVisitor } from './validity.js';
+import type { Corridors } from './corridors.js';
 
 /**
  * Why a player's build or demolish was refused. A CLOSED UNION, not free text — the
@@ -105,6 +116,38 @@ import { standsInRoom } from './validity.js';
  * exist is simulation structure; what a room costs is a designer's number.
  */
 export type BuildRefusalReason =
+  /**
+   * The edit would make a room OTHER THAN THE ONE BEING EDITED invalid (G-036c, ADR-0047 B4).
+   *
+   * ==========================================================================================
+   * AN EDIT MAY BREAK THE ROOM YOU ARE EDITING. IT MAY NOT BREAK A ROOM YOU ARE NOT.
+   *
+   * That line is the whole rule, and it is a deliberate DIFFERENCE from what this file does at
+   * build time rather than an inconsistency with it. The header above says, at length, that a
+   * room which will be INVALID — floating above nothing, sealed in by its neighbours — is built
+   * without complaint, because if every buildable room were valid by construction then "an
+   * invalid room is not a provider" would inspect nothing and the rule would be unfalsifiable
+   * (ADR-0007). **That argument is about the room the player is acting on, and it survives
+   * untouched**: `drawRoom` still builds a bad room, `resizeRoom` still lets a player shrink
+   * their own room off its own support, and `computeRoomInvalidity` still has a population.
+   *
+   * What it never covered is COLLATERAL damage, because until this goal there was none to
+   * cover. A build ADDS a rectangle; the only room it can newly seal is a neighbour it was
+   * placed against, and the player is looking at exactly that cell. **An edit REMOVES one**,
+   * and removing a rectangle can pull the floor out from under a room two storeys up that the
+   * player cannot even see — a room they paid for, furnished, and have a guest sleeping in,
+   * invalidated by a drag two floors below. There is no "and then the player finds out": the
+   * guest is evicted on the next tick and nothing says why.
+   *
+   * ONE REASON RATHER THAN A MIRROR OF `RoomInvalidityReason`, and that is the same call
+   * `isProviding` makes about an item's borrowed validity. HOW the other room broke —
+   * `unsupported`, `noDoor`, `noCorridor`, `missingItem` — is already spelled once, in
+   * `validity.ts`, and a second tally keyed on the same facts is the drift that file refuses
+   * for validity itself. What the REFUSAL says is what the PLAYER did wrong, and that is one
+   * thing: you cut into something that was holding up somebody else's room.
+   * ==========================================================================================
+   */
+  | 'breaksAnotherRoom'
   /**
    * The drawn footprint covers more cells than this room type allows (G-036b).
    *
@@ -120,7 +163,16 @@ export type BuildRefusalReason =
   | 'footprintTooSmall'
   /** The charge would take the balance below zero. */
   | 'insufficientFunds'
-  /** Demolish named an id that is not a live room. */
+  /**
+   * `moveItem` named an id that is not a live ITEM (G-036c).
+   *
+   * Its own reason rather than `noSuchRoom`, because "no such room" naming a piece of furniture
+   * is a diagnosis that sends the reader to look for the wrong thing — `describeOccupied`'s
+   * argument one field over. A live ROOM id passed to `moveItem` lands here too, and correctly:
+   * a room is redrawn, not carried, and the player reached for the wrong verb.
+   */
+  | 'noSuchItem'
+  /** Demolish or resize named an id that is not a live room. */
   | 'noSuchRoom'
   /**
    * `placeItem` named a cell that no room covers (G-036b).
@@ -146,9 +198,11 @@ export type BuildRefusalReason =
  * type error in BOTH directions, not a comment somebody has to remember.
  */
 const BUILD_REFUSAL_REASON_SET: Readonly<Record<BuildRefusalReason, true>> = Object.freeze({
+  breaksAnotherRoom: true,
   footprintTooLarge: true,
   footprintTooSmall: true,
   insufficientFunds: true,
+  noSuchItem: true,
   noSuchRoom: true,
   notInRoom: true,
   occupied: true,
@@ -214,6 +268,47 @@ export function isBuildRefusalReason(value: string): value is BuildRefusalReason
 export type BuildOutcomes = {
   /** Rooms placed by a `buildRoom` or `drawRoom` command. Never decreases. */
   readonly built: number;
+  /**
+   * Items removed because a `resizeRoom` cut the cell they stood on out of their room
+   * (G-036c). Never decreases.
+   *
+   * ==========================================================================================
+   * THE RULED ANSWER TO "WHAT HAPPENS TO AN ITEM OUTSIDE A SHRUNK FOOTPRINT": IT IS DROPPED,
+   * AND THE DROP IS RECORDED. The block that set this goal named three candidates — dropped,
+   * refused, orphaned — and required the other two to be shown worse. They are, and not
+   * marginally:
+   *
+   *   ORPHANED (leave it standing where it is) is the worst of the three and fails twice.
+   *   `hostRoomOf` would give it no host, so `isProviding` answers false and it is DEAD
+   *   FURNITURE — which is precisely the state `placeItem` refuses to create (`notInRoom`, and
+   *   read its note: "an unhosted item is dead the moment it lands and the player has no way to
+   *   be told why"). One verb refusing what another verb silently produces is two definitions
+   *   of one rule, and this codebase's own history says which way that ends. Worse, it is
+   *   EXPLOITABLE: `applyDemolishRoom` removes a room's furniture explicitly so that "a bed
+   *   left standing in an empty cell would furnish the NEXT room built there for free" cannot
+   *   happen — and shrink-then-redraw is that exploit with an extra step.
+   *
+   *   REFUSED (refuse the whole resize) is coherent and is still worse, because THE PLAYER HAS
+   *   NO WAY OUT. There is no verb that removes an item on its own; `demolishRoom` takes the
+   *   whole room with it. So a player who placed a vending machine in the third cell of a room
+   *   could never shrink that room to two cells again, ever, for the life of the save — a dead
+   *   end reachable by a single ordinary click. `moveItem` gives them the recovery route
+   *   (move it, then shrink), which is what makes DROPPED a choice rather than a forfeit.
+   *
+   * SO: the cells stop being part of the room, and what was in them goes with them —
+   * `applyDemolishRoom`'s rule, applied to the part of a room a shrink demolishes. **A shrink
+   * is a partial demolition**, and treating it as one keeps a single rule about what happens to
+   * furniture when the room around it stops existing.
+   *
+   * IT IS NOT PART OF `totalBuildOutcomes`, AND THAT IS THE ONE THING A READER MUST NOT MISS.
+   * Every other counter here is moved once per COMMAND, which is what makes the per-tick law in
+   * `applyCommands` — "outcomes grew by exactly the number of build-family commands" — able to
+   * fail usefully. This one counts ITEMS, and one resize can displace several or none, so
+   * folding it in would break that law on the first crowded room. It is a recorded EFFECT
+   * rather than a recorded outcome, which is exactly what this goal's ruling owes.
+   * ==========================================================================================
+   */
+  readonly displaced: number;
   /** Rooms removed by a `demolishRoom` command. Never decreases. */
   readonly demolished: number;
   /**
@@ -228,6 +323,23 @@ export type BuildOutcomes = {
    * nothing at all yet.
    */
   readonly placed: number;
+  /**
+   * Items relocated by a `moveItem` command (G-036c). Never decreases.
+   *
+   * Its own counter rather than a second meaning for `placed`, for the reason `placed` is its
+   * own counter rather than a second meaning for `built`: the per-tick law only fails usefully
+   * while each counter is moved by one kind of thing.
+   */
+  readonly moved: number;
+  /**
+   * Rooms redrawn by a `resizeRoom` command (G-036c). Never decreases.
+   *
+   * IT IS NOT FOLDED INTO `built`, and the reason is the cross-subsystem law rather than
+   * tidiness: `countConstructionTransactions(ledger) === built` holds only while `built` counts
+   * exactly the commands that book a `construction` transaction, and a resize books none — see
+   * `applyResizeRoom` for why it charges nothing and what would falsify that.
+   */
+  readonly resized: number;
   /** Refusals, by reason. Every key of `BuildRefusalReason` is present, always. */
   readonly refused: Readonly<Record<BuildRefusalReason, number>>;
 };
@@ -236,11 +348,16 @@ export function createBuildOutcomes(): BuildOutcomes {
   return {
     built: 0,
     demolished: 0,
+    displaced: 0,
     placed: 0,
+    moved: 0,
+    resized: 0,
     refused: {
+      breaksAnotherRoom: 0,
       footprintTooLarge: 0,
       footprintTooSmall: 0,
       insufficientFunds: 0,
+      noSuchItem: 0,
       noSuchRoom: 0,
       notInRoom: 0,
       occupied: 0,
@@ -267,7 +384,13 @@ export function totalRefusals(outcomes: BuildOutcomes): number {
  * in this codebase is a fold (I4's argument, applied past money).
  */
 export function totalBuildOutcomes(outcomes: BuildOutcomes): number {
-  return outcomes.built + outcomes.demolished + outcomes.placed + totalRefusals(outcomes);
+  // `displaced` IS DELIBERATELY ABSENT FROM THIS SUM (G-036c). It counts ITEMS, not commands,
+  // and one `resizeRoom` can displace several or none — so including it would break the
+  // per-tick law this quantity exists to feed on the first crowded room a player shrinks. See
+  // the note on `BuildOutcomes.displaced`.
+  return (
+    outcomes.built + outcomes.demolished + outcomes.placed + outcomes.moved + outcomes.resized + totalRefusals(outcomes)
+  );
 }
 
 /**
@@ -290,6 +413,16 @@ export function assertBuildOutcomes(outcomes: BuildOutcomes): void {
     // subsystems from its cause. With it, the migration is forced to state what a world that
     // never had the command placed: nothing.
     ['placed', outcomes.placed],
+    // AND THE THREE v20 COUNTERS, FOR THE SAME REASON, WHICH IS WHY THE v19 -> v20 MIGRATION IS
+    // FORCED RATHER THAN REMEMBERED (G-036c). Without these lines a v19 world would load with
+    // `moved`/`resized` undefined, `totalBuildOutcomes` would fold them into `NaN`, and the
+    // per-tick law would compare NaN against a command count on the first tick that built
+    // anything. `displaced` is checked here even though it is outside that sum, because it is
+    // hashed state either way and a `NaN` in hashed state is an I2 divergence with nothing to
+    // absorb it.
+    ['displaced', outcomes.displaced],
+    ['moved', outcomes.moved],
+    ['resized', outcomes.resized],
   ] as const) {
     if (!Number.isSafeInteger(value) || value < 0) {
       throw new Error(
@@ -388,10 +521,23 @@ export function roomOverlapping(
   content: BoundContent,
   at: Cell,
   footprint: Footprint,
+  /**
+   * A room that does not count as an obstacle to itself (G-036c). `NO_ENTITY` — the default —
+   * excludes nothing, which is what every caller before `resizeRoom` meant.
+   *
+   * IT IS NOT A LOOPHOLE IN "ONE DEFINITION OF OCCUPIED": the question a resize asks is
+   * genuinely different from the one a draw asks. A draw asks "is anything standing here"; a
+   * resize asks "is anything OTHER THAN ME standing here", and without the exclusion every
+   * resize that kept so much as one cell would be refused as `occupied` by the room being
+   * resized. Passing the id rather than filtering the result afterwards keeps the early exit:
+   * `draftFindEntity` returns the FIRST match, so a post-filter would have had to scan.
+   */
+  exclude: EntityId = NO_ENTITY,
 ): Entity | undefined {
   return draftFindEntity(
     draft,
     (entity) =>
+      entity.id !== exclude &&
       isPlaced(entity) &&
       footprintsOverlap(entity.at, entity.footprint, at, footprint) &&
       findRoomType(content, entity.kind) !== undefined,
@@ -443,6 +589,16 @@ export type BuildInput = {
   readonly bounds: GridBounds;
   /** The open entity draft: spawns staged this tick are visible, despawns are not. */
   readonly entities: EntityDraft;
+  /**
+   * The corridor plan as this tick's commands have left it (G-036c).
+   *
+   * READ-ONLY. Nothing in this file changes it — `layCorridor` is the only writer and it is not
+   * a build-family command. It is here because the editing verbs have to be able to ask whether
+   * an edit would break a room they are not editing, and `noCorridor` is one of the four ways a
+   * room breaks; a validity context built without the plan would answer that question against a
+   * hotel with no circulation at all and refuse every edit in the building.
+   */
+  readonly corridors: Corridors;
   readonly content: BoundContent;
   readonly ledger: readonly Transaction[];
   readonly outcomes: BuildOutcomes;
@@ -706,6 +862,289 @@ export function applyPlaceItem(input: BuildInput, itemType: ContentId, at: Cell)
   return {
     ledger: input.ledger,
     outcomes: { ...input.outcomes, placed: input.outcomes.placed + 1 },
+    balance: input.balance,
+  };
+}
+
+/**
+ * A room that this proposed world would break AND that the current world does not, or
+ * `undefined` (G-036c, ADR-0047 B4). THE ONE DEFINITION OF COLLATERAL DAMAGE.
+ *
+ * ==========================================================================================
+ * TWO VERDICTS, NOT ONE, AND THE SECOND IS ONLY COMPUTED WHEN THE FIRST FINDS SOMETHING.
+ *
+ * "Is any other room invalid AFTER the edit" is the wrong question on its own: this file
+ * deliberately lets a player build a room that is already broken (see the header), so a hotel
+ * can legitimately contain an unsupported room that nothing the player is doing right now
+ * caused. Refusing an unrelated resize because of it would make the editing verbs unusable in
+ * exactly the hotels that most need editing.
+ *
+ * So the rule is a DIFFERENCE: a room that was fine and is not any more. The "before" context
+ * is built lazily, only once the "after" pass has actually found a broken room, so the common
+ * case — an edit that breaks nothing — pays for one validity context and not two.
+ *
+ * WHAT IT COSTS, STATED RATHER THAN DISCOVERED. One (occasionally two) full validity contexts
+ * per editing command: O(A log A) in occupied area for the placement index, plus one
+ * `computeRoomInvalidity` per room. **It is NOT in the per-tick budget.** `resizeRoom` and
+ * `moveItem` arrive from a player, like `buildRoom` and `demolishRoom`, which already pay
+ * O(entities) each; no tick that issues none of them pays anything, and there is no pass over
+ * all entities per entity anywhere in it.
+ *
+ * THE PROPOSAL IS A VISITOR AND NOTHING IS STAGED, which is what makes a refusal free. The
+ * caller hands in a `forEach` that substitutes the edited entity and skips the displaced ones;
+ * if this refuses, the draft was never touched, `draftIsClean` is still true, and the
+ * `ValidityCache` survives the tick untouched.
+ * ==========================================================================================
+ */
+function roomBrokenBy(
+  input: BuildInput,
+  proposed: EntityVisitor,
+  /** The room being edited, which is allowed to break itself. `NO_ENTITY` exempts nothing. */
+  exempt: EntityId,
+): Entity | undefined {
+  const after = createValidityContext(input.content, input.bounds, input.corridors, proposed);
+  let before: ReturnType<typeof createValidityContext> | null = null;
+  let broken: Entity | undefined;
+  proposed((entity) => {
+    if (broken !== undefined) return;
+    if (entity.id === exempt) return;
+    if (findRoomType(input.content, entity.kind) === undefined) return;
+    if (roomInvalidity(after, entity) === null) return;
+    // It is broken NOW. Was it broken before? Built once, on the first candidate, and reused
+    // for the rest — a hotel with several pre-existing ruins asks this once.
+    before ??= createValidityContext(input.content, input.bounds, input.corridors, draftEntities(input.entities));
+    if (roomInvalidity(before, entity) === null) broken = entity;
+  });
+  return broken;
+}
+
+/**
+ * THE PLAYER REDRAWS A ROOM THEY ALREADY BUILT (G-036c, ADR-0047 B4). NEVER THROWS FOR A
+ * REFUSABLE REASON.
+ *
+ * ==========================================================================================
+ * A THIRD COMMAND RATHER THAN A RE-ISSUED `drawRoom`, AND THE G-036b ARGUMENT APPLIES HERE
+ * MORE STRONGLY RATHER THAN INVERTING.
+ *
+ * G-036b made `drawRoom` a second command instead of widening `buildRoom` because **a command
+ * log is a durable artefact (I2): adding a command leaves every recorded log meaning exactly
+ * what it meant, and widening one silently changes all of them.** That was a claim about a
+ * SIGNATURE. Here the same move would change a MEANING, which is worse:
+ *
+ *   A re-issued `drawRoom` over a room that already exists is refused today, as `occupied`, and
+ *   every recorded log in this project — the I2 harness's 100,000-tick log among them —
+ *   contains draws aimed at occupied cells ON PURPOSE, because that is how `occupied` is
+ *   exercised inside the determinism gate. Teaching `drawRoom` to mean "resize the room that is
+ *   in the way" would silently turn every one of those refusals into an EDIT. The bytes would
+ *   not change and the hotel they describe would.
+ *
+ * And a resize is not expressible as a draw in any case. It must preserve the ENTITY ID, which
+ * is the handle `Guest.roomEntityId`, `Guest.engagement.entityId` and every hosted item hold; a
+ * draw allocates a new one. `applyBuildRoom` could be defined as `applyDrawRoom` because they
+ * are one rule at two sizes. This is a different rule.
+ *
+ * IT TAKES AN ORIGIN AS WELL AS AN EXTENT, and that is forced rather than convenient: dragging
+ * a room's LEFT or BACK edge inward moves the origin, and half of all resizes are inexpressible
+ * without it. So the command is "re-draw this room's rectangle", one rule covering resize and
+ * nudge, rather than two verbs whose difference is which edge the player grabbed.
+ *
+ * IT CHARGES NOTHING, AND THAT IS A STATED GAP RATHER THAN A DESIGN — `applyPlaceItem`'s
+ * position exactly. `constructionCostPence` is a flat per-ROOM number; there is no per-cell
+ * price in content and inventing one here would ship a number nobody balanced (ADR-0008).
+ * Nothing is dominated by it today, and that is checkable rather than hopeful: **drawing the
+ * room at its final size already costs the same flat price**, so growing by resize buys exactly
+ * what drawing big bought, and `maxFootprintCells` still binds either way. Booking it as
+ * `construction` would also break `countConstructionTransactions(ledger) === built`, this
+ * file's cross-subsystem law. Parked with its falsification test: **if a run can raise a
+ * hotel's score by growing rooms and never move the balance, the per-cell price is
+ * load-bearing and belongs in content.** G-037 is the goal that makes that run possible.
+ *
+ * THE REFUSALS, IN THE ORDER THEY ARE CHECKED, and the order is `applyDrawRoom`'s with two
+ * entries added at the ends:
+ *
+ *   NO SUCH ROOM first, because every later question is about a room, and there is not one.
+ *   OUT OF BOUNDS, then the two SIZE rules, then OCCUPANCY — identical to `applyDrawRoom`, for
+ *   its reasons: a rectangle that is not a legal shape on this plot is not a rectangle whose
+ *   collisions are worth reporting, and structure comes before access.
+ *   BREAKS ANOTHER ROOM last, because it is the only one that is not a property of the
+ *   rectangle at all, and by far the most expensive to compute.
+ *
+ * WHAT DOES THROW: a non-integer cell or a footprint that is not a pair of positive integers,
+ * via `assertCell` and `assertFootprint`. `applyDrawRoom`'s argument verbatim — a 2.5-column
+ * rectangle is not a small room, it is not a room, and a player dragging over a grid cannot
+ * produce one.
+ * ==========================================================================================
+ */
+export function applyResizeRoom(
+  input: BuildInput,
+  id: EntityId,
+  at: Cell,
+  footprint: Footprint,
+): BuildResult {
+  // "A live room", not "a live entity": `applyDemolishRoom`'s content-scoped definition, so
+  // resizing an item with the room tool is refused rather than silently effective.
+  const room = draftFindEntity(
+    input.entities,
+    (entity) => entity.id === id && findRoomType(input.content, entity.kind) !== undefined,
+  );
+  if (room === undefined) {
+    return refuse(input, 'noSuchRoom');
+  }
+  assertCell({ floor: at.floor, column: at.column, row: at.row }, UNBOUNDED, 'resizeRoom');
+  assertFootprint(footprint, 'resizeRoom');
+
+  if (!footprintWithinBounds(at, footprint, input.bounds)) {
+    return refuse(input, 'outOfBounds');
+  }
+  const area = footprintArea(footprint);
+  if (area < minFootprintCellsOf(input.content, room.kind)) {
+    return refuse(input, 'footprintTooSmall');
+  }
+  const maximum = maxFootprintCellsOf(input.content, room.kind);
+  if (maximum !== undefined && area > maximum) {
+    return refuse(input, 'footprintTooLarge');
+  }
+  // RECTANGLE AGAINST RECTANGLE, EXCLUDING ITSELF. Without the exclusion a room that kept even
+  // one of its own cells would be refused as occupied by itself.
+  if (roomOverlapping(input.entities, input.content, at, footprint, room.id) !== undefined) {
+    return refuse(input, 'occupied');
+  }
+
+  const redrawn: Entity = {
+    id: room.id,
+    kind: room.kind,
+    at: { floor: at.floor, column: at.column, row: at.row },
+    footprint: { columns: footprint.columns, rows: footprint.rows },
+  };
+  // THE FURNITURE THE SHRINK CUTS OFF. Collected BEFORE anything is staged, because
+  // `standsInRoom` reads the room's OLD rectangle and a scan that edited as it walked would be
+  // reasoning about a draft it was changing — `applyDemolishRoom`'s discipline exactly.
+  //
+  // TWO STRUCTURES FROM ONE WALK, AND THE SPLIT IS I2's RULE RATHER THAN A CONVENIENCE. The
+  // ARRAY carries the order — `draftForEach`'s canonical ascending-id order — and is what the
+  // despawn loop below walks; the SET is LOOKUP ONLY, never iterated, and is what the proposed
+  // visitor asks. Iterating the set instead would be a Set-iteration order in a path that ends
+  // in state, which is the thing I2 forbids even on the days it happens not to matter.
+  //
+  // A ROOM WITH NO POSITION AT ALL displaces nothing and is simply PLACED by the redraw:
+  // `standsInRoom` is false for everything when `room.at` is null (`coversCell`), so the walk
+  // finds no furniture. That state is legacy-only — the v2 -> v3 migration is its only
+  // producer — and giving such a room a rectangle is the one repair a player could want.
+  const displaced: EntityId[] = [];
+  const isDisplaced = new Set<EntityId>();
+  draftForEach(input.entities, (entity) => {
+    if (entity.id === room.id) return;
+    if (isRoomKind(input.content, entity.kind)) return;
+    if (!standsInRoom(room, entity)) return;
+    if (entity.at !== null && footprintCovers(at, footprint, entity.at)) return;
+    displaced.push(entity.id);
+    isDisplaced.add(entity.id);
+  });
+  // THE WORLD THIS COMMAND WOULD PRODUCE, as a visitor over a draft nothing has touched yet.
+  const proposed: EntityVisitor = (visit) => {
+    draftForEach(input.entities, (entity) => {
+      if (isDisplaced.has(entity.id)) return;
+      visit(entity.id === room.id ? redrawn : entity);
+    });
+  };
+  if (roomBrokenBy(input, proposed, room.id) !== undefined) {
+    return refuse(input, 'breaksAnotherRoom');
+  }
+
+  // Cannot return undefined: `draftFindEntity` just found it live in this same draft. Kept as
+  // the postcondition of that search rather than as evidence anything was checked.
+  if (draftReplace(input.entities, room.id, at, footprint) === undefined) {
+    throw new Error(`resizeRoom: entity ${id} was found live and then refused a redraw`);
+  }
+  for (const itemId of displaced) {
+    draftDespawn(input.entities, itemId);
+  }
+  return {
+    // NO TRANSACTION. See the note above on why a resize is free and what would falsify it.
+    // The ledger and the balance are returned BY REFERENCE, exactly as a refusal returns them.
+    ledger: input.ledger,
+    outcomes: {
+      ...input.outcomes,
+      resized: input.outcomes.resized + 1,
+      displaced: input.outcomes.displaced + displaced.length,
+    },
+    balance: input.balance,
+  };
+}
+
+/**
+ * THE PLAYER MOVES A PIECE OF FURNITURE (G-036c, ADR-0047 B4). NEVER THROWS FOR A REFUSABLE
+ * REASON.
+ *
+ * ==========================================================================================
+ * THE OTHER HALF OF "A ROOM'S CONTENTS ARE MUTABLE WORLD STATE", and the half that makes the
+ * shrink ruling a choice rather than a forfeit: a player who wants to shrink a room past a
+ * vending machine moves the machine first. Without it, `BuildOutcomes.displaced`'s argument for
+ * dropping rather than refusing would be an argument for taking the player's furniture with no
+ * way to save it.
+ *
+ * BY ENTITY ID AND A DESTINATION CELL. The id because that is the simulation's own handle and a
+ * cell does not identify an entity uniquely once items share a room's cells — `demolishRoom`'s
+ * reasoning. The destination as a CELL because where in a room a thing stands is the player's
+ * choice, which is the sentence `commands.ts` has carried on `placeItem` since G-036b.
+ *
+ * IT REFUSES `notInRoom` FOR `placeItem`'s REASON, WORD FOR WORD: an item's provision is
+ * entirely borrowed from the room it stands in, so an item moved onto free plot is dead the
+ * moment it lands. One rule about where furniture may be, not two.
+ *
+ * AND IT REFUSES `breaksAnotherRoom` WHEN THE ROOM IT LEAVES NEEDS IT. Carrying the only bed
+ * out of a bedroom makes that bedroom `missingItem` — it houses nobody while still costing
+ * upkeep, and the guest asleep in it is evicted on the next tick. **Nothing is exempt here**,
+ * unlike a resize: a resize is an edit TO a room and may break that room, but an item is not a
+ * room, so every room this touches is a room the player was not editing.
+ *
+ * IT CHARGES NOTHING, which needs no separate argument: `placeItem` charges nothing because
+ * `ItemTypeData` has no price, and moving something cannot cost more than putting it there.
+ * ==========================================================================================
+ */
+export function applyMoveItem(input: BuildInput, id: EntityId, to: Cell): BuildResult {
+  // NOT A ROOM, and a live room id lands here rather than in a "wrong verb" throw: the player
+  // has grabbed the wrong thing, which is a move rather than a caller bug. `drawRoom`'s unknown
+  // ROOM TYPE throws because the caller named something content does not define; an id is not a
+  // content id, and an id that names nothing is exactly what a stale UI sends.
+  const item = draftFindEntity(
+    input.entities,
+    (entity) => entity.id === id && !isRoomKind(input.content, entity.kind),
+  );
+  if (item === undefined) {
+    return refuse(input, 'noSuchItem');
+  }
+  assertCell({ floor: to.floor, column: to.column, row: to.row }, UNBOUNDED, 'moveItem');
+
+  if (!footprintWithinBounds(to, UNIT_FOOTPRINT, input.bounds)) {
+    return refuse(input, 'outOfBounds');
+  }
+  if (roomAt(input.entities, input.content, to) === undefined) {
+    return refuse(input, 'notInRoom');
+  }
+  const relocated: Entity = {
+    id: item.id,
+    kind: item.kind,
+    at: { floor: to.floor, column: to.column, row: to.row },
+    footprint: { columns: UNIT_FOOTPRINT.columns, rows: UNIT_FOOTPRINT.rows },
+  };
+  const proposed: EntityVisitor = (visit) => {
+    draftForEach(input.entities, (entity) => visit(entity.id === item.id ? relocated : entity));
+  };
+  if (roomBrokenBy(input, proposed, NO_ENTITY) !== undefined) {
+    return refuse(input, 'breaksAnotherRoom');
+  }
+
+  // Cannot return undefined, for `applyResizeRoom`'s reason: it was just found live here.
+  if (draftReplace(input.entities, item.id, to, UNIT_FOOTPRINT) === undefined) {
+    throw new Error(`moveItem: entity ${id} was found live and then refused a move`);
+  }
+  // AN ITEM IS STILL ONE CELL (ADR-0047 A3). `UNIT_FOOTPRINT` is passed explicitly rather than
+  // carried over from the item, so this verb cannot become the door through which a multi-tile
+  // item reaches a save that `assertSingleTile` then throws on at the first frame.
+  return {
+    ledger: input.ledger,
+    outcomes: { ...input.outcomes, moved: input.outcomes.moved + 1 },
     balance: input.balance,
   };
 }

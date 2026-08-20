@@ -369,6 +369,57 @@ export const spriteRefSchema = z.string().min(1);
  */
 export const footprintCellsSchema = z.int().min(1);
 
+/**
+ * WHO MAY USE A ROOM OF THIS TYPE (G-036c, ADR-0047 B6).
+ *
+ * ---------------------------------------------------------------------------
+ * THE VALUES ARE camelCase, AND THAT IS A RULING RATHER THAN A HOUSE STYLE.
+ *
+ * The natural spellings are `public / guests_of_this_room / staff_only`, and two of those
+ * three are **snake_case, which is ADR-0003's convention for a CONTENT ID**. The simulation
+ * has to BRANCH on these values — `guestAccessTo` in `packages/sim/src/validity.ts` compares
+ * them — so the literal would have to appear in `packages/sim`, and `pnpm check:content` fires
+ * on exactly that. The only exits then are a waiver file or a rename after the content is
+ * written; the rename is free today and is a content migration once anybody has authored a
+ * table. `RoomInvalidityReason`'s `noDoor` / `missingItem` and `needRoleSchema`'s `lodging` /
+ * `engagement` are the precedent already in the tree: a closed union the sim reasons about is
+ * spelled the way the sim spells its own vocabulary.
+ *
+ * WHAT EACH ONE MEANS, and the middle one is the interesting one:
+ *
+ *   `public`             anybody may use it. The lounge, the café, the games room.
+ *   `guestsOfThisRoom`   only the guest who is LODGING in this very room. A bedroom, and
+ *                        everything the player puts inside it.
+ *   `staffOnly`          no guest, ever. A linen store, a plant room, a staff canteen.
+ *                        **C4's staff are NAMED and not built (ADR-0047), so today this value
+ *                        means "nobody uses it".** That is a coherent thing for a player to
+ *                        build — a room can be a cost centre — and it is the value a shipped
+ *                        staff room will carry the day C4 lands.
+ *
+ * REQUIRED HERE, OPTIONAL IN THE SIM — the `requires` / price / footprint contract exactly.
+ *
+ *   SILENCE ON DISK is a designer who did not decide, and the undecided answer is the
+ *   permissive one, so it ships a room every guest may walk into. That is the shape a missing
+ *   `constructionCostPence` had at G-008 and a missing `maxFootprintCells` had at G-036b.
+ *
+ *   SILENCE IN HISTORY is a TRUE STATEMENT and is what protects the permanent v1 fixture:
+ *   content written before access rules existed restricted nobody, so every provider in every
+ *   world those bytes can describe was reachable by every guest — `public` states that fact
+ *   rather than choosing a default. `SAVE_V1_CONTENT` is a frozen literal that never passes
+ *   through this schema, a REQUIRED key would stop it typechecking, and adding the key to it
+ *   would move its `8e09fe4f0fa162a3` fingerprint, which is the `contentHash` INSIDE the
+ *   frozen bytes (ADR-0006).
+ *
+ * THE SHIPPED ASSIGNMENT IS A DIAL AND SHIPS LABELLED AS ONE (ADR-0013 §4). Nothing derives
+ * it. `standard_room` is `guestsOfThisRoom` because a bedroom is the one room in a hotel that
+ * belongs to one guest, and the three amenities are `public` because that is what an amenity
+ * is. **No shipped room type is `staffOnly`**, because no shipped room type is a staff room;
+ * the value is exercised by synthetic content in `validity.access.test.ts` and refused by
+ * `bindContent` when it would leave a hotel with no room a guest could book.
+ * ---------------------------------------------------------------------------
+ */
+export const roomAccessRuleSchema = z.enum(['public', 'guestsOfThisRoom', 'staffOnly']);
+
 export const roomTypeSchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
@@ -382,6 +433,7 @@ export const roomTypeSchema = z.strictObject({
   fitBasisPoints: fitBasisPointsSchema,
   minFootprintCells: footprintCellsSchema,
   maxFootprintCells: footprintCellsSchema,
+  accessRule: roomAccessRuleSchema,
   sprite: spriteRefSchema.optional(),
 });
 
@@ -1540,6 +1592,7 @@ export const speedLadderSchema = z
 
 export type GuestRules = z.infer<typeof guestRulesSchema>;
 export type RoomType = z.infer<typeof roomTypeSchema>;
+export type RoomAccessRule = z.infer<typeof roomAccessRuleSchema>;
 export type NeedType = z.infer<typeof needTypeSchema>;
 export type NeedRole = z.infer<typeof needRoleSchema>;
 export type ItemType = z.infer<typeof itemTypeSchema>;

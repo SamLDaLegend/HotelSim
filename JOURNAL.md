@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. The wall-height ruling is DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished. AN INTERMITTENT ROW IS NOW ESCALATED and the count is corrected. Fourteen rows green on re-run. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-16, G-036c is done: rooms are editable and can be private, save v20. B6 bites — one string of content different, and the same hotel at the same seed produces different engagement and a divergent hash. A shrunk room DROPS items and both alternatives were driven rather than argued. ADR-0052 (human): wall visibility becomes a CONTROL with three positions, amending ADR-0047 A4 — 24 stays the default, and none of WATCH #14's measurement is withdrawn; what changes is the conclusion drawn from it. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
 
-- **State**: save **v19** · summary **v4** · I2 `17a77351290e686d` · measure golden
-  `4955bc697f128ae5` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v20** · summary **v4** · I2 `dcc8c18446799e78` · measure golden
+  `013816cc3168aee0` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the

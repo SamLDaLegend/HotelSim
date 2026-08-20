@@ -10,7 +10,8 @@
     "provides": ["night_rest"],
     "requires": ["single_bed"],
     "minFootprintCells": 1,
-    "maxFootprintCells": 6
+    "maxFootprintCells": 6,
+    "accessRule": "guestsOfThisRoom"
   },
   {
     "id": "hotel_lounge",
@@ -23,7 +24,8 @@
     "provides": [],
     "requires": ["arm_chair"],
     "minFootprintCells": 1,
-    "maxFootprintCells": 24
+    "maxFootprintCells": 24,
+    "accessRule": "public"
   },
   {
     "id": "games_room",
@@ -37,6 +39,7 @@
     "requires": ["vending_machine"],
     "minFootprintCells": 1,
     "maxFootprintCells": 24,
+    "accessRule": "public",
     "fitBasisPoints": 7500
   },
   {
@@ -51,6 +54,7 @@
     "requires": [],
     "minFootprintCells": 1,
     "maxFootprintCells": 24,
+    "accessRule": "public",
     "fitBasisPoints": 7500
   }
 ]

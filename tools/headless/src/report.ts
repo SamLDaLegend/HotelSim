@@ -1473,12 +1473,28 @@ export type RunSummary = {
      * the same call `corridors` got at G-034b. No key changes meaning and none is removed.
      */
     readonly placed: number;
+    /**
+     * What the player EDITED (G-036c). Additive for `placed`'s reason, so
+     * `SUMMARY_SCHEMA_VERSION` still does not move.
+     *
+     * `displaced` counts ITEMS and the other two count COMMANDS, which is why the sim keeps it
+     * out of `totalBuildOutcomes`; it is reported beside them anyway, because "how much
+     * furniture did the player's shrinking cost them" is exactly the kind of question a headless
+     * run exists to answer and it is invisible in every other figure here.
+     */
+    readonly displaced: number;
+    readonly moved: number;
+    readonly resized: number;
     readonly refused: {
+      /** G-036c. An edit would have invalidated a room the player was not editing. */
+      readonly breaksAnotherRoom: number;
       /** G-036b. The drawn rectangle was larger than the room type allows. */
       readonly footprintTooLarge: number;
       /** G-036b. The drawn rectangle was smaller than the room type allows. */
       readonly footprintTooSmall: number;
       readonly insufficientFunds: number;
+      /** G-036c. `moveItem` named an id that is not a live item. */
+      readonly noSuchItem: number;
       readonly noSuchRoom: number;
       /** G-036b. `placeItem` named a cell no room covers. */
       readonly notInRoom: number;
@@ -1772,10 +1788,16 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       // ADDITIVE, so `SUMMARY_SCHEMA_VERSION` does NOT move (G-036b) — the policy that
       // constant states, and the `corridors` precedent from G-034b.
       placed: world.buildOutcomes.placed,
+      // G-036c, additive for the same reason.
+      displaced: world.buildOutcomes.displaced,
+      moved: world.buildOutcomes.moved,
+      resized: world.buildOutcomes.resized,
       refused: {
+        breaksAnotherRoom: world.buildOutcomes.refused.breaksAnotherRoom,
         footprintTooLarge: world.buildOutcomes.refused.footprintTooLarge,
         footprintTooSmall: world.buildOutcomes.refused.footprintTooSmall,
         insufficientFunds: world.buildOutcomes.refused.insufficientFunds,
+        noSuchItem: world.buildOutcomes.refused.noSuchItem,
         noSuchRoom: world.buildOutcomes.refused.noSuchRoom,
         notInRoom: world.buildOutcomes.refused.notInRoom,
         occupied: world.buildOutcomes.refused.occupied,

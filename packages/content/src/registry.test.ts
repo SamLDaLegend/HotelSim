@@ -44,6 +44,13 @@ const roomType = (overrides: Record<string, unknown> = {}): Record<string, unkno
   // its `8e09fe4f0fa162a3` fingerprint.
   minFootprintCells: 1,
   maxFootprintCells: 6,
+  // Required on disk since G-036c (ADR-0047 B6), and the dominance reason a FOURTH time in a
+  // different currency: silence is a designer who did not decide, and the undecided answer is
+  // the permissive one — a room every guest may walk into, shipped by omission. Silence in
+  // HISTORY is again a different statement, because content written before access rules
+  // restricted nobody, which is why `RoomTypeData` in packages/sim keeps this key OPTIONAL and
+  // reads absence as `public`.
+  accessRule: 'guestsOfThisRoom',
   ...overrides,
 });
 
@@ -71,6 +78,7 @@ describe('parseContent — the happy path', () => {
       requires: ['single_bed'],
       minFootprintCells: 1,
       maxFootprintCells: 6,
+      accessRule: 'guestsOfThisRoom',
     });
   });
 
@@ -266,6 +274,29 @@ describe('new content on disk must state both of its prices (G-008)', () => {
     // not simply always on. A square room type — min and max both 1 — is sayable.
     expect(() => parseOne({ minFootprintCells: 1, maxFootprintCells: 1 })).not.toThrow();
     expect(() => parseOne({ minFootprintCells: 4, maxFootprintCells: 40 })).not.toThrow();
+  });
+
+  it('rejects a room type that omits accessRule, and takes only the three the sim branches on (G-036c)', () => {
+    // THE DOMINANCE ARGUMENT A FOURTH TIME, in a currency that is not money or size: silence
+    // ships a room every guest may walk into, which is the permissive end of a range the whole
+    // point of B6 is to let a designer move. Silence in HISTORY is the different statement, and
+    // `RoomTypeData` in packages/sim is where it is read.
+    expect(() => parseContent([roomTypeWithout('accessRule')])).toThrow(ContentError);
+    expect(() => parseContent([roomTypeWithout('accessRule')])).toThrow(/accessRule/);
+    // THE VALUES ARE camelCase AND THAT WAS RULED AT PLAN, NOT DISCOVERED. The natural
+    // spellings `guests_of_this_room` and `staff_only` are snake_case, which is ADR-0003's
+    // convention for a CONTENT ID — and the simulation must branch on these, so the literals
+    // would appear in `packages/sim` and `pnpm check:content` would fire. This asserts the
+    // ruling from the schema's side: the snake_case spellings are not accepted, so nobody can
+    // author them and rediscover the problem later as a content migration.
+    for (const bad of ['guests_of_this_room', 'staff_only', 'PUBLIC', 'anyone', '', 3]) {
+      expect(() => parseOne({ accessRule: bad })).toThrow(/accessRule/);
+    }
+    // And the companion ADR-0007 asks for: each of the three is accepted, so the check above
+    // is not simply always on.
+    for (const good of ['public', 'guestsOfThisRoom', 'staffOnly']) {
+      expect(() => parseOne({ accessRule: good })).not.toThrow();
+    }
   });
 
   it('bounds the refund rate to 0..10000 basis points, and demands an integer', () => {

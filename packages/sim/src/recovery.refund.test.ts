@@ -17,6 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBuildRoom, applyDemolishRoom, countDemolitionRefundTransactions, createBuildOutcomes } from './build.js';
 import type { BuildInput } from './build.js';
+import { createCorridors } from './corridors.js';
 import { bindContent, demolitionRefundOf } from './content.js';
 import type { BoundContent, RoomTypeData } from './content.js';
 import { beginEntityDraft } from './entities.js';
@@ -51,6 +52,7 @@ const input = (content: BoundContent, balance: number, ledger: readonly Transact
   entities: beginEntityDraft({ nextId: 1, list: [] }, createGridBounds()),
   content,
   ledger,
+  corridors: createCorridors(),
   outcomes: createBuildOutcomes(),
   balance,
 });

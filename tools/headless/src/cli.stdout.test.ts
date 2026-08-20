@@ -137,7 +137,17 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // while the need rows' met/unmet and the review distribution move because their definition
     // did. `unservedTicks` and `instanceTicks` are counted in ticks and are UNCHANGED, which is
     // what separates a change of unit from the simulation behaving differently.
-    stateHash: '4ca14d55f98ad071',
+    // MOVED AGAIN AT G-036c to `2b1ba508644bcf7c`, for TWO hashed-state causes and NO
+    // behaviour: `buildOutcomes` gained `resized`, `moved`, `displaced` and two refusal
+    // counters (save v20), and `World.contentHash` moved because `room-types.json` gained
+    // `accessRule`. **THE CONTROL IS THE FULL DOCUMENT AGAIN** — every other field here is
+    // byte-identical, including the need rows and the review distribution that G-028b had to
+    // exclude: 24 arrived, 4 checked out, 16 gave up, four still in the hotel, the same 7
+    // transactions and the same 510,000p. B6 CAN be inert here and it is checked rather than
+    // assumed: the shipped `standard_room` is `guestsOfThisRoom`, and the only need it provides
+    // is the LODGING need, which the engagement pass skips by name — so there is nothing in a
+    // bedroom for a stranger to be turned away from until a player puts something there.
+    stateHash: '2b1ba508644bcf7c',
   },
   guests: {
     arrived: 24,
@@ -341,10 +351,18 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // `corridors` got at G-034b. The default run issues neither `drawRoom` nor `placeItem`,
     // so every one of them is zero for a structural reason.
     placed: 0,
+    // G-036c. The three edit counters and the two edit refusals are ADDITIVE for the same
+    // reason, so `SUMMARY_SCHEMA_VERSION` still stays at 4. The default run issues neither
+    // `resizeRoom` nor `moveItem`, so every one of them is zero for a structural reason.
+    displaced: 0,
+    moved: 0,
+    resized: 0,
     refused: {
+      breaksAnotherRoom: 0,
       footprintTooLarge: 0,
       footprintTooSmall: 0,
       insufficientFunds: 0,
+      noSuchItem: 0,
       noSuchRoom: 0,
       notInRoom: 0,
       occupied: 0,
@@ -474,7 +492,19 @@ const GOLDEN_2_DAYS_SEED_42 =
     // checked claim: the shipped CLI hotel draws nothing, places nothing, and every room in it
     // is one cell, so a footprint-aware placement index gives it the answers the origin-keyed
     // one gave. The two ADDED lines are new columns of the same report, both reading 0.
-    'state hash  4ca14d55f98ad071',
+    //
+    // G-036c: ONE LINE MOVED AND NOT ONE OTHER CHARACTER OF THIS GOLDEN CHANGED.
+    // `4ca14d55f98ad071` -> `2b1ba508644bcf7c`, for two hashed-state causes and no behaviour:
+    // `buildOutcomes` gained three edit counters and two refusal counters (save v20), and
+    // `World.contentHash` moved because `room-types.json` gained `accessRule`. **The printed
+    // report did not gain a column this time** — the new build counters are reported in `--json`
+    // and the printed table is unchanged — so the control here is every line above this one,
+    // literally: the same 6 valid rooms, the same 0/0/0/0/0 tally, the same 24 arrivals, the
+    // same 4/16 split, the same four need rows to the basis point, the same 7 transactions and
+    // the same 510,000p. B6 is INERT on this hotel for a structural reason rather than by luck:
+    // the only need `standard_room` provides is the lodging need, which the engagement pass
+    // skips by name, and nothing else in this run stands inside a bedroom.
+    'state hash  2b1ba508644bcf7c',
   ].join('\n') + '\n';
 
 /**
@@ -631,7 +661,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  4ca14d55f98ad071']);
+    expect(differing).toEqual(['seed        42', 'state hash  2b1ba508644bcf7c']);
     expect(lines43).toContain('seed        43');
   });
 });

@@ -313,7 +313,21 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   `--rooms` seeds through `spawnEntity` with no footprint and `--build` dispatches
     //   `buildRoom`, which IS `drawRoom` at `UNIT_FOOTPRINT` — so a footprint-aware placement
     //   index returns exactly what the origin-keyed one returned, cell for cell.
-    expect(hashState(plain)).toBe('4955bc697f128ae5');
+    //   `4955bc697f128ae5` -> `013816cc3168aee0`   G-036c made a room EDITABLE and gave it an
+    //   ACCESS RULE. TWO causes, both shape and neither behavioural: `buildOutcomes` gained
+    //   `resized`, `moved`, `displaced` and two refusal counters (save v20), AND
+    //   `World.contentHash` moved because `room-types.json` gained `accessRule`.
+    //   **THE CONTROL IS THE FULL BLOCK AGAIN**: arrivals, checkouts, `leftDissatisfied`,
+    //   evictions, the departure table, the need rows and the abandonment count are every one
+    //   of them UNCHANGED. They can be for two structural reasons rather than by luck. B4:
+    //   this workload issues no `resizeRoom` and no `moveItem`, so all five new counters are
+    //   zero and no entity in it moves — the v19 -> v20 step rewrites no entity at all, which
+    //   is what shipping the footprint mutable-capable at G-036b bought. B6: the shipped
+    //   `standard_room` is `guestsOfThisRoom`, and the ONLY need it provides is the lodging
+    //   need, which the engagement pass skips by name (`reserve`) — while the lounge and the
+    //   games room, which are what guests here engage, are `public`. So the rule is live and
+    //   there is nothing in this hotel for it to turn anybody away from.
+    expect(hashState(plain)).toBe('013816cc3168aee0');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -460,7 +474,13 @@ describe('the same workload with the player churning the building', () => {
     // wider than the rectangles it has always had. THE SHARP CONTROL HOLDS FOR THE TWELFTH
     // TIME: 19 evictions, unchanged, in the goal that made a room a rectangle — the churn
     // schedule demolishes the same rooms out from under the same guests.
-    expect(hashState(churn)).toBe('eb25a99e0fbedbc2');
+    // MOVED AT G-036c WITH ITS SIBLING, `eb25a99e0fbedbc2` -> `62aebaef31a6b85b`, for the two
+    // causes the plain row gives and no third one: this arm builds and demolishes, but it
+    // issues no `resizeRoom` and no `moveItem`, so its five new counters are zero exactly as
+    // the plain arm's are. THE SHARP CONTROL HOLDS FOR THE THIRTEENTH TIME: 19 evictions,
+    // unchanged, in the goal that made a room editable — the churn schedule demolishes the same
+    // rooms out from under the same guests, and no bedroom in it holds anything a guest engages.
+    expect(hashState(churn)).toBe('62aebaef31a6b85b');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

@@ -60,7 +60,7 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v19', () => {
+  it('is a v1 blob, and this build now writes v20', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
@@ -77,13 +77,20 @@ describe('I6 stored v1 save fixture', () => {
     // a floor stopped being a strip and became a plan — `Cell` gained `row` and the plot gained
     // `minRow`/`maxRow`, one row deep, because a v16 floor had exactly one row, and a
     // SEVENTEENTH at G-034b when a cell could be a CORRIDOR: `World` gained `corridors`, empty,
-    // because a v17 world had no word for one and every floor of it was open plan).
+    // because a v17 world had no word for one and every floor of it was open plan, and an
+    // EIGHTEENTH at G-036b when a room instance gained a player-drawn `footprint` — one cell,
+    // because that is what every entity this project ever wrote took up — and a NINETEENTH at
+    // G-036c when a room became EDITABLE: `buildOutcomes` gained `resized`, `moved` and
+    // `displaced` and two refusal reasons, all zero, because a v19 world had no verb that could
+    // move any of them. **B4 rewrote no entity**, which is what ADR-0047 B4's "ship it
+    // mutable-capable" bought a goal early, and B6 added no save field at all because an access
+    // rule belongs to the room TYPE and reaches a world only through `contentHash`.)
     //
     // THE ONE ABSOLUTE ERA PIN IN THE REPO SINCE G-014b. The other four were relative
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(19);
+    expect(SAVE_SCHEMA_VERSION).toBe(20);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 

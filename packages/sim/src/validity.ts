@@ -70,7 +70,14 @@
 // and not `world.ts`. `countGuestsInInvalidRooms` lives in `guests.ts` for exactly that
 // reason: putting it here would close a cycle.
 
-import { findRoomType, isRoomKind, providesOf, requiredItemsOf, roomTypeProvides } from './content.js';
+import {
+  accessRuleOf,
+  findRoomType,
+  isRoomKind,
+  providesOf,
+  requiredItemsOf,
+  roomTypeProvides,
+} from './content.js';
 import type { BoundContent } from './content.js';
 import { hasCorridorAt } from './corridors.js';
 import type { Corridors } from './corridors.js';
@@ -1008,6 +1015,99 @@ export function validRoomsOf(ctx: ValidityContext): readonly Entity[] {
  */
 function hostRoomOf(ctx: ValidityContext, item: Entity): Entity | undefined {
   return item.at === null ? undefined : roomAtCell(ctx, item.at);
+}
+
+/**
+ * WHY A PARTICULAR GUEST MAY NOT USE A PARTICULAR PROVIDER, or `'allowed'` (G-036c, ADR-0047
+ * B6). THE ONE DEFINITION.
+ *
+ * ==========================================================================================
+ * B6 HAS TO BITE OR IT IS A FIELD WITH NO CONSUMER, WHICH IS THE STANDARD THIS PROJECT
+ * APPLIED TO `forbidden adjacencies` ONE GOAL AGO AND REFUSED.
+ *
+ * The rule was parked for thirteen goals as an edge case, because a stranger walking into a
+ * bedroom was a CONTENT ACCIDENT — nothing a designer would author on purpose. Player-drawn
+ * rooms turn it into a certainty: **somebody will put a vending machine in a bedroom on
+ * purpose**, and `placeItem` is now the primary verb for doing exactly that. So this predicate
+ * is consulted by `findFreeRoom` in `guests.ts`, and a guest does not engage a provider whose
+ * room excludes it.
+ *
+ * THE ROOM IS THE UNIT AND THE ITEM BORROWS FROM IT, which is `isProviding`'s rule one field
+ * over and for the same reason: an item has no validity of its own and it has no access rule of
+ * its own either. A vending machine is reachable exactly when the room it stands in is
+ * reachable, so `ItemTypeData` gains no field and there is no second table to drift.
+ *
+ * THE THREE VERDICTS ARE NOT TWO, AND THE SPLIT IS LOAD-BEARING RATHER THAN DESCRIPTIVE:
+ *
+ *   `closedToGuests`               is a fact about the ROOM. It is the same answer for every
+ *                                  guest in the hotel on this tick.
+ *   `reservedForItsOwnGuest`       is a fact about THIS GUEST. The next guest asked may get
+ *                                  `allowed` for the very same room.
+ *
+ * `findFreeRoom` memoises "no free provider of this need" across every guest in a tick
+ * (`RoomSearch.exhausted`), and that memo is only sound while the candidate set is the same for
+ * all of them. **A per-guest denial breaks that and a per-room one does not**, so the caller
+ * suppresses the memo on the first and keeps it on the second. Collapsing these two into one
+ * "denied" would make one guest's bedroom mark its need exhausted for the whole hotel — a
+ * guest standing in the lobby beside its own vending machine, which is §6.1's literal case.
+ *
+ * WHY LODGING IS EXEMPT FROM `guestsOfThisRoom` AND NOT FROM `staffOnly`, ruled here rather
+ * than discovered. **Lodging is HOW a guest becomes a guest of the room.** A bedroom carrying
+ * `guestsOfThisRoom` — which is what the shipped `standard_room` carries — would otherwise be
+ * unbookable by construction, because the search runs while `roomEntityId` is still
+ * `NO_ENTITY`: the rule would read "only the occupant may become the occupant" and the hotel
+ * would have no beds. `staffOnly` has no such circularity: a guest may not book a bed in the
+ * linen store, before or after. `bindContent` refuses content where that would leave nothing
+ * bookable at all (`assertSomeLodgingRoomAdmitsGuests`).
+ *
+ * IT IS ASKED AT ACQUISITION AND NEEDS NO RELEASE CONDITION, and that is a property of the
+ * guest lifecycle rather than an omission. The verdict depends on `Guest.roomEntityId`, which
+ * moves exactly twice: from `NO_ENTITY` when a guest books (`reserve` never reassigns a room a
+ * guest already holds), and never again — a guest that LOSES its lodging room departs on the
+ * same tick (`stepGuests` step 3). So no engagement this predicate allowed can become
+ * disallowed while it is held. `validity.access.test.ts` pins that as a checked fact rather
+ * than leaving it as this paragraph.
+ *
+ * AN ENTITY WITH NO ROOM READS AS `'allowed'`, which is unreachable from the caller and is a
+ * postcondition rather than a decision: `findFreeRoom`'s candidates all come from
+ * `providersFor`, which holds only entities `isProviding` accepted, and an item with no host is
+ * not one of them. Answering "allowed" rather than inventing a fourth verdict keeps this
+ * function about ACCESS and leaves hostedness to `isProviding`, which already owns it.
+ * ==========================================================================================
+ */
+export type RoomAccessVerdict =
+  /** This guest may use it. */
+  | 'allowed'
+  /** `staffOnly`: no guest may use it, so the answer is the same for every guest this tick. */
+  | 'closedToGuests'
+  /** `guestsOfThisRoom`: only the guest lodging in it may, and this is not that guest. */
+  | 'reservedForItsOwnGuest';
+
+export function guestAccessTo(
+  ctx: ValidityContext,
+  provider: Entity,
+  /** The room this guest is lodging in, or `NO_ENTITY` for a guest that holds none. */
+  lodgingRoomId: EntityId,
+  /** True when the guest is choosing where to LODGE. See the note above on why it matters. */
+  forLodging: boolean,
+): RoomAccessVerdict {
+  const room = isRoomKind(ctx.content, provider.kind) ? provider : hostRoomOf(ctx, provider);
+  if (room === undefined) return 'allowed';
+  switch (accessRuleOf(ctx.content, room.kind)) {
+    case 'public':
+      return 'allowed';
+    case 'staffOnly':
+      return 'closedToGuests';
+    case 'guestsOfThisRoom':
+      if (forLodging) return 'allowed';
+      return room.id === lodgingRoomId ? 'allowed' : 'reservedForItsOwnGuest';
+    default: {
+      // Unreachable: `cloneRoomType` refuses a rule this simulation has no branch for, at bind
+      // time, on the one path every host goes through. Kept as the postcondition of that rather
+      // than as evidence anything was checked (ADR-0010's amendment).
+      return 'allowed';
+    }
+  }
 }
 
 /**

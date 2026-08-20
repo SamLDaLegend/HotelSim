@@ -71,6 +71,12 @@ export const FOOD_COURT_ROOM_TYPES = [
     // from the shipped table in what it was always meant to differ in — the room TYPES present.
     minFootprintCells: 1,
     maxFootprintCells: 24,
+    // REQUIRED ON DISK SINCE G-036c (ADR-0047 B6), for the same reason: silence is a designer
+    // who did not decide, and the undecided answer is the permissive one. The food court has no
+    // bedrooms at all, so every room in it is an amenity and every one of them is `public` —
+    // which is also what makes this arm a CONTROL for the access rule rather than a second
+    // subject of it.
+    accessRule: 'public',
     fitBasisPoints: 7500,
   },
   {
@@ -89,6 +95,12 @@ export const FOOD_COURT_ROOM_TYPES = [
     // from the shipped table in what it was always meant to differ in — the room TYPES present.
     minFootprintCells: 1,
     maxFootprintCells: 24,
+    // REQUIRED ON DISK SINCE G-036c (ADR-0047 B6), for the same reason: silence is a designer
+    // who did not decide, and the undecided answer is the permissive one. The food court has no
+    // bedrooms at all, so every room in it is an amenity and every one of them is `public` —
+    // which is also what makes this arm a CONTROL for the access rule rather than a second
+    // subject of it.
+    accessRule: 'public',
     fitBasisPoints: 7500,
   },
   {
@@ -107,6 +119,12 @@ export const FOOD_COURT_ROOM_TYPES = [
     // from the shipped table in what it was always meant to differ in — the room TYPES present.
     minFootprintCells: 1,
     maxFootprintCells: 24,
+    // REQUIRED ON DISK SINCE G-036c (ADR-0047 B6), for the same reason: silence is a designer
+    // who did not decide, and the undecided answer is the permissive one. The food court has no
+    // bedrooms at all, so every room in it is an amenity and every one of them is `public` —
+    // which is also what makes this arm a CONTROL for the access rule rather than a second
+    // subject of it.
+    accessRule: 'public',
   },
 ] as const;
 

@@ -25,7 +25,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 19;
+export const SAVE_SCHEMA_VERSION = 20;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -1951,6 +1951,101 @@ function migrateV18ToV19(world: unknown): unknown {
 }
 
 /**
+ * THE BUILD COUNTERS A v19 WORLD IS CARRIED ONTO, frozen at the moment v20 was defined.
+ *
+ * A LITERAL, and it must stay one, for the reason `V4_MIGRATION_BUILD_OUTCOMES` and
+ * `V19_MIGRATION_BUILD_OUTCOMES` both give: `createBuildOutcomes()` returns the same zeros
+ * today and the two are allowed to diverge, so no value assertion could tell the
+ * implementations apart (ADR-0008 (3)). The source scan in
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts` is what
+ * keeps this file from reaching for the live constructor.
+ *
+ * THREE COUNTERS AND TWO REFUSAL REASONS, because that is what G-036c added, and **every one
+ * of them is ZERO because zero is the TRUE COUNT rather than a placeholder**. A v19 world is
+ * not a world whose new counters were left out of the file; it is a world in which
+ * `resizeRoom` and `moveItem` DID NOT EXIST. No room was ever redrawn, no item was ever
+ * carried, no item was ever displaced by a shrink, no edit was ever refused for breaking a
+ * neighbour, and no id was ever rejected as not-an-item. That is the v3 -> v4 step's argument
+ * verbatim, and it is the stronger kind: nothing here is unknown.
+ */
+const V20_MIGRATION_BUILD_OUTCOMES = Object.freeze({
+  displaced: 0,
+  moved: 0,
+  resized: 0,
+  refused: Object.freeze({
+    breaksAnotherRoom: 0,
+    noSuchItem: 0,
+  }),
+});
+
+/**
+ * v19 -> v20: a world that predates editable rooms (G-036c, ADR-0047 B4).
+ *
+ * ==========================================================================================
+ * IT TOUCHES `buildOutcomes` AND NOTHING ELSE, AND THAT ABSENCE IS THE INTERESTING HALF.
+ *
+ * B4 is "a room's footprint and its contents are MUTABLE world state" — and the fields it
+ * mutates already exist. ADR-0047 B4's whole argument was that **retrofitting mutability into a
+ * write-once schema is the painful direction**, which is why G-036b shipped `footprint` as
+ * plain data on the entity a goal before anything could edit it. This step is what that
+ * decision bought: **no entity is rewritten, no cell is invented, and no world's geometry
+ * changes by so much as a column.** A v19 room and a v20 room are the same bytes; what is new
+ * is that a command can change them.
+ *
+ * B6 ADDS NO SAVE FIELD AT ALL, and that is worth stating rather than leaving as a gap in the
+ * list. An access rule is a property of the room TYPE, which is CONTENT (I3, ADR-0046 §4.2) —
+ * it lives in `packages/content/data/room-types.json` and reaches the world only through
+ * `contentHash`. So a v19 save loaded under the new content answers access questions the new
+ * way, which is correct: the rule is the designer's, not the save's.
+ *
+ * SO WHAT MOVES IS THE TALLY. Three counters and two refusal reasons, all zero, all true. And
+ * the step is FORCED rather than remembered: `assertBuildOutcomes` checks each of the three by
+ * name and rejects an unknown refusal key, so a v19 world reaching v20 without this would fail
+ * at the load rather than folding an `undefined` into `NaN` three subsystems away.
+ *
+ * THE ONE WAY THIS STEP COULD DESTROY DATA — overwriting a count somebody's play produced — is
+ * the one thing it refuses to do, exactly as all nineteen earlier steps refuse.
+ * `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an own key
+ * (G-003).
+ * ==========================================================================================
+ */
+function migrateV19ToV20(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const outcomes = world['buildOutcomes'];
+  if (!isRecord(outcomes)) {
+    throw new Error('Save is corrupt: world.buildOutcomes is missing or not an object');
+  }
+  for (const field of ['displaced', 'moved', 'resized']) {
+    if (Object.keys(outcomes).includes(field)) {
+      throw new Error(
+        `world.buildOutcomes already has a "${field}" field, so it is not a v19 world; migrating it would ` +
+          'overwrite a real count of what a player edited',
+      );
+    }
+  }
+  const refused = outcomes['refused'];
+  if (!isRecord(refused)) {
+    throw new Error('Save is corrupt: world.buildOutcomes.refused is missing or not an object');
+  }
+  return {
+    ...world,
+    buildOutcomes: {
+      ...outcomes,
+      displaced: V20_MIGRATION_BUILD_OUTCOMES.displaced,
+      moved: V20_MIGRATION_BUILD_OUTCOMES.moved,
+      resized: V20_MIGRATION_BUILD_OUTCOMES.resized,
+      // THE NEW COUNTERS FIRST, THE SAVE'S OWN COUNTS SECOND, so a v19 world's real refusal
+      // history survives and only the two reasons that did not exist are written — the
+      // v18 -> v19 step's ordering, and spreading it the other way round would silently zero a
+      // player's recorded refusals.
+      refused: { ...V20_MIGRATION_BUILD_OUTCOMES.refused, ...refused },
+    },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -1977,6 +2072,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 16, to: 17, migrate: migrateV16ToV17 }),
   Object.freeze({ from: 17, to: 18, migrate: migrateV17ToV18 }),
   Object.freeze({ from: 18, to: 19, migrate: migrateV18ToV19 }),
+  Object.freeze({ from: 19, to: 20, migrate: migrateV19ToV20 }),
 ]);
 
 /**

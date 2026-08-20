@@ -9,7 +9,9 @@ export {
   applyBuildRoom,
   applyDemolishRoom,
   applyDrawRoom,
+  applyMoveItem,
   applyPlaceItem,
+  applyResizeRoom,
   assertBuildOutcomes,
   BUILD_REFUSAL_REASONS,
   constructionCostOf,
@@ -31,11 +33,13 @@ export type {
   ItemTypeData,
   NeedRole,
   NeedTypeData,
+  RoomAccessRule,
   RoomTypeData,
   SimContent,
 } from './content.js';
 export {
   abandonMarginOf,
+  accessRuleOf,
   bindContent,
   demolitionRefundOf,
   // θ-b1. Exported for the reason `stayDurationOf` below is: the tests that compute the arms and
@@ -51,6 +55,7 @@ export {
   firstRoomTypeProviding,
   fitOf,
   hasContentId,
+  isRoomAccessRule,
   isRoomKind,
   itemTypeProvides,
   lodgingNeedOf,
@@ -62,6 +67,7 @@ export {
   ONE_WHOLE_BASIS_POINTS,
   providesOf,
   requiredItemsOf,
+  ROOM_ACCESS_RULES,
   roomTypeProvides,
   roomTypeServes,
   // G-027a. Exported because the runner reports the stay length and the tests that compute
@@ -90,6 +96,7 @@ export {
   draftForEach,
   draftGet,
   draftIsClean,
+  draftReplace,
   draftSpawn,
   entitiesInOrder,
   entityCount,
@@ -288,6 +295,7 @@ export {
 } from './tick.js';
 export type {
   EntityVisitor,
+  RoomAccessVerdict,
   RoomInvalidityReason,
   RoomInvalidityTally,
   ValidityCache,
@@ -299,6 +307,7 @@ export {
   createValidityContext,
   describeRoomInvalidity,
   draftEntities,
+  guestAccessTo,
   isProviding,
   isRoomInvalidityReason,
   isValidRoom,

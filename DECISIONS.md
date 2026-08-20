@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. The wall-height ruling is DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished. AN INTERMITTENT ROW IS NOW ESCALATED and the count is corrected. Fourteen rows green on re-run. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-16, G-036c is done: rooms are editable and can be private, save v20. B6 bites — one string of content different, and the same hotel at the same seed produces different engagement and a divergent hash. A shrunk room DROPS items and both alternatives were driven rather than argued. ADR-0052 (human): wall visibility becomes a CONTROL with three positions, amending ADR-0047 A4 — 24 stays the default, and none of WATCH #14's measurement is withdrawn; what changes is the conclusion drawn from it. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4534,3 +4534,61 @@ code, covered by tests. **The defect is that it answers at the wrong LEVEL**, an
 project asks that question. **It was caught by a person looking at rooms on a screen and noticing
 they all held one guest** — the third time in two days the milestone question has found something
 thirteen green rows could not, after the plot-depth gap and the missing lobby.
+
+---
+
+## ADR-0052 — WALL VISIBILITY IS A CONTROL, NOT A CONSTANT. ADR-0047 A4 is amended.
+
+**Date**: 2026-08-16 · **Status**: accepted · **HUMAN**, raised from reading WATCH #14's ruling.
+
+> *"I see that the wall height ruling has been changed to allow better visibility — that might be
+> better served with a toggle between walls being visible, transparent, and the reduced height (as
+> at a later date I might want to admire some wall art)."*
+
+**RULED: wall visibility becomes a VIEW CONTROL with three positions — full, transparent, and
+reduced.** `WALL_HEIGHT = 24` stops being *the* answer and becomes *one position of it*.
+
+### This amends ADR-0047 A4, which considered a toggle and refused it
+
+A4 chose two far walls over *"transparent or cutaway walls"* and *"a wall height slider"*, on the
+grounds that two far walls **removes the problem rather than managing it.** **That was right about
+the DEFAULT and wrong to treat the alternatives as mutually exclusive.** Two far walls remains the
+projection; the toggle governs how tall those two walls are drawn.
+
+### What the measurement still says, because none of it is withdrawn
+
+WATCH #14's arms stand and the reasoning is unchanged: at `H=64` an item is **3-of-9 visible at
+every anchor tried**, the near lip is the **most** occluded band rather than the least, and the
+first bad height is **28** — computed by walking every integer height against the real wall polygon.
+**What changes is the conclusion drawn FROM it**, not the number:
+
+- **Before**: 64 hides room contents, therefore ship 24 and lock it.
+- **Now**: 64 hides room contents, **therefore 64 is the wrong DEFAULT** — and the reading a tall
+  wall gives is worth having on demand. **A player admiring wall art and a player checking what is
+  in a room want different pictures of the same hotel.**
+
+**The default stays 24.** It is the position that shows the mechanic `placeItem` and G-037 are about,
+and a default is what an unattended recording gets.
+
+### Why this is a real gain rather than a nicety, in this project's own terms
+
+**The WATCH surface is the instrument of record (ADR-0023), and an instrument with one fixed setting
+answers one question.** WATCH #14 had to choose between showing a room's contents and showing its
+walls, and it chose — correctly, for the goals in front of it. **A toggle means the next goal that
+needs the other reading does not have to re-litigate a constant to get it.**
+
+**And it costs nothing structurally**: `farSidesOf(orientation)` already derives which walls exist,
+`WALL_HEIGHT` already lives in `iso.ts` beside the item constants that G-036b moved there **because
+visibility is a fact about both**. The control varies one number and one alpha.
+
+### Scope, bounded
+
+**Not built here.** It is render work with no sim consequence — no hashed state, no content, no
+migration — and ADR-0046 §9 permits no new scope inside a goal. **It goes to the M3-exit instrument
+goal (G-039)**, which already owns the WATCH surface's debts, **or earlier if a goal needs the tall
+reading to watch its own mechanic** — which is the trigger, not the calendar.
+
+**Transparency is the position with an unknown**: at 2:1 with two far walls, a translucent wall over
+a neighbouring room's floor may read as mud rather than as glass. **Parked with its falsification
+test — build all three positions, look at the same frame in each, and if transparent is not legible
+it ships as two positions rather than being tuned until it is.**

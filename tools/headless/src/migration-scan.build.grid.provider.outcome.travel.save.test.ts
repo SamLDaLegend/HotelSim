@@ -492,6 +492,47 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
     expect(body).toContain("Object.keys(world).includes('corridors')");
   });
 
+  it('freezes the v20 edit counters as literals, and writes exactly those five', () => {
+    // The positive half for v20 (G-036c), and the same argument `V4_MIGRATION_BUILD_OUTCOMES`
+    // makes: deleting `V20_MIGRATION_BUILD_OUTCOMES` and calling `createBuildOutcomes()` would
+    // make the identifier scan pass by REMOVING ITS SUBJECT, so the shape is asserted here too.
+    // Every counter and every new refusal reason is spelled out as its own literal `0`, which
+    // is what makes this break loudly on the day the union grows again but history does not.
+    const code = stripComments(saveSource());
+    const declaration = /V20_MIGRATION_BUILD_OUTCOMES[\s\S]{0,600}?\}\)/.exec(code)?.[0] ?? '';
+    expect(declaration).toContain('Object.freeze');
+    expect(declaration).toContain('displaced: 0');
+    expect(declaration).toContain('moved: 0');
+    expect(declaration).toContain('resized: 0');
+    expect(declaration).toContain('breaksAnotherRoom: 0');
+    expect(declaration).toContain('noSuchItem: 0');
+    // AND THE STEP WRITES EXACTLY THOSE FIVE AND NOTHING ELSE — it must not carry `built`,
+    // `demolished` or `placed`, which a v19 world already has and whose real values it would
+    // then zero. The v18 -> v19 step's spread-order lesson, asserted structurally.
+    const body = /function migrateV19ToV20[\s\S]*?\n\}/.exec(code)?.[0] ?? '';
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).toContain('displaced: V20_MIGRATION_BUILD_OUTCOMES.displaced');
+    expect(body).toContain('moved: V20_MIGRATION_BUILD_OUTCOMES.moved');
+    expect(body).toContain('resized: V20_MIGRATION_BUILD_OUTCOMES.resized');
+    expect(body).toContain('refused: { ...V20_MIGRATION_BUILD_OUTCOMES.refused, ...refused }');
+    // PLAIN REGEXP LITERALS WITH A BOUNDARY, NOT `toContain` — and the reason is a live near
+    // miss rather than style: `displaced:` CONTAINS `placed:`, so a substring test here passes
+    // for the wrong reason and would go on passing if the step really did write `placed`.
+    // Literals rather than patterns built from strings, per `CLAUDE.md`'s three-goal rule.
+    const NAMES_PLACED = /(?<![A-Za-z])placed:/;
+    const NAMES_BUILT = /(?<![A-Za-z])built:/;
+    // The predicate discriminates, checked against strings rather than trusted.
+    expect(NAMES_PLACED.test('displaced: 0')).toBe(false);
+    expect(NAMES_PLACED.test('placed: 0')).toBe(true);
+    expect(NAMES_BUILT.test('rebuilt: 0')).toBe(false);
+    expect(NAMES_BUILT.test('built: 0')).toBe(true);
+    expect(NAMES_BUILT.test(body)).toBe(false);
+    expect(NAMES_PLACED.test(body)).toBe(false);
+    // AND IT REFUSES A WORLD THAT ALREADY HAS ONE, which is the guard every step carries and
+    // the only way this one could destroy data.
+    expect(body).toContain('Object.keys(outcomes).includes(field)');
+  });
+
   it('freezes the v17 row as ONE integer literal, and the plot it writes is one row deep', () => {
     // The positive half for v17, and the same argument `V4_MIGRATION_BUILD_OUTCOMES` makes:
     // deleting the constant and calling `createGridBounds()` would make the identifier scan

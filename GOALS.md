@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036b is done: a room instance carries a player-drawn footprint, placeItem is the primary verb, save v19. WATCH #14 shows three-cell halls as ONE space each and every bed visible where three were. The wall-height ruling is DISCHARGED — 64 to 24, and the front-anchored-item candidate was FALSIFIED: the near lip is the MOST occluded band. ADR-0051 (human): capacity is still a room-TYPE field, so ADR-0046's inversion is half-finished. AN INTERMITTENT ROW IS NOW ESCALATED and the count is corrected. Fourteen rows green on re-run. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-16, G-036c is done: rooms are editable and can be private, save v20. B6 bites — one string of content different, and the same hotel at the same seed produces different engagement and a divergent hash. A shrunk room DROPS items and both alternatives were driven rather than argued. ADR-0052 (human): wall visibility becomes a CONTROL with three positions, amending ADR-0047 A4 — 24 stays the default, and none of WATCH #14's measurement is withdrawn; what changes is the conclusion drawn from it. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
 
-- **Schemas**: save **v19** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `17a77351290e686d` · measure golden `4955bc697f128ae5`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `dcc8c18446799e78` · measure golden `013816cc3168aee0`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2351,7 +2351,70 @@ now, expensive to discover at BUILD.** `layCorridor` has the same question one f
 
 
 ## G-036c — A room can be edited, and it can be private
-Status: **PLANNED.** Follows G-036b; **both rules need a footprint model that does not exist yet.**
+Status: **done.** Save **v20**. B6 bites — the same hotel, same seed, one string of content
+  different, produces different engagement and a divergent hash.
+
+### G-036c — REFLECT
+
+**done. Fourteen rows green, exit code captured.** Suite 2,449 tests. Save **v20**; v1 fixture a
+zero-line diff and `SAVE_V1_CONTENT_FINGERPRINT` unmoved. **I2 `17a77351290e686d` →
+`dcc8c18446799e78`.**
+
+**THE RESIZE IS A NEW COMMAND, AND G-036b'S ARGUMENT APPLIED MORE STRONGLY RATHER THAN INVERTING.**
+There it was about a signature; here it would change a MEANING. **`determinism-log.ts` issues draws
+over existing rooms ON PURPOSE, to exercise `occupied` inside the I2 gate** — teaching `drawRoom` to
+resize what is in the way would **silently convert every recorded refusal in the project into an
+edit, the bytes unchanged and the hotel they describe changed.** It is also not expressible as a
+draw: a resize must keep the **entity id**, which is the handle `Guest.roomEntityId` and every
+hosted item hold. The command carries an **origin as well as an extent**, because dragging a room's
+left or back edge moves the origin — **half of all resizes are otherwise inexpressible.**
+
+**AN ITEM OUTSIDE A SHRUNK FOOTPRINT IS DROPPED, AND BOTH ALTERNATIVES WERE DRIVEN RATHER THAN
+ARGUED.** *Orphaned* fails twice — it produces exactly the dead furniture `placeItem` REFUSES to
+create, **one verb refusing what another silently produces**, and it is exploitable because the
+freed cell is one `drawRoom` away from inheriting free furniture. *Refused* leaves the player
+**permanently stuck**: no verb removes an item, so a room with a machine in its third cell could
+never shrink again for the life of the save. **Dropped makes a shrink a partial demolition, which
+is `applyDemolishRoom`'s existing rule**, and `moveItem` is what makes it a choice rather than a
+forfeit. All three asserted.
+
+**AN EDIT MAY BREAK THE ROOM YOU ARE EDITING; IT MAY NOT BREAK A ROOM YOU ARE NOT** — and this was a
+real contradiction with `build.ts`, resolved by SCOPE rather than by overruling either side.
+`build.ts` deliberately builds invalid rooms without complaint, on an ADR-0007 argument: if every
+buildable room were valid by construction, *"an invalid room is not a provider"* would inspect
+nothing. **A build ADDS a rectangle and can only seal the neighbour the player is looking at; an
+edit REMOVES one and can pull the floor from under a room two storeys up that the player cannot
+see.** So the refusal fires only for **collateral** damage. *(The block's wording said the room
+BELOW; a resize leaves the room ABOVE unsupported, and the implemented reading is the correct one.)*
+
+**B6 BITES, AND THE TEST DISCRIMINATES ON ONE STRING.** Same hotel, same seed, same entity ids, two
+contents differing in one value: `public` → the guest engages the vending machine;
+`guestsOfThisRoom` → `engagement` is null, the hashes diverge, and over a full stay `snack.met > 0`
+becomes `met === 0, unmet > 0`. **And the guest who DOES lodge there may use it**, so the rule is
+not `staffOnly` by another name — which is also why `guestAccessTo` returns three verdicts rather
+than two, since `RoomSearch.exhausted` is a per-tick memo shared by every guest.
+
+**I3 FIRED ON THE BUILDER'S OWN TEST, EXACTLY WHERE THE PLAN PREDICTED IT WOULD.** A draft asserted
+`isRoomAccessRule('staff_only') === false`; **`check:content` judges snake_case BY SHAPE and was
+right to fire.** The gate was not touched — the proof moved to `registry.test.ts`, outside
+`CODE_ROOTS`, where such a literal is legal. **The camelCase ruling was made at PLAN precisely so
+this would be a test relocation rather than a content migration.**
+
+**TWO STALE CLAIMS FOUND AND REPAIRED**: `determinism-log.ts` said `buildOutcomes` is *"non-zero in
+EVERY counter by tick 100,000"* — **false since G-036b added four counters the log does not drive,
+and nobody noticed** · and a new scan predicate had a near-miss: `not.toContain('placed:')` passes
+for the wrong reason **because `displaced:` contains `placed:`**. Replaced with boundary-carrying
+regex literals plus assertions that the predicate discriminates.
+
+**ADR-0047 B4's "retrofitting mutability is the painful direction" BOUGHT A BILL OF ZERO** —
+`Entity.at` and `footprint` shipped as plain data at G-036b, so **B4 rewrites no entity at all**,
+asserted as *the step touches `buildOutcomes` and nothing else*. **A parked cost that came in at
+nothing is worth recording as loudly as one that came in high.**
+
+**Owed forward**: the wall-visibility control (ADR-0052) at G-039 · **`check:tickcost` and
+`check:scaling` were PASS on both full runs while the digest still described them as ruled red** —
+a stale reading now corrected · the intermittent row **did not recur** in either full run.
+
 Milestone: M3 · Owner pair: sim-engineer / sim-critic
 Statement: **B4** — a room's footprint and contents are mutable world state, so a player can resize
   a room and move an item. **B6** — a room carries an access rule, content-defined per room type.
@@ -2430,6 +2493,19 @@ because each is a room requirement and a pathing consumer, and this goal must be
 them.
 
 ## G-039 — M3 exit instruments
+
+**PLUS THE WALL-VISIBILITY CONTROL (ADR-0052, human).** Three positions — full, transparent,
+reduced — with **24 staying the default**. It amends ADR-0047 A4, which considered a toggle and
+refused it on the grounds that two far walls *removes* the problem rather than managing it: **right
+about the default, wrong to treat the alternatives as exclusive.** None of WATCH #14's measurement
+is withdrawn; what changes is the conclusion drawn from it — 64 is the wrong DEFAULT rather than
+the wrong NUMBER, and **a player admiring wall art and a player checking what is in a room want
+different pictures of the same hotel.**
+
+**Transparency is the position with an unknown, and it is parked with its test**: at 2:1 with two
+far walls, a translucent wall over a neighbouring room's floor may read as mud rather than glass.
+**Build all three, look at the same frame in each, and if transparent is not legible it ships as
+two positions rather than being tuned until it is.**
 Status: **PLANNED.** G-022's shape, at the **EXIT and not the entrance** (ADR-0043 §2, re-affirmed
 by ADR-0046 §8).
 **Carries**: every measurement campaign re-take — **the grid change and pathfinding alter what the

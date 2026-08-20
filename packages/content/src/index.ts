@@ -13,7 +13,16 @@
 // This package reads no files. It validates whatever a caller hands it — which is why
 // its tsconfig still has `"types": []` and cannot so much as name `node:fs`.
 
-export type { Economy, GuestRules, ItemType, NeedRole, NeedType, RoomType, SpeedRung } from './schema.js';
+export type {
+  Economy,
+  GuestRules,
+  ItemType,
+  NeedRole,
+  NeedType,
+  RoomAccessRule,
+  RoomType,
+  SpeedRung,
+} from './schema.js';
 export {
   abandonMarginBasisPointsSchema,
   basisPointsSchema,
@@ -28,6 +37,7 @@ export {
   needTypeSchema,
   needTypesSchema,
   penceSchema,
+  roomAccessRuleSchema,
   roomTypeSchema,
   roomTypesSchema,
   speedLadderSchema,

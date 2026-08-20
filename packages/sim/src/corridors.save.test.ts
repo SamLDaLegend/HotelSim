@@ -379,7 +379,10 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
     // WRITTEN IN BY HAND, WHICH IS THE POINT: this is what the later steps in the chain claim a
     // pre-corridor world becomes, spelled as literals rather than read back out of the code
     // that produced it. `corridors: []` is the 17 -> 18 step; the one-cell footprint and the
-    // four v19 build counters are the 18 -> 19 step (G-036b). If any step wrote something else
+    // four v19 build counters are the 18 -> 19 step (G-036b); the three edit counters and the
+    // two edit refusals are the 19 -> 20 step (G-036c), and note that step touches NO entity —
+    // a v19 room and a v20 room are the same bytes, which is ADR-0047 B4's "ship it
+    // mutable-capable" paying off a goal after it was decided. If any step wrote something else
     // — or wrote it under a different key — these two hashes would differ.
     const byHand = {
       ...(era as unknown as typeof loaded),
@@ -391,7 +394,17 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
       buildOutcomes: {
         ...eraOutcomes,
         placed: 0,
-        refused: { ...eraRefused, footprintTooLarge: 0, footprintTooSmall: 0, notInRoom: 0 },
+        displaced: 0,
+        moved: 0,
+        resized: 0,
+        refused: {
+          ...eraRefused,
+          footprintTooLarge: 0,
+          footprintTooSmall: 0,
+          notInRoom: 0,
+          breaksAnotherRoom: 0,
+          noSuchItem: 0,
+        },
       },
     } as unknown as typeof loaded;
     expect(hashState(loaded)).toBe(hashState(byHand));

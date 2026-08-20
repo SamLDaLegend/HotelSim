@@ -26,6 +26,71 @@ import type { JsonValue } from './hash.js';
 import { applyBasisPoints } from './ledger.js';
 
 /**
+ * WHO MAY USE A ROOM OF THIS TYPE (G-036c, ADR-0047 B6).
+ *
+ * ==========================================================================================
+ * THE VALUES ARE camelCase AND THAT WAS RULED AT PLAN RATHER THAN DISCOVERED AT BUILD.
+ *
+ * The natural spellings are `public / guests_of_this_room / staff_only`, and two of the three
+ * are **snake_case, which is ADR-0003's convention for a content ID**. The simulation must
+ * BRANCH on these values — `guestAccessTo` in `validity.ts` compares them — so the literals
+ * would appear in `packages/sim`, `pnpm check:content` would fire, and the only exits would be
+ * a waiver file or a rename after the content is written. **Free now, a content migration
+ * later.** `RoomInvalidityReason`'s `noDoor` / `missingItem` and `NeedRoleData`'s `lodging` /
+ * `engagement` are the precedent already in the tree: a closed union the sim reasons about is
+ * spelled the way the sim spells its own vocabulary, and only the ids are snake_case.
+ *
+ * (`public` is a single lowercase word and therefore not a content id under
+ * `CONTENT_ID_PATTERN`, which requires at least one underscore. It is spelled the same way
+ * `lodging` and `engagement` are, and for the same reason.)
+ * ==========================================================================================
+ */
+export type RoomAccessRule =
+  /** Anybody may use it. The lounge, the café, the games room. */
+  | 'public'
+  /**
+   * Only the guest LODGING IN THIS VERY ROOM may use it, or anything standing in it.
+   *
+   * The rule that stops being an edge case the moment players draw rooms: it was parked when a
+   * stranger walking into a bedroom was a content accident, and **with player-designed rooms
+   * somebody will put a vending machine in a bedroom on purpose** (ADR-0047 B6).
+   *
+   * IT DOES NOT GATE LODGING, and that is not an omission. Lodging is HOW a guest becomes a
+   * guest of the room, so applying this rule to the lodging search would make every bedroom
+   * carrying it unbookable by construction — a rule that reads "only the occupant may become
+   * the occupant". See `guestAccessTo`.
+   */
+  | 'guestsOfThisRoom'
+  /**
+   * NO GUEST, EVER. A linen store, a plant room, a staff canteen.
+   *
+   * C4's staff are NAMED AND NOT BUILT (ADR-0047), so today this value means "nobody uses
+   * it" — which is a coherent thing for a player to build, because a room can be a pure cost
+   * centre, and it is the value a staff room will carry on the day C4 lands. Unlike
+   * `guestsOfThisRoom` it DOES gate lodging: a guest may not book a bed in the linen store.
+   *
+   * `bindContent` refuses content in which it would leave a hotel with no room a guest could
+   * ever book — see `assertSomeLodgingRoomAdmitsGuests`.
+   */
+  | 'staffOnly';
+
+/**
+ * The members of the union, ascending. Sorted with an explicit locale-free comparator (the
+ * `WORLD_KEYS` discipline): an order that happens to be right is not an order.
+ */
+export const ROOM_ACCESS_RULES: readonly RoomAccessRule[] = Object.freeze(
+  (['guestsOfThisRoom', 'public', 'staffOnly'] as RoomAccessRule[]).sort((a, b) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  ),
+);
+
+/** Whether `value` names an access rule this simulation branches on. `.includes`, never `in` —
+ *  a `__proto__` own key must not pass (the G-003 lesson). */
+export function isRoomAccessRule(value: string): value is RoomAccessRule {
+  return ROOM_ACCESS_RULES.includes(value as RoomAccessRule);
+}
+
+/**
  * One room type as the simulation sees it.
  *
  * Structurally identical to `RoomType` in `@hotelsim/content`, deliberately not
@@ -205,6 +270,24 @@ export type RoomTypeData = {
    * prices and G-009 closed for `requires`.
    */
   readonly maxFootprintCells?: number | undefined;
+  /**
+   * WHO MAY USE A ROOM OF THIS TYPE (G-036c, ADR-0047 B6). See `RoomAccessRule`.
+   *
+   * OPTIONAL, AND ABSENCE HAS AN EXACT HISTORICAL READING — the `provides` /
+   * `nightlyUpkeepPence` / `minFootprintCells` contract. **Content written before access rules
+   * existed restricted nobody**, so every provider in every world those bytes can describe was
+   * reachable by every guest, and `public` states that fact rather than choosing a permissive
+   * default. No verdict moves for any world or content set that predates this change, which is
+   * what keeps the permanent v1 fixture's fingerprint at `8e09fe4f0fa162a3` (ADR-0006):
+   * `SAVE_V1_CONTENT` is a frozen literal, a REQUIRED field would stop it typechecking, and
+   * adding the field to it would move the `contentHash` INSIDE the frozen bytes — the fixture
+   * would load and never tick again. `access.save.test.ts` asserts the fingerprint unmoved.
+   *
+   * OPTIONAL HERE, REQUIRED ON DISK, for the reason set out on `nightlyUpkeepPence`. Silence in
+   * a file a designer is editing today is an undecided question whose undecided answer is the
+   * permissive one — a room every guest may walk into, shipped by omission.
+   */
+  readonly accessRule?: RoomAccessRule | undefined;
 };
 
 /**
@@ -712,6 +795,19 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
         `${maxCells}, so no footprint a player could draw would be accepted and the room type could never be built`,
     );
   }
+  // AND THE ACCESS RULE IS VALIDATED AT THE BOUNDARY (G-036c), the `cloneNeedType` discipline
+  // exactly: a raw host — one that did not come through the zod schema — offering a rule the
+  // simulation has no branch for dies here, at bind time, with the room type named, rather than
+  // being silently read as "not staffOnly" by every later comparison. That silent reading is
+  // the worse failure of the two, because the value a typo degrades to is the PERMISSIVE one.
+  const accessRule = roomType.accessRule;
+  if (accessRule !== undefined && !isRoomAccessRule(accessRule)) {
+    throw new Error(
+      `bindContent: room type "${roomType.id}" has accessRule "${String(accessRule)}"; it must be one of ` +
+        `${ROOM_ACCESS_RULES.join(', ')} — who may use a room is a closed union the simulation branches on ` +
+        '(ADR-0047 B6). Omitting the key entirely is the different, historical statement and reads as "public".',
+    );
+  }
   // Every optional key is STRIPPED when it holds undefined, not carried: an absent
   // key and a key holding `undefined` are different documents to the fingerprint, and
   // only the absent form is the "predates this field" statement (see the field docs).
@@ -724,6 +820,7 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
     fitBasisPoints: _rawFit,
     minFootprintCells: _rawMinCells,
     maxFootprintCells: _rawMaxCells,
+    accessRule: _rawAccessRule,
     ...rest
   } = roomType;
   const withUpkeep: RoomTypeData = upkeep === undefined ? { ...rest } : { ...rest, nightlyUpkeepPence: upkeep };
@@ -733,10 +830,11 @@ function cloneRoomType(roomType: RoomTypeData): RoomTypeData {
   const withFit: RoomTypeData = fit === undefined ? withRefund : { ...withRefund, fitBasisPoints: fit };
   const withMin: RoomTypeData = minCells === undefined ? withFit : { ...withFit, minFootprintCells: minCells };
   const withMax: RoomTypeData = maxCells === undefined ? withMin : { ...withMin, maxFootprintCells: maxCells };
+  const withAccess: RoomTypeData = accessRule === undefined ? withMax : { ...withMax, accessRule };
   const base: RoomTypeData =
     rawProvides === undefined
-      ? withMax
-      : { ...withMax, provides: cloneIdList('room type', roomType.id, 'provides', 'need', rawProvides) };
+      ? withAccess
+      : { ...withAccess, provides: cloneIdList('room type', roomType.id, 'provides', 'need', rawProvides) };
   return rawRequires === undefined
     ? base
     : { ...base, requires: cloneIdList('room type', roomType.id, 'requires', 'item', rawRequires) };
@@ -2417,6 +2515,60 @@ function assertFitIsReadable(
  * needs yet, which is what M6's table will be full of on its first day. Rejecting it
  * would make adding an item before the room that uses it impossible.
  */
+/**
+ * Throws if this content leaves no room a guest could ever BOOK (G-036c, ADR-0047 B6).
+ *
+ * ==========================================================================================
+ * THE MIRROR OF `assertNeedsAreSatisfiable`, ONE FIELD OVER, AND THE REASON IT IS NEEDED IS
+ * THAT THE ACCESS RULE IS THE FIRST CONTENT FIELD THAT CAN MAKE A PROVIDER UNREACHABLE.
+ *
+ * `assertNeedsAreSatisfiable` asks whether a need has a provider a PLAYER can reach. This asks
+ * whether the lodging need has a provider a GUEST can reach, which is a different question the
+ * moment `staffOnly` exists: a room type may provide the lodging need, be buildable, be valid,
+ * and still admit nobody. Every guest would then form a lodging need, queue for a room that
+ * cannot be taken, and leave without checking in — for every guest, forever, with `pnpm verify`
+ * green. That is HOTELSIM.md §6.1's first catalogue entry ("needs that can never be satisfied,
+ * producing guaranteed unhappiness") arriving through a door that did not exist before.
+ *
+ * IT IS DELIBERATELY NARROW, AND THE NARROWNESS IS THE HONEST PART. It speaks only about the
+ * LODGING need and only about ROOM TYPES, because those are the two halves that can be decided
+ * from the table alone:
+ *
+ *   - an ENGAGEMENT need may legitimately have all of its providers behind
+ *     `guestsOfThisRoom`. A vending machine in every bedroom is a perfectly good hotel, and it
+ *     is the exact case ADR-0047 B6 was written for.
+ *   - an ITEM's access rule is its HOST ROOM's, and which room an item ends up in is world
+ *     state rather than content, so no static check can answer it. Stated rather than left to
+ *     be discovered.
+ *
+ * `guestsOfThisRoom` IS NOT A VIOLATION HERE EITHER, and that is the subtle half: a bedroom
+ * carrying it is bookable, because the rule does not gate lodging — it gates use BY SOMEBODY
+ * ELSE. `guestAccessTo` is the one place that asymmetry is written, and this check would be
+ * wrong in the other direction if it forgot it. The shipped table has exactly that shape.
+ *
+ * Content with no lodging need is untouched: nothing books, so there is nothing to be unable
+ * to book. That is the permanent v1 fixture (no need types at all) and every visitor-only
+ * table (ADR-0017 §5).
+ * ==========================================================================================
+ */
+function assertSomeLodgingRoomAdmitsGuests(
+  roomTypes: readonly RoomTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  if (lodgingNeedId === undefined) return;
+  const lodgings = roomTypes.filter((roomType) => (roomType.provides ?? EMPTY_IDS).includes(lodgingNeedId));
+  // No room type provides lodging at all: `assertNeedsAreSatisfiable` has already refused
+  // that, and refusing it twice would report the narrower fault for the wider mistake.
+  if (lodgings.length === 0) return;
+  if (lodgings.some((roomType) => (roomType.accessRule ?? 'public') !== 'staffOnly')) return;
+  throw new Error(
+    `bindContent: every room type providing the lodging need "${lodgingNeedId}" is staffOnly ` +
+      `(${lodgings.map((roomType) => `"${roomType.id}"`).join(', ')}), so no guest could ever book a room. ` +
+      'Every arrival would queue for a bed it may not use and leave without checking in, for the whole run. ' +
+      'A staff room is a room a guest may not enter; a hotel needs at least one that a guest may.',
+  );
+}
+
 function assertRequiredItemsExist(
   roomTypes: readonly RoomTypeData[],
   itemTypes: readonly ItemTypeData[],
@@ -2609,6 +2761,10 @@ export function bindContent(content: SimContent): BoundContent {
   assertLodgingNeedIsUnambiguous(needTypes ?? []);
   assertNeedsAreSatisfiable(roomTypes, needTypes ?? [], itemTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   assertRequiredItemsExist(roomTypes, itemTypes ?? []);
+  // AND WHO MAY BOOK ONE (G-036c). It needs the lodging need settled for `assertFitIsReadable`'s
+  // reason, and it comes after `assertNeedsAreSatisfiable` so that content with NO lodging
+  // provider at all still says that rather than complaining about access rules.
+  assertSomeLodgingRoomAdmitsGuests(roomTypes, lodgingNeedIn(needTypes ?? [])?.id);
   // FIT IS ENGAGEMENT-ONLY (G-014a), and this needs the lodging need settled above for the
   // same reason `assertNeedsAreSatisfiable` does — "engagement" is defined as "not that
   // one", so the answer means nothing until the table is known to name exactly one.
@@ -2754,6 +2910,24 @@ export function minFootprintCellsOf(bound: BoundContent, roomTypeId: ContentId):
  */
 export function maxFootprintCellsOf(bound: BoundContent, roomTypeId: ContentId): number | undefined {
   return findRoomType(bound, roomTypeId)?.maxFootprintCells;
+}
+
+/**
+ * WHO MAY USE A ROOM OF THIS TYPE (G-036c, ADR-0047 B6). THE ONE PLACE ABSENCE IS READ.
+ *
+ * `'public'` RATHER THAN `undefined`, and unlike `maxFootprintCellsOf` one function up that is
+ * the right call rather than a magic constant: there is no third state here. "No rule" and
+ * "everybody may use it" are the SAME statement about who gets in, because content that
+ * predates access rules restricted nobody — so a caller that had to distinguish them would be
+ * distinguishing two spellings of one fact and would eventually branch on the spelling.
+ *
+ * AN UNKNOWN ROOM TYPE ALSO READS AS `'public'`, and that is a postcondition rather than a
+ * decision: every caller has already established the kind against content — `guestAccessTo`
+ * only ever asks about a room the placement index found, and `isRoomKind` decided it was a room
+ * — so this branch cannot be reached with a kind this content does not define.
+ */
+export function accessRuleOf(bound: BoundContent, roomTypeId: ContentId): RoomAccessRule {
+  return findRoomType(bound, roomTypeId)?.accessRule ?? 'public';
 }
 
 /** Shared empty list, so `requiredItemsOf` allocates nothing on the hot path. Frozen

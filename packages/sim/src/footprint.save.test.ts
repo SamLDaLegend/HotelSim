@@ -52,6 +52,7 @@ import { stepTick } from './tick.js';
 import { countInvalidRooms } from './validity.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
+import { stripEditCounters } from './without-edits.js';
 import { stripFootprints } from './without-footprints.js';
 
 const content = bindContent({
@@ -115,7 +116,7 @@ function drawnWorld(): World {
 
 /** The same world written the way an era with no word for a footprint wrote it. */
 const asV18 = (world: World): Record<string, unknown> =>
-  stripFootprints(JSON.parse(JSON.stringify(world)) as Record<string, unknown>);
+  stripEditCounters(stripFootprints(JSON.parse(JSON.stringify(world)) as Record<string, unknown>));
 
 describe('the chain walks 1 -> ... -> today, and the 18 -> 19 step is the eighteenth of it', () => {
   it('ships one step per version, gapless', () => {

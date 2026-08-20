@@ -261,12 +261,37 @@ export type EntityDraft = {
    * in a Set is fine; ordered iteration of one is not (I2).
    */
   removed: Set<EntityId>;
+  /**
+   * ENTITIES WHOSE PLACEMENT THIS TICK HAS CHANGED, by id (G-036c, ADR-0047 B4).
+   *
+   * ==========================================================================================
+   * A ROOM IS EDITABLE, AND THIS IS WHERE THAT STOPS BEING A CLAIM ABOUT THE SCHEMA.
+   *
+   * `Entity.at` and `Entity.footprint` were already `readonly` data on a plain object, which is
+   * what ADR-0047 B4 means by "the footprint ships mutable-CAPABLE": nothing had to be reshaped
+   * to allow an edit, only a door had to be opened. This is the door, and it is a SUBSTITUTION
+   * rather than an in-place write — the entity objects in `base.list` are shared with the
+   * committed store that a previous tick handed out, and writing through one of them would
+   * mutate a world somebody else is holding, which is the determinism bug this codebase's
+   * whole immutable-threading discipline exists to prevent.
+   *
+   * LOOKUP ONLY: never iterated, never ordered, never hashed, never saved (I2), exactly like
+   * `removed`. `commitEntityDraft`, `draftGet`, `draftForEach` and `draftFindEntity` all
+   * consult it by KEY while walking `base.list` in its own ascending order, so the canonical
+   * order is unaffected by what is in here or in what order it went in.
+   *
+   * NULL UNTIL SOMETHING MOVES, so a tick with no edit allocates nothing — the
+   * `RoomSearch.exhausted` discipline. `draftIsClean` reads it, which is what keeps a stale
+   * `ValidityCache` from surviving a resize: see the note there.
+   * ==========================================================================================
+   */
+  moved: Map<EntityId, Entity> | null;
   nextId: EntityId;
 };
 
 /** O(1). Copies nothing — an untouched tick pays nothing. */
 export function beginEntityDraft(store: EntityStore, bounds: GridBounds): EntityDraft {
-  return { base: store, bounds, added: [], removed: new Set<EntityId>(), nextId: store.nextId };
+  return { base: store, bounds, added: [], removed: new Set<EntityId>(), moved: null, nextId: store.nextId };
 }
 
 /**
@@ -348,14 +373,110 @@ export function draftDespawn(draft: EntityDraft, id: EntityId): boolean {
 }
 
 /**
- * Whether this draft has staged no membership change at all (G-010).
+ * MOVE OR RESIZE ONE LIVE ENTITY (G-036c, ADR-0047 B4). O(1). Returns the entity as it now
+ * stands, or `undefined` when the id is not live.
  *
- * THE ONE DEFINITION OF "MEMBERSHIP IS STILL THAT OF `draft.base`". `commitEntityDraft`
- * already answers the same question, and its answer is what makes an idle tick return the
- * base store BY REFERENCE — so a caller that needs to know whether the draft still
- * describes `base` asks here rather than reaching into `added` and `removed` itself. Two
- * hand-written copies of this predicate would eventually disagree, and the way that shows
- * up is a cache reused across a tick that spawned something.
+ * ==========================================================================================
+ * THE THIRD DOOR, AND IT IS DELIBERATELY A DOOR RATHER THAN A FIELD ASSIGNMENT.
+ *
+ * `draftSpawn`'s own docblock names this goal: it copies the caller's cell and footprint
+ * "because a caller keeping a reference to a mutable `{columns, rows}` could resize a room
+ * after it was committed, which is exactly the write-once-versus-mutable question G-036c has
+ * to answer deliberately". This is the answer: **a placement changes through one function,
+ * which stages a REPLACEMENT ENTITY, and never by writing through a reference.**
+ *
+ * WHY SUBSTITUTION AND NOT MUTATION. The entity objects in `base.list` are the SAME objects a
+ * committed `EntityStore` holds, and that store was handed to whoever ran the previous tick.
+ * Writing `entity.at = ...` would change a world somebody else is holding — a previous frame
+ * in a recording, a save being serialised, a cached validity context — which is the exact
+ * class this file's header calls "mutation that escapes". A new frozen-shaped literal cannot.
+ *
+ * WHY NOT DESPAWN-AND-RESPAWN, which needs no new mechanism at all. Because it would allocate
+ * a NEW ID, and the id is the handle every other system holds: `Guest.roomEntityId`,
+ * `Guest.engagement.entityId`, and every item the room is hosting. A resize that renumbered
+ * the room would evict its own guest and orphan its own furniture — the room would be "the
+ * same room" to a player and a different one to the simulation. **A room's identity must
+ * survive an edit to its shape, or it is not an edit.**
+ *
+ * THE CELL AND THE FOOTPRINT ARE COPIED, for `draftSpawn`'s reason exactly, and the same two
+ * assertions are made in the same order: a rectangle that is not a rectangle throws, and a
+ * rectangle hanging off the plot throws. Both are caller bugs — the caller is holding the world
+ * whose plot it just ignored. A PLAYER's illegal resize is `applyResizeRoom`'s recorded
+ * refusal, which asks every one of those questions before it ever gets here.
+ *
+ * OVERLAP IS NOT POLICED HERE, for the reason `draftSpawn` gives one function up: what may
+ * share a cell is a CONTENT-scoped question and this store has no content.
+ *
+ * AN ALREADY-DESPAWNED OR UNKNOWN ID IS `undefined` RATHER THAN A THROW — `draftDespawn`'s
+ * no-op contract, and for its reason: a command log replayed against a slightly different
+ * world must not crash. The player-facing verb turns that into a recorded refusal.
+ * ==========================================================================================
+ */
+export function draftReplace(
+  draft: EntityDraft,
+  id: EntityId,
+  at: Cell,
+  footprint: Footprint,
+): Entity | undefined {
+  const live = draftGet(draft, id);
+  if (live === undefined) return undefined;
+  assertCell(at, draft.bounds, 'draftReplace');
+  assertFootprint(footprint, 'draftReplace');
+  if (!footprintWithinBounds(at, footprint, draft.bounds)) {
+    throw new Error(
+      `draftReplace: a ${footprint.columns}x${footprint.rows} footprint at floor ${at.floor}, column ${at.column}, ` +
+        `row ${at.row} reaches outside the plot (columns ${draft.bounds.minColumn}..${draft.bounds.maxColumn}, ` +
+        `rows ${draft.bounds.minRow}..${draft.bounds.maxRow})`,
+    );
+  }
+  const replacement: Entity = {
+    id: live.id,
+    kind: live.kind,
+    at: { floor: at.floor, column: at.column, row: at.row },
+    footprint: { columns: footprint.columns, rows: footprint.rows },
+  };
+  // AN ENTITY SPAWNED THIS TICK IS EDITED IN `added` RATHER THAN SHADOWED IN `moved`, because
+  // `added` is not shared with any committed store — nothing outside this draft has ever seen
+  // it — and because two records of one entity is precisely the drift this file refuses
+  // everywhere else. `draftGet` would otherwise have to decide which of the two wins, and the
+  // answer would be a rule nobody stated.
+  const staged = indexOfId(draft.added, id);
+  if (staged !== -1) {
+    draft.added[staged] = replacement;
+    return replacement;
+  }
+  (draft.moved ??= new Map<EntityId, Entity>()).set(id, replacement);
+  return replacement;
+}
+
+/**
+ * Whether this draft still describes `draft.base` EXACTLY — no entity added, none removed,
+ * and none moved or resized (G-010, widened at G-036c).
+ *
+ * THE ONE DEFINITION OF "THE COMMITTED STORE IS STILL THE ANSWER". `commitEntityDraft` asks
+ * it too, and its answer is what makes an idle tick return the base store BY REFERENCE — so a
+ * caller that needs to know whether the draft still describes `base` asks here rather than
+ * reaching into `added`, `removed` and `moved` itself. Two hand-written copies of this
+ * predicate would eventually disagree, and the way that shows up is a cache reused across a
+ * tick that changed something.
+ *
+ * ==========================================================================================
+ * IT SAID "MEMBERSHIP" UNTIL G-036c AND MEMBERSHIP IS NO LONGER THE WHOLE INPUT.
+ *
+ * `ValidityCache`'s reuse predicate calls this, and what that predicate actually needs is not
+ * "the same entities" but "the same derived index" — the placement index, the grounded set,
+ * the valid-room list. **A resize changes every one of those while adding and removing
+ * nothing**, so a membership-only reading would hand `runGuests` a context built from the
+ * room's OLD rectangle on the very tick the player redrew it: `applyCommands` runs first, and
+ * a room that had just been shrunk off its neighbour's door would still be reported as sealing
+ * it. That is `layCorridor`'s failure at G-034b, arriving through the entity store instead of
+ * beside it, and it is why the corridor clause could not have covered this one.
+ *
+ * ADR-0027: the widened predicate FORBIDS strictly more than the one it replaces and permits
+ * nothing new, so nothing that was safe under the old reading has become unsafe. It is also
+ * what lets `applyResizeRoom` decide against a throwaway visitor and stage nothing until it has
+ * accepted — a REFUSED resize leaves this `true`, so a refusal still costs the cache nothing.
+ * ==========================================================================================
  *
  * Deliberately does NOT consider `nextId`. `commitEntityDraft` checks it because a moved
  * counter must reach the committed store; but an id counter is not membership, and no
@@ -363,7 +484,7 @@ export function draftDespawn(draft: EntityDraft, id: EntityId): boolean {
  * `added` in any case — `draftSpawn` does both.)
  */
 export function draftIsClean(draft: EntityDraft): boolean {
-  return draft.added.length === 0 && draft.removed.size === 0;
+  return draft.added.length === 0 && draft.removed.size === 0 && (draft.moved?.size ?? 0) === 0;
 }
 
 /**
@@ -386,7 +507,12 @@ export function draftFindEntity(
   match: (entity: Entity) => boolean,
 ): Entity | undefined {
   for (const entity of draft.base.list) {
-    if (!draft.removed.has(entity.id) && match(entity)) return entity;
+    if (draft.removed.has(entity.id)) continue;
+    // THE STAGED PLACEMENT WINS, BY KEY (G-036c). A LOOKUP into `moved`, never an iteration of
+    // it: the order walked here is still `base.list`'s own ascending one, so what a caller sees
+    // and in what order it sees them is unchanged by an edit — only WHERE one of them stands.
+    const current = draft.moved?.get(entity.id) ?? entity;
+    if (match(current)) return current;
   }
   for (const entity of draft.added) {
     if (!draft.removed.has(entity.id) && match(entity)) return entity;
@@ -410,7 +536,10 @@ export function draftFindEntity(
  */
 export function draftForEach(draft: EntityDraft, visit: (entity: Entity) => void): void {
   for (const entity of draft.base.list) {
-    if (!draft.removed.has(entity.id)) visit(entity);
+    if (draft.removed.has(entity.id)) continue;
+    // The staged placement wins, by key — see `draftFindEntity` for why a lookup here is not
+    // the Set/Map iteration-order dependence I2 forbids.
+    visit(draft.moved?.get(entity.id) ?? entity);
   }
   for (const entity of draft.added) {
     if (!draft.removed.has(entity.id)) visit(entity);
@@ -420,6 +549,8 @@ export function draftForEach(draft: EntityDraft, visit: (entity: Entity) => void
 /** Lookup against the draft: staged spawns are visible, staged despawns are not. */
 export function draftGet(draft: EntityDraft, id: EntityId): Entity | undefined {
   if (draft.removed.has(id)) return undefined;
+  const edited = draft.moved?.get(id);
+  if (edited !== undefined) return edited;
   const fromBase = getEntity(draft.base, id);
   if (fromBase !== undefined) return fromBase;
   const index = indexOfId(draft.added, id);
@@ -436,12 +567,18 @@ export function draftGet(draft: EntityDraft, id: EntityId): Entity | undefined {
  * guarantee like that quietly dies, so `grid.test.ts` re-pins it by identity.
  */
 export function commitEntityDraft(draft: EntityDraft): EntityStore {
-  if (draft.added.length === 0 && draft.removed.size === 0 && draft.nextId === draft.base.nextId) {
+  // ONE PREDICATE, NOT A SECOND HAND-WRITTEN COPY OF IT (G-036c). This line spelled out
+  // `added.length === 0 && removed.size === 0` while `draftIsClean` spelled out the same thing
+  // a few lines away — the two copies its own docblock warns about. A resize is the change that
+  // would have made them disagree: it stages neither an add nor a remove, so the old spelling
+  // here would have returned `base` BY REFERENCE and thrown the edit away silently.
+  if (draftIsClean(draft) && draft.nextId === draft.base.nextId) {
     return draft.base;
   }
   const list: Entity[] = [];
   for (const entity of draft.base.list) {
-    if (!draft.removed.has(entity.id)) list.push(entity);
+    if (draft.removed.has(entity.id)) continue;
+    list.push(draft.moved?.get(entity.id) ?? entity);
   }
   for (const entity of draft.added) {
     if (!draft.removed.has(entity.id)) list.push(entity);

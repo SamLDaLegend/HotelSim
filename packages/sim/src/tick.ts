@@ -91,7 +91,9 @@ import {
   applyBuildRoom,
   applyDemolishRoom,
   applyDrawRoom,
+  applyMoveItem,
   applyPlaceItem,
+  applyResizeRoom,
   assertBuildOutcomes,
   describeOccupied,
   roomOverlapping,
@@ -317,6 +319,11 @@ function buildInput(
     tick: state.world.tick,
     bounds: state.world.grid,
     entities,
+    // THE PLAN AS THIS TICK HAS LEFT IT, not `state.world.corridors` (G-036c). The editing
+    // verbs ask whether an edit would break a room, and `noCorridor` is one of the four ways a
+    // room breaks — so a `layCorridor` earlier in the SAME log has to be visible, exactly as a
+    // room built earlier in the same log already is through the draft.
+    corridors: accumulator.corridors,
     content: state.content,
     ledger: accumulator.ledger,
     outcomes: accumulator.outcomes,
@@ -427,6 +434,31 @@ function applyCommand(
       // transaction, so unlike its siblings it leaves the ledger by reference.
       accumulator.buildCommands += 1;
       const result = applyPlaceItem(buildInput(state, entities, accumulator), command.itemType, command.at);
+      accumulator.ledger = result.ledger;
+      accumulator.outcomes = result.outcomes;
+      accumulator.balance = result.balance;
+      return;
+    }
+    case 'resizeRoom': {
+      // A ROOM IS EDITABLE (G-036c). Same plumbing as its siblings; all of the behaviour is in
+      // `build.ts`. It books no transaction, so like `placeItem` it leaves the ledger by
+      // reference — but it is still a build-family command, so the per-tick law below covers it
+      // and exactly one outcome is recorded whether the redraw landed or was refused.
+      accumulator.buildCommands += 1;
+      const result = applyResizeRoom(
+        buildInput(state, entities, accumulator),
+        command.id,
+        command.at,
+        command.footprint,
+      );
+      accumulator.ledger = result.ledger;
+      accumulator.outcomes = result.outcomes;
+      accumulator.balance = result.balance;
+      return;
+    }
+    case 'moveItem': {
+      accumulator.buildCommands += 1;
+      const result = applyMoveItem(buildInput(state, entities, accumulator), command.id, command.to);
       accumulator.ledger = result.ledger;
       accumulator.outcomes = result.outcomes;
       accumulator.balance = result.balance;

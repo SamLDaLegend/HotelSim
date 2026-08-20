@@ -465,11 +465,11 @@ describe('the refusal reason union', () => {
     // The `TRANSACTION_REASONS` discipline, verbatim. `.includes` never `in`, because
     // `JSON.parse` makes `__proto__` an own key (the G-003 lesson).
     expect([...BUILD_REFUSAL_REASONS]).toEqual([...BUILD_REFUSAL_REASONS].sort());
-    // SEVEN SINCE G-036b: `footprintTooLarge`, `footprintTooSmall` and `notInRoom` joined
-    // the four G-008 shipped. COUNTED rather than `toBeGreaterThan(0)` — G-034b's lesson —
-    // so a reason added and forgotten in `BUILD_REFUSAL_REASON_SET` fails here as well as
-    // in the type.
-    expect(BUILD_REFUSAL_REASONS).toHaveLength(7);
+    // NINE SINCE G-036c: `breaksAnotherRoom` and `noSuchItem` joined the three G-036b added
+    // (`footprintTooLarge`, `footprintTooSmall`, `notInRoom`) and the four G-008 shipped.
+    // COUNTED rather than `toBeGreaterThan(0)` — G-034b's lesson — so a reason added and
+    // forgotten in `BUILD_REFUSAL_REASON_SET` fails here as well as in the type.
+    expect(BUILD_REFUSAL_REASONS).toHaveLength(9);
     expect(isBuildRefusalReason('occupied')).toBe(true);
     expect(isBuildRefusalReason('__proto__')).toBe(false);
     expect(isBuildRefusalReason('toString')).toBe(false);

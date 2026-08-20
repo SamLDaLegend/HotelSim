@@ -26,6 +26,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBuildRoom, createBuildOutcomes } from './build.js';
 import { bindContent } from './content.js';
 import type { BoundContent, EconomyData, RoomTypeData } from './content.js';
+import { createCorridors } from './corridors.js';
 import { beginEntityDraft, draftSpawn } from './entities.js';
 import type { EntityDraft, EntityStore } from './entities.js';
 import { createGridBounds } from './grid.js';
@@ -154,6 +155,7 @@ describe('THE BI-IMPLICATION: a loan is available exactly when the hotel cannot 
               entities: draftWith(rooms),
               content,
               ledger: drawn.ledger,
+              corridors: createCorridors(),
               outcomes: createBuildOutcomes(),
               balance: drawn.balance,
             },
@@ -181,6 +183,7 @@ describe('THE BI-IMPLICATION: a loan is available exactly when the hotel cannot 
                 entities: draftWith(rooms),
                 content,
                 ledger,
+                corridors: createCorridors(),
                 outcomes: createBuildOutcomes(),
                 balance,
               },
@@ -273,6 +276,7 @@ describe('drawing a loan', () => {
         entities: draftWith(0),
         content: freeRooms,
         ledger: ledgerHolding(-1),
+        corridors: createCorridors(),
         outcomes: createBuildOutcomes(),
         balance: -1,
       },
@@ -372,6 +376,7 @@ describe('THE ABSORBING-STATE SEARCH: every degenerate corner still has a move',
         entities: draftWith(rooms),
         content,
         ledger,
+        corridors: createCorridors(),
         outcomes: createBuildOutcomes(),
         balance: balanceOf(ledger),
       },
