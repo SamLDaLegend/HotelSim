@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0047 is ACCEPTED (human), with wall height left PROVISIONAL until it is watched. M3 is rewritten by ADR-0046: grid depth, then the isometric WATCH surface, then room drawing, scoring, circulation and exit instruments; the review goal is restored to the numbered table after the view returns. The proof-of-SUBJECT guard is LANDED across four gates with its own bite test; check:ladder keeps its stronger per-root one, which predates it. G-033 and the pre-ruling work stand at fourteen rows green. No build starts until the human says go. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0048 (human): a solved problem that never propagated is its own class, and REFLECT gains one standing question pointed SIDEWAYS — does anything else here have this problem? The grid goal is SPLIT at PLAN, seam offered and TAKEN: first the y-axis, validity and v17 with check:ladder re-pointed in the same commit; then corridors, connectivity and v18. ADR-0046 §4's done-together clause is superseded and points forward. Agent roster verified selectable, sim-critic write-toolless. G-033 and the pre-ruling work stand at fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v16** (G-028a; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -1695,8 +1695,27 @@ Status: **DONE** (`d6e6e1e`). **TAKEN, not parked** — ADR-0046 §8.2 required 
   **parking it would mean un-shipping working code.** Its one loose end is the tick-cost bound,
   which is the open escalation, and campaign re-takes sit at the **exit** — so it gates nothing.
 
-## G-034 — A floor is a plan, not a strip
-Status: **PLANNED, not started.** Awaiting the human's go.
+## G-034 — SPLIT at PLAN, 2026-08-16. The seam was offered by the builder and TAKEN (§5.5, ADR-0048 §2).
+Status: **split into G-034a / G-034b.** **G-013 is the precedent and it is not being repeated** —
+  there the builder named the seam, the orchestrator declined it in one line, and it cost nine
+  instances of one defect class and three sweeps that reached exhaustion only at the last round the
+  budget allowed.
+
+  **WHY THE SEAM IS CLEAN — THE DEPENDENCY RUNS ONE WAY.** Corridors need the y-axis; **the y-axis
+  does not need corridors.**
+
+  **AND THEY ARE DIFFERENT RULE SYSTEMS.** *Supported, enclosed, doored, holds required items* is a
+  property of **a room in isolation**. *Connects to circulation* is a property of **a room in a
+  building**. **Sweeping both in one diff asks a critic to hold two rule systems and a migration at
+  once.**
+
+  **TWO MIGRATIONS RATHER THAN ONE IS THE RIGHT TRADE, and the human superseded their own argument
+  to say so.** ADR-0046 §4 combined them because grid depth and room-as-instance **touch the same
+  fields**; **corridors touch a different one — cell walkability — so the doubled cost does not
+  apply.** *"Sixteen clean migrations say the chain is cheap; an unsweepable diff isn't."*
+
+## G-034a — A floor is a plan, not a strip
+Status: **IN PROGRESS.**
 Milestone: M3
 Owner pair: sim-engineer / sim-critic
 Statement: `(floor, x)` becomes `(floor, x, y)`. Build validity is reworked — supported, enclosed,
@@ -1712,9 +1731,12 @@ and the schema, not the player's hands.
   reachable through a door, holds its required items.
 - **B1 rectangles**, stored in a representation that *could* generalise to a polyomino — so
   arbitrary shapes are a later GOAL rather than a later MIGRATION.
-- **B2 explicit corridors.** The human named this the register's most consequential entry and it
-  is: without scarce space, "bigger is better" has no counterweight and B7's pricing has nothing
-  to trade against.
+- **B2 corridors: THE CONCEPT IS RESERVED, NOT BUILT** — a constraint on this goal from ADR-0048 §2:
+  *"the cell representation must not preclude corridors."* A cell carries the room it is part of, or
+  none; **walkability is G-034b's field, and this goal must leave room for it rather than make it.**
+  The human named B2 the register's most consequential entry and it is — without scarce space,
+  "bigger is better" has no counterweight and B7's pricing has nothing to trade against — **which is
+  the argument for it getting its own sweep rather than riding in on this one.**
 - **B3 stored bounds, per floor.** `grid.ts` already stores rather than hardcodes, so this is
   continuity — and it makes buying land an M4 feature instead of a migration.
 - **B5's condition field RESERVED** (not built — housekeeping is M4).
@@ -1751,6 +1773,28 @@ guard, which predates the shared one** — see ADR-0047 amdt §3's correction.
 **Seam offered at PLAN**: none yet. If the builder offers one it is **taken, or gets a written
 prediction of what declining it costs, scored at REFLECT (§5.5) — AND RECORDED IN THIS BLOCK**,
 which is this session's most-repeated failure.
+
+## G-034b — Corridors: space is scarce, and a room must connect to something
+Status: **PLANNED.** Follows G-034a; **the dependency runs one way** (ADR-0048 §2).
+Milestone: M3
+Owner pair: sim-engineer / sim-critic
+Statement: A cell can be a corridor. **Connectivity becomes a validity rule** — a room must reach
+  circulation — and the save goes to **v18**.
+
+**WHY IT IS ITS OWN GOAL RATHER THAN THE SECOND HALF OF G-034a.** *Supported, enclosed, doored,
+holds required items* are properties of **a room in isolation**; *connects to circulation* is a
+property of **a room in a building**. They are two rule systems, and asking one critic to sweep
+both plus a migration is how G-013 produced nine instances of one defect class.
+
+**AND THIS IS THE MECHANIC, NOT THE PLUMBING.** B2 is what makes building a spatial puzzle rather
+than a menu: **without scarce space, "bigger is better" has no counterweight, and G-037's
+per-instance pricing has nothing to trade against.** It earns a sweep that is not competing with a
+grid rewrite for a critic's attention.
+
+**Exit criteria**: a room that reaches no corridor is **refused, with the refusal recorded** ·
+connectivity is asserted on a built hotel, not on a hand-made fixture · save **v18** with a real
+17→18 migration and **the v1 fixture a zero-line diff walking 1→18** · `pnpm verify` green ·
+three-OS CI green · the I2 hash re-derived and the four digests updated in the same commit.
 
 ## G-035 — The isometric view, restored as the WATCH surface
 Status: **PLANNED.** **Goes before the room model** (ADR-0046 §7).

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0047 is ACCEPTED (human), with wall height left PROVISIONAL until it is watched. M3 is rewritten by ADR-0046: grid depth, then the isometric WATCH surface, then room drawing, scoring, circulation and exit instruments; the review goal is restored to the numbered table after the view returns. The proof-of-SUBJECT guard is LANDED across four gates with its own bite test; check:ladder keeps its stronger per-root one, which predates it. G-033 and the pre-ruling work stand at fourteen rows green. No build starts until the human says go. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0048 (human): a solved problem that never propagated is its own class, and REFLECT gains one standing question pointed SIDEWAYS — does anything else here have this problem? The grid goal is SPLIT at PLAN, seam offered and TAKEN: first the y-axis, validity and v17 with check:ladder re-pointed in the same commit; then corridors, connectivity and v18. ADR-0046 §4's done-together clause is superseded and points forward. Agent roster verified selectable, sim-critic write-toolless. G-033 and the pre-ruling work stand at fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -3962,6 +3962,11 @@ ADR-0027, ADR-0040/0041/0042 — **none of that was about the projection.**
 
 ### 4. THE TWO REAL MODEL CHANGES — done together, because splitting pays the migration twice
 
+> **SUPERSEDED IN PART BY ADR-0048 §3 — the "done together" clause only.** The accepted plan
+> splits the grid change (G-034) from the room model (G-036), with **G-035 between them**,
+> because **§7's instrument requirement outranks the shared-migration argument: the view cannot
+> wait on the room model.** The axis/validity/migration content of this section stands.
+
 **4.1 The grid gains an axis.** `(floor, x)` becomes `(floor, x, y)`. **A floor is a plan, not a
 strip.** Build validity is reworked — supported, enclosed, has a door, holds required items —
 **the rules surviving and their implementation changing.** This is a save migration. **ADR-0006
@@ -4308,3 +4313,73 @@ and nearly mis-scoped a ruling in both directions.
 ### 5. Scope
 
 **G-032c plus a realistic G-034 plan.** Nothing further this sitting.
+
+---
+
+## ADR-0048 — A SOLVED PROBLEM THAT NEVER PROPAGATED, and G-034 takes its seam
+
+**Date**: 2026-08-16 · **Status**: accepted · **HUMAN RULING.** Three parts, all consequences of
+building ADR-0047's amendment.
+
+### 1. THE STANDING QUESTION AT REFLECT — §5.8 pointed SIDEWAYS
+
+**The human owns the error and states it as one**: *"I asserted 'every scanner here has a
+proof-of-bite; none has a proof-of-subject.' I didn't check. `check:ladder` had one since G-030,
+with a registered test, and its per-root counting is stronger than the helper I ordered — which is
+why wrapping it turned its own test red. I made a claim about the state of the repo FROM MEMORY
+and shipped it as a finding."*
+
+> **Rule 4's referent problem again, and this time THE REFERENT WAS THE TREE ITSELF.**
+
+**But the correction names a class the register does not have**, and that is the part worth
+keeping:
+
+> **A RULE DISCOVERED INSIDE ONE GATE AND LEFT WHERE IT WAS FOUND. Not a missing rule — a SOLVED
+> PROBLEM THAT NEVER PROPAGATED.**
+
+**RULED: one standing question at REFLECT, one line — *does anything else here have this
+problem?*** It is **§5.8 pointed sideways rather than backwards**: §5.8 asks where else the defect
+just fixed lives; this asks where else the fix just written is *already needed*. **G-030 solving
+it silently for eight goals is the evidence the question is needed**, and the cost is a sentence.
+
+*Not a mechanism. It does not get a scanner — that would be the ADR-0046 §1 mistake in miniature.*
+
+### 2. G-034 TAKES ITS SEAM — G-034a / G-034b
+
+**The builder flagged it, so it gets TAKEN rather than declined in one line. G-013 is the
+precedent and it is not being repeated** (§5.5: a builder that offers a seam at PLAN gets it taken,
+or gets a written prediction of what declining it will cost, scored at REFLECT).
+
+- **G-034a** — the grid gains an axis; build validity reworked; migration to **v17**;
+  **`check:ladder` re-pointed in the commit that empties `apps/game`.**
+- **G-034b** — corridors: the cell type, connectivity as a validity rule, migration to **v18**.
+
+**WHY THE SEAM IS CLEAN — the dependency runs ONE WAY.** *"Corridors need the y-axis; the y-axis
+does not need corridors."*
+
+**AND THEY ARE DIFFERENT RULE SYSTEMS.** *"Supported, enclosed, doored, holds required items"* is a
+property of **a room in isolation**. *"Connects to circulation"* is a property of **a room in a
+building**. **Sweeping both in one diff asks a critic to hold two rule systems and a migration at
+once.**
+
+**TWO MIGRATIONS RATHER THAN ONE IS THE RIGHT TRADE HERE, and the human supersedes their own
+argument to say so**: ADR-0046 §4's case for combining was that grid depth and room-as-instance
+**touch the same fields**. **Corridors touch a DIFFERENT one — cell walkability — so the doubled
+cost does not apply.** *"Sixteen clean migrations say the chain is cheap; an unsweepable diff
+isn't."*
+
+**ONE CONSTRAINT ON G-034a: the cell representation MUST NOT PRECLUDE CORRIDORS. Reserve the
+concept, do not build it.**
+
+### 3. ADR-0046 §4 IS SUPERSEDED ON ITS "DONE TOGETHER" CLAUSE, and the human caught it themselves
+
+§4 said the grid change and the room model are **done together, because splitting pays the
+migration twice.** **The accepted plan splits them** — G-034, then **G-035 between**, then G-036.
+
+**The plan is right and §4 was wrong**, because **§7's instrument requirement OUTRANKS the
+shared-migration argument: the view cannot wait on the room model.**
+
+> **AND THE HUMAN APPROVED THE PLAN WITHOUT MARKING §4 SUPERSEDED — "a small instance of the same
+> class", recorded rather than left to sit there contradicting the plan.** A decision that exists
+> in one record and not the other, which is the G-031a class, now caught three times in three
+> messages by three different readings. **§4 points forward from here.**

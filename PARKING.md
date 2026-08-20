@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, ADR-0047 is ACCEPTED (human), with wall height left PROVISIONAL until it is watched. M3 is rewritten by ADR-0046: grid depth, then the isometric WATCH surface, then room drawing, scoring, circulation and exit instruments; the review goal is restored to the numbered table after the view returns. The proof-of-SUBJECT guard is LANDED across four gates with its own bite test; check:ladder keeps its stronger per-root one, which predates it. G-033 and the pre-ruling work stand at fourteen rows green. No build starts until the human says go. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, ADR-0048 (human): a solved problem that never propagated is its own class, and REFLECT gains one standing question pointed SIDEWAYS — does anything else here have this problem? The grid goal is SPLIT at PLAN, seam offered and TAKEN: first the y-axis, validity and v17 with check:ladder re-pointed in the same commit; then corridors, connectivity and v18. ADR-0046 §4's done-together clause is superseded and points forward. Agent roster verified selectable, sim-critic write-toolless. G-033 and the pre-ruling work stand at fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

@@ -299,6 +299,14 @@ The agent that bears the cost of a fat goal is the CRITIC, who has to sweep it �
 
 Scope only. Not design, not approach, not test strategy — those are the orchestrator's at PLAN review and the critic's after BUILD. This is the cheapest possible moment to split, and it puts the objection where the incentive already is.
 
+
+AND ONE STANDING QUESTION AT REFLECT, POINTED SIDEWAYS RATHER THAN BACKWARDS (ruled 2026-08-16, human -- ADR-0048 §1): DOES ANYTHING ELSE HERE HAVE THIS PROBLEM?
+
+§5.8 asks where else the defect just FIXED lives. This asks where else the fix just WRITTEN is ALREADY NEEDED -- and it names a class the register did not have: A RULE DISCOVERED INSIDE ONE GATE AND LEFT WHERE IT WAS FOUND. Not a missing rule. A SOLVED PROBLEM THAT NEVER PROPAGATED.
+
+THE EVIDENCE IS THAT IT HAPPENED AND NOBODY NOTICED FOR EIGHT GOALS. check:ladder has refused a dead root since G-030, with a registered test, counting PER ROOT because a single total stays comfortably non-zero while one root is misspelt and contributes nothing. That is a better guard than the shared one written eight goals later to fill a gap that gate did not have -- and the shared one was ordered on the claim that NO scanner had a proof-of-subject, asserted from memory about the repo's own contents. The wrapping pre-empted check:ladder's message and turned its own test red, which is the only reason any of this was found.
+
+ONE LINE AT REFLECT, ANSWERED IN PROSE. It does not get a scanner: automating this question would be ADR-0046 §1's mistake in miniature -- a check bolted onto the place where judgement was the point.
 5.8 A FIX ON A KNOWN CLASS MUST STATE WHERE ELSE THAT CLASS LIVES
 
 (Added 2026-08-09 by human ruling.)
