@@ -2141,51 +2141,160 @@ amdt §2): C3 makes **satisfaction primary**, so **room score → satisfaction r
 Landing G-028 before G-037 is fine, **but it WILL need a re-sweep when scoring lands.** Scheduled,
 not a surprise.
 
-## G-036 — The player draws a room
-Status: **PLANNED.**
 
-**FIRST DELIVERABLE, AND IT WAS NOWHERE IN THIS BLOCK UNTIL WATCH #12 ASKED FOR IT: THE PLOT GAINS
-DEPTH.** `createGridBounds`' default stops being one row deep and becomes a real plan.
+## G-036 — SPLIT at PLAN, 2026-08-16. Seam named by `sim-critic`, TAKEN (§5.6, §5.5).
+Status: **split into G-036a / G-036b.** Four BLOCKERs and nine MAJORs on a plan with no diff.
 
-**THE HUMAN LOOKED AT G-035 AND ASKED WHETHER THE STAIRS-AND-LIFTS GOAL WOULD FIX IT. IT WOULD
-NOT** — circulation is G-038 and it moves guests THROUGH a plan; it does not make one. The change
-that turns *a string of huts on a path* into a building is this one, and **before this note the
-phrase "G-036 widens the plot" occurred EXACTLY ONCE IN THE WHOLE LEDGER — inside a comment in
-G-034a's REFLECT.** A constraint mentioned in another goal's prose is not a deliverable of this
-one. **That is the G-031a class for the fourth time, and this time it was caught by a person
-looking at the screen rather than by any gate** — which is ADR-0046 §1's whole argument, arriving
-on its first outing.
+**THE BLOCK'S OWN REASON FOR COMBINING THEM WAS FALSE AGAINST THE TREE, AND THE CRITIC READ THE
+TREE RATHER THAN THE ARGUMENT.** This block said *"the two together are one migration rather than
+two."* **`grid.ts:132-134` says the opposite, and names this goal while doing it:** *"The day a
+verb can draw into the depth (G-036), widening this is a ONE-LINE CHANGE THAT OWES NO MIGRATION,
+for the reason `GridBounds` gives: a save carries its own plot."* `world.ts:113-116` and ADR-0047
+B3 agree.
 
-**WHY IT WAITS FOR THIS GOAL RATHER THAN LANDING EARLIER, stated so the delay is a decision:** a
-deeper plot with no drawing verb is a bigger empty field. Depth only means something once a room
-can be SHAPED to use it, and the two together are one migration rather than two. **G-034a's
-one-row constraint was what kept that goal behaviour-free; it was never meant to survive M3.**
+> **DEPTH OWES NO MIGRATION AT ALL, so splitting costs ZERO extra migrations.** The shared-migration
+> argument — which ADR-0046 §4 already rested on once and ADR-0048 §3 already superseded once — **is
+> now wrong for the third time, and this is the first time the tree was asked instead of the
+> reasoning.**
 
-**AND IT REOPENS TWO THINGS THAT WERE DELIBERATELY DEFERRED TO THE DEPTH:**
-- **`WALL_HEIGHT` (64px) IS STILL PROVISIONAL** and must be looked at again HERE, not before —
-  WATCH #12 recorded that at one row deep the judgement is not available, because walls this tall
-  are what makes rooms occlude the path behind them (ADR-0047 amdt §1, human).
-- **The 4-neighbour door rule stops degenerating.** On a one-row plot it collapses to the
-  2-neighbour rule, which is what kept every migrated verdict identical at G-034a. **The moment
-  the plot deepens, `noDoor` and `noCorridor` become producible in ways the one-dimensional seal
-  layouts cannot express** — `determinism-log.ts` and `report.ts` will need re-deriving, and
-  `SHIPPED_ROW` says so in its own header.
+**The dependency runs one way**, as at G-034: **on a one-row plot every footprint is a 1×N strip and
+the multi-cell branches degenerate again** — G-034a's seam argument verbatim. And the halves touch
+**disjoint surfaces**: depth is `tools/headless` + goldens + the renderer; footprints are the
+`packages/sim` model + the save.
 
-**A LOBBY IS NOT IN M3 AT ALL, and the human's expectation of one is fair.** Reception as a queue
-point is **C5, PARKED** (ADR-0047), with its falsification test: *if M3's queue machinery cannot
-express a check-in desk without changing shape, it was scoped too narrowly.* **Depth plus drawing
-is what makes a lobby EXPRESSIBLE — a player can draw one — but nothing in M3 makes it MEAN
-anything.** Stated here rather than discovered at the milestone question.
-Statement: the player draws a footprint and places items inside it. **`placeItem` is promoted out
-  of M6 to the PRIMARY PLAYER VERB** (ADR-0046 §4.2).
+## G-036a — The plot gains depth, and the hotel becomes a plan
+Status: **PLANNED, not started.**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
 
-A room **type** becomes a **constraint set** in content — min/max footprint, required items,
-forbidden adjacencies, what need it serves. A room **instance** carries the player's drawing and
-its placed items, and **that is world state, which is where it has always belonged.** **I3 is not
-weakened and ADR-0003 stands.**
-**B4 (rooms are editable) and B6 (access rule: public / guests-of-this-room / staff-only) land
-here** — B6 was already parked as an edge case, and **player-designed rooms turn it into a
-certainty: somebody will put a vending machine in a bedroom on purpose.**
+Statement: `createGridBounds`' default stops being one row deep, **and the shipped layouts spread
+into it** — so the hotel stops reading as a string of huts on a path (WATCH #12). **No schema bump.**
+
+**WIDENING THE BOUND ALONE CHANGES NOTHING ON SCREEN, AND THAT IS THE FINDING THAT SHAPES THIS
+GOAL.** `camera.ts:118-164` derives its extent from **OCCUPIED cells**, not from the bounds, and
+**every shipped layout writes `row: bounds.minRow`** (`report.ts:305/382/427/440`,
+`determinism-log.ts:117`). So a one-line bound change produces a recording **pixel-for-pixel like
+WATCH #12**, and the *"before"* recorded in `JOURNAL.md` would have no *"after"*. **The human's
+complaint is about the LAYOUT being one row; the plot bound is only its cause.** The layouts are the
+substance of this goal, not a footnote to it.
+
+**MEASURED BEFORE BUILD, BY THE CRITIC, ON THE SHIPPED HARNESSES.** One extra row makes `noDoor`
+**unproducible in both**:
+
+| arm | `noDoor` | other |
+|---|---|---|
+| I2 log, 40,000 ticks, seed 42, depth+0 | **5** | `gaveUp` 432 |
+| depth+1 (and +5, identical) | **0** | `gaveUp` 364, `leftDissatisfied` 164 → 230 |
+| CLI criterion, depth+0 | **2** | `noCorridor` 2 |
+| CLI criterion, depth+1 | **0** | `noCorridor` 4 |
+
+**WHAT GOES RED LOUDLY**: `validity.determinism.test.ts:77` and `validity.report.test.ts:127`.
+**WHAT GOES QUIETLY WRONG WHILE STAYING GREEN, which is the part that matters**:
+`validity.report.test.ts:122`'s `reasons.length >= 2` **survives on unsupported+noCorridor**, so the
+file's headline assertion holds in a state where `noDoor` is unreachable from any CLI run —
+**ADR-0007's shape inside the file written to prevent it** · the 100,000-tick I2 proof **stops
+covering the door rule's failure branch**, and the gate cannot see that · `report.ts:315`'s
+derivation of `PLAYER_COLUMNS_PER_BLOCK` becomes **false prose** while its only test (that 8 divides
+80) stays green — **§2.1's exact failure** · and `checkedOut` **1262** and `valid` **64** are
+**byte-identical across the change**, so the CLI summary looks untouched while one of four validity
+reasons has died.
+
+**SO THE LAYOUTS SEAL ON FOUR SIDES**: `builtRoomCell`, `roomCell`, `amenityCell`,
+`playerCorridorCells`, and `determinism-log`'s terrace waves and sky tower. **And every
+`toBeGreaterThan(0)` this converts to a knife-edge — `missingItem` sits at 1, `noCorridor` at 1 —
+becomes a COUNTED assertion**, which is G-034b's own lesson: a wrong corridor list dropped checkouts
+187 → 12 while every non-zero assertion stayed green.
+
+**THE WORST-JOURNEY DERIVATION IS RE-DERIVED IN BOTH PACKAGES IN ONE CHANGE.**
+`schema.ts:1067`'s *"23 floors × 80 columns, worst journey 101, tolerance 180"* is the **derived
+floor** under `guestCellsPerTickSchema`. With depth `D` the worst journey is `22+79+(D-1)`, so **the
+derivation survives only while `D < 80` — a real upper bound on the depth chosen, not a comment.**
+And the quiet half: **`travel.movement.test.ts:70`'s loop terminates on `floor && column` and never
+compares `row`**, so a re-derived version would report a worst journey that is **too small, while
+staying green.**
+
+**WALL HEIGHT IS LOOKED AT HERE AND IT IS AN EXIT CRITERION, NOT A SENTENCE.** ADR-0047 amdt §1
+(human) says *ship it, LOOK at it, then lock it*; WATCH #12 deferred the look to the depth. Because
+64px is **perceptual**, its check **is** a WATCH entry naming a frame — **discharged by the same
+recording this goal owes anyway**, and **locked by omission for a second goal running if it has no
+WATCH criterion.**
+
+**Exit criteria — commands, not adjectives:**
+- `pnpm exec vitest run validity` · `run grid` · `run travel` green.
+- **`noDoor` IS STILL PRODUCED, AS A COUNTED ASSERTION**, in both the I2 log and a CLI run — not
+  `toBeGreaterThan(0)`.
+- `report.ts`'s `PLAYER_COLUMNS_PER_BLOCK` derivation **re-derived for two axes**, and the
+  worst-journey warrant re-derived in `schema.ts` **and** its test, with the test **comparing
+  `row`**.
+- **NO SAVE BUMP, and `grid`'s defaults stay on `FORBIDDEN_IN_SAVE_TS`** — a migrated world's plot
+  is **unchanged**, because the plot is stored and widening it would rewrite validity verdicts.
+- `pnpm verify` green, all rows. Three-OS CI green. The I2 hash re-derived and the four digests
+  updated in the same commit.
+- **A RECORDING AND A `JOURNAL.md` WATCH ENTRY, which must answer TWO questions**: does the hotel
+  now read as a building rather than a string of huts, and **is 64px the right wall height** —
+  after which it is locked or changed, and either way stops being provisional.
+
+## G-036b — The player draws a room
+Status: **PLANNED.** Follows G-036a; on a one-row plot every footprint is a 1×N strip.
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+
+Statement: a room instance carries a player-drawn footprint; `placeItem` becomes the primary player
+verb; a room type becomes a constraint set in content. Save **v19**.
+
+**THE PLACEMENT INDEX IS KEYED ON THE ORIGIN CELL AND EVERY LOOKUP THROUGH IT BREAKS SILENTLY THE
+MOMENT A FOOTPRINT EXCEEDS 1×1.** `placementIndex` sorts by `entity.at`; `roomAtIn` binary-searches
+and walks while `cellsEqual(entry.at, cell)` — **a room COVERING a cell but ORIGINATING elsewhere is
+not found.** Three consequences, none visible to any current test or gate:
+`groundedRooms` reports a room standing on a wide room **unsupported** unless it sits on that room's
+origin · the door walk reads a wide neighbour's non-origin cells as **free**, giving a sealed room a
+**phantom door** · and **`hostRoomOf` gives an item placed anywhere but the origin NO host, so
+`isProviding` is false — `placeItem`, this goal's PRIMARY VERB, silently producing dead furniture.**
+**I2 cannot backstop any of it**: the gate holds no reference hash, so a *consistently* wrong
+verdict stays green. **The plan must state how the index becomes footprint-aware before BUILD**, and
+what one-entry-per-covered-cell does to `groundedRooms`' one-pass argument.
+
+**EVERY NEW ROOM-TYPE FIELD IS OPTIONAL, WITH AN EXACT HISTORICAL READING FOR ABSENCE — OR THE
+PERMANENT v1 FIXTURE IS HUSKED AND ADR-0006 FORBIDS THE ONLY REPAIR.** `SAVE_V1_CONTENT` is a frozen
+literal; a required field stops it typechecking, and adding the field moves
+`SAVE_V1_CONTENT_FINGERPRINT` `8e09fe4f0fa162a3`, **which is the `contentHash` inside the frozen
+bytes** — the fixture would load and never tick again. **This is the largest content-field addition
+the project has ever made.** Criterion: the fingerprint asserted unmoved.
+
+**`roomAt`'s OCCUPANCY TEST BECOMES RECTANGLE OVERLAP**, or a player draws a room whose origin is
+free and whose body lies across an existing one. `build.ts:293` already nominates itself as *"THE
+SINGLE SITE THAT GENERALISES"* — **and the draw command passes a rectangle, so the signature changes
+too.** **`coversCell` must be a rectangle-contains test, not a linear scan**: inside the door walk's
+neighbour loop it makes the door rule **O(area²) per room** — a 10×10 room is 40,000 comparisons per
+room per validity computation — and it lands against an **OPEN escalation** whose bound already
+cannot catch this project's smallest known regression.
+
+**THE WATCH SURFACE THROWS ON THE THING THIS GOAL BUILDS.** `scene.ts:224`'s `assertSingleTile` is
+**enforced, not commented** (ADR-0047 A3), and its docblock names this goal: *"when G-036 gives
+rooms player-drawn footprints THIS THROWS, LOUDLY, AT THE FIRST FRAME — which is the point."* So
+**multi-tile drawing is IN SCOPE for the renderer here**, or this goal cannot be watched and cannot
+close. *(It dissolves for G-036a: depth alone satisfies `assertSingleTile`, and the renderer already
+iterates `view.minRow..view.maxRow`.)*
+
+**B6's ACCESS VALUES ARE camelCase, DECIDED AT PLAN BECAUSE IT IS FREE NOW AND A CONTENT MIGRATION
+LATER.** `public / guests_of_this_room / staff_only` are **snake_case, which is I3's content-ID
+convention**, and the sim must branch on them — so `check:content` fires and the only exits are a
+waiver file or a rename after the content is written. `RoomInvalidityReason`'s `noDoor`/`missingItem`
+is the precedent already in the tree.
+
+**`assertEntity` OWES A `footprint` CLAUSE.** `save.test.ts`'s field-coverage generator reads
+`WORLD_KEYS`, which is **top-level only**, so a v19 save missing `footprint` loads, `roomCellsOf`
+folds over nothing, and `computeRoomInvalidity` answers *"vacuously fine"* — the failure mode
+`validity.ts:617-620` already names for `unplaced`.
+
+**`forbidden adjacencies` GOES WITH THE SCORER (G-037) UNLESS A REFUSAL RULE LANDS HERE WITH A
+DISCRIMINATING TEST.** ADR-0047 C2 puts adjacency in the scoring fold; **a content field shipped
+here with no consumer is a field that ships unexercised — the shape the G-034a seam was taken to
+avoid.**
+
+**The drawing verb's relation to `buildRoom` is ruled at PLAN**: widening `buildRoom` to a rectangle
+rewrites every scheduled command in `report.ts` and `determinism-log.ts` plus recorded replays;
+a second command leaves `buildRoom` a 1×1 special case that must stay exercised. **Cheap to rule
+now, expensive to discover at BUILD.** `layCorridor` has the same question one field over.
+
 
 ## G-037 — A room is scored on what is in it
 Status: **PLANNED.** The fold over placed items, in the shape Two Point uses.
