@@ -16,9 +16,30 @@
 //     deterministic, which is the mirror image of the hole G-004 found.
 //
 // SINCE G-034b THERE ARE FIVE REASONS AND THE HARNESS PRODUCES FOUR OF THEM. The log declares
-// circulation on its ground floor and WITHHOLDS three cells of it, so `noCorridor` is produced
-// by rooms a guest would otherwise have taken — the sky-tower argument applied to a rule whose
-// consequence, like every other validity verdict, the hash can only see indirectly.
+// circulation on its ground floor and WITHHOLDS the free neighbours of three rooms, so
+// `noCorridor` is produced by rooms a guest would otherwise have taken — the sky-tower argument
+// applied to a rule whose consequence, like every other validity verdict, the hash can only see
+// indirectly.
+//
+// ============================================================================
+//  AND SINCE G-036a EVERY ONE OF THOSE TALLIES IS ASSERTED AS A COUNT RATHER THAN AS "MORE
+//  THAN ZERO". THAT IS THIS PROJECT'S OWN LESSON, ARRIVING FOR THE THIRD TIME.
+//
+//  G-034b: a wrong corridor list dropped this harness's checkouts from 187 to 12 and EVERY
+//  `toBeGreaterThan(0)` in this file stayed green, because each reason still occurred
+//  somewhere. θ-b1: the same shape, in the same file, for departures. And G-036a measured the
+//  third instance BEFORE writing any code — one extra row of plot takes `noDoor` from 5 to 0
+//  here and from 2 to 0 in the CLI, while `checkedOut` and `valid` in the CLI stay
+//  BYTE-IDENTICAL. A suite of non-zero assertions cannot see a validity reason die.
+//
+//  **A NON-ZERO ASSERTION CANNOT SEE A HOTEL THAT HAS STOPPED WORKING. ONLY A COUNT THAT MOVED
+//  CAN.** Two of these counts are at ONE, which is a knife edge and is said so in place: they
+//  are the ones a schedule change silences first, and a count is what makes that a red line
+//  with a number in it rather than a quiet zero.
+//
+//  WHAT TO DO WHEN ONE OF THEM MOVES: read what moved, decide whether the hotel is still the
+//  hotel this log is for, and re-record. Do NOT weaken a count back to `toBeGreaterThan(0)`.
+// ============================================================================
 //
 // `unplaced` is deliberately NOT expected: its only producer is the v2 -> v3 migration,
 // and a harness that starts from `createWorld` can never contain one. That is asserted
@@ -53,38 +74,60 @@ function replay(ticks: number, seed = 42): World {
 
 // 40,000 ticks rather than the gate's 100,000, and the number is chosen rather than
 // picked: the LAST thing this file makes a claim about is the second terrace wave, whose
-// five basement blocks are scheduled at ticks 20,011 / 26,018 / 32,025 / 38,032 / 44,039,
-// so 40,000 has four of the five standing and every other pass has fired many times over.
-// The suite is not the place to spend a 100,000-tick run; the 100,000-tick case is the
-// gate's own, and it runs this same log through `commandLog`.
+// three basement crosses are scheduled at ticks 20,011 / 26,018 / 32,025, so 40,000 has all
+// three standing and every other pass has fired many times over. The suite is not the place to
+// spend a 100,000-tick run; the 100,000-tick case is the gate's own, and it runs this same log
+// through `commandLog`.
 const TICKS = 40_000;
 
 describe('the I2 harness reaches rooms that do not work', () => {
   const world = replay(TICKS);
   const tally = countInvalidRooms(world.entities, world.grid, world.corridors, content);
 
+  it('TALLIES EXACTLY, so a reason that dies is a red line with a number in it', () => {
+    // THE HEADLINE ASSERTION OF THIS FILE (G-036a). Every reason a placement can produce, at
+    // the count it produces it at, in one comparison — so a change that swaps one reason for
+    // another, or halves a row, cannot hide behind "still greater than zero". Recorded from a
+    // replay of this log at 40,000 ticks; see the header for what to do when it moves.
+    expect(tally).toEqual({
+      missingItem: 1,
+      noCorridor: 1,
+      noDoor: 3,
+      unplaced: 0,
+      unsupported: 40,
+    });
+  });
+
   it('contains rooms with nothing beneath them', () => {
-    expect(tally.unsupported).toBeGreaterThan(0);
+    expect(tally.unsupported).toBe(40);
   });
 
-  it('contains rooms with no bed in them', () => {
-    expect(tally.missingItem).toBeGreaterThan(0);
+  it('contains rooms with no bed in them — AND THE COUNT IS ONE, which is a knife edge', () => {
+    // ONE. The spawn walk furnishes every other room, and all but one of the unfurnished ones
+    // is ALSO unsupported — `missingItem` is checked after support, so it is reported only for
+    // the single unfurnished room that happens to be standing on something. A schedule change
+    // that moves which spawn indices land on the earth silences this row entirely.
+    expect(tally.missingItem).toBe(1);
   });
 
-  it('contains rooms sealed in on both sides', () => {
-    // The basement terraces. If the door rule were deleted this would go to zero while
-    // the two above stayed green, so it is not covered by them.
-    expect(tally.noDoor).toBeGreaterThan(0);
+  it('contains rooms sealed in ON ALL FOUR SIDES', () => {
+    // The basement crosses. If the door rule were deleted this would go to zero while the two
+    // above stayed green, so it is not covered by them — and since G-036a the plot has depth,
+    // so a line of three seals nobody and this counts CENTRES of crosses.
+    expect(tally.noDoor).toBe(3);
   });
 
   it('CONTAINS A ROOM WHOSE DOOR OPENS ONTO NOWHERE ANYBODY WALKS (G-034b)', () => {
-    // The fourth reason a placement can produce, and the log withholds three ground-floor
-    // corridor cells to produce it — see `determinism-log.ts` for which and why. The sky
-    // tower's argument applies here word for word: validity is DERIVED, so the state hash can
-    // only see this rule's CONSEQUENCE, and the consequence exists only if the room it refuses
-    // is one a guest would otherwise have taken. The first room this log ever spawns is one of
-    // the three, which is the lowest-id lodging room in the hotel.
-    expect(tally.noCorridor).toBeGreaterThan(0);
+    // The fourth reason a placement can produce, and the log withholds the free neighbours of
+    // three ground-floor rooms to produce it — see `determinism-log.ts` for which and why. The
+    // sky tower's argument applies here word for word: validity is DERIVED, so the state hash
+    // can only see this rule's CONSEQUENCE, and the consequence exists only if the room it
+    // refuses is one a guest would otherwise have taken. The first room this log ever spawns is
+    // one of the three, which is the lowest-id lodging room in the hotel.
+    //
+    // ONE, AND IT IS THE OTHER KNIFE EDGE. The other two withheld rooms are alive at different
+    // parts of the run; at this horizon exactly one of the three is both standing and stranded.
+    expect(tally.noCorridor).toBe(1);
   });
 
   it('and the harness DECLARES a corridor plan at all, so the rule is not vacuous there', () => {
@@ -175,6 +218,9 @@ describe('and it reaches rooms that do work', () => {
 });
 
 describe('the replay is the thing the gate runs', () => {
+  /** The world at the gate's own horizon. Built once; two tests below read it. */
+  const horizon = replay(100_000);
+
   it('produces the same world twice from the same seed and log', () => {
     const a = replay(5_000);
     const b = replay(5_000);
@@ -198,6 +244,28 @@ describe('the replay is the thing the gate runs', () => {
     expect(world.buildOutcomes.refused.noSuchRoom).toBeGreaterThan(0);
   });
 
+  it('AND EVERY REASON IS STILL BEING PRODUCED AT THE GATE\'S OWN HORIZON', () => {
+    // ==================================================================================
+    // 100,000 TICKS — THE HORIZON `pnpm test:determinism` ACTUALLY COMPARES, AND THE FIRST
+    // TIME `noDoor` HAS BEEN NON-ZERO THERE (G-036a).
+    //
+    // `determinism-log.ts`'s second terrace wave claims it lands "with ids far above anything
+    // the despawn pass reaches — sealed-in rooms that are still sealed in at tick 100,000".
+    // Replaying the log as it stood BEFORE this goal gives `noDoor` 0 at 100,000: the demolish
+    // walk reaches id 182 by then and the wave-2 ids sit under it. A claim in a comment that
+    // no test pinned — ADR-0007's shape, in a file written to close it.
+    //
+    // The log now carries a third, single-cross wave at tick 70,001 whose ids no id-walking
+    // pass reaches, and this is the assertion that says so.
+    // ==================================================================================
+    const tally = countInvalidRooms(horizon.entities, horizon.grid, horizon.corridors, content);
+    expect(tally.noDoor).toBe(1);
+    expect(tally.noCorridor).toBe(2);
+    expect(tally.missingItem).toBe(4);
+    expect(tally.unsupported).toBe(76);
+    expect(tally.unplaced).toBe(0);
+  });
+
   it('AND the funds refusal, which G-011 pushed out to the gate\'s own horizon', () => {
     // MEASURED CHANGE, RECORDED RATHER THAN PAPERED OVER. `insufficientFunds` used to be
     // non-zero by tick 40,000 and now is not, because G-011 made this harness RICHER: its
@@ -213,8 +281,7 @@ describe('the replay is the thing the gate runs', () => {
     // rooms FREE, and demolishing one still pays a refund on a construction nobody was
     // charged for. A player cannot reach that — spawning is the structural door, not a
     // player action — but a HOST can, and this log is a host.)
-    const world = replay(100_000);
-    expect(world.buildOutcomes.refused.insufficientFunds).toBeGreaterThan(0);
+    expect(horizon.buildOutcomes.refused.insufficientFunds).toBeGreaterThan(0);
   });
 });
 

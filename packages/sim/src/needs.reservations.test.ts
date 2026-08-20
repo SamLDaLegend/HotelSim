@@ -268,14 +268,19 @@ describe('exit path — the provider stopped existing', () => {
   it('releases the engagement when the provider stops being a VALID room', () => {
     // G-009's rule reaches the second reservation too: an invalid room is not a provider,
     // and a guest being served by one is the same defect as a guest sleeping in one. Here
-    // the café is sealed in by rooms on both sides, so it loses its door.
+    // the café is walled in until it loses its door.
+    //
+    // THREE BLOCKERS RATHER THAN TWO SINCE G-036a: the shipped plot has depth, so a café with
+    // rooms east and west still opens onto the cell BEHIND it. The café stands on the plot's
+    // front row, so the fourth side is off the plot and three is what it takes.
     const start = run(hotel(1, 1), content, 3, [at(1, arrive)]);
     const cafe = entitiesInOrder(start.entities)[1]!;
     expect(isEngaged(only(start))).toBe(true);
     const left: Command = { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 39, row: 0 } };
     const right: Command = { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 41, row: 0 } };
+    const behind: Command = { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 40, row: 1 } };
 
-    const after = stepTick(start, content, [left, right]);
+    const after = stepTick(start, content, [left, right, behind]);
     expect(only(after).engagement).toBeNull();
     expect(isResting(only(after))).toBe(true);
     expect(countGuestsInInvalidRooms(after.guests, after.entities, BOUNDS, createCorridors(), content)).toBe(0);

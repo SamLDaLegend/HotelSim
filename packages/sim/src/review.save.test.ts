@@ -55,7 +55,7 @@ import type { ReviewOutcomeRow } from './reviews.js';
 import { run, stepTick } from './tick.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
-import { stripDepth } from './without-depth.js';
+import { onEraPlot, stripDepth } from './without-depth.js';
 import { stripCorridors } from './without-corridors.js';
 
 /** The 9 -> 10 step itself. Index 8, the ninth link. */
@@ -348,9 +348,13 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
 };
 
 describe('a migrated v9 world and a v10 world with the same history are the SAME world', () => {
-  /** A world lived forward under this build: one room, one café, one completed stay. */
+  /**
+   * A world lived forward under this build: one room, one café, one completed stay — ON THE
+   * ERA'S PLOT, which is one row deep (`onEraPlot`, G-036a). See that helper for why the
+   * comparand and not the migration is what had to move.
+   */
   const lived = (): World => {
-    const world = stepTick(createWorld(1, content), content, [
+    const world = stepTick(onEraPlot(createWorld(1, content)), content, [
       { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0, row: 0 } },
       { kind: 'spawnEntity', entityKind: 'cafe', at: { floor: 0, column: 2, row: 0 } },
     ]);

@@ -90,14 +90,20 @@ function worldOfEveryReason(): World {
     { id: 8, kind: 'bed', at: cell(GROUND_FLOOR, 29) },
     { id: 9, kind: 'bedroom', at: cell(GROUND_FLOOR, 31) },
     { id: 10, kind: 'bed', at: cell(GROUND_FLOOR, 31) },
-    { id: 11, kind: 'bedroom', at: cell(GROUND_FLOOR, 50) }, //     valid
-    { id: 12, kind: 'bed', at: cell(GROUND_FLOOR, 50) },
-    { id: 13, kind: 'bedroom', at: cell(GROUND_FLOOR, 60) }, //     noCorridor
-    { id: 14, kind: 'bed', at: cell(GROUND_FLOOR, 60) },
+    // THE THIRD BLOCKER, BEHIND ROOM 5 (G-036a). The shipped plot has depth, so a room walled
+    // in east and west has a free cell at row 1 and is not sealed at all — room 5 came back
+    // VALID and this world stopped containing a `noDoor`. Room 5 stands on the plot's FRONT
+    // row, so the cell in front of it is off the plot and three blockers are what it takes.
+    { id: 11, kind: 'bedroom', at: cell(GROUND_FLOOR, 30, 1) },
+    { id: 12, kind: 'bed', at: cell(GROUND_FLOOR, 30, 1) },
+    { id: 13, kind: 'bedroom', at: cell(GROUND_FLOOR, 50) }, //     valid
+    { id: 14, kind: 'bed', at: cell(GROUND_FLOOR, 50) },
+    { id: 15, kind: 'bedroom', at: cell(GROUND_FLOOR, 60) }, //     noCorridor
+    { id: 16, kind: 'bed', at: cell(GROUND_FLOOR, 60) },
   ];
   // AND THE PLAN THAT MAKES TWO OF THOSE ROOMS DIFFER (G-034b). The ground floor is PLANNED —
   // it carries corridors — so every room on it has to open onto one, and the corridor at
-  // column 51 is the only difference between room 11 (valid) and room 13 (`noCorridor`):
+  // column 51 is the only difference between room 13 (valid) and room 15 (`noCorridor`):
   // identical type, identical bed, identical earth beneath, identical free cells beside.
   // That is what makes this world a test of the rule rather than of a layout.
   //
@@ -106,14 +112,17 @@ function worldOfEveryReason(): World {
   // walls room 5 in, they were valid, and they stay valid. Without them the ground floor's plan
   // would silently convert two of this world's valid rooms into `noCorridor` ones and the
   // `noDoor` room would be the only thing left unchanged — a fixture rewritten by a rule rather
-  // than a fixture testing one.
+  // than a fixture testing one. `(30, row 1)` is the same argument for the third blocker
+  // G-036a added: it is scenery, it must stay valid, so its own walkway is declared behind it.
   return {
     ...createWorld(9, content),
-    entities: { nextId: 15, list },
-    corridors: [cell(GROUND_FLOOR, 28), cell(GROUND_FLOOR, 32), cell(GROUND_FLOOR, 51)].reduce(
-      withCorridor,
-      createCorridors(),
-    ),
+    entities: { nextId: 17, list },
+    corridors: [
+      cell(GROUND_FLOOR, 28),
+      cell(GROUND_FLOOR, 32),
+      cell(GROUND_FLOOR, 30, 2),
+      cell(GROUND_FLOOR, 51),
+    ].reduce(withCorridor, createCorridors()),
   };
 }
 
@@ -215,7 +224,7 @@ describe('a world full of invalid rooms', () => {
 
   it('keeps ticking, and keeps every room where it was', () => {
     const advanced = run(worldOfEveryReason(), content, 100);
-    expect(entitiesInOrder(advanced.entities)).toHaveLength(14);
+    expect(entitiesInOrder(advanced.entities)).toHaveLength(16);
     expect(countInvalidRooms(advanced.entities, BOUNDS, advanced.corridors, content)).toEqual({
       missingItem: 1,
       noCorridor: 1,

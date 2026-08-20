@@ -150,16 +150,21 @@ describe('coordinates', () => {
 });
 
 // ============================================================================
-//  A FLOOR IS A PLAN, NOT A STRIP (G-034a, ADR-0046 §4.1).
+//  A FLOOR IS A PLAN, NOT A STRIP (G-034a, ADR-0046 §4.1) — AND SINCE G-036a THE SHIPPED PLOT
+//  IS ONE TOO.
 //
-//  The coordinate space gained a third axis. THE SHIPPED PLOT DID NOT GAIN DEPTH, and the
-//  two are separate decisions asserted separately below: the axis exists, is ordered, is
-//  bounded and is hashed, and the default plot is one row deep so nothing the simulation
-//  does can differ. Depth is exercised by FIXTURE — a plot passed in by a test — never by
-//  the shipped default.
+//  The coordinate space gained its third axis at G-034a and the shipped plot deliberately did
+//  NOT gain depth, so that goal could change no behaviour: the two were separate decisions and
+//  are still asserted separately below. **G-036a is the goal that spends the second one.** The
+//  axis exists, is ordered, is bounded and is hashed; the default plot is now EIGHT rows deep,
+//  and the test below re-derives that depth rather than merely reading it back.
+//
+//  So depth is no longer exercised only by FIXTURE. `DEEP` stays because a small, fully-stated
+//  plot is what makes a claim about one cell's neighbours readable, and because the arms that
+//  PAIR a deep plot against a flat one need both — not because the default has none.
 // ============================================================================
 
-/** A plot with real depth. THE ONLY WAY DEPTH IS EXERCISED, and it is never the default. */
+/** A plot with real depth, small enough to state in full. Not the only one any more (G-036a). */
 const DEEP: GridBounds = { minFloor: -1, maxFloor: 3, minColumn: 0, maxColumn: 6, minRow: 0, maxRow: 4 };
 
 describe('the third axis', () => {
@@ -180,13 +185,47 @@ describe('the third axis', () => {
     ]);
   });
 
-  it('LEAVES THE SHIPPED PLOT ONE ROW DEEP, which is what makes this goal behaviour-free', () => {
-    // THE LOAD-BEARING ASSERTION OF THE WHOLE CHANGE. Every claim that G-034a changes no
-    // journey, no verdict and no outcome rests on this one fact, so it is pinned directly
-    // rather than left to be inferred from the goldens that depend on it.
-    expect(DEFAULT_MIN_ROW).toBe(DEFAULT_MAX_ROW);
-    expect(bounds.minRow).toBe(bounds.maxRow);
-    // And the door is on that row, because `entranceCell` reads the plot it is given.
+  it('GIVES THE SHIPPED PLOT DEPTH, AND EVERY TERM OF THAT DEPTH IS DERIVED (G-036a)', () => {
+    // ==================================================================================
+    // THIS ASSERTED `DEFAULT_MIN_ROW === DEFAULT_MAX_ROW` UNTIL G-036a, AND THAT WAS THE
+    // LOAD-BEARING FACT OF G-034a: every claim that adding the axis changed no journey, no
+    // verdict and no outcome rested on it. G-036a is the goal that spends it, so the
+    // assertion is REPLACED BY ITS DERIVATION rather than deleted.
+    //
+    // `grid.ts` states the four steps; three of them are checkable here and the fourth says
+    // out loud that it is a preference (ADR-0013 §4).
+    // ==================================================================================
+    const depth = DEFAULT_MAX_ROW - DEFAULT_MIN_ROW + 1;
+    expect(depth).toBe(8);
+    expect(bounds.maxRow - bounds.minRow + 1).toBe(depth);
+
+    // AT LEAST 3, or the row axis cannot seal a room without the plot's own edge doing it.
+    expect(depth).toBeGreaterThanOrEqual(3);
+
+    // AND NOTHING HERE ASSERTS THE DEPTH IS EVEN, WHICH IS A DELETION WITH A REASON RATHER
+    // THAN AN OMISSION. The plan's third clause said the depth had to be even "because every
+    // seeded layout puts a lane between rooms on BOTH axes"; the layouts this goal actually
+    // shipped put a lane on the COLUMN axis only (`report.ts`'s `PLAYER_COLUMNS_PER_BLOCK`
+    // and `roomCell` each derive that and count what it buys), so there is no lane row to
+    // strand and the clause has no warrant. **An assertion whose warrant is false is a false
+    // necessity, and this file already carries the project's other instance** — the rank of
+    // `compareCells`, pinned as a CONVENTION and labelled one, after a mutation probe showed
+    // the direction was the precondition. Struck in `grid.ts` in the same edit.
+
+    // AT MOST 79 — the real bound, and the one that ties this constant to another package.
+    // `stepTowards` spends its budget floor, then column, then row, so the worst journey is
+    // the sum of the three spans; `guestCellsPerTickSchema` derives the guest speed FLOOR
+    // from it against a tolerance of 180 ticks, and a plot deep enough for the worst journey
+    // to outlast tolerance would let a guest time out because it WALKED.
+    // `travel.movement.test.ts` measures the journey by walking it; this asserts the bound
+    // the plot has to stay inside for that measurement to clear.
+    const worstJourney =
+      bounds.maxFloor - bounds.minFloor + (bounds.maxColumn - bounds.minColumn) + (bounds.maxRow - bounds.minRow);
+    expect(worstJourney).toBe(108);
+    expect(worstJourney).toBeLessThan(180);
+
+    // And the door is on the NEAR row, because `entranceCell` reads the plot it is given —
+    // which is a choice now that there is more than one row to choose from.
     expect(entranceCell(bounds).row).toBe(bounds.minRow);
   });
 
@@ -195,10 +234,13 @@ describe('the third axis', () => {
     expect(isWithinBounds(cell(0, 0, DEEP.maxRow), DEEP)).toBe(true);
     expect(isWithinBounds(cell(0, 0, DEEP.minRow - 1), DEEP)).toBe(false);
     expect(isWithinBounds(cell(0, 0, DEEP.maxRow + 1), DEEP)).toBe(false);
-    // On the SHIPPED plot there is one row, so row 1 is off it. This is the clause the
-    // 4-neighbour door rule degenerates through — see `validity.door.test.ts`.
-    expect(isWithinBounds(cell(0, 0, 0), bounds)).toBe(true);
-    expect(isWithinBounds(cell(0, 0, 1), bounds)).toBe(false);
+    // AND ON THE SHIPPED PLOT (G-036a): row 1 is ON it, which it was not before this goal,
+    // and one past the back edge is off it. This is the clause the 4-neighbour door rule
+    // degenerates through on a MIGRATED plot — see `validity.door.test.ts`.
+    expect(isWithinBounds(cell(0, 0, bounds.minRow), bounds)).toBe(true);
+    expect(isWithinBounds(cell(0, 0, bounds.minRow + 1), bounds)).toBe(true);
+    expect(isWithinBounds(cell(0, 0, bounds.maxRow), bounds)).toBe(true);
+    expect(isWithinBounds(cell(0, 0, bounds.maxRow + 1), bounds)).toBe(false);
   });
 
   it('makes two cells that differ only in `row` DIFFERENT cells', () => {
@@ -280,9 +322,12 @@ describe('the third axis', () => {
       /row must be a safe integer/,
     );
     // And a whole row that is simply off the plot fails as what it is, AFTER the integer
-    // check — the ordering `assertCell` has had since G-007, now on three axes.
-    expect(() => stepTick(fresh(), content, [spawnAt('alpha', cell(0, 0, 1))])).toThrow(
-      /floor 0, column 0, row 1 is outside the plot/,
+    // check — the ordering `assertCell` has had since G-007, now on three axes. ONE PAST THE
+    // BACK EDGE, read from the plot rather than written as `1`: since G-036a row 1 is a cell a
+    // world can really be built on, and a literal here would have started asserting that a
+    // legal cell is refused (G-036a).
+    expect(() => stepTick(fresh(), content, [spawnAt('alpha', cell(0, 0, bounds.maxRow + 1))])).toThrow(
+      new RegExp(`floor 0, column 0, row ${bounds.maxRow + 1} is outside the plot`),
     );
   });
 

@@ -36,7 +36,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { withoutCounters } from './fixtures/without-counters.js';
-import { stripDepth } from './without-depth.js';
+import { onEraPlot, stripDepth } from './without-depth.js';
 import { stripCorridors } from './without-corridors.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
@@ -278,9 +278,13 @@ describe('a migrated v8 world and a v9 world with the same history are the SAME 
   // write it in the v8 SHAPE by hand, migrate it up, and compare it against the world this
   // build reaches by living the same history.
 
-  /** A world lived forward under this build: one room, one guest, one completed stay. */
+  /**
+   * A world lived forward under this build: one room, one guest, one completed stay — ON THE
+   * ERA'S PLOT, which is one row deep (`onEraPlot`, G-036a). See that helper for why the
+   * comparand and not the migration is what had to move.
+   */
   const lived = (): World => {
-    const world = stepTick(createWorld(1, content), content, [
+    const world = stepTick(onEraPlot(createWorld(1, content)), content, [
       { kind: 'spawnEntity', entityKind: 'bedroom', at: { floor: 0, column: 0, row: 0 } },
     ]);
     return run(world, content, 60, [{ tick: 1, command: { kind: 'guestArrives' } }]);

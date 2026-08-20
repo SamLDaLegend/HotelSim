@@ -120,17 +120,40 @@ describe('the exit criterion is a measurement, not a tautology', () => {
   it('runs a hotel that contains invalid rooms of at least TWO reasons', () => {
     const reasons = Object.entries(summary.rooms.invalid).filter(([, count]) => count > 0);
     expect(reasons.length).toBeGreaterThanOrEqual(2);
-    // Named, so a change that swapped one reason for another is visible rather than
-    // absorbed by a count. The player builds above the corridors of the hotel below
-    // (`unsupported`) and packs rooms hard against each other (`noDoor`).
-    expect(summary.rooms.invalid.unsupported).toBeGreaterThan(0);
-    expect(summary.rooms.invalid.noDoor).toBeGreaterThan(0);
-    // AND CONNECTIVITY (G-034b). The player draws a corridor every eight columns and packs
-    // rooms between them, so a run produces all three of the reasons a placement can reach:
-    // rooms in mid-air, rooms walled in by their neighbours, and rooms whose door opens onto
-    // a cell nobody walks in. `noCorridor` is checked LAST of the four, so a room counted here
-    // is one that is supported, furnished and doored — the rule biting on its own.
-    expect(summary.rooms.invalid.noCorridor).toBeGreaterThan(0);
+    // ======================================================================================
+    // AND THE COUNTS ARE COUNTS SINCE G-036a, BECAUSE THE ASSERTION ABOVE SURVIVES ON THE
+    // WRONG PAIR AND THAT WAS MEASURED RATHER THAN IMAGINED.
+    //
+    // `reasons.length >= 2` holds on `unsupported` + `noCorridor` alone. Widening the plot by
+    // ONE ROW, with no other change, takes `noDoor` here from 2 to 0 and `noCorridor` from 2 to
+    // 4 — this file's headline assertion stays green in a state where `noDoor` is unreachable
+    // from any CLI run, which is ADR-0007's shape inside the file written to prevent it. And
+    // `checkedOut` (1,262) and `valid` (64) were BYTE-IDENTICAL across that change, so the
+    // summary a human reads looked untouched while a validity reason had died.
+    //
+    // THE WHOLE TALLY, AS ONE COMPARISON. G-034b's lesson from the other direction: a wrong
+    // corridor list dropped the I2 harness's checkouts 187 -> 12 while every non-zero assertion
+    // stayed green. Do not weaken any of these back to `toBeGreaterThan(0)`; if one moves, read
+    // what moved and re-record it.
+    // ======================================================================================
+    expect(summary.rooms.invalid).toEqual({
+      missingItem: 0,
+      // FIFTEEN. Rooms the player built over the LANES of the hotel below: the seeded plate
+      // banks rooms along every row of its even columns, so the player's odd columns are the
+      // ones standing on nothing.
+      unsupported: 15,
+      // FOUR, AND SINCE G-036a EVERY ONE OF THEM IS SEALED BY ROOMS ON ALL FOUR SIDES — no
+      // plot edge is doing any of the work. Inspected: (floor 1, column 4, row 1),
+      // (6, 1), (4, 2) and (6, 2), each with a room west, east, in front and behind. On the
+      // one-row plot this run produced TWO, both sealed on two sides with the other two probes
+      // off the world; that is the difference the whole goal is about.
+      noDoor: 4,
+      // TWO. `noCorridor` is checked LAST of the five, so a room counted here is supported,
+      // furnished and doored — the rule biting on its own.
+      noCorridor: 2,
+      unplaced: 0,
+    });
+    expect(summary.rooms.valid).toBe(66);
   });
 
   it('and reports ZERO guests in any of them', () => {
@@ -139,16 +162,19 @@ describe('the exit criterion is a measurement, not a tautology', () => {
   });
 
   it('is a hotel that still works, so the zero is not the zero of an empty building', () => {
-    expect(summary.rooms.valid).toBeGreaterThan(0);
-    expect(departuresOf(summary, 'checkedOut')).toBeGreaterThan(0);
-    expect(summary.money.revenuePennies).toBeGreaterThan(0);
+    // COUNTED SINCE G-036a, for the reason above: `checkedOut` was byte-identical across a
+    // change that killed a validity reason, so it is exactly the number that has to be pinned
+    // rather than merely non-zero.
+    expect(summary.rooms.valid).toBe(66);
+    expect(departuresOf(summary, 'checkedOut')).toBe(1_274);
+    expect(summary.money.revenuePennies).toBe(10_829_000);
   });
 
   it('actually evicted guests, so the invalidated-under-a-guest path ran in a real run', () => {
     // The strongest single number here. A guest was resting in a room, the player took its
     // floor away or built against its door, and the guest left with an outcome. Without
     // the eviction path this would be 0 AND `inInvalidRooms` would be non-zero.
-    expect(evictedInSummary(summary)).toBeGreaterThan(0);
+    expect(evictedInSummary(summary)).toBe(9);
   });
 
   it('accounts for every room: valid plus invalid, with nothing left over', () => {
@@ -169,17 +195,13 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     expect(result.stderr.toString('utf8')).toBe('');
     const stdout = result.stdout.toString('utf8');
     expect(stdout).toContain('in bad room 0');
-    // Two reasons, on the face of the report a human reads.
-    expect(stdout).toMatch(
-      /rooms bad {3}0 unplaced, \d+ unsupported, \d+ no door, \d+ no corridor, 0 no item/,
+    // THE WHOLE LINE, WITH ITS NUMBERS, ON THE FACE OF THE REPORT A HUMAN READS (G-036a).
+    // It matched `\d+` in three places until this goal, which is a non-zero assertion wearing
+    // a regular expression: the same run that took `noDoor` to 0 would have matched it with a
+    // literal `0` in that slot. THREE reasons, at their counts, through a real process.
+    expect(stdout).toContain(
+      'rooms bad   0 unplaced, 15 unsupported, 4 no door, 2 no corridor, 0 no item',
     );
-    const line = /rooms bad {3}0 unplaced, (\d+) unsupported, (\d+) no door, (\d+) no corridor/.exec(stdout);
-    expect(Number(line?.[1])).toBeGreaterThan(0);
-    expect(Number(line?.[2])).toBeGreaterThan(0);
-    // THE THIRD REASON, ON THE FACE OF THE REPORT A HUMAN READS (G-034b). A room the player
-    // built with a door onto space nobody walks in — produced by the same layout that produces
-    // the other two, in the same run, rather than by a fixture.
-    expect(Number(line?.[3])).toBeGreaterThan(0);
   }, 60_000);
 });
 

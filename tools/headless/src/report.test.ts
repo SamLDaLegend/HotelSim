@@ -184,26 +184,57 @@ describe('schedule', () => {
 // off-plot refusals against 417 for funds and ZERO rooms built: a diagnostic that told
 // the next reader the build loop was plot-limited when it was cash-limited.
 describe('the build walk stays on the plot', () => {
-  it('leaves a corridor beside every inherited room, and walks the full width of the plot', () => {
+  it('leaves a lane beside every inherited room, and banks them into a SQUARE PLATE', () => {
     // G-009 CHANGED THESE NUMBERS, and the arithmetic is the subject rather than the
     // literals: a room needs a free cell beside it on its floor or it has no door, so the
     // inherited hotel is laid out one room, one corridor. The stride is imported rather
     // than copied, so the test cannot disagree with the runner about what it is.
+    //
+    // A PLATE RATHER THAN A LINE SINCE G-036a, AND THE COLUMN STILL VARIES FASTEST. The lane
+    // runs the full depth and the rooms bank along it — a double-loaded corridor — so the row
+    // axis takes no stride and the plate is SQUARE IN ROOMS. Walking the rows first would have
+    // moved the shipped default hotel off the cells it has stood on since G-006 for no reason
+    // anybody asked for; walking the columns first and wrapping into the depth spreads
+    // `--rooms 40` into a block while leaving `--rooms 3` exactly where it was.
     expect(COLUMNS_PER_ROOM).toBe(2);
     expect(roomCell(0, PLOT)).toEqual({ floor: 0, column: 0, row: PLOT.minRow });
     expect(roomCell(1, PLOT)).toEqual({ floor: 0, column: 2, row: PLOT.minRow });
     expect(roomCell(2, PLOT)).toEqual({ floor: 0, column: 4, row: PLOT.minRow });
-    // No two inherited rooms are ever neighbours, which is the property that makes them
-    // valid. Checked against the sim's own rule in the golden run, not only here.
-    for (let i = 1; i < 40; i += 1) {
-      expect(Math.abs(roomCell(i, PLOT).column - roomCell(i - 1, PLOT).column)).toBeGreaterThan(1);
+    // SQUARE IN ROOMS: as many room-columns as room-rows, capped by the plot's width.
+    const rowsPerFloor = PLOT.maxRow - PLOT.minRow + 1;
+    const columnsPerFloor = Math.min(
+      rowsPerFloor,
+      Math.floor((PLOT.maxColumn - PLOT.minColumn + 1) / COLUMNS_PER_ROOM),
+    );
+    expect(rowsPerFloor).toBe(8);
+    expect(columnsPerFloor).toBe(8);
+    // The plate wraps INTO the plot when a row of it is full, and up a floor when the plate is.
+    expect(roomCell(columnsPerFloor, PLOT)).toEqual({ floor: 0, column: 0, row: PLOT.minRow + 1 });
+    // NO TWO INHERITED ROOMS ARE EVER NEIGHBOURS ON THE COLUMN AXIS, which is the property that
+    // gives every one of them a door; they DO touch front and back, which is what a bank of
+    // rooms along a corridor is. Checked against the sim's own rule in the golden run too.
+    const perFloor = rowsPerFloor * columnsPerFloor;
+    const occupied = new Set<string>();
+    for (let i = 0; i < perFloor; i += 1) {
+      const at = roomCell(i, PLOT);
+      occupied.add(`${at.floor}:${at.column}:${at.row}`);
     }
-    // The width is the plot's width divided by the stride, not a constant of the runner's
-    // own: the last room of the ground floor is the last one that FITS, and the next index
-    // starts floor 1.
-    const perFloor = Math.floor((PLOT.maxColumn - PLOT.minColumn + 1) / COLUMNS_PER_ROOM);
-    expect(perFloor).toBe(40);
-    expect(roomCell(perFloor - 1, PLOT)).toEqual({ floor: 0, column: PLOT.maxColumn - 1, row: PLOT.minRow });
+    let touchingFrontToBack = 0;
+    for (const key of occupied) {
+      const [floor, column, row] = key.split(':').map(Number) as [number, number, number];
+      expect(occupied.has(`${floor}:${column - 1}:${row}`)).toBe(false);
+      expect(occupied.has(`${floor}:${column + 1}:${row}`)).toBe(false);
+      if (occupied.has(`${floor}:${column}:${row + 1}`)) touchingFrontToBack += 1;
+    }
+    expect(touchingFrontToBack).toBe(columnsPerFloor * (rowsPerFloor - 1));
+    // The plate is the plot's own depth squared, not a constant of the runner's own: the last
+    // room of the ground floor is the last one that FITS, and the next index starts floor 1.
+    expect(perFloor).toBe(64);
+    expect(roomCell(perFloor - 1, PLOT)).toEqual({
+      floor: 0,
+      column: (columnsPerFloor - 1) * COLUMNS_PER_ROOM,
+      row: PLOT.maxRow,
+    });
     expect(roomCell(perFloor, PLOT)).toEqual({ floor: 1, column: PLOT.minColumn, row: PLOT.minRow });
     // Injective, so no seeded room can land on another (the sim throws on a spawn into an
     // occupied cell, and refuses a build into one).
@@ -211,9 +242,9 @@ describe('the build walk stays on the plot', () => {
     for (let i = 0; i < perFloor * 4; i += 1) {
       const cell = roomCell(i, PLOT);
       // THE KEY CARRIES ALL THREE AXES SINCE G-034a. Two cells that differ only in `row` are
-      // different cells, and a two-axis key would report them as a collision — which on the
-      // one-row plot this walks is a distinction with no instance, and on a deeper plot would
-      // be an injectivity claim quietly proved over the wrong equality.
+      // different cells, and a two-axis key would report them as a collision — a distinction
+      // with no instance while the plot was one row deep, and an injectivity claim proved over
+      // the wrong equality now that it is not.
       seen.add(`${cell.floor}:${cell.column}:${cell.row}`);
     }
     expect(seen.size).toBe(perFloor * 4);
@@ -231,32 +262,81 @@ describe('the build walk stays on the plot', () => {
     // fills the seven between: the rooms at each end of a block are connected, the five in the
     // middle are walled in, and the blocks are OFFSET BY ONE so their end rooms land over the
     // inherited hotel's rooms rather than over the corridors between them.
+    //
+    // AND THE LANE RUNS THE FULL DEPTH SINCE G-036a, so the block is seven columns by the whole
+    // plot rather than seven cells. The ratio the layout exists for is unchanged — two working
+    // columns to five walled-in ones — and the seals are now on FOUR sides.
+    const rows = PLOT.maxRow - PLOT.minRow + 1;
     const stubs = playerCorridorCells(1, PLOT);
     expect(stubs[0]).toEqual({ floor: 1, column: PLOT.minColumn + 1, row: PLOT.minRow });
-    expect(stubs[1]).toEqual({ floor: 1, column: PLOT.minColumn + 1 + PLAYER_COLUMNS_PER_BLOCK, row: PLOT.minRow });
+    expect(stubs[rows - 1]).toEqual({ floor: 1, column: PLOT.minColumn + 1, row: PLOT.maxRow });
+    expect(stubs[rows]).toEqual({
+      floor: 1,
+      column: PLOT.minColumn + 1 + PLAYER_COLUMNS_PER_BLOCK,
+      row: PLOT.minRow,
+    });
     expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 2, row: PLOT.minRow });
     expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 3, row: PLOT.minRow });
+    // ACROSS THE BLOCK FIRST, THEN ONE ROW BACK — the fill order the seal depends on, since a
+    // column-first fill would need three whole columns before any room had two neighbours.
+    const perBlock = PLAYER_COLUMNS_PER_BLOCK - 1;
+    expect(builtRoomCell(perBlock - 1, PLOT, above)).toEqual({
+      floor: 1,
+      column: PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK,
+      row: PLOT.minRow,
+    });
+    expect(builtRoomCell(perBlock, PLOT, above)).toEqual({
+      floor: 1,
+      column: PLOT.minColumn + 2,
+      row: PLOT.minRow + 1,
+    });
     // The last room of the first block, then the first of the second: the walk steps OVER the
     // next corridor rather than onto it.
-    const perBlock = PLAYER_COLUMNS_PER_BLOCK - 1;
-    expect(builtRoomCell(perBlock - 1, PLOT, above).column).toBe(PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK);
-    expect(builtRoomCell(perBlock, PLOT, above).column).toBe(PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK + 2);
+    expect(builtRoomCell(perBlock * rows - 1, PLOT, above)).toEqual({
+      floor: 1,
+      column: PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK,
+      row: PLOT.maxRow,
+    });
+    expect(builtRoomCell(perBlock * rows, PLOT, above).column).toBe(
+      PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK + 2,
+    );
     // AND NO ROOM IS EVER BUILT ON A CORRIDOR, which is the property the connected rooms rest
     // on: a room standing on a declared corridor closes it — the cell stops being a DOOR — so a walk that
     // wrapped onto one would take the door away from the rooms beside it.
     const stubColumns = new Set(stubs.map((cell) => cell.column));
-    const blocks = stubs.length;
-    const perFloor = blocks * perBlock;
+    const blocks = stubs.length / rows;
+    const perFloor = blocks * perBlock * rows;
     for (let i = 0; i < perFloor * 3; i += 1) {
       expect(stubColumns.has(builtRoomCell(i, PLOT, above).column)).toBe(false);
     }
     expect(builtRoomCell(perFloor - 1, PLOT, above).floor).toBe(1);
     expect(builtRoomCell(perFloor, PLOT, above)).toEqual({ floor: 2, column: PLOT.minColumn + 2, row: PLOT.minRow });
+    // A ROOM IS WALLED IN ON FOUR SIDES WITHIN TEN BUILDS, which is the property the CLI
+    // criterion's `noDoor` rests on and is what the fill order was chosen for. Index 9 is
+    // (column +4, row 0); its four neighbours are indices 8, 10, off-plot, and 2 + 7.
+    const packed = new Set<string>();
+    for (let i = 0; i <= 9; i += 1) {
+      const at = builtRoomCell(i, PLOT, above);
+      packed.add(`${at.column}:${at.row}`);
+    }
+    const sealed = builtRoomCell(2, PLOT, above);
+    expect(packed.has(`${sealed.column - 1}:${sealed.row}`)).toBe(true);
+    expect(packed.has(`${sealed.column + 1}:${sealed.row}`)).toBe(true);
+    expect(packed.has(`${sealed.column}:${sealed.row + 1}`)).toBe(true);
+    expect(sealed.row).toBe(PLOT.minRow); // and the fourth side is off the plot
     // THE END ROOMS SIT OVER THE INHERITED HOTEL, not over its corridors — the offset-by-one,
     // stated as the property rather than as the arithmetic. `roomCell` strides by two from
     // `minColumn`, so a supported column is an even offset.
     for (const stub of stubs) {
       expect((stub.column + 1 - PLOT.minColumn) % COLUMNS_PER_ROOM).toBe(0);
+    }
+    // AND THE ROW AXIS NEEDS NO OFFSET, which is arithmetic rather than luck: the inherited
+    // plate banks rooms along EVERY row of the columns it uses, so a player room standing on
+    // an even column is supported whatever row it is on. That is what keeps
+    // `evictedRoomUnusable` reachable from a CLI run — see `outcome.report.test.ts`, which
+    // measured it falling to zero when the seeded plate strode the row axis as well.
+    for (let row = PLOT.minRow; row <= PLOT.maxRow; row += 1) {
+      expect(roomCell(row * 8, PLOT).row).toBe(row);
     }
     // Never floor 0, so it cannot collide with the inherited hotel for any `--rooms` that
     // fits on one floor.

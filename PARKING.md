@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, C5 is BROUGHT FORWARD into circulation by human ruling (ADR-0049) — reception becomes a queue point, so the lobby gets a reason to exist rather than only being drawable. G-035 is done and the game has been SEEN in its own projection (WATCH #12). G-028 closed as already discharged. Plot depth is now G-036's first NAMED deliverable. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **168 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -2761,7 +2761,25 @@ implies and this goal did not build.
   `check-measure.mjs` / `check-tripwire.mjs` were re-pointed at the new name in this commit.
   **FALSIFICATION TEST**: `node tools/gates/measure.mjs --head <any pre-G-034b revision>`. *If it
   reports a RATIO, the workload did not really change and the re-point was wrong; if it reports
-  INCOMPARABLE naming `layCorridor`, the campaigns cannot be compared across this change and are
-  re-taken rather than continued* — ADR-0015's REPLACE-on-configuration-change case.
+  INCOMPARABLE naming what stopped it, the campaigns cannot be compared across this change and
+  are re-taken rather than continued* — ADR-0015's REPLACE-on-configuration-change case.
   -> **G-039**, which already owns every campaign re-take.
 
+  **AMENDED AT G-036a, AND THE AMENDMENT IS THE POINT OF WRITING THE TEST DOWN.** This test named
+  `layCorridor` as the expected cause. **It has already moved**: HEAD's harness now reads
+  `bounds.maxRow` when it sizes the seeded plate, so a pre-G-034a `GridBounds` gives `NaN` and the
+  arm stops at `draftSpawn: floor must be a safe integer` — EARLIER than any command. The
+  property was never the symbol; it is *"a revision the harness cannot drive says so and names
+  what stopped it"*, which is how both gate probes are now written (structural clause plus
+  today's cause). **A parked test pinned to a symbol expires the next time the harness grows.**
+
+- **THE WATCH SURFACE SHOWS THREE OF THE PLOT'S EIGHT ROWS, AND NOBODY HAS SEEN EIGHT.** G-036a
+  widened the plot to eight rows and spread every layout into it, but `apps/game/src/scenario.ts`
+  seeds **three** — argued in place as the smallest depth with a MIDDLE row, which is what the
+  wall-height question needs. So the recording answers *"does it read as a building"* at depth 3
+  and says nothing about depth 8, where a room has up to seven walls stacked behind it.
+  **FALSIFICATION TEST**: raise `LODGING_ROWS` to 8, record, and look. *If the back rows are
+  legible, the wall height is fine at the plot's full depth and this note closes; if the front
+  rows' walls bury them, then either `WALL_HEIGHT` is too tall for a deep plate or the camera
+  owes a cutaway — and the 64px reading taken at depth 3 was taken at the wrong depth.*
+  -> **G-036b**, which puts a player-drawn room on that surface and has to look at it anyway.

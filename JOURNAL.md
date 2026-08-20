@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, C5 is BROUGHT FORWARD into circulation by human ruling (ADR-0049) — reception becomes a queue point, so the lobby gets a reason to exist rather than only being drawable. G-035 is done and the game has been SEEN in its own projection (WATCH #12). G-028 closed as already discharged. Plot depth is now G-036's first NAMED deliverable. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
-- **State**: save **v18** · summary **v4** · I2 `c9f6bb07d25b089b` · measure golden
-  `c7a049822580b39e` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v18** · summary **v4** · I2 `0826588d36865609` · measure golden
+  `fbbb35b464f13368` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -1459,3 +1459,49 @@ saturation gap persists, the ranking is wrong rather than the art.
 **Nothing read as stupid in the behavioural sense** — no guest stuck in a wall, no room drawn
 behind the thing in front of it, no guest teleporting between floors on the switch. **The depth
 sort holds on the picture as well as in its test.**
+
+## WATCH #13 — G-036a. The hotel reads as a building, and the wall height has a measured cost.
+
+**Frames**: `apps/game/recording/t004320-f0.svg`, `t004320-f1.svg`, `t004320-fm1.svg`; contact
+sheet at `apps/game/recording/contact-sheet.html`. Census at tick 4320: floor 0, **9 rooms, 0
+invalid**, 7 guests here and 5 elsewhere; **33 corridors declared**; floors −1, 0, 1, 2.
+
+**THE QUESTION WATCH #12 ASKED IS ANSWERED: YES.** #12 recorded *"a string of huts on a path"* —
+three rooms on a diagonal ribbon with open plot on both sides. Floors 0 and 1 now each show a
+**3×3 plate**: rooms banked along lanes that run the full depth, **rooms touching front-to-back**,
+nine rooms legible, guests tinted and standing in them. The basement reads as **three coloured
+slabs** — games rooms, cafés, lounges, three deep each — and that is **the first frame in this
+project where a TYPE of space reads as an area rather than as a dot.** It looks like a floorplan.
+
+### THE WALL-HEIGHT READING, AND IT IS A COUNT RATHER THAN AN IMPRESSION
+
+**ADR-0047 amdt §1 (human) left `WALL_HEIGHT = 64` PROVISIONAL pending exactly this look**, and
+WATCH #12 deferred the look because at one row deep the judgement was not available. It is now.
+
+**The good half**: the walls enclose rooms rather than blocking a path, and the far-wall occlusion
+now falls on **another room's tile** rather than on the corridor. Guests stand ~49px and clear the
+walls; **no guest is hidden.**
+
+**The cost, and it only became visible at depth:**
+
+> **ITEMS INSIDE ROOMS ARE PAINTED OVER BY THE FAR WALL OF THE ROOM IN FRONT.** `drawItems` anchors
+> an item at `centre.y − 16` — toward the tile's back — and a 64px wall covers that band. In the
+> shipped floor-1 frame **9 item plates are emitted into the SVG and 3 are visible.** A full-depth
+> probe (24 rooms filling all 8 rows, same `createScene` / `viewFor` / `frameSvg` path) reads
+> **24 emitted, 3 visible.**
+
+**Why that matters beyond looks, and it is the reason this is not a cosmetic note:** **G-036b makes
+`placeItem` the primary player verb and G-037 scores a room on what is in it.** A WATCH surface in
+which **21 of 24 rooms show none of their contents cannot show the next two goals' mechanic.**
+
+**The fix is a render call and is NOT made here**: a shorter wall, **or** moving the item anchor to
+the tile front. **The builder reported the frames and declined to choose, which was right.**
+**64px therefore stays PROVISIONAL for one more goal** — not by omission this time, but because the
+look produced a finding that names two candidate repairs and does not decide between them.
+
+### A limit on this reading, stated rather than left implicit
+
+**The shipped WATCH scenario seeds THREE of the plot's eight rows** (`scenario.ts`'s
+`LODGING_ROWS = 3`, argued as the smallest depth with a middle row). So **the reading above is taken
+at depth 3, and only a scratch probe has ever seen depth 8.** Parked with its falsification test and
+pointed at G-036b.

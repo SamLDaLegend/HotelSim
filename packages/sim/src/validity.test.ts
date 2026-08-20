@@ -106,6 +106,35 @@ const workingRoom = (at: Cell): readonly Spec[] => [
   ['bed', at],
 ];
 
+/**
+ * THE FOUR ROOMS THAT WALL `at` IN, minus any that would stand off the plot (G-036a).
+ *
+ * SEALING USED TO BE TWO ROOMS AND IT IS NOW FOUR, because the shipped plot has depth and the
+ * door rule probes four neighbours. Every seal fixture in this file was a LINE of three rooms,
+ * which sealed the middle one only while `cellFront`/`cellBack` were off the plot for every
+ * cell — true of a one-row plot and false of the shipped one. Those fixtures did not go red
+ * when the rule became 4-neighbour at G-034a; they went red when the PLOT gained depth, which
+ * is the same defect arriving a goal late.
+ *
+ * IT DROPS AN OFF-PLOT BLOCKER RATHER THAN REFUSING TO BUILD ONE, so a cell on the plot's edge
+ * is sealed by fewer rooms and the tests that are ABOUT the edge (the void is not a door) say
+ * so by passing an edge cell.
+ */
+const walledIn = (at: Cell): readonly Spec[] => {
+  const specs: Spec[] = [];
+  for (const beside of [
+    cellLeft(at),
+    cellRight(at),
+    { floor: at.floor, column: at.column, row: at.row - 1 },
+    { floor: at.floor, column: at.column, row: at.row + 1 },
+  ]) {
+    if (beside.column < BOUNDS.minColumn || beside.column > BOUNDS.maxColumn) continue;
+    if (beside.row < BOUNDS.minRow || beside.row > BOUNDS.maxRow) continue;
+    specs.push(...workingRoom(beside));
+  }
+  return specs;
+};
+
 describe('a valid room', () => {
   it('is one that is placed, supported, doored and furnished', () => {
     expect(reasonFor(storeOf(...workingRoom(cell(GROUND_FLOOR, 4))), 0)).toBeNull();
@@ -407,30 +436,44 @@ describe('a door: somewhere to open into', () => {
     expect(reasonFor(store, 2)).toBeNull();
   });
 
-  it('REFUSES a room sealed in by neighbours on both sides', () => {
+  it('REFUSES a room sealed in by neighbours on ALL FOUR sides', () => {
+    // FOUR, NOT TWO, SINCE THE PLOT GAINED DEPTH (G-036a). Three rooms in a line leave the
+    // middle one open front and back, which is the next test rather than this one.
+    const at = cell(GROUND_FLOOR, 4, 3);
+    const store = storeOf(...workingRoom(at), ...walledIn(at));
+    expect(reasonFor(store, 0)).toBe('noDoor');
+  });
+
+  it('and a room sealed EAST AND WEST ONLY still has a door, which is the discriminating case', () => {
+    // The falsifier for the test above and for the arity of the rule itself: a 2-neighbour
+    // door rule typechecks unchanged against a three-axis cell and would call this sealed.
+    // `validity.door.test.ts` owns the full argument; it is restated here because this file's
+    // seal fixtures are the ones that would have gone quietly wrong.
+    const at = cell(GROUND_FLOOR, 4, 3);
     const store = storeOf(
-      ...workingRoom(cell(GROUND_FLOOR, 3)),
-      ...workingRoom(cell(GROUND_FLOOR, 4)),
-      ...workingRoom(cell(GROUND_FLOOR, 5)),
+      ...workingRoom(at),
+      ...workingRoom(cellLeft(at)),
+      ...workingRoom(cellRight(at)),
     );
-    expect(reasonFor(store, 2)).toBe('noDoor');
+    expect(reasonFor(store, 0)).toBeNull();
   });
 
   it('does not count the void beyond the plot edge as a door', () => {
     // A door opening off the edge of the world is not a door. The room at the left edge
     // has a neighbour on its only inward side, so it is sealed.
-    const store = storeOf(
-      ...workingRoom(cell(GROUND_FLOOR, BOUNDS.minColumn)),
-      ...workingRoom(cell(GROUND_FLOOR, BOUNDS.minColumn + 1)),
-    );
+    // THE CORNER, so THREE of the four probes are off the plot and one room seals it. That is
+    // a stronger statement of this test's own subject than the pre-G-036a version could make:
+    // the void is not a door on EITHER axis.
+    const at = cell(GROUND_FLOOR, BOUNDS.minColumn, BOUNDS.minRow);
+    const store = storeOf(...workingRoom(at), ...walledIn(at));
+    expect(store.list).toHaveLength(2 + 2 * 2); // the room, and exactly two blockers
     expect(reasonFor(store, 0)).toBe('noDoor');
   });
 
   it('does the same at the right edge', () => {
-    const store = storeOf(
-      ...workingRoom(cell(GROUND_FLOOR, BOUNDS.maxColumn)),
-      ...workingRoom(cell(GROUND_FLOOR, BOUNDS.maxColumn - 1)),
-    );
+    const at = cell(GROUND_FLOOR, BOUNDS.maxColumn, BOUNDS.maxRow);
+    const store = storeOf(...workingRoom(at), ...walledIn(at));
+    expect(store.list).toHaveLength(2 + 2 * 2);
     expect(reasonFor(store, 0)).toBe('noDoor');
   });
 
@@ -518,11 +561,8 @@ describe('precedence between reasons', () => {
   });
 
   it('reports noDoor ahead of missingItem', () => {
-    const store = storeOf(
-      ['bedroom', cell(GROUND_FLOOR, 4)],
-      ...workingRoom(cell(GROUND_FLOOR, 3)),
-      ...workingRoom(cell(GROUND_FLOOR, 5)),
-    );
+    const at = cell(GROUND_FLOOR, 4, 3);
+    const store = storeOf(['bedroom', at], ...walledIn(at));
     expect(reasonFor(store, 0)).toBe('noDoor');
   });
 });
@@ -559,9 +599,8 @@ describe('counting invalid rooms', () => {
       ['bedroom', null], //                      unplaced
       ...workingRoom(cell(7, 20)), //            unsupported
       ['bedroom', cell(GROUND_FLOOR, 30)], //    missingItem
-      ...workingRoom(cell(GROUND_FLOOR, 40)),
-      ...workingRoom(cell(GROUND_FLOOR, 41)),
-      ...workingRoom(cell(GROUND_FLOOR, 42)), // the middle one is noDoor
+      ...workingRoom(cell(GROUND_FLOOR, 41, 3)), //  walled in on four sides: noDoor
+      ...walledIn(cell(GROUND_FLOOR, 41, 3)), //     and the four rooms that do it
     );
     const tally = countInvalidRooms(store, BOUNDS, createCorridors(), content);
     expect(tally).toEqual({ missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unsupported: 1 });

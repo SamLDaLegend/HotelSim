@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, C5 is BROUGHT FORWARD into circulation by human ruling (ADR-0049) — reception becomes a queue point, so the lobby gets a reason to exist rather than only being drawable. G-035 is done and the game has been SEEN in its own projection (WATCH #12). G-028 closed as already discharged. Plot depth is now G-036's first NAMED deliverable. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4441,3 +4441,40 @@ The human has taken it back, which is what a park is for.
 > ADR-0047 parked eleven items and wrote NONE of them into `PARKING.md`**, so §9's *"PARKING.md has
 > stopped growing"* stop condition has been reading clean while an entire register accumulated
 > elsewhere. **That is a real gap and it goes to G-039**, not here.
+
+---
+
+## ADR-0050 — A PROOF-OF-BITE THAT ASSERTS A SYMPTOM NEEDS EDITING EVERY TIME THE WORKLOAD MOVES
+
+**Date**: 2026-08-16 · **Status**: accepted · **Raised by**: the orchestrator, adjudicating the
+second gate edit in three goals.
+
+**TWICE NOW, A GOAL HAS HAD TO EDIT A GATE FILE BECAUSE THE GATE ASSERTED A SPECIFIC SYMPTOM.**
+`check-measure.mjs` and `check-tripwire.mjs` prove that a revision the harness cannot drive reports
+`INCOMPARABLE` **and names what stopped it** — a good property. But the assertion was spelled as a
+**single expected token**:
+
+| goal | the workload gained | the token had to move |
+|---|---|---|
+| **G-034b** | `layCorridor` | `roomTypeServes` → `layCorridor` |
+| **G-036a** | `bounds.maxRow` | `layCorridor` → *(dies earlier still, at `draftSpawn`)* |
+
+**Neither is §9's forbidden case** — §9 forbids editing a gate to make a **failing build pass**, and
+in both cases the gate was red *because the workload legitimately changed* and the property under
+test was untouched. **But two edits in three goals is a pattern, and the pattern is the finding.**
+
+> **A PROOF-OF-BITE THAT PINS THE SYMPTOM MUST BE RE-EDITED BY EVERY GOAL THAT CHANGES THE
+> WORKLOAD — AND EACH EDIT LOOKS, IN ISOLATION, LIKE A GOAL TOUCHING A GATE TO GO GREEN.** That is
+> corrosive whether or not any individual edit is wrong, because it trains the reader to wave
+> them through.
+
+**The repair `sim-engineer` shipped is the right one and is hereby the rule**: the assertion splits
+into a **STRUCTURAL clause** — *an arm is named, and the cause is non-empty* — **plus** today's
+specific cause. **The structural clause survives every workload change; the specific one documents
+what happens to be true now.** Strictly stronger than the single-token form it replaces, and a
+goal that changes the workload updates a fact rather than weakening a check.
+
+**Where else this class lives (§5.8)**: every other proof-of-bite in the tree asserts a **verdict or
+a count**, not a symptom string — `ladder-arithmetic`'s dead root, `unpinned.scan`'s CRLF arms,
+`content-gate`'s two halves, `purity-gate`, `determinism-gate`. **The two `INCOMPARABLE` probes were
+the only symptom-pinned pair, and both are now repaired.** Swept, not assumed.

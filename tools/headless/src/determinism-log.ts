@@ -87,9 +87,9 @@ const ARRIVALS_EVERY_TICKS = 97;
  *   - the spawn walk climbs a DIAGONAL, so most spawned rooms have nothing beneath them
  *     — `unsupported`, in bulk;
  *   - only every other spawned room is furnished, so `missingItem` occurs too;
- *   - a basement pass spawns TERRACES OF THREE, so the middle room of each has a room
- *     hard against both sides — `noDoor`, arising from a placement rather than from a
- *     demolition;
+ *   - a basement pass spawns TERRACES IN A CROSS, so the middle room of each has a room hard
+ *     against all FOUR sides — `noDoor`, arising from a placement rather than from a
+ *     demolition, and from geometry rather than from an edge of the world (G-036a);
  *   - and the ground floor carries furnished, supported, doored rooms, so guests are
  *     still served and the proof covers rooms that WORK as well as rooms that do not. A
  *     harness in which nothing worked would prove only that failure is deterministic.
@@ -98,23 +98,30 @@ const ARRIVALS_EVERY_TICKS = 97;
  * `validity.determinism.test.ts` — not assumed here.
  */
 /**
- * THE ONLY ROW THE SHIPPED PLOT HAS (G-034a).
+ * THE ROWS THE SHIPPED PLOT HAS (G-034a, widened at G-036a).
  *
- * `createGridBounds()` returns a plot one row deep — `minRow === maxRow === 0` — so every
- * cell in this log has to be on it or `applyBuildRoom` refuses the build and `spawnEntity`
- * throws. A LITERAL rather than an import of `DEFAULT_MIN_ROW`, and the reason is what this
- * log IS: a command log whose whole value is that it does not move. Reading the live
- * constant would silently re-aim every cell in it on the day G-036 widens the plot, which
- * would move the I2 hash on a change that says nothing about determinism, and it would move
- * it in a way whose only symptom is a number in four digests.
+ * `createGridBounds()` returns a plot eight rows deep — 0..7 — so every cell in this log has
+ * to be on it or `applyBuildRoom` refuses the build and `spawnEntity` throws. LITERALS rather
+ * than imports of `DEFAULT_MIN_ROW`/`DEFAULT_MAX_ROW`, and the reason is what this log IS: a
+ * command log whose whole value is that it does not move. Reading the live constants would
+ * silently re-aim every cell in it the next time somebody edits the plot, which would move the
+ * I2 hash on a change that says nothing about determinism, and it would move it in a way whose
+ * only symptom is a number in four digests. **The day G-034a named has now come and the
+ * literal did its job: widening the plot moved these cells only where this file says so.**
  *
- * WHAT DEPENDS ON THE LOG STAYING ONE ROW DEEP, and it is not tidiness: the terrace waves
- * and the sky tower below produce `noDoor` and `unsupported` verdicts by SEALING rooms
- * shoulder to shoulder along one axis. Give those rooms a second axis with free cells on it
- * and every one of them acquires a door — `validity.determinism.test.ts` reads those tallies
- * and they would go to zero, silently, while the gate stayed green.
+ * WHAT DEPENDED ON THE LOG BEING ONE ROW DEEP, AND WHAT REPLACED IT. The terrace waves and the
+ * sky tower produce `noDoor` and `unsupported` by SEALING rooms against their neighbours, and
+ * on a strip two neighbours were all there were. On a plan a room has FOUR, so a terrace of
+ * three in a line acquires a door front and back and stops being sealed at all — measured
+ * before this goal changed anything: one extra row on the old log takes `noDoor` from 5 to 0
+ * at 40,000 ticks while every other tally holds. The terraces below are therefore CROSSES
+ * rather than lines, and `validity.determinism.test.ts` counts the result rather than
+ * asserting it is non-zero.
  */
-const SHIPPED_ROW = 0;
+const SHIPPED_FIRST_ROW = 0;
+const SHIPPED_LAST_ROW = 7;
+/** How many rows the plot above has. Derived from the two literals, never counted twice. */
+const SHIPPED_ROWS = SHIPPED_LAST_ROW - SHIPPED_FIRST_ROW + 1;
 
 export function commandLog(ticks: number, content: BoundContent): readonly ScheduledCommand[] {
   // The kind comes from the LOADED CONTENT, not from a literal. So the 100,000-tick
@@ -191,7 +198,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   let churnTick = 1;
   let churnRoomId = 1;
   for (let cycle = 0; cycle < churnCycles; cycle += 1) {
-    const at = { floor: 20, column: 0, row: SHIPPED_ROW };
+    const at = { floor: 20, column: 0, row: SHIPPED_FIRST_ROW };
     schedule.push({ tick: churnTick, command: { kind: 'buildRoom', roomType: entityKind, at } });
     schedule.push({ tick: churnTick + 1, command: { kind: 'demolishRoom', id: churnRoomId } });
     churnTick += 2;
@@ -226,15 +233,19 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // rooms that genuinely work.
   let spawnIndex = 0;
   for (let tick = 13; tick < ticks; tick += 1009) {
-    const at = { floor: spawnIndex % 21, column: spawnIndex % 80, row: SHIPPED_ROW };
+    // THE DIAGONAL WALKS ALL THREE AXES SINCE G-036a. The row modulus divides the column
+    // modulus (8 divides 80), so two spawns share a cell exactly when they shared one before
+    // — the walk is no less injective for having a third coordinate, and `spawnEntity` still
+    // THROWS on an occupied cell, which is what makes that claim loud rather than hopeful.
+    const at = { floor: spawnIndex % 21, column: spawnIndex % 80, row: spawnIndex % SHIPPED_ROWS };
     const furnished = spawnIndex % 2 === 0;
     spawnIndex += 1;
     schedule.push({ tick, command: { kind: 'spawnEntity', entityKind, at } });
     if (furnished) furnish(tick, at, schedule);
   }
-  // BASEMENT TERRACES OF THREE (G-009), so the MIDDLE room of each is sealed in on both
-  // sides: `noDoor`. Two adjacent rooms would not do it — each still has a free outer
-  // side — which is the sort of thing that is obvious only once the rule is written down.
+  // BASEMENT TERRACES (G-009), so the MIDDLE room of each is sealed in: `noDoor`. Two
+  // adjacent rooms would not do it — each still has a free outer side — which is the sort of
+  // thing that is obvious only once the rule is written down.
   //
   // FLOOR -1 IS CHOSEN, not incidental. It must be at or below ground, or the terrace
   // would report `unsupported` first and never reach the door rule at all; and no other
@@ -247,26 +258,80 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // terrace works, so guests are served and revenue eventually pays for a build. But those
   // rooms take LOW IDS, and the despawn and demolish passes below walk ids upward from 1,
   // so by tick ~40,000 they have been picked apart and every sealed-in middle room has
-  // been opened up again. Measured: `noDoor` peaks at 3 and is 0 by tick 40,000.
+  // been opened up again. (The figure that used to sit here was measured against terraces of
+  // three on a one-row plot and is not restated for a cross on an eight-row one;
+  // `validity.determinism.test.ts` counts what the tally actually is.)
   //
   // A reason that is reachable for the first third of the run and gone by the end is a
   // reason the gate's FINAL hash says nothing about. So the second wave lands on floor -2,
   // late, with ids far above anything the despawn pass reaches — sealed-in rooms that are
   // still sealed in at tick 100,000.
-  const terraceWave = (firstTick: number, step: number, floor: number, count: number): void => {
+  //
+  // AND SINCE G-036a A TERRACE IS A CROSS RATHER THAN A LINE, BECAUSE THE PLOT HAS DEPTH.
+  // A line of three seals its middle room only where the front and back neighbours are off
+  // the plot; on an eight-row plot they are real cells, so the whole wave would have gone
+  // valid — measured at 5 -> 0 before this goal touched the layout. Five rooms in a plus
+  // shape put a room hard against ALL FOUR sides of the middle one, which is the same
+  // player mistake asked of a plan: the four arms keep their own doors (each has three free
+  // sides), the centre has none, and `noDoor` is produced by geometry rather than by an
+  // edge of the world.
+  const terraceWave = (
+    firstTick: number,
+    step: number,
+    floor: number,
+    count: number,
+    firstColumn = 60,
+  ): void => {
     let terrace = 0;
     for (let tick = firstTick; tick < ticks && terrace < count; tick += step) {
-      const left = 60 + terrace * 4; // a clear column between terraces, so they stay apart
-      for (const column of [left, left + 1, left + 2]) {
-        const at = { floor, column, row: SHIPPED_ROW };
+      const left = firstColumn + terrace * 4; // a clear column between terraces, so they stay apart
+      const middle = left + 1;
+      const row = SHIPPED_FIRST_ROW + 1; // one row in, so the centre has a real cell in FRONT of it
+      const cells = [
+        { floor, column: left, row },
+        { floor, column: middle, row },
+        { floor, column: left + 2, row },
+        { floor, column: middle, row: row - 1 },
+        { floor, column: middle, row: row + 1 },
+      ];
+      for (const at of cells) {
         schedule.push({ tick, command: { kind: 'spawnEntity', entityKind, at } });
         furnish(tick, at, schedule);
       }
       terrace += 1;
     }
   };
-  terraceWave(601, 607, -1, 5);
-  terraceWave(20_011, 6_007, -2, 5);
+  // THREE CROSSES A WAVE RATHER THAN FIVE TERRACES, SO THE BASEMENT HOLDS THE SAME NUMBER OF
+  // ROOMS IT ALWAYS DID (G-036a). A cross is five rooms where a line was three, and five of
+  // them would put twenty-five rooms a wave in the basement instead of fifteen — MEASURED, and
+  // it is not a rounding: the extra upkeep took the hotel's balance from -209,500 to
+  // -1,401,500 over 100,000 ticks and left 156,500p of the loan UNREPAID at the horizon, so
+  // `recovery.determinism.test.ts`'s claim that the final partial repayment runs inside the
+  // gate stopped being true. THE ROOM BUDGET IS THE THING THE LOG WAS TUNED AROUND; the shape
+  // of a seal is not. Three crosses still put three sealed rooms in each wave.
+  terraceWave(601, 607, -1, 3);
+  terraceWave(20_011, 6_007, -2, 3);
+  // ============================================================================
+  // A THIRD WAVE, ONE CROSS, VERY LATE — AND IT IS THE WAVE THAT MAKES THIS PASS'S OWN CLAIM
+  // TRUE FOR THE FIRST TIME (G-036a).
+  //
+  // The second wave's paragraph says it lands "with ids far above anything the despawn pass
+  // reaches — sealed-in rooms that are still sealed in at tick 100,000". **MEASURED ON THE
+  // TREE BEFORE THIS GOAL TOUCHED IT, THAT WAS FALSE**: replaying the shipped log to 100,000
+  // ticks gives `noDoor` 0. The demolish walk (`id = 5k + 2`) reaches id 182 by the horizon and
+  // the wave-2 ids sit under it, so its centres were opened up again — a claim in a comment
+  // that no test pinned, which is ADR-0007's own shape, in the file written to close it.
+  //
+  // It is repaired rather than restated, and cheaply: ONE cross, spawned so late that every
+  // id-walking pass is far below it, on the floor wave 1 uses and in a column band nothing
+  // else on the plot touches (72..74 — the spawn diagonal never reaches a negative floor, the
+  // builds are floors 5..19 and 900, the churn is floor 20, and the amenities are floor 0).
+  // Five rooms of upkeep for the last twenty days of the run, which is inside the margin the
+  // loan repayment needs (`recovery.determinism.test.ts`); the debt reaches zero by tick
+  // 60,000, well before this lands. `validity.determinism.test.ts` counts the tally at the
+  // gate's own horizon rather than trusting this paragraph.
+  // ============================================================================
+  terraceWave(70_001, 6_007, -1, 1, 72);
   // A SKY TOWER: four furnished storeys stacked at column 79, starting at floor 3, with
   // NOTHING AT FLOOR 2 UNDER THEM (G-009 critique round 1).
   //
@@ -296,8 +361,15 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // ticks, so the queue is real and these rooms are the next ones a guest would take.
   // Under the local rule the top three served those guests; under the transitive rule
   // none of them does. That difference is what the state hash records.
+  //
+  // ITS ROW IS THE PLOT'S BACK EDGE SINCE G-036a, AND THAT IS THE `unsupported` CASE BEING
+  // KEPT HONEST RATHER THAN A COSMETIC MOVE. Support is `cellBelow`, which preserves BOTH
+  // horizontal axes, so a tower at row 7 needs floor 2 EMPTY AT ROW 7 — the same claim in a
+  // world where the row is a real coordinate rather than the only one. Nothing else in this
+  // log reaches (floor 2, column 79, row 7): the spawn diagonal touches column 79 only at
+  // `spawnIndex` 79, which is floor 16, and neither build destination can produce column 79.
   for (const floor of [3, 4, 5, 6]) {
-    const at = { floor, column: 79, row: SHIPPED_ROW };
+    const at = { floor, column: 79, row: SHIPPED_LAST_ROW };
     schedule.push({ tick: 47, command: { kind: 'spawnEntity', entityKind, at } });
     furnish(47, at, schedule);
   }
@@ -444,7 +516,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     }
     if (!servesEngagement) continue;
     for (let copy = 0; copy < (copies ?? copiesFor(roomType)); copy += 1) {
-      const at = { floor: 0, column: amenityColumn, row: SHIPPED_ROW };
+      const at = { floor: 0, column: amenityColumn, row: SHIPPED_FIRST_ROW };
       amenityColumn += 2;
       schedule.push({ tick, command: { kind: 'spawnEntity', entityKind: roomType.id, at } });
       spawned += 1;
@@ -580,7 +652,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // than this comment is what holds the coverage.
   if (secondHost !== undefined) {
     const seal = (host: number, spawnTick: number, sealTick: number): void => {
-      const at = { floor: 0, column: host, row: SHIPPED_ROW };
+      const at = { floor: 0, column: host, row: SHIPPED_FIRST_ROW };
       schedule.push({ tick: spawnTick, command: { kind: 'spawnEntity', entityKind: secondHost.id, at } });
       // Only entities that exist BEFORE the `underfoot` walk starts at tick 1,601 are ones
       // that walk has to step over, so wave 2 contributes nothing to the offset.
@@ -593,8 +665,15 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
       // the item stands untouched in a room that has stopped working, which is the whole of
       // cause (b). Furnished, so the blockers are valid rooms rather than a second kind of
       // broken thing.
-      for (const column of [host - 1, host + 1]) {
-        const beside = { floor: 0, column, row: SHIPPED_ROW };
+      // THREE BLOCKERS RATHER THAN TWO SINCE G-036a. The host stands on the plot's FRONT row,
+      // so the cell in front of it is off the plot and is skipped by the door rule exactly as
+      // it always was; the cells left, right and BEHIND are real, and all three have to hold a
+      // room or the host keeps a door and this pass stops producing a release at all.
+      for (const beside of [
+        { floor: 0, column: host - 1, row: SHIPPED_FIRST_ROW },
+        { floor: 0, column: host + 1, row: SHIPPED_FIRST_ROW },
+        { floor: 0, column: host, row: SHIPPED_FIRST_ROW + 1 },
+      ]) {
         schedule.push({ tick: sealTick, command: { kind: 'spawnEntity', entityKind, at: beside } });
         furnish(sealTick, beside, schedule);
       }
@@ -723,10 +802,13 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   for (let tick = 307; tick < ticks; tick += 1_303) {
     const at =
       buildIndex % 3 === 0
-        ? { floor: 5 + (buildIndex % 15), column: 40 + (buildIndex % 39), row: SHIPPED_ROW }
+        ? { floor: 5 + (buildIndex % 15), column: 40 + (buildIndex % 39), row: buildIndex % SHIPPED_ROWS }
         : buildIndex % 3 === 1
-          ? { floor: buildIndex % 21, column: buildIndex % 80, row: SHIPPED_ROW }
-          : { floor: 900, column: 0, row: SHIPPED_ROW };
+          ? // THE OCCUPIED BRANCH STILL LANDS ON THE SPAWN WALK, AND THE ROW DOES NOT WEAKEN
+            // THAT (G-036a): both walks take the same index through the same three moduli, so
+            // they agree on all three axes exactly where they used to agree on two.
+            { floor: buildIndex % 21, column: buildIndex % 80, row: buildIndex % SHIPPED_ROWS }
+          : { floor: 900, column: 0, row: SHIPPED_FIRST_ROW };
     buildIndex += 1;
     schedule.push({ tick, command: { kind: 'buildRoom', roomType: entityKind, at } });
   }
@@ -841,7 +923,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // 12 over 40,000 ticks — while every `toBeGreaterThan(0)` in `validity.determinism.test.ts`
   // stayed green, because each reason still occurred somewhere. That is the θ-b1 failure mode
   // exactly, and a pass added by a later goal would have reproduced it silently. Reading the
-  // schedule is not the `SHIPPED_ROW` hazard: that one is about reading a LIVE CONSTANT which
+  // schedule is not the `SHIPPED_FIRST_ROW` hazard: that one is about reading a LIVE CONSTANT which
   // can move without this log moving, and this reads the log itself — the same thing `furnish`
   // already does by placing furniture wherever a room is placed.
   //
@@ -849,30 +931,81 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // never edited, so the corridor set is constant for the whole run and every ground-floor
   // verdict is a function of what was built rather than of when the plan was drawn.
   // ============================================================================
-  const WITHHELD_COLUMNS: readonly number[] = [1, 41, 43, 53, 55];
-  // The plot's own columns, as a literal, for `SHIPPED_ROW`'s reason — this log is written
+  // ==========================================================================================
+  // WITHHELD CELLS, NOT WITHHELD COLUMNS (G-036a). A room on a plan has FOUR neighbours, so
+  // withholding the two beside it leaves the two behind and in front of it declared and the
+  // room connected — `noCorridor` would have gone to zero while this list still looked right.
+  // Each entry below is EVERY free neighbour of one room, which is what it takes to strand it:
+  //
+  //   (1,0) and (0,1)                       the two on-plot neighbours of the FIRST room this
+  //                                         log spawns, at (floor 0, column 0, row 0), tick 13.
+  //                                         The other two are off the plot. It is the lowest-id
+  //                                         lodging room in the hotel, so it is the room every
+  //                                         arriving guest would otherwise take.
+  //   (41,2) (43,2) (42,1) (42,3)           all four neighbours of the room at column 42, row 2
+  //                                         — spawn index 42, tick 42,391, with an id far above
+  //                                         anything the despawn walk reaches, so the reason is
+  //                                         still produced AT THE HORIZON the gate compares.
+  //   (53,0) (55,0) (54,1)                  the three on-plot neighbours of the amenity at
+  //                                         column 54, which is the pair that makes the reason
+  //                                         present IN THE MIDDLE of the run as well: spawned
+  //                                         before tick 40,000 and never despawned.
+  // ==========================================================================================
+  const WITHHELD_CELLS: readonly { readonly column: number; readonly row: number }[] = [
+    { column: 1, row: 0 },
+    { column: 0, row: 1 },
+    { column: 41, row: 2 },
+    { column: 43, row: 2 },
+    { column: 42, row: 1 },
+    { column: 42, row: 3 },
+    { column: 53, row: 0 },
+    { column: 55, row: 0 },
+    { column: 54, row: 1 },
+  ];
+  // The plot's own edges, as literals, for `SHIPPED_FIRST_ROW`'s reason — this log is written
   // against the plot it was written against, and `layCorridor` THROWS off it.
   const FIRST_COLUMN = 0;
   const LAST_COLUMN = 79;
-  const planned = new Set<number>();
+  // KEYED BY `column:row` AND NEVER ITERATED IN INSERTION ORDER (I2) — see the sort below.
+  const planned = new Set<string>();
+  const withheld = (column: number, row: number): boolean =>
+    WITHHELD_CELLS.some((cell) => cell.column === column && cell.row === row);
   for (const entry of schedule) {
     const command = entry.command;
     const at = command.kind === 'spawnEntity' ? command.at : command.kind === 'buildRoom' ? command.at : undefined;
     const kind = command.kind === 'spawnEntity' ? command.entityKind : command.kind === 'buildRoom' ? command.roomType : undefined;
     if (at === undefined || kind === undefined) continue;
     if (at.floor !== 0 || !isRoomKind(content, kind)) continue;
-    for (const column of [at.column - 1, at.column + 1]) {
-      if (column < FIRST_COLUMN || column > LAST_COLUMN) continue;
-      if (WITHHELD_COLUMNS.includes(column)) continue;
-      planned.add(column);
+    // ALL FOUR NEIGHBOURS, BECAUSE THE DOOR RULE PROBES ALL FOUR. Two would declare half the
+    // circulation a ground-floor room can open onto and report the other half `noCorridor` —
+    // a whole floor changing verdict for a reason this goal did not intend.
+    for (const beside of [
+      { column: at.column - 1, row: at.row },
+      { column: at.column + 1, row: at.row },
+      { column: at.column, row: at.row - 1 },
+      { column: at.column, row: at.row + 1 },
+    ]) {
+      if (beside.column < FIRST_COLUMN || beside.column > LAST_COLUMN) continue;
+      if (beside.row < SHIPPED_FIRST_ROW || beside.row > SHIPPED_LAST_ROW) continue;
+      if (withheld(beside.column, beside.row)) continue;
+      planned.add(`${beside.column}:${beside.row}`);
     }
   }
   // SORTED ASCENDING WITH AN EXPLICIT COMPARATOR before anything is emitted. `layCorridor` is
   // idempotent and the corridor plan sorts itself, so the world would be identical either way
   // — but a Set walked in insertion order is a habit this project does not keep (I2), and the
-  // command log is the artefact whose stability the whole gate rests on.
-  for (const column of [...planned].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
-    schedule.push({ tick: 0, command: { kind: 'layCorridor', at: { floor: 0, column, row: SHIPPED_ROW } } });
+  // command log is the artefact whose stability the whole gate rests on. Column first, then
+  // row, which is `compareCells`'s own order once the floor is fixed.
+  const cells = [...planned].map((key) => {
+    const [column, row] = key.split(':').map(Number) as [number, number];
+    return { column, row };
+  });
+  cells.sort((a, b) => (a.column !== b.column ? (a.column < b.column ? -1 : 1) : a.row < b.row ? -1 : a.row > b.row ? 1 : 0));
+  for (const cell of cells) {
+    schedule.push({
+      tick: 0,
+      command: { kind: 'layCorridor', at: { floor: 0, column: cell.column, row: cell.row } },
+    });
   }
   return schedule;
 }

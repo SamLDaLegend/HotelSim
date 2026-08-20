@@ -27,6 +27,12 @@
 //  which is exactly what those bytes said: a world whose floors were strips had one row, and
 //  `V17_MIGRATION_ROW` names it. Nothing is lost across the round trip, so callers compare
 //  hashes for EQUALITY rather than equality-except-one-field.
+//
+//  **THAT LAST SENTENCE ACQUIRED A PRECONDITION AT G-036a AND `onEraPlot` BELOW IS IT.** It was
+//  true unconditionally while `createGridBounds()` returned a one-row plot, because the world a
+//  caller built to compare against was one row deep too. The shipped plot is now eight rows
+//  deep, so a caller must build its comparand ON THE ERA'S PLOT or the round trip loses a plot
+//  it never had — which is a real difference reported as a migration defect.
 // ============================================================================
 
 /**
@@ -69,4 +75,34 @@ export function stripDepth(json: Record<string, unknown>): Record<string, unknow
     out['guests'] = { ...guests, list: guests.list.map(flatten) };
   }
   return out;
+}
+
+/**
+ * THE SAME WORLD, ON THE PLOT ITS ERA STOOD ON: one row deep (G-036a).
+ *
+ * ==========================================================================================
+ * THE COMPANION `stripDepth` NEEDED FROM THE DAY THE SHIPPED PLOT GAINED DEPTH, AND THE
+ * REASON IS THE ONE `stripDepth`'s own docblock states and then stopped being true of.
+ *
+ * `stripDepth` says: *"the chain puts all three values back at 0, which is exactly what those
+ * bytes said... nothing is lost across the round trip, so callers compare hashes for
+ * EQUALITY."* That held while `createGridBounds()` returned a one-row plot, because the world
+ * a caller built to compare against was ALSO one row deep. G-036a made this build's plot eight
+ * rows deep, so a world made here, stripped and walked back through the chain comes back on a
+ * DIFFERENT plot — and the identity tests failed reporting a migration defect that is not one.
+ *
+ * THE MIGRATION IS RIGHT AND THE COMPARAND WAS WRONG. `migrateV16ToV17` writes the plot a v16
+ * world's BYTES describe, which is a strip, and widening it would be pure invention — it would
+ * hand every migrated room free cells at row +/- 1 and turn a `noDoor` verdict recorded in
+ * those bytes back into VALID. So the world these tests compare against has to be built on the
+ * era's plot, and this is the one place that says which plot that was.
+ * ==========================================================================================
+ *
+ * Structurally typed rather than importing `World`: `without-depth.ts` deliberately imports
+ * nothing, so `entities.ts` and `world.ts` can both be strangers to it.
+ */
+export function onEraPlot<W extends { readonly grid: { readonly minRow: number; readonly maxRow: number } }>(
+  world: W,
+): W {
+  return { ...world, grid: { ...world.grid, minRow: 0, maxRow: 0 } };
 }

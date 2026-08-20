@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, C5 is BROUGHT FORWARD into circulation by human ruling (ADR-0049) — reception becomes a queue point, so the lobby gets a reason to exist rather than only being drawable. G-035 is done and the game has been SEEN in its own projection (WATCH #12). G-028 closed as already discharged. Plot depth is now G-036's first NAMED deliverable. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
+*As of 2026-08-16, G-036a is done: the plot is EIGHT ROWS DEEP and the shipped layouts spread into it, so WATCH #13 records the hotel reading as a BUILDING rather than a string of huts — the question WATCH #12 asked, answered. No save bump; a migrated world keeps its own plot. WALL HEIGHT STAYS PROVISIONAL for one more goal, and this time with a measured reason: at depth, 24 item plates are emitted and 3 are visible, which is the mechanic the next two goals are about. Fourteen rows green. Unreliable: 0 gates, 0 defects.*
 
 - **Schemas**: save **v18** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `c9f6bb07d25b089b` · measure golden `c7a049822580b39e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `0826588d36865609` · measure golden `fbbb35b464f13368`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2163,7 +2163,7 @@ the multi-cell branches degenerate again** — G-034a's seam argument verbatim. 
 `packages/sim` model + the save.
 
 ## G-036a — The plot gains depth, and the hotel becomes a plan
-Status: **PLANNED, not started.**
+Status: **done.** WATCH #13 recorded — the hotel reads as a building, and the wall height now has a MEASURED cost rather than an impression.
 Milestone: M3 · Owner pair: sim-engineer / sim-critic
 
 Statement: `createGridBounds`' default stops being one row deep, **and the shipped layouts spread
@@ -2232,6 +2232,60 @@ WATCH criterion.**
 - **A RECORDING AND A `JOURNAL.md` WATCH ENTRY, which must answer TWO questions**: does the hotel
   now read as a building rather than a string of huts, and **is 64px the right wall height** —
   after which it is locked or changed, and either way stops being provisional.
+
+### G-036a — REFLECT
+
+**done. Fourteen rows green, every row re-run by the orchestrator.** Plot is **8 rows deep**, no
+save bump, v1 fixture a zero-line diff. **I2 `c9f6bb07d25b089b` → `0826588d36865609`.**
+
+**THE BUILDER ARRIVED TO A DIRTY TREE AND DID NOT DISCARD IT.** An interrupted first run had left
+~30 files carrying a near-complete implementation. **ADR-0022 forbids `git checkout --` and a stash
+over the repo, and it was unreviewed work**, so it was treated as a build to VERIFY rather than as
+debris — every number re-derived independently. **That found three false-prose defects inside the
+inherited work's own derivations**, which is a better outcome than starting clean would have been.
+
+**AND THE ORCHESTRATOR TOLD THE HUMAN THE TREE WAS CLEAN WITHOUT LOOKING.** Asked *"are we
+stuck?"*, I answered *"nothing was lost and nothing is half-written… working tree clean"* — a claim
+about the repository asserted from memory, **in the sentence written to reassure.** `git status`
+read **31 modified files**. Fifth instance this session of the referent being the tree itself, and
+the first one aimed at the human rather than at a ledger.
+
+**THE THREE DEFECTS FOUND INSIDE THE INHERITED BUILD**, each a warrant that had stopped being true:
+`playerCorridorCells`' docblock claimed the inherited hotel strides two from `minRow`; **`roomCell`
+takes no row stride and its own docblock says so**, with `report.test.ts` asserting the opposite of
+the comment — replaced by the measured truth (`unsupported: 15` is 11 player rooms over lanes plus
+4 whose seeded support the demolish walk had taken) · **the depth derivation's "EVEN" clause was
+falsified by the layouts the same goal shipped** — it claimed a lane on both axes; the shipped
+layouts lane the column axis only, by explicit derivation. **Two files in one change contradicting
+each other, with `grid.test.ts` asserting `depth % 2 === 0` on the strength of it.** Struck, the
+assertion deleted, and **the forced part (`3 ≤ depth ≤ 79`) separated from the preference (8),
+labelled as one** — the same rank-vs-direction correction G-034a already carries · and
+`grid.test.ts`'s own section header still said the shipped plot has no depth, three lines above a
+test proving it does.
+
+**`noDoor` IS PRODUCED BY FOUR-SIDED SEALING AND WAS VERIFIED INDEPENDENTLY OF THE TESTS.** A
+scratch probe walked each `noDoor` room's four neighbours: at 40,000 ticks all three read
+`W:room E:room F:room B:room` — **no plot edge doing any of the sealing** — and the CLI criterion's
+four are sealed on all four sides. **The previous log gave `noDoor: 0` at the gate's own 100,000
+horizon while its comment claimed otherwise; that is now pinned by a test.** Knife edges are
+**counted** (`toBe(1)`), not `toBeGreaterThan(0)` — G-034b's lesson.
+
+**The worst-journey warrant is re-derived in both packages in one change**: `22 + 79 + 7 = 108`
+against tolerance 180, and **`100 + depth < 180` ⇒ `depth ≤ 79` is now a LIVE cross-package bound on
+`DEFAULT_MAX_ROW`.** The test's loop terminated on `floor && column` and never compared `row`; it
+now uses `cellsEqual` and **a new falsifier walks a journey differing only in `row` — 0 ticks under
+the old loop, 7 under the new.**
+
+**ADR-0050 came out of this goal**: two gate edits in three goals, both because a proof-of-bite
+pinned a **symptom string** rather than a structural property. Repaired to a structural clause plus
+today's cause, and **swept — the two `INCOMPARABLE` probes were the only symptom-pinned pair.**
+
+**Owed forward**: the wall-height repair (a shorter wall **or** a front-anchored item), which is
+G-036b's, since that is the goal whose mechanic the occlusion hides · the WATCH scenario seeds 3 of
+8 rows, so **the 64px reading is taken at depth 3** and only a scratch probe has seen depth 8 ·
+G-015's five-reason invocation was retuned again **without being broken** — margin-buying on a
+knife-edge row, sanctioned by that file's own procedure, and worth watching if it happens a third
+time.
 
 ## G-036b — The player draws a room
 Status: **PLANNED.** Follows G-036a; on a one-row plot every footprint is a 1×N strip.

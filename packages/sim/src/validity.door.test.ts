@@ -14,9 +14,12 @@
 //
 //    - THE COMPILER CANNOT TELL. `cellLeft`/`cellRight` typecheck unchanged against a
 //      three-axis `Cell`; they copy the new axis through.
-//    - EVERY EXISTING DOOR TEST CANNOT TELL. All of them live on the shipped plot, which is
-//      ONE ROW DEEP, so `cellFront`/`cellBack` are off the plot and `isWithinBounds` skips
-//      them. Two probes and four probes give the same verdict on every one.
+//    - EVERY DOOR TEST THAT EXISTED AT G-034a COULD NOT TELL. All of them lived on the
+//      shipped plot, which was ONE ROW DEEP, so `cellFront`/`cellBack` were off the plot and
+//      `isWithinBounds` skipped them. Two probes and four probes gave the same verdict on
+//      every one. **G-036a gave the shipped plot depth, so that is now true only of a
+//      MIGRATED world** — and the seal fixtures elsewhere in the repo went red rather than
+//      quiet, which is the arrangement working from the other side.
 //    - I2 CANNOT TELL. The determinism gate compares runs to each other and holds no
 //      reference hash, so a rule that is consistently wrong leaves it green.
 //
@@ -31,8 +34,17 @@
 //  would have its validity verdicts silently rewritten — a room that was `noDoor` when its
 //  bytes were written coming back VALID.
 //
-//  DEPTH IS EXERCISED BY FIXTURE, NEVER BY THE SHIPPED DEFAULT. `DEEP` below is this file's
-//  own plot; `createGridBounds()` is the shipped one and stays one row deep (G-034a).
+//  ============================================================================
+//  AT G-036a THE SHIPPED PLOT GAINED DEPTH AND THE TWO PLOTS IN THIS FILE STOPPED BEING THE
+//  SAME PLOT. `FLAT` was `createGridBounds()` and asserted `minRow === maxRow`; that
+//  assertion was TRUE OF THE SHIPPED PLOT and was standing in for a claim about MIGRATED
+//  BYTES. It is now `MIGRATED_FLAT`, a one-row literal in the shape `migrateV16ToV17` writes,
+//  and `SHIPPED` is a separate arm asserting the live plot does NOT degenerate.
+//
+//  **Splitting them is the repair the migration argument needed anyway**: the property is
+//  about what a v16 world's bytes said, and reading it off this build's constants meant the
+//  day somebody widened the plot the migration's own warrant would move with it.
+//  ============================================================================
 // ============================================================================
 //
 // Entity kinds and content ids are camelCase on purpose: a snake_case string literal anywhere
@@ -61,14 +73,34 @@ const content = bindContent({
   itemTypes: [{ id: 'bed', name: 'bed' }],
 });
 
-/** A cell on the plot. `row` defaults to 0, the only row the shipped plot has (G-034a). */
+/** A cell on the plot. `row` defaults to 0, the plot's near edge. */
 const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
-/** THE SHIPPED PLOT — one row deep. The control arm, not the subject. */
-const FLAT: GridBounds = createGridBounds();
+/**
+ * THE PLOT A MIGRATED WORLD LANDS ON — one row deep, written out rather than read from
+ * `createGridBounds()`.
+ *
+ * A LITERAL FOR THE REASON `migrateV16ToV17` CARRIES ITS OWN: this describes the plot a v16
+ * world's BYTES describe, which is a fact about history and must not move when this build's
+ * plot does. It read `createGridBounds()` until G-036a and would have started asserting
+ * something about the live plot instead.
+ */
+const MIGRATED_FLAT: GridBounds = {
+  minFloor: -2,
+  maxFloor: 20,
+  minColumn: 0,
+  maxColumn: 79,
+  minRow: 0,
+  maxRow: 0,
+};
+
+/** THE SHIPPED PLOT — eight rows deep since G-036a. */
+const SHIPPED: GridBounds = createGridBounds();
 
 /**
- * A PLOT WITH DEPTH, and the only place in this repo where depth exists (G-034a).
+ * A PLOT WITH DEPTH. It was the only place in this repo where depth existed until G-036a gave
+ * the shipped plot some; it stays because a small, fully-stated plot is what makes the seals
+ * below readable, and because the arms that PAIR a deep plot against a flat one need both.
  *
  * Five rows and seven columns, so a room in the middle has room to be sealed on any subset of
  * its four sides without any of the seals landing on a plot edge — a "sealed" that was really
@@ -213,7 +245,8 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
   // This is the property `migrateV16ToV17` rests on. A v16 world was a strip, so the migrated
   // plot is one row deep — and if the 4-neighbour rule gave a different answer there from the
   // 2-neighbour rule it replaced, the migration would be rewriting validity verdicts on saves
-  // it claims only to reshape.
+  // it claims only to reshape. IT IS A CLAIM ABOUT MIGRATED BYTES AND NOT ABOUT THIS BUILD'S
+  // PLOT, which is why every arm below names `MIGRATED_FLAT` (G-036a).
 
   it('seals a room between two neighbours, because front and back are off the plot', () => {
     const store = storeOf(
@@ -221,8 +254,31 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
       ...workingRoom(cell(GROUND_FLOOR, 4)),
       ...workingRoom(cell(GROUND_FLOOR, 5)),
     );
-    expect(FLAT.minRow).toBe(FLAT.maxRow);
-    expect(reasonOn(FLAT, store, 2)).toBe('noDoor');
+    expect(MIGRATED_FLAT.minRow).toBe(MIGRATED_FLAT.maxRow);
+    expect(reasonOn(MIGRATED_FLAT, store, 2)).toBe('noDoor');
+  });
+
+  it('AND THE SHIPPED PLOT NO LONGER DOES, which is what G-036a changed', () => {
+    // The same three rooms in a line, on the plot a world CREATED by this build stands on.
+    // They are valid: each has open plot in front of it and behind it. That is the whole
+    // reason every seal layout in the tree had to be re-laid in the same change — measured
+    // before it was made, `noDoor` fell to zero in both shipped harnesses on this alone.
+    const line = storeOf(
+      ...workingRoom(cell(GROUND_FLOOR, 3)),
+      ...workingRoom(cell(GROUND_FLOOR, 4)),
+      ...workingRoom(cell(GROUND_FLOOR, 5)),
+    );
+    expect(SHIPPED.maxRow).toBeGreaterThan(SHIPPED.minRow);
+    expect(reasonOn(SHIPPED, line, 2)).toBeNull();
+    // And FOUR rooms round it seal it there, on the shipped plot, with no plot edge involved.
+    const crossed = storeOf(
+      ...workingRoom(cell(GROUND_FLOOR, 4, 3)),
+      ...workingRoom(cell(GROUND_FLOOR, 3, 3)),
+      ...workingRoom(cell(GROUND_FLOOR, 5, 3)),
+      ...workingRoom(cell(GROUND_FLOOR, 4, 2)),
+      ...workingRoom(cell(GROUND_FLOOR, 4, 4)),
+    );
+    expect(reasonOn(SHIPPED, crossed, 0)).toBe('noDoor');
   });
 
   it('and the SAME store on a DEEPER plot is valid — the arms differ only in the plot', () => {
@@ -240,10 +296,10 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
     expect(reasonOn(twoRows, store, 2)).toBeNull();
   });
 
-  it('gives the shipped plot the same tally a strip always gave it', () => {
-    // The seal layouts the rest of the repo depends on — `determinism-log.ts`'s terraces and
-    // seal pass, `report.ts`'s shoulder-to-shoulder builds — are all of this shape. If this
-    // went green only by accident, four tests elsewhere would have gone red instead.
+  it('gives a MIGRATED plot the same tally a strip always gave it', () => {
+    // A row of five rooms is the shape every pre-G-036a seal layout had, and it is still the
+    // shape a v16 save's bytes describe. The tally on the migrated plot must be what that era
+    // measured, room for room.
     const terrace = storeOf(
       ...workingRoom(cell(GROUND_FLOOR, 10)),
       ...workingRoom(cell(GROUND_FLOOR, 11)),
@@ -251,10 +307,20 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
       ...workingRoom(cell(GROUND_FLOOR, 13)),
       ...workingRoom(cell(GROUND_FLOOR, 14)),
     );
-    expect(countInvalidRooms(terrace, FLAT, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(terrace, MIGRATED_FLAT, createCorridors(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 3, // the three in the middle; the two ends still open outward
+      unplaced: 0,
+      unsupported: 0,
+    });
+    // AND THE SAME STORE ON THE SHIPPED PLOT IS ENTIRELY VALID — the paired arm, which is the
+    // measurement that made this goal re-lay every layout in the tree rather than only widen
+    // a bound. One integer of plot differs and three verdicts flip.
+    expect(countInvalidRooms(terrace, SHIPPED, createCorridors(), content)).toEqual({
+      missingItem: 0,
+      noCorridor: 0,
+      noDoor: 0,
       unplaced: 0,
       unsupported: 0,
     });

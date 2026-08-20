@@ -382,8 +382,13 @@ describe('5. a save without a position is refused, rather than placed a tick lat
     // not exist — and missing ONE of the three longhand checks is silent, which is why each of
     // `assertCell`, `assertEntity` and `assertGuest` is driven separately (`grid.test.ts`).
     expect(corrupt((guest) => { guest['at'] = { floor: 0, column: 0, row: 0.5 }; })).toThrow(/row must be a safe integer/);
-    // And a whole row that is simply off this save's own one-row plot.
-    expect(corrupt((guest) => { guest['at'] = { floor: 0, column: 0, row: 1 }; })).toThrow(/outside the plot/);
+    // And a whole row that is simply off this save's own plot — one past its BACK EDGE, read
+    // from the plot rather than written as `1`. Row 1 became a legal cell at G-036a.
+    expect(
+      corrupt((guest) => {
+        guest['at'] = { floor: 0, column: 0, row: createGridBounds().maxRow + 1 };
+      }),
+    ).toThrow(/outside the plot/);
   });
 
   it('and the tick-boundary check refuses the same world, so load and commit agree', () => {

@@ -110,12 +110,19 @@ const CONSTRUCTIONS: readonly Construction[] = [
     store: storeOf(...furnished(cell(5, 10))),
   },
   {
+    // FOUR NEIGHBOURS, NOT TWO, SINCE THE SHIPPED PLOT GAINED DEPTH (G-036a). A line of three
+    // sealed the middle one only while the cells in front of and behind it were off the plot;
+    // on an eight-row plot they are ordinary free cells and this construction went VALID —
+    // which is the whole of what this file exists to catch, arriving from the plot rather
+    // than from the rule.
     reason: 'noDoor',
-    how: 'a room with another room hard against each side',
+    how: 'a room with another room hard against each of its four sides',
     store: storeOf(
-      ...furnished(cell(GROUND_FLOOR, 4)),
-      ...furnished(cell(GROUND_FLOOR, 3)),
-      ...furnished(cell(GROUND_FLOOR, 5)),
+      ...furnished(cell(GROUND_FLOOR, 4, 3)),
+      ...furnished(cell(GROUND_FLOOR, 3, 3)),
+      ...furnished(cell(GROUND_FLOOR, 5, 3)),
+      ...furnished(cell(GROUND_FLOOR, 4, 2)),
+      ...furnished(cell(GROUND_FLOOR, 4, 4)),
     ),
   },
   {

@@ -2830,11 +2830,14 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
  * is what it replaces**, and the order stops being arbitrary because a guest will have to reach
  * the stairs before it can use them.
  *
- * THE ROW AXIS IS WALKED LAST AND CHANGES NO SHIPPED JOURNEY (G-034a). The shipped plot is one
- * row deep, so `to.row - from.row` is always 0 there and this function returns exactly what it
- * returned before the axis existed — which is why the worst journey on the default plot is
- * still 22 floors + 79 columns = 101 cells, the number `travel.movement.test.ts` pins and the
- * number `packages/content/src/schema.ts` derives the guest speed floor from.
+ * THE ROW AXIS IS WALKED LAST, AND SINCE G-036a IT IS REALLY WALKED. G-034a added it against a
+ * one-row plot, where `to.row - from.row` was always 0 and this function returned exactly what
+ * it returned before the axis existed; the shipped plot now has eight rows, so the worst journey
+ * across it is `22 floors + 79 columns + 7 rows` = 108 cells rather than 101. That number is the
+ * derived FLOOR under the guest speed dial in `packages/content/src/schema.ts`, and
+ * `travel.movement.test.ts` MEASURES it by walking the plot corner to corner — comparing all
+ * three axes, which is a repair rather than a restatement: the loop terminated on
+ * `floor && column` and would have under-reported the journey the day the plot gained depth.
  * ------------------------------------------------------------------------------------------
  */
 /**

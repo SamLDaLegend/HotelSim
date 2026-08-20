@@ -40,11 +40,11 @@
  * `column` IS CALLED `column` — `floor`/`column`/`y` would be two vocabularies for one
  * coordinate system, and the reader has to hold both.
  *
- * THE SHIPPED DEFAULT PLOT IS ONE ROW DEEP (`DEFAULT_MIN_ROW === DEFAULT_MAX_ROW`), and
- * that is the constraint that makes this goal behaviour-free rather than a coincidence.
- * Every rule below is depth-CAPABLE; nothing shipped uses the depth until there is a verb
- * that can draw into it (G-036). Depth is exercised BY FIXTURE — a test passing its own
- * deeper bounds — never by the default.
+ * THE SHIPPED DEFAULT PLOT HAS DEPTH SINCE G-036a (`DEFAULT_MIN_ROW < DEFAULT_MAX_ROW`).
+ * G-034a added the axis and deliberately left the plot one row deep, so that goal changed
+ * no behaviour; this one opens the depth AND spreads the shipped layouts into it, because
+ * widening the bound on its own changes nothing anybody can see — every layout wrote
+ * `row: bounds.minRow` and the renderer frames what is OCCUPIED, not what is legal.
  */
 export type Cell = {
   /**
@@ -60,8 +60,8 @@ export type Cell = {
   /**
    * Horizontal cell index INTO the plot, 0 at the near edge (G-034a).
    *
-   * The second axis of a storey's plan. On the shipped default plot there is exactly one
-   * row, so every shipped cell has `row === DEFAULT_MIN_ROW` — see `Cell` above.
+   * The second axis of a storey's plan, and since G-036a the shipped plot has more than
+   * one of them — see `DEFAULT_MAX_ROW` for how deep and why exactly that deep.
    */
   readonly row: number;
 };
@@ -110,35 +110,78 @@ export type GridBounds = {
  * needs even at four columns a room, with two basements for the plant and parking M6
  * will want.
  *
- * AND IT IS ONE ROW DEEP — `DEFAULT_MIN_ROW === DEFAULT_MAX_ROW`, DELIBERATELY (G-034a).
- * The coordinate space gained a third axis in this goal; the SHIPPED PLOT did not gain
- * depth, and the two are separate decisions.
+ * ==========================================================================================
+ * AND SINCE G-036a IT IS EIGHT ROWS DEEP. G-034a shipped `DEFAULT_MIN_ROW === DEFAULT_MAX_ROW`
+ * so that the axis could land without changing any behaviour; this widens it, AND the shipped
+ * layouts spread into it in the same change. **Widening the bound ALONE would have changed
+ * nothing anybody could see** — `apps/game/src/view/camera.ts` frames the cells that are
+ * OCCUPIED rather than the plot that is legal, and every layout in the tree wrote
+ * `row: bounds.minRow`. WATCH #12 called the result *"a string of huts on a path"*; the plot
+ * bound was only its cause.
  *
- * WHAT THE ONE-ROW DEFAULT BUYS, AND IT IS THE WHOLE REASON THIS GOAL IS BEHAVIOUR-FREE:
+ * WHERE EIGHT COMES FROM. TWO steps are forced, they are a RANGE rather than a value, and the
+ * choice inside that range says out loud that it is a preference (ADR-0013 §4 — a dial ships
+ * labelled as one):
  *
- *   - Nothing can be built into the depth, because no command can address a row the plot
- *     does not have — so a depth-capable rule with no verb to reach it cannot ship a
- *     branch that no reachable world exercises in the shipped configuration, and the
- *     branches are exercised by fixtures that pass their own deeper bounds.
- *   - THE 4-NEIGHBOUR DOOR RULE DEGENERATES TO THE 2-NEIGHBOUR ONE, through
- *     `isWithinBounds`: `cellFront`/`cellBack` of any cell on a one-row plot are off the
- *     plot, so they are skipped exactly as a cell beyond the left edge already was. Every
- *     seal layout that produced `noDoor` before this goal still produces it, and every
- *     migrated world keeps its exact validity verdicts.
- *   - NO JOURNEY LENGTH CHANGES. `stepTowards` walks the row axis last and the row gap is
- *     always zero here, so the worst journey on this plot is still 22 floors + 79 columns
- *     = 101 cells — which is the number `travel.movement.test.ts` pins and the number
- *     `packages/content/src/schema.ts` derives the guest speed floor from.
+ *   - **AT MOST 79, AND THIS IS A REAL BOUND RATHER THAN A COMMENT.** `stepTowards` walks the
+ *     floor axis, then the column axis, then the row axis, so the worst journey across this
+ *     plot is `(maxFloor - minFloor) + (maxColumn - minColumn) + (maxRow - minRow)` =
+ *     `22 + 79 + (depth - 1)` cells. `guestCellsPerTickSchema` in
+ *     `packages/content/src/schema.ts` derives the guest SPEED FLOOR from exactly that number
+ *     against a tolerance of 180 ticks: a plot deep enough for the worst journey to outlast
+ *     tolerance would let a guest time out because it WALKED rather than because the hotel
+ *     failed it, which is the cliff ADR-0017 was written to dissolve. `100 + depth < 180`
+ *     gives `depth <= 79`. `travel.movement.test.ts` measures the journey rather than
+ *     asserting the arithmetic.
+ *   - **AT LEAST 3, or the row axis cannot SEAL.** A room is walled in when all four
+ *     neighbours are rooms; the row axis contributes to that only where a room has a row on
+ *     each side of it, which needs three. At two rows the only seals are against the plot's
+ *     own edge — the degenerate case this goal exists to leave, since `isWithinBounds` skips
+ *     an off-plot neighbour exactly as the one-row plot made it skip both of them.
+ *   - **A THIRD CLAUSE SAYING THE DEPTH MUST BE EVEN WAS PLANNED, WRITTEN, AND IS STRUCK HERE
+ *     BECAUSE THE LAYOUTS THIS GOAL SHIPPED FALSIFY IT.** It read *"even, because every seeded
+ *     layout in `report.ts` puts a lane between rooms on BOTH axes now; an odd depth ends the
+ *     plot on a lane row with nothing behind it"*. **The shipped layouts put a lane on the
+ *     COLUMN axis only** — `PLAYER_COLUMNS_PER_BLOCK`'s third clause and `roomCell`'s first
+ *     both derive that decision and count what it buys, and `apps/game/src/scenario.ts` ships
+ *     three rows for the same reason. With no lane rows there is no lane row to strand, so
+ *     the clause has no warrant. **A clause kept for its sound and asserted by a test is a
+ *     false necessity — ADR-0044 §2's class, and `compareCells` below already carries the
+ *     project's other instance of it.** Struck rather than restated, and `grid.test.ts`
+ *     stopped asserting evenness in the same edit.
+ *   - **SO THE FORCED PART IS `3 <= depth <= 79`, AND 8 IS A PREFERENCE INSIDE IT.** Nothing
+ *     anybody has stated derives 8 over 4, 6 or 9. What can be said without inventing a
+ *     requirement is the CONSEQUENCE: the seeded plate in `report.ts` is square in rooms, so
+ *     a depth of `d` gives `d x d` rooms a floor — 64 at 8, which is the first depth at which
+ *     G-010's 60-room bench stands on ONE floor. That is a fact about the layout, offered as
+ *     a reading of the number rather than as its derivation, because a requirement nobody
+ *     stated before the number was chosen is §2.1's superstition wearing a proof.
  *
- * The day a verb can draw into the depth (G-036), widening this is a one-line change that
- * owes no migration, for the reason `GridBounds` gives: a save carries its own plot.
+ * WHAT IT COSTS, STATED RATHER THAN DISCOVERED: the 4-neighbour door rule stops degenerating,
+ * so every layout that produced `noDoor` by sealing along ONE axis stops producing it. That is
+ * not a rule change — it is the rule finally being asked a two-dimensional question — and the
+ * layouts are re-laid to seal on four sides in the same change. Measured before it was made,
+ * on the shipped harnesses: one extra row alone takes `noDoor` to 0 in the I2 log at 40,000
+ * ticks (from 5) and to 0 in the CLI criterion run (from 2), while `checkedOut` and `valid`
+ * stay byte-identical in the CLI — a validity reason dying with every non-zero assertion in
+ * the suite still green.
+ *
+ * NO MIGRATION IS OWED AND NONE IS WRITTEN, for the reason `GridBounds` gives: a save carries
+ * its own plot. A migrated world keeps the plot its bytes describe, which for every world
+ * before G-036a is one row deep — and that is not a courtesy, it is the only non-inventive
+ * reading. Widening a migrated plot would give every migrated room free cells at row +/- 1, so
+ * a room that was `noDoor` when those bytes were written would load back VALID: a migration
+ * rewriting a validity verdict. `save.ts` is scanned for these constants by name
+ * (`migration-scan.build.grid.provider.outcome.travel.save.test.ts`) so that no step can reach
+ * for them.
+ * ==========================================================================================
  */
 export const DEFAULT_MIN_FLOOR = -2;
 export const DEFAULT_MAX_FLOOR = 20;
 export const DEFAULT_MIN_COLUMN = 0;
 export const DEFAULT_MAX_COLUMN = 79;
 export const DEFAULT_MIN_ROW = 0;
-export const DEFAULT_MAX_ROW = 0;
+export const DEFAULT_MAX_ROW = 7;
 
 /**
  * The plot for a world created by THIS build.
@@ -191,8 +234,9 @@ export const GROUND_FLOOR = 0;
  * (`vitest run travel`) is what runs it.
  *
  * Column is `minColumn` — the left edge of the plot, which is where the street is. Row is
- * `minRow` — the near edge, which is the same argument on the other horizontal axis, and on
- * the shipped one-row plot it is the only row there is.
+ * `minRow` — the NEAR edge, which is the same argument on the other horizontal axis: the
+ * street is in front of the building, not behind it. Before G-036a it was also the only row
+ * there was; now it is a choice, and it is the same choice `minColumn` already made.
  *
  * IT IS DERIVED FROM THE BOUNDS PASSED IN, NEVER FROM `createGridBounds()`. A save carries
  * its own plot (see `GridBounds`), so a world on a narrower plot gets its own entrance
@@ -271,7 +315,7 @@ export function boundsEqual(a: GridBounds, b: GridBounds): boolean {
  * a convention nothing asserts is a convention that drifts — and because a reader who has
  * to work out which orderings are safe will get it wrong in the direction that costs a
  * goal. `grid.test.ts` states it as `compareCells(cell(0, 0, 5), cell(1, 0, 0)) === -1`,
- * which no pre-existing assertion could: they all live at one row.
+ * which no assertion predating G-034a could: they all lived at one row.
  *
  * AND I2 DOES NOT BACKSTOP EITHER OF THEM: the determinism gate compares runs to each
  * other and holds no reference hash, so a consistently wrong verdict leaves it green.
@@ -318,9 +362,11 @@ export function cellBelow(cell: Cell): Cell {
  * exist.
  *
  * Pure coordinates — they say nothing about what stands there, and they may name a cell off
- * the plot, which is the caller's question to ask. On the shipped one-row plot the front and
- * back cells are always off the plot, which is what makes the 4-neighbour rule degenerate to
- * the 2-neighbour one there rather than change any shipped verdict.
+ * the plot, which is the caller's question to ask. Until G-036a the shipped plot was one row
+ * deep and the front and back cells were therefore always off it, which is what made the
+ * 4-neighbour rule degenerate to the 2-neighbour one on every shipped world. THAT IS OVER:
+ * the shipped plot has depth, so all four probes reach real cells and a room is walled in
+ * only when all four of them hold a room.
  */
 export function cellLeft(cell: Cell): Cell {
   return { floor: cell.floor, column: cell.column - 1, row: cell.row };
@@ -377,8 +423,11 @@ export function assertGridBounds(bounds: GridBounds): void {
       `Grid bounds are invalid: minColumn ${bounds.minColumn} is right of maxColumn ${bounds.maxColumn}, so no column exists`,
     );
   }
-  // `minRow === maxRow` is LEGAL and is what the shipped plot carries: a one-row plot is a
-  // strip, which is what every world before G-034a was. Only an inverted range is refused.
+  // `minRow === maxRow` IS STILL LEGAL, and it stopped being what the SHIPPED plot carries at
+  // G-036a. A one-row plot is a strip, which is what every world before G-034a was and what
+  // every world MIGRATED from before G-034a still is — `migrateV16ToV17` writes its own frozen
+  // row rather than this build's plot, so those saves keep loading. Only an inverted range is
+  // refused.
   if (bounds.minRow > bounds.maxRow) {
     throw new Error(
       `Grid bounds are invalid: minRow ${bounds.minRow} is behind maxRow ${bounds.maxRow}, so no row exists`,
@@ -395,7 +444,10 @@ export function assertGridBounds(bounds: GridBounds): void {
  * THE ROW CLAUSE IS WHAT MAKES THE 4-NEIGHBOUR DOOR RULE DEGENERATE ON A ONE-ROW PLOT
  * (G-034a). `cellFront`/`cellBack` of a cell at `row === minRow === maxRow` are off the
  * plot, so the door rule skips them exactly as it already skipped a cell beyond the left
- * edge — no new branch, no new verdict, on every world this build ships or migrates.
+ * edge — no new branch and no new verdict on such a world. **Since G-036a that is the shape
+ * of a MIGRATED world rather than of a new one**: this build's plot is eight rows deep, so
+ * the degeneracy is what keeps old saves reading the way their bytes meant, and nothing
+ * else.
  */
 export function isWithinBounds(cell: Cell, bounds: GridBounds): boolean {
   return (

@@ -134,10 +134,13 @@ describe('a guest will not take an invalid room', () => {
   });
 
   it('waits, and gives up, when the only room is sealed in by its neighbours', () => {
+    // FOUR NEIGHBOURS, because the shipped plot has depth (G-036a). The room sits on the plot's
+    // FRONT row, so the cell in front of it is off the plot and three cupboards seal it.
     let world = stepTick(createWorld(1, content), content, [
       ...bedroomAt(cell(GROUND_FLOOR, 4)),
       spawn('cupboard', cell(GROUND_FLOOR, 3)),
       spawn('cupboard', cell(GROUND_FLOOR, 5)),
+      spawn('cupboard', cell(GROUND_FLOOR, 4, 1)),
       arrive(),
     ]);
     expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).noDoor).toBe(1);
@@ -280,9 +283,13 @@ describe('a valid room can go invalid under a guest', () => {
     // Nothing is demolished here and nothing moves. The room is invalidated by what the
     // player put NEXT to it, which is the direction of failure a placement check could
     // never see.
+    // THREE OF THE FOUR SIDES ARE ALREADY GONE BEFORE THE GUEST ARRIVES (G-036a): the cell in
+    // front is off the plot, and cupboards stand west and behind. The build below takes the
+    // LAST one, which is what this test is named for.
     let world = stepTick(worldWithCash(COST * 2), content, [
       ...bedroomAt(cell(GROUND_FLOOR, 4)),
       spawn('cupboard', cell(GROUND_FLOOR, 3)),
+      spawn('cupboard', cell(GROUND_FLOOR, 4, 1)),
       arrive(),
     ]);
     world = run(world, content, 5);

@@ -198,13 +198,20 @@ describe('build refuses nothing on validity grounds', () => {
   });
 
   it('builds a room that seals in its neighbour, and refuses neither of them', () => {
-    let world = stepTick(worldWithCash(COST * 3), content, [
-      build('bedroom', cell(GROUND_FLOOR, 4)),
-      build('bedroom', cell(GROUND_FLOOR, 3)),
+    // FOUR NEIGHBOURS SINCE THE SHIPPED PLOT GAINED DEPTH (G-036a): the victim is walled in on
+    // the last of its four sides by the last build, and the point of the test is unchanged —
+    // `applyBuildRoom` refuses NOTHING on validity grounds, including the build that ruins the
+    // room next door.
+    const victim = cell(GROUND_FLOOR, 4, 3);
+    let world = stepTick(worldWithCash(COST * 5), content, [
+      build('bedroom', victim),
+      build('bedroom', cell(GROUND_FLOOR, 3, 3)),
+      build('bedroom', cell(GROUND_FLOOR, 5, 3)),
+      build('bedroom', cell(GROUND_FLOOR, 4, 2)),
     ]);
     expect(reasonOf(world, 1)).toBeNull();
-    world = stepTick(world, content, [build('bedroom', cell(GROUND_FLOOR, 5))]);
-    expect(world.buildOutcomes.built).toBe(3);
+    world = stepTick(world, content, [build('bedroom', cell(GROUND_FLOOR, 4, 4))]);
+    expect(world.buildOutcomes.built).toBe(5);
     expect(totalRefusals(world.buildOutcomes)).toBe(0);
     // The room built FIRST is the one that stopped working, and nothing about it moved.
     expect(reasonOf(world, 1)).toBe('noDoor');

@@ -181,12 +181,17 @@ describe('the rule is asked LAST, so no earlier verdict is displaced', () => {
   });
 
   it('noDoor beats noCorridor', () => {
-    const terrace = storeOf(
-      ...furnished(cell(GROUND_FLOOR, 4)),
-      ...furnished(cell(GROUND_FLOOR, 3)),
-      ...furnished(cell(GROUND_FLOOR, 5)),
+    // FOUR NEIGHBOURS SINCE THE PLOT GAINED DEPTH (G-036a): a line of three leaves the middle
+    // room a free cell front and back, so it would report `noCorridor` — which is this test's
+    // own subject failing silently in the direction it exists to refuse.
+    const cross = storeOf(
+      ...furnished(cell(GROUND_FLOOR, 4, 3)),
+      ...furnished(cell(GROUND_FLOOR, 3, 3)),
+      ...furnished(cell(GROUND_FLOOR, 5, 3)),
+      ...furnished(cell(GROUND_FLOOR, 4, 2)),
+      ...furnished(cell(GROUND_FLOOR, 4, 4)),
     );
-    expect(reasonOf(terrace, planned)).toBe('noDoor');
+    expect(reasonOf(cross, planned)).toBe('noDoor');
   });
 
   it('missingItem beats noCorridor', () => {
@@ -198,17 +203,21 @@ describe('the rule is asked LAST, so no earlier verdict is displaced', () => {
       ['bedroom', null],
       ...furnished(cell(9, 10)),
       ['bedroom', cell(GROUND_FLOOR, 20)],
-      ...furnished(cell(GROUND_FLOOR, 30)),
-      ...furnished(cell(GROUND_FLOOR, 29)),
-      ...furnished(cell(GROUND_FLOOR, 31)),
+      ...furnished(cell(GROUND_FLOOR, 30, 3)),
+      ...furnished(cell(GROUND_FLOOR, 29, 3)),
+      ...furnished(cell(GROUND_FLOOR, 31, 3)),
+      ...furnished(cell(GROUND_FLOOR, 30, 2)),
+      ...furnished(cell(GROUND_FLOOR, 30, 4)),
       ...furnished(cell(GROUND_FLOOR, 60)),
     );
-    // The ground floor is planned by the cell at column 40, so the terrace's two outer rooms and
-    // the lone room at 60 are `noCorridor`; the middle of the terrace is `noDoor`; the mid-air
-    // room is `unsupported`; the unfurnished one is `missingItem`; the placeless one `unplaced`.
+    // The ground floor is planned by the cell at column 40, so the cross's four arms and the
+    // lone room at 60 are `noCorridor`; the centre of the cross is `noDoor`; the mid-air room
+    // is `unsupported`; the unfurnished one is `missingItem`; the placeless one `unplaced`.
+    // FIVE ROOMS IN A CROSS RATHER THAN THREE IN A LINE (G-036a) — see `noDoor beats
+    // noCorridor` above; on a plot with depth a line seals nobody.
     expect(countInvalidRooms(store, BOUNDS, planned, content)).toEqual({
       missingItem: 1,
-      noCorridor: 3,
+      noCorridor: 5,
       noDoor: 1,
       unplaced: 1,
       unsupported: 1,

@@ -43,11 +43,40 @@ import type { BoundContent, Cell, Command, GridBounds, RoomTypeData } from '@hot
  * so the first play session is comparable with the observations that exist rather than
  * being a fresh configuration nobody has a prior on.
  */
-const LODGING_ROOMS_PER_FLOOR = 3;
+const LODGING_ROOMS_PER_ROW = 3;
 const LODGING_FLOORS = 2;
 
-/** One of each amenity room type, in the basement. */
-const AMENITIES_EACH = 1;
+/**
+ * HOW FAR BACK INTO THE PLOT THE HOTEL GOES (G-036a).
+ *
+ * ==========================================================================================
+ * THE WHOLE REASON THIS FILE IS TOUCHED BY A `packages/sim` GOAL, AND IT IS WATCH #12's
+ * FINDING RATHER THAN A TIDY-UP.
+ *
+ * *"THE HOTEL DOES NOT READ AS A BUILDING. IT READS AS A STRING OF HUTS ON A PATH."* Three
+ * rooms marched down a diagonal ribbon of corridor paving with open plot on both sides. It was
+ * geometrically correct — the shipped plot was ONE ROW DEEP — and G-036a opens that depth.
+ *
+ * **WIDENING THE PLOT ALONE WOULD HAVE CHANGED NOTHING ON SCREEN.** `view/camera.ts` frames
+ * the cells that are OCCUPIED, not the plot that is legal, and every layout in the tree wrote
+ * `row: bounds.minRow`. A recording taken after a one-line bound change would have been
+ * pixel-for-pixel WATCH #12, and the goal would have failed while every test passed. **The
+ * layout is the substance; the bound was only its cause.**
+ *
+ * THREE, WHICH IS THE SMALLEST DEPTH THAT ANSWERS THE TWO QUESTIONS THE RECORDING OWES. One
+ * row is the picture being replaced. Two rows put a row behind another row but never a row
+ * BETWEEN two others, so nothing is occluded from both sides and the wall-height question
+ * (ADR-0047 amdt §1, still PROVISIONAL) cannot be looked at. Three is the first depth where a
+ * middle row exists, which is exactly the reading the human deferred to this goal.
+ * ==========================================================================================
+ */
+const LODGING_ROWS = 3;
+
+/**
+ * How many of each amenity room type, in the basement — ONE PER LODGING ROW since G-036a, so
+ * the amenity floor is a plate rather than a line and switching floors compares like with like.
+ */
+const AMENITIES_EACH = LODGING_ROWS;
 
 /**
  * A CORRIDOR CELL BETWEEN ROOMS, and it is a validity rule rather than a look.
@@ -58,6 +87,17 @@ const AMENITIES_EACH = 1;
  * stride "the corridor that gives each one a door".
  */
 const COLUMNS_PER_ROOM = 2;
+
+/**
+ * AND THE ROW AXIS TAKES NO STRIDE, WHICH IS THE SAME DECISION `report.ts` MAKES AND FOR THE
+ * SAME REASON (G-036a).
+ *
+ * The door rule asks for ONE free neighbour on the floor. A lane every other COLUMN, running
+ * the full depth of the band, already gives every room in the bank one — so a second lane every
+ * other row would halve the plate and buy no verdict. Rooms therefore touch front and back and
+ * never left and right: a double-loaded corridor, which is what a hotel floor is.
+ */
+const ROWS_PER_ROOM = 1;
 
 /**
  * How often somebody walks in. Two in-game hours, which is `TICKS_BETWEEN_ARRIVALS` in
@@ -122,15 +162,15 @@ function amenityRoomTypesOf(content: BoundContent): readonly RoomTypeData[] {
  * invalid rooms that houses nobody.
  */
 function lodgingCell(index: number, entrance: Cell): Cell {
-  const column = index % LODGING_ROOMS_PER_FLOOR;
-  const floor = Math.floor(index / LODGING_ROOMS_PER_FLOOR);
+  const perFloor = LODGING_ROOMS_PER_ROW * LODGING_ROWS;
+  const onFloor = index % perFloor;
   return {
-    floor: entrance.floor + floor,
-    column: entrance.column + COLUMNS_PER_ROOM * column + 1,
-    // The entrance's own row (G-034a) — the shipped plot has exactly one, and reading it
-    // from the entrance rather than writing `0` keeps this host on whatever plot the sim
-    // hands it. Minimal change: `apps/game` is not this goal's subject.
-    row: entrance.row,
+    floor: entrance.floor + Math.floor(index / perFloor),
+    column: entrance.column + COLUMNS_PER_ROOM * (onFloor % LODGING_ROOMS_PER_ROW) + 1,
+    // BACK INTO THE PLOT WHEN A ROW OF THE PLATE IS FULL (G-036a). Measured from the
+    // ENTRANCE's row rather than written as `0`, so this host stays on whatever plot the sim
+    // hands it — the same rule the column above follows.
+    row: entrance.row + ROWS_PER_ROOM * Math.floor(onFloor / LODGING_ROOMS_PER_ROW),
   };
 }
 
@@ -143,11 +183,12 @@ function lodgingCell(index: number, entrance: Cell): Cell {
  * nothing, and a room at or below grade is grounded by the earth so it needs nothing built
  * under it.
  */
-function amenityCell(index: number, bounds: GridBounds, entrance: Cell): Cell {
+function amenityCell(index: number, bounds: GridBounds, entrance: Cell, perRow: number): Cell {
   return {
     floor: Math.max(bounds.minFloor, entrance.floor - 1),
-    column: entrance.column + COLUMNS_PER_ROOM * index,
-    row: entrance.row,
+    column: entrance.column + COLUMNS_PER_ROOM * (index % perRow),
+    // The same plate as the lodging floors, one storey down (G-036a).
+    row: entrance.row + ROWS_PER_ROOM * Math.floor(index / perRow),
   };
 }
 
@@ -181,26 +222,40 @@ function amenityCell(index: number, bounds: GridBounds, entrance: Cell): Cell {
  * which is the property `corridors.ts` was designed around.
  * ---------------------------------------------------------------------------------------
  */
-function corridorCommands(entrance: Cell, bounds: GridBounds, amenities: number): readonly Command[] {
+function corridorCommands(
+  entrance: Cell,
+  bounds: GridBounds,
+  amenities: number,
+  amenitiesPerRow: number,
+): readonly Command[] {
   const commands: Command[] = [];
-  const lay = (floor: number, column: number): void => {
+  const lay = (floor: number, column: number, row: number): void => {
     if (column < bounds.minColumn || column > bounds.maxColumn) return;
+    if (row < bounds.minRow || row > bounds.maxRow) return;
     if (floor < bounds.minFloor || floor > bounds.maxFloor) return;
-    commands.push({ kind: 'layCorridor', at: { floor, column, row: entrance.row } });
+    commands.push({ kind: 'layCorridor', at: { floor, column, row } });
   };
+  // EVERY LANE RUNS THE FULL DEPTH OF THE PLATE SINCE G-036a. A lane one cell deep would leave
+  // every room behind the front row with no declared walkway anywhere near it, and the whole
+  // building would report `noCorridor` on the first frame — which is a thing the HUD says out
+  // loud, so it would be seen rather than missed, but it would be seen instead of the picture
+  // this recording is for.
+  const rows = (count: number): readonly number[] =>
+    Array.from({ length: count }, (_, row) => entrance.row + ROWS_PER_ROOM * row);
   // THE LODGING FLOORS: rooms sit on the ODD offsets (`lodgingCell` adds 1), so the walkway is
   // every EVEN one — including the entrance's own column, which is the lobby.
   for (let floor = 0; floor < LODGING_FLOORS; floor += 1) {
-    for (let i = 0; i <= LODGING_ROOMS_PER_FLOOR; i += 1) {
-      lay(entrance.floor + floor, entrance.column + COLUMNS_PER_ROOM * i);
+    for (let i = 0; i <= LODGING_ROOMS_PER_ROW; i += 1) {
+      for (const row of rows(LODGING_ROWS)) lay(entrance.floor + floor, entrance.column + COLUMNS_PER_ROOM * i, row);
     }
   }
   // THE AMENITY FLOOR: amenities sit on the EVEN offsets (`amenityCell` adds none), so the
   // walkway is every ODD one. Mirrored, and derived from the same stride rather than written
   // out — a change to `COLUMNS_PER_ROOM` moves the rooms and the corridors together.
   const amenityFloor = Math.max(bounds.minFloor, entrance.floor - 1);
-  for (let i = 0; i < amenities; i += 1) {
-    lay(amenityFloor, entrance.column + COLUMNS_PER_ROOM * i + 1);
+  const amenityRows = Math.ceil(amenities / Math.max(1, amenitiesPerRow));
+  for (let i = 0; i < amenitiesPerRow; i += 1) {
+    for (const row of rows(amenityRows)) lay(amenityFloor, entrance.column + COLUMNS_PER_ROOM * i + 1, row);
   }
   return commands;
 }
@@ -224,20 +279,25 @@ export function seedCommands(content: BoundContent, bounds: GridBounds): readonl
     }
   };
   const lodging = lodgingRoomTypeOf(content);
-  for (let i = 0; i < LODGING_ROOMS_PER_FLOOR * LODGING_FLOORS; i += 1) {
+  for (let i = 0; i < LODGING_ROOMS_PER_ROW * LODGING_ROWS * LODGING_FLOORS; i += 1) {
     place(lodging.id, lodgingCell(i, entrance));
   }
+  // ONE COLUMN PER AMENITY TYPE, ONE ROW PER COPY (G-036a), so the basement is a plate of the
+  // same shape as the floors above it and each type stands together rather than interleaved.
+  const amenityTypes = amenityRoomTypesOf(content);
   let amenityIndex = 0;
-  for (const amenity of amenityRoomTypesOf(content)) {
-    for (let i = 0; i < AMENITIES_EACH; i += 1) {
-      place(amenity.id, amenityCell(amenityIndex, bounds, entrance));
+  for (let copy = 0; copy < AMENITIES_EACH; copy += 1) {
+    for (let type = 0; type < amenityTypes.length; type += 1) {
+      const amenity = amenityTypes[type];
+      if (amenity === undefined) continue;
+      place(amenity.id, amenityCell(amenityIndex, bounds, entrance, amenityTypes.length));
       amenityIndex += 1;
     }
   }
   // AFTER THE ROOMS, AND THE ORDER IS STATED BECAUSE IT IS ASKED. It makes no difference to
   // the result — a corridor is a declaration about a cell and says nothing about what stands
   // there — but a reader should not have to work that out from `corridors.ts` to be sure.
-  commands.push(...corridorCommands(entrance, bounds, amenityIndex));
+  commands.push(...corridorCommands(entrance, bounds, amenityIndex, amenityTypes.length));
   return commands;
 }
 

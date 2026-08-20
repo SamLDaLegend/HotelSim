@@ -32,7 +32,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { withoutCounters } from './fixtures/without-counters.js';
-import { stripDepth } from './without-depth.js';
+import { onEraPlot, stripDepth } from './without-depth.js';
 import { stripCorridors } from './without-corridors.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
@@ -367,9 +367,17 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
   // change is the whole difference.
   const content = bindContent(V7_CONTENT);
 
-  /** A world lived forward under this build: one room, one guest, one completed stay. */
+  /**
+   * A world lived forward under this build: one room, one guest, one completed stay — ON THE
+   * ERA'S PLOT, which is one row deep (`onEraPlot`, G-036a).
+   *
+   * A v7 world was a strip and `migrateV16ToV17` writes it back as one, so a comparand built
+   * on THIS build's eight-row plot would differ from the migrated world in the plot and in
+   * nothing else — a real difference, reported as a migration failure. The plot is the era's
+   * because the bytes are.
+   */
   const lived = (): World => {
-    const world = stepTick(createWorld(1, content), content, [
+    const world = stepTick(onEraPlot(createWorld(1, content)), content, [
       { kind: 'spawnEntity', entityKind: 'fixtureRoom', at: { floor: 0, column: 0, row: 0 } },
     ]);
     return run(world, content, 40, [{ tick: 1, command: { kind: 'guestArrives' } }]);

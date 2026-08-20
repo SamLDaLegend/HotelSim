@@ -1064,8 +1064,22 @@ export const toleranceTicksSchema = z.int().min(1);
  *   **A journey must not be able to exhaust a guest's patience on its own.** Travel now spends
  *   `toleranceTicks`, so a speed low enough that crossing the plot outlasts tolerance would
  *   re-introduce the cliff ADR-0017 was written to dissolve — a guest timing out because it
- *   walked, not because the hotel failed it. The plot is 23 floors x 80 columns, so the worst
- *   journey is 101 cells; against a tolerance of 180 ticks, any speed of 1 or more clears it.
+ *   walked, not because the hotel failed it.
+ *
+ *   **RE-DERIVED AT G-036a, WHEN THE PLOT GAINED DEPTH.** `stepTowards` spends its budget on
+ *   the floor axis, then the column axis, then the ROW axis, so the worst journey is the sum
+ *   of all three spans: `(maxFloor - minFloor) + (maxColumn - minColumn) + (maxRow - minRow)`.
+ *   The plot is **23 floors x 80 columns x 8 rows**, so that is `22 + 79 + 7` = **108 cells**;
+ *   against a tolerance of 180 ticks, any speed of 1 or more still clears it. (It read *"23
+ *   floors x 80 columns, so the worst journey is 101 cells"* while the plot was one row deep,
+ *   which was true then and would have been a stale number one goal later.)
+ *
+ *   **AND THE DERIVATION IS WHAT PUTS AN UPPER BOUND ON THE PLOT'S DEPTH, WHICH IS A REAL
+ *   CONSTRAINT RATHER THAN AN OBSERVATION.** `100 + depth < 180` gives `depth <= 79`, so
+ *   `DEFAULT_MAX_ROW` in `packages/sim/src/grid.ts` cannot be widened past 79 rows without
+ *   this floor ceasing to hold — and that constant's own docblock cites this one. Neither
+ *   package can move alone. `packages/sim/src/travel.movement.test.ts` MEASURES the journey by
+ *   walking it, comparing all three axes, rather than asserting the arithmetic.
  *
  * **`.positive()` IS THEREFORE A DERIVED BOUND AND `3` IS A PREFERENCE.** Saying which is
  * which is the point of ADR-0013 §4; a number nobody can source is a superstition with CI

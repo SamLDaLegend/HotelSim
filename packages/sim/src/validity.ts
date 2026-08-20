@@ -688,11 +688,18 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // seal test lives on a one-row plot where front and back are off the plot anyway.
   // `validity.door.test.ts` pins the discriminating case on a plot with depth.
   //
-  // AND ON THE SHIPPED ONE-ROW PLOT THIS DEGENERATES TO THE OLD RULE EXACTLY, through
-  // `isWithinBounds`: `cellFront`/`cellBack` of a cell whose row is both `minRow` and
-  // `maxRow` are off the plot, so they are skipped by the very first line of the loop —
-  // the same line that already skipped a cell beyond the left edge. That is what keeps
-  // every migrated world's validity verdicts identical across 16 -> 17.
+  // ON A ONE-ROW PLOT THIS DEGENERATES TO THE OLD RULE EXACTLY, through `isWithinBounds`:
+  // `cellFront`/`cellBack` of a cell whose row is both `minRow` and `maxRow` are off the
+  // plot, so they are skipped by the very first line of the loop — the same line that
+  // already skipped a cell beyond the left edge. That is what kept every migrated world's
+  // validity verdicts identical across 16 -> 17, and it is why a MIGRATED world still keeps
+  // them today: `migrateV16ToV17` writes a one-row plot from its own frozen constant.
+  //
+  // SINCE G-036a THE SHIPPED PLOT IS EIGHT ROWS DEEP, so on a world this build CREATES all
+  // four probes reach real cells and the arity is load-bearing for real. Measured before the
+  // plot was widened: one extra row on its own takes `noDoor` from 5 to 0 in the I2 log at
+  // 40,000 ticks and from 2 to 0 in the CLI criterion run, because every seal layout in the
+  // tree sealed along ONE axis. The layouts now seal on four sides; the rule did not change.
   //
   // THE PROBE ORDER IS FIXED AND DOES NOT MATTER TO THE ANSWER: this asks whether ANY
   // neighbour is open, so it is an existential over a fixed-length array literal, not an

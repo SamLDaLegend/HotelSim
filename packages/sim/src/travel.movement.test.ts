@@ -26,6 +26,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { stepTowards } from './guests.js';
+import { cellsEqual, createGridBounds } from './grid.js';
 import type { Cell } from './grid.js';
 
 const at = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
@@ -63,17 +64,55 @@ describe('stepTowards — one tick of walking', () => {
     // The derived FLOOR under the speed dial: travel now spends `toleranceTicks`, so a speed at
     // which crossing the plot outlasts tolerance would re-introduce the cliff ADR-0017 was
     // written to dissolve — a guest timing out because it walked, not because it was failed.
-    // The plot is 23 floors x 80 columns; the shipped tolerance is 180 ticks.
-    let here = at(-2, 0);
-    const there = at(20, 79);
+    // The shipped tolerance is 180 ticks and `guestCellsPerTickSchema` in
+    // `packages/content/src/schema.ts` carries the other half of this derivation.
+    //
+    // ======================================================================================
+    // THE LOOP TERMINATED ON `floor && column` AND NEVER COMPARED `row` (found at G-036a).
+    //
+    // On the one-row plot G-034a shipped, that was invisible: `to.row - from.row` was always
+    // zero, so the row axis cost nothing and the answer was right for the wrong reason. The
+    // moment the plot gained depth it would have stopped: the walk would have declared the
+    // journey OVER while the guest still had rows to cross, reported a worst journey that is
+    // TOO SMALL, and stayed green — a derived bound quietly under-measuring the thing it
+    // bounds, in the test that exists to keep it honest. `cellsEqual` is the one comparison
+    // (`grid.ts`), and this now uses it rather than spelling two thirds of it out.
+    // ======================================================================================
+    //
+    // THE CORNERS ARE THE PLOT'S OWN, READ FROM `createGridBounds()` RATHER THAN WRITTEN OUT.
+    // The bound is a property of the SHIPPED plot, so a plot change must move this number or
+    // fail here; two literals copied out of `grid.ts` would go stale silently, which is the
+    // defect one paragraph up wearing different clothes.
+    const bounds = createGridBounds();
+    let here = { floor: bounds.minFloor, column: bounds.minColumn, row: bounds.minRow };
+    const there = { floor: bounds.maxFloor, column: bounds.maxColumn, row: bounds.maxRow };
     let ticks = 0;
-    while (!(here.floor === there.floor && here.column === there.column)) {
+    while (!cellsEqual(here, there)) {
       here = stepTowards(here, there, 1);
       ticks += 1;
       if (ticks > 1000) break;
     }
-    expect(ticks).toBe(101);
+    // 22 floors + 79 columns + 7 rows. The three spans, added, because the budget is spent on
+    // one axis at a time.
+    expect(ticks).toBe(
+      bounds.maxFloor - bounds.minFloor + (bounds.maxColumn - bounds.minColumn) + (bounds.maxRow - bounds.minRow),
+    );
+    expect(ticks).toBe(108);
     expect(ticks).toBeLessThan(180);
+  });
+
+  it('and the row axis is REALLY walked, so the bound above is not measuring two axes of three', () => {
+    // The falsifier for the repair above: a journey that differs ONLY in the row. Under the
+    // old `floor && column` termination this loop never ran a single tick and `ticks` was 0.
+    let here = at(4, 20, 0);
+    const there = at(4, 20, 7);
+    let ticks = 0;
+    while (!cellsEqual(here, there)) {
+      here = stepTowards(here, there, 1);
+      ticks += 1;
+      if (ticks > 100) break;
+    }
+    expect(ticks).toBe(7);
   });
 
   it('ABSENT speed teleports, which is what every build before this one did', () => {

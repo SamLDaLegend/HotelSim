@@ -285,24 +285,46 @@ export const COLUMNS_PER_ROOM = 2;
  * changes only the case nobody could previously play.
  * ---------------------------------------------------------------------------
  */
+/**
+ * ==========================================================================================
+ * AND SINCE G-036a IT PACKS IN TWO AXES AND SEALS ON FOUR SIDES.
+ *
+ * The block is unchanged — a lane column, then seven columns of rooms — but the lane now runs
+ * the FULL DEPTH of the plot and the rooms fill every row between the lanes. So a room walled
+ * in by its neighbours is walled in on all FOUR sides rather than on the two a one-row plot
+ * made available: the same player mistake, in a world where the rule can see all of it.
+ *
+ * THE FILL ORDER IS ACROSS THE BLOCK FIRST AND THEN BACK INTO IT, AND IT IS CHOSEN RATHER THAN
+ * INCIDENTAL. `--build` advances its index on every ATTEMPT, refused or not (see `schedule`),
+ * and the pinned criterion invocation affords only a few dozen. Filling column by column needs
+ * three whole columns — `3 x depth` builds — before any room has a neighbour on both sides;
+ * filling row by row needs two neighbours in the same row and one behind, so the first sealed
+ * room appears within TEN builds. A layout whose defining mistake is unreachable inside the run
+ * that measures it is the ADR-0007 shape, and making that mistake is what this walk is for.
+ * ==========================================================================================
+ */
 export function builtRoomCell(index: number, bounds: GridBounds, startFloor: number): Cell {
   // PACKED INTO BLOCKS BETWEEN THE PLAYER'S OWN CORRIDORS SINCE G-034b. Every eighth column is
   // a corridor (`playerCorridorCells`) and the walk fills the seven between, block by block,
   // then up. See `PLAYER_COLUMNS_PER_BLOCK` for what each part of that buys.
-  const blocks = blocksPerFloor(bounds);
-  const perBlock = roomsPerBlock(bounds);
-  const perFloor = blocks * perBlock;
+  const columnsPerBlock = roomColumnsPerBlock(bounds);
+  const perBlock = columnsPerBlock * rowsPerFloor(bounds);
+  const perFloor = blocksPerFloor(bounds) * perBlock;
   const onFloor = index % perFloor;
+  const inBlock = onFloor % perBlock;
   return {
     floor: startFloor + Math.floor(index / perFloor),
     // The block's corridor is at `minColumn + 1 + block * 8`, so its rooms start one past it.
     column:
-      bounds.minColumn + 2 + Math.floor(onFloor / perBlock) * PLAYER_COLUMNS_PER_BLOCK + (onFloor % perBlock),
-    // THE PLOT'S OWN ROW, not a literal 0 (G-034a). The shipped plot is one row deep, so
-    // this is the only row there is; reading it from the bounds is what keeps this layout
-    // on a plot that a later goal makes deeper, and keeps the terraces here SHOULDER TO
-    // SHOULDER on one row so the `noDoor` verdicts this walk exists to produce still occur.
-    row: bounds.minRow,
+      bounds.minColumn +
+      2 +
+      Math.floor(onFloor / perBlock) * PLAYER_COLUMNS_PER_BLOCK +
+      (inBlock % columnsPerBlock),
+    // ONE ROW FURTHER BACK EVERY TIME THE BLOCK'S WIDTH IS EXHAUSTED (G-036a). See the docblock
+    // above for why this order and not the other, and `playerCorridorCells` for why no row is
+    // a lane. It reads the plot's own `minRow` rather than a literal 0, which is what keeps
+    // this layout correct on a test plot that starts somewhere else.
+    row: bounds.minRow + Math.floor(inBlock / columnsPerBlock),
   };
 }
 
@@ -310,20 +332,36 @@ export function builtRoomCell(index: number, bounds: GridBounds, startFloor: num
  * HOW WIDE A BLOCK OF THE PLAYER'S ROOMS IS, corridor included (G-034b).
  *
  * DERIVED FROM WHAT THE LAYOUT HAS TO PRODUCE, not chosen for looks — §2.1's rule applied to a
- * host's layout number:
+ * host's layout number.
  *
- *   AT LEAST 4, or the block has no MIDDLE room and `noDoor` stops being reachable from a
- *   CLI run at all. A corridor, then rooms: at 4 the block is corridor + 3 rooms, and the
- *   middle one has a room hard against both sides. That reason is `validity.report.test.ts`'s
- *   pinned criterion and it must survive this goal.
+ * ==========================================================================================
+ * RE-DERIVED FOR TWO AXES AT G-036a, BECAUSE THE OLD DERIVATION WAS ABOUT A STRIP AND ITS ONLY
+ * TEST (that 8 divides 80) WOULD HAVE STAYED GREEN WHILE IT BECAME FALSE PROSE.
+ *
+ * The three clauses below are the same three, asked of a plan rather than of a line:
+ *
+ *   AT LEAST 4 ON THE COLUMN AXIS, or the block has no MIDDLE column and no room in it can be
+ *   walled in from the left and the right at once. A lane, then rooms: at 4 the block is a
+ *   lane plus 3 rooms and the middle one has a room hard against both sides. **On a plan that
+ *   is necessary and no longer SUFFICIENT** — the door rule probes four neighbours, so a room
+ *   with rooms east and west and open space in front of it HAS a door. What supplies the other
+ *   two is THE PLOT'S DEPTH, which is why `grid.ts` derives a depth of at least 3: the row axis
+ *   carries no lane here, so a room's front and back neighbours are rooms wherever the fill has
+ *   reached them. `validity.report.test.ts` counts the result rather than trusting this.
  *
  *   A DIVISOR OF THE SHIPPED PLOT'S WIDTH (80), so no floor ends in a ragged part-block whose
- *   last room's verdict depends on arithmetic nobody meant. 4, 8, 10, 16, 20 all qualify.
+ *   last room's verdict depends on arithmetic nobody meant. 4, 8, 10, 16, 20 all qualify. The
+ *   row axis owes nothing here: with no lane rows there are no row part-blocks to be ragged.
  *
  *   AND AS FEW CORRIDORS AS THAT ALLOWS, because the point of this layout is a player who
- *   under-provides circulation: 8 gives one corridor to seven rooms, of which two work (the
- *   ones at the ends of the block) and five are walled in. A smaller block would make the
- *   player's floor mostly work, which is the opposite of what this walk is for.
+ *   under-provides circulation. **THIS IS THE CLAUSE THAT DECIDED THE ROW AXIS GETS NO LANE OF
+ *   ITS OWN.** A lane every eighth column running the FULL DEPTH keeps the ratio the strip had
+ *   exactly: of the block's seven columns, the two beside a lane work and the five between them
+ *   are walled in, at every row. Give the row axis its own lane every fourth row and the block
+ *   becomes 7 x 3 rooms of which 16 work and 5 do not — **the player's floor would mostly WORK,
+ *   which is the opposite of what this walk is for.** So the depth is PACKED rather than
+ *   planned, and that is a decision with a count behind it rather than an omission.
+ * ==========================================================================================
  */
 export const PLAYER_COLUMNS_PER_BLOCK = 8;
 
@@ -335,9 +373,20 @@ function blocksPerFloor(bounds: GridBounds): number {
   return Math.max(1, Math.floor((bounds.maxColumn - bounds.minColumn) / PLAYER_COLUMNS_PER_BLOCK));
 }
 
-/** How many rooms fill one block: the block's width less its corridor, or what the plot allows. */
-function roomsPerBlock(bounds: GridBounds): number {
-  return Math.min(PLAYER_COLUMNS_PER_BLOCK - 1, bounds.maxColumn - bounds.minColumn - 1);
+/**
+ * How many room COLUMNS fill one block: the block's width less its lane, or what the plot
+ * allows. At least one, so a two-column test plot still walks.
+ */
+function roomColumnsPerBlock(bounds: GridBounds): number {
+  return Math.max(1, Math.min(PLAYER_COLUMNS_PER_BLOCK - 1, bounds.maxColumn - bounds.minColumn - 1));
+}
+
+/**
+ * How deep the packing goes: EVERY row of the plot (G-036a). No row is a lane — see
+ * `PLAYER_COLUMNS_PER_BLOCK`'s third clause for the count that decided that.
+ */
+function rowsPerFloor(bounds: GridBounds): number {
+  return bounds.maxRow - bounds.minRow + 1;
 }
 
 /**
@@ -375,11 +424,36 @@ function roomsPerBlock(bounds: GridBounds): number {
  * block's working rooms land over the corridors of the hotel below — connected, furnished, and
  * in mid-air, so `unsupported` swallows them and the eviction case dies again for a second
  * reason. Offset by one and every block's end rooms sit over rooms. Measured both ways.
+ *
+ * THE ROW AXIS NEEDS NO SUCH OFFSET, AND THAT IS ARITHMETIC RATHER THAN LUCK (G-036a) — BUT
+ * NOT THE SAME ARITHMETIC, WHICH IS WHY IT IS SPELLED OUT RATHER THAN ASSUMED SYMMETRIC.
+ * The inherited plate takes NO STRIDE ON THE ROW AXIS (`roomCell`): it banks rooms along EVERY
+ * row of the even columns it reaches. So on this axis there is no parity to line up with —
+ * a player room standing over an even column is supported at whatever row it is on, out to the
+ * depth `--rooms` reached, and `report.test.ts` asserts exactly that.
+ *
+ * SO `unsupported` COMES FROM THE COLUMN AXIS AND FROM DEMOLITION, NOT FROM THE ROW AXIS, AND
+ * THAT IS MEASURED RATHER THAN REASONED. At `validity.report.test.ts`'s pinned criterion the
+ * tally is 15: ELEVEN player rooms on ODD columns, standing over the lanes of the hotel below,
+ * and FOUR on even columns whose seeded room the demolish walk has already taken away — which
+ * is the same event `evictedRoomUnusable` counts from the guest's side. Both cases are wanted:
+ * the supported ones are what let a sealed room reach the DOOR rule at all (`unsupported` is
+ * checked first and would otherwise swallow every seal), and the unsupported ones are what keep
+ * `unsupported` itself in the tally.
  */
 export function playerCorridorCells(floor: number, bounds: GridBounds): readonly Cell[] {
   const cells: Cell[] = [];
   for (let block = 0; block < blocksPerFloor(bounds); block += 1) {
-    cells.push({ floor, column: bounds.minColumn + 1 + block * PLAYER_COLUMNS_PER_BLOCK, row: bounds.minRow });
+    const column = bounds.minColumn + 1 + block * PLAYER_COLUMNS_PER_BLOCK;
+    // THE LANE RUNS THE FULL DEPTH OF THE PLOT (G-036a). A stub one cell deep would leave every
+    // room behind the first row of the block with no declared walkway anywhere near it, so the
+    // whole packed floor would report `noCorridor` and the `noDoor` this walk exists to produce
+    // would be displaced by it — `noCorridor` is checked LAST, so it does not mask `noDoor`,
+    // but a room that has no door AND no corridor is only ever counted once, under the door.
+    // Emitted front to back, ascending, which is `compareCells`'s own order.
+    for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+      cells.push({ floor, column, row });
+    }
   }
   return cells;
 }
@@ -420,25 +494,85 @@ export function builtRoomStartFloor(rooms: number): number {
  * is the same honest failure `--rooms 99999` gets.
  */
 export function amenityCell(index: number, bounds: GridBounds): Cell {
-  const perFloor = Math.max(1, Math.floor((bounds.maxColumn - bounds.minColumn + 1) / COLUMNS_PER_ROOM));
+  // THE SAME PLATE AS `roomCell`, ONE FLOOR DOWN AND WALKED THE SAME WAY (G-036a): across the
+  // plate, then back into it, then further down. The stride of two on the COLUMN axis is what
+  // gives each amenity its doors, exactly as the sentence above says — that sentence was
+  // written when the column axis was the only one there was to say it about.
+  const columns = plateColumns(bounds);
+  const perFloor = columns * plateRows(bounds);
+  const onFloor = index % perFloor;
   return {
     floor: GROUND_FLOOR - 1 - Math.floor(index / perFloor),
-    column: bounds.minColumn + (index % perFloor) * COLUMNS_PER_ROOM,
-    row: bounds.minRow,
+    column: bounds.minColumn + (onFloor % columns) * COLUMNS_PER_ROOM,
+    row: bounds.minRow + Math.floor(onFloor / columns),
   };
 }
 
+/**
+ * Where the nth room this runner seeds stands: across the plate, then BACK into it, then up.
+ *
+ * ==========================================================================================
+ * THE SEEDED HOTEL IS A PLATE RATHER THAN A LINE (G-036a), AND BOTH HALVES OF THAT ARE
+ * DERIVED. Until this goal it was `index * 2` columns along one row: on a plot with no depth
+ * there was nowhere else to put it, and WATCH #12 called the result *"a string of huts on a
+ * path"*.
+ *
+ * 1. A LANE EVERY OTHER COLUMN, RUNNING THE FULL DEPTH — `COLUMNS_PER_ROOM`, unchanged. Rooms
+ *    bank along both sides of it, touching each other front and back and never left and right,
+ *    so every one of them keeps its door and its declared walkway. **THE ROW AXIS TAKES NO
+ *    STRIDE, and that is a decision rather than an omission**: the door rule asks for ONE free
+ *    neighbour and the lane beside the bank already supplies it, so a second lane every other
+ *    row would halve the plate for no verdict at all — the same rooms over twice the plot,
+ *    with twice the walk to the far one. A double-loaded corridor is what a hotel floor is.
+ *
+ * 2. THE PLATE IS SQUARE IN ROOMS — as many room-columns as it has room-rows. **Derived from
+ *    the WALK rather than chosen for looks**: `stepTowards` spends a tick per cell on each
+ *    axis in turn, so `n` rooms in a line put the last one `2n` cells from the door while `n`
+ *    rooms in a square put it about `3 * sqrt(n)` away. A square is the arrangement that
+ *    minimises the worst walk for a given room count on a plot whose two horizontal axes cost
+ *    the same per cell — and the worst walk is the quantity `guestCellsPerTickSchema` derives
+ *    the speed floor from, so it is a number this project already cares about rather than a
+ *    shape somebody liked. Capped by the plot's own width, so a narrow test plot still walks.
+ *
+ * WHAT IT LEAVES ALONE, WHICH IS THE PART THAT MATTERS FOR EVERY GOLDEN OLDER THAN THIS GOAL:
+ * the COLUMN varies fastest, so `--rooms 3` is still (0,0), (2,0), (4,0) — the shipped default
+ * hotel stands exactly where it stood, and the only thing that moved in the two-day golden is
+ * the state hash, which the plot's own new edges move on their own.
+ * ==========================================================================================
+ */
 export function roomCell(index: number, bounds: GridBounds): Cell {
-  // At least 1: `assertGridBounds` guarantees `minColumn <= maxColumn`, so the plot is at
-  // least one column wide, and a room is one column. The goal that widens a room (G-009,
-  // footprints) owns the case where a room is wider than the plot, and owns it there
-  // rather than here because that is where a room first HAS a width to compare.
-  const roomsPerFloor = Math.floor((bounds.maxColumn - bounds.minColumn + 1) / COLUMNS_PER_ROOM);
+  // At least 1 on each axis: `assertGridBounds` guarantees `minColumn <= maxColumn` and
+  // `minRow <= maxRow`, so the plot is at least one cell wide and one deep, and a room is one
+  // cell. The goal that widens a room (G-036b, footprints) owns the case where a room is
+  // bigger than the plot, and owns it there rather than here because that is where a room
+  // first HAS a size to compare.
+  const columns = plateColumns(bounds);
+  const rows = plateRows(bounds);
+  const perFloor = columns * rows;
+  const onFloor = index % perFloor;
   return {
-    floor: GROUND_FLOOR + Math.floor(index / roomsPerFloor),
-    column: bounds.minColumn + (index % roomsPerFloor) * COLUMNS_PER_ROOM,
-    row: bounds.minRow,
+    floor: GROUND_FLOOR + Math.floor(index / perFloor),
+    column: bounds.minColumn + (onFloor % columns) * COLUMNS_PER_ROOM,
+    row: bounds.minRow + Math.floor(onFloor / columns),
   };
+}
+
+/**
+ * How many room-ROWS one floor of the seeded plate holds: every row of the plot, because the
+ * row axis takes no stride (see `roomCell`).
+ */
+function plateRows(bounds: GridBounds): number {
+  return bounds.maxRow - bounds.minRow + 1;
+}
+
+/**
+ * How many room-COLUMNS one floor of the seeded plate holds: as many as it has rows, so the
+ * plate is SQUARE IN ROOMS — capped by what the plot's width allows at the column stride, and
+ * at least one so a one-column test plot still walks.
+ */
+function plateColumns(bounds: GridBounds): number {
+  const widest = Math.floor((bounds.maxColumn - bounds.minColumn + 1) / COLUMNS_PER_ROOM);
+  return Math.max(1, Math.min(plateRows(bounds), widest));
 }
 
 /**

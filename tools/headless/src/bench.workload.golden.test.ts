@@ -291,7 +291,18 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   free cell beside it keeps its verdict when that cell is named. The plain arm builds
     //   nothing, so the player's own corridor blocks (`playerCorridorCells`) never fire here;
     //   the churn arm below is where they do, and its 19 evictions are unchanged too.
-    expect(hashState(plain)).toBe('c7a049822580b39e');
+    //   `c7a049822580b39e` -> `fbbb35b464f13368`   G-036a gave the shipped PLOT depth and
+    //   spread the seeded layout into it. TWO causes, both shape: `minRow`/`maxRow` are hashed
+    //   and they moved, and this runner's 60 rooms are now banked into a SQUARE PLATE — eight
+    //   room-columns by eight rows, all on floor 0 — where they used to be forty along floor 0
+    //   and twenty along floor 1. **THE CONTROL IS THE FULL BLOCK AGAIN AND IT IS THE WHOLE
+    //   ARGUMENT**: arrivals, checkouts, `leftDissatisfied`, evictions, the departure table,
+    //   the need rows and the abandonment count are every one of them UNCHANGED. They can be,
+    //   because the shipped content declares no `guestCellsPerTick` — travel is instantaneous,
+    //   so a room's distance from the door costs nothing — and because every room in the plate
+    //   has the same free lane beside it that it had when the plate was a line. Sixty rooms in
+    //   a different arrangement, serving the same guests in the same order.
+    expect(hashState(plain)).toBe('fbbb35b464f13368');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -426,7 +437,13 @@ describe('the same workload with the player churning the building', () => {
     // HOLDS FOR THE TENTH TIME: 19 evictions, unchanged, in the goal that made connectivity a
     // validity rule — the churn schedule demolishes the same rooms out from under the same
     // guests, and the rooms it demolishes were connected before and after.
-    expect(hashState(churn)).toBe('09496f8d672da4e9');
+    // MOVED AT G-036a WITH ITS SIBLING, `09496f8d672da4e9` -> `c06e0719c4b65235`, for the two
+    // causes the plain row gives PLUS one this arm alone reaches: it builds, so the player's
+    // lanes now run the full depth of the plot and its rooms pack into every row between them.
+    // THE SHARP CONTROL HOLDS FOR THE ELEVENTH TIME: 19 evictions, unchanged, in the goal that
+    // gave the plot depth and re-laid every layout in the tree — the churn schedule demolishes
+    // the same rooms out from under the same guests.
+    expect(hashState(churn)).toBe('c06e0719c4b65235');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

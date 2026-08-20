@@ -611,21 +611,46 @@ check(
   `a docs-only commit did not PASS as IDENTICAL with no ratio (exit ${identical.status}, verdict ${identical.verdict})`,
 );
 
-// AND THE NAME IN THAT LAST CLAIM MOVED AT G-034b, WHICH IS THE CLAIM WORKING RATHER THAN
-// WEAKENING. An arm materialises `packages/sim/src` from the revision and drives it with HEAD's
-// workload (`ARM_PATHS`), and HEAD's workload now lays CORRIDORS — so a pre-G-034b simulation
-// stops at `applyCommand: unhandled command layCorridor` BEFORE it can reach the function G-013
-// added. The property under test is unchanged: *a revision the harness cannot drive reports
-// INCOMPARABLE and NAMES what stopped it*. Only the name of the first thing to stop it moved,
-// because the workload gained a command. (The wider consequence — every historical arm is now
-// INCOMPARABLE, so the measurement campaigns are re-taken rather than compared across this
-// change — is ADR-0015's REPLACE-on-configuration-change case, and G-039 owns it.)
+// AND THE NAME IN THAT LAST CLAIM MOVED AT G-034b, AND AGAIN AT G-036a — WHICH IS THE CLAIM
+// WORKING, AND THE SECOND MOVE IS ALSO THE EVIDENCE THAT THE NAME WAS NEVER THE PROPERTY.
+//
+// An arm materialises `packages/sim/src` from the revision and drives it with HEAD's harness
+// (`ARM_PATHS`), so anything HEAD's harness asks of the simulation that the old revision cannot
+// answer stops the arm. G-034b's workload gained a COMMAND, so a pre-G-034b sim stopped at
+// `applyCommand: unhandled command layCorridor`. G-036a's harness reads a FIELD — the seeded
+// layout now sizes its plate from `bounds.maxRow`, which a pre-G-034a `GridBounds` does not
+// have — so the arm now stops earlier still, at `draftSpawn: floor must be a safe integer, got
+// NaN`, before any command is applied at all.
+//
+// THE PROPERTY UNDER TEST IS UNCHANGED IN BOTH MOVES: *a revision the harness cannot drive
+// reports INCOMPARABLE and NAMES what stopped it.* Only the first thing to stop it moved.
+//
+// SO THE ASSERTION IS NOW WRITTEN IN TWO PARTS RATHER THAN RE-AIMED A THIRD TIME, AND THAT IS
+// A STRENGTHENING RATHER THAN A WEAKENING (ADR-0027's question, asked out loud): the STRUCTURAL
+// clause forbids everything the old single clause forbade except the choice of symbol — an
+// INCOMPARABLE with no named arm, or with an empty cause, still fails — and the SPECIFIC clause
+// keeps today's cause pinned so this is a real reading and not a shape check. What the old form
+// additionally forbade was a cause other than `layCorridor`, which is not a property of the
+// instrument; it is a property of whichever revision the probe happens to name.
+// (The wider consequence — every historical arm is INCOMPARABLE, so the measurement campaigns
+// are re-taken rather than compared across this change — is ADR-0015's
+// REPLACE-on-configuration-change case, and G-039 owns it.)
 const incomparable = withGateCopy([...FAST, armPatch('e870147')], (gate) => runTripwire(gate));
+/**
+ * WHAT "NAMES WHAT STOPPED IT" MEANS, AS A SHAPE RATHER THAN AS ONE SYMBOL: the reason line
+ * identifies the ARM that would not run (`head-0`, `base-0`) and carries a non-empty cause
+ * after it. An INCOMPARABLE with no arm named, or with an empty reason, still fails this.
+ */
+const NAMES_A_CAUSE = /\b[a-z]+-\d+: \S+/;
 check(
   'tools/gates/tripwire.mjs',
-  incomparable.status === 0 && incomparable.verdict === 'INCOMPARABLE:1' && incomparable.stdout.includes('layCorridor'),
+  incomparable.status === 0 &&
+    incomparable.verdict === 'INCOMPARABLE:1' &&
+    NAMES_A_CAUSE.test(incomparable.stdout) &&
+    incomparable.stdout.includes('must be a safe integer'),
   `a revision the harness cannot drive did not PASS as INCOMPARABLE naming what stopped it ` +
-    `(exit ${incomparable.status}, verdict ${incomparable.verdict})`,
+    `(exit ${incomparable.status}, verdict ${incomparable.verdict}, ` +
+    `cause "${/\b[a-z]+-\d+: .*/.exec(incomparable.stdout)?.[0] ?? '(no cause printed)'}")`,
 );
 
 // --- 6. the gate FAILS CLOSED when the instrument fails ---------------------------

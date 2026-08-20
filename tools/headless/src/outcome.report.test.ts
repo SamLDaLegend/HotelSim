@@ -432,12 +432,36 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   // the rooms packed between — and the inherited `--build 360` fell to ONE episode where it had
   // three. `outcome.test.ts` drives both eviction reasons deterministically and stayed green
   // throughout, which is step 1 of the note answered: the split works, this was a schedule
-  // change. `--build 720` restores the margin to THREE against the same seed, the same hotel and
-  // the same demolition cadence — the smallest edit that puts a guest back upstairs when the
-  // floor beneath it goes.
+  // change. `--build 720` restored the margin to THREE against the same seed, the same hotel and
+  // the same demolition cadence.
+  //
+  // ---------------------------------------------------------------------------
+  // RETUNED AGAIN AT G-036a — FOURTH TIME, SAME PROCEDURE — AND THIS TIME THE INHERITED
+  // INVOCATION WAS NOT BROKEN. IT WAS THIN, AND THAT IS WHY IT MOVED.
+  //
+  // The plot gained depth and both layouts spread into it. **MEASURED ON THE INHERITED
+  // INVOCATION AFTER THE CHANGE: all five reasons still fire, with `evictedRoomUnusable` at
+  // TWO** — down from three, on the row the note below calls "no headroom" and warns about in
+  // as many words. So this is not step 2 rescuing a dead criterion; it is step 2 spending a
+  // goal that was already editing this file to buy back margin the note has been asking for
+  // since G-027a.
+  //
+  // STEP 1 OF THE NOTE, ANSWERED FIRST AND ANSWERED EVERY TIME: `outcome.test.ts` drives both
+  // eviction reasons deterministically on a two-room stack and is green. The split works.
+  //
+  // STEP 2, AND THE SWEEP IS RECORDED SO THE NEXT READER CAN SEE THE NUMBER WAS FOUND RATHER
+  // THAN GUESSED. `evictedRoomUnusable` needs a GUEST in a player room whose support is
+  // demolished, so the levers are the number of inherited rooms under the player's block and
+  // the number of guests inside them: `--rooms 40` and `--arrivals 30`. **THE AMENITY COUNT IS
+  // DERIVED, NOT SWEPT**, from the relation `needShareBasisPoints` owns — one provider sustains
+  // `1 + refillPerTick` = 8 concurrent guests, this hotel holds `1440 / 30` = 48 of them, and
+  // `ceil(48 / 8)` = **6**. Measured at that invocation: 841 checkedOut, 535 gaveUp, 13
+  // leftDissatisfied, 29 evictedRoomGone, **6 evictedRoomUnusable** — all five reasons, and
+  // the first time this criterion has had more than three of the thin one.
+  // ---------------------------------------------------------------------------
   const ARGS = [
-    '--days', '30', '--seed', '7', '--rooms', '30', '--amenities', '3', '--arrivals', '60',
-    '--build', '720', '--demolish', '1440',
+    '--days', '30', '--seed', '7', '--rooms', '40', '--amenities', '6', '--arrivals', '30',
+    '--build', '360', '--demolish', '1440',
   ];
 
   it('the pinned invocation exits 0 and reports at least FOUR reasons non-zero', () => {
@@ -462,13 +486,15 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     expect(nonZero).toHaveLength(5);
   });
 
-  it('AND THE MARGIN IS TWO — read this first if the test above just went red', () => {
-    // MEASURED, AND NARROW. Four of the five reasons arrive in the dozens or hundreds — 380 /
-    // 260 / 46 / 29 at θ-b1, where G-027a read 60 / 286 / 11 over four rows.
-    // `evictedRoomUnusable` arrives THREE TIMES: three guests, in three rooms, whose support was
-    // demolished from under them. It was ONE before G-027a and TWO on θ-b1's first invocation —
-    // see the note on `ARGS` for why each of those had to be retuned, and treat three as barely
-    // more headroom than one.
+  it('AND THE MARGIN IS SIX — read this first if the test above just went red', () => {
+    // MEASURED, AND NARROW. Four of the five reasons arrive in the dozens or hundreds — 841 /
+    // 535 / 13 / 29 at G-036a, where θ-b1 read 380 / 260 / 46 / 29 and G-027a read 60 / 286 / 11
+    // over four rows.
+    // `evictedRoomUnusable` arrives SIX TIMES: six guests, in six rooms, whose support was
+    // demolished from under them. It was ONE before G-027a, TWO on θ-b1's first invocation and
+    // THREE from G-034b — see the note on `ARGS` for why each of those had to be retuned. Six is
+    // the first reading with real headroom, and it is still the thinnest row here by two orders
+    // of magnitude, so the procedure below stands exactly as written.
     //
     // SO THE CRITERION HAS NO HEADROOM ON THAT ROW, and the failure mode is a trap for
     // whoever hits it. Change the build cadence, the demolish cadence, the plot, the
@@ -491,7 +517,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     };
     const count = (reason: string): number =>
       document.guests.departures.find((row) => row.reason === reason)?.count ?? -1;
-    expect(count('evictedRoomUnusable')).toBe(3);
+    expect(count('evictedRoomUnusable')).toBe(6);
     // The other three, for contrast: this is what headroom looks like.
     expect(count('checkedOut')).toBeGreaterThan(50);
     expect(count('gaveUp')).toBeGreaterThan(50);
@@ -504,10 +530,11 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     };
     const departed = document.guests.departures.reduce((total, row) => total + row.count, 0);
     expect(departed + document.guests.inHotel).toBe(document.guests.arrived);
-    // 360 -> 720: the retuned invocation halves the arrival interval (see `ARGS`). Derived and
-    // asserted rather than pinned by hand — 43,200 ticks at one arrival every 60, plus the one
-    // at tick 0's offset — so a future retune moves this by arithmetic rather than by editing.
-    expect(document.guests.arrived).toBe(720);
+    // 720 -> 1,440 at G-036a: the retuned invocation halves the arrival interval again (see
+    // `ARGS`). Derived and asserted rather than pinned by hand — 43,200 ticks at one arrival
+    // every 30, plus the one at tick 0's offset — so a future retune moves this by arithmetic
+    // rather than by editing.
+    expect(document.guests.arrived).toBe(1_440);
   });
 
   it('the migration-only reason stays zero in every real run, whatever the length of the union', () => {

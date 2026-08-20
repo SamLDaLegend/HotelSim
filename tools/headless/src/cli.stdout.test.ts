@@ -137,7 +137,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // while the need rows' met/unmet and the review distribution move because their definition
     // did. `unservedTicks` and `instanceTicks` are counted in ticks and are UNCHANGED, which is
     // what separates a change of unit from the simulation behaving differently.
-    stateHash: '609eab77f24306e3',
+    stateHash: '9256cb64df99e768',
   },
   guests: {
     arrived: 24,
@@ -425,7 +425,21 @@ const GOLDEN_2_DAYS_SEED_42 =
     // same 510,000p. The shipped hotel is laid out one room, one corridor, so declaring
     // that corridor changes no verdict — which is the whole argument that this goal changed
     // the RULES without changing what the shipped hotel does.
-    'state hash  609eab77f24306e3',
+    //
+    // G-036a: ONE LINE MOVED AGAIN, AND THE CONTROL IS THE STRONGEST IT HAS BEEN.
+    // `609eab77f24306e3` -> `9256cb64df99e768`, because the shipped PLOT gained depth and
+    // `minRow`/`maxRow` are hashed state. **NOTHING ELSE IN THIS RUN MOVED AT ALL** — not one
+    // cell, not one corridor, not one entity id: the seeded plate wraps into the depth only
+    // when a row of it is FULL, and this hotel is three rooms wide, so the three bedrooms and
+    // the three basement amenities stand on exactly the cells they have stood on since G-006
+    // and the lanes are the lanes G-034b declared.
+    //
+    // So every other line is byte-identical: the same 6 valid rooms, the same 0/0/0/0/0
+    // invalidity tally, the same 24 arrivals, the same 4/16 split, the same 7 transactions and
+    // the same 510,000p. **THIS LINE IS THE PLOT'S TWO NEW EDGES AND NOTHING ELSE**, which is
+    // the tightest control this golden has carried: the hotel is identical and the world it
+    // stands in is two integers bigger.
+    'state hash  9256cb64df99e768',
   ].join('\n') + '\n';
 
 /**
@@ -582,7 +596,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  609eab77f24306e3']);
+    expect(differing).toEqual(['seed        42', 'state hash  9256cb64df99e768']);
     expect(lines43).toContain('seed        43');
   });
 });
