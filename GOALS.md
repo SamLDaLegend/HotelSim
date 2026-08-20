@@ -2124,6 +2124,39 @@ not a surprise.
 
 ## G-036 — The player draws a room
 Status: **PLANNED.**
+
+**FIRST DELIVERABLE, AND IT WAS NOWHERE IN THIS BLOCK UNTIL WATCH #12 ASKED FOR IT: THE PLOT GAINS
+DEPTH.** `createGridBounds`' default stops being one row deep and becomes a real plan.
+
+**THE HUMAN LOOKED AT G-035 AND ASKED WHETHER THE STAIRS-AND-LIFTS GOAL WOULD FIX IT. IT WOULD
+NOT** — circulation is G-038 and it moves guests THROUGH a plan; it does not make one. The change
+that turns *a string of huts on a path* into a building is this one, and **before this note the
+phrase "G-036 widens the plot" occurred EXACTLY ONCE IN THE WHOLE LEDGER — inside a comment in
+G-034a's REFLECT.** A constraint mentioned in another goal's prose is not a deliverable of this
+one. **That is the G-031a class for the fourth time, and this time it was caught by a person
+looking at the screen rather than by any gate** — which is ADR-0046 §1's whole argument, arriving
+on its first outing.
+
+**WHY IT WAITS FOR THIS GOAL RATHER THAN LANDING EARLIER, stated so the delay is a decision:** a
+deeper plot with no drawing verb is a bigger empty field. Depth only means something once a room
+can be SHAPED to use it, and the two together are one migration rather than two. **G-034a's
+one-row constraint was what kept that goal behaviour-free; it was never meant to survive M3.**
+
+**AND IT REOPENS TWO THINGS THAT WERE DELIBERATELY DEFERRED TO THE DEPTH:**
+- **`WALL_HEIGHT` (64px) IS STILL PROVISIONAL** and must be looked at again HERE, not before —
+  WATCH #12 recorded that at one row deep the judgement is not available, because walls this tall
+  are what makes rooms occlude the path behind them (ADR-0047 amdt §1, human).
+- **The 4-neighbour door rule stops degenerating.** On a one-row plot it collapses to the
+  2-neighbour rule, which is what kept every migrated verdict identical at G-034a. **The moment
+  the plot deepens, `noDoor` and `noCorridor` become producible in ways the one-dimensional seal
+  layouts cannot express** — `determinism-log.ts` and `report.ts` will need re-deriving, and
+  `SHIPPED_ROW` says so in its own header.
+
+**A LOBBY IS NOT IN M3 AT ALL, and the human's expectation of one is fair.** Reception as a queue
+point is **C5, PARKED** (ADR-0047), with its falsification test: *if M3's queue machinery cannot
+express a check-in desk without changing shape, it was scoped too narrowly.* **Depth plus drawing
+is what makes a lobby EXPRESSIBLE — a player can draw one — but nothing in M3 makes it MEAN
+anything.** Stated here rather than discovered at the milestone question.
 Statement: the player draws a footprint and places items inside it. **`placeItem` is promoted out
   of M6 to the PRIMARY PLAYER VERB** (ADR-0046 §4.2).
 
