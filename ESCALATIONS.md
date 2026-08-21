@@ -1675,3 +1675,47 @@ and both recommendations have been on the table since they were raised.
 > continuing would mean choosing a gate threshold and a balance direction on the orchestrator's own
 > authority, which `CLAUDE.md` forbids in one line: *"Changing an invariant is a human decision,
 > always."***
+
+---
+
+## 2026-08-21 — OPEN — A ROUTER COSTS 1.7× AND THE BOUND WAS FROZEN THIS MORNING
+
+**Raised**: G-038a's plan review · **Asked of the human**: nothing yet — **this is a notice, not a
+request.** It is filed because the two facts were ruled on **hours apart** and nobody has read them
+together.
+
+**THIS MORNING (ADR-0056, option b), the human ruled the tick-cost bound STAYS at `1.4640`** and the
+gate prints what it cannot catch. **This afternoon, `sim-critic` measured that a per-guest-per-tick
+route search costs `1.70× · 1.91× · 1.77×`** — three independent campaigns, medians of 5, arms
+alternated, quiet `win32/12cpu`.
+
+> **A router as G-038 describes it would fail `check:tickcost` outright, against a bound that was
+> deliberately left wide enough to catch only doublings.** It is not a marginal call: **1.7× is
+> above the bound, not inside its blind spot.**
+
+**AND THE MEASURED ARM IS A GENEROUS LOWER BOUND**: cached blocked masks, zero per-search
+allocation, an integer heap, **1.19 nodes expanded per search**, and **no route reconstruction, no
+stepping, no stairs, no corridor partition.** A real implementation is strictly worse.
+
+### Why this is not an escalation yet
+
+**The design has not been attempted.** The finding is that **the obvious design is unaffordable**,
+and the block now says so before a builder spends a goal discovering it. **The obvious escape —
+caching a path — is itself blocked**: `placed()` recomputes the destination every tick *by written
+decision*, because a stored one goes stale silently when a walking guest is handed a room; and an
+off-world cache **passes I6 green while diverging the replay**, since I6 round-trips one moment.
+
+**So G-038a-i's first exit criterion is a tick-cost design that beats a measured 1.7×**, and the
+honest possibilities are: route on **destination change** rather than per tick; route **once per
+guest per journey** with a stated invalidation rule and a red test for it; or **do not route at
+all** and keep `stepTowards`, buying the *"walks a corridor rather than through a wall"* property by
+a cheaper means.
+
+### What would turn this into a decision for the human
+
+**If no design comes in under the bound.** Then the choice is between **shipping a router and
+re-opening a bound ruled this morning**, or **shipping the mechanic differently.** Both are the
+human's, and neither should be reached by a builder quietly widening a number.
+
+**Nothing is blocked today.** Main is fourteen green, travel is on, and G-038a-i can be planned
+against this constraint rather than into it.

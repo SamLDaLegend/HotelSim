@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-023b-ii is done and TRAVEL IS ON IN THE SHIPPED GAME — guestCellsPerTick 3, inside a derived window, with 41 assertions moved and eight of them criteria that INVERTED rather than re-pins. The backlog derivation is EXTENDED not re-pinned, and produced a floor nobody ordered: the speed floor is 2, not 1. WATCH #16 shows the first guest ever to be somewhere it was not going. And the intermittent row was DIAGNOSED by the instrument shipped hours earlier — both failures are TIMEOUTS, not assertion failures, and travel is faster not slower. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-023b-ii is done and travel is ON. The circulation goal split again at PLAN — four BLOCKERs, and the decisive one is MEASURED: a route search per guest per tick costs 1.70x/1.91x/1.77x against a bound the human froze at 1.4640 this same morning, and that arm was a generous lower bound. Both walkability answers are unimplementable on the shipped plans; 166 of 300 move events change floor and there is still no stair anywhere. Two ledger blocks were physically broken and are repaired. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2817,11 +2817,143 @@ is what a builder sizes against.**
   through a wall, and takes the stairs.
 - **G-038b — "a route can be busy"**: lift capacity, the call queue, wait state, C5's desk as the
   third consumer, and the wait-as-satisfaction ruling.
+- **G-038c — B8's floor price and floor-count patience**: a transaction plus a price in
+  `economy.json`, and one number in `guest-rules.json` read by the lodging search — a guest will
+  not lodge more than N floors from the entrance. **B8's two independent halves — the only part of
+  circulation that depends on neither open escalation.** *(Now a block of its own, below.)*
+
+## G-038a — SPLIT at PLAN, 2026-08-21. Four BLOCKERs; the seam is taken.
+Status: **split into G-038a-i / G-038a-ii.** `sim-critic`'s second review of this goal, with travel
+now ON. **The blocker that stopped G-038 last week is discharged; four new ones replaced it.**
+
+### THE ONE THAT DECIDES THE DESIGN: A ROUTE SEARCH PER GUEST PER TICK IS NOT AFFORDABLE
+
+**Measured today, three independent campaigns, medians of 5 per arm, arms alternated, warm-up
+discarded, quiet `win32/12cpu`, 60 rooms / 5 amenities / arrival every 96 / seed 42 / 20,000 ticks:**
+
+> **1.70× · 1.91× · 1.77× — against a bound of 1.4640 that ADR-0056 ruled TODAY cannot move.**
+
+**And the measured arm is a deliberately generous LOWER bound**: blocked masks cached across all
+20,000 ticks (two rebuilds total), **zero per-search allocation**, an integer binary heap, a
+Manhattan heuristic, and **a mean of 1.19 nodes expanded per search** because most guests are
+already where they are going — **with no route reconstruction, no stepping, no stairs and no
+corridor-only partition.** *"A real implementation is strictly worse than 1.7×."*
+
+*(Caveat stated rather than implied: this is not `check:tickcost`'s own arm — it measures the same
+workload shape through a different door, so it PREDICTS the gate rather than reporting it.)*
+
+**AND THE OBVIOUS ESCAPE IS ITSELF A BLOCKER.** *"Cache the path"* collides with a decision already
+written down: **`placed()` recomputes the destination EVERY TICK by design**, because *"a stored one
+would go stale silently"* — the destination genuinely changes mid-journey when a walking guest is
+handed a room. On the Guest it is hashed state and can go stale; off-world in `ValidityCache`'s
+shape, **I6 round-trips ONE moment and re-hashes, so a cache that changes FUTURE routes after a
+reload passes I6 green and diverges the replay the viewer reads.**
+
+**So the plan must state how a route is computed WITHOUT a search per guest per tick, before BUILD.**
+
+### BOTH ANSWERS TO "WHAT IS WALKABLE" ARE UNIMPLEMENTABLE ON THE SHIPPED PLANS
+
+My last review posed this as a dichotomy. **The tree says numerically that neither branch exists:**
+
+1. **Destinations are INSIDE rooms.** `standingCell` returns the host's own footprint cell, so
+   *"A\* walks circulation only"* **has no admissible destination, ever.**
+2. **The lanes are not connected to each other.** Floor 0 of the WATCH surface: corridors at columns
+   0, 2, 4, 6; rooms at 1, 3, 5. **Every pair of adjacent lanes is separated by a room column.**
+3. **The headless harness is worse** — `report.ts` lays exactly ONE lane cell per seeded room, so
+   `--days 2 --seed 42` yields **nine corridor cells, every one an isolated single cell.** Under
+   circulation-only, **no guest in the I2 log, the bench or any golden can move at all.**
+4. **And "any free cell" is not the safe fallback**: it routes a guest from the lobby lane **around
+   the BACK of the building through empty plot rows 3–7.** A legal route that reads as stupid, **on
+   the instrument, in the goal whose watchable is *"walks a corridor instead of through a wall"*.**
+
+**Ruling owed: THREE sets, not two** — declared circulation, open-plan free cells, **and the
+destination room's own footprint** — and then an explicit decision whether **the lanes get JOINED**
+(three layouts, every golden) **or B2's scarcity has no consequence in pathing.**
+
+### 166 OF 300 MOVE EVENTS CHANGE FLOOR, AND THERE IS STILL NO STAIR ANYWHERE
+
+Re-checked: **no stair, no lift, no vertical connection** in `packages/sim`, `packages/content/data`,
+`report.ts`, `determinism-log.ts` or `scenario.ts` — **every hit is a comment.** Measured on the
+WATCH surface (reproducing WATCH #16 exactly): **166 of 300 move events change floor.** Under
+*"vertical joins at stairs only"* with no stair declared, **55% of all visible motion becomes
+impossible**, and headless is the same — `--days 2 --seed 42` meets comfort 12, entertainment 6,
+nourishment 10, **every one cross-floor.**
+
+### AND A\* FALSIFIES THE DERIVATION THAT LICENSES `guestCellsPerTick: 3`
+
+The window `[2, 108]` is derived from `stepTowards` walking floor, then column, then row — **worst
+journey = 22 + 79 + 7 = 108.** **A route around an obstacle is longer than the Manhattan distance**,
+so the moment a router replaces `stepTowards`: the schema's upper endpoint is false; the
+dissatisfaction bound that produced *"the floor is 2, not 1"* is computed from that same sum; and
+`travel.movement.test.ts` asserts the corner-to-corner walk **is 108**. **If the re-derived floor
+rises above 3, the SHIPPED CONTENT becomes illegal** — and editing those numbers while their
+warrants still say 108 is §2.1's exact failure, which G-034a and G-036a both avoided by re-deriving
+in the same change.
+
+### THE SEAM, TAKEN
+
+- **G-038a-i — "a wall is a wall".** Horizontal routing on one floor: the walkability ruling,
+  per-floor routing, **the tick-cost design that has to beat a measured 1.7×**, and joining the
+  lanes. **NO stairs, NO new `World` field, NO save bump** — the floor axis keeps `stepTowards`'s
+  current unconditional spend, **which is exactly what a v20 world MEANS.**
+- **G-038a-ii — "a floor is reached by something".** The stair declaration, **v21 and its contested
+  migration**, reachability as a validity rule, the re-derived speed window, and the occupancy
+  re-take **merged with G-039b.**
+
+**The dependency runs one way**, as at G-034 and G-036: **the vertical half needs a router to exist
+before a stair means anything, and the horizontal half needs no new hashed state at all.** Every
+BLOCKER except the walkability ruling and the tick cost lives in the vertical half — **and the
+horizontal half alone carries the ENTIRE watchable claim (224 of 300 move events), while the
+vertical half carries the entire behavioural risk.**
+
+### IS A\* WARRANTED? YES — BUT NOT FOR THE REASON THE BLOCK GAVE
+
+**Journeys are tiny on every shipped workload**: CLI default longest 11 cells, median 3; 60 rooms
+longest 16, median 6; WATCH surface longest 8; **maximum 3 cells in any single tick, everywhere.**
+**A router buys essentially nothing in ARRIVAL TIME and any claim that it does will not survive a
+stopwatch.**
+
+> **What it buys is that 224 of 300 guest steps on the WATCH surface — and 275 of 335 on the CLI
+> default — STOP PASSING THROUGH SOLID ROOMS.** That is large, legible, and **it is what belongs in
+> the exit criteria, as a COUNTED assertion** in G-034b's and G-036a's shape, never
+> `toBeGreaterThan(0)`.
+
+**This is NOT G-037a's shape.** G-037a was a fold that could not improve a zero; **this changes
+three quarters of every step a guest takes on the instrument.**
+
+### BOTH PARKED FALSIFICATION TESTS RAN, AND BOTH CAME BACK POSITIVE
+
+**"A corridor in mid-air is legal"**: a tower to floor 12 with one corridor declared at (12, 40, 0)
+and **nothing beneath it** — the room reports **VALID**. **"Circulation is not reachability"**: a 3×3
+block whose only declared corridor is **its walled-in centre cell** — the four edge rooms report
+**VALID**, **four valid rooms whose entire circulation is a sealed one-cell void.** And today the
+guest reaches them **by walking through the walls**: **275 of 335 move events on the CLI default land
+inside a room footprint.**
+
+### Also owed, each with its consequence
+
+**The entrance cell is INSIDE A ROOM in every headless workload** — `entranceCell` is
+`(0, minColumn, minRow)` and so is `roomCell(0)`, so **every roomless guest stands inside a
+stranger's bedroom** and any reachability model rooted at the entrance is rooted inside a room.
+`scenario.ts` leaves that column empty and calls it the lobby; **the harness driving I2, the bench,
+the scaling arms and every golden does not.**
+
+**I2 does not backstop route choice** — the gate holds no reference hash, so **a consistently
+arbitrary tie-break between two equal-cost routes leaves it green forever** while a guest takes the
+long way round every time. Criterion: **two equal-cost routes, the chosen one asserted directly,
+with a mutation probe.** Named I2 hazards: any open/closed set that is **iterated** rather than
+looked up; any **non-integer cost** — 4-connected, unit costs, no `sqrt`, no diagonals.
+
+**And the occupancy pin will fire again**: routing via a stair **strictly lengthens journeys**, so
+occupancy leaves 856 — **the same move that took it 872 → 856.** That commit is **already owned by
+G-039b**, and nothing had scheduled the merge.
+
+
 ## G-038c — A floor costs money, and height costs patience
 Status: **done.** Fourteen rows green, exit code captured. **No save bump.**
 Milestone: M3 · Owner pair: economy-engineer / balance-critic
-  the entrance. B8's two independent halves — the only part of circulation that depends on
-  neither open escalation.
+Statement: a floor costs money to open, and a guest will not lodge more than N floors from the
+  entrance.
 
 **RECORDED AS A BLOCK RATHER THAN A BULLET, AND THAT IS THE POINT.** It was first written as a
 bullet inside G-038's seam list, and `check:stamp` REFUSED the as-of line naming it — because the
@@ -3067,7 +3199,6 @@ different pictures of the same hotel.**
 far walls, a translucent wall over a neighbouring room's floor may read as mud rather than glass.
 **Build all three, look at the same frame in each, and if transparent is not legible it ships as
 two positions rather than being tuned until it is.**
-Status: **PLANNED.** G-022's shape, at the **EXIT and not the entrance** (ADR-0043 §2, re-affirmed
 by ADR-0046 §8).
 **Carries**: every measurement campaign re-take — **the grid change and pathfinding alter what the
 workload MEANS, which is ADR-0015's REPLACE-on-configuration-change case, already ruled and

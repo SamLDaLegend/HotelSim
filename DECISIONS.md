@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-023b-ii is done and TRAVEL IS ON IN THE SHIPPED GAME — guestCellsPerTick 3, inside a derived window, with 41 assertions moved and eight of them criteria that INVERTED rather than re-pins. The backlog derivation is EXTENDED not re-pinned, and produced a floor nobody ordered: the speed floor is 2, not 1. WATCH #16 shows the first guest ever to be somewhere it was not going. And the intermittent row was DIAGNOSED by the instrument shipped hours earlier — both failures are TIMEOUTS, not assertion failures, and travel is faster not slower. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-023b-ii is done and travel is ON. The circulation goal split again at PLAN — four BLOCKERs, and the decisive one is MEASURED: a route search per guest per tick costs 1.70x/1.91x/1.77x against a bound the human froze at 1.4640 this same morning, and that arm was a generous lower bound. Both walkability answers are unimplementable on the shipped plans; 166 of 300 move events change floor and there is still no stair anywhere. Two ledger blocks were physically broken and are repaired. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
