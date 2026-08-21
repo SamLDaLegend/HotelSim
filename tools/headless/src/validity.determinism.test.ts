@@ -262,7 +262,11 @@ describe('the replay is the thing the gate runs', () => {
     expect(tally.noDoor).toBe(1);
     expect(tally.noCorridor).toBe(2);
     expect(tally.missingItem).toBe(4);
-    expect(tally.unsupported).toBe(76);
+    // G-038c: 76 -> 75. The log's player builds land on floors 5..19 and the first one on each
+    // floor now pays `floorConstructionCostPence` as well (ADR-0047 B8), so one fewer is
+    // affordable over the run — and the rooms this walk builds are the ones standing on nothing.
+    // The 40,000-tick tally above did NOT move, which places the lost build in the second half.
+    expect(tally.unsupported).toBe(75);
     expect(tally.unplaced).toBe(0);
   });
 

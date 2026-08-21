@@ -587,6 +587,7 @@ const distinct: RunSummary = {
     constructionPennies: -125,
     startingCapitalPennies: 139,
     demolitionRefundPennies: 140,
+    floorConstructionPennies: -151,
     loanDrawPennies: 141,
     loanFeePennies: -142,
     loanRepaymentPennies: -143,
@@ -616,6 +617,7 @@ const distinct: RunSummary = {
     },
     constructionTransactions: 126,
     refundTransactions: 127,
+    floorConstructionTransactions: 152,
   },
   loans: {
     drawn: 145,
@@ -668,6 +670,7 @@ describe('renderers', () => {
         'building    -125p',
         'capital     139p',
         'refunds     140p',
+        'floors      152 opened, -151p',
         'loans       145 drawn, 147 not needed, 146 not offered',
         'borrowed    141p, fees -142p, repaid -143p',
         'scrap value 148p',

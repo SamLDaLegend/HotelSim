@@ -17,6 +17,7 @@ export {
   constructionCostOf,
   countConstructionTransactions,
   countDemolitionRefundTransactions,
+  countFloorConstructionTransactions,
   createBuildOutcomes,
   describeOccupied,
   isBuildRefusalReason,
@@ -54,6 +55,9 @@ export {
   firstGuestRules,
   firstRoomTypeProviding,
   fitOf,
+  // G-038c. Exported for `demolitionRefundOf`'s reason: the harness reports what a floor cost
+  // and the tests that drive the sink read the shipped number rather than retyping it.
+  floorConstructionCostOf,
   hasContentId,
   isRoomAccessRule,
   isRoomKind,
@@ -61,6 +65,7 @@ export {
   lodgingNeedOf,
   MAX_FIT_BASIS_POINTS,
   maxFootprintCellsOf,
+  maxLodgingFloorsFromEntranceOf,
   minConstructionCostOf,
   minFootprintCellsOf,
   needTypesInOrder,

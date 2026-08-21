@@ -71,6 +71,7 @@ import {
   demolitionRefundOf,
   findItemType,
   findRoomType,
+  floorConstructionCostOf,
   isRoomKind,
   maxFootprintCellsOf,
   minFootprintCellsOf,
@@ -93,6 +94,7 @@ import {
   describeBounds,
   describeCell,
   describeFootprint,
+  entranceCell,
   footprintArea,
   footprintCovers,
   footprintWithinBounds,
@@ -551,6 +553,87 @@ export function roomAt(draft: EntityDraft, content: BoundContent, cell: Cell): E
 }
 
 /**
+ * WHAT THIS BUILD OWES FOR REACHING ITS FLOOR (G-038c, ADR-0047 B8), in integer pence.
+ *
+ * B8: *"does adding a floor cost money? **Recommend: yes — the build loop needs a large sink.**"*
+ * This is the sink, and it is charged **once per floor opened** rather than per room: the build
+ * that puts the first room on a floor the hotel does not yet occupy pays it, and every later
+ * room on that floor pays only its own `constructionCostPence`.
+ *
+ * ==========================================================================================
+ * A FLOOR IS OPEN WHILE IT HOLDS A ROOM. IT IS DERIVED, NOT STORED, AND THAT IS I4's ARGUMENT
+ * APPLIED PAST CASH.
+ *
+ * The alternative was a set of opened floors on `World` — hashed state, a save bump and a
+ * migration — and it buys exactly one thing: a floor you have emptied stays paid for. It costs
+ * a second stored fact that can drift from the world that explains it, which is the class of bug
+ * I2 cannot see because it hashes perfectly (`outstandingDebtOf` makes the same call, and
+ * `World` has no `debt` field for the same reason).
+ *
+ * THE CONSEQUENCE, STATED RATHER THAN DISCOVERED: demolish the last room on a floor and you have
+ * given the floor back, so building there again pays again. That is coherent — you paid to
+ * extend the structure up there and you tore it down — and it is never a GAIN, so it is not
+ * exploitable in the direction `assertRefundsCannotReopenTheDodge` hunts. It is a real cost of
+ * churn that the demolition refund does not mention, and the stored-set alternative is parked
+ * with its falsification test rather than argued away.
+ * ==========================================================================================
+ *
+ * THE ENTRANCE FLOOR IS FREE, AND THAT IS LOAD-BEARING FOR THE LENDER. `canDrawLoan` grants a
+ * loan when `balance + liquidationValue < cheapest constructionCost` and knows nothing about
+ * this charge. It stays correct because the floor a hotel is standing on is always open, so the
+ * cheapest ACTION a player has is always a room at exactly the cost the lender measures — a
+ * player is never refused a loan for want of a floor charge. `entranceCell` is asked rather than
+ * `GROUND_FLOOR` compared, because a save carries its own plot and a world whose floors are 3..5
+ * has its entrance at 3 (see `entranceCell`, which clamps for exactly that world).
+ *
+ * IT IS ASKED ONLY WHEN IT COULD BE NON-ZERO. Content that declares no charge — every content
+ * set before G-038c, and the permanent v1 fixture — never reaches the scan, so this whole
+ * mechanism costs those runs nothing and reproduces them to the byte. A build on the entrance
+ * floor, which is where every shipped harness workload builds first, does not scan either.
+ *
+ * THE SCAN IS `draftFindEntity`, THE SAME WALK `roomOverlapping` ALREADY DOES ON THIS PATH, and
+ * it early-exits on the first room it finds on the floor. So a build on a floor that is already
+ * open — the common case once a floor is in use — is one short walk, and a build that opens a
+ * floor is one full one. It does not change the order of `applyDrawRoom`.
+ */
+export function floorChargeFor(
+  draft: EntityDraft,
+  content: BoundContent,
+  bounds: GridBounds,
+  at: Cell,
+): number {
+  const charge = floorConstructionCostOf(content);
+  if (charge === 0) return 0;
+  if (at.floor === entranceCell(bounds).floor) return 0;
+  const standing = draftFindEntity(
+    draft,
+    (entity) =>
+      isPlaced(entity) &&
+      entity.at.floor === at.floor &&
+      findRoomType(content, entity.kind) !== undefined,
+  );
+  return standing === undefined ? charge : 0;
+}
+
+/**
+ * How many floor charges this log records (G-038c).
+ *
+ * The `countConstructionTransactions` shape, and it exists for the same reason: so the CLI
+ * reports a measurement the sim took rather than a fact it inferred (ADR-0007). There is NO
+ * cross-subsystem law pairing it with a counter, deliberately — `built` counts builds and a
+ * floor charge is not one, and the number of floors a hotel has OPEN is not this count either,
+ * because a floor given back and retaken is counted twice. What it is, exactly, is the number of
+ * times this hotel has reached a floor it was not already on.
+ */
+export function countFloorConstructionTransactions(log: readonly Transaction[]): number {
+  let count = 0;
+  for (const transaction of log) {
+    if (transaction.reason === 'floorConstruction') count += 1;
+  }
+  return count;
+}
+
+/**
  * What this room type costs to build, in integer pence. Absent means free (G-008's
  * absence-is-not-emptiness contract), and an unknown kind is not this function's problem
  * — `applyBuildRoom` has already established the kind against content.
@@ -741,7 +824,17 @@ export function applyDrawRoom(
     return refuse(input, 'occupied');
   }
   const cost = constructionCostOf(input.content, roomType);
-  if (input.balance - cost < 0) {
+  // AND WHAT REACHING THIS FLOOR COSTS (G-038c, ADR-0047 B8). Zero unless this build opens a
+  // floor the hotel does not yet occupy — see `floorChargeFor`, which also says why the entrance
+  // floor is free and why content that declares no charge never pays for the question.
+  //
+  // ONE REFUSAL FOR BOTH HALVES, AND IT IS THE EXISTING ONE. A player who can afford the room
+  // but not the floor it stands on is short of money, which is what `insufficientFunds` means
+  // and what its counter counts; a second reason keyed on the same fact would be the drift
+  // `BuildRefusalReason`'s own docblock refuses for `breaksAnotherRoom`. The player's mistake is
+  // one thing: you reached for something you cannot pay for.
+  const floorCharge = floorChargeFor(input.entities, input.content, input.bounds, at);
+  if (input.balance - cost - floorCharge < 0) {
     return refuse(input, 'insufficientFunds');
   }
 
@@ -773,18 +866,30 @@ export function applyDrawRoom(
   for (const itemId of requiredItemsOf(input.content, roomType)) {
     draftSpawn(input.entities, itemId, at);
   }
+  // ONE TRANSACTION PER SUCCESSFUL BUILD, UNCONDITIONALLY — including a free room type,
+  // which books amount 0. The settlement precedent: "one per build, no exceptions" is
+  // what makes the count a countable fact and what makes the cross-subsystem law above
+  // exact. A conditional append would hold on every hotel somebody watched and fail on
+  // exactly the free-content worlds where nothing else would notice (ADR-0007).
+  //
+  // `0 - cost`, never `-cost`: negating a zero cost yields `-0`, which is the same
+  // money but not the same value, and `appendTransaction` rejects it at the choke point.
+  const built = appendTransaction(input.ledger, { tick: input.tick, amount: 0 - cost, reason: 'construction' });
+  // AND THE FLOOR CHARGE, CONDITIONALLY, WHICH IS THE OPPOSITE RULE FOR THE OPPOSITE REASON
+  // (G-038c). Unconditional is what makes `construction` a count of BUILDS; conditional is what
+  // makes `floorConstruction` a count of FLOORS REACHED. A zero-amount row on every build would
+  // count builds twice and say nothing about floors. `TransactionReason` carries the argument.
+  //
+  // SECOND, NEVER FIRST, and the order is observable because the ledger is a sequence a player
+  // reads: the room is what the player asked for and the floor is what it turned out to need.
+  const ledger =
+    floorCharge === 0
+      ? built
+      : appendTransaction(built, { tick: input.tick, amount: 0 - floorCharge, reason: 'floorConstruction' });
   return {
-    // ONE TRANSACTION PER SUCCESSFUL BUILD, UNCONDITIONALLY — including a free room type,
-    // which books amount 0. The settlement precedent: "one per build, no exceptions" is
-    // what makes the count a countable fact and what makes the cross-subsystem law above
-    // exact. A conditional append would hold on every hotel somebody watched and fail on
-    // exactly the free-content worlds where nothing else would notice (ADR-0007).
-    //
-    // `0 - cost`, never `-cost`: negating a zero cost yields `-0`, which is the same
-    // money but not the same value, and `appendTransaction` rejects it at the choke point.
-    ledger: appendTransaction(input.ledger, { tick: input.tick, amount: 0 - cost, reason: 'construction' }),
+    ledger,
     outcomes: { ...input.outcomes, built: input.outcomes.built + 1 },
-    balance: input.balance - cost,
+    balance: input.balance - cost - floorCharge,
   };
 }
 

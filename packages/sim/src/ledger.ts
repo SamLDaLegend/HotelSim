@@ -44,6 +44,27 @@ export type TransactionReason =
    * balance".
    */
   | 'demolitionRefund'
+  /**
+   * A FLOOR WAS OPENED (G-038c, ADR-0047 B8). Negative: the build loop's large sink.
+   *
+   * Charged once, on the build that puts the first room on a floor the hotel does not yet
+   * occupy. The entrance floor is never charged — see `applyDrawRoom` in `build.ts`.
+   *
+   * ITS OWN REASON RATHER THAN A SECOND `construction`, AND THAT IS A LAW RATHER THAN TASTE —
+   * the `demolitionRefund` argument, one event over. G-008's cross-subsystem check is
+   * `countConstructionTransactions(ledger) === buildOutcomes.built` EXACTLY, and a floor charge
+   * sharing that reason would break it on the first build of every floor. It is also simply a
+   * different event: one is what the room cost, the other is what getting up there cost, and
+   * "a ledger you cannot explain is a ledger you cannot balance".
+   *
+   * IT IS APPENDED CONDITIONALLY, WHICH IS THE OPPOSITE OF WHAT `construction` DOES, and the
+   * difference is what the count would MEAN. One `construction` per build unconditionally —
+   * including a zero-cost one — is what makes `built` a countable fact. A zero-amount
+   * `floorConstruction` on every build would count builds a second time and say nothing about
+   * floors; appended only when a floor is actually opened, the count is the number of times
+   * this hotel has reached a floor it was not already on, which is a fact somebody might want.
+   */
+  | 'floorConstruction'
   /** Cash a loan provided (G-011). Positive. Half of what `outstandingDebtOf` folds. */
   | 'loanDraw'
   /** What the loan cost to take out (G-011). Negative, charged once, at the draw. */
@@ -71,6 +92,7 @@ export type TransactionReason =
 const TRANSACTION_REASON_SET: Readonly<Record<TransactionReason, true>> = Object.freeze({
   construction: true,
   demolitionRefund: true,
+  floorConstruction: true,
   loanDraw: true,
   loanFee: true,
   loanRepayment: true,

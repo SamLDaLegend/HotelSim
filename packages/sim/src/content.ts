@@ -326,6 +326,19 @@ export type EconomyData = {
    * `economySchema`, which carries the measurements.
    */
   readonly liquidationRoomsMax: number;
+  /**
+   * WHAT IT COSTS TO OPEN A FLOOR (G-038c, ADR-0047 B8) — the build loop's large sink.
+   *
+   * Charged ONCE, as its own `floorConstruction` transaction, on the build that puts the first
+   * room on a floor the hotel does not yet occupy. The ENTRANCE FLOOR is never charged.
+   *
+   * OPTIONAL, AND ABSENT MEANS FREE — the exact behaviour of every build before G-038c, so
+   * content that does not declare it keeps its outcomes and its hashes to the byte. There is
+   * deliberately no default in this package: a default here would be a content number living in
+   * the simulation (I3). See `floorConstructionCostPenceSchema` in `packages/content` for the
+   * derivation of the shipped value and for why the lender does not need to know about it.
+   */
+  readonly floorConstructionCostPence?: number | undefined;
 };
 
 /**
@@ -472,6 +485,20 @@ export type GuestRulesData = {
    * in this package -- a default here would be a content number living in the simulation (I3).
    */
   readonly guestCellsPerTick?: number | undefined;
+  /**
+   * HOW MANY FLOORS FROM THE ENTRANCE A GUEST WILL GO TO REACH ITS ROOM (G-038c, ADR-0047 B8).
+   *
+   * A HARD REFUSAL AND NOT A PREFERENCE — `findFreeRoom` drops a room further than this from the
+   * candidate list rather than ranking it lower, so a guest with nothing in reach takes no room
+   * at all. The ruling and its three reasons are in `maxLodgingFloorsFromEntranceSchema` in
+   * `packages/content`; the short form is that a PREFERENCE is a fit term, the lodging search is
+   * ruled not to consult fit (`reserve`), and `assertFitIsReadable` enforces that today.
+   *
+   * ABSENT MEANS UNBOUNDED. That is a true historical statement rather than a default: no build
+   * of this simulation has ever refused a room for its height, so content without this field
+   * reproduces every earlier run to the byte. No default lives in this package (I3).
+   */
+  readonly maxLodgingFloorsFromEntrance?: number | undefined;
 };
 
 /**
@@ -924,9 +951,12 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     toleranceTicks: tolerance,
     dissatisfactionCapacityTicks: ceiling,
     dissatisfactionReliefPerTick: relief,
+    maxLodgingFloorsFromEntrance: reach,
     ...rest
   } = rules;
-  const withStay = cloneDissatisfaction(
+  const withStay = cloneLodgingReach(
+    rules.id,
+    cloneDissatisfaction(
     rules.id,
     cloneStockRules(
       rules.id,
@@ -943,6 +973,8 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     ),
     ceiling,
     relief,
+    ),
+    reach,
   );
   if (margin === undefined) return withStay;
   if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
@@ -954,6 +986,36 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     );
   }
   return { ...withStay, abandonMarginBasisPoints: margin };
+}
+
+/**
+ * The floor-patience half of `cloneGuestRules` (G-038c, ADR-0047 B8).
+ *
+ * The `cloneStockRules` discipline exactly, and INDEPENDENTLY OPTIONAL like the two halves of
+ * that one rather than paired like the dissatisfaction stock: floor patience means something on
+ * its own — content can declare a reach and no floor charge, or a floor charge and no reach, and
+ * both are coherent house rules. The key is STRIPPED when absent, because only the absent form
+ * is the "no build ever refused a room for its height" statement.
+ *
+ * ZERO IS ACCEPTED AND IS NOT A DEGENERATE-BUT-MEANINGLESS VALUE, unlike `stayDurationTicks`' 0.
+ * It says "the entrance floor only" — a one-storey hotel, which is a house rule a designer may
+ * legitimately write and is the arm that proves the refusal bites at all.
+ *
+ * THE RELATION TO THE PLOT IS NOT CHECKED HERE, and that is the `cloneDissatisfaction`
+ * precedent one field over: the upper endpoint of the useful window is `maxFloor - entranceFloor`
+ * and the plot is stored per WORLD (`GridBounds`), which no function in this file ever sees. A
+ * reach above the plot's height is inert rather than wrong, so there is nothing to refuse.
+ */
+function cloneLodgingReach(id: ContentId, rest: GuestRulesData, reach: number | undefined): GuestRulesData {
+  if (reach === undefined) return rest;
+  if (!Number.isSafeInteger(reach) || reach < 0) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a maxLodgingFloorsFromEntrance of ${String(reach)}; it must be a whole ` +
+        'number of floors, zero or more. It is how far from the entrance floor a guest will go to reach its room, ' +
+        'counted in storeys, and a guest that finds nothing in reach takes no room at all.',
+    );
+  }
+  return { ...rest, maxLodgingFloorsFromEntrance: reach };
 }
 
 /**
@@ -2237,6 +2299,17 @@ function cloneEconomy(economy: EconomyData): EconomyData {
   // subsystems from the cause. Driving the real function is deliberate: one definition of
   // "exact", not a second copy of the bound.
   applyBasisPoints(economy.loanPrincipalPence, fee);
+  // THE FLOOR CHARGE (G-038c, ADR-0047 B8). Optional, so absence is untouched — the pre-G-038c
+  // era, in which reaching a floor was free. A present value is validated here for the reason
+  // every other number in this record is: a float or a negative from a raw host that did not
+  // come through the zod schema dies at bind time, with the table named, rather than inside
+  // `appendTransaction` on the tick a player opened a floor.
+  const floorCost = economy.floorConstructionCostPence;
+  if (floorCost !== undefined && (!Number.isSafeInteger(floorCost) || floorCost < 0)) {
+    throw new Error(
+      `bindContent: economy "${economy.id}" has a non-integer or negative floorConstructionCostPence (${String(floorCost)}); money is integer pence (ADR-0002)`,
+    );
+  }
   return { ...economy };
 }
 
@@ -2707,6 +2780,54 @@ function assertStockIsAReserve(
 }
 
 /**
+ * Throws if opening a floor costs less than the cheapest room that could stand on it (G-038c,
+ * ADR-0047 B8).
+ *
+ * THE LOWER ENDPOINT OF THE FLOOR CHARGE'S WINDOW, AND IT IS A RELATION BETWEEN TWO TABLES —
+ * which is why it is here and not in `economySchema`, where the room types do not exist. The
+ * `assertStockIsAReserve` shape exactly, one number over.
+ *
+ * WHAT IT PROTECTS. B2 — the most consequential entry in ADR-0047's register — says the
+ * room-design mechanic *"needs a reason for space to be scarce"*. Space on a floor is scarce
+ * only while the floor you are standing on is worth filling; if reaching a fresh floor is
+ * cheaper than the room you would put on it, a player never fills anything and simply climbs.
+ * **The sink would then be smaller than the thing it gates**, which is a sink that gates
+ * nothing.
+ *
+ * IT ONLY APPLIES WHEN A FLOOR CHARGE IS DECLARED, and that is the honest scoping rather than a
+ * convenience: absence means free, which is every build before G-038c, and the permanent v1
+ * fixture must keep loading (ADR-0006).
+ *
+ * A FREE ROOM TYPE SUSPENDS IT, for `assertStockIsAReserve`'s reason: if the cheapest build
+ * costs nothing then no charge can be below it except zero, and a designer who has made rooms
+ * free has already said space is not what this content is about.
+ */
+function assertAFloorCostsAtLeastARoom(
+  roomTypes: readonly RoomTypeData[],
+  economy: readonly EconomyData[],
+): void {
+  const rules = economy[0];
+  if (rules === undefined) return;
+  const charge = rules.floorConstructionCostPence;
+  if (charge === undefined) return;
+  let cheapest = Number.POSITIVE_INFINITY;
+  for (const roomType of roomTypes) {
+    const cost = roomType.constructionCostPence ?? 0;
+    if (cost < cheapest) cheapest = cost;
+  }
+  if (!Number.isFinite(cheapest) || cheapest <= 0) return;
+  if (charge < cheapest) {
+    throw new Error(
+      `bindContent: economy "${rules.id}" opens a floor for ${charge}p, which is below the ${cheapest}p cheapest ` +
+        'room this content can build. Opening a floor must never be cheaper than the room that would stand on it, ' +
+        'or a player climbs instead of filling the floor they have and space stops being scarce (ADR-0047 B2). ' +
+        'Raise floorConstructionCostPence, or lower constructionCostPence if a cheap floor really is the game ' +
+        'you mean.',
+    );
+  }
+}
+
+/**
  * Normalise injected content and fingerprint it.
  *
  * Sorting rather than asserting-sorted is the deliberate choice: it puts the one
@@ -2776,6 +2897,10 @@ export function bindContent(content: SimContent): BoundContent {
   // economy, because it is the LENDER that a worthless refund lets loose.
   assertRefundsCannotReopenTheDodge(roomTypes);
   assertStockIsAReserve(roomTypes, economy ?? []);
+  // AND THE THIRD MONEY RELATION (G-038c): a floor costs at least a room. It reads both tables
+  // like `assertStockIsAReserve` and is placed after it so that content broken for the older,
+  // narrower reason — a refund that lets the lender loose — still says so first.
+  assertAFloorCostsAtLeastARoom(roomTypes, economy ?? []);
   // THE REVIEW SCALE AGAINST THE NEED TABLE (G-019). Last of the cross-table refusals,
   // and it needs both tables normalised — which is why it is here and not in
   // `cloneGuestRules`, where only one of them exists yet.
@@ -3238,6 +3363,35 @@ export function dissatisfactionReliefOf(bound: BoundContent): number | undefined
  */
 export function guestSpeedOf(bound: BoundContent): number | undefined {
   return firstGuestRules(bound)?.guestCellsPerTick;
+}
+
+/**
+ * HOW MANY FLOORS FROM THE ENTRANCE A GUEST WILL GO TO REACH ITS ROOM, or `undefined` under
+ * content that declares none (G-038c, ADR-0047 B8).
+ *
+ * `undefined` IS NOT A MISSING VALUE TO BE FILLED IN, it is the statement "a guest will climb
+ * anything" — the behaviour of every build before this one. `findFreeRoom` reads it that way, so
+ * the absence case is a BRANCH rather than a fallback constant, and no content number appears in
+ * `packages/sim` (I3). The `guestSpeedOf` contract exactly, one field over.
+ */
+export function maxLodgingFloorsFromEntranceOf(bound: BoundContent): number | undefined {
+  return firstGuestRules(bound)?.maxLodgingFloorsFromEntrance;
+}
+
+/**
+ * WHAT IT COSTS TO OPEN A FLOOR, in integer pence, or 0 under content that declares none
+ * (G-038c, ADR-0047 B8).
+ *
+ * ZERO RATHER THAN `undefined`, WHICH IS THE OPPOSITE CALL FROM `maxLodgingFloorsFromEntranceOf`
+ * ABOVE, and the difference is that one of these is money. `constructionCostOf` in `build.ts`
+ * answers 0 for a room type that declares no cost — G-008's absence-is-not-emptiness contract —
+ * and a free floor is exactly a floor that costs nothing, so there is no second behaviour for a
+ * branch to select. A patience reach of "unbounded" is NOT a number, which is why that one keeps
+ * its `undefined`. Nothing here reads content that predates the economy table differently: an
+ * absent table gives an absent economy gives 0.
+ */
+export function floorConstructionCostOf(bound: BoundContent): number {
+  return firstEconomy(bound)?.floorConstructionCostPence ?? 0;
 }
 
 /**

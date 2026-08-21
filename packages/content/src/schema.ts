@@ -1204,6 +1204,107 @@ export const toleranceTicksSchema = z.int().min(1);
 export const guestCellsPerTickSchema = z.int().positive().optional();
 
 /**
+ * HOW MANY FLOORS FROM THE ENTRANCE A GUEST WILL GO TO REACH ITS ROOM (G-038c, ADR-0047 B8).
+ *
+ * B8 ruled three things about multi-floor and this is the third of them: *"a floor-count
+ * patience input that makes lifts necessary rather than optional"*, and it ships as **a content
+ * number**, which the ruling says in as many words.
+ *
+ * ---------------------------------------------------------------------------
+ * IT IS A HARD REFUSAL, NOT A PREFERENCE, AND THE RULING WAS OWED AT PLAN.
+ *
+ * A guest whose lodging search finds only rooms further than this from the entrance floor
+ * **takes no room at all** — it stands in the lobby and eventually gives up — rather than taking
+ * one and being less satisfied about it. Three reasons, in the order they bind:
+ *
+ * 1. **A PREFERENCE IS A FIT TERM, AND A FIT TERM IN THE LODGING SEARCH IS ALREADY REFUSED.**
+ *    `reserve` in `packages/sim/src/guests.ts` rules that the lodging search does not consult
+ *    fit — *"a fit term with no price term would make the most expensive suite strictly
+ *    preferred, which is the dominant-strategy shape `balance-critic` hunts"* — and
+ *    `assertFitIsReadable` in `bindContent` ENFORCES it by refusing a `fitBasisPoints` on a room
+ *    type that only lodges. A height PREFERENCE is that same shape with the sign flipped, so it
+ *    would need its own ADR overturning a shipped ruling. **A refusal is a different shape**: it
+ *    changes the CANDIDATE SET rather than the ORDER, which is exactly what `guestAccessTo`
+ *    already does one field over (G-036c), inside the same loop, without ranking anything.
+ * 2. **ONLY A REFUSAL MAKES A LIFT NECESSARY**, which is the property B8 asks the number for. A
+ *    penalty is survivable: the player keeps building upward and pays a little satisfaction. A
+ *    refusal makes floor N+1 unlettable until circulation reaches it, so the lift is the thing
+ *    that buys the floors — the build-loop decision the ruling wanted.
+ * 3. **A PENALTY WOULD HAVE NOTHING TO CHARGE TODAY.** `guestCellsPerTick` is undeclared in the
+ *    shipped table, so travel is instantaneous and a distant room costs a guest no time at all.
+ *    A "less satisfied" term would therefore be a number the simulation could not derive from
+ *    anything the guest experiences — an invented dial, which is ADR-0008's class.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * IT BOUNDS LODGING ONLY, AND THAT IS A SCOPE LINE RATHER THAN AN OVERSIGHT.
+ *
+ * A guest LODGES in one room for a whole stay and ENGAGES providers opportunistically, many
+ * times, on whichever tick a need outruns the others. The lodging choice is the one a guest
+ * makes once, with its luggage, and the one B8's sentence is about (*"do guests refuse to walk
+ * above N floors?"*). The engagement half is a TIME cost rather than a patience cost — it is
+ * paid in ticks spent walking — and there are no ticks to pay while travel is off. It belongs
+ * with the goal that turns travel on and gives a journey a length (G-023b-ii / G-038a), not
+ * here, where it would be a second inert dial.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE THE SHIPPED VALUE COMES FROM: A DIAL INSIDE A DERIVED WINDOW (ADR-0013 §4).
+ *
+ * §2.1 forbids a number nobody can source. Both ENDPOINTS are derived; where a designer sits
+ * between them is tuned, exactly as `visitDurationTicks`' 190 sits inside [181, 207].
+ *
+ *     LOWER ENDPOINT — 1. At 0 the hotel is one storey forever: no room off the entrance floor
+ *     could ever be let, so every penny of `floorConstructionCostPence` would buy stock that
+ *     houses nobody. A sink that funds dead rooms is not a build loop.
+ *
+ *     UPPER ENDPOINT — (maxFloor - entranceFloor) - 1, which is 19 on the shipped plot. At the
+ *     plot's own height nothing is out of reach, the rule inspects nothing, and it is
+ *     `capacity` and `forbidden adjacencies` again: a content field with no consumer, which
+ *     this project has refused twice (ADR-0053).
+ *
+ * The upper endpoint is a fact about the PLOT and the plot is stored per world (`GridBounds`),
+ * so it cannot be checked here or in `bindContent` — neither sees a world. What it bounds is the
+ * DESIGNER's choice, and `guests.floorpatience.test.ts` drives both endpoints rather than
+ * quoting them: at 1 rooms two floors up are refused, at the plot's height none are.
+ *
+ * SHIPPED: 2, AND THE POSITION INSIDE THE WINDOW WAS MEASURED RATHER THAN PICKED. On the
+ * shipped plot it makes 18 of 23 floors unlettable — the rule is live on the BUILDING — while
+ * costing the shipped WORKLOADS nothing, because none of them puts a valid lodging room more
+ * than two floors from the entrance. The campaign, all arms on the 100,000-tick I2 log, seed
+ * 42, every counter exact:
+ *
+ *     reach 2, 3, 19 and undeclared    byte-identical in every counter; only `contentHash`
+ *                                      moves the state hash
+ *     reach 1                          checkedOut 742 -> 452, gaveUp 377 -> 827, and TWO
+ *                                      COVERAGE REGRESSIONS IN THE GATE: the drawn loan is no
+ *                                      longer repaid in full (90,000p outstanding at the
+ *                                      horizon, where it reached zero) and `evictedRoomGone`
+ *                                      stops firing at tick 42,014, inside the last quarter
+ *                                      the proof requires it to reach
+ *     reach 0                          checkedOut 178 -> 63 at 40,000 ticks, and outside the
+ *                                      window: a one-storey hotel
+ *
+ * **1 IS THE ONLY VALUE THAT BITES A SHIPPED WORKLOAD, AND IT BUYS THAT BY DELETING GATE
+ * COVERAGE**, which HOTELSIM.md §9 does not permit trading for a livelier dial. 2 is therefore
+ * the shipped position, and moving it is a one-line content edit the day M3's circulation gives
+ * a guest a way up — which is the whole reason a balance number lives on disk (I3).
+ * ---------------------------------------------------------------------------
+ *
+ * OPTIONAL HERE **AND** OPTIONAL ON DISK, which is the `fitBasisPoints` contract and not the
+ * `stayDurationTicks` one. ABSENCE MEANS UNBOUNDED, and that is a TRUE HISTORICAL STATEMENT
+ * rather than a default: there has never been an era of this simulation in which a guest
+ * refused a room for its height, so content that does not declare this reproduces every build
+ * before G-038c to the byte. That is also what keeps the permanent v1 save fixture's
+ * `8e09fe4f0fa162a3` content fingerprint unmoved (ADR-0006).
+ *
+ * ZERO IS LEGAL AND MEANS "THE ENTRANCE FLOOR ONLY". It is outside the window derived above and
+ * a designer who writes it gets a one-storey hotel, deliberately: it is the arm that proves the
+ * rule bites at all, and `basisPointsSchema`'s 0 has the same standing.
+ */
+export const maxLodgingFloorsFromEntranceSchema = z.int().min(0).optional();
+
+/**
  * HOW MUCH DISSATISFACTION A GUEST CARRIES BEFORE IT WALKS OUT MID-STAY, IN TICKS (G-027b θ-b1,
  * ADR-0017 4(b), ADR-0026).
  *
@@ -1367,6 +1468,7 @@ export const guestRulesSchema = z
     dissatisfactionCapacityTicks: dissatisfactionCapacityTicksSchema,
     dissatisfactionReliefPerTick: dissatisfactionReliefPerTickSchema,
     guestCellsPerTick: guestCellsPerTickSchema,
+    maxLodgingFloorsFromEntrance: maxLodgingFloorsFromEntranceSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
   // cannot separate two stays and so cannot report on either. The relation against the need
@@ -1429,6 +1531,9 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  *                               below zero on its own, which is what lets a hotel that
  *                               never repays keep ticking without a bankruptcy state (M4).
  *   liquidationRoomsMax         THE LENDER'S BRAKE — see below.
+ *   floorConstructionCostPence  WHAT IT COSTS TO OPEN A FLOOR — see the block below. OPTIONAL,
+ *                               and absence means free, which is what every build before
+ *                               G-038c did.
  *
  * The outstanding debt itself is NOT here and is not stored anywhere: it is a fold over
  * the ledger, `sum(loanDraw) + sum(loanRepayment)`, which is I4's argument applied past
@@ -1465,6 +1570,101 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  * which is exactly why a v1-era content set still loads.
  * ---------------------------------------------------------------------------
  */
+/**
+ * WHAT IT COSTS TO OPEN A FLOOR (G-038c, ADR-0047 B8), in integer pence.
+ *
+ * B8: *"does adding a floor cost money? **Recommend: yes — the build loop needs a large sink.**"*
+ * This is that sink. It is charged ONCE, as its own `floorConstruction` ledger transaction, on
+ * the build that puts the FIRST room on a floor the hotel does not yet occupy; every later room
+ * on that floor pays only its own `constructionCostPence`.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY IT LIVES HERE AND NOT ON A ROOM TYPE. A floor is not a room and has no type. Reaching one
+ * costs the same whether the first thing you put on it is a bedroom or a café, so it is a
+ * property of the HOUSE — the `liquidationRoomsMax` argument one field over, which sits beside
+ * the loan terms rather than on the room type for the same reason.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * THE ENTRANCE FLOOR IS FREE, AND THAT IS WHAT KEEPS THE LENDER HONEST.
+ *
+ * `canDrawLoan` in `packages/sim/src/loan.ts` grants a loan exactly when
+ * `balance + liquidationValue < cheapest constructionCost`, and it does NOT know about this
+ * number. That stays correct because the hotel's entrance floor is always open and never
+ * charged, so the cheapest ACTION a player has is always "build a room on the floor you are
+ * standing on", at exactly the cost the lender measures. **A player is never refused a loan for
+ * want of a floor charge they could otherwise have afforded.**
+ *
+ * The residual case — an entrance floor with no legal cell left, plus a balance below this
+ * number — is a SPACE problem rather than a money one, and a loan would not fix it. It is
+ * parked with its falsification test rather than papered over here; on the shipped plot it
+ * needs 640 rooms on one floor and is unreachable inside the I5 horizon, but a small scenario
+ * plot (ADR-0047 C1) reaches it, which is where the test belongs.
+ * ---------------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE THE SHIPPED VALUE COMES FROM. A DIAL INSIDE A DERIVED WINDOW (ADR-0013 §4), with one
+ * endpoint ENFORCED by `assertAFloorCostsAtLeastARoom` in `packages/sim/src/content.ts`.
+ *
+ *     LOWER ENDPOINT — the cheapest `constructionCostPence` any room type declares.
+ *     Below it, opening a floor is cheaper than the room that would stand on it, so a player
+ *     never fills a floor before opening the next: space on the floor you have stops being
+ *     scarce, and B2's scarcity — *"the room-design mechanic needs a reason for space to be
+ *     scarce"* — has no counterweight. This half is a RELATION between two content tables, so
+ *     no schema in this file can see it; `bindContent` enforces it, exactly as it does for the
+ *     refund threshold and the want line.
+ *
+ *     UPPER ENDPOINT — THE FLOOR MUST STILL BE REACHABLE, and this one is MEASURED rather than
+ *     argued, because the arithmetic that would predict it needs a whole hotel's trading. Above
+ *     it the sink stops being a sink and becomes a WALL: the player earns money it cannot spend,
+ *     which is the one failure `balance-critic`'s charter names in a single line — *"an economy
+ *     where cash piles up with nothing to spend it on has stopped being a game."*
+ *
+ *     Measured on `--days 30 --seed 42` with the shipped starting hotel, at all three build
+ *     cadences an operator would try (1440, 60, 5 ticks):
+ *
+ *         charge       rooms built      floors opened      closing balance
+ *         (none)       4                0                  25,500 – 38,000p
+ *         250,000      2 – 3            1 – 2              98,000 – 358,000p
+ *         500,000      1                1                  168,500 – 173,500p
+ *         625,000      1                1                  66,000 – 68,500p
+ *         750,000      **0**            **0**              **956,000p, UNSPENDABLE**
+ *
+ *     At 750,000 the hotel cannot reach the 1,000,000p a floor plus its first room costs, so it
+ *     builds NOTHING in a month at any cadence and sits on nearly a million pence. The wall is
+ *     therefore between 625,000 and 750,000 on the shipped content, and the shipped value must
+ *     be below it with room to spare.
+ *
+ * ---------------------------------------------------------------------------
+ * SHIPPED: 500,000 — TWICE THE CHEAPEST ROOM, and derived rather than picked.
+ *
+ * THE REQUIREMENT: **a hotel must not be able to open its second storey out of the money it
+ * opened with.** A floor that comes free with the opening balance is a fee rather than a sink,
+ * and the build loop's first real decision would be made before the hotel had traded for a
+ * single night. The charge is only ever levied BY A BUILD, so the quantity that has to clear the
+ * opening capital is the PAIR:
+ *
+ *     floorConstructionCostPence + cheapest constructionCostPence  >  startingCapitalPence
+ *
+ * Walking the whole multiples of the cheapest room, which is the unit a designer thinks in:
+ *
+ *     1x = 250,000   ->  250,000 + 250,000 = 500,000  =  the opening capital. Payable on day
+ *                        one, out of the box, having earned nothing. REJECTED.
+ *     2x = 500,000   ->  500,000 + 250,000 = 750,000  >  500,000. The hotel must trade first.
+ *                        ACCEPTED, and it is the SMALLEST multiple that clears the bound, which
+ *                        is the conservative direction: the cheapest floor that is still earned.
+ *
+ * 500,000 also sits comfortably below the measured wall above — the hotel reaches it inside the
+ * month at every cadence and closes on 168,500p rather than on 956,000p it cannot spend.
+ * ---------------------------------------------------------------------------
+ *
+ * OPTIONAL, AND ABSENCE MEANS FREE. That is a TRUE HISTORICAL STATEMENT and not a default: every
+ * build before G-038c charged nothing for reaching a floor, so content that does not declare
+ * this reproduces those runs to the byte — including the permanent v1 fixture, whose
+ * `8e09fe4f0fa162a3` content fingerprint must not move (ADR-0006).
+ */
+export const floorConstructionCostPenceSchema = penceSchema.min(0).optional();
+
 export const economySchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
@@ -1473,6 +1673,7 @@ export const economySchema = z.strictObject({
   loanFeeBasisPoints: basisPointsSchema,
   loanRepaymentPerNightPence: penceSchema.min(0),
   liquidationRoomsMax: z.int().min(1),
+  floorConstructionCostPence: floorConstructionCostPenceSchema,
 });
 
 /** The whole `economy.json` document. A top-level array, for the same reason. */

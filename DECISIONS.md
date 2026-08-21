@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036c is done and the scoring goal is SPLIT at PLAN into three after four BLOCKERs. The big one CORRECTS ADR-0051: capacity has NO READER — one in the whole tree, a test re-asserting its own schema — and capacity 99 on every room type gives a byte-identical report. Making it mean anything is MULTI-OCCUPANCY inside a throwing invariant, and the shipped schema forbids strangers sharing a room by name. ESCALATED: does a party mechanic enter M3, or does capacity wait for the archetype work? Also measured before any code: the review channel is binary per tick and at 12 rooms every guest is already at the ceiling, so a quality fold that raises rates cannot improve a zero. Fourteen rows green. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-21, G-038c is done — a floor costs money and a guest will not lodge more than N floors from the entrance. No save bump: a floor is open while it holds a room, derived and never stored. The floor price was RE-DERIVED mid-build because the first derivation made the harness build nothing and sit on 956,000p unspendable. M3 IS OTHERWISE BLOCKED: travel, both circulation halves and the party goal queue behind the 2026-08-14 tripwire decision, and the quality branch behind ADR-0054's. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at

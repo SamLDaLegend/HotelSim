@@ -10,6 +10,7 @@
     "wantAtBasisPoints": 3000,
     "toleranceTicks": 180,
     "dissatisfactionCapacityTicks": 431,
-    "dissatisfactionReliefPerTick": 1
+    "dissatisfactionReliefPerTick": 1,
+    "maxLodgingFloorsFromEntrance": 2
   }
 ]

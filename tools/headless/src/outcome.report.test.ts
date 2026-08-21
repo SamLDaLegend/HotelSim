@@ -517,7 +517,16 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     };
     const count = (reason: string): number =>
       document.guests.departures.find((row) => row.reason === reason)?.count ?? -1;
-    expect(count('evictedRoomUnusable')).toBe(6);
+    // G-038c: SIX -> FOUR, and this is a RE-RECORD rather than the retune step 2 above asks
+    // for, because step 1 answers it: the cause is still reachable — `outcome.test.ts` drives
+    // both eviction reasons on a two-room stack and is green — and the reason still fires four
+    // times in this very run, so the test above still reads five non-zero reasons. The cause of
+    // the drop is `floorConstructionCostPence` (ADR-0047 B8): this invocation's player walk
+    // starts on floor 1, its first build pays for the floor too, and two fewer rooms are
+    // demolished out from under a guest across the run. FOUR is above the THREE this project
+    // shipped and defended at G-034b; retuning the invocation to chase six would change what
+    // every other assertion in this block measures, for a margin it already has.
+    expect(count('evictedRoomUnusable')).toBe(4);
     // The other three, for contrast: this is what headroom looks like.
     expect(count('checkedOut')).toBeGreaterThan(50);
     expect(count('gaveUp')).toBeGreaterThan(50);

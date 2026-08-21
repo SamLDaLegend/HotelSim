@@ -327,7 +327,22 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   need, which the engagement pass skips by name (`reserve`) — while the lounge and the
     //   games room, which are what guests here engage, are `public`. So the rule is live and
     //   there is nothing in this hotel for it to turn anybody away from.
-    expect(hashState(plain)).toBe('013816cc3168aee0');
+    //   `013816cc3168aee0` -> `5846043bcd849207`   G-038c gave a floor a PRICE and a guest a
+    //   height it will not climb (ADR-0047 B8). **ONE cause, and it is the narrowest this row
+    //   has ever recorded**: `World.contentHash` moved because `economy.json` gained
+    //   `floorConstructionCostPence` and `guest-rules.json` gained
+    //   `maxLodgingFloorsFromEntrance`. **NOTHING IN `World` GAINED A FIELD** — a floor charge
+    //   is a ledger transaction and the reach is read from content on every lodging search, so
+    //   the save schema stays at v20 and no migration is owed.
+    //   **THE CONTROL IS THE FULL BLOCK AGAIN, AND THE LEDGER TOO**: arrivals, checkouts,
+    //   `leftDissatisfied`, evictions, the departure table, the need rows and the abandonment
+    //   count are every one of them UNCHANGED, and so is the closing balance — measured at
+    //   -238,500p under content that declares neither field and -238,500p under content that
+    //   declares both. Both rules are inert here for STRUCTURAL reasons rather than by luck:
+    //   this arm issues no build command at all, and the charge is levied only BY a build; and
+    //   all sixty of its rooms are banked on floor 0, which is the entrance floor, so no
+    //   lodging candidate is more than zero floors from the door.
+    expect(hashState(plain)).toBe('5846043bcd849207');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -480,7 +495,22 @@ describe('the same workload with the player churning the building', () => {
     // the plain arm's are. THE SHARP CONTROL HOLDS FOR THE THIRTEENTH TIME: 19 evictions,
     // unchanged, in the goal that made a room editable — the churn schedule demolishes the same
     // rooms out from under the same guests, and no bedroom in it holds anything a guest engages.
-    expect(hashState(churn)).toBe('62aebaef31a6b85b');
+    // MOVED AT G-038c WITH ITS SIBLING, `62aebaef31a6b85b` -> `f0c6311efe764342`, for the one
+    // cause the plain row gives PLUS one this arm alone reaches, and this is the FIRST TIME IN
+    // FOURTEEN MOVES THAT THE THIRD CAUSE IS BEHAVIOURAL. This arm builds, and
+    // `builtRoomStartFloor` puts its walk on floor 1 — so its first build pays
+    // `floorConstructionCostPence` as well as the room, and two of the nine rooms it used to
+    // afford are now refused: **built 9 -> 7, insufficientFunds 21 -> 23, one
+    // `floorConstruction` row of -500,000p, closing balance 107,000p -> 132,000p.** Demolitions
+    // are unchanged at 20.
+    //
+    // THE SHARP CONTROL HOLDS FOR THE FOURTEENTH TIME AND IT IS SHARPER HERE THAN ANYWHERE: 19
+    // evictions and 0 `evictedRoomUnusable`, unchanged, IN A GOAL THAT CHANGED WHAT THIS ARM
+    // BUILDS. The churn schedule demolishes rooms by id from the bottom, and the two rooms it
+    // can no longer afford are at the TOP of the walk — so the same rooms come down out from
+    // under the same guests, and the counter that has held at 19 through thirteen shape changes
+    // holds through a behavioural one.
+    expect(hashState(churn)).toBe('f0c6311efe764342');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

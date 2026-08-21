@@ -51,6 +51,7 @@ import {
   balanceOf,
   countConstructionTransactions,
   countDemolitionRefundTransactions,
+  countFloorConstructionTransactions,
   countGuestsInInvalidRooms,
   countInvalidRooms,
   countLoanDrawTransactions,
@@ -1427,6 +1428,16 @@ export type RunSummary = {
     readonly startingCapitalPennies: number;
     /** Positive: what scrapping rooms returned (G-011). One transaction per demolition. */
     readonly demolitionRefundPennies: number;
+    /**
+     * Negative: what OPENING FLOORS cost (G-038c, ADR-0047 B8) — the build loop's large sink.
+     *
+     * One transaction per floor the hotel reached, NOT one per build: only the build that puts
+     * the first room on a floor pays it, and the entrance floor is never charged. Reported for
+     * `liquidationValuePennies`' reason — it was going to be invisible, folded silently into a
+     * balance nobody could take apart, and a ledger you cannot explain is a ledger you cannot
+     * balance. A run whose builds all land on the entrance floor reads 0 here, correctly.
+     */
+    readonly floorConstructionPennies: number;
     /** Positive: cash borrowed (G-011). Also the money side of the debt fold. */
     readonly loanDrawPennies: number;
     /** Negative: what borrowing cost (G-011), charged once per draw. */
@@ -1505,6 +1516,15 @@ export type RunSummary = {
     readonly constructionTransactions: number;
     /** One refund transaction per successful demolition (G-011). Must equal `demolished`. */
     readonly refundTransactions: number;
+    /**
+     * How many times this hotel reached a floor it was not already on (G-038c).
+     *
+     * DELIBERATELY PAIRED WITH NO COUNTER, unlike the two lines above. `built` counts builds and
+     * a floor charge is not one; the number of floors currently OCCUPIED is not this either,
+     * because a floor emptied and retaken is counted twice. See
+     * `countFloorConstructionTransactions`, which says exactly what it is.
+     */
+    readonly floorConstructionTransactions: number;
   };
   /**
    * What the player's loan commands did (G-011).
@@ -1641,6 +1661,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   const settlements = countSettlementTransactions(world.ledger);
   const constructions = countConstructionTransactions(world.ledger);
   const refunds = countDemolitionRefundTransactions(world.ledger);
+  const floorCharges = countFloorConstructionTransactions(world.ledger);
   const loanDraws = countLoanDrawTransactions(world.ledger);
   const debt = outstandingDebtOf(world.ledger);
   const nights = dayOf(world);
@@ -1773,6 +1794,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       constructionPennies: sumByReason(world.ledger, 'construction'),
       startingCapitalPennies: sumByReason(world.ledger, 'startingCapital'),
       demolitionRefundPennies: sumByReason(world.ledger, 'demolitionRefund'),
+      floorConstructionPennies: sumByReason(world.ledger, 'floorConstruction'),
       loanDrawPennies: sumByReason(world.ledger, 'loanDraw'),
       loanFeePennies: sumByReason(world.ledger, 'loanFee'),
       loanRepaymentPennies: sumByReason(world.ledger, 'loanRepayment'),
@@ -1805,6 +1827,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       },
       constructionTransactions: constructions,
       refundTransactions: refunds,
+      floorConstructionTransactions: floorCharges,
     },
     loans: {
       drawn: world.loanOutcomes.drawn,
@@ -2371,6 +2394,7 @@ export function renderText(summary: RunSummary): string {
     `building    ${summary.money.constructionPennies}p`,
     `capital     ${summary.money.startingCapitalPennies}p`,
     `refunds     ${summary.money.demolitionRefundPennies}p`,
+    `floors      ${summary.build.floorConstructionTransactions} opened, ${summary.money.floorConstructionPennies}p`,
     `loans       ${summary.loans.drawn} drawn, ${summary.loans.refused.notEligible} not needed, ` +
       `${summary.loans.refused.noLoanOffered} not offered`,
     `borrowed    ${summary.money.loanDrawPennies}p, fees ${summary.money.loanFeePennies}p, ` +

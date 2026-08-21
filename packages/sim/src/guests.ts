@@ -48,6 +48,7 @@ import {
   isRoomKind,
   guestSpeedOf,
   lodgingNeedOf,
+  maxLodgingFloorsFromEntranceOf,
   needTypesInOrder,
   ONE_WHOLE_BASIS_POINTS,
   providesOf,
@@ -1573,6 +1574,45 @@ function findFreeRoom(
   let deniedThisGuestOnly = false;
   for (const room of candidates) {
     if (search.held.has(room.id)) continue;
+    // ==========================================================================
+    // AND THE FLOOR-PATIENCE RULE (G-038c, ADR-0047 B8). THE ONE PLACE B8's THIRD PART BITES.
+    //
+    // A guest will not take a room more than `lodgingReach` floors from the entrance. **A HARD
+    // REFUSAL, RULED AT PLAN**, and the ruling is written out in
+    // `maxLodgingFloorsFromEntranceSchema` in `packages/content`. The short form, because the
+    // reason it is a filter and not a score is the reason it is legal to write here at all:
+    //
+    //   A PREFERENCE WOULD BE A FIT TERM, AND `reserve`'s DOCBLOCK RULES THE LODGING SEARCH DOES
+    //   NOT CONSULT FIT — "a fit term with no price term would make the most expensive suite
+    //   strictly preferred, which is the dominant-strategy shape `balance-critic` hunts" — with
+    //   `assertFitIsReadable` in `bindContent` ENFORCING it. This changes the CANDIDATE SET, not
+    //   the ORDER, which is exactly what `guestAccessTo` does three lines down. Nothing here
+    //   ranks anything, so the list stays ascending by id and "lowest id wins" keeps its one
+    //   meaning.
+    //
+    // LODGING ONLY, and that is the scope line rather than an omission: the engagement half of
+    // "how far will a guest go" is a TIME cost, paid in ticks spent walking, and there are no
+    // ticks to pay while `guestCellsPerTick` is undeclared. It belongs to the goal that turns
+    // travel on.
+    //
+    // IT DOES NOT SUPPRESS THE `exhausted` MEMO, AND THE SPLIT IS THE SAME ONE `closedToGuests`
+    // GETS. A room's floor and the plot's entrance are the same facts for every guest in the
+    // building, so a scan that found only out-of-reach rooms really did find nothing for
+    // anybody. Only `reservedForItsOwnGuest` is per-guest, and only it sets the flag below.
+    //
+    // `Math.abs` BECAUSE A BASEMENT IS AS FAR AS A PENTHOUSE. Floors below the entrance are
+    // negative (`Cell.floor`), and two floors down is two floors of stairs exactly as two floors
+    // up is. A signed comparison would let a designer's "3" mean an unbounded basement.
+    // ==========================================================================
+    //
+    // `isPlaced` IS A TYPE NARROWING AND NOT A CASE. An unplaced room has no floor to measure,
+    // and `computeRoomInvalidity` already answers `unplaced` for one — so it is not in
+    // `validRooms` and cannot reach this loop. Written as a guard rather than an assertion
+    // because the compiler cannot see that, and because a room with no floor is not a room a
+    // guest could be too far from.
+    if (forLodging && search.lodgingReach !== undefined && isPlaced(room)) {
+      if (Math.abs(room.at.floor - search.entranceFloor) > search.lodgingReach) continue;
+    }
     const access = guestAccessTo(search.input.validity, room, lodgingRoomId, forLodging);
     if (access === 'reservedForItsOwnGuest') {
       deniedThisGuestOnly = true;
@@ -1602,6 +1642,22 @@ type RoomSearch = {
    * one array index behind two optional chains and it is the same answer for every guest.
    */
   readonly speed: number | undefined;
+  /**
+   * HOW MANY FLOORS FROM THE ENTRANCE A GUEST WILL GO TO REACH ITS ROOM, or `undefined` for
+   * content that sets no limit (G-038c, ADR-0047 B8). READ ONCE PER TICK, for `speed`'s reason:
+   * it is one array index behind two optional chains and it is the same answer for every guest.
+   */
+  readonly lodgingReach: number | undefined;
+  /**
+   * The floor a guest walks in on, read once per tick beside the reach it is measured against
+   * (G-038c). A total function of the plot (`entranceCell`), and the plot cannot change inside a
+   * tick — so this is the one place the pair is resolved and nothing below can reach a different
+   * entrance than the line above it.
+   *
+   * IT IS ONLY MEANINGFUL WITH `lodgingReach`, and it is computed unconditionally anyway: it is
+   * three integer comparisons on a value `placed` already asks for on every tick.
+   */
+  readonly entranceFloor: number;
   /**
    * Rooms currently held, as bedrooms OR as engagements. Membership only: never iterated,
    * never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
@@ -1822,6 +1878,11 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     input,
     held,
     speed: guestSpeedOf(content),
+    // THE FLOOR-PATIENCE PAIR (G-038c), read here for the reason `speed` is: one lookup per tick
+    // rather than one per guest per candidate room. `undefined` is not a missing value, it is
+    // "a guest will climb anything" — see `maxLodgingFloorsFromEntranceOf`.
+    lodgingReach: maxLodgingFloorsFromEntranceOf(content),
+    entranceFloor: entranceCell(input.entities.bounds).floor,
     exhausted: null,
     needOutcomes: input.needOutcomes,
     reviewOutcomes: input.reviewOutcomes,

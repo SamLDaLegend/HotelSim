@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-16, G-036c is done and the scoring goal is SPLIT at PLAN into three after four BLOCKERs. The big one CORRECTS ADR-0051: capacity has NO READER — one in the whole tree, a test re-asserting its own schema — and capacity 99 on every room type gives a byte-identical report. Making it mean anything is MULTI-OCCUPANCY inside a throwing invariant, and the shipped schema forbids strangers sharing a room by name. ESCALATED: does a party mechanic enter M3, or does capacity wait for the archetype work? Also measured before any code: the review channel is binary per tick and at 12 rooms every guest is already at the ceiling, so a quality fold that raises rates cannot improve a zero. Fourteen rows green. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-21, G-038c is done — a floor costs money and a guest will not lodge more than N floors from the entrance. No save bump: a floor is open while it holds a room, derived and never stored. The floor price was RE-DERIVED mid-build because the first derivation made the harness build nothing and sit on 956,000p unspendable. M3 IS OTHERWISE BLOCKED: travel, both circulation halves and the party goal queue behind the 2026-08-14 tripwire decision, and the quality branch behind ADR-0054's. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `dcc8c18446799e78` · measure golden `013816cc3168aee0`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `083677b82ced9e9c` · measure golden `5846043bcd849207`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2632,10 +2632,71 @@ is what a builder sizes against.**
   through a wall, and takes the stairs.
 - **G-038b — "a route can be busy"**: lift capacity, the call queue, wait state, C5's desk as the
   third consumer, and the wait-as-satisfaction ruling.
-- **G-038c — B8's floor price and floor-count patience.** *A transaction plus a price in
-  `economy.json`, and one number in `guest-rules.json`.* **No dependency on A\*, on queues, or on
-  each other — the only part of this goal that could ship without the escalation**, and bundling it
-  into a pathfinding sweep buys nothing and costs a critic's attention.
+## G-038c — A floor costs money, and height costs patience
+Status: **done.** Fourteen rows green, exit code captured. **No save bump.**
+Milestone: M3 · Owner pair: economy-engineer / balance-critic
+  the entrance. B8's two independent halves — the only part of circulation that depends on
+  neither open escalation.
+
+**RECORDED AS A BLOCK RATHER THAN A BULLET, AND THAT IS THE POINT.** It was first written as a
+bullet inside G-038's seam list, and `check:stamp` REFUSED the as-of line naming it — because the
+gate reads a `Status:` line under a `##` heading and a bullet has neither. **That is G-032a's
+failure exactly: a goal recorded somewhere its own gate cannot see it**, and this time the gate
+caught it in seconds rather than a session later.
+
+captured. **No save bump** — a floor is open while it holds a room, DERIVED and never stored, so
+nothing hashed was added. I2 `dcc8c18446799e78` → `083677b82ced9e9c`.
+
+**THE PATIENCE INPUT IS A HARD REFUSAL, AND THE COLLISION WAS CHECKED RATHER THAN ASSUMED.** A
+*preference* is a ranking term — a fit with the sign flipped — and `reserve` rules the lodging
+search must not consult fit, with `bindContent` **enforcing** it. **A refusal changes the
+candidate set, not the order**, which is structurally what `guestAccessTo` already does three
+lines away. No collision, no ADR needed. Scope is **lodging only**, pinned by a test rather than
+left in prose, because engagement is a TIME cost and there are no ticks to pay while travel is
+inert.
+
+**THE CONTESTED CALL, AND IT IS ONE JSON DIGIT.** Measured on the 100,000-tick log, seed 42:
+reaches of **2, 3, 19 and undeclared are BYTE-IDENTICAL in every counter** — only `contentHash`
+moves. **Reach 1 is the only value that bites a shipped workload, and it buys that by DELETING
+GATE COVERAGE**: the drawn loan stops being repaid in full (90,000p outstanding at the horizon,
+where it reached zero) and `evictedRoomGone` stops firing at tick 42,014 — inside the last
+quarter `validity.determinism.test.ts` requires. **§9 does not permit trading coverage for a
+livelier dial, so shipped is 2**: live on the plot (18 of 23 floors unlettable) and inert on
+today's workloads. **If the human wants 1, it costs those two regressions or a further revenue
+repair, and that is their call.**
+
+**THE FLOOR PRICE WAS RE-DERIVED MID-BUILD BECAUSE THE FIRST DERIVATION PRODUCED A WALL.**
+750,000p made the harness build **nothing at all** and close on **956,000p unspendable** — the
+charter's own failure mode. Re-derived with both endpoints: the **lower is ENFORCED** in
+`bindContent` (a floor costs at least the cheapest room, or climbing beats filling and B2's
+scarcity has no counterweight); the **upper is MEASURED** — 250,000 → 2–3 rooms built, 500,000 →
+1, 625,000 → 1, **750,000 → 0 built and 956,000p unspent.** Shipped **500,000 = 2× the cheapest
+room**, the smallest whole multiple for which a hotel cannot open its second storey out of the
+money it opened with.
+
+**AND THE CHARGE BROKE THE I2 GATE'S LOAN COVERAGE — repaired at the source, not re-pinned.** The
+churn pass built at floor 20 and demolished each cycle, **so every cycle re-opened the floor**:
+its stated round trip `constructionCost − refund` became false prose, and the first cycle became
+unaffordable — **`loanOutcomes.drawn` went to ZERO with I2 green throughout.** Moved to the
+entrance floor, where the round trip is exactly what the derivation says, and verified that the
+move alone leaves **every counter byte-identical** with neither content field declared.
+
+**A tree finding, not this goal's**: `groundedRooms` treats `floor <= GROUND_FLOOR` as the earth
+while `entranceCell` clamps to the plot — **so a world whose plot excludes floor 0 can have no
+valid room at all.**
+
+**WATCH, frame-level and labelled as such** (the builder had no browser): at tick 9,721 **the two
+ledger rows appear together** — `−250000 construction` and `−500000 floorConstruction` — so the
+ledger says which half is the room and which is the storey; **a single fused row would have read
+as one 750,000p charge with no explanation.** And the finding worth keeping: **the floor charge
+TRIPLES the price of ADR-0009's known trap** — a dud room cost 250,000p, the first dud on a fresh
+floor now costs 750,000p, and the frames show one lit room on an empty storey nobody walks into.
+Parked with its falsification test, pointed at M5's build-time feedback.
+
+*(The brief said the floor price sits in `economy.json` "alongside the construction cost and
+demolition refund" — it does not; those are room-type fields. `economy.json` is still right, but
+the stated neighbours were wrong.)*
+
 
 ### C5's PARKED FALSIFICATION TEST IS ANSWERED, AND THE ANSWER IS "IT CHANGES SHAPE"
 

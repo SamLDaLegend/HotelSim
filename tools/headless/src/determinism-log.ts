@@ -136,6 +136,16 @@ const ARRIVALS_EVERY_TICKS = 97;
  * asserting it is non-zero.
  */
 const SHIPPED_FIRST_ROW = 0;
+/**
+ * The floor a guest walks in on, on the plot this log is written against (G-038c).
+ *
+ * A LITERAL FOR THE SAME REASON THE ROWS ABOVE ARE LITERALS: this function is handed content
+ * and no world, so it cannot call `entranceCell`, and the plot it schedules against is the
+ * shipped default. It is named rather than spelled `0` inline because the churn pass below
+ * depends on it being the floor `floorChargeFor` treats as free -- which is a fact about the
+ * ENTRANCE and not about the number zero.
+ */
+const SHIPPED_ENTRANCE_FLOOR = 0;
 const SHIPPED_LAST_ROW = 7;
 /** How many rows the plot above has. Derived from the two literals, never counted twice. */
 const SHIPPED_ROWS = SHIPPED_LAST_ROW - SHIPPED_FIRST_ROW + 1;
@@ -194,11 +204,50 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // reaches the state — and `recovery.determinism.test.ts` asserts a draw was actually
   // GRANTED, so if this ever stops working it fails loudly rather than going quiet.
   //
-  // ITS CELL IS floor 20, column 0, AND THAT IS NOT INCIDENTAL. The spawn diagonal reaches
-  // it only at `spawnIndex` 1,280 (this log reaches ~99 in 100,000 ticks); the build
-  // rotation is floors 5..19 and 900; the terraces are floors -1 and -2; the tower is
-  // column 79. `buildRoom` would RECORD an occupied collision rather than throw, but a
-  // collision would still muddy what this pass is for.
+  // ITS CELL IS THE ENTRANCE FLOOR, COLUMN 1, AND IT MOVED THERE AT G-038c BECAUSE THE
+  // DERIVATION ABOVE WOULD OTHERWISE HAVE BECOME FALSE PROSE.
+  //
+  // It was floor 20, column 0. Under ADR-0047 B8 the build that puts the FIRST room on a
+  // floor the hotel does not occupy pays `floorConstructionCostPence` on top of the room, and
+  // the churn DEMOLISHES its room every cycle -- so every cycle re-opened floor 20 and the
+  // real round trip was `constructionCost + floorCharge - refund`, not the
+  // `constructionCost - refund` this pass computes and the demolition refund is bounded by.
+  //
+  // AND IT DID NOT MERELY COST MORE, IT STOPPED THE PASS DEAD. The shipped floor charge is
+  // derived to exceed the shipped opening capital (see `floorConstructionCostPenceSchema`),
+  // so the FIRST cycle was refused for want of funds, nothing was ever burned, the hotel was
+  // never stuck, and `recovery.determinism.test.ts` went red on
+  // `loanOutcomes.drawn > 0`: measured, one draw at a charge of 250,000p and ZERO at
+  // 500,000p or above, with the I2 gate still green throughout. **A LOAN PATH THAT THE
+  // 100,000-TICK PROOF NO LONGER REACHES**, which is the ADR-0007 class this whole file
+  // exists to keep closed.
+  //
+  // THE ENTRANCE FLOOR IS NEVER CHARGED, so the round trip there really is
+  // `constructionCost - refund` and the derivation above is exactly true again rather than
+  // carrying a new term. It is also what a player would actually do: churning stock to raise
+  // cash happens on the floor you are standing on, and opening a storey in order to knock it
+  // down again is not a move anybody makes.
+  //
+  // COLUMN 70 IS CHOSEN, not incidental, and it is the same collision argument the old cell
+  // had -- plus one the old cell never had to make. The spawn diagonal is
+  // `(spawnIndex % 21, spawnIndex % 80, spawnIndex % 8)`, so on the entrance floor it lands on
+  // columns 0, 21, 42, 63 and 4 at the indices this log reaches (~99); the amenity waves start
+  // at columns 10, 44 and 64 and step by two; the seal hosts are 42 and 54; the sky tower is
+  // column 79; the build rotation is floors 5..19 and 900; the terraces are floors -1 and -2.
+  // 70 and its two column-neighbours are free of all of them.
+  //
+  // THE EXTRA ARGUMENT, AND IT IS WHY COLUMN 1 WAS TRIED AND DROPPED: the corridor pass at the
+  // bottom of this file declares a corridor beside EVERY floor-0 room in the schedule, and the
+  // churn is now a floor-0 room. At column 1 that meant three new corridor cells at columns
+  // 0..2 -- inside the region `WITHHELD_CELLS` tunes by hand to keep `noCorridor` alive. At 70
+  // the three cells it adds are in a stretch of the plot nothing else touches, so the pass
+  // stays additive and the withheld region is untouched. The corridors OUTLIVE the churn rooms,
+  // and that is `layCorridor`'s own semantics rather than a leak: a corridor is a declaration
+  // about a cell, not a thing standing on it.
+  //
+  // Every churn room is built and demolished inside ticks 1..2N and the first arrival is tick
+  // 101, so a churn room -- which on this floor is GROUNDED and therefore VALID, where the old
+  // one was `unsupported` -- can never be lodged in.
   //
   // IT RUNS FIRST, SO IT SHIFTS EVERY LATER ENTITY ID, and G-010 left a warning saying
   // exactly that would happen ("a pass inserted before tick 47 would move that, and the
@@ -215,7 +264,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   let churnTick = 1;
   let churnRoomId = 1;
   for (let cycle = 0; cycle < churnCycles; cycle += 1) {
-    const at = { floor: 20, column: 0, row: SHIPPED_FIRST_ROW };
+    const at = { floor: SHIPPED_ENTRANCE_FLOOR, column: 70, row: SHIPPED_FIRST_ROW };
     schedule.push({ tick: churnTick, command: { kind: 'buildRoom', roomType: entityKind, at } });
     schedule.push({ tick: churnTick + 1, command: { kind: 'demolishRoom', id: churnRoomId } });
     churnTick += 2;
