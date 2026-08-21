@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-039b-alpha is done and reachability from the entrance goes 1 of 75 to 60 of 75 — the number the reachability goal depends on. The lanes are joined, the entrance is out of room 0, and occupancy is re-taken to 850 ALONE per ADR-0058. WATCH #19 answers WATCH #16's parked test: joining every lane and moving every room buys motion 149 to 158 basis points, so the invisibility is BOUNDED rather than refuted. Two findings beyond the re-pins: the monotone-review discharge reverses at one rung and was standing on a 17-hundredth margin nothing reported, because a PREDICATE carries no margin; and the plate move inverted a parity that would have silently killed evictedRoomUnusable. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, the reachability goal was ATTEMPTED and STOPPED by the builder, correctly — no source byte changed, because my brief's load-bearing premise was FALSE. stairLeg returns its destination unchanged when no stairwell is declared, so in every shipped world the floor axis is FREE FROM EVERY CELL, and guests are in the basement today with no stairs. That corrects G-039b-alpha's headline: its 60-of-75 was measured by a fill STRICTER THAN THE MOVER. What survives is its real achievement — the lanes are joined and the door is out of room 0. ADR-0059 rules four questions; the goal is re-planned. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
   `5cfb73ca16c3463e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)

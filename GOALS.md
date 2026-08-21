@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-039b-alpha is done and reachability from the entrance goes 1 of 75 to 60 of 75 — the number the reachability goal depends on. The lanes are joined, the entrance is out of room 0, and occupancy is re-taken to 850 ALONE per ADR-0058. WATCH #19 answers WATCH #16's parked test: joining every lane and moving every room buys motion 149 to 158 basis points, so the invisibility is BOUNDED rather than refuted. Two findings beyond the re-pins: the monotone-review discharge reverses at one rung and was standing on a 17-hundredth margin nothing reported, because a PREDICATE carries no margin; and the plate move inverted a parity that would have silently killed evictedRoomUnusable. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, the reachability goal was ATTEMPTED and STOPPED by the builder, correctly — no source byte changed, because my brief's load-bearing premise was FALSE. stairLeg returns its destination unchanged when no stairwell is declared, so in every shipped world the floor axis is FREE FROM EVERY CELL, and guests are in the basement today with no stairs. That corrects G-039b-alpha's headline: its 60-of-75 was measured by a fill STRICTER THAN THE MOVER. What survives is its real achievement — the lanes are joined and the door is out of room 0. ADR-0059 rules four questions; the goal is re-planned. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -3447,11 +3447,11 @@ RESERVED** — v20 has no `condition` on the room entity or in `room-types.json`
 supposed to be free was skipped, and it stopped being free at the next migration.**
 
 ## G-038a-ii-β — A room is reached, or it is not a room
-Status: **PLANNED. IT HAD NO BLOCK UNTIL NOW, WHICH IS ADR-0032 §2's CLASS.** `G-038a-ii-β`
-  occurred exactly twice in the whole ledger, **both times as a name** — and the digest already
-  records that class for two struck goals. **A goal whose whole purpose is to be unblocked by
-  another goal must exist as a block, or the goal unblocking it is aimed at nothing.** Found by
-  `sim-critic` sizing G-039b.
+Status: **PLANNED — ATTEMPTED 2026-08-21 AND STOPPED BY THE BUILDER, CORRECTLY.** No source byte
+  changed. **The brief's load-bearing premise was FALSE** and the builder measured it before
+  enforcing anything, then **declined to report gates it had not earned**: *"reporting them as this
+  goal's gates would be the evidence defect this milestone keeps catching."* Four rulings now in
+  **ADR-0059**; re-planned below.
 Milestone: M3 · Owner pair: sim-engineer / sim-critic
 Statement: **reachability becomes a `RoomInvalidityReason`** — a room that cannot be reached from
   the entrance is not a room.
@@ -3470,6 +3470,47 @@ collapses. **G-038c refused `reach = 1` for strictly smaller damage on §9 groun
 **ITS WATCH NEEDS NO RENDER WORK AND IS THE STRONGEST FRAME THIS MILESTONE COULD PRODUCE**: an
 invalid room **already draws hatched, alarm-outlined and labelled with its reason**, so the
 scenario's upper floors and basement **go red before the stair and green after.**
+
+### RE-PLANNED 2026-08-21 after the attempt, per ADR-0059
+
+**THE PREDICATE IS SIM-FAITHFUL.** A rule that calls a room unreachable **while `stepTowards` walks
+guests into it** is the drift class this project has closed four times. **The mover is the
+authority.**
+
+**AND THE HARNESSES DECLARE STAIRWELLS FIRST — not to repair the basement, but because that is what
+gives the rule ANYTHING TO BITE ON.** Measured: **without a declared stairwell the parked
+falsification fixture does NOT go green** under the faithful predicate, because the sealed cell is
+reached from the open-plan floor above. **`layStair` at `(column 1, row 0)` is verified correct** —
+both `(0,1,0)` and `(-1,1,0)` are spine cells `seededSpineCells` lays on every seeded floor.
+
+**THE CRITERION MAY LOSE ITS TWO ROOMS**, and that is the rule working rather than the damage the
+stop condition guards — which was written against **mass** invalidation. The cause is real: floor 1
+has **no room-free row**, and the tested repair **moves the component by 2 cells and the count by
+ZERO**. **Joining the player's lanes needs the player's rooms moved: a layout re-take on a FOURTH
+host, and its own goal.**
+
+**`determinism-log.ts`'s SEALED DOOR IS FIXED HERE.** Room 7 stands on `entranceCell`, so the
+component is **0 cells and all 20 rooms read unreachable**; rooted one floor up it is **0**.
+**Third host with the defect G-039b-α fixed in two** — ADR-0048 §1's standing question, third
+firing — **and it is one room moved off the door.** Moves the I2 hash; expected and cheap.
+
+**THE FILL'S COST IS AN EXIT CRITERION, NOT AN AFTERTHOUGHT.** A **full-height** stairwell makes the
+entrance component **13,482 cells**; confined to floors −1..0 it is **1,322**. A fill of that size
+**per validity-context rebuild** is new per-tick cost **against a bound ADR-0056 froze** — so **the
+stairwell's HEIGHT is a deliberate choice.**
+
+**Settled by the attempt and not to be re-opened**: reachability is asked **LAST**, after
+`noCorridor`, so **every existing reason's count is provably unchanged in every world** — it
+converts VALID and displaces nothing, it is the strictly stronger claim of the pair, and it is the
+most expensive check, so the ascending-cost ordering still agrees · **the cache owes no eighth
+clause** (corridors, stairs, bounds and entity membership already cover it) **but it owes a RED
+TEST, because clause 6 now guards a second answer** · and **no save bump is owed** — validity is
+derived, never stored, never hashed.
+
+**AND THE WATCH PREDICTION IN THE OLD BLOCK IS FALSIFIED.** *"The basement goes red before the stair
+and green after"* is available **only under the predicate that contradicts the mover** — under the
+faithful one the scenario's basement reads **0 unreachable** today. **A new watchable is owed**, and
+the honest one is the parked fixture itself: **a sealed one-cell void, red once a stairwell exists.**
 
 ## G-039b — REWRITTEN AND SPLIT at PLAN, 2026-08-21. Most of it was already done.
 Status: **split into G-039b-α (the layout re-take) / G-039b-β (the campaign that actually drifted).**
@@ -3541,6 +3582,18 @@ spine into a lane** rather than crossing room columns — WATCH #17's framing on
 
 
 ### G-039b-α — REFLECT
+
+> **CORRECTED 2026-08-21 by ADR-0059, one goal later.** The reading below was taken by a fill that
+> **steps floors only where a stairwell is declared — which is STRICTER THAN THE MOVER.**
+> `stairLeg` returns its destination unchanged when no stairwell exists and `stepTowards` then
+> spends the floor axis **unconditionally**, so **in every shipped world the floor axis is free from
+> every cell.** Verified by effect: `--days 2 --seed 42` reports `guest_entertainment 4 met (4 by
+> room)`, and **its only provider is in the basement.**
+>
+> **WHAT SURVIVES**: the lanes ARE joined and the entrance IS out of room 0 — both measured by a
+> HORIZONTAL fill the mover agrees with, and both are this goal's real achievement.
+> **WHAT IS WITHDRAWN**: the reading that 15 basement amenities were unreachable. **They never
+> were** — they were reachable by a mover that walks through the ceiling.
 
 **THE HEADLINE β DEPENDS ON: ROOMS REACHABLE FROM THE ENTRANCE GO 1 OF 75 → 60 OF 75**, and on the
 entrance floor **60 of 60**. Counted through `isWalkableFor` — **the same predicate `stepTowards`

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-039b-alpha is done and reachability from the entrance goes 1 of 75 to 60 of 75 — the number the reachability goal depends on. The lanes are joined, the entrance is out of room 0, and occupancy is re-taken to 850 ALONE per ADR-0058. WATCH #19 answers WATCH #16's parked test: joining every lane and moving every room buys motion 149 to 158 basis points, so the invisibility is BOUNDED rather than refuted. Two findings beyond the re-pins: the monotone-review discharge reverses at one rung and was standing on a 17-hundredth margin nothing reported, because a PREDICATE carries no margin; and the plate move inverted a parity that would have silently killed evictedRoomUnusable. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, the reachability goal was ATTEMPTED and STOPPED by the builder, correctly — no source byte changed, because my brief's load-bearing premise was FALSE. stairLeg returns its destination unchanged when no stairwell is declared, so in every shipped world the floor axis is FREE FROM EVERY CELL, and guests are in the basement today with no stairs. That corrects G-039b-alpha's headline: its 60-of-75 was measured by a fill STRICTER THAN THE MOVER. What survives is its real achievement — the lanes are joined and the door is out of room 0. ADR-0059 rules four questions; the goal is re-planned. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4912,3 +4912,87 @@ G-039b's split.
 occupancy again. **Re-taking the pin now buys a number two planned goals will invalidate.**
 **So the pin is re-taken in the goal that MOVES it** — the layout half — **and G-040 and G-041 each
 re-take it again when they move it, rather than one goal pre-paying for three.**
+
+---
+
+## ADR-0059 — THE REACHABILITY PREDICATE MUST MATCH THE MOVER, AND "60 OF 75" WAS MEASURED WITH ONE THAT DOES NOT
+
+**Date**: 2026-08-21 · **Status**: accepted · **Orchestrator ruling**, forced by `sim-engineer`
+**stopping G-038a-ii-β rather than building it** — the brief's load-bearing premise was false.
+
+### The falsification, verified independently
+
+`stairLeg` returns its destination unchanged when no stairwell is declared, and `stepTowards` then
+**spends the floor axis unconditionally**:
+
+```ts
+if (stairwell === null || to.floor === from.floor) return to;
+```
+
+> **SO IN ANY WORLD THAT DECLARES NO STAIR — WHICH IS EVERY SHIPPED WORLD — THE FLOOR AXIS IS FREE
+> FROM EVERY CELL.**
+
+**Confirmed by effect, not by reading**: `--days 2 --seed 42` reports
+`guest_entertainment 4 met (4 by room)`, and **the only room providing it is the games room, which
+`amenityCell` puts in the BASEMENT.** Guests are down there today, with no stairwell.
+
+**G-038a-ii-α constrained vertical travel only for worlds that DECLARE a stairwell, and said so.**
+Nobody carried that clause forward into the instrument.
+
+### What this corrects
+
+**G-039b-α's headline — "reachability goes 1 of 75 → 60 of 75" — was measured by a fill that steps
+floors only where `hasStairAt` is true.** That fill is **stricter than the mover**, and
+`layout.reach.report.test.ts`'s own comment states the assumption it rests on:
+*"`stepTowards` … takes the floor axis only at a stairwell"* — **which is false for the stairless
+case.**
+
+**The measurement is not withdrawn; its SUBJECT is corrected.** It is a true statement about a
+*declared-stairs* world and a false one about the shipped one. **G-039b-α's real achievement stands
+untouched** — the lanes are joined and the entrance is out of room 0, both measured by a
+horizontal fill the mover agrees with. **What is withdrawn is the reading that 15 basement
+amenities were unreachable.** They were never unreachable; they were reachable *by a mover that
+walks through the ceiling.*
+
+> **A predicate stricter than the simulation reports defects that do not exist, and one looser
+> reports none that do. This one was stricter, and it manufactured the goal's premise.**
+
+### The four rulings
+
+**1. THE PREDICATE IS SIM-FAITHFUL (P2).** A validity rule that calls a room unreachable **while
+`stepTowards` walks guests into it** is the drift class this project has closed four times. **The
+mover is the authority; the rule follows it.**
+
+**2. AND THE HARNESSES DECLARE STAIRWELLS, WHICH IS WHAT GIVES THE RULE ANYTHING TO BITE ON.** The
+builder measured that **without a declared stairwell the parked falsification fixture does NOT go
+green under P2** — the sealed cell is reached from the open-plan floor above. **So the stairwell is
+not a repair for the basement; it is the precondition for the rule meaning anything.** *The brief's
+instruction was right and the reason attached to it was wrong.*
+
+**3. THE CRITERION MAY LOSE ITS TWO ROOMS.** My stop condition — *"no shipped workload loses a
+room"* — was written against **mass** invalidation (59 of 75). **Two rooms that are genuinely
+unreachable being marked unreachable is the rule working**, not the damage the condition guards. The
+cause is named and real: floor 1 has **no room-free row** for a cross-corridor, and the builder
+tested the repair — a spine on floor 1 moves the component by 2 cells and the count by **0**.
+**Joining the player's lanes requires moving the player's rooms, which is a layout re-take on a
+fourth host and is its own goal.**
+
+**4. `determinism-log.ts`'s SEALED DOOR IS FIXED HERE.** Room 7 stands on `entranceCell`, so the
+component is **0 cells** and all 20 rooms read unreachable; rooted one floor up the count is **0**.
+**That is the THIRD host with the defect G-039b-α fixed in two** — ADR-0048 §1's standing question
+firing for the third time — **and it is one room moved off the door.** It moves the I2 hash, which
+is expected and cheap.
+
+### And a cost that must be measured before the rule ships
+
+**A full-height stairwell makes the entrance component 13,482 cells; confined to floors −1..0 it is
+1,322.** A flood fill of that size **per validity-context rebuild** is new per-tick cost **against a
+bound ADR-0056 froze.** **The stairwell's HEIGHT is therefore a deliberate choice, not a detail**,
+and the fill's cost is an exit criterion rather than an afterthought.
+
+### Why this is recorded as a win rather than a mishap
+
+**The builder was told to measure before enforcing, and it did — then stopped, changed no source
+byte, and refused to report gates it had not earned**: *"reporting them as this goal's gates would be
+the evidence defect this milestone keeps catching."* **That is the instruction working exactly as
+intended.** The alternative was a validity rule shipped on a premise that the simulation contradicts.
