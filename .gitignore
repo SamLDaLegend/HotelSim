@@ -20,3 +20,8 @@ coverage/
 # command log, it is regenerated in seconds, and a run of 2,880 ticks writes twenty-six
 # frames plus a contact sheet. Watch it, write what you saw in `JOURNAL.md`, delete it.
 recording/
+
+# A red row's own output, kept by `pnpm verify` so an intermittent failure can be diagnosed
+# rather than re-run (G-039a). Derived from one run of one tree; the next run rewrites it.
+# It exists because three sightings of an intermittent row produced no captured text at all.
+.verify-logs/

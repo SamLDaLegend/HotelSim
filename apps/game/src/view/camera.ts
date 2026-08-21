@@ -26,9 +26,10 @@ import {
   TILE_WIDTH,
   toView,
   viewTileAt,
-  WALL_HEIGHT,
+  wallPositionOf,
+  DEFAULT_WALL_VISIBILITY,
 } from './iso.js';
-import type { Orientation, ScreenPoint } from './iso.js';
+import type { Orientation, ScreenPoint, WallVisibility } from './iso.js';
 
 /** One empty tile of margin around whatever is on the floor, so nothing meets the edge. */
 const PADDING_TILES = 1;
@@ -53,6 +54,19 @@ const MIN_SCALE = 0.2;
 
 export type View = {
   readonly orientation: Orientation;
+  /**
+   * WHICH WALL POSITION THIS CAMERA IS DRAWING (ADR-0052, G-039a).
+   *
+   * It is on the VIEW rather than in the scene because the framing depends on it: a wall puts
+   * paint above its tile, and `boxOf` has to know how much before it can decide the scale. A
+   * scene-level setting would frame for one height and draw another, cutting the tops off the
+   * back row at the tall position — which is exactly the class of bug `boxOf`'s own comment
+   * already describes.
+   *
+   * RENDER STATE, NOT WORLD STATE. Nothing is saved, nothing is hashed, and the simulation
+   * cannot see it — the same status the camera's floor and orientation already have.
+   */
+  readonly walls: WallVisibility;
   /** The floor being drawn. Every tile in the scene is on it. */
   readonly floor: number;
   /** Canvas pixels added to projection space, so the content lands where it should. */
@@ -184,7 +198,7 @@ function clampToPlot(extent: Extent, bounds: GridBounds): Extent {
  * range puts `WALL_HEIGHT` of paint above the tile, and a framing that ignored it would cut
  * the tops off the back row.
  */
-function boxOf(extent: Extent, orientation: Orientation): {
+function boxOf(extent: Extent, orientation: Orientation, walls: WallVisibility): {
   readonly left: number;
   readonly right: number;
   readonly top: number;
@@ -213,7 +227,10 @@ function boxOf(extent: Extent, orientation: Orientation): {
       }
     }
   }
-  return { left, right, top: top - WALL_HEIGHT, bottom };
+  // THE TALLEST THING ON THE FLOOR IS THE WALL, AND WHICH WALL DEPENDS ON THE POSITION. At
+  // `full` this is 64 and at `reduced` it is 24; framing for the wrong one puts the back row's
+  // rims outside the picture.
+  return { left, right, top: top - wallPositionOf(walls).height, bottom };
 }
 
 /**
@@ -229,9 +246,13 @@ export function viewFor(
   orientation: Orientation,
   width: number,
   height: number,
+  // A DEFAULTED PARAMETER RATHER THAN A REQUIRED ONE, so every existing call site keeps
+  // meaning what it meant: an unattended recording and a fresh browser get `reduced`, which is
+  // ADR-0052's ruling in one word.
+  walls: WallVisibility = DEFAULT_WALL_VISIBILITY,
 ): View {
   const extent = extentOf(world, floor);
-  const box = boxOf(extent, orientation);
+  const box = boxOf(extent, orientation, walls);
   const contentWidth = Math.max(1, box.right - box.left);
   const contentHeight = Math.max(1, box.bottom - box.top);
   const scale = Math.max(
@@ -241,6 +262,7 @@ export function viewFor(
   return {
     orientation,
     floor,
+    walls,
     scale,
     originX: width / 2 - ((box.left + box.right) / 2) * scale,
     originY: height / 2 - ((box.top + box.bottom) / 2) * scale,

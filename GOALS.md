@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038c is done — a floor costs money and a guest will not lodge more than N floors from the entrance. No save bump: a floor is open while it holds a room, derived and never stored. The floor price was RE-DERIVED mid-build because the first derivation made the harness build nothing and sit on 956,000p unspendable. M3 IS OTHERWISE BLOCKED: travel, both circulation halves and the party goal queue behind the 2026-08-14 tripwire decision, and the quality branch behind ADR-0054's. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-21, G-039a is done: verify now KEEPS a red row's output, a goal block's status is checked against git, sixteen parked items are written into PARKING.md with their tests, and the wall control ships as three positions with a DERIVED alpha. THE INTERMITTENT ROW WAS CAPTURED AT LAST — it is check:scaling, not test, so there are at least two of them and my one-load-sensitive-test inference was wrong; loaded/quiet is 1.71x on that axis. Fourteen rows green, exit code read from the process. M3's remaining goals wait on the 2026-08-14 tripwire decision and ADR-0054's. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2768,8 +2768,106 @@ already marks it — **so "guests piling up in the lobby" is drawable today, whi
 watchable half of this goal and stairs/lifts the least.**
 
 
-## G-039 — M3 exit instruments
+## G-039 — SPLIT 2026-08-21. The campaigns are blocked; the instruments are not.
+Status: **split into G-039a / G-039b.** I told the human *"there is nothing left I can build without
+  one of those two answers"* and **that was wrong** — it read the goal as one thing because the
+  block described it as one thing. **Its campaign half waits on the tripwire decision; its
+  instrument half waits on nothing**, and three of those instruments exist to close evidence gaps
+  this session has hit repeatedly.
 
+## G-039a — The instruments that are owed and are not blocked
+Status: **done.** Fourteen rows green, exit code read from the process. **No save bump; I2 unmoved.**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+
+**1. `verify` KEEPS PER-ROW OUTPUT.** The intermittent row has been seen **three times** and I have
+**never captured which row failed**, because the invocation was `pnpm verify | tail -3`. That gap is
+now three sightings old and is named in its own escalation. **A gate that can go red without
+leaving a diagnosable trace is an instrument with a hole in it.**
+
+**2. A GOAL BLOCK'S STATUS IS CHECKED AGAINST GIT** (ADR-0047 amdt §4). `check:stamp` verifies the
+four digests agree **with each other**, and **nothing verifies a block's status against what is in
+the repository** — which is how G-031a sat at `pending` after shipping and being watched, and
+**nearly mis-scoped ADR-0046's damage assessment in both directions.** A commit referencing a goal
+ID implies its block is not `pending`.
+
+**3. THE `PARKING.md` GAP, which is a §9 stop condition reading clean while it is false.**
+ADR-0047 parked **eleven items and wrote NONE of them into `PARKING.md`** — they live only in the
+register. So §9's *"`PARKING.md` has stopped growing, meaning scope is leaking into goals"* has
+been reading clean **while an entire register accumulated somewhere it does not look.**
+
+**4. THE WALL-VISIBILITY CONTROL** (ADR-0052, human): three positions — full, transparent, reduced
+— with **24 staying the default**. **Transparency is parked with its falsification test**: at 2:1
+with two far walls, a translucent wall over a neighbouring room's floor may read as mud rather than
+glass. **Build all three, look at one frame in each, and if transparent is not legible it ships as
+two positions rather than being tuned until it is.**
+
+**Exit criteria**: a red row's own output survives a `verify` run and is asserted · the status
+scanner **bites on a block that git says shipped** · the eleven register items are in `PARKING.md`
+with their falsification tests · the wall control has a WATCH entry naming a frame per position ·
+`pnpm verify` green with its **exit code captured** · three-OS CI green.
+
+### G-039a — REFLECT
+
+**THE INTERMITTENT ROW FIRED WHILE THE BUILDER WAS FIXING THE INSTRUMENT THAT CATCHES IT, AND IT
+REFUTED MY OWN INFERENCE.** It opened by running `verify` through a wrapper that KEPT stdout,
+before editing a file. It went red — and the transcript exists for the first time: **`FAIL density
+2.6497` against a 2.1856 bound.** **It is `check:scaling`, NOT `test`.** Sighting #3 was I4, **so
+there are AT LEAST TWO intermittent rows and my *"consistent with one load-sensitive test"* was
+wrong.** Paired immediately: standalone `check:scaling` read **1.5515, PASS** — **loaded/quiet =
+1.71× on the same axis**, on a box running greps and a `tsx` probe. **A ratio of medians of timings
+is the row most exposed to exactly that.**
+
+**THE GATE FOUND A HOLE IN ITSELF ON ITS FIRST RUN AGAINST REAL HISTORY.** `G-031a` **has no
+block** — the shipped, watched goal lived inside `## G-031` — so exact-ID resolution **printed a
+green tick over the very defect it was ordered to catch.** Fallback resolution fixes it, and that
+case is the proof's headline arm.
+
+**AND IT CARRIED TWO LATENT DEFECTS OUT WITH IT, both found by reading rather than running**:
+`Status: **DONE**` was silently not counted (the case-sensitivity trap this session already hit
+once), and `/^## (G-\d{3}[a-z]?)/` **truncated `G-023b-i` to `G-023b`, so one block spoke for
+two.** The stamp's own pattern had the same blind spot. Both pinned.
+
+**THE `PARKING.md` SWEEP FOUND SIXTEEN, NOT ELEVEN** — ADR-0047's register plus **three outside it**
+— each written with its falsification test. **One item genuinely has none and the builder said so
+rather than inventing one**: the stamp gate's *"four identical but uniformly stale stamps are
+undetectable"*, **whose own comment claims a test that does not exist.**
+
+**AND THE PARKING DIGEST'S OWN COUNT WAS BADLY STALE — 168 against a re-derivation of 257 by its
+own stated command.** §9's *"`PARKING.md` has stopped growing"* stop condition was reading a figure
+**89 items out of date.**
+
+**THE WALL CONTROL SHIPS AS THREE POSITIONS, AND THE ALPHA IS DERIVED RATHER THAN CHOSEN.** Every
+palette colour blended through every wall colour at 1% steps: **the first alpha at which any
+contents-against-ground pair drops below the palette's own 1.3:1 floor is 0.37**; 30 ships seven
+points inside, labelled a preference exactly as 24 is. **A finding changed the design**: a wall's
+face against the floor behind it is **1.10:1 even at full opacity** — a wall reads by its rim — so
+the glass fades the **pane only** and keeps the frame.
+
+**LOOKED AT, AND THE PARK'S TEST CAME BACK POSITIVE.** Beds visible on floor 1: **reduced 9/9 ·
+transparent 9/9 · full 3/9** — and **the `full` row reproduces WATCH #14's 3-of-9 from a different
+instrument.** Transparent is legible, so it ships as three rather than two. **One caveat recorded
+rather than tidied**: behind the glass a room's HUE shifts (amber reads olive), and the derived
+criterion covers contents-against-ground, **not identifying a room TYPE by colour through a pane.**
+
+**Two self-inflicted defects the builder caught in its own work**: a `not.toContain` that fired on
+`verify.mjs`'s own COMMENT rather than its code, and **a 150ms sleep in a streaming arm that went
+red inside the parallel runner — its own contribution to the class this goal exists to diagnose.**
+Replaced with a file handshake, so the ordering is caused rather than hoped for.
+
+**Owed forward**: **ADR-0047 B5 said *"reserve the field now, build at M4"* and the field was NEVER
+RESERVED** — v20 has no `condition` on the room entity or in `room-types.json`. **The half that was
+supposed to be free was skipped, and it stopped being free at the next migration.**
+
+## G-039b — The campaign re-takes
+Status: **BLOCKED** on the 2026-08-14 tripwire decision, and it is the goal that consumes the answer.
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+
+**Carries**: every measurement campaign re-take — **the grid change, corridors and pathfinding alter
+what the workload MEANS, which is ADR-0015's REPLACE-on-configuration-change case** · the tick-cost
+bound, once the human's escalation is answered · `TARGET_CONCURRENT_HUNDREDTHS`, **re-taken WITH the
+bound campaign in one commit** · the cadence, which G-023b-ii measured is **no longer a local
+minimum** · the backlog derivation, which **now owes travel legs AND queue wait** rather than the
+129→139 repair alone · and the ~38 report goldens.
 **PLUS THE WALL-VISIBILITY CONTROL (ADR-0052, human).** Three positions — full, transparent,
 reduced — with **24 staying the default**. It amends ADR-0047 A4, which considered a toggle and
 refused it on the grounds that two far walls *removes* the problem rather than managing it: **right

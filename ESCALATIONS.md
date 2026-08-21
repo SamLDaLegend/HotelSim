@@ -1318,6 +1318,74 @@ ends this condition.
 
 ## 2026-08-16 — OPEN — AN INTERMITTENT ROW IS OBSERVED, AND THE DIGEST SAYS THERE ARE NONE
 
+**FOURTH SIGHTING, 2026-08-21 — CAPTURED AT LAST, AND IT REFUTES MY OWN INFERENCE.** `sim-engineer`
+opened G-039a by running `verify` through a wrapper that KEPT stdout instead of piping to `tail`,
+before editing a file. It went red, and the transcript exists:
+
+> `FAIL  density  2.6497  dense-providers / full-vector` · bound 2.1856 ·
+> `SCALING axis=density ratio=2.6497 bound=2.1856 seed=42 ticks=4320 samples=5`
+> `aggregation=median-of-medians regime=win32/12cpu` · **EXIT 1**, thirteen other rows PASS.
+
+**IT IS `check:scaling`, NOT `test`.** Sighting #3 was I4. **So there are AT LEAST TWO
+intermittent rows, and my third-sighting note — *"the two sightings are consistent with one
+load-sensitive test"* — WAS WRONG.** I hedged that claim when I made it and the hedge was
+load-bearing: it is exactly the inference this project keeps getting wrong, and this time the
+instrument caught it rather than another round of reasoning.
+
+**AND THE REGIME IS NAMED, WHICH IS WHAT MAKES IT ACTIONABLE.** Paired, same sitting, same box:
+an immediate standalone `check:scaling` returned **density 1.5515, PASS**. **Loaded/quiet =
+1.71x on the same axis.** The red run was a background process while greps, reads and a `tsx`
+probe ran on the same 12-core box — **and `check:scaling` is a ratio of medians of timings, the
+row most exposed to exactly that.** No gate bound was touched.
+
+**THE EVIDENCE GAP IS CLOSED AT SOURCE**: `verify` now tees every row and writes a red row's own
+output to `.verify-logs/<row>.log`, **with the path inside the last three lines**, because
+`| tail -3` is what lost the first three sightings.
+
+**FOURTH SIGHTING, 2026-08-21, AND IT IS CAPTURED IN FULL. THE ROW IS `check:scaling`, NOT `test`.**
+
+`sim-engineer` opened G-039a by running a BASELINE `pnpm verify` through a wrapper that captured
+stdout instead of piping it to `tail` — before touching any file. It went red, and for the first
+time in four sightings the failing row's own text exists:
+
+```
+  FAIL  density          2.6497  dense-providers / full-vector
+        bound 2.1856, inside trunc(1.4571 quiet median x 1.5) = 2.1856 and above the worst observed 2.0415
+        margins 1.4623x above the worst QUIET reading, 1.0706x above the worst reading in any measured regime
+  FAIL  density: 2.6497 is at or above the 2.1856 bound (dense-providers / full-vector)
+  SCALING axis=density ratio=2.6497 bound=2.1856 arms=dense-providers(60r/96a/20m)/full-vector(60r/96a/1m)
+          seed=42 ticks=4320 samples=5 aggregation=median-of-medians regime=win32/12cpu
+```
+
+**EXIT CODE 1, READ FROM THE PROCESS**, with the other thirteen rows PASS — including I2 at
+23,920ms and I4 at 158,745ms.
+
+**PAIRED, SAME SITTING, SAME MACHINE.** An immediate standalone `pnpm run check:scaling`, run alone
+with nothing else issued against the box, returned **density 1.5515, PASS, exit 0**. Loaded 2.6497
+against quiet 1.5515 is **1.71×** on the same axis of the same tree minutes apart. Then the final
+full `verify` of the goal, run quietly, returned **check:scaling PASS at 9,498ms and exit 0** —
+against **11,414ms** for the same row on the red run.
+
+**THE REGIME IS THE FINDING, AND IT IS STATED RATHER THAN INFERRED.** The red run was issued as a
+BACKGROUND process while the agent kept working: greps, file reads and a `tsx` probe were running
+on the same 12-core box throughout. That is precisely the *"discriminator is LOAD, not the tree"*
+hypothesis this entry already carries — and `check:scaling` is a **ratio of medians of timings**,
+so it is the row most exposed to it. The gate says so itself, in the text above: its bound sits
+above the worst reading in any measured regime, and this reading is **1.30× that worst.**
+
+**WHAT IS NOT CLAIMED.** That this is the same defect as the earlier three. It is not: sighting #3
+was `test` (I4), and this is `check:scaling` — **so there are at least two intermittent rows, not
+one**, and the earlier inference that they were one thing would have been wrong. Nor is the gate
+being touched: no bound was widened and no arm was edited (§9).
+
+**THE EVIDENCE GAP IS CLOSED FOR THE NEXT ONE.** `pnpm verify` now tees every row and writes a red
+row's full output to `.verify-logs/<row>.log`, with the path printed **inside the last three
+lines** so it survives the `| tail -3` invocation that lost sightings #1–#3. Asserted end to end
+against the shipped gate in `verify.annotations.test.ts` ("RED + not CI: … AND IT SURVIVES ON
+DISK") and driven arm by arm in `verify.rowlog.test.ts`. **The next sighting arrives with its own
+transcript rather than a memory of one.**
+
+
 **THIRD SIGHTING, 2026-08-21, AND THE PATTERN IS NOW SHARP ENOUGH TO NAME.** `pnpm verify` returned
 **I4 `test` RED**, and an immediate standalone `pnpm test` on the same tree returned **2,449
 passed**; a second `verify` then returned **exit 0**. **Three sightings now — one by

@@ -94,6 +94,14 @@ export type HudState = {
    * or whether they are on the wrong floor.
    */
   readonly guestsElsewhere: number;
+  /**
+   * WHICH WALL POSITION THE CAMERA IS SET TO (ADR-0052, G-039a).
+   *
+   * A control the player cannot see the state of is a control they have to discover by
+   * pressing it — and this one has three positions, so "press it and see" costs up to three
+   * presses. It carries the key beside the value for the same reason the floor switcher does.
+   */
+  readonly walls: string;
 };
 
 const cell = (key: string, value: string): string =>
@@ -217,6 +225,7 @@ export function renderHud(host: HTMLElement, state: HudState): void {
     cell('rooms', `${state.rooms - state.invalidRooms}/${state.rooms} valid`),
     ...outcomeCells(world, state.content),
     ...buildCells(world),
+    cell('walls', `${state.walls}  (w)`),
     cell('tick', String(world.tick)),
     cell('fps', String(Math.round(state.fps))),
     state.crowdedOut > 0 ? cell('not drawn', `${state.crowdedOut} guest(s) — tile too narrow`) : '',

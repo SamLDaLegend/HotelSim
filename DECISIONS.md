@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038c is done — a floor costs money and a guest will not lodge more than N floors from the entrance. No save bump: a floor is open while it holds a room, derived and never stored. The floor price was RE-DERIVED mid-build because the first derivation made the harness build nothing and sit on 956,000p unspendable. M3 IS OTHERWISE BLOCKED: travel, both circulation halves and the party goal queue behind the 2026-08-14 tripwire decision, and the quality branch behind ADR-0054's. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-21, G-039a is done: verify now KEEPS a red row's output, a goal block's status is checked against git, sixteen parked items are written into PARKING.md with their tests, and the wall control ships as three positions with a DERIVED alpha. THE INTERMITTENT ROW WAS CAPTURED AT LAST — it is check:scaling, not test, so there are at least two of them and my one-load-sensitive-test inference was wrong; loaded/quiet is 1.71x on that axis. Fourteen rows green, exit code read from the process. M3's remaining goals wait on the 2026-08-14 tripwire decision and ADR-0054's. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at

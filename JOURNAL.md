@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038c is done — a floor costs money and a guest will not lodge more than N floors from the entrance. No save bump: a floor is open while it holds a room, derived and never stored. The floor price was RE-DERIVED mid-build because the first derivation made the harness build nothing and sit on 956,000p unspendable. M3 IS OTHERWISE BLOCKED: travel, both circulation halves and the party goal queue behind the 2026-08-14 tripwire decision, and the quality branch behind ADR-0054's. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-21, G-039a is done: verify now KEEPS a red row's output, a goal block's status is checked against git, sixteen parked items are written into PARKING.md with their tests, and the wall control ships as three positions with a DERIVED alpha. THE INTERMITTENT ROW WAS CAPTURED AT LAST — it is check:scaling, not test, so there are at least two of them and my one-load-sensitive-test inference was wrong; loaded/quiet is 1.71x on that axis. Fourteen rows green, exit code read from the process. M3's remaining goals wait on the 2026-08-14 tripwire decision and ADR-0054's. Unreliable: 2 gates, 0 defects.*
 
 - **State**: save **v20** · summary **v4** · I2 `083677b82ced9e9c` · measure golden
   `5846043bcd849207` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
@@ -1566,3 +1566,77 @@ back rows legible.** The camera owes no cutaway and the wall height holds at ful
 rightward off the tile. Items 0 and 1 are clear; no shipped room type requires more than one item;
 **and no wall height in the useful range fixes it — it is the item layout, not the wall.** Asserted
 as a fact and parked with its test, because `placeItem` will make three-item rooms ordinary.
+
+## WATCH #15 — G-039a. Three wall positions, looked at, and the parked unknown comes back POSITIVE.
+
+**Frames**: `apps/game/recording/`, seed 7, ticks 0 and 720, one file per floor **per position** —
+the recorder now writes `t000720-f1-reduced.svg`, `t000720-f1-transparent.svg`,
+`t000720-f1-full.svg` and the same triple for floors −1, 0 and 2 (gitignored — derived; reproduce
+with `pnpm --filter @hotelsim/game record -- --ticks 720 --every 720 --walls <position>`). Read
+through a scratch rasteriser written outside the repository, which draws the **same primitives
+`buildScene` returns** — an unrasterised SVG is an assertion rather than a look (WATCH #14's
+precedent, and its rasteriser did not survive either).
+
+**ADR-0052 PARKED TRANSPARENCY WITH A FALSIFICATION TEST AND ORDERED IT RUN**: *"at 2:1 with two
+far walls, a translucent wall over a neighbouring room's floor may read as MUD rather than as
+glass. Build all three positions, look at the same frame in each, and if transparent is not
+legible it ships as two positions rather than being tuned until it is."*
+
+### RUN, AND IT COMES BACK POSITIVE. It ships as three.
+
+**Floor 1 — nine one-cell bedrooms in a 3×3 plate, tick 720, identical world in all three frames:**
+
+| position | frame | beds visible | item-coloured pixels |
+|---|---|---|---|
+| **reduced** (default, H=24) | `t000720-f1-reduced.svg` | **9 of 9** | 1,296 |
+| **transparent** (H=64, face α=0.30) | `t000720-f1-transparent.svg` | **9 of 9** | 1,296 |
+| **full** (H=64, opaque) | `t000720-f1-full.svg` | **3 of 9** | 432 |
+
+**THE `full` ROW IS WATCH #14's MEASUREMENT, REPRODUCED FROM A DIFFERENT CODE PATH.** That goal
+measured 3-of-9 item plates visible at H=64 by walking the wall polygon; this counts coloured
+pixels in a raster of the shipped primitives. **Two instruments, one number** — and it is the
+clearest evidence available that 64 is the wrong DEFAULT and a fine POSITION.
+
+**Through the glass, the beds are green squares on a pale floor, not a smear.** The panes read as
+tinted glass: each keeps its own top rim and outline at full opacity, and the room behind keeps its
+colour, its floor and its contents. **Nothing about it reads as mud.**
+
+**Floor −1, which is the case the park actually named** — three 1×3 halls side by side, so each
+hall's far wall stands **over its neighbour's floor**. Frames `t000720-fm1-{reduced,transparent,
+full}.svg`. The item plate in the magenta hall and both guests are legible in all three. At `full`
+the halls read as three rooms with tall coloured walls — **which is the reading the human asked for
+(*"I might want to admire some wall art"*) and it is exactly what the position delivers.**
+
+### The number was derived first, then looked at — because a derivation is not a perceptual check
+
+`TRANSPARENT_WALL_ALPHA_HUNDREDTHS = 30`, and the bound is computed rather than chosen:
+`wall-visibility.test.ts` blends every colour the shipped palette can hand out through every wall
+colour it can hand out, at one-percent steps, and finds **the first alpha at which any
+contents-against-their-ground pair drops below the palette's own `MIN_CONTRAST_WITHIN_ROLE` of
+1.3:1 is 0.37.** 30 sits seven points inside it, and **30 ships labelled a preference inside that
+bound**, exactly as 24 does. The bound is conservative twice over — it uses each room's *unshaded*
+colour as the glass where the drawn face is `WALL_SHADE` darker, and it includes `INK.paper`, which
+no wall is ever near.
+
+**AND ONE FINDING FELL OUT OF THE DERIVATION THAT CHANGED THE DESIGN.** A wall's *face* against the
+floor behind it is **1.10:1 even at full opacity** — same hue, near-identical luminance. **A wall
+does not read by its face at all; it reads by its top rim and its outline.** So the glass position
+fades **the pane only** and keeps the frame. Had the alpha been applied to the whole wall, the
+transparent position would have dissolved rather than glazed, and the park would have come back
+negative for a reason that had nothing to do with transparency.
+
+### One caveat, recorded rather than tidied away
+
+**Behind the glass, a room's HUE shifts** — the amber hall's far strip reads olive, the magenta
+hall's reads maroon. The derived criterion covers *contents against their ground*, which is what
+"can I see what is in there" means; it says nothing about *identifying a room type by colour
+through a pane*. Nothing in the game asks a player to do that today (every room carries a badge,
+drawn at full opacity), **so it is a caveat and not a defect** — but it is the thing to look at
+first if someone later reports misreading a room at the tall position.
+
+### What the control is
+
+Three positions on one key — **`w` cycles reduced → transparent → full**, and the HUD carries
+`walls <position> (w)` so the state is visible rather than discovered. **`reduced` stays the
+default**, which is ADR-0052's ruling in one word: it is the position that shows the mechanic
+`placeItem` and the quality fold are about, and **it is what an unattended recording gets.**

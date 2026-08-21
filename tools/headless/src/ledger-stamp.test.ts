@@ -33,6 +33,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const GATE = join(ROOT, 'tools/gates/stamp.mjs');
 const SCAN_LIB = join(ROOT, 'tools/gates/lib/scan.mjs');
+// The shared goal-block parse the gate has read since G-039a, when `check-status.mjs` became
+// its second reader. Copied into the mirrored tree like the gate itself, and sha256-pinned below.
+const BLOCKS_LIB = join(ROOT, 'tools/gates/lib/goal-blocks.mjs');
 
 const LEDGERS = ['GOALS.md', 'JOURNAL.md', 'PARKING.md', 'DECISIONS.md'] as const;
 type Ledger = (typeof LEDGERS)[number];
@@ -120,6 +123,7 @@ function makeTree(options: { readonly omitSource?: string } = {}): Tree {
   // test below is what turns "copied" from a comment into an assertion.
   writeFileSync(join(dir, 'tools/gates/stamp.mjs'), readFileSync(GATE));
   writeFileSync(join(dir, 'tools/gates/lib/scan.mjs'), readFileSync(SCAN_LIB));
+  writeFileSync(join(dir, 'tools/gates/lib/goal-blocks.mjs'), readFileSync(BLOCKS_LIB));
   // The three files the digest-body predicate reads its truth from (G-032a).
   for (const [path, source] of Object.entries(STUB_SOURCES)) {
     if (path === options.omitSource) continue;
@@ -393,6 +397,44 @@ describe('AND IT BITES — every mutation named, each against an otherwise-valid
     expect(runGate(tree.gate).status).not.toBe(0);
     writeLedgers(tree.dir, { goalBlock: DONE_BLOCK });
     expect(runGate(tree.gate).status).toBe(0);
+  });
+
+  it('AND CASE DOES NOT DEFEAT IT — `Status: **DONE**` counts as done (G-039a)', () => {
+    // A LATENT DEFECT, FOUND BY READING THE PREDICATE RATHER THAN BY RUNNING IT. `doneGoals`
+    // was `/^Status:\s*\*{0,2}done\b/` — case-sensitive — so a block reading `**DONE**` was
+    // silently not counted, and a correct stamp naming that goal would have been refused. No
+    // block in `GOALS.md` is spelled that way, so the gate never fired on it: exactly the
+    // shape of a scanner whose predicate has quietly stopped matching. The parse moved to
+    // `lib/goal-blocks.mjs` when `check-status.mjs` became its second reader, and lost the
+    // case-sensitivity on the way. The anchoring, which IS load-bearing, is kept — the arm
+    // above is what holds it.
+    writeLedgers(tree.dir, {
+      goalBlock: ['## G-042 — a goal that finished', 'Status: **DONE**', ''].join('\n'),
+    });
+    expect(runGate(tree.gate).status).toBe(0);
+  });
+
+  it('and a heading with a roman-numeral suffix is its OWN block, not its sibling (G-039a)', () => {
+    // The second latent defect in the old predicate: `/^## (G-\d{3}[a-z]?)\b/` truncates
+    // `## G-023b-i` to `G-023b`, so two blocks collapse into one ID and the first speaks for
+    // both. `G-023b-i` and `G-023b-ii` are real headings in `GOALS.md`. Here the FIRST block
+    // is done and the second is not; under the old parse the stamp would be accepted for
+    // `G-042-ii` on the strength of `G-042-i`'s status.
+    writeLedgers(tree.dir, {
+      stamp: '*As of 2026-08-12, G-042-ii done. Unreliable: 0 gates, 0 defects.*',
+      goalBlock: [
+        '## G-042-i — the first half',
+        'Status: **done, DRY at 1/3**',
+        '',
+        '## G-042-ii — the second half',
+        'Status: pending',
+        '',
+      ].join('\n'),
+    });
+    const { status, output } = runGate(tree.gate);
+    expect(status).not.toBe(0);
+    expect(output).toContain('G-042-ii');
+    expect(output).toContain('does not mark done');
   });
 
   it('a stamp whose count does not name its unit', () => {

@@ -2,9 +2,9 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038c is done — a floor costs money and a guest will not lodge more than N floors from the entrance. No save bump: a floor is open while it holds a room, derived and never stored. The floor price was RE-DERIVED mid-build because the first derivation made the harness build nothing and sit on 956,000p unspendable. M3 IS OTHERWISE BLOCKED: travel, both circulation halves and the party goal queue behind the 2026-08-14 tripwire decision, and the quality branch behind ADR-0054's. Fourteen rows green, exit code captured. Unreliable: 1 gate, 0 defects.*
+*As of 2026-08-21, G-039a is done: verify now KEEPS a red row's output, a goal block's status is checked against git, sixteen parked items are written into PARKING.md with their tests, and the wall control ships as three positions with a DERIVED alpha. THE INTERMITTENT ROW WAS CAPTURED AT LAST — it is check:scaling, not test, so there are at least two of them and my one-load-sensitive-test inference was wrong; loaded/quiet is 1.71x on that axis. Fourteen rows green, exit code read from the process. M3's remaining goals wait on the 2026-08-14 tripwire decision and ADR-0054's. Unreliable: 2 gates, 0 defects.*
 
-- **168 top-level items**, counted below the digest so the figure does not include itself:
+- **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
   the previous figure could not be re-derived** (`CLAUDE.md` rule 5). G-022 is the newest source,
   **each item with its falsification test attached** (§4). **G-020a's zero is discharged**;
@@ -2844,3 +2844,170 @@ implies and this goal did not build.
   room's — a bed against a wall, a queue point by the door — then position is state that matters
   and the editing verbs owe it a move command.* Until then a player who cares where the bed is,
   is expressing a preference the simulation cannot see. -> **G-036c**, which owns the moving.
+
+## From the DECISION REGISTER — ADR-0047's parked items, written down at last (G-039a, 2026-08-21)
+
+**THE GAP, STATED FIRST, BECAUSE IT IS THE REASON THIS SECTION EXISTS.** ADR-0047 ruled a
+twenty-two-entry register and **parked everything outside its blocking set with a falsification
+test — inside `DECISIONS.md`.** None of it was ever written here. ADR-0049 found the first
+instance (*"I wrote 'this did go to `PARKING.md`, as C5' and then looked — there is no C5 entry
+there"*) and named the consequence: **§9's stop condition *"`PARKING.md` has stopped growing,
+meaning scope is leaking into goals"* has been reading clean while an entire register
+accumulated somewhere §9 does not look.** A deferral recorded in a decision register defers just
+as effectively; what it does not do is show up in the one place a person checks whether
+deferral is still happening.
+
+**THE SWEEP (§5.8 — a fix on a known class must state where else that class lives).** Every
+`DECISIONS.md` entry marked parked, deferred, reserved or named-not-built was checked against
+this file. The register is the bulk of it and is below. **Three items outside the register were
+found and are at the end.** **Two register items were already here** and are cross-referenced
+rather than duplicated: B1's polygon clause (*From G-036b*) and B2's corridor pricing (*Deferred
+out of G-034b*). **B6, the access rule, is NOT parked — it shipped at G-036c**, and appears
+nowhere below for that reason.
+
+### A — the graphics pipeline
+
+- **A1 — THE REAL ART TRACK: 3D-RENDERED SPRITES.** Accepted as the authoring route because it
+  makes camera rotation and walk cycles *additive rather than multiplicative*; what ships today
+  is the placeholder track, which needs no assets at all (procedural coloured prisms, ADR-0014).
+  **Nothing is owed until the first asset exists.** **FALSIFICATION TEST**: *when the first real
+  sprite is authored, count what a rotation and a walk cycle cost on top of it. If they are
+  independent renders of one model, A1 was right; if either forces a redraw of the other, the
+  route was multiplicative after all and the placeholder track should have kept running.*
+  -> **M5 or later**, with the art track ADR-0014 already says M5 does not wait on.
+
+- **A5 — CAMERA ROTATION, BUILT-FOR AND NOT BUILT.** `iso.ts` takes an `Orientation` everywhere
+  and `farSidesOf` derives the far walls from the projection, so all four orientations are
+  already exercised by `iso-depth.test.ts` — but **no control changes it and no code path reads
+  a saved one.** **FALSIFICATION TEST**: *add a key that cycles `SHIPPED_ORIENTATION` and record
+  one frame per orientation. If every room, wall, item and guest lands correctly, rotation is a
+  control and not a rewrite, which is what A5 bought; if anything is a half-tile out, the `-1`s
+  in `toView` are wrong in a way only rotation reveals — which is the exact bug A5 was ruled to
+  prevent.* -> **whichever goal wants the second orientation.** Nobody has asked for one.
+
+- **A6 — EIGHT FACINGS, AND WALK CYCLES.** Four facings ship. The ruling: *"eight is a render
+  setting, not a redraw"*, and *"walk cycles land with movement, not before"* — and movement is
+  M3's travel, which is itself blocked. **FALSIFICATION TEST**: *when travel is on, watch a
+  recording at four facings. If a guest crossing a corridor reads as sliding rather than
+  walking, the walk cycle is owed; if the four facings make the direction legible on their own,
+  eight is a preference and can wait for the real art.* -> **M5**, with the art track.
+
+- **A7 — ZOOM AND RESOLUTION LEVELS.** Parked by the register with its own reason: decide it
+  when the renderer is rebuilt. **FALSIFICATION TEST** (ADR-0047's own): *if the atlas ever has
+  to be RE-PACKED to add a zoom level, it should have been decided at A2 and this park cost
+  something.* Note the near-miss: this file already carries a *camera pan and zoom* item from
+  G-031, which is a CONTROL over the existing single-resolution camera — a different question
+  from how many resolutions the atlas holds. -> **the renderer rebuild, M5.**
+
+- **A3 — MULTI-TILE ITEMS ARE STILL FORBIDDEN, AND THE PROHIBITION IS A CHECK.**
+  `assertSingleTile` moved into `drawItems` at G-036b; the ROOM half was handled there (a room
+  is now per-tile drawables with their own depths) and **the ITEM half was not** — an item
+  spanning two tiles has two depths and no correct place in the draw order. `placeItem` cannot
+  create one, so what reaches the check is a hand-built save. **FALSIFICATION TEST**: *hand-build
+  a save with a two-tile item and load it. If the renderer throws, the prohibition is live and
+  the debt is real; if it draws something plausible, the sort order has been made total by some
+  later goal and A3 can be closed.* -> **the goal that gives an item a footprint** (M6's
+  `placeItem` work).
+
+### B — the world model
+
+- **B5 — CONDITION / CLEANLINESS: THE FIELD WAS NEVER RESERVED, AND THAT IS A LIVE
+  CONTRADICTION.** The ruling reads *"reserve the field now, build at M4"* and calls reserving
+  free. **At save v20 there is no such field** — `packages/sim/src/save.ts` has no `condition`,
+  and neither `room-types.json` nor the room entity carries one. So the half that was supposed
+  to be free was not done, and it stopped being free the moment the next migration shipped
+  without it. Housekeeping itself is correctly M4. **FALSIFICATION TEST**: *when condition is
+  built, count the migration. If adding the field then costs one more step on an eighteen-step
+  chain and nothing else, the reservation was worth nothing and skipping it was right; if any
+  rule has to be re-derived because old saves cannot say what condition a room was in, the
+  register was right and this is what the miss cost.* -> **M4**, with housekeeping.
+
+- **B3 — BUYING LAND.** The plot's bounds are STORED rather than constant (`grid.ts`), which is
+  the whole of what B3 decided; expanding them is an economy feature nobody has built.
+  **FALSIFICATION TEST**: *widen `GridBounds` in a save by hand and load it. If rooms, corridors,
+  pathing and the camera all cope, buying land is a transaction plus a command and B3's storage
+  call has paid off; if anything assumed the opening bounds, that assumption is the real debt.*
+  -> **M4**, with the economy.
+
+### C — gameplay
+
+- **C1 — SANDBOX OR SCENARIOS: RULED (scenarios), BUILT AT M6 — and it is the fix for the
+  `--rooms N` contamination this project has carried since M1.** Starting capital and starting
+  provisioning become scenario FIELDS, which are content (I3), so the harness stops injecting
+  world shape through a CLI flag. **FALSIFICATION TEST**: *express the bench workload as a
+  scenario file and run `sim:bench` from it. If every balance figure moves, `--rooms N` was
+  seeding capital the numbers were quietly resting on — which this file already records as ~75%
+  extra opening capital — and the re-take is owed; if nothing moves, the flag was harmless and
+  only the tidiness argument remains.* -> **M6**, and **M4 consumes it** (scenario capital is
+  already recorded here as a hard prerequisite of M4).
+
+- **C2 — EVERY SCORING NUMBER.** The SHAPE is pinned — function (a binary gate on required
+  items), size (diminishing returns with an upkeep cost), decor, condition (B5), adjacency — and
+  **every weight, threshold and band boundary is content and is unset.** **FALSIFICATION TEST**:
+  *when the fold lands, try to express "a bigger room is better up to a point" purely in
+  content. If a weight has to be a code constant, the shape was pinned wrongly and C2 was not
+  the deferrable half; ADR-0045's per-need banding is the precedent for how such a fold is
+  written and falsified.* -> **M4**, or the quality-fold goal that consumes it.
+
+- **C4 — STAFF ROLES: NAMED, NOT BUILT.** Housekeeping (B5), reception (C5), maintenance,
+  porters. Named because **each is a room requirement and a pathing consumer**, so M3's
+  circulation has to be able to carry them. **FALSIFICATION TEST**: *try to express a
+  housekeeper as an entity that walks a route and occupies a queue point, using M3's circulation
+  and nothing new. If it fits, C4 was cheap to defer; if the pathing only knows how to move
+  GUESTS, then "staff are a pathing consumer" was an assumption and the circulation goal owes a
+  generalisation.* -> **M4**, with wages.
+
+- **C5 — RECEPTION AS A QUEUE POINT. PARKED BY ADR-0047, TAKEN BACK BY ADR-0049, AND STILL NOT
+  BUILT.** The human brought it forward into G-038 after looking at WATCH #12 and finding the
+  hotel had no lobby; G-038 is blocked on the tripwire decision, so **the deferral is live again
+  through no decision of its own.** Recorded here so that fact is visible somewhere §9 looks.
+  **FALSIFICATION TEST** (ADR-0047's own, which ADR-0049 ruled *stops being deferred and starts
+  being run*): *if M3's queue machinery cannot express a check-in desk without changing shape,
+  it was scoped too narrowly and this should have been in it.* -> **G-038**, when it unblocks.
+
+- **C6 — GUEST ARCHETYPES.** Parked twice over: by the register, and by this file's existing
+  bootstrap line naming archetypes for M6. What the register adds is the structural half already
+  shipped at ADR-0017 §5 — the visit terminator is keyed on the need vector, so a second
+  population is a table away rather than a rewrite. **FALSIFICATION TEST**: *give one archetype
+  a need vector with a hole in it and run a season. If the existing terminator, review fold and
+  scorer all read it without a code change, C6 really is content; if any of them assumes every
+  guest wants every need, that assumption is the debt and not the table.* -> **M6**.
+
+- **C7 — BOOKINGS, DAY/NIGHT AND SEASONS.** All three are balance-shaped and none has a
+  consumer. **FALSIFICATION TEST**: *the day a review depends on WHEN a guest arrived rather
+  than on what happened while they were here, one of the three has become load-bearing and the
+  park expires. Until then `ARRIVAL_EVERY_TICKS` is a flat rate, and every campaign in this
+  repository is measured against a hotel with no night.* -> **M4 or later**.
+
+### Outside the register — the three the sweep found
+
+- **A CACHED PER-INSTANCE CAPACITY IS A SEPARATE DECISION WITH A SEPARATE MIGRATION** (ADR-0051,
+  as corrected by ADR-0053). Capacity is to be DERIVED from a room's footprint and contents at
+  read time, exactly as the quality score is — *"two folds over one input list, not two
+  mechanisms"* — so it needs no save field. The parenthetical parks the other direction: *"if a
+  later goal wants capacity cached in state for tick cost, that is a separate decision with a
+  separate migration — parked, not assumed."* **FALSIFICATION TEST**: *measure the fold in the
+  tick loop with `sim:measure` once it exists. If deriving capacity per read is inside the
+  noise, the cache is never owed; if it is not, the cache is a migration and this line is the
+  decision that has to be taken first.* -> **whichever goal measures the fold.**
+
+- **A UNIFORMLY STALE SET OF LEDGER STAMPS IS UNDETECTABLE, AND THE PARK HAS NO TEST.**
+  `stamp.mjs`'s own header states it: four IDENTICAL but stale stamps pass every predicate the
+  gate has — it detects disagreement and malformedness, not age — and it says *"parked with its
+  falsification test rather than half-built."* **THERE IS NO FALSIFICATION TEST IN THAT COMMENT,
+  and this entry does not invent one**, because the reason given is real: making "old" mechanical
+  means ordering goal IDs across G-020a/b/c and reconciling them with `JOURNAL.md`'s headings,
+  which is a bigger check than the defect it catches. **What CAN be said, and is the nearest
+  thing to a test**: *G-039a's `check-status.mjs` now compares goal blocks against git, so the
+  cheapest ordering-free version of "the stamp is old" — the stamp names a goal, and git has
+  since seen commits for goals whose blocks are not pending — is one join away from machinery
+  that now exists.* -> **unclaimed**, and honestly so.
+
+- **THE `pnpm verify` ROW LOG KEEPS THE LAST 4 MB OF A RED ROW, NOT THE WHOLE OF IT** (G-039a).
+  `rowlog.mjs` streams everything to the terminal and keeps the tail, because a runner prints
+  its banner first and its failures last. **FALSIFICATION TEST**: *if a red row is ever truncated
+  in a way that loses the diagnosis — the kept text carries a marker saying how many bytes were
+  dropped, so this is observable rather than inferred — the cap is wrong and the fix is to spool
+  to the file as the chunks arrive rather than at the end.* -> **the goal that hits it.** Nothing
+  has come close: the largest row in this project's history is `test`, and its full output is
+  well inside the cap.

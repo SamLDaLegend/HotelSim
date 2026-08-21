@@ -43,7 +43,8 @@ import { loadContent } from '../../../tools/headless/src/content-loader.js';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, frameSvg, hex } from './svg.js';
 import { createScenario } from '../src/scenario.js';
 import { floorsOf, guestsOnFloor, viewFor } from '../src/view/camera.js';
-import { SHIPPED_ORIENTATION } from '../src/view/iso.js';
+import { DEFAULT_WALL_VISIBILITY, SHIPPED_ORIENTATION, WALL_VISIBILITIES } from '../src/view/iso.js';
+import type { WallVisibility } from '../src/view/iso.js';
 import { BACKGROUND } from '../src/view/palette.js';
 import { createScene } from '../src/view/scene.js';
 
@@ -53,6 +54,27 @@ function arg(name: string, fallback: number): number {
   if (at === -1) return fallback;
   const value = Number(process.argv[at + 1]);
   return Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * WHICH WALL POSITION TO RECORD IN (ADR-0052, G-039a) — `--walls reduced|transparent|full`.
+ *
+ * IT DEFAULTS TO THE DEFAULT, which is the whole point of the ruling: an unattended recording
+ * gets `reduced`, the position that shows what is inside a room. The flag exists because the
+ * transparency position was PARKED WITH A FALSIFICATION TEST — *"build all three, look at the
+ * same frame in each"* — and a test you cannot invoke is not a test.
+ */
+const wallsArg = process.argv.includes('--walls')
+  ? String(process.argv[process.argv.indexOf('--walls') + 1])
+  : DEFAULT_WALL_VISIBILITY;
+const walls: WallVisibility = (WALL_VISIBILITIES as readonly string[]).includes(wallsArg)
+  ? (wallsArg as WallVisibility)
+  : DEFAULT_WALL_VISIBILITY;
+if (walls !== wallsArg) {
+  // LOUD, NOT QUIET. A misspelt `--walls transparant` that silently records the default would
+  // produce two identical recordings and an argument about what they showed.
+  process.stdout.write(`--walls "${wallsArg}" is not one of ${WALL_VISIBILITIES.join(', ')}; recording ${walls}
+`);
 }
 
 const seed = arg('seed', 7);
@@ -72,7 +94,7 @@ mkdirSync(outDir, { recursive: true });
 
 /** A census line per frame, so a description of the recording rests on counts. */
 function census(current: World, floor: number): string {
-  const view = viewFor(current, floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const view = viewFor(current, floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT, walls);
   const frame = scene.build(current, view);
   const figures = frame.shapes.filter((item) => item.kind === 'figure');
   const tints = new Map<string, number>();
@@ -108,13 +130,15 @@ const entrance = entranceCell(current.grid);
 for (let tick = 0; tick <= ticks; tick += 1) {
   if (tick % every === 0) {
     for (const floor of floorsOf(current)) {
-      const view = viewFor(current, floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT);
+      const view = viewFor(current, floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT, walls);
       const frame = scene.build(current, view);
       const caption =
-        `tick ${current.tick} · floor ${floor} · ${frame.report.rooms} rooms ` +
+        `tick ${current.tick} · floor ${floor} · walls ${walls} · ${frame.report.rooms} rooms ` +
         `(${frame.report.invalidRooms} invalid) · ${guestsOnFloor(current, floor)} guests here · ` +
         `${frame.report.guestsElsewhere} elsewhere · scale ${view.scale.toFixed(2)}`;
-      const file = `t${String(current.tick).padStart(6, '0')}-f${floor < 0 ? `m${-floor}` : floor}.svg`;
+      // THE POSITION IS IN THE FILENAME, so three recordings of one tick can sit in one
+      // directory and a report can name the frame it is describing.
+      const file = `t${String(current.tick).padStart(6, '0')}-f${floor < 0 ? `m${-floor}` : floor}-${walls}.svg`;
       writeFileSync(join(outDir, file), frameSvg(frame.shapes, frame.labels, caption), 'utf8');
       written.push({ file, caption });
     }
@@ -125,7 +149,7 @@ for (let tick = 0; tick <= ticks; tick += 1) {
 }
 
 // THE RUN'S OWN SUMMARY, printed rather than inferred from the pictures.
-const finalView = viewFor(current, entrance.floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT);
+const finalView = viewFor(current, entrance.floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT, walls);
 process.stdout.write(`\nfloors: ${floorsOf(current).join(', ')}\n`);
 process.stdout.write(`corridors declared: ${current.corridors.length}\n`);
 process.stdout.write(`frames written: ${written.length} in ${outDir}\n`);

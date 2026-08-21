@@ -15,7 +15,7 @@
     "check:tickcost": "node tools/gates/tripwire.mjs",
     "check:tickcost:proof": "node tools/gates/check-tripwire.mjs",
     "check:scaling": "node tools/gates/scaling.mjs",
-    "check:stamp": "node tools/gates/stamp.mjs",
+    "check:stamp": "node tools/gates/stamp.mjs && node tools/gates/check-status.mjs",
     "check:ladder": "node tools/gates/check-ladder.mjs",
     "check:unpinned": "node tools/gates/check-unpinned.mjs",
     "stamp:set": "node tools/gates/stamp.mjs --set",

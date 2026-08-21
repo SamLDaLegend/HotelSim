@@ -324,6 +324,34 @@ const ALSO_REGISTERED: ReadonlyMap<string, { readonly proof: string; readonly ti
           'than reporting a clean tree — which is why it is here and not in REGISTER.',
       },
     ],
+    [
+      'tools/gates/check-status.mjs',
+      {
+        proof: 'tools/headless/src/goal-status.test.ts',
+        title: 'G-031a: a commit names the SUB-GOAL, the block is spelled G-031, and it reads pending',
+        note:
+          'ADR-0047 amdt §4, G-039a. A goal block\'s status against git. Reads two named ledgers ' +
+          'and `git log`, so it is here rather than in REGISTER for the same reason `stamp.mjs` ' +
+          'is. Its subject can go empty in a way a file-reader\'s cannot — a shallow clone, or a ' +
+          'history whose subjects stopped naming goals — so it carries FOUR anti-vacuity clauses ' +
+          'and the proof drives all four. The bite arm named here is the historical case itself, ' +
+          'and it caught a real hole while being written: the first version resolved goal IDs ' +
+          'EXACTLY, found no `G-031a` block (there has never been one — the goal lived inside ' +
+          '`## G-031`), judged nothing and printed green over the defect it was built for.',
+      },
+    ],
+    [
+      'tools/gates/lib/goal-blocks.mjs',
+      {
+        proof: 'tools/headless/src/goal-status.test.ts',
+        title: 'CASE DOES NOT SAVE IT — `Status: **PENDING**` is caught, which the old predicate class was not',
+        note:
+          'G-039a. The shared goal-block parse, read by `stamp.mjs` (done) and `check-status.mjs` ' +
+          '(pending). It exists because the second reader was about to be a second predicate, and ' +
+          'the first had two latent defects: case-sensitivity, and a heading pattern that ' +
+          'truncated `G-023b-i` to `G-023b`. Both are exercised here and in `ledger-stamp.test.ts`.',
+      },
+    ],
   ]);
 
 const ALL_REGISTERED = new Map([...REGISTER, ...ALSO_REGISTERED]);

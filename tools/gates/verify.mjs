@@ -6,10 +6,10 @@
 // Every gate runs even if an earlier one fails, so one command tells you everything
 // that is broken instead of the first thing.
 
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { escapeAnnotation, tail } from './lib/annotate.mjs';
+import { prepareLogDir, runRow, writeRowLog } from './lib/rowlog.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -60,7 +60,7 @@ const GATES = [
   ['—', 'check:tickcost', 'tick cost against the previous commit, inside a derived bound (G-020b)'],
   ['—', 'check:tickcost:proof', 'the tripwire, watched going red under two mutations'],
   ['—', 'check:scaling', 'rooms, needs and provider density scale as claimed (G-020c, out of I4)'],
-  ['—', 'check:stamp', 'the four ledger digests carry one byte-identical as-of line (§4.1, G-022)'],
+  ['—', 'check:stamp', 'the four digests carry one as-of line (§4.1, G-022), and no goal block reads `pending` that git says shipped (ADR-0047 amdt §4, G-039a)'],
   ['—', 'check:ladder', 'no render code computes one play speed from another (§2.1.1, G-030)'],
   ['—', 'check:unpinned', 'no quantity printed as a claim that its own file does not pin (ADR-0032 §1, G-033)'],
 ];
@@ -72,34 +72,58 @@ const GATES = [
 // ruled to stop, and the census is the stronger of the two because it is derived from the tree
 // rather than from a list somebody remembered to update.
 
-// IN CI, CAPTURE EACH ROW'S OUTPUT SO A RED ONE CAN SPEAK; EVERYWHERE ELSE, STREAM IT.
+// EVERY ROW'S OUTPUT IS STREAMED **AND** KEPT, ON EVERY PLATFORM (G-039a).
 //
-// `stdio: 'inherit'` is what makes a local `pnpm verify` watchable — output appears as it
-// happens. It also means nothing is kept, so the parent cannot quote a failing child. In CI that
-// trade is the wrong way round: nobody is watching a live log, and the failing row's text is the
-// one thing a reader without a token cannot otherwise obtain.
+// ==========================================================================================
+// IT USED TO BE ONE OR THE OTHER, AND THE ONE PICKED LOCALLY IS WHY THREE SIGHTINGS OF AN
+// INTERMITTENT ROW PRODUCED ZERO DIAGNOSES.
 //
-// So in CI the child is piped and its output is written straight back out afterwards. The step
-// log is the same text either way; only its arrival changes, from interleaved to per-row blocks.
-// THE VERDICT IS UNTOUCHED — `result.status` is read identically on both paths, and the exit code
-// at the foot of this file is computed from `results` exactly as before.
+// The previous version read: `stdio: CI ? 'pipe' : 'inherit'`. `inherit` is what makes a local
+// run watchable — the child writes to this terminal directly, as it happens — and it is also
+// why the parent held NOTHING afterwards. So when `pnpm verify` went red three times on this
+// desk, twice under `| tail -3`, all that survived was the failure footer. The escalation of
+// 2026-08-16 says it in one line: "I STILL HAVE NOT CAPTURED THE FAILING ROW'S OUTPUT."
+//
+// The child is now PIPED everywhere and TEE'D (`lib/rowlog.mjs`): each chunk goes straight to
+// this process's stdout as it arrives, and into a per-row buffer. Streaming is preserved, which
+// is the property `inherit` was chosen for; the bytes now also exist when the row goes red.
+//
+// THE COST, BECAUSE IT IS REAL AND SMALL: a piped child's stdout is not a TTY, so a runner that
+// redraws a progress line in place prints a plain log instead. `FORCE_COLOR` below keeps the
+// colour outside CI. In CI the child was ALREADY piped, so the annotations below still receive
+// a row's whole output; two things there do change and are stated rather than glossed — the
+// text now arrives WHILE the row runs instead of in one block after it, and stdout and stderr
+// interleave in arrival order instead of being concatenated stdout-first.
+//
+// THE VERDICT IS UNTOUCHED. A row is red exactly when its exit status is not 0, the summary is
+// computed from `results` as before, and the exit code at the foot of this file is unchanged.
+// Nothing here can turn a red row green: the only new writes are to stdout and to a log file.
+// ==========================================================================================
 const CI = process.env.GITHUB_ACTIONS === 'true';
+
+/**
+ * Where a red row's own output is kept. Gitignored — it is a derived artefact of one run, and
+ * the same argument `recording/` and `*.ndjson` already carry in `.gitignore`.
+ */
+const LOG_DIR = join(ROOT, '.verify-logs');
+
+prepareLogDir(LOG_DIR, GATES.map(([, script]) => script));
 
 const results = [];
 for (const [id, script, blurb] of GATES) {
   process.stdout.write(`\n── ${id} ${script} — ${blurb}\n`);
-  const started = Date.now();
-  const result = spawnSync(`pnpm run ${script}`, {
+  const result = await runRow(`pnpm run ${script}`, {
     cwd: ROOT,
-    stdio: CI ? 'pipe' : 'inherit',
-    shell: true,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, NODE_NO_WARNINGS: '1' },
+    out: process.stdout,
+    env: {
+      ...process.env,
+      NODE_NO_WARNINGS: '1',
+      // OUTSIDE CI ONLY, so the bytes CI reads are byte-for-byte the ones it read before this
+      // change. Locally it buys back the colour that piping the child costs.
+      ...(CI ? {} : { FORCE_COLOR: '1' }),
+    },
   });
-  const output = CI ? `${result.stdout ?? ''}${result.stderr ?? ''}` : '';
-  if (CI) process.stdout.write(output);
-  results.push({ id, script, ok: result.status === 0, ms: Date.now() - started, output });
+  results.push({ id, script, ok: result.status === 0, ms: result.ms, output: result.output });
 }
 
 process.stdout.write('\n── summary ──\n');
@@ -143,9 +167,27 @@ if (CI) {
 }
 
 const failed = results.filter((r) => !r.ok);
+
+// A RED ROW SAYS WHAT IT SAID, TWICE: ON SCREEN AND ON DISK (G-039a).
+//
+// ON SCREEN, because the row's own text scrolled past minutes ago and the reader is looking at
+// the summary. ON DISK, because the two invocations that lost this evidence were pipelines —
+// `pnpm verify 2>&1 | tail -3` — and a file is the only form of the answer that survives one.
+// The path is printed in the LAST TWO LINES for the same reason: three lines is what that
+// pipeline keeps, so the pointer has to fit inside it.
+const kept = [];
+for (const r of failed) {
+  const path = writeRowLog(LOG_DIR, r.script, r.output);
+  kept.push({ script: r.script, path: relative(ROOT, path).split('\\').join('/') });
+  const excerpt = tail(r.output, { lines: 40, chars: 8000 });
+  process.stdout.write(`\n── output of the red row: ${r.id} ${r.script} — last 40 lines ──\n`);
+  process.stdout.write(`${excerpt === '' ? '(the row produced no output at all)' : excerpt}\n`);
+}
+
 if (failed.length > 0) {
   process.stdout.write(`\n${failed.length} gate(s) red: ${failed.map((r) => r.script).join(', ')}\n`);
-  process.stdout.write('Fix the code, not the gate. Changing an invariant is a human decision (§9).\n\n');
+  process.stdout.write('Fix the code, not the gate. Changing an invariant is a human decision (§9).\n');
+  process.stdout.write(`red row output kept: ${kept.map((k) => k.path).join(', ')}\n\n`);
   process.exit(1);
 }
 process.stdout.write('\nAll six invariant gates green.\n\n');

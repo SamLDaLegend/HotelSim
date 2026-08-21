@@ -63,6 +63,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { GOAL_ID_ONCE, goalBlocks, isDone, splitLines } from './lib/goal-blocks.mjs';
 import { finish, rel } from './lib/scan.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -91,19 +92,13 @@ function findStamp(text) {
   return { text: lines.slice(first, last + 1).join('\n'), firstLine: first + 1, lastLine: last + 1 };
 }
 
-/**
- * Split on either newline convention, and DROP the carriage return.
- *
- * THE FIRST VERSION OF THIS FILE DID NOT, AND IT WENT RED ON THIS MACHINE IMMEDIATELY —
- * every stamp ended `…(I4).*\r`, so the "closes its italics" rule fired on all four. That
- * is the cheap version of a much more expensive bug: this repository is checked out CRLF on
- * Windows and LF on Linux and macOS, so a newline-sensitive gate is GREEN ON THE MACHINE IT
- * WAS WRITTEN ON AND RED ON THE OTHER TWO — discoverable only in CI, which is the thing
- * G-022 exists to start using. A gate must compare text, not line endings.
- */
-function splitLines(text) {
-  return text.split('\n').map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));
-}
+// `splitLines` MOVED TO `lib/goal-blocks.mjs` AT G-039a and is imported above, because a second
+// gate now needs the same parse. The reason is unchanged and stays at the point of use: the
+// first version of this file did not drop the carriage return, and it went red on this machine
+// immediately — every stamp ended with a carriage return, so the "closes its italics" rule
+// fired on all four. This repository is checked out CRLF on Windows and LF on Linux and macOS,
+// so a newline-sensitive gate is GREEN ON THE MACHINE IT WAS WRITTEN ON AND RED ON THE OTHER
+// TWO — discoverable only in CI. A gate must compare text, not line endings.
 
 /** The newline this file already uses, so `--set` does not rewrite every line of a ledger. */
 function newlineOf(text) {
@@ -126,21 +121,24 @@ function replaceStamp(text, stamp, replacement) {
  * `done` (after optional bold markers) to count. `ledger-stamp.test.ts` drives exactly that
  * string through this function, because a near-miss the repo already contains is worth more
  * as a test case than one somebody invents.
+ *
+ * THE PARSE MOVED TO `lib/goal-blocks.mjs` AT G-039a, WITH TWO DEFECTS REPAIRED ON THE WAY —
+ * and it moved because `check-status.mjs` was about to write a second copy of it:
+ *
+ *   - IT WAS CASE-SENSITIVE. `Status: **DONE**` was silently not counted. Nobody had written a
+ *     status that way, so it never fired; it was found by READING the predicate rather than by
+ *     running it, which is the only way a false negative in a scanner is ever found.
+ *   - IT COULD NOT SEE `G-023b-i`. `/^## (G-\d{3}[a-z]?)\b/` truncates that heading to
+ *     `G-023b`, so two real blocks collapsed into one ID and whichever came first spoke for
+ *     both.
+ *
+ * Neither changes any verdict on today's tree — both are latent — and both are the class this
+ * file's own header is about: a predicate that has quietly stopped matching reports clean.
  */
 function doneGoals(goalsText) {
   const done = new Set();
-  const lines = splitLines(goalsText);
-  let current = null;
-  for (const line of lines) {
-    const heading = /^## (G-\d{3}[a-z]?)\b/.exec(line);
-    if (heading !== null) {
-      current = heading[1];
-      continue;
-    }
-    if (current !== null && /^Status:\s*\*{0,2}done\b/.test(line)) {
-      done.add(current);
-      current = null;
-    }
+  for (const block of goalBlocks(goalsText)) {
+    if (isDone(block.status)) done.add(block.id);
   }
   return done;
 }
@@ -165,7 +163,11 @@ function shapeViolations(where, stamp, done) {
   if (!/\*As of \d{4}-\d{2}-\d{2}[,.]/.test(text)) {
     out.push({ where, what: 'the as-of stamp carries no `YYYY-MM-DD` date (§4.1).' });
   }
-  const goal = /\bG-\d{3}[a-z]?\b/.exec(text);
+  // THE SHARED SPELLING (G-039a). The local pattern here had the same blind spot the local
+  // heading pattern had: it matched `G-023b` inside `G-023b-ii` and then asked whether THAT was
+  // done — so a stamp naming the second half of a split goal was judged against the first
+  // half's status, and a real `GOALS.md` contains exactly that pair of headings.
+  const goal = GOAL_ID_ONCE.exec(text);
   if (goal === null) {
     out.push({ where, what: 'the as-of stamp names no goal, so it cannot say where we are (§4.1).' });
   } else if (!done.has(goal[0])) {

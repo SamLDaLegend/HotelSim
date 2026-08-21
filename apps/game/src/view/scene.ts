@@ -79,7 +79,9 @@ import {
   ITEM_SIZE,
   neighbourAcross,
   toView,
-  WALL_HEIGHT,
+  wallPositionOf,
+  WALL_SHADE_HUNDREDTHS,
+  FLOOR_SHADE_HUNDREDTHS,
 } from './iso.js';
 import type { Side } from './iso.js';
 import { createPalette, INK } from './palette.js';
@@ -110,11 +112,20 @@ function nameOf(content: BoundContent, kind: string): string {
  *
  * The light is up-and-left, which is also where `figure.ts` puts it — one light source for the
  * whole picture, because two would make a guest standing in a room look like a cut-out.
+ *
+ * THE NUMBERS THEMSELVES MOVED TO `iso.ts` AT G-039a, in hundredths, beside `WALL_HEIGHT` and
+ * the item constants G-036b put there. Reason, and it is that goal's reason one step further
+ * out: with a TRANSLUCENT wall position the glass IS the wall's face, so how much a wall hides
+ * is a fact about its height, the item anchor AND its shade. Keeping them apart is how 64
+ * shipped — and `tools/` may import `iso.ts`, so the criterion can be a test.
  */
-const WALL_SHADE: Readonly<Record<string, number>> = Object.freeze({ lit: 0.82, shadow: 0.55 });
+const WALL_SHADE: Readonly<Record<string, number>> = Object.freeze({
+  lit: WALL_SHADE_HUNDREDTHS.lit / 100,
+  shadow: WALL_SHADE_HUNDREDTHS.shadow / 100,
+});
 
 /** How much darker a room's own floor is than its nominal colour, so the walls stand out. */
-const FLOOR_SHADE = 0.95;
+const FLOOR_SHADE = FLOOR_SHADE_HUNDREDTHS / 100;
 
 export type SceneReport = {
   readonly view: View;
@@ -428,7 +439,10 @@ function drawRoom(
   const base = colourOf(appearances.room(room.kind));
   const ink = palette.inkOn(base);
   const tile = toView(cell.column, cell.row, view.orientation);
-  const height = WALL_HEIGHT * view.scale;
+  // THE WALL POSITION THE CAMERA IS SET TO (ADR-0052). Height and face opacity come from one
+  // place; `reduced` is the default and is the 24 WATCH #14 measured.
+  const wall = wallPositionOf(view.walls);
+  const height = wall.height * view.scale;
 
   for (const side of farSidesOf(view.orientation)) {
     // NO WALL BETWEEN A ROOM AND ITSELF. Without this a wide room is drawn as a grid of
@@ -448,6 +462,11 @@ function drawRoom(
       kind: 'poly',
       points: [foot0.x, foot0.y, foot1.x, foot1.y, foot1.x, foot1.y - height, foot0.x, foot0.y - height],
       fill: shade(base, factor ?? 0.7),
+      // ONLY THE PANE FADES. The outline keeps its own alpha, and so does the rim below,
+      // because a wall does not read by its FACE — measured while deriving the alpha, a face
+      // against the floor behind it is 1.10:1 even at full opacity. Fading the frame with the
+      // pane is what would turn the glass position into a smear.
+      alpha: wall.faceAlpha,
       stroke: { width: 1, colour: shade(base, 0.35), alpha: 0.9 },
     });
     // THE TOP RIM, in the ink that reads against this room's own colour. It is the same

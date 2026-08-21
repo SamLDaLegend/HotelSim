@@ -58,7 +58,8 @@ import {
 } from './session.js';
 import { cellAt, floorsOf, guestsOnFloor, viewFor } from './view/camera.js';
 import type { View } from './view/camera.js';
-import { SHIPPED_ORIENTATION } from './view/iso.js';
+import { DEFAULT_WALL_VISIBILITY, SHIPPED_ORIENTATION, WALL_VISIBILITIES } from './view/iso.js';
+import type { WallVisibility } from './view/iso.js';
 import { createOverlay } from './view/overlay.js';
 import { createPainter } from './view/paint.js';
 import { INK } from './view/palette.js';
@@ -243,7 +244,26 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+/**
+ * WHICH WALL POSITION IS DRAWN (ADR-0052, human ruling — G-039a).
+ *
+ * Render state and nothing else: a reload puts it back to `reduced`, nothing is saved, and the
+ * simulation cannot see it. The default is the human's ruling in one word — *"the default stays
+ * 24"* — because it is the position that shows the mechanic `placeItem` and the quality fold
+ * are about, and it is what an unattended recording gets.
+ */
+let walls: WallVisibility = DEFAULT_WALL_VISIBILITY;
+
 window.addEventListener('keydown', (event) => {
+  // `w` CYCLES THE WALLS, in the order `WALL_VISIBILITIES` lists them: reduced -> transparent
+  // -> full. One key rather than three, because a control with three positions and three keys
+  // is three things to remember; the HUD says which one is live.
+  if (event.key === 'w' || event.key === 'W') {
+    event.preventDefault();
+    const at = WALL_VISIBILITIES.indexOf(walls);
+    walls = WALL_VISIBILITIES[(at + 1) % WALL_VISIBILITIES.length] ?? DEFAULT_WALL_VISIBILITY;
+    return;
+  }
   if (event.key === ' ') {
     event.preventDefault();
     paused = !paused;
@@ -305,7 +325,7 @@ app.ticker.add(() => {
   // two point sources — so what makes them agree is that they read one `View` object, written
   // here and nowhere else. A second assignment (a resize handler is the obvious candidate)
   // would let a click resolve against a camera the player never saw.
-  view = viewFor(driver.world, floor, SHIPPED_ORIENTATION, width, height);
+  view = viewFor(driver.world, floor, SHIPPED_ORIENTATION, width, height, walls);
   const frame = scene.build(driver.world, view);
   const marks = overlay.build(view, {
     hovered: pointer === null ? null : cellAt(view, pointer.x, pointer.y),
@@ -326,6 +346,7 @@ app.ticker.add(() => {
     fps,
     queued: session.queue.length,
     lastAction: session.last,
+    walls,
   });
   renderGuestPositions(guestsHost, driver.world, GUEST_POSITIONS_SHOWN);
 

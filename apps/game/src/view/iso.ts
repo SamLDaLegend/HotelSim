@@ -105,6 +105,127 @@ export const ASSET_SCALE = 2;
  */
 export const WALL_HEIGHT = 24;
 
+/**
+ * WALL VISIBILITY IS A CONTROL, NOT A CONSTANT (ADR-0052, HUMAN RULING — G-039a).
+ *
+ * ==========================================================================================
+ * *"I see that the wall height ruling has been changed to allow better visibility — that might
+ * be better served with a toggle between walls being visible, transparent, and the reduced
+ * height (as at a later date I might want to admire some wall art)."*
+ *
+ * **THIS AMENDS ADR-0047 A4**, which considered *"transparent or cutaway walls"* and *"a wall
+ * height slider"* and refused both, on the grounds that two far walls **removes** the problem
+ * rather than managing it. That was **right about the DEFAULT and wrong to treat the
+ * alternatives as exclusive.** Two far walls is still the projection; this decides how tall
+ * those two walls are drawn and how much light passes through them.
+ *
+ * **NONE OF WATCH #14's MEASUREMENT IS WITHDRAWN.** At `H = 64` an item is 3-of-9 visible at
+ * every anchor tried, the near lip is the MOST occluded band, and the first bad height is 28.
+ * What changes is the conclusion drawn from it: **64 is the wrong DEFAULT rather than the wrong
+ * NUMBER**, and a player admiring wall art and a player checking what is in a room want
+ * different pictures of the same hotel.
+ *
+ * **`WALL_HEIGHT = 24` STAYS THE DEFAULT** — it is the position that shows the mechanic
+ * `placeItem` and the quality fold are about, and a default is what an unattended recording
+ * gets (ADR-0023: the WATCH surface is the instrument of record).
+ * ==========================================================================================
+ */
+export type WallVisibility = 'full' | 'transparent' | 'reduced';
+
+/** Every position, in the order a control cycles them. Ascending in how much they hide. */
+export const WALL_VISIBILITIES: readonly WallVisibility[] = Object.freeze(['reduced', 'transparent', 'full']);
+
+/** The one an unattended recording and a fresh browser get. ADR-0052: *"the default stays 24."* */
+export const DEFAULT_WALL_VISIBILITY: WallVisibility = 'reduced';
+
+/**
+ * The tall position, and it is ADR-0047 A2's ORIGINAL DERIVATION rather than a new number: at
+ * 2:1 a tile's screen height is the projection of one grid unit, so a one-unit wall is
+ * `TILE_HEIGHT` and a wall is exactly as tall as its tile is deep. WATCH #13 showed that this
+ * covers the whole tile behind it. That is now a POSITION a player chooses, not a default they
+ * are given.
+ */
+export const FULL_WALL_HEIGHT = TILE_HEIGHT;
+
+/**
+ * HOW MUCH OF THE GLASS WALL'S OWN FACE IS PAINTED, IN HUNDREDTHS — **DERIVED, THEN LOOKED AT.**
+ *
+ * ------------------------------------------------------------------------------------------
+ * ADR-0052 parked transparency WITH ITS FALSIFICATION TEST: *"at 2:1 with two far walls, a
+ * translucent wall over a neighbouring room's floor may read as MUD rather than as glass. Build
+ * all three positions, look at the same frame in each, and if transparent is not legible it
+ * ships as two positions rather than being tuned until it is."* Both halves were done at
+ * G-039a — the number is computed, and then a frame in each position was rasterised and looked
+ * at. See `JOURNAL.md`, WATCH #15.
+ *
+ * REQUIREMENT — a room's contents seen THROUGH the glass must stay as distinguishable as the
+ * palette guarantees any two colours in one role are: `MIN_CONTRAST_WITHIN_ROLE = 1.3`
+ * (`palette.ts`, itself computed rather than picked). The binding pair is an item's dark plate
+ * against the floor it stands on, because the plate exists precisely so an item is read against
+ * a constant ground.
+ *
+ * COMPUTED, NOT HAND-DERIVED — `tools/headless/src/wall-visibility.test.ts` blends every colour
+ * the shipped palette can hand out through every wall colour it can hand out, at one-percent
+ * steps: **the first alpha at which any such pair drops below 1.3:1 is 0.37.** 30 sits seven
+ * points inside that, and the bound is CONSERVATIVE twice over — it uses the room's unshaded
+ * colour as the glass, where the drawn face is `WALL_SHADE` times darker and therefore kinder,
+ * and it includes `INK.paper` among the glass colours although no wall is ever that bright.
+ *
+ * 30 IS A PREFERENCE INSIDE THAT BOUND AND SHIPS LABELLED AS ONE (ADR-0013 §4), exactly as 24
+ * does. What can be said about the ends comes from LOOKING: see WATCH #15.
+ *
+ * IN HUNDREDTHS because the rest of this file is integers and a pinned integer is what a test
+ * compares against; the division happens once, below.
+ * ------------------------------------------------------------------------------------------
+ */
+export const TRANSPARENT_WALL_ALPHA_HUNDREDTHS = 30;
+
+/**
+ * HOW DARK A WALL'S TWO FACES ARE, AND HOW DARK A ROOM'S FLOOR IS, AS FRACTIONS IN HUNDREDTHS.
+ *
+ * THEY MOVED HERE FROM `scene.ts` AT G-039a FOR G-036b's REASON, ONE STEP FURTHER OUT. That
+ * goal moved `ITEM_ANCHOR_RISE`, `ITEM_SIZE` and `ITEM_PLATE_PAD` beside `WALL_HEIGHT` because
+ * *"whether a room's contents are visible is a fact about BOTH numbers and neither one alone"*
+ * — and with a translucent position it is now a fact about the wall's SHADE as well: the glass
+ * is the wall's own face, and how much it hides depends on how dark that face is. Keeping them
+ * apart is how 64 shipped.
+ *
+ * It also puts them where the fence can reach them. `.dependency-cruiser.cjs` lets `tools/`
+ * import `iso.ts` and not `scene.ts`, so a criterion written about these numbers can be a test
+ * rather than a screenshot — and moving the fence to reach a criterion is the wrong repair
+ * (WATCH #14).
+ */
+export const WALL_SHADE_HUNDREDTHS = Object.freeze({ lit: 82, shadow: 55 });
+
+/** How much darker a room's own floor is than its nominal colour, so the walls stand out. */
+export const FLOOR_SHADE_HUNDREDTHS = 95;
+
+/** One position of the wall control: how tall the wall is, and how opaque its face is. */
+export type WallPosition = {
+  /** Logical pixels, before the camera's scale. */
+  readonly height: number;
+  /** 0..1. The FACE only — see `wallPositionOf`. */
+  readonly faceAlpha: number;
+};
+
+/**
+ * The three positions, and the ONE PLACE that says what each of them is.
+ *
+ * THE RIM AND THE OUTLINE STAY OPAQUE IN ALL THREE, and that is the finding that made
+ * `transparent` work rather than a detail. Measured while deriving the alpha: a wall's FACE is
+ * `shade(base, 0.82)` and the floor behind it is `shade(base, 0.95)` — the same hue at almost
+ * the same luminance, **1.10:1 even at full opacity.** A wall does not read by its face at all;
+ * it reads by its top rim and its outline. So the glass position fades the pane and keeps the
+ * frame, which is also what makes it read as glass rather than as a stain.
+ */
+export function wallPositionOf(visibility: WallVisibility): WallPosition {
+  if (visibility === 'full') return { height: FULL_WALL_HEIGHT, faceAlpha: 1 };
+  if (visibility === 'transparent') {
+    return { height: FULL_WALL_HEIGHT, faceAlpha: TRANSPARENT_WALL_ALPHA_HUNDREDTHS / 100 };
+  }
+  return { height: WALL_HEIGHT, faceAlpha: 1 };
+}
+
 /** Half a tile, which is what every projection line below is actually written in terms of. */
 const HALF_WIDTH = TILE_WIDTH / 2;
 export const HALF_HEIGHT = TILE_HEIGHT / 2;

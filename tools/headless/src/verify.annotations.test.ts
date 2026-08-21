@@ -76,6 +76,10 @@ function makeTree(rows: Rows = 'both'): string {
 
   writeFileSync(join(dir, 'tools/gates/verify.mjs'), stubbed, 'utf8');
   writeFileSync(join(dir, 'tools/gates/lib/annotate.mjs'), readFileSync(join(ROOT, 'tools/gates/lib/annotate.mjs')));
+  // `rowlog.mjs` JOINED THE MIRROR AT G-039a, when `verify.mjs` stopped using `spawnSync` and
+  // started tee-ing each row. A lib the gate imports and the mirror does not copy makes every
+  // cell below fail at module resolution — which is how this line came to be written.
+  writeFileSync(join(dir, 'tools/gates/lib/rowlog.mjs'), readFileSync(join(ROOT, 'tools/gates/lib/rowlog.mjs')));
   writeFileSync(
     join(dir, 'package.json'),
     JSON.stringify(
@@ -173,12 +177,33 @@ describe('the escaping and the tail, which are the parts with rules', () => {
 // a stronger claim — 1,1,0,0 pinned four times says "the verdict does not depend on the mode" more
 // exactly than an equality between two numbers nobody has pinned.
 describe('the shipped verify.mjs — four cells, and the verdict pinned in each', () => {
-  it('RED + not CI: no workflow command at all, and the child text still reaches the log', () => {
-    const { status, output } = runVerify(makeTree('red-only'), false);
+  it('RED + not CI: no workflow command, the text streams, AND IT SURVIVES ON DISK (G-039a)', () => {
+    const dir = makeTree('red-only');
+    const { status, output } = runVerify(dir, false);
     expect(status).toBe(1);
-    expect(output).toContain(MARKER); // streamed through `stdio: inherit`
+    expect(output).toContain(MARKER); // tee'd to this process's stdout as the child wrote it
     expect(output).not.toContain('::error');
     expect(output).not.toContain('::notice');
+
+    // ===================================================================================
+    // THE G-039a HALF, END TO END, IN THE CELL THAT ALREADY PAYS FOR THE CHILD.
+    //
+    // Three sightings of an intermittent row produced zero diagnoses, because locally the row
+    // ran under `stdio: 'inherit'` — nothing kept — and the invocation was
+    // `pnpm verify 2>&1 | tail -3`, so the scrollback was cut to the footer. Both halves of the
+    // repair are asserted here against the SHIPPED gate: the row's own text is on disk
+    // afterwards, and the path to it is inside the last three lines.
+    // ===================================================================================
+    const log = readFileSync(join(dir, '.verify-logs/row-red.log'), 'utf8');
+    expect(log).toContain(MARKER);
+
+    const lastThree = output.trimEnd().split('\n').slice(-3).join('\n');
+    expect(lastThree).toContain('.verify-logs/row-red.log');
+
+    // AND A ROW THAT PASSES LEAVES NOTHING, or the directory fills with fourteen files a run
+    // and the red one stops standing out. This tree's single row is the red one, so the file
+    // for a green row must not exist.
+    expect(() => readFileSync(join(dir, '.verify-logs/row-green.log'), 'utf8')).toThrow();
   });
 
   it('RED + CI: the summary notice, the failing row, and that row\'s TEXT', () => {
