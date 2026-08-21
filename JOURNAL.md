@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-ii-alpha is done: aligned coordinate stairs, save v21 with a per-WORLD migration that is provably verdict-preserving because a stair does not plan its floor. Occupancy still 856 and the concurrency pin untouched — the exit criterion that kept the goal small. THE TICK-COST CRITERION I WROTE WAS NOT MEASURABLE and the builder refused to claim it: three campaigns spread 0.99 to 1.04 against a stated quiet noise ceiling of 1.0355, so neither the claim nor a regression is asserted. My room-over-stairwell premise was FALSE — the fallback means the guest converges anyway. The depth ceiling is re-derived to 60, and the speed window did NOT move, because the dial saturates at the longest LEG not the longest journey. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-ii-alpha is done and G-039b was REWRITTEN at PLAN because most of it was already done — two of its four deliverables shipped in G-039a and three of five Carries bullets were discharged, while the ONE beta-blocking deliverable, the layout re-take, was not in the block at all. THE DIGEST ITSELF SAID THIRTEEN ROWS TEN GREEN THREE RED for eleven goals after that stopped being true, and said Unreliable 0 three lines below an as-of line saying 2 — found by a critic sizing a goal FROM the digest. ADR-0058 rules the TOGETHER clause unexecutable and discharged. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
   `418cf36055a3408c` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-ii-alpha is done: aligned coordinate stairs, save v21 with a per-WORLD migration that is provably verdict-preserving because a stair does not plan its floor. Occupancy still 856 and the concurrency pin untouched — the exit criterion that kept the goal small. THE TICK-COST CRITERION I WROTE WAS NOT MEASURABLE and the builder refused to claim it: three campaigns spread 0.99 to 1.04 against a stated quiet noise ceiling of 1.0355, so neither the claim nor a regression is asserted. My room-over-stairwell premise was FALSE — the fallback means the guest converges anyway. The depth ceiling is re-derived to 60, and the speed window did NOT move, because the dial saturates at the longest LEG not the longest journey. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-ii-alpha is done and G-039b was REWRITTEN at PLAN because most of it was already done — two of its four deliverables shipped in G-039a and three of five Carries bullets were discharged, while the ONE beta-blocking deliverable, the layout re-take, was not in the block at all. THE DIGEST ITSELF SAID THIRTEEN ROWS TEN GREEN THREE RED for eleven goals after that stopped being true, and said Unreliable 0 three lines below an as-of line saying 2 — found by a critic sizing a goal FROM the digest. ADR-0058 rules the TOGETHER clause unexecutable and discharged. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -16,22 +16,23 @@
   **All six invariants green on all three platforms.** The only reds are the three ruled ADR-0015
   refusals, **identical on every platform, with no fourth row and nothing platform-specific** —
   against G-022's precedent of six runs and two real cross-platform defects.
-- **`verify` runs THIRTEEN rows** (G-030 added `check:ladder`). **TEN GREEN, THREE RED.**
-  The three are `check:tickcost`, its proof row, and `check:scaling` — **three rows, TWO causes,
-  both ADR-0015 configuration refusals, human-ruled and accepted.** Each declines to compare a
-  campaign taken at `arrivalEveryTicks: 32` against a workload now at 96. **No bound was touched.
-  NO INVARIANT IS RED.**
-- **STATE EVERY VERIFY AS "ten green, three ruled red" — NEVER AS A GREEN COUNT ALONE.** §9's
-  shape is *a gate that flakes red teaches people to re-run it*; a gate that is **known** red
-  teaches people to skim the summary. The exception becomes the habit the first time it is not
-  named out loud.
-- **Unreliable: 0 gates / 0 defects** — §2.0's sense, which is flakiness, **not** the ruled reds.
-  §2.0: a **THIRD** unreliable gate is a stop condition. **Tripwire** `BOUND 1.4557` (ADR-0015),
-  bounds pinned to their derivation (ADR-0016). **The SPEED ladder is CONTENT** — *(corrected
-  2026-08-13, ADR-0033: this line read "the ladder is CONTENT" and was being taken as covering
-  AXIS 1's ladder too. **AXIS 1's ladder is four CLI flag strings in a test file**, provisioned by
-  `schedule()`'s defaults, and no gate reads it. Two different objects, similar names, one
-  sentence.)*
+- **`verify` runs FOURTEEN rows and ALL FOURTEEN ARE GREEN.** Measured 2026-08-21, one full run,
+  exit code read from the process. **The three ADR-0015 configuration refusals are DISCHARGED** —
+  `check:tickcost` PASS at 1.0024 against the 1.4640 bound, its proof row PASS, `check:scaling`
+  PASS. **No bound was touched to get there** (ADR-0056 froze the value); the campaigns were
+  re-taken at the shipped workload at G-032a and G-023b-ii.
+- **THIS DIGEST SAID "THIRTEEN ROWS, TEN GREEN, THREE RED" FOR ELEVEN GOALS AFTER IT STOPPED BEING
+  TRUE**, and it said **"Unreliable: 0 gates"** three lines below an as-of line saying **2**.
+  Found by `sim-critic` sizing a goal FROM the digest — **the stale text made G-039b look necessary
+  by describing red rows that are green.** `check:stamp` cannot catch it: it compares the four
+  as-of lines with each other and **never reads the body beneath them**, which this digest records
+  eight lines above. **A digest that oversells the work remaining is worse than one that is merely
+  old.**
+- **Unreliable: 2 gates, 0 defects** — §2.0's sense, which is flakiness, **not** a ruled red. Both
+  are **load-sensitive TIMEOUTS under full `verify`**, both pass in isolation, **I2 green
+  throughout**: `test` (two files) and `check:scaling`. **§2.0: a THIRD is a stop condition.**
+  `verify` now keeps a red row's own output in `.verify-logs/` (G-039a), which is how the fourth
+  and fifth sightings were finally diagnosed.
 - **The re-take goal carries THREE campaigns**: tickcost, scaling, and `PARKING.md`'s
   needs-history interval (1.1071..1.2534, n=25) whose two arms are no longer poolable. Sized by
   `ai-critic`, which checked four other candidates and found none implied.
@@ -3445,38 +3446,129 @@ Replaced with a file handshake, so the ordering is caused rather than hoped for.
 RESERVED** — v20 has no `condition` on the room entity or in `room-types.json`. **The half that was
 supposed to be free was skipped, and it stopped being free at the next migration.**
 
-## G-039b — The campaign re-takes
-Status: **UNBLOCKED 2026-08-21 by ADR-0056.** The bound's VALUE is unchanged, so what is re-taken
-  is the OCCUPANCY it is calibrated against — `TARGET_CONCURRENT_HUNDREDTHS` with the bound campaign,
-  in one commit, as `workload.concurrency.test.ts` requires.
+## G-038a-ii-β — A room is reached, or it is not a room
+Status: **PLANNED. IT HAD NO BLOCK UNTIL NOW, WHICH IS ADR-0032 §2's CLASS.** `G-038a-ii-β`
+  occurred exactly twice in the whole ledger, **both times as a name** — and the digest already
+  records that class for two struck goals. **A goal whose whole purpose is to be unblocked by
+  another goal must exist as a block, or the goal unblocking it is aimed at nothing.** Found by
+  `sim-critic` sizing G-039b.
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+Statement: **reachability becomes a `RoomInvalidityReason`** — a room that cannot be reached from
+  the entrance is not a room.
+
+**IT IS WARRANTED**: both parked falsification tests came back positive at G-038a-ii's review —
+**a corridor in mid-air with nothing beneath it leaves its room VALID**, and a 3×3 block whose only
+corridor is its **walled-in centre cell** leaves four rooms VALID, *four valid rooms whose entire
+circulation is a sealed one-cell void.*
+
+**AND IT CANNOT SHIP UNTIL G-039b-α LANDS.** Measured: strict reachability is **ZERO on every
+shipped workload** because the entrance is inside room 0; even charitably rooted, **59 of 75 valid
+rooms on the 60-room plate become invalid.** `computeRoomInvalidity` asks circulation **last**, so a
+new reason **converts VALID to invalid and displaces nothing** — guests cannot lodge, `checkedOut`
+collapses. **G-038c refused `reach = 1` for strictly smaller damage on §9 grounds.**
+
+**ITS WATCH NEEDS NO RENDER WORK AND IS THE STRONGEST FRAME THIS MILESTONE COULD PRODUCE**: an
+invalid room **already draws hatched, alarm-outlined and labelled with its reason**, so the
+scenario's upper floors and basement **go red before the stair and green after.**
+
+## G-039b — REWRITTEN AND SPLIT at PLAN, 2026-08-21. Most of it was already done.
+Status: **split into G-039b-α (the layout re-take) / G-039b-β (the campaign that actually drifted).**
+
+**THE BLOCK A BUILDER WOULD HAVE SIZED AGAINST WAS MOSTLY STALE, AND STALE IN THE DIRECTION THAT
+MADE THE GOAL LOOK NECESSARY.** `sim-critic` found:
+
+- **Two of its four named deliverables were SHIPPED BY G-039a** — the wall-visibility control and
+  the status scanner. **A builder handed the old block rebuilds both.**
+- **Three of five `Carries` bullets are already discharged**: `TARGET_CONCURRENT_HUNDREDTHS` already
+  reads **856**, re-taken at G-023b-ii in one commit; the cadence was re-derived and stands at 96
+  with its reason written at the constant; and the backlog derivation was extended at G-023b-ii and
+  **re-derived again at G-038a-ii-α** — *the critic re-checked its arithmetic independently against
+  the stair leg and it is correct.*
+- **"~38 report goldens" is a count of a population that no longer exists** — it traces to item 5 of
+  a five-item list written while travel was OFF, and items 1–4 of that list all shipped. **CLAUDE.md
+  rule 3, on a figure from another session.**
+- **And the ONE un-discharged, β-blocking deliverable — the LAYOUT RE-TAKE — was not in the block at
+  all.** The words *entrance*, *lane*, *corridor* and *layout* did not appear in it.
+
+**The `queue wait` clause is STRUCK as premature**: it belongs to G-038b, **which exists only as a
+bullet**, and there is no queue in the tree for a derivation to owe a term to.
+
+## G-039b-α — The layout re-take
+Status: **PLANNED.** **The only half that unblocks reachability (β).**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic **plus render-engineer** — see below.
+
+**EVERY VIABLE REPAIR MOVES OCCUPANCY, AND THAT WAS MEASURED IN THREE SPELLINGS RATHER THAN
+REASONED**, on the pin's own instrument, exact deterministic counts:
+
+| repair | occupancy |
+|---|---|
+| baseline today | **856** — reproduces the pin exactly |
+| **A** plate shifted +1 column, column 0 declared *(entrance out of room 0 only)* | 849 |
+| **B** spine row at `minRow`, 8×7 plate *(lanes joined)* | 839 — **spills 4 rooms onto floor 1** |
+| **C** spine row at `minRow`, 9×7 plate *(lanes joined)* | **840** |
+
+> **Even the entrance-only repair moves it.** That is structural: prerequisite (i) cannot be met
+> without moving every seeded room **or** moving `entranceCell`, and **both change every journey
+> length.**
+
+**PLAN AGAINST VARIANT C.** It joins the lanes, puts the entrance on circulation, **and keeps all 60
+rooms on floor 0** — so it does not additionally require the harness to grow a stairwell before β
+can flood-fill. **B buys the repair and a defect in one move**: four rooms on floor 1 with no stair,
+which β would then invalidate.
+
+**THE ENTRANCE HALF IS A SOLVED PROBLEM THAT NEVER PROPAGATED** — §5.6's standing question
+(ADR-0048 §1) firing again. `scenario.ts` already fixed it at G-030 by starting the plate one column
+right and laying corridor on the entrance's own column, **and its comment names `report.ts` by
+hand**: *"'waiting at the door' and 'asleep in bedroom 1' are the same square."* **`report.ts` still
+does neither.** So the entrance repair is **a known shape, not a design question.**
+
+**BUT JOINING THE LANES IS UNSOLVED IN BOTH FILES** — `scenario.ts` lays corridor on even columns
+only at the room rows, **so its lanes are parallel and unjoined exactly as `report.ts`'s are.**
+**That is why this half carries a render pair as well: it is two pieces of work in two packages.**
+
+**THE PIN IS RE-TAKEN HERE, ALONE, AND ADR-0058 SAYS WHY THAT IS LEGITIMATE.** The *"TOGETHER"*
+instruction is **unexecutable** — the tripwire refuses to run if the bound and its derivation
+disagree, ADR-0056 froze the bound, and two of three arms cannot be re-taken at today's occupancy at
+all. **ADR-0058 discharges the clause and requires the gate's message to be rewritten**, because an
+unexecutable instruction in a failure message reads as authority.
+
+**WATCH IS OWED HERE AND NOT IN β.** The spine layouts **move every room and lengthen every
+journey**, so the watchable is **motion frames against WATCH #16's 149 basis points** — **which is
+WATCH #16's own parked falsification test arriving for free** (*if journeys lengthened, would walking
+become visible — geometry or dial?*). Second watchable, no render work: **a guest turning out of the
+spine into a lane** rather than crossing room columns — WATCH #17's framing on a third subject.
+**Record at `--every 1`.**
+
+## G-039b-β — The campaign that actually drifted
+Status: **PLANNED.** No layout, no WATCH, and it does not block β.
 Milestone: M3 · Owner pair: sim-engineer / sim-critic
 
-**Carries**: every measurement campaign re-take — **the grid change, corridors and pathfinding alter
-what the workload MEANS, which is ADR-0015's REPLACE-on-configuration-change case** · the tick-cost
-bound, once the human's escalation is answered · `TARGET_CONCURRENT_HUNDREDTHS`, **re-taken WITH the
-bound campaign in one commit** · the cadence, which G-023b-ii measured is **no longer a local
-minimum** · the backlog derivation, which **now owes travel legs AND queue wait** rather than the
-129→139 repair alone · and the ~38 report goldens.
-**PLUS THE WALL-VISIBILITY CONTROL (ADR-0052, human).** Three positions — full, transparent,
-reduced — with **24 staying the default**. It amends ADR-0047 A4, which considered a toggle and
-refused it on the grounds that two far walls *removes* the problem rather than managing it: **right
-about the default, wrong to treat the alternatives as exclusive.** None of WATCH #14's measurement
-is withdrawn; what changes is the conclusion drawn from it — 64 is the wrong DEFAULT rather than
-the wrong NUMBER, and **a player admiring wall art and a player checking what is in a room want
-different pictures of the same hotel.**
+**`scaling-bound.mjs` HAS NOT BEEN TOUCHED SINCE G-032a** — *before travel, before corridors, before
+footprints, before stairs.* **Its configuration fingerprint carries no `guestCellsPerTick` term and
+no corridor or stair term**, so **the drift refusal cannot see travel being turned on.**
 
-**Transparency is the position with an unknown, and it is parked with its test**: at 2:1 with two
-far walls, a translucent wall over a neighbouring room's floor may read as mud rather than glass.
-**Build all three, look at the same frame in each, and if transparent is not legible it ships as
-two positions rather than being tuned until it is.**
-by ADR-0046 §8).
-**Carries**: every measurement campaign re-take — **the grid change and pathfinding alter what the
-workload MEANS, which is ADR-0015's REPLACE-on-configuration-change case, already ruled and
-precedented at G-032a** · the tick-cost bound, once the human's escalation is answered · the
-cadence, which G-023b-ii measured is **no longer a local minimum** · the backlog-derivation repair
-(129 as a floor, the measurement pinned, the excess bounded) · the ~38 report goldens.
-**PLUS THE G-031a GAP** (ADR-0047 amdt §4): `check:stamp` verifies the four digests agree **with
-each other**, and **nothing verifies a goal block's status against git** — which is how a shipped,
-watched goal sat at `pending` and nearly mis-scoped a ruling in both directions. **A commit
-referencing a goal ID implies its block is not `pending`.** A cheap scanner and **a line in this
-goal, not a goal of its own.**
+> **It is the identical class that file's own comment records ADR-0039 §2 fixing for
+> `stayDurationTicks` — *"a guard spelled entirely in the flags it guards cannot see the content
+> redefine what a flag means"* — one content field over, IN THE FILE THAT WROTE THE SENTENCE.**
+
+**THE TWO INTERMITTENT ROWS COME HERE, AND THE REMEDY IS NOT WHAT I CALLED IT.** I wrote *"a bounded
+change to two literals with a stated regime"*. **Both halves of that are wrong:**
+
+- **The number has no derivation.** The hysteresis timeout is **already at 60,000** — raising it
+  again is raising an already-raised literal — **and the comment above it WITHDRAWS the two previous
+  justifications as unpaired**, ending *"this file's behaviour under deliberate load is UNOBSERVED
+  for this tree."* **The file itself says the measurement that would derive the number has never
+  been taken.** Picking a bigger literal is §2.1's superstition with CI access.
+- **It covers ONE of the two rows.** The other is `check:scaling`, whose bound is a ratio of medians
+  of timings and **whose remedy ADR-0056 explicitly PARKED with a falsification test.** No timeout
+  literal touches it.
+
+**So the honest form is: DERIVE the timeout, with the pairing as the exit criterion** — pair both
+files loaded against quiet, interleaved, in one sitting. **G-039a's row log makes that cheap**, which
+is the instrument paying for itself a second time.
+
+**STRUCK RATHER THAN SCHEDULED — the tick-cost campaign re-take.** It is **discharged for the
+occupancy constant and FORBIDDEN for the bound.** *Leaving it in a block is what makes a builder
+attempt it.*
+
+

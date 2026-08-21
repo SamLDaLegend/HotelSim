@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-ii-alpha is done: aligned coordinate stairs, save v21 with a per-WORLD migration that is provably verdict-preserving because a stair does not plan its floor. Occupancy still 856 and the concurrency pin untouched — the exit criterion that kept the goal small. THE TICK-COST CRITERION I WROTE WAS NOT MEASURABLE and the builder refused to claim it: three campaigns spread 0.99 to 1.04 against a stated quiet noise ceiling of 1.0355, so neither the claim nor a regression is asserted. My room-over-stairwell premise was FALSE — the fallback means the guest converges anyway. The depth ceiling is re-derived to 60, and the speed window did NOT move, because the dial saturates at the longest LEG not the longest journey. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-ii-alpha is done and G-039b was REWRITTEN at PLAN because most of it was already done — two of its four deliverables shipped in G-039a and three of five Carries bullets were discharged, while the ONE beta-blocking deliverable, the layout re-take, was not in the block at all. THE DIGEST ITSELF SAID THIRTEEN ROWS TEN GREEN THREE RED for eleven goals after that stopped being true, and said Unreliable 0 three lines below an as-of line saying 2 — found by a critic sizing a goal FROM the digest. ADR-0058 rules the TOGETHER clause unexecutable and discharged. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4850,3 +4850,65 @@ was correct and is why this is a goal rather than a patch.**
 `g037a-quality-fold` (`87c0101`) holds the fold, 80 red assertions and three findings worth keeping;
 **it merges after the rates make its ruling satisfiable, and its ~80 assertions are then re-pinned
 against numbers that mean something.**
+
+---
+
+## ADR-0058 — ADR-0056 DISCHARGES THE "TOGETHER" CLAUSE. Re-taking the pin alone is legitimate.
+
+**Date**: 2026-08-21 · **Status**: accepted · **Orchestrator ruling**, forced by `sim-critic`'s
+G-039b review, which found the standing instruction **literally unexecutable**.
+
+### The instruction, and why it cannot be obeyed
+
+`workload.concurrency.test.ts`'s failure message says:
+
+> *"Re-take `TARGET_CONCURRENT_HUNDREDTHS` and the bound campaign **TOGETHER, in the same commit**,
+> and do NOT widen the bound."*
+
+**Three facts from the tree make that impossible as written:**
+
+1. **`tripwire.mjs` REFUSES TO RUN if `BOUND !== derived`**, and `derived` is computed from the
+   campaign arms. **Re-taking the campaign moves the noise ceiling, which moves `derived`, which
+   turns the row red.**
+2. **ADR-0056 (human, this morning) froze the bound at `1.4640`.** So the campaign cannot be
+   re-taken without either breaking the gate or breaking the ruling.
+3. **Two of the three arms cannot be re-taken at today's occupancy AT ALL** — `git-tree.mjs`
+   materialises `packages/content/data` per arm, so they run **pre-travel content on both sides**.
+
+> **The instruction was written when the bound was free to move. ADR-0056 took that away, and
+> nobody noticed the instruction had become unexecutable.**
+
+### The ruling
+
+**Re-taking `TARGET_CONCURRENT_HUNDREDTHS` ALONE is legitimate, and the "TOGETHER" clause is
+discharged by ADR-0056 rather than violated.**
+
+**The clause's PURPOSE was to stop the pin and the bound describing different hotels.** ADR-0056
+achieves that purpose by a different route: **the bound's value is now fixed by ruling, and the gate
+prints what it cannot catch.** A pin re-taken alone against a frozen bound **cannot** produce the
+disagreement the clause existed to prevent — **it can only make the pin true.**
+
+**What is NOT discharged, and it is the part that matters**: the gate's message must be **rewritten
+to say this**, or the next reader meets an instruction that cannot be followed and either edits a
+number or gives up. **An unexecutable instruction in a failure message is worse than none**, because
+it reads as authority.
+
+### And the campaign that DOES need re-taking is the one nobody named
+
+**`scaling-bound.mjs` has not been touched since G-032a** — *before travel, before corridors, before
+footprints, before stairs.* **Its configuration fingerprint has no `guestCellsPerTick` term and no
+corridor or stair term**, so **the drift refusal cannot see travel being turned on.**
+
+> **That is the identical class the file's own comment records ADR-0039 §2 fixing for
+> `stayDurationTicks` — *"a guard spelled entirely in the flags it guards cannot see the content
+> redefine what a flag means"* — one content field over, in the file that wrote the sentence.**
+
+**That is the real un-discharged ADR-0015 REPLACE case**, and it goes to the campaign half of
+G-039b's split.
+
+### The ordering hazard, recorded so the pin is not re-taken twice
+
+**G-040 claims the same occupancy obligation, and G-041 re-derives every need rate** — which moves
+occupancy again. **Re-taking the pin now buys a number two planned goals will invalidate.**
+**So the pin is re-taken in the goal that MOVES it** — the layout half — **and G-040 and G-041 each
+re-take it again when they move it, rather than one goal pre-paying for three.**
