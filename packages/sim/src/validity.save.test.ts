@@ -20,6 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { bindContent } from './content.js';
 import type { Entity } from './entities.js';
 import { entitiesInOrder } from './entities.js';
@@ -151,6 +152,10 @@ describe('validity adds nothing to the save', () => {
       // exception to it.
       'reviewOutcomes',
       'rng',
+      // G-038a-ii-alpha. WHERE THE PLAN SAYS PEOPLE CLIMB — `corridors`' argument exactly, one
+      // axis over: a record of what the player DREW rather than a cached property of the
+      // building, which is what this test is about.
+      'stairs',
       'tick',
     ]);
   });
@@ -189,7 +194,7 @@ describe('a world full of invalid rooms', () => {
     // The subject of the round trip below is a world that actually exercises the rules.
     // Without this the tests after it would be round-tripping an ordinary hotel.
     const world = worldOfEveryReason();
-    const tally = countInvalidRooms(world.entities, BOUNDS, world.corridors, content);
+    const tally = countInvalidRooms(world.entities, BOUNDS, world.corridors, world.stairs, content);
     for (const reason of ROOM_INVALIDITY_REASONS) expect(tally[reason]).toBeGreaterThan(0);
     expect(totalInvalidRooms(tally)).toBe(5);
   });
@@ -210,8 +215,8 @@ describe('a world full of invalid rooms', () => {
     // if `corridors` fell out of the save, this comparison would be a planned floor against an
     // open-plan one and the restored hotel would come back with a valid room where the original
     // had a `noCorridor` (G-034b).
-    expect(countInvalidRooms(restored.entities, BOUNDS, restored.corridors, content)).toEqual(
-      countInvalidRooms(world.entities, BOUNDS, world.corridors, content),
+    expect(countInvalidRooms(restored.entities, BOUNDS, restored.corridors, restored.stairs, content)).toEqual(
+      countInvalidRooms(world.entities, BOUNDS, world.corridors, world.stairs, content),
     );
   });
 
@@ -225,7 +230,7 @@ describe('a world full of invalid rooms', () => {
   it('keeps ticking, and keeps every room where it was', () => {
     const advanced = run(worldOfEveryReason(), content, 100);
     expect(entitiesInOrder(advanced.entities)).toHaveLength(16);
-    expect(countInvalidRooms(advanced.entities, BOUNDS, advanced.corridors, content)).toEqual({
+    expect(countInvalidRooms(advanced.entities, BOUNDS, advanced.corridors, advanced.stairs, content)).toEqual({
       missingItem: 1,
       noCorridor: 1,
       noDoor: 1,
@@ -260,7 +265,7 @@ describe('the permanent v1 fixture', () => {
     // deliberately refuses to invent positions, so every room it carries stands nowhere.
     // This is the only producer of that reason outside a hand-built world.
     const world = deserialise(SAVE_V1_BYTES);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), fixtureContent)).toEqual({
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), fixtureContent)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,

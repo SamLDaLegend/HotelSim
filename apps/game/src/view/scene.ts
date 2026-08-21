@@ -176,7 +176,16 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
     // works" would eventually disagree, and the player would be shown the wrong one. The
     // world's OWN corridor plan, never an empty one: a renderer that passed `[]` here would
     // show every floor as open plan and paint a disconnected room as working.
-    const validity = createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
+    // AND THE WORLD'S OWN STAIRWELL (G-038a-ii-alpha), for the same reason and by the same
+    // rule: a declared stair is a declared walkway, so a renderer that passed an empty set
+    // could paint a room whose only walkway is the stairwell as `noCorridor`.
+    const validity = createValidityContext(
+      content,
+      world.grid,
+      world.corridors,
+      world.stairs,
+      storeEntities(world.entities),
+    );
 
     // ==================================================================================
     // A ROOM IS INDEXED BY EVERY CELL IT COVERS (G-036b), which is the renderer's half of the

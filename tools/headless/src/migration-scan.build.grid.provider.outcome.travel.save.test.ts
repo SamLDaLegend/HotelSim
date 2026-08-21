@@ -106,6 +106,14 @@ const FORBIDDEN_IN_SAVE_TS = [
   // (ADR-0047 C1, M6) makes the live constructor return something, and a step that read it
   // would start migrating the SAME v17 bytes onto a plan somebody else chose.
   'createCorridors',
+  // G-038a-ii-alpha. `migrateV20ToV21` states WHAT A v20 WORLD DECLARED ABOUT STAIRS: nothing,
+  // and — the load-bearing half — that its floor axis therefore spent UNCONDITIONALLY.
+  // `createStairs()` returns the same empty set today, so no assertion can tell the two
+  // implementations apart, which is ADR-0008 (3)'s case exactly. The day it would bite is the
+  // day a scenario opens with a stairwell already drawn: the live constructor returns something
+  // and a step that read it would start migrating the SAME v20 bytes onto somebody else's
+  // stairwell — changing where every guest in a migrated world walks.
+  'createStairs',
   'createBuildOutcomes',
   'BUILD_REFUSAL_REASONS',
   'createLoanOutcomes',

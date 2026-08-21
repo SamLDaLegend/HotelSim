@@ -52,6 +52,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import type { Command, ScheduledCommand } from './commands.js';
 import { bindContent } from './content.js';
 import type { ItemTypeData, NeedTypeData, RoomTypeData } from './content.js';
@@ -185,7 +186,7 @@ const armed = (world: World): World => {
 /** Everything a healthy world must still be able to say after a release. */
 const healthy = (world: World): void => {
   expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
-  expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), content)).toBe(0);
+  expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), createStairs(), content)).toBe(0);
 };
 
 describe('(a) THE HOST ROOM IS DEMOLISHED — the exit criterion, literally (G-013)', () => {

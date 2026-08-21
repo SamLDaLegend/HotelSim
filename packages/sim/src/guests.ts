@@ -77,6 +77,8 @@ import {
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 import type { Corridors } from './corridors.js';
+import { stairwellOf } from './stairs.js';
+import type { Stairs } from './stairs.js';
 import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
 import type { ReviewOutcomeRow } from './reviews.js';
 import {
@@ -1091,6 +1093,7 @@ export function countGuestsInInvalidRooms(
   entities: EntityStore,
   bounds: GridBounds,
   corridors: Corridors,
+  stairs: Stairs,
   content: BoundContent,
 ): number {
   let count = 0;
@@ -1112,7 +1115,7 @@ export function countGuestsInInvalidRooms(
         else {
           // Allocated only once a guest is actually holding something, so an empty hotel
           // pays nothing — the `assertGuestStoreInvariants` discipline.
-          validity ??= createValidityContext(content, bounds, corridors, storeEntities(entities));
+          validity ??= createValidityContext(content, bounds, corridors, stairs, storeEntities(entities));
           if (!isValidRoom(validity, room)) count += 1;
         }
       }
@@ -1125,7 +1128,7 @@ export function countGuestsInInvalidRooms(
         // being served by an item whose room has lost its floor is the same defect as a
         // guest sleeping in that room, and the tick releases both on the same tick for the
         // same reason.
-        validity ??= createValidityContext(content, bounds, corridors, storeEntities(entities));
+        validity ??= createValidityContext(content, bounds, corridors, stairs, storeEntities(entities));
         if (!isProviding(validity, provider)) count += 1;
       }
     }
@@ -1664,6 +1667,21 @@ type RoomSearch = {
    */
   readonly entranceFloor: number;
   /**
+   * THE STAIRWELL COLUMN, or `null` when this world has declared no stair (G-038a-ii-alpha).
+   *
+   * READ ONCE PER TICK, for the reason `speed`, `lodgingReach` and `entranceFloor` are: it is
+   * the same answer for every guest in the hotel and the plan cannot change inside a tick.
+   * `stairwellOf` is an ARRAY INDEX — stairs are ALIGNED, one stairwell column through the plot
+   * — so this costs one lookup per tick and NOT one scan per moving guest per tick. That is the
+   * whole reason the alignment rule exists, and the reason the router notice ADR-0056 left open
+   * is not being cashed here.
+   *
+   * `null` IS NOT A MISSING VALUE, IT IS A RULE: *no stair declared anywhere in this world =>
+   * the floor axis spends unconditionally*, which is what `stepTowards` did for every build
+   * before this one and exactly what a v20 save says. See `stairs.ts`.
+   */
+  readonly stairwell: Cell | null;
+  /**
    * Rooms currently held, as bedrooms OR as engagements. Membership only: never iterated,
    * never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
    */
@@ -1888,6 +1906,9 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // "a guest will climb anything" — see `maxLodgingFloorsFromEntranceOf`.
     lodgingReach: maxLodgingFloorsFromEntranceOf(content),
     entranceFloor: entranceCell(input.entities.bounds).floor,
+    // THE STAIRWELL (G-038a-ii-alpha), read here for `speed`'s reason: one array index per tick
+    // rather than one per moving guest. O(1) only because stairs are aligned.
+    stairwell: stairwellOf(input.validity.stairs),
     exhausted: null,
     needOutcomes: input.needOutcomes,
     reviewOutcomes: input.reviewOutcomes,
@@ -2916,14 +2937,95 @@ function reserve(
 function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entity | null, search: RoomSearch): Guest {
   const at = standingCell(lodgingRoom, engagedProvider, search.input.entities.bounds);
   if (cellsEqual(guest.at, at)) return guest;
+  // A FLOOR IS REACHED BY A STAIR (G-038a-ii-alpha). The cell a guest walks TOWARDS this tick
+  // is not always the cell it is going TO: with a stairwell declared and a destination on
+  // another floor, the target is a LEG of the journey rather than its end. Derived every tick
+  // from `guest.at`, the destination and the plan; never stored. See `stairLeg`.
+  const leg = stairLeg(guest.at, at, search.stairwell);
   // THE ROOM STANDING ON THE DESTINATION CELL, RESOLVED ONCE AND ONLY FOR A GUEST THAT IS
   // ACTUALLY MOVING (G-038a-i). It is asked AFTER the `cellsEqual` return above, so a
   // sleeping guest — which is almost every guest on almost every tick — pays nothing for
   // walls, exactly as it already paid nothing for a step. See `isWalkableFor` for why the
   // ROOM rather than the destination ENTITY: a guest engaged with an item walks to a cell
   // inside that item's host room.
-  const next = stepTowards(guest.at, at, search.speed, search.input.validity, roomIdAt(search.input.validity, at));
+  const next = stepTowards(guest.at, leg, search.speed, search.input.validity, roomIdAt(search.input.validity, leg));
   return cellsEqual(guest.at, next) ? guest : { ...guest, at: next };
+}
+
+/**
+ * ==========================================================================================
+ * WHERE A GUEST WALKS *THIS TICK*, WHICH IS NOT ALWAYS WHERE IT IS GOING (G-038a-ii-alpha).
+ *
+ *   A FLOOR IS REACHED BY A STAIR. `stepTowards` spent the floor axis first and
+ *   UNCONDITIONALLY, so a guest with a cross-floor destination rose through the ceiling from
+ *   wherever it happened to be standing. This is the function that sends it to the stairwell
+ *   first.
+ *
+ * ------------------------------------------------------------------------------------------
+ * A DERIVED DESTINATION, NOT A STORED ONE, AND THAT IS THE DESIGN RATHER THAN A DETAIL.
+ *
+ * `stepTowards`' own docblock records why a countdown with a stored destination was refused at
+ * G-023b-i: *"the destination CAN change mid-journey — a waiting guest is given a room while it
+ * is walking to the cafe — and a stored one would go stale silently."* A stair leg IS a
+ * destination, so storing one would re-introduce exactly that. Recomputing it every tick is
+ * correct under a mid-journey change by construction, adds NO hashed field beyond the stair set
+ * itself, and keeps `placed`'s recompute-every-tick decision intact.
+ *
+ * IT IS O(1), AND ONLY BECAUSE STAIRS ARE ALIGNED. `stairwell` is one array index resolved once
+ * per tick (`RoomSearch.stairwell`); nothing here scans the stair set, nothing here searches for
+ * a NEAREST stair, and nothing here is a route search. *"Nearest stair on this floor"* is
+ * O(stairs) per moving guest per tick on top of `stepTowards`' four-or-fewer `isWalkableFor`
+ * calls — the shape the plan review refused against a bound ADR-0056 froze.
+ * ------------------------------------------------------------------------------------------
+ *
+ * ------------------------------------------------------------------------------------------
+ * THREE CASES, AND THEY COMPOSE INTO A JOURNEY WITH NO STATE BETWEEN THEM.
+ *
+ *   SAME FLOOR, or NO STAIRWELL DECLARED  ->  the destination itself, unchanged. The second of
+ *     those is the v20 reading and it is what every world in this project has today: no stair
+ *     anywhere means the floor axis spends unconditionally, so this file behaves exactly as it
+ *     did before this goal, to the cell.
+ *   OFF THE STAIRWELL COLUMN  ->  the foot of the stairs ON THE GUEST'S OWN FLOOR. The floor gap
+ *     is then zero, so `stepTowards` spends nothing on the floor axis and the guest WALKS.
+ *   ON THE STAIRWELL COLUMN  ->  the stair cell on the DESTINATION's floor. The column and row
+ *     gaps are then zero, so the whole budget goes vertical and the guest CLIMBS.
+ *
+ * THE PHASES ADVANCE STRICTLY AND NOTHING OSCILLATES, which is the safety argument and it is
+ * structural rather than statistical — G-038a-i's shape, one axis over. Within a phase the guest
+ * covers exactly `min(cellsPerTick, distance)` cells toward that phase's target, so the
+ * remaining distance falls monotonically; reaching the target moves it on; the third phase IS
+ * the pre-goal function. A guest cannot be stranded and cannot be sent back.
+ *
+ * A JOURNEY IS LENGTHENED, AND THAT IS THE MECHANIC RATHER THAN A COST TO HIDE. G-038a-i could
+ * say a wall never lengthens a journey; a stair does, by up to two ticks of unspent budget at
+ * the two phase changes plus the detour to the column. That is why the speed window is
+ * re-derived in this goal and `worstJourney` stops being the Manhattan sum — see
+ * `tools/headless/src/dissatisfaction.content.test.ts`, which walks all three legs.
+ *
+ * AND IT INHERITS `stepTowards`' FALLBACK, WHICH IS WHAT ANSWERS *"WHAT IF SOMEBODY BUILDS ON
+ * THE STAIRWELL?"*. If a room stands on the stair cell, every candidate landing is a wall and
+ * `stepTowards` takes candidate zero — so the guest converges on the stairwell anyway, stands
+ * inside that room for a tick, and climbs. **A room drawn over a stairwell does not sever the
+ * building in this half.** What it costs is LEGIBILITY — a guest seen standing in a stranger's
+ * bedroom on its way up, which is WATCH #17's residual class on a new subject rather than a new
+ * failure mode. The refusal that would stop it needs reachability to derive itself from, and
+ * reachability is G-038a-ii-beta's.
+ * ------------------------------------------------------------------------------------------
+ *
+ * A MODULE-LEVEL FUNCTION AND NOT A CLOSURE, for `hasArrivedAt`'s MEASURED reason: this runs for
+ * every MOVING guest on every tick, after `placed`'s `cellsEqual` early return, and a closure
+ * declared inside the loop is the allocation shape that measured 1.5889 against a 1.4640 bound.
+ * Scalars in, one cell out, nothing captured.
+ *
+ * IT RETURNS `to` BY REFERENCE in the two unchanged cases, so the path every world in this
+ * project takes today allocates nothing at all.
+ */
+function stairLeg(from: Cell, to: Cell, stairwell: Cell | null): Cell {
+  if (stairwell === null || to.floor === from.floor) return to;
+  if (from.column === stairwell.column && from.row === stairwell.row) {
+    return { floor: to.floor, column: stairwell.column, row: stairwell.row };
+  }
+  return { floor: from.floor, column: stairwell.column, row: stairwell.row };
 }
 
 /**

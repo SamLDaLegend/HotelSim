@@ -40,6 +40,7 @@ import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
 import { createCorridors, withCorridor } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { SAVE_V1_BYTES } from './fixtures/save-v1.js';
 import type { Cell } from './grid.js';
 import {
@@ -252,9 +253,15 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
   });
 
   it('adds exactly ONE top-level key, and it is the one this goal is about', () => {
+    // AGAINST TODAY'S KEYS MINUS THE ONES LATER STEPS ADD, and the exclusion is spelled as a
+    // list rather than a single name since G-038a-ii-alpha: this asserts what the 17 -> 18 step
+    // produces, which is a v18 world, and `stairs` does not arrive until the 20 -> 21 step.
+    const laterThanV18 = ['stairs'];
     const migrated = Object.keys(migrate() as unknown as Record<string, unknown>).sort();
-    expect(migrated).toEqual([...WORLD_KEYS]);
-    expect(Object.keys(v17World()).sort()).toEqual([...WORLD_KEYS].filter((key) => key !== 'corridors'));
+    expect(migrated).toEqual([...WORLD_KEYS].filter((key) => !laterThanV18.includes(key)));
+    expect(Object.keys(v17World()).sort()).toEqual(
+      [...WORLD_KEYS].filter((key) => key !== 'corridors' && !laterThanV18.includes(key)),
+    );
     expect([...WORLD_KEYS]).toEqual([...WORLD_KEYS].sort());
   });
 });
@@ -311,17 +318,22 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT (G-034b)', () => {
    * present"*, and the present is reached by `deserialise`, so that is what it now walks. It is
    * also the path a real save takes, which is the stronger reason.
    */
-  const migratedWorld = (): { entities: EntityStore; grid: GridBounds; corridors: readonly Cell[] } =>
+  const migratedWorld = (): {
+    entities: EntityStore;
+    grid: GridBounds;
+    corridors: readonly Cell[];
+    stairs: readonly Cell[];
+  } =>
     deserialise(v17Blob());
 
   it('computes the SAME tally from the migrated world that the v17 bytes described', () => {
     const world = migratedWorld();
-    expect(countInvalidRooms(world.entities, world.grid, world.corridors, content)).toEqual(V17_TALLY);
+    expect(countInvalidRooms(world.entities, world.grid, world.corridors, world.stairs, content)).toEqual(V17_TALLY);
   });
 
   it('and the same rooms still WORK, which is the half a tally of failures cannot show', () => {
     const world = migratedWorld();
-    const tally = countInvalidRooms(world.entities, world.grid, world.corridors, content);
+    const tally = countInvalidRooms(world.entities, world.grid, world.corridors, world.stairs, content);
     const rooms = world.entities.list.filter((entity) => entity.kind === 'bedroom').length;
     const invalid = Object.values(tally).reduce((sum, count) => sum + count, 0);
     expect(rooms - invalid).toBe(V17_VALID_ROOMS);
@@ -337,7 +349,7 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT (G-034b)', () => {
     // that were already invalid keep their reasons EXACTLY, because `noCorridor` is asked last.
     const world = migratedWorld();
     const planned = withCorridor(createCorridors(), { floor: 0, column: 30, row: 0 });
-    expect(countInvalidRooms(world.entities, world.grid, planned, content)).toEqual({
+    expect(countInvalidRooms(world.entities, world.grid, planned, createStairs(), content)).toEqual({
       missingItem: 1,
       noCorridor: 3,
       noDoor: 1,
@@ -356,7 +368,7 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT (G-034b)', () => {
       { floor: 0, column: 13, row: 0 }, // the terrace's right end
       { floor: 0, column: 71, row: 0 }, // the lone room
     ].reduce(withCorridor, createCorridors());
-    expect(countInvalidRooms(world.entities, world.grid, lane, content)).toEqual(V17_TALLY);
+    expect(countInvalidRooms(world.entities, world.grid, lane, createStairs(), content)).toEqual(V17_TALLY);
   });
 });
 
@@ -387,6 +399,9 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
     const byHand = {
       ...(era as unknown as typeof loaded),
       corridors: [],
+      // AND THE 20 -> 21 STEP: an empty stairwell (G-038a-ii-alpha), because a v17 world's
+      // floor axis spent unconditionally and no v17 fact can name a cell as a stair.
+      stairs: [],
       entities: {
         ...eraEntities,
         list: eraEntities.list.map((entity) => ({ ...entity, footprint: { columns: 1, rows: 1 } })),

@@ -24,6 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import type { Command, ScheduledCommand } from './commands.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData } from './content.js';
@@ -283,7 +284,7 @@ describe('exit path — the provider stopped existing', () => {
     const after = stepTick(start, content, [left, right, behind]);
     expect(only(after).engagement).toBeNull();
     expect(isResting(only(after))).toBe(true);
-    expect(countGuestsInInvalidRooms(after.guests, after.entities, BOUNDS, createCorridors(), content)).toBe(0);
+    expect(countGuestsInInvalidRooms(after.guests, after.entities, BOUNDS, createCorridors(), createStairs(), content)).toBe(0);
     expect(orphansIn(after)).toBe(0);
     expect(cafe.id).toBeGreaterThan(0);
   });
@@ -669,7 +670,7 @@ describe('thirty days of a hotel where every provider is oversubscribed', () => 
       world = run(world, busy, TICKS_PER_DAY, commands);
       expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
       expect(countStuckGuests(world.tick, world.guests, busy)).toBe(0);
-      expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), busy)).toBe(0);
+      expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), createStairs(), busy)).toBe(0);
     }
     // And the run really did exercise all of it, rather than reporting zeros about nothing.
     expect(world.guestOutcomes.arrived).toBeGreaterThan(400);

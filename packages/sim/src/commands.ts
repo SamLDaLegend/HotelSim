@@ -226,6 +226,28 @@ export type Command =
    */
   | { readonly kind: 'layCorridor'; readonly at: Cell }
   /**
+   * THE PLAN SAYS PEOPLE CLIMB HERE (G-038a-ii-alpha).
+   *
+   * Declares one cell a stair. Idempotent — declaring a cell that is already declared is a
+   * deterministic no-op returning the SAME array, which is what keeps the `ValidityCache`'s
+   * seventh clause exact rather than conservative — and it costs nothing, for the reason
+   * `layCorridor` costs nothing: what a stair COSTS is a designer's number and therefore
+   * content, and there is none yet.
+   *
+   * IT THROWS ON A MISALIGNED CELL, AND THAT IS THIS COMMAND'S ONE DIFFERENCE FROM
+   * `layCorridor`. Stairs are ALIGNED — one stairwell column through the plot — because that
+   * is what makes the derived stair leg in `guests.ts` O(1) and the guest speed window
+   * derivable at all (`stairs.ts` carries both halves of the arithmetic). A second stairwell
+   * is therefore not a cell this world can address, which is the same class as a cell off the
+   * plot, and `assertCell` already throws for that one line above.
+   *
+   * THERE IS NO `clearStair` YET, deliberately, and it is `layCorridor`'s reason exactly: a
+   * plan that can only grow is enough for a rule that only reads it. Removal belongs with the
+   * editing verbs, and it lands with the ruling on what happens to a stairwell somebody builds
+   * over — which is G-038a-ii-beta's, where reachability gives it a rule to be derived from.
+   */
+  | { readonly kind: 'layStair'; readonly at: Cell }
+  /**
    * One guest walks in (G-004).
    *
    * NO PAYLOAD. A guest has no archetype (M6) and no party size at M0, so there is

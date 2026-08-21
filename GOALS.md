@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-i is done and the circulation goal split AGAIN at PLAN — five BLOCKERs, two of which reorder the rest of M3. Reachability CANNOT ship yet: measured, it invalidates 59 of 75 valid rooms on the 60-room plate and 100 percent strictly, because the entrance is INSIDE room 0. And the speed floor depends on a stair-placement rule nobody had named — aligned stairs keep the shipped dial legal, free placement makes it ILLEGAL at a derived floor of 19. So stairs are ALIGNED and COORDINATES, the migration is per-WORLD, and the order is stairs then the layout re-take then reachability. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-ii-alpha is done: aligned coordinate stairs, save v21 with a per-WORLD migration that is provably verdict-preserving because a stair does not plan its floor. Occupancy still 856 and the concurrency pin untouched — the exit criterion that kept the goal small. THE TICK-COST CRITERION I WROTE WAS NOT MEASURABLE and the builder refused to claim it: three campaigns spread 0.99 to 1.04 against a stated quiet noise ceiling of 1.0355, so neither the claim nor a regression is asserted. My room-over-stairwell premise was FALSE — the fallback means the guest converges anyway. The depth ceiling is re-derived to 60, and the speed window did NOT move, because the dial saturates at the longest LEG not the longest journey. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
-- **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `3119f19683a70e7a` · measure golden `ddfe4e4000bf1dc4`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `ca7bee4a4d6ea416` · measure golden `418cf36055a3408c`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -3155,6 +3155,69 @@ hatched and labelled — **but that belongs to β, which is a further argument f
 default produces **three isolated single cells**, and **a stair on an isolated corridor cell is a
 stairwell nobody can walk to.** Decide where before BUILD.
 
+
+## G-038a-ii-α — A floor is reached by a stair
+Status: **done.** Fourteen rows green, exit code read from the process. Save **v21**; I2
+  `3119f19683a70e7a` → `ca7bee4a4d6ea416`. **Occupancy still 856 and `TARGET_CONCURRENT_HUNDREDTHS`
+  untouched — the exit criterion that kept this goal small.**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+
+### G-038a-ii-α — REFLECT
+
+**THE TICK-COST CRITERION I WROTE WAS NOT MEASURABLE, AND THE BUILDER REFUSED TO CLAIM IT.** I asked
+for **≤ 1.0×**. Three campaigns of `--repeat 5`, medians of medians, loaded `win32/12cpu`:
+**1.0367 · 1.0219 · 0.9943**, single readings spreading **0.93–1.29**. **The gate's own stated QUIET
+noise ceiling is 1.0355 and that spread exceeds it**, so *"≤ 1.0×"* is not a question this
+instrument can answer in this regime. **`verdict=MEASURED` and PASS on all fifteen invocations**;
+neither ≤ 1.0 nor a regression is claimed. **That is rule 5 executed rather than quoted** — a number
+you cannot re-measure paired is withdrawn, not restated. The structural claim stands instead: one
+integer compare, one null check per MOVING guest, one array index per tick, **with a `.length !== 0`
+guard added specifically so the stairless case is structural — and the code records that its effect
+is UNMEASURED.**
+
+**A ROOM OVER THE STAIRWELL DOES NOT SEVER THE BUILDING — MY PREMISE WAS FALSE.** I offered a sixth
+refusal or an accepted severing. **Neither applies**: `stepTowards`' fallback means every candidate
+landing being a wall yields candidate zero, **so the guest converges on the stairwell anyway, stands
+inside the room for a tick, and climbs.** Asserted directly — **the blocked path is identical to the
+unblocked path, cell for cell.** What it costs is **legibility**, which is WATCH #17's residual class
+on a new subject. *(And there are NINE `BuildRefusalReason`s, not five — a new one would be the
+tenth.)*
+
+**THE DEPTH CEILING IS NOW A JOINT BOUND AND HAD NO SOLUTION IN ITS OLD FORM.** `100 + depth < 180`
+was evaluated at speed 1, and **at 194 cells speed 1 breaches at EVERY depth.** Re-derived against
+the shipped speed: **`depth ≤ 60`, down from 79** — **computed rather than typed**, with
+`legal(79) === false` asserted.
+
+**AND THE UPPER ENDPOINT DID NOT MOVE TO 194, WHICH IS THE TRAP.** The dial saturates at the longest
+single **LEG**, not the longest **journey** — 86/22/86 with a stairwell, 108 without — so the window
+is **still [2, 108]**. **The obvious edit would have moved it and been wrong.** Likewise **ticks are
+the sum of three ceilings, not the ceiling of the sum**: 198 at speed 3, not 195, because a guest
+lands exactly on the stairwell and exactly on the destination floor, **spending part of a budget
+each time.** The larger number is the true bound, so it is the one derived.
+
+**THE TOLERANCE FLOOR MOVED 1 → 2, AND THE FALSE SENTENCE IS STRUCK RATHER THAN DELETED** —
+*"at 108 cells against 180 ticks, any speed of 1 or more clears it"* is **false at 194**, so it is
+fenced in both packages **because it went FALSE rather than stale.** Both floors now coincide at 2.
+
+**THE MIGRATION IS PER WORLD AND PROVABLY VERDICT-PRESERVING WITHOUT INSPECTING A WORLD**, because
+**a stair does not plan its floor** — so the third walkability clause is **strictly widening**, and
+an empty set cannot change any verdict. **The cache's seventh clause was mutation-probed**: replaced
+with `true` → 2 red; restored from a scratch copy, `sha256sum -c` OK, 18/18 green.
+
+**Two gates caught the builder's own work**: `check:purity` **reads inside string literals**, so a
+`layStair` error message containing the word *window* tripped I1 — the message was reworded and
+**the gate was not touched**; and `check:unpinned` caught **a stale figure in one of its own test
+titles**, a number changed elsewhere and not in the title.
+
+**I OWN THE DIGEST EDIT.** The builder changed **two numbers** in `GOALS.md` and `JOURNAL.md`
+against my instruction — the save version and the measure golden — because **`check:stamp` reads
+both FROM THE TREE, so the gate is red by construction for any save bump.** That was correct;
+the instruction was wrong for a goal that bumps the schema. **I updated the I2 line myself**, which
+the gate checks for agreement only and therefore would not have caught.
+
+**Owed forward**: **G-039b** — the layout re-take, which is the prerequisite for β · then
+**G-038a-ii-β**, reachability, which today would invalidate 59 of 75 valid rooms · and the parked
+turn-around test.
 
 ## G-038c — A floor costs money, and height costs patience
 Status: **done.** Fourteen rows green, exit code captured. **No save bump.**

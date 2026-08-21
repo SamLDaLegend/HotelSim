@@ -81,6 +81,8 @@ import {
 import type { BoundContent } from './content.js';
 import { hasCorridorAt } from './corridors.js';
 import type { Corridors } from './corridors.js';
+import { hasStairAt } from './stairs.js';
+import type { Stairs } from './stairs.js';
 import { NO_ENTITY, draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 import {
@@ -219,6 +221,15 @@ export type ValidityContext = {
    * is what keeps a blind-cadence `layCorridor` from dropping the cache every tick.
    */
   readonly corridors: Corridors;
+  /**
+   * The stair plan this context is answering against (G-038a-ii-alpha).
+   *
+   * READ-ONLY AND HELD BY REFERENCE, exactly like `corridors`: the `ValidityCache` reuse
+   * predicate compares it by IDENTITY in its SEVENTH clause, so a context must never be reused
+   * across a tick that declared a stair. `withStair` returns the same array when nothing
+   * changed, which is what keeps a blind-cadence `layStair` from dropping the cache every tick.
+   */
+  readonly stairs: Stairs;
   readonly forEach: EntityVisitor;
   /** One entry per COVERED CELL of every placed entity, sorted by cell then id. Null until
    *  the first question. See `Placement` for what changed at G-036b and why. */
@@ -356,6 +367,7 @@ export function tickValidityContext(
   content: BoundContent,
   bounds: GridBounds,
   corridors: Corridors,
+  stairs: Stairs,
   draft: EntityDraft,
 ): ValidityContext {
   const clean = draftIsClean(draft);
@@ -373,12 +385,26 @@ export function tickValidityContext(
       // consulted on the very tick the player drew. IDENTITY, the rule `content` already
       // keeps, and it is exact rather than conservative because `withCorridor` returns the
       // same array when the cell was already declared.
-      cached.corridors === corridors
+      cached.corridors === corridors &&
+      // THE SEVENTH CLAUSE (G-038a-ii-alpha). A stair laid this tick is a new DECLARED WALKWAY
+      // — `isDeclaredWalkway` takes it as a third clause — so it can change which rooms are
+      // valid without touching entity membership, exactly as a corridor can, and every clause
+      // above can hold while the answer has moved. `applyCommands` runs before `runGuests`, so
+      // the stale context would be consulted on the very tick the player drew.
+      //
+      // ITS ABSENCE IS INVISIBLE TO EVERY GATE, WHICH IS WHY IT HAS ITS OWN RED TEST. I2 cannot
+      // see it (the determinism log re-converges before the gate's horizon, the limit G-038a-i
+      // measured) and I6 cannot (a save round-trips ONE moment and carries no cache at all).
+      // `validity.cache.test.ts` deletes this clause and watches a verdict go stale.
+      //
+      // IDENTITY, and it is exact rather than conservative because `withStair` returns the same
+      // array when the cell was already declared.
+      cached.stairs === stairs
     ) {
       return cached;
     }
   }
-  const fresh = createValidityContext(content, bounds, corridors, draftEntities(draft));
+  const fresh = createValidityContext(content, bounds, corridors, stairs, draftEntities(draft));
   // Kept only when it describes `draft.base` exactly. On a tick that staged a spawn or a
   // despawn the fresh context describes the DRAFT, which no later tick will ever see —
   // `commitEntityDraft` will hand the next tick a new store object — so caching it would
@@ -443,12 +469,14 @@ export function createValidityContext(
   content: BoundContent,
   bounds: GridBounds,
   corridors: Corridors,
+  stairs: Stairs,
   forEach: EntityVisitor,
 ): ValidityContext {
   return {
     content,
     bounds,
     corridors,
+    stairs,
     forEach,
     index: null,
     grounded: null,
@@ -913,8 +941,40 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
  * thing and not this one"* before this goal existed. It lands with pathfinding (G-038).
  */
 function isDeclaredWalkway(ctx: ValidityContext, cell: Cell): boolean {
-  return isOpenPlan(ctx, cell.floor) || hasCorridorAt(ctx.corridors, cell);
+  return (
+    isOpenPlan(ctx, cell.floor) ||
+    hasCorridorAt(ctx.corridors, cell) ||
+    // `.length !== 0` FIRST, AND IT IS A STRUCTURAL CLAIM RATHER THAN A MEASURED SAVING. This
+    // predicate is asked once per candidate landing per moving guest per tick AND once per
+    // neighbour of every cell of every room in the door walk, and EVERY world in this project
+    // declares no stairwell — so without the guard every one of them would pay a call and a
+    // binary search to be told what an empty array always says. `hasStairAt` returns false on an
+    // empty set anyway, so the answer is identical; what changes is that a stairless world pays
+    // one integer compare. It is the same shape `stairLeg` uses for its `stairwell === null`
+    // branch, and it is recorded as UNMEASURED: `check:tickcost` in this regime spreads
+    // 0.93-1.29 and cannot resolve a change this size.
+    (ctx.stairs.length !== 0 && hasStairAt(ctx.stairs, cell))
+  );
 }
+
+// A DECLARED STAIR IS A DECLARED WALKWAY, AND IT IS A THIRD CLAUSE RATHER THAN A FOURTH BRANCH
+// OF `isOpenPlan` (G-038a-ii-alpha). Two consequences, both deliberate:
+//
+//   1. A STAIR DOES NOT PLAN ITS FLOOR. `plannedFloorsOf` reads `corridors` and only
+//      `corridors`, so declaring a stairwell on an open-plan floor leaves it open plan. The
+//      per-floor reading was refused for stairs on the grounds `stairs.ts` sets out — a stair
+//      is a relation between floor f and f+1, so "whose floor?" has no local answer — and this
+//      is where that ruling is spent.
+//   2. THE RULE IS THEREFORE STRICTLY WIDENING. A union gains a clause: declaring a stair can
+//      only ever ADD walkable cells and turn `noCorridor` into valid, never the reverse. That
+//      is what makes `migrateV20ToV21`'s empty set provably verdict-preserving without
+//      measuring a single world — adding nothing to a union changes nothing — and it is a
+//      stronger argument than the one `migrateV17ToV18` had to make about open plans.
+//
+// AND IT IS WHY A GUEST WALKS TO THE STAIRWELL RATHER THAN THROUGH A WALL TO IT. `placed`
+// derives a stair leg whose destination is this cell; without this clause the leg would end on
+// a cell no guest may stand on, and every ascent on a planned floor would go down
+// `stepTowards`'s fallback. See `isWalkableFor`.
 
 /** Whether no corridor has been declared on this floor. See `isDeclaredWalkway`. */
 function isOpenPlan(ctx: ValidityContext, floor: number): boolean {
@@ -1361,9 +1421,10 @@ export function countInvalidRooms(
   entities: EntityStore,
   bounds: GridBounds,
   corridors: Corridors,
+  stairs: Stairs,
   content: BoundContent,
 ): RoomInvalidityTally {
-  const ctx = createValidityContext(content, bounds, corridors, storeEntities(entities));
+  const ctx = createValidityContext(content, bounds, corridors, stairs, storeEntities(entities));
   const tally: Record<RoomInvalidityReason, number> = {
     missingItem: 0,
     noCorridor: 0,

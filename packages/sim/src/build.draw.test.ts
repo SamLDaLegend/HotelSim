@@ -100,7 +100,7 @@ function funded(pennies: number): World {
 }
 
 const contextOf = (world: World): ReturnType<typeof createValidityContext> =>
-  createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
+  createValidityContext(content, world.grid, world.corridors, world.stairs, storeEntities(world.entities));
 
 describe('a draw places a rectangle, and buildRoom is that draw at one cell', () => {
   it('stores the footprint the player drew, on the instance', () => {

@@ -43,6 +43,7 @@
 import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import { createCorridors, withCorridor } from './corridors.js';
+import { createStairs } from './stairs.js';
 import type { Entity, EntityStore } from './entities.js';
 import { footprintCells, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, Footprint, GridBounds } from './grid.js';
@@ -94,7 +95,7 @@ function storeOf(...specs: readonly Spec[]): EntityStore {
 }
 
 const contextOf = (store: EntityStore, corridors = createCorridors()): ReturnType<typeof createValidityContext> =>
-  createValidityContext(content, PLOT, corridors, storeEntities(store));
+  createValidityContext(content, PLOT, corridors, createStairs(), storeEntities(store));
 
 /** The `index`-th entity, or a failure — `noUncheckedIndexedAccess` is on. */
 function at(store: EntityStore, index: number): Entity {

@@ -24,6 +24,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors, withCorridor } from './corridors.js';
+import { createStairs, withStair } from './stairs.js';
+import type { Stairs } from './stairs.js';
 import type { Corridors } from './corridors.js';
 import { bindContent } from './content.js';
 import { beginEntityDraft, draftDespawn, draftSpawn } from './entities.js';
@@ -118,9 +120,10 @@ function validRoomIds(
   bounds: GridBounds,
   cache: ReturnType<typeof createValidityCache> | null,
   corridors: Corridors = createCorridors(),
+  stairs: Stairs = createStairs(),
 ): readonly number[] {
   const draft = beginEntityDraft(store, bounds);
-  const ctx = tickValidityContext(cache, content, bounds, corridors, draft);
+  const ctx = tickValidityContext(cache, content, bounds, corridors, stairs, draft);
   return validRoomsOf(ctx).map((room) => room.id);
 }
 
@@ -128,8 +131,8 @@ describe('the cache is a memo, not a second record — a hit answers what a miss
   it('reuses the very same context object across a tick that changed nothing', () => {
     const cache = createValidityCache();
     const store = workingHotel();
-    const first = tickValidityContext(cache, content, BOUNDS, createCorridors(), beginEntityDraft(store, BOUNDS));
-    const second = tickValidityContext(cache, content, BOUNDS, createCorridors(), beginEntityDraft(store, BOUNDS));
+    const first = tickValidityContext(cache, content, BOUNDS, createCorridors(), createStairs(), beginEntityDraft(store, BOUNDS));
+    const second = tickValidityContext(cache, content, BOUNDS, createCorridors(), createStairs(), beginEntityDraft(store, BOUNDS));
     // Identity, not equality: an equal-looking rebuild would be the cache failing to work
     // while still being correct, which is the outcome this whole goal exists to avoid.
     expect(second).toBe(first);
@@ -145,7 +148,7 @@ describe('the cache is a memo, not a second record — a hit answers what a miss
     const store = workingHotel();
     const dirty = beginEntityDraft(store, BOUNDS);
     draftSpawn(dirty, 'bedroom', cell(GROUND_FLOOR, 4));
-    tickValidityContext(cache, content, BOUNDS, createCorridors(), dirty);
+    tickValidityContext(cache, content, BOUNDS, createCorridors(), createStairs(), dirty);
     // The context just built describes a world no commit boundary will ever see. Storing
     // it would hand the NEXT tick an answer about a draft.
     expect(cache.context).toBeNull();
@@ -192,7 +195,7 @@ describe('clause 2 — `draftIsClean`: this tick has staged no spawn', () => {
     const draft = beginEntityDraft(store, BOUNDS);
     const roomId = draftSpawn(draft, 'bedroom', cell(GROUND_FLOOR, 4));
     draftSpawn(draft, 'bed', cell(GROUND_FLOOR, 4));
-    const ctx = tickValidityContext(cache, content, BOUNDS, createCorridors(), draft);
+    const ctx = tickValidityContext(cache, content, BOUNDS, createCorridors(), createStairs(), draft);
     expect(validRoomsOf(ctx).map((r) => r.id)).toEqual([1, roomId]);
   });
 });
@@ -204,7 +207,7 @@ describe('clause 3 — `draftIsClean`: this tick has staged no despawn', () => {
     expect(validRoomIds(store, BOUNDS, cache)).toEqual([1]);
     const draft = beginEntityDraft(store, BOUNDS);
     expect(draftDespawn(draft, 1)).toBe(true);
-    const ctx = tickValidityContext(cache, content, BOUNDS, createCorridors(), draft);
+    const ctx = tickValidityContext(cache, content, BOUNDS, createCorridors(), createStairs(), draft);
     // Without the `removed.size` half of the clean check, the cached context would still
     // offer room 1 and a guest would reserve a room that is being demolished this tick.
     expect(validRoomsOf(ctx).map((r) => r.id)).toEqual([]);
@@ -255,7 +258,7 @@ describe('clause 4 — `context.content === content`: the same injected content'
       ],
     });
     const draft = beginEntityDraft(store, BOUNDS);
-    const ctx = tickValidityContext(cache, stricter, BOUNDS, createCorridors(), draft);
+    const ctx = tickValidityContext(cache, stricter, BOUNDS, createCorridors(), createStairs(), draft);
     expect(validRoomsOf(ctx)).toEqual([]);
     expect(roomInvalidity(ctx, entityAt(store, 0))).toBe('missingItem');
   });
@@ -305,10 +308,81 @@ describe('clause 6 — the same CORRIDOR PLAN (G-034b)', () => {
     const cache = createValidityCache();
     const store = workingHotel();
     const plan = withCorridor(createCorridors(), cell(GROUND_FLOOR, 1));
-    const first = tickValidityContext(cache, content, BOUNDS, plan, beginEntityDraft(store, BOUNDS));
+    const first = tickValidityContext(cache, content, BOUNDS, plan, createStairs(), beginEntityDraft(store, BOUNDS));
     const again = withCorridor(plan, cell(GROUND_FLOOR, 1));
-    const second = tickValidityContext(cache, content, BOUNDS, again, beginEntityDraft(store, BOUNDS));
+    const second = tickValidityContext(cache, content, BOUNDS, again, createStairs(), beginEntityDraft(store, BOUNDS));
     expect(second).toBe(first);
+  });
+});
+
+describe('clause 7 — the same STAIR PLAN (G-038a-ii-alpha)', () => {
+  // ==========================================================================================
+  // THIS CLAUSE'S ABSENCE IS INVISIBLE TO EVERY GATE, WHICH IS WHY IT HAS A TEST OF ITS OWN AND
+  // WHY THAT TEST IS THE FIRST THING WRITTEN ABOUT IT.
+  //
+  //   I2 CANNOT SEE IT. `tools/gates/determinism.mjs` compares runs TO EACH OTHER and holds no
+  //   reference hash, so a CONSISTENTLY stale answer leaves the gate green — and G-038a-i
+  //   measured the sharper version of the same limit: the determinism log's state re-converges
+  //   before the gate's horizon, so a change visible at 5,000 ticks is invisible at 20,000.
+  //
+  //   I6 CANNOT SEE IT. A save round-trips ONE moment and carries no cache at all; a host
+  //   reusing a cache across a load meets a different `EntityStore` object, misses, and
+  //   rebuilds. There is nothing about staleness for `test:save` to notice.
+  //
+  // So the clause's whole witness is here, in exactly the shape the six clauses above have:
+  // delete `cached.stairs === stairs` from `tickValidityContext` and the first arm goes red.
+  // ==========================================================================================
+
+  it('a cache carried past a `layStair` does not answer under the old plan', () => {
+    // A DECLARED STAIR IS A DECLARED WALKWAY (`isDeclaredWalkway`), so laying one changes which
+    // rooms are valid while staging no spawn and no despawn — `builtFrom === draft.base` and
+    // `draftIsClean(draft)` are both still true, and every earlier clause holds while the
+    // answer has moved. `applyCommands` runs before `runGuests`, so the stale context would be
+    // consulted on the very tick the player drew.
+    const cache = createValidityCache();
+    const store = workingHotel();
+    // A lane declared elsewhere on the floor: the floor is PLANNED, and the room reaches no
+    // circulation, so it is `noCorridor`. This is the state clause 6 above leaves it in.
+    const elsewhere = withCorridor(createCorridors(), cell(GROUND_FLOOR, 40));
+    expect(validRoomIds(store, BOUNDS, cache, elsewhere)).toEqual([]);
+    // NOW A STAIRWELL BESIDE THE ROOM, and nothing else changes. The stair cell is a declared
+    // walkway, the room opens onto it, and the room works again — the rule is a UNION and a
+    // stair only ever adds to it.
+    const stairwell = withStair(createStairs(), cell(GROUND_FLOOR, 1));
+    expect(validRoomIds(store, BOUNDS, cache, elsewhere, stairwell)).toEqual([1]);
+    // And back to the empty set, so the clause is not simply "any second call misses".
+    expect(validRoomIds(store, BOUNDS, cache, elsewhere, createStairs())).toEqual([]);
+  });
+
+  it('and a `layStair` on a cell already declared KEEPS the cache, by identity', () => {
+    // The other half, and the reason `withStair` returns its argument by reference: a host
+    // issuing `layStair` on a blind cadence must not drop the derived index every tick.
+    const cache = createValidityCache();
+    const store = workingHotel();
+    const plan = withStair(createStairs(), cell(GROUND_FLOOR, 1));
+    const first = tickValidityContext(cache, content, BOUNDS, createCorridors(), plan, beginEntityDraft(store, BOUNDS));
+    const again = withStair(plan, cell(GROUND_FLOOR, 1));
+    const second = tickValidityContext(cache, content, BOUNDS, createCorridors(), again, beginEntityDraft(store, BOUNDS));
+    expect(second).toBe(first);
+  });
+
+  it('and the two plans are INDEPENDENT clauses: a stair change alone drops the cache', () => {
+    // The discriminating half. If `stairs` were folded into the corridor comparison — or if the
+    // clause read `corridors` twice, which is the copy-paste this file exists to catch — this
+    // arm would return the cached context because the corridor plan is the very same object.
+    const cache = createValidityCache();
+    const store = workingHotel();
+    const corridors = withCorridor(createCorridors(), cell(GROUND_FLOOR, 40));
+    const first = tickValidityContext(cache, content, BOUNDS, corridors, createStairs(), beginEntityDraft(store, BOUNDS));
+    const second = tickValidityContext(
+      cache,
+      content,
+      BOUNDS,
+      corridors,
+      withStair(createStairs(), cell(GROUND_FLOOR, 1)),
+      beginEntityDraft(store, BOUNDS),
+    );
+    expect(second).not.toBe(first);
   });
 });
 
@@ -389,7 +463,7 @@ describe('validRoomsOf is the same choice the old every-entity scan made', () =>
       ['bed', cell(GROUND_FLOOR, 2)],
     );
     const draft = beginEntityDraft(store, BOUNDS);
-    const ctx = tickValidityContext(null, content, BOUNDS, createCorridors(), draft);
+    const ctx = tickValidityContext(null, content, BOUNDS, createCorridors(), createStairs(), draft);
     expect(validRoomsOf(ctx).map((r) => r.id)).toEqual([1, 3]);
   });
 
@@ -402,7 +476,7 @@ describe('validRoomsOf is the same choice the old every-entity scan made', () =>
       ['bed', cell(GROUND_FLOOR + 1, 4)],
     );
     const draft = beginEntityDraft(store, BOUNDS);
-    const ctx = tickValidityContext(null, content, BOUNDS, createCorridors(), draft);
+    const ctx = tickValidityContext(null, content, BOUNDS, createCorridors(), createStairs(), draft);
     expect(validRoomsOf(ctx).map((r) => r.id)).toEqual([1]);
     expect(isValidRoom(ctx, entityAt(store, 2))).toBe(false);
   });

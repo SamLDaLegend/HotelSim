@@ -35,6 +35,7 @@
 import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import { createCorridors, withCorridor } from './corridors.js';
+import { createStairs } from './stairs.js';
 import type { Corridors } from './corridors.js';
 import { NO_ENTITY } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
@@ -77,7 +78,7 @@ function storeOf(...specs: readonly Spec[]): EntityStore {
 }
 
 function contextOf(store: EntityStore, corridors: Corridors, bounds: GridBounds = BOUNDS): ValidityContext {
-  return createValidityContext(content, bounds, corridors, storeEntities(store));
+  return createValidityContext(content, bounds, corridors, createStairs(), storeEntities(store));
 }
 
 /** One tick of walking toward `to`, with the room standing on `to` resolved the way `placed` does. */

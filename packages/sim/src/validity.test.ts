@@ -17,6 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
 import { cellBelow, cellLeft, cellRight, compareCells, createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
@@ -83,7 +84,7 @@ function storeOf(...specs: readonly Spec[]): EntityStore {
 }
 
 function contextOf(store: EntityStore): ReturnType<typeof createValidityContext> {
-  return createValidityContext(content, BOUNDS, createCorridors(), storeEntities(store));
+  return createValidityContext(content, BOUNDS, createCorridors(), createStairs(), storeEntities(store));
 }
 
 /** The reason the `index`-th entity of this store is invalid, or null. */
@@ -213,7 +214,7 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
     const ctx = (store: EntityStore, index: number): string | null => {
       const entity = store.list[index];
       if (entity === undefined) throw new Error(`test bug: no entity at index ${index}`);
-      return roomInvalidity(createValidityContext(content, deep, createCorridors(), storeEntities(store)), entity);
+      return roomInvalidity(createValidityContext(content, deep, createCorridors(), createStairs(), storeEntities(store)), entity);
     };
     // Ground room at row 3; the room ON TOP OF IT is at row 3 too — the support is directly
     // below, which is the rule — but the store also holds an unrelated ground room at row 0,
@@ -224,7 +225,7 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
       ...workingRoom(cell(1, 4, 3)),
     );
     expect(ctx(store, 4)).toBeNull();
-    expect(countInvalidRooms(store, deep, createCorridors(), content).unsupported).toBe(0);
+    expect(countInvalidRooms(store, deep, createCorridors(), createStairs(), content).unsupported).toBe(0);
 
     // AND THE SAME TOWER WITH ITS SUPPORT MOVED ONE ROW ACROSS IS `unsupported`, so the rule
     // is reading the cell directly below rather than "some room on the floor below".
@@ -265,7 +266,7 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
     }
     // And the tally reports the whole block, which is the legibility half of the goal: a
     // player told "1 unsupported" would go and fix the wrong room.
-    expect(countInvalidRooms(store, BOUNDS, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(store, BOUNDS, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,
@@ -283,7 +284,7 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
     for (let i = 0; i <= 10; i += 1) {
       expect(reasonFor(store, i * 2)).toBeNull();
     }
-    expect(countInvalidRooms(store, BOUNDS, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(store, BOUNDS, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,
@@ -298,7 +299,7 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
     // with a visible consequence rather than a local one.
     const specs: Spec[] = [];
     for (let floor = 1; floor <= 10; floor += 1) specs.push(...workingRoom(cell(floor, 10)));
-    expect(countInvalidRooms(storeOf(...specs), BOUNDS, createCorridors(), content).unsupported).toBe(10);
+    expect(countInvalidRooms(storeOf(...specs), BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(10);
   });
 
   it('does not let a tower reach the earth through a room one column over', () => {
@@ -331,11 +332,11 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
     // order instead of cell order, this is where it would answer wrongly.
     const topDown: Spec[] = [];
     for (let floor = 10; floor >= GROUND_FLOOR; floor -= 1) topDown.push(...workingRoom(cell(floor, 10)));
-    expect(countInvalidRooms(storeOf(...topDown), BOUNDS, createCorridors(), content).unsupported).toBe(0);
+    expect(countInvalidRooms(storeOf(...topDown), BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(0);
 
     const topDownFloating: Spec[] = [];
     for (let floor = 10; floor >= 1; floor -= 1) topDownFloating.push(...workingRoom(cell(floor, 10)));
-    expect(countInvalidRooms(storeOf(...topDownFloating), BOUNDS, createCorridors(), content).unsupported).toBe(10);
+    expect(countInvalidRooms(storeOf(...topDownFloating), BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(10);
   });
 });
 
@@ -416,7 +417,7 @@ describe('the one-pass support computation agrees with a naive chain walk', () =
       if (entity.kind === 'bed' || entity.kind === 'lamp') continue;
       if (!reachesEarthNaively(store, entity)) floating += 1;
     }
-    expect(countInvalidRooms(store, BOUNDS, createCorridors(), content).unsupported).toBe(floating);
+    expect(countInvalidRooms(store, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(floating);
   });
 });
 
@@ -583,8 +584,8 @@ describe('the answer does not depend on the order entities were created in', () 
     // were iterated in insertion order instead of sorted, these would disagree.
     expect(reasonFor(upperFirst, 0)).toBeNull();
     expect(reasonFor(lowerFirst, 2)).toBeNull();
-    expect(countInvalidRooms(upperFirst, BOUNDS, createCorridors(), content)).toEqual(
-      countInvalidRooms(lowerFirst, BOUNDS, createCorridors(), content),
+    expect(countInvalidRooms(upperFirst, BOUNDS, createCorridors(), createStairs(), content)).toEqual(
+      countInvalidRooms(lowerFirst, BOUNDS, createCorridors(), createStairs(), content),
     );
   });
 });
@@ -598,7 +599,7 @@ describe('counting invalid rooms', () => {
       ...workingRoom(cell(GROUND_FLOOR, 41, 3)), //  walled in on four sides: noDoor
       ...walledIn(cell(GROUND_FLOOR, 41, 3)), //     and the four rooms that do it
     );
-    const tally = countInvalidRooms(store, BOUNDS, createCorridors(), content);
+    const tally = countInvalidRooms(store, BOUNDS, createCorridors(), createStairs(), content);
     expect(tally).toEqual({ missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unsupported: 1 });
     // Every key of the union, always — the `BuildOutcomes.refused` contract, so a host
     // rendering the tally never has to guard against a missing key.
@@ -609,7 +610,7 @@ describe('counting invalid rooms', () => {
 
   it('counts no item as an invalid room, whatever it is standing on', () => {
     const store = storeOf(['bed', cell(9, 9)], ['lamp', null]);
-    expect(countInvalidRooms(store, BOUNDS, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(store, BOUNDS, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,
@@ -624,7 +625,7 @@ describe('counting invalid rooms', () => {
       ...workingRoom(cell(GROUND_FLOOR, 2)),
       ...workingRoom(cell(GROUND_FLOOR, 4)),
     );
-    expect(countInvalidRooms(store, BOUNDS, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(store, BOUNDS, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,

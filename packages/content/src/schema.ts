@@ -1181,19 +1181,44 @@ export const toleranceTicksSchema = z.int().min(1);
  *   walked, not because the hotel failed it.
  *
  *   **RE-DERIVED AT G-036a, WHEN THE PLOT GAINED DEPTH.** `stepTowards` spends its budget on
- *   the floor axis, then the column axis, then the ROW axis, so the worst journey is the sum
+ *   the floor axis, then the column axis, then the ROW axis, so the worst journey was the sum
  *   of all three spans: `(maxFloor - minFloor) + (maxColumn - minColumn) + (maxRow - minRow)`.
- *   The plot is **23 floors x 80 columns x 8 rows**, so that is `22 + 79 + 7` = **108 cells**;
- *   against a tolerance of 180 ticks, any speed of 1 or more still clears it. (It read *"23
- *   floors x 80 columns, so the worst journey is 101 cells"* while the plot was one row deep,
- *   which was true then and would have been a stale number one goal later.)
+ *   The plot is **23 floors x 80 columns x 8 rows**, so that was `22 + 79 + 7` = **108 cells**.
+ *   (It read *"23 floors x 80 columns, so the worst journey is 101 cells"* while the plot was
+ *   one row deep, which was true then and would have been a stale number one goal later.)
+ *
+ *   ~~against a tolerance of 180 ticks, any speed of 1 or more still clears it~~
+ *
+ *   **RE-DERIVED AGAIN AT G-038a-ii-alpha, AND THAT STRUCK SENTENCE IS WHY IT IS FENCED RATHER
+ *   THAN EDITED: IT WENT FALSE.** A floor is now reached by A STAIR. `stairLeg` in
+ *   `packages/sim/src/guests.ts` sends a guest with a cross-floor destination to the STAIRWELL
+ *   COLUMN first, up it, and then on — so the worst journey is **THREE LEGS AND NOT ONE**:
+ *
+ *       horizontal to the stairwell + the floor axis + horizontal from the stairwell
+ *              79 + 7 = 86          +      22        +          79 + 7 = 86        = **194**
+ *
+ *   At speed 1 that is **194 ticks against a tolerance of 180**, so a guest sent on the worst
+ *   journey this plot permits times out because it WALKED — the cliff ADR-0017 was written to
+ *   dissolve. **The tolerance floor is therefore 2 as well**, and it coincides with the
+ *   ceiling floor below rather than sitting under it.
+ *
+ *   **AND STAIRS ARE ALIGNED PRECISELY SO THAT THIS NUMBER IS 194.** One stairwell column
+ *   through the plot gives 194 and a floor of 2, so the shipped `3` stays legal with no content
+ *   edit. FREE placement — a stair anywhere per floor pair — gives roughly `22 x 86 + 108`,
+ *   about **1,900 cells and a floor of NINETEEN**, at which **this very field's shipped value
+ *   becomes illegal**. The ruling is written out in `packages/sim/src/stairs.ts`.
  *
  *   **AND THE DERIVATION IS WHAT PUTS AN UPPER BOUND ON THE PLOT'S DEPTH, WHICH IS A REAL
- *   CONSTRAINT RATHER THAN AN OBSERVATION.** `100 + depth < 180` gives `depth <= 79`, so
- *   `DEFAULT_MAX_ROW` in `packages/sim/src/grid.ts` cannot be widened past 79 rows without
- *   this floor ceasing to hold — and that constant's own docblock cites this one. Neither
- *   package can move alone. `packages/sim/src/travel.movement.test.ts` MEASURES the journey by
- *   walking it, comparing all three axes, rather than asserting the arithmetic.
+ *   CONSTRAINT RATHER THAN AN OBSERVATION — AND SINCE G-038a-ii-alpha IT IS A JOINT ONE.** It
+ *   was `100 + depth < 180` giving `depth <= 79`, evaluated at speed 1. With a stair, speed 1
+ *   breaches at EVERY depth, so that form has no solution: **a depth is now legal against a
+ *   SPEED, and this field is that speed.** At the shipped `3` the binding half is the ceiling
+ *   below rather than tolerance, and it gives **`depth <= 60`** — so `DEFAULT_MAX_ROW` in
+ *   `packages/sim/src/grid.ts` cannot be widened past 60 rows, down from 79, and that
+ *   constant's own docblock cites this one. **Neither package can move alone.**
+ *   `tools/headless/src/dissatisfaction.content.test.ts` COMPUTES both endpoints rather than
+ *   quoting them, and `packages/sim/src/travel.movement.test.ts` MEASURES the stairless journey
+ *   by walking it.
  *
  * **`.positive()` IS THEREFORE A DERIVED BOUND AND `3` IS A PREFERENCE.** Saying which is
  * which is the point of ADR-0013 §4; a number nobody can source is a superstition with CI
@@ -1215,15 +1240,24 @@ export const toleranceTicksSchema = z.int().min(1);
  * travel it also climbs across the WALKS between them** — one leg per engagement need, each
  * at most the worst journey over the plot:
  *
- *     peak <= backlog + needs(engagement) x ceil(worstJourney / speed)
- *          =  129     + 3                 x ceil(108 / speed)
+ *     peak <= backlog + needs(engagement) x worstJourneyTicks(speed)
  *
- *     speed 1   129 + 3 x 108 = 453  >  431   the ceiling is BREACHED
- *     speed 2   129 + 3 x  54 = 291  <  431   clears
- *     speed 3   129 + 3 x  36 = 237  <  431   clears, and is what ships
+ * where `worstJourneyTicks` is THE SUM OF THREE CEILINGS since G-038a-ii-alpha — to the
+ * stairwell, up it, and on — rather than the ceiling of one sum. The difference is real rather
+ * than pedantic: a guest lands exactly on the stairwell and exactly on the destination floor,
+ * spending part of a budget each time, so at speed 3 the true cost is 66 ticks where
+ * `ceil(194/3)` says 65. The larger number is the bound.
+ *
+ *     speed 1   129 + 3 x (86 + 22 + 86) = 711  >  431   the ceiling is BREACHED
+ *     speed 2   129 + 3 x (43 + 11 + 43) = 420  <  431   clears
+ *     speed 3   129 + 3 x (29 +  8 + 29) = 327  <  431   clears, and is what ships
+ *
+ * (It read `129 + 3 x ceil(108/speed)` — 453 / 291 / 237 — while the floor axis was free. The
+ * floor it derived was 2 then and is 2 now; what moved is the margin, from 194 ticks of
+ * headroom at the shipped speed to 104.)
  *
  * **SO THE DERIVED FLOOR IS 2, NOT 1.** It is a claim about what the PLOT permits and not
- * about the shipped hotel — no shipped workload puts two providers 108 cells apart — which is
+ * about the shipped hotel — no shipped workload puts two providers 194 cells apart — which is
  * exactly the shape of the tolerance floor above it, and it is stated with the same scope.
  * `tools/headless/src/dissatisfaction.content.test.ts` DRIVES both sides rather than quoting
  * them: it runs the bound and it runs the measurement.
@@ -1234,15 +1268,22 @@ export const toleranceTicksSchema = z.int().min(1);
  * a test that walks the plot, which is the mechanism this project already chose for that case.
  *
  * THE UPPER ENDPOINT IS DERIVED TOO, AND IT IS THE POINT WHERE THE DIAL STOPS DOING ANYTHING.
- * `stepTowards` clamps at the destination, so at any speed of **108** or more every journey on
- * this plot completes in one tick and every larger value produces the identical world. Above
- * it the field is a content number with no consumer — `capacity` and `forbidden adjacencies`
- * again, refused twice (ADR-0053).
+ * `stepTowards` clamps at the destination, so at any speed of **108** or more every LEG on this
+ * plot completes in one tick and every larger value produces the identical world. Above it the
+ * field is a content number with no consumer — `capacity` and `forbidden adjacencies` again,
+ * refused twice (ADR-0053).
+ *
+ * **IT DID NOT MOVE WITH THE JOURNEY AT G-038a-ii-alpha, AND THAT IS WORTH SAYING BECAUSE THE
+ * OBVIOUS EDIT WOULD HAVE MOVED IT TO 194.** The dial saturates at the longest single LEG, not
+ * at the longest JOURNEY: with a stairwell the legs are 86, 22 and 86, and with none — which is
+ * every world in this project today — the journey is one leg of 108. So 108 is still the
+ * largest leg anywhere and still the endpoint, and the window is still **[2, 108]**.
  *
  * WHERE 3 SITS, AND WHY IT IS NOT A NUMBER CHOSEN BY WATCHING TESTS GO GREEN. The window is
  * [2, 108] and 3 is one step inside its binding floor: at 3 a guest crosses a room and the
- * lane beside it in one tick, and the worst journey on the plot costs 36 ticks — a fifth of
- * `toleranceTicks`, so a walk is FELT and never DECIDES anything.
+ * lane beside it in one tick, and the worst journey on the plot costs **66** ticks — a bit over
+ * a third of `toleranceTicks`, so a walk is FELT and never DECIDES anything. (It read 36 while
+ * the floor axis was free; the number moved with the journey and the reading did not.)
  *
  * **AND THE DIAL WAS SWEPT BEFORE IT WAS SET, WHICH IS WHAT MAKES THE PARAGRAPH ABOVE A
  * PREFERENCE RATHER THAN A FIT.** Peak dissatisfaction over a perfectly provisioned hotel,

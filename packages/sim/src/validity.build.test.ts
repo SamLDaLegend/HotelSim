@@ -20,6 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { roomAt, totalRefusals } from './build.js';
 import type { Command } from './commands.js';
 import { bindContent } from './content.js';
@@ -100,7 +101,7 @@ function worldWithCash(pennies: number): World {
 const reasonOf = (world: World, id: number): string | null => {
   const room = getEntity(world.entities, id);
   if (room === undefined) throw new Error(`test bug: no entity ${id}`);
-  return roomInvalidity(createValidityContext(content, BOUNDS, createCorridors(), storeEntities(world.entities)), room);
+  return roomInvalidity(createValidityContext(content, BOUNDS, createCorridors(), createStairs(), storeEntities(world.entities)), room);
 };
 
 describe('a built room arrives furnished', () => {
@@ -194,7 +195,7 @@ describe('build refuses nothing on validity grounds', () => {
     expect(world.buildOutcomes.built).toBe(1);
     expect(totalRefusals(world.buildOutcomes)).toBe(0);
     expect(reasonOf(world, 1)).toBe('unsupported');
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).unsupported).toBe(1);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(1);
   });
 
   it('builds a room that seals in its neighbour, and refuses neither of them', () => {

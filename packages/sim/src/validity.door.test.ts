@@ -52,6 +52,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
 import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
@@ -120,7 +121,7 @@ function storeOf(...specs: readonly Spec[]): EntityStore {
 function reasonOn(bounds: GridBounds, store: EntityStore, index: number): string | null {
   const entity = store.list[index];
   if (entity === undefined) throw new Error(`test bug: no entity at index ${index}`);
-  return roomInvalidity(createValidityContext(content, bounds, createCorridors(), storeEntities(store)), entity);
+  return roomInvalidity(createValidityContext(content, bounds, createCorridors(), createStairs(), storeEntities(store)), entity);
 }
 
 /** A furnished bedroom and its bed, both standing on `at`. */
@@ -150,7 +151,7 @@ describe('THE DISCRIMINATING CASE: four neighbours, not two', () => {
     expect(reasonOn(DEEP, store, 0)).toBeNull();
     expect(reasonOn(DEEP, store, 2)).toBeNull();
     expect(reasonOn(DEEP, store, 4)).toBeNull();
-    expect(countInvalidRooms(store, DEEP, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(store, DEEP, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,
@@ -183,7 +184,7 @@ describe('THE DISCRIMINATING CASE: four neighbours, not two', () => {
       ...workingRoom(cell(GROUND_FLOOR, 3, 3)),
     );
     expect(reasonOn(DEEP, store, 0)).toBe('noDoor');
-    expect(countInvalidRooms(store, DEEP, createCorridors(), content).noDoor).toBe(1);
+    expect(countInvalidRooms(store, DEEP, createCorridors(), createStairs(), content).noDoor).toBe(1);
   });
 
   it('THREE sealed sides are not enough — each of the four openings is a door on its own', () => {
@@ -307,7 +308,7 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
       ...workingRoom(cell(GROUND_FLOOR, 13)),
       ...workingRoom(cell(GROUND_FLOOR, 14)),
     );
-    expect(countInvalidRooms(terrace, MIGRATED_FLAT, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(terrace, MIGRATED_FLAT, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 3, // the three in the middle; the two ends still open outward
@@ -317,7 +318,7 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
     // AND THE SAME STORE ON THE SHIPPED PLOT IS ENTIRELY VALID — the paired arm, which is the
     // measurement that made this goal re-lay every layout in the tree rather than only widen
     // a bound. One integer of plot differs and three verdicts flip.
-    expect(countInvalidRooms(terrace, SHIPPED, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(terrace, SHIPPED, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,

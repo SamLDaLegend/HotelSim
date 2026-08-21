@@ -53,6 +53,7 @@ import { countInvalidRooms } from './validity.js';
 import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 import { stripEditCounters } from './without-edits.js';
+import { stripStairs } from './without-stairs.js';
 import { stripFootprints } from './without-footprints.js';
 
 const content = bindContent({
@@ -116,7 +117,7 @@ function drawnWorld(): World {
 
 /** The same world written the way an era with no word for a footprint wrote it. */
 const asV18 = (world: World): Record<string, unknown> =>
-  stripEditCounters(stripFootprints(JSON.parse(JSON.stringify(world)) as Record<string, unknown>));
+  stripStairs(stripEditCounters(stripFootprints(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)));
 
 describe('the chain walks 1 -> ... -> today, and the 18 -> 19 step is the eighteenth of it', () => {
   it('ships one step per version, gapless', () => {
@@ -188,9 +189,9 @@ describe('THE HISTORICAL READING: a v18 room had no footprint and occupied one c
         ],
       },
     };
-    const before = countInvalidRooms(era.entities, era.grid, era.corridors, content);
+    const before = countInvalidRooms(era.entities, era.grid, era.corridors, era.stairs, content);
     const loaded = deserialise(JSON.stringify({ schemaVersion: 18, world: asV18(era) }));
-    expect(countInvalidRooms(loaded.entities, loaded.grid, loaded.corridors, content)).toEqual(before);
+    expect(countInvalidRooms(loaded.entities, loaded.grid, loaded.corridors, loaded.stairs, content)).toEqual(before);
     // AND THE TALLY IS NOT ALL ZEROES, or "unchanged" would be a claim about a rule that never
     // bit on this world — the ADR-0007 shape one level up from the migration.
     expect(before.missingItem).toBe(1);
@@ -244,7 +245,11 @@ describe('the step refuses to destroy a footprint somebody drew', () => {
     const era = asV18(createWorld(3, content));
     const migrated = step.migrate(era) as Record<string, unknown>;
     expect(Object.keys(migrated).sort()).toEqual(Object.keys(era).sort());
-    expect(Object.keys(migrated).sort()).toEqual([...WORLD_KEYS]);
+    // TODAY'S KEYS MINUS THE ONES LATER STEPS ADD. The 18 -> 19 step produces a v19 world, and
+    // `stairs` does not arrive until the 20 -> 21 step (G-038a-ii-alpha) — so excluding it is
+    // what keeps this arm about the claim in its own title rather than about the current era.
+    const laterThanV19 = ['stairs'];
+    expect(Object.keys(migrated).sort()).toEqual([...WORLD_KEYS].filter((key) => !laterThanV19.includes(key)));
   });
 });
 

@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-i is done and the circulation goal split AGAIN at PLAN — five BLOCKERs, two of which reorder the rest of M3. Reachability CANNOT ship yet: measured, it invalidates 59 of 75 valid rooms on the 60-room plate and 100 percent strictly, because the entrance is INSIDE room 0. And the speed floor depends on a stair-placement rule nobody had named — aligned stairs keep the shipped dial legal, free placement makes it ILLEGAL at a derived floor of 19. So stairs are ALIGNED and COORDINATES, the migration is per-WORLD, and the order is stairs then the layout re-take then reachability. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-ii-alpha is done: aligned coordinate stairs, save v21 with a per-WORLD migration that is provably verdict-preserving because a stair does not plan its floor. Occupancy still 856 and the concurrency pin untouched — the exit criterion that kept the goal small. THE TICK-COST CRITERION I WROTE WAS NOT MEASURABLE and the builder refused to claim it: three campaigns spread 0.99 to 1.04 against a stated quiet noise ceiling of 1.0355, so neither the claim nor a regression is asserted. My room-over-stairwell premise was FALSE — the fallback means the guest converges anyway. The depth ceiling is re-derived to 60, and the speed window did NOT move, because the dial saturates at the longest LEG not the longest journey. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
-- **State**: save **v20** · summary **v4** · I2 `3119f19683a70e7a` · measure golden
-  `ddfe4e4000bf1dc4` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
+  `418cf36055a3408c` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -1748,3 +1748,42 @@ primitive** — `translate(832 372)` → `translate(704 372)`, Δx = −128, Δy
 
 **Guests standing on a lane or an open cell across the window rise 76 → 93.** Nothing read as
 stupid; no guest stalled, no guest oscillated.
+
+## WATCH #18 — G-038a-ii-α. A guest stands at the foot of the stairs.
+
+**Recorded at `--every 1`**, paired in one sitting: `watch-stairs.ndjson` and
+`watch-no-stairs.ndjson`, 1,441 frames each, seed 42, `--rooms 60 --amenities 5 --arrivals 96`
+(gitignored, reproducible via `HOTELSIM_WATCH_DIR=. pnpm exec vitest run travel.stairs.report`).
+`tools/viewer/viewer.js` now draws the stairwell hatched.
+
+**THE WATCHABLE IS POSITION, NOT TRAVERSAL, AND THAT WAS RULED BEFORE THE BUILD** — one floor is
+drawn at a time, so a traversal is a guest leaving one view and entering another.
+
+| frame | with stairs | without |
+|---|---|---|
+| 2 | guest 1 `(0,1,0)` — **still on floor 0, at the foot of the stairs** | `(-1,1,1)` — **already in the basement** |
+| 3 | `(-1,1,0)` | `(-1,4,1)` |
+| 5 | `(-1,4,1)` — arrives two ticks later | `(-1,4,1)` |
+
+**Without a stairwell the guest simply drops through the ground floor wherever it happens to be
+standing.** With one, it walks to the stairwell column first and then descends. **That is
+G-038a-i's framing one axis over, and it is visible on a single floor's own frames.**
+
+**Guest-frames on the stairwell go 10 → 602**, and **ascents landing on the stairwell go 284 of
+290** — *not* all 290, because **six pre-goal ascents land on column 1 by coincidence: it is already
+a lane.** Pinned at 284, because *"every one of them"* is a claim the instrument does not support.
+
+### THE ONE THING THAT READS AS STUPID, AND ITS CAUSE IS MEASURED RATHER THAN GUESSED
+
+**Turn-arounds (A→B→A) go 0 → 23.** Guest 8, frames 1227–1229: `(-1,1,0)` → `(0,1,0)` → `(-1,1,0)`
+— **it climbs the stairwell one floor and comes straight back down.**
+
+> **All 23 are mid-journey re-targets, and that is ASSERTED rather than inferred**:
+> `turnAroundsOnRetarget === turnArounds`, with the guest's holdings changing on the turn tick every
+> time.
+
+**That is the exact case `stepTowards`' own docblock names as the reason a destination is recomputed
+rather than stored.** So **the stair changes VISIBILITY, not behaviour** — WATCH #16's finding
+arriving on a third subject. **Parked with its falsification test in the code**: suppress the
+re-target while a guest is on the stairwell, and this count should go to zero **while the
+journey-bound arm does not move.**

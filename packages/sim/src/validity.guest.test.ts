@@ -17,6 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import type { Command } from './commands.js';
 import { bindContent } from './content.js';
 import { entitiesInOrder, getEntity } from './entities.js';
@@ -114,7 +115,7 @@ describe('a guest will not take an invalid room', () => {
     // The room is furnished and doored and provides exactly what the guest wants. The
     // only thing wrong with it is that nothing holds it up.
     let world = stepTick(createWorld(1, content), content, [...bedroomAt(cell(5, 10)), arrive()]);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).unsupported).toBe(1);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(1);
     expect(guestsInOrder(world.guests)[0]?.roomEntityId).toBe(0);
     world = run(world, content, 20);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
@@ -128,7 +129,7 @@ describe('a guest will not take an invalid room', () => {
       spawn('bedroom', cell(GROUND_FLOOR, 10)),
       arrive(),
     ]);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).missingItem).toBe(1);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).missingItem).toBe(1);
     world = run(world, content, 20);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
   });
@@ -143,7 +144,7 @@ describe('a guest will not take an invalid room', () => {
       spawn('cupboard', cell(GROUND_FLOOR, 4, 1)),
       arrive(),
     ]);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).noDoor).toBe(1);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).noDoor).toBe(1);
     world = run(world, content, 20);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
   });
@@ -161,7 +162,7 @@ describe('a guest will not take an invalid room', () => {
     expect(world.buildOutcomes.built).toBe(6);
     // ALL SIX, not one. The tally is the legibility half: a player told "1 unsupported"
     // would go and fix the wrong room.
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).unsupported).toBe(6);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(6);
 
     world = run(world, content, 60, [
       { tick: world.tick, command: arrive() },
@@ -181,7 +182,7 @@ describe('a guest will not take an invalid room', () => {
     const builds: Command[] = [build('bedroom', cell(GROUND_FLOOR, 10))];
     for (let floor = 1; floor <= 5; floor += 1) builds.push(build('bedroom', cell(floor, 10)));
     let world = stepTick(worldWithCash(cash), content, builds);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).unsupported).toBe(0);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(0);
     world = run(world, content, 60, [{ tick: world.tick, command: arrive() }]);
     expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
   });
@@ -214,7 +215,7 @@ describe('a guest will not take an invalid room', () => {
     // could not tell them apart — this is the sentence above, as an assertion.
     expect(departureCountOf(world.guestOutcomes, 'evictedRoomGone')).toBe(1);
     expect(departureCountOf(world.guestOutcomes, 'evictedRoomUnusable')).toBe(3);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).unsupported).toBe(3);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(3);
   });
 
   it('passes over a lower-id invalid room to reach a valid one', () => {
@@ -236,7 +237,7 @@ describe('a guest will not take an invalid room', () => {
       ...bedroomAt(cell(1, 10)),
       arrive(),
     ]);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content)).toEqual({
       missingItem: 0,
       noCorridor: 0,
       noDoor: 0,
@@ -274,7 +275,7 @@ describe('a valid room can go invalid under a guest', () => {
     expect(guestsInOrder(world.guests)).toHaveLength(0);
     // The room is still there. It is simply no longer a room anybody can use.
     expect(getEntity(world.entities, 2)?.kind).toBe('bedroom');
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).unsupported).toBe(1);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(1);
     // And it paid nothing: it never completed the stay.
     expect(sumByReason(world.ledger, 'roomRevenue')).toBe(0);
   });
@@ -305,7 +306,7 @@ describe('a valid room can go invalid under a guest', () => {
     // read, recorded (G-015).
     expect(departureCountOf(world.guestOutcomes, 'evictedRoomUnusable')).toBe(1);
     expect(departureCountOf(world.guestOutcomes, 'evictedRoomGone')).toBe(0);
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).noDoor).toBe(1);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).noDoor).toBe(1);
   });
 
   it('lets the stay finish when the room stays valid', () => {
@@ -335,7 +336,7 @@ describe('an invalid room still costs money', () => {
         { tick: 0, command: spawn('bedroom', cell(9, 10)) }, // no floor, no bed
       ],
     );
-    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), content).unsupported).toBe(1);
+    expect(countInvalidRooms(world.entities, BOUNDS, createCorridors(), createStairs(), content).unsupported).toBe(1);
     expect(sumByReason(world.ledger, 'upkeep')).toBe(0 - UPKEEP);
   });
 
@@ -361,7 +362,7 @@ describe('counting guests in invalid rooms', () => {
       { tick: 1, command: arrive() },
       { tick: 2, command: arrive() },
     ]);
-    expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), content)).toBe(0);
+    expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), createStairs(), content)).toBe(0);
   });
 
   it('IS NON-ZERO for a world that came from outside the simulation', () => {
@@ -394,11 +395,11 @@ describe('counting guests in invalid rooms', () => {
       },
       guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     };
-    expect(countGuestsInInvalidRooms(forged.guests, forged.entities, BOUNDS, createCorridors(), content)).toBe(1);
+    expect(countGuestsInInvalidRooms(forged.guests, forged.entities, BOUNDS, createCorridors(), createStairs(), content)).toBe(1);
     // And the tick puts it right on the very next minute, rather than leaving it there.
     const after = stepTick(forged, content, []);
     expect(evictedGuests(after.guestOutcomes)).toBe(1);
-    expect(countGuestsInInvalidRooms(after.guests, after.entities, BOUNDS, createCorridors(), content)).toBe(0);
+    expect(countGuestsInInvalidRooms(after.guests, after.entities, BOUNDS, createCorridors(), createStairs(), content)).toBe(0);
   });
 
   it('does not double-count an orphaned reservation as a guest in an invalid room', () => {
@@ -425,6 +426,6 @@ describe('counting guests in invalid rooms', () => {
       },
       guestOutcomes: { arrived: 1, departures: createGuestOutcomes().departures },
     };
-    expect(countGuestsInInvalidRooms(forged.guests, forged.entities, BOUNDS, createCorridors(), content)).toBe(0);
+    expect(countGuestsInInvalidRooms(forged.guests, forged.entities, BOUNDS, createCorridors(), createStairs(), content)).toBe(0);
   });
 });

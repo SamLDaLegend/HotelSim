@@ -166,10 +166,10 @@ describe('a room the player already built can be redrawn (B4)', () => {
       spawn('hall', cell(0, 4), fp(1, 1)),
       spawn('hall', cell(1, 9), fp(1, 1)),
     ]);
-    expect(countInvalidRooms(before.entities, before.grid, before.corridors, content).unsupported).toBe(1);
+    expect(countInvalidRooms(before.entities, before.grid, before.corridors, before.stairs, content).unsupported).toBe(1);
     const lower = entitiesInOrder(before.entities)[0]!;
     const after = stepTick(before, content, [resize(lower.id, cell(0, 9), fp(1, 1))]);
-    expect(countInvalidRooms(after.entities, after.grid, after.corridors, content).unsupported).toBe(0);
+    expect(countInvalidRooms(after.entities, after.grid, after.corridors, after.stairs, content).unsupported).toBe(0);
   });
 
   it('and a stale validity cache cannot survive it', () => {
@@ -265,14 +265,14 @@ describe('a redraw that is not legal is REFUSED AND RECORDED, never thrown', () 
     ]);
     const lower = entitiesInOrder(before.entities)[0]!;
     const upper = entitiesInOrder(before.entities)[1]!;
-    expect(countInvalidRooms(before.entities, before.grid, before.corridors, content).unsupported).toBe(0);
+    expect(countInvalidRooms(before.entities, before.grid, before.corridors, before.stairs, content).unsupported).toBe(0);
 
     const after = stepTick(before, content, [resize(lower.id, cell(0, 4), fp(1, 1))]);
     expect(after.buildOutcomes.refused.breaksAnotherRoom).toBe(1);
     expect(after.buildOutcomes.resized).toBe(0);
     // THE EDIT DID NOT HAPPEN, which is what separates "refused" from "counted and applied".
     expect(at(after, lower.id)?.footprint).toEqual(fp(2, 1));
-    expect(countInvalidRooms(after.entities, after.grid, after.corridors, content).unsupported).toBe(0);
+    expect(countInvalidRooms(after.entities, after.grid, after.corridors, after.stairs, content).unsupported).toBe(0);
     expect(at(after, upper.id)?.at).toEqual(cell(1, 5));
   });
 
@@ -288,12 +288,12 @@ describe('a redraw that is not legal is REFUSED AND RECORDED, never thrown', () 
       spawn('hall', cell(0, 20, 2), fp(1, 1)),
       spawn('hall', cell(0, 20, 5), fp(1, 3)), // one row short of sealing it
     ]);
-    expect(countInvalidRooms(before.entities, before.grid, before.corridors, content).noDoor).toBe(0);
+    expect(countInvalidRooms(before.entities, before.grid, before.corridors, before.stairs, content).noDoor).toBe(0);
 
     const lid = entitiesInOrder(before.entities)[4]!;
     const after = stepTick(before, content, [resize(lid.id, cell(0, 20, 4), fp(1, 4))]);
     expect(after.buildOutcomes.refused.breaksAnotherRoom).toBe(1);
-    expect(countInvalidRooms(after.entities, after.grid, after.corridors, content).noDoor).toBe(0);
+    expect(countInvalidRooms(after.entities, after.grid, after.corridors, after.stairs, content).noDoor).toBe(0);
   });
 
   it('but a room the player breaks by editing ITSELF is allowed, which is drawRoom’s standing permission', () => {
@@ -311,7 +311,7 @@ describe('a redraw that is not legal is REFUSED AND RECORDED, never thrown', () 
     const after = stepTick(before, content, [resize(upper.id, cell(1, 40), fp(2, 1))]);
     expect(after.buildOutcomes.resized).toBe(1);
     expect(after.buildOutcomes.refused.breaksAnotherRoom).toBe(0);
-    expect(countInvalidRooms(after.entities, after.grid, after.corridors, content).unsupported).toBe(1);
+    expect(countInvalidRooms(after.entities, after.grid, after.corridors, after.stairs, content).unsupported).toBe(1);
   });
 
   it('and a room that was ALREADY broken does not veto an unrelated edit', () => {
@@ -323,7 +323,7 @@ describe('a redraw that is not legal is REFUSED AND RECORDED, never thrown', () 
       spawn('hall', cell(1, 40), fp(1, 1)), // in mid-air from the start
       spawn('hall', cell(0, 4), fp(1, 1)),
     ]);
-    expect(countInvalidRooms(before.entities, before.grid, before.corridors, content).unsupported).toBe(1);
+    expect(countInvalidRooms(before.entities, before.grid, before.corridors, before.stairs, content).unsupported).toBe(1);
     const ground = entitiesInOrder(before.entities)[1]!;
     const after = stepTick(before, content, [resize(ground.id, cell(0, 4), fp(2, 2))]);
     expect(after.buildOutcomes.resized).toBe(1);
@@ -520,13 +520,13 @@ describe('an item can be moved (B4), and a move that would break a room is refus
     const hall = stepTick(world, content, [
       { kind: 'drawRoom', roomType: 'hall', at: cell(0, 10), footprint: fp(1, 1) },
     ]);
-    expect(countInvalidRooms(hall.entities, hall.grid, hall.corridors, content).missingItem).toBe(0);
+    expect(countInvalidRooms(hall.entities, hall.grid, hall.corridors, hall.stairs, content).missingItem).toBe(0);
 
     const after = stepTick(hall, content, [move(bed, cell(0, 10))]);
     expect(after.buildOutcomes.refused.breaksAnotherRoom).toBe(1);
     expect(after.buildOutcomes.moved).toBe(0);
     expect(at(after, bed)?.at).toEqual(cell(0, 4));
-    expect(countInvalidRooms(after.entities, after.grid, after.corridors, content).missingItem).toBe(0);
+    expect(countInvalidRooms(after.entities, after.grid, after.corridors, after.stairs, content).missingItem).toBe(0);
   });
 
   it('but a SPARE item may leave, so the rule is about the requirement and not about the room', () => {

@@ -237,6 +237,12 @@ describe('the 1 -> 2 step itself', () => {
       // pass while measuring something else. Empty, which is what an era with no word for a
       // corridor declared.
       corridors: [],
+      // AND A STAIRWELL SINCE v21 (G-038a-ii-alpha), for the fourth time and with the identical
+      // failure mode: `assertWorldShape` reaches `stairs` before it reaches the guests, so a
+      // document without one is refused for the wrong field and the assertion below would pass
+      // while measuring something else. Empty, which is what an era whose floor axis spent
+      // unconditionally declared.
+      stairs: [],
       // AND A FOOTPRINT ON EVERY ENTITY SINCE v19 (G-036b), for the third time and with the
       // identical failure mode: `assertEntity` reaches `footprint` before `assertWorldShape`
       // reaches the guests, so a document without one is refused for the wrong field and the

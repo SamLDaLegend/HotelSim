@@ -116,6 +116,11 @@ export {
 } from './entities.js';
 export type { Corridors } from './corridors.js';
 export { assertCorridors, createCorridors, hasCorridorAt, withCorridor } from './corridors.js';
+// STAIRS (G-038a-ii-alpha). `stairwellOf` is exported because a host that wants to DRAW the
+// stairwell needs the same O(1) answer the tick uses, and a second copy of 'where the stairs
+// are' in a renderer is the drift `corridors.ts` refuses for the plan itself.
+export type { Stairs } from './stairs.js';
+export { assertStairs, createStairs, hasStairAt, stairwellOf, withStair } from './stairs.js';
 export type { Cell, Footprint, GridBounds } from './grid.js';
 export {
   assertCell,

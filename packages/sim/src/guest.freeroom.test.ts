@@ -15,6 +15,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { bindContent } from './content.js';
 import { beginEntityDraft } from './entities.js';
 import type { EntityStore } from './entities.js';
@@ -177,7 +178,7 @@ function tick(guests: GuestStore, entities: EntityStore, arriving = 0) {
     ledger: [],
     entities: draft,
     content,
-    validity: tickValidityContext(null, content, BOUNDS, createCorridors(), draft),
+    validity: tickValidityContext(null, content, BOUNDS, createCorridors(), createStairs(), draft),
     arriving,
   });
 }

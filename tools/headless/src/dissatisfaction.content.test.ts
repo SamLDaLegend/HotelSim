@@ -52,6 +52,53 @@ import { schedule } from './report.js';
 
 const SHIPPED = loadContent();
 
+// ==========================================================================================
+//  THE WORST JOURNEY, RE-DERIVED AT G-038a-ii-alpha BECAUSE IT STOPPED BEING THE MANHATTAN SUM.
+//
+//  IT USED TO BE `(maxFloor-minFloor) + (maxColumn-minColumn) + (maxRow-minRow)` = 108, and
+//  that expression WOULD HAVE GONE ON RETURNING 108 — a green row whose derivation had become
+//  false, which is the ADR-0007 class inside the file that exists to derive the number.
+//
+//  A FLOOR IS NOW REACHED BY A STAIR. `stairLeg` in `packages/sim/src/guests.ts` sends a guest
+//  with a cross-floor destination to the STAIRWELL COLUMN first, up it, and then on — so the
+//  worst journey is THREE LEGS and not one:
+//
+//      horizontal to the stairwell   +   the floor axis   +   horizontal from the stairwell
+//         79 + 7 = 86               +        22          +           79 + 7 = 86      = 194
+//
+//  AND THIS IS WHY STAIRS ARE ALIGNED. One stairwell column through the plot gives 194 and a
+//  derived speed floor of 2, so the shipped `guestCellsPerTick: 3` stays legal with no content
+//  edit. FREE placement — a stair anywhere per floor pair — gives roughly `22 x 86 + 108`, about
+//  1,900 cells and a floor of NINETEEN, at which the shipped dial becomes ILLEGAL by this
+//  file's own arithmetic. The ruling is written out in `packages/sim/src/stairs.ts`.
+//
+//  TICKS ARE THE SUM OF THREE CEILINGS, NOT THE CEILING OF THE SUM, and the difference is real
+//  rather than pedantic: a guest lands exactly on the stairwell and exactly on the destination
+//  floor, spending part of a budget each time. At speed 3 that is 66 ticks where `ceil(194/3)`
+//  says 65. The larger number is the true bound, so it is the one derived here.
+// ==========================================================================================
+
+/** The two horizontal spans and the vertical one, from the plot the sim actually ships. */
+const legsOfThePlot = (): { readonly horizontal: number; readonly vertical: number } => {
+  const bounds = createGridBounds();
+  return {
+    horizontal: bounds.maxColumn - bounds.minColumn + (bounds.maxRow - bounds.minRow),
+    vertical: bounds.maxFloor - bounds.minFloor,
+  };
+};
+
+/** The worst journey the plot permits, IN CELLS: to the stairwell, up it, and on. */
+const worstJourneyCells = (): number => {
+  const { horizontal, vertical } = legsOfThePlot();
+  return horizontal + vertical + horizontal;
+};
+
+/** The worst journey the plot permits, IN TICKS, at `speed`. Three legs, three ceilings. */
+const worstJourneyTicks = (speed: number): number => {
+  const { horizontal, vertical } = legsOfThePlot();
+  return Math.ceil(horizontal / speed) + Math.ceil(vertical / speed) + Math.ceil(horizontal / speed);
+};
+
 /** The shipped tables with the guest rules patched. */
 const rebound = (patch: Partial<GuestRulesData>): ReturnType<typeof bindContent> =>
   bindContent({
@@ -137,20 +184,24 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // the backlog of guests being SERVED and leaves the backlog of guests being IGNORED where
     // it was, which is the one-line statement of what this whole goal did.
     // ========================================================================================
-    const bounds = createGridBounds();
-    const worstJourney =
-      bounds.maxFloor - bounds.minFloor + (bounds.maxColumn - bounds.minColumn) + (bounds.maxRow - bounds.minRow);
+    const worstJourney = worstJourneyCells();
     const speed = guestSpeedOf(SHIPPED);
     // A leg per engagement need chased, at most the worst journey the plot permits. `speed`
     // undefined is the historical no-travel content and costs nothing, which keeps this
     // expression correct for the era `absence` describes rather than special-cased for it.
-    const legs = speed === undefined ? 0 : engagement.length * Math.ceil(worstJourney / speed);
-    expect(worstJourney).toBe(108);
-    expect(legs).toBe(108);
+    const legs = speed === undefined ? 0 : engagement.length * worstJourneyTicks(speed);
+    // 108 -> 194 AT G-038a-ii-alpha, and the CAUSE is the stair rather than the plot: not one
+    // edge of `createGridBounds` moved. See `worstJourneyCells` above.
+    expect(worstJourney).toBe(194);
+    expect(legs).toBe(198);
 
     const uncontended = peakOver(SHIPPED, 10, 60, 3);
     expect(uncontended).toBeGreaterThanOrEqual(129);
     expect(uncontended).toBeLessThanOrEqual(129 + legs);
+    // AND THE BOUND STILL BINDS SOMETHING. 129 + 198 = 327, comfortably under the 431 ceiling —
+    // which is the property the speed floor below is derived from, asserted here so that
+    // widening the journey can never quietly pass this arm by making the bound vacuous.
+    expect(129 + legs).toBeLessThan(dissatisfactionCapacityOf(SHIPPED) ?? 0);
     // PINNED AS WELL AS BOUNDED. The bound above is worst-case over the whole plot and the
     // seeded hotel is nowhere near it, so on its own it would admit a 98-tick regression
     // without a murmur. The literal is what keeps this arm sharp; the bound is what keeps it
@@ -165,8 +216,13 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // ONE THE SCHEMA ALREADY CARRIED.
     //
     // `guestCellsPerTickSchema` derives its floor from `toleranceTicks`: a journey must not be
-    // able to exhaust a guest's patience on its own, which at 108 cells against 180 ticks
-    // clears at any speed of 1 or more. **The ceiling gives a tighter one.** The requirement
+    // able to exhaust a guest's patience on its own. **THAT SENTENCE USED TO END "which at 108
+    // cells against 180 ticks clears at any speed of 1 or more", AND AT 194 IT IS FALSE** — a
+    // speed-1 guest sent on the worst journey this plot permits spends 194 ticks walking and
+    // times out at 180 because it WALKED, which is the cliff ADR-0017 was written to dissolve.
+    // So the tolerance floor is 2 as well now, and `THE TOLERANCE FLOOR IS ALSO 2` below drives
+    // it rather than leaving it in prose. **The ceiling still gives the tighter bound.** The
+    // requirement
     // `dissatisfactionCapacityTicks` encodes is that a PERFECTLY PROVISIONED hotel does not
     // evict its guests, and the bound above is what such a guest can reach — so a speed at
     // which `chase + legs` passes the ceiling re-opens the eviction that number was placed to
@@ -177,11 +233,8 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // 163, far under 431 — no shipped workload puts two providers 108 cells apart. What the
     // plot ALLOWS is the thing a content bound has to survive.
     // ========================================================================================
-    const bounds = createGridBounds();
-    const worstJourney =
-      bounds.maxFloor - bounds.minFloor + (bounds.maxColumn - bounds.minColumn) + (bounds.maxRow - bounds.minRow);
     const ceiling = dissatisfactionCapacityOf(SHIPPED) ?? 0;
-    const reachableAt = (speed: number): number => 129 + engagement.length * Math.ceil(worstJourney / speed);
+    const reachableAt = (speed: number): number => 129 + engagement.length * worstJourneyTicks(speed);
     // THE CLIFF, FROM BOTH SIDES — ADR-0007's two-sided form, over the dial rather than over
     // the ceiling.
     expect(reachableAt(1)).toBeGreaterThan(ceiling);
@@ -192,12 +245,77 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     while (reachableAt(floor) > ceiling) floor += 1;
     expect(floor).toBe(2);
     expect(guestSpeedOf(SHIPPED) ?? 0).toBeGreaterThanOrEqual(floor);
-    // AND THE UPPER ENDPOINT, WHICH IS WHERE THE DIAL STOPS DOING ANYTHING: `stepTowards`
-    // clamps at the destination, so at the worst journey's own length every journey on this
-    // plot costs one tick and every larger value is the identical world. The shipped value
-    // sits inside [floor, worstJourney] and is a preference there (ADR-0013 §4).
-    expect(guestSpeedOf(SHIPPED) ?? 0).toBeLessThanOrEqual(worstJourney);
+    // AND THE UPPER ENDPOINT, WHICH IS WHERE THE DIAL STOPS DOING ANYTHING — AND IT DID NOT
+    // MOVE WITH THE JOURNEY, WHICH IS WORTH SAYING BECAUSE THE OBVIOUS EDIT WOULD HAVE MOVED IT.
+    // `stepTowards` clamps at the destination, so the dial saturates at THE LONGEST SINGLE LEG
+    // and not at the longest JOURNEY. With a stairwell the legs are 86, 22 and 86; with none —
+    // which is every world in this project today — the journey is one leg of 108. So 108 is
+    // still the largest leg anywhere and still the endpoint. The shipped value sits inside
+    // [floor, 108] and is a preference there (ADR-0013 §4).
+    const { horizontal, vertical } = legsOfThePlot();
+    const longestLeg = Math.max(horizontal + vertical, horizontal, vertical);
+    expect(longestLeg).toBe(108);
+    expect(guestSpeedOf(SHIPPED) ?? 0).toBeLessThanOrEqual(longestLeg);
     expect(guestSpeedOf(SHIPPED)).toBe(3);
+  });
+
+  it('THE TOLERANCE FLOOR IS ALSO 2 NOW, and at 108 it was 1 — the sentence that went false', () => {
+    // ========================================================================================
+    // THE OTHER FLOOR, DRIVEN RATHER THAN QUOTED (G-038a-ii-alpha). `guestCellsPerTickSchema`
+    // and `grid.ts` both carried *"at 108 cells against 180 ticks, any speed of 1 or more
+    // clears it"*. A stair makes the worst journey 194 and that sentence false, and a
+    // derivation that has gone false while its test stays green is the exact class this file
+    // exists to catch — so the claim is now executed on both sides of the cliff.
+    // ========================================================================================
+    const tolerance = toleranceOf(SHIPPED) ?? 0;
+    expect(tolerance).toBe(180);
+    expect(worstJourneyTicks(1)).toBeGreaterThan(tolerance);
+    expect(worstJourneyTicks(2)).toBeLessThan(tolerance);
+    // AND IT IS THE STAIR AND NOT THE PLOT THAT MOVED IT: the same plot, walked as one
+    // Manhattan leg the way a world with no stairwell still walks it, clears at speed 1.
+    const { horizontal, vertical } = legsOfThePlot();
+    expect(horizontal + vertical).toBe(108);
+    expect(horizontal + vertical).toBeLessThan(tolerance);
+  });
+
+  it('AND THE PLOT DEPTH IS RE-DERIVED IN THE SAME CHANGE, because `grid.ts` rests on this', () => {
+    // ========================================================================================
+    // `DEFAULT_MAX_ROW` IS DERIVED FROM THIS INEQUALITY AND ITS OWN DOCBLOCK CITES THIS FILE.
+    // The old derivation was `100 + depth < 180 => depth <= 79`, evaluated AT SPEED 1 — and
+    // with a stair, speed 1 breaches at EVERY depth, so that form has no solution at all. The
+    // bound is therefore JOINT: a depth is legal against a SPEED, and neither package may move
+    // alone.
+    //
+    // The binding half is the ceiling rather than the tolerance (100 ticks against 180), and at
+    // the shipped speed of 3 it gives `2*ceil((78+depth)/3) + 8 <= 100`, i.e. depth <= 60. The
+    // shipped depth is 8 and sits well inside — but 79 would now be ILLEGAL, which is the part
+    // that had to be re-derived rather than left standing.
+    // ========================================================================================
+    const speed = guestSpeedOf(SHIPPED) ?? 0;
+    const ceiling = dissatisfactionCapacityOf(SHIPPED) ?? 0;
+    const bounds = createGridBounds();
+    const engagementNeeds = engagement.length;
+    /** The worst journey in ticks on a plot of this width and `depth` rows, at `speed`. */
+    const atDepth = (depth: number): number => {
+      const horizontal = bounds.maxColumn - bounds.minColumn + (depth - 1);
+      const vertical = bounds.maxFloor - bounds.minFloor;
+      return 2 * Math.ceil(horizontal / speed) + Math.ceil(vertical / speed);
+    };
+    const legal = (depth: number): boolean =>
+      129 + engagementNeeds * atDepth(depth) < ceiling && atDepth(depth) < (toleranceOf(SHIPPED) ?? 0);
+    // COMPUTED, NOT ASSERTED, so a content change to the ceiling or a plot change to the width
+    // moves it here instead of leaving a stale 60.
+    let deepest = 1;
+    while (legal(deepest + 1)) deepest += 1;
+    expect(deepest).toBe(60);
+    // THE CLIFF, FROM BOTH SIDES.
+    expect(legal(deepest)).toBe(true);
+    expect(legal(deepest + 1)).toBe(false);
+    // AND THE SHIPPED PLOT CLEARS IT. `DEFAULT_MAX_ROW` is 7, so the depth is 8.
+    expect(bounds.maxRow - bounds.minRow + 1).toBe(8);
+    expect(legal(bounds.maxRow - bounds.minRow + 1)).toBe(true);
+    // The old ceiling of 79 is no longer legal, which is the finding rather than a footnote.
+    expect(legal(79)).toBe(false);
   });
 
   it('THE CEILING CLEARS IT, with the margin the placement rule produces', () => {

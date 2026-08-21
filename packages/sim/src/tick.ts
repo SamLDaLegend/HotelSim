@@ -103,6 +103,8 @@ import type { BuildInput, BuildOutcomes } from './build.js';
 import type { Command, ScheduledCommand } from './commands.js';
 import { withCorridor } from './corridors.js';
 import type { Corridors } from './corridors.js';
+import { withStair } from './stairs.js';
+import type { Stairs } from './stairs.js';
 import { hasContentId, isRoomKind, needTypesInOrder } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
@@ -298,6 +300,15 @@ type CommandAccumulator = {
    * below and what lets the `ValidityCache` compare plans by identity.
    */
   corridors: Corridors;
+  /**
+   * The stair plan as this tick's commands have left it (G-038a-ii-alpha).
+   *
+   * Threaded exactly as `corridors` is, and for the same three reasons: replaced by value,
+   * never mutated, and returned by REFERENCE when nothing declared anything — which is what
+   * keeps the idle-tick guarantee below and what lets the `ValidityCache` compare plans by
+   * identity in its seventh clause.
+   */
+  stairs: Stairs;
 };
 
 /** The one place the balance is folded, and the one place it is folded only once. */
@@ -324,6 +335,9 @@ function buildInput(
     // room breaks — so a `layCorridor` earlier in the SAME log has to be visible, exactly as a
     // room built earlier in the same log already is through the draft.
     corridors: accumulator.corridors,
+    // AND THE STAIRWELL AS THIS TICK HAS LEFT IT, on the same rule (G-038a-ii-alpha): a stair
+    // declared earlier in this log is a declared walkway for the edit checked later in it.
+    stairs: accumulator.stairs,
     content: state.content,
     ledger: accumulator.ledger,
     outcomes: accumulator.outcomes,
@@ -511,6 +525,19 @@ function applyCommand(
       assertCell(command.at, state.world.grid, 'layCorridor');
       accumulator.corridors = withCorridor(accumulator.corridors, command.at);
       return;
+    case 'layStair':
+      // THE PLAN SAYS PEOPLE CLIMB HERE (G-038a-ii-alpha). `layCorridor`'s contract, one axis
+      // over: the structural door, a throw off the plot, nothing asked about what is standing
+      // there, no charge, no outcome and no id — so neither per-tick law below has anything to
+      // say about it either.
+      //
+      // AND ONE THROW `layCorridor` DOES NOT HAVE: a misaligned cell. Stairs are aligned, which
+      // is what makes the vertical rule O(1) and the speed window derivable, so a second
+      // stairwell is a cell this world cannot address — the same class as a cell off the plot,
+      // raised by `withStair` rather than here so that a save and a command meet one rule.
+      assertCell(command.at, state.world.grid, 'layStair');
+      accumulator.stairs = withStair(accumulator.stairs, command.at);
+      return;
     case 'guestArrives':
       // Checked here rather than in the guest system, alongside `spawnEntity`'s
       // unknown-kind check and for the same reason: a guest that could form no need is
@@ -579,6 +606,7 @@ export function applyCommands(state: TickState): TickState {
   const accumulator: CommandAccumulator = {
     arrivingGuests: 0,
     corridors: state.world.corridors,
+    stairs: state.world.stairs,
     ledger: state.world.ledger,
     outcomes: state.world.buildOutcomes,
     balance: 0,
@@ -663,7 +691,10 @@ export function applyCommands(state: TickState): TickState {
     // BY IDENTITY, and `withCorridor` is what makes that exact rather than conservative: a
     // `layCorridor` on a cell already declared returns the same array, so a host issuing one
     // on a blind cadence still gets the idle-tick guarantee (G-034b).
-    accumulator.corridors === state.world.corridors
+    accumulator.corridors === state.world.corridors &&
+    // BY IDENTITY, for `corridors`' reason exactly: `withStair` on a cell already declared
+    // returns the same array (G-038a-ii-alpha).
+    accumulator.stairs === state.world.stairs
       ? state.world
       : {
           ...state.world,
@@ -671,6 +702,7 @@ export function applyCommands(state: TickState): TickState {
           buildOutcomes: accumulator.outcomes,
           loanOutcomes: accumulator.loanOutcomes,
           corridors: accumulator.corridors,
+          stairs: accumulator.stairs,
         };
 
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
@@ -747,6 +779,9 @@ export function runGuests(state: TickState): TickState {
       // circulation for the guests of tick t — the same no-lag rule a room built this tick
       // already has (G-034b).
       state.world.corridors,
+      // THIS TICK'S STAIRWELL, on the same no-lag rule: a `layStair` earlier in this tick's log
+      // is a stairwell for the guests of this tick (G-038a-ii-alpha).
+      state.world.stairs,
       state.entities,
     ),
     arriving: state.arrivingGuests,

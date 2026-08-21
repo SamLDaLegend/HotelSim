@@ -364,7 +364,14 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   the unserved integrals move. **Travel costs satisfaction; it costs OUTCOMES only where
     //   the hotel was already failing**, and 60 bedrooms behind two amenities is that hotel.
     //   (Closing balance here moves -238,500p -> -264,000p, which is the three lost stays.)
-    expect(hashState(plain)).toBe('ddfe4e4000bf1dc4');
+    //   `ddfe4e4000bf1dc4` -> `418cf36055a3408c`   G-038a-ii-alpha added `World.stairs` and took
+    //   the save to **v21**. **ONE cause, and it is a FIELD rather than a behaviour**: the
+    //   harness declares no stairwell, so `stairLeg` reads the empty set as *"the floor axis
+    //   spends unconditionally"* and every guest walks exactly where it walked. **THE CONTROL
+    //   BLOCK BELOW HOLDS IN FULL** — every counter, every departure row, every need row and the
+    //   closing balance are byte-identical — which is what says the hash moved because the world
+    //   grew a key and not because the hotel changed.
+    expect(hashState(plain)).toBe('418cf36055a3408c');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -580,7 +587,13 @@ describe('the same workload with the player churning the building', () => {
     //
     // THE SHARP CONTROL HOLDS FOR THE SIXTEENTH TIME: 19 evictions, 0 `evictedRoomUnusable`.
     // ==========================================================================================
-    expect(hashState(churn)).toBe('17c163b7169e3e03');
+    // MOVED AGAIN AT G-038a-ii-alpha, `17c163b7169e3e03` -> `137b3dff76f88a93`, AND THIS TIME
+    // THE TWO SIBLINGS MOVE TOGETHER — which is itself the reading. G-038a-i's divergence was
+    // behavioural and landed on the arm with a choice to make; this one is `World.stairs`, an
+    // empty array on every world, so it moves every hash in the repo and no counter anywhere.
+    // Every control in this arm still holds: checkedOut 0, leftDissatisfied 51, evictedRoomGone
+    // 19, insufficientFunds 23, built 7, demolished 20, five guests at the horizon.
+    expect(hashState(churn)).toBe('137b3dff76f88a93');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

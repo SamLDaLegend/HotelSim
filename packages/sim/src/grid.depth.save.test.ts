@@ -33,6 +33,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
 import { entitiesInOrder } from './entities.js';
@@ -406,7 +407,7 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT, which is what makes it non
     // under test on both sides of the assertion.
     // ==================================================================================
     const loaded = deserialise(v16Blob());
-    expect(countInvalidRooms(loaded.entities, loaded.grid, createCorridors(), content)).toEqual(V16_TALLY);
+    expect(countInvalidRooms(loaded.entities, loaded.grid, createCorridors(), createStairs(), content)).toEqual(V16_TALLY);
   });
 
   it('and a DEEPER plot flips one of them, so the tally above is not true of any plot', () => {
@@ -414,7 +415,7 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT, which is what makes it non
     // assertion above would be evidence about nothing.
     const loaded = deserialise(v16Blob());
     const deeper = { ...loaded.grid, maxRow: loaded.grid.maxRow + 1 };
-    expect(countInvalidRooms(loaded.entities, deeper, createCorridors(), content)).toEqual({
+    expect(countInvalidRooms(loaded.entities, deeper, createCorridors(), createStairs(), content)).toEqual({
       ...V16_TALLY,
       noDoor: 0, // entity 2 gains a door in front of it
     });

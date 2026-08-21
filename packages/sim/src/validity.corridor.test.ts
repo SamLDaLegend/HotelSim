@@ -30,6 +30,7 @@
 import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import { createCorridors, withCorridor } from './corridors.js';
+import { createStairs } from './stairs.js';
 import type { Corridors } from './corridors.js';
 import type { Entity, EntityStore } from './entities.js';
 import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
@@ -88,7 +89,7 @@ function reasonOf(
 ): RoomInvalidityReason | null {
   const room = store.list[0];
   if (room === undefined) throw new Error('test bug: the store has no room');
-  return roomInvalidity(createValidityContext(content, bounds, corridors, storeEntities(store)), room);
+  return roomInvalidity(createValidityContext(content, bounds, corridors, createStairs(), storeEntities(store)), room);
 }
 
 describe('a floor with no corridor on it is OPEN PLAN, exactly as it always was', () => {
@@ -215,7 +216,7 @@ describe('the rule is asked LAST, so no earlier verdict is displaced', () => {
     // is `unsupported`; the unfurnished one is `missingItem`; the placeless one `unplaced`.
     // FIVE ROOMS IN A CROSS RATHER THAN THREE IN A LINE (G-036a) — see `noDoor beats
     // noCorridor` above; on a plot with depth a line seals nobody.
-    expect(countInvalidRooms(store, BOUNDS, planned, content)).toEqual({
+    expect(countInvalidRooms(store, BOUNDS, planned, createStairs(), content)).toEqual({
       missingItem: 1,
       noCorridor: 5,
       noDoor: 1,
@@ -277,13 +278,14 @@ describe('the reason is legible and behaves like the other four', () => {
     // `isValidRoom` is the predicate the guest loop asks before reserving, so this is the line
     // between "a reason in a tally" and "a room that houses nobody".
     const store = storeOf(...furnished(cell(GROUND_FLOOR, 10)));
-    const ctx = createValidityContext(content, BOUNDS, planOf(cell(GROUND_FLOOR, 40)), storeEntities(store));
+    const ctx = createValidityContext(content, BOUNDS, planOf(cell(GROUND_FLOOR, 40)), createStairs(), storeEntities(store));
     const room = store.list[0]!;
     expect(isValidRoom(ctx, room)).toBe(false);
     const connected = createValidityContext(
       content,
       BOUNDS,
       planOf(cell(GROUND_FLOOR, 11)),
+      createStairs(),
       storeEntities(store),
     );
     expect(isValidRoom(connected, room)).toBe(true);

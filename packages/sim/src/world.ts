@@ -14,6 +14,8 @@ import { firstEconomy } from './content.js';
 import type { BoundContent } from './content.js';
 import { createCorridors } from './corridors.js';
 import type { Corridors } from './corridors.js';
+import { createStairs } from './stairs.js';
+import type { Stairs } from './stairs.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
 import { createGridBounds } from './grid.js';
@@ -138,6 +140,26 @@ export type World = {
    */
   readonly corridors: Corridors;
   /**
+   * WHERE THE PLAN SAYS PEOPLE CLIMB (G-038a-ii-alpha): every cell declared a stair,
+   * ascending by `compareCells`, ALL SHARING ONE `(column, row)`.
+   *
+   * A SECOND SET OF COORDINATES BESIDE `corridors` RATHER THAN A FLAG ON ONE, because the two
+   * answer different questions and a cell can be neither, either or both. A corridor says
+   * people walk HERE; a stair says people climb FROM here. Folding them into one set would
+   * make "is this circulation?" and "may the floor axis spend?" the same question, and the
+   * whole of `stairs.ts` is the argument that they are not.
+   *
+   * READ PER WORLD, NOT PER FLOOR, and `stairs.ts`'s header carries the ruling: a stair is a
+   * relation between floor f and f+1, so every per-floor reading is non-local in exactly the
+   * direction `isOpenPlan` refused for corridors. The one sentence the field means is *"no
+   * stair declared anywhere in this world => the floor axis spends unconditionally"*, which is
+   * what every build before this one did and what a v20 save says.
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, which is why it is a field: an empty cell in a lane and
+   * a stairwell in a lane are the same bytes everywhere else in `World`.
+   */
+  readonly stairs: Stairs;
+  /**
    * What the player's build commands have done, counted (G-008).
    *
    * NOT DERIVABLE FROM ANYTHING ELSE, which is why it is a field rather than a fold. A
@@ -201,6 +223,7 @@ const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   needOutcomes: true,
   reviewOutcomes: true,
   rng: true,
+  stairs: true,
   tick: true,
 };
 
@@ -273,6 +296,11 @@ export function createWorld(seed: number, content: BoundContent): World {
     // corridors existed, and is why opening a world under this build changes no verdict.
     // See `corridors.ts` and `computeRoomInvalidity`.
     corridors: createCorridors(),
+    // EMPTY, AND THAT IS A STATEMENT RATHER THAN A DEFAULT (G-038a-ii-alpha). A new hotel has
+    // no stairwell, so the floor axis spends unconditionally — which is exactly what this
+    // simulation did before stairs existed, and is why opening a world under this build
+    // changes no journey. See `stairs.ts`.
+    stairs: createStairs(),
     buildOutcomes: createBuildOutcomes(),
     loanOutcomes: createLoanOutcomes(),
   };

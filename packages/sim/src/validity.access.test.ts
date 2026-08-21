@@ -216,7 +216,7 @@ describe('THE DISCRIMINATING EXPERIMENT: the same hotel and seed, with and witho
 
 describe('the predicate itself', () => {
   const ctxOf = (world: World, content: BoundContent) =>
-    createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
+    createValidityContext(content, world.grid, world.corridors, world.stairs, storeEntities(world.entities));
 
   it('reads absence as `public`, which is the exact historical reading and not a default', () => {
     // Content written before access rules restricted nobody, so every provider in every world

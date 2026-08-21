@@ -8,6 +8,7 @@
 import { assertBuildOutcomes } from './build.js';
 import type { BuildOutcomes } from './build.js';
 import { assertCorridors } from './corridors.js';
+import { assertStairs } from './stairs.js';
 import { assertEntityStoreInvariants } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
 import { assertGridBounds } from './grid.js';
@@ -25,7 +26,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 20;
+export const SAVE_SCHEMA_VERSION = 21;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -2046,6 +2047,95 @@ function migrateV19ToV20(world: unknown): unknown {
 }
 
 /**
+ * WHAT A v20 WORLD DECLARED ABOUT STAIRS, FROZEN AT THE MOMENT v21 WAS DEFINED: NOTHING,
+ * BECAUSE THE CONCEPT DID NOT EXIST.
+ *
+ * A LITERAL, and it must stay one, for the reason `V18_MIGRATION_CORRIDORS` gives at length:
+ * `createStairs()` in `stairs.ts` returns the same empty set today and the two are ALLOWED to
+ * diverge — the day a scenario opens with a stairwell pre-drawn, a step that read the live
+ * constructor would start migrating the SAME v20 bytes onto a world whose stairwell somebody
+ * else chose (ADR-0008 (1)). The guard is structural, because the values coincide today and no
+ * assertion can tell the two implementations apart: the source scan in
+ * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts` forbids
+ * this file from naming `createStairs` in executable code (ADR-0008 (3)).
+ *
+ * AND IT CARRIES NO TYPE ANNOTATION, which is G-034a's correction: `readonly Cell[]` would be a
+ * live-build reference wearing a type's clothes, and the day a cell gains an axis the compiler
+ * would demand this frozen v20 literal grow one too.
+ */
+const V21_MIGRATION_STAIRS = Object.freeze([]);
+
+/**
+ * v20 -> v21: a world in which travel was VERTICALLY FREE (G-038a-ii-alpha).
+ *
+ * ADR-0006 fires for the TWENTIETH time. `World` gains `stairs`, `assertWorldShape` rejects
+ * unknown top-level keys and demands the known ones, so the permanent v1 fixture describes a
+ * world this build cannot load, and the answer is this step. `fixtures/save-v1.ts` HAS A
+ * ZERO-LINE DIFF in this change; the walk is 1 -> ... -> 20 -> 21.
+ *
+ * ==========================================================================================
+ * THE HISTORICAL READING, WHICH IS THE WHOLE OF THIS STEP, AND IT WAS RE-CHECKED AGAINST
+ * G-038a-i RATHER THAN ASSUMED.
+ *
+ * A v20 world genuinely declared no stair — and the question that matters is not *"what did it
+ * declare?"* but *"how did its guests get upstairs?"*. The answer is in `stepTowards` as
+ * G-038a-i left it: **the floor axis is spent FIRST and UNCONDITIONALLY**, and the
+ * landing-choice loop that goal added only ever splits the REMAINING budget between the column
+ * and row axes. A v20 guest rose through the ceiling from wherever it stood.
+ *
+ * So the only non-inventive reading of these bytes is *"travel was vertically free"*, and the
+ * empty set is not a shrug and not a default: `stairLeg` in `guests.ts` reads an empty set as
+ * exactly that rule — **no stair declared anywhere in this world => the floor axis spends
+ * unconditionally** — and every migrated world keeps every journey its bytes describe, to the
+ * cell.
+ *
+ * PER WORLD, NOT PER FLOOR, AND THAT IS THE OPPOSITE CALL TO `migrateV17ToV18`'s. The corridor
+ * step could say *"a floor with no declared corridor is OPEN PLAN"* because circulation is a
+ * property of a floor. A stair is a relation BETWEEN floor f and floor f+1, so a per-floor
+ * reading must answer *"whose floor — f, f+1, or both?"* and every answer is non-local in
+ * exactly the direction `isOpenPlan`'s docblock refused for corridors. `stairs.ts` carries the
+ * ruling; this step is where it is spent.
+ *
+ * AND THE PROOF THAT IT REWRITES NO VERDICT IS STRUCTURAL RATHER THAN SAMPLED, and it is
+ * stronger than the corridor step's. `isDeclaredWalkway` takes the stair set as a third clause
+ * of a UNION, so the rule is strictly WIDENING: adding an empty set to a union changes nothing,
+ * on any world, without inspecting one. Every v20 world keeps its exact validity verdicts and
+ * its exact journeys.
+ *
+ * THE CONSEQUENCE TO OWN RATHER THAN DISCOVER: under this reading stairs are INERT in every
+ * migrated world, in the I2 log, in the bench and in every golden until a harness declares one
+ * — and the moment one does, the whole building changes at once. Not avoidable; it is the price
+ * of a migration that invents nothing.
+ *
+ * Reads no content and no live constant, so the same v20 bytes produce the same v21 world
+ * however the shipped world changes afterwards (ADR-0008; see `V21_MIGRATION_STAIRS`).
+ *
+ * NOT TESTED BY THE PERMANENT v1 FIXTURE, AND SAYING SO IS THE POINT. The fixture's world holds
+ * entities that are all unplaced and no guests at all, so this step walks it with a ZERO-LINE
+ * diff while inspecting no cell, no room and no journey — ADR-0007's exact shape, and the
+ * paragraph `migrateV17ToV18` and `migrateV10ToV11` both carry. `stairs.save.test.ts` drives a
+ * HAND-BUILT v20 world with supported, doored, furnished, sealed and floating rooms AND a
+ * cross-floor guest through this step, and asserts both its validity tallies and its journey
+ * are unchanged across 20 -> 21.
+ * ==========================================================================================
+ */
+function migrateV20ToV21(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way this step could destroy data — overwriting a stairwell somebody already drew —
+  // is the one thing it refuses to do, exactly as all nineteen earlier steps refuse.
+  // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an own
+  // key (G-003).
+  if (Object.keys(world).includes('stairs')) {
+    throw new Error(
+      'world already has a "stairs" field, so it is not a v20 world; migrating it would overwrite a real stairwell',
+    );
+  }
+  return { ...world, stairs: V21_MIGRATION_STAIRS };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -2073,6 +2163,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 17, to: 18, migrate: migrateV17ToV18 }),
   Object.freeze({ from: 18, to: 19, migrate: migrateV18ToV19 }),
   Object.freeze({ from: 19, to: 20, migrate: migrateV19ToV20 }),
+  Object.freeze({ from: 20, to: 21, migrate: migrateV20ToV21 }),
 ]);
 
 /**
@@ -2490,6 +2581,13 @@ export function assertWorldShape(value: unknown): asserts value is World {
   // ARRAY'S ORDER is part of the state hash, and a save carrying the same corridors in a
   // different sequence would load happily and hash differently from the world that wrote it.
   assertCorridors(value['corridors'], grid as unknown as GridBounds);
+
+  // WHERE THE PLAN SAYS PEOPLE CLIMB (G-038a-ii-alpha). Validated after the plot for
+  // `corridors`' reason — every cell is checked against the plot THIS SAVE carries — and it
+  // checks one thing `assertCorridors` does not: THE ALIGNMENT INVARIANT. `stairwellOf` is an
+  // array index, so a save carrying two stairwells would load, hash perfectly, and send every
+  // guest on the plot to whichever one happened to sort first. See `stairs.ts`.
+  assertStairs(value['stairs'], grid as unknown as GridBounds);
 
   const entities = value['entities'];
   if (!isRecord(entities)) {

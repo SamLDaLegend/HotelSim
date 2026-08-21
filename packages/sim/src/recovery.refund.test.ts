@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBuildRoom, applyDemolishRoom, countDemolitionRefundTransactions, createBuildOutcomes } from './build.js';
 import type { BuildInput } from './build.js';
 import { createCorridors } from './corridors.js';
+import { createStairs } from './stairs.js';
 import { bindContent, demolitionRefundOf } from './content.js';
 import type { BoundContent, RoomTypeData } from './content.js';
 import { beginEntityDraft } from './entities.js';
@@ -53,6 +54,7 @@ const input = (content: BoundContent, balance: number, ledger: readonly Transact
   content,
   ledger,
   corridors: createCorridors(),
+  stairs: createStairs(),
   outcomes: createBuildOutcomes(),
   balance,
 });

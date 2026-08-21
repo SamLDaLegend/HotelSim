@@ -156,7 +156,15 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // field is byte-identical apart from the two new zero counters, and both are zero for
     // structural reasons rather than contingent ones — this run issues no build command, and
     // every seeded room stands on the entrance floor.
-    stateHash: 'a97bc3b7995e9293',
+    //
+    // MOVED AGAIN AT G-038a-ii-alpha to `6f719333f63082c7`, for ONE hashed-state cause and NO
+    // behaviour: `World` GAINED `stairs`, an EMPTY array, and the save went to **v21**. The
+    // harness declares no stairwell — that is a decision, recorded in
+    // `travel.stairs.report.test.ts` — so `stairLeg` in `guests.ts` reads the empty set as *"the
+    // floor axis spends unconditionally"* and every guest in this run walks exactly where it
+    // walked before. **THE CONTROL IS THE FULL DOCUMENT AGAIN**: every other field of this
+    // golden is byte-identical, which is what says the field was added and nothing moved.
+    stateHash: '6f719333f63082c7',
   },
   guests: {
     arrived: 24,
@@ -583,7 +591,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // floor, so no lodging candidate is more than zero floors from the door and a reach of 2
     // cannot turn anybody away. Same 6 valid rooms, same 0/0/0/0/0 tally, same 24 arrivals,
     // same 4/16 split, same four need rows to the basis point.
-    'state hash  a97bc3b7995e9293',
+    'state hash  6f719333f63082c7',
   ].join('\n') + '\n';
 
 /**
@@ -740,7 +748,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  a97bc3b7995e9293']);
+    expect(differing).toEqual(['seed        42', 'state hash  6f719333f63082c7']);
     expect(lines43).toContain('seed        43');
   });
 });

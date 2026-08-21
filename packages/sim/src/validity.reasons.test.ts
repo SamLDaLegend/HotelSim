@@ -16,6 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors, withCorridor } from './corridors.js';
+import { createStairs } from './stairs.js';
 import type { Corridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
@@ -146,7 +147,7 @@ const CONSTRUCTIONS: readonly Construction[] = [
 function reasonOf(store: EntityStore, corridors: Corridors = createCorridors()): RoomInvalidityReason | null {
   const room = store.list[0];
   if (room === undefined) throw new Error('test bug: the construction has no room');
-  return roomInvalidity(createValidityContext(content, BOUNDS, corridors, storeEntities(store)), room);
+  return roomInvalidity(createValidityContext(content, BOUNDS, corridors, createStairs(), storeEntities(store)), room);
 }
 
 describe('every invalidity reason is reachable by a world constructed here', () => {
@@ -180,6 +181,10 @@ describe('every invalidity reason is reachable by a world constructed here', () 
         // `noCorridor` room as valid, on an open-plan floor, while `reasonOf` called it
         // invalid. Two answers from one store is exactly what a shared parameter prevents.
         construction.corridors ?? createCorridors(),
+        // AND THE SAME FOR THE STAIRWELL (G-038a-ii-alpha). None of these constructions declares
+        // one, but passing the empty set explicitly is what keeps this call and `reasonOf`
+        // answering about the same world rather than about two.
+        createStairs(),
         content,
       );
       expect(tally[construction.reason]).toBe(1);

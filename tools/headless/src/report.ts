@@ -1671,12 +1671,16 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // AND AGAINST ITS OWN CORRIDOR PLAN (G-034b), for the same reason and with a sharper
   // edge: a report that passed an empty plan would call every floor open plan and count a
   // disconnected room as working. `world.corridors`, never a literal.
-  const invalidRooms = countInvalidRooms(world.entities, world.grid, world.corridors, content);
+  // AND AGAINST ITS OWN STAIRWELL (G-038a-ii-alpha), on the same rule once more: a declared
+  // stair is a declared walkway, so an empty set here would report `noCorridor` for a room
+  // whose only walkway is the stairs. `world.stairs`, never a literal.
+  const invalidRooms = countInvalidRooms(world.entities, world.grid, world.corridors, world.stairs, content);
   const guestsInInvalidRooms = countGuestsInInvalidRooms(
     world.guests,
     world.entities,
     world.grid,
     world.corridors,
+    world.stairs,
     content,
   );
   // Rooms, not entities: the furniture is not a room, and counting it as one would make

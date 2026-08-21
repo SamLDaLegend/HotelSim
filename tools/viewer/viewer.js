@@ -206,7 +206,7 @@ const rec = { lines: [], cache: new Map(), everyTicks: 1, extent: null };
  * mis-draw. A stale copy here refuses every recording, including the good ones, which is a
  * five-minute repair with a message pointing at it.
  */
-const VIEWER_SCHEMA_VERSION = 20;
+const VIEWER_SCHEMA_VERSION = 21;
 
 function frameAt(i) {
   const hit = rec.cache.get(i);
@@ -366,6 +366,36 @@ function draw(world) {
   for (const at of world.corridors) {
     if (at.floor < g.minF || at.floor > g.maxF) continue;
     ctx.fillRect(g.x(at.column) + 1, g.y(at.floor) + 1, g.cw - 2, g.ch - 2);
+  }
+
+  // AND WHERE THE PLAN SAYS PEOPLE CLIMB (G-038a-ii-alpha). Drawn over the corridors and under
+  // the entities, for the same reason and in the same order: a stair cell is usually a lane
+  // cell too, and a room built on one covers it.
+  //
+  // IT IS HERE RATHER THAN ON THE EXEMPTION LIST FOR A SHARPER REASON THAN THE CORRIDORS HAD.
+  // The watchable this half of G-038a-ii claims is *"a guest crossing floors now walks to the
+  // stairwell column FIRST"*, and one floor is drawn at a time, so the traversal itself is a
+  // guest leaving one view and entering another. What a watcher CAN see is the guest converging
+  // on one column — and that reads as a detour rather than as a route unless the column is on
+  // screen. An instrument blind to the subject of its own question is the G-019 shape.
+  //
+  // HATCHED RATHER THAN FILLED, so a stair on a lane cell is distinguishable from the lane. The
+  // whole file is coloured rectangles; this is two diagonal strokes and it stays that way (§9 —
+  // the viewer is disposable, and a feature it acquires is a reason to delete it).
+  ctx.strokeStyle = '#8a7bd0';
+  ctx.lineWidth = 2;
+  for (const at of world.stairs) {
+    if (at.floor < g.minF || at.floor > g.maxF) continue;
+    const x = g.x(at.column) + 1;
+    const y = g.y(at.floor) + 1;
+    const w = g.cw - 2;
+    const h = g.ch - 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x + w, y);
+    ctx.moveTo(x + w / 2, y + h);
+    ctx.lineTo(x + w, y + h / 2);
+    ctx.stroke();
   }
 
   // Where each entity stands, and who is inside it.

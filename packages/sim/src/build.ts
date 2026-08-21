@@ -107,6 +107,7 @@ import type { Transaction } from './ledger.js';
 import { createValidityContext, draftEntities, roomInvalidity, standsInRoom } from './validity.js';
 import type { EntityVisitor } from './validity.js';
 import type { Corridors } from './corridors.js';
+import type { Stairs } from './stairs.js';
 
 /**
  * Why a player's build or demolish was refused. A CLOSED UNION, not free text — the
@@ -682,6 +683,15 @@ export type BuildInput = {
    * hotel with no circulation at all and refuse every edit in the building.
    */
   readonly corridors: Corridors;
+  /**
+   * The stair plan as this tick's commands have left it (G-038a-ii-alpha).
+   *
+   * READ-ONLY, and here for `corridors`' reason exactly: a declared stair is a declared walkway
+   * (`isDeclaredWalkway`), so it is one of the things that can give a room its circulation, and
+   * a validity context built without it would answer `noCorridor` for a room whose only walkway
+   * is the stairwell — refusing an edit that breaks nothing.
+   */
+  readonly stairs: Stairs;
   readonly content: BoundContent;
   readonly ledger: readonly Transaction[];
   readonly outcomes: BuildOutcomes;
@@ -1007,7 +1017,7 @@ function roomBrokenBy(
   /** The room being edited, which is allowed to break itself. `NO_ENTITY` exempts nothing. */
   exempt: EntityId,
 ): Entity | undefined {
-  const after = createValidityContext(input.content, input.bounds, input.corridors, proposed);
+  const after = createValidityContext(input.content, input.bounds, input.corridors, input.stairs, proposed);
   let before: ReturnType<typeof createValidityContext> | null = null;
   let broken: Entity | undefined;
   proposed((entity) => {
@@ -1017,7 +1027,7 @@ function roomBrokenBy(
     if (roomInvalidity(after, entity) === null) return;
     // It is broken NOW. Was it broken before? Built once, on the first candidate, and reused
     // for the rest — a hotel with several pre-existing ruins asks this once.
-    before ??= createValidityContext(input.content, input.bounds, input.corridors, draftEntities(input.entities));
+    before ??= createValidityContext(input.content, input.bounds, input.corridors, input.stairs, draftEntities(input.entities));
     if (roomInvalidity(before, entity) === null) broken = entity;
   });
   return broken;

@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-i is done and the circulation goal split AGAIN at PLAN — five BLOCKERs, two of which reorder the rest of M3. Reachability CANNOT ship yet: measured, it invalidates 59 of 75 valid rooms on the 60-room plate and 100 percent strictly, because the entrance is INSIDE room 0. And the speed floor depends on a stair-placement rule nobody had named — aligned stairs keep the shipped dial legal, free placement makes it ILLEGAL at a derived floor of 19. So stairs are ALIGNED and COORDINATES, the migration is per-WORLD, and the order is stairs then the layout re-take then reachability. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-ii-alpha is done: aligned coordinate stairs, save v21 with a per-WORLD migration that is provably verdict-preserving because a stair does not plan its floor. Occupancy still 856 and the concurrency pin untouched — the exit criterion that kept the goal small. THE TICK-COST CRITERION I WROTE WAS NOT MEASURABLE and the builder refused to claim it: three campaigns spread 0.99 to 1.04 against a stated quiet noise ceiling of 1.0355, so neither the claim nor a regression is asserted. My room-over-stairwell premise was FALSE — the fallback means the guest converges anyway. The depth ceiling is re-derived to 60, and the speed window did NOT move, because the dial saturates at the longest LEG not the longest journey. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at

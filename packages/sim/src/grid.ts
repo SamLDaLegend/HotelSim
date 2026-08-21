@@ -123,16 +123,30 @@ export type GridBounds = {
  * choice inside that range says out loud that it is a preference (ADR-0013 §4 — a dial ships
  * labelled as one):
  *
- *   - **AT MOST 79, AND THIS IS A REAL BOUND RATHER THAN A COMMENT.** `stepTowards` walks the
- *     floor axis, then the column axis, then the row axis, so the worst journey across this
- *     plot is `(maxFloor - minFloor) + (maxColumn - minColumn) + (maxRow - minRow)` =
- *     `22 + 79 + (depth - 1)` cells. `guestCellsPerTickSchema` in
- *     `packages/content/src/schema.ts` derives the guest SPEED FLOOR from exactly that number
- *     against a tolerance of 180 ticks: a plot deep enough for the worst journey to outlast
- *     tolerance would let a guest time out because it WALKED rather than because the hotel
- *     failed it, which is the cliff ADR-0017 was written to dissolve. `100 + depth < 180`
- *     gives `depth <= 79`. `travel.movement.test.ts` measures the journey rather than
- *     asserting the arithmetic.
+ *   - **AT MOST 60, AND THIS IS A REAL BOUND RATHER THAN A COMMENT — AND SINCE
+ *     G-038a-ii-alpha IT IS A JOINT ONE WITH A CONTENT NUMBER.**
+ *
+ *     ~~`stepTowards` walks the floor axis, then the column axis, then the row axis, so the
+ *     worst journey is `22 + 79 + (depth - 1)`; `100 + depth < 180` gives `depth <= 79`.~~
+ *     **STRUCK RATHER THAN EDITED, BECAUSE IT WENT FALSE RATHER THAN STALE.** A floor is now
+ *     reached by A STAIR (`stairs.ts`): `stairLeg` in `guests.ts` sends a guest with a
+ *     cross-floor destination to the STAIRWELL COLUMN first, up it, and then on, so the worst
+ *     journey is **THREE LEGS** — `(79 + depth - 1) + 22 + (79 + depth - 1)`, which is **194
+ *     cells** at the shipped depth of 8 rather than 108.
+ *
+ *     **AT SPEED 1 THAT BREACHES TOLERANCE AT EVERY DEPTH**, so the old form has no solution
+ *     at all: a depth is legal against a SPEED, and the speed is `guestCellsPerTick` in
+ *     `packages/content/src/schema.ts` — CONTENT, which this package cannot see (ADR-0001).
+ *     At the shipped speed of 3 the binding half is the dissatisfaction ceiling rather than
+ *     tolerance (100 ticks against 180), and `2*ceil((78+depth)/3) + 8 <= 100` gives
+ *     **`depth <= 60`**, down from 79.
+ *
+ *     **NEITHER PACKAGE MAY MOVE ALONE.** Widening this constant past 60 rows, or lowering
+ *     `guestCellsPerTick`, breaks a bound the other package derives — and the two are checked
+ *     in ONE place, `tools/headless/src/dissatisfaction.content.test.ts`, which COMPUTES the
+ *     deepest legal plot at the shipped speed rather than quoting 60.
+ *     `travel.movement.test.ts` measures the STAIRLESS journey by walking it, which is still
+ *     108 and is still what every world in this project does, because none declares a stair.
  *   - **AT LEAST 3, or the row axis cannot SEAL.** A room is walled in when all four
  *     neighbours are rooms; the row axis contributes to that only where a room has a row on
  *     each side of it, which needs three. At two rows the only seals are against the plot's
@@ -149,7 +163,7 @@ export type GridBounds = {
  *     false necessity — ADR-0044 §2's class, and `compareCells` below already carries the
  *     project's other instance of it.** Struck rather than restated, and `grid.test.ts`
  *     stopped asserting evenness in the same edit.
- *   - **SO THE FORCED PART IS `3 <= depth <= 79`, AND 8 IS A PREFERENCE INSIDE IT.** Nothing
+ *   - **SO THE FORCED PART IS `3 <= depth <= 60`, AND 8 IS A PREFERENCE INSIDE IT.** Nothing
  *     anybody has stated derives 8 over 4, 6 or 9. What can be said without inventing a
  *     requirement is the CONSEQUENCE: the seeded plate in `report.ts` is square in rooms, so
  *     a depth of `d` gives `d x d` rooms a floor — 64 at 8, which is the first depth at which

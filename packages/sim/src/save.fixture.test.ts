@@ -90,7 +90,7 @@ describe('I6 stored v1 save fixture', () => {
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(20);
+    expect(SAVE_SCHEMA_VERSION).toBe(21);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -134,7 +134,12 @@ describe('I6 stored v1 save fixture', () => {
     // ever added to these bytes, and the FIRST since v10. The count is what makes that a
     // checked fact rather than a sentence — a step adding a ninth fails here even if it adds it
     // correctly.
-    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 8);
+    //
+    // NINE AFTER G-038a-ii-alpha: `stairs` (20 -> 21), the ninth, and the second in three
+    // versions. What it says about THESE bytes is that a v1 world declared no stairwell — which
+    // is not a fact about v1 at all but about v20, because the floor axis spent unconditionally
+    // in every era up to it, so the empty set is the only reading of ANY of them.
+    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 9);
   });
 
   it('continues to simulate from where it was saved', () => {

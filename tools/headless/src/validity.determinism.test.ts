@@ -82,7 +82,7 @@ const TICKS = 40_000;
 
 describe('the I2 harness reaches rooms that do not work', () => {
   const world = replay(TICKS);
-  const tally = countInvalidRooms(world.entities, world.grid, world.corridors, content);
+  const tally = countInvalidRooms(world.entities, world.grid, world.corridors, world.stairs, content);
 
   it('TALLIES EXACTLY, so a reason that dies is a red line with a number in it', () => {
     // THE HEADLINE ASSERTION OF THIS FILE (G-036a). Every reason a placement can produce, at
@@ -184,7 +184,7 @@ describe('the I2 harness reaches rooms that do not work', () => {
     );
     expect(underneath).toEqual([]);
     // And every storey of it — not merely the bottom one — is invalid.
-    const ctx = createValidityContext(content, world.grid, world.corridors, storeEntities(world.entities));
+    const ctx = createValidityContext(content, world.grid, world.corridors, world.stairs, storeEntities(world.entities));
     for (const room of stack) {
       expect(roomInvalidity(ctx, room)).toBe('unsupported');
     }
@@ -222,7 +222,7 @@ describe('and it reaches rooms that do work', () => {
   it('leaves no guest in an invalid room', () => {
     // The exit criterion, measured inside the determinism harness's own world rather
     // than only in the CLI's.
-    expect(countGuestsInInvalidRooms(world.guests, world.entities, world.grid, world.corridors, content)).toBe(0);
+    expect(countGuestsInInvalidRooms(world.guests, world.entities, world.grid, world.corridors, world.stairs, content)).toBe(0);
   });
 });
 
@@ -267,7 +267,7 @@ describe('the replay is the thing the gate runs', () => {
     // The log now carries a third, single-cross wave at tick 70,001 whose ids no id-walking
     // pass reaches, and this is the assertion that says so.
     // ==================================================================================
-    const tally = countInvalidRooms(horizon.entities, horizon.grid, horizon.corridors, content);
+    const tally = countInvalidRooms(horizon.entities, horizon.grid, horizon.corridors, horizon.stairs, content);
     expect(tally.noDoor).toBe(1);
     expect(tally.noCorridor).toBe(2);
     expect(tally.missingItem).toBe(4);
