@@ -31,9 +31,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   bindContent,
+  createGridBounds,
   createWorld,
   dissatisfactionCapacityOf,
   dissatisfactionReliefOf,
+  guestSpeedOf,
   guestsInOrder,
   lodgingNeedOf,
   needTypesInOrder,
@@ -107,16 +109,95 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     expect(lodging).toBeDefined();
   });
 
-  it('and a hotel that serves everything reaches EXACTLY that, read out of the field', () => {
-    // THE UNCONTENDED ARM IS SIXTY ROOMS, not six, and the six-room reading is asserted beside
-    // it because the difference IS the point: at six rooms guests QUEUE FOR A BED, and a guest
-    // with no room excuses nothing — nobody has given it one — so its peak rises to 179. Both
-    // are correct and only the first is the cliff this ceiling is placed against.
+  it('and a hotel that serves everything reaches the chase PLUS ITS LEGS, both bounded', () => {
+    // ========================================================================================
+    // THIS ARM READ `toBe(129)` UNTIL G-023b-ii, AND IT WAS AN EQUALITY BETWEEN A DERIVATION
+    // AND A MEASUREMENT. Turning travel on left the derivation at 129 and moved the
+    // measurement to 139, and **re-pinning 139 over the top would have left a derived number
+    // and a measured number disagreeing inside one test** — a green row with an ADR-0007
+    // defect in it. The derivation is EXTENDED instead, and this comment says which of the two
+    // repairs was taken.
     //
-    // The peak is the backlog and nothing more, which also proves the RELIEF requirement: a
-    // stock that ratcheted would exceed it over a three-cycle stay.
-    expect(peakOver(SHIPPED, 10, 60, 3)).toBe(129);
+    // WHAT THE ARITHMETIC ABOVE MODELS AND WHAT IT DOES NOT. It models a CHASE between
+    // providers — three visits of 60, 69 and 79 ticks, the stock climbing until the third
+    // begins — and it does not model the LEGS between them, because when it was written there
+    // were none. With `guestCellsPerTick` declared, the stock also climbs while the guest
+    // WALKS, once per engagement need it chases:
+    //
+    //     peak <= chase + needs(engagement) x ceil(worstJourney / speed)
+    //
+    // Every term is read rather than typed: the chase from the need table, the leg count from
+    // the same table, the journey from the plot the sim actually ships, the speed from the
+    // guest rules. **129 IS NOW A FLOOR AND THE EXCESS IS BOUNDED**, which is the honest shape
+    // of a derivation that models part of a quantity.
+    //
+    // AND THE SIX-ROOM ARM DOES NOT MOVE — 179 with travel off and 179 with it on, at every
+    // speed from 1 to 12. **That is evidence rather than luck**: its peak belongs to guests
+    // queueing for a bed, and a guest nobody has given a room is going nowhere. Travel raises
+    // the backlog of guests being SERVED and leaves the backlog of guests being IGNORED where
+    // it was, which is the one-line statement of what this whole goal did.
+    // ========================================================================================
+    const bounds = createGridBounds();
+    const worstJourney =
+      bounds.maxFloor - bounds.minFloor + (bounds.maxColumn - bounds.minColumn) + (bounds.maxRow - bounds.minRow);
+    const speed = guestSpeedOf(SHIPPED);
+    // A leg per engagement need chased, at most the worst journey the plot permits. `speed`
+    // undefined is the historical no-travel content and costs nothing, which keeps this
+    // expression correct for the era `absence` describes rather than special-cased for it.
+    const legs = speed === undefined ? 0 : engagement.length * Math.ceil(worstJourney / speed);
+    expect(worstJourney).toBe(108);
+    expect(legs).toBe(108);
+
+    const uncontended = peakOver(SHIPPED, 10, 60, 3);
+    expect(uncontended).toBeGreaterThanOrEqual(129);
+    expect(uncontended).toBeLessThanOrEqual(129 + legs);
+    // PINNED AS WELL AS BOUNDED. The bound above is worst-case over the whole plot and the
+    // seeded hotel is nowhere near it, so on its own it would admit a 98-tick regression
+    // without a murmur. The literal is what keeps this arm sharp; the bound is what keeps it
+    // honest about which half is derived.
+    expect(uncontended).toBe(139);
     expect(peakOver(SHIPPED, 10, 6, 5)).toBe(179);
+  });
+
+  it('THE SPEED FLOOR THE CEILING IMPLIES IS 2, AND THE SHIPPED DIAL CLEARS IT', () => {
+    // ========================================================================================
+    // A SECOND FLOOR UNDER `guestCellsPerTick`, PRODUCED BY THIS GOAL AND BINDING ABOVE THE
+    // ONE THE SCHEMA ALREADY CARRIED.
+    //
+    // `guestCellsPerTickSchema` derives its floor from `toleranceTicks`: a journey must not be
+    // able to exhaust a guest's patience on its own, which at 108 cells against 180 ticks
+    // clears at any speed of 1 or more. **The ceiling gives a tighter one.** The requirement
+    // `dissatisfactionCapacityTicks` encodes is that a PERFECTLY PROVISIONED hotel does not
+    // evict its guests, and the bound above is what such a guest can reach — so a speed at
+    // which `chase + legs` passes the ceiling re-opens the eviction that number was placed to
+    // close.
+    //
+    // IT IS A CLAIM ABOUT WHAT THE PLOT PERMITS, NOT ABOUT THE SEEDED HOTEL, and it is stated
+    // with exactly the scope the tolerance floor above it has. The measured peak at speed 1 is
+    // 163, far under 431 — no shipped workload puts two providers 108 cells apart. What the
+    // plot ALLOWS is the thing a content bound has to survive.
+    // ========================================================================================
+    const bounds = createGridBounds();
+    const worstJourney =
+      bounds.maxFloor - bounds.minFloor + (bounds.maxColumn - bounds.minColumn) + (bounds.maxRow - bounds.minRow);
+    const ceiling = dissatisfactionCapacityOf(SHIPPED) ?? 0;
+    const reachableAt = (speed: number): number => 129 + engagement.length * Math.ceil(worstJourney / speed);
+    // THE CLIFF, FROM BOTH SIDES — ADR-0007's two-sided form, over the dial rather than over
+    // the ceiling.
+    expect(reachableAt(1)).toBeGreaterThan(ceiling);
+    expect(reachableAt(2)).toBeLessThan(ceiling);
+    // SMALLEST ADMISSIBLE SPEED, computed rather than asserted, so a content change to the
+    // ceiling or a plot change to the depth moves it here instead of leaving a stale 2.
+    let floor = 1;
+    while (reachableAt(floor) > ceiling) floor += 1;
+    expect(floor).toBe(2);
+    expect(guestSpeedOf(SHIPPED) ?? 0).toBeGreaterThanOrEqual(floor);
+    // AND THE UPPER ENDPOINT, WHICH IS WHERE THE DIAL STOPS DOING ANYTHING: `stepTowards`
+    // clamps at the destination, so at the worst journey's own length every journey on this
+    // plot costs one tick and every larger value is the identical world. The shipped value
+    // sits inside [floor, worstJourney] and is a preference there (ADR-0013 §4).
+    expect(guestSpeedOf(SHIPPED) ?? 0).toBeLessThanOrEqual(worstJourney);
+    expect(guestSpeedOf(SHIPPED)).toBe(3);
   });
 
   it('THE CEILING CLEARS IT, with the margin the placement rule produces', () => {

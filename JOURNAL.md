@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, BOTH OPEN DECISIONS ARE TAKEN, both as recommended. ADR-0056 (b): the tripwire keeps 1.4640 and now PRINTS what it cannot catch — a 1.173x regression passes, and narrowing to the re-derived 1.102 would sit beneath this box's own worst loaded noise. ADR-0057 (a): refillPerTick stays the CEILING and the content rates are re-derived as their own goal, derived not dialled. Three escalations RESOLVED; one open (two intermittent rows, now diagnosed). The chain reopens: travel, then circulation, then parties; and the rates, then the quality branch. G-039a and the rest stand at fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-023b-ii is done and TRAVEL IS ON IN THE SHIPPED GAME — guestCellsPerTick 3, inside a derived window, with 41 assertions moved and eight of them criteria that INVERTED rather than re-pins. The backlog derivation is EXTENDED not re-pinned, and produced a floor nobody ordered: the speed floor is 2, not 1. WATCH #16 shows the first guest ever to be somewhere it was not going. And the intermittent row was DIAGNOSED by the instrument shipped hours earlier — both failures are TIMEOUTS, not assertion failures, and travel is faster not slower. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
 
-- **State**: save **v20** · summary **v4** · I2 `083677b82ced9e9c` · measure golden
-  `5846043bcd849207` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+- **State**: save **v20** · summary **v4** · I2 `3119f19683a70e7a` · measure golden
+  `ddfe4e4000bf1dc4` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -1640,3 +1640,85 @@ Three positions on one key — **`w` cycles reduced → transparent → full**, 
 `walls <position> (w)` so the state is visible rather than discovered. **`reduced` stays the
 default**, which is ADR-0052's ruling in one word: it is the position that shows the mechanic
 `placeItem` and the quality fold are about, and **it is what an unattended recording gets.**
+
+## WATCH #16 — G-023b-ii. Guests walk, and you can hardly see them do it.
+
+**Frames**: `apps/game/recording/`, seed 7, the shipped `createScenario`, `--walls reduced`
+(gitignored — derived; reproduce with `pnpm --filter @hotelsim/game record -- --ticks 2880
+--every 240`, then the tick-exact frame with `--ticks 831 --every 831`). Read through a scratch
+SVG→PNG rasteriser written OUTSIDE the repository, drawing the same primitives `buildScene`
+returns — WATCH #14's precedent, and its rasteriser did not survive either.
+
+**THIS IS THE FIRST RUN OF THIS PROJECT IN WHICH A GUEST HAS EVER BEEN SOMEWHERE IT WAS NOT
+GOING.** Every recording before this one shows a hotel in which `placed()` teleported.
+
+### THE FRAME THAT PROVES IT, AND IT TOOK A TICK-EXACT RECORDING TO GET
+
+`t000831-fm1-reduced.svg`. At tick 831 floor −1 holds exactly two guests: **guest 3 at
+(−1, 3, 0) — a corridor cell, mid-journey to the games room** — and guest 7 inside the lounge.
+The frame shows both. It is the picture the mechanism was built for.
+
+**AND IT IS ALMOST THE ONLY ONE. THAT IS THE FINDING.** Over 2,880 ticks of the shipped
+scenario, measured rather than impressed:
+
+| | |
+|---|---|
+| guest-frames | 20,154 |
+| frames in which any guest MOVED | 300 — **149 basis points** |
+| frames in which a guest stood on a corridor or open cell | **78** |
+| journeys completed | 193 |
+| longest journey | **8 cells, 3 ticks** |
+| journeys finishing in ONE tick | **101 of 193** |
+| most guests moving in any single tick | 3 |
+
+**Of the thirteen frames the default recorder writes, exactly one contains a guest in motion.**
+Sampling every 240 ticks against journeys that last one to three is sampling for something that
+is not there.
+
+> **AND NO ADMISSIBLE SPEED FIXES IT, WHICH IS WHY THIS IS NOT A DIAL COMPLAINT.** The window is
+> [2, 108] (`guestCellsPerTickSchema`). The longest journey the shipped scenario produces is 8
+> cells: **4 ticks at the derived floor, 1 tick at the top.** The whole admissible range puts
+> every journey inside four ticks. **The invisibility is a property of the SCENARIO's geometry
+> — rooms and amenities two to five cells apart — not of the speed**, and the thing that would
+> change it is a bigger building or a slower clock, neither of which is this goal's.
+
+**Falsifiable, and parked as such**: if `scenario.ts` seeded the amenities on a far floor rather
+than one below, journeys would cross the floor axis and lengthen. If that produces visible
+walking at the same speed, geometry is confirmed as the cause; if it does not, the dial is.
+
+### WHAT LOOKS WRONG, AND IT IS ONE THING THE FIRST WALKING GUEST EXPOSES
+
+> **A GUEST ON A CORRIDOR TILE BEHIND A ROOM IS DRAWN ABOVE THAT ROOM'S FAR WALL, AND READS AS
+> PERCHED ON THE WALL RATHER THAN STANDING IN THE LANE BEHIND IT.**
+
+In `t000831-fm1-reduced.svg`, zoomed, guest 3's body sits on the top edge of the games room's
+far wall with the dark backdrop above it. Its feet are on a wall line rather than on a floor
+tile. Nothing is drawn in the wrong order — the depth sort is correct — but the wall is between
+the camera and the tile the guest is standing on, and a ~10px figure on top of a wall lip does
+not read as "behind it".
+
+**THIS IS THE WATCH #13 / #14 CLASS ARRIVING ON A NEW SUBJECT.** Those goals measured a far wall
+covering the ITEMS in the tile behind it and took `WALL_HEIGHT` 64 → 24 for it. **Guests were
+never behind a wall before, because guests were only ever inside rooms.** Travel is what put one
+there, and at H=24 the occlusion is partial rather than total — the guest is visible, and
+mislocated.
+
+**IT IS NOT FIXED HERE AND THE REASON IS ADR-0046 §9**: this is a render call in `apps/game`,
+this goal is a `packages/sim` and content goal, and the repair has at least two candidate shapes
+(draw a guest on a non-room tile at the tile's front edge, or give a walking guest a shadow that
+lands on the tile it occupies). **Naming two candidates and declining to choose is WATCH #13's
+own precedent**, and it was right there.
+
+### WHAT DOES NOT LOOK WRONG, CHECKED RATHER THAN ASSUMED
+
+- **No guest is inside a wall, in a room it does not belong to, or off the plot.** The 78
+  corridor-standing frames are all lane or open-plot cells.
+- **No guest is drawn in two places, and none stops mid-lane.** Every one of the 193 journeys
+  completes; `open` journeys at the horizon: none.
+- **Nobody walks through a floor.** `stepTowards` spends the floor axis first, so a guest going
+  from floor −1 to floor 0 is at the destination floor before it starts crossing columns — which
+  is arbitrary and says so, and looks like an instantaneous floor change rather than like a
+  stairwell. **G-038a owns that, and this is the first frame where the placeholder is visible.**
+- **The needs bars follow the guest.** A walking guest's three bars move with it, so a watcher
+  can see a need decaying while its owner is in transit — which is the whole design claim of
+  this goal, on screen.

@@ -255,9 +255,43 @@ describe('summary schema 4, and what an older consumer does with it', () => {
     // consumer that inferred "met" from the printed share would get this row backwards, which
     // is precisely the hazard the version is protecting and precisely why the two columns are
     // published side by side rather than one being derived from the other.
-    const comfort = summary.needs.find((row) => row.needId === 'guest_comfort')!;
-    expect(comfort.unservedTicks * 5).toBeLessThanOrEqual(comfort.instanceTicks);
-    expect(comfort.met).toBeLessThan(departuresInSummary(summary) / 2);
+    //
+    // ==========================================================================================
+    // IT NAMED `guest_comfort` UNTIL G-023b-ii AND THAT ROW HAS CHANGED SIDES. Declaring
+    // `guestCellsPerTick: 3` moved comfort's `met` 8 -> 12 of 20 departures, so on this
+    // invocation the pooled share and the per-instance count now AGREE about it and the row
+    // stops being a witness. **The hazard is unchanged; the row carrying it moved.**
+    //
+    // SO THE ARM SEARCHES FOR THE ROW RATHER THAN NAMING IT, AND PINS WHICH ROW IT IS TODAY.
+    // That is strictly stronger than the version it replaces: a build in which NO row diverges
+    // goes red on the search — which is the state that would actually mean the bump is
+    // bookkeeping — and a build in which a different row diverges goes red on the literal, with
+    // the row name in the message. Naming one row could only ever have caught half of that.
+    //
+    //     row            pooled share inside the top band?   most instances inside it?
+    //     comfort        yes                                 YES  (8 -> 12 of 20)
+    //     nourishment    yes                                 no   (12 -> 10 of 20)
+    //
+    // `guest_nourishment` is the witness now, and it is the same sentence with a different
+    // subject: its pooled ratio sits inside the band while half its instances do not, because
+    // `met` is decided per guest over that guest's own stay and a ratio of sums is not a sum of
+    // ratios.
+    //
+    // INTEGER COMPARISON, NOT `/ 2`. "Most" over 20 departures was `met < 10` and today's
+    // witness reads exactly 10; `met * 2 <= departures` says "not more than half" without a
+    // float and without a boundary anybody has to reason about.
+    // ==========================================================================================
+    const departed = departuresInSummary(summary);
+    const diverging = summary.needs.filter(
+      (row) => row.unservedTicks * 5 <= row.instanceTicks && row.met * 2 <= departed,
+    );
+    expect(
+      diverging.map((row) => row.needId),
+      'NO row has a pooled share inside the top band while most of its instances sit outside ' +
+        'it. That is the state in which summary schema 4 would be bookkeeping rather than a ' +
+        'redefinition: re-read the block above, find the invocation where the two columns still ' +
+        'disagree, and move this arm to it — do not delete the claim.',
+    ).toEqual(['guest_nourishment']);
   });
 
   it('THE RENAMED REASONS ARE ABSENT FROM v3, NOT ZERO — the property THIS bump exists for', () => {
@@ -486,7 +520,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     expect(nonZero).toHaveLength(5);
   });
 
-  it('AND THE MARGIN IS SIX — read this first if the test above just went red', () => {
+  it('AND THE MARGIN IS THREE — read this first if the test above just went red', () => {
     // MEASURED, AND NARROW. Four of the five reasons arrive in the dozens or hundreds — 841 /
     // 535 / 13 / 29 at G-036a, where θ-b1 read 380 / 260 / 46 / 29 and G-027a read 60 / 286 / 11
     // over four rows.
@@ -511,7 +545,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     //      levers — and re-record the numbers here. Do not weaken the criterion to four.
     //
     // The count is asserted so the margin is a FACT IN THE FILE rather than a surprise:
-    // whoever changes the schedule sees the 3 before the red.
+    // whoever changes the schedule sees the count before the red.
     const document = JSON.parse(runCli([...ARGS, '--json']).stdout) as {
       guests: { departures: { reason: string; count: number }[] };
     };
@@ -526,7 +560,18 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // demolished out from under a guest across the run. FOUR is above the THREE this project
     // shipped and defended at G-034b; retuning the invocation to chase six would change what
     // every other assertion in this block measures, for a margin it already has.
-    expect(count('evictedRoomUnusable')).toBe(4);
+    // G-023b-ii: FOUR -> THREE, and it is a RE-RECORD by the same route as the row above. Step 1
+    // is answered: `outcome.test.ts` drives both eviction reasons on a two-room stack and is
+    // green, so the split works and this is the schedule moving. The cause is travel — this
+    // invocation's guests spend ticks walking, so at the instant `--demolish` takes a room's
+    // support away one fewer guest is standing in the room above it.
+    //
+    // **AND THREE IS THE FLOOR THIS PROJECT DEFENDED, NOT A MARGIN INSIDE IT.** G-034b shipped
+    // and argued for three; the row has now come back down to it. The test above still reads
+    // five non-zero reasons, so nothing is red — but the NEXT goal that moves this schedule
+    // should expect step 2 rather than another re-record, and this sentence is here so that it
+    // is not a surprise.
+    expect(count('evictedRoomUnusable')).toBe(3);
     // The other three, for contrast: this is what headroom looks like.
     expect(count('checkedOut')).toBeGreaterThan(50);
     expect(count('gaveUp')).toBeGreaterThan(50);

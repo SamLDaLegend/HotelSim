@@ -53,8 +53,28 @@ export const ROOMS = 60;
  * this constant, so the calibrated occupancy and the observed one were two literals that could
  * disagree — the duplicated-constant shape ADR-0021 exists about, inside the file written to
  * close ADR-0021. The test now measures against THIS.
+ *
+ * ===========================================================================================
+ * 872 -> 856 AT G-023b-ii, RE-TAKEN WITH THE BOUND CAMPAIGN IN ONE COMMIT AS THE PIN DEMANDS,
+ * AND THE BOUND'S VALUE IS UNCHANGED. Shipped content declared `guestCellsPerTick: 3`, so
+ * guests spend ticks walking and this hotel holds fewer of them at once. `--rooms 60
+ * --arrivals 96 --seed 42`, 30 days, guest-frames over ticks — an exact deterministic integer
+ * count, so n=1 is the whole distribution and there is no aggregation and no regime to state.
+ *
+ * **THE BOUND STAYS AT 1.4640 BY HUMAN RULING (ADR-0056), NOT BY OMISSION.** What that ruling
+ * re-takes is this constant: the pin must describe the hotel the gate now runs, and the
+ * campaign's own reach is printed by `tripwire.mjs` rather than implied.
+ *
+ * AND 848 IS WITHDRAWN. The figure carried in `GOALS.md`'s G-023b-ii block was measured under
+ * a probe taken BEFORE G-038c, which added `floorConstructionCostPence` and
+ * `maxLodgingFloorsFromEntrance` and moved this hotel. Re-measured on today's tree the same
+ * quantity reads 856. `CLAUDE.md` rule 3: never compare an absolute against a figure recorded
+ * in another session — and the travel-OFF census reproduces G-032a's committed table byte for
+ * byte at every one of its thirteen cadences, which is what says the instrument is sound and
+ * the stale figure was the tree.
+ * ===========================================================================================
  */
-export const TARGET_CONCURRENT_HUNDREDTHS = 872;
+export const TARGET_CONCURRENT_HUNDREDTHS = 856;
 
 /**
  * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.
@@ -78,10 +98,46 @@ export const TARGET_CONCURRENT_HUNDREDTHS = 872;
  * ===========================================================================================
  *
  * 32 -> 96 AT G-027a, AND IT WAS A RESTORATION RATHER THAN A RETUNE (ADR-0021, human). At the
- * time, the quotient was believed to restore fifteen concurrent guests. **What it restored is
- * 8.72**, which is what `TARGET_CONCURRENT_HUNDREDTHS` now records, measured. The literal is
- * right and the reasoning that chose it was not — so the value stays and the justification for it
- * is now "this is the cadence the shipped campaign was taken at", which is checkable.
+ * time, the quotient was believed to restore fifteen concurrent guests. **What it restored was
+ * 8.72**, which is what `TARGET_CONCURRENT_HUNDREDTHS` recorded until G-023b-ii, measured; it
+ * records **8.56** now, for the reason that constant gives. The literal is right and the
+ * reasoning that chose it was not — so the value stays and the justification for it is now
+ * "this is the cadence the shipped campaign was taken at", which is checkable.
+ *
+ * ===========================================================================================
+ * AND AT G-023b-ii THE SHIPPED CADENCE STOPPED BEING A LOCAL MINIMUM OF THE AXIS. IT STAYS AT
+ * 96 ANYWAY, AND THIS IS WHY — SAID HERE RATHER THAN LEFT FOR A READER TO INFER.
+ *
+ * G-032a's census found 96 sitting BELOW both its neighbours and read a mechanism off it:
+ * round cadences phase-lock against a 1,440-tick stay, and the chosen ones come out extrema.
+ * With travel declared the lock is gone — the same census, same hotel, same seed:
+ *
+ *     arrivals    90   91   92   93   94  [95]  [96]  [97]  98   99  100  101  102
+ *     travel off 927  952  868  872  894  900   872   890  875  871  843  852  848
+ *     travel on  897  876  885  868  867  870   856   850  839  873  836  832  845
+ *
+ * 96 is a local minimum of the first row and a point on a DOWNWARD SLOPE of the second.
+ *
+ * 1. **96 WAS NEVER CHOSEN FOR MINIMALITY.** It arrived at G-027a because `1440 / 96 = 15` was
+ *    believed to restore fifteen concurrent guests — a quotient this file's own paragraphs
+ *    above record as not-occupancy. Minimality was DISCOVERED by G-032a's census a milestone
+ *    later; it was a finding about the axis, never the warrant for the literal. So losing it
+ *    costs the value nothing it ever had.
+ * 2. **MOVING IT WOULD FORCE THE RE-DERIVATION ADR-0056 JUST RULED OUT.** `arrivalEveryTicks`
+ *    is one of the four fields `tripwire.mjs` compares against `BOUND_CAMPAIGN.configuration`
+ *    at startup, so a new cadence makes that gate REFUSE until the whole bound campaign is
+ *    re-taken — which is the question a human answered on 2026-08-21 by keeping 1.4640.
+ * 3. **THE CLAIM THE CENSUS IS LOAD-BEARING FOR SURVIVES INTACT**: a reading taken at one
+ *    cadence is a claim about THAT cadence and is not poolable across cadences (ADR-0015's
+ *    REPLACE half, ADR-0037 amendment 2). One tick still moves the axis by ~1.6% with travel
+ *    on. What was lost is the EXTREMUM, not the sensitivity.
+ *
+ * THE MECHANISM CLAIM IS PARKED WITH ITS TEST rather than restated: if round cadences
+ * phase-lock, the travel-on minima should still fall on divisors of `stayDurationTicks`. They
+ * do not — 94, 98 and 101 are the local minima above and none divides 1,440 — so the census
+ * either has a different mechanism under travel or none. `PARKING.md` carries the sweep that
+ * would decide it.
+ * ===========================================================================================
  *
  * IT STAYS A LITERAL AND IS NOT DERIVED FROM CONTENT AT RUNTIME, deliberately. This gate is
  * a PAIRED RATIO: `measure.mjs` hands the same `--arrivals` to both arms, and a constant

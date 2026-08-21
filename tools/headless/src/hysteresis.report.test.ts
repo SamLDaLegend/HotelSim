@@ -223,7 +223,15 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // amenity count, and this file cannot produce one without a second real subprocess for a
     // claim the criterion does not rest on. Rule 5 says withdraw rather than restate, so it is
     // withdrawn and not replaced by a guess.
-    expect(abandonmentsIn(contended)).toBe(3);
+    //
+    // 3 -> 1 AT G-023b-ii, AND THIS ARM IS NOW ONE EVENT FROM VACUOUS — SAID PLAINLY, BECAUSE
+    // THAT IS WHAT THE PROJECT CALLS THE STATE IT IS IN. `guestCellsPerTick: 3` means a guest
+    // spends part of every engagement WALKING, and a need can only be abandoned mid-visit, so
+    // there is less mid-visit to abandon in. The COVERAGE claim this arm exists for survives —
+    // the mechanism is live at an arm that runs — but at a count of one it is exactly the shape
+    // `provider.determinism.test.ts` records for `evictedRoomUnusable`, and a future goal that
+    // moves this number to zero should widen the arm rather than delete the claim.
+    expect(abandonmentsIn(contended)).toBe(1);
   });
 
   it('and it abandons FAR less than a margin of zero, so the margin is doing the work', () => {
@@ -232,7 +240,14 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // now re-decides against a LEVEL that moves by 7 basis points a tick rather than against a
     // patience fraction that moved by 33: at margin 0 it still switches on every tie, and there
     // are far fewer ties to switch on.
-    expect(abandonmentsIn(thrash)).toBe(3_887);
+    //
+    // 3,887 -> 5,590 AT G-023b-ii, AND IT RISES WHERE THE SHIPPED ARM'S FALLS — which is the
+    // pair worth reading together rather than either number alone. A margin-zero guest
+    // re-decides on every tie; travel gives it a NEW population of ties, because a guest walking
+    // to one provider keeps decaying on the others and can be overtaken en route. **The margin
+    // is what stops that from happening in the shipped arm**, and the widening gap between the
+    // two arms is this criterion's own quantity getting stronger, not weaker.
+    expect(abandonmentsIn(thrash)).toBe(5_590);
   });
 
   it('and the separation is a factor, not a rounding difference', () => {
@@ -270,7 +285,12 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // is the premise the stock model removes. It is left failing-shaped rather than deleted:
     // the assertion below states the new ordering and names it as a reversal, so a later goal
     // that wants the old one has something to argue with.
-    expect(engagementMet(thrash)).toBe(1_862);
+    // 1,862 -> 1,712 AT G-023b-ii. The thrash arm loses met-instances because its guests now
+    // spend a share of every re-decision walking to the provider they just switched to. **The
+    // SHIPPED and eraA arms do NOT move — both still 1,095** — so the reversal recorded above
+    // narrows without closing, and the two literals either side of this one are the control
+    // that says which arm paid.
+    expect(engagementMet(thrash)).toBe(1_712);
     expect(engagementMet(shipped)).toBe(engagementMet(eraA));
     expect(engagementMet(thrash)).toBeGreaterThan(engagementMet(shipped));
   });
@@ -422,9 +442,36 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // a table: at this invocation the shipped margin never fires, so the saturating arm and the
     // shipped arm are the same simulation. It is pinned rather than collapsed, because the day
     // the margin becomes reachable here again the two tables separate and this says so.
+    //
+    // ==========================================================================================
+    // MOVED AT G-023b-ii, AND IT IS A PERMUTATION RATHER THAN A LOSS — THE HEADLINE READING OF
+    // THIS WHOLE TABLE AND THE THING A RE-PIN WOULD HAVE HIDDEN.
+    //
+    //     row                  travel off      travel on
+    //     guest_comfort        [711,   0, 0]   [195, 516, 0]
+    //     guest_entertainment  [192, 519, 0]   [708,   3, 0]
+    //     guest_nourishment    [192, 519, 0]   [192, 519, 0]     unchanged
+    //     night_rest           [192, 519, 0]   [192, 519, 0]     unchanged
+    //
+    // **THE TOTAL ENGAGEMENT `met` IS 1,095 ON BOTH SIDES, TO THE UNIT.** Comfort and
+    // entertainment have swapped places and nothing else moved. At six rooms behind two of each
+    // amenity this hotel can keep exactly ONE engagement need topped up, and turning travel on
+    // changed WHICH ONE — it did not change how much the hotel serves.
+    //
+    // AND IT IS STRUCTURAL RATHER THAN PHASE. Measured at seeds 7, 8 and 9: every arm reads
+    // 195/708/192/192 with travel on and 711/192/192/192 with it off, identically. A phase
+    // effect would have moved with the seed.
+    //
+    // THE MECHANISM IS NOT CLAIMED HERE. The two needs that swapped have identical rows in
+    // `need-types.json` — same capacity, same refill — and differ only in HOW they are provided:
+    // comfort by an ITEM in the lounge, entertainment by the games ROOM. That is the obvious
+    // candidate and it is not evidence. **Parked with its falsification test in `PARKING.md`**:
+    // give `hotel_lounge` a `provides` entry and see whether the swap follows the provision
+    // kind or stays with the need. Recorded as a measured permutation, which is what it is.
+    // ==========================================================================================
     expect(table(eraA)).toEqual({
-      guest_comfort: [711, 0, 0],
-      guest_entertainment: [192, 519, 0],
+      guest_comfort: [195, 516, 0],
+      guest_entertainment: [708, 3, 0],
       guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
@@ -442,9 +489,12 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // agree about them. The engagement rows separate, and they separate the way an integral
     // separates from a snapshot — comfort is served throughout and now reads met for everybody,
     // the other two are served late and now read unmet for the guests who waited.
+    // AND IT MOVES WITH eraA, WHICH IS THE PROPERTY THIS PAIR IS FOR: at this invocation the
+    // shipped margin never fires, so the two arms are the same simulation and travel moved both
+    // of them the same way. The day they separate, this says so.
     expect(table(shipped)).toEqual({
-      guest_comfort: [711, 0, 0],
-      guest_entertainment: [192, 519, 0],
+      guest_comfort: [195, 516, 0],
+      guest_entertainment: [708, 3, 0],
       guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
@@ -452,10 +502,14 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // under a stock an interrupted visit is not wasted, so churn stops being expensive. The
     // abandonment counts fell by an order of magnitude for the same reason the margin stopped
     // firing — pressures move by 7 basis points a tick where they used to move by 33.
+    // MOVED AT G-023b-ii, AND UNLIKE THE TWO ARMS ABOVE IT IS NOT A PERMUTATION: every
+    // engagement row loses met-instances and gains abandonments, and the total falls 1,862 ->
+    // 1,712. A guest with no margin re-decides on every tie and now pays a walk for each
+    // re-decision. `night_rest` is unmoved at 192/519 in all three arms, which is the anchor.
     expect(table(thrash)).toEqual({
-      guest_comfort: [631, 80, 1_452],
-      guest_entertainment: [522, 189, 1_151],
-      guest_nourishment: [709, 2, 1_284],
+      guest_comfort: [484, 227, 2_038],
+      guest_entertainment: [521, 190, 1_615],
+      guest_nourishment: [707, 4, 1_937],
       night_rest: [192, 519, 0],
     });
     // AND THE ABANDONMENT COLUMN IS UNTOUCHED BY G-028b, WHICH IS THE CONTROL FOR THE ROWS
@@ -464,7 +518,7 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // indistinguishable from the simulation behaving differently.
     const abandonments = (summary: Summary): number[] =>
       summary.needs.map((row) => row.abandoned);
-    expect(abandonments(thrash)).toEqual([1_452, 1_151, 1_284, 0]);
+    expect(abandonments(thrash)).toEqual([2_038, 1_615, 1_937, 0]);
     expect(abandonments(shipped)).toEqual([0, 0, 0, 0]);
   });
 

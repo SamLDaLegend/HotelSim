@@ -1333,6 +1333,29 @@ ends this condition.
 
 ## 2026-08-16 — OPEN — AN INTERMITTENT ROW IS OBSERVED, AND THE DIGEST SAYS THERE ARE NONE
 
+**FIFTH SIGHTING, 2026-08-21 — AND THE NEW INSTRUMENT PAID FOR ITSELF ON ITS FIRST RED RUN.**
+`verify` went red, printed `red row output kept: .verify-logs/test.log`, and **the log answered the
+question five sightings had failed to answer:**
+
+> `FAIL hysteresis.report.test.ts > STARVED (1 amenity of each)` — **`Error: Test timed out in
+> 60000ms.`**
+> `FAIL scorer.report.test.ts > and it moves at EVERY room count` — **`Error: Test timed out in
+> 30000ms.`** · `Tests 2 failed | 2529 passed`
+
+**BOTH ARE TIMEOUTS. NEITHER IS AN ASSERTION FAILURE.** Run alone immediately afterwards, the two
+files pass **29/29 in 39s**; the next full `verify` returned **exit 0**. **That is the
+load-sensitivity diagnosis with evidence under it rather than inference on top of it** — and it is
+the first time in five sightings that the failing row's own words were available.
+
+**AND IT IS NOT TRAVEL.** `sim-engineer` measured the same file paired and interleaved, three
+rounds each, medians of total test time, quiet `win32/12cpu`: **travel-on 31.23s, travel-off
+34.79s** — **travel is FASTER**, so turning it on did not push these over the line. What pushed
+them over is thirteen other rows running beside them.
+
+**THE REMEDY IS NOW A NARROW ONE**: two files carry per-test timeouts sized for an unloaded box.
+**That is a bounded change to two literals with a stated regime**, not an investigation — and it
+belongs to G-039b, which owns the campaign work and is now unblocked.
+
 **FOURTH SIGHTING, 2026-08-21 — CAPTURED AT LAST, AND IT REFUTES MY OWN INFERENCE.** `sim-engineer`
 opened G-039a by running `verify` through a wrapper that KEPT stdout instead of piping to `tail`,
 before editing a file. It went red, and the transcript exists:

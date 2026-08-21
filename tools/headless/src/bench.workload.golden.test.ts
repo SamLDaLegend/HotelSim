@@ -298,10 +298,13 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   and twenty along floor 1. **THE CONTROL IS THE FULL BLOCK AGAIN AND IT IS THE WHOLE
     //   ARGUMENT**: arrivals, checkouts, `leftDissatisfied`, evictions, the departure table,
     //   the need rows and the abandonment count are every one of them UNCHANGED. They can be,
-    //   because the shipped content declares no `guestCellsPerTick` — travel is instantaneous,
-    //   so a room's distance from the door costs nothing — and because every room in the plate
-    //   has the same free lane beside it that it had when the plate was a line. Sixty rooms in
-    //   a different arrangement, serving the same guests in the same order.
+    //   because the shipped content of THAT ERA declared no `guestCellsPerTick` — travel was
+    //   instantaneous, so a room's distance from the door cost nothing — and because every room
+    //   in the plate has the same free lane beside it that it had when the plate was a line.
+    //   Sixty rooms in a different arrangement, serving the same guests in the same order.
+    //   **(G-023b-ii declared that field, so the clause is fenced as the era fact it is: the
+    //   plate's shape now DOES cost a guest time, and the row for that goal below is where the
+    //   departure table finally moves.)**
     //   `fbbb35b464f13368` -> `4955bc697f128ae5`   G-036b gave a room INSTANCE a footprint.
     //   TWO causes, both shape and neither behavioural: every entity gained a `footprint` and
     //   `buildOutcomes` gained `placed` plus three refusal counters (save v19), AND
@@ -342,7 +345,26 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   this arm issues no build command at all, and the charge is levied only BY a build; and
     //   all sixty of its rooms are banked on floor 0, which is the entrance floor, so no
     //   lodging candidate is more than zero floors from the door.
-    expect(hashState(plain)).toBe('5846043bcd849207');
+    //   `5846043bcd849207` -> `ddfe4e4000bf1dc4`   G-023b-ii DECLARED `guestCellsPerTick: 3`,
+    //   so going somewhere takes time in the hotel anybody actually runs. **ONE cause and IT IS
+    //   BEHAVIOURAL — the first time in this row's history that the control block below does
+    //   NOT hold**, and it is stated first rather than buried, because every previous entry
+    //   here ends "the departure table is unchanged" and this one cannot.
+    //   **checkedOut 4 -> 1, leftDissatisfied 64 -> 67.** Sixty bedrooms share ONE lounge and
+    //   ONE games room; a provider serves one guest at a time; and a guest now spends part of
+    //   its turn walking to that provider instead of appearing in it. Three of the four guests
+    //   who used to complete a 1,440-tick stay now saturate the 431-tick dissatisfaction
+    //   ceiling first. **The conservation still closes: 1 + 67 + 7 still in the hotel = 75
+    //   arrived**, and `arrived`, `evictedGuests`, the abandonment count and the seven-row
+    //   departure table's SHAPE are all unchanged.
+    //   **AND THIS IS THE STARVED END OF THE MEASUREMENT, NOT A REPRESENTATIVE ONE.** The same
+    //   change measured on a hotel with enough amenities — `--days 30 --seed 7 --rooms 6
+    //   --amenities 5` — moves NO outcome at all: checkedOut 192, gaveUp 161, revenue
+    //   1,632,000p and closing balance 1,007,000p identical with travel off and on, and only
+    //   the unserved integrals move. **Travel costs satisfaction; it costs OUTCOMES only where
+    //   the hotel was already failing**, and 60 bedrooms behind two amenities is that hotel.
+    //   (Closing balance here moves -238,500p -> -264,000p, which is the three lost stays.)
+    expect(hashState(plain)).toBe('ddfe4e4000bf1dc4');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -363,8 +385,13 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // and a guest that is never served saturates at 431 of its 1,440 ticks. The hand-check is
     // the CONSERVATION of the three, and it is the arithmetic the assertions below execute:
     // **4 + 64 + 7 still in the hotel = 75 arrived.**
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(4);
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(64);
+    // 4 + 64 -> 1 + 67 AT G-023b-ii, and the CONSERVATION is what survives: **1 + 67 + 7 still
+    // in the hotel = 75 arrived**, which is what the assertion two lines down executes. Three
+    // guests moved from one row to the other because a walk to the single lounge now costs
+    // ticks they did not have. The arithmetic in the paragraph above is re-spelled here rather
+    // than left stale.
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(1);
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(67);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -510,7 +537,28 @@ describe('the same workload with the player churning the building', () => {
     // can no longer afford are at the TOP of the walk — so the same rooms come down out from
     // under the same guests, and the counter that has held at 19 through thirteen shape changes
     // holds through a behavioural one.
-    expect(hashState(churn)).toBe('f0c6311efe764342');
+    // MOVED AT G-023b-ii WITH ITS SIBLING, `f0c6311efe764342` -> `4bf093bbce011c4f`, for the one
+    // cause the plain row gives and no third one this arm reaches: the build walk is unchanged
+    // at **built 7, demolished 20, insufficientFunds 23**, because a guest that walks does not
+    // change what a room costs. What moved is the same thing that moved there — **checkedOut
+    // 7 -> 0, leftDissatisfied 42 -> 51**, with the balance following at 132,000p -> 72,500p —
+    // and the conservation closing on both sides, 7+42+19 departed +7 in hotel and 0+51+19 +5.
+    // **THIS ARM LOSES EVERY CHECKOUT IT HAD**, which is sharper than the plain arm's 4 -> 1 and
+    // has the same cause one turn worse: it is the plain hotel with rooms being demolished under
+    // it, so a guest that must now walk to the single lounge is competing for it against guests
+    // whose own rooms keep vanishing. **It is the starved case, and it is recorded as the
+    // starved case** — see the plain row for the well-provisioned measurement, where no outcome
+    // moves at all.
+    //
+    // THE SHARP CONTROL HOLDS FOR THE FIFTEENTH TIME AND THIS IS THE HARDEST ONE IT HAS FACED:
+    // **19 evictions and 0 `evictedRoomUnusable`, unchanged, IN THE GOAL THAT MADE GUESTS WALK.**
+    // An eviction happens when `--demolish 360` takes a room out from under an OCCUPIED guest,
+    // so it is a joint fact about the demolition schedule and about where guests are — and
+    // where guests are is exactly what this goal changed. The count holding says the guests
+    // being evicted are guests IN THEIR ROOMS, whose position travel does not move: a lodger
+    // walks to its bed once and stays there. It is travel's own claim, tested by the one
+    // counter in this file that could have refuted it.
+    expect(hashState(churn)).toBe('4bf093bbce011c4f');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

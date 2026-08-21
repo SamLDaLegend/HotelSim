@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, BOTH OPEN DECISIONS ARE TAKEN, both as recommended. ADR-0056 (b): the tripwire keeps 1.4640 and now PRINTS what it cannot catch — a 1.173x regression passes, and narrowing to the re-derived 1.102 would sit beneath this box's own worst loaded noise. ADR-0057 (a): refillPerTick stays the CEILING and the content rates are re-derived as their own goal, derived not dialled. Three escalations RESOLVED; one open (two intermittent rows, now diagnosed). The chain reopens: travel, then circulation, then parties; and the rates, then the quality branch. G-039a and the rest stand at fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-023b-ii is done and TRAVEL IS ON IN THE SHIPPED GAME — guestCellsPerTick 3, inside a derived window, with 41 assertions moved and eight of them criteria that INVERTED rather than re-pins. The backlog derivation is EXTENDED not re-pinned, and produced a floor nobody ordered: the speed floor is 2, not 1. WATCH #16 shows the first guest ever to be somewhere it was not going. And the intermittent row was DIAGNOSED by the instrument shipped hours earlier — both failures are TIMEOUTS, not assertion failures, and travel is faster not slower. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `083677b82ced9e9c` · measure golden `5846043bcd849207`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `3119f19683a70e7a` · measure golden `ddfe4e4000bf1dc4`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -1297,7 +1297,8 @@ needs it fixed. Nothing models a stairwell until G-024, so there is no route to 
 countdown-era vocabulary the stock model deleted. Renamed to tolerance.
 
 ## G-023b-ii — Travel is measured, and turned on
-Status: **STARTED, NOT CLOSED — BLOCKED on the open escalation.** One repair landed; the rest is coupled to the tickcost bound, which is under a human decision.
+Status: **done. TRAVEL IS ON IN THE SHIPPED GAME.** Fourteen rows green, exit code read from the
+  process. Save unchanged; I2 `083677b82ced9e9c` → `3119f19683a70e7a`.
 Milestone: M3
 Statement: declare `guestCellsPerTick` in shipped content, re-pin the goldens it moves **with a
   judgement on each rather than a bulk accept**, add the journey instrument and the far/near
@@ -1560,6 +1561,100 @@ Carried forward: `check:tickcost`'s acceptance bar is **`verdict=MEASURED`** (`I
   `16ed33c4e13dc808`. The gate holds no reference hash — it compares runs to each other — so a
   changed command log is expected to move it. **The four digest bodies are updated; the
   historical citations of the old hash are left alone, because they were true when written.**
+
+
+  ### G-023b-ii, THIRD PASS — TRAVEL IS ON. The shipped game's guests walk.
+
+  **`guestCellsPerTick: 3` is declared in `packages/content/data/guest-rules.json`.** Fourteen
+  rows run; the only red ones are the two that read the ledger DIGESTS, which the orchestrator
+  stamps (see "what is owed" at the foot). Every other row is green with its exit code captured.
+
+  **I2 MOVES, PAIRED IN ONE SITTING**: `083677b82ced9e9c` (travel off, re-measured on this tree
+  today) → **`3119f19683a70e7a`** (travel on). The measure golden moves with it:
+  `5846043bcd849207` → **`ddfe4e4000bf1dc4`**.
+
+  **`check:tickcost` reports `verdict=MEASURED:1 ratio=0.9934 bound=1.4640`** — travel costs no
+  measurable tick time, and the criterion is satisfied by a ratio rather than by an abstention.
+
+  #### THE THREE CARRIED FINDINGS, EACH ANSWERED
+
+  **(1) THE BACKLOG DERIVATION IS EXTENDED, NOT RE-PINNED.** `dissatisfaction.content.test.ts`
+  now derives `peak <= chase + needs(engagement) x ceil(worstJourney / speed)` — 129 + 3 x 36 =
+  237 — asserts the chase as a FLOOR, pins the measurement at 139, and reads every term off the
+  content table, the shipped plot and the shipped dial rather than typing any of them. **The
+  six-room arm does not move: 179 at every speed from 1 to 12.**
+
+  > **AND IT PRODUCED A NEW DERIVED FLOOR, WHICH IS THE PART NOBODY ORDERED.** At speed 1 the
+  > bound reads 129 + 3 x 108 = **453, above the 431 ceiling** — so a legal hotel on this plot
+  > could evict a perfectly provisioned guest. **The speed floor is therefore 2, not 1**, and
+  > `guestCellsPerTickSchema`'s *"any speed of 1 or more still clears it"* is true of the
+  > TOLERANCE bound only. The window is [2, 108]; 3 ships one step inside its binding floor.
+
+  **(2) THE CADENCE STAYS AT 96 AND THE REASON IS WRITTEN DOWN.** The census, re-taken:
+
+      arrivals    90   91   92   93   94  [95]  [96]  [97]  98   99  100  101  102
+      travel off 927  952  868  872  894  900   872   890  875  871  843  852  848
+      travel on  897  876  885  868  867  870   856   850  839  873  836  832  845
+
+  **The travel-off row reproduces G-032a's committed census byte for byte at all thirteen
+  cadences**, which is what makes the second row a finding rather than an instrument fault. 96
+  is a local minimum of the first and a point on a downward slope of the second. It stands
+  because (a) it was never chosen for minimality — ADR-0021 chose it for `1440 / 96 = 15`, and
+  minimality was a census DISCOVERY a milestone later; (b) moving it changes
+  `BOUND_CAMPAIGN.configuration.arrivalEveryTicks` and makes `tripwire.mjs` refuse until the
+  bound campaign is re-taken, which ADR-0056 has just ruled must not happen; (c) the claim the
+  census is load-bearing for — a reading at one cadence is a claim about THAT cadence — survives
+  intact. The arm asserts that, with the three readings pinned as literals.
+
+  **(3) 41 ASSERTIONS MOVED AND EACH CARRIES ITS CAUSE.** Not one is a bulk literal swap, and
+  **eight of them were not re-pins at all** — they were criteria that inverted:
+
+  | what moved | judgement |
+  |---|---|
+  | `unserved.report` amenity-axis golden (3 arms) | **INVERTED, as that file pre-registered.** Adding an amenity now improves EVERY engagement row at both rungs. An extra amenity is also a shorter walk, so the move stopped being zero-sum. |
+  | `review.report` CRITERION 2 (4 arms) | **SATISFIED AGAIN.** Three bands clear the floor where two did; the small band grows 9 → 110. Travel is a source of variation between guests the hotel treats identically. |
+  | `review.report` mean-monotone golden | **BROKEN BY ONE HUNDREDTH** at 3 → 6 rooms. M4's *"a reputation term over the MEAN is safe"* is now false as written. Asserted as a CENSUS of inversions. |
+  | `scorer.report` never-falls | Same cell, other instrument. Now a census of falls: exactly one, `room axis at 1 amenities, 3->6: -1`. |
+  | `review.report` starved-hotel ladder | `--rooms 1` is no longer best at comfort (196 vs 226). Time-to-USE and time-to-REACH are different quantities and only one existed when it was written. |
+  | `needs.report` three-stories | Two rows COLLIDE at 65. Replaced by the property it was too strong a spelling of, plus the exact triple. |
+  | `outcome.report` schema-4 witness | `guest_comfort` changed sides; the arm now SEARCHES for the diverging row and pins which it is. |
+  | `hysteresis.report` era table | **A PERMUTATION**: comfort and entertainment swap, total engagement `met` 1,095 both ways, identical at seeds 7/8/9. |
+  | `bench.workload.golden` | **First behavioural move in fifteen** — checkedOut 4 → 1 — and the sharp control holds: 19 evictions, unchanged, in the goal that made guests walk. |
+  | `validity.determinism` tallies | Travel costs completed stays → less revenue → `built` 11 → 9 → `unsupported` 75 → 73. G-038c's mechanism from the opposite side. |
+
+  **THE `gaveUp` REPAIR HOLDS WITH TRAVEL ON.** `ef1f361`'s rush makes the late-run give-up
+  pressure by construction; all four late-quarter arms pass at speed 3. Not re-opened.
+
+  **THE DIAL IS SWEPT, NOT FITTED.** Peak dissatisfaction at speeds off/1/2/3/4/6/12 reads
+  129/163/145/139/137/134/131 at 60 rooms and **179 at every one of them at 6 rooms**. And the
+  sweep is also the argument against tuning: `unserved.report`'s golden holds at speeds 1 and 12
+  and fails at 2, 3, 4 and 6, so a value picked to keep goldens green would be ADR-0057's
+  forbidden move. The value comes from the derivation; the goldens are judged on their own.
+
+  #### THREE THINGS THAT CONTRADICTED THE BRIEF, FLAGGED RATHER THAN ABSORBED
+
+  1. **THE OCCUPANCY RE-TAKE IS 856, NOT 848.** 848 was measured under a probe taken BEFORE
+     G-038c added `floorConstructionCostPence` and `maxLodgingFloorsFromEntrance`. Re-measured
+     today: **872 → 856**. `CLAUDE.md` rule 3, and the travel-off census reproducing exactly is
+     what says the instrument is sound and the stale figure was the tree.
+  2. **THE PAIRED 30-DAY TABLE DOES NOT REPRODUCE AT SPEED 3.** Re-taken today,
+     `--days 30 --seed 7 --rooms 6 --amenities 5`: checkedOut/gaveUp 192/161 unchanged and
+     revenue/balance identical **as recorded** — but **reviews do NOT move (3:161 both ways) and
+     the mean stays at 409**, where the record says 2:161 and 363. Unserved rises far less
+     (18/705/1503 → 38/751/1598, not 151/883/1737). The recorded ON arm matches **speed 1** on a
+     pre-G-038c tree, not speed 3 on this one. **The headline holds and is STRONGER than
+     recorded**: at the shipped speed even the review distribution is untouched.
+  3. **"96 WAS CHOSEN FOR BEING THE MINIMUM" IS NOT WHAT `workload.mjs` SAYS.** Its own history
+     records ADR-0021 choosing it for a quotient, with minimality discovered later. That is why
+     finding 2 resolves as "state why it stands" rather than as a re-derivation.
+
+  #### WHAT IS OWED, AND IT IS ONE CLERICAL EDIT IN THE ORCHESTRATOR'S OWN AREA
+
+  `check:stamp` and `ledger-stamp.test.ts` are red on TWO violations, both the same token:
+  `GOALS.md` and `JOURNAL.md` digest bodies state the measure golden as `5846043bcd849207`; the
+  tree says **`ddfe4e4000bf1dc4`**. The I2 line in both digests should read **`3119f19683a70e7a`**.
+  **The digests were left untouched deliberately** — they are stamped at REFLECT, not by a
+  builder — so those two rows are red for that reason and no other.
 
 ## G-024 — Stairs are a shared resource, and sharing means queueing
 Status: pending — **MAY MERGE WITH G-025; the question goes to the builder at PLAN (ADR-0018 §5)**
@@ -2600,6 +2695,66 @@ is enforced rather than intended.** If that stands, **a player who furnishes a b
 changes nothing about which room a guest takes** — guests pick the lowest free entity id. If it
 falls, this goal must supply the price term, which is the M4 economy the ruling deferred.
 **Both answers are expensive to discover at BUILD.**
+
+### G-023b-ii — REFLECT
+
+**TRAVEL IS ON. `guestCellsPerTick: 3` is declared in shipped content**, inside a **derived window
+[2, 108]**, labelled a dial. **41 assertions moved and every one carries its cause in the file;
+EIGHT were not re-pins at all but criteria that INVERTED**, each recorded as an inversion with its
+mechanism.
+
+**THREE THINGS IN MY OWN BRIEF DID NOT REPRODUCE, AND THE BUILDER CHECKED RATHER THAN INHERITED.**
+**(1) Occupancy is 856, not 848** — 848 predates G-038c's floor charge. **(2) THE PAIRED 30-DAY
+TABLE I HAVE BEEN CITING FOR THREE GOALS DOES NOT REPRODUCE AT SPEED 3**: re-taken, checkedOut and
+gaveUp are 192/161 with revenue and balance identical *as recorded* — **but the reviews do NOT move
+(3:161 both ways) and the mean stays 409**, where I had recorded `3:161 → 2:161` and `409 → 363`.
+Unserved rises 18/705/1503 → **38/751/1598**, not 151/883/1737. **The recorded ON arm matches SPEED
+1 ON A PRE-G-038c TREE.** *(CLAUDE.md rule 3 exactly: never compare an absolute against a figure
+recorded in another session. I quoted that table into three briefs.)* **The headline is unchanged
+and in fact stronger — outcomes do not move, experience does.** **(3)** `workload.mjs` never says 96
+was chosen for minimality; ADR-0021 chose it for `1440/96 = 15`.
+
+**THE BACKLOG DERIVATION IS EXTENDED, NOT RE-PINNED** — `peak ≤ chase + engagementNeeds ×
+ceil(worstJourney / speed)` = 129 + 3×36 = **237**, with the chase asserted as a **floor** and the
+measurement pinned at 139. **Every term is READ — the chase from the need table, the leg count from
+the same table, the journey from the shipped plot, the speed from the guest rules.** And it
+**produced a derived floor nobody ordered**: at speed 1 the bound reads **453 against the 431
+ceiling**, so **the speed floor is 2, not 1**, and the schema's *"any speed of 1 or more clears it"*
+is true of the tolerance bound only. **The six-room arm is 179 at every speed 1–12** — a guest
+nobody has given a room is going nowhere.
+
+**CADENCE 96 STANDS, AND THE REASON IS WRITTEN AT THE CONSTANT.** The census was re-taken and **the
+travel-off row reproduces G-032a's committed table byte for byte at all thirteen cadences — which is
+what makes the travel-on row a finding rather than drift.** 96 is no longer a local minimum; it
+stands because **it was never chosen for minimality** (that was a later census *discovery*), and
+because moving it makes the tripwire refuse until the bound campaign is re-taken.
+
+**THE DIAL WAS SWEPT BEFORE IT WAS SET, AND THE SWEEP IS ALSO THE ARGUMENT AGAINST TUNING IT.** Peak
+dissatisfaction at off/1/2/3/4/6/12 = 129/163/145/139/137/134/131. **`unserved.report`'s golden holds
+at speeds 1 and 12 and FAILS at 2, 3, 4 and 6** — so **a value picked to keep goldens green would be
+ADR-0057's forbidden move**, and the builder named that rather than quietly picking one.
+
+**WATCH #16 — THE FIRST TIME A GUEST HAS BEEN SOMEWHERE IT WAS NOT GOING.** Frame
+`t000831-fm1-reduced.svg`: **guest 3 at (−1, 3, 0), a corridor cell, mid-journey to the games
+room.** **And it is almost the only such frame**: over 2,880 ticks, 20,154 guest-frames, **300 with
+any movement — 149 basis points** — 193 journeys, longest **8 cells in 3 ticks**, and **101 of 193
+finish in ONE TICK. One of thirteen default frames contains motion.** **No admissible speed fixes
+it** — the derived window puts every journey on this scenario inside four ticks — **so the
+invisibility is the scenario's geometry, not the dial.** Parked with its test. Plus a visual
+finding: **a guest on a corridor tile behind a room draws above that room's far wall and reads as
+perched on it** — the WATCH #13/#14 occlusion class on a new subject, because guests were never
+behind walls before.
+
+**ONE GATE FILE EDITED, AND IT IS THE ADR-0050 REPAIR.** `check-tripwire.mjs` asserted an import as
+a **single expected token** and went red because the tripwire now *also* imports
+`TARGET_CONCURRENT_HUNDREDTHS` — **the property was MORE true after the change, not less.** Split
+into a structural clause plus today's cause, proved by mutation with sha256 either side.
+
+**AND THE INTERMITTENT ROW WAS DIAGNOSED AT LAST, BY THE INSTRUMENT G-039a SHIPPED HOURS EARLIER.**
+`verify` went red, printed `red row output kept: .verify-logs/test.log`, and the log said: **both
+failures are `Test timed out`, neither is an assertion failure.** Alone: 29/29 in 39s; next full run
+exit 0. **And it is not travel — paired, travel-on 31.23s against travel-off 34.79s, travel is
+FASTER.** **Five sightings, and the first time the failing row's own words were available.**
 
 ## G-038 — SPLIT at PLAN, 2026-08-21, and BLOCKED. Four BLOCKERs; the seam is taken.
 Status: **split into G-038a / G-038b / G-038c — and NONE of them can start.** `sim-critic`'s plan

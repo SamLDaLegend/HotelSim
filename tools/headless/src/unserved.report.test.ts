@@ -304,21 +304,45 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
     return [lean, at(rooms, amenitiesFor(rooms) + 1)];
   };
 
-  it('the WORST engagement need rises when an amenity is added, at the saturated room count', () => {
-    // SIX ROOMS IS ABSENT AND THAT IS THE POINT. At that rung the mechanism arm below asserts
-    // `after[argmax(before)] > before[argmax(before)]`, and `before[argmax(before)]` IS
-    // `max(before)` — so "the max rose" follows from it, and a line here would forbid no state
-    // that arm already forbids. At twelve rooms it does not follow: there the mechanism arm says
-    // the old bottleneck IMPROVES and the maximum rises through a different row. One claim,
-    // asserted at the rung where it is a claim.
-    for (const rooms of [DEMAND]) {
+  it('THE GOLDEN IS INVERTED AT G-023b-ii: the worst engagement need now IMPROVES', () => {
+    // ==========================================================================================
+    // **THIS IS THE ANSWER ARRIVING, AND THIS FILE PRE-REGISTERED IT IN THOSE WORDS.** The block
+    // above says: *"IT IS A GOLDEN: it records what the statistic does today. If a later build
+    // makes the worst need IMPROVE when an amenity is added, this arm goes red and that is the
+    // answer arriving, not a regression."* G-023b-ii declared `guestCellsPerTick: 3` and it did.
+    //
+    // MEASURED, BOTH ARMS, ONE SITTING, `--days 30 --seed 7 --arrivals 120`, unserved share in
+    // basis points, exact integer counts so n=1 is the whole distribution:
+    //
+    //     rung      travel off                            travel on
+    //      6 rooms  [472, 557, 1229] -> [19, 706, 1503]   [197, 937, 1700] -> [85, 808, 1630]
+    //     12 rooms  [787, 818,  513] -> [21, 431,  910]   [448, 888, 1296] -> [65, 499,  998]
+    //
+    // With travel off, adding one amenity of each kind made SOME row worse at both rungs. With
+    // travel on it makes EVERY row better at both rungs, and the maximum falls with them.
+    //
+    // **THE MECHANISM IS THE GOAL ITSELF, AND IT IS WHY THIS INVERSION IS THE RIGHT WAY UP.**
+    // ADR-0034's amendment explained the old shape as *"a guest holds ONE provider at a time, so
+    // serving one need better spends the ticks it was spending on another"* — a zero-sum over a
+    // fixed budget of guest-ticks. **Travel adds a term that is not zero-sum: an extra amenity
+    // is also a SHORTER WALK.** Every guest's journey to the nearest provider of a kind gets
+    // cheaper, so the budget itself grows, and the row that was being robbed can improve at the
+    // same time as the row that was gaining. The zero-sum reading was never wrong — it was a
+    // statement about a world in which distance cost nothing.
+    //
+    // WHAT THIS MEANS FOR THE BUILD LOOP, SAID OUT LOUD BECAUSE IT IS THE POINT OF THE GAME:
+    // *"build another amenity"* was a move that made the worst-served need WORSE, which is a
+    // player being punished for the cheapest thing they can do. It is now a move that improves
+    // every row. **Travel is what makes the amenity axis behave the way a player expects.**
+    // ==========================================================================================
+    for (const rooms of [6, DEMAND]) {
       const [lean, rich] = richer(rooms);
       const worst = (summary: RunSummary): number => Math.max(...engagementSharesIn(summary));
-      expect(worst(rich), `${rooms} rooms`).toBeGreaterThan(worst(lean));
+      expect(worst(rich), `${rooms} rooms`).toBeLessThan(worst(lean));
     }
   });
 
-  it('and the SUM and the MEAN over the same rows fall, so the two aggregations disagree in sign', () => {
+  it('and the SUM and the MEAN over the same rows fall — AND SINCE G-023b-ii the MAX falls too', () => {
     // OVER THE SAME ROWS MEANS OVER THE SAME ROWS. Both folds here are ENGAGEMENT-only, which is
     // the set the `max` above is taken over and the set ADR-0034's amendment names. It shipped
     // with the mean folded over all four rows — mixing in the lodging row this file argues at
@@ -361,7 +385,7 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
   const leastPressed = (values: readonly number[]): number =>
     values.reduce((best, value, index) => (value < values[best]! ? index : best), 0);
 
-  it('AT SIX ROOMS the bottleneck itself gets worse while a need that was fine improves', () => {
+  it('AT SIX ROOMS EVERY ROW IMPROVES, AND THE BOTTLENECK STAYS PUT', () => {
     // ========================================================================
     // THE MECHANISM, PINNED AS SUCH. The arm this replaces asserted "some row improved and some
     // row worsened", and BOTH halves of that are ENTAILED by the two arms above: a sum cannot
@@ -374,12 +398,23 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
     // a need that was not the worst gets better. Neither follows from "the max rose" or "the sum
     // fell" — the twelve-room arm below is a live witness that arms 1 and 2 admit the opposite.
     // ========================================================================
+    //
+    // INVERTED AT G-023b-ii WITH THE ARM ABOVE, AND ITS ROW-IDENTITY CLAIM IS GONE RATHER THAN
+    // MOVED. It asserted that the WORST row got worse and the BEST-SERVED row got better — two
+    // rows moving in opposite directions, which was the whole content of "you built the wrong
+    // thing". With travel on, [197, 937, 1700] becomes [85, 808, 1630]: **all three rows
+    // improve**, so there are no opposite directions left to name. What is asserted instead is
+    // the stronger statement the new shape supports — EVERY row improves, which forbids the old
+    // behaviour and every partial version of it.
     const [lean, rich] = richer(6);
     const before = engagementSharesIn(lean);
     const after = engagementSharesIn(rich);
     const worst = bottleneck(before);
     const bestServed = leastPressed(before);
-    expect(after[worst]!).toBeGreaterThan(before[worst]!);
+    for (const [index, value] of after.entries()) {
+      expect(value, `row ${index} at 6 rooms`).toBeLessThan(before[index]!);
+    }
+    expect(after[worst]!).toBeLessThan(before[worst]!);
     // AND THE ROW THAT IMPROVES IS THE ONE THAT WAS ALREADY BEST SERVED, which is the sentence
     // ADR-0034's amendment reads as "you built the wrong thing": the extra provider goes where
     // there was no shortage. `some(row improved)` was here and is GONE — with the sum falling
@@ -388,9 +423,14 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
     // equal, every row would be equal, and the two lines around it would be asserting that one
     // row both rose and fell — red already, in every state that line could have caught.
     expect(after[bestServed]!).toBeLessThan(before[bestServed]!);
+    // AND THE BOTTLENECK DOES NOT MOVE, which is the other half of what changed: the row that
+    // was worst is still worst, so the extra provider is not merely shuffling which need is
+    // starved. The twelve-room arm below now says the same thing, and that AGREEMENT is the
+    // finding — see its own block.
+    expect(bottleneck(after)).toBe(worst);
   });
 
-  it('AT TWELVE ROOMS the SAME move produces the opposite shape: the bottleneck moves', () => {
+  it('AT TWELVE ROOMS THE SAME MOVE NOW PRODUCES THE SAME SHAPE, WHICH IS THE INVERSION', () => {
     // ========================================================================
     // AND THIS IS WHY THE ARM ABOVE NAMES ITS ROOM COUNT. One extra amenity of each kind, the
     // same content, the same cadence — and here the need that was the worst is SERVED BETTER
@@ -401,17 +441,33 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
     // carries away from the arms above and it is FALSE of this rung. A build that swapped the
     // two shapes would go red here, and that is a finding rather than a regression.
     // ========================================================================
+    //
+    // ==========================================================================================
+    // THIS ARM EXISTED TO SAY THE TWO RUNGS DISAGREE, AND AT G-023b-ii THEY AGREE. Its own
+    // comment above reads *"'the worst need gets worse' is the sentence a reader carries away
+    // from the arms above and it is FALSE of this rung"* — that sentence is now false of BOTH
+    // rungs, in the same direction, so the contrast it was drawing has closed.
+    //
+    // **THE ARM IS KEPT RATHER THAN MERGED INTO ITS SIBLING, AND THE AGREEMENT IS WHAT IT NOW
+    // ASSERTS.** Two rungs behaving the same way is a claim that can fail: the day they diverge
+    // again — at either rung, in either direction — one of these two arms goes red with its room
+    // count in the title. Deleting it would have left the whole amenity axis pinned at one room
+    // count, which is the state ADR-0034's amendment was written about.
+    // ==========================================================================================
     const [lean, rich] = richer(DEMAND);
     const before = engagementSharesIn(lean);
     const after = engagementSharesIn(rich);
     const worstBefore = bottleneck(before);
+    for (const [index, value] of after.entries()) {
+      expect(value, `row ${index} at ${DEMAND} rooms`).toBeLessThan(before[index]!);
+    }
     expect(after[worstBefore]!).toBeLessThan(before[worstBefore]!);
     // AND THE ROW THAT TAKES OVER IS THE ONE THAT WAS BEST SERVED — the same row identity the
     // six-room arm names, pointing the other way. Two clauses that used to sit here are gone
     // because they were entailed: "the argmax moved" follows from the line above plus a rising
     // max, and "the new max got worse" follows from a rising max alone. Neither forbade anything
     // its neighbours permitted.
-    expect(bottleneck(after)).toBe(leastPressed(before));
+    expect(bottleneck(after)).toBe(worstBefore);
   });
 });
 
@@ -452,10 +508,36 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
     expect(reviewPhaseSpread).toBe(0);
     // And it is zero BECAUSE the rung is saturated, which is the precondition that makes the
     // reading a clamp. Without this line the zero above reads as robustness.
+    //
+    // ========================================================================================
+    // SATURATION IS NO LONGER PERFECT AT ALL FOUR CADENCES, AND THE PIN IS NOW THE FOUR
+    // DISTRIBUTIONS THEMSELVES. With travel on, cadence 127 puts ONE guest of 329 in band 4:
+    //
+    //     cadence 119   5:351          120   5:348          121   5:346          127   4:1, 5:328
+    //
+    // `toHaveLength(1)` therefore fails at 127 while the spread above is still exactly zero —
+    // one guest in 329 does not move a mean rounded to hundredths. **A `toHaveLength(2)` would
+    // have been the lazy repair and it would say nothing**: it permits any second band at any
+    // count, including one big enough to make the zero above a real reading rather than a clamp.
+    //
+    // WHAT IS ASSERTED INSTEAD: the exact occupied distribution at each cadence, and that the
+    // TOP band is the max score. These are deterministic integer counts, so the literals cost
+    // nothing and forbid strictly more than any length check — a second band growing by one
+    // guest goes red here, which is what keeps "the zero is a clamp" honest.
+    // ========================================================================================
+    const occupancy = phases.map((summary) =>
+      summary.reviews.distribution
+        .filter((row) => row.count > 0)
+        .map((row) => `${row.score}:${row.count}`)
+        .join(','),
+    );
+    expect(occupancy).toEqual(['5:351', '5:348', '5:346', '4:1,5:328']);
     for (const summary of phases) {
       const occupied = summary.reviews.distribution.filter((row) => row.count > 0);
-      expect(occupied).toHaveLength(1);
-      expect(occupied[0]!.score).toBe(summary.reviews.scoreMax);
+      // The modal band is the TOP band at every cadence, which is what "saturated" means and is
+      // the clause that survives any re-pin of the literals above.
+      const modal = occupied.reduce((best, row) => (row.count > best.count ? row : best));
+      expect(modal.score).toBe(summary.reviews.scoreMax);
     }
 
     const ladderShareEffect =

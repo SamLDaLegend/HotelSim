@@ -89,17 +89,26 @@ describe('the I2 harness reaches rooms that do not work', () => {
     // the count it produces it at, in one comparison — so a change that swaps one reason for
     // another, or halves a row, cannot hide behind "still greater than zero". Recorded from a
     // replay of this log at 40,000 ticks; see the header for what to do when it moves.
+    //
+    // 40 -> 39 AT G-023b-ii, AND THE CAUSE IS INCOME RATHER THAN GEOMETRY. Shipped content
+    // declared `guestCellsPerTick: 3`, so this log's guests spend ticks walking, and at 40,000
+    // ticks the harness completes fewer stays — **`checkedOut` 178 -> 159** — so it takes less
+    // money and affords **built 7 -> 6** with
+    // `insufficientFunds` 7 -> 8. **The rooms this walk builds are exactly the ones standing on
+    // nothing**, so `unsupported` falls by the same one, and the four other rows do not move at
+    // all. Same shape as G-038c one row down, arriving from the opposite side: that goal made a
+    // build cost MORE, this one makes the hotel EARN less.
     expect(tally).toEqual({
       missingItem: 1,
       noCorridor: 1,
       noDoor: 3,
       unplaced: 0,
-      unsupported: 40,
+      unsupported: 39,
     });
   });
 
   it('contains rooms with nothing beneath them', () => {
-    expect(tally.unsupported).toBe(40);
+    expect(tally.unsupported).toBe(39);
   });
 
   it('contains rooms with no bed in them — AND THE COUNT IS ONE, which is a knife edge', () => {
@@ -266,7 +275,14 @@ describe('the replay is the thing the gate runs', () => {
     // floor now pays `floorConstructionCostPence` as well (ADR-0047 B8), so one fewer is
     // affordable over the run — and the rooms this walk builds are the ones standing on nothing.
     // The 40,000-tick tally above did NOT move, which places the lost build in the second half.
-    expect(tally.unsupported).toBe(75);
+    //
+    // G-023b-ii: 75 -> 73, and THIS TIME THE 40,000-TICK TALLY MOVED TOO (40 -> 39), which
+    // places one lost build in each half. Travel costs the hotel completed stays — **checkedOut
+    // 738 -> 636 over the horizon** — so it earns less and affords **built 11 -> 9**, with
+    // `insufficientFunds` 18 -> 20. The other four rows are unchanged at the horizon, including
+    // `noDoor` 1: the third terrace wave lands at tick 70,001 with ids above everything the
+    // despawn pass reaches, and no amount of walking moves an id.
+    expect(tally.unsupported).toBe(73);
     expect(tally.unplaced).toBe(0);
   });
 

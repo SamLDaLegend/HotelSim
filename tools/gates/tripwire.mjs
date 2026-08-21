@@ -42,7 +42,7 @@ import { cpus, platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ARRIVAL_EVERY_TICKS, MEASURE_DAYS, ROOMS, SEED } from './workload.mjs';
+import { ARRIVAL_EVERY_TICKS, MEASURE_DAYS, ROOMS, SEED, TARGET_CONCURRENT_HUNDREDTHS } from './workload.mjs';
 
 const GATES = dirname(fileURLToPath(import.meta.url));
 const MEASURE = join(GATES, 'measure.mjs');
@@ -179,6 +179,30 @@ const BOUND_CAMPAIGN = Object.freeze({
     Object.freeze({ name: 'pair-A e1623b4', n: 5, regime: 'quiet', min: 0.9815, max: 1.0142, centre: 0.9893 }),
     Object.freeze({ name: 'pair-B 88dc25e', n: 5, regime: 'quiet', min: 0.9808, max: 1.0262, centre: 1.0086 }),
   ]),
+  // ===========================================================================================
+  // THE OCCUPANCY THESE ARMS WERE TAKEN AT, RECORDED AT G-023b-ii AND *NOT* ADDED TO THE DRIFT
+  // CHECK ABOVE. It is a fact about the campaign, not a field of the configuration the gate
+  // refuses on, and the difference is a human ruling rather than a convenience.
+  //
+  // G-023b-ii declared `guestCellsPerTick: 3` in shipped content and this workload's occupancy
+  // moved **872 -> 856**. `workload.concurrency.test.ts` requires the pin and the campaign to be
+  // re-taken together in one commit and forbids widening the bound; **ADR-0056 (human, and the
+  // escalation it answers was open for a week) ruled that the bound STAYS at 1.4640**, so what
+  // moved is `TARGET_CONCURRENT_HUNDREDTHS` and this field records the gap instead of hiding it.
+  //
+  // AND TWO OF THE THREE ARMS CANNOT BE RE-TAKEN WITH TRAVEL ON AT ALL, which is a structural
+  // fact rather than an excuse. `lib/git-tree.mjs`'s `ARM_PATHS` materialises
+  // `packages/content/data` PER ARM, so pair-A (e1623b4) and pair-B (88dc25e) run their own
+  // committed content on both sides — content that predates the field. A "re-take at travel on"
+  // would silently be a re-take of the null arm and a re-run of two travel-off pairs under a
+  // new heading, which is worse than saying what the campaign measured.
+  //
+  // WHAT A READER SHOULD TAKE FROM IT: this is a NOISE campaign. Its quantity is the instrument's
+  // multiplicative spread when there is nothing to find, and the argument that spread is
+  // occupancy-sensitive has never been made or measured here. If someone makes it, the response
+  // is a re-take at the new occupancy — not a wider bound (ADR-0021).
+  // ===========================================================================================
+  occupancyWhenTaken: 872,
 });
 
 /**
@@ -639,6 +663,17 @@ out.push(`             chosen because ${chosen.because}`);
 // it for display is how 1.022840 became "1.0229" and put the bound above its own derivation.
 out.push(`  bound      ${BOUND.toFixed(4)} = sqrt(${NOISE_CEILING.toFixed(6)} noise ceiling x ${SMALLEST_KNOWN_REGRESSION} smallest known regression)`);
 out.push(`             derived from ${BOUND_CAMPAIGN.arms.length} campaign arms, ${BOUND_CAMPAIGN.regime.split(' —')[0]}; worst recorded LOADED noise ${Math.max(...LOADED_OBSERVATIONS.map((o) => o.max)).toFixed(4)}`);
+// THE SECOND THING THIS GATE CANNOT CATCH, PRINTED FOR THE SAME REASON AS THE REACH BLOCK
+// BELOW (ADR-0056): the campaign's arms were taken at one occupancy and the workload holds
+// another. A reader should not have to open two files to learn that.
+if (BOUND_CAMPAIGN.occupancyWhenTaken !== TARGET_CONCURRENT_HUNDREDTHS) {
+  out.push(
+    `             CAMPAIGN OCCUPANCY: arms taken at ${(BOUND_CAMPAIGN.occupancyWhenTaken / 100).toFixed(2)} concurrent guests; ` +
+      `this workload now holds ${(TARGET_CONCURRENT_HUNDREDTHS / 100).toFixed(2)} (G-023b-ii, travel).`,
+  );
+  out.push('             The bound was NOT re-derived (ADR-0056, human). Two of the three arms materialise their own');
+  out.push("             committed content, so they cannot be re-taken at today's occupancy at all.");
+}
 // WHAT THIS GATE CANNOT CATCH, PRINTED WHERE IT IS READ (ADR-0056 §"What this ruling obliges").
 // No reader should have to reconstruct the gate's reach from an ADR.
 out.push(

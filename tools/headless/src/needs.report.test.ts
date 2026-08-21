@@ -150,15 +150,23 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // old paragraph complained about: a guest that walked out at its dissatisfaction ceiling
     // having been at home for most of a short stay. It reads UNMET now, which is the better
     // summary of the visit the paragraph asked for.
+    //
+    // 196/157 -> 194/159 AT G-023b-ii, AND THE TWO GUESTS ARE ACCOUNTED FOR ON THE ROW BELOW:
+    // `checkedOut` 163 -> 161 and `leftDissatisfied` 42 -> 44, exactly two moving from one to
+    // the other. Six rooms behind the default amenity count is an under-provisioned hotel, and
+    // travel is what tips two of its guests from completing a stay to walking out on it. **The
+    // give-up row does not move at all — 148 either way** — which is the same fact this goal
+    // measured everywhere it looked: a guest nobody houses is going nowhere, so travel cannot
+    // reach it.
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBe(196);
-    expect(lodging?.unmet).toBe(157);
+    expect(lodging?.met).toBe(194);
+    expect(lodging?.unmet).toBe(159);
     // AND THE THREE WAYS A GUEST CAN LEAVE THIS HOTEL ARE ALL NON-ZERO AT θ-b1, where the
     // invocation used to produce two. **148 never got a bed, 163 ran out their clock, and 42 got
     // a bed and walked out on it** — one hotel, three different instructions to a player.
     expect(departuresOf(summary, 'gaveUp')).toBe(148);
-    expect(departuresOf(summary, 'checkedOut')).toBe(163);
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(42);
+    expect(departuresOf(summary, 'checkedOut')).toBe(161);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(44);
     // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
     // the countdown, a guest that checked out had by definition completed its lodging need, so
     // the two columns were the same number. "Met" is now a BAND read at the moment of
@@ -200,9 +208,29 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // number of rows, computed rather than captured.
     const engagement = summary.needs.filter((row) => !row.lodging);
     expect(engagement).toHaveLength(3);
-    // THE PRIMARY CLAUSE, and the one doing the work: three engagement rows, three DIFFERENT
-    // met counts. A table in which every row is the same row cannot satisfy it.
-    expect(new Set(engagement.map((row) => row.met)).size).toBe(engagement.length);
+    // ========================================================================================
+    // THE PRIMARY CLAUSE ASKED FOR THREE DIFFERENT `met` COUNTS AND IT IS FALSE AT G-023b-ii,
+    // BY A COLLISION RATHER THAN BY A FLATTENING. Measured, both arms, same invocation:
+    //
+    //     row                  travel off   travel on
+    //     guest_comfort        70 / 283     65 / 288
+    //     guest_entertainment  64 / 289     65 / 288
+    //     guest_nourishment    326 /  27    327 /  26
+    //
+    // Comfort falls by five and entertainment rises by one, and the two rows LAND ON THE SAME
+    // INTEGER. They were six apart; they are now equal. Nothing about the table has flattened —
+    // the spread is still 262 guests — but "three different stories" is not true of it.
+    //
+    // SO THE CLAUSE IS REPLACED BY THE THING IT WAS TOO STRONG A SPELLING OF, PLUS A LITERAL.
+    // Its own comment says the property is *"a table in which every row is the same row cannot
+    // satisfy it"*, and two-of-three agreeing is not that. What is asserted now is that
+    // property, and beside it the exact triple — which forbids strictly more than any set-size
+    // claim could and needs no threshold anybody had to choose. **A `toBe(3)` re-pinned to
+    // `toBe(2)` would have been the alternative and it says nothing at all**: 2 is what a table
+    // of three rows reads when any two of them collide, from any cause.
+    // ========================================================================================
+    expect(new Set(engagement.map((row) => row.met)).size).toBeGreaterThan(1);
+    expect(engagement.map((row) => row.met)).toEqual([65, 65, 327]);
     // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
     // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
     // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is

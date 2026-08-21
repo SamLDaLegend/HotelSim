@@ -204,11 +204,22 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // THE RANGE MOVED DOWN AT G-023b-ii AND THE REASON IS THE GOAL: travel converts idle time
     // into TRAVEL time. A guest walking to the cafe is neither idle nor being served, so a
     // build in which going somewhere takes time has strictly less idleness than one in which
-    // arriving is instantaneous. Measured 861 before travel and 271 after, at the shipped
-    // table — the ceiling is unmoved, because it is computed from the refill rates and travel
-    // is not one of them, which is exactly why the gap below is asserted and not the value.
-    expect(box.idleBasisPoints).toBeGreaterThan(500);
-    expect(box.idleBasisPoints).toBeLessThan(1_200);
+    // arriving is instantaneous. **Measured 861 before travel and 271 after**, at the shipped
+    // table — the ceiling is unmoved at 2,500, because it is computed from the refill rates and
+    // travel is not one of them, which is exactly why the gap below is asserted and not the
+    // value. The paragraph above this one was written a goal early, under the probe that found
+    // this; both readings are now the tree's rather than a probe's.
+    //
+    // AND IT IS A POINT NOW RATHER THAN A RANGE, WHICH IS SHARPER RATHER THAN BRAVER. The old
+    // `[500, 1_200]` carried the reason *"so a tuning change moves it visibly without reddening
+    // on the third decimal"* — and there is no third decimal here: `stepTheBox` steps one guest
+    // through a fixed schedule and folds integer frames into integer basis points, so this
+    // reading is exact and identical on every run and every platform. A window around an exact
+    // integer is a window in which a real change can hide.
+    expect(box.idleBasisPoints).toBe(271);
+    // AND THE TWO STRUCTURAL CLAUSES, WHICH SURVIVE ANY RE-PIN OF THE LITERAL ABOVE: the share
+    // is under its derived ceiling, and it is under it by a margin rather than by a rounding.
+    expect(box.idleBasisPoints).toBeLessThan(ceiling);
     expect(ceiling - box.idleBasisPoints).toBeGreaterThan(1_000);
   });
 
@@ -221,9 +232,9 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // the arrival rate is contention. That was harmless while distance was free: room and
     // amenity counts changed what a guest competed for and not how far it walked.
     //
-    // **FOUND BY A PROBE, AND THE PROBE'S CONFIGURATION IS NOT THE SHIPPED ONE — say so, or
-    // this comment is an unpinned claim.** G-023b-ii declared `guestCellsPerTick: 3` in shipped
-    // content, ran the suite, and reverted it; travel is OFF in the tree this test ships in.
+    // **FOUND BY A PROBE WHOSE CONFIGURATION WAS NOT THEN THE SHIPPED ONE, AND IT IS NOW.**
+    // G-023b-ii's first pass declared `guestCellsPerTick: 3`, ran the suite and reverted it;
+    // its second pass ships that value, so the readings below are the tree's own.
     // Under that probe the inequality INVERTED — free-flow fell to 271 bp while the contended
     // arm read 484, so "contended is lower" reversed. The cause was not contention: the free
     // arm had THREE amenities spread across the plot against the contended arm's two, so its

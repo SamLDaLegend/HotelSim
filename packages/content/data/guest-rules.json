@@ -11,6 +11,7 @@
     "toleranceTicks": 180,
     "dissatisfactionCapacityTicks": 431,
     "dissatisfactionReliefPerTick": 1,
-    "maxLodgingFloorsFromEntrance": 2
+    "maxLodgingFloorsFromEntrance": 2,
+    "guestCellsPerTick": 3
   }
 ]

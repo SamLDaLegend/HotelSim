@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, BOTH OPEN DECISIONS ARE TAKEN, both as recommended. ADR-0056 (b): the tripwire keeps 1.4640 and now PRINTS what it cannot catch — a 1.173x regression passes, and narrowing to the re-derived 1.102 would sit beneath this box's own worst loaded noise. ADR-0057 (a): refillPerTick stays the CEILING and the content rates are re-derived as their own goal, derived not dialled. Three escalations RESOLVED; one open (two intermittent rows, now diagnosed). The chain reopens: travel, then circulation, then parties; and the rates, then the quality branch. G-039a and the rest stand at fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-023b-ii is done and TRAVEL IS ON IN THE SHIPPED GAME — guestCellsPerTick 3, inside a derived window, with 41 assertions moved and eight of them criteria that INVERTED rather than re-pins. The backlog derivation is EXTENDED not re-pinned, and produced a floor nobody ordered: the speed floor is 2, not 1. WATCH #16 shows the first guest ever to be somewhere it was not going. And the intermittent row was DIAGNOSED by the instrument shipped hours earlier — both failures are TIMEOUTS, not assertion failures, and travel is faster not slower. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
 
 - **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -3011,3 +3011,67 @@ nowhere below for that reason.
   to the file as the chunks arrive rather than at the end.* -> **the goal that hits it.** Nothing
   has come close: the largest row in this project's history is `test`, and its full output is
   well inside the cap.
+
+## G-023b-ii — four hypotheses, each with the test that would settle it
+
+**Parked with their falsification tests** (human ruling 2026-08-09). Every one of these is a
+belief about how the sim behaves that this goal MEASURED the surface of and did not explain.
+
+### 1. TRAVEL PERMUTES WHICH NEED A SMALL HOTEL SERVES, RATHER THAN HOW MUCH IT SERVES
+
+`hysteresis.report.test.ts`'s era table: at `--rooms 6 --arrivals 60 --amenities 2`, comfort and
+entertainment SWAP — `[711, 0, 0] / [192, 519, 0]` becomes `[195, 516, 0] / [708, 3, 0]` —
+while **total engagement `met` is 1,095 on both sides, to the unit**, and identical at seeds 7,
+8 and 9. So it is structural, not phase.
+
+**THE TEST**: the two needs have identical rows in `need-types.json` and differ only in how they
+are provided — comfort by an ITEM in the lounge, entertainment by the games ROOM. Give
+`hotel_lounge` a `provides: ["guest_comfort"]` entry so both are room-provided, re-run the arm,
+and see whether the swap follows the PROVISION KIND (it disappears) or stays with the NEED (it
+does not). One content edit, one arm, no new instrument.
+
+### 2. THE CADENCE CENSUS IS A CLAIM ABOUT A TREE WHERE TRAVEL WAS OFF
+
+`cadence.census.test.ts` publishes a ±1-tick union taken at G-032a. Two of its five property
+findings were INVERTED at the shipped cadence by this goal, and their recorded `assertion`
+readings are pre-travel. **The census has not been re-taken.**
+
+**THE TEST**: `node tools/gates/cadence-census.mjs --delta +1` against a travel-on tree, compared
+arm for arm against the published union. Three outcomes worth telling apart: the same five
+properties still reverse; the two inverted ones now reverse the other way; or they have stopped
+reversing, which would mean travel made the axis less phase-sensitive and is a result in its own
+right. Costs two full suite runs.
+
+### 3. THE WATCH SCENARIO'S INVISIBLE WALKING IS GEOMETRY, NOT THE DIAL
+
+WATCH #16 measured 149 basis points of moving guest-frames, 101 of 193 journeys finishing in one
+tick, and a longest journey of 8 cells. The claim is that no admissible speed changes this
+because the window [2, 108] puts every journey inside four ticks.
+
+**THE TEST**: move `scenario.ts`'s amenities two floors from the lodging plate instead of one and
+re-run the census. If moving-frames rise materially at the SAME speed, geometry is confirmed and
+the repair belongs to the scenario (or to G-038's circulation). If they do not, the dial is the
+cause after all and the WATCH finding is wrong about its own subject.
+
+### 4. A GUEST BEHIND A ROOM'S FAR WALL IS MISLOCATED, AND THERE ARE TWO CANDIDATE REPAIRS
+
+WATCH #16's one visual finding: at `WALL_HEIGHT` 24, a guest standing on a corridor tile behind a
+room is drawn above that room's wall lip and reads as standing ON the wall. It has never been
+visible before because guests were never behind walls before.
+
+**THE TEST**, and it is the WATCH #14 shape: build the guest polygon and the far-wall polygon from
+`iso.ts`'s own constants and walk every integer height, counting guests whose body overlaps a wall
+they are BEHIND. Then compare two candidate repairs on the same frame — anchoring a guest on a
+non-room tile at the tile's FRONT edge, against giving a walking guest a ground shadow on the tile
+it occupies. **WATCH #14 falsified one of its own two candidates that way**; do not choose in
+prose.
+
+---
+
+## G-023b-ii — one thing NOT parked, recorded so nobody parks it
+
+**M4's reputation term.** `review.report.test.ts` now records the review mean falling by one
+hundredth between 3 and 6 rooms, so *"a term over the MEAN is safe — building rooms cannot hurt"*
+is false as written. **That is not a hypothesis and it does not want a test — it wants a
+decision**, and the decision belongs to whoever writes the reputation term. It is asserted as a
+census of inversions in that file so it cannot be lost.

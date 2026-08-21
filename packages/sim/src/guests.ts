@@ -1591,9 +1591,12 @@ function findFreeRoom(
     //   meaning.
     //
     // LODGING ONLY, and that is the scope line rather than an omission: the engagement half of
-    // "how far will a guest go" is a TIME cost, paid in ticks spent walking, and there are no
-    // ticks to pay while `guestCellsPerTick` is undeclared. It belongs to the goal that turns
-    // travel on.
+    // "how far will a guest go" is a TIME cost, paid in ticks spent walking — and at G-023b-ii
+    // those ticks began to exist. Shipped content now declares `guestCellsPerTick`, so an
+    // engaging guest pays its distance in TIME rather than in a second patience dial. **The
+    // scope line stands and its reason is discharged rather than pending**: the engagement half
+    // is priced, by the mechanism this field's sibling turns on, and this refusal is still
+    // lodging-only.
     //
     // IT DOES NOT SUPPRESS THE `exhausted` MEMO, AND THE SPLIT IS THE SAME ONE `closedToGuests`
     // GETS. A room's floor and the plot's entrance are the same facts for every guest in the

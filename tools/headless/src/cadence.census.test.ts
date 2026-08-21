@@ -125,7 +125,19 @@ const CENSUS = {
 const PERMITTED = [
   {
     file: 'tools/headless/src/workload.concurrency.test.ts',
-    title: 'THE SHIPPED CADENCE IS A LOCAL MINIMUM OF THE AXIS THE BENCHMARK SAYS IT MEASURES',
+    // ===================================================================================
+    // RENAMED AT G-023b-ii, AND THE ENTRY'S REASON IS UNCHANGED BY THE RENAME.
+    //
+    // Declaring `guestCellsPerTick: 3` cost the shipped cadence its local-minimum property —
+    // 95/96/97 read 870/856/850 with travel on where they read 900/872/890 with it off — so
+    // that arm now asserts the SENSITIVITY it was always load-bearing for, and pins the three
+    // readings as literals. **Its subject is still the cadence response**, which is the whole
+    // of what puts it in this list: offset every cadence by one and the arm is asked about a
+    // different triple, so its reddening carries no information about the census's subject.
+    // The reason survives the rename word for word, which is what says the rename is a rename
+    // rather than a new test wearing an old excuse.
+    // ===================================================================================
+    title: 'ONE ARRIVAL TICK MOVES THE AXIS, so a reading is a claim about ITS cadence',
     shape: 'property',
     why: 'its subject IS the cadence response: offset every cadence and it is asked about a different triple',
   },
@@ -171,6 +183,30 @@ const PERMITTED = [
  * The `assertion` strings are what the run reported — kept because a reversal is only legible
  * with the two numbers that changed places.
  */
+/*
+ * ==============================================================================================
+ * TITLES UPDATED AT G-023b-ii, READINGS NOT — AND THE DIFFERENCE IS THE WHOLE POINT OF THIS NOTE.
+ *
+ * That goal declared `guestCellsPerTick: 3` and INVERTED two of the properties below outright, at
+ * the SHIPPED cadence: on the amenity axis the worst engagement need now IMPROVES when an amenity
+ * is added, at both room counts, so `unserved.report.test.ts`'s two arms assert the opposite
+ * direction and carry new titles. **The rot guard below requires the titles to name live tests, so
+ * they are updated here** — which is that guard working, not being worked around.
+ *
+ * THE `assertion` STRINGS ARE G-032a's AND ARE LEFT ALONE. Their docblock says they are what the
+ * run reported, and that run was the ±1-tick census at cadence 96 on a tree where travel was OFF.
+ * Re-typing them from a travel-on run would be inventing a measurement: **the census has NOT been
+ * re-taken since travel shipped**, and re-taking it costs two full suite runs against a perturbed
+ * `report.ts`.
+ *
+ * SO WHAT IS TRUE TODAY, STATED PLAINLY: the COUNT and the readings are a claim about the tree at
+ * G-032a. Whether these five properties still reverse one arrival tick away — and whether the two
+ * that inverted permanently now reverse in the other direction, or have stopped reversing at all
+ * — is unmeasured. **Parked with its command**, which is the one the header already publishes:
+ * `node tools/gates/cadence-census.mjs --delta +1`, run against a travel-on tree, compared arm for
+ * arm against the union below.
+ * ==============================================================================================
+ */
 const PROPERTY_FINDINGS = [
   {
     file: 'tools/headless/src/hysteresis.report.test.ts',
@@ -195,12 +231,14 @@ const PROPERTY_FINDINGS = [
   },
   {
     file: 'tools/headless/src/unserved.report.test.ts',
-    title: 'AT SIX ROOMS the bottleneck itself gets worse while a need that was fine improves',
+    // RENAMED AT G-023b-ii — the arm now asserts that every row improves. See the block above.
+    title: 'AT SIX ROOMS EVERY ROW IMPROVES, AND THE BOTTLENECK STAYS PUT',
     assertion: 'expected 1513 to be greater than 1606',
   },
   {
     file: 'tools/headless/src/unserved.report.test.ts',
-    title: 'the WORST engagement need rises when an amenity is added, at the saturated room count',
+    // RENAMED AT G-023b-ii — the golden inverted; the arm now asserts the worst need IMPROVES.
+    title: 'THE GOLDEN IS INVERTED AT G-023b-ii: the worst engagement need now IMPROVES',
     assertion: '12 rooms: expected 909 to be greater than 1193',
   },
 ] as const;

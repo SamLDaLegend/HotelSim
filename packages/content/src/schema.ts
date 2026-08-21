@@ -1200,6 +1200,70 @@ export const toleranceTicksSchema = z.int().min(1);
  * access, and a number whose warrant is "it feels right to walk a room in a few ticks" is
  * fine as long as it does not pretend to be anything else.
  * ------------------------------------------------------------------------------------------
+ *
+ * ==========================================================================================
+ * SHIPPED AT G-023b-ii: `3`. AND TURNING IT ON PRODUCED A SECOND FLOOR THAT BINDS ABOVE THIS
+ * ONE, SO THE SENTENCE ABOVE — *"any speed of 1 or more still clears it"* — IS TRUE OF THE
+ * TOLERANCE BOUND AND IS NO LONGER THE WHOLE STORY.
+ *
+ * THE SECOND FLOOR: A JOURNEY MUST NOT PUSH THE ARRIVAL BACKLOG THROUGH THE DISSATISFACTION
+ * CEILING. `dissatisfactionCapacityTicks` (431) was placed above the arrival backlog (129) by
+ * equal multiplicative margin, and the requirement it encodes is that **a perfectly
+ * provisioned hotel does not evict its guests**. That backlog was derived with no travel in
+ * it: a guest arrives at its want line on every engagement need and is served one at a time,
+ * so the stock climbs across the first two visits and stops when the third begins. **With
+ * travel it also climbs across the WALKS between them** — one leg per engagement need, each
+ * at most the worst journey over the plot:
+ *
+ *     peak <= backlog + needs(engagement) x ceil(worstJourney / speed)
+ *          =  129     + 3                 x ceil(108 / speed)
+ *
+ *     speed 1   129 + 3 x 108 = 453  >  431   the ceiling is BREACHED
+ *     speed 2   129 + 3 x  54 = 291  <  431   clears
+ *     speed 3   129 + 3 x  36 = 237  <  431   clears, and is what ships
+ *
+ * **SO THE DERIVED FLOOR IS 2, NOT 1.** It is a claim about what the PLOT permits and not
+ * about the shipped hotel — no shipped workload puts two providers 108 cells apart — which is
+ * exactly the shape of the tolerance floor above it, and it is stated with the same scope.
+ * `tools/headless/src/dissatisfaction.content.test.ts` DRIVES both sides rather than quoting
+ * them: it runs the bound and it runs the measurement.
+ *
+ * IT IS NOT ENFORCED BY THIS TYPE, FOR THE REASON `maxLodgingFloorsFromEntrance` BELOW GIVES
+ * ABOUT ITS OWN UPPER ENDPOINT: the worst journey is a fact about `GridBounds`, which is
+ * stored per world, and neither this schema nor `bindContent` sees a world. What bounds it is
+ * a test that walks the plot, which is the mechanism this project already chose for that case.
+ *
+ * THE UPPER ENDPOINT IS DERIVED TOO, AND IT IS THE POINT WHERE THE DIAL STOPS DOING ANYTHING.
+ * `stepTowards` clamps at the destination, so at any speed of **108** or more every journey on
+ * this plot completes in one tick and every larger value produces the identical world. Above
+ * it the field is a content number with no consumer — `capacity` and `forbidden adjacencies`
+ * again, refused twice (ADR-0053).
+ *
+ * WHERE 3 SITS, AND WHY IT IS NOT A NUMBER CHOSEN BY WATCHING TESTS GO GREEN. The window is
+ * [2, 108] and 3 is one step inside its binding floor: at 3 a guest crosses a room and the
+ * lane beside it in one tick, and the worst journey on the plot costs 36 ticks — a fifth of
+ * `toleranceTicks`, so a walk is FELT and never DECIDES anything.
+ *
+ * **AND THE DIAL WAS SWEPT BEFORE IT WAS SET, WHICH IS WHAT MAKES THE PARAGRAPH ABOVE A
+ * PREFERENCE RATHER THAN A FIT.** Peak dissatisfaction over a perfectly provisioned hotel,
+ * `--days 10 --seed 7 --rooms 60 --amenities 3` against `--rooms 6 --amenities 5`, one arm
+ * per speed, exact integer counts so n=1 is the whole distribution and no regime applies:
+ *
+ *     speed      off    1     2     3     4     6    12
+ *     60 rooms   129   163   145   139   137   134   131
+ *      6 rooms   179   179   179   179   179   179   179
+ *
+ * The excess over 129 falls monotonically with speed and the SIX-ROOM ARM DOES NOT MOVE AT
+ * ALL — a guest nobody has given a room is going nowhere, so its backlog is unreachable by
+ * this dial. **Travel raises the backlog of guests being SERVED and leaves the backlog of
+ * guests being IGNORED exactly where it was.**
+ *
+ * WHAT THE SWEEP ALSO SHOWS, RECORDED BECAUSE IT IS THE ARGUMENT AGAINST TUNING THIS NUMBER:
+ * several shipped report criteria are NOT monotone in it. `unserved.report.test.ts`'s
+ * amenity-axis golden holds at speeds 1 and 12 and fails at 2, 3, 4 and 6. **A value picked to
+ * keep those green would be a dial tuned until the tests passed** — ADR-0057's forbidden move
+ * — so the value is set from the derivation above and the goldens are judged on their own.
+ * ==========================================================================================
  */
 export const guestCellsPerTickSchema = z.int().positive().optional();
 
@@ -1230,10 +1294,17 @@ export const guestCellsPerTickSchema = z.int().positive().optional();
  *    penalty is survivable: the player keeps building upward and pays a little satisfaction. A
  *    refusal makes floor N+1 unlettable until circulation reaches it, so the lift is the thing
  *    that buys the floors — the build-loop decision the ruling wanted.
- * 3. **A PENALTY WOULD HAVE NOTHING TO CHARGE TODAY.** `guestCellsPerTick` is undeclared in the
- *    shipped table, so travel is instantaneous and a distant room costs a guest no time at all.
- *    A "less satisfied" term would therefore be a number the simulation could not derive from
- *    anything the guest experiences — an invented dial, which is ADR-0008's class.
+ * 3. ~~**A PENALTY WOULD HAVE NOTHING TO CHARGE TODAY.** `guestCellsPerTick` is undeclared in
+ *    the shipped table, so travel is instantaneous and a distant room costs a guest no time at
+ *    all. A "less satisfied" term would therefore be a number the simulation could not derive
+ *    from anything the guest experiences — an invented dial, which is ADR-0008's class.~~
+ *    **ITS PREMISE EXPIRED AT G-023b-ii**, which declared `guestCellsPerTick: 3`: a distant
+ *    room now costs a guest 36 ticks in the worst case, so the simulation CAN derive such a
+ *    term. **THE RULING DOES NOT MOVE, AND THAT IS THE POINT OF NUMBERING THESE.** Reasons 1
+ *    and 2 stand alone — a fit term in the lodging search is refused outright, and only a
+ *    refusal makes a lift necessary — and neither says anything about travel. Reason 3 was the
+ *    weakest of the three and it is fenced rather than deleted, because a reader arriving from
+ *    G-038's queueing work needs to know that the argument they might reach for is spent.
  * ---------------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------------
@@ -1243,9 +1314,11 @@ export const guestCellsPerTickSchema = z.int().positive().optional();
  * times, on whichever tick a need outruns the others. The lodging choice is the one a guest
  * makes once, with its luggage, and the one B8's sentence is about (*"do guests refuse to walk
  * above N floors?"*). The engagement half is a TIME cost rather than a patience cost — it is
- * paid in ticks spent walking — and there are no ticks to pay while travel is off. It belongs
- * with the goal that turns travel on and gives a journey a length (G-023b-ii / G-038a), not
- * here, where it would be a second inert dial.
+ * paid in ticks spent walking — and **at G-023b-ii those ticks began to exist**: an engaging
+ * guest now pays its distance in time rather than in a second patience dial, which is what
+ * this paragraph predicted the answer would be. **The scope line therefore stands and its
+ * reason has been discharged rather than removed** — the engagement half is priced, in ticks,
+ * by the mechanism `guestCellsPerTick` turns on, and this field is still lodging-only.
  * ---------------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------------

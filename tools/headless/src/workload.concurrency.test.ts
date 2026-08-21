@@ -206,7 +206,12 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // The measurement above cannot notice the whole benchmark being replaced by another one
     // that happens to hold 8.72 guests. These say WHICH hotel holds it.
     expect(workload.ARRIVAL_EVERY_TICKS).toBe(96);
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(872);
+    // 872 -> 856 AT G-023b-ii. Shipped content declared `guestCellsPerTick: 3`, so guests spend
+    // ticks walking and this hotel holds fewer of them at once. Re-taken WITH the bound campaign
+    // in this commit, as the assertion at the top of this file demands, and the bound's value is
+    // unchanged by human ruling (ADR-0056) — `tripwire.mjs` now PRINTS the gap between the
+    // occupancy its arms were taken at and the occupancy this workload holds.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(856);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -406,16 +411,51 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
   // citation, and it is the reason the count is now a file rather than a sentence.)
   // ===========================================================================================
 
-  it('THE SHIPPED CADENCE IS A LOCAL MINIMUM OF THE AXIS THE BENCHMARK SAYS IT MEASURES', () => {
+  it('ONE ARRIVAL TICK MOVES THE AXIS, so a reading is a claim about ITS cadence', () => {
+    // ===========================================================================================
+    // THIS ARM READ "THE SHIPPED CADENCE IS A LOCAL MINIMUM" UNTIL G-023b-ii, AND THE PROPERTY IS
+    // GONE. It is recorded as gone rather than re-pinned around, because the census block above
+    // reads the extremum as EVIDENCE FOR A MECHANISM and that mechanism is what moved.
+    //
+    //     arrivals    90   91   92   93   94  [95]  [96]  [97]  98   99  100  101  102
+    //     travel off 927  952  868  872  894  900   872   890  875  871  843  852  848
+    //     travel on  897  876  885  868  867  870   856   850  839  873  836  832  845
+    //
+    // Same hotel, same seed, same 30-day arm, `--rooms 60 --amenities 1 --seed 42`; exact integer
+    // counts, so n=1 is the whole distribution and there is no aggregation and no regime. **The
+    // travel-off row reproduces G-032a's committed census byte for byte at all thirteen
+    // cadences**, which is what makes the second row a finding rather than an instrument fault.
+    //
+    // 96 is a local minimum of the first row and a point on a downward slope of the second. THE
+    // CADENCE STAYS AT 96 — `workload.mjs` carries the three reasons at the constant itself, of
+    // which the binding one is that moving it makes `tripwire.mjs` refuse until the whole bound
+    // campaign is re-taken, which ADR-0056 has just ruled must not happen.
+    //
+    // WHAT THIS ARM ASSERTS NOW IS THE HALF THAT SURVIVED, AND IT IS THE LOAD-BEARING HALF. The
+    // extremum was a curiosity about phase-locking; the SENSITIVITY is what ADR-0015's REPLACE
+    // rule and ADR-0037 amendment 2 actually rest on — a reading taken at one cadence is a claim
+    // about that cadence and does not pool with a reading taken at another.
+    //
+    // AND THE THREE READINGS ARE PINNED AS LITERALS BESIDE IT. An inequality over neighbours
+    // would admit any world in which the three merely differ; occupancy here is an exact
+    // deterministic count, so a literal costs nothing and forbids strictly more. That is what
+    // replaces the discriminating power the extremum was carrying.
+    // ===========================================================================================
     const here = measuredConcurrentHundredths();
     const below = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS - 1);
     const above = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS + 1);
-    // ARRIVALS FALL AS THE INTERVAL GROWS, so a monotone axis would put the shipped reading
-    // BETWEEN its neighbours. It is below both. That is the state this arm forbids and a
-    // smooth axis would permit — and it is why a reading taken at one cadence is a claim about
-    // that cadence (ADR-0037 amendment 2, arriving on the instrument side).
-    expect(here, `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`).toBeLessThan(below);
-    expect(here, `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`).toBeLessThan(above);
+    const readings = `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`;
+    expect([below, here, above], readings).toEqual([870, 856, 850]);
+    // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
+    // either side is a different hotel. Written as a set size so it cannot be satisfied by two
+    // of the three agreeing.
+    expect(new Set([below, here, above]).size, readings).toBe(3);
+    // A THIRD CLAUSE STOOD HERE FOR ONE ROUND AND IS DELETED RATHER THAN TUNED. It asserted the
+    // movement was "material" at one part in a hundred, went red on the +1 side at 6 hundredths
+    // against 8.56, and the only repair available was to pick a smaller threshold — which is
+    // §2.1's superstition-with-CI-access in miniature, invented inside the arm written to record
+    // that a derived property had been lost. The literals above forbid strictly more than any
+    // threshold would, and they cost nothing to state.
   }, 180_000);
 
   // ===========================================================================================

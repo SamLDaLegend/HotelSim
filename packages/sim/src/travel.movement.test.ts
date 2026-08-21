@@ -17,8 +17,14 @@
 //   speed DECLARED    a guest covers `guestCellsPerTick` cells a tick and is served only once
 //                     it has ARRIVED — the bed and the amenity both.
 //   speed ABSENT      arriving is instantaneous and presence gates nothing, which is what every
-//                     build before this one did, to the byte. Shipped content declares no speed
-//                     TODAY, deliberately: see the seam recorded in `GOALS.md`.
+//                     build before G-023b-i did, to the byte.
+//
+// **SHIPPED CONTENT DECLARES A SPEED SINCE G-023b-ii.** This block read *"shipped content
+// declares no speed TODAY, deliberately: see the seam recorded in `GOALS.md`"* while that seam
+// was open, and the seam is closed. The ABSENT regime is a HISTORICAL CONTRACT now rather than
+// the shipped configuration — and it is still driven here for exactly that reason: content
+// written before the field must keep its behaviour and its hashes to the byte, forever, and
+// nothing but this file says so.
 //
 // The second regime is asserted here rather than assumed, because "absence has an exact
 // historical reading" is a claim about behaviour and this project has been bitten by claims

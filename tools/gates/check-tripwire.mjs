@@ -668,10 +668,62 @@ check(
 
 // --- 7. the method the probes skipped, read rather than run -----------------------
 
+// ===========================================================================================
+// A STRUCTURAL CLAUSE PLUS TODAY'S CAUSE (ADR-0050), BECAUSE THE SYMPTOM FORM HAD TO BE EDITED.
+//
+// This read `SOURCE.includes("import { ARRIVAL_EVERY_TICKS, MEASURE_DAYS, ROOMS, SEED } from
+// './workload.mjs';")` — a single expected token, and **G-023b-ii had to move it** for a reason
+// that has nothing to do with the property under test: the gate now also imports
+// `TARGET_CONCURRENT_HUNDREDTHS`, to PRINT the occupancy its bound campaign was taken at beside
+// the occupancy the workload holds. The property — "the tripwire reads the shared workload" —
+// was strictly MORE true after that change than before it, and the check went red anyway.
+//
+// That is the third instance of the class ADR-0050 names, in the third goal, and the ruling is
+// explicit about the repair: **split into a STRUCTURAL clause that survives every workload
+// change, plus the specific fact that happens to be true today.** The structural half below is
+// strictly stronger than the string it replaces — a rename of `ROOMS` would have slipped past a
+// substring match on the whole line only if the whole line matched, and this checks each name.
+// ===========================================================================================
+
+// STRUCTURAL: there is an import from the shared workload module, and it names every constant
+// this gate's own hotel comparison reads back out of the child's JSON. Built from normal strings
+// rather than a template literal, because `\s` inside a template literal compiles to a bare `s`
+// — the rule `CLAUDE.md` records three goals of, and this is a scanner.
+const workloadImport = new RegExp(
+  'import\\s*\\{([^}]*)\\}\\s*from\\s*' + "'\\./workload\\.mjs'",
+).exec(SOURCE);
+const imported = (workloadImport?.[1] ?? '')
+  .split(',')
+  .map((name) => name.trim().split(/\s+as\s+/)[0].trim())
+  .filter((name) => name !== '');
+// THE FOUR THE COMPARISON USES. `tripwire.mjs` refuses when the instrument reports a hotel other
+// than `ROOMS / ARRIVAL_EVERY_TICKS / SEED / MEASURE_DAYS`, so those four are what "reads the
+// shared workload" MEANS here, and each is checked by name.
+for (const name of ['ARRIVAL_EVERY_TICKS', 'MEASURE_DAYS', 'ROOMS', 'SEED']) {
+  check(
+    'tools/gates/tripwire.mjs',
+    imported.includes(name),
+    `the tripwire no longer imports ${name} from the shared workload, so its hotel and the ` +
+      "bench's can drift apart",
+  );
+}
+// AND THE MATCH IS NOT VACUOUS: a source in which the import had been deleted entirely would give
+// an empty list and the four checks above would each fire, but a reader of a red run should be
+// told which of the two happened.
 check(
   'tools/gates/tripwire.mjs',
-  SOURCE.includes("import { ARRIVAL_EVERY_TICKS, MEASURE_DAYS, ROOMS, SEED } from './workload.mjs';"),
-  'the tripwire no longer reads the shared workload, so its hotel and the bench\'s can drift apart',
+  workloadImport !== null,
+  "the tripwire has no import from './workload.mjs' at all",
+);
+// SPECIFIC, AND TRUE TODAY RATHER THAN FOREVER: it also imports the calibrated occupancy, which
+// is what lets it PRINT the gap between the campaign's hotel and the shipped one (ADR-0056). A
+// goal that removes that line should remove this clause with it and say why — which is a fact
+// being updated, not a check being weakened.
+check(
+  'tools/gates/tripwire.mjs',
+  imported.includes('TARGET_CONCURRENT_HUNDREDTHS'),
+  'the tripwire no longer imports TARGET_CONCURRENT_HUNDREDTHS, so it cannot print the ' +
+    'occupancy its bound campaign was calibrated at (ADR-0056 requires the gate to say so)',
 );
 // AND THE IMPORT IS LOAD-BEARING RATHER THAN DECORATION. Everything the gate prints comes
 // from the child's JSON, so an unused import would leave the check above inspecting nothing —

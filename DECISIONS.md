@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, BOTH OPEN DECISIONS ARE TAKEN, both as recommended. ADR-0056 (b): the tripwire keeps 1.4640 and now PRINTS what it cannot catch — a 1.173x regression passes, and narrowing to the re-derived 1.102 would sit beneath this box's own worst loaded noise. ADR-0057 (a): refillPerTick stays the CEILING and the content rates are re-derived as their own goal, derived not dialled. Three escalations RESOLVED; one open (two intermittent rows, now diagnosed). The chain reopens: travel, then circulation, then parties; and the rates, then the quality branch. G-039a and the rest stand at fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-023b-ii is done and TRAVEL IS ON IN THE SHIPPED GAME — guestCellsPerTick 3, inside a derived window, with 41 assertions moved and eight of them criteria that INVERTED rather than re-pins. The backlog derivation is EXTENDED not re-pinned, and produced a floor nobody ordered: the speed floor is 2, not 1. WATCH #16 shows the first guest ever to be somewhere it was not going. And the intermittent row was DIAGNOSED by the instrument shipped hours earlier — both failures are TIMEOUTS, not assertion failures, and travel is faster not slower. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at

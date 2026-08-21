@@ -18,9 +18,11 @@
 //  CANDIDATE SET rather than the ORDER, which is exactly what `guestAccessTo` already does in
 //  the same loop.
 //
-//  IT BOUNDS LODGING ONLY. The engagement half is a TIME cost and there are no ticks to pay
-//  while travel is off (`guestCellsPerTick` is undeclared in shipped content). `AN AMENITY IS
-//  NOT BOUNDED` below is the test that pins that scope line rather than leaving it in prose.
+//  IT BOUNDS LODGING ONLY. The engagement half is a TIME cost — and since G-023b-ii shipped
+//  content DECLARES `guestCellsPerTick`, so those ticks exist and an engaging guest pays them.
+//  The scope line is unchanged and its justification is now the stronger one: the engagement
+//  half is already priced in time, so bounding it here would be a SECOND charge for one
+//  distance. `AN AMENITY IS NOT BOUNDED` below pins it rather than leaving it in prose.
 //
 //  Ids and kinds are camelCase: `check:content` scans test files too (ADR-0003).
 // ============================================================================
@@ -326,9 +328,9 @@ describe('AN AMENITY IS NOT BOUNDED — the scope line, pinned rather than left 
   it('lets a guest engage a kiosk five floors up while refusing a bedroom two floors up', () => {
     // ========================================================================================
     // LODGING ONLY. The engagement half of "how far will a guest go" is a TIME cost, paid in
-    // ticks spent walking, and there are no ticks to pay while `guestCellsPerTick` is
-    // undeclared. Bounding it here would be an invented dial (ADR-0008) and would collide with
-    // nothing today, which is exactly what makes it tempting and wrong.
+    // ticks spent walking, and since G-023b-ii the shipped table declares a speed so those
+    // ticks are really paid. Bounding it here as well would charge one distance twice — the
+    // reason has got stronger since it was written, not weaker (ADR-0008).
     //
     // This is also the test that would fail if `forLodging` were dropped from the guard.
     // ========================================================================================

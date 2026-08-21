@@ -58,6 +58,10 @@ export {
   // G-038c. Exported for `demolitionRefundOf`'s reason: the harness reports what a floor cost
   // and the tests that drive the sink read the shipped number rather than retyping it.
   floorConstructionCostOf,
+  // G-023b-ii. Exported for the same reason: the derivation of the speed FLOOR lives in
+  // `tools/headless/src/dissatisfaction.content.test.ts`, which reads the shipped dial rather
+  // than retyping it — a second copy of a content number is how a derived bound goes stale.
+  guestSpeedOf,
   hasContentId,
   isRoomAccessRule,
   isRoomKind,
