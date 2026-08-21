@@ -1680,6 +1680,13 @@ and both recommendations have been on the table since they were raised.
 
 ## 2026-08-21 — OPEN — A ROUTER COSTS 1.7× AND THE BOUND WAS FROZEN THIS MORNING
 
+**STILL OPEN 2026-08-21, AND HERE IS WHY, because a reader arriving at G-038a-ii needs it.**
+**G-038a-i did NOT refute the 1.7x figure — it took this notice's THIRD option** (*do not route
+at all*) and measured **0.9978**. **The constraint is untouched**: `sim-critic`'s G-038a-ii review
+found that *"nearest stair on this floor"* is O(stairs) per moving guest per tick, **on top of**
+the wall checks that produced 0.9978, against a bound ADR-0056 froze. **The measurement was routed
+around, not overturned**, and the next goal that reaches for a search meets it unchanged.
+
 **Raised**: G-038a's plan review · **Asked of the human**: nothing yet — **this is a notice, not a
 request.** It is filed because the two facts were ruled on **hours apart** and nobody has read them
 together.

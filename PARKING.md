@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-i is done: a guest no longer walks through solid rooms, and it cost NOTHING — check:tickcost 0.9978 against 1.4640, where a router measured 1.70x. The fix chooses over LANDINGS rather than cells crossed, because a guest occupies one cell per tick and no save, hash or frame can observe an intermediate one. TWO CORRECTIONS TO MY OWN BRIEF: the 224-of-300 baseline overstated the defect ninefold (201 were guests ARRIVING), and the per-cell spelling I recommended is WORSE than doing nothing. I2 unmoved — and the reason is a gate limitation: the log re-converges before the horizon. WATCH #17 has the frame. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-i is done and the circulation goal split AGAIN at PLAN — five BLOCKERs, two of which reorder the rest of M3. Reachability CANNOT ship yet: measured, it invalidates 59 of 75 valid rooms on the 60-room plate and 100 percent strictly, because the entrance is INSIDE room 0. And the speed floor depends on a stair-placement rule nobody had named — aligned stairs keep the shipped dial legal, free placement makes it ILLEGAL at a derived floor of 19. So stairs are ALIGNED and COORDINATES, the migration is per-WORLD, and the order is stairs then the layout re-take then reachability. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

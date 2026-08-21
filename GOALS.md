@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-i is done: a guest no longer walks through solid rooms, and it cost NOTHING — check:tickcost 0.9978 against 1.4640, where a router measured 1.70x. The fix chooses over LANDINGS rather than cells crossed, because a guest occupies one cell per tick and no save, hash or frame can observe an intermediate one. TWO CORRECTIONS TO MY OWN BRIEF: the 224-of-300 baseline overstated the defect ninefold (201 were guests ARRIVING), and the per-cell spelling I recommended is WORSE than doing nothing. I2 unmoved — and the reason is a gate limitation: the log re-converges before the horizon. WATCH #17 has the frame. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-i is done and the circulation goal split AGAIN at PLAN — five BLOCKERs, two of which reorder the rest of M3. Reachability CANNOT ship yet: measured, it invalidates 59 of 75 valid rooms on the 60-room plate and 100 percent strictly, because the entrance is INSIDE room 0. And the speed floor depends on a stair-placement rule nobody had named — aligned stairs keep the shipped dial legal, free placement makes it ILLEGAL at a derived floor of 19. So stairs are ALIGNED and COORDINATES, the migration is per-WORLD, and the order is stairs then the layout re-take then reachability. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -3020,6 +3020,141 @@ and the file records why so nobody re-adds it.
 
 **Owed forward — G-038a-ii**: stairs, v21 and its contested migration, reachability as a validity
 reason, the re-derived speed window, and the occupancy re-take merged with G-039b.
+
+## G-038a-ii — SPLIT at PLAN, 2026-08-21. Five BLOCKERs; two of them decide the order of the rest of M3.
+Status: **split into G-038a-ii-α (stairs) / G-038a-ii-β (reachability), with G-039b BETWEEN them.**
+
+### REACHABILITY CANNOT LAND HERE — IT WOULD INVALIDATE 79–100% OF EVERY SHIPPED HOTEL
+
+**Measured today, exact integer counts, flood-filling `isWalkableFor` 4-connected from the
+entrance:**
+
+| workload | valid rooms | entrance is circulation | reachable (strict) | reachable (charitable) |
+|---|---|---|---|---|
+| `--days 2 --seed 42` | 6 | **FALSE** | **0** | 2 |
+| `--rooms 60 --amenities 5` | 75 | **FALSE** | **0** | **16** |
+| `--rooms 60 --build` | 63 | **FALSE** | **0** | 16 |
+
+**Strict is 0 EVERYWHERE because the entrance is INSIDE ROOM 0** — `entranceCell` is
+`(0, minColumn, minRow)` and so is `roomCell(0)`, so a room stands on it, it is not circulation, and
+the component is empty. **Even charitably, 59 of 75 valid rooms on the 60-room plate become
+invalid**, and it is 16 because the only lane touches two room columns — **G-038a-i's *"no layout in
+this project has a cross-corridor"*, reproduced from a second instrument.**
+
+`computeRoomInvalidity` asks circulation **last**, so a new reason **converts VALID to invalid and
+displaces nothing**: `validRoomsProviding` returns 16 rooms, guests cannot lodge, `checkedOut`
+collapses and `gaveUp` explodes.
+
+> **G-038c refused `reach = 1` for STRICTLY SMALLER coverage damage on §9 grounds. This is that
+> objection an order of magnitude larger.**
+
+**Reachability is WARRANTED — both parked falsification tests came back positive — but its
+prerequisites are (i) the entrance out of a room and (ii) the lanes joined, and G-038a-i already
+measured that (ii) requires MOVING ROOMS on the 60-room plate.** Moving rooms is occupancy, and
+occupancy is **G-039b**. **So the order is: α → G-039b's layout re-take → β.**
+
+### THE SPEED RE-DERIVATION IS DECIDED BY A STAIR-PLACEMENT RULE THE PLAN NEVER NAMED
+
+`worstJourney` is the Manhattan sum, pinned `toBe(108)`, and the floor is computed from it and
+pinned `toBe(2)`. **Once a stair is required, the Manhattan sum stops being the worst journey and
+that expression goes on returning 108** — a green row whose derivation is false, **the ADR-0007
+class inside the file that exists to derive the number.**
+
+| stair rule | worst journey | derived speed floor |
+|---|---|---|
+| **ALIGNED** — one stairwell column through the plot | 86 + 22 + 86 = **194** | **2** — shipped 3 clears, no content edit |
+| **FREE** — each floor pair's stair anywhere | ≈ 22×86 + 108 ≈ **1,900** | **19** — **`guestCellsPerTick: 3` BECOMES ILLEGAL by this test's own arithmetic** |
+
+**And it does not stop at speed**: `grid.ts` derives `DEFAULT_MAX_ROW ≤ 79` from the same
+inequality at speed 1, and at W=194 speed 1 already breaches tolerance at depth 8 — **so the
+plot-depth ceiling is re-derived here too, and `grid.ts` says explicitly that neither package may
+move alone.**
+
+> **RULED: STAIRS ARE ALIGNED.** It keeps the shipped dial legal, it keeps the re-derivation to one
+> number, **and it is what makes the derived stair leg below O(1).**
+
+### THE VERTICAL RULE AND FALLBACK-SAFETY ARE IN DIRECT TENSION
+
+G-038a-i's safety argument is that **every candidate spends the whole budget**, so when everything
+is a wall it falls back to the pre-goal function. **Applied to the floor axis that gives two
+outcomes, both bad:**
+
+- **(a) the floor step is admissible only when the landing is a stair cell.** A guest with a
+  cross-floor destination is **essentially never standing on a stair**, so it never ascends — unless
+  the fallback fires, **and the fallback IS the unconditional spend, i.e. STAIRS ARE INERT.**
+  **G-038's founding BLOCKER, one axis over.**
+- **(b) route the guest to the stair first.** That is a route search, and **the router notice is NOT
+  discharged** — G-038a-i took its *third* option. *"Nearest stair on this floor"* is O(stairs) per
+  moving guest per tick, **on top of** the ≤4 `isWalkableFor` calls that measured 0.9978, against a
+  bound **frozen by ADR-0056**.
+
+> **THE ONE AFFORDABLE DIRECTION, AND IT IS DERIVED RATHER THAN STORED: a stair leg as a DERIVED
+> DESTINATION.** When `guest.at.floor !== target.floor`, `placed()` steps toward the stair cell
+> instead of `standingCell(...)`. **That keeps `placed()`'s recompute-every-tick decision intact,
+> adds no hashed field, and is O(1) — but only because stairs are aligned.**
+> **Which of (a) / (b) / derived-leg ships, with a PREDICTED `check:tickcost` reading, before a line
+> is written.**
+
+### THE MIGRATION, RULED — PER WORLD, NOT PER FLOOR
+
+**Re-checked against G-038a-i as asked: the floor axis is STILL spent first and unconditionally.**
+The landing-choice loop only ever splits the **remaining** budget between column and row. **So the
+only non-inventive reading of v20 bytes is *"travel was vertically free"***, and the honest
+migration writes an **empty stair set**.
+
+**The rule that makes an empty set mean that must be spelled PER WORLD**, and **not** the
+`isOpenPlan` analogue — that function's own docblock records why per-world was refused *for
+corridors*: *"a corridor drawn in the basement would invalidate rooms on floor twelve — a non-local
+effect with no reading a player could recover."* **A STAIR IS THE OPPOSITE SHAPE**: it is a relation
+between floor f and f+1, so a per-floor reading must answer *"whose floor — f, f+1, or both?"*, and
+**every answer is non-local in the direction corridors avoided.**
+
+**And there is a MEASURED precedent against per-floor**: on floor 0 — the only floor the harness
+plans — G-038a-i's three-set rule raised through-wall landings **948 → 1,321**, because a handful of
+scattered declared cells makes nearly the whole floor back-of-house. **A stair declaration has
+exactly that shape.**
+
+**The consequence to OWN rather than discover**: under a per-world reading **stairs are inert in
+every migrated world, the I2 log, the bench and every golden until the harnesses declare one — and
+the moment they do, the whole building changes at once.** Not avoidable; **the price of a migration
+that invents nothing.**
+
+### A STAIR IS COORDINATES, AND THE ID ARGUMENT WAS RE-CHECKED RATHER THAN INHERITED
+
+**Lowest-id-wins is still the lodging rule.** `findFreeRoom` still walks canonical ascending id, and
+**both new rules change the CANDIDATE SET rather than the ORDER** — G-036c's access rule and
+G-038c's floor-patience filter, whose own comment says so. **So an entity stair would renumber every
+room spawned after it and change which room every guest takes, in every run, forever.**
+
+**Coordinates cost nothing in ids**, `grid.ts` independently rules that *"a stairwell is a
+connection between floors, not a room with a floor extent"*, **and a coordinate stair CAN carry a
+price** — `floorConstruction` is already a ledger transaction attached to a derived fact with no
+entity behind it. **Say "coordinates" in the block so no builder re-opens it.**
+
+### Also owed
+
+**THE CACHE OWES A SEVENTH CLAUSE** — `cached.stairs === stairs`, the identical shape to G-034b's
+corridor clause, **and omitting it is invisible to every gate**: I2 cannot see it (the log
+re-converges before the horizon) and I6 cannot (it round-trips one moment). Requires `withStair` to
+return the **same array by reference** on a redundant lay.
+
+**A ROOM DRAWN OVER A STAIRWELL SEVERS THE BUILDING.** For a corridor, closure is local and
+readable. For a stair, **every floor above becomes unreachable at once — with no refusal, no outcome
+recorded, and in the α half no diagnostic anywhere.** Rule it: a sixth `BuildRefusalReason`, or the
+severing is accepted **and named, with the frame that shows it.**
+
+**WATCH: A TRAVERSAL IS NOT WATCHABLE AND THE PLAN MUST CLAIM THE RIGHT INSTRUMENT.** One floor is
+drawn at a time, so a traversal is **a guest leaving one view and entering another**, there is no
+stair drawable, and motion is 149 basis points. **Two watchables that DO exist**: **position** —
+*"a guest crossing floors now walks to the stairwell column FIRST"*, visible on one floor's frames
+and **exactly G-038a-i's own framing**, which WATCH #17 discharged from a single-primitive diff; and
+**the validity flip**, which needs **no render work at all** because an invalid room already draws
+hatched and labelled — **but that belongs to β, which is a further argument for the split.**
+
+**And the harness has no natural stair site**: `report.ts` lays one lane cell per room, so the CLI
+default produces **three isolated single cells**, and **a stair on an isolated corridor cell is a
+stairwell nobody can walk to.** Decide where before BUILD.
+
 
 ## G-038c — A floor costs money, and height costs patience
 Status: **done.** Fourteen rows green, exit code captured. **No save bump.**
