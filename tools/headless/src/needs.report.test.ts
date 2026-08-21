@@ -158,15 +158,35 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // give-up row does not move at all — 148 either way** — which is the same fact this goal
     // measured everywhere it looked: a guest nobody houses is going nowhere, so travel cannot
     // reach it.
+    //
+    // ========================================================================================
+    // 194/159 -> 196/157 AT G-039b-alpha, AND THE GIVE-UP ROW MOVES THIS TIME. The three exit
+    // rows, same invocation, one layout apart:
+    //
+    //     gaveUp            148 -> 143      five FEWER guests leave without ever getting a bed
+    //     checkedOut        161 -> 155      six fewer complete a stay
+    //     leftDissatisfied   42 ->  55      thirteen more get a bed and walk out on it
+    //                       ---------
+    //     departures        353 -> 353      conserved, which is what says this is a shift
+    //
+    // **THE SENTENCE ABOVE SAID TRAVEL COULD NOT REACH THE GIVE-UP ROW, AND THE SPINE CAN.**
+    // The difference is which cells are WALKABLE rather than how far they are: a guest that
+    // could not reach a free room now can, so five of the never-housed are housed — and this
+    // hotel is under-provisioned, so most of the newly-housed run out their dissatisfaction
+    // clock rather than completing. That is the same trade G-023b-ii measured for travel,
+    // arriving through the other door: **outcomes shift toward experience, and the total does
+    // not move.** It is not a regression in the loop; it is six rooms serving more guests
+    // worse, which is what an under-provisioned hotel does when you make it reachable.
+    // ========================================================================================
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBe(194);
-    expect(lodging?.unmet).toBe(159);
+    expect(lodging?.met).toBe(196);
+    expect(lodging?.unmet).toBe(157);
     // AND THE THREE WAYS A GUEST CAN LEAVE THIS HOTEL ARE ALL NON-ZERO AT θ-b1, where the
-    // invocation used to produce two. **148 never got a bed, 163 ran out their clock, and 42 got
+    // invocation used to produce two. **143 never got a bed, 155 ran out their clock, and 55 got
     // a bed and walked out on it** — one hotel, three different instructions to a player.
-    expect(departuresOf(summary, 'gaveUp')).toBe(148);
-    expect(departuresOf(summary, 'checkedOut')).toBe(161);
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(44);
+    expect(departuresOf(summary, 'gaveUp')).toBe(143);
+    expect(departuresOf(summary, 'checkedOut')).toBe(155);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(55);
     // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
     // the countdown, a guest that checked out had by definition completed its lodging need, so
     // the two columns were the same number. "Met" is now a BAND read at the moment of
@@ -229,8 +249,26 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // `toBe(2)` would have been the alternative and it says nothing at all**: 2 is what a table
     // of three rows reads when any two of them collide, from any cause.
     // ========================================================================================
+    // ========================================================================================
+    // AND AT G-039b-alpha THE COLLISION THE BLOCK ABOVE RECORDS HAS COME APART AGAIN — 65/65
+    // -> 66/57 — so the table tells three different stories once more. **The clause is NOT
+    // restored to `toBe(3)` on the strength of that.** It was replaced because a set-size claim
+    // says nothing about which rows collided or why; the literal triple beside it forbids
+    // strictly more, and it would have caught this move too. A spelling that happens to be
+    // satisfiable again is not an argument for going back to it.
+    //
+    //     row                  travel off   travel on   + the spine
+    //     guest_comfort        70 / 283     65 / 288      66 / 287
+    //     guest_entertainment  64 / 289     65 / 288      57 / 296
+    //     guest_nourishment    326 /  27    327 /  26    335 /  18
+    //
+    // Entertainment is what moved (65 -> 57): its providers are in the BASEMENT, and the spine
+    // did not put a stair in — so a walk to the games room still crosses the floor axis for
+    // free but starts and ends a row further into the plot. Nourishment rises for the same
+    // reason from the other side: more guests reach a café at all.
+    // ========================================================================================
     expect(new Set(engagement.map((row) => row.met)).size).toBeGreaterThan(1);
-    expect(engagement.map((row) => row.met)).toEqual([65, 65, 327]);
+    expect(engagement.map((row) => row.met)).toEqual([66, 57, 335]);
     // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
     // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
     // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is

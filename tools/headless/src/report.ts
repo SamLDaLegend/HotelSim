@@ -315,10 +315,11 @@ export function builtRoomCell(index: number, bounds: GridBounds, startFloor: num
   const inBlock = onFloor % perBlock;
   return {
     floor: startFloor + Math.floor(index / perFloor),
-    // The block's corridor is at `minColumn + 1 + block * 8`, so its rooms start one past it.
+    // The block's corridor is at `minColumn + block * 8` (`playerCorridorCells`, whose offset
+    // moved at G-039b-alpha), so its rooms start one past it.
     column:
       bounds.minColumn +
-      2 +
+      1 +
       Math.floor(onFloor / perBlock) * PLAYER_COLUMNS_PER_BLOCK +
       (inBlock % columnsPerBlock),
     // ONE ROW FURTHER BACK EVERY TIME THE BLOCK'S WIDTH IS EXHAUSTED (G-036a). See the docblock
@@ -445,7 +446,16 @@ function rowsPerFloor(bounds: GridBounds): number {
 export function playerCorridorCells(floor: number, bounds: GridBounds): readonly Cell[] {
   const cells: Cell[] = [];
   for (let block = 0; block < blocksPerFloor(bounds); block += 1) {
-    const column = bounds.minColumn + 1 + block * PLAYER_COLUMNS_PER_BLOCK;
+    // THE OFFSET IS ZERO SINCE G-039b-alpha, AND THE PARAGRAPH ABOVE IS WHY IT MOVED RATHER
+    // THAN WHY IT WENT. The rule is unchanged — a block boundary must sit where the block's END
+    // ROOMS land over the inherited hotel's ROOMS rather than over its lanes — but the seeded
+    // plate moved one column right (`plateColumnOffset`), so the supported columns are the ODD
+    // offsets now and were the EVEN ones before. Leaving `+ 1` here would put both of every
+    // block's working rooms in mid-air, `unsupported` would swallow them, and
+    // `evictedRoomUnusable` would die for exactly the reason this offset was measured into
+    // existence at G-034b. The parity is asserted in `report.test.ts` against `roomCell` rather
+    // than against a literal, so the two cannot drift apart again.
+    const column = bounds.minColumn + block * PLAYER_COLUMNS_PER_BLOCK;
     // THE LANE RUNS THE FULL DEPTH OF THE PLOT (G-036a). A stub one cell deep would leave every
     // room behind the first row of the block with no declared walkway anywhere near it, so the
     // whole packed floor would report `noCorridor` and the `noDoor` this walk exists to produce
@@ -504,8 +514,12 @@ export function amenityCell(index: number, bounds: GridBounds): Cell {
   const onFloor = index % perFloor;
   return {
     floor: GROUND_FLOOR - 1 - Math.floor(index / perFloor),
-    column: bounds.minColumn + (onFloor % columns) * COLUMNS_PER_ROOM,
-    row: bounds.minRow + Math.floor(onFloor / columns),
+    // ONE COLUMN RIGHT AND ONE ROW BACK SINCE G-039b-alpha, exactly as `roomCell` — the basement
+    // walks the same plate, so it gets the same spine and the same offsets. Its own entrance
+    // question is `entranceCell`'s clamp rather than this: the door is on the ground floor, and
+    // an amenity below it is reached through a stairwell no shipped harness declares yet.
+    column: bounds.minColumn + plateColumnOffset(bounds) + (onFloor % columns) * COLUMNS_PER_ROOM,
+    row: bounds.minRow + plateRowOffset(bounds) + Math.floor(onFloor / columns),
   };
 }
 
@@ -553,27 +567,156 @@ export function roomCell(index: number, bounds: GridBounds): Cell {
   const onFloor = index % perFloor;
   return {
     floor: GROUND_FLOOR + Math.floor(index / perFloor),
-    column: bounds.minColumn + (onFloor % columns) * COLUMNS_PER_ROOM,
-    row: bounds.minRow + Math.floor(onFloor / columns),
+    // OFF THE ENTRANCE'S COLUMN AND OFF THE SPINE'S ROW (G-039b-alpha). Both offsets are
+    // functions of the plot rather than literals, so a migrated one-row or one-column plot
+    // degenerates to the pre-goal walk instead of stepping off the plot — see
+    // `plateColumnOffset`.
+    column: bounds.minColumn + plateColumnOffset(bounds) + (onFloor % columns) * COLUMNS_PER_ROOM,
+    row: bounds.minRow + plateRowOffset(bounds) + Math.floor(onFloor / columns),
   };
 }
 
 /**
- * How many room-ROWS one floor of the seeded plate holds: every row of the plot, because the
- * row axis takes no stride (see `roomCell`).
+ * THE ROW THE SPINE RUNS ALONG: the plot's NEAR edge, which is the entrance's own row
+ * (`entranceCell` reads `minRow` for the same reason — the street is in front of the building).
+ *
+ * DERIVED RATHER THAN CHOSEN, and it is the same derivation twice over. Put the spine anywhere
+ * else and `entranceCell` is a cell of the plate: either a room — which is the defect this goal
+ * exists to remove — or a lane stub that joins nothing. `minRow` is the one row that is both the
+ * entrance's row and a full-width run across every lane, so ONE row of corridor buys both
+ * prerequisites: the entrance stands on circulation, and the lanes are joined to each other.
  */
-function plateRows(bounds: GridBounds): number {
-  return bounds.maxRow - bounds.minRow + 1;
+function spineRow(bounds: GridBounds): number {
+  return bounds.minRow;
 }
 
 /**
- * How many room-COLUMNS one floor of the seeded plate holds: as many as it has rows, so the
- * plate is SQUARE IN ROOMS — capped by what the plot's width allows at the column stride, and
- * at least one so a one-column test plot still walks.
+ * How many room-ROWS one floor of the seeded plate holds: every row of the plot EXCEPT the one
+ * the spine takes (G-039b-alpha).
+ *
+ * It read `maxRow - minRow + 1` — every row — until the spine, and the change is exactly the
+ * spine's cost: the plate is one row shallower and `plateColumns` below buys the rooms back.
+ *
+ * AT LEAST ONE, so a MIGRATED one-row plot still walks. `assertGridBounds` permits
+ * `minRow === maxRow` and says why — every world before G-034a is that shape — so this cannot
+ * divide to zero, and on such a plot the spine row and the room row are the same row, which is
+ * the same degeneracy the 4-neighbour door rule already has there. `report.test.ts` walks that
+ * plot rather than leaving the branch unrun.
+ */
+function plateRows(bounds: GridBounds): number {
+  return Math.max(1, bounds.maxRow - bounds.minRow);
+}
+
+/**
+ * ==========================================================================================
+ * How many room-COLUMNS one floor of the seeded plate holds: TWO MORE THAN IT HAS ROOM-ROWS,
+ * which is what "square in rooms" becomes once a row is given to the spine (G-039b-alpha).
+ *
+ * THE OLD DERIVATION WAS `min(plateRows, widest)` — SQUARE IN ROOMS — and its argument still
+ * stands: `stepTowards` spends a tick per cell on each axis in turn, so `n` rooms in a square
+ * put the worst walk at about `3 * sqrt(n)` against `2n` in a line, and the worst walk is the
+ * quantity `guestCellsPerTickSchema` derives the speed floor from. **The spine does not refute
+ * that argument; it takes a row out from under it.**
+ *
+ * SO THE PLATE IS `(d + 1)` BY `(d - 1)` ON A PLOT `d` ROWS DEEP — a square with one row moved
+ * to the front and one column added back — and its capacity is `d*d - 1`: **exactly one room
+ * short of the square it replaces, at every depth.** At the shipped depth of 8 that is 9 by 7 =
+ * 63 against 64. `plateRows` is already `d - 1`, so the `+ 2` here is `d + 1` spelled in terms
+ * of what is left rather than of what the plot started with.
+ *
+ * WHY THE ONE ROOM IS AFFORDABLE, AND WHY THE SIXTY-FOURTH WAS NOT ARBITRARY. `grid.ts`'s
+ * `DEFAULT_MAX_ROW` derives the depth of 8 from *"the first depth at which G-010's 60-room
+ * bench stands on ONE floor"* — 64 at 8. **63 still clears 60**, so the requirement that fixed
+ * the depth survives the spine and the bench does not spill onto a floor no flood fill can
+ * reach without a stairwell (G-038a-ii-beta). A plate that merely stayed square would be 7 by
+ * 7 = 49 and would put ELEVEN of the bench's rooms upstairs — the repair and a defect in one
+ * move.
+ *
+ * Capped by what the plot's width allows at the column stride, and at least one so a
+ * one-column test plot still walks.
+ * ==========================================================================================
  */
 function plateColumns(bounds: GridBounds): number {
   const widest = Math.floor((bounds.maxColumn - bounds.minColumn + 1) / COLUMNS_PER_ROOM);
-  return Math.max(1, Math.min(plateRows(bounds), widest));
+  return Math.max(1, Math.min(plateRows(bounds) + 2, widest));
+}
+
+/**
+ * How far right of the plot's left edge the plate starts: ONE COLUMN, so that the entrance's
+ * own column is a lane rather than a bedroom (G-039b-alpha).
+ *
+ * ==========================================================================================
+ * A SOLVED PROBLEM THAT NEVER PROPAGATED (ADR-0048 section 1). `apps/game/src/scenario.ts`
+ * fixed this at G-030 and its docblock NAMES THIS FILE while doing it: *"`entranceCell(bounds)`
+ * is `{ floor: clamp(0), column: minColumn }` and the CLI's `roomCell(0, bounds)` is the same
+ * cell — so on the default plot 'waiting at the door' and 'asleep in bedroom 1' are the same
+ * square, and a watcher cannot tell one from the other."* **It was true when it was written and
+ * it was still true eight goals later**, because a comment in one host cannot repair another.
+ *
+ * ZERO ON A ONE-COLUMN PLOT, for the reason `plateRows` degenerates on a one-row plot: a
+ * migrated strip has nowhere to shift to, and shifting anyway would walk the first room off the
+ * plot and turn a legal narrow plot into a throw.
+ * ==========================================================================================
+ */
+function plateColumnOffset(bounds: GridBounds): number {
+  return bounds.maxColumn > bounds.minColumn ? 1 : 0;
+}
+
+/**
+ * How far back the plate starts: ONE ROW, the one `spineRow` took. Zero on a one-row plot, for
+ * the reason `plateColumnOffset` is zero on a one-column one.
+ */
+function plateRowOffset(bounds: GridBounds): number {
+  return bounds.maxRow > bounds.minRow ? 1 : 0;
+}
+
+/**
+ * ==========================================================================================
+ * THE SPINE: the run of corridor along `spineRow` that JOINS THE PLATE'S LANES TO EACH OTHER
+ * AND TO THE DOOR (G-039b-alpha).
+ *
+ * NO LAYOUT IN THIS PROJECT HAD A CROSS-CORRIDOR BEFORE THIS ONE, and that was measured rather
+ * than noticed: G-038a-i counted journeys with a fully walkable path at **7/7** on the CLI
+ * default, **34/88** at six rooms and **92/219** at sixty, and recorded that *"on the 60-room
+ * plate there is no room-free row for a cross-corridor to run along, so joining requires MOVING
+ * ROOMS"*. This is that row, and `plateRows` is where the rooms moved from.
+ *
+ * WHAT IT IS FOR, IN THE ORDER THE RULES ASK IT:
+ *
+ *   - `isWalkableFor` admits a declared corridor cell that no room stands on. Every lane of the
+ *     plate reaches `spineRow`, and the spine is contiguous across all of them, so any lane is
+ *     reachable from any other. Before this, each lane was a closed strip between two banks of
+ *     rooms, and a guest could only ever walk within the one bank it started beside.
+ *   - the ENTRANCE stands on it. `entranceCell` is `(clamp(0), minColumn, minRow)`, the spine's
+ *     own first cell, so "waiting at the door" is a cell on circulation instead of a cell
+ *     inside bedroom 1.
+ *
+ * IT RUNS THE FULL WIDTH OF THE PLATE, room columns included. Nothing stands on `spineRow` — the
+ * plate starts one row back — so declaring the lot costs no verdict, and it makes the run
+ * contiguous rather than a comb of stubs. A spine that covered only the LANE columns would be
+ * nine disconnected cells, which is the defect it exists to fix, spelled one axis over.
+ *
+ * AND IT STOPS AT THE PLATE RATHER THAN AT THE PLOT'S EDGE. A lane the plate never reaches
+ * joins nothing, and an 80-column run of corridor on a floor holding nine room columns would
+ * make most of the floor walkable and quietly delete the `noCorridor` verdict this runner
+ * exists to produce.
+ *
+ * WHAT IT DELIBERATELY IS NOT: reachability. Nothing here asks whether a room CAN be reached —
+ * that is a validity rule and it is G-038a-ii-beta's. This makes the answer yes; it does not ask
+ * the question. `layout.reach.report.test.ts` counts what it bought.
+ * ==========================================================================================
+ */
+export function seededSpineCells(floor: number, bounds: GridBounds): readonly Cell[] {
+  const cells: Cell[] = [];
+  const row = spineRow(bounds);
+  const last = Math.min(
+    bounds.maxColumn,
+    bounds.minColumn + plateColumnOffset(bounds) + COLUMNS_PER_ROOM * (plateColumns(bounds) - 1),
+  );
+  // Emitted left to right, ascending, which is `compareCells`'s own order — `playerCorridorCells`
+  // says the same about its own emission and for the same reason.
+  for (let column = bounds.minColumn; column <= last; column += 1) cells.push({ floor, column, row });
+  return cells;
 }
 
 /**
@@ -1044,6 +1187,13 @@ export function schedule(
    */
   const seededRoomIds: number[] = [];
   let nextEntityId = 1;
+  /**
+   * The floors this walk has already laid a spine on (G-039b-alpha). MEMBERSHIP ONLY — never
+   * iterated, never ordered, and it decides no outcome; it exists so the spine is laid ONCE per
+   * floor rather than once per room. The same shape, and the same I2 disclaimer, as the
+   * `stubbed` set the player's walk keeps below.
+   */
+  const spined = new Set<number>();
   const seedRoom = (kind: string, amenity: boolean): void => {
     // Each room gets its own cell (G-007). A cell off the plot throws inside the sim,
     // which is the right failure for `--rooms 99999`: the plot is finite and the runner
@@ -1053,6 +1203,18 @@ export function schedule(
     const at = amenity ? amenityCell(seededAmenities, bounds) : roomCell(seeded, bounds);
     if (amenity) seededAmenities += 1;
     else seeded += 1;
+    // AND THE SPINE, BEFORE THE FIRST ROOM ON ITS FLOOR (G-039b-alpha). Commands apply in order
+    // within a tick, and all of these are tick 0, so laying circulation first means the plate is
+    // connected from the moment its first room exists rather than from the moment its last one
+    // does. `seededSpineCells` says what it buys; this is only where it is emitted, and it is
+    // emitted here rather than in a pass of its own because THIS is the loop that knows which
+    // floors the walk actually reached.
+    if (!spined.has(at.floor)) {
+      spined.add(at.floor);
+      for (const cell of seededSpineCells(at.floor, bounds)) {
+        commands.push({ tick: 0, command: { kind: 'layCorridor', at: cell } });
+      }
+    }
     seededRoomIds.push(nextEntityId);
     nextEntityId += 1;
     commands.push({ tick: 0, command: { kind: 'spawnEntity', entityKind: kind, at } });
@@ -1083,7 +1245,16 @@ export function schedule(
     // right of the last room on a floor is the plot's own edge column, which is on it — but a
     // test may pass a plot one column wide, and a scenario should not fail to build because its
     // corridor would be outside the world.
-    const lane = { floor: at.floor, column: at.column + 1, row: at.row };
+    //
+    // IT IS THE CELL TO THE LEFT SINCE G-039b-alpha, AND THAT IS THE SAME CELL IT ALWAYS WAS.
+    // The plate moved one column right (`plateColumnOffset`) so that the entrance's column is a
+    // lane; the lane a room opens onto therefore moved with it, from `column + 1` to
+    // `column - 1`. Rooms sit on the ODD offsets and lanes on the EVEN ones — mirrored from what
+    // this file did until G-039b-alpha, and mirrored to the same shape `scenario.ts` has laid
+    // since G-030. Every room still has exactly one lane beside it and every lane still serves
+    // the two banks it runs between: the room at offset `2k+1` opens onto the lane at `2k`, and
+    // the lane at `2k+2` is the next room's, which is this room's other neighbour.
+    const lane = { floor: at.floor, column: at.column - 1, row: at.row };
     if (isWithinBounds(lane, bounds)) {
       commands.push({ tick: 0, command: { kind: 'layCorridor', at: lane } });
     }

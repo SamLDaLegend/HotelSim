@@ -149,24 +149,60 @@ function cliCensus(argv: readonly string[]): Census {
 //  THE HEADLESS WORKLOADS.
 // ==========================================================================================
 
+// ==========================================================================================
+//  AND SINCE G-039b-alpha EVERY COUNT HERE CARRIES ITS DENOMINATOR, BECAUSE THE LAYOUT MOVED
+//  UNDER IT AND A RAW COUNT COULD NOT SAY WHICH WAY.
+//
+//  The spine gave the seeded plate a cross-corridor and moved every room one column right and
+//  one row back, so JOURNEYS CHANGED LENGTH — and a through-wall LANDING count over a workload
+//  whose motion has moved is two effects in one integer. G-038a-i's own REFLECT makes the same
+//  point one level down: what ships *"chooses over LANDINGS, not over cells crossed"*, and a
+//  landing count needs the landings.
+//
+//  PAIRED, BOTH ARMS IN ONE SITTING, exact deterministic integers — n = 1 is the whole
+//  distribution, so there is no aggregation and no regime to state. The "before" arm is this
+//  tree with `report.ts` restored to `981d5c4` and nothing else changed; it was restored from a
+//  scratch copy afterwards and `sha256sum -c` checked (`CLAUDE.md`'s mutation recipe).
+//
+//     arm                          moves      landings in a room     THROUGH A WALL     rate
+//     60 rooms / 5 amenities       913 -> 910      596 -> 613          219 -> 236    24.0 -> 25.9%
+//     G-009's criterion            568 -> 848      246 -> 324           75 ->  66    13.2 ->  7.8%
+//     6 rooms / 5 amenities        511 -> 483      335 -> 335          118 -> 116    23.1 -> 24.0%
+//     CLI default, 2 days          163 -> 191      151 -> 138           33 ->  16    20.2 ->  8.4%
+//
+//  TWO ARMS IMPROVE SHARPLY, ONE IS FLAT, AND THE BENCH ARM IS MEASURABLY WORSE. That last one
+//  is FLAGGED RATHER THAN OVERRIDDEN, which is the same call G-038a-i made about the three-set
+//  ruling on the same surface: 236 against 219 with motion flat (910 against 913), so it is not
+//  a denominator effect and it is not noise — it is a real 7.8% rise on the one workload whose
+//  plate is nearly full. The mechanism, stated as the reading rather than as a certainty: at
+//  `--rooms 60` the plate has 63 slots and 3 stay empty, so three of the nine lanes are one cell
+//  short in the back row, and a guest crossing the new row gap into a bank has one fewer
+//  admissible landing there than the geometry suggests. **Nobody is walking through a wall who
+//  was not before; there are 17 more landings inside a room that is not the destination, out of
+//  613.** The rule's own criterion — a guest takes the first split whose LANDING is walkable — is
+//  untouched, and `travel.movement.test.ts` still pins it.
+// ==========================================================================================
+
 describe('the workloads the gates run', () => {
-  it('COUNTED: 60 rooms, 5 amenities, the tick-cost workload’s shape — 293 → 219', () => {
+  it('COUNTED: 60 rooms, 5 amenities, the tick-cost workload’s shape — 219 → 236 of 613 landings', () => {
     const taken = cliCensus(['--days', '2', '--seed', '42', '--rooms', '60', '--amenities', '5', '--arrivals', '96']);
-    expect(taken.throughWall).toBe(219);
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([910, 613, 236]);
+    // STILL FAR BELOW THE PRE-G-038a-i WORLD, which is the claim this file was written to make
+    // and the one the spine does not touch: 293 was the count with no walkability rule at all.
     expect(taken.throughWall).toBeLessThan(293);
   });
 
-  it('COUNTED: G-009’s pinned criterion invocation — 119 → 75', () => {
+  it('COUNTED: G-009’s pinned criterion invocation — 75 → 66 on 49% more motion', () => {
     const taken = cliCensus([
       '--days', '2', '--seed', '42', '--rooms', '20', '--arrivals', '20', '--build', '1440', '--demolish', '5760',
     ]);
-    expect(taken.throughWall).toBe(75);
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([848, 324, 66]);
     expect(taken.throughWall).toBeLessThan(119);
   });
 
-  it('COUNTED: 6 rooms, 5 amenities — ADR-0017’s configuration — 129 → 118', () => {
+  it('COUNTED: 6 rooms, 5 amenities — ADR-0017’s configuration — 118 → 116', () => {
     const taken = cliCensus(['--days', '2', '--seed', '42', '--rooms', '6', '--amenities', '5']);
-    expect(taken.throughWall).toBe(118);
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([483, 335, 116]);
     expect(taken.throughWall).toBeLessThan(129);
   });
 });
@@ -175,28 +211,43 @@ describe('the workloads the gates run', () => {
 //  AND THE CONTROL THAT SAYS WHERE THE RULE CANNOT BITE, RATHER THAN LEAVING IT TO BE FOUND.
 // ==========================================================================================
 
-describe('the CLI default is UNMOVED, and the reason is geometric rather than a defect', () => {
-  it('COUNTED: 33 through-wall landings before this goal, and 33 after', () => {
-    // `--days 2 --seed 42` seeds 3 lodging rooms and 3 amenities, ALL AT ROW 0 — `roomCell`
-    // and `amenityCell` only reach back into the plot once a floor's front row is full. So
-    // every journey on this workload has a row gap of ZERO, there is exactly one way to spend
-    // the budget, and a rule that chooses BETWEEN equal-cost landings has nothing to choose.
-    //
-    // Recorded as a criterion rather than left as a surprise: this is the shape of workload on
-    // which "a wall is a wall" is inert, and the fix for it is a layout with depth, not a
-    // stronger rule. G-038a-ii inherits it.
+// ==========================================================================================
+//  AND THE CONTROL THAT SAID WHERE THE RULE COULD NOT BITE HAS BEEN DISCHARGED BY THE FIX IT
+//  NAMED. G-038a-i wrote, of the CLI default:
+//
+//     *"every journey on this workload has a row gap of ZERO, there is exactly one way to spend
+//      the budget, and a rule that chooses BETWEEN equal-cost landings has nothing to choose...
+//      the fix for it is A LAYOUT WITH DEPTH, not a stronger rule. G-038a-ii inherits it."*
+//
+//  **THE SPINE IS THAT LAYOUT, AND THE PREDICTION IS SCORED HERE RATHER THAN QUOTED.** The
+//  plate starts one row back now, so the door is on `minRow` and every room is not — every
+//  journey on this workload has a row gap of at least one, the budget can be split more than
+//  one way, and the rule has something to choose. Through-wall landings **33 -> 16 at two days
+//  and 70 -> 42 at four**, on MORE motion in both (163 -> 191, 322 -> 401).
+//
+//  The describe is renamed rather than deleted, because the claim it made was true and is now
+//  false for a stated reason, which is worth more on the page than a green test with no history.
+// ==========================================================================================
+
+describe('the CLI default is NO LONGER INERT, and the layout with depth is why', () => {
+  it('COUNTED: 33 through-wall landings before the spine, 16 after — on MORE motion, not less', () => {
     const taken = cliCensus(['--days', '2', '--seed', '42']);
     // The denominator, pinned beside the count so the share is a reading rather than an
-    // impression: 163 move events out of 11,756 guest-frames — motion is rare, which is WATCH
-    // #16's own finding and the reason a `--every 240` recording shows nothing.
+    // impression: 191 move events out of 11,756 guest-frames — motion is still rare, which is
+    // WATCH #16's own finding and the reason a `--every 240` recording shows nothing. **The
+    // guest-frame count is UNMOVED at 11,756**, so the extra motion is longer journeys by the
+    // same guests rather than a different population.
     expect(taken.guestFrames).toBe(11_756);
-    expect(taken.moves).toBe(163);
-    expect(taken.throughWall).toBe(33);
+    expect(taken.moves).toBe(191);
+    expect(taken.throughWall).toBe(16);
+    // AND IT IS A FALL IN THE SHARE AS WELL AS IN THE COUNT, which is the half a raw count
+    // cannot say: 33/163 = 20.2% before, 16/191 = 8.4% after.
+    expect(taken.throughWall * 163).toBeLessThan(33 * taken.moves);
   });
 
-  it('and it stays inert at four days, so it is the LAYOUT and not the sample', () => {
+  it('and the fall HOLDS at four days, so it is the LAYOUT and not the sample', () => {
     const taken = cliCensus(['--days', '4', '--seed', '42']);
-    expect(taken.moves).toBe(322);
-    expect(taken.throughWall).toBe(70);
+    expect(taken.moves).toBe(401);
+    expect(taken.throughWall).toBe(42);
   });
 });

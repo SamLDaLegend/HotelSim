@@ -25,14 +25,25 @@
 //  plus a stairwell, which is the same hotel with one command added.
 //
 //  WHERE THE STAIRWELL GOES WHEN THIS FILE DECLARES ONE, AND IT IS DERIVED FROM THE LAYOUT
-//  RATHER THAN PICKED. `roomCell` puts seeded rooms on the EVEN columns of the plate and
-//  `report.ts` lays the lane one column to the right of each, so the ODD columns are lanes —
-//  ON EVERY SEEDED FLOOR AND IN THE BASEMENT ALIKE, because `amenityCell` walks the same plate
-//  one floor down. **`(column 1, row 0)` is therefore a declared corridor cell on the
-//  amenity floor AND on the room floor**, which is exactly what an aligned stairwell needs and
-//  the one thing the CLI default cannot supply. `playerCorridorCells` puts the player's own
-//  lane at `minColumn + 1` too, so the column stays circulation on the floors a `--build` run
-//  fills.
+//  RATHER THAN PICKED. `(column 1, row 0)` is a DECLARED CORRIDOR CELL ON EVERY SEEDED FLOOR
+//  AND IN THE BASEMENT ALIKE, which is exactly what an aligned stairwell needs and the one
+//  thing the CLI default cannot supply.
+//
+//  **AND THE REASON IT IS ONE CHANGED COMPLETELY AT G-039b-alpha WHILE THE CELL DID NOT.** This
+//  paragraph used to read: *"`roomCell` puts seeded rooms on the EVEN columns and `report.ts`
+//  lays the lane one column to the right of each, so the ODD columns are lanes."* **Every clause
+//  of that is now false** — the plate moved one column right, so the rooms are on the ODD
+//  columns and the lanes on the EVEN ones. What keeps `(1, 0)` circulation is the SPINE: the
+//  run of corridor along `minRow` that G-039b-alpha lays across the whole plate on every seeded
+//  floor, room columns included, because the plate starts one row back and nothing stands on
+//  that row. So the stairwell now sits on the cross-corridor rather than in a lane, on both
+//  floors, for a reason that is stronger than the one it replaced.
+//
+//  IT IS STRUCK RATHER THAN DELETED BECAUSE IT WENT FALSE RATHER THAN STALE, which is the call
+//  G-038a-ii-alpha made about the tolerance-floor sentence and for the same reason: a reader
+//  who remembers the old parity needs to be told it inverted, not left to rediscover it.
+//  `playerCorridorCells` also moved its own offset in the same change and for the same cause,
+//  so a `--build` run's lanes land over the seeded plate's rooms rather than over its lanes.
 // ==========================================================================================
 
 import { closeSync, mkdtempSync, openSync, readFileSync, writeSync } from 'node:fs';
@@ -216,45 +227,75 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // the world WITHOUT it is the pre-goal simulation — the reading `migrateV20ToV21` writes
     // into every migrated save, measured on the workload the gates run.
     expect(without.world.stairs).toEqual([]);
+    // GUEST-FRAMES ARE UNMOVED AT 33,105 ACROSS G-039b-alpha, which is what says the spine
+    // changed the BUILDING and not the population: the same guests arrive and stay as long.
     expect(without.guestFrames).toBe(33_105);
-    expect(without.moves).toBe(913);
+    // 913 -> 910 at G-039b-alpha. Three fewer move events out of 910 on a plate where every
+    // room moved a column right and a row back — the seeded layout is the same distance from
+    // the door on average, which is what a plate reshaped from 8x8 to 9x7 ought to give.
+    expect(without.moves).toBe(910);
     // AND THE CROSS-FLOOR TRAFFIC IS REAL: the amenities are in the basement and the bedrooms
     // are on floor 0, so guests genuinely change floor on this workload. Without this the whole
-    // file would be measuring a rule with no population.
+    // file would be measuring a rule with no population. **UNMOVED AT 290 across the layout
+    // change**, which is the arm that says the traffic is a property of the two floors rather
+    // than of where the rooms sit on them.
     expect(without.ascents).toBe(290);
-    // 284 OF THOSE 290 RISE THROUGH THE CEILING SOMEWHERE THAT IS NOT THE STAIRWELL COLUMN.
-    // The other six land on it BY COINCIDENCE — column 1 is a lane the harness already lays,
-    // and a free-floor-axis guest whose horizontal position happens to be there rises there.
-    // Recorded as 284 rather than rounded to 290, because "every one of them" would have been
-    // a claim this instrument does not support.
-    expect(without.ascentsOffTheStairwell).toBe(284);
+    // ========================================================================================
+    // 284 -> 290, AND THE SIX THAT WENT ARE THE MOST INFORMATIVE NUMBER IN THIS FILE.
+    //
+    // It read: *"284 of those 290 rise somewhere that is not the stairwell column. The other
+    // six land on it BY COINCIDENCE — column 1 is a lane the harness already lays, and a
+    // free-floor-axis guest whose horizontal position happens to be there rises there. Recorded
+    // as 284 rather than rounded to 290, because 'every one of them' would have been a claim
+    // this instrument does not support."*
+    //
+    // **THE COINCIDENCE HAS GONE, BECAUSE COLUMN 1 STOPPED BEING A LANE.** G-039b-alpha moved
+    // the plate one column right, so column 1 is a BANK OF BEDROOMS at every row except the
+    // spine's, and `isWalkableFor` lets a guest stand in a bedroom only when it is its own
+    // destination. So now all 290 rise off the stairwell and the control is exact — but the
+    // 284 was right when it was written, and the caution that produced it is why this line
+    // reads as a repair rather than as a surprise.
+    // ========================================================================================
+    expect(without.ascentsOffTheStairwell).toBe(290);
   });
 
   it('WITH A STAIRWELL, EVERY TRAVERSAL HAPPENS ON THE STAIRWELL COLUMN — none land off it', () => {
     // THE HEADLINE, AS A PAIR OF LITERALS TAKEN WITH ONE INSTRUMENT IN ONE SITTING. A
     // single-armed assertion here would pass equally under a rule that changed nothing.
     expect(withStairs.ascentsOffTheStairwell).toBe(0);
-    expect(withStairs.ascents).toBe(304);
+    // 304 -> 278 at G-039b-alpha. Fewer traversals over the same 290-ascent control, because a
+    // guest that must reach the stairwell first spends longer walking and re-targets less often
+    // mid-flight; the property this arm asserts is the ZERO beside it, and it is unmoved.
+    expect(withStairs.ascents).toBe(278);
     // AND THE JOURNEYS GET LONGER, WHICH IS THE COST AND IS REPORTED RATHER THAN BURIED. Move
-    // events double — 913 -> 1,840 — because a guest crossing floors now walks to the stairwell
+    // events double — 910 -> 1,948 — because a guest crossing floors now walks to the stairwell
     // and back out again instead of rising where it stood. That is the mechanic doing its job:
     // G-038a-i could say a wall never lengthens a journey, and a stair is the change that
     // makes that false, which is why the speed window is re-derived in this same goal
     // (`dissatisfaction.content.test.ts`, worst journey 108 -> 194).
-    expect(without.moves).toBe(913);
-    expect(withStairs.moves).toBe(1_840);
+    expect(without.moves).toBe(910);
+    expect(withStairs.moves).toBe(1_948);
   });
 
   it('and guests are SEEN on the stairwell, which is the watchable this goal claims', () => {
     // Guest-frames whose cell is the stairwell column. The recording below is what a human
     // opens; this is the same fact as a number, so a reader who cannot open a viewer still has
     // the measurement. 0 -> a real count is the whole claim.
-    // 10 -> 602 GUEST-FRAMES. It is not zero on the control, and that is worth pinning rather
-    // than idealising: column 1 is a lane the harness already lays, so a guest occasionally
-    // stands there anyway. The sixty-fold rise is the finding; a 0 would have been an instrument
-    // that could not see the lane.
-    expect(without.onTheStairwell).toBe(10);
-    expect(withStairs.onTheStairwell).toBe(602);
+    // ========================================================================================
+    // 0 -> 555 GUEST-FRAMES SINCE G-039b-alpha, WHERE IT WAS 10 -> 602.
+    //
+    // The control's 10 was pinned with this note: *"it is not zero on the control, and that is
+    // worth pinning rather than idealising: column 1 is a lane the harness already lays, so a
+    // guest occasionally stands there anyway. A 0 would have been an instrument that could not
+    // see the lane."* **The control now reads 0 and the instrument is the same one** — column 1
+    // is a bank of bedrooms since the plate moved, and `(1, 0)` is a single spine cell rather
+    // than a seven-cell lane, so there is no longer anywhere for a guest to be standing there
+    // by accident. The old caution was right and its subject has gone; the zero is now a fact
+    // about the layout rather than a blind instrument, and the arm beside it is what proves the
+    // instrument still sees (555).
+    // ========================================================================================
+    expect(without.onTheStairwell).toBe(0);
+    expect(withStairs.onTheStairwell).toBe(555);
   });
 
   it('NO GUEST GETS STUCK: the two arms serve the same guests, and the walk does not stall', () => {
@@ -287,8 +328,12 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     expect(without.longestJourney).toBeLessThanOrEqual(worstJourneyTicks);
     // AND THE STAIR LENGTHENS THE WORST WALK, which is the cost stated as a pair of readings
     // rather than as an impression.
-    expect(without.longestJourney).toBe(6);
-    expect(withStairs.longestJourney).toBe(11);
+    // 6 -> 9 AND 11 -> 12 AT G-039b-alpha, AND THE CONTROL'S HALF IS THIS GOAL'S OWN WATCHABLE.
+    // The spine gives every journey a row to cross and a lane to turn out of, so the longest
+    // unbroken walk on the STAIRLESS harness — the one every gate and every golden runs — rose
+    // by half. Both are still inside the derived 66.
+    expect(without.longestJourney).toBe(9);
+    expect(withStairs.longestJourney).toBe(12);
   });
 
   it('THE ONE THING THAT READS AS STUPID: turn-arounds appear, and the cause is NOT the stair', () => {
@@ -311,10 +356,13 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // Parked with its falsification test: if the re-target were suppressed while a guest is on
     // the stairwell, this count should go to zero and the arm above should not move.
     // ========================================================================================
+    // 23 -> 14 AT G-039b-alpha, AND THE CONTROL IS STILL 0. Fewer re-targets land mid-flight on
+    // the new plate; the finding — that they exist at all, and that the stair makes them
+    // legible — is unchanged, and the equality below is what carries it.
     expect(without.turnArounds).toBe(0);
-    expect(withStairs.turnArounds).toBe(23);
+    expect(withStairs.turnArounds).toBe(14);
     // AND THE CAUSE, COUNTED RATHER THAN INFERRED FROM THE HANDFUL I READ IN THE RECORDING:
-    // EVERY ONE OF THE 23 is a guest whose HOLDINGS changed on the turn tick. Not most, not
+    // EVERY ONE OF THE 14 is a guest whose HOLDINGS changed on the turn tick. Not most, not
     // typically — all of them. If a turn-around ever appeared with the holdings unchanged, that
     // WOULD be the stair rule and this equality is what would say so.
     expect(withStairs.turnAroundsOnRetarget).toBe(withStairs.turnArounds);
@@ -412,12 +460,17 @@ describe('THE WATCH RECORDING, at --every 1', () => {
     expect([ascentTick, ascentGuest]).toEqual([2, 1]);
     // AND THE SAME FRAME OF THE PAIRED RECORDING, WHICH IS WHAT MAKES THE SENTENCE ABOVE A
     // MEASUREMENT RATHER THAN A RECOLLECTION. At frame 2, with no stairwell declared, guest 1
-    // is ALREADY IN THE BASEMENT at (-1, 1, 1) — it spent the floor axis on tick 1 and dropped
+    // is ALREADY IN THE BASEMENT at (-1, 2, 0) — it spent the floor axis on tick 1 and dropped
     // through the ground floor wherever it happened to be. With the stairwell it is still on
     // floor 0, standing at the foot of the stairs. **Two frames, same tick, same guest, one
     // command apart** — the WATCH #17 shape, on the vertical axis.
+    //
+    // `(-1, 1, 1)` -> `(-1, 2, 0)` AT G-039b-alpha: the amenity plate moved with the lodging
+    // one (`amenityCell` takes the same two offsets), so the free-axis guest lands one column
+    // right and on the spine's row rather than a row back. The picture is the same picture; the
+    // basement it drops into is one square over.
     const beforeAt = (JSON.parse(beforeFrames[ascentTick] ?? '{}').world as World).guests.list[0]?.at;
-    expect(beforeAt).toEqual({ floor: -1, column: 1, row: 1 });
+    expect(beforeAt).toEqual({ floor: -1, column: 2, row: 0 });
     expect(stoodOn?.floor).toBe(0);
     expect(stoodOn).toEqual({ floor: 0, column: STAIR_COLUMN, row: STAIR_ROW });
     expect(landedOn?.column).toBe(STAIR_COLUMN);

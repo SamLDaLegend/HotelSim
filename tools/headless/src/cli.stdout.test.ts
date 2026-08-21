@@ -164,7 +164,15 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // floor axis spends unconditionally"* and every guest in this run walks exactly where it
     // walked before. **THE CONTROL IS THE FULL DOCUMENT AGAIN**: every other field of this
     // golden is byte-identical, which is what says the field was added and nothing moved.
-    stateHash: '6f719333f63082c7',
+    // MOVED AGAIN AT G-039b-alpha to `5103ab9588f8b6e9`, and THIS ONE IS A BEHAVIOUR CHANGE —
+    // the first on this golden since G-023b-ii. The seeded plate gained a SPINE at `minRow` and
+    // moved one column right and one row back, so the three bedrooms and the three basement
+    // amenities all stand somewhere new and every journey in this run is a different journey.
+    // The need rows, the review distribution and the mean move with it; **the departure table,
+    // the ledger, the revenue, the closing balance, the entity count and the validity block do
+    // NOT**, which is the hand-check that says the hotel changed shape rather than changing
+    // outcome. See the need-row block above for the numbers.
+    stateHash: '5103ab9588f8b6e9',
   },
   guests: {
     arrived: 24,
@@ -320,9 +328,9 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // the ledger, the revenue and the closing balance do NOT — the block at the head of this
     // golden is unchanged from `arrived` to `left evictedCauseUnrecorded`.
     // ==========================================================================================
-    { needId: 'guest_comfort', lodging: false, met: 12, unmet: 8, metByItem: 12, abandoned: 0, unservedTicks: 1_207, instanceTicks: 8_640 },
-    { needId: 'guest_entertainment', lodging: false, met: 6, unmet: 14, metByItem: 0, abandoned: 0, unservedTicks: 1_945, instanceTicks: 8_640 },
-    { needId: 'guest_nourishment', lodging: false, met: 10, unmet: 10, metByItem: 4, abandoned: 0, unservedTicks: 1_673, instanceTicks: 8_640 },
+    { needId: 'guest_comfort', lodging: false, met: 12, unmet: 8, metByItem: 12, abandoned: 0, unservedTicks: 1_254, instanceTicks: 8_640 },
+    { needId: 'guest_entertainment', lodging: false, met: 4, unmet: 16, metByItem: 0, abandoned: 0, unservedTicks: 2_223, instanceTicks: 8_640 },
+    { needId: 'guest_nourishment', lodging: false, met: 11, unmet: 9, metByItem: 4, abandoned: 0, unservedTicks: 1_708, instanceTicks: 8_640 },
     { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0, unservedTicks: 3_000, instanceTicks: 8_640 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -356,11 +364,19 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
       // review. The mean rises 295 -> 300: travel made this hotel's guests very slightly
       // HAPPIER, which is not the direction anybody predicted and is why the need rows carry
       // the mechanism rather than a shrug.
+      //
+      // RE-RECORDED AGAIN AT G-039b-alpha: **0/8/8/0/4 -> 0/10/6/1/3**, and the interesting cell
+      // is the FOURTH BAND, which has never been occupied on this golden before. It conserves
+      // against the same UNCHANGED departure table — 0 + 10 + 6 + 1 + 3 = 20 = 4 checked out +
+      // 16 who gave up — but **the four at the top are no longer the four that checked out**:
+      // one of them scores 4. Its stay was complete and part of it was spent walking, which is
+      // exactly what a mean of per-need bands is supposed to notice and what a count of needs
+      // met could not. The mean falls 300 -> 285 with it.
       { score: 1, count: 0 },
-      { score: 2, count: 8 },
-      { score: 3, count: 8 },
-      { score: 4, count: 0 },
-      { score: 5, count: 4 },
+      { score: 2, count: 10 },
+      { score: 3, count: 6 },
+      { score: 4, count: 1 },
+      { score: 5, count: 3 },
     ],
   },
   rooms: {
@@ -484,14 +500,14 @@ const GOLDEN_2_DAYS_SEED_42 =
     // rows pay. The `bp unserved` column is a SHARE and the JSON's is a TICK COUNT, so they are
     // two views of one measurement and both are re-recorded here rather than one being derived
     // from the other. `night_rest` below is unchanged, which is this pair's control.
-    'need       guest_comfort 12 met, 8 unmet (0 by room, 12 by item), 0 abandoned, 1396 bp unserved',
-    'need       guest_entertainment 6 met, 14 unmet (6 by room, 0 by item), 0 abandoned, 2251 bp unserved',
-    'need       guest_nourishment 10 met, 10 unmet (6 by room, 4 by item), 0 abandoned, 1936 bp unserved',
+    'need       guest_comfort 12 met, 8 unmet (0 by room, 12 by item), 0 abandoned, 1451 bp unserved',
+    'need       guest_entertainment 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned, 2572 bp unserved',
+    'need       guest_nourishment 11 met, 9 unmet (7 by room, 4 by item), 0 abandoned, 1976 bp unserved',
     'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned, 3472 bp unserved',
     // G-023b-ii: one guest moves 2 -> 3 and the mean rises with it. See the JSON golden's
     // distribution above for why a hotel whose guests must now WALK reviews slightly better.
-    'reviews     1:0, 2:8, 3:8, 4:0, 5:4',
-    'mean x100   300',
+    'reviews     1:0, 2:10, 3:6, 4:1, 5:3',
+    'mean x100   285',
     'ledger      7 transactions',
     'revenue     34000p',
     'upkeep      -24000p',
@@ -591,7 +607,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // floor, so no lodging candidate is more than zero floors from the door and a reach of 2
     // cannot turn anybody away. Same 6 valid rooms, same 0/0/0/0/0 tally, same 24 arrivals,
     // same 4/16 split, same four need rows to the basis point.
-    'state hash  6f719333f63082c7',
+    'state hash  5103ab9588f8b6e9',
   ].join('\n') + '\n';
 
 /**
@@ -748,7 +764,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  6f719333f63082c7']);
+    expect(differing).toEqual(['seed        42', 'state hash  5103ab9588f8b6e9']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -1161,9 +1177,26 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // and the floor charge means they never happen. The one room the player does build is still
     // over a corridor of the hotel below, so it is still a dud — the ADR-0009 trap is unchanged
     // in shape and smaller in size.
-    expect(s.rooms.invalid.unsupported).toBe(1);
+    // ==========================================================================================
+    // G-039b-alpha: THE DUD IS STILL A DUD AND ITS REASON MOVED — `unsupported` 1 -> 0,
+    // `noCorridor` 0 -> 1, `rooms.valid` UNCHANGED at 6. That is one room changing which rule it
+    // fails, and it is the seeded plate's shift arriving here.
+    //
+    // The seeded plate moved to the ODD columns, so `playerCorridorCells`' block offset moved
+    // with it (see `report.ts`, which measures why: leaving it would have put both of every
+    // block's working rooms in mid-air). The one room this wallet can afford therefore lands
+    // OVER AN INHERITED BEDROOM instead of over a lane — supported at last — and away from the
+    // player's own corridor stub, which is what `noCorridor` is for.
+    //
+    // **ADR-0009's TRAP IS UNCHANGED IN SHAPE AND UNCHANGED IN SIZE**: 750,000p for a room that
+    // houses nobody and still costs 2,500p a night. What moved is which of the five reasons
+    // says so, and that is worth recording rather than smoothing, because the two reasons teach
+    // a player different things — *"you built in mid-air"* against *"you built somewhere nobody
+    // can walk to"*.
+    // ==========================================================================================
+    expect(s.rooms.invalid.unsupported).toBe(0);
     expect(s.rooms.invalid.noDoor).toBe(0);
-    expect(s.rooms.invalid.noCorridor).toBe(0);
+    expect(s.rooms.invalid.noCorridor).toBe(1);
     // Three inherited bedrooms that work, plus the three basement amenities, which always
     // do. All three of the player's builds are duds — the ratio of waste to spend is what
     // ADR-0009 describes, and a thinner margin does not make the walk any wiser.

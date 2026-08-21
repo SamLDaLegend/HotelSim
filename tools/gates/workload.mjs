@@ -65,6 +65,39 @@ export const ROOMS = 60;
  * re-takes is this constant: the pin must describe the hotel the gate now runs, and the
  * campaign's own reach is printed by `tripwire.mjs` rather than implied.
  *
+ * ===========================================================================================
+ * 856 -> 850 AT G-039b-alpha, RE-TAKEN ALONE, AND ADR-0058 IS WHY THAT IS LEGITIMATE.
+ *
+ * **THE FIVE SLOTS.** WHAT: concurrent guests in hundredths, as guest-frames divided by ticks —
+ * an exact deterministic integer count. WORKLOAD: `--rooms 60 --amenities 1 --arrivals 96
+ * --seed 42`, 30 simulated days, this file's own constants, run through `report.ts`'s schedule.
+ * SAMPLE COUNT: n = 1, which is the whole distribution — the run is deterministic, so a second
+ * invocation returns the same integer. AGGREGATION: none; one division, rounded once. REGIME:
+ * none applies — no clock is read, so nothing about the machine or its load can reach this
+ * number. `workload.concurrency.test.ts` re-measures it on every run of `pnpm test` rather than
+ * trusting this line.
+ *
+ * WHY IT MOVED: G-039b-alpha gave the seeded plate a SPINE — a run of corridor along the plot's
+ * near row that joins the plate's lanes to each other and puts the entrance on circulation —
+ * and moved every seeded room one column right and one row back to make room for it. Every
+ * journey in this hotel is a different journey, so the hotel holds a different number of guests
+ * at once. **Six hundredths of a guest, on a workload where every room moved.**
+ *
+ * RE-TAKEN ALONE, AND THE BOUND CAMPAIGN IS NOT RE-TAKEN, PER ADR-0058 (orchestrator ruling,
+ * forced by a review that found the standing instruction literally unexecutable). The clause
+ * that said the two must move TOGETHER was written when the bound was free to move; ADR-0056
+ * froze the bound by human ruling, `tripwire.mjs` refuses to run if the bound and its derivation
+ * disagree, and two of the campaign's three arms materialise their own committed content and
+ * therefore cannot be re-taken at today's occupancy at all. **A pin re-taken alone against a
+ * frozen bound cannot produce the disagreement the clause existed to prevent — it can only make
+ * the pin true**, and the gate PRINTS the gap rather than implying it.
+ *
+ * AND IT WILL MOVE AGAIN, TWICE, BY DESIGN. G-040 (parties) changes who holds a room and G-041
+ * re-derives every need rate; both move occupancy. **Each re-takes this constant when it moves
+ * it.** This goal deliberately does not pre-pay for either — a pin taken now for a hotel two
+ * planned goals will replace is a number that is wrong the moment it is written.
+ * ===========================================================================================
+ *
  * AND 848 IS WITHDRAWN. The figure carried in `GOALS.md`'s G-023b-ii block was measured under
  * a probe taken BEFORE G-038c, which added `floorConstructionCostPence` and
  * `maxLodgingFloorsFromEntrance` and moved this hotel. Re-measured on today's tree the same
@@ -74,7 +107,7 @@ export const ROOMS = 60;
  * the stale figure was the tree.
  * ===========================================================================================
  */
-export const TARGET_CONCURRENT_HUNDREDTHS = 856;
+export const TARGET_CONCURRENT_HUNDREDTHS = 850;
 
 /**
  * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.

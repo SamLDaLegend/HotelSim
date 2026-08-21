@@ -178,11 +178,24 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
       measuredConcurrentHundredths(),
       'THE BENCHMARK HAS BEEN REDEFINED. `tools/gates/workload.mjs` says its honest axis is ' +
         'CONCURRENT GUESTS, and the occupancy this workload actually holds has moved. That is ' +
-        'not necessarily a defect — a content change that alters how long guests stay will do ' +
-        'it — but it means `check:tickcost` is comparing a different hotel than the campaign ' +
-        'was calibrated on. Re-take TARGET_CONCURRENT_HUNDREDTHS and the bound campaign ' +
-        'TOGETHER, in the same commit, and do NOT widen the bound — that would bury this rather ' +
-        'than report it (ADR-0021).',
+        'not necessarily a defect — a content or layout change that alters how guests spend ' +
+        'their stay will do it — but it means `check:tickcost` is comparing a different hotel ' +
+        'than its bound campaign was calibrated on.\n\n' +
+        'WHAT TO DO: re-take TARGET_CONCURRENT_HUNDREDTHS ALONE, in the commit that moves it, ' +
+        'and record the reading with its five slots at the constant. Do NOT widen the ' +
+        'tick-cost bound and do NOT re-take the bound campaign — ADR-0056 (human) froze the ' +
+        'bound at 1.4640, `tripwire.mjs` REFUSES TO RUN if the bound and its derivation ' +
+        'disagree, and two of the campaign\'s three arms materialise their own committed ' +
+        'content so they cannot be re-taken at today\'s occupancy at all.\n\n' +
+        'THIS MESSAGE USED TO SAY "re-take the pin and the bound campaign TOGETHER, in the ' +
+        'same commit". THAT INSTRUCTION WAS UNEXECUTABLE and ADR-0058 discharges it: the ' +
+        'clause was written while the bound was free to move, and ADR-0056 took that away ' +
+        'without anybody noticing the instruction had become impossible. The property it was ' +
+        'protecting — that the pin and the bound never describe different hotels — is now ' +
+        'held by the freeze plus the gap `tripwire.mjs` PRINTS, not by this message. ' +
+        '(Rewriting an unexecutable remedy is not editing a gate to make a build pass: the ' +
+        'property asserted here is unchanged, and this arm still goes red on exactly the ' +
+        'same worlds.)',
     ).toBe(workload.TARGET_CONCURRENT_HUNDREDTHS);
   }, 60_000);
 
@@ -208,10 +221,16 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     expect(workload.ARRIVAL_EVERY_TICKS).toBe(96);
     // 872 -> 856 AT G-023b-ii. Shipped content declared `guestCellsPerTick: 3`, so guests spend
     // ticks walking and this hotel holds fewer of them at once. Re-taken WITH the bound campaign
-    // in this commit, as the assertion at the top of this file demands, and the bound's value is
-    // unchanged by human ruling (ADR-0056) — `tripwire.mjs` now PRINTS the gap between the
-    // occupancy its arms were taken at and the occupancy this workload holds.
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(856);
+    // in this commit, as the assertion at the top of this file demanded at the time, and the
+    // bound's value is unchanged by human ruling (ADR-0056) — `tripwire.mjs` now PRINTS the gap
+    // between the occupancy its arms were taken at and the occupancy this workload holds.
+    //
+    // 856 -> 850 AT G-039b-alpha, RE-TAKEN **ALONE** (ADR-0058), because the seeded plate gained
+    // a spine and every room in it moved. The reading and its five slots are recorded at the
+    // constant in `workload.mjs`; this line is the pin, not the derivation. **G-040 and G-041
+    // each move occupancy again and each re-take it again** — this goal does not pre-pay for
+    // them.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(850);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -458,12 +477,25 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     // side, one guest does. Which is this arm's own claim, restated by the change: a reading taken
     // at one cadence is a claim about THAT cadence.
     // -------------------------------------------------------------------------------------------
+    //
+    // -------------------------------------------------------------------------------------------
+    // 871 / 856 / 854  ->  876 / 850 / 854 AT G-039b-alpha, AND THIS TIME THE MIDDLE READING IS
+    // THE ONE THAT MOVES — which is why `TARGET_CONCURRENT_HUNDREDTHS` IS re-taken here and was
+    // not at G-038a-i. The spine moves every seeded room, so it reaches the shipped cadence
+    // rather than only its neighbours.
+    //
+    // **AND THE SHIPPED CADENCE IS STILL A LOCAL MINIMUM OF THE AXIS**, which is the census's own
+    // finding and the reason 96 stays: 876 above it, 854 below it, 850 at it. The +1 neighbour is
+    // byte-identical at 854, which is a small piece of evidence that the seam this arm describes
+    // — a destination changing mid-journey — is where the sensitivity lives rather than in the
+    // arithmetic of the cadence.
+    // -------------------------------------------------------------------------------------------
     // ===========================================================================================
     const here = measuredConcurrentHundredths();
     const below = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS - 1);
     const above = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS + 1);
     const readings = `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`;
-    expect([below, here, above], readings).toEqual([871, 856, 854]);
+    expect([below, here, above], readings).toEqual([876, 850, 854]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
     // either side is a different hotel. Written as a set size so it cannot be satisfied by two
     // of the three agreeing.

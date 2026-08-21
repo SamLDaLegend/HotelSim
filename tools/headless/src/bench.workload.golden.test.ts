@@ -371,7 +371,12 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   BLOCK BELOW HOLDS IN FULL** — every counter, every departure row, every need row and the
     //   closing balance are byte-identical — which is what says the hash moved because the world
     //   grew a key and not because the hotel changed.
-    expect(hashState(plain)).toBe('418cf36055a3408c');
+    //   `418cf36055a3408c` -> `5cfb73ca16c3463e`   G-039b-alpha gave the seeded plate a SPINE
+    //   and moved every seeded room one column right and one row back. **This one IS a
+    //   behaviour change and the control block below moves with it** — see the outcome arm: the
+    //   bench completes FIVE stays where it completed one. `check:stamp` reads this literal out
+    //   of the tree, so the digest's measure-golden line moves with it.
+    expect(hashState(plain)).toBe('5cfb73ca16c3463e');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -397,8 +402,34 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // guests moved from one row to the other because a walk to the single lounge now costs
     // ticks they did not have. The arithmetic in the paragraph above is re-spelled here rather
     // than left stale.
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(1);
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(67);
+    //
+    // ==========================================================================================
+    // 1 + 67 -> 5 + 63 AT G-039b-alpha, AND IT IS THE FIRST TIME THIS ROW HAS GONE THE OTHER
+    // WAY. **The I5 benchmark completes five stays where it completed one**, and the direction
+    // is the finding rather than the size: every previous move on this row has been downward,
+    // from 60 at G-010 to 4 at theta-b1 to 1 at G-023b-ii, each for a good reason and each
+    // making the benchmark a slightly worse witness for the loop it is supposed to exercise.
+    //
+    // THE CAUSE IS CIRCULATION RATHER THAN DISTANCE, which is what makes it an improvement and
+    // not a shorter walk. Sixty bedrooms behind two amenities is a starved hotel and this goal
+    // did not feed it; what changed is that the plate's nine lanes are JOINED, so a guest whose
+    // provider is on the far side of the floor can now reach it at all instead of walking
+    // within one lane until its dissatisfaction ceiling saturates. Four more guests get served
+    // enough to complete.
+    //
+    // **THE CONSERVATION STILL CLOSES: 5 + 61 + 9 still in the hotel = 75 arrived**, and
+    // `arrived`, `evictedGuests`, the abandonment count and the seven-row departure table's
+    // SHAPE are all unchanged — which is what says the guests moved between rows rather than
+    // appearing from anywhere. **The still-in-the-hotel column moves 7 -> 9 as well**, and that
+    // is the same fact from the other side: a guest that is being served is a guest still in
+    // residence at the horizon rather than one that has already walked out.
+    //
+    // (`G-041` will move this row again by re-deriving the rates, and the branch
+    // `g037a-quality-fold` records that this benchmark completed ZERO stays over a simulated
+    // year. Neither is discharged here; this is four guests, not a fix.)
+    // ==========================================================================================
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(5);
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(61);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -593,7 +624,14 @@ describe('the same workload with the player churning the building', () => {
     // empty array on every world, so it moves every hash in the repo and no counter anywhere.
     // Every control in this arm still holds: checkedOut 0, leftDissatisfied 51, evictedRoomGone
     // 19, insufficientFunds 23, built 7, demolished 20, five guests at the horizon.
-    expect(hashState(churn)).toBe('137b3dff76f88a93');
+    //
+    // MOVED AGAIN AT G-039b-alpha, `137b3dff76f88a93` -> `86a99eadfabb3e19`, AND THE SIBLINGS
+    // MOVE TOGETHER AGAIN — for the third time, and for a third distinct reason. This one is
+    // the SPINE: the seeded plate is a different plate, so the churn arm's player builds land
+    // over different ground and the plain arm's guests can reach providers they could not.
+    // **Unlike the last two, this one moves counters** — on the plain arm (see above). The
+    // controls asserted below this line are what say which of them moved on THIS arm.
+    expect(hashState(churn)).toBe('86a99eadfabb3e19');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

@@ -669,7 +669,7 @@ out.push(`             derived from ${BOUND_CAMPAIGN.arms.length} campaign arms,
 if (BOUND_CAMPAIGN.occupancyWhenTaken !== TARGET_CONCURRENT_HUNDREDTHS) {
   out.push(
     `             CAMPAIGN OCCUPANCY: arms taken at ${(BOUND_CAMPAIGN.occupancyWhenTaken / 100).toFixed(2)} concurrent guests; ` +
-      `this workload now holds ${(TARGET_CONCURRENT_HUNDREDTHS / 100).toFixed(2)} (G-023b-ii, travel).`,
+      `this workload now holds ${(TARGET_CONCURRENT_HUNDREDTHS / 100).toFixed(2)} (G-023b-ii travel, then G-039b-alpha's spine).`,
   );
   out.push('             The bound was NOT re-derived (ADR-0056, human). Two of the three arms materialise their own');
   out.push("             committed content, so they cannot be re-taken at today's occupancy at all.");

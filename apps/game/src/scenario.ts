@@ -193,7 +193,12 @@ function lodgingCell(index: number, entrance: Cell): Cell {
     // BACK INTO THE PLOT WHEN A ROW OF THE PLATE IS FULL (G-036a). Measured from the
     // ENTRANCE's row rather than written as `0`, so this host stays on whatever plot the sim
     // hands it — the same rule the column above follows.
-    row: entrance.row + ROWS_PER_ROOM * Math.floor(onFloor / LODGING_ROOMS_PER_ROW),
+    //
+    // AND ONE ROW FURTHER BACK STILL SINCE G-039b-alpha, because the entrance's own ROW is now
+    // the spine (`corridorCommands`). The column above has started one right of the entrance
+    // since G-030 for the same reason on the other axis; the two clauses now say the same thing
+    // twice, which is what the entrance being a CELL rather than a column always implied.
+    row: entrance.row + 1 + ROWS_PER_ROOM * Math.floor(onFloor / LODGING_ROOMS_PER_ROW),
   };
 }
 
@@ -214,7 +219,11 @@ function amenityCell(index: number, bounds: GridBounds, entrance: Cell): Cell {
     // three copies stacked into the depth (G-036b). `Entity.at` is a rectangle's ORIGIN — its
     // smallest column and smallest row — so an amenity's origin is its front-left cell and its
     // footprint carries the rest.
-    row: entrance.row,
+    //
+    // ONE ROW BACK OF THE NEAR EDGE SINCE G-039b-alpha: the near row is the spine here too. The
+    // basement gets one for the same reason the lodging floors do — its lanes were parallel and
+    // unjoined, so an amenity was reachable only from the one lane it happened to stand beside.
+    row: entrance.row + 1,
   };
 }
 
@@ -266,13 +275,42 @@ function corridorCommands(
   // loud, so it would be seen rather than missed, but it would be seen instead of the picture
   // this recording is for.
   const rows = (count: number): readonly number[] =>
-    Array.from({ length: count }, (_, row) => entrance.row + ROWS_PER_ROOM * row);
+    Array.from({ length: count }, (_, row) => entrance.row + 1 + ROWS_PER_ROOM * row);
+  /**
+   * ========================================================================================
+   * THE SPINE — the run of corridor along the ENTRANCE'S OWN ROW that joins the lanes to each
+   * other and to the door (G-039b-alpha).
+   *
+   * **THE LANES WERE PARALLEL AND UNJOINED, IN THIS FILE AS WELL AS IN `report.ts`.** The loop
+   * below has laid a lane down every even column since G-036a, and every one of them was a
+   * closed strip between two banks of rooms: a guest standing in the lane at the entrance's
+   * column could reach the two room columns beside it and NOTHING ELSE, because the only cells
+   * joining one lane to the next are the rooms between them and `isWalkableFor` admits a room
+   * only when it is the guest's own destination. G-038a-i measured the consequence on the
+   * harness layouts — journeys with a fully walkable path 34/88 at six rooms — and recorded
+   * that joining them requires MOVING ROOMS. This is the row the rooms moved to make.
+   *
+   * IT IS THE ENTRANCE'S ROW BECAUSE THAT IS THE ROW THAT BUYS BOTH THINGS AT ONCE: the lanes
+   * are joined, and `entranceCell` — which is `(clamp(0), minColumn, minRow)` and therefore the
+   * spine's own first cell — stands on circulation rather than on undeclared floor. G-030's
+   * one-column shift did the same job on the column axis and its docblock is still the reason
+   * the shift exists; this is that decision finished on the axis it did not have.
+   *
+   * IT RUNS THE FULL WIDTH OF THE BAND, room columns included, because nothing stands on it —
+   * the plate starts one row back — so declaring the lot costs no verdict and makes the run
+   * contiguous instead of a comb of stubs.
+   * ========================================================================================
+   */
+  const spine = (floor: number, columns: number): void => {
+    for (let column = 0; column <= columns; column += 1) lay(floor, entrance.column + column, entrance.row);
+  };
   // THE LODGING FLOORS: rooms sit on the ODD offsets (`lodgingCell` adds 1), so the walkway is
   // every EVEN one — including the entrance's own column, which is the lobby.
   for (let floor = 0; floor < LODGING_FLOORS; floor += 1) {
     for (let i = 0; i <= LODGING_ROOMS_PER_ROW; i += 1) {
       for (const row of rows(LODGING_ROWS)) lay(entrance.floor + floor, entrance.column + COLUMNS_PER_ROOM * i, row);
     }
+    spine(entrance.floor + floor, COLUMNS_PER_ROOM * LODGING_ROOMS_PER_ROW);
   }
   // THE AMENITY FLOOR: amenities sit on the EVEN offsets (`amenityCell` adds none), so the
   // walkway is every ODD one. Mirrored, and derived from the same stride rather than written
@@ -287,6 +325,14 @@ function corridorCommands(
   for (let i = 0; i < amenityColumns; i += 1) {
     for (const row of rows(AMENITY_ROWS)) lay(amenityFloor, entrance.column + COLUMNS_PER_ROOM * i + 1, row);
   }
+  // AND THE BASEMENT GETS A SPINE TOO, one column short of the lodging floors' because the
+  // amenity band is `amenityColumns` rooms wide with its lanes on the ODD offsets rather than
+  // the even ones. Whether a guest can get DOWN to it is a different question and this goal
+  // does not answer it: no harness in this project declares a stairwell, so the basement is a
+  // joined floor that the ground floor cannot reach. G-038a-ii-beta owns that, and its own
+  // block already says the WATCH it wants is the basement going red before a stair and green
+  // after.
+  spine(amenityFloor, COLUMNS_PER_ROOM * amenityColumns - 1);
   return commands;
 }
 

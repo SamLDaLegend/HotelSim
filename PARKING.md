@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-ii-alpha is done and G-039b was REWRITTEN at PLAN because most of it was already done — two of its four deliverables shipped in G-039a and three of five Carries bullets were discharged, while the ONE beta-blocking deliverable, the layout re-take, was not in the block at all. THE DIGEST ITSELF SAID THIRTEEN ROWS TEN GREEN THREE RED for eleven goals after that stopped being true, and said Unreliable 0 three lines below an as-of line saying 2 — found by a critic sizing a goal FROM the digest. ADR-0058 rules the TOGETHER clause unexecutable and discharged. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-039b-alpha is done and reachability from the entrance goes 1 of 75 to 60 of 75 — the number the reachability goal depends on. The lanes are joined, the entrance is out of room 0, and occupancy is re-taken to 850 ALONE per ADR-0058. WATCH #19 answers WATCH #16's parked test: joining every lane and moving every room buys motion 149 to 158 basis points, so the invisibility is BOUNDED rather than refuted. Two findings beyond the re-pins: the monotone-review discharge reverses at one rung and was standing on a 17-hundredth margin nothing reported, because a PREDICATE carries no margin; and the plate move inverted a parity that would have silently killed evictedRoomUnusable. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because

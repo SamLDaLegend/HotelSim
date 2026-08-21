@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-ii-alpha is done and G-039b was REWRITTEN at PLAN because most of it was already done — two of its four deliverables shipped in G-039a and three of five Carries bullets were discharged, while the ONE beta-blocking deliverable, the layout re-take, was not in the block at all. THE DIGEST ITSELF SAID THIRTEEN ROWS TEN GREEN THREE RED for eleven goals after that stopped being true, and said Unreliable 0 three lines below an as-of line saying 2 — found by a critic sizing a goal FROM the digest. ADR-0058 rules the TOGETHER clause unexecutable and discharged. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-039b-alpha is done and reachability from the entrance goes 1 of 75 to 60 of 75 — the number the reachability goal depends on. The lanes are joined, the entrance is out of room 0, and occupancy is re-taken to 850 ALONE per ADR-0058. WATCH #19 answers WATCH #16's parked test: joining every lane and moving every room buys motion 149 to 158 basis points, so the invisibility is BOUNDED rather than refuted. Two findings beyond the re-pins: the monotone-review discharge reverses at one rung and was standing on a 17-hundredth margin nothing reported, because a PREDICATE carries no margin; and the plate move inverted a parity that would have silently killed evictedRoomUnusable. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `ca7bee4a4d6ea416` · measure golden `418cf36055a3408c`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `ca7bee4a4d6ea416` · measure golden `5cfb73ca16c3463e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -3494,7 +3494,7 @@ MADE THE GOAL LOOK NECESSARY.** `sim-critic` found:
 bullet**, and there is no queue in the tree for a derivation to owe a term to.
 
 ## G-039b-α — The layout re-take
-Status: **PLANNED.** **The only half that unblocks reachability (β).**
+Status: **done.** Fourteen rows green, exit code read from the process. **No sim or content bytes touched — `check:tickcost` reported `IDENTICAL`, proven by digest.**
 Milestone: M3 · Owner pair: sim-engineer / sim-critic **plus render-engineer** — see below.
 
 **EVERY VIABLE REPAIR MOVES OCCUPANCY, AND THAT WAS MEASURED IN THREE SPELLINGS RATHER THAN
@@ -3538,6 +3538,83 @@ WATCH #16's own parked falsification test arriving for free** (*if journeys leng
 become visible — geometry or dial?*). Second watchable, no render work: **a guest turning out of the
 spine into a lane** rather than crossing room columns — WATCH #17's framing on a third subject.
 **Record at `--every 1`.**
+
+
+### G-039b-α — REFLECT
+
+**THE HEADLINE β DEPENDS ON: ROOMS REACHABLE FROM THE ENTRANCE GO 1 OF 75 → 60 OF 75**, and on the
+entrance floor **60 of 60**. Counted through `isWalkableFor` — **the same predicate `stepTowards`
+asks**, so pathing and the assertion cannot drift apart — and the joined component is **78 cells,
+asserted EQUAL to the floor's declared corridor count**: the circulation is one piece. **Proof of
+bite: strip the spine and the identical walk reaches 7 cells and cannot leave its lane.**
+
+**THE 15 THAT REMAIN UNREACHABLE ARE THE BASEMENT AMENITIES, AND THE BUILDER NAMED IT HERE RATHER
+THAN LEAVING β TO DISCOVER IT.** The basement is internally joined — it got a spine too — **it is
+the VERTICAL link that is missing**, and no harness declares a stairwell. **Not added**, because
+avoiding that requirement is the whole argument for variant C over B.
+
+**A CASCADE THE PLAN DID NOT NAME, AND IT WAS LOAD-BEARING.** Moving the plate to the odd columns
+**inverts the parity `playerCorridorCells`' offset-by-one was measured into existence for at
+G-034b.** Left alone it would have put **both of every player block's WORKING rooms in mid-air**,
+`unsupported` would have swallowed them, and **`evictedRoomUnusable` would have died — the exact
+failure that offset was created to prevent.** Repaired, and `report.test.ts` now asserts the parity
+**against `roomCell` itself** rather than an even/odd literal, **so the two layouts cannot drift
+apart again.**
+
+**THE CRITIC'S OCCUPANCY READING DID NOT REPRODUCE, AND THE BUILDER MEASURED THREE SPELLINGS RATHER
+THAN ADOPTING IT.** Variant C was quoted at **840**; the shipped one reads **850**, as do both
+neighbouring spellings (852 for row-only). **The pin is re-taken to 850, alone, per ADR-0058** — and
+**the reachability result is identical under all three spellings**, so the number β depends on is
+not sensitive to the disagreement. **The block says in as many words that G-040 and G-041 each
+re-take it again when they move it**, so this goal does not pre-pay for two others.
+
+**AND THE STRICT READING IS 1, NOT 0 — BOTH ARE RIGHT ABOUT DIFFERENT ROOTINGS.** Rooted at the door
+with room-specific walkability the pre-goal answer is **1**, and **that 1 IS the defect**: the only
+reachable room was room 0, **reachable because the door was standing inside it.** The charitable
+half reproduces the review's **16 exactly** — and the builder **declines to re-assert it**, because
+it is `2 columns × 8 rows` of a plate that no longer exists and **is therefore not re-measurable on
+this tree (rule 5).** Recorded in prose with its invocation instead.
+
+**THE I5 BENCH COMPLETES FIVE STAYS WHERE IT COMPLETED ONE** — the first time that row has gone UP.
+**Joined lanes, not a shorter walk**, and conservation closes: 5 + 61 + 9 = 75.
+
+**AND G-038a-i's OWN PREDICTION IS SCORED RATHER THAN QUOTED.** It wrote that the CLI default was
+inert *"because every journey had a row gap of zero — the fix is a layout with depth, not a stronger
+rule."* **The spine is that layout: through-wall landings on the CLI default go 33 → 16 at two days
+and 70 → 42 at four.** *(Flagged the other way, not overridden: on the 60-room bench they go 219 →
+236 — a real 7.8% rise on the one plate that is nearly full. **Every arm now carries its
+denominator**, because a landing count over a workload whose motion moved is two effects in one
+integer.)*
+
+### THE CALL THE BUILDER ASKED TO HAVE ADJUDICATED, AND IT HANDLED IT CORRECTLY
+
+**G-028b's monotone-review discharge REVERSES at exactly one rung.** Paired, mutation recipe, scratch
+copy restored `sha256sum -c` OK: means `[300, 317, 409, 500] → [300, 291, 409, 500]`, **with the
+departures byte-identical at every rung on both sides.** Only the *distribution* at rung 2 moved.
+**That is G-023b-ii's own sentence through another door — outcomes do not move; experience does —
+and ADR-0017 accepted exactly that trade.**
+
+> **THE FINDING WORTH MORE THAN THE RE-PIN: the margin was 17 hundredths and this goal moved the
+> rung by 26. Every other rung has ≥ 90.** The discharge was true **and standing on a knife-edge,
+> and nothing said so — because the arm asserted a PREDICATE, and predicates carry no margin.**
+
+**IT DID NOT FLIP THE ASSERTION, AND THAT WAS RIGHT.** Inverting a monotonicity claim is §9-shaped
+whatever the evidence. Instead it **pinned all four means as literals**, asserted the tail's
+monotonicity (unmoved), and **asserted the reversal as a NAMED claim — strictly more forbidden than
+the predicate it replaces.** *Confirmed by the orchestrator.* The other side of the same event:
+**the worst-reviewed hotel on the ladder is now the three-room one, not the one-room one.**
+
+**Also flagged, not tuned away**: **`noDoor` is down to 1** in the pinned criterion — *one room from
+the state that block's own warning is about* — and **the player's walk was NOT moved to protect the
+count, because that is tuning a workload to keep a test interesting.** The tally is compared whole
+so the next goal reads the numbers rather than the assertion length.
+
+**AND MY DIGEST INSTRUCTION WAS WRONG FOR THE SECOND TIME.** I told the builder not to edit the
+digests; `check:stamp` reads the measure golden **from the tree**, so *"leave the digests"* and
+*"fourteen rows green"* **cannot both hold for any goal that moves one.** It obeyed the instruction
+I gave and flagged the contradiction. **Standing correction: a builder MAY edit the two
+from-the-tree facts — the save version and the measure golden — and nothing else.**
+
 
 ## G-039b-β — The campaign that actually drifted
 Status: **PLANNED.** No layout, no WATCH, and it does not block β.

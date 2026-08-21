@@ -167,27 +167,59 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // cell removed would forbid nothing about that cell and nothing about the size of the dip;
     // this forbids a second fall anywhere on the grid, a fall of a different size, and a fall
     // that moves to a different cell — with the coordinates in the message.
+    //
     // ==========================================================================================
+    // AND AT G-039b-alpha THE EXCEPTION IS GONE: THE CENSUS IS EMPTY AND THE PROPERTY IS
+    // UNQUALIFIED AGAIN. Same grid, same invocation, both arms in one sitting, review mean x100:
+    //
+    //                 amen 1        amen 2        amen 3
+    //     3 rooms     317 -> 291    354 -> 354    354 -> 354
+    //     6 rooms     316 -> 317    409 -> 409    409 -> 409
+    //    12 rooms     371 -> 371    500 -> 500    500 -> 500
+    //
+    // **SEVEN OF THE NINE CELLS DO NOT MOVE AT ALL, AGAIN, AND IT IS THE SAME COLUMN THAT DOES.**
+    // The 3->6 room step at one amenity was `317 -> 316`, a fall of one hundredth; it is now
+    // `291 -> 317`, a rise of twenty-six. Both ends moved: the starved cell fell 26 and the
+    // under-provisioned cell rose 1.
+    //
+    // THE FALL WAS ALWAYS ONE HUNDREDTH WIDE AND THIS GOAL MOVED THE CELL BESIDE IT BY 26, which
+    // is the same knife-edge `unserved.report.test.ts`'s review-mean arm records from the other
+    // direction — there the margin was 17 and the move was 26, and the property broke; here the
+    // margin was 1 and the move was 26, and the property was restored. **Neither is evidence
+    // about the scorer.** Both are evidence that a three-room hotel with one of each amenity is
+    // where this project's review statistic has no margin at all, in either direction.
+    //
+    // THE EMPTY CENSUS IS GUARDED AGAINST VACUITY, which the old form did not need: an expected
+    // literal cannot be produced by a loop that never ran, and `[]` can. The comparison count is
+    // asserted beside it.
+    // ==========================================================================================
+    let compared = 0;
     const falls: string[] = [];
     for (const rooms of ROOMS) {
       for (let i = 1; i < AMENITIES.length; i += 1) {
         const drop = mean(at(rooms, AMENITIES[i - 1]!)) - mean(at(rooms, AMENITIES[i]!));
+        compared += 1;
         if (drop > 0) falls.push(`amenity axis at ${rooms} rooms, ${AMENITIES[i - 1]}->${AMENITIES[i]}: -${drop}`);
       }
     }
     for (const amenities of AMENITIES) {
       for (let i = 1; i < ROOMS.length; i += 1) {
         const drop = mean(at(ROOMS[i - 1]!, amenities)) - mean(at(ROOMS[i]!, amenities));
+        compared += 1;
         if (drop > 0) falls.push(`room axis at ${amenities} amenities, ${ROOMS[i - 1]}->${ROOMS[i]}: -${drop}`);
       }
     }
+    // TWELVE STEPS: three rows x two amenity steps, plus three columns x two room steps. If the
+    // grid ever shrinks, this goes red before the empty census can be read as a property.
+    expect(compared).toBe(12);
     expect(
       falls,
-      'THE SCORE FALLS SOMEWHERE NEW ON A SINGLE AXIS. Read the block above: exactly one fall ' +
-        'is known and accepted — one hundredth, on the room axis, into a cell a player has ' +
-        'under-provisioned. A second one, a bigger one, or one that has moved is a finding about ' +
-        'the scorer and needs a measurement rather than a re-pin.',
-    ).toEqual(['room axis at 1 amenities, 3->6: -1']);
+      'THE SCORE FALLS SOMEWHERE ON A SINGLE AXIS. Read the block above: it fell in exactly one ' +
+        'cell between G-023b-ii and G-039b-alpha — one hundredth, on the room axis, into a cell ' +
+        'a player has under-provisioned — and it does not any more. A fall reappearing, ' +
+        'anywhere, at any size, is a finding about the scorer and needs a measurement rather ' +
+        'than a re-pin.',
+    ).toEqual([]);
   });
 
   /*
@@ -262,7 +294,7 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
    * population, which is the property G-019's minimum-share criterion was rewritten into.
    * ============================================================================
    */
-  it('THREE scores clear the derived one-guest-per-simulated-day floor, at THREE rooms', () => {
+  it('FOUR scores clear the derived one-guest-per-simulated-day floor, at THREE rooms', () => {
     // ========================================================================
     // THE CRITERION, IN THE FORM G-019 HAD TO BE REWRITTEN INTO: *a stated minimum share per
     // named score, after the original was discharged by two guests.*
@@ -291,7 +323,13 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // this line and is gone — it is entailed by the equality, which forbids everything it
     // forbade and more, and it sat 23 lines above the epitaph for the assertion the same fix
     // removed from this same block (ADR-0035).
-    expect(clearing.map((row) => row.score)).toEqual([2, 3, 5]);
+    // [2, 3, 5] -> [2, 3, 4, 5] AT G-039b-alpha, AND A BAND APPEARED RATHER THAN A COUNT MOVING.
+    // The spine puts a three-room hotel's guests on longer walks, so a population that used to
+    // land squarely in the top band or squarely in the bottom two now spreads into the fourth —
+    // the same 32 guests that `unserved.report.test.ts`'s rung-2 distribution records moving
+    // 5 -> 4. **The criterion gets stronger rather than weaker**: it names four bands where it
+    // named three, each still carrying more than one guest per simulated day.
+    expect(clearing.map((row) => row.score)).toEqual([2, 3, 4, 5]);
     // AND THE SHARE PER NAMED SCORE, which is the criterion's own wording. The floor as a share
     // is derived from the same two numbers rather than chosen: one guest per simulated day over
     // the run's own departures.

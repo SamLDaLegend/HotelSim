@@ -230,6 +230,13 @@ describe('summary schema 4, and what an older consumer does with it', () => {
     expect(buildSummary(world, content, options).summary.schema).toBe(4);
   });
 
+  /**
+   * The invocation the divergence arm below stands on: ADR-0017's six-room configuration, which
+   * is also `needs.report.test.ts`'s criterion hotel. It was `--days 2 --seed 42` until
+   * G-039b-alpha; see the block inside the arm for the search that moved it.
+   */
+  const WITNESS = ['--days', '2', '--seed', '42', '--rooms', '6', '--amenities', '5'];
+
   it('THE MEANING OF `met` IS WHAT MOVED, AND THE COLUMNS BESIDE IT ARE THE WITNESS', () => {
     // ========================================================================
     // The property THIS bump exists for, driven rather than described — and it is the hardest
@@ -242,7 +249,7 @@ describe('summary schema 4, and what an older consumer does with it', () => {
     // is looking at without trusting the version — and the fact that they can disagree with a
     // schema-3 reading of `met` is the whole hazard.
     // ========================================================================
-    const { world, options } = runWorld(['--days', '2', '--seed', '42']);
+    const { world, options } = runWorld(WITNESS);
     const { summary } = buildSummary(world, content, options);
     for (const row of summary.needs) {
       expect(row.met + row.unmet, row.needId).toBe(departuresInSummary(summary));
@@ -280,6 +287,32 @@ describe('summary schema 4, and what an older consumer does with it', () => {
     // INTEGER COMPARISON, NOT `/ 2`. "Most" over 20 departures was `met < 10` and today's
     // witness reads exactly 10; `met * 2 <= departures` says "not more than half" without a
     // float and without a boundary anybody has to reason about.
+    //
+    // ==========================================================================================
+    // AND AT G-039b-alpha THE **INVOCATION** MOVED, WHICH IS THE CASE THE MESSAGE BELOW WAS
+    // WRITTEN FOR — read it before changing anything here, because it is an instruction.
+    //
+    // The spine took nourishment's `met` on `--days 2 --seed 42` from 10 of 20 to 11 of 20, so
+    // `met * 2 <= departures` stopped holding and NO row on the CLI default diverged. That is
+    // the state the message calls *"summary schema 4 would be bookkeeping"*, and the message
+    // says what to do about it: **find the invocation where the two columns still disagree, and
+    // move this arm to it — do not delete the claim.** Searched over 48 invocations (4 seeds x
+    // 3 arm lengths x 4 hotel sizes) and the six-room configuration diverges on THREE rows at
+    // both 2 and 3 days, on every seed. `--rooms 6 --amenities 5` is ADR-0017's own hotel and
+    // the one `needs.report.test.ts` runs its criterion on, so the arm moves to a workload this
+    // project already measures rather than to one found by the search alone.
+    //
+    //     `--days 2 --seed 42 --rooms 6 --amenities 5`, 17 departures
+    //     row                    pooled share inside the top band?   most instances inside it?
+    //     guest_comfort          no                                  n/a
+    //     guest_entertainment    yes                                 no  (7 of 17)
+    //     guest_nourishment      yes                                 no  (7 of 17)
+    //     night_rest             yes                                 no  (7 of 17)
+    //
+    // THREE WITNESSES RATHER THAN ONE IS A STRICTLY BETTER PLACE FOR THIS ARM TO STAND, because
+    // the failure mode it guards — no row diverging at all — now needs three rows to move
+    // rather than one. The search is recorded rather than the result alone, because *"there was
+    // no such invocation"* and *"I did not look far"* are the two readings of an empty search.
     // ==========================================================================================
     const departed = departuresInSummary(summary);
     const diverging = summary.needs.filter(
@@ -291,7 +324,7 @@ describe('summary schema 4, and what an older consumer does with it', () => {
         'it. That is the state in which summary schema 4 would be bookkeeping rather than a ' +
         'redefinition: re-read the block above, find the invocation where the two columns still ' +
         'disagree, and move this arm to it — do not delete the claim.',
-    ).toEqual(['guest_nourishment']);
+    ).toEqual(['guest_entertainment', 'guest_nourishment', 'night_rest']);
   });
 
   it('THE RENAMED REASONS ARE ABSENT FROM v3, NOT ZERO — the property THIS bump exists for', () => {

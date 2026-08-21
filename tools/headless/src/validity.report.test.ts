@@ -150,23 +150,41 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // walkway the corridor plan does not declare). Nothing went to zero and nothing was
     // weakened to `toBeGreaterThan(0)`.
     // ======================================================================================
+    // ======================================================================================
+    // RE-RECORDED AGAIN AT G-039b-alpha, AND THE TALLY MOVED FOR ONE CAUSE WITH TWO EFFECTS.
+    //
+    // The seeded plate gave its NEAR ROW to the spine, so floor 0's `minRow` is a run of
+    // corridor rather than a bank of bedrooms. The player's walk starts at `minRow` on floor 1
+    // — directly over it — so its whole first row now stands on circulation instead of on
+    // rooms. `unsupported` is checked FIRST, so those rooms report `unsupported` where some of
+    // them used to report `noDoor`:
+    //
+    //     unsupported  14 -> 17   ·   noDoor  3 -> 1   ·   noCorridor  3 -> 2
+    //
+    // **EVERY REASON IS STILL PRODUCED, AND `noDoor` IS DOWN TO ONE, WHICH IS FLAGGED RATHER
+    // THAN NOTED.** This block's own warning is that `reasons.length >= 2` survives on the
+    // wrong pair, and a reason sitting at 1 is one room away from the state it warns about.
+    // Nothing here fixes it: the player's walk is deliberately the layout that under-provides,
+    // and moving it to protect a count would be tuning a workload to keep a test interesting.
+    // What is owed is that the next goal to touch either layout READS THIS TALLY rather than
+    // the assertion length — which is why the tally is compared whole.
+    // ======================================================================================
     expect(summary.rooms.invalid).toEqual({
       missingItem: 0,
-      // FOURTEEN. Rooms the player built over the LANES of the hotel below: the seeded plate
-      // banks rooms along every row of its even columns, so the player's odd columns are the
-      // ones standing on nothing. Fifteen until G-038c bought one fewer room.
-      unsupported: 14,
-      // THREE, AND SINCE G-036a EVERY ONE OF THEM IS SEALED BY ROOMS ON ALL FOUR SIDES — no
-      // plot edge is doing any of the work. On the one-row plot this run produced TWO, both
-      // sealed on two sides with the other two probes off the world; that is the difference
-      // G-036a was about, and it survives the floor charge taking one of the four away.
-      noDoor: 3,
-      // THREE. `noCorridor` is checked LAST of the five, so a room counted here is supported,
+      // SEVENTEEN. Rooms the player built over something that is not a room: the LANES of the
+      // hotel below — the seeded plate banks rooms along the odd columns since G-039b-alpha, so
+      // the player's even columns stand on nothing — plus, since the same goal, every room of
+      // the player's FIRST ROW, which stands over the spine.
+      unsupported: 17,
+      // ONE, AND IT IS SEALED BY ROOMS ON ALL FOUR SIDES — no plot edge is doing any of the
+      // work. It was three until the spine moved the front row into `unsupported`.
+      noDoor: 1,
+      // TWO. `noCorridor` is checked LAST of the five, so a room counted here is supported,
       // furnished and doored — the rule biting on its own.
-      noCorridor: 3,
+      noCorridor: 2,
       unplaced: 0,
     });
-    expect(summary.rooms.valid).toBe(65);
+    expect(summary.rooms.valid).toBe(64);
   });
 
   it('and reports ZERO guests in any of them', () => {
@@ -178,12 +196,14 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // COUNTED SINCE G-036a, for the reason above: `checkedOut` was byte-identical across a
     // change that killed a validity reason, so it is exactly the number that has to be pinned
     // rather than merely non-zero.
-    expect(summary.rooms.valid).toBe(65);
+    expect(summary.rooms.valid).toBe(64);
     // G-038c: one fewer room built means slightly less capacity, and the closed form still
-    // holds to the penny — 1,269 x 8,500p. Both numbers moved together, which is what makes
-    // this a re-record rather than a coincidence.
-    expect(departuresOf(summary, 'checkedOut')).toBe(1_269);
-    expect(summary.money.revenuePennies).toBe(10_786_500);
+    // holds to the penny. G-039b-alpha: one fewer VALID room again — 65 -> 64 — for the cause
+    // in the tally above, and checkouts fall with it, 1,269 -> 1,217 x 8,500p. **The closed
+    // form is what makes this a re-record rather than a coincidence**: revenue is still exactly
+    // the checkout count times the rate, so the two numbers moved together rather than apart.
+    expect(departuresOf(summary, 'checkedOut')).toBe(1_217);
+    expect(summary.money.revenuePennies).toBe(10_344_500);
     expect(departuresOf(summary, 'checkedOut') * 8_500).toBe(summary.money.revenuePennies);
   });
 
@@ -192,7 +212,10 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // floor away or built against its door, and the guest left with an outcome. Without
     // the eviction path this would be 0 AND `inInvalidRooms` would be non-zero.
     // G-038c: 9 -> 8, one guest fewer, for the same one-fewer-room cause as the tally above.
-    expect(evictedInSummary(summary)).toBe(8);
+    // G-039b-alpha: 8 -> 7, again one fewer, again for the tally's cause — the player's front
+    // row is unsupported from the moment it is built, so a room that used to be occupied and
+    // then invalidated is now invalid before anybody can be evicted from it.
+    expect(evictedInSummary(summary)).toBe(7);
   });
 
   it('accounts for every room: valid plus invalid, with nothing left over', () => {
@@ -218,7 +241,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // a regular expression: the same run that took `noDoor` to 0 would have matched it with a
     // literal `0` in that slot. THREE reasons, at their counts, through a real process.
     expect(stdout).toContain(
-      'rooms bad   0 unplaced, 14 unsupported, 3 no door, 3 no corridor, 0 no item',
+      'rooms bad   0 unplaced, 17 unsupported, 1 no door, 2 no corridor, 0 no item',
     );
   }, 60_000);
 });

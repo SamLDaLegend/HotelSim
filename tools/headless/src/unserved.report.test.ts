@@ -185,7 +185,33 @@ describe('the provisioning rule is derived from content, and the ladder is built
     // described: the top rung and twice the top rung produce the same run.
     const twice = at(DEMAND * 2, amenitiesFor(DEMAND));
     expect(twice.guests.departures).toEqual(LADDER[LADDER.length - 1]!.guests.departures);
-    expect(sharesIn(twice)).toEqual(sharesIn(LADDER[LADDER.length - 1]!));
+    // ========================================================================================
+    // THE EQUALITY IS NO LONGER EXACT ON ONE ROW OF FOUR, AND THE TWO HALVES OF THIS ARM HAVE
+    // COME APART FOR A STATED REASON (G-039b-alpha).
+    //
+    //     departures     IDENTICAL, exactly, on both sides — the assertion above, unmoved
+    //     shares         [455, 893, 1302, 0]  ->  [455, 894, 1302, 0] at TWICE the rooms
+    //
+    // **SATURATION IS A CLAIM ABOUT THE POPULATION AND THE SHARE IS AN INTEGRAL OVER TICKS**, and
+    // only the first is implied by the cadence. Past saturation the same guests arrive, lodge and
+    // leave — that is what `departures` being identical says, and it is the property this arm is
+    // named for. But `--rooms 24` is a BIGGER BUILDING than `--rooms 12`: twelve more rooms means
+    // twelve more lanes, the plate reaches further across the floor, and a guest walking to an
+    // amenity spends a tick or two more in transit with its needs decaying. The unserved integral
+    // counts those ticks. It read equal before this goal because the pre-spine plate happened to
+    // give both room counts the same walk; it does not now, and one basis point on one row of
+    // four is the size of the effect.
+    //
+    // BOTH SIDES ARE PINNED AS LITERALS RATHER THAN A TOLERANCE BEING INTRODUCED. A `toBeCloseTo`
+    // here would permit any drift under whatever bound somebody chose; two exact arrays forbid
+    // strictly more than the equality did, and they say WHICH row moved and by how much.
+    // ========================================================================================
+    expect(sharesIn(LADDER[LADDER.length - 1]!)).toEqual([455, 893, 1302, 0]);
+    expect(sharesIn(twice)).toEqual([455, 894, 1302, 0]);
+    // AND THREE ROWS OF FOUR ARE STILL EXACTLY EQUAL, which is what says the fourth is a
+    // one-step difference in an integral rather than a different hotel.
+    const topShares = sharesIn(LADDER[LADDER.length - 1]!);
+    expect(sharesIn(twice).filter((value, index) => value === topShares[index])).toHaveLength(3);
   });
 
   it('and every rung converges to the occupancy it was provisioned for — the stable fixed point', () => {
@@ -255,10 +281,61 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     //
     // NO FIGURE IS SPELLED (ADR-0032 §1). What the effect is on THIS ladder is computed below.
     // ============================================================================
+    //
+    // ==========================================================================================
+    //  AND AT G-039b-alpha THE DISCHARGE IS **REVERSED AT EXACTLY ONE RUNG**, AND IT IS THE RUNG
+    //  IT ALWAYS HAD THE LEAST MARGIN AT. This is the loudest reading this goal produced and it
+    //  is written up rather than flipped, because `strictlyIncreasing(...)).toBe(false)` would
+    //  have been three characters and would have hidden all of it.
+    //
+    //  PAIRED, ONE SITTING, SAME LADDER, EXACT DETERMINISTIC INTEGERS — the "before" arm is this
+    //  tree with `report.ts` restored to `981d5c4` and nothing else changed, restored afterwards
+    //  from a scratch copy with `sha256sum -c` checked (`CLAUDE.md`'s mutation recipe):
+    //
+    //      rung            1 room   3 rooms   6 rooms   12 rooms
+    //      before            300      317       409       500
+    //      after             300     *291*      409       500
+    //
+    //  **THE DEPARTURES ARE BYTE-IDENTICAL AT EVERY RUNG, BOTH ARMS.** checkedOut 32/96/192/348
+    //  and gaveUp 326/260/161/0 on both sides. Nobody is housed who was not housed, and nobody
+    //  leaves who did not leave. What moved is the REVIEW DISTRIBUTION at one rung:
+    //
+    //      3 rooms   before   2:130, 3:130,        5:96
+    //                after    2:192, 3:68,  4:32,  5:64
+    //
+    //  So this is **G-023b-ii's own sentence arriving through a different door**: *"outcomes do
+    //  not move; experience does."* The spine lengthens every journey in a hotel whose two
+    //  amenities are spread across the plate, guests spend more of a short stay in transit with
+    //  their needs decaying, and thirty-two five-star stays become four-star ones while sixty-two
+    //  three-star ones become two-star ones. ADR-0017 accepted exactly that trade for travel.
+    //
+    //  **WHY IT CROSSES THE LINE HERE AND NOWHERE ELSE: THE MARGIN WAS 17 HUNDREDTHS.** Rung 2
+    //  sat at 317 against rung 1's 300 — a sixth of one band — and this goal moved it 26. Every
+    //  other rung has 90 or more. **G-028b's discharge was true and was standing on a
+    //  knife-edge**, and nothing in the file said so, because the arm asserted a PREDICATE and
+    //  predicates do not carry margins. That is the finding worth more than the re-pin.
+    //
+    //  AND THE 1-ROOM RUNG IS WHY THE EDGE IS THERE AT ALL, which is a fact about the LADDER
+    //  rather than about the scorer: at one room 326 of 358 guests never get a bed and review a
+    //  neutral 3, so the rung scores like an average hotel by never being one. A hotel that
+    //  serves a third of its guests badly scores below a hotel that serves almost none. Naming
+    //  it is not fixing it; `G-041` re-derives the rates and ADR-0034's amendment already
+    //  carries the amenity-axis half of the same complaint.
+    //
+    //  WHAT IS ASSERTED NOW FORBIDS STRICTLY MORE THAN THE PREDICATE IT REPLACES: all four means
+    //  as literals, the tail's monotonicity unchanged, and the reversal itself as a named claim.
+    //  A build that restored rung 2 goes red here, with the number in hand, instead of quietly
+    //  going green.
+    // ==========================================================================================
     const reviewMeans = LADDER.map((summary) => meanReviewHundredths(summary)!);
-    expect(strictlyIncreasing(reviewMeans)).toBe(true);
-    // And it agrees with the SHARE, which is the contrast this file was built to draw: the
-    // statistic and the score now move together over the same runs.
+    expect(reviewMeans).toEqual([300, 291, 409, 500]);
+    // THE DISCHARGE STILL HOLDS FROM RUNG 2 ONWARD, unmoved by this goal.
+    expect(strictlyIncreasing(reviewMeans.slice(1))).toBe(true);
+    // AND IT IS REVERSED AT RUNG 1 -> 2, asserted rather than left as an absence.
+    expect(reviewMeans[1]!).toBeLessThan(reviewMeans[0]!);
+    // And the SHARE statistic is untouched and still falls at every rung, which is the contrast
+    // this file was built to draw and which the reversal above makes sharper rather than weaker:
+    // the integral tracks the ladder where the score does not.
     const means = LADDER.map((summary) => meanShare(sharesIn(summary)));
     expect(strictlyDecreasing(means)).toBe(true);
   });
@@ -504,16 +581,34 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
     // no ratio is claimed from it. The SHARE half is untouched and still carries the finding:
     // the integral is phase-robust where the snapshot was not.
     // ========================================================================
+    // ========================================================================================
+    // 0 -> 1 HUNDREDTH AT G-039b-alpha, AND THE PARAGRAPH BELOW ALREADY PREDICTED THE MECHANISM.
+    // It says *"one guest in 329 does not move a mean rounded to hundredths"*. The spine moved
+    // the non-saturated cadence from 127 to 121 and put TWO guests of 346 outside the top band,
+    // and two do:
+    //
+    //     cadence      119        120        121              127
+    //     before       5:351      5:348      5:346            4:1, 5:328     spread 0
+    //     after        5:351      5:348      4:2, 5:344       5:329          spread 1
+    //
+    // **THE READING IS UNCHANGED AND IS STILL A CLAMP, NOT ROBUSTNESS.** One hundredth of a band
+    // against a ladder review effect of TWO HUNDRED hundredths is the ceiling of the scale
+    // showing through, exactly as zero was, and no ratio is claimed from it here either — which
+    // is the trap ADR-0034 section 3(a) names and caught an earlier claim in. The bound is
+    // asserted as a bound rather than the value as a literal, so a rung that genuinely
+    // de-saturated would go red rather than be re-pinned to 2, then 3, then 12.
+    // ========================================================================================
     const reviewPhaseSpread = spread(phases.map((summary) => meanReviewHundredths(summary)!));
-    expect(reviewPhaseSpread).toBe(0);
-    // And it is zero BECAUSE the rung is saturated, which is the precondition that makes the
-    // reading a clamp. Without this line the zero above reads as robustness.
+    expect(reviewPhaseSpread).toBeLessThanOrEqual(1);
+    // And it is a clamp BECAUSE the rung is saturated, which is the precondition that makes the
+    // reading a clamp. Without this line the bound above reads as robustness.
     //
     // ========================================================================================
     // SATURATION IS NO LONGER PERFECT AT ALL FOUR CADENCES, AND THE PIN IS NOW THE FOUR
-    // DISTRIBUTIONS THEMSELVES. With travel on, cadence 127 puts ONE guest of 329 in band 4:
+    // DISTRIBUTIONS THEMSELVES. With travel on, cadence 127 put ONE guest of 329 in band 4;
+    // since G-039b-alpha it is cadence 121 with TWO of 346, and 127 is saturated again:
     //
-    //     cadence 119   5:351          120   5:348          121   5:346          127   4:1, 5:328
+    //     cadence 119   5:351          120   5:348          121   4:2, 5:344     127   5:329
     //
     // `toHaveLength(1)` therefore fails at 127 while the spread above is still exactly zero —
     // one guest in 329 does not move a mean rounded to hundredths. **A `toHaveLength(2)` would
@@ -531,7 +626,7 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
         .map((row) => `${row.score}:${row.count}`)
         .join(','),
     );
-    expect(occupancy).toEqual(['5:351', '5:348', '5:346', '4:1,5:328']);
+    expect(occupancy).toEqual(['5:351', '5:348', '4:2,5:344', '5:329']);
     for (const summary of phases) {
       const occupied = summary.reviews.distribution.filter((row) => row.count > 0);
       // The modal band is the TOP band at every cadence, which is what "saturated" means and is

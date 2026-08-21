@@ -245,8 +245,16 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // TUNED TO THIS BUILD — measured paired, in one sitting, on this tree and on `6b536e3`:
     // **330 abandonments either way, byte-identical.** An arm whose reading the change does not
     // move is an arm that is measuring the mechanism rather than measuring this goal.
+    //
+    // 330 -> 321 AT G-039b-alpha. The spine moves every provider in this hotel, so a guest that
+    // is reassigned mid-visit is somewhere different when it is reassigned — the same class of
+    // perturbation as the wall rule, on an arm that is now three hundred events wide instead of
+    // one. **THAT WIDTH IS THE POINT AND IT IS WHY THIS IS A RE-PIN RATHER THAN A REPAIR**: a
+    // 2.7% move on 321 events is the mechanism being measured, where a 1 -> 0 move on a count
+    // of one was a coin-flip. The widening this arm received at G-038a-i is what makes the
+    // difference readable, one goal later, which is the instrument paying for itself.
     // ======================================================================================
-    expect(abandonmentsIn(contended)).toBe(330);
+    expect(abandonmentsIn(contended)).toBe(321);
   });
 
   it('and it abandons FAR less than a margin of zero, so the margin is doing the work', () => {
@@ -262,7 +270,14 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // to one provider keeps decaying on the others and can be overtaken en route. **The margin
     // is what stops that from happening in the shipped arm**, and the widening gap between the
     // two arms is this criterion's own quantity getting stronger, not weaker.
-    expect(abandonmentsIn(thrash)).toBe(5_590);
+    //
+    // 5,590 -> 12,118 AT G-039b-alpha, WHICH IS THE SAME SENTENCE WITH A BIGGER NUMBER. Joining
+    // the lanes means a walking guest passes NEAR providers it was not going to, and a
+    // margin-zero guest re-decides on every tie; the spine manufactures ties. The shipped arm
+    // stays at zero, so the separation this criterion rests on more than doubles. **A criterion
+    // whose gap grows is not a criterion that needs re-deriving** — the ordering assertion above
+    // this line is the claim, and this literal is the size of it.
+    expect(abandonmentsIn(thrash)).toBe(12_118);
   });
 
   it('and the separation is a factor, not a rounding difference', () => {
@@ -305,7 +320,15 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // SHIPPED and eraA arms do NOT move — both still 1,095** — so the reversal recorded above
     // narrows without closing, and the two literals either side of this one are the control
     // that says which arm paid.
-    expect(engagementMet(thrash)).toBe(1_712);
+    //
+    // 1,712 -> 1,586 AT G-039b-alpha, AND THE CONTROL HOLDS AGAIN: **shipped and eraA are BOTH
+    // STILL 1,095, byte-identical across the layout change**, so the whole move is on the thrash
+    // arm. Same cause as its abandonment count doubling — every extra re-decision buys a walk —
+    // and the reversal this block records narrows for the second goal running without closing:
+    // 1,862 -> 1,712 -> 1,586 against 1,095. **If it ever closes, the reversal is discharged and
+    // G-014b's original finding is back**; that is worth watching, and the two unmoved literals
+    // either side of this one are what will make it legible when it happens.
+    expect(engagementMet(thrash)).toBe(1_586);
     expect(engagementMet(shipped)).toBe(engagementMet(eraA));
     expect(engagementMet(thrash)).toBeGreaterThan(engagementMet(shipped));
   });
@@ -521,10 +544,15 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // engagement row loses met-instances and gains abandonments, and the total falls 1,862 ->
     // 1,712. A guest with no margin re-decides on every tie and now pays a walk for each
     // re-decision. `night_rest` is unmoved at 192/519 in all three arms, which is the anchor.
+    // MOVED AGAIN AT G-039b-alpha, AND AGAIN ONLY THIS ARM — the two tables above are unmoved,
+    // which is the control this pair exists for. Every engagement row loses met-instances and
+    // MORE THAN DOUBLES its abandonments: comfort 2,038 -> 4,630, entertainment 1,615 -> 3,083,
+    // nourishment 1,937 -> 4,405. `night_rest` is unmoved at 192/519 in all three arms, which is
+    // the anchor and says the guests who got a room still got one promptly.
     expect(table(thrash)).toEqual({
-      guest_comfort: [484, 227, 2_038],
-      guest_entertainment: [521, 190, 1_615],
-      guest_nourishment: [707, 4, 1_937],
+      guest_comfort: [452, 259, 4_630],
+      guest_entertainment: [479, 232, 3_083],
+      guest_nourishment: [655, 56, 4_405],
       night_rest: [192, 519, 0],
     });
     // AND THE ABANDONMENT COLUMN IS UNTOUCHED BY G-028b, WHICH IS THE CONTROL FOR THE ROWS
@@ -533,7 +561,7 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // indistinguishable from the simulation behaving differently.
     const abandonments = (summary: Summary): number[] =>
       summary.needs.map((row) => row.abandoned);
-    expect(abandonments(thrash)).toEqual([2_038, 1_615, 1_937, 0]);
+    expect(abandonments(thrash)).toEqual([4_630, 3_083, 4_405, 0]);
     expect(abandonments(shipped)).toEqual([0, 0, 0, 0]);
   });
 

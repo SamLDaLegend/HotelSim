@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-038a-ii-alpha is done and G-039b was REWRITTEN at PLAN because most of it was already done — two of its four deliverables shipped in G-039a and three of five Carries bullets were discharged, while the ONE beta-blocking deliverable, the layout re-take, was not in the block at all. THE DIGEST ITSELF SAID THIRTEEN ROWS TEN GREEN THREE RED for eleven goals after that stopped being true, and said Unreliable 0 three lines below an as-of line saying 2 — found by a critic sizing a goal FROM the digest. ADR-0058 rules the TOGETHER clause unexecutable and discharged. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-039b-alpha is done and reachability from the entrance goes 1 of 75 to 60 of 75 — the number the reachability goal depends on. The lanes are joined, the entrance is out of room 0, and occupancy is re-taken to 850 ALONE per ADR-0058. WATCH #19 answers WATCH #16's parked test: joining every lane and moving every room buys motion 149 to 158 basis points, so the invisibility is BOUNDED rather than refuted. Two findings beyond the re-pins: the monotone-review discharge reverses at one rung and was standing on a 17-hundredth margin nothing reported, because a PREDICATE carries no margin; and the plate move inverted a parity that would have silently killed evictedRoomUnusable. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
-  `418cf36055a3408c` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
+  `5cfb73ca16c3463e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -1787,3 +1787,39 @@ rather than stored.** So **the stair changes VISIBILITY, not behaviour** — WAT
 arriving on a third subject. **Parked with its falsification test in the code**: suppress the
 re-target while a guest is on the stairwell, and this count should go to zero **while the
 journey-bound arm does not move.**
+
+## WATCH #19 — G-039b-α. The ground floor reads as a hotel floor, and WATCH #16's parked test is answered.
+
+**8,182 frames at `--every 1`**, seed 7, `--ticks 2045 --floor 0` (gitignored, reproducible).
+**Every one of the 2,046 census lines reads `invalid 0` and `hollow 0`.**
+
+### WATCH #16's PARKED FALSIFICATION TEST, ARRIVING FOR FREE — AND THE ANSWER IS NO
+
+It asked: *if journeys lengthened, would walking become visible, or is the invisibility geometry
+rather than the dial?* **Paired in one sitting, same subject:**
+
+| | guest-frames | moves | **motion** | frames on circulation |
+|---|---|---|---|---|
+| before (`981d5c4`) | 20,154 | 300 | **149 bp** | 101 |
+| after (the spine) | 21,162 | 334 | **158 bp** | 122 |
+
+**The before arm reproduces WATCH #16's figures EXACTLY — 20,154 / 300 / 149 — so this is a
+re-measurement rather than a quotation.**
+
+> **149 → 158 basis points is one frame in 63 instead of one in 67.** The hypothesis is **not
+> refuted, it is BOUNDED**: a geometry change that **joins every lane and moves every room a row
+> back** buys **6%**, and that is nothing. **The invisibility survives it.**
+
+### THE SECOND WATCHABLE, WITH ITS FRAME REFERENCE
+
+`t002042-f0-reduced.svg` → `t002043-f0-reduced.svg`. **The two frames differ in exactly one
+figure** — `translate(736 292)` → `translate(672 388)`, Δx = −64, Δy = +96 — **guest 18 stepping
+`(0,3,0) → (0,4,2)`: off the lobby spine, one column right and two rows back into a lane.** Its
+three need bars move with it.
+
+**Before this goal the same class of move was `(0,2,0) → (0,4,1)`, crossing a room column. There is
+no longer any such move, because there is a lane to turn into.**
+
+**Nothing read as stupid**: no guest inside a wall, none in a stranger's room, none stalled, none
+drawn twice — **and the ground floor's plan now reads as a hotel floor: a lobby corridor across the
+front with the door at its left end, lanes running back off it, rooms banked between them.**

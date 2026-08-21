@@ -344,14 +344,21 @@ describe('CRITERION 2: --rooms 6 --arrivals 60 spreads guests across the scale',
     // it, which is the right direction for a change that makes some guests walk further than
     // others: a hotel that treats everybody identically cannot produce a spread, and this one
     // has stopped treating everybody identically.
+    //
+    // G-039b-alpha: THE SAME SENTENCE, TWICE AS LOUD. 0/110/190/413/0 -> 0/216/111/386/0, and
+    // the mean falls 342 -> 324. The spine spreads the walks further apart still — a guest whose
+    // room is at the near end of the plate and one at the far end are now several ticks apart on
+    // every journey — so the second band nearly doubles. **This criterion is about SPREAD and
+    // the spread got wider**: three occupied bands, none of them the whole run, and the modal
+    // band's share falls from 413/713 to 386/713.
     expect(middle.reviews.distribution).toEqual([
       { score: 1, count: 0 },
-      { score: 2, count: 110 },
-      { score: 3, count: 190 },
-      { score: 4, count: 413 },
+      { score: 2, count: 216 },
+      { score: 3, count: 111 },
+      { score: 4, count: 386 },
       { score: 5, count: 0 },
     ]);
-    expect(meanReviewHundredths(middle)).toBe(342);
+    expect(meanReviewHundredths(middle)).toBe(324);
     expect(middle.reviews.distribution.filter((row) => row.count === 0)).toHaveLength(2);
   });
 
@@ -403,7 +410,7 @@ describe('CRITERION 2: --rooms 6 --arrivals 60 spreads guests across the scale',
     // an arbitrary one. Asserted rather than assumed: a build that grew a small band again
     // makes this red, and the arm above regains a real lower bound.
     expect(excludedBands).toEqual([]);
-    expect(included).toBe(110);
+    expect(included).toBe(111);
     const high = included / middle.world.days;
     expect(high).toBeGreaterThan(1);
     for (const rate of [0, 0.5, 1, 3, high - 0.01]) {
@@ -412,7 +419,7 @@ describe('CRITERION 2: --rooms 6 --arrivals 60 spreads guests across the scale',
     // And at the upper end the selection really does change — or the sweep above is asserting
     // that a filter with no discriminating power gives a constant answer. The lower end cannot
     // be exhibited: with nothing under the floor there is no rate below which a new band joins.
-    expect(selectedAt(high)).toEqual([3, 4]);
+    expect(selectedAt(high)).toEqual([2, 4]);
     // Three occupied bands, so the sweep is choosing rather than agreeing with itself.
     expect(counts.filter((c) => c > 0)).toHaveLength(3);
   });
@@ -489,11 +496,11 @@ describe('CRITERION 2: --rooms 6 --arrivals 60 spreads guests across the scale',
     // G-023b-ii: 2/141/15 -> 3/140/17. Three guests move between adjacent bands out of 353;
     // the SHAPE — five occupied bands, mass at 2 and 4 — is unchanged, which is what this arm
     // is about.
-    expect(countAt(amen1, 1)).toBe(3);
-    expect(countAt(amen1, 2)).toBe(140);
-    expect(countAt(amen1, 3)).toBe(17);
-    expect(countAt(amen1, 4)).toBe(185);
-    expect(countAt(amen1, 5)).toBe(8);
+    expect(countAt(amen1, 1)).toBe(2);
+    expect(countAt(amen1, 2)).toBe(137);
+    expect(countAt(amen1, 3)).toBe(20);
+    expect(countAt(amen1, 4)).toBe(187);
+    expect(countAt(amen1, 5)).toBe(7);
     // The two filters still differ somewhere, which is the property the replacement rests on.
     // ========================================================================
     // THE ARM THAT DEMONSTRATES IT MOVED, AND THAT IS SAID RATHER THAN SWAPPED IN SILENTLY.
@@ -645,12 +652,34 @@ describe('AXIS 1: --rooms 1 and --rooms 12 review differently', () => {
     // WHAT IS ASSERTED NOW: the three literals, and the far-end ordering that survives. The
     // near-end inequality is asserted as the FALSEHOOD it is, so a build that restored it goes
     // red here rather than passing quietly.
+    //
+    // ==========================================================================================
+    // AND AT G-039b-alpha IT IS RESTORED, WHICH IS WHY IT WAS ASSERTED AS A FALSEHOOD RATHER
+    // THAN DELETED. Same ladder, three arms now:
+    //
+    //     rooms          1     3    12
+    //     travel off    195   160    16
+    //     travel on     196   226    16
+    //     + the spine   196   165    15
+    //
+    // **`--rooms 1` IS THE BEST HOTEL IN THE BUILDING AT COMFORT AGAIN.** The one-room rung does
+    // not move at all (196 both ways); the three-room rung falls 226 -> 165, back to within five
+    // of its pre-travel value. G-023b-ii's diagnosis is what predicts this: it said the loss came
+    // from a room-less guest being *"charged for each journey"* because it *"starts every journey
+    // from wherever it is rather than from a base"*. **The spine is what makes those journeys
+    // possible to complete** — the room-less guest's walks now reach a provider instead of
+    // dead-ending in a lane — so the queue buys engagement time again and the monotone ladder
+    // comes back.
+    //
+    // THE FALSEHOOD ASSERTION IS THE THING THAT MADE THIS LEGIBLE. Had G-023b-ii dropped the
+    // clause instead of inverting it, this goal would have restored a property nobody was
+    // watching and nobody would have known.
     // ==========================================================================================
     const comfortIn = (s: RunSummary) => s.needs.find((row) => !row.lodging && row.metByItem > 0)!.met;
     expect(comfortIn(rooms1)).toBe(196);
-    expect(comfortIn(rooms3)).toBe(226);
-    expect(comfortIn(rooms12)).toBe(16);
-    expect(comfortIn(rooms1) > comfortIn(rooms3)).toBe(false);
+    expect(comfortIn(rooms3)).toBe(165);
+    expect(comfortIn(rooms12)).toBe(15);
+    expect(comfortIn(rooms1) > comfortIn(rooms3)).toBe(true);
     expect(comfortIn(rooms3)).toBeGreaterThan(comfortIn(rooms12));
     // AND THE MEAN NOW OPPOSES IT RATHER THAN FOLLOWING IT.
     expect(meanExceedsBy(rooms12, rooms1, 0)).toBe(true);
@@ -718,7 +747,7 @@ describe('AXIS 1: --rooms 1 and --rooms 12 review differently', () => {
     // ==========================================================================================
     const share = (s: RunSummary): number => (countAt(s, SCALE.max) * 10_000) / reviewsIn(s);
     const means = [rooms1, rooms3, rooms6, rooms12].map((s) => meanReviewHundredths(s)!);
-    expect(means).toEqual([300, 317, 316, 371]);
+    expect(means).toEqual([300, 291, 317, 371]);
     const rungs = [1, 3, 6, 12] as const;
     const inversions = means
       .map((mean, i) => (i > 0 && mean < means[i - 1]! ? `${rungs[i - 1]}->${rungs[i]}: -${means[i - 1]! - mean}` : ''))
@@ -729,11 +758,37 @@ describe('AXIS 1: --rooms 1 and --rooms 12 review differently', () => {
         'recorded above — one hundredth, into the under-provisioned six-room rung. A second, a ' +
         'bigger one, or one at a different rung is a finding about the scorer that M4 needs, and ' +
         'it needs a measurement rather than a re-pin.',
-    ).toEqual(['3->6: -1']);
-    // AND THE ENDPOINTS STILL ORDER CORRECTLY, which is the half of the property that did not
-    // move: the biggest hotel is the best and the smallest is the worst.
+    ).toEqual(['1->3: -9']);
+    // ==========================================================================================
+    // AND AT G-039b-alpha THE FALL MOVES RUNG AND GROWS NINEFOLD, AND ONE OF THE TWO ENDPOINT
+    // CLAIMS GOES WITH IT. Same ladder, same invocation, both arms in one sitting:
+    //
+    //     rooms          1     3     6    12
+    //     travel off    300   304   317   371     monotone
+    //     travel on     300   317   316   371     FALLS at 3 -> 6, by 1
+    //     + the spine   300   291   317   371     FALLS at 1 -> 3, by 9
+    //
+    // **THE 3 -> 6 FALL IS REPAIRED AND A BIGGER ONE OPENS AT 1 -> 3.** The six-room rung goes
+    // back up (316 -> 317) because joining the lanes lets an under-provisioned hotel's guests
+    // reach the amenity they were queuing beside; the three-room rung falls 26 because the same
+    // hotel's three bedrooms are now a row further from everything, and at three rooms there is
+    // no queue to hide the walk in.
+    //
+    // **SO `Math.min(...means) === means[0]` IS NOW FALSE AND IS ASSERTED AS FALSE**: the
+    // WORST-REVIEWED hotel on this ladder is the three-room one, not the one-room one. That is
+    // not a scorer defect — at one bedroom 326 of 358 guests never get a bed at all and review a
+    // neutral 3, so the rung scores like an average hotel by never being one — but it is a real
+    // loss of an endpoint claim M4 might have leaned on, and it is written down rather than
+    // dropped from the arm.
+    //
+    // **AND `scorer.report.test.ts` NO LONGER MEASURES THE SAME CELL**, which the paragraph
+    // above says it does; its grid is 3/6/12 rooms and this fall is at 1 -> 3, outside it. Its
+    // census is EMPTY now, and the two files agree about that: there is no fall between 3 and 12
+    // in either. The cross-reference is corrected rather than left pointing at a coincidence.
+    // ==========================================================================================
     expect(Math.max(...means)).toBe(means[means.length - 1]!);
-    expect(Math.min(...means)).toBe(means[0]!);
+    expect(Math.min(...means)).toBe(means[1]!);
+    expect(Math.min(...means) === means[0]!).toBe(false);
     // THE TOP SHARE IS STILL NOT MONOTONE, and it peaks back at THREE rooms — twelve rooms
     // produce EIGHT five-star reviews in 355 at θ-b1, where θ-a read one in 348. The statistic
     // M4 may not read is unchanged in kind; what changed is that the statistic it COULD read
@@ -744,7 +799,13 @@ describe('AXIS 1: --rooms 1 and --rooms 12 review differently', () => {
     // reputation term reading this statistic would still punish building.
     // G-023b-ii: 255 -> 227 at the six-room rung, the other three unmoved. The shape — a peak
     // at three rooms and a zero at twelve — is what this arm is about and it is untouched.
-    expect(shares.map((x) => Math.round(x))).toEqual([894, 2697, 227, 0]);
+    // G-039b-alpha: 2,697 -> 1,798 at three rooms and 227 -> 198 at six; the one-room rung and
+    // the twelve-room zero are BOTH unmoved. **THE SHAPE IS UNTOUCHED AGAIN** — still a peak at
+    // three rooms, still a zero at twelve — which is what this arm asserts in the four lines
+    // below. Fewer perfect stays at the two middle rungs is the same walk that moved the means:
+    // a five-star stay is one where nothing was ever below its want line, and a longer walk is
+    // the cheapest way to spend a few ticks below it.
+    expect(shares.map((x) => Math.round(x))).toEqual([894, 1798, 198, 0]);
     expect(shares[1]!).toBeGreaterThan(shares[0]!);
     expect(shares[3]!).toBeLessThan(shares[2]!);
     const nonDecreasingShares = shares.every((x, i) => i === 0 || x >= shares[i - 1]!);
@@ -772,8 +833,8 @@ describe('AXIS 1: --rooms 1 and --rooms 12 review differently', () => {
     // fact every other file in this goal reports: travel moves guests between CHECKED OUT and
     // LEFT DISSATISFIED, and never between either of those and GAVE UP, because a guest that
     // never gets a room never walks anywhere.
-    expect([countOf(rooms12, 'checkedOut'), countOf(rooms12, 'gaveUp')]).toEqual([46, 0]);
-    expect([countOf(amen1, 'checkedOut'), countOf(amen1, 'gaveUp')]).toEqual([161, 148]);
+    expect([countOf(rooms12, 'checkedOut'), countOf(rooms12, 'gaveUp')]).toEqual([56, 0]);
+    expect([countOf(amen1, 'checkedOut'), countOf(amen1, 'gaveUp')]).toEqual([155, 143]);
     // TWELVE ROOMS IS ENOUGH BEDS AND NOT ENOUGH HOTEL (θ-b1). Nobody gives up waiting — the
     // beds are there — and 289 of the 355 that get one walk out anyway. "Adequate" now needs
     // both rows to be small, and this configuration answers only one of them, which is exactly
@@ -781,7 +842,7 @@ describe('AXIS 1: --rooms 1 and --rooms 12 review differently', () => {
     expect(countOf(rooms12, 'gaveUp')).toBe(0);
     // 289 -> 309, the twenty that stopped checking out. The sentence above still holds and its
     // numbers move together: enough beds, not enough hotel.
-    expect(countOf(rooms12, 'leftDissatisfied')).toBe(309);
+    expect(countOf(rooms12, 'leftDissatisfied')).toBe(294);
   });
 });
 
@@ -842,7 +903,7 @@ describe('AXIS 2: at fixed rooms, amenity density moves the review mean', () => 
     // broke the room ladder's monotonicity one describe up: 200 -> 316 -> 409 is strictly up,
     // the first gap still clears a whole step, and the second still does not.
     expect(meanReviewHundredths(amen0)).toBe(200);
-    expect(meanReviewHundredths(amen1)).toBe(316);
+    expect(meanReviewHundredths(amen1)).toBe(317);
     expect(meanReviewHundredths(amen5)).toBe(409);
     // AND THE TOP OF THE LADDER IS NO LONGER A POINT MASS, WHICH IS THE REPAIR G-028's BLOCK
     // ASKED FOR BY NAME. It read *"`--amenities 5` IS NOW A PURE POINT MASS, WHICH VIOLATES
@@ -907,7 +968,7 @@ describe('AXIS 2: at fixed rooms, amenity density moves the review mean', () => 
     // control it feeds is weakened in the same way and for the same reason as before.
     // G-023b-ii: 196 -> 194 at the middle rung, the two ends unmoved. The control was already
     // recorded as FALSE rather than inexact, and this moves it no further in either direction.
-    expect([lodgingMet(amen0), lodgingMet(amen1), lodgingMet(amen5)]).toEqual([357, 194, 192]);
+    expect([lodgingMet(amen0), lodgingMet(amen1), lodgingMet(amen5)]).toEqual([357, 196, 192]);
     // The equality the criterion wanted, stated as the falsehood it is.
     expect(lodgingMet(amen0) === lodgingMet(amen1)).toBe(false);
     // ---------------------------------------------------------------------------
@@ -1010,8 +1071,8 @@ describe('A STAY THE HOTEL CUT SHORT reviews at the floor, in a real run', () =>
     // below is untouched — 5 evictions, 5 floor reviews, exactly equal** — which is the point of
     // having it and is the fifth era in which that equality has held unchanged while the slack
     // arm moved around it.
-    expect(countAt(evictionsNamed, SCALE.min)).toBe(432);
-    expect(countAt(evictionsNamed, SCALE.min) - evictedIn(evictionsNamed)).toBe(427);
+    expect(countAt(evictionsNamed, SCALE.min)).toBe(433);
+    expect(countAt(evictionsNamed, SCALE.min) - evictedIn(evictionsNamed)).toBe(428);
     expect(evictedIn(evictions)).toBe(5);
     expect(countAt(evictions, SCALE.min)).toBe(5);
     expect(countAt(evictions, SCALE.min)).toBe(evictedIn(evictions));
@@ -1108,8 +1169,8 @@ describe('the bimodal recording configuration shows BOTH outcomes', () => {
     // guest giving up and a guest walking out on a stay at rates a watcher can actually see
     // within a session rather than one event in seventy. Nobody still reaches a checkout clock.
     expect(checkedOut).toBe(0);
-    expect(gaveUp).toBe(110);
-    expect(leftDissatisfied).toBe(603);
+    expect(gaveUp).toBe(217);
+    expect(leftDissatisfied).toBe(496);
     // BOTH GUEST-INITIATED TERMINATORS FIRE, which is what the recording is for. `checkedOut`
     // is zero here and that is the finding rather than a gap: at one arrival every 60 ticks
     // against six bedrooms, no guest in this hotel ever reaches its checkout clock.
@@ -1141,7 +1202,7 @@ describe('the bimodal recording configuration shows BOTH outcomes', () => {
     expect(countAt(middle, SCALE.min)).toBe(0);
     expect(countAt(middle, SCALE.max)).toBe(0);
     // What is left of the original property: the modal band is not the whole run.
-    expect(Math.max(...middle.reviews.distribution.map((row) => row.count))).toBe(413);
+    expect(Math.max(...middle.reviews.distribution.map((row) => row.count))).toBe(386);
     expect(Math.max(...middle.reviews.distribution.map((row) => row.count))).toBeLessThan(total);
   });
 });

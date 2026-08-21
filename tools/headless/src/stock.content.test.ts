@@ -184,6 +184,31 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
    * over such content rather than quietly seeding nothing.
    */
   const VISITOR_ARM: Arm = { rooms: 0, amenities: 3, ticks: 2_000 };
+  /**
+   * THE DEFAULT HOTEL, RUN TWICE AS LONG — the fourth answer to "where does this number live",
+   * and it is a WINDOW rather than a hotel (G-039b-alpha).
+   *
+   * `dissatisfactionCapacityTicks` bit in `DEFAULT_ARM` until the spine, and the layout change
+   * pushed the first tick at which the ceiling BINDS past 2,000. Measured over this file's own
+   * instrument, mutation value against arm length, `same`/`MOVED` on the state hash:
+   *
+   *     value       181   200   250   300   360   429
+   *     3/1/2000    same  same  same  same  same  same
+   *     3/1/4000    MOVED MOVED MOVED same  same  same
+   *     3/1/6000    MOVED MOVED MOVED same  same  same
+   *     60/3/6000   same  same  same  same  same  same
+   *
+   * So the field is REACHABLE in the default hotel and the arm's WINDOW was too short, which is
+   * a different fact from `dissatisfactionReliefPerTick`'s (unreachable at any value in the
+   * hotel that never serves anybody) and is recorded as a different fact. Doubling the window
+   * is the smallest change that restores the bite, and 4,000 rather than 6,000 because the two
+   * read identically and the shorter one costs less on `pnpm test`.
+   *
+   * IT IS NOT A WEAKENING: the mutation value is unchanged at 181 — still the tightest ceiling
+   * `assertDissatisfactionOutlastsTheLobby` admits — and the arm still asks the same question
+   * of the same hotel.
+   */
+  const DEEP_ARM: Arm = { rooms: 3, amenities: 1, ticks: 4_000 };
   const FOOD_COURT = bindContent(FOOD_COURT_CONTENT as unknown as SimContent);
 
   /**
@@ -198,7 +223,9 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
    * `dissatisfactionCapacityTicks` GOES TO 181, one above the lobby tolerance — the tightest
    * ceiling `assertDissatisfactionOutlastsTheLobby` admits against the shipped `toleranceTicks`.
    * At 430 it moves nothing over two thousand ticks, which is what a number one below its
-   * shipped value SHOULD do and is why the mutation is large rather than adjacent.
+   * shipped value SHOULD do and is why the mutation is large rather than adjacent. **Its ARM
+   * moved to `DEEP_ARM` at G-039b-alpha and its VALUE did not** — see `DEEP_ARM` for the
+   * value-by-window table that says why.
    *
    * `dissatisfactionReliefPerTick` GOES UP, because 1 is the floor `cloneDissatisfaction`
    * admits: a stock that never drains is a ratchet.
@@ -238,7 +265,7 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
     toleranceTicks: { to: 120, arm: DEFAULT_ARM },
     abandonMarginBasisPoints: { to: 0, arm: DEFAULT_ARM },
     stayDurationTicks: { to: 1_380, arm: DEFAULT_ARM },
-    dissatisfactionCapacityTicks: { to: 181, arm: DEFAULT_ARM },
+    dissatisfactionCapacityTicks: { to: 181, arm: DEEP_ARM },
     dissatisfactionReliefPerTick: { to: 61, arm: SERVED_ARM },
     visitDurationTicks: { to: 400, arm: VISITOR_ARM, base: FOOD_COURT },
   };
@@ -249,6 +276,7 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
       [DEFAULT_ARM, simHash(SHIPPED, DEFAULT_ARM)],
       [SERVED_ARM, simHash(SHIPPED, SERVED_ARM)],
       [VISITOR_ARM, simHash(FOOD_COURT, VISITOR_ARM)],
+      [DEEP_ARM, simHash(SHIPPED, DEEP_ARM)],
     ]);
     for (const needType of needTypesInOrder(SHIPPED)) {
       for (const field of PER_NEED_TYPE) {
