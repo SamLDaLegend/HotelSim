@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-023b-ii is done and travel is ON. The circulation goal split again at PLAN — four BLOCKERs, and the decisive one is MEASURED: a route search per guest per tick costs 1.70x/1.91x/1.77x against a bound the human froze at 1.4640 this same morning, and that arm was a generous lower bound. Both walkability answers are unimplementable on the shipped plans; 166 of 300 move events change floor and there is still no stair anywhere. Two ledger blocks were physically broken and are repaired. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-i is done: a guest no longer walks through solid rooms, and it cost NOTHING — check:tickcost 0.9978 against 1.4640, where a router measured 1.70x. The fix chooses over LANDINGS rather than cells crossed, because a guest occupies one cell per tick and no save, hash or frame can observe an intermediate one. TWO CORRECTIONS TO MY OWN BRIEF: the 224-of-300 baseline overstated the defect ninefold (201 were guests ARRIVING), and the per-cell spelling I recommended is WORSE than doing nothing. I2 unmoved — and the reason is a gate limitation: the log re-converges before the horizon. WATCH #17 has the frame. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at

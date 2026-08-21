@@ -558,7 +558,29 @@ describe('the same workload with the player churning the building', () => {
     // being evicted are guests IN THEIR ROOMS, whose position travel does not move: a lodger
     // walks to its bed once and stays there. It is travel's own claim, tested by the one
     // counter in this file that could have refuted it.
-    expect(hashState(churn)).toBe('4bf093bbce011c4f');
+    //
+    // ==========================================================================================
+    // MOVED AT G-038a-i, `4bf093bbce011c4f` -> `17c163b7169e3e03`, AND IT MOVES ALONE. **THE
+    // PLAIN ARM'S HASH DOES NOT MOVE AT ALL** — `ddfe4e4000bf1dc4` on both sides — so this is the
+    // first divergence in this file's history where the two siblings part company, and the
+    // reason is the whole shape of the change.
+    //
+    // A WALL CANNOT CHANGE HOW FAR A GUEST GETS, ONLY WHICH CELL IT LANDS ON. Every candidate
+    // landing spends the same budget, so arrival ticks are untouched — and **every counter in
+    // this arm is byte-identical**: checkedOut 0, leftDissatisfied 51, evictedRoomGone 19,
+    // insufficientFunds 23, built 7, demolished 20, five guests in the hotel at the horizon.
+    // Measured paired, in one sitting, against `6b536e3`. What moved is `Guest.at` and nothing
+    // else, which is exactly what a hash catches and no counter can.
+    //
+    // AND THE PLAIN ARM STAYS PUT BECAUSE ITS GUESTS NEVER FACE A CHOICE. `--build 240` packs
+    // the player's rooms into blocks that fill every row of floor 1, so a journey there has a
+    // row gap AND a column gap and there are several ways to spend one tick's budget; the
+    // seeded plate the plain arm walks offers exactly one on every journey it produces. That is
+    // the same geometric fact `travel.walls.report.test.ts` pins as the CLI default's control.
+    //
+    // THE SHARP CONTROL HOLDS FOR THE SIXTEENTH TIME: 19 evictions, 0 `evictedRoomUnusable`.
+    // ==========================================================================================
+    expect(hashState(churn)).toBe('17c163b7169e3e03');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

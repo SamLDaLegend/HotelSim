@@ -84,7 +84,9 @@ import {
   guestAccessTo,
   isProviding,
   isValidRoom,
+  isWalkableFor,
   providersFor,
+  roomIdAt,
   storeEntities,
   validRoomsProviding,
 } from './validity.js';
@@ -2914,7 +2916,13 @@ function reserve(
 function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entity | null, search: RoomSearch): Guest {
   const at = standingCell(lodgingRoom, engagedProvider, search.input.entities.bounds);
   if (cellsEqual(guest.at, at)) return guest;
-  const next = stepTowards(guest.at, at, search.speed);
+  // THE ROOM STANDING ON THE DESTINATION CELL, RESOLVED ONCE AND ONLY FOR A GUEST THAT IS
+  // ACTUALLY MOVING (G-038a-i). It is asked AFTER the `cellsEqual` return above, so a
+  // sleeping guest — which is almost every guest on almost every tick — pays nothing for
+  // walls, exactly as it already paid nothing for a step. See `isWalkableFor` for why the
+  // ROOM rather than the destination ENTITY: a guest engaged with an item walks to a cell
+  // inside that item's host room.
+  const next = stepTowards(guest.at, at, search.speed, search.input.validity, roomIdAt(search.input.validity, at));
   return cellsEqual(guest.at, next) ? guest : { ...guest, at: next };
 }
 
@@ -2942,11 +2950,41 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
  * That is why `undefined` is a branch here rather than a defaulted constant: a default in this
  * package would be a content number living in the simulation (I3).
  *
- * THE AXIS ORDER IS ARBITRARY AND SAYS SO. Vertical first, then column, then row, because it
- * must be SOME fixed order for I2 and there is no reason yet to prefer one — nothing models a
- * stairwell until G-024, so no route exists to be faithful to. **When G-024 lands, this function
- * is what it replaces**, and the order stops being arbitrary because a guest will have to reach
- * the stairs before it can use them.
+ * THE AXIS ORDER WAS ARBITRARY AND IS NOW A TIE-BREAK (G-038a-i). It was vertical, then column,
+ * then row, because it had to be SOME fixed order for I2 and nothing modelled a route to be
+ * faithful to. A room is a route now: the horizontal budget can be split between the two axes in
+ * several ways, every one of them the same distance travelled, and the guest takes the first
+ * split whose LANDING CELL is somewhere it may stand (`isWalkableFor`). Column-first is candidate
+ * ZERO, so the old order is what an unobstructed guest still gets, to the cell.
+ *
+ * ------------------------------------------------------------------------------------------
+ * WHY THE CHOICE IS OVER LANDINGS AND NOT OVER EVERY CELL CROSSED, WHICH IS THE DESIGN.
+ *
+ * A guest occupies exactly ONE cell per tick. Nothing in the simulation, in a save, in the state
+ * hash or in a recorded frame can observe a cell it passed through on the way, so "a wall is a
+ * wall" is a claim about where a guest STANDS, and that is what this chooses over. A per-cell
+ * rule was built and MEASURED: it makes the WATCH surface WORSE, 23 through-wall landings to 43,
+ * because refusing one cell early spends the row budget and strands the guest with nothing but
+ * blocked column steps for the rest of the journey. Landing-choice was 23 -> 6 on the same arm.
+ *
+ * AND THE PROPERTY THAT MAKES IT SAFE: every candidate spends the WHOLE budget, so the guest
+ * covers exactly `min(cellsPerTick, distance)` cells whatever the building looks like. A wall
+ * cannot lengthen a journey, cannot slow one, and cannot strand a guest — when every candidate
+ * is a wall the guest takes candidate zero, which is what this function did before walls
+ * existed. That is why this half owes no re-derivation of `guestCellsPerTick`'s [2, 108] window
+ * and no change to `dissatisfaction.content.test.ts`'s `ceil(worstJourney / speed)` term.
+ *
+ * `walls` AND `destinationRoom` ARE ONE ARGUMENT IN TWO HALVES, and the second is not optional
+ * in spirit: `destinationRoom` is the room STANDING ON the destination cell, resolved by
+ * `roomIdAt`, and passing walls without it would make the guest's own room unenterable and send
+ * every final approach down the fallback. `placed` is the only production caller and passes
+ * both. Both default to absent so that a caller with no context — `travel.movement.test.ts`,
+ * and every build before this goal — gets the pre-G-038a-i function to the byte.
+ *
+ * THE FLOOR AXIS IS UNTOUCHED AND SPENDS UNCONDITIONALLY. There is no stair anywhere in this
+ * project, so there is no vertical route to be faithful to and nothing to refuse; that is
+ * G-038a-ii's, and it is exactly what a v20 world means.
+ * ------------------------------------------------------------------------------------------
  *
  * THE ROW AXIS IS WALKED LAST, AND SINCE G-036a IT IS REALLY WALKED. G-034a added it against a
  * one-row plot, where `to.row - from.row` was always 0 and this function returned exactly what
@@ -2980,26 +3018,50 @@ export function hasArrivedAt(speed: number | undefined, guestAt: Cell, host: Ent
   return cellsEqual(guestAt, host.at);
 }
 
-export function stepTowards(from: Cell, to: Cell, cellsPerTick: number | undefined): Cell {
+export function stepTowards(
+  from: Cell,
+  to: Cell,
+  cellsPerTick: number | undefined,
+  walls: ValidityContext | null = null,
+  destinationRoom: EntityId = NO_ENTITY,
+): Cell {
   if (cellsPerTick === undefined) return { floor: to.floor, column: to.column, row: to.row };
   let budget = cellsPerTick;
-  let floor = from.floor;
-  let column = from.column;
-  let row = from.row;
 
+  let floor = from.floor;
   const floorGap = to.floor - floor;
   const floorStep = Math.min(Math.abs(floorGap), budget);
   floor += floorGap >= 0 ? floorStep : -floorStep;
   budget -= floorStep;
 
-  const columnGap = to.column - column;
-  const columnStep = Math.min(Math.abs(columnGap), budget);
-  column += columnGap >= 0 ? columnStep : -columnStep;
-  budget -= columnStep;
+  const columnGap = to.column - from.column;
+  const rowGap = to.row - from.row;
+  const columnDistance = Math.abs(columnGap);
+  const rowDistance = Math.abs(rowGap);
+  const columnSign = columnGap >= 0 ? 1 : -1;
+  const rowSign = rowGap >= 0 ? 1 : -1;
 
-  const rowGap = to.row - row;
-  const rowStep = Math.min(Math.abs(rowGap), budget);
-  row += rowGap >= 0 ? rowStep : -rowStep;
+  // THE MOST THE COLUMN AXIS CAN TAKE, AND THE LEAST IT MAY LEAVE. `mostOnColumn` is
+  // column-first, which is exactly what this function returned before it could see a wall,
+  // so it is candidate ZERO and an unobstructed guest lands where it always landed.
+  // `leastOnColumn` is what the row axis cannot absorb, clamped so the range is never empty:
+  // when the whole remaining distance is shorter than the budget the two coincide and the
+  // guest simply arrives.
+  const mostOnColumn = Math.min(budget, columnDistance);
+  const leastOnColumn = Math.min(mostOnColumn, Math.max(0, budget - rowDistance));
 
-  return { floor, column, row };
+  let fallback: Cell | null = null;
+  for (let onColumn = mostOnColumn; onColumn >= leastOnColumn; onColumn -= 1) {
+    const candidate: Cell = {
+      floor,
+      column: from.column + columnSign * onColumn,
+      row: from.row + rowSign * Math.min(budget - onColumn, rowDistance),
+    };
+    if (fallback === null) fallback = candidate;
+    if (walls === null || isWalkableFor(walls, candidate, destinationRoom)) return candidate;
+  }
+  // Unreachable: `leastOnColumn <= mostOnColumn` by construction, so the loop runs at least
+  // once and `fallback` is set. Kept as the postcondition of that rather than as evidence
+  // anything was checked (ADR-0010's amendment).
+  return fallback ?? { floor, column: from.column, row: from.row };
 }

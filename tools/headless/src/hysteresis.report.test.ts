@@ -202,9 +202,10 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // --arrivals 96` fell to ZERO switches once a guest could leave: at that cadence a guest
     // that is not being served walks out before a second need has drifted a margin's width past
     // the one it is holding. Halving the arrival interval puts more guests against the same
-    // providers, so needs reach abandoning depth again — measured 3 switches, and the point of
-    // this arm is that the mechanism is LIVE somewhere a run reaches, not that it is live here.
-    const contended = reportOf(['--rooms', '60', '--arrivals', '48', '--seed', '42']);
+    // providers, so needs reach abandoning depth again — and it was halved a SECOND time at
+    // G-038a-i, for the same reason and by the same move. The point of this arm is that the
+    // mechanism is LIVE somewhere a run reaches, not that it is live here.
+    const contended = reportOf(['--rooms', '60', '--arrivals', '24', '--seed', '42']);
     expect(abandonmentsIn(contended)).toBeGreaterThan(0);
     // 24 -> 3 AT θ-b1, AND THE MECHANISM IS THE SAME ONE THIS ARM IS ABOUT. A need only reaches
     // abandoning depth if the guest is still here to feel it, and once a guest can leave, most
@@ -224,14 +225,28 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // claim the criterion does not rest on. Rule 5 says withdraw rather than restate, so it is
     // withdrawn and not replaced by a guess.
     //
-    // 3 -> 1 AT G-023b-ii, AND THIS ARM IS NOW ONE EVENT FROM VACUOUS — SAID PLAINLY, BECAUSE
-    // THAT IS WHAT THE PROJECT CALLS THE STATE IT IS IN. `guestCellsPerTick: 3` means a guest
-    // spends part of every engagement WALKING, and a need can only be abandoned mid-visit, so
-    // there is less mid-visit to abandon in. The COVERAGE claim this arm exists for survives —
-    // the mechanism is live at an arm that runs — but at a count of one it is exactly the shape
-    // `provider.determinism.test.ts` records for `evictedRoomUnusable`, and a future goal that
-    // moves this number to zero should widen the arm rather than delete the claim.
-    expect(abandonmentsIn(contended)).toBe(1);
+    // 3 -> 1 AT G-023b-ii, AND THIS ARM WAS THEN ONE EVENT FROM VACUOUS — SAID PLAINLY AT THE
+    // TIME, BECAUSE THAT IS WHAT THE PROJECT CALLS THE STATE IT IS IN. `guestCellsPerTick: 3`
+    // means a guest spends part of every engagement WALKING, and a need can only be abandoned
+    // mid-visit, so there is less mid-visit to abandon in. That entry ended: *"a future goal
+    // that moves this number to zero should widen the arm rather than delete the claim."*
+    //
+    // ======================================================================================
+    // 1 -> 0 AT G-038a-i, AND THE ARM IS WIDENED RATHER THAN RE-PINNED, WHICH IS WHAT THE
+    // ENTRY ABOVE INSTRUCTED THE GOAL THAT DID IT.
+    //
+    // The wall rule changes WHICH cell a walking guest lands on, and a guest whose destination
+    // is reassigned mid-journey is therefore somewhere slightly different when it is
+    // reassigned. On a count of one, any such perturbation is a coin-flip — the same knife-edge
+    // G-023b-ii diagnosed under `gaveUp`, on a different counter.
+    //
+    // WIDENED THE WAY THIS ARM WAS WIDENED LAST TIME: halve the arrival interval again, 48 ->
+    // 24, which is the move the paragraph above already documents. And the widened arm is NOT
+    // TUNED TO THIS BUILD — measured paired, in one sitting, on this tree and on `6b536e3`:
+    // **330 abandonments either way, byte-identical.** An arm whose reading the change does not
+    // move is an arm that is measuring the mechanism rather than measuring this goal.
+    // ======================================================================================
+    expect(abandonmentsIn(contended)).toBe(330);
   });
 
   it('and it abandons FAR less than a margin of zero, so the margin is doing the work', () => {

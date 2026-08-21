@@ -81,7 +81,7 @@ import {
 import type { BoundContent } from './content.js';
 import { hasCorridorAt } from './corridors.js';
 import type { Corridors } from './corridors.js';
-import { draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
+import { NO_ENTITY, draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 import {
   boundsEqual,
@@ -927,6 +927,57 @@ function plannedFloorsOf(corridors: Corridors): Set<number> {
   const floors = new Set<number>();
   for (const cell of corridors) floors.add(cell.floor);
   return floors;
+}
+
+/**
+ * ==========================================================================================
+ * WHAT A GUEST MAY STAND ON — THE WALKABILITY RULING (G-038a-i, "a wall is a wall").
+ *
+ * `stepTowards` walked a fixed axis order and put guests inside other people's bedrooms.
+ * This is the predicate that stops it, and the ruling is THREE SETS RATHER THAN TWO,
+ * because both two-set answers are unimplementable on the plans this project actually
+ * builds and that was established by measurement rather than by argument:
+ *
+ *   1. DECLARED CIRCULATION — a cell `World.corridors` names, that no room stands on.
+ *   2. OPEN-PLAN FREE CELLS — every free cell of a floor nobody has drawn a corridor on.
+ *      Sets 1 and 2 are not two rules: they are `isDeclaredWalkway`, the SAME function the
+ *      door walk asks, so "somewhere people walk" has one definition in this file and
+ *      pathing cannot drift from validity. The "no room stands here" half is the branch
+ *      above rather than a second clause inside it — `computeRoomInvalidity` makes exactly
+ *      that split, for exactly that reason.
+ *   3. THE DESTINATION ROOM'S OWN FOOTPRINT. Without it there is no admissible destination
+ *      EVER: `standingCell` returns the host entity's own cell, so every journey in this
+ *      simulation ends inside a room. A two-set "circulation only" rule is not a stricter
+ *      version of this one, it is a rule under which no guest can arrive anywhere.
+ *
+ * AND `destinationRoom` IS THE ROOM STANDING ON THE DESTINATION CELL, NOT THE DESTINATION
+ * ENTITY. A guest engaged with an ITEM walks to the item's cell, and the item stands inside
+ * its host room; spelled as "the entity the guest is going to", set 3 would be empty for
+ * every engagement with a piece of furniture and the guest could not enter the room it was
+ * heading for. `roomIdAt` is how a caller resolves it, once per journey rather than per step.
+ *
+ * WHAT THIS DELIBERATELY IS NOT: reachability. Nothing here asks whether the walkable cells
+ * CONNECT — that is a flood fill, it needs stairs to mean anything on a multi-floor plot, and
+ * it is G-038a-ii's. What rests on that: the caller must not assume a walkable route exists,
+ * because on every layout this project ships it frequently does not. See `stepTowards`.
+ * ==========================================================================================
+ */
+export function isWalkableFor(ctx: ValidityContext, cell: Cell, destinationRoom: EntityId): boolean {
+  const standing = roomAtCell(ctx, cell);
+  if (standing !== undefined) return standing.id === destinationRoom;
+  return isDeclaredWalkway(ctx, cell);
+}
+
+/**
+ * The id of the room standing on `cell`, or `NO_ENTITY`.
+ *
+ * The one way to resolve `isWalkableFor`'s third set. It is a separate call rather than a
+ * `Cell` argument on the predicate because the answer is the same for every step of a
+ * journey: resolving it inside the predicate would pay a binary search per candidate cell
+ * per moving guest per tick to compute a constant.
+ */
+export function roomIdAt(ctx: ValidityContext, cell: Cell): EntityId {
+  return roomAtCell(ctx, cell)?.id ?? NO_ENTITY;
 }
 
 /**

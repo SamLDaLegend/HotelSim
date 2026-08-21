@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-023b-ii is done and travel is ON. The circulation goal split again at PLAN — four BLOCKERs, and the decisive one is MEASURED: a route search per guest per tick costs 1.70x/1.91x/1.77x against a bound the human froze at 1.4640 this same morning, and that arm was a generous lower bound. Both walkability answers are unimplementable on the shipped plans; 166 of 300 move events change floor and there is still no stair anywhere. Two ledger blocks were physically broken and are repaired. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-i is done: a guest no longer walks through solid rooms, and it cost NOTHING — check:tickcost 0.9978 against 1.4640, where a router measured 1.70x. The fix chooses over LANDINGS rather than cells crossed, because a guest occupies one cell per tick and no save, hash or frame can observe an intermediate one. TWO CORRECTIONS TO MY OWN BRIEF: the 224-of-300 baseline overstated the defect ninefold (201 were guests ARRIVING), and the per-cell spelling I recommended is WORSE than doing nothing. I2 unmoved — and the reason is a gate limitation: the log re-converges before the horizon. WATCH #17 has the frame. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2823,7 +2823,8 @@ is what a builder sizes against.**
   circulation that depends on neither open escalation.** *(Now a block of its own, below.)*
 
 ## G-038a — SPLIT at PLAN, 2026-08-21. Four BLOCKERs; the seam is taken.
-Status: **split into G-038a-i / G-038a-ii.** `sim-critic`'s second review of this goal, with travel
+Status: **split into G-038a-i (done) / G-038a-ii (planned).** `sim-critic`'s second review of this
+  goal, with travel now ON.
 now ON. **The blocker that stopped G-038 last week is discharged; four new ones replaced it.**
 
 ### THE ONE THAT DECIDES THE DESIGN: A ROUTE SEARCH PER GUEST PER TICK IS NOT AFFORDABLE
@@ -2948,6 +2949,77 @@ looked up; any **non-integer cost** — 4-connected, unit costs, no `sqrt`, no d
 occupancy leaves 856 — **the same move that took it 872 → 856.** That commit is **already owned by
 G-039b**, and nothing had scheduled the merge.
 
+
+## G-038a-i — A wall is a wall
+Status: **done.** Fourteen rows green, exit code read from the process. **No save bump; I2 unmoved.**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+
+### G-038a-i — REFLECT
+
+**THE BASELINE IN MY OWN BRIEF WAS WRONG BY ~9x, AND THE BUILDER MEASURED RATHER THAN INHERITED IT.**
+I wrote that **224 of 300** move events land inside a room footprint. That count is real and
+reproduces to the event — **but 201 of the 224 are guests ARRIVING IN THE ROOM THEY ARE GOING TO.**
+**The number that means "walked through a wall" is 23 of 300.** The review's headline, and my brief
+after it, overstated the defect ninefold. *(The `275 of 335` figure would not reproduce under twelve
+invocations; closest is `--days 4 --seed 42` at 304/322. Reported, not restated — rule 3.)*
+
+**AND THE SPELLING I RECOMMENDED IS FALSIFIED.** *"Will not step into a room it is not going to"*
+read as a per-cell refusal. Built and measured: **through-wall landings go 23 → 43. WORSE than doing
+nothing.** Refusing a cell early **spends the row budget and strands the guest** with nothing but
+blocked column steps for the rest of the journey.
+
+**WHAT SHIPS CHOOSES OVER LANDINGS, NOT OVER CELLS CROSSED**, and the argument is observational: **a
+guest occupies exactly one cell per tick, and no save, hash or frame can observe an intermediate
+cell** — so *"a wall is a wall"* is a claim about where a guest **stands**. The budget can be split
+between the axes several ways at the same distance; the guest takes **the first split whose LANDING
+is walkable**, column-first being candidate zero. **23 → 6.**
+
+**AND IT COSTS NOTHING: `check:tickcost` MEASURED 0.9978** (three readings: 1.0027 · 1.0114 ·
+0.9978) against the 1.4640 bound — **where `sim-critic` measured a router at 1.70/1.91/1.77x.** No
+per-guest-per-tick allocation, no closure, **one binary search per MOVING guest only**, after the
+early return, so a sleeping guest pays nothing.
+
+**NO GUEST GETS STUCK, AND IT IS STRUCTURAL RATHER THAN STATISTICAL.** Every candidate spends the
+WHOLE budget monotonically, so a guest covers exactly `min(cellsPerTick, distance)` cells whatever
+the building looks like; **when every candidate is a wall it takes candidate zero, which is the
+pre-goal function.** Asserted three ways, including a **swept property over 416 geometry × speed
+cells** of a solid 13×8 wall — **and the corner-to-corner walk is still 108**, so no journey is
+lengthened and `schema.ts` is not edited.
+
+**THE THREE-SET RULING IS SHIPPED AS RULED AND FLAGGED AS MEASURABLY WORSE ON ONE SURFACE.** At
+20,000 ticks of the I2 log: today 1,202 through-wall landings · **three sets 1,448** · two sets
+1,006. Split by floor, the rule **halves them on open-plan floors (254 → 127)** and **raises them on
+floor 0 (948 → 1,321)** — the only floor that declares corridors, where a handful of scattered cells
+makes nearly the whole floor back-of-house. **No shipped hotel has that shape**: the WATCH, 60-room
+and criterion arms read identically under both rulings. **Flagged, not overridden.**
+
+**I2 DOES NOT MOVE, AND THE REASON IS A GATE LIMITATION WORTH RECORDING.** At 5,000 ticks the hash
+DOES move (`71f7b7ad…` → `67e19ef2…`); at 20,000, 50,000 and 100,000 it is identical. **The log's
+state re-converges before the gate's horizon, so I2 cannot see this change at all** — the same
+blindness `ValidityCache` and `Placement` already record, in a new form.
+
+**Three goldens moved, each with its cause.** The bench **CHURN** arm moved while **the PLAIN arm did
+not — the first time the siblings have parted** — and every churn counter is byte-identical, so it
+is purely positional. The cadence census neighbours moved **while the middle reading did not:
+occupancy at the shipped cadence is still 856**, so `TARGET_CONCURRENT_HUNDREDTHS` is untouched and
+**ADR-0056 is not reopened.** And `hysteresis.report`'s abandonment arm was **widened rather than
+re-pinned — which is what that file's own comment instructed the goal that moved it to zero** —
+with **330 abandonments on both sides**, so the widened arm is not tuned to this build.
+
+**JOINING THE LANES IS NOT ACHIEVABLE IN THIS HALF, AND THE BUILDER MEASURED WHY RATHER THAN
+DECLINING IT.** **No layout in this project has a cross-corridor** — every one lays parallel lanes
+with a solid column of rooms between them. Journeys with a fully walkable path: **7/7** CLI default,
+**34/88** at six rooms, **92/219** at sixty. **On the 60-room plate there is no room-free row for a
+cross-corridor to run along, so joining requires MOVING ROOMS** — occupancy, the concurrency pin,
+G-039b's re-take. **That is precisely why the shipped design is fallback-safe rather than
+route-dependent, and why the seam's claim that this half carries no re-take holds.**
+
+**Plus**: the WATCH-surface arm was first written importing `apps/game/src/scenario.ts` and **I1 went
+red** — the fence admits only the pure view modules. **The import came out; the fence did not move**,
+and the file records why so nobody re-adds it.
+
+**Owed forward — G-038a-ii**: stairs, v21 and its contested migration, reachability as a validity
+reason, the re-derived speed window, and the occupancy re-take merged with G-039b.
 
 ## G-038c — A floor costs money, and height costs patience
 Status: **done.** Fourteen rows green, exit code captured. **No save bump.**

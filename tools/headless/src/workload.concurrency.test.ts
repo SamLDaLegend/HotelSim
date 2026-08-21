@@ -440,12 +440,30 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     // would admit any world in which the three merely differ; occupancy here is an exact
     // deterministic count, so a literal costs nothing and forbids strictly more. That is what
     // replaces the discriminating power the extremum was carrying.
+    //
+    // -------------------------------------------------------------------------------------------
+    // 870 / 856 / 850  ->  871 / 856 / 854 AT G-038a-i, AND THE MIDDLE READING DOES NOT MOVE.
+    //
+    // That is the whole judgement on this re-pin and it is worth stating before the literals. The
+    // wall rule changes WHICH cell a walking guest lands on and never HOW FAR it gets — every
+    // candidate landing spends the same budget — so a guest arrives on exactly the tick it always
+    // did and occupancy at the shipped cadence is byte-identical at **856**. `TARGET_CONCURRENT_
+    // HUNDREDTHS` is therefore NOT re-taken here, the bound campaign is not re-taken, and
+    // ADR-0056's ruling that neither may move quietly is not touched.
+    //
+    // THE NEIGHBOURS MOVE THROUGH THE ONE CHANNEL THE RULE HAS, and it is the channel `placed`
+    // was designed around: **a destination can change mid-journey** — a walking guest is handed a
+    // room — and the guest is then somewhere slightly different when it is re-targeted, so the
+    // remaining distance differs. At 96 nothing lands on that seam in this run; one tick either
+    // side, one guest does. Which is this arm's own claim, restated by the change: a reading taken
+    // at one cadence is a claim about THAT cadence.
+    // -------------------------------------------------------------------------------------------
     // ===========================================================================================
     const here = measuredConcurrentHundredths();
     const below = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS - 1);
     const above = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS + 1);
     const readings = `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`;
-    expect([below, here, above], readings).toEqual([870, 856, 850]);
+    expect([below, here, above], readings).toEqual([871, 856, 854]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
     // either side is a different hotel. Written as a set size so it cannot be satisfied by two
     // of the three agreeing.

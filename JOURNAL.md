@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-023b-ii is done and travel is ON. The circulation goal split again at PLAN — four BLOCKERs, and the decisive one is MEASURED: a route search per guest per tick costs 1.70x/1.91x/1.77x against a bound the human froze at 1.4640 this same morning, and that arm was a generous lower bound. Both walkability answers are unimplementable on the shipped plans; 166 of 300 move events change floor and there is still no stair anywhere. Two ledger blocks were physically broken and are repaired. Fourteen rows green, exit code read from the process. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, G-038a-i is done: a guest no longer walks through solid rooms, and it cost NOTHING — check:tickcost 0.9978 against 1.4640, where a router measured 1.70x. The fix chooses over LANDINGS rather than cells crossed, because a guest occupies one cell per tick and no save, hash or frame can observe an intermediate one. TWO CORRECTIONS TO MY OWN BRIEF: the 224-of-300 baseline overstated the defect ninefold (201 were guests ARRIVING), and the per-cell spelling I recommended is WORSE than doing nothing. I2 unmoved — and the reason is a gate limitation: the log re-converges before the horizon. WATCH #17 has the frame. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **State**: save **v20** · summary **v4** · I2 `3119f19683a70e7a` · measure golden
   `ddfe4e4000bf1dc4` · `pnpm verify` is **thirteen** rows — **ten green, three RULED RED**
@@ -1722,3 +1722,29 @@ own precedent**, and it was right there.
 - **The needs bars follow the guest.** A walking guest's three bars move with it, so a watcher
   can see a need decaying while its owner is in transit — which is the whole design claim of
   this goal, on screen.
+
+## WATCH #17 — G-038a-i. A guest stops standing in a stranger's bedroom.
+
+**Frame**: `apps/game/recording/t000831-f0-reduced.svg`, recorded at **`--every 1`** over
+`--ticks 835` (3,342 frames, gitignored, reproducible), and recorded a **second time from `6b536e3`
+into scratch** so the pair is paired rather than remembered.
+
+**`--every 1` IS A CRITERION HERE, NOT A PREFERENCE.** WATCH #16 measured motion at **149 basis
+points** — one frame in thirteen contains a moving guest — so **a `--every 240` recording of this
+goal would have shown nothing and the goal would have skipped a step while appearing not to.**
+
+**THE SAME FRAME WATCH #16 USED AS ITS PROOF THAT A GUEST WAS EVER SOMEWHERE IT WAS NOT GOING.**
+Guest 6 walks from `(0,2,0)` to the bedroom at `(0,5,1)`.
+
+| | before | after |
+|---|---|---|
+| lands at | `(0,5,0)` — **inside a stranger's bedroom** | `(0,4,1)` — **a declared corridor cell** |
+
+**It reaches its own room on the next tick either way**, which is the point: the repair costs no
+time and changes where the guest *is seen to be*. **The two frames differ in exactly one
+primitive** — `translate(832 372)` → `translate(704 372)`, Δx = −128, Δy = 0, which is precisely
+`(5,0) → (4,1)` in this projection. **Two more repairs in the same window**: t=901 guest 8
+`(0,3,1)` → `(0,2,2)`, t=962 guest 3 `(0,5,1)` → `(0,4,0)`.
+
+**Guests standing on a lane or an open cell across the window rise 76 → 93.** Nothing read as
+stupid; no guest stalled, no guest oscillated.
