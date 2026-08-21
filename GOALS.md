@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-039a is done: verify now KEEPS a red row's output, a goal block's status is checked against git, sixteen parked items are written into PARKING.md with their tests, and the wall control ships as three positions with a DERIVED alpha. THE INTERMITTENT ROW WAS CAPTURED AT LAST — it is check:scaling, not test, so there are at least two of them and my one-load-sensitive-test inference was wrong; loaded/quiet is 1.71x on that axis. Fourteen rows green, exit code read from the process. M3's remaining goals wait on the 2026-08-14 tripwire decision and ADR-0054's. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, BOTH OPEN DECISIONS ARE TAKEN, both as recommended. ADR-0056 (b): the tripwire keeps 1.4640 and now PRINTS what it cannot catch — a 1.173x regression passes, and narrowing to the re-derived 1.102 would sit beneath this box's own worst loaded noise. ADR-0057 (a): refillPerTick stays the CEILING and the content rates are re-derived as their own goal, derived not dialled. Three escalations RESOLVED; one open (two intermittent rows, now diagnosed). The chain reopens: travel, then circulation, then parties; and the rates, then the quality branch. G-039a and the rest stand at fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Schemas**: save **v20** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2509,6 +2509,36 @@ so a future builder must not read a red fence as a defect · and **the caching d
 PLAN with its measurement plan**, because a derived-at-read-time fold lands on the hottest loop in
 the sim, guarded by a bound under an OPEN escalation for being too wide to catch it.
 
+## G-041 — The rates are re-derived, so a bare room can be worse
+Status: **PLANNED.** Human ruling ADR-0057, option (a). **Precedes the `g037a-quality-fold` merge.**
+Milestone: M3 · Owner pair: economy-engineer / balance-critic
+Statement: the need rates are re-derived so the **declared** rates sit genuinely **above** the bare
+  rate, restoring the headroom a quality penalty needs.
+
+**WHY IT EXISTS**: ADR-0054 ruled `refillPerTick` is the CEILING, and its own build measured that
+today's numbers have no room for it — **the content's duty cycle already sits at 0.75 of a guest's
+whole time AT THE DECLARED RATES**, so below ~0.71 quality it exceeds one whole and guests
+structurally cannot keep up. **Every dial setting that de-saturates a good hotel stops a starved one
+transacting, and vice versa.** That is a fact about the RATES, not about the fold.
+
+**THE BOUND THAT MAKES THIS A GOAL RATHER THAN A PATCH: IT IS DERIVED, NOT DIALLED.** The new rates
+come from the duty-cycle arithmetic with the bare-room penalty as an input, stated as a derivation
+the way the speed floor and the dissatisfaction cliffs are. **Tuning until the tests pass is exactly
+what option (a) does not permit.**
+
+**`assertNeedDemandIsServiceable` IS RE-DERIVED, NOT RELAXED** — it currently computes serviceability
+at the DECLARED rate, so under a ceiling reading it describes only the fully-appointed case. **The
+builder refused to widen it because the shipped content would have failed it, and that refusal is
+why this is a goal.** It also trips `assertLodgingBecomesWanted`, so **`night_rest.capacityTicks` is
+re-derived too — measured in advance, scheduled rather than discovered.**
+
+**Then `g037a-quality-fold` (`87c0101`) merges**, and its ~80 red assertions are re-pinned against
+numbers that mean something — **plus the three findings the branch is worth keeping for on their
+own**: `HOTEL_AMENITIES = 1` was below this project's own derived requirement (the I5 benchmark
+completed **zero stays** over a simulated year); the provider tie-break routed guests to the WORST
+room, so a player building a fourth café watched their rating **fall**; and the harness's furnishing
+cycle made an existing amenity worse when you bought another.
+
 ## G-040 — A party is a thing, and it arrives together
 Status: **PLANNED.** Human ruling ADR-0055, option (a) — taken with its cost stated back.
 Milestone: M3 · Owner pair: sim-engineer / sim-critic
@@ -2859,7 +2889,9 @@ RESERVED** — v20 has no `condition` on the room entity or in `room-types.json`
 supposed to be free was skipped, and it stopped being free at the next migration.**
 
 ## G-039b — The campaign re-takes
-Status: **BLOCKED** on the 2026-08-14 tripwire decision, and it is the goal that consumes the answer.
+Status: **UNBLOCKED 2026-08-21 by ADR-0056.** The bound's VALUE is unchanged, so what is re-taken
+  is the OCCUPANCY it is calibrated against — `TARGET_CONCURRENT_HUNDREDTHS` with the bound campaign,
+  in one commit, as `workload.concurrency.test.ts` requires.
 Milestone: M3 · Owner pair: sim-engineer / sim-critic
 
 **Carries**: every measurement campaign re-take — **the grid change, corridors and pathfinding alter

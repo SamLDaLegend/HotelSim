@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, G-039a is done: verify now KEEPS a red row's output, a goal block's status is checked against git, sixteen parked items are written into PARKING.md with their tests, and the wall control ships as three positions with a DERIVED alpha. THE INTERMITTENT ROW WAS CAPTURED AT LAST — it is check:scaling, not test, so there are at least two of them and my one-load-sensitive-test inference was wrong; loaded/quiet is 1.71x on that axis. Fourteen rows green, exit code read from the process. M3's remaining goals wait on the 2026-08-14 tripwire decision and ADR-0054's. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-21, BOTH OPEN DECISIONS ARE TAKEN, both as recommended. ADR-0056 (b): the tripwire keeps 1.4640 and now PRINTS what it cannot catch — a 1.173x regression passes, and narrowing to the re-derived 1.102 would sit beneath this box's own worst loaded noise. ADR-0057 (a): refillPerTick stays the CEILING and the content rates are re-derived as their own goal, derived not dialled. Three escalations RESOLVED; one open (two intermittent rows, now diagnosed). The chain reopens: travel, then circulation, then parties; and the rates, then the quality branch. G-039a and the rest stand at fourteen rows green. Unreliable: 2 gates, 0 defects.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4752,3 +4752,101 @@ occupancy.
 **Two strangers still never share a room.** A party is one booking; capacity bounds its size.
 **Nothing here permits the thing §6.1 forbids**, and a goal that produced it would be failing this
 ADR rather than extending it.
+
+---
+
+## ADR-0056 — THE TRIPWIRE KEEPS 1.4640 AND SAYS WHAT IT CANNOT CATCH. Option (b).
+
+**Date**: 2026-08-21 · **Status**: accepted · **HUMAN RULING** on the 2026-08-14 escalation, open
+for a week and load-bearing for four goals.
+
+**RULED: option (b).** The bound **stays at `1.4640`**, and the gate **records openly that it
+catches doublings rather than the ~1.2× regressions this project actually produces.** A
+regime-split bound waits until somebody has measured the CI runner.
+
+### What is being admitted, in writing, rather than implied
+
+`BOUND = sqrt(1.035500 noise ceiling × 2.07 smallest known regression) = 1.4640`. **`2.07` is no
+longer the smallest known regression — `1.173` is, and this project shipped it** (G-032b's
+`unservedTicks` counter). Re-deriving on the observed value gives ≈**1.102**.
+
+> **SO THE GATE IS KNOWINGLY WIDER THAN THE CLASS IT WAS BUILT FOR, AND IT MUST SAY SO WHERE IT IS
+> READ.** A bound that cannot catch the regressions its own project produces is not a defect **once
+> it is stated**; it is a defect **exactly while it is implied.**
+
+### Why (b) rather than narrowing to 1.102
+
+**1.102 sits BELOW the worst recorded LOADED noise, which is 1.2461** — a figure the gate already
+prints. **A bound beneath the noise of a regime the project actually runs in is a gate that fires on
+weather**, and a gate that fires on weather stops being read. **That is §9's own stop condition, and
+this session watched three ruled-red rows teach exactly that habit.**
+
+**And the loaded regime is now MEASURED rather than feared.** G-039a captured `check:scaling` going
+red at **density 2.6497 against a 2.1856 bound**, with an immediate standalone run reading **1.5515**
+— **loaded/quiet 1.71× on one axis, on this box.** Narrowing a bound to 1.102 in a project whose
+timing rows demonstrably move 1.71× under load would have been indefensible.
+
+### What this ruling obliges
+
+**The gate prints its own reach.** `tripwire.mjs`'s output states that the bound is derived from
+`2.07`, that the smallest regression this project has shipped is `1.173`, and **that a regression
+between those two passes.** No reader should have to reconstruct that from an ADR.
+
+**The regime split is PARKED WITH ITS TEST, not promised**: measure the CI runner's noise ceiling
+paired and interleaved; **if a runner-regime bound comes out above 1.4640, the split buys nothing
+and the idea is dead.** That is falsifiable, which *"we should split by regime one day"* is not.
+
+**And the campaign re-takes are now UNBLOCKED**, which is the point of answering: G-023b-ii,
+G-038a/b, G-039b and G-040 all queue behind this, and `TARGET_CONCURRENT_HUNDREDTHS` is re-taken
+**with the bound campaign in one commit** as `workload.concurrency.test.ts` requires — **the bound's
+VALUE is unchanged, so what is re-taken is the occupancy it is calibrated against.**
+
+---
+
+## ADR-0057 — ADR-0054 AMENDED: the content re-scale is real work, and it is its own goal. Option (a).
+
+**Date**: 2026-08-21 · **Status**: accepted · **HUMAN RULING** on the 2026-08-21 escalation.
+**Amends ADR-0054**, which was mine and which its own build falsified.
+
+**RULED: option (a).** `refillPerTick` **stays the CEILING**. The content's need rates are
+**re-derived so the declared rates sit genuinely above the bare rate**, restoring the headroom a
+quality penalty needs — **and that re-derivation is its own balance goal**, not a dial turned inside
+the fold's goal.
+
+### Why the ruling survives the thing that falsified it
+
+**ADR-0054's reasoning was never in question**: under a FLOOR reading, **at 12 rooms / 5 amenities
+every guest is already at `u_i = 0`, and a fold that raises rates cannot improve a zero.** The fold
+would be a mechanic that inspects nothing — ADR-0007's founding class, shipped as the game's
+headline feature.
+
+**What the build measured is that today's numbers have no room for it**: the content's duty cycle —
+`Σ 1/(1+refillPerTick)` over the engagement needs, plus the rest that away-time costs — **already
+sits at 0.75 of a guest's whole time AT THE DECLARED RATES**, so below ~0.71 quality it exceeds one
+whole and guests structurally cannot keep up. **Every dial setting that de-saturates a good hotel
+stops a starved one transacting, and vice versa.**
+
+> **That is a fact about the RATES, not about the fold.** The ruling was right and the content was
+> not ready for it.
+
+### The bound this puts on the re-scale, and it is the whole point of (a)
+
+**IT IS DERIVED, NOT DIALLED.** The new rates come from the duty-cycle arithmetic with the bare-room
+penalty as an input, stated as a derivation the way `guestCellsPerTickSchema`'s floor and the
+dissatisfaction cliffs are. **Tuning until the tests pass is exactly what this option does not
+permit** — and this project has a name for the alternative: a superstition with CI access.
+
+**`assertNeedDemandIsServiceable` IS RE-DERIVED, NOT RELAXED.** It currently computes serviceability
+at the **declared** rate, so under a ceiling reading it describes only the fully-appointed case.
+**The builder refused to widen it because the shipped content would have failed it — that refusal
+was correct and is why this is a goal rather than a patch.**
+
+**And it trips `assertLodgingBecomesWanted`**, which needs `night_rest.capacityTicks` re-derived.
+**Measured in advance, so it is scheduled rather than discovered.**
+
+### Where it lands
+
+**A new goal, G-041 — THE RATES ARE RE-DERIVED — before G-037a merges.** The branch
+`g037a-quality-fold` (`87c0101`) holds the fold, 80 red assertions and three findings worth keeping;
+**it merges after the rates make its ruling satisfiable, and its ~80 assertions are then re-pinned
+against numbers that mean something.**

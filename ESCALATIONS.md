@@ -1119,7 +1119,22 @@ concurrent population, moving back when the population did.
   to skim the summary. **Every VERIFY between now and the re-take must state the row count green
   AND name these two as the ruled exceptions**, or the exception has become the habit.
 
-## 2026-08-14 — OPEN — THE TRIPWIRE'S BOUND CANNOT CATCH THE SMALLEST REGRESSION THIS PROJECT HAS SHIPPED
+## 2026-08-14 — RESOLVED — THE TRIPWIRE'S BOUND CANNOT CATCH THE SMALLEST REGRESSION THIS PROJECT HAS SHIPPED
+
+**RESOLVED 2026-08-21 by ADR-0056: the human took option (b), as recommended.** The bound stays at
+`1.4640` and **the gate now states what it cannot catch** — that it is derived from `2.07`, that
+the smallest regression this project has shipped is `1.173`, and that a regression between the two
+passes. **A bound that cannot catch its own project's regressions is not a defect once it is
+stated; it is a defect exactly while it is implied.**
+
+**Narrowing to the re-derived 1.102 was refused on measured grounds**: it sits below the worst
+recorded LOADED noise (1.2461), and G-039a then captured `check:scaling` moving **1.71x between
+loaded and quiet on one axis**. **A bound beneath the noise of a regime the project runs in is a
+gate that fires on weather**, and §9 already names where that ends. The regime split is parked
+**with its falsification test**: measure the runner paired, and if its bound comes out above
+1.4640 the split buys nothing and the idea is dead.
+
+**This unblocks G-023b-ii, G-038a/b, G-039b and G-040.**
 
 **Raised**: G-032b · **Asked of the human**: which of the three options below. **Do not widen or
 narrow the bound to clear this — that is the decision being escalated.**
@@ -1487,7 +1502,21 @@ group arrivals are wanted sooner; it is a goal, not a field.**
 
 ---
 
-## 2026-08-21 — OPEN — ADR-0054 IS RIGHT IN PRINCIPLE AND UNSATISFIABLE ON THE SHIPPED CONTENT
+## 2026-08-21 — RESOLVED — ADR-0054 IS RIGHT IN PRINCIPLE AND UNSATISFIABLE ON THE SHIPPED CONTENT
+
+**RESOLVED 2026-08-21 by ADR-0057: the human took option (a), as recommended.** `refillPerTick`
+**stays the ceiling**; the content's rates are **re-derived** so the declared rates sit genuinely
+above the bare rate — **and that re-derivation is its own balance goal (G-041), not a dial turned
+inside the fold's goal.**
+
+**The bound that makes (a) mean something: it is DERIVED, NOT DIALLED.** The new rates come from
+the duty-cycle arithmetic with the bare-room penalty as an input.
+`assertNeedDemandIsServiceable` is **re-derived, not relaxed** — the builder's refusal to widen it
+was correct and is why this is a goal rather than a patch — and it trips
+`assertLodgingBecomesWanted`, so `night_rest.capacityTicks` is re-derived too. **Measured in
+advance, scheduled rather than discovered.**
+
+**The `g037a-quality-fold` branch merges AFTER the rates make its ruling satisfiable.**
 
 **Raised**: G-037a, by the orchestrator, against **my own ruling** · **Asked of the human**: which of
 three, below. **Nothing is blocked** — main is green and the work is preserved on branch
@@ -1567,7 +1596,11 @@ amenity made an **existing** one worse; and the third copy of a type was worse t
 
 ---
 
-## 2026-08-21 — OPEN — M3 IS BLOCKED. Three goals queue behind ONE unanswered decision.
+## 2026-08-21 — RESOLVED — M3 IS BLOCKED. Three goals queue behind ONE unanswered decision.
+
+**RESOLVED 2026-08-21. Both decisions were taken, both as recommended** — ADR-0056 (b) and
+ADR-0057 (a). **The chain reopens in the order this entry traced it**: G-023b-ii (travel on) →
+G-038a/b (circulation) → G-040 (parties); and G-041 (the rates) → the quality branch.
 
 **Raised**: G-038's plan review · **Asked of the human**: the 2026-08-14 tripwire-bound decision,
 which has now been open for a week and has become load-bearing for the rest of the milestone.

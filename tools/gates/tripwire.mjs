@@ -358,10 +358,26 @@ const CADENCE_OBSERVATIONS = Object.freeze([
  * "the instrument is too noisy to gate" rather than quietly widening. That is the report
  * G-020b was told to make if this landed above ~1.6, and it did not.
  *
- * THE BLIND SPOT, STATED RATHER THAN DISCOVERED LATER: anything between the noise ceiling
- * and this bound is invisible to this gate. That is deliberate — see
- * SMALLEST_KNOWN_REGRESSION for why the class this project produces is nowhere near it —
- * and it is the price of a gate that does not cry wolf.
+ * THE BLIND SPOT, AND ITS SIZE IS NO LONGER HYPOTHETICAL (ADR-0056, human, 2026-08-21).
+ *
+ * Anything between the noise ceiling and this bound is invisible to this gate. This paragraph
+ * used to add "the class this project produces is nowhere near it" — AND THAT CLAUSE IS NOW
+ * FALSE. G-032b shipped a 1.173x regression, measured paired: the `unservedTicks` counter cost
+ * 1.173x of tick time and this gate would have passed it without a murmur.
+ *
+ * THE HUMAN RULED (b): KEEP 1.4640 AND SAY SO, rather than narrow to the re-derived
+ * sqrt(1.0355 x 1.173) ~= 1.102. The reason is measured, not cautious — 1.102 sits BELOW the
+ * worst recorded LOADED noise (1.2461), and G-039a then caught `check:scaling` reading 2.6497
+ * loaded against 1.5515 quiet on one axis, a 1.71x swing. A bound beneath the noise of a regime
+ * the project actually runs in is a gate that fires on weather, and a gate that fires on weather
+ * stops being read — which is §9's own stop condition and what three ruled-red rows taught this
+ * project earlier in the same milestone.
+ *
+ * SO THE PRICE IS PAID KNOWINGLY AND THE GATE PRINTS IT. A bound that cannot catch its own
+ * project's regressions is not a defect once it is STATED; it is a defect exactly while it is
+ * IMPLIED. The regime split is parked WITH ITS FALSIFICATION TEST: measure the CI runner paired
+ * and interleaved, and if its bound comes out above 1.4640 the split buys nothing and the idea
+ * is dead.
  */
 
 /**
@@ -623,6 +639,14 @@ out.push(`             chosen because ${chosen.because}`);
 // it for display is how 1.022840 became "1.0229" and put the bound above its own derivation.
 out.push(`  bound      ${BOUND.toFixed(4)} = sqrt(${NOISE_CEILING.toFixed(6)} noise ceiling x ${SMALLEST_KNOWN_REGRESSION} smallest known regression)`);
 out.push(`             derived from ${BOUND_CAMPAIGN.arms.length} campaign arms, ${BOUND_CAMPAIGN.regime.split(' —')[0]}; worst recorded LOADED noise ${Math.max(...LOADED_OBSERVATIONS.map((o) => o.max)).toFixed(4)}`);
+// WHAT THIS GATE CANNOT CATCH, PRINTED WHERE IT IS READ (ADR-0056 §"What this ruling obliges").
+// No reader should have to reconstruct the gate's reach from an ADR.
+out.push(
+  `             REACH: derived from ${SMALLEST_KNOWN_REGRESSION}, but the smallest regression this project has SHIPPED is 1.173 (G-032b).`,
+);
+out.push('             A regression between those two PASSES. Ruled and accepted (ADR-0056): narrowing to the');
+out.push('             re-derived ~1.102 would sit beneath the worst loaded noise measured here, and a gate that');
+out.push('             fires on weather stops being read (§9). Regime split is parked with its falsification test.');
 // TWO MARGINS, PRINTED TO FIVE PLACES AND NEVER CALLED EQUAL. The geometric mean equalises
 // them EXACTLY; truncating the bound to 4dp does not, so the shipped constant carries margins
 // that differ in the fifth place. Reporting one figure for both, or the word "equal", would be
