@@ -2571,32 +2571,141 @@ changes nothing about which room a guest takes** — guests pick the lowest free
 falls, this goal must supply the price term, which is the M4 economy the ruling deferred.
 **Both answers are expensive to discover at BUILD.**
 
-## G-038 — Circulation, and the lobby gets a reason to exist
-Status: **PLANNED.** A* over a single floor's tile grid, plus stair and lift nodes joining floors —
-**per-floor rather than volumetric.** M3's statement lands here: stairs cheap/slow/unbounded, lifts
-expensive/fast/queued, **wait time a first-class satisfaction input.**
-**C5 IS BROUGHT FORWARD INTO THIS GOAL (ADR-0049, human).** Reception as a QUEUE POINT: arrival
-gains a spatial cost, and a guest checks in somewhere rather than materialising served.
+## G-038 — SPLIT at PLAN, 2026-08-21, and BLOCKED. Four BLOCKERs; the seam is taken.
+Status: **split into G-038a / G-038b / G-038c — and NONE of them can start.** `sim-critic`'s plan
+review. **THE SCOPE OBJECTION IS UPHELD AND IT DECIDES THE REST.**
 
-**WHY IT MOVED, and the reason is a person looking at the screen.** WATCH #12 put the game in its
-own projection for the first time and the human said it had no lobby. Depth plus drawing (G-036)
-makes a lobby EXPRESSIBLE; **nothing in M3 made it MEAN anything** — no check-in, no queue, no
-reason to go there. **A room that is only a shape is decoration**, and an entrance hall that is
-decoration is a hole where the game's first five minutes should be.
+**ADR-0046 PRESERVED M3'S STATEMENT AND SILENTLY COLLAPSED THREE GOALS INTO ONE.** The tree still
+carries G-024 (stairs queue), G-025 (lift capacity, direction, call order) and G-026 (travel time
+and wait in the score — **scheduled LAST-IN-MILESTONE with a second critic**), each with its own
+exit criteria. **This block is all three, plus B8, plus C5, plus a walkability model none of them
+needed because the old M3 had a one-dimensional floor.**
 
-**AND IT RUNS C5'S PARKED FALSIFICATION TEST RATHER THAN DEFERRING IT AGAIN**: *if M3's queue
-machinery cannot express a check-in desk without changing shape, it was scoped too narrowly.*
-**Either answer is a result.** It lands here because stairs and lifts already force the queue
-machinery to exist — a check-in desk is a third consumer of it, not a fourth mechanism.
+### THE BLOCKER THAT STOPS EVERYTHING: A* IS DEAD CODE UNDER SHIPPED CONTENT
 
-**IT DOES NOT BRING C4's STAFF WITH IT.** A queue point is a place a guest waits and is served; **a
-receptionist who walks, tires and costs wages is M4's.** C4 stays named-not-built.
+**`hasArrivedAt(undefined, …)` returns true unconditionally and `stepTowards(from, to, undefined)`
+returns `to`.** `guest-rules.json` declares no `guestCellsPerTick`. **So with travel off: a route
+nobody walks, a queue nobody stands in, and a wait that costs nothing** — and a queued guest is
+simultaneously *waiting for the lift* and *being served in the café*, because both serving slots are
+gated on `hasArrivedAt`.
 
-**B8 lands here**, including a floor-count patience input that makes lifts necessary rather than
-optional — **a content number, shipped as one.**
-**C4's staff roles are NAMED but not built** — housekeeping, reception, maintenance, porters —
-because each is a room requirement and a pathing consumer, and this goal must be able to carry
-them.
+**Coverage of the mechanism today, reproduced by the critic**: two `packages/sim` test files, and
+**the three `tools/headless` hits are COMMENTS.** `determinism-harness.ts` loads shipped content, so
+**the 100,000-tick I2 proof, the bench, the scaling arms and every golden run with travel OFF.**
+
+> **A pathfinder over a hotel where movement is instantaneous is not anything but dead code.** It
+> would be exercised in two hand-built test files and in **none** of the I2 log, the bench, the
+> scaling arms, or any golden. **G-037a's finding, one axis over.**
+
+**SO TRAVEL MUST BE ON — AND THAT IS G-023b-ii, WHICH IS ITSELF BLOCKED.** Occupancy moves 872 → 848,
+and `workload.concurrency.test.ts` requires `TARGET_CONCURRENT_HUNDREDTHS` and the bound campaign
+re-taken **together in one commit** — **and that campaign's derivation is the 2026-08-14 escalation,
+still OPEN.**
+
+> **`ESCALATIONS.md`'s own trigger list: *"The goal turns out to depend on an unbuilt goal."*
+> THREE M3 GOALS NOW QUEUE BEHIND ONE UNANSWERED DECISION** — G-023b-ii, G-040 (ADR-0055 names the
+> same re-take) and this one.
+
+### THE OTHER THREE BLOCKERS, all measured
+
+**PER-FLOOR PATHING DISCONNECTS EVERY SHIPPED WORKLOAD ON DAY ONE.** `amenityCell` puts every
+amenity at floor −1 and below; `roomCell` puts every room at floor 0 and above. **There is no stair,
+no lift and no vertical connection anywhere in `packages/content/data` or `packages/sim`.**
+Reproduced: `--days 2 --seed 42` gives comfort 8, entertainment 8, nourishment 12 met at 24
+arrivals — **all cross-floor. Under this plan they become 0.** And a v20 save has no stairs, so the
+migration owes either **the open-plan reading G-034b took for corridors** (chosen precisely because
+it kept every migrated verdict) **or it silently rewrites behaviour** — G-034a's BLOCKER 2, one goal
+later. **And if a stair is an ENTITY it costs an id, and an id is behaviour**: `corridors.ts` records
+that **measured** — declaring the harness's implicit corridors as entities would have renumbered
+every room spawned after them and changed which room every guest takes.
+
+**THE BLOCK NAMES NO SAVE VERSION AND THIS GOAL CANNOT AVOID ONE.** A queue is cross-tick state — who
+waits, in what order, since when; a lift car has a position and a direction. G-034a, G-034b, G-036b
+and G-036c each carried the bump as an **exit criterion**; this block carries none, **and the block
+is what a builder sizes against.**
+
+### THE SEAM, TAKEN
+
+- **prerequisite — close G-023b-ii (travel ON).** Everything below is dead code without it.
+- **G-038a — "a route exists"**: the walkability ruling, reachability, per-floor A\*, vertical joins
+  with **unbounded** capacity (stairs only). **Watchable**: a guest walks a corridor instead of
+  through a wall, and takes the stairs.
+- **G-038b — "a route can be busy"**: lift capacity, the call queue, wait state, C5's desk as the
+  third consumer, and the wait-as-satisfaction ruling.
+- **G-038c — B8's floor price and floor-count patience.** *A transaction plus a price in
+  `economy.json`, and one number in `guest-rules.json`.* **No dependency on A\*, on queues, or on
+  each other — the only part of this goal that could ship without the escalation**, and bundling it
+  into a pathfinding sweep buys nothing and costs a critic's attention.
+
+### C5's PARKED FALSIFICATION TEST IS ANSWERED, AND THE ANSWER IS "IT CHANGES SHAPE"
+
+ADR-0049 said a check-in desk is *"a third consumer of the queue machinery, not a fourth
+mechanism."* **Against the tree that is false in one specific way**: a guest's position is **derived
+from its holdings** — `placed()` steps toward `standingCell(lodgingRoom, engagedProvider, …)` and is
+*"THE ONLY PLACE `Guest.at` MOVES"*. There are exactly **two** holdings. **A guest standing in a
+check-in queue holds a third thing, or the desk holds a list of guests — either way it is new hashed
+state**, plus `assertGuest`, `assertGuestStoreInvariants` and `countOrphanedReservations`.
+
+> **`save.ts` PREDICTED THIS AND FENCED THE MIGRATION AGAINST IT**: *"G-023b, G-024 and G-025 change
+> WHERE AN UNPLACED GUEST STANDS: a lobby entity, the foot of the stairs, a reception queue."*
+
+**This is a RESULT, not a defect** — the park asked whether the machinery could express a desk
+without changing shape, and **the answer is no.** Recorded as the park's answer.
+
+### RULINGS OWED AT PLAN, each with its consequence named
+
+**WHAT IS WALKABLE.** If A\* walks any free cell, **corridors are irrelevant to pathing and B2's
+"space is scarce" has no consequence in the mechanic meant to give it one.** If A\* walks circulation
+only, **the shipped player floors become disconnected islands** — one full-depth lane per 8-column
+block, **nothing joining the lanes**, and declaring any corridor makes the whole floor planned, so
+every non-lane cell stops being a walkway. **Two parked items name G-038 by number and are the
+falsification tests for this ruling.**
+
+**"WAIT TIME A FIRST-CLASS SATISFACTION INPUT" HAS TWO READINGS THAT DIFFER BY A SAVE FIELD.**
+**Reading A — wait reaches the score — IS ALREADY TRUE** through the channel travel uses, measured at
+G-023b-ii (unserved 18/705/1503 → 151/883/1737 bp, reviews 3:161 → 2:161). **So G-038 is NOT blocked
+on G-037a's unmerged channel.** Reading B — wait separately identifiable — is a per-need
+`waitedTicks` field, **already parked WITH its objection** (a v9 guest waited and nothing recorded
+it — the ADR-0008 invention case). *One caveat to assert rather than assume: a guest that holds a
+room excuses its lodging need while away, so a guest queueing pays on its three engagement needs and
+not on rest — the right answer, but an accident today.*
+
+**THE QUEUE'S I2 SITES, NAMED INDIVIDUALLY**: `stepGuests` walks ids ascending, so a queue built from
+*"whoever asks during this tick's walk"* **serves in permanent id order — deterministic, and exactly
+§6.1's "correct but reads as stupid"**; the rule must be arrival-tick with an id tiebreak, **asserted
+on two insertion orders** · **the `exhausted` memo is the WRONG SHAPE for a queue** — it records one
+answer per tick for every guest and is sound only while the answer is the same for all of them, and
+**a queue answer is per-guest by construction; memoising a lift that way is a correctness bug, not a
+slow path** · **`held` is about to become a count and the throw a bound (ADR-0055), so G-040 and
+G-038 rewrite the same three functions from different directions and nothing has scheduled that
+merge** · and **any stored queue is an ordered array**, because a `Map` serialises to `{}` through
+`canonicalise` and **vanishes from both the hash and the save while `assertWorldShape` waves it
+through.**
+
+**THE SPEED FLOOR'S PREMISE IS FALSIFIED BY A QUEUE.** *"A journey must not exhaust a guest's
+patience on its own"* bounds **travel** at 108 against 180 — and **queue wait spends the same 180.**
+Once a lift can hold a guest, *a journey* is travel **plus** wait, and **the arithmetic bounds only
+half of it**, under a derivation `grid.ts` cites back as a live bound on the plot's depth.
+
+**AND THE BACKLOG DERIVATION MOVES A THIRD TIME.** `gaveUp` fires on `tick - arrivedTick >=
+toleranceTicks` and **the clock does not stop for a walk and will not stop for a queue.**
+G-023b-ii measured travel alone moving the peak 129 → 139 and **refused to re-pin under a derivation
+that still said 129.** **If C5 stays in scope, that derivation is re-derived to include travel legs
+AND queue wait — once, here — not re-pinned.**
+
+### WATCH — the honest answer is "nothing, until travel is on"
+
+**With speed undefined a queued guest's cell IS its destination**, so a recording would show it
+**standing inside the café it is queueing to reach — worse than invisible.** With travel on it is
+watchable only if the renderer can express it: guests are tinted by worst need, so *"waiting for the
+lift"* has **no reading today**; the scene draws one floor at a time, so **a queue on floor 3 is
+off-screen while you watch floor 0**; and a stair needs a drawable at all. **Either the render work
+is named IN SCOPE, or the goal has no instrument** (ADR-0046 §7 — an escalation, not a debt).
+
+**The one thing already right**: `entranceCell` is where a roomless guest stands and the scene
+already marks it — **so "guests piling up in the lobby" is drawable today, which makes C5 the most
+watchable half of this goal and stairs/lifts the least.**
+
 
 ## G-039 — M3 exit instruments
 

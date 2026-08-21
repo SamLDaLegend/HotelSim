@@ -1368,7 +1368,14 @@ blocked**; the tree is green and every row has passed on re-run.
 
 ---
 
-## 2026-08-16 — OPEN — CAPACITY NEEDS A PARTY MECHANIC, AND THAT IS NOT IN M3
+## 2026-08-16 — RESOLVED — CAPACITY NEEDS A PARTY MECHANIC, AND THAT IS NOT IN M3
+
+**RESOLVED 2026-08-21 by ADR-0055: the human took option (a)** — a party mechanic enters M3 as
+its own goal, **G-040**. My recommendation was (b), deferral to M6, and it is overruled. **Marked
+here rather than only in `DECISIONS.md`, because `sim-critic` pointed out at G-038's plan review
+that an entry left reading OPEN makes the count of open escalations unreadable — and that count
+is what tells a planner whether a goal is blocked.** This file's own rule: mark entries RESOLVED
+with the answer rather than deleting them.
 
 **Raised**: G-037 plan review · **Asked of the human**: does a party / group-arrival mechanic enter
 M3, or does capacity wait?
@@ -1489,3 +1496,58 @@ ample capacity let everyone reach the lowest-id bare copy.
 **And the harness's own furnishing cycle broke the build loop twice**, both measured: buying an
 amenity made an **existing** one worse; and the third copy of a type was worse than the second,
 **moving five guests down a band with departures held exactly constant.**
+
+---
+
+## 2026-08-21 — OPEN — M3 IS BLOCKED. Three goals queue behind ONE unanswered decision.
+
+**Raised**: G-038's plan review · **Asked of the human**: the 2026-08-14 tripwire-bound decision,
+which has now been open for a week and has become load-bearing for the rest of the milestone.
+
+### The dependency chain, traced rather than asserted
+
+> **`ESCALATIONS.md`'s own trigger list includes *"the goal turns out to depend on an unbuilt
+> goal."* THREE M3 GOALS NOW DEPEND ON ONE UNANSWERED QUESTION.**
+
+**G-038 (circulation) requires travel to be ON.** `hasArrivedAt(undefined, …)` returns true
+unconditionally and `stepTowards(…, undefined)` returns the destination, so with shipped content
+**a route nobody walks, a queue nobody stands in, and a wait that costs nothing.** Coverage today:
+two `packages/sim` test files; **the three `tools/headless` matches are COMMENTS.** The I2 proof,
+the bench, the scaling arms and every golden run with travel off.
+
+**Travel ON is G-023b-ii**, which stopped because occupancy moves **872 → 848** and
+`workload.concurrency.test.ts` requires `TARGET_CONCURRENT_HUNDREDTHS` and the bound campaign
+re-taken **together, in one commit, without widening the bound.**
+
+**That campaign's derivation is the 2026-08-14 escalation** — the tripwire bound, `1.4640` against a
+**smallest known regression of 1.173** this project shipped. Recommendation **(b)** was given a week
+ago and is unanswered.
+
+**And G-040 (the party mechanic, ADR-0055, which the human ordered on 2026-08-21) names the same
+re-take.** So it queues behind the same decision.
+
+### What is NOT blocked, so this entry is not a request to stop
+
+- **G-038c** — B8's floor price and the floor-count patience input. *A transaction plus a price in
+  `economy.json`, and one number in `guest-rules.json`.* **No dependency on A\*, on queues, or on the
+  escalation.** `sim-critic` named it as *"the only part of this goal that could ship this week."*
+- **G-039** — the exit instruments, though it is the goal that would *consume* the answer.
+- **The G-037a branch** — but that has its own open ruling (ADR-0054's three options).
+
+### The two decisions that unblock the milestone
+
+1. **THE TRIPWIRE BOUND** (2026-08-14, options a/b/c, **recommendation (b)**): keep `1.4640` and
+   record openly that the tripwire catches doublings rather than the ~1.2× regressions this project
+   actually produces, then split by regime once someone measures the CI runner. **Answering this
+   unblocks G-023b-ii → G-038 → G-040.**
+2. **ADR-0054's THREE OPTIONS** (2026-08-21, **recommendation (a)**): amend to permit a *derived*
+   content re-scale as its own balance goal. **Answering this unblocks the G-037a branch.**
+
+**Neither needs new information.** Both have their options written with the measurements attached,
+and both recommendations have been on the table since they were raised.
+
+> **The loop is not stalling — it is doing the thing §5.4 says to do when a goal depends on a human
+> call.** Six M3 goals shipped since the last decision was needed; **this is the first point where
+> continuing would mean choosing a gate threshold and a balance direction on the orchestrator's own
+> authority, which `CLAUDE.md` forbids in one line: *"Changing an invariant is a human decision,
+> always."***
