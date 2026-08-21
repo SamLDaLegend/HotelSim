@@ -4655,3 +4655,100 @@ READS the field.** The observation was correct — every room does hold one gues
 was invented**, and it was plausible enough that nobody checked, including me. **Fourth time this
 session that a claim about the tree was asserted from memory**, and the first where the claim was
 load-bearing for a goal's scope.
+
+---
+
+## ADR-0054 — TODAY'S `refillPerTick` IS THE CEILING, NOT THE FLOOR. A bare room serves slowly.
+
+**Date**: 2026-08-16 · **Status**: accepted · **Orchestrator ruling**, owed at G-037a's PLAN and
+asked for by `ai-critic`: *"is today's `refillPerTick` the FLOOR (decor adds) or the CEILING (bare
+rooms subtract)?"*
+
+### The measurement decides it, and it was taken before any code
+
+`ai-critic` measured the review distribution across three provisioning cells, three seeds each,
+exact deterministic counts:
+
+| provisioning | distribution |
+|---|---|
+| 3 rooms, 1 amenity | `2:177, 3:83, 5:96` |
+| 6 rooms, 3 amenities | `3:161, 5:192` — **exactly the departure table** |
+| **12 rooms, 5 amenities** | **`5:348` — every guest at the ceiling, unserved zero on all four needs** |
+
+> **UNDER "FLOOR", THE FOLD IS INERT AT THE PROVISIONING LEVEL A PLAYER IS TRYING TO REACH.** If
+> decor only ADDS to a rate, then a hotel that is adequately provisioned already has every guest at
+> `u_i = 0`, and **a fold that raises rates cannot improve a zero.** It would be a mechanic that
+> inspects nothing — ADR-0007's founding class, shipped as the game's headline feature.
+
+**So: CEILING.** Today's `refillPerTick` is **the rate a fully-appointed room achieves**. A bare
+room that meets its `requires` gate but carries nothing else **serves more slowly**, and furnishing
+it climbs toward the number content already declares.
+
+### What this costs, stated rather than discovered
+
+**Every golden and every campaign moves**, deliberately: today's rooms are minimally furnished, so
+under this ruling they stop achieving today's rate. **That is a real re-pin across the report
+goldens, the CLI golden, the bench workloads and the scaling arms** — and it is the honest direction,
+because **the alternative buys unchanged goldens by making the feature do nothing.**
+
+**It also means the fold's direction is DOWNWARD from a known point**, which is the shape this
+project can already measure: the review discriminates in the under-provisioned population, and a
+bare-room penalty **puts a well-provisioned hotel's guests back into the range where the review has
+resolution.** That is the same argument ADR-0045 used to choose responsiveness over severity.
+
+### The bound this ruling puts on itself
+
+**A bare room must not be worse than no room.** The penalty is bounded so that the `requires` gate
+stays the thing that separates a working room from a broken one — **otherwise `missingItem` and
+"badly furnished" collapse into one verdict and I3's content gate loses its subject.**
+
+**And the penalty is CONTENT**, like every weight in the fold (I3). The ruling here is the
+*direction*, not the magnitude: **`refillPerTick` is a ceiling** is the law; how far a bare room
+falls below it is a number a designer tunes without a rebuild.
+
+---
+
+## ADR-0055 — A PARTY IS A THING. Group arrival enters M3 as its own goal.
+
+**Date**: 2026-08-21 · **Status**: accepted · **HUMAN RULING**, answering the escalation ADR-0053
+raised: option **(a)**.
+
+> *"Party mechanic enters M3 as its own goal — honest, but it's a real feature: arrivals, the guest
+> store, every occupancy pin."*
+
+**The human took the expensive option with its cost stated back to them**, which is the point of
+writing options with their prices attached. **(b) — defer to M6 — was the recommendation, and it is
+overruled.**
+
+### What this makes true
+
+**`capacity` gets a meaning it has never had.** ADR-0053 measured that the field has **one reader in
+the entire repository** and that `capacity: 99` on every shipped room type produces a byte-identical
+report. **A party is the thing that makes the number mean something**, and it is the reading the
+shipped schema has demanded since it was written:
+
+> *"`capacity` is the size of the **party** a room holds, NOT a count of unrelated bookings. A party
+> is one guest at M0. Two strangers sharing a room is not what this number means and would read as
+> stupid to a watching player (§6.1)."*
+
+**So the schema is not overturned — it is finally honoured.** `capacity` has been describing a
+concept the simulation did not have, since M0, in a comment nobody could falsify.
+
+### What it costs, and the human named it themselves
+
+**Arrivals** — a guest stops being the unit that walks in; a party of 1..N does. **The guest store** —
+`claimEntity`'s throw becomes a bound, `held` becomes a count, `countOrphanedReservations` is
+re-defined, and `findFreeRoom`'s per-tick `exhausted` memo means *"no room with room enough"* rather
+than *"no unheld room"*. **Every occupancy pin** — `TARGET_CONCURRENT_HUNDREDTHS` and the tripwire
+campaign are re-taken **together, in one commit**, per `workload.concurrency.test.ts`'s own
+instruction.
+
+**It is G-040, it precedes G-037b, and G-037b becomes small once it lands** — capacity stops being a
+mechanism and goes back to being the fold ADR-0051 wanted, bounding a party rather than inventing
+occupancy.
+
+### The bound this ruling keeps
+
+**Two strangers still never share a room.** A party is one booking; capacity bounds its size.
+**Nothing here permits the thing §6.1 forbids**, and a goal that produced it would be failing this
+ADR rather than extending it.

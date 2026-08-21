@@ -2509,6 +2509,26 @@ so a future builder must not read a red fence as a defect · and **the caching d
 PLAN with its measurement plan**, because a derived-at-read-time fold lands on the hottest loop in
 the sim, guarded by a bound under an OPEN escalation for being too wide to catch it.
 
+## G-040 — A party is a thing, and it arrives together
+Status: **PLANNED.** Human ruling ADR-0055, option (a) — taken with its cost stated back.
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+Statement: a **party** of 1..N guests arrives together and takes one room. `capacity` bounds the
+  party. **Two strangers still never share a room** — that is §6.1 and it is not relaxed.
+
+**THIS FINALLY HONOURS A SCHEMA COMMENT THAT HAS BEEN UNFALSIFIABLE SINCE M0.** `capacity` is
+documented as *the size of the PARTY a room holds*, and **there has never been a party** — so the
+field described a concept the simulation did not have, read by nothing, for thirty-odd goals.
+
+**THE COST, WHICH THE HUMAN NAMED WHEN CHOOSING IT**: arrivals (a party, not a guest, is what walks
+in) · the guest store (`claimEntity`'s throw becomes a bound, `held` becomes a count,
+`countOrphanedReservations` is re-defined, and `findFreeRoom`'s `exhausted` memo means *no room
+with room enough* rather than *no unheld room*) · **and every occupancy pin —
+`TARGET_CONCURRENT_HUNDREDTHS` and the tripwire campaign re-taken TOGETHER in one commit**, per
+`workload.concurrency.test.ts`'s own instruction.
+
+**It precedes G-037b, and makes G-037b small**: capacity stops being a mechanism and goes back to
+being the fold ADR-0051 wanted.
+
 ## G-037b — Capacity, and a room that holds more than one guest
 Status: **PLANNED — and BLOCKED on a mechanic nobody has written. See ADR-0053.**
 Milestone: M3 · Owner pair: sim-engineer / sim-critic

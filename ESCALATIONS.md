@@ -1318,6 +1318,21 @@ ends this condition.
 
 ## 2026-08-16 — OPEN — AN INTERMITTENT ROW IS OBSERVED, AND THE DIGEST SAYS THERE ARE NONE
 
+**THIRD SIGHTING, 2026-08-21, AND THE PATTERN IS NOW SHARP ENOUGH TO NAME.** `pnpm verify` returned
+**I4 `test` RED**, and an immediate standalone `pnpm test` on the same tree returned **2,449
+passed**; a second `verify` then returned **exit 0**. **Three sightings now — one by
+`sim-engineer` (once in four full-suite runs, passing in isolation), two by the orchestrator.**
+
+**THE DISCRIMINATOR IS LOAD, NOT THE TREE.** Every failure has been inside a FULL `verify` run —
+where `test` runs alongside thirteen other rows — and every isolated run has passed. **That is a
+timing-sensitive test, not a non-deterministic simulation**, and I2 has been green on every one of
+those runs, which it could not be if the sim itself were unstable.
+
+**I STILL HAVE NOT CAPTURED THE FAILING ROW'S OUTPUT**, which is the same evidence gap as the first
+entry and is now three sightings old. **`verify` keeping per-row output is the fix, and it is
+G-039's** — this entry is not asking for an investigation today, it is refusing to let three
+sightings sit under a digest that says zero.
+
 **Raised**: G-036b, by the orchestrator · **Asked of the human**: §2.0 makes an intermittent gate
 its own escalation. This is that entry.
 
@@ -1394,3 +1409,83 @@ and price, which is most of what "the player decides the size" was about. **(a) 
 group arrivals are wanted sooner; it is a goal, not a field.**
 
 **Nothing is blocked today.** G-037a and G-037c proceed either way; only G-037b waits on this.
+
+---
+
+## 2026-08-21 — OPEN — ADR-0054 IS RIGHT IN PRINCIPLE AND UNSATISFIABLE ON THE SHIPPED CONTENT
+
+**Raised**: G-037a, by the orchestrator, against **my own ruling** · **Asked of the human**: which of
+three, below. **Nothing is blocked** — main is green and the work is preserved on branch
+`g037a-quality-fold` (`87c0101`).
+
+### The ruling, and the measurement that falsifies it on today's numbers
+
+**ADR-0054 ruled** that `refillPerTick` is the **CEILING**: a bare room serves more slowly, and
+furnishing climbs toward the declared rate. **The reasoning still stands** — under "FLOOR" the fold
+is provably inert, because at 12 rooms / 5 amenities every guest is already at `u_i = 0` and **a
+fold that raises rates cannot improve a zero.**
+
+**What the build measured** — ten dial settings across two content scalings:
+
+> **Every setting that de-saturates 12/3 also stops the under-provisioned workloads transacting, and
+> every setting that keeps them transacting re-saturates 12/3.**
+
+**And the cause is derivable rather than a tuning accident.** The content's own duty cycle —
+`Σ 1/(1+refillPerTick)` over the engagement needs, plus the rest that away-time costs — **already
+sits at 0.75 of a guest's whole time AT THE DECLARED RATES.** Below roughly 0.71 quality it exceeds
+one whole, and **guests structurally cannot keep up.**
+
+> **`assertNeedDemandIsServiceable` computes serviceability at the DECLARED rate, so under a ceiling
+> reading it now describes only the fully-appointed case.** The builder **did not widen that
+> refusal, because the shipped content would fail it** — which was the right call and is why this is
+> an escalation rather than a repair.
+
+**There is no headroom in the shipped content for a quality penalty.** That is a fact about the
+numbers, not about the fold.
+
+### Why I am not simply finishing the re-pin
+
+**80 assertions are red across 16 files, all in `tools/headless`, none in `packages/sim`.** They are
+not all re-pins: the builder made one blind literal-swapping pass over ~23 and **reverted it**,
+because several are **property changes needing their surrounding prose re-derived** — e.g. lodging's
+unserved share moving 0 → 8 (the narrowed excuse becoming visible) and abandonments 0 → 4.
+
+> **Pinning those numbers under a ruling that does not hold would be manufacturing agreement.** It
+> is §9's *"coverage added to satisfy a number rather than to pin behaviour"*, at the scale of a
+> milestone.
+
+### The options
+
+- **(a) AMEND ADR-0054 to permit a content re-scale, and make that a balance goal.** The need rates
+  are re-derived so the declared rates sit genuinely **above** the bare rate, restoring headroom.
+  **Cost, measured**: it trips `assertLodgingBecomesWanted`, which needs `night_rest.capacityTicks`
+  re-derived. **This is the option that makes the ceiling real.**
+- **(b) Reverse ADR-0054 to FLOOR** and accept the fold is inert at good provisioning — **decor adds,
+  and the feature does nothing for a hotel that is already adequate.** Cheap, keeps every golden,
+  and **ships the mechanic ADR-0044 §3 already caught this project shipping once.**
+- **(c) Keep the ceiling and accept the degraded regime** — the shipped hotel simply serves worse
+  than its content declares. **Every golden moves and the game gets harder**, without anyone having
+  decided that it should.
+
+**Recommendation: (a).** It is the only one that leaves the feature meaning what the human asked for
+when they said a room should be scored on what is in it. **It is a real balance pass and should be
+its own goal**, with the re-derivation done and argued rather than dialled until green.
+
+**What (a) does NOT permit**: tuning until the tests pass. The re-scale is derived from the duty
+cycle and stated, and `assertLodgingBecomesWanted` is re-derived rather than relaxed.
+
+### Three findings the branch is worth keeping for regardless of the ruling
+
+**`HOTEL_AMENITIES = 1` was below this project's own derived provider requirement.**
+`determinism-log.ts` derives `ceil(concurrency / (1 + refillPerTick))` = **2**; `report.ts` used
+**1** and its docblock defended it in the same arithmetic. **At 1, the I5 benchmark completed ZERO
+stays and earned ZERO over a simulated year.** At the derived 2: **785 checkouts, 6,672,500p.**
+
+**With quality live, the provider tie-break systematically routed guests to the WORST room.** At 12
+rooms with the departure table constant at 348 checkouts: mean review **4.74 → 4.53 → 4.50** as
+amenities went 4 → 5 → 6. **A player building a fourth café watched their rating FALL**, because
+ample capacity let everyone reach the lowest-id bare copy.
+
+**And the harness's own furnishing cycle broke the build loop twice**, both measured: buying an
+amenity made an **existing** one worse; and the third copy of a type was worse than the second,
+**moving five guests down a band with departures held exactly constant.**
