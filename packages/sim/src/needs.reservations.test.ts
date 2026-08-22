@@ -120,7 +120,7 @@ const hotel = (bedrooms: number, cafes: number, seed = 3): World =>
     ...Array.from({ length: cafes }, (_, i) => spawnCafe(i)),
   ]);
 
-const orphansIn = (world: World): number => countOrphanedReservations(world.guests, world.entities);
+const orphansIn = (world: World): number => countOrphanedReservations(world.guests, world.entities, content);
 const only = (world: World): Guest => {
   const guests = guestsInOrder(world.guests);
   expect(guests).toHaveLength(1);
@@ -344,6 +344,9 @@ describe('EVERY WAY A CAFÉ IS GIVEN BACK frees it for a guest visited later in 
 
   const guest = (id: number, room: EntityId, engagedWith: EntityId | null, over: Deficits = {}): Guest => ({
     id,
+    // G-040a: a party of one. Every builder in this file makes lone guests, which is what the
+    // tick makes too — the party cases are built explicitly where they are the subject.
+    partyId: id,
     // G-023a: a guest is somewhere. The doorway — nothing in this file reads a position,
     // and `stepGuests` re-states it from what the guest holds on every tick. The placement
     // rule is pinned in `travel.position.test.ts`.
@@ -560,7 +563,7 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
 
   it('1. DANGLING LODGING — a bedroom that is not there', () => {
     const broken = withGuests([{ ...guest, roomEntityId: 4_242, engagement: null }]);
-    expect(countOrphanedReservations(broken, world.entities)).toBe(1);
+    expect(countOrphanedReservations(broken, world.entities, content)).toBe(1);
     expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/lodges in entity 4242/);
   });
 
@@ -568,19 +571,43 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
     // THE SHAPE THAT ONLY EXISTS BECAUSE OF THIS GOAL. A detector that read only
     // `roomEntityId` returns 0 here and reports a healthy hotel.
     const broken = withGuests([{ ...guest, engagement: { entityId: 4_243, needId: 'food' } }]);
-    expect(countOrphanedReservations(broken, world.entities)).toBe(1);
+    expect(countOrphanedReservations(broken, world.entities, content)).toBe(1);
     expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(
       /is engaged with entity 4243/,
     );
   });
 
-  it('3. DOUBLE-BOOKED BEDROOM — two guests in one bed', () => {
+  it('3. DOUBLE-BOOKED BEDROOM — two guests of DIFFERENT PARTIES in one bed', () => {
+    // TWO PARTIES SINCE G-040a, and the extra word is what the shape became rather than a
+    // loosening. A room holds a PARTY (ADR-0055), so the leak is a STRANGER in somebody's
+    // bedroom — which is the bound that ruling explicitly keeps. Two members of ONE party in
+    // this same capacity-2 room is the mechanic, and the case below pins that it is not counted.
     const broken = withGuests([
+      { ...guest, roomEntityId: bedroomA!, engagement: null },
+      { ...guest, id: guest.id + 1, partyId: guest.partyId + 1, roomEntityId: bedroomA!, engagement: null },
+    ]);
+    expect(countOrphanedReservations(broken, world.entities, content)).toBe(1);
+    expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/held by more than one guest/);
+  });
+
+  it('3b. AND ONE PARTY IN THAT SAME BED IS NOT A LEAK — the discriminating half', () => {
+    // Without this, case 3 is satisfied by a detector that calls every second lodger a leak,
+    // which is precisely the build this goal replaces. The bedroom holds 2 (see `roomType`), so
+    // two members fit and a third does not — and the third is counted, which is the `capacity`
+    // clause `assertGuestStoreInvariants` cannot make because it has no content in hand.
+    const together = withGuests([
       { ...guest, roomEntityId: bedroomA!, engagement: null },
       { ...guest, id: guest.id + 1, roomEntityId: bedroomA!, engagement: null },
     ]);
-    expect(countOrphanedReservations(broken, world.entities)).toBe(1);
-    expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/held by more than one guest/);
+    expect(countOrphanedReservations(together, world.entities, content)).toBe(0);
+    expect(() => assertGuestStoreInvariants(together, world.entities, world.grid)).not.toThrow();
+
+    const overfull = withGuests([
+      { ...guest, roomEntityId: bedroomA!, engagement: null },
+      { ...guest, id: guest.id + 1, roomEntityId: bedroomA!, engagement: null },
+      { ...guest, id: guest.id + 2, roomEntityId: bedroomA!, engagement: null },
+    ]);
+    expect(countOrphanedReservations(overfull, world.entities, content)).toBe(1);
   });
 
   it('4. DOUBLE-ENGAGED — two guests at one table', () => {
@@ -588,21 +615,44 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
     // two guests in one café is a leak rather than a feature.
     const broken = withGuests([
       { ...guest, roomEntityId: bedroomA!, engagement: { entityId: cafe!, needId: 'food' } },
-      { ...guest, id: guest.id + 1, roomEntityId: bedroomB!, engagement: { entityId: cafe!, needId: 'food' } },
+      {
+        ...guest,
+        id: guest.id + 1,
+        partyId: guest.partyId + 1,
+        roomEntityId: bedroomB!,
+        engagement: { entityId: cafe!, needId: 'food' },
+      },
     ]);
-    expect(countOrphanedReservations(broken, world.entities)).toBe(1);
+    expect(countOrphanedReservations(broken, world.entities, content)).toBe(1);
     expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/held by more than one guest/);
   });
 
   it('5. CROSSED — one guest\'s bedroom is another guest\'s café', () => {
-    // The shape that needs BOTH fields in ONE set to see. Counting the two kinds
-    // separately would report zero here: nobody has two bedrooms and nobody has two cafés.
+    // ------------------------------------------------------------------
+    // THIS COMMENT SAID *"the shape that needs BOTH fields in ONE set to see — counting the two
+    // kinds separately would report zero here"*, AND AT G-040a THE TWO KINDS ARE COUNTED
+    // SEPARATELY. A single count is what stopped being available: under it, two members of one
+    // party in a capacity-2 room, one lodger plus one engager in that room, and two guests at
+    // one café are the same reading.
+    //
+    // So the cross-clause is now its OWN predicate rather than a consequence of the structure:
+    // each branch asks whether the OTHER kind already claimed the entity. It is a lookup, never
+    // an iteration (I2), and the assertion below is run BOTH WAYS ROUND in
+    // `guest.party.save.test.ts` — because a predicate that only fires when the lodger is
+    // visited first would pass this case and miss half the worlds it describes.
+    // ------------------------------------------------------------------
     // A bedroom is somebody's, so it is not also a shared amenity.
     const broken = withGuests([
       { ...guest, roomEntityId: bedroomA!, engagement: null },
-      { ...guest, id: guest.id + 1, roomEntityId: bedroomB!, engagement: { entityId: bedroomA!, needId: 'food' } },
+      {
+        ...guest,
+        id: guest.id + 1,
+        partyId: guest.partyId + 1,
+        roomEntityId: bedroomB!,
+        engagement: { entityId: bedroomA!, needId: 'food' },
+      },
     ]);
-    expect(countOrphanedReservations(broken, world.entities)).toBe(1);
+    expect(countOrphanedReservations(broken, world.entities, content)).toBe(1);
     expect(() => assertGuestStoreInvariants(broken, world.entities, world.grid)).toThrow(/held by more than one guest/);
   });
 
@@ -610,11 +660,11 @@ describe('THE DETECTOR CAN RETURN SOMETHING OTHER THAN ZERO — all five shapes'
     const broken = withGuests([
       { ...guest, roomEntityId: 4_242, engagement: { entityId: 4_243, needId: 'food' } },
     ]);
-    expect(countOrphanedReservations(broken, world.entities)).toBe(2);
+    expect(countOrphanedReservations(broken, world.entities, content)).toBe(2);
   });
 
   it('still returns zero for the world the simulation actually produced', () => {
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
     expect(guestsInOrder(world.guests).some(isEngaged)).toBe(true);
   });
 });
@@ -668,7 +718,7 @@ describe('thirty days of a hotel where every provider is oversubscribed', () => 
     const commands = schedule();
     for (let day = 0; day < DAYS; day += 1) {
       world = run(world, busy, TICKS_PER_DAY, commands);
-      expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+      expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
       expect(countStuckGuests(world.tick, world.guests, busy)).toBe(0);
       expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), createStairs(), busy)).toBe(0);
     }
@@ -700,7 +750,7 @@ describe('a guest that never gets a bedroom still holds nothing on the way out',
     const world = run(start, impatient, 10, [at(start.tick, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'gaveUp')).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
     // And the café is genuinely free again: a new guest can take it.
     const next = run(world, impatient, 3, [at(world.tick, arrive)]);
     expect(isEngaged(only(next))).toBe(true);

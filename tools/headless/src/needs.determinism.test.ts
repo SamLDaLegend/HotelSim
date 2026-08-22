@@ -126,7 +126,7 @@ describe('the determinism log reaches the need vector', () => {
   it('leaves nobody stuck, nothing orphaned and nobody in an invalid room', () => {
     const world = replayed();
     expect(countStuckGuests(world.tick, world.guests, content)).toBe(0);
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
     expect(countGuestsInInvalidRooms(world.guests, world.entities, world.grid, world.corridors, world.stairs, content)).toBe(0);
   });
 

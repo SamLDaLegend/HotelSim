@@ -118,6 +118,9 @@ const store = (count: number): GuestStore => ({
   nextId: count + 1,
   list: Array.from({ length: count }, (_, i) => ({
     id: i + 1,
+    // G-040a: a party of one each, which is what the tick writes and what the conservation law
+    // this file is about does not care about either way.
+    partyId: i + 1,
     // G-023a: a guest is somewhere. These guests hold nothing, so the doorway is also what
     // the placement rule would give them.
     at: { floor: 0, column: 0, row: 0 },

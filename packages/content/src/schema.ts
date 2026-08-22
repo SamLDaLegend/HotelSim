@@ -154,6 +154,15 @@ export const fitBasisPointsSchema = basisPointsSchema.optional();
  * A party is one guest at M0. Two strangers sharing a room is not what this number
  * means and would read as stupid to a watching player (HOTELSIM.md §6.1).
  *
+ * **AND SINCE G-040a THE SIMULATION HAS THE CONCEPT** (ADR-0055, human ruling). `Guest.partyId`
+ * exists, `findFreeRoom` drops a room without room enough, and `guestRulesSchema`'s
+ * `maxPartySize` is the other end of this sentence — refused by `bindContent` when it exceeds
+ * the roomiest room type providing the lodging need. **The sentence above is unchanged and is
+ * finally CHECKED**: two strangers still never share a room, because a second lodger is admitted
+ * only when it belongs to the party already there. The shipped size is still 1 (G-040b hands a
+ * party more than one member), so `A party is one guest at M0` remains a true statement about
+ * the shipped table rather than about what the simulation can express.
+ *
  * `provides` is OPTIONAL, and absence is not emptiness. A room type that predates need
  * types omits the key entirely and therefore hashes exactly as it did before need types
  * existed, which is what keeps saves taken under that content loadable (G-002's content
@@ -1419,6 +1428,46 @@ export const guestCellsPerTickSchema = z.int().positive().optional();
 export const maxLodgingFloorsFromEntranceSchema = z.int().min(0).optional();
 
 /**
+ * THE LARGEST PARTY THAT CAN ARRIVE, IN GUESTS (G-040a, ADR-0055 — HUMAN RULING).
+ *
+ * A PARTY IS THE UNIT THAT BOOKS A ROOM. `capacity` on `roomTypeSchema` has said so since M0 —
+ * *"the size of the PARTY a room holds, NOT a count of unrelated bookings"* — and until this
+ * field existed there was nothing at the other end of that sentence: ADR-0053 measured that
+ * `capacity` had ONE reader in the whole repository and that setting it to 99 everywhere
+ * produced a byte-identical report. This is the number that gives it a referent.
+ *
+ * ---------------------------------------------------------------------------
+ * THE BOUND IS NOT A TASTE, AND IT IS NOT ENFORCED HERE. `bindContent`'s
+ * `assertPartiesCanBeHoused` refuses content whose largest party exceeds the roomiest room type
+ * PROVIDING the lodging need, because such a party has no provider anywhere in the building:
+ * every member wants rest for its whole life, its dissatisfaction fills with nothing draining
+ * it, and the party leaves having given up — every time, in every hotel, however well the
+ * player builds. That is HOTELSIM.md §6.1's first shape, guaranteed unhappiness rather than
+ * difficulty.
+ *
+ * A `max()` here could not express it: the ceiling is a relation between this table and the
+ * ROOM TYPE table, and a zod schema over one document cannot see the other. Same reason
+ * `assertRefundsCannotReopenTheDodge` is not a `max()` on `demolitionRefundBasisPoints`.
+ *
+ * TODAY'S SHIPPED CONTENT PROVIDES `night_rest` FROM ONE ROOM TYPE, `standard_room`, WHICH
+ * HOLDS 2. So the domain a designer can legally write today is {1, 2}, and 3 becomes legal the
+ * day somebody adds a family room — which is exactly how a balance number is supposed to move
+ * (I3).
+ * ---------------------------------------------------------------------------
+ *
+ * OPTIONAL HERE **AND** OPTIONAL ON DISK, which is the `maxLodgingFloorsFromEntrance` contract
+ * one field up. ABSENCE MEANS ONE, and that is a TRUE HISTORICAL STATEMENT rather than a
+ * default: every arrival in every build of this simulation before G-040b is a single guest, so
+ * content that does not declare this reproduces those runs to the byte — and the permanent v1
+ * save fixture's `8e09fe4f0fa162a3` content fingerprint does not move (ADR-0006).
+ *
+ * `min(1)`, BECAUSE THE PARTY IS WHAT WALKS IN. A maximum of 0 is content under which nobody
+ * can arrive, which is not a house rule anybody means to write — unlike
+ * `maxLodgingFloorsFromEntrance`'s 0, which means the coherent "the entrance floor only".
+ */
+export const maxPartySizeSchema = z.int().min(1).optional();
+
+/**
  * HOW MUCH DISSATISFACTION A GUEST CARRIES BEFORE IT WALKS OUT MID-STAY, IN TICKS (G-027b θ-b1,
  * ADR-0017 4(b), ADR-0026).
  *
@@ -1583,6 +1632,7 @@ export const guestRulesSchema = z
     dissatisfactionReliefPerTick: dissatisfactionReliefPerTickSchema,
     guestCellsPerTick: guestCellsPerTickSchema,
     maxLodgingFloorsFromEntrance: maxLodgingFloorsFromEntranceSchema,
+    maxPartySize: maxPartySizeSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
   // cannot separate two stays and so cannot report on either. The relation against the need

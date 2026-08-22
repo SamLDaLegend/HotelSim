@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-040a is DONE: a party is a thing, and the shipped size is PINNED AT 1. Guest.partyId is hashed state, save v22 migrates every v21 guest to a party of one (partyId = guest.id, inventing nothing — packages/content has said a party is one guest since M0), held becomes a COUNT, claimEntity becomes a BOUND rather than a refusal of the second holder, and bindContent refuses content whose largest party exceeds the roomiest room type providing the lodging need. countOrphanedReservations counts the two claim kinds SEPARATELY — lodging by party and capacity, engagement by one, the cross-clause its own lookup — because ONE count destroys three of the five shapes it detects. findFreeRoom's capacity denial sets deniedThisGuestOnly and NEVER arms the per-tick exhausted memo, and release decrements rather than deleting and un-exhausts on EVERY decrement. THE HASH MOVED AND NOTHING ELSE DID, demonstrated over three CLI invocations: --days 20 --seed 42, --days 40 --seed 7 and --days 10 --seed 1 each print a 48-line report whose only differing line is state hash. I2 7ff621928358cb8e over three processes (was 2b5369e4461a9140); measure golden c7212353b3d1784f (was 760558b631beb552). Fourteen rows green, VERIFY_EXIT read from the process. E-010 and E-011 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
-- **State**: save **v21** · summary **v4** · I2 `2b5369e4461a9140` · measure golden
-  `760558b631beb552` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
+- **State**: save **v22** · summary **v4** · I2 `7ff621928358cb8e` · measure golden
+  `c7212353b3d1784f` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -2171,3 +2171,57 @@ file is under `tools/headless/src/`, and the command exits 1 with *"No test file
 > work. **Ten goals running now.** The briefs keep getting more specific and the corrections keep
 > coming, which I read as the process working rather than failing — **but a wrong path is not a
 > subtle error, and I should be running the commands I write into exit criteria.**
+
+### G-040a — One line differs in a 48-line report, three times, and it is the state hash.
+
+**The seam was cut to make exactly one claim, and the claim is demonstrated rather than asserted.**
+Three `sim:run` invocations captured at HEAD before any edit and re-captured after, diffed whole:
+`48c48` on all three. Every counter, every departure row, every need row, the review distribution,
+the whole ledger — byte-identical. **ADR-0068 has the tables.**
+
+> **That is the payoff of splitting on the number/behaviour line rather than the file line.** G-040a's
+> intersection with the parked rate branch is state-hash literals and nothing else, so whichever
+> lands first costs the other almost nothing. **Nine plan reviews, nine splits, and this is the first
+> one where the seam's value can be shown in a diff.**
+
+### MY CONSTRAINT WAS NOT EXECUTABLE, AND THE BUILDER'S SPLIT IS BETTER THAN WHAT I ASKED FOR
+
+I required lodging to be bounded by room capacity inside `assertGuestStoreInvariants`. **That
+validator is content-free by construction** — called from `assertWorldShape`, which has no content in
+hand — **and `capacity` is content.** The builder bounded by **party identity** in the content-free
+validator and by **capacity** in `countOrphanedReservations`, which has content and **reports rather
+than refuses**.
+
+**The reason is the part worth keeping**, and it cites a precedent four fields up: **content can
+legitimately SHRINK between saves**, so a world carrying three lodgers under content that now says
+two **is a true statement about the build that wrote it, not corruption.** A refusal there would
+reject valid history.
+
+**And my exit criterion was wrong in the same direction** — *"two lodgers in a capacity-2 room now
+LOADS"* **licenses two STRANGERS**, which ADR-0055 forbids. The stranger case still throws, pinned,
+with a discriminating sibling beside it.
+
+### THE TEST THAT RUNS ITS OWN PREDICATE BOTH WAYS ROUND
+
+The CROSSED shape is exercised **in both guest-list orders**, because *"a cross-predicate that only
+fires when the lodger is visited first would pass the shipped case and miss half the worlds it
+describes."*
+
+> **That is the I2 iteration-order hazard caught inside a test rather than in the code**, and nothing
+> asked for it. It is the same instinct as `assertGuest`'s new check being placed **last** so an
+> older defect still reports itself — a rule that caught a test the moment it was written.
+
+### AND A CORRECTION TO MY CHARTER, NOT JUST TO A BRIEF
+
+My I6 clause says a new field is covered by `save.test.ts`'s field-coverage test. **That test is
+generated from `WORLD_KEYS` and sees top-level `World` keys only** — so it **cannot see any
+guest-level field**, and the sentence has been wrong for every one ever added. `dissatisfaction` and
+`at` both took the dedicated-case route without the charter noticing.
+
+### THE STALLS, RECORDED BECAUSE THEY WILL RECUR
+
+**Two builders stalled on this goal**: one sentence, zero tool calls, no processes, no file writes —
+36 and 31 minutes. **Diagnosed without reading either transcript**: 0-byte output, zero `node.exe`,
+clean `git status`. **The second stall carried the anti-stall instruction that fixed the first**, so
+it is infrastructure rather than the brief. **Cost: 67 minutes and two briefs; nothing was lost
+because neither ever touched the tree.**

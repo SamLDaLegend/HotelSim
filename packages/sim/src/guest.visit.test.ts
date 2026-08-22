@@ -183,7 +183,7 @@ describe('THE VISIT ENDS — a guest that booked no room goes home on its own cl
   it('releases everything it held, so nothing leaks (the exit-path rule)', () => {
     const content = foodCourt();
     const world = run(built(content, ['cafe']), content, 40, [at(1, arrive), at(2, arrive)]);
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
   });
 });
 

@@ -499,6 +499,28 @@ export type GuestRulesData = {
    * reproduces every earlier run to the byte. No default lives in this package (I3).
    */
   readonly maxLodgingFloorsFromEntrance?: number | undefined;
+  /**
+   * THE LARGEST PARTY THAT CAN ARRIVE (G-040a, ADR-0055).
+   *
+   * A PARTY IS THE UNIT THAT BOOKS A ROOM, and `capacity` is how large a party a room type
+   * holds — the reading `roomTypeSchema` has demanded since M0. This is the other end of that
+   * relation, and `assertPartiesCanBeHoused` in `bindContent` refuses content in which the two
+   * do not meet: a party larger than every lodging room in the building has no provider
+   * anywhere, so every member accumulates dissatisfaction it cannot shed and departs
+   * `gaveUp` — guaranteed unhappiness rather than difficulty, which is §6.1's first shape.
+   *
+   * ABSENT MEANS ONE, AND THAT IS A TRUE HISTORICAL STATEMENT rather than a default: every
+   * build of this simulation before G-040b forms parties of exactly one, so content without
+   * this field reproduces every earlier run to the byte and its fingerprint does not move. No
+   * default lives in this package (I3); `maxPartySizeOf` is where the reading is written down.
+   *
+   * ONE NUMBER RATHER THAN A DISTRIBUTION, DELIBERATELY, AND THE SPLIT IS THE POINT (G-040a /
+   * G-040b). What this goal ships is the RELATION — the refusal above, and the machinery a
+   * party of two would need. The weights that decide how often a party of two actually arrives
+   * are G-040b's, and until they land nothing in the simulation reads this field except the
+   * refusal.
+   */
+  readonly maxPartySize?: number | undefined;
 };
 
 /**
@@ -952,9 +974,12 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     dissatisfactionCapacityTicks: ceiling,
     dissatisfactionReliefPerTick: relief,
     maxLodgingFloorsFromEntrance: reach,
+    maxPartySize: party,
     ...rest
   } = rules;
-  const withStay = cloneLodgingReach(
+  const withStay = clonePartySize(
+    rules.id,
+    cloneLodgingReach(
     rules.id,
     cloneDissatisfaction(
     rules.id,
@@ -975,6 +1000,8 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     relief,
     ),
     reach,
+    ),
+    party,
   );
   if (margin === undefined) return withStay;
   if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
@@ -1016,6 +1043,33 @@ function cloneLodgingReach(id: ContentId, rest: GuestRulesData, reach: number | 
     );
   }
   return { ...rest, maxLodgingFloorsFromEntrance: reach };
+}
+
+/**
+ * The party half of `cloneGuestRules` (G-040a, ADR-0055).
+ *
+ * The `cloneLodgingReach` discipline exactly, and INDEPENDENTLY OPTIONAL like that one: content
+ * can declare a party size and no floor patience, or the other way round, and both are coherent
+ * house rules. The key is STRIPPED when absent, because only the absent form is the "every
+ * arrival is one guest" statement — which is what every build before G-040b did.
+ *
+ * ZERO AND NEGATIVES ARE REFUSED, AND SO IS ONE-LESS-THAN-ONE FOR THE SAME REASON: a party is at
+ * least one guest, because the party is what walks in. A "maximum party size" of 0 is content
+ * under which nobody can arrive, which is not a house rule anybody means to write.
+ *
+ * THE RELATION TO `capacity` IS NOT CHECKED HERE, and that is `cloneLodgingReach`'s precedent
+ * one field over: the other side of the relation lives in the ROOM TYPE table, which no clone
+ * in this file sees. `assertPartiesCanBeHoused` has both in hand and is where it is refused.
+ */
+function clonePartySize(id: ContentId, rest: GuestRulesData, size: number | undefined): GuestRulesData {
+  if (size === undefined) return rest;
+  if (!Number.isSafeInteger(size) || size < 1) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a maxPartySize of ${String(size)}; it must be a whole number of ` +
+        'guests, one or more. A party is the unit that books a room, and the smallest one is a guest arriving alone.',
+    );
+  }
+  return { ...rest, maxPartySize: size };
 }
 
 /**
@@ -2642,6 +2696,74 @@ function assertSomeLodgingRoomAdmitsGuests(
   );
 }
 
+/**
+ * Throws if the largest party this content can form is larger than any room it could sleep in
+ * (G-040a, ADR-0055, G-040's BLOCKER 3).
+ *
+ * ==========================================================================================
+ * THE FAILURE IT REFUSES, MEASURED RATHER THAN IMAGINED.
+ *
+ * The shipped content provides the lodging need from exactly ONE room type — `standard_room`,
+ * `capacity` 2 — so the observable domain of "party size" in this building is {1, 2}. A party
+ * of THREE has no provider anywhere in the hotel: `findFreeRoom`'s capacity clause drops every
+ * candidate, every member's lodging need stays wanted for its whole life, dissatisfaction fills
+ * and never drains, and the whole party departs `gaveUp`. **Every time, in every hotel, however
+ * well the player builds** — which is guaranteed unhappiness rather than difficulty, and is the
+ * first shape §6.1 names.
+ *
+ * THE PRECEDENT IS FOUR LINES AWAY. `assertNeedDemandIsServiceable` refuses a need table no
+ * guest could keep up with, and `assertSomeLodgingRoomAdmitsGuests` refuses a hotel whose every
+ * bedroom is staff-only. This is the same class: content that is not merely unbalanced but
+ * unplayable, refused at bind time with the numbers named, rather than watched at runtime.
+ *
+ * AGAINST THE MAXIMUM CAPACITY, NOT THE MINIMUM. One room type big enough is enough for the
+ * party to have somewhere to go; the smaller ones are simply not candidates for it, which is a
+ * design a designer may legitimately write (a hotel with singles and doubles). What may not
+ * exist is a party size NOTHING can hold.
+ *
+ * SILENT WHEN NO ROOM TYPE PROVIDES LODGING AT ALL: `assertNeedsAreSatisfiable` has already
+ * refused that, and refusing it twice would report the narrower fault for the wider mistake —
+ * the sentence `assertSomeLodgingRoomAdmitsGuests` carries, for the same reason.
+ * ==========================================================================================
+ */
+function assertPartiesCanBeHoused(
+  guestRules: readonly GuestRulesData[],
+  roomTypes: readonly RoomTypeData[],
+  lodgingNeedId: ContentId | undefined,
+): void {
+  if (lodgingNeedId === undefined) return;
+  // ABSENT MEANS ONE (see `maxPartySize`), so content that predates parties is checked rather
+  // than skipped: a hotel whose only bedroom held nobody would be refused here too.
+  let largest = 1;
+  let by = '';
+  for (const rules of guestRules) {
+    const size = rules.maxPartySize ?? 1;
+    if (size > largest) {
+      largest = size;
+      by = rules.id;
+    }
+  }
+  const lodgings = roomTypes.filter((roomType) => (roomType.provides ?? EMPTY_IDS).includes(lodgingNeedId));
+  if (lodgings.length === 0) return;
+  let roomiest = 0;
+  let roomiestId = '';
+  for (const roomType of lodgings) {
+    if (roomType.capacity > roomiest) {
+      roomiest = roomType.capacity;
+      roomiestId = roomType.id;
+    }
+  }
+  if (largest <= roomiest) return;
+  throw new Error(
+    `bindContent: the largest party this content can form is ${largest}` +
+      `${by === '' ? '' : ` (guest rules "${by}")`}, but the roomiest room type providing the lodging need ` +
+      `"${lodgingNeedId}" holds ${roomiest}${roomiestId === '' ? '' : ` ("${roomiestId}")`}. A party books ONE room ` +
+      'and capacity is how large a party a room holds, so such a party has no provider anywhere in the building: ' +
+      'every member would want rest for its whole life, fill its dissatisfaction with nothing draining it, and ' +
+      'leave having given up. Raise capacity on a lodging room type, or lower maxPartySize.',
+  );
+}
+
 function assertRequiredItemsExist(
   roomTypes: readonly RoomTypeData[],
   itemTypes: readonly ItemTypeData[],
@@ -2886,6 +3008,11 @@ export function bindContent(content: SimContent): BoundContent {
   // reason, and it comes after `assertNeedsAreSatisfiable` so that content with NO lodging
   // provider at all still says that rather than complaining about access rules.
   assertSomeLodgingRoomAdmitsGuests(roomTypes, lodgingNeedIn(needTypes ?? [])?.id);
+  // AND HOW MANY OF THEM ARRIVE AT ONCE (G-040a, ADR-0055). Placed directly after the access
+  // rule for the same ordering reason it is placed after `assertNeedsAreSatisfiable`: content
+  // with no bookable bedroom at all should say THAT rather than complain that its parties are
+  // too big for the bedroom it does not have.
+  assertPartiesCanBeHoused(guestRules ?? [], roomTypes, lodgingNeedIn(needTypes ?? [])?.id);
   // FIT IS ENGAGEMENT-ONLY (G-014a), and this needs the lodging need settled above for the
   // same reason `assertNeedsAreSatisfiable` does — "engagement" is defined as "not that
   // one", so the answer means nothing until the table is known to name exactly one.
@@ -3376,6 +3503,22 @@ export function guestSpeedOf(bound: BoundContent): number | undefined {
  */
 export function maxLodgingFloorsFromEntranceOf(bound: BoundContent): number | undefined {
   return firstGuestRules(bound)?.maxLodgingFloorsFromEntrance;
+}
+
+/**
+ * The largest party this content can form, in guests (G-040a, ADR-0055).
+ *
+ * ONE RATHER THAN `undefined`, WHICH IS THE OPPOSITE CALL FROM `maxLodgingFloorsFromEntranceOf`
+ * one function up, and for the reason that one's own note gives: an absent reach means
+ * UNBOUNDED, which is a distinct rule the caller has to branch on, whereas an absent party size
+ * means "every arrival is one guest" — a value, and the value every build before G-040b used.
+ * There is no third state to represent, so there is nothing for `undefined` to say.
+ *
+ * `bindContent` REFUSES content whose answer here exceeds the roomiest lodging room type
+ * (`assertPartiesCanBeHoused`), so a caller may rely on this being housable.
+ */
+export function maxPartySizeOf(bound: BoundContent): number {
+  return firstGuestRules(bound)?.maxPartySize ?? 1;
 }
 
 /**

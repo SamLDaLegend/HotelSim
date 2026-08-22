@@ -124,6 +124,10 @@ function guest(id: number, over: GuestOver = {}): Guest {
   const restDeficit = over.restDeficit ?? WANT_LINE;
   return {
     id,
+    // G-040a: a party of one, which is what `stepGuests` writes for every arrival. Nothing in
+    // this file is about parties; these cases are about which room a scan finds, and a party of
+    // one finds exactly what a lone guest found before the field existed.
+    partyId: id,
     // G-023a: a guest is somewhere. THE DOORWAY, because nothing in this file is about
     // where anybody is standing — these cases are about which room a scan finds, and
     // `stepGuests` re-states the position from what the guest holds on every tick anyway.

@@ -368,6 +368,8 @@ describe('the zero CAN be non-zero', () => {
         list: [
           {
             id: 1,
+            // G-040a: a party of one, which is what every guest the tick makes belongs to.
+            partyId: 1,
             // G-023a: standing in the room it holds, invalid though that room is.
             at: { floor: 9, column: 10, row: 0 },
             arrivedTick: 0,

@@ -387,6 +387,7 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
     const loaded = deserialise(v17Blob());
     const era = v17World();
     const eraEntities = era['entities'] as { nextId: number; list: Record<string, unknown>[] };
+    const eraGuests = era['guests'] as { nextId: number; list: Record<string, unknown>[] };
     const eraOutcomes = era['buildOutcomes'] as Record<string, unknown>;
     const eraRefused = eraOutcomes['refused'] as Record<string, unknown>;
     // WRITTEN IN BY HAND, WHICH IS THE POINT: this is what the later steps in the chain claim a
@@ -403,6 +404,13 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
       // AND THE 20 -> 21 STEP: an empty stairwell (G-038a-ii-alpha), because a v17 world's
       // floor axis spent unconditionally and no v17 fact can name a cell as a stair.
       stairs: [],
+      // AND THE 21 -> 22 STEP: every v17 guest is a party of ONE, named by its own id
+      // (G-040a). Spelled here rather than read back out of the step, which is what makes the
+      // two hashes an independent agreement rather than a tautology.
+      guests: {
+        ...eraGuests,
+        list: eraGuests.list.map((guest) => ({ ...guest, partyId: guest['id'] })),
+      },
       entities: {
         ...eraEntities,
         list: eraEntities.list.map((entity) => ({ ...entity, footprint: { columns: 1, rows: 1 } })),

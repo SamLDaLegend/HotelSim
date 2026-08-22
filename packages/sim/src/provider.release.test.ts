@@ -185,7 +185,7 @@ const armed = (world: World): World => {
 
 /** Everything a healthy world must still be able to say after a release. */
 const healthy = (world: World): void => {
-  expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+  expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
   expect(countGuestsInInvalidRooms(world.guests, world.entities, BOUNDS, createCorridors(), createStairs(), content)).toBe(0);
 };
 
@@ -315,6 +315,9 @@ describe('A RELEASED ITEM THAT IS STILL GOOD GOES BACK INTO THE POOL, THIS TICK 
 
   const guest = (id: number, room: number, engagedWith: number | null, comfortLeft: number): Guest => ({
     id,
+    // G-040a: a party of one. Every builder in this file makes lone guests, which is what the
+    // tick makes too — the party cases are built explicitly where they are the subject.
+    partyId: id,
     // G-023a: a guest is somewhere. The doorway — this file is about what a RELEASE does,
     // and nothing in the simulation reads a position (`travel.position.test.ts` owns the
     // placement rule).

@@ -2068,7 +2068,10 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   assertNeedOutcomes(world.needOutcomes, departedGuests(world.guestOutcomes));
 
   const stuck = countStuckGuests(world.tick, world.guests, content);
-  const orphans = countOrphanedReservations(world.guests, world.entities);
+  // IT TAKES CONTENT SINCE G-040a, and the reason is `capacity`: a room holds a PARTY, so
+  // "two lodgers in one bedroom" is legal or a leak depending on a number that lives in the
+  // room type table. The same `content` every other line here reads.
+  const orphans = countOrphanedReservations(world.guests, world.entities, content);
   const balance = balanceOf(world.ledger);
   let classified = 0;
   for (const reason of TRANSACTION_REASONS) {

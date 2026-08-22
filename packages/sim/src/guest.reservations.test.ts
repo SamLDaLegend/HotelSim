@@ -112,7 +112,7 @@ const at = (tick: number, command: Command): ScheduledCommand => ({ tick, comman
 const hotel = (rooms: number, seed = 3): World =>
   stepTick(createWorld(seed, content), content, Array.from({ length: rooms }, (_, i) => spawnRoom(i)));
 
-const orphansIn = (world: World): number => countOrphanedReservations(world.guests, world.entities);
+const orphansIn = (world: World): number => countOrphanedReservations(world.guests, world.entities, content);
 const resting = (world: World): readonly Guest[] => guestsInOrder(world.guests).filter(isResting);
 
 describe('exit path — the need was met', () => {
@@ -242,26 +242,30 @@ describe('the detector can return something other than zero', () => {
 
   it('counts a reservation on a room that does not exist', () => {
     const dangling = withGuests([{ ...guest, roomEntityId: 4_242 }]);
-    expect(countOrphanedReservations(dangling, world.entities)).toBe(1);
+    expect(countOrphanedReservations(dangling, world.entities, content)).toBe(1);
     expect(() => assertGuestStoreInvariants(dangling, world.entities, world.grid)).toThrow(/does not exist/);
   });
 
-  it('counts a room booked twice', () => {
-    const doubled = withGuests([guest, { ...guest, id: guest.id + 1 }]);
-    expect(countOrphanedReservations(doubled, world.entities)).toBe(1);
+  it('counts a room booked twice BY TWO PARTIES', () => {
+    // TWO PARTIES SINCE G-040a, and the extra word is the whole difference. A room holds a
+    // PARTY (ADR-0055), so a second lodger is a leak exactly when it is a stranger; the case
+    // where the two belong to one party is the mechanic and is pinned in
+    // `guest.party.save.test.ts`, beside the `capacity` bound this file's rooms do not exercise.
+    const doubled = withGuests([guest, { ...guest, id: guest.id + 1, partyId: guest.partyId + 1 }]);
+    expect(countOrphanedReservations(doubled, world.entities, content)).toBe(1);
     expect(() => assertGuestStoreInvariants(doubled, world.entities, world.grid)).toThrow(/more than one guest/);
   });
 
   it('counts each broken reservation separately', () => {
     const both = withGuests([
       { ...guest, roomEntityId: 4_242 },
-      { ...guest, id: guest.id + 1, roomEntityId: 4_243 },
+      { ...guest, id: guest.id + 1, partyId: guest.partyId + 1, roomEntityId: 4_243 },
     ]);
-    expect(countOrphanedReservations(both, world.entities)).toBe(2);
+    expect(countOrphanedReservations(both, world.entities, content)).toBe(2);
   });
 
   it('still returns zero for the world the simulation actually produced', () => {
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
   });
 });
 
@@ -316,7 +320,7 @@ describe('thirty days of a hotel that is always over capacity', () => {
     const commands = schedule();
     for (let day = 0; day < DAYS; day += 1) {
       world = run(world, busyContent, TICKS_PER_DAY, commands);
-      expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+      expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
       expect(countStuckGuests(world.tick, world.guests, busyContent)).toBe(0);
     }
     expect(world.guestOutcomes.arrived).toBeGreaterThan(400);

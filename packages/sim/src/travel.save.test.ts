@@ -247,6 +247,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
       [18, 19],
       [19, 20],
       [20, 21],
+      [21, 22],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });

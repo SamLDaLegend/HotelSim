@@ -60,7 +60,7 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v20', () => {
+  it('is a v1 blob, and this build now writes v22', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
@@ -90,7 +90,7 @@ describe('I6 stored v1 save fixture', () => {
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(21);
+    expect(SAVE_SCHEMA_VERSION).toBe(22);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 

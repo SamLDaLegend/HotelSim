@@ -382,6 +382,8 @@ describe('counting guests in invalid rooms', () => {
         list: [
           {
             id: 1,
+            // G-040a: a party of one, which is what every guest the tick makes belongs to.
+            partyId: 1,
             // G-023a: standing in the room it holds, which is what the placement rule gives
             // a guest that lodges in a placed room — invalid though that room is.
             at: cell(9, 10),
@@ -413,6 +415,8 @@ describe('counting guests in invalid rooms', () => {
         list: [
           {
             id: 1,
+            // G-040a: a party of one, which is what every guest the tick makes belongs to.
+            partyId: 1,
             // G-023a: the doorway. Its reservation names an entity that does not exist, so
             // there is no cell to stand in and the entrance is what the rule falls back to.
             at: { floor: 0, column: 0, row: 0 },

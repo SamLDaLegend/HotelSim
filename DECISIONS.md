@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-040a is DONE: a party is a thing, and the shipped size is PINNED AT 1. Guest.partyId is hashed state, save v22 migrates every v21 guest to a party of one (partyId = guest.id, inventing nothing — packages/content has said a party is one guest since M0), held becomes a COUNT, claimEntity becomes a BOUND rather than a refusal of the second holder, and bindContent refuses content whose largest party exceeds the roomiest room type providing the lodging need. countOrphanedReservations counts the two claim kinds SEPARATELY — lodging by party and capacity, engagement by one, the cross-clause its own lookup — because ONE count destroys three of the five shapes it detects. findFreeRoom's capacity denial sets deniedThisGuestOnly and NEVER arms the per-tick exhausted memo, and release decrements rather than deleting and un-exhausts on EVERY decrement. THE HASH MOVED AND NOTHING ELSE DID, demonstrated over three CLI invocations: --days 20 --seed 42, --days 40 --seed 7 and --days 10 --seed 1 each print a 48-line report whose only differing line is state hash. I2 7ff621928358cb8e over three processes (was 2b5369e4461a9140); measure golden c7212353b3d1784f (was 760558b631beb552). Fourteen rows green, VERIFY_EXIT read from the process. E-010 and E-011 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -5675,3 +5675,93 @@ does not transfer.
 *(Also incidental and correctly swept: three superseded figures in comments describing arrays that
 had already been replaced, and a pair of incident numbers now labelled as G-020c history because
 they appear in no table in the file.)*
+
+---
+
+## ADR-0068 — A party is a thing, and the invariant that bounds it cannot see content.
+
+**Date**: 2026-08-22 · **Status**: accepted · **G-040a.** First half of the G-040 split.
+
+### THE CLAIM THE SEAM WAS CUT TO MAKE, AND IT IS DEMONSTRATED RATHER THAN ASSERTED
+
+**Three `sim:run` invocations, captured at HEAD before any edit and re-captured on the finished
+tree, diffed whole**: `--days 20 --seed 42`, `--days 40 --seed 7`, `--days 10 --seed 1`.
+
+> **`48c48` — ONE LINE DIFFERS IN A 48-LINE REPORT, THREE TIMES, AND IT IS THE STATE HASH.**
+
+Byte-identical: `arrived`, all seven departure rows, `in hotel`, `stuck`, `orphan res`,
+`in bad room`, all four need rows, the review distribution, `mean x100`, `ledger`, `revenue`,
+`upkeep`, the build and refusal counters, `capital`, `scrap value`, `settlements`, `balance`.
+
+**Two more controls, both unchanged apart from the hash literal**: the bench golden's PLAIN arm keeps
+its hand-checked outcome block (`checkedOut 2`, `leftDissatisfied 64`, 9 in hotel, 75 arrived); the
+CHURN arm keeps `evictedGuests === 18`; and `cli.stdout.test.ts`'s whole golden JSON diff shows
+**exactly one changed field, `stateHash`.**
+
+**I2 `2b5369e4461a9140` -> `7ff621928358cb8e`**, three processes, read three separate times.
+**`pnpm verify` fourteen rows PASS.** **`save-v1.ts` has a zero-line diff** — ADR-0006 holds.
+
+### CONSTRAINT 2 WAS NOT EXECUTABLE AS I WROTE IT, AND THE SPLIT THE BUILDER MADE IS BETTER
+
+I required *"lodging bounded by the room type's capacity"* inside
+`assertGuestStoreInvariants`. **That validator is content-free BY CONSTRUCTION** — it is called from
+`assertWorldShape`, which has no content in hand, and its own docblock rules it out. **`capacity` is
+content.**
+
+The builder split the constraint rather than forcing it:
+
+- **`claimEntity` bounds a lodging claim by PARTY IDENTITY** — content-free, and *"it is the bound
+  ADR-0055 actually keeps: two strangers never share."*
+- **`countOrphanedReservations` gained a `content` parameter and bounds by CAPACITY as well** — it
+  has content, and **a host reports rather than refuses.**
+
+> **The asymmetry is deliberate and cites a precedent four fields up**: the `dissatisfaction` clause
+> already refuses to check a saved value against a live content ceiling, **because content can
+> legitimately SHRINK between saves.** A world carrying three lodgers under content that now says
+> two **is a true statement about the build that wrote it, not corruption.**
+
+**And my exit criterion 4 was wrong in the same direction.** *"A save with two lodgers in a
+capacity-2 room now LOADS"* — **as stated that licenses two STRANGERS, which ADR-0055 forbids.**
+Implemented party-scoped; **the stranger case still throws and is pinned**, with a discriminating
+sibling test beside it.
+
+**A third case runs the CROSSED shape BOTH WAYS ROUND THE GUEST LIST**, because *"a cross-predicate
+that only fires when the lodger is visited first would pass the shipped case and miss half the worlds
+it describes."* **That is the I2 iteration-order hazard caught inside a test rather than in the
+code.**
+
+### A CONTENT FIELD HAD TO BE INVENTED, AND IT IS FLAGGED RATHER THAN SMUGGLED
+
+**"Maximum party size" existed nowhere** — `guest-rules.json` has no such key — so the refusal
+exit criterion was not expressible without one. **`maxPartySize` is added to the schema and to sim's
+mirror type as OPTIONAL, absent-means-one**, so `guest-rules.json` is untouched and **no content
+fingerprint moves**.
+
+**UPHELD.** I3 forbids content *defined in code*; a schema field whose data stays in JSON is the
+opposite of that, and absent-means-one keeps every shipped world's meaning unchanged. **The builder
+named it as a scope deviation and offered the one-function revert** — which is the disclosure that
+makes it acceptable rather than the size of the change.
+
+### THE THREE TRAPS HELD, AND ONE WAS CONFIRMED BY MEASUREMENT
+
+**Leader-holds-the-room is genuinely unavailable**: `atHome` requires
+`guest.roomEntityId !== NO_ENTITY` at `guests.ts:2382`, verified. **Capacity denial sets
+`deniedThisGuestOnly` and never arms `exhausted`** — and `release` now **un-exhausts on every
+decrement rather than only the last**, which is the same defect one step further on and was not in
+the brief. **The two claim kinds are counted separately**, so all five orphan shapes survive.
+
+**`assertGuest`'s new shape check is placed LAST** — *"the newest key checks last, so an older defect
+still reports itself"* — **and that rule caught a test immediately.**
+
+### THE OTHER CORRECTION IS TO MY OWN CHARTER
+
+My I6 clause says a new field is *"covered by the field-coverage test in `save.test.ts`."* **That test
+is generated from `WORLD_KEYS` and covers top-level `World` keys only.** `partyId` is a `Guest`
+field, so **`WORLD_KEYS` does not move and that test cannot see it.** Coverage comes from a dedicated
+case, **which is the route `dissatisfaction` and `at` already took** — so the charter sentence has
+been wrong for every guest-level field ever added.
+
+*(Cost, with slots: `check:tickcost` 1.0707x standalone and 0.9786x inside `verify` — 60 rooms,
+arrival every 96, seed 42, 30 days, 6 samples per arm interleaved, median of ratios, two regimes
+straddling 1.0, both far inside 1.4640. **No tick-cost claim is made beyond "not measurable at this
+instrument's resolution."** I5 bench 2.0% of budget.)*

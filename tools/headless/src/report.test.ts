@@ -843,13 +843,23 @@ describe('buildSummary violations (forged worlds)', () => {
   const needType = lodgingNeedOf(content);
   if (needType === undefined) throw new Error('shipped content defines no lodging need');
 
-  /** A guest appended to a real world's store, with outcomes kept conserved. */
-  function withForgedGuest(world: World, guest: Omit<Guest, 'id'>): World {
+  /**
+   * A guest appended to a real world's store, with outcomes kept conserved.
+   *
+   * IT WRITES THE PARTY AS WELL AS THE ID (G-040a), for the reason it writes the id: a forged
+   * guest has to be one this world could have produced, and `stepGuests` gives every arrival a
+   * party of one drawn from the same counter. Each caller forges exactly ONE violation, and a
+   * party id colliding with a live one would be a second.
+   */
+  function withForgedGuest(world: World, guest: Omit<Guest, 'id' | 'partyId'>): World {
     return {
       ...world,
       guests: {
         nextId: world.guests.nextId + 1,
-        list: [...world.guests.list, { ...guest, id: world.guests.nextId }],
+        list: [
+          ...world.guests.list,
+          { ...guest, id: world.guests.nextId, partyId: world.guests.nextId },
+        ],
       },
       guestOutcomes: { ...world.guestOutcomes, arrived: world.guestOutcomes.arrived + 1 },
     };

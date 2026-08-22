@@ -26,7 +26,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 21;
+export const SAVE_SCHEMA_VERSION = 22;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -2141,6 +2141,83 @@ function migrateV20ToV21(world: unknown): unknown {
 }
 
 /**
+ * v21 -> v22: a world in which a guest was the unit that booked a room (G-040a, ADR-0055).
+ *
+ * ADR-0006 fires for the TWENTY-FIRST time. `Guest` gains `partyId`, `assertGuest` demands it,
+ * and so the permanent v1 fixture describes guests this build cannot load — the answer is this
+ * step. `fixtures/save-v1.ts` HAS A ZERO-LINE DIFF in this change; the walk is 1 -> ... -> 21 -> 22.
+ *
+ * ==========================================================================================
+ * IT INVENTS NOTHING, AND THAT IS A STRONGER CLAIM HERE THAN AT ANY EARLIER STEP.
+ *
+ * `partyId = guest.id`: every guest in a v21 world is a party of ONE. That is not a default
+ * standing in for missing information and it is not the most tolerant value available — it is
+ * what `roomTypeSchema` in `packages/content` has SAID since M0, in the comment beside the
+ * field this goal finally gives a reader:
+ *
+ *   > *"`capacity` is the size of the PARTY a room holds, NOT a count of unrelated bookings.
+ *   > A party is one guest at M0."*
+ *
+ * So the bytes already describe parties of one; they simply had nowhere to write it down. Every
+ * migrated guest keeps its room, its needs, its position and its mood, and — because a party of
+ * one behaves exactly as a lone guest did — every journey, every check-out and every penny.
+ *
+ * WHY THE GUEST'S OWN ID RATHER THAN A FRESH COUNTER. A party id must be unique for the life of
+ * the run, and `guests.nextId` already guarantees that of every id it has handed out; borrowing
+ * from that space means no `nextPartyId` in hashed state, no migration default anybody invented,
+ * and no possibility of a migrated party colliding with one formed after the load. It reads no
+ * content and no live constant, so the same v21 bytes produce the same v22 world however the
+ * shipped world changes afterwards (ADR-0008).
+ *
+ * G-040b's block records the one thing this must NOT be read as promising: a party id is not a
+ * REFERENCE to its leader. At one member the two coincide; the day a party has two, a departed
+ * leader must not strand the remainder.
+ *
+ * NOT TESTED BY THE PERMANENT v1 FIXTURE, AND SAYING SO IS THE POINT. That fixture's world holds
+ * no guests at all, so this step walks it with a ZERO-LINE diff while inspecting nothing —
+ * ADR-0007's exact shape, and the paragraph `migrateV20ToV21` and `migrateV13ToV14` both carry.
+ * `guest.party.save.test.ts` drives a HAND-BUILT v21 world whose guests hold rooms, hold
+ * engagements, carry needs and carry distinct ids through this step, and watches each land on
+ * its own party.
+ * ==========================================================================================
+ */
+function migrateV21ToV22(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  const guests = world['guests'];
+  if (!isRecord(guests)) {
+    throw new Error('Save is corrupt: world.guests is missing, so its guests cannot be given a party');
+  }
+  const list = guests['list'];
+  if (!Array.isArray(list)) {
+    throw new Error('Save is corrupt: world.guests.list is missing or not an array');
+  }
+  const converted: unknown[] = list.map((guest, index) => {
+    if (!isRecord(guest)) {
+      throw new Error(`Save is corrupt: world.guests.list[${index}] is not an object`);
+    }
+    // The one way this step could destroy data — overwriting a party somebody already belongs
+    // to — is the one thing it refuses to do, exactly as all twenty earlier steps refuse.
+    // `Object.keys().includes` rather than `in`, because `JSON.parse` makes `__proto__` an own
+    // key (G-003).
+    if (Object.keys(guest).includes('partyId')) {
+      throw new Error(
+        `world.guests.list[${index}] already has a "partyId" field, so it is not a v21 guest; migrating it would overwrite a real party`,
+      );
+    }
+    const id = guest['id'];
+    if (typeof id !== 'number') {
+      throw new Error(
+        `Save is corrupt: world.guests.list[${index}].id is missing or not a number, so this guest has no party to be the only member of`,
+      );
+    }
+    return { ...guest, partyId: id };
+  });
+  return { ...world, guests: { ...guests, list: converted } };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -2169,6 +2246,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 18, to: 19, migrate: migrateV18ToV19 }),
   Object.freeze({ from: 19, to: 20, migrate: migrateV19ToV20 }),
   Object.freeze({ from: 20, to: 21, migrate: migrateV20ToV21 }),
+  Object.freeze({ from: 21, to: 22, migrate: migrateV21ToV22 }),
 ]);
 
 /**
@@ -2505,6 +2583,18 @@ function assertGuest(value: unknown, index: number): asserts value is Guest {
   // **The newest key checks last, so a save that is broken for an older reason still says so.**
   if (typeof value['dissatisfaction'] !== 'number') {
     throw new Error(`Save is corrupt: world.guests.list[${index}].dissatisfaction is not a number`);
+  }
+  // WHICH PARTY IT ARRIVED WITH (G-040a). Shape only — what a legal party id is belongs to
+  // `assertGuestStoreInvariants`, shared with the tick rather than written twice. A v21 save
+  // carries no such key and reaches this line only through `migrateV21ToV22`, so a save missing
+  // it here is a save no migration produced.
+  //
+  // AND IT CHECKS AFTER `dissatisfaction`, WHICH IS THE RULE THAT FIELD'S OWN NOTE ESTABLISHED
+  // rather than a place it happened to land: **the newest key checks last, so a save that is
+  // broken for an older reason still says so.** Put first, this would report a v10 blob fed in
+  // without its migration as "partyId is not a number".
+  if (typeof value['partyId'] !== 'number') {
+    throw new Error(`Save is corrupt: world.guests.list[${index}].partyId is not a number`);
   }
 }
 

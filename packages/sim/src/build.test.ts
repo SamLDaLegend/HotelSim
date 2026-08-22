@@ -270,7 +270,7 @@ describe('demolish', () => {
 
     expect(evictedGuests(world.guestOutcomes)).toBe(1);
     expect(guestsInOrder(world.guests)).toHaveLength(0);
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
     // It never got what it came for, so it pays nothing.
     expect(sumByReason(world.ledger, 'roomRevenue')).toBe(revenueBefore);
   });

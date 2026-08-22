@@ -109,6 +109,34 @@ export type GuestId = number;
 export const NO_GUEST: GuestId = 0;
 
 /**
+ * THE PARTY A GUEST BELONGS TO (G-040a, ADR-0055).
+ *
+ * A PARTY IS THE UNIT THAT BOOKS A ROOM, and `capacity` is how large a party a room type
+ * holds — which is what `roomTypeSchema` in `packages/content` has said since M0:
+ *
+ *   > *"`capacity` is the size of the PARTY a room holds, NOT a count of unrelated bookings.
+ *   > A party is one guest at M0."*
+ *
+ * SHIPPED PINNED AT ONE. Every party this build forms has exactly one member — `stepGuests`
+ * writes `partyId = id` and nothing else ever writes the field — so every occupancy number,
+ * every counter and every penny is what it was before this type existed. What changes is that
+ * the SHAPE is now expressible: `held` counts rather than flags, `findFreeRoom` asks whether a
+ * room has room enough, and `assertGuestStoreInvariants` bounds a claim rather than forbidding
+ * a second one. G-040b hands parties more than one member; this goal makes them a thing.
+ *
+ * IT IS DRAWN FROM THE GUEST ID SPACE AND NOT FROM A SECOND COUNTER. `guests.nextId` already
+ * hands out values nothing reuses, so a party id taken from it is unique for the life of the
+ * run and needs no `nextPartyId` in hashed state and no migration default anybody had to
+ * invent. It is NOT a live guest id in general — at one member the two coincide, and G-040b's
+ * block records why the party must not be RE-READ as its leader: a departed leader would
+ * strand the remainder.
+ */
+export type PartyId = number;
+
+/** Reserved. Means "no party". Never allocated — `guests.nextId` starts at 1. */
+export const NO_PARTY: PartyId = 0;
+
+/**
  * The prefix of every "this guest is standing somewhere impossible" message (G-023a).
  *
  * A MODULE CONSTANT RATHER THAN A TEMPLATE LITERAL AT THE CALL SITE. `assertCell` is called
@@ -138,6 +166,20 @@ export type Engagement = {
 
 export type Guest = {
   readonly id: GuestId;
+  /**
+   * THE PARTY THIS GUEST ARRIVED WITH (G-040a, ADR-0055). Hashed, saved, and never absent.
+   *
+   * EVERY MEMBER OF A PARTY CARRIES THE SHARED ROOM ID IN `roomEntityId`, AND THAT IS FORCED
+   * RATHER THAN CHOSEN. The smaller design — the leader holds the room, members point at the
+   * leader — is not available: `atHome` requires `guest.roomEntityId !== NO_ENTITY`, so a
+   * member holding no room id NEVER RESTS whatever it is standing in, and its lodging need
+   * becomes structurally unsatisfiable. That is why `RoomSearch.held` counts claims instead of
+   * flagging them, and why `claimEntity` is a bound rather than a refusal of the second holder.
+   *
+   * TODAY EVERY PARTY HAS ONE MEMBER and this equals `id` for every guest this build creates
+   * and for every guest `migrateV21ToV22` reads out of a v21 save. See `PartyId`.
+   */
+  readonly partyId: PartyId;
   /**
    * WHERE THIS GUEST IS STANDING (G-023a). Hashed, saved, and never absent.
    *
@@ -1041,7 +1083,8 @@ export function countStuckGuests(
  *
  *   1. DANGLING LODGING     — a guest holds a room entity that is not live.
  *   2. DANGLING ENGAGEMENT  — a guest is engaged with an entity that is not live.
- *   3. DOUBLE-BOOKED ROOM   — two guests lodging in one room.
+ *   3. DOUBLE-BOOKED ROOM   — two guests OF DIFFERENT PARTIES lodging in one room, or one
+ *                             party with more members in a room than its type holds.
  *   4. DOUBLE-ENGAGED       — two guests using one provider. A provider serves one guest
  *                             at a time; a queue with capacity is M3's.
  *   5. CROSSED              — one guest's lodging room is another's engagement provider.
@@ -1051,27 +1094,105 @@ export function countStuckGuests(
  * means either a release path broke or the world came from outside the simulation (a
  * hand-built or corrupt save, which is why `assertGuestStoreInvariants` refuses to load
  * one). This returns a count rather than throwing so a host can REPORT it every run.
+ *
+ * ===========================================================================================
+ * TWO COUNTS, NOT ONE, AND THAT IS WHAT KEEPS FIVE SHAPES FIVE (G-040a).
+ *
+ * THIS PARAGRAPH USED TO SAY *"ONE set for both kinds of reservation, which is what makes
+ * shape 5 visible at all"*, and it was right — while a room held one guest. A party may now
+ * fill a room to its capacity, so a second LODGER in a bedroom is legal, and a single count
+ * would make three different worlds indistinguishable:
+ *
+ *   two members of one party in a capacity-2 room     LEGAL     — the mechanic itself
+ *   one lodger and one engager in that same room      CROSSED   — shape 5
+ *   two guests at one café                            DOUBLE-ENGAGED — shape 4
+ *
+ * So the two claim kinds are counted APART. Lodging is bounded by the room type's `capacity`
+ * and by party identity; engagement is still bounded by ONE; and the cross-clause is its own
+ * predicate, asked of the OTHER structure in each branch. That is why this takes content
+ * where it never used to: `capacity` is content, and there is nowhere else to read it.
+ *
+ * IT NEVER ITERATES EITHER STRUCTURE (I2), which is what makes the cross-clause a lookup
+ * rather than a second pass. Each branch asks whether the other kind already claimed the
+ * entity, so a crossed pair is counted exactly once whichever member is visited first — and
+ * the total is the same for every visiting order, which is the property this function has
+ * always had and must keep.
+ *
+ * WHY IT IS STRICTER THAN `assertGuestStoreInvariants`, DELIBERATELY. That validator is
+ * CONTENT-FREE by construction (`assertWorldShape` has no content in hand), so it can bound a
+ * lodging claim by party identity and no further. This function has content, so it can also
+ * say that six people are not a party of two — and reporting it is the right response rather
+ * than refusing the load, for the reason the `dissatisfaction` clause in that validator gives:
+ * capacity can legitimately SHRINK between saves, and a world carrying more lodgers than
+ * today's content admits is a true statement about the build that wrote it.
+ * ===========================================================================================
  */
-export function countOrphanedReservations(guests: GuestStore, entities: EntityStore): number {
+export function countOrphanedReservations(
+  guests: GuestStore,
+  entities: EntityStore,
+  content: BoundContent,
+): number {
   let orphaned = 0;
-  // Membership only. Never iterated, so nothing here can affect an order (I2) — and the
-  // total is the same whatever order the guests are visited in. ONE set for both kinds of
-  // reservation, which is what makes shape 5 above visible at all: an entity that is
-  // somebody's bedroom and somebody else's amenity is claimed twice.
-  let held: Set<EntityId> | null = null;
+  // Lookup only, never iterated, so nothing here can affect an order (I2). Allocated only if a
+  // reservation is actually seen — the `assertGuestStoreInvariants` discipline.
+  let lodged: Map<EntityId, LodgingClaim> | null = null;
+  let engaged: Set<EntityId> | null = null;
   for (const guest of guests.list) {
-    for (const id of [guest.roomEntityId, guest.engagement?.entityId ?? NO_ENTITY]) {
-      if (id === NO_ENTITY) continue;
-      if (indexOfEntity(entities, id) === -1) {
+    const roomId = guest.roomEntityId;
+    if (roomId !== NO_ENTITY) {
+      if (indexOfEntity(entities, roomId) === -1) orphaned += 1;
+      else if (engaged !== null && engaged.has(roomId)) {
+        // SHAPE 5, reached from the lodging side: somebody is already being served by the
+        // thing this guest calls its bedroom.
         orphaned += 1;
-        continue;
+      } else {
+        lodged ??= new Map<EntityId, LodgingClaim>();
+        const claim = lodged.get(roomId);
+        if (claim === undefined) lodged.set(roomId, { partyId: guest.partyId, count: 1 });
+        else if (claim.partyId !== guest.partyId) orphaned += 1;
+        else {
+          claim.count += 1;
+          // A room holds a PARTY, and `capacity` is how large a one. A party overflowing its
+          // own room is the same leak as two strangers in it, seen one member later.
+          if (claim.count > lodgingCapacityOf(content, entities, roomId)) orphaned += 1;
+        }
       }
-      held ??= new Set<EntityId>();
-      if (held.has(id)) orphaned += 1;
-      else held.add(id);
+    }
+    const engagementId = guest.engagement?.entityId ?? NO_ENTITY;
+    if (engagementId === NO_ENTITY) continue;
+    if (indexOfEntity(entities, engagementId) === -1) orphaned += 1;
+    else if (lodged !== null && lodged.has(engagementId)) {
+      // SHAPE 5, reached from the engagement side. A bedroom is somebody's, so it is not
+      // also a shared amenity — whichever of the two guests the list happens to reach first.
+      orphaned += 1;
+    } else {
+      engaged ??= new Set<EntityId>();
+      if (engaged.has(engagementId)) orphaned += 1;
+      else engaged.add(engagementId);
     }
   }
   return orphaned;
+}
+
+/** One room, the party lodging in it, and how many of that party are in it. Lookup only (I2). */
+type LodgingClaim = {
+  readonly partyId: PartyId;
+  count: number;
+};
+
+/**
+ * How large a party this entity holds, or 0 for anything that is not a room type of this
+ * content (G-040a).
+ *
+ * ZERO FOR A NON-ROOM IS THE STRICT READING AND IT IS THE RIGHT ONE HERE: a guest lodging in
+ * an ARM CHAIR holds something no party fits in, so the second claim on it is a leak on the
+ * first member rather than the second. `countGuestsInInvalidRooms` reports the first member
+ * separately, which is the split that keeps one defect from reading as two.
+ */
+function lodgingCapacityOf(content: BoundContent, entities: EntityStore, id: EntityId): number {
+  const entity = getEntity(entities, id);
+  if (entity === undefined) return 0;
+  return findRoomType(content, entity.kind)?.capacity ?? 0;
 }
 
 /**
@@ -1181,10 +1302,11 @@ export function assertGuestStoreInvariants(
     throw new Error(`Guest store is invalid: nextId must be a positive safe integer, got ${String(guests.nextId)}`);
   }
   // Allocated only if a reservation is actually seen. This runs at the end of EVERY
-  // tick, and an empty hotel is most of a 365-day run (I5). ONE set for both kinds, so a
+  // tick, and an empty hotel is most of a 365-day run (I5). ONE map for both kinds, so a
   // room that is one guest's bedroom and another's amenity is caught by the same clause
-  // that catches two guests in one bed.
-  let held: Set<EntityId> | null = null;
+  // that catches two PARTIES in one bed — see `claimEntity` for what changed at G-040a and
+  // for the one thing this validator cannot say without content.
+  let held: Map<EntityId, StoreClaim> | null = null;
   let previous = 0;
   for (let i = 0; i < guests.list.length; i += 1) {
     const guest = guests.list[i];
@@ -1206,6 +1328,28 @@ export function assertGuestStoreInvariants(
     }
     previous = guest.id;
 
+    // WHICH PARTY IT BELONGS TO (G-040a). Content-free, like every other clause here: how large
+    // a party may be is `capacity`, which is content and which this validator has none of — so
+    // what it can say is that the id is an id, and that it comes from the space `guests.nextId`
+    // is handing out from.
+    //
+    // THE UPPER BOUND IS THE SAME ARGUMENT `id` MAKES TWO CLAUSES UP, and it is not decoration:
+    // a party id at or above `nextId` will be handed out AGAIN to a future arrival, and the two
+    // unrelated parties sharing it would then be allowed into one room — which is the one thing
+    // ADR-0055's ruling keeps forbidden. A save carrying one was not written by this build.
+    if (!Number.isSafeInteger(guest.partyId) || guest.partyId < 1) {
+      throw new Error(
+        `Guest store is invalid: guest ${guest.id} has a partyId of ${String(guest.partyId)}; it must be a positive ` +
+          'safe integer. A guest always belongs to a party — a party of one, for a guest that arrived alone.',
+      );
+    }
+    if (guest.partyId >= guests.nextId) {
+      throw new Error(
+        `Guest store is invalid: guest ${guest.id} has a partyId of ${guest.partyId}, which is at or above nextId ` +
+          `${guests.nextId}. Party ids come from the guest id space, so a future arrival would be handed the same ` +
+          'one and two unrelated parties would be allowed to share a room.',
+      );
+    }
     if (!Number.isSafeInteger(guest.arrivedTick) || guest.arrivedTick < 0) {
       throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer arrivedTick`);
     }
@@ -1250,7 +1394,7 @@ export function assertGuestStoreInvariants(
       if (!Number.isSafeInteger(guest.roomEntityId) || guest.roomEntityId < 0) {
         throw new Error(`Guest store is invalid: guest ${guest.id} has a non-integer roomEntityId`);
       }
-      held = claimEntity(held, entities, guest, guest.roomEntityId, 'lodges in');
+      held = claimEntity(held, entities, guest, guest.roomEntityId, true, 'lodges in');
     }
 
     // Typed wider than the field, because this runs at LOAD against bytes nobody in this
@@ -1295,37 +1439,74 @@ export function assertGuestStoreInvariants(
           'A provider is released on the tick the need it serves reaches full, so nothing holds one with nothing to do.',
       );
     }
-    held = claimEntity(held, entities, guest, engagement.entityId, 'is engaged with');
+    held = claimEntity(held, entities, guest, engagement.entityId, false, 'is engaged with');
   }
 }
 
+/** What stands against one entity in `assertGuestStoreInvariants`. Lookup only, never iterated (I2). */
+type StoreClaim = {
+  /** The party lodging here, or `NO_PARTY` when this is an engagement claim. */
+  readonly partyId: PartyId;
+  /** How many guests LODGE here. `0` for an engagement claim, which is bounded by one. */
+  lodgers: number;
+};
+
 /**
- * One entity claimed by one guest. Throws if it is not live, or if somebody already has it.
+ * One entity claimed, and the BOUND on who else may claim it. Throws if it is not live, or if
+ * the claim is one this world has no reading of.
  *
- * BOTH RESERVATIONS GO THROUGH HERE, which is what makes "a bedroom is not a shared
- * amenity" a checked fact rather than a convention: the set does not care which field the
- * claim came from, so a room claimed twice fails however it was claimed.
+ * BOTH RESERVATIONS GO THROUGH HERE, which is what makes "a bedroom is not a shared amenity" a
+ * checked fact rather than a convention: the map does not care which field the claim came from,
+ * so a room that is one guest's bed and another's café fails however it was claimed.
+ *
+ * ===========================================================================================
+ * IT WAS A REFUSAL OF THE SECOND HOLDER, AND AT G-040a IT BECOMES A BOUND (ADR-0055).
+ *
+ * A room holds a PARTY. So a second LODGER is legal exactly when it is a member of the party
+ * already there, and everything else stays a refusal:
+ *
+ *   second lodger, same party         ALLOWED     — the mechanic. `lodgers` counts them.
+ *   second lodger, different party    REFUSED     — two strangers never share a room, which
+ *                                                 is the bound ADR-0055's ruling KEEPS.
+ *   an engager on a lodged room       REFUSED     — shape 5, from either side.
+ *   a second engager                  REFUSED     — a provider serves one guest at a time.
+ *
+ * AND THE ONE THING IT CANNOT SAY: whether those lodgers exceed the room type's `capacity`.
+ * This validator is CONTENT-FREE by construction — `assertWorldShape` has no content in hand,
+ * and the `dissatisfaction` clause above records why that is not a gap to be plugged: content
+ * can legitimately shrink between saves, so a world carrying three lodgers under content that
+ * now says two is a true statement about the build that wrote it rather than corruption.
+ * `countOrphanedReservations` HAS content and reports exactly that, every run.
+ * ===========================================================================================
  */
 function claimEntity(
-  held: Set<EntityId> | null,
+  held: Map<EntityId, StoreClaim> | null,
   entities: EntityStore,
   guest: Guest,
   id: EntityId,
+  forLodging: boolean,
   verb: string,
-): Set<EntityId> {
+): Map<EntityId, StoreClaim> {
   if (indexOfEntity(entities, id) === -1) {
     throw new Error(
       `Guest store is invalid: guest ${guest.id} ${verb} entity ${id}, which does not exist. ` +
         'A reservation held against a room that is gone is the leak §6.1 names; the tick releases such a guest instead.',
     );
   }
-  const claimed = held ?? new Set<EntityId>();
-  if (claimed.has(id)) {
+  const claimed = held ?? new Map<EntityId, StoreClaim>();
+  const standing = claimed.get(id);
+  if (standing === undefined) {
+    claimed.set(id, { partyId: forLodging ? guest.partyId : NO_PARTY, lodgers: forLodging ? 1 : 0 });
+    return claimed;
+  }
+  if (!forLodging || standing.lodgers === 0 || standing.partyId !== guest.partyId) {
     throw new Error(
-      `Guest store is invalid: entity ${id} is held by more than one guest, most recently ${guest.id}`,
+      `Guest store is invalid: entity ${id} is held by more than one guest, most recently ${guest.id}. ` +
+        'A room holds one PARTY and a provider serves one guest, so the only second claim there is a ' +
+        'reading of is another member of the party already lodging there.',
     );
   }
-  claimed.add(id);
+  standing.lodgers += 1;
   return claimed;
 }
 
@@ -1514,6 +1695,12 @@ function findFreeRoom(
    * validity — is the same for every guest on this tick.
    */
   lodgingRoomId: EntityId,
+  /**
+   * The party this guest belongs to (G-040a). THE SECOND PER-GUEST INPUT THIS FUNCTION TAKES,
+   * and like `lodgingRoomId` it is why the exhausted memo needs a clause: a room that is full
+   * for THIS party may have room for the next one, and vice versa.
+   */
+  partyId: PartyId,
 ): Entity | null {
   // THE SHORT-CIRCUIT (G-010, sharpened by G-012). If a scan for this need already came up
   // empty and NOTHING THAT PROVIDES IT HAS BEEN RELEASED SINCE, the answer is still empty
@@ -1578,7 +1765,29 @@ function findFreeRoom(
   // ============================================================================
   let deniedThisGuestOnly = false;
   for (const room of candidates) {
-    if (search.held.has(room.id)) continue;
+    // ==========================================================================
+    // AND THE CAPACITY RULE (G-040a, ADR-0055). THE ONE PLACE `capacity` BITES.
+    //
+    // A room holds a PARTY. `held` therefore counts claims rather than flagging them, and a
+    // room somebody is already in is a candidate for exactly one guest: another member of the
+    // party that is in it, and only while the room has room enough.
+    //
+    // TWO DENIALS WITH DIFFERENT REACH, AND CONFLATING THEM IS THE BUG THIS CLAUSE EXISTS TO
+    // AVOID. A room held by ANOTHER party is unavailable to every party in the building, so it
+    // suppresses nothing — exactly as the plain `held` test did before this goal. A room with
+    // no room LEFT is a fact about THIS guest's party, so it sets `deniedThisGuestOnly` for the
+    // reason `reservedForItsOwnGuest` does thirty lines down: `exhausted` is recorded once per
+    // tick and read by every later guest, and arming it on a per-party fact would mark lodging
+    // exhausted for every party of one queued behind a party of two — **a guest standing in
+    // the lobby beside an empty room it could have had**, which is §6.1's literal case.
+    //
+    // AN ENGAGEMENT CLAIM IS STILL A FLAT REFUSAL. A provider serves one guest at a time, and a
+    // room somebody sleeps in is not a shared amenity — so any standing claim, of either kind,
+    // takes an entity out of the engagement search. That is `countOrphanedReservations`' shape
+    // 5, kept unrepresentable by construction rather than by a second rule.
+    // ==========================================================================
+    const standing = search.held.get(room.id);
+    if (standing !== undefined && (!forLodging || standing.partyId !== partyId)) continue;
     // ==========================================================================
     // AND THE FLOOR-PATIENCE RULE (G-038c, ADR-0047 B8). THE ONE PLACE B8's THIRD PART BITES.
     //
@@ -1627,6 +1836,18 @@ function findFreeRoom(
       continue;
     }
     if (access === 'closedToGuests') continue;
+    // LAST, AFTER THE CHEAP FILTERS, because it is the only clause here that reads content — one
+    // O(log n) lookup, and only for a room that has already survived everything else. `?? 0`
+    // rather than a throw: a lodging candidate is always a room type by construction
+    // (`validRoomsProviding`), so the fallback is the postcondition of that list rather than a
+    // case, and a hand-built world that broke it would find no bed rather than crash the tick.
+    if (forLodging) {
+      const capacity = findRoomType(search.input.content, room.kind)?.capacity ?? 0;
+      if ((standing?.lodgers ?? 0) + 1 > capacity) {
+        deniedThisGuestOnly = true;
+        continue;
+      }
+    }
     return room;
   }
   // Allocated only when a scan actually fails, so a hotel that is never full pays nothing —
@@ -1635,6 +1856,20 @@ function findFreeRoom(
   if (!deniedThisGuestOnly) (search.exhausted ??= new Set<ContentId>()).add(needId);
   return null;
 }
+
+/**
+ * What stands against one entity for the rest of this tick (G-040a).
+ *
+ * The tick-local twin of `StoreClaim`, and deliberately the same shape: `partyId` is the party
+ * LODGING here or `NO_PARTY` for an engagement, and `lodgers` counts the members in the room.
+ * Two types rather than one shared one because the two live in different worlds — this one is
+ * mutable tick state that never escapes `stepGuests`, and that one is built inside a validator
+ * that runs on every load. Merging them would tie a hot-path allocation to a load-path contract.
+ */
+type TickClaim = {
+  readonly partyId: PartyId;
+  lodgers: number;
+};
 
 /**
  * The tick-local state of looking for a room: who holds what, and what has been given back.
@@ -1682,10 +1917,16 @@ type RoomSearch = {
    */
   readonly stairwell: Cell | null;
   /**
-   * Rooms currently held, as bedrooms OR as engagements. Membership only: never iterated,
-   * never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
+   * Rooms currently held, as bedrooms OR as engagements, AND BY HOW MANY (G-040a). Lookup only:
+   * never iterated, never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
+   *
+   * A COUNT RATHER THAN A FLAG, because a room holds a party and a party may have more than one
+   * member. `release` is the one place it shrinks and it decrements rather than deleting, which
+   * is what makes "one bed came free in a room that still has somebody in it" expressible — see
+   * the note there for why the exhausted memo must be re-armed on THAT event and not only on the
+   * last member leaving.
    */
-  readonly held: Set<EntityId>;
+  readonly held: Map<EntityId, TickClaim>;
   /**
    * Needs a scan has already found no free provider for, this tick. LOOKUP ONLY (I2):
    * never iterated, never ordered, never hashed.
@@ -1726,7 +1967,24 @@ type RoomSearch = {
  * branch to be conservative about.
  */
 function release(search: RoomSearch, id: EntityId, freed: Entity | null, content: BoundContent): void {
-  search.held.delete(id);
+  // ==========================================================================================
+  // AND IT IS SIZE-AWARE SINCE G-040a, WHICH IS TWO SEPARATE STATEMENTS.
+  //
+  //   THE CLAIM SHRINKS BY ONE, not to nothing. A capacity-2 room with two members in it and
+  //   one of them leaving is still held — by the member who stayed — so deleting the entry
+  //   would hand that bedroom to a stranger, which is the thing ADR-0055's ruling keeps
+  //   forbidden.
+  //
+  //   THE MEMO IS RE-ARMED ON EVERY DECREMENT, not only on the last one. A bed came free, and
+  //   `exhausted` says "no room with room enough for anybody" — which that bed may have just
+  //   falsified for a party of one. Un-exhausting too eagerly costs a rescan that finds
+  //   nothing; un-exhausting too late is a guest standing in the lobby beside a free bed for
+  //   the rest of the tick, which is the failure this whole function exists to prevent. The
+  //   cheap direction is the sound one, and it is the one taken.
+  // ==========================================================================================
+  const standing = search.held.get(id);
+  if (standing !== undefined && standing.lodgers > 1) standing.lodgers -= 1;
+  else search.held.delete(id);
   const exhausted = search.exhausted;
   if (exhausted === null || freed === null) return;
   // Un-exhaust exactly what this provider can serve. `providesOf` answers for a room type
@@ -1892,10 +2150,20 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     };
   }
 
-  const held = new Set<EntityId>();
+  // ONE FORWARD PASS OVER `guests.list`, WHICH IS ASCENDING BY CONSTRUCTION (I2). A party is
+  // resolved by accumulating into a lookup structure that is never iterated — there is no
+  // `Map<PartyId, GuestId[]>` here and there must never be one, because iterating it would make
+  // the tick's answer depend on insertion order.
+  const held = new Map<EntityId, TickClaim>();
   for (const guest of guests.list) {
-    if (guest.roomEntityId !== NO_ENTITY) held.add(guest.roomEntityId);
-    if (guest.engagement !== null) held.add(guest.engagement.entityId);
+    if (guest.roomEntityId !== NO_ENTITY) {
+      const standing = held.get(guest.roomEntityId);
+      if (standing === undefined) held.set(guest.roomEntityId, { partyId: guest.partyId, lodgers: 1 });
+      else standing.lodgers += 1;
+    }
+    // NOT A COUNT, DELIBERATELY: a provider serves one guest at a time, so a second engagement
+    // claim on one entity is a world `assertGuestStoreInvariants` already refused to load.
+    if (guest.engagement !== null) held.set(guest.engagement.entityId, { partyId: NO_PARTY, lodgers: 0 });
   }
   const search: RoomSearch = {
     input,
@@ -2494,6 +2762,13 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // to whatever it manages to take, exactly as it does for a guest already here.
     const arrived: Guest = {
       id,
+      // A PARTY OF ONE, AND THE FIELD IS WRITTEN HERE AND NOWHERE ELSE (G-040a, ADR-0055).
+      // `id` comes from `guests.nextId`, so the party id is drawn from the guest id space and
+      // is unique for the life of the run without a second counter in hashed state. G-040b is
+      // where one arrival becomes several guests sharing this value; until then every party
+      // has exactly one member, and every occupancy number is what it was before the field
+      // existed.
+      partyId: id,
       at: standingCell(null, null, input.entities.bounds),
       arrivedTick: tick,
       roomEntityId: NO_ENTITY,
@@ -2720,9 +2995,14 @@ function reserve(
       // the room, so gating it on already being one would make every bedroom carrying the rule
       // unbookable. `staffOnly` still bites here, and should: no guest books a bed in the
       // linen store.
-      const room = findFreeRoom(search, lodgingNeedId, true, NO_ENTITY);
+      const room = findFreeRoom(search, lodgingNeedId, true, NO_ENTITY, result.partyId);
       if (room !== null) {
-        search.held.add(room.id);
+        // THE CLAIM GROWS RATHER THAN BEING SET (G-040a): `findFreeRoom` returns a room this
+        // guest's own party may already be in, and overwriting the entry would lose the members
+        // already there. Only a room with no standing claim starts a new one.
+        const standing = search.held.get(room.id);
+        if (standing === undefined) search.held.set(room.id, { partyId: result.partyId, lodgers: 1 });
+        else standing.lodgers += 1;
         result = { ...result, roomEntityId: room.id };
         // The parameter is the room this guest held on the way IN, and it has just changed.
         // Reassigned rather than shadowed so the exits below cannot read the stale one — a
@@ -2858,7 +3138,7 @@ function reserve(
     // room's vending machine until the next one — a guest walking past the thing it just
     // rented. `reserve` never reassigns a room a guest already holds, so this value is final
     // for the rest of the guest's stay.
-    const provider = findFreeRoom(search, need.needId, false, result.roomEntityId);
+    const provider = findFreeRoom(search, need.needId, false, result.roomEntityId, result.partyId);
     if (provider === null) continue;
     bestPressure = pressure;
     bestNeed = need;
@@ -2891,7 +3171,7 @@ function reserve(
     release(search, engagement.entityId, engagedRoom, content);
     result = { ...result, needs: abandonNeed(result.needs, engagement.needId), engagement: null };
   }
-  search.held.add(bestProvider.id);
+  search.held.set(bestProvider.id, { partyId: NO_PARTY, lodgers: 0 });
   // AND THE GUEST IS AT THE THING IT JUST ENGAGED (G-023a). `bestProvider`, not `engagedRoom`
   // — the incumbent was released three lines up, so passing it here would leave a guest
   // standing at the café it just walked out of.

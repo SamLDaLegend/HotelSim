@@ -261,6 +261,10 @@ describe('the 5 -> 6 step reshapes a guest and invents nothing', () => {
         'engagement',
         'id',
         'needs',
+        // G-040a: the party the guest arrived with. A v5 guest reaches this shape through the
+        // WHOLE chain, so every field a later step ADDED is here too; the v5-era claim this case
+        // is named for is about the three fields that LEFT.
+        'partyId',
         'roomEntityId',
       ]);
     }
@@ -469,6 +473,11 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
             // missing this would still be refused — for the wrong reason, and the test would
             // pass while inspecting a different defect.
             dissatisfaction: 0,
+            // G-040a, present for exactly that reason and NOT a copy-paste: `partyId` is now the
+            // newest key and therefore the last one checked, so omitting it moved this case's
+            // failure onto the party clause. It was caught the moment the field landed, which is
+            // what the age-order rule buys.
+            partyId: 1,
           },
         ],
       },

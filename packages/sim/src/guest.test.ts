@@ -350,7 +350,7 @@ describe('who gets the room', () => {
     // strangers sharing a room would read as stupid to a watching player.
     const world = run(hotel(2), content, 400, Array.from({ length: 60 }, (_, i) => at(i * 3 + 1, arrive)));
     expect(world.guestOutcomes.arrived).toBe(60);
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
   });
 });
 
@@ -554,7 +554,7 @@ describe('the exit criteria, over 30 simulated days', () => {
 
   it('holds no orphaned reservation, and every guest is accounted for', () => {
     const world = thirtyDays();
-    expect(countOrphanedReservations(world.guests, world.entities)).toBe(0);
+    expect(countOrphanedReservations(world.guests, world.entities, content)).toBe(0);
     expect(() => assertGuestOutcomes(world.guestOutcomes, world.guests)).not.toThrow();
     // The law spelled out over the TABLE (G-015), not over four fields. `departedGuests`
     // folds the rows — nothing stores the total — so this is three independently

@@ -185,7 +185,18 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // byte-identical — 24 arrived, 4 checked out, 16 gave up, 4 still in the hotel, 7
     // transactions, 510,000p. The need rows, the review distribution and the mean move; see the
     // need-row block above for the numbers and the mechanism.
-    stateHash: '73ec70f0ec5bf424',
+    //
+    // MOVED AGAIN AT G-040a to `72d843e8af79257c`, for ONE hashed-state cause and NO behaviour:
+    // every `Guest` GAINED a `partyId`, and the save went to **v22**. The shipped party size is
+    // PINNED AT ONE — `stepGuests` writes `partyId = id` and nothing else writes the field — so
+    // no room is shared, no arrival is doubled and no journey is different. **THE CONTROL IS THE
+    // FULL DOCUMENT AGAIN, AND IT IS THE STRONGEST FORM OF IT THIS GOLDEN HAS CARRIED**: every
+    // other field here is byte-identical, and the same claim was taken at the CLI over three
+    // separate invocations — `--days 20 --seed 42`, `--days 40 --seed 7`, `--days 10 --seed 1` —
+    // where the ONLY line differing from HEAD in a 48-line report is `state hash`. 24 arrived,
+    // 4 checked out, 16 gave up, 4 still in the hotel, 7 transactions, 510,000p, the same need
+    // rows, the same review distribution and the same mean.
+    stateHash: '72d843e8af79257c',
   },
   guests: {
     arrived: 24,
@@ -663,7 +674,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // floor, so no lodging candidate is more than zero floors from the door and a reach of 2
     // cannot turn anybody away. Same 6 valid rooms, same 0/0/0/0/0 tally, same 24 arrivals,
     // same 4/16 split, same four need rows to the basis point.
-    'state hash  73ec70f0ec5bf424',
+    'state hash  72d843e8af79257c',
   ].join('\n') + '\n';
 
 /**
@@ -820,7 +831,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  73ec70f0ec5bf424']);
+    expect(differing).toEqual(['seed        42', 'state hash  72d843e8af79257c']);
     expect(lines43).toContain('seed        43');
   });
 });

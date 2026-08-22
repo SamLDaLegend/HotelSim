@@ -206,7 +206,7 @@ const rec = { lines: [], cache: new Map(), everyTicks: 1, extent: null };
  * mis-draw. A stale copy here refuses every recording, including the good ones, which is a
  * five-minute repair with a message pointing at it.
  */
-const VIEWER_SCHEMA_VERSION = 21;
+const VIEWER_SCHEMA_VERSION = 22;
 
 function frameAt(i) {
   const hit = rec.cache.get(i);

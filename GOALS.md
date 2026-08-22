@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-040a is DONE: a party is a thing, and the shipped size is PINNED AT 1. Guest.partyId is hashed state, save v22 migrates every v21 guest to a party of one (partyId = guest.id, inventing nothing — packages/content has said a party is one guest since M0), held becomes a COUNT, claimEntity becomes a BOUND rather than a refusal of the second holder, and bindContent refuses content whose largest party exceeds the roomiest room type providing the lodging need. countOrphanedReservations counts the two claim kinds SEPARATELY — lodging by party and capacity, engagement by one, the cross-clause its own lookup — because ONE count destroys three of the five shapes it detects. findFreeRoom's capacity denial sets deniedThisGuestOnly and NEVER arms the per-tick exhausted memo, and release decrements rather than deleting and un-exhausts on EVERY decrement. THE HASH MOVED AND NOTHING ELSE DID, demonstrated over three CLI invocations: --days 20 --seed 42, --days 40 --seed 7 and --days 10 --seed 1 each print a 48-line report whose only differing line is state hash. I2 7ff621928358cb8e over three processes (was 2b5369e4461a9140); measure golden c7212353b3d1784f (was 760558b631beb552). Fourteen rows green, VERIFY_EXIT read from the process. E-010 and E-011 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
-- **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v22** (G-040a — a guest gained a `partyId`; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `2b5369e4461a9140` · measure golden `760558b631beb552`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `7ff621928358cb8e` · measure golden `c7212353b3d1784f`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2786,7 +2786,11 @@ no guest could keep up with. **`bindContent` must refuse content whose maximum p
 `max(capacity)` over room types providing the lodging need.**
 
 ## G-040a — A party is a thing
-Status: **PLANNED. Buildable on main NOW; independent of E-011.**
+Status: **done** (2026-08-22). Save **v22**; I2 `7ff621928358cb8e` over three processes; measure
+golden `c7212353b3d1784f`. The hash moved and NOTHING ELSE did — `pnpm sim:run` at
+`--days 20 --seed 42`, `--days 40 --seed 7` and `--days 10 --seed 1` each print a 48-line report
+whose ONLY line differing from HEAD is `state hash`. Party size ships PINNED AT 1; the
+distribution, the arrival, departure cohesion and `payForStay` are G-040b's.
 Milestone: M3 · Owner pair: sim-engineer / ai-critic
 
 **`Guest.partyId`, save **v22** and its migration, `held` as a count, `claimEntity`'s bound,

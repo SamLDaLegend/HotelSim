@@ -222,6 +222,9 @@ describe('CHECKOUT runs on a clock, and the clock starts at the door', () => {
       list: [
         {
           id: 1,
+          // G-040a: a party of one. This file is about the LIFETIME BOUND, which a party
+          // does not move — every member carries its own clock.
+          partyId: 1,
           at: { floor: 0, column: 0, row: 0 },
           arrivedTick: 1_000 - age,
           roomEntityId: 1,

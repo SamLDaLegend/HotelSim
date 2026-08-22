@@ -388,7 +388,17 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   `evictedGuests`, the abandonment count and the departure table's seven-row SHAPE are
     //   unchanged. `check:stamp` reads this literal out of the tree, so the digest's
     //   measure-golden line moves with it.
-    expect(hashState(plain)).toBe('760558b631beb552');
+    //   `760558b631beb552` -> `c7212353b3d1784f`   G-040a gave every guest a `partyId` and took
+    //   the save to **v22**. **ONE cause, and it is a FIELD rather than a behaviour** — the
+    //   `418cf36055a3408c` row's shape exactly, and this time it is checked over three
+    //   invocations rather than one: `pnpm sim:run` at `--days 20 --seed 42`, `--days 40 --seed
+    //   7` and `--days 10 --seed 1` each print a 48-line report in which **the only line that
+    //   differs from HEAD is `state hash`.** Every arrival, every departure row, every need row,
+    //   every review, the revenue, the upkeep and the closing balance are byte-identical.
+    //   **THE CONTROL BLOCK BELOW HOLDS IN FULL**, which is what says the hash moved because the
+    //   world grew a key and not because the hotel changed. `check:stamp` reads this literal out
+    //   of the tree, so the digest's measure-golden line moves with it.
+    expect(hashState(plain)).toBe('c7212353b3d1784f');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -690,7 +700,11 @@ describe('the same workload with the player churning the building', () => {
     // runner declares a stairwell and every basement journey is routed through it. Eviction is
     // this arm's subject and it still evicts — 19 -> 18, one guest fewer standing in a room at
     // the moment it is demolished, because the guests are elsewhere on the way to the stairs.
-    expect(hashState(churn)).toBe('4ca40a2319b272bf');
+    // `4ca40a2319b272bf` -> `29c600242aed7db8` AT G-040a: `Guest.partyId` is hashed state and
+    // every guest now carries one. **NOT ONE COUNTER MOVES**, which on this arm is the whole
+    // claim — eviction is its subject and it still evicts exactly 18, asserted three lines
+    // down, and every counter named in the block above is asserted below this line unchanged.
+    expect(hashState(churn)).toBe('29c600242aed7db8');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
