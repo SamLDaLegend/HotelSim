@@ -99,6 +99,14 @@ const stepTheBox = (
   arrivalEveryTicks: number,
   amenities: number,
   ticks: number,
+  /**
+   * G-038a-iii-b. `report.ts` declares a stairwell on every floor, so this box has one too.
+   * Passing `false` filters those entries back out — the same subtraction
+   * `travel.stairs.report.test.ts` and `layout.reach.player.report.test.ts` re-founded onto —
+   * which is what lets the arm below report the shaft's effect as a PAIR rather than as a
+   * literal that dropped to zero for reasons a reader has to take on trust.
+   */
+  withShaft = true,
 ): {
   readonly idleBasisPoints: number;
   readonly longestRunTicks: number;
@@ -111,6 +119,7 @@ const stepTheBox = (
   const commands = schedule(ticks, content, world.grid, rooms, arrivalEveryTicks, 0, 0, 0, amenities);
   const byTick = new Map<number, ReturnType<typeof schedule>[number]['command'][]>();
   for (const scheduled of commands) {
+    if (!withShaft && scheduled.command.kind === 'layStair') continue;
     const bucket = byTick.get(scheduled.tick) ?? [];
     bucket.push(scheduled.command);
     byTick.set(scheduled.tick, bucket);
@@ -226,7 +235,33 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // through a fixed schedule and folds integer frames into integer basis points, so this
     // reading is exact and identical on every run and every platform. A window around an exact
     // integer is a window in which a real change can hide.
-    expect(box.idleBasisPoints).toBe(271);
+    //
+    // ==========================================================================================
+    // 271 -> 0 AT G-038a-iii-b, AND A ZERO IS A WEAKER PIN, SO IT COMES WITH ITS OWN CONTROL.
+    //
+    // THE READING IS HONEST AND IT IS THE SAME MECHANISM ONE NOTCH FURTHER ON. The paragraph
+    // above says travel converts idle time into TRAVEL time; the stairwell adds a vertical leg
+    // to every journey between this box's rooms and its basement amenities, and at that journey
+    // length the one guest's needs never all sit above their want line at the same moment.
+    // **`frames` is UNMOVED at `STAY - 1`** — the guest still holds its room for the whole stay,
+    // so the denominator is the denominator and the instrument still sees the guest. What went
+    // to zero is the numerator.
+    //
+    // **AND A LITERAL 0 WOULD MAKE THE TWO CLAUSES BELOW NEARLY FREE**, which is said out loud
+    // rather than left for a reader to notice: `0 < 2500` and `2500 - 0 > 1000` cannot fail for
+    // any reading at or below 1,500. So the arm now measures the PAIR in one sitting — the same
+    // box with the shipped `layStair` entries filtered out — and asserts the gap it names in its
+    // own title as a difference rather than as a level. That is the only clause here that can
+    // still distinguish "the shaft did this" from "the instrument stopped counting".
+    // ==========================================================================================
+    expect(box.idleBasisPoints).toBe(0);
+    // THE CONTROL, SAME SITTING, SAME BOX, ONE DECLARATION APART. 271 is the reading this arm
+    // pinned before the shaft and it is re-measured here rather than quoted from the paragraph
+    // above (`CLAUDE.md` rule 3).
+    const withoutTheShaft = stepTheBox(2, STAY * 3, 3, STAY, false);
+    expect(withoutTheShaft.frames).toBe(box.frames);
+    expect(withoutTheShaft.idleBasisPoints).toBe(271);
+    expect(withoutTheShaft.idleBasisPoints).toBeGreaterThan(box.idleBasisPoints);
     // AND THE TWO STRUCTURAL CLAUSES, WHICH SURVIVE ANY RE-PIN OF THE LITERAL ABOVE: the share
     // is under its derived ceiling, and it is under it by a margin rather than by a rounding.
     expect(box.idleBasisPoints).toBeLessThan(ceiling);

@@ -42,18 +42,24 @@
 // layout, and not this goal's.
 //
 // ==========================================================================================
-// WHAT THIS FILE DOES NOT DO: SHIP THE DECLARATION. The stairwell below is a TEST FIXTURE. No
-// harness in this project declares one, and declaring one in `report.ts` moves occupancy, every
-// golden, the bench and the state hash at once — that is G-038a-iii-b's whole goal. Proving a
-// LAYOUT does not require shipping a BEHAVIOUR change, and the two arms below are the proof:
-// the same run, with and without the shaft, reports the same verdicts.
+// ~~WHAT THIS FILE DOES NOT DO: SHIP THE DECLARATION. The stairwell below is a TEST FIXTURE. No
+// harness in this project declares one …~~ **SUPERSEDED AT G-038a-iii-b, ONE GOAL LATER, WHICH
+// IS WHEN IT SAID IT WOULD BE.** `report.ts`'s `schedule` emits the shaft on every floor of the
+// plot (`shaftCells`), so the WITH arm below is now the SHIPPED run and the WITHOUT arm strips
+// the shipped declaration back out. Nothing in the measurement moved — the shaft is the same
+// cell, full height, at tick 0 — which is why the tallies below are the tallies this file
+// pinned when it declared its own.
+//
+// THE CLAIM THAT SURVIVES UNCHANGED IS THE ONE THIS FILE EXISTS FOR: routing every cross-floor
+// journey through one column changes which rooms are valid NOT AT ALL, which is what "the
+// layout is joined" means. It is now a statement about the runner rather than about a fixture.
 // ==========================================================================================
 
 import { describe, expect, it } from 'vitest';
 import { createWorld, run } from '@hotelsim/sim';
-import type { BoundContent, Cell, Command, RoomInvalidityTally, ScheduledCommand } from '@hotelsim/sim';
+import type { BoundContent, Command, RoomInvalidityTally, ScheduledCommand } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { buildSummary, parseArgs, playerSpineCells, schedule, seededSpineCells } from './report.js';
+import { buildSummary, parseArgs, playerSpineCells, schedule, seededSpineCells, shaftCell } from './report.js';
 
 const content: BoundContent = loadContent(undefined);
 
@@ -71,30 +77,22 @@ const CRITERION = [
 
 /**
  * ==========================================================================================
- * WHERE THE FIXTURE'S SHAFT GOES, AND IT IS DERIVED FROM BOTH LAYOUTS RATHER THAN PICKED.
+ * WHERE THE SHAFT GOES — AND SINCE G-038a-iii-b THIS FILE DOES NOT DECIDE IT.
  *
- * A stairwell is ALIGNED — one `(column, row)` through the whole plot (`stairs.ts`) — so the
- * cell has to be circulation on the seeded floors, in the basement AND on the player's floors,
- * or the shaft lands inside a room somewhere and the fill stops for a reason that has nothing
- * to do with this goal. The two spines are the only run of corridor that crosses both plates,
- * and they share `spineRow`, so the answer is the INTERSECTION of the two — taken here rather
- * than written down, so it moves with either layout.
+ * ~~WHERE THE FIXTURE'S SHAFT GOES, AND IT IS DERIVED FROM BOTH LAYOUTS RATHER THAN PICKED.~~
+ * The derivation was right and it has MOVED, whole, into `report.ts` as `shaftCell` — because
+ * the runner now ships the declaration this file was standing in for, and two spellings of
+ * "where the stairs are" is the duplicated-constant shape ADR-0021 exists about. The argument
+ * is unchanged and lives at `shaftCell`: a stairwell is ALIGNED — one `(column, row)` through
+ * the whole plot (`stairs.ts`) — so the cell has to be circulation on the seeded floors, in the
+ * basement AND on the player's floors at once, and the intersection of the two spines is the
+ * only place that is true. It comes to `(column 1, row 0)` on the shipped plot.
  *
- * It comes to `(column 1, row 0)` on the shipped plot, which is the same cell
- * `travel.stairs.report.test.ts` derives for its own arm, from the seeded half of this
- * argument. The intersection is asserted non-empty below, because a derivation that silently
- * came back empty would leave this file testing a world with no stairwell in it.
+ * WHAT IS LEFT HERE IS THE CHECK RATHER THAN THE CHOICE: the arm below asserts the shipped
+ * derivation still lands on both spines, which is the property that would break if either
+ * layout moved — and it asks the two layout functions rather than a literal.
  * ==========================================================================================
  */
-function shaftCell(bounds: Parameters<typeof seededSpineCells>[1]): Cell {
-  const seeded = new Set(seededSpineCells(0, bounds).map((cell) => `${cell.column}:${cell.row}`));
-  const both = playerSpineCells(0, bounds).filter((cell) => seeded.has(`${cell.column}:${cell.row}`));
-  // The FIRST cell is the entrance's own, which is charity-seeded by the fill whatever stands
-  // on it (`reachableCells`); the second is the first that has to earn its walkability.
-  const chosen = both[1];
-  if (chosen === undefined) throw new Error('the two spines do not overlap; the derivation is wrong');
-  return chosen;
-}
 
 type Arm = {
   readonly invalid: RoomInvalidityTally;
@@ -129,16 +127,6 @@ function runArm(withShaft: boolean, strip?: (command: Command) => boolean): Arm 
   const options = parseArgs([...CRITERION]);
   const initial = createWorld(options.seed, content);
   const entries: ScheduledCommand[] = [];
-  if (withShaft) {
-    const at = shaftCell(initial.grid);
-    // FULL HEIGHT, every floor of the plot, so the fixture cannot be accused of testing a
-    // partial shaft. `stairLeg` reads only the stairwell's column and row, so which floors
-    // declared a stair changes nothing about travel (ADR-0059) — it changes what `hasStairAt`
-    // answers, and therefore which cells `isDeclaredWalkway` admits.
-    for (let floor = initial.grid.minFloor; floor <= initial.grid.maxFloor; floor += 1) {
-      entries.push({ tick: 0, command: { kind: 'layStair', at: { floor, column: at.column, row: at.row } } });
-    }
-  }
   for (const entry of schedule(
     options.ticks,
     content,
@@ -150,6 +138,12 @@ function runArm(withShaft: boolean, strip?: (command: Command) => boolean): Arm 
     options.loanEveryTicks,
     options.amenities,
   )) {
+    // RE-FOUNDED AT G-038a-iii-b. This arm used to PREPEND a full-height shaft to a schedule
+    // that declared none; `report.ts` now emits one itself (`shaftCells`), so the arm subtracts
+    // instead — the same technique `strip` below already uses, and the same one
+    // `travel.stairs.report.test.ts` re-founded onto in the same change. The two worlds are the
+    // two worlds they always were: the shipped shaft IS `shaftCell`'s, full height, at tick 0.
+    if (!withShaft && entry.command.kind === 'layStair') continue;
     if (strip !== undefined && strip(entry.command)) continue;
     entries.push(entry);
   }
@@ -166,12 +160,19 @@ describe('the shaft is a fixture, and it is a live one', () => {
   it('declares a stair on every floor of the plot, and the derived cell is on BOTH spines', () => {
     const bounds = createWorld(1, content).grid;
     const at = shaftCell(bounds);
+    // NOT `undefined` ON THE SHIPPED PLOT, ASSERTED FIRST. `shaftCell` degrades rather than
+    // throwing where the two spines do not meet, which its docblock argues is unreachable on any
+    // bounds `assertGridBounds` admits — this is that argument checked on the plot that matters,
+    // so a derivation that came back empty reddens here instead of shipping a hotel with no
+    // stairwell in it.
+    expect(at).toBeDefined();
     expect(at).toEqual({ floor: 0, column: bounds.minColumn + 1, row: bounds.minRow });
     // On both spines, asked of the layout functions rather than of this literal.
-    expect(seededSpineCells(0, bounds).some((cell) => cell.column === at.column && cell.row === at.row)).toBe(true);
-    expect(playerSpineCells(1, bounds).some((cell) => cell.column === at.column && cell.row === at.row)).toBe(true);
+    expect(seededSpineCells(0, bounds).some((cell) => cell.column === at!.column && cell.row === at!.row)).toBe(true);
+    expect(playerSpineCells(1, bounds).some((cell) => cell.column === at!.column && cell.row === at!.row)).toBe(true);
     expect(arm(true).stairs).toBe(bounds.maxFloor - bounds.minFloor + 1);
-    // AND NOTHING SHIPPED DECLARES ONE, which is this goal's own hard rule stated as a test.
+    // AND THE CONTROL ARM STRIPS IT BACK OUT (G-038a-iii-b) — the runner declares one now, so
+    // "no stairs" is a world this file SUBTRACTS rather than one it inherits.
     expect(arm(false).stairs).toBe(0);
   }, 60_000);
 });

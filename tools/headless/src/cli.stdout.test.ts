@@ -172,7 +172,20 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // the ledger, the revenue, the closing balance, the entity count and the validity block do
     // NOT**, which is the hand-check that says the hotel changed shape rather than changing
     // outcome. See the need-row block above for the numbers.
-    stateHash: '5103ab9588f8b6e9',
+    //
+    // MOVED AGAIN AT G-038a-iii-b to `73ec70f0ec5bf424`, and this one IS a behaviour change:
+    // `schedule` now declares a STAIRWELL at `(column 1, row 0)` on every floor of the plot
+    // (`shaftCells`), so the floor axis stops spending from wherever a guest stands and every
+    // journey between the three bedrooms on floor 0 and the amenity in the basement goes
+    // through that column. **This is the change the G-038a-ii-alpha row above promised**: it
+    // added `World.stairs` as an EMPTY array and said every guest walks exactly where it
+    // walked, which was true until this commit and is the reason the field was inert.
+    // **THE CONTROL IS THE SAME CONTROL G-039b-alpha USED, AND IT HOLDS**: the departure table,
+    // the ledger, the revenue, the closing balance, the entity count and the validity block are
+    // byte-identical — 24 arrived, 4 checked out, 16 gave up, 4 still in the hotel, 7
+    // transactions, 510,000p. The need rows, the review distribution and the mean move; see the
+    // need-row block above for the numbers and the mechanism.
+    stateHash: '73ec70f0ec5bf424',
   },
   guests: {
     arrived: 24,
@@ -328,9 +341,31 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // the ledger, the revenue and the closing balance do NOT — the block at the head of this
     // golden is unchanged from `arrived` to `left evictedCauseUnrecorded`.
     // ==========================================================================================
-    { needId: 'guest_comfort', lodging: false, met: 12, unmet: 8, metByItem: 12, abandoned: 0, unservedTicks: 1_254, instanceTicks: 8_640 },
-    { needId: 'guest_entertainment', lodging: false, met: 4, unmet: 16, metByItem: 0, abandoned: 0, unservedTicks: 2_223, instanceTicks: 8_640 },
-    { needId: 'guest_nourishment', lodging: false, met: 11, unmet: 9, metByItem: 4, abandoned: 0, unservedTicks: 1_708, instanceTicks: 8_640 },
+    // ==========================================================================================
+    // RE-RECORDED AT G-038a-iii-b, WHICH DECLARED THE STAIRWELL, AND THE THREE ROWS MOVE IN TWO
+    // DIRECTIONS AGAIN:
+    //
+    //     row                  met         unserved ticks
+    //     guest_comfort        12 -> 12    1,254 -> 1,319   worse, and only by ticks
+    //     guest_entertainment   4 ->  6    2,223 -> 2,032   BETTER
+    //     guest_nourishment    11 -> 10    1,708 -> 1,742   worse
+    //     night_rest            4 ->  4    3,000 -> 3,000   UNCHANGED
+    //
+    // **THE LODGING ROW IS STILL THE CONTROL AND IT STILL DOES NOT MOVE.** Three rooms against
+    // 24 arrivals is decided by capacity, and a guest with no room is going nowhere — so a
+    // change that only alters HOW a guest travels cannot touch it. That it is byte-identical
+    // through a change that moved every other row is the strongest evidence in this golden that
+    // the shaft changed journeys and not the hotel.
+    //
+    // **`guest_entertainment` GETTING BETTER IS THE SAME FINDING G-023b-ii RECORDED ABOUT
+    // `guest_comfort`, ONE AXIS OVER**: the amenity is in the BASEMENT, so entertainment is the
+    // row every stairwell journey in this run is about. A guest that must walk to the stairs
+    // commits to the walk and is served on arrival, where before it re-picked a provider every
+    // tick and thrashed. Two more satisfactions, and 191 fewer unserved ticks.
+    // ==========================================================================================
+    { needId: 'guest_comfort', lodging: false, met: 12, unmet: 8, metByItem: 12, abandoned: 0, unservedTicks: 1_319, instanceTicks: 8_640 },
+    { needId: 'guest_entertainment', lodging: false, met: 6, unmet: 14, metByItem: 0, abandoned: 0, unservedTicks: 2_032, instanceTicks: 8_640 },
+    { needId: 'guest_nourishment', lodging: false, met: 10, unmet: 10, metByItem: 4, abandoned: 0, unservedTicks: 1_742, instanceTicks: 8_640 },
     { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0, unservedTicks: 3_000, instanceTicks: 8_640 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -372,11 +407,27 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
       // one of them scores 4. Its stay was complete and part of it was spent walking, which is
       // exactly what a mean of per-need bands is supposed to notice and what a count of needs
       // met could not. The mean falls 300 -> 285 with it.
+      //
+      // RE-RECORDED AGAIN AT G-038a-iii-b, WHICH DECLARED THE STAIRWELL: **0/10/6/1/3 ->
+      // 0/8/8/0/4**, which is byte-for-byte the distribution G-023b-ii pinned, and the mean
+      // goes back to 300. It conserves against the same UNCHANGED departure table — 0 + 8 + 8 +
+      // 0 + 4 = 20 = 4 checked out + 16 who gave up — and the fourth band empties again, so the
+      // four at the top are once more the four that checked out.
+      //
+      // **THAT THIS HOTEL GETS BETTER UNDER A STAIRWELL IS THE FINDING, AND IT IS THE SAME
+      // MECHANISM `guest_comfort` CARRIES ABOVE.** Three bedrooms on floor 0 against one
+      // amenity in the basement: a guest that must walk to the stairs and down COMMITS to that
+      // journey, and a committed guest arrives and is served instead of re-picking a provider
+      // every tick. `guest_entertainment` met 4 -> 6 is where it shows. The bench workload
+      // moves the OTHER way in the same commit (`bench.workload.golden.test.ts`, checkedOut
+      // 5 -> 2) — sixty bedrooms behind two amenities is a hotel with a queue, and there the
+      // extra walk is time a guest does not have. **The two readings together are the honest
+      // account of this mechanic; either alone would be a press release.**
       { score: 1, count: 0 },
-      { score: 2, count: 10 },
-      { score: 3, count: 6 },
-      { score: 4, count: 1 },
-      { score: 5, count: 3 },
+      { score: 2, count: 8 },
+      { score: 3, count: 8 },
+      { score: 4, count: 0 },
+      { score: 5, count: 4 },
     ],
   },
   rooms: {
@@ -500,14 +551,19 @@ const GOLDEN_2_DAYS_SEED_42 =
     // rows pay. The `bp unserved` column is a SHARE and the JSON's is a TICK COUNT, so they are
     // two views of one measurement and both are re-recorded here rather than one being derived
     // from the other. `night_rest` below is unchanged, which is this pair's control.
-    'need       guest_comfort 12 met, 8 unmet (0 by room, 12 by item), 0 abandoned, 1451 bp unserved',
-    'need       guest_entertainment 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned, 2572 bp unserved',
-    'need       guest_nourishment 11 met, 9 unmet (7 by room, 4 by item), 0 abandoned, 1976 bp unserved',
+    // G-038a-iii-b re-records all three again, and the `night_rest` line below is STILL the
+    // control at 3472 bp: the stairwell moves how a guest travels and nothing about how many
+    // beds there are. See the JSON golden's need-row block for the mechanism.
+    'need       guest_comfort 12 met, 8 unmet (0 by room, 12 by item), 0 abandoned, 1526 bp unserved',
+    'need       guest_entertainment 6 met, 14 unmet (6 by room, 0 by item), 0 abandoned, 2351 bp unserved',
+    'need       guest_nourishment 10 met, 10 unmet (6 by room, 4 by item), 0 abandoned, 2016 bp unserved',
     'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned, 3472 bp unserved',
     // G-023b-ii: one guest moves 2 -> 3 and the mean rises with it. See the JSON golden's
     // distribution above for why a hotel whose guests must now WALK reviews slightly better.
-    'reviews     1:0, 2:10, 3:6, 4:1, 5:3',
-    'mean x100   285',
+    // G-038a-iii-b: back to G-023b-ii's own distribution, and the mean back to 300, when the
+    // walk gains a vertical leg. The JSON golden carries why.
+    'reviews     1:0, 2:8, 3:8, 4:0, 5:4',
+    'mean x100   300',
     'ledger      7 transactions',
     'revenue     34000p',
     'upkeep      -24000p',
@@ -607,7 +663,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // floor, so no lodging candidate is more than zero floors from the door and a reach of 2
     // cannot turn anybody away. Same 6 valid rooms, same 0/0/0/0/0 tally, same 24 arrivals,
     // same 4/16 split, same four need rows to the basis point.
-    'state hash  5103ab9588f8b6e9',
+    'state hash  73ec70f0ec5bf424',
   ].join('\n') + '\n';
 
 /**
@@ -764,7 +820,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  5103ab9588f8b6e9']);
+    expect(differing).toEqual(['seed        42', 'state hash  73ec70f0ec5bf424']);
     expect(lines43).toContain('seed        43');
   });
 });

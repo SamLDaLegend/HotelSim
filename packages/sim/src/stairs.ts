@@ -66,6 +66,13 @@
 // one does the whole building changes at once. Not avoidable; it is the price of a migration
 // that invents nothing.
 //
+// **THAT MOMENT WAS G-038a-iii-b**, which declared the shaft in `tools/headless/src/report.ts`
+// and in `apps/game/src/scenario.ts` and paid the bill the sentence above predicted: occupancy
+// 850 -> 827, the CLI golden, the bench golden, I5's stay count and every report golden in one
+// commit. **The I2 log is the exception and it is deliberate** — `determinism-log.ts` declares
+// no stairwell yet (G-038a-iii-c owns it, together with the `noCorridor` coverage that
+// `WITHHELD_CELLS` buys), so the 100,000-tick proof still runs a stairless world.
+//
 // WHAT A DECLARED STAIR CELL IS *NOT*: it does not make its floor PLANNED. `isDeclaredWalkway`
 // adds this set as a third clause, never as a fourth branch of `isOpenPlan`, so declaring a
 // stair can only ever ADD walkable cells. That monotonicity is what makes the empty-set
@@ -108,8 +115,17 @@ const NO_STAIRS: Stairs = Object.freeze([]);
  * Deliberately NOT called by any migration (ADR-0008 (1), and the source scan in
  * `migration-scan.build.grid.provider.outcome.travel.save.test.ts` enforces it): a migration's
  * output must be a function of its input bytes and its own era, and this is a live constructor
- * whose value the day someone ships a scenario with a stairwell pre-drawn would silently
- * re-write history. `V21_MIGRATION_STAIRS` in `save.ts` is the frozen literal.
+ * whose value the day it stops being empty would silently re-write history.
+ * `V21_MIGRATION_STAIRS` in `save.ts` is the frozen literal.
+ *
+ * **THE HAZARD IS THE CONSTRUCTOR, NOT THE SCENARIO, AND G-038a-iii-b IS WHY THAT DISTINCTION
+ * NOW HAS TO BE SPELLED.** This paragraph used to name the trigger as *"the day someone ships a
+ * scenario with a stairwell pre-drawn"*. Two shipped hosts do exactly that today — `report.ts`
+ * and `apps/game/src/scenario.ts` — and it costs this guard NOTHING, because they declare their
+ * shafts by issuing `layStair` on a world that started empty. **This function still returns the
+ * empty set, so the divergence ADR-0008 (1) forbids still cannot occur.** It would occur the day
+ * THIS CONSTRUCTOR returned a pre-drawn plan, which is a different event and is the one the
+ * scan guards.
  */
 export function createStairs(): Stairs {
   return NO_STAIRS;

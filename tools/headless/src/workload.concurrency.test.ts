@@ -239,7 +239,11 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // constant in `workload.mjs`; this line is the pin, not the derivation. **G-040 and G-041
     // each move occupancy again and each re-take it again** — this goal does not pre-pay for
     // them.
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(850);
+    // 850 -> 827 AT G-038a-iii-b, RE-TAKEN **ALONE** again (ADR-0058), because `report.ts` now
+    // declares a stairwell and every cross-floor journey in this hotel goes through it. The
+    // reading and its five slots are recorded at the constant in `workload.mjs`; this line is
+    // the pin, not the derivation.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(827);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -499,16 +503,46 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     // — a destination changing mid-journey — is where the sensitivity lives rather than in the
     // arithmetic of the cadence.
     // -------------------------------------------------------------------------------------------
+    //
+    // -------------------------------------------------------------------------------------------
+    // 876 / 850 / 854  ->  821 / 827 / 821 AT G-038a-iii-b, WHICH DECLARED THE STAIRWELL, AND
+    // **TWO CLAIMS IN THE BLOCK ABOVE GO FALSE. BOTH ARE STRUCK RATHER THAN RE-PINNED.**
+    //
+    // 1. ~~"THE SHIPPED CADENCE IS STILL A LOCAL MINIMUM OF THE AXIS."~~ It is now a local
+    //    **MAXIMUM**: 821 below it, 827 at it, 821 above it. **The cadence does not move because
+    //    of this and must not**: `workload.mjs` carries three reasons at the constant, of which
+    //    the binding one is that moving it makes `tripwire.mjs` refuse until the whole bound
+    //    campaign is re-taken, which ADR-0056 rules must not happen. The extremum was called *"a
+    //    curiosity about phase-locking"* in this very block when the arm was re-founded on
+    //    sensitivity; it is recorded as having flipped, and nothing rests on it.
+    //
+    // 2. ~~`expect(new Set([below, here, above]).size).toBe(3)`~~ — **the two NEIGHBOURS now
+    //    collide with each other at 821 while both differ from the shipped cadence.** The clause
+    //    was written *"as a set size so it cannot be satisfied by two of the three agreeing"*,
+    //    which forbids MORE than the property it stands for: the property is *"one tick either
+    //    side is a different hotel"*, i.e. below != here AND above != here. Whether the two
+    //    neighbours happen to agree with EACH OTHER is a coincidence about a hotel two ticks
+    //    wide and this arm has never had a claim about it. **So the clause is replaced by the
+    //    two inequalities it was too strong a spelling of** — which is the same repair, for the
+    //    same reason, that `needs.report.test.ts` made to its own `toBe(3)` set-size clause, and
+    //    it is NOT a `toBe(2)`: a 2 is what three readings give when ANY two collide, from any
+    //    cause, and it would go green on the state this arm exists to catch.
+    //
+    // THE SENSITIVITY — the load-bearing half, what ADR-0015's REPLACE rule and ADR-0037
+    // amendment 2 rest on — is UNCHANGED and is now larger in both directions: six hundredths
+    // either side, where the -1 neighbour used to differ by 26 and the +1 by 4.
+    // -------------------------------------------------------------------------------------------
     // ===========================================================================================
     const here = measuredConcurrentHundredths();
     const below = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS - 1);
     const above = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS + 1);
     const readings = `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`;
-    expect([below, here, above], readings).toEqual([876, 850, 854]);
+    expect([below, here, above], readings).toEqual([821, 827, 821]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
-    // either side is a different hotel. Written as a set size so it cannot be satisfied by two
-    // of the three agreeing.
-    expect(new Set([below, here, above]).size, readings).toBe(3);
+    // either side is a different hotel. Stated as the two inequalities that ARE the claim — see
+    // the block above for why the set-size spelling came out.
+    expect(below, readings).not.toBe(here);
+    expect(above, readings).not.toBe(here);
     // A THIRD CLAUSE STOOD HERE FOR ONE ROUND AND IS DELETED RATHER THAN TUNED. It asserted the
     // movement was "material" at one part in a hundred, went red on the +1 side at 6 hundredths
     // against 8.56, and the only repair available was to pick a smaller threshold — which is

@@ -9,25 +9,39 @@
 // beside the numbers it produced.
 //
 // ==========================================================================================
-//  THE SHIPPED HARNESSES DECLARE NO STAIRWELL, AND THAT IS A DECISION RATHER THAN AN OMISSION.
+//  RE-FOUNDED AT G-038a-iii-b: THE SHIPPED HARNESS NOW DECLARES THE STAIRWELL, SO THE CONTROL
+//  ARM TAKES IT AWAY RATHER THAN DECLINING TO ADD IT.
 //
-//  The plan review asked WHERE THE HARNESS PUTS ITS STAIR and noted that `report.ts` lays one
-//  lane cell per room, so `--days 2 --seed 42` produces three isolated single cells and *"a
-//  stair on an isolated corridor cell is a stairwell nobody can walk to."*
+//  ~~THE SHIPPED HARNESSES DECLARE NO STAIRWELL, AND THAT IS A DECISION RATHER THAN AN
+//  OMISSION.~~ ~~The answer is NOWHERE … the harness stays as it is and the mechanic is
+//  exercised HERE, on the harness's own schedule plus a stairwell, which is the same hotel with
+//  one command added.~~ **STRUCK, BECAUSE IT WENT FALSE RATHER THAN STALE** — the same call this
+//  file's own next paragraph made about the column parity. `report.ts`'s `schedule` emits
+//  `layStair` on every floor of the plot at tick 0 (`shaftCells`), so the sentence that this
+//  file's `withStairs === false` arm rested on — `expect(without.world.stairs).toEqual([])` as a
+//  claim about a world nobody had touched — is now structurally impossible to obtain by
+//  ADDITION. It is obtained by SUBTRACTION instead.
 //
-//  THE ANSWER IS NOWHERE, AND IT IS THE CONSEQUENCE THE MIGRATION RULING ALREADY OWNED. A
-//  per-world reading of an empty stair set means *"the floor axis spends unconditionally"*, so
-//  stairs are inert in every migrated world, in the I2 log, in the bench and in every golden
-//  until a harness declares one — **and the moment one does, the whole building changes at
-//  once.** Declaring one in `report.ts` would move occupancy, and occupancy is
-//  `TARGET_CONCURRENT_HUNDREDTHS`, which ADR-0056 has just frozen and G-039b owns. So the
-//  harness stays as it is and the mechanic is exercised HERE, on the harness's own schedule
-//  plus a stairwell, which is the same hotel with one command added.
+//  WHAT THAT COSTS AND WHAT IT BUYS. The pairing is the same pairing and every reading in it is
+//  unmoved: the WITH arm is now the schedule verbatim, the WITHOUT arm is the schedule with its
+//  `layStair` entries filtered out, and because `report.ts` ships the very cell this file
+//  derived for its fixture the two arms are the same two worlds they always were. What it buys
+//  is that the WITH arm has stopped being a hypothetical: it is the run `pnpm sim:run` performs.
+//  What it costs is that the control is now a COUNTERFACTUAL — "the pre-goal simulation" — and
+//  the assertion below says so in as many words rather than implying it from an empty array.
 //
-//  WHERE THE STAIRWELL GOES WHEN THIS FILE DECLARES ONE, AND IT IS DERIVED FROM THE LAYOUT
-//  RATHER THAN PICKED. `(column 1, row 0)` is a DECLARED CORRIDOR CELL ON EVERY SEEDED FLOOR
-//  AND IN THE BASEMENT ALIKE, which is exactly what an aligned stairwell needs and the one
-//  thing the CLI default cannot supply.
+//  THE FILTER IS `layout.reach.player.report.test.ts`'s `strip`, and the technique is
+//  `layout.reach.report.test.ts`'s before that: remove commands the runner ITSELF emits rather
+//  than re-implement a previous era's schedule, so the control cannot drift from the shipped
+//  layout in any way except the one it is subtracting.
+//
+//  WHERE THE STAIRWELL GOES, AND IT IS DERIVED FROM THE LAYOUT RATHER THAN PICKED.
+//  `(column 1, row 0)` is a DECLARED CORRIDOR CELL ON EVERY SEEDED FLOOR AND IN THE BASEMENT
+//  ALIKE, which is exactly what an aligned stairwell needs. **THIS FILE NO LONGER CHOOSES IT.**
+//  `report.ts`'s `shaftCell` derives the same cell from the intersection of the two spines, and
+//  the constants below are asserted against it rather than declared beside it — a second
+//  spelling of "where the stairs are" is exactly the duplicated-constant shape ADR-0021 exists
+//  about.
 //
 //  **AND THE REASON IT IS ONE CHANGED COMPLETELY AT G-039b-alpha WHILE THE CELL DID NOT.** This
 //  paragraph used to read: *"`roomCell` puts seeded rooms on the EVEN columns and `report.ts`
@@ -61,22 +75,21 @@ import {
 } from '@hotelsim/sim';
 import type { BoundContent, Cell, Command, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
-import { parseArgs, schedule } from './report.js';
+import { parseArgs, schedule, shaftCell } from './report.js';
 
 const content: BoundContent = loadContent(undefined);
 
-/** The stairwell this file declares: the seeded plate's own first lane column, full height. */
+/**
+ * The stairwell the SHIPPED runner declares, read back out of `report.ts` rather than declared
+ * here. The literals are asserted against `shaftCell` in the alignment arm at the foot of this
+ * file, so a shaft that moved would fail there rather than silently make every counter below
+ * measure a column nobody uses.
+ */
 const STAIR_COLUMN = 1;
 const STAIR_ROW = 0;
 
-/** `layStair` on every floor the seeded workload can reach, lowest first. */
-function stairwell(minFloor: number, maxFloor: number): Command[] {
-  const commands: Command[] = [];
-  for (let floor = minFloor; floor <= maxFloor; floor += 1) {
-    commands.push({ kind: 'layStair', at: { floor, column: STAIR_COLUMN, row: STAIR_ROW } });
-  }
-  return commands;
-}
+/** Everything `report.ts` emits to declare the shaft — what the control arm subtracts. */
+const isShaft = (command: Command): boolean => command.kind === 'layStair';
 
 type Arm = {
   /** Guest-frames: one per live guest per tick. WATCH #16's denominator. */
@@ -108,7 +121,8 @@ type Arm = {
 };
 
 /**
- * Run a CLI workload, optionally with a stairwell, counting where the guests went.
+ * Run a CLI workload, optionally with the shipped stairwell REMOVED, counting where the guests
+ * went.
  *
  * `recordTo` writes one `serialise(world)` per line — the SAME frame format `record.ts`
  * produces and `tools/viewer` reads — at `--every 1`, which is a criterion rather than a
@@ -135,11 +149,13 @@ function arm(argv: readonly string[], withStairs: boolean, recordTo?: string): A
     options.loanEveryTicks,
     options.amenities,
   )) {
+    // THE SUBTRACTION, AND IT IS THE ONLY DIFFERENCE BETWEEN THE TWO ARMS. `report.ts` emits the
+    // shaft at tick 0 with the hotel, so the stairwell is there before the first guest walks in
+    // BOTH the shipped run and this file's WITH arm; the control removes exactly those entries
+    // and changes nothing else about the schedule, the seed or the tick count.
+    if (!withStairs && isShaft(entry.command)) continue;
     push(entry.tick, entry.command);
   }
-  // AT TICK 0, WITH THE HOTEL, so the stairwell is there before the first guest walks. Laying
-  // it later would make the arms differ in WHEN as well as in WHAT.
-  if (withStairs) for (const command of stairwell(initial.grid.minFloor, initial.grid.maxFloor)) push(0, command);
 
   let world = initial;
   const cache = createValidityCache();
@@ -222,10 +238,13 @@ describe('the shipped harness workload, with and without a stairwell', () => {
   const without = arm(SIXTY, false);
   const withStairs = arm(SIXTY, true);
 
-  it('THE CONTROL: the harness declares no stairwell, so nothing about it moves', () => {
-    // Every arm below is a claim about a world with one command added. This is the claim that
-    // the world WITHOUT it is the pre-goal simulation — the reading `migrateV20ToV21` writes
-    // into every migrated save, measured on the workload the gates run.
+  it('THE CONTROL: strip the shipped stairwell and nothing about the pre-goal run moves', () => {
+    // Every arm below is a claim about the world the runner SHIPS. This is the claim that the
+    // world with its `layStair` entries subtracted is the pre-goal simulation — the reading
+    // `migrateV20ToV21` writes into every migrated save, measured on the workload the gates run.
+    // **AN EMPTY ARRAY OBTAINED BY SUBTRACTION**, which since G-038a-iii-b is the only way this
+    // file can obtain one; the arm at the foot asserts the shipped run's is NOT empty, so the
+    // pair says "the declaration is real and this is the world without it".
     expect(without.world.stairs).toEqual([]);
     // GUEST-FRAMES ARE UNMOVED AT 33,105 ACROSS G-039b-alpha, which is what says the spine
     // changed the BUILDING and not the population: the same guests arrive and stay as long.
@@ -373,6 +392,16 @@ describe('the shipped harness workload, with and without a stairwell', () => {
       expect([at.column, at.row]).toEqual([STAIR_COLUMN, STAIR_ROW]);
     }
     expect(withStairs.world.stairs.length).toBeGreaterThan(1);
+    // AND THE TWO LITERALS ABOVE ARE `report.ts`'s, NOT THIS FILE'S (G-038a-iii-b). Asked of the
+    // shipped derivation rather than declared beside it: a shaft that moved would fail HERE,
+    // loudly, instead of leaving every counter in this file measuring an unused column and
+    // reporting zeroes that look like a broken rule.
+    const at = shaftCell(createWorld(1, content).grid);
+    // DEFINED FIRST: `shaftCell` returns `undefined` on a plot whose two spines do not meet, so
+    // without this line a derivation that came back empty would satisfy nothing and fail here
+    // with a type error rather than with the reading.
+    expect(at).toBeDefined();
+    expect([at!.column, at!.row]).toEqual([STAIR_COLUMN, STAIR_ROW]);
   });
 });
 

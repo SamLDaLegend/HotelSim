@@ -178,15 +178,37 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // not move.** It is not a regression in the loop; it is six rooms serving more guests
     // worse, which is what an under-provisioned hotel does when you make it reachable.
     // ========================================================================================
+    // ========================================================================================
+    // 196/157 -> 202/151 AT G-038a-iii-b, WHICH DECLARED THE STAIRWELL, AND THE GIVE-UP ROW
+    // MOVES AGAIN AND FURTHEST. The three exit rows, same invocation, one declaration apart:
+    //
+    //     gaveUp            143 -> 129      fourteen FEWER guests leave without ever getting a bed
+    //     checkedOut        155 -> 138      seventeen fewer complete a stay
+    //     leftDissatisfied   55 ->  86      thirty-one more get a bed and walk out on it
+    //                       ---------
+    //     departures        353 -> 353      conserved, so this is a shift and not a loss
+    //
+    // **IT IS THE SAME TRADE THE SPINE MADE, ONE AXIS OVER AND LARGER.** A room's LODGING need
+    // is met by standing in it, so anything that gets more guests into beds moves `met` up —
+    // and the shaft does, because `unreachable`'s fill and `findFreeRoom`'s access rule now
+    // agree about a building whose floors are genuinely joined. What those guests then do is
+    // walk further for everything else, and six rooms behind the default amenity count is an
+    // under-provisioned hotel, so most of the newly-housed run out their dissatisfaction clock.
+    //
+    // **THIS IS THE COST FACE OF THE MECHANIC AND IT IS PINNED BESIDE THE BENEFIT FACE.** The
+    // CLI default golden gets BETTER under the same commit (`cli.stdout.test.ts`, mean 285 ->
+    // 300); this arm gets worse in outcomes and better in occupancy. Neither reading is the
+    // headline on its own.
+    // ========================================================================================
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBe(196);
-    expect(lodging?.unmet).toBe(157);
+    expect(lodging?.met).toBe(202);
+    expect(lodging?.unmet).toBe(151);
     // AND THE THREE WAYS A GUEST CAN LEAVE THIS HOTEL ARE ALL NON-ZERO AT θ-b1, where the
-    // invocation used to produce two. **143 never got a bed, 155 ran out their clock, and 55 got
+    // invocation used to produce two. **129 never got a bed, 138 ran out their clock, and 86 got
     // a bed and walked out on it** — one hotel, three different instructions to a player.
-    expect(departuresOf(summary, 'gaveUp')).toBe(143);
-    expect(departuresOf(summary, 'checkedOut')).toBe(155);
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(55);
+    expect(departuresOf(summary, 'gaveUp')).toBe(129);
+    expect(departuresOf(summary, 'checkedOut')).toBe(138);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(86);
     // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
     // the countdown, a guest that checked out had by definition completed its lodging need, so
     // the two columns were the same number. "Met" is now a BAND read at the moment of
@@ -267,8 +289,25 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // free but starts and ends a row further into the plot. Nourishment rises for the same
     // reason from the other side: more guests reach a café at all.
     // ========================================================================================
+    // ========================================================================================
+    // AND AT G-038a-iii-b, WITH THE STAIRWELL DECLARED, THE THREE ROWS SPREAD FURTHER APART:
+    //
+    //     row                  + the spine   + the shaft
+    //     guest_comfort         66 / 287      47 / 306
+    //     guest_entertainment   57 / 296      55 / 298
+    //     guest_nourishment    335 /  18     350 /   3
+    //
+    // **NOURISHMENT AND COMFORT MOVE IN OPPOSITE DIRECTIONS AND THE MECHANISM IS THE SAME
+    // ONE.** Both amenity types are in the BASEMENT, so both are now reached through the shaft
+    // — and a guest that commits to that journey is a guest that is not simultaneously chasing
+    // its other needs. Nourishment is the highest-priority engagement need in the shipped
+    // table, so it is what a committed guest goes for; comfort is what it gives up while it
+    // walks. That is `stepTowards`' single-destination model made visible by a longer journey,
+    // and it is the same "commit and be served" effect the CLI golden's `guest_entertainment`
+    // row records from the winning side.
+    // ========================================================================================
     expect(new Set(engagement.map((row) => row.met)).size).toBeGreaterThan(1);
-    expect(engagement.map((row) => row.met)).toEqual([66, 57, 335]);
+    expect(engagement.map((row) => row.met)).toEqual([47, 55, 350]);
     // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
     // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
     // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is

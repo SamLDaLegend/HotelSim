@@ -205,13 +205,33 @@ describe('the provisioning rule is derived from content, and the ladder is built
     // BOTH SIDES ARE PINNED AS LITERALS RATHER THAN A TOLERANCE BEING INTRODUCED. A `toBeCloseTo`
     // here would permit any drift under whatever bound somebody chose; two exact arrays forbid
     // strictly more than the equality did, and they say WHICH row moved and by how much.
+    //
     // ========================================================================================
-    expect(sharesIn(LADDER[LADDER.length - 1]!)).toEqual([455, 893, 1302, 0]);
-    expect(sharesIn(twice)).toEqual([455, 894, 1302, 0]);
-    // AND THREE ROWS OF FOUR ARE STILL EXACTLY EQUAL, which is what says the fourth is a
-    // one-step difference in an integral rather than a different hotel.
+    // **AND AT G-038a-iii-b THE EXACT EQUALITY IS BACK — ALL FOUR ROWS, BOTH SIDES.**
+    //
+    //     shares at the top rung   [455, 893, 1302, 0]  ->  [488, 908, 1315, 0]
+    //     shares at TWICE the top  [455, 894, 1302, 0]  ->  [488, 908, 1315, 0]   IDENTICAL
+    //
+    // The paragraph above diagnosed the one-basis-point gap as a WALK: *"`--rooms 24` is a
+    // BIGGER BUILDING than `--rooms 12` … a guest walking to an amenity spends a tick or two
+    // more in transit"*. **The shaft makes that difference stop mattering, which is the
+    // diagnosis being confirmed rather than a coincidence.** Every journey to an amenity in
+    // this hotel is now dominated by the leg to the stairwell column and back out again — a
+    // leg both room counts pay identically, because the shaft is at the same cell on both —
+    // so the extra lanes past room twelve no longer buy anybody a longer walk.
+    //
+    // ALL THREE ROWS RISE, WHICH IS THE COST AND IS PINNED RATHER THAN GLOSSED: the unserved
+    // integral is up 33, 15 and 13 basis points because the shaft is a longer walk for
+    // everybody. What saturation asserts is that the two arms are the SAME RUN, and they are
+    // more exactly the same run than they were before this goal.
+    // ========================================================================================
+    expect(sharesIn(LADDER[LADDER.length - 1]!)).toEqual([488, 908, 1315, 0]);
+    expect(sharesIn(twice)).toEqual([488, 908, 1315, 0]);
+    // AND ALL FOUR ROWS ARE EXACTLY EQUAL AGAIN — a `toHaveLength(3)` stood here for one goal,
+    // while one row of four differed, and it is restored to the full width rather than left at
+    // the weaker count.
     const topShares = sharesIn(LADDER[LADDER.length - 1]!);
-    expect(sharesIn(twice).filter((value, index) => value === topShares[index])).toHaveLength(3);
+    expect(sharesIn(twice).filter((value, index) => value === topShares[index])).toHaveLength(4);
   });
 
   it('and every rung converges to the occupancy it was provisioned for — the stable fixed point', () => {
@@ -327,12 +347,33 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     //  A build that restored rung 2 goes red here, with the number in hand, instead of quietly
     //  going green.
     // ==========================================================================================
+    // ==========================================================================================
+    // **AND AT G-038a-iii-b THE REVERSAL IS GONE AND THE DISCHARGE IS WHOLE AGAIN.** Rung 2 goes
+    // 291 -> 317 — back to its pre-spine reading, to the hundredth — so the ladder is strictly
+    // increasing across all four rungs and `reviewMeans[1] < reviewMeans[0]` is FALSE.
+    //
+    //     rung            1      2      3      4
+    //     + the spine    300    291    409    500     reversed at 1 -> 2
+    //     + the shaft    300    317    409    500     strictly increasing
+    //
+    // **THE MARGIN IS BACK TO 17 HUNDREDTHS, WHICH IS THE PART A READER MUST NOT LOSE.** The
+    // block above is emphatic that G-028b's discharge *"was true and was standing on a
+    // knife-edge"* and that the arm hid it by asserting a PREDICATE. That is exactly as true
+    // today: 17 hundredths between rung 1 and rung 2, against 90 or more everywhere else, and
+    // one goal has already knocked it over. The four literals stay so the margin is visible;
+    // the predicate is restored beside them rather than instead of them.
+    //
+    // The 1-room rung is still why the edge exists — at one room 326 of 358 guests never get a
+    // bed and review a neutral 3 — and `G-041` still owns the rates. Nothing here fixes it.
+    // ==========================================================================================
     const reviewMeans = LADDER.map((summary) => meanReviewHundredths(summary)!);
-    expect(reviewMeans).toEqual([300, 291, 409, 500]);
-    // THE DISCHARGE STILL HOLDS FROM RUNG 2 ONWARD, unmoved by this goal.
+    expect(reviewMeans).toEqual([300, 317, 409, 500]);
+    // THE DISCHARGE HOLDS FROM RUNG 2 ONWARD, as it has through every era of this file.
     expect(strictlyIncreasing(reviewMeans.slice(1))).toBe(true);
-    // AND IT IS REVERSED AT RUNG 1 -> 2, asserted rather than left as an absence.
-    expect(reviewMeans[1]!).toBeLessThan(reviewMeans[0]!);
+    // AND ACROSS THE WHOLE LADDER AGAIN, WITH THE MARGIN AT RUNG 1 -> 2 STATED AS A NUMBER so
+    // that the knife-edge the block above names is a reading rather than a memory.
+    expect(strictlyIncreasing(reviewMeans)).toBe(true);
+    expect(reviewMeans[1]! - reviewMeans[0]!).toBe(17);
     // And the SHARE statistic is untouched and still falls at every rung, which is the contrast
     // this file was built to draw and which the reversal above makes sharper rather than weaker:
     // the integral tracks the ladder where the score does not.
@@ -626,7 +667,11 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
         .map((row) => `${row.score}:${row.count}`)
         .join(','),
     );
-    expect(occupancy).toEqual(['5:351', '5:348', '4:2,5:344', '5:329']);
+    // G-038a-iii-b: cadence 121 is SATURATED AGAIN — `4:2, 5:344` -> `5:346` — so all four
+    // cadences put every guest in the top band and the spread above is a clamp at every one of
+    // them. The literals are kept at full width rather than collapsed back to a length check,
+    // for the reason the block above gives: a second band growing by one guest must go red here.
+    expect(occupancy).toEqual(['5:351', '5:348', '5:346', '5:329']);
     for (const summary of phases) {
       const occupied = summary.reviews.distribution.filter((row) => row.count > 0);
       // The modal band is the TOP band at every cadence, which is what "saturated" means and is

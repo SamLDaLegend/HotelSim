@@ -347,10 +347,13 @@ describe('COUNTED: how many rooms a guest can walk to from the door WITHOUT CHAN
     // STATEMENT ABOUT THIS WALK AND NOT ABOUT THE SIMULATION. **CORRECTED BY ADR-0059.**
     //
     // This block used to call them UNREACHABLE. They are not, and never were: `amenityCell`
-    // puts them a floor down, no harness declares a stairwell, and with no stairwell declared
-    // `stepTowards` spends the floor axis from EVERY cell. Guests are down there today.
-    // Verified by effect, which is how the error was found: `--days 2 --seed 42` reports
-    // `guest_entertainment` met by room, and the only room providing it is in the basement.
+    // puts them a floor down, and the floor axis got them there — from EVERY cell while no
+    // harness declared a stairwell, and SINCE G-038a-iii-b through the shaft at
+    // `(column 1, row 0)`, which is on the basement's own spine. **The reason changed and the
+    // answer did not**, which is why this correction stands as written. Verified by effect,
+    // which is how the error was found, and re-verified after the shaft landed:
+    // `--days 2 --seed 42` reports `guest_entertainment` met BY ROOM, and the only room
+    // providing it is in the basement.
     //
     // So the number above is a PER-FLOOR number and is stated as one. What it measures — and
     // what the spine bought — is that the entrance floor's circulation is a single piece
@@ -430,10 +433,16 @@ describe('AND THE SIMULATION S OWN REACHABILITY RULE, WHICH IS A DIFFERENT QUEST
   // ==========================================================================================
   // THE COUNTED READING THE RULE OWES, PER WORKLOAD, AS A WHOLE TALLY.
   //
-  // **IT IS ZERO EVERYWHERE, AND THAT IS THE FINDING RATHER THAN A DISAPPOINTMENT.** No harness
-  // in this project declares a stairwell, so `stairLeg` leaves the floor axis free from every
-  // cell, so every walkable cell on the plot is one step from the floor above it and nothing on
-  // a finite plot is out of reach. The rule is INERT on every shipped layout.
+  // **IT IS ZERO EVERYWHERE, AND AT G-038a-iii-b THAT STOPPED BEING CHEAP.**
+  //
+  // ~~No harness in this project declares a stairwell, so `stairLeg` leaves the floor axis free
+  // from every cell, so every walkable cell on the plot is one step from the floor above it and
+  // nothing on a finite plot is out of reach. The rule is INERT on every shipped layout.~~
+  // **STRUCK. `report.ts`'s `schedule` now declares one** (`shaftCells`), so the rule is LIVE:
+  // the fill can no longer drop onto a floor from above, and a room these layouts stranded would
+  // be counted. The tallies below are unmoved at zero, which is now a statement about the
+  // LAYOUTS rather than about a dormant rule — and the anti-vacuity arm at the foot of this
+  // describe block is the proof it can bite, at 67.
   //
   // WHAT WAS REFUSED, AND WHY IT IS RECORDED HERE. The obvious way to make these numbers
   // non-zero is to declare a stairwell in this runner. Measured both ways at the same sitting,
@@ -455,11 +464,13 @@ describe('AND THE SIMULATION S OWN REACHABILITY RULE, WHICH IS A DIFFERENT QUEST
   // **DECLARING A STAIRWELL BUYS THE RULE NOTHING ON EITHER LAYOUT THIS FILE IS ABOUT**, and on
   // the criterion it buys only rooms the player's own walk stranded. What it costs is every
   // cross-floor journey in the hotel re-routed through one shaft — occupancy, every golden, the
-  // I5 bench. Turning stairs on in the shipped layouts is a BEHAVIOUR change with its own blast
-  // radius and its own goal; doing it inside this one to make a new counter interesting is
-  // tuning a workload to keep a test interesting, which G-039b-alpha refused one goal ago in as
-  // many words. The zeros stand, and they are compared WHOLE so the next goal reads the numbers
-  // rather than the assertion.
+  // I5 bench. ~~Turning stairs on in the shipped layouts is a BEHAVIOUR change with its own
+  // blast radius and its own goal~~ — **and G-038a-iii-b is that goal, which paid the blast
+  // radius rather than avoiding it: occupancy 850 -> 827, the CLI golden, the bench golden and
+  // I5's stay count all re-taken in the one commit.** What the paragraph got RIGHT is the part
+  // that still holds: the zeros in this file were never the thing a stairwell would fix, and
+  // they are unmoved. The table above stands as measured; the last row's arrow now describes
+  // the shipped world rather than a hypothetical one.
   // ==========================================================================================
   const tallyOf = (world: World): RoomInvalidityTally =>
     countInvalidRooms(world.entities, world.grid, world.corridors, world.stairs, content);
@@ -488,22 +499,46 @@ describe('AND THE SIMULATION S OWN REACHABILITY RULE, WHICH IS A DIFFERENT QUEST
     }
   });
 
-  it('AND THE ZERO IS NOT VACUOUS: strip the spine and the DOOR half still reads zero', () => {
+  it('AND THE ZERO IS NOT VACUOUS: strip the spine and the two rule now CONVERGE', () => {
     // ==========================================================================================
-    // THE ANTI-VACUITY ARM, AND ITS ANSWER IS THE ONE WORTH RECORDING. Without the spine the
-    // door is not on circulation and the per-floor walk reaches nothing — the arm above measures
-    // exactly that. The SIMULATION's rule still says zero, because the free ceiling routes round
-    // the break. **That gap between the two numbers is the whole of ADR-0059**, and it is
-    // asserted here rather than left as prose so that the day vertical travel stops being free
-    // the two answers converge and this arm goes red on purpose.
+    // **THE ARM WENT RED ON PURPOSE AT G-038a-iii-b, WHICH IS THE DAY IT NAMED.** It read:
+    //
+    //   ~~The SIMULATION's rule still says zero, because the free ceiling routes round the
+    //   break. That gap between the two numbers is the whole of ADR-0059, and it is asserted
+    //   here rather than left as prose so that **the day vertical travel stops being free the
+    //   two answers converge and this arm goes red on purpose**.~~
+    //
+    // That day is this commit. `schedule` declares a stairwell (`shaftCells` in `report.ts`), so
+    // `stairLeg` no longer leaves the floor axis free from every cell, so the fill can no longer
+    // drop onto a severed strip from above. Strip the spine and the SIMULATION agrees with the
+    // per-floor walk: **`unreachable` 0 -> 67 of this world's 75 rooms.**
+    //
+    // THE TWO ANSWERS ARE NOT THE SAME NUMBER AND THEY ARE NOT MEANT TO BE. `tally().reached`
+    // counts rooms the door's own floor reaches ON THAT FLOOR and reads 0; `unreachable` counts
+    // rooms the WHOLE BUILDING's fill misses and reads 67, so eight rooms are reached through
+    // the shaft that the entrance floor's walk cannot see. That is the shaft doing its job:
+    // convergence here means the two rules stopped DISAGREEING ABOUT THE CEILING, not that they
+    // started counting the same population.
+    //
+    // AND THE SHIPPED LAYOUTS ARE STILL ZERO, which is what makes this arm anti-vacuity rather
+    // than a regression: the two arms above run the same instrument on the same worlds with
+    // their spines intact and every reason reads 0.
     // ==========================================================================================
     const stripped = seeded(BENCH_ROOMS, BENCH_AMENITIES, (command) =>
       command.kind === 'layCorridor' && command.at.row === PLOT.minRow);
     expect(tally(stripped).reached).toBe(0);
-    expect(tallyOf(stripped).unreachable).toBe(0);
-    // And the rooms the per-floor walk cannot reach are NOT reported invalid, so no verdict in
-    // this project rests on the difference today.
-    expect(tallyOf(stripped).noCorridor + tallyOf(stripped).noDoor).toBe(0);
+    expect(tallyOf(stripped).unreachable).toBe(67);
+    // AND THE WHOLE TALLY, because a single number moving is not evidence about which rule
+    // moved it (G-034b's lesson). `unreachable` is checked LAST of the six, so a room counted
+    // here is one that has a door, a corridor and support and STILL cannot be walked to.
+    expect(tallyOf(stripped)).toEqual({
+      missingItem: 0,
+      noCorridor: 0,
+      noDoor: 0,
+      unplaced: 0,
+      unreachable: 67,
+      unsupported: 0,
+    });
   });
 });
 

@@ -2982,9 +2982,12 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
  * THREE CASES, AND THEY COMPOSE INTO A JOURNEY WITH NO STATE BETWEEN THEM.
  *
  *   SAME FLOOR, or NO STAIRWELL DECLARED  ->  the destination itself, unchanged. The second of
- *     those is the v20 reading and it is what every world in this project has today: no stair
- *     anywhere means the floor axis spends unconditionally, so this file behaves exactly as it
- *     did before this goal, to the cell.
+ *     those is the v20 reading: no stair anywhere means the floor axis spends unconditionally,
+ *     so this file behaves on such a world exactly as it did before G-038a-ii-alpha, to the
+ *     cell. ~~and it is what every world in this project has today~~ — **STRUCK AT
+ *     G-038a-iii-b, which declared the stairwell in `report.ts` and in
+ *     `apps/game/src/scenario.ts`. No SHIPPED world takes that branch any more**; a migrated
+ *     v20 save and a fixture that declares nothing still do, which is what keeps the branch.
  *   OFF THE STAIRWELL COLUMN  ->  the foot of the stairs ON THE GUEST'S OWN FLOOR. The floor gap
  *     is then zero, so `stepTowards` spends nothing on the floor axis and the guest WALKS.
  *   ON THE STAIRWELL COLUMN  ->  the stair cell on the DESTINATION's floor. The column and row

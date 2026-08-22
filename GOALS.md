@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-a is DONE: the player's floor has a spine, and `unreachable`'s global minimum over 160 shaft sitings goes 2 -> 0 (35 sitings now reach zero; stripping the spine puts the same shaft back at 7). Only the free floor axis was hiding that report.ts lays parallel player lanes with no cross-corridor. The layout is correct and INERT, like the two rules it serves — no harness declares a stairwell yet; all three go live together at the next goal, which also owns occupancy, every golden and the tickcost question. I2 ca7bee4a4d6ea416 UNMOVED and could not have moved: determinism-log.ts imports nothing from report.ts, which is a claim I made without checking (ADR-0064). The stairwell rollout split three ways at plan review after three BLOCKERs, one ordering work that shipped two goals ago. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-b is DONE: report.ts and apps/game/src/scenario.ts DECLARE THE STAIRWELL, so stairs-as-coordinates (G-038a-ii-α) and unreachable (G-038a-ii-β) are both LIVE on every shipped world. Shaft DERIVED not picked — the second cell of the intersection of the two spines, (column 1, row 0), full height. unreachable is 0 on the pinned invocation with the shaft SHIPPED and the whole tally is byte-identical to the stairless one. Occupancy 850 -> 827, re-taken ALONE (ADR-0058); the tripwire campaign gap widens 2.5% -> 5.2% against occupancyWhenTaken 872 and the bound stays 1.4640 (ADR-0056). check:tickcost PREDICTED IDENTICAL and READ MEASURED — 0.9719 quiet and 1.0172 inside verify, both PASS and both NULLS: ARM_PATHS covers packages/sim/src so the ADR-0007 prose sweep made the arms differ in bytes but not in semantics, and harnessFor copies report.ts into BOTH arms, so this gate still cannot see the shaft's cost. I2 ca7bee4a4d6ea416 UNMOVED, checked not assumed. Through-wall landings 236 -> 29 on the bench and 16 -> 0 on the CLI default; moves roughly double everywhere; I5 1.8% of budget. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `ca7bee4a4d6ea416` · measure golden `5cfb73ca16c3463e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `ca7bee4a4d6ea416` · measure golden `760558b631beb552`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -3580,7 +3580,11 @@ criterion**, so the criterion is re-taken **once, here**, as a whole tally rathe
 - `pnpm verify` — fourteen rows PASS, `VERIFY_EXIT` read from the process.
 
 ## G-038a-iii-b — `report.ts` and `scenario.ts` declare the shaft
-Status: **PLANNED.** Owner pair: sim-engineer / sim-critic
+Status: **DONE 2026-08-22 (ADR-0065).** Shaft DERIVED at (column 1, row 0), full height, in
+report.ts and scenario.ts. Through-wall landings 236 -> 29 on the bench, 16 -> 0 on the CLI
+default. Occupancy 850 -> 827, re-taken alone; tripwire gap 2.5% -> 5.2%, bound unmoved.
+check:tickcost STRUCTURALLY cannot see a harness change - harnessFor copies report.ts into
+BOTH arms. I2 unmoved, checked. Fourteen rows PASS, VERIFY_EXIT=0.
 **Depends on -a.** Owns occupancy, the report goldens, the bench golden, I5's stay count, WATCH.
 
 **THE COST QUESTION IS MEASURED BEFORE BUILD, NOT AT VERIFY.** `isDeclaredWalkway`'s

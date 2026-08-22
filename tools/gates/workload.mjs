@@ -106,8 +106,35 @@ export const ROOMS = 60;
  * byte at every one of its thirteen cadences, which is what says the instrument is sound and
  * the stale figure was the tree.
  * ===========================================================================================
+ * 850 -> 827 AT G-038a-iii-b, RE-TAKEN ALONE AGAIN, UNDER THE SAME ADR-0058 RULING.
+ *
+ * **THE FIVE SLOTS.** WHAT: concurrent guests in hundredths, as guest-frames divided by ticks —
+ * an exact deterministic integer count. WORKLOAD: `--rooms 60 --amenities 1 --arrivals 96
+ * --seed 42`, 30 simulated days, this file's own constants, run through `report.ts`'s schedule.
+ * SAMPLE COUNT: n = 1, which is the whole distribution. AGGREGATION: none; one division,
+ * rounded once. REGIME: none applies — no clock is read.
+ *
+ * WHY IT MOVED: `report.ts`'s `schedule` now declares a STAIRWELL — `layStair` on every floor of
+ * the plot at `(column 1, row 0)`, derived in `shaftCell` from the intersection of the two
+ * spines. This workload's one amenity is in the BASEMENT and all sixty of its bedrooms are on
+ * floor 0, so every engagement journey in it is a cross-floor journey, and a cross-floor journey
+ * now costs a walk to that column instead of rising through the ceiling from wherever the guest
+ * stood. **Twenty-three hundredths of a guest — four times the spine's six**, which is the right
+ * order for a change that roughly doubles move events on this shape
+ * (`travel.stairs.report.test.ts`: 910 -> 1,948).
+ *
+ * **THE GAP AGAINST THE CAMPAIGN WIDENS AND `tripwire.mjs` PRINTS IT.** The bound campaign was
+ * taken at `occupancyWhenTaken: 872`; the gap was 2.5% at 872 -> 850 and is 5.2% at 872 -> 827.
+ * The bound STAYS at 1.4640 (ADR-0056, human) and is not re-derived. What the ruling requires is
+ * that the pin describe the hotel the gate now runs, and the gate print its campaign's reach
+ * rather than imply it — both of which this re-take does. The campaign is a NOISE campaign; the
+ * argument that its spread is occupancy-sensitive has never been made or measured, and if
+ * somebody makes it the response is a re-take, not a wider bound (ADR-0021).
+ *
+ * AND G-040 AND G-041 STILL OWE THEIR OWN RE-TAKES, unchanged by this one.
+ * ===========================================================================================
  */
-export const TARGET_CONCURRENT_HUNDREDTHS = 850;
+export const TARGET_CONCURRENT_HUNDREDTHS = 827;
 
 /**
  * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.

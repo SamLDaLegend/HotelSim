@@ -120,6 +120,25 @@ function replayed(): World {
  * Tick by tick because a release is an EVENT and the final world remembers none of them —
  * exactly the reason `metBy` had to be stored in the first place. Cached, because the walk
  * costs a few seconds and every case below reads it.
+ *
+ * ==========================================================================================
+ * ~~"a few seconds"~~ — **MEASURED AT G-038a-iii-b AND IT IS NOT.** The first case to call this
+ * pays the whole 100,000-tick walk, and vitest's DEFAULT 30s budget was never sized against it:
+ *
+ *     this file alone, three runs      16.7s / 17.0s / 16.4s total, ~15.5s in tests
+ *     inside a full `pnpm test`        39.9s for the one case, TIMED OUT at 30,000ms
+ *
+ * The gap is CONTENTION — the whole suite's workers on one machine — which is the §2.0 shape
+ * `needs.scaling.test.ts` already carries: a timing bound inside a parallel unit-test runner is
+ * not a red gate, it is an UNRELIABLE one. It went red once in four full `pnpm verify` runs on
+ * an otherwise identical tree, and `determinism-log.ts` (which builds this walk's log) is
+ * BYTE-UNCHANGED by that goal, so the walk itself did not get slower.
+ *
+ * **THE CASES THAT READ THIS NOW DECLARE A BUDGET INSTEAD OF INHERITING A DEFAULT NOBODY
+ * MEASURED.** 120,000ms is three times the worst reading above; it is not a threshold anybody
+ * has to defend, because nothing PASSES or FAILS on its value — it is the point at which vitest
+ * stops waiting, and the assertions are the claims. What it must not be is under the cost.
+ * ==========================================================================================
  */
 type ReleaseCensus = {
   readonly finished: number;
@@ -219,7 +238,7 @@ describe('the 100,000-tick log reaches items as providers (G-013)', () => {
 
   it('keeps guests engaged with items throughout, not merely once', () => {
     expect(census().guestTicksEngagedWithAnItem).toBeGreaterThan(1_000);
-  });
+  }, 120_000);
 
   it('leaves nobody stuck, nothing orphaned and nobody served by something broken', () => {
     const world = replayed();
@@ -234,7 +253,7 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
   // true of `itemSurvived` before the log was taught, and which nothing would have said.
   it('engagements finish normally, in bulk', () => {
     expect(census().finished).toBeGreaterThan(100);
-  });
+  }, 120_000);
 
   it('a ROOM provider goes bad under a guest', () => {
     // ONE EVENT FROM VACUOUS SINCE G-014a, AND SAYING SO IS THE POINT OF THIS COMMENT. This
@@ -248,11 +267,11 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
     // happens to hit: tightening it would pin a coincidence, and the honest response to thin
     // coverage is to widen the log, which is a decision above this file.
     expect(census().roomWentBad).toBeGreaterThan(0);
-  });
+  }, 120_000);
 
   it('an ITEM DISAPPEARS from under a guest — cause (c)', () => {
     expect(census().itemDisappeared).toBeGreaterThan(0);
-  });
+  }, 120_000);
 
   it('AN ITEM SURVIVES AND STOPS SERVING — cause (b), the one this goal introduced', () => {
     // Produced by the door-sealing passes. It was ZERO before they existed, measured rather
@@ -273,7 +292,7 @@ describe('EVERY RELEASE CAUSE OCCURS INSIDE THE I2 PROOF (G-013)', () => {
     // is busy. The ticks were re-chosen by measuring occupancy and landing inside a live
     // engagement window; this assertion is what verifies that rather than trusting it.
     expect(census().itemSurvived).toBeGreaterThanOrEqual(2);
-  });
+  }, 120_000);
 
   it('AND THE STATE IS STILL THERE AT TICK 100,000, so the gate’s final hash carries it', () => {
     // The terrace precedent's actual claim, asserted rather than described: an item standing

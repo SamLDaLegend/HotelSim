@@ -146,7 +146,11 @@ export type GridBounds = {
  *     in ONE place, `tools/headless/src/dissatisfaction.content.test.ts`, which COMPUTES the
  *     deepest legal plot at the shipped speed rather than quoting 60.
  *     `travel.movement.test.ts` measures the STAIRLESS journey by walking it, which is still
- *     108 and is still what every world in this project does, because none declares a stair.
+ *     108 — ~~and is still what every world in this project does, because none declares a
+ *     stair~~. **STRUCK AT G-038a-iii-b: `report.ts` and `apps/game/src/scenario.ts` both
+ *     declare one now, so NO SHIPPED WORLD walks the stairless journey and 194 is the live
+ *     figure.** 108 is still what a MIGRATED v20 world does — `migrateV20ToV21` writes an
+ *     empty set and means it — which is the era that test measures and the reason it stays.
  *   - **AT LEAST 3, or the row axis cannot SEAL.** A room is walled in when all four
  *     neighbours are rooms; the row axis contributes to that only where a room has a row on
  *     each side of it, which needs three. At two rows the only seals are against the plot's

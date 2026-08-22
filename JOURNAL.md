@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-a is DONE: the player's floor has a spine, and `unreachable`'s global minimum over 160 shaft sitings goes 2 -> 0 (35 sitings now reach zero; stripping the spine puts the same shaft back at 7). Only the free floor axis was hiding that report.ts lays parallel player lanes with no cross-corridor. The layout is correct and INERT, like the two rules it serves — no harness declares a stairwell yet; all three go live together at the next goal, which also owns occupancy, every golden and the tickcost question. I2 ca7bee4a4d6ea416 UNMOVED and could not have moved: determinism-log.ts imports nothing from report.ts, which is a claim I made without checking (ADR-0064). The stairwell rollout split three ways at plan review after three BLOCKERs, one ordering work that shipped two goals ago. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-b is DONE: report.ts and apps/game/src/scenario.ts DECLARE THE STAIRWELL, so stairs-as-coordinates (G-038a-ii-α) and unreachable (G-038a-ii-β) are both LIVE on every shipped world. Shaft DERIVED not picked — the second cell of the intersection of the two spines, (column 1, row 0), full height. unreachable is 0 on the pinned invocation with the shaft SHIPPED and the whole tally is byte-identical to the stairless one. Occupancy 850 -> 827, re-taken ALONE (ADR-0058); the tripwire campaign gap widens 2.5% -> 5.2% against occupancyWhenTaken 872 and the bound stays 1.4640 (ADR-0056). check:tickcost PREDICTED IDENTICAL and READ MEASURED — 0.9719 quiet and 1.0172 inside verify, both PASS and both NULLS: ARM_PATHS covers packages/sim/src so the ADR-0007 prose sweep made the arms differ in bytes but not in semantics, and harnessFor copies report.ts into BOTH arms, so this gate still cannot see the shaft's cost. I2 ca7bee4a4d6ea416 UNMOVED, checked not assumed. Through-wall landings 236 -> 29 on the bench and 16 -> 0 on the CLI default; moves roughly double everywhere; I5 1.8% of budget. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
-  `5cfb73ca16c3463e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
+  `760558b631beb552` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -2004,3 +2004,58 @@ A builder ran 31 minutes, emitted **one sentence and zero tool calls**, and left
 file writes. **Diagnosed without reading the transcript** — 0-byte output, no `node.exe`, clean
 `git status` — stopped, and relaunched with one line added: *start by running a command, not by
 planning in prose.* The retry completed the goal. **Cost: 31 minutes and one brief.**
+
+### G-038a-iii-b — Three goals shipped inert; today all three went live at once.
+
+**The shaft is declared, and through-wall landings fall 236 -> 29 on the bench and 16 -> 0 on the
+CLI default.** Guests stop walking through solid rooms. **ADR-0065 has the tables.**
+
+### THE GATE I BUILT A PHASE AROUND CANNOT SEE THE THING I FEARED
+
+I made the tickcost measurement **a gate on starting** — a written prediction before any shipped
+file changed — because `isDeclaredWalkway`'s fast path rests on a premise this goal inverts, and
+ADR-0056 froze the bound so a red reading would have had no in-goal remedy.
+
+**The builder pre-registered `IDENTICAL`, read `MEASURED`, and both were NULLS.**
+`check:tickcost` materialises only `packages/sim`, and `harnessFor` copies `report.ts` **into both
+arms** — **the shaft is on both sides of every comparison.**
+
+> **The discipline was still right and I would do it again.** A prediction recorded before the diff
+> is what turned "the gate passed" into "the gate cannot see this", **and only one of those is
+> knowledge.** A green row I had not predicted would have been filed as reassurance.
+
+The cost landed on **I5 instead — 1.8% of budget.**
+
+### THE TWO GOLDENS DISAGREE, AND THAT IS THE ENTRY WORTH REREADING
+
+**Bench `checkedOut` 5 -> 2**: fewer completed stays, because every cross-floor journey now routes
+through one shaft. **CLI review mean 285 -> 300**: better. **Both pinned, neither reconciled.**
+
+**And the shaft REPAIRED three things nobody asked it to**: the review-mean ladder is monotone again,
+`unserved`'s saturation equality is exact on all four rows again, and cadence 121 is saturated
+again. **A single geometric constraint fixed three independent criteria** — which is either the
+strongest evidence yet that the free floor axis was distorting the whole economy, or a coincidence,
+and it is worth a goal to find out which.
+
+### FIVE MORE BRIEF CORRECTIONS, AND ONE OF THEM I HAD JUST FINISHED APOLOGISING FOR
+
+**My 814 / 836 occupancy figures were for sitings this goal does not use** — the derived (1,0) reads
+**827**, gap 5.2% not 6.6%. **Handed a builder numbers for the wrong arm, one goal after handing a
+builder a hash claim I had not checked.** The class is the same: **a figure quoted into a brief from
+an exploration, without re-deriving it for the case the brief actually orders.**
+
+Also false: my "fourteen prose sentences in thirteen files" **undercounted** — the builder found more,
+including two `packages/sim` component-size numbers whose stated cause was *"with no stairwell the
+floor axis is free"*, **withdrawn rather than restated** because `reachableCells` is not exported and
+they cannot be re-measured paired. **Rule 5 applied by the builder, to numbers I wrote.**
+
+### THE ADJUDICATIONS, AND WHY THE TIMEOUT ONE IS NOT A CLIMBDOWN
+
+I forbade raising timeout literals in **G-039b-β2, whose SUBJECT was the intermittent**. Here the
+diff genuinely made the suite heavier, the test measures **16.7s alone / 39.9s contended**, and a
+declared per-test budget is the **house pattern** — 60,000 in seven files, 180,000 and 240,000
+elsewhere. **Upheld, with the distinction written down so the next goal cannot read it as licence.**
+
+**And `apps/game/src/scenario.ts` ships covered by no test.** The builder flagged it rather than
+letting it pass silently. **Nothing will go red if it is wrong** — which is exactly why it is
+recorded here and not only in the diff.

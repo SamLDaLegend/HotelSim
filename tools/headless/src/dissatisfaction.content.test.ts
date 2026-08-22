@@ -216,7 +216,16 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // seeded hotel is nowhere near it, so on its own it would admit a 98-tick regression
     // without a murmur. The literal is what keeps this arm sharp; the bound is what keeps it
     // honest about which half is derived.
-    expect(uncontended).toBe(139);
+    // 139 -> 141 AT G-038a-iii-b, WHICH DECLARED THE STAIRWELL, AND IT MOVES BY TWO TICKS. The
+    // 60-room arm's peak backlog is guests being SERVED, and a served guest's journey now has a
+    // vertical leg in it — so the deepest any need in this hotel gets is two ticks deeper. It
+    // is still an order of magnitude inside the 129 + 198 bound above, which is the property
+    // that arm asserts and the reason this literal is a sharpener rather than the claim.
+    expect(uncontended).toBe(141);
+    // AND THE SIX-ROOM ARM STILL DOES NOT MOVE, at 179, THROUGH THE STAIRWELL AS WELL AS
+    // THROUGH TRAVEL. The paragraph above calls that evidence rather than luck — its peak
+    // belongs to guests queueing for a bed, and a guest nobody has given a room is going
+    // nowhere, by stairs or otherwise. It is the control that survived both goals.
     expect(peakOver(SHIPPED, 10, 6, 5)).toBe(179);
   });
 
@@ -259,8 +268,11 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // MOVE WITH THE JOURNEY, WHICH IS WORTH SAYING BECAUSE THE OBVIOUS EDIT WOULD HAVE MOVED IT.
     // `stepTowards` clamps at the destination, so the dial saturates at THE LONGEST SINGLE LEG
     // and not at the longest JOURNEY. With a stairwell the legs are 86, 22 and 86; with none —
-    // which is every world in this project today — the journey is one leg of 108. So 108 is
-    // still the largest leg anywhere and still the endpoint. The shipped value sits inside
+    // ~~which is every world in this project today~~ **which since G-038a-iii-b is no world
+    // this project ships, and the endpoint DID NOT MOVE ANYWAY** — the journey is one leg of
+    // 108. So 108 is still the largest leg anywhere and still the endpoint: 86 and 22 are both
+    // under it, which is exactly why the aligned shaft was the placement that kept this
+    // arithmetic to one number. The shipped value sits inside
     // [floor, 108] and is a preference there (ADR-0013 §4).
     const { horizontal, vertical } = legsOfThePlot();
     const longestLeg = Math.max(horizontal + vertical, horizontal, vertical);

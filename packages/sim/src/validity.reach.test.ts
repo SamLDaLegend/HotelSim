@@ -493,7 +493,11 @@ describe('a route over the empty floor above', () => {
     // away: `stairLeg` now sends every cross-floor guest to that one column, so the far island
     // is unreachable and the room beside it says so. **One command's difference, and the
     // verdict turns on it** — which is both the proof that the arm above measures a ROUTE, and
-    // the measured reason no shipped harness declares a stairwell in this goal.
+    // ~~the measured reason no shipped harness declares a stairwell in this goal~~ **the reason
+    // G-038a-ii-beta did not declare one and G-038a-iii-b needed a whole goal to: one command
+    // turns a verdict, so declaring the shaft in the shipped harnesses moved occupancy, every
+    // golden and the I5 stay count at once. It is declared now; this fixture is unchanged,
+    // because a hand-built world is the right place to pin the RULE.**
     // ========================================================================================
     const confined: World = { ...ISLANDS, stairs: stairsOf(at(DOOR.floor, DOOR.column, DOOR.row)) };
     expect(verdictAt(confined, at(GROUND_FLOOR, 25, 0))).toBe('unreachable');

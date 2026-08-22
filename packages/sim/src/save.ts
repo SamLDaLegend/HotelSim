@@ -2052,9 +2052,14 @@ function migrateV19ToV20(world: unknown): unknown {
  *
  * A LITERAL, and it must stay one, for the reason `V18_MIGRATION_CORRIDORS` gives at length:
  * `createStairs()` in `stairs.ts` returns the same empty set today and the two are ALLOWED to
- * diverge — the day a scenario opens with a stairwell pre-drawn, a step that read the live
- * constructor would start migrating the SAME v20 bytes onto a world whose stairwell somebody
- * else chose (ADR-0008 (1)). The guard is structural, because the values coincide today and no
+ * diverge — the day that CONSTRUCTOR returns a pre-drawn plan, a step that read it would start
+ * migrating the SAME v20 bytes onto a world whose stairwell somebody else chose (ADR-0008 (1)).
+ *
+ * **IT SAID "the day a scenario opens with a stairwell pre-drawn", AND THAT DAY ARRIVED AT
+ * G-038a-iii-b WITHOUT MOVING THIS GUARD ONE INCH.** `report.ts` and `apps/game/src/scenario.ts`
+ * both open with a shaft — by ISSUING `layStair` on a world that started empty, not by asking
+ * the constructor for one. The trigger is restated as what it always was: a change to
+ * `createStairs`, not a change to a host. The guard is structural, because the values coincide today and no
  * assertion can tell the two implementations apart: the source scan in
  * `tools/headless/src/migration-scan.build.grid.provider.outcome.travel.save.test.ts` forbids
  * this file from naming `createStairs` in executable code (ADR-0008 (3)).

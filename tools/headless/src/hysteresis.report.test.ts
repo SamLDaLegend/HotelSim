@@ -253,8 +253,16 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // 2.7% move on 321 events is the mechanism being measured, where a 1 -> 0 move on a count
     // of one was a coin-flip. The widening this arm received at G-038a-i is what makes the
     // difference readable, one goal later, which is the instrument paying for itself.
+    //
+    // 321 -> 278 AT G-038a-iii-b, and the argument is the one directly above, at the same
+    // width: a 13% move on 321 events is the mechanism being measured. The shaft routes every
+    // cross-floor engagement through one column, so a guest that is reassigned mid-visit is
+    // both somewhere different AND further from the provider it would have switched to — fewer
+    // occasions to abandon, which is the same direction the thrash arm moves in criterion 3's
+    // table. **The arm is not widened again**: the instruction the G-014b entry left was to
+    // widen rather than delete IF THE NUMBER GOES TO ZERO, and 278 is nowhere near it.
     // ======================================================================================
-    expect(abandonmentsIn(contended)).toBe(321);
+    expect(abandonmentsIn(contended)).toBe(278);
   });
 
   it('and it abandons FAR less than a margin of zero, so the margin is doing the work', () => {
@@ -277,7 +285,16 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // stays at zero, so the separation this criterion rests on more than doubles. **A criterion
     // whose gap grows is not a criterion that needs re-deriving** — the ordering assertion above
     // this line is the claim, and this literal is the size of it.
-    expect(abandonmentsIn(thrash)).toBe(12_118);
+    //
+    // 12,118 -> 9,821 AT G-038a-iii-b, AND IT FALLS FOR THE FIRST TIME SINCE G-027a. The
+    // sentence above says the spine MANUFACTURES ties by walking a guest near providers it was
+    // not going to; the shaft does the opposite on the same mechanism, because a cross-floor
+    // journey runs along a cross-corridor and through a shaft rather than past a bank of
+    // amenity doors. **The criterion is unaffected and that is the point of stating the size
+    // separately from the claim**: the shipped arm is still ZERO, so the separation this
+    // criterion rests on is 9,821 against 0 — the ordering assertion above this line is the
+    // claim, and it does not care which way a five-figure gap moved.
+    expect(abandonmentsIn(thrash)).toBe(9_821);
   });
 
   it('and the separation is a factor, not a rounding difference', () => {
@@ -328,7 +345,11 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // 1,862 -> 1,712 -> 1,586 against 1,095. **If it ever closes, the reversal is discharged and
     // G-014b's original finding is back**; that is worth watching, and the two unmoved literals
     // either side of this one are what will make it legible when it happens.
-    expect(engagementMet(thrash)).toBe(1_586);
+    // 1,586 -> 1,517 AT G-038a-iii-b, AND THE CONTROL HOLDS FOR THE THIRD GOAL RUNNING:
+    // **shipped and eraA are BOTH STILL 1,095, byte-identical across the stairwell**, so the
+    // whole move is on the thrash arm again. The reversal this block records narrows for the
+    // third goal running without closing: 1,862 -> 1,712 -> 1,586 -> 1,517 against 1,095.
+    expect(engagementMet(thrash)).toBe(1_517);
     expect(engagementMet(shipped)).toBe(engagementMet(eraA));
     expect(engagementMet(thrash)).toBeGreaterThan(engagementMet(shipped));
   });
@@ -507,9 +528,34 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // give `hotel_lounge` a `provides` entry and see whether the swap follows the provision
     // kind or stays with the need. Recorded as a measured permutation, which is what it is.
     // ==========================================================================================
+    // ==========================================================================================
+    // AND IT PERMUTED AGAIN AT G-038a-iii-b, WHICH DECLARED THE STAIRWELL — **AND THE TOTAL IS
+    // STILL 1,095, TO THE UNIT.** That is the reading, and it is the third time this table has
+    // made the same statement about this hotel under a different mechanic:
+    //
+    //     row                  travel off      travel on       + the shaft
+    //     guest_comfort        [711,   0, 0]   [195, 516, 0]   [517, 194, 0]
+    //     guest_entertainment  [192, 519, 0]   [708,   3, 0]   [386, 325, 0]
+    //     guest_nourishment    [192, 519, 0]   [192, 519, 0]   [192, 519, 0]   unchanged
+    //     night_rest           [192, 519, 0]   [192, 519, 0]   [192, 519, 0]   unchanged
+    //
+    //     engagement `met`      1,095           1,095           1,095
+    //
+    // **AT SIX ROOMS BEHIND TWO OF EACH AMENITY THIS HOTEL CAN KEEP EXACTLY ONE ENGAGEMENT NEED
+    // TOPPED UP, AND EVERY TRAVEL CHANGE SO FAR HAS ONLY MOVED WHICH ONE.** Travel swapped
+    // comfort and entertainment outright; the shaft moves the split back toward comfort without
+    // restoring it, which is the first reading in this table's history that is a BLEND rather
+    // than a swap — comfort at 517 of 711 and entertainment at 386 of 708. Neither is served
+    // throughout any more, and the ceiling has not moved by a single instance.
+    //
+    // THE PARKED FALSIFICATION TEST IS UNCHANGED AND THIS IS A THIRD DATA POINT FOR IT: comfort
+    // is provided by an ITEM in the lounge and entertainment by the games ROOM, and the two are
+    // otherwise identical rows in `need-types.json`. `PARKING.md` carries the experiment — give
+    // `hotel_lounge` a `provides` entry and see whether the split follows the provision kind.
+    // ==========================================================================================
     expect(table(eraA)).toEqual({
-      guest_comfort: [195, 516, 0],
-      guest_entertainment: [708, 3, 0],
+      guest_comfort: [517, 194, 0],
+      guest_entertainment: [386, 325, 0],
       guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
@@ -531,8 +577,8 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // shipped margin never fires, so the two arms are the same simulation and travel moved both
     // of them the same way. The day they separate, this says so.
     expect(table(shipped)).toEqual({
-      guest_comfort: [195, 516, 0],
-      guest_entertainment: [708, 3, 0],
+      guest_comfort: [517, 194, 0],
+      guest_entertainment: [386, 325, 0],
       guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
@@ -549,10 +595,19 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // MORE THAN DOUBLES its abandonments: comfort 2,038 -> 4,630, entertainment 1,615 -> 3,083,
     // nourishment 1,937 -> 4,405. `night_rest` is unmoved at 192/519 in all three arms, which is
     // the anchor and says the guests who got a room still got one promptly.
+    //
+    // MOVED AGAIN AT G-038a-iii-b, AND THIS TIME ALL THREE ARMS MOVED — so the control above is
+    // NOT available here and that is said rather than glossed. What separates this arm is the
+    // DIRECTION: abandonments FALL on every engagement row (comfort 4,630 -> 3,315,
+    // entertainment 3,083 -> 3,122 flat, nourishment 4,405 -> 3,384) where the shipped arm's
+    // stay at zero. A margin-zero guest re-decides on every tie, and a guest committed to a
+    // journey through the shaft has fewer moments at which a tie can be evaluated against a
+    // provider it is close to. `night_rest` is unmoved at 192/519 in all three arms, which is
+    // the anchor that survives every one of these re-pins.
     expect(table(thrash)).toEqual({
-      guest_comfort: [452, 259, 4_630],
-      guest_entertainment: [479, 232, 3_083],
-      guest_nourishment: [655, 56, 4_405],
+      guest_comfort: [368, 343, 3_315],
+      guest_entertainment: [476, 235, 3_122],
+      guest_nourishment: [673, 38, 3_384],
       night_rest: [192, 519, 0],
     });
     // AND THE ABANDONMENT COLUMN IS UNTOUCHED BY G-028b, WHICH IS THE CONTROL FOR THE ROWS
@@ -561,7 +616,7 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // indistinguishable from the simulation behaving differently.
     const abandonments = (summary: Summary): number[] =>
       summary.needs.map((row) => row.abandoned);
-    expect(abandonments(thrash)).toEqual([4_630, 3_083, 4_405, 0]);
+    expect(abandonments(thrash)).toEqual([3_315, 3_122, 3_384, 0]);
     expect(abandonments(shipped)).toEqual([0, 0, 0, 0]);
   });
 
@@ -628,7 +683,7 @@ describe('the amenity sweep that chose this invocation, and what each level show
     };
   };
 
-  it('STARVED (1 amenity of each): the margin changes NOTHING here either, at θ-b1', () => {
+  it('STARVED (1 amenity of each): the margin fires ONCE here since the shaft, and no more', () => {
     // ------------------------------------------------------------------
     // THIS ARM INVERTED AT θ-b1 AND THE SWEEP BELOW IT NOW READS ONE WAY AT EVERY LEVEL.
     //
@@ -636,7 +691,7 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // `margin.abandoned > 0` and `margin.met < total.met` at one amenity of each. Measured on
     // this build, at ALL THREE levels of the sweep, both margins give the SAME numbers:
     //
-    //     amenities 1    abandoned 0 / 0     met identical
+    //     amenities 1    abandoned 0 / 0     met identical     <- 0 / 1 SINCE G-038a-iii-b
     //     amenities 2    abandoned 0 / 0     met identical
     //     amenities 3    abandoned 0 / 0     met identical
     //
@@ -655,12 +710,36 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // ABANDONMENT COVERAGE HAS NOT BEEN LOST, and that is why this arm can be re-expressed
     // rather than deleted: it lives at the contended arm above (`--rooms 60 --arrivals 48`,
     // three switches), which is asserted to be non-zero and is the arm that actually runs.
+    //
+    // ------------------------------------------------------------------
+    // **AND AT G-038a-iii-b THE MARGIN STOPPED BEING INERT HERE, BY ONE EVENT.** With the
+    // stairwell declared the one-amenity level reads:
+    //
+    //     saturating margin   abandoned 0    engagement met 736
+    //     SHIPPED margin      abandoned 1    engagement met 719
+    //
+    // So *"the two margins give the SAME numbers at every level"* is FALSE at this level and is
+    // struck rather than re-asserted. The mechanism the block above gives is why it was inert —
+    // a guest leaves at its dissatisfaction ceiling before a second need can drift a margin's
+    // width past the one being served — and the shaft lengthens every journey between the six
+    // bedrooms and the single basement amenity, so ONE guest in thirty simulated days now gets
+    // far enough for that gap to open.
+    //
+    // **IT IS A COUNT OF ONE AND IT IS PINNED AS ONE, NOT ARGUED FROM.** This file already
+    // records what a count of one is worth — *"on a count of one, any such perturbation is a
+    // coin-flip"* — and the standing instruction from that entry is to WIDEN rather than to
+    // delete when a count goes to zero. Nothing is widened here and nothing is claimed from the
+    // 1: what is asserted is the pair of exact integers, so the next goal reads the numbers.
+    //
+    // **THE SWEEP'S CONCLUSION DOES NOT REST ON THIS.** Which amenity level to pin is decided
+    // below on `completed()` — how many guests finish a stay — and that column is untouched by
+    // whether one abandonment fired at the leanest level.
     // ------------------------------------------------------------------
     const total = at(1, ONE_WHOLE_BASIS_POINTS);
     const margin = at(1, SHIPPED_MARGIN);
     expect(total.abandoned).toBe(0);
-    expect(margin.abandoned).toBe(0);
-    expect(margin.met).toBe(total.met);
+    expect(margin.abandoned).toBe(1);
+    expect([total.met, margin.met]).toEqual([736, 719]);
     // ------------------------------------------------------------------
     // AND THE PIN IS STILL THE RIGHT ONE — BUT NOT VIA THE `met` COLUMN ANY MORE, AND THE
     // REASON IS A PROPERTY OF THE NEW DEFINITION THAT A LATER READER MUST NOT REDISCOVER.

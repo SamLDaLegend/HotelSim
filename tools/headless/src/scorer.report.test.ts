@@ -294,7 +294,7 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
    * population, which is the property G-019's minimum-share criterion was rewritten into.
    * ============================================================================
    */
-  it('FOUR scores clear the derived one-guest-per-simulated-day floor, at THREE rooms', () => {
+  it('THREE scores clear the derived one-guest-per-simulated-day floor, at THREE rooms', () => {
     // ========================================================================
     // THE CRITERION, IN THE FORM G-019 HAD TO BE REWRITTEN INTO: *a stated minimum share per
     // named score, after the original was discharged by two guests.*
@@ -329,7 +329,19 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // the same 32 guests that `unserved.report.test.ts`'s rung-2 distribution records moving
     // 5 -> 4. **The criterion gets stronger rather than weaker**: it names four bands where it
     // named three, each still carrying more than one guest per simulated day.
-    expect(clearing.map((row) => row.score)).toEqual([2, 3, 4, 5]);
+    // [2, 3, 4, 5] -> [2, 3, 5] AT G-038a-iii-b, AND THE BAND THAT APPEARED HAS GONE AGAIN.
+    // The shaft gives this hotel's guests a vertical leg to its one basement amenity, and the
+    // fourth band drops back under one guest per simulated day. **The criterion still holds at
+    // its own stated strength — three named bands, each above the derived floor — which is the
+    // form G-019 was rewritten into, and it is where this arm stood before the spine.**
+    //
+    // AND IT AGREES WITH ITS OWN NEIGHBOUR-CADENCE ARM AGAIN, WHICH IS THE PART WORTH READING.
+    // That arm has asserted `[2, 3, 5]` at arrivals 119 and 121 throughout, so between
+    // G-039b-alpha and this commit the SHIPPED cadence was the odd one out and the pair
+    // disagreed about how many bands this hotel produces. They are back in step, which is a
+    // small piece of evidence that the fourth band was the phase artefact this file was
+    // rewritten to stop pinning rather than a durable property of the layout.
+    expect(clearing.map((row) => row.score)).toEqual([2, 3, 5]);
     // AND THE SHARE PER NAMED SCORE, which is the criterion's own wording. The floor as a share
     // is derived from the same two numbers rather than chosen: one guest per simulated day over
     // the run's own departures.

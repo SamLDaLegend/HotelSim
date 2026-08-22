@@ -559,7 +559,10 @@ export function amenityCell(index: number, bounds: GridBounds): Cell {
     // ONE COLUMN RIGHT AND ONE ROW BACK SINCE G-039b-alpha, exactly as `roomCell` — the basement
     // walks the same plate, so it gets the same spine and the same offsets. Its own entrance
     // question is `entranceCell`'s clamp rather than this: the door is on the ground floor, and
-    // an amenity below it is reached through a stairwell no shipped harness declares yet.
+    // an amenity below it is reached through the stairwell ~~no shipped harness declares yet~~
+    // **this runner declares at G-038a-iii-b — `shaftCells`, which lands on the very spine this
+    // comment is about.** Every engagement journey on a workload whose amenities are down here
+    // is therefore a walk to `(column 1, row 0)` and down it.
     column: bounds.minColumn + plateColumnOffset(bounds) + (onFloor % columns) * COLUMNS_PER_ROOM,
     row: bounds.minRow + plateRowOffset(bounds) + Math.floor(onFloor / columns),
   };
@@ -771,9 +774,11 @@ export function seededSpineCells(floor: number, bounds: GridBounds): readonly Ce
  * lane every eighth column running the full depth, and until this goal NOTHING JOINED THEM: the
  * player's floor was nine parallel strips with banks of bedrooms between them, and a guest in
  * one strip could not walk to another. It was invisible because `unreachable` — the sixth
- * room-invalidity reason, G-038a-ii-beta's — is inert while no world declares a stairwell: with
+ * room-invalidity reason, G-038a-ii-beta's — WAS inert while no world declared a stairwell: with
  * no stairwell the floor axis spends from EVERY cell, so the fill drops onto each strip from
- * above and every strip is reached. **Declare a shaft and the strips are islands.** Measured on
+ * above and every strip is reached. **G-038a-iii-b declared the shaft one goal later
+ * (`shaftCells`), so the rule is live and this spine is what keeps its verdict at zero rather
+ * than at seven.** Measured on
  * `validity.report.test.ts`'s pinned invocation with a full-height shaft, over columns 0..17 x
  * rows 0..7 plus four off-plate columns: the global minimum was **2, and no siting reached 0**
  * — because the defect was the layout and not where the shaft went. With this spine it is 0 at
@@ -823,6 +828,110 @@ function spineCells(floor: number, bounds: GridBounds, last: number): readonly C
   // Emitted left to right, ascending, which is `compareCells`'s own order — `playerCorridorCells`
   // says the same about its own emission and for the same reason.
   for (let column = bounds.minColumn; column <= rightmost; column += 1) cells.push({ floor, column, row });
+  return cells;
+}
+
+/**
+ * ==========================================================================================
+ * THE SHAFT: the one column a guest changing floor has to walk to (G-038a-iii-b).
+ *
+ * TWO RULES SHIPPED INERT AND THIS IS WHAT TURNS THEM ON. `stairs.ts` (G-038a-ii-alpha) made
+ * the floor axis cost a walk to a declared stairwell, and `unreachable` (G-038a-ii-beta) made
+ * a room no fill can reach invalid — and BOTH read an empty stair set as *"the floor axis
+ * spends unconditionally"*, so until this function is called by `schedule` neither rule
+ * changed anything on any world this project runs. `stairs.ts`' own header owns the
+ * consequence: *"the moment one does, the whole building changes at once."* This is that
+ * moment for the CLI; `apps/game/src/scenario.ts` does the same job for the recorder.
+ *
+ * WHERE IT GOES IS DERIVED FROM THE TWO LAYOUTS, NOT PICKED, AND THE DERIVATION IS TAKEN
+ * RATHER THAN WRITTEN DOWN so it moves with either of them.
+ *
+ * A stairwell is ALIGNED — one `(column, row)` through the whole plot, which is what keeps
+ * the derived stair leg O(1) and the speed window derivable (`stairs.ts`) — so ONE cell has to
+ * be circulation on the seeded plate, in the basement AND on the player's floors at once.
+ * `seededSpineCells` and `playerSpineCells` are the only runs of corridor that cross both
+ * plates and they share `spineRow`, so the answer is their INTERSECTION.
+ *
+ * THE SECOND CELL OF IT, NOT THE FIRST. The first is `entranceCell`'s own, which
+ * `reachableCells` charity-seeds whatever stands on it; the second is the first cell that has
+ * to EARN its walkability, so a layout that stopped joining the shaft to the building would be
+ * caught by `unreachable` rather than hidden by the seed. On the shipped plot it is
+ * `(column 1, row 0)` — the same cell `travel.stairs.report.test.ts` derived for its fixture
+ * from the seeded half of this argument alone, and the same cell
+ * `layout.reach.player.report.test.ts` measured `unreachable` down to 0 at.
+ *
+ * IT FALLS BACK RATHER THAN THROWING ON A DEGENERATE PLOT, AND THEN RETURNS `undefined` RATHER
+ * THAN THROWING AT ALL. `assertGridBounds` permits a one-column plot — every world before
+ * G-034a is one — and both spines CLAMP to it (`spineCells`), so the intersection is one cell
+ * there and the shaft takes it.
+ *
+ * **THE EMPTY CASE IS UNREACHABLE ON ANY BOUNDS `assertGridBounds` ADMITS**, and that is an
+ * argument rather than an assurance: both spines run from `bounds.minColumn` along `spineRow`,
+ * both clamp their right-hand end to `bounds.maxColumn`, and `assertGridBounds` guarantees
+ * `minColumn <= maxColumn` — so both arrays contain `(minColumn, spineRow)` and the
+ * intersection contains it too. It can only come back empty on a MALFORMED `GridBounds`, where
+ * the clamp arithmetic is `NaN`.
+ *
+ * ==========================================================================================
+ * IT THREW FOR ONE DRAFT AND THE THROW CAME OUT, WHICH IS WORTH THE FOUR LINES.
+ *
+ * A throw here is unreachable on a real plot and therefore buys nothing on one — but
+ * `tools/gates/measure.mjs` drives HEAD's `report.ts` against HISTORICAL `packages/sim` trees
+ * whose `GridBounds` has no `maxRow`, and on those the throw fired at SCHEDULE-BUILD time,
+ * ahead of the `draftSpawn: floor must be a safe integer` that both `check:measure` and
+ * `check:tickcost:proof` pin as the cause an INCOMPARABLE arm names. **Two gates went red for
+ * an unreachable branch**, and the only repair available would have been to re-aim a pinned
+ * symptom in each — a gate edit bought by a line that can never run in production.
+ *
+ * SO IT DEGRADES, WHICH IS ALSO WHAT ITS TWO NEIGHBOURS ALREADY DO and for the same stated
+ * reason: `spineCells` clamps *"because a narrow test plot must still lay a legal (if short)
+ * spine rather than fail to build"*, and `seedRoom`'s lane is `isWithinBounds`-guarded because
+ * *"a scenario should not fail to build because its corridor would be outside the world"*.
+ * A plot with no spine gets no stairwell and behaves exactly as every pre-G-038a-ii world did.
+ *
+ * NOTHING GOES SILENT, BECAUSE THE DERIVATION IS ASSERTED WHERE IT IS REACHABLE:
+ * `layout.reach.player.report.test.ts` pins the cell on both spines and the shaft's height,
+ * and `travel.stairs.report.test.ts` reads this function back and pins its column and row.
+ * A drift that emptied the intersection on a real plot reddens both.
+ * ==========================================================================================
+ */
+export function shaftCell(bounds: GridBounds): Cell | undefined {
+  const seeded = seededSpineCells(GROUND_FLOOR, bounds);
+  // LOOKUP ONLY — never iterated, so it decides no order and owes I2 nothing. The ORDER of the
+  // result is `playerSpineCells`' own, which is ascending by column (`spineCells` says so).
+  const onSeeded = new Set(seeded.map((cell) => `${String(cell.column)}:${String(cell.row)}`));
+  const both = playerSpineCells(GROUND_FLOOR, bounds).filter((cell) =>
+    onSeeded.has(`${String(cell.column)}:${String(cell.row)}`),
+  );
+  // The FIRST cell is the entrance's own; the second is the first that has to earn its
+  // walkability. `undefined` only where a spine is empty — see the docblock.
+  return both[1] ?? both[0];
+}
+
+/**
+ * Every cell of the shaft: `shaftCell`'s column and row, on EVERY floor of the plot, lowest
+ * first.
+ *
+ * FULL HEIGHT, AND NOT "the floors the walk reached". `stairLeg` reads only the stairwell's
+ * column and row, so which floors declared a stair changes nothing about travel (ADR-0059);
+ * what it changes is what `hasStairAt` answers, and therefore which cells `isDeclaredWalkway`
+ * admits. A shaft that stopped at the last seeded floor would be a building whose stairs end
+ * where the current hotel does — and `--build` puts rooms above that line on the very same
+ * run. A real stairwell goes all the way up before anyone builds next to it.
+ *
+ * IT CANNOT DELETE A `noCorridor` VERDICT ON A FLOOR THE WALK NEVER TOUCHED, which is the
+ * failure `seededSpineCells`' last paragraph names for corridors. A stair declaration does not
+ * make its floor PLANNED (`stairs.ts`), so on an empty open-plan floor it adds nothing to a
+ * set that already holds every cell, and on a planned floor it adds exactly one cell — which
+ * is on the spine there anyway, by `shaftCell`'s own derivation.
+ */
+export function shaftCells(bounds: GridBounds): readonly Cell[] {
+  const at = shaftCell(bounds);
+  if (at === undefined) return [];
+  const cells: Cell[] = [];
+  for (let floor = bounds.minFloor; floor <= bounds.maxFloor; floor += 1) {
+    cells.push({ floor, column: at.column, row: at.row });
+  }
   return cells;
 }
 
@@ -1272,6 +1381,27 @@ export function schedule(
   }
   const entityKind = lodgingRoomType?.id;
   const commands: ScheduledCommand[] = [];
+  // ==========================================================================================
+  // THE STAIRWELL, FIRST, BEFORE ANY ROOM OR ANY CORRIDOR (G-038a-iii-b).
+  //
+  // FIRST IN THE LOG because commands apply in order within a tick and all of these are tick 0:
+  // the building has vertical circulation from the moment it has anything at all, rather than
+  // from the moment its last amenity is seeded. Nothing here DEPENDS on that order — a stair is
+  // a declaration about a cell and says nothing about what stands there, exactly as
+  // `scenario.ts` says of its corridors — but a reader should not have to prove that to be sure.
+  //
+  // UNCONDITIONALLY, INCLUDING AT `--rooms 0`. The shaft is a property of the PLOT, not of what
+  // this invocation happens to seed on it: `shaftCell` reads only `bounds`, so every run of
+  // this runner declares the same stairwell and a golden taken at one room count describes the
+  // same building as a golden taken at another. It costs `maxFloor - minFloor + 1` commands.
+  //
+  // WHAT IT BUYS, AND IT IS THE WHOLE OF THIS GOAL: `stepTowards`' floor axis stops spending
+  // from wherever a guest is standing and starts costing a walk to this column, and
+  // `reachableCells` stops dropping onto every floor from above. See `shaftCell`.
+  // ==========================================================================================
+  for (const at of shaftCells(bounds)) {
+    commands.push({ tick: 0, command: { kind: 'layStair', at } });
+  }
   /**
    * The seeded hotel walks ONE index space (G-012): lodging rooms first, then the
    * amenities, so no two seeded rooms can ever land on the same cell. `roomCell` is

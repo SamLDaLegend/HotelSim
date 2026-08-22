@@ -1103,12 +1103,20 @@ function climbsFrom(cell: Cell, stairwell: Cell | null): boolean {
  * paid ONCE per validity context and amortised by `ValidityCache` over every tick that changed
  * nothing, which on the measured 60-room bench is one fill for a 43,200-tick run.
  *
- * AND THE COMPONENT IS MUCH BIGGER THAN THE WALK THAT FINDS IT. On the shipped plot the
- * entrance's component COVERS 13,482 cells for the CLI default and 13,551 for the bench —
- * almost the whole plot, because with no stairwell declared the floor axis is free — while the
- * fill VISITS about 1,400 of them, because `isEmptyFloor` folds the twenty-one storeys of empty
- * air into twenty-one marks. Those two numbers are different quantities and the difference is
- * the optimisation.
+ * AND THE COMPONENT IS MUCH BIGGER THAN THE WALK THAT FINDS IT — which is a STRUCTURAL claim
+ * and needs no reading: `isEmptyFloor` folds each of the twenty-one storeys of empty air into
+ * ONE mark, so the fill VISITS a few hundred cells and COVERS a plot-sized component. Those are
+ * different quantities and the difference is the optimisation.
+ *
+ * ~~On the shipped plot the entrance's component COVERS 13,482 cells for the CLI default and
+ * 13,551 for the bench — almost the whole plot, because with no stairwell declared the floor
+ * axis is free — while the fill VISITS about 1,400 of them.~~ **WITHDRAWN AT G-038a-iii-b, NOT
+ * RESTATED.** Its stated CAUSE is dead — `report.ts` and `apps/game/src/scenario.ts` declare a
+ * stairwell now, so the floor axis is confined on every shipped world — and the two counts were
+ * taken on the harnesses as they stood before that. `CLAUDE.md` rule 5: a number you cannot
+ * re-measure paired is withdrawn rather than restated, and `reachableCells` is not exported, so
+ * re-measuring it means a probe nobody has run. The argument above stands on its own without
+ * either figure.
  *
  * AND IT OWES THE CACHE NO NEW CLAUSE. The component is a function of the corridors, the
  * stairs, the plot and which cells hold rooms — and the reuse predicate already compares all
@@ -1350,13 +1358,35 @@ function isDeclaredWalkway(ctx: ValidityContext, cell: Cell): boolean {
     hasCorridorAt(ctx.corridors, cell) ||
     // `.length !== 0` FIRST, AND IT IS A STRUCTURAL CLAIM RATHER THAN A MEASURED SAVING. This
     // predicate is asked once per candidate landing per moving guest per tick AND once per
-    // neighbour of every cell of every room in the door walk, and EVERY world in this project
-    // declares no stairwell — so without the guard every one of them would pay a call and a
-    // binary search to be told what an empty array always says. `hasStairAt` returns false on an
-    // empty set anyway, so the answer is identical; what changes is that a stairless world pays
-    // one integer compare. It is the same shape `stairLeg` uses for its `stairwell === null`
-    // branch, and it is recorded as UNMEASURED: `check:tickcost` in this regime spreads
-    // 0.93-1.29 and cannot resolve a change this size.
+    // neighbour of every cell of every room in the door walk. `hasStairAt` returns false on an
+    // empty set anyway, so the answer is identical; what the guard changes is that a STAIRLESS
+    // world pays one integer compare instead of a call and a binary search. It is the same
+    // shape `stairLeg` uses for its `stairwell === null` branch.
+    //
+    // ==========================================================================================
+    // **THE PREMISE INVERTED AT G-038a-iii-b AND IS RESTATED RATHER THAN LEFT STANDING.**
+    //
+    // It read *"EVERY world in this project declares no stairwell — so without the guard every
+    // one of them would pay a call and a binary search to be told what an empty array always
+    // says."* **That is now false of every SHIPPED world**: `report.ts`'s `schedule` and
+    // `apps/game/src/scenario.ts`'s `seedCommands` both declare a shaft, so the fast path is
+    // never taken on a run this project performs, and the binary search is paid on every
+    // candidate landing, every neighbour in the door walk and every cell of the reachability
+    // fill. It IS still taken by every migrated v20 save and by every fixture that declares
+    // nothing, which is why the clause stays; what it is no longer is a claim about the
+    // workloads the gates run.
+    //
+    // **AND THE COST IS UNMEASURED IN BOTH DIRECTIONS, WHICH IS THE HONEST POSITION AND NOT A
+    // SHRUG.** `check:tickcost` cannot see this change at all — its arms materialise
+    // `packages/sim/src` and `packages/content/data` only (`ARM_PATHS` in
+    // `tools/gates/lib/git-tree.mjs`), so a change made in `tools/headless` produces two
+    // byte-identical arms and the verdict IDENTICAL, and `measure.mjs`'s `harnessFor` copies
+    // `report.ts` into BOTH arms in any case. What DID move, measured paired in one sitting on
+    // the shipped bench workload: move events 910 -> 1,948 (`travel.stairs.report.test.ts`) and
+    // I5's own reading 7,267ms -> the figure `pnpm sim:bench` prints, both well inside a budget
+    // this workload uses ~2% of. A gate that could resolve this predicate on its own does not
+    // exist here and is not invented for it.
+    // ==========================================================================================
     (ctx.stairs.length !== 0 && hasStairAt(ctx.stairs, cell))
   );
 }

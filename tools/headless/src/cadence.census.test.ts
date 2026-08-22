@@ -210,7 +210,11 @@ const PERMITTED = [
 const PROPERTY_FINDINGS = [
   {
     file: 'tools/headless/src/hysteresis.report.test.ts',
-    title: 'STARVED (1 amenity of each): the margin changes NOTHING here either, at θ-b1',
+    // RENAMED AT G-038a-iii-b. The arm's own claim inverted — with the stairwell declared the
+    // shipped margin fires ONCE at the leanest amenity level where it used to fire not at all —
+    // so the title moved with it. The FINDING this row records is unchanged and is still the
+    // thing the census counts: this property reverses one arrival tick away.
+    title: 'STARVED (1 amenity of each): the margin fires ONCE here since the shaft, and no more',
     assertion: 'expected 0 to be greater than 0',
   },
   {

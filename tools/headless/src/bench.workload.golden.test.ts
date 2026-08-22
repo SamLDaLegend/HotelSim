@@ -376,7 +376,19 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   behaviour change and the control block below moves with it** — see the outcome arm: the
     //   bench completes FIVE stays where it completed one. `check:stamp` reads this literal out
     //   of the tree, so the digest's measure-golden line moves with it.
-    expect(hashState(plain)).toBe('5cfb73ca16c3463e');
+    //   `5cfb73ca16c3463e` -> `760558b631beb552`   G-038a-iii-b DECLARED THE STAIRWELL. **ONE
+    //   cause and it is BEHAVIOURAL, and it is the cause `418cf36055a3408c`'s row promised**:
+    //   that row moved the hash for a FIELD and said the harness declares no stairwell, so
+    //   `stairLeg` read the empty set as *"the floor axis spends unconditionally"* and every
+    //   guest walked exactly where it walked. It does not any more. `schedule` emits `layStair`
+    //   on every floor at `(column 1, row 0)` (`shaftCells`), so a guest going to the basement
+    //   walks to that column first — and this workload's amenities are ALL in the basement.
+    //   **checkedOut 5 -> 2, leftDissatisfied 61 -> 64**, the still-in-the-hotel column unmoved
+    //   at 9, and the conservation closes: **2 + 64 + 9 = 75 arrived.** `arrived`,
+    //   `evictedGuests`, the abandonment count and the departure table's seven-row SHAPE are
+    //   unchanged. `check:stamp` reads this literal out of the tree, so the digest's
+    //   measure-golden line moves with it.
+    expect(hashState(plain)).toBe('760558b631beb552');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -427,9 +439,34 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // (`G-041` will move this row again by re-deriving the rates, and the branch
     // `g037a-quality-fold` records that this benchmark completed ZERO stays over a simulated
     // year. Neither is discharged here; this is four guests, not a fix.)
+    //
     // ==========================================================================================
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(5);
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(61);
+    // 5 + 61 -> 2 + 64 AT G-038a-iii-b, AND IT GOES BACK DOWN. **THE PRICE OF THE STAIRWELL,
+    // STATED AS THE THING THE PREVIOUS PARAGRAPH CALLED A FINDING RATHER THAN QUIETLY RE-PINNED
+    // ONE GOAL LATER.** G-039b-alpha's row above reads *"the first time this row has gone the
+    // other way"* and *"the direction is the finding rather than the size"*; this goal spends
+    // three of its four guests back.
+    //
+    // THE CAUSE IS VERTICAL DISTANCE, WHICH IS THE COST HALF OF THE SAME MECHANIC. Every one of
+    // this workload's amenities is in the BASEMENT and every one of its sixty bedrooms is on
+    // floor 0, so every engagement in it is a cross-floor journey. Before the shaft a guest
+    // spent the floor axis from wherever it stood; now it walks to `(column 1, row 0)` first
+    // and out again on the other side — `travel.stairs.report.test.ts` measures move events on
+    // this same shape at **910 -> 1,948** — and three more of the sixty saturate the 431-tick
+    // dissatisfaction ceiling before they are served.
+    //
+    // **IT IS NOT A DEFECT AND IT IS NOT TUNED AWAY.** The hotel is the same hotel; the journey
+    // is the one a building with one stairwell actually imposes, and the previous row's own
+    // last paragraph says this benchmark is *"the starved end of the measurement, not a
+    // representative one"* — sixty bedrooms behind two amenities. Making the workload kinder to
+    // keep this number high is precisely what G-039b-alpha refused by name.
+    //
+    // **THE CONSERVATION STILL CLOSES: 2 + 64 + 9 still in the hotel = 75 arrived**, and the
+    // still-in-the-hotel column is UNMOVED at 9 — the guests moved between the two departure
+    // rows and nowhere else.
+    // ==========================================================================================
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(2);
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(64);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -649,12 +686,16 @@ describe('the same workload with the player churning the building', () => {
     // them unchanged. A hash that moves while every counter holds is exactly what this literal
     // is for: `Guest.at`, `Entity.at` and the corridor plan are state no counter reports.
     // ==========================================================================================
-    expect(hashState(churn)).toBe('18b389412e4f9365');
+    // `18b389412e4f9365` -> `4ca40a2319b272bf` AT G-038a-iii-b, for the plain arm's cause: the
+    // runner declares a stairwell and every basement journey is routed through it. Eviction is
+    // this arm's subject and it still evicts — 19 -> 18, one guest fewer standing in a room at
+    // the moment it is demolished, because the guests are elsewhere on the way to the stairs.
+    expect(hashState(churn)).toBe('4ca40a2319b272bf');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
     expect(evictedGuests(churn.guestOutcomes)).toBeGreaterThan(0);
-    expect(evictedGuests(churn.guestOutcomes)).toBe(19);
+    expect(evictedGuests(churn.guestOutcomes)).toBe(18);
     expect(hashState(churn)).not.toBe(hashState(runWorkload(0, 0)));
   });
 
@@ -676,7 +717,7 @@ describe('the same workload with the player churning the building', () => {
     // The split earned its keep twice over. A single `evicted` counter would have gone 19 ->
     // 35 -> 19 and said nothing about which half did it.
     // ============================================================================
-    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(19);
+    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(18);
     expect(departureCountOf(churn.guestOutcomes, 'evictedRoomUnusable')).toBe(0);
     // Only a migration writes the third, so a run that never loaded a save must read zero.
     expect(departureCountOf(churn.guestOutcomes, 'evictedCauseUnrecorded')).toBe(0);

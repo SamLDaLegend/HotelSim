@@ -327,12 +327,65 @@ function corridorCommands(
   }
   // AND THE BASEMENT GETS A SPINE TOO, one column short of the lodging floors' because the
   // amenity band is `amenityColumns` rooms wide with its lanes on the ODD offsets rather than
-  // the even ones. Whether a guest can get DOWN to it is a different question and this goal
+  // the even ones. ~~Whether a guest can get DOWN to it is a different question and this goal
   // does not answer it: no harness in this project declares a stairwell, so the basement is a
-  // joined floor that the ground floor cannot reach. G-038a-ii-beta owns that, and its own
-  // block already says the WATCH it wants is the basement going red before a stair and green
-  // after.
+  // joined floor that the ground floor cannot reach.~~ **ANSWERED AT G-038a-iii-b**, which is
+  // where G-038a-ii-beta's block said the answer belonged: `shaftCommands` below declares the
+  // stairwell, and the basement is reached down the same column the lodging floors are reached
+  // up. The spine is what it stands on.
   spine(amenityFloor, COLUMNS_PER_ROOM * amenityColumns - 1);
+  return commands;
+}
+
+/**
+ * ==========================================================================================
+ * THE STAIRWELL (G-038a-iii-b) — the column a guest changing floor has to walk to.
+ *
+ * TWO SHIPPED RULES WERE INERT UNTIL SOMETHING DECLARED ONE. `stairs.ts` made the floor axis
+ * cost a walk to a declared stairwell (G-038a-ii-alpha) and `unreachable` made a room no fill
+ * can reach invalid (G-038a-ii-beta), and both read an EMPTY stair set as *"the floor axis
+ * spends unconditionally"*. So until this function is called, a guest in this scenario rose
+ * through the ceiling from wherever it stood — which on a two-storey building over a basement
+ * is the single most visible thing the renderer could have been getting wrong, and WATCH #16
+ * recorded exactly that class of defect one axis over.
+ *
+ * WHERE IT GOES IS THE SPINE'S SECOND CELL, AND BOTH HALVES OF THAT ARE DERIVED.
+ *
+ *   ON THE SPINE, because a stairwell is ALIGNED — one `(column, row)` through the whole plot
+ *   (`stairs.ts`) — so the one cell has to be circulation on BOTH lodging floors and on the
+ *   amenity floor at once. `corridorCommands` runs `spine()` along `entrance.row` on all three
+ *   and neither `lodgingCell` (row + 1 or deeper) nor `amenityCell` (row + 1) ever stands on
+ *   it, so the entrance's row is the only run of corridor common to every floor this scenario
+ *   builds on.
+ *
+ *   THE SECOND CELL AND NOT THE FIRST, because the first is `entranceCell` itself — the lobby,
+ *   where every guest with no room stands. Putting the stairs under the waiting crowd would
+ *   make the two states one square on screen, which is the defect `lodgingCell`'s own docblock
+ *   records G-030 fixing on the column axis: *"a watcher cannot tell one from the other"*.
+ *   `report.ts`'s `shaftCell` takes the second cell too, for the reachability reason — the
+ *   entrance is charity-seeded by the fill whatever stands on it — and the two hosts agreeing
+ *   is worth more than either argument alone.
+ *
+ * FULL HEIGHT OF THE PLOT, clamped by `lay`'s own bounds check, for the reason `report.ts`
+ * gives: `stairLeg` reads only the stairwell's column and row, so which floors declared a
+ * stair changes nothing about travel (ADR-0059) — what it changes is which cells
+ * `isDeclaredWalkway` admits. A shaft that stopped at the top of today's hotel would be a
+ * building whose stairs end where the current floor count does, and G-031 lets the player
+ * build above it.
+ *
+ * `layStair` IS AN EXISTING COMMAND AND NO SIMULATION BEHAVIOUR IS ADDED HERE, exactly as
+ * `corridorCommands` says of its own. It is idempotent, it costs nothing (what a stair costs
+ * is a designer's number and there is none yet), and it takes no entity id — so it moves no
+ * id and changes nobody's provider choice.
+ * ==========================================================================================
+ */
+function shaftCommands(entrance: Cell, bounds: GridBounds): readonly Command[] {
+  const column = entrance.column + 1;
+  if (column > bounds.maxColumn) return [];
+  const commands: Command[] = [];
+  for (let floor = bounds.minFloor; floor <= bounds.maxFloor; floor += 1) {
+    commands.push({ kind: 'layStair', at: { floor, column, row: entrance.row } });
+  }
   return commands;
 }
 
@@ -389,6 +442,11 @@ export function seedCommands(content: BoundContent, bounds: GridBounds): readonl
   // the result — a corridor is a declaration about a cell and says nothing about what stands
   // there — but a reader should not have to work that out from `corridors.ts` to be sure.
   commands.push(...corridorCommands(entrance, bounds, amenityTypes.length));
+  // AND THE STAIRWELL, LAST, FOR THE SAME REASON THE CORRIDORS ARE LAID AFTER THE ROOMS: it
+  // makes no difference to the result — a stair is a declaration about a cell and says nothing
+  // about what stands there — and a reader should not have to work that out to be sure. It goes
+  // after the corridors rather than before because the cell it takes is one of theirs.
+  commands.push(...shaftCommands(entrance, bounds));
   return commands;
 }
 

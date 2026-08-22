@@ -110,9 +110,15 @@ const FORBIDDEN_IN_SAVE_TS = [
   // and — the load-bearing half — that its floor axis therefore spent UNCONDITIONALLY.
   // `createStairs()` returns the same empty set today, so no assertion can tell the two
   // implementations apart, which is ADR-0008 (3)'s case exactly. The day it would bite is the
-  // day a scenario opens with a stairwell already drawn: the live constructor returns something
-  // and a step that read it would start migrating the SAME v20 bytes onto somebody else's
-  // stairwell — changing where every guest in a migrated world walks.
+  // day THE CONSTRUCTOR returns something and a step that read it would start migrating the SAME
+  // v20 bytes onto somebody else's stairwell — changing where every guest in a migrated world
+  // walks.
+  //
+  // ~~The day it would bite is the day a scenario opens with a stairwell already drawn.~~
+  // **RESTATED AT G-038a-iii-b, WHICH IS THE GOAL THAT DID THAT AND DID NOT BITE.** `report.ts`
+  // and `apps/game/src/scenario.ts` now open with a shaft, by issuing `layStair` on a world
+  // that started empty; `createStairs()` still returns `NO_STAIRS`, so this scan's premise is
+  // untouched and its subject was always the constructor rather than the host.
   'createStairs',
   'createBuildOutcomes',
   'BUILD_REFUSAL_REASONS',

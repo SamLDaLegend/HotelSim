@@ -313,6 +313,25 @@ describe('summary schema 4, and what an older consumer does with it', () => {
     // the failure mode it guards — no row diverging at all — now needs three rows to move
     // rather than one. The search is recorded rather than the result alone, because *"there was
     // no such invocation"* and *"I did not look far"* are the two readings of an empty search.
+    //
+    // ==========================================================================================
+    // AND AT G-038a-iii-b ONE OF THE THREE DROPPED OUT, WHICH IS EXACTLY THE MARGIN THE MOVE
+    // ABOVE WAS BOUGHT FOR. The stairwell put `guest_nourishment` OUT of the top band on this
+    // invocation — unserved 2,443 of 11,880 instance-ticks, which is more than a fifth — so it
+    // fails the first column rather than the second and stops being a witness.
+    //
+    //     `--days 2 --seed 42 --rooms 6 --amenities 5`, 17 departures, with the shaft
+    //     row                    pooled share inside the top band?   most instances inside it?
+    //     guest_comfort          yes                                 NO  (17 of 17)
+    //     guest_entertainment    yes                                 no  (7 of 17)
+    //     guest_nourishment      **no**                              no  (7 of 17)
+    //     night_rest             yes                                 no  (7 of 17)
+    //
+    // **THE ARM DOES NOT MOVE AGAIN AND THE MESSAGE BELOW IS WHY.** Its instruction fires when
+    // NO row diverges; two still do, so the claim stands where it is and the literal records
+    // which rows carry it today. Moving the invocation now, to get the third witness back,
+    // would be shopping for a workload — and the arm one goal ago moved only because the count
+    // had reached ZERO. The margin the search bought is being spent as intended.
     // ==========================================================================================
     const departed = departuresInSummary(summary);
     const diverging = summary.needs.filter(
@@ -324,7 +343,7 @@ describe('summary schema 4, and what an older consumer does with it', () => {
         'it. That is the state in which summary schema 4 would be bookkeeping rather than a ' +
         'redefinition: re-read the block above, find the invocation where the two columns still ' +
         'disagree, and move this arm to it — do not delete the claim.',
-    ).toEqual(['guest_entertainment', 'guest_nourishment', 'night_rest']);
+    ).toEqual(['guest_entertainment', 'night_rest']);
   });
 
   it('THE RENAMED REASONS ARE ABSENT FROM v3, NOT ZERO — the property THIS bump exists for', () => {
