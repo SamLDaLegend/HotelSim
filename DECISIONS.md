@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta2 is DONE: the five-sighting intermittent is CLOSED and the cause was the orchestrator running two `pnpm verify` at once. `verify.mjs` now takes an atomic mkdir lock: one verify per tree, waits for a live owner, steals a dead one. The derivation has NO free parameter — vitest sizes its own pool from the machine, so one verify already owns the core budget and two exceed it by exactly two, on every machine (ADR-0063). A worker cap was measured CHEAP (0.997x) and USELESS (removes 0 of 5 timeout cells) and is rejected for ineffectiveness, not cost — my brief's cost figure was from another session and would have got the right verdict by a false argument. Both gate-probe files now materialise OUTSIDE the repo. E-010 is open and does NOT stop the loop: one exit criterion I wrote is ill-posed, asking the policy to hold under a 24-worker arm that breaks its own premise. Reachability shipped and was destroyed and recovered on 2026-08-21 (ADR-0061, ADR-0062). Next up is the stairwell rollout, which is what makes reachability live. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 ca7bee4a4d6ea416. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-a is DONE: the player's floor has a spine, and `unreachable`'s global minimum over 160 shaft sitings goes 2 -> 0 (35 sitings now reach zero; stripping the spine puts the same shaft back at 7). Only the free floor axis was hiding that report.ts lays parallel player lanes with no cross-corridor. The layout is correct and INERT, like the two rules it serves — no harness declares a stairwell yet; all three go live together at the next goal, which also owns occupancy, every golden and the tickcost question. I2 ca7bee4a4d6ea416 UNMOVED and could not have moved: determinism-log.ts imports nothing from report.ts, which is a claim I made without checking (ADR-0064). The stairwell rollout split three ways at plan review after three BLOCKERs, one ordering work that shipped two goals ago. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -5294,3 +5294,90 @@ roots, not just the one that was observed.
 
 Proof of bite, ADR-0022 recipe, sha256 captured and re-checked identical: **commenting out
 `acquireLock()` turns 3 of 6 cells red.**
+
+---
+
+## ADR-0064 — The player's floor gets a spine, and `unreachable` can reach zero. Three brief claims false, one structurally impossible.
+
+**Date**: 2026-08-22 · **Status**: accepted · **G-038a-iii-a.**
+
+### THE RESULT, and the sweep is the evidence rather than a single reading
+
+Exact deterministic counts on `validity.report.test.ts`'s pinned invocation, full-height shaft,
+**176 sitings (16 throw off-plot, 160 measured)** — and **both arms re-measured in this tree**, the
+pre-goal arm restored from a copy outside the repo per ADR-0022, **rather than quoted from the plan
+review**:
+
+| | before | after |
+|---|---|---|
+| global minimum `unreachable` | **2** | **0** |
+| sitings reaching 0 | **0 / 160** | **35 / 160** |
+| at the derived shaft (col 1, row 0) | 2 | **0** |
+| same shaft, player spine stripped | — | **7** *(proof-of-bite)* |
+
+**The pinned criterion, compared WHOLE rather than one number adjusted:**
+
+```
+                  before    after
+missingItem            0        0
+unsupported           17       13
+noDoor                 1        3
+noCorridor             2        3
+unplaced               0        0
+unreachable            0        0
+VALID                 64       66
+rooms in the world    84       85    <- why no reason's move is a subset of another's
+```
+
+**`noDoor` 1 -> 3 is the one to read.** The block flagged 1 as *one room from making
+`reasons.length >= 2` vacuous*. **Nothing was tuned**: a four-sided seal used to be bought with
+**the plot's edge** as its fourth wall and now costs a real room behind it.
+
+**I2 `ca7bee4a4d6ea416` — unchanged. `pnpm verify` fourteen rows, `VERIFY_EXIT=0`.**
+
+### THE FIX IS NOT THE ONE I SPECIFIED, AND THE BUILDER TRIED MINE FIRST
+
+I wrote *"`seededSpineCells`' argument, one layout over."* **It was tried first and produces a
+BYTE-IDENTICAL tally at every siting** — unreachable 2/2/3 at shafts c0/c1/c8, exactly as before —
+**because the player's rooms stand on `minRow` and block the spine.** Joining the lanes needs the
+player's plate to **give up a row**: `builtRoomCell` + `rowsPerFloor`, not an argument.
+
+**And a second reason the one-liner could not have worked:** `seededSpineCells`' extent **stops at
+the seeded plate (column 17)**, so it would join lanes 0/8/16 and **leave blocks 3–8 as islands.**
+`playerSpineCells` runs to the player's own plate edge. *(Both spines are now one spelling behind a
+private `spineCells`, which is the right shape and is not what I asked for.)*
+
+### THE I2 CLAIM WAS NOT MERELY WRONG, IT WAS STRUCTURALLY IMPOSSIBLE
+
+I wrote *"the hash will likely move (the seeded layout changes) — run `pnpm stamp:set`."* **False
+twice.** The seeded layout did not change; and **`determinism-log.ts` imports NOTHING from
+`report.ts`** — verified independently: `grep '^import' determinism-log.ts | grep -c report` is
+**0**, and this goal touches no `packages/sim` file.
+
+> **No change to `report.ts` can move the I2 hash. Ever.** I did not check the import graph before
+> asserting a hash would move, and a builder that trusted me would have run `stamp:set` and written
+> a false hash into four digests. **The cheap check is one `grep`, and the expensive failure is a
+> digest that lies.**
+
+### AND I NAMED THE WRONG WATCH INSTRUMENT — the correction inverts my reasoning
+
+I wrote that `tools/viewer` cannot show this because it collapses the row axis, so use
+`record-frames.ts --floor 0`. **The premise is true and the conclusion inverts.**
+`record-frames.ts` draws **`apps/game/src/scenario.ts`'s world**, which this goal does not touch —
+**it would have shown literally nothing.** The viewer draws `world.corridors` **on the COLUMN
+axis**, and this change *is* a change in the corridor column set.
+
+**WATCH #21, and the change is legible on screen**: at tick 240 on floor 1 the corridor columns read
+**`[0-71]`, 72 of them**; pre-goal the same frame draws **9** (columns 0, 8, ... 64 —
+`playerCorridorCells` alone). Floor 0 is the control at `[0-17]` and did not move. By ticks
+6000–8640 a guest lives at (column 5, row 1) — **a row that was `unsupported` from the moment it was
+built, pre-goal.**
+
+**Zero guest-frames on the new spine row across all 37 frames, and that is expected rather than
+disappointing**: with no stairwell the floor axis is free, so nobody is *obliged* to use the
+corridor. **It goes live at -b.**
+
+**One "reads as stupid", and it is the instrument rather than the sim** (§9, logged not fixed): the
+player's floor now paints as a **solid 72-column corridor band**, because the viewer collapses the
+row axis and the spine is one row. A watcher would read *"the player built a floor that is entirely
+corridor"* — **it is 72 cells of 576.** A pre-existing property of a disposable instrument.

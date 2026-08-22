@@ -1729,7 +1729,7 @@ against this constraint rather than into it.
 
 ---
 
-## E-009 — I destroyed the builder's uncommitted work. The tree is safe; the rebuild path is your call.
+## E-009 [RESOLVED 2026-08-22] - I destroyed the builder uncommitted work; it was fully recovered.
 **Opened 2026-08-22 by the orchestrator. Loop stopped.** Full account in ADR-0061.
 
 ### The state right now, verified rather than asserted

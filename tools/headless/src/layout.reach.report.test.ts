@@ -30,6 +30,13 @@
 //
 // The spine (`seededSpineCells`) is that row, and the plate moved to make it.
 //
+// **AND "BOTH HOSTS" WAS TWO OF THREE LAYOUTS, WHICH G-038a-iii-a HAD TO FIX SEPARATELY.**
+// `scenario.ts` and `roomCell` were joined at G-039b-alpha; `builtRoomCell` — the layout the
+// PLAYER builds on, in this same file's host — was left exactly as it was found, and its nine
+// lanes stayed unjoined for another goal. `playerSpineCells` is its row.
+// `layout.reach.player.report.test.ts` measures what it bought, and needs a stairwell in a
+// test fixture to make it visible at all.
+//
 // WHAT THIS FILE IS NOT: it does not ask the reachability question as a RULE. Nothing here
 // touches `RoomInvalidityReason` and no verdict changes. It COUNTS what the layouts now afford,
 // so that the goal which adds the rule inherits a number instead of a hope.
@@ -436,7 +443,14 @@ describe('AND THE SIMULATION S OWN REACHABILITY RULE, WHICH IS A DIFFERENT QUEST
   //     |------------------------|--------------|-----------------|-----------------------|
   //     | CLI default            | **0**        | 0               | 0                     |
   //     | 60-room bench          | **0**        | 0               | 0                     |
-  //     | criterion invocation   | **0**        | 5               | 2                     |
+  //     | criterion invocation   | **0**        | 5               | 2 -> **0**            |
+  //
+  // **THE LAST CELL IS STRUCK RATHER THAN RESTATED (G-038a-iii-a).** The 2 was real and it was
+  // never about the seeded plate this file tests: the two rooms were on the PLAYER's floor,
+  // beside a lane that nothing joined to the one the shaft came up in. That layout now has a
+  // cross-corridor of its own and the same measurement reads 0.
+  // `layout.reach.player.report.test.ts` owns the criterion row and asserts it; the two rows
+  // above it are this file's and are untouched, because this goal changed no seeded layout.
   //
   // **DECLARING A STAIRWELL BUYS THE RULE NOTHING ON EITHER LAYOUT THIS FILE IS ABOUT**, and on
   // the criterion it buys only rooms the player's own walk stranded. What it costs is every

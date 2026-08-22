@@ -1194,9 +1194,30 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // a player different things — *"you built in mid-air"* against *"you built somewhere nobody
     // can walk to"*.
     // ==========================================================================================
-    expect(s.rooms.invalid.unsupported).toBe(0);
+    // ==========================================================================================
+    // G-038a-iii-a: AND IT MOVES STRAIGHT BACK — `unsupported` 0 -> 1, `noCorridor` 1 -> 0,
+    // `rooms.valid` STILL 6. The same one room, the same 750,000p, the third reason it has
+    // carried in three goals. **Everything else in this invocation is byte-identical**: built 1,
+    // refused 14 on funds, revenue 816,000p, upkeep -390,000p, 96 checkouts, 260 gave up.
+    //
+    // WHY, EXACTLY, BECAUSE "IT MOVED BACK" IS NOT A REASON. The player's plate now starts at
+    // `minRow + 1`, so the one build this wallet can afford — index 9, the tenth ATTEMPT — lands
+    // at (column 3, row 2) where it used to land at (column 3, row 1). This invocation seeds
+    // only THREE rooms, and all three stand on floor 0 row 1. So the cell underneath the built
+    // room is bare plot rather than an inherited bedroom, and `unsupported` is checked first.
+    //
+    // **THE ROW OFFSET IS NOT A DEFECT AND THIS IS NOT EVIDENCE OF ONE**, which is worth saying
+    // because "the dud got worse" is the available misreading. It is a three-room hotel: the
+    // seeded plate is one row deep because there are only three rooms to bank, so ANY offset on
+    // the row axis takes the player's walk off it. At `--rooms 40` (the criterion) the plate is
+    // five rows deep and `unsupported` FELL, 17 -> 13, for the same offset.
+    //
+    // ADR-0009's trap is unchanged in shape and unchanged in size, for the third time: 750,000p
+    // for a room that houses nobody and still costs 2,500p a night.
+    // ==========================================================================================
+    expect(s.rooms.invalid.unsupported).toBe(1);
     expect(s.rooms.invalid.noDoor).toBe(0);
-    expect(s.rooms.invalid.noCorridor).toBe(1);
+    expect(s.rooms.invalid.noCorridor).toBe(0);
     // Three inherited bedrooms that work, plus the three basement amenities, which always
     // do. All three of the player's builds are duds — the ratio of waste to spend is what
     // ADR-0009 describes, and a thinner margin does not make the walk any wiser.

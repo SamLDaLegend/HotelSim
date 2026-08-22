@@ -32,6 +32,7 @@ import {
   builtRoomStartFloor,
   PLAYER_COLUMNS_PER_BLOCK,
   playerCorridorCells,
+  playerSpineCells,
   COLUMNS_PER_ROOM,
   departuresInSummary,
   departuresOf,
@@ -296,64 +297,120 @@ describe('the build walk stays on the plot', () => {
     // the offset that satisfies that rule is 0 where it was 1. The parity is asserted against
     // `roomCell` at the foot of this test rather than against a literal, so the two layouts
     // cannot drift apart again.
-    const rows = PLOT.maxRow - PLOT.minRow + 1;
+    // ==========================================================================================
+    // TWO ROW COUNTS SINCE G-038a-iii-a, AND THEY ARE DIFFERENT NUMBERS RATHER THAN A RENAME.
+    // The LANES still run the full depth of the plot, because a lane has to meet the spine at
+    // the near row to be joined to the other lanes at all. The PACKING is one row shallower,
+    // because that near row is the spine. `rows` used to be both and would have gone on reading
+    // as though it were.
+    // ==========================================================================================
+    const laneRows = PLOT.maxRow - PLOT.minRow + 1;
+    const packedRows = PLOT.maxRow - PLOT.minRow;
     const stubs = playerCorridorCells(1, PLOT);
     expect(stubs[0]).toEqual({ floor: 1, column: PLOT.minColumn, row: PLOT.minRow });
-    expect(stubs[rows - 1]).toEqual({ floor: 1, column: PLOT.minColumn, row: PLOT.maxRow });
-    expect(stubs[rows]).toEqual({
+    expect(stubs[laneRows - 1]).toEqual({ floor: 1, column: PLOT.minColumn, row: PLOT.maxRow });
+    expect(stubs[laneRows]).toEqual({
       floor: 1,
       column: PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK,
       row: PLOT.minRow,
     });
-    expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 1, row: PLOT.minRow });
-    expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 2, row: PLOT.minRow });
+    // AND THE PACKING STARTS ONE ROW BACK (G-038a-iii-a) — `spineRow` is `minRow` for this
+    // layout as it is for the seeded one, so a player room on `minRow` would stand ON the
+    // cross-corridor and close it.
+    expect(builtRoomCell(0, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 1, row: PLOT.minRow + 1 });
+    expect(builtRoomCell(1, PLOT, above)).toEqual({ floor: 1, column: PLOT.minColumn + 2, row: PLOT.minRow + 1 });
     // ACROSS THE BLOCK FIRST, THEN ONE ROW BACK — the fill order the seal depends on, since a
     // column-first fill would need three whole columns before any room had two neighbours.
     const perBlock = PLAYER_COLUMNS_PER_BLOCK - 1;
     expect(builtRoomCell(perBlock - 1, PLOT, above)).toEqual({
       floor: 1,
       column: PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK - 1,
-      row: PLOT.minRow,
+      row: PLOT.minRow + 1,
     });
     expect(builtRoomCell(perBlock, PLOT, above)).toEqual({
       floor: 1,
       column: PLOT.minColumn + 1,
-      row: PLOT.minRow + 1,
+      row: PLOT.minRow + 2,
     });
     // The last room of the first block, then the first of the second: the walk steps OVER the
     // next corridor rather than onto it.
-    expect(builtRoomCell(perBlock * rows - 1, PLOT, above)).toEqual({
+    expect(builtRoomCell(perBlock * packedRows - 1, PLOT, above)).toEqual({
       floor: 1,
       column: PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK - 1,
       row: PLOT.maxRow,
     });
-    expect(builtRoomCell(perBlock * rows, PLOT, above).column).toBe(
+    expect(builtRoomCell(perBlock * packedRows, PLOT, above).column).toBe(
       PLOT.minColumn + PLAYER_COLUMNS_PER_BLOCK + 1,
     );
     // AND NO ROOM IS EVER BUILT ON A CORRIDOR, which is the property the connected rooms rest
     // on: a room standing on a declared corridor closes it — the cell stops being a DOOR — so a walk that
     // wrapped onto one would take the door away from the rooms beside it.
     const stubColumns = new Set(stubs.map((cell) => cell.column));
-    const blocks = stubs.length / rows;
-    const perFloor = blocks * perBlock * rows;
+    const blocks = stubs.length / laneRows;
+    const perFloor = blocks * perBlock * packedRows;
     for (let i = 0; i < perFloor * 3; i += 1) {
       expect(stubColumns.has(builtRoomCell(i, PLOT, above).column)).toBe(false);
     }
+    // AND NEVER ON THE SPINE EITHER (G-038a-iii-a), which is the same property one axis over:
+    // a room on the cross-corridor closes it, and the whole floor's lanes come apart.
+    const spineRows = new Set(playerSpineCells(1, PLOT).map((cell) => cell.row));
+    for (let i = 0; i < perFloor * 3; i += 1) {
+      expect(spineRows.has(builtRoomCell(i, PLOT, above).row)).toBe(false);
+    }
     expect(builtRoomCell(perFloor - 1, PLOT, above).floor).toBe(1);
-    expect(builtRoomCell(perFloor, PLOT, above)).toEqual({ floor: 2, column: PLOT.minColumn + 1, row: PLOT.minRow });
-    // A ROOM IS WALLED IN ON FOUR SIDES WITHIN TEN BUILDS, which is the property the CLI
-    // criterion's `noDoor` rests on and is what the fill order was chosen for. Index 9 is
-    // (column +4, row 0); its four neighbours are indices 8, 10, off-plot, and 2 + 7.
+    expect(builtRoomCell(perFloor, PLOT, above)).toEqual({
+      floor: 2,
+      column: PLOT.minColumn + 1,
+      row: PLOT.minRow + 1,
+    });
+    // ==========================================================================================
+    // A ROOM IS WALLED IN ON FOUR SIDES WITHIN SIXTEEN BUILDS — TEN UNTIL G-038a-iii-a, AND THE
+    // SIX IS THE SPINE'S BILL RATHER THAN A REGRESSION IN THE FILL ORDER.
+    //
+    // It was ten because the fourth side WAS THE PLOT'S EDGE: the packing started on `minRow`,
+    // so index 2 at (column +3, `minRow`) had rooms left, right and behind it and open air in
+    // front of it that no guest could ever stand in. The packing now starts one row back and
+    // the plot's edge is the SPINE — a free, declared corridor cell — so the front row has a
+    // door by construction and a genuine four-sided seal costs a room in the row behind.
+    //
+    // DERIVED RATHER THAN SWEPT: filling seven columns row by row, the cheapest seal is at
+    // column offset 1 of the second packed row (index 8), whose last neighbour is the room
+    // directly behind it (index 15). No earlier index has four built neighbours.
+    //
+    // AND THE PINNED CRITERION STILL AFFORDS IT, which is the whole reason this number is
+    // tracked: `validity.report.test.ts` runs thirty build ATTEMPTS and `noDoor` reads 3 there,
+    // up from 1. Sixteen is inside the budget; it is asserted here so that a future change which
+    // pushes it past a run's attempt count fails HERE rather than by quietly zeroing a reason.
+    // ==========================================================================================
     const packed = new Set<string>();
-    for (let i = 0; i <= 9; i += 1) {
+    for (let i = 0; i <= 15; i += 1) {
       const at = builtRoomCell(i, PLOT, above);
       packed.add(`${at.column}:${at.row}`);
     }
-    const sealed = builtRoomCell(2, PLOT, above);
+    const sealed = builtRoomCell(8, PLOT, above);
     expect(packed.has(`${sealed.column - 1}:${sealed.row}`)).toBe(true);
     expect(packed.has(`${sealed.column + 1}:${sealed.row}`)).toBe(true);
+    expect(packed.has(`${sealed.column}:${sealed.row - 1}`)).toBe(true);
     expect(packed.has(`${sealed.column}:${sealed.row + 1}`)).toBe(true);
-    expect(sealed.row).toBe(PLOT.minRow); // and the fourth side is off the plot
+    // AND NOT ONE BUILD SOONER — the fifteenth build is what closes it, so the count above is
+    // the cheapest seal rather than an upper bound somebody rounded up.
+    const packedFewer = new Set<string>();
+    for (let i = 0; i <= 14; i += 1) {
+      const at = builtRoomCell(i, PLOT, above);
+      packedFewer.add(`${at.column}:${at.row}`);
+    }
+    let sealedEarlier = 0;
+    for (let i = 0; i <= 14; i += 1) {
+      const at = builtRoomCell(i, PLOT, above);
+      const walls = [
+        packedFewer.has(`${at.column - 1}:${at.row}`),
+        packedFewer.has(`${at.column + 1}:${at.row}`),
+        packedFewer.has(`${at.column}:${at.row - 1}`),
+        packedFewer.has(`${at.column}:${at.row + 1}`),
+      ];
+      if (walls.every(Boolean)) sealedEarlier += 1;
+    }
+    expect(sealedEarlier).toBe(0);
     // THE END ROOMS SIT OVER THE INHERITED HOTEL, not over its corridors — the offset, stated as
     // the property rather than as the arithmetic. **AND IT IS NOW ASKED OF `roomCell` DIRECTLY
     // RATHER THAN OF A PARITY LITERAL** (G-039b-alpha): the clause used to read *"a supported
@@ -376,18 +433,23 @@ describe('the build walk stays on the plot', () => {
       expect(seededColumns.has(stub.column + 1)).toBe(true);
       overTheInheritedHotel += 1;
     }
-    expect(overTheInheritedHotel).toBe(3 * rows);
+    expect(overTheInheritedHotel).toBe(3 * laneRows);
     // ==========================================================================================
     // AND THE ROW AXIS NEEDS NO STRIDE, WHICH IS STILL ARITHMETIC RATHER THAN LUCK — BUT IT NO
     // LONGER STARTS AT `minRow`, AND THE SENTENCE IS AMENDED RATHER THAN LEFT (G-039b-alpha).
     //
     // It read *"the inherited plate banks rooms along EVERY row of the columns it uses, so a
     // player room standing on an even column is supported whatever row it is on"*. **The spine
-    // took `minRow`**, so a player room on the plot's NEAR row now stands over circulation and
-    // is `unsupported` whatever column it is on — which is a real, wanted consequence rather
-    // than a defect: the player's first row of builds is in mid-air over the lobby, and
-    // `unsupported` is one of the reasons this layout exists to produce. From `minRow + 1`
-    // back, the old sentence holds exactly as it did.
+    // took `minRow`**, so a player room on the plot's NEAR row would stand over circulation and
+    // be `unsupported` whatever column it is on. From `minRow + 1` back, the old sentence holds
+    // exactly as it did.
+    //
+    // AND AT G-038a-iii-a THE PLAYER'S WALK MOVED OFF `minRow` TOO, so the case that paragraph
+    // describes no longer occurs: BOTH plates now start at `minRow + 1` and a player room is
+    // over an inherited room or over an inherited LANE, never over the spine. The `unsupported`
+    // this layout exists to produce comes from the column parity and from demolition, which is
+    // what `playerCorridorCells`' docblock says and what the tally in `validity.report.test.ts`
+    // counts — it fell 17 -> 13 in that change, and it is the front row that left it.
     // ==========================================================================================
     for (let row = PLOT.minRow + 1; row <= PLOT.maxRow; row += 1) {
       expect(roomCell((row - PLOT.minRow - 1) * 9, PLOT).row).toBe(row);
@@ -412,10 +474,14 @@ describe('the build walk stays on the plot', () => {
     // The rule is the existing comment's own reasoning extended to the case it did not
     // cover: the player builds on the ground unless the ground is already spoken for.
     expect(builtRoomStartFloor(0)).toBe(GROUND_FLOOR);
+    // ONE ROW BACK SINCE G-038a-iii-a, and G-011's property is unharmed: the first build of a
+    // from-nothing run is still hard against the block's own lane (column `minColumn`, every
+    // row), so it is still connected the moment it exists, and on the GROUND it is supported by
+    // the earth wherever it stands. What it gains is the spine in front of it as well.
     expect(builtRoomCell(0, PLOT, builtRoomStartFloor(0))).toEqual({
       floor: 0,
       column: PLOT.minColumn + 1,
-      row: PLOT.minRow,
+      row: PLOT.minRow + 1,
     });
     // And every inherited-hotel invocation is untouched, which is what keeps G-009's
     // pinned criterion byte-identical.
@@ -437,9 +503,18 @@ describe('the build walk stays on the plot', () => {
     // is the player's own corridor and one more is the offset the blocks start at, so the walk
     // has nine blocks of seven per floor rather than eighty columns. The arithmetic is the
     // subject; 1,260 is just what it comes to today.
+    //
+    // AND THE LANE DEPTH AND THE PACKING DEPTH ARE TWO NUMBERS SINCE G-038a-iii-a. `blocks` used
+    // to be `playerCorridorCells(...).length` — lanes times rows — and multiplying it by
+    // `perBlock` happened to give the right answer only while the packing was as deep as the
+    // lanes. It no longer is: the near row is the spine. Both are derived from the layout's own
+    // functions here, so neither can be a stale literal.
     const perBlock = PLAYER_COLUMNS_PER_BLOCK - 1;
-    const blocks = playerCorridorCells(1, PLOT).length;
-    const cells = PLOT.maxFloor * blocks * perBlock; // floor 1 upward, less each block's corridor
+    const laneCells = playerCorridorCells(1, PLOT);
+    const laneRows = PLOT.maxRow - PLOT.minRow + 1;
+    const blocks = laneCells.length / laneRows;
+    const packedRows = laneRows - 1;
+    const cells = PLOT.maxFloor * blocks * perBlock * packedRows; // floor 1 up, less lanes and spine
     const commands = schedule(cells * 3, content, PLOT, HOTEL_ROOMS, TICKS_PER_DAY, 1);
     const builds = commands.filter((c) => c.command.kind === 'buildRoom');
     expect(builds).toHaveLength(cells); // the player's walk starts from its own zero
@@ -457,15 +532,25 @@ describe('the build walk stays on the plot', () => {
     const playerStubs = commands.flatMap(({ command }) =>
       command.kind === 'layCorridor' && command.at.floor > GROUND_FLOOR ? [command.at] : [],
     );
-    const stubColumns = new Set(playerCorridorCells(1, PLOT).map((cell) => cell.column));
+    // AND THE SPINE IS PART OF THAT SET SINCE G-038a-iii-a, so the membership test is against
+    // BOTH of the layout's corridor functions rather than against the lanes alone. Asked of the
+    // lanes only, every spine cell between two lanes would have failed it — and asked as "is it
+    // a lane column OR any column", it would have tested nothing.
+    const declared = new Set(
+      [...laneCells, ...playerSpineCells(1, PLOT)].map((cell) => `${cell.column}:${cell.row}`),
+    );
     for (const at of playerStubs) {
-      expect(stubColumns.has(at.column)).toBe(true);
+      expect(declared.has(`${at.column}:${at.row}`)).toBe(true);
       expect(isWithinBounds(at, PLOT)).toBe(true);
     }
     const stubFloors = [...new Set(playerStubs.map((at) => at.floor))];
     expect(stubFloors).toHaveLength(PLOT.maxFloor);
-    // One full set of blocks per floor the walk reached, and no floor stubbed twice.
-    expect(playerStubs).toHaveLength(stubFloors.length * blocks);
+    // One full set of blocks AND ONE SPINE per floor the walk reached, and no floor stubbed
+    // twice. The spine overlaps the lanes on `minRow` — one cell per block — and `layCorridor`
+    // is idempotent, but the SCHEDULE still carries both commands, so the count is the sum.
+    expect(playerStubs).toHaveLength(
+      stubFloors.length * (laneCells.length + playerSpineCells(1, PLOT).length),
+    );
   });
 
   it('SWEEP: no cadence blames the plot for what money is doing', () => {

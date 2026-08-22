@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta2 is DONE: the five-sighting intermittent is CLOSED and the cause was the orchestrator running two `pnpm verify` at once. `verify.mjs` now takes an atomic mkdir lock: one verify per tree, waits for a live owner, steals a dead one. The derivation has NO free parameter — vitest sizes its own pool from the machine, so one verify already owns the core budget and two exceed it by exactly two, on every machine (ADR-0063). A worker cap was measured CHEAP (0.997x) and USELESS (removes 0 of 5 timeout cells) and is rejected for ineffectiveness, not cost — my brief's cost figure was from another session and would have got the right verdict by a false argument. Both gate-probe files now materialise OUTSIDE the repo. E-010 is open and does NOT stop the loop: one exit criterion I wrote is ill-posed, asking the policy to hold under a 24-worker arm that breaks its own premise. Reachability shipped and was destroyed and recovered on 2026-08-21 (ADR-0061, ADR-0062). Next up is the stairwell rollout, which is what makes reachability live. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 ca7bee4a4d6ea416. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-a is DONE: the player's floor has a spine, and `unreachable`'s global minimum over 160 shaft sitings goes 2 -> 0 (35 sitings now reach zero; stripping the spine puts the same shaft back at 7). Only the free floor axis was hiding that report.ts lays parallel player lanes with no cross-corridor. The layout is correct and INERT, like the two rules it serves — no harness declares a stairwell yet; all three go live together at the next goal, which also owns occupancy, every golden and the tickcost question. I2 ca7bee4a4d6ea416 UNMOVED and could not have moved: determinism-log.ts imports nothing from report.ts, which is a claim I made without checking (ADR-0064). The stairwell rollout split three ways at plan review after three BLOCKERs, one ordering work that shipped two goals ago. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
   `5cfb73ca16c3463e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
@@ -1960,3 +1960,47 @@ superstition with CI access, and nothing would have gone red to reveal it.
 
 **WATCH: none owed.** No guest, room or economy behaviour changed; I2 is `ca7bee4a4d6ea416`,
 unmoved, and no sim source was touched.
+
+### G-038a-iii-a — The player's floor was never joined, and only a free floor axis was hiding it.
+
+**`unreachable`'s global minimum over 160 shaft sitings goes 2 -> 0**, and 35 sitings now reach zero
+where none did. **ADR-0064 has the sweep**; the proof-of-bite is that stripping the new spine puts
+the same shaft back at 7.
+
+**THE FIX WAS NOT THE ONE I SPECIFIED, AND THE BUILDER TRIED MINE FIRST.** *"`seededSpineCells`'
+argument, one layout over"* produces a **byte-identical tally at every siting** — the player's rooms
+stand on `minRow` and block the spine, so the plate has to give up a row. **A one-line brief for a
+change that needed a layout is the same error as sizing a goal from a block instead of the tree**,
+and it cost the builder one discarded attempt rather than a goal, because it measured before
+believing me.
+
+### THE CLAIM I SHOULD NOT HAVE MADE AT ALL
+
+I told the builder the I2 hash would likely move and to run `stamp:set`. **`determinism-log.ts`
+imports nothing from `report.ts`** — one `grep`, zero hits, and this goal touches no `packages/sim`
+file. **No change to `report.ts` can move that hash, ever.**
+
+> **A builder that trusted me would have written a false hash into four digests.** The digests are
+> the thing every later reader takes the schema version and the gate reading from, and `check:stamp`
+> would have gone green over it because it compares the four to each other, not to the world.
+> **I asserted a consequence without checking the import graph that decides it.**
+
+### AND THE WATCH INSTRUMENT CORRECTION INVERTS MY REASONING RATHER THAN REFINING IT
+
+I ruled out `tools/viewer` because it collapses the row axis, and named
+`record-frames.ts --floor 0` instead. **The premise was right and the conclusion was backwards**:
+`record-frames.ts` draws `scenario.ts`'s world, **which this goal does not touch — it would have
+shown nothing at all.** The viewer draws corridors on the **column** axis, and a corridor-column
+change is exactly what this was. **Corridor columns on floor 1 read 9 before and 72 after**, with
+floor 0 as an unmoved control.
+
+**Zero guest-frames on the new spine, and that is the honest reading**: with no stairwell the floor
+axis is free, so nobody is obliged to walk it. **The layout is correct and inert, like the two rules
+it exists to serve.** All three go live together at -b.
+
+### THE FIRST ATTEMPT AT THIS GOAL STALLED, AND THE SIGNATURE IS WORTH KNOWING
+
+A builder ran 31 minutes, emitted **one sentence and zero tool calls**, and left no processes and no
+file writes. **Diagnosed without reading the transcript** — 0-byte output, no `node.exe`, clean
+`git status` — stopped, and relaunched with one line added: *start by running a command, not by
+planning in prose.* The retry completed the goal. **Cost: 31 minutes and one brief.**

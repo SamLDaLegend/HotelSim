@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta2 is DONE: the five-sighting intermittent is CLOSED and the cause was the orchestrator running two `pnpm verify` at once. `verify.mjs` now takes an atomic mkdir lock: one verify per tree, waits for a live owner, steals a dead one. The derivation has NO free parameter — vitest sizes its own pool from the machine, so one verify already owns the core budget and two exceed it by exactly two, on every machine (ADR-0063). A worker cap was measured CHEAP (0.997x) and USELESS (removes 0 of 5 timeout cells) and is rejected for ineffectiveness, not cost — my brief's cost figure was from another session and would have got the right verdict by a false argument. Both gate-probe files now materialise OUTSIDE the repo. E-010 is open and does NOT stop the loop: one exit criterion I wrote is ill-posed, asking the policy to hold under a 24-worker arm that breaks its own premise. Reachability shipped and was destroyed and recovered on 2026-08-21 (ADR-0061, ADR-0062). Next up is the stairwell rollout, which is what makes reachability live. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 ca7bee4a4d6ea416. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-a is DONE: the player's floor has a spine, and `unreachable`'s global minimum over 160 shaft sitings goes 2 -> 0 (35 sitings now reach zero; stripping the spine puts the same shaft back at 7). Only the free floor axis was hiding that report.ts lays parallel player lanes with no cross-corridor. The layout is correct and INERT, like the two rules it serves — no harness declares a stairwell yet; all three go live together at the next goal, which also owns occupancy, every golden and the tickcost question. I2 ca7bee4a4d6ea416 UNMOVED and could not have moved: determinism-log.ts imports nothing from report.ts, which is a claim I made without checking (ADR-0064). The stairwell rollout split three ways at plan review after three BLOCKERs, one ordering work that shipped two goals ago. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -3499,63 +3499,148 @@ runs over a folded floor.
 - **WATCH #20** — 3,602 frames at `--every 1`. The rule is inert and changes no frame. **The
   builder re-took its own first-draft claim over all 901 census lines and it disagreed** (rule 5).
 
-## G-038a-iii — A floor is reached by a stairwell, and the harnesses declare one
-Status: **PLANNED 2026-08-21.** **The goal that makes G-038a-ii-α AND -β live.** Both shipped
-correct and both are INERT, for the same reason: **no world in this tree declares a stairwell.**
-Milestone: M3 · Owner pair: sim-engineer / sim-critic
+## G-038a-iii — SPLIT at PLAN, 2026-08-22. Three BLOCKERs; the seam is the HARNESS boundary.
+Status: **split into G-038a-iii-a / -b / -c.** Seam named by `sim-critic` under §5.6 and taken.
+**Every reading below is an exact deterministic count, not a timing** — no stopwatch claim, so
+rule 4's regime slot does not bind. Probe scripts recorded in the review.
 
-### WHY THIS IS A GOAL AND NOT A LINE IN THE NEXT ONE
+### BLOCKER 1 — ARM 1'S EXIT CRITERION IS UNMEETABLE, AND THE BLOCK'S DIAGNOSIS OF THE FAILURE WAS WRONG
 
-**Declaring one stairwell in `report.ts` changes the whole building at once** — G-038a-ii-α owned
-that consequence in writing and nothing has scheduled it:
+I wrote *"declare the shaft, assert `unreachable` is still 0; a room going invalid here is a LAYOUT
+defect, not a rule defect."* **Swept over the whole seeded plate — columns 0..17 x rows 0..7, plus
+four off-plate columns — on `validity.report.test.ts`'s own pinned invocation, the GLOBAL MINIMUM IS
+2. No siting reaches 0.**
 
-- **Every cross-floor journey re-routes through one shaft.** `stairLeg` sends a guest to the
-  stairwell column/row FIRST, so journey lengths rise on every workload with a cross-floor need.
-- **Occupancy moves.** The pin is `TARGET_CONCURRENT_HUNDREDTHS`, re-taken to **850** at G-039b-α;
-  longer journeys is the same lever that took it 872 → 856 before. **Re-take it here, alone.**
-- **Every report golden moves**, the I2 hash moves, and I5's stay count moves.
-- **And `unreachable` stops being inert** — the free ceiling closes, so any floor not served by the
-  shaft becomes invalid **in the same commit**. That is two large effects in one integer unless
-  they are separated by construction.
+**The cause is not siting.** The rooms that go unreachable are on **floor 1 — the PLAYER's floor** —
+and `playerCorridorCells` lays **parallel vertical lanes at columns 0, 8, 16 with no cross-corridor
+joining them.** G-039b-α gave the *seeded* plate a spine and **left the player's floor exactly as it
+found it**; the free floor axis is the only thing that has been hiding it.
 
-> **A goal that moves occupancy, every golden, the hash, I5 and a validity reason at once is not a
-> bullet. It is the goal.**
+> **And the tree had already measured this.** `PARKING.md` records *"0 / 0 / 2 with a full-height
+> one"* for exactly these three workloads, **written by the immediately preceding goal.** The block
+> was written against a number its own tree contradicts — **the fourth time in six goals that a
+> brief of mine asserted something a ledger already refuted.**
 
-### THE ORDER THAT SEPARATES THE TWO EFFECTS, AND IT IS THE EXIT CRITERION
+### BLOCKER 2 — THE SPEED RE-DERIVATION ALREADY SHIPPED, AND THE BLOCK SENDS A BUILDER HUNTING A STALE NUMBER THAT IS NOT STALE
 
-**Arm 1 — declare the stairwell, assert `unreachable` is still 0 on every shipped workload.** If a
-room goes invalid here, the shaft is badly sited and that is a LAYOUT defect, not a rule defect.
-**Arm 2 — then re-take occupancy, the goldens and the hash**, in a second commit, with the count of
-rooms that changed diagnosis asserted at **0**. *Two commits, so a reviewer can see which effect
-each number belongs to.*
+I wrote *"`worstJourney` is pinned `toBe(108)` as a Manhattan sum; once a shaft is required that
+expression is false and stays green."* **False against the bytes.** G-038a-ii-α already did it:
 
-### THE TWO PARKED HYPOTHESES THIS GOAL RUNS
+- `dissatisfaction.content.test.ts:205` — **`expect(worstJourney).toBe(194)`**
+- `:256` — **`expect(floor).toBe(2)`**, so shipped `guestCellsPerTick: 3` clears
+- `grid.ts:126-146` — the **79 -> 60** joint depth ceiling, struck and replaced, *"neither package
+  may move alone"*
 
-1. **A room drawn over a stairwell severs the building for validity while the mover walks through
-   it.** The fill asks `isWalkableFor` at the stairwell cell; `stairLeg` does not. **Assert both
-   halves, then rule**: a sixth `BuildRefusalReason`, or a named acceptance with the frame.
-2. **WATCH #17's residual, third subject** — *how* a guest leaves a floor. A floor-0 recording
-   shows the guest simply ceasing to be drawn. **The watchable this goal finally makes possible: a
-   guest crossing floors walks to the stairwell column FIRST**, which is G-038a-i's own framing and
-   is visible on ONE floor's frames. **Record at `--every 1` and compare against WATCH #20's
-   inert baseline.**
+Arithmetic re-checked independently: `79 + 7 = 86`, `20 - (-2) = 22`, `86 + 22 + 86 = 194`;
+`129 + 3x194 = 711 > 431` and `129 + 3x97 = 420 < 431`, so the floor is **2 with 11 ticks of
+margin.**
 
-### WHERE THE SHAFT GOES — DECIDE BEFORE BUILD, IT IS NOT OBVIOUS
+> **`108` IS still pinned twice — and both are LIVE AND CORRECT**: `:267` the longest single leg
+> (the dial's upper endpoint, which rightly did not move) and `:287` the stairless Manhattan sum.
+> **A builder handed my block goes looking for a stale 108 and finds two correct ones.** That is
+> §2.1's exact failure *aimed at the wrong file*, inside the paragraph warning against it.
 
-**Stairs are ALIGNED** (G-038a-ii-α, ruled): one column through the plot, which is what keeps the
-stair leg O(1) and the shipped `guestCellsPerTick: 3` legal. **But `report.ts` lays one lane cell
-per seeded room**, and G-039b-α's spine now runs at `minRow` — **so the shaft belongs ON the spine,
-at a column the spine already covers**, or it is a stairwell nobody can walk to. Name the cell in
-the plan, with the arithmetic that shows it is on circulation on **every** floor it serves.
+**STRUCK.** What IS owed in its place: **fourteen prose sentences across thirteen files assert "no
+harness declares a stairwell" and go false** — `grid.ts`, `save.ts`, `stairs.ts` (x2),
+`stairs.save.test.ts`, `travel.stairs.test.ts`, `validity.ts`, `validity.reach.test.ts`,
+`report.ts`, `scenario.ts`, `bench.workload.golden.test.ts`, `cli.stdout.test.ts`,
+`layout.reach.report.test.ts`, `travel.stairs.report.test.ts` (x2).
 
-### AND THE SPEED WINDOW IS RE-DERIVED HERE, NOT ASSUMED
+### BLOCKER 3 — `determinism-log.ts` CANNOT TAKE A BORROWED SPINE COLUMN, AND A SHAFT THERE DELETES GATE COVERAGE SILENTLY
 
-`worstJourney` is pinned `toBe(108)` as a Manhattan sum. **Once a shaft is required that expression
-is false and stays green** — the ADR-0007 class inside the file that exists to derive the number.
-G-038a-ii-α computed **194** under the aligned rule and a derived floor of **2**, so shipped speed 3
-clears with no content edit. **Re-derive it in the same change**, and re-check `grid.ts`'s depth
-ceiling against the same inequality, because `grid.ts` says explicitly that neither package moves
-alone.
+That harness declares corridors **on floor 0 only** (hard-coded), has **no spine at all**, and
+scatters rooms across twenty-one floors. Measured **at the I2 gate's own horizon** — 100,000 ticks,
+seed 42, full-height shaft at (0,0), the best of three sitings:
+
+| | rooms | noCorridor | unreachable | hash |
+|---|---|---|---|---|
+| base | 105 | **2** | 0 | `ca7bee4a4d6ea416` |
+| shaft c0r0 | 102 | **0** | **13** | `9dc58ea6c9311f2a` |
+
+**`noCorridor` goes 2 -> 0, and `validity.determinism.test.ts:275` pins it `toBe(2)`.**
+`WITHHELD_CELLS` is a **hand-tuned list that exists solely to keep that reason alive in the 100k
+proof** — declaring a stairwell **deletes the coverage it buys, silently, inside the gate meant to
+prove this goal reaches its own code.**
+
+## G-038a-iii-a — The player's floor gets a spine
+Status: **DONE 2026-08-22 (ADR-0064).** unreachable global minimum 2 -> 0 over 160 sitings;
+35 of 160 now reach 0, and stripping the player spine puts it at 7. The fix was NOT the
+one-liner I specified - that produces a byte-identical tally. I2 unmoved (it could not have
+moved: determinism-log.ts imports nothing from report.ts). Fourteen rows PASS, VERIFY_EXIT=0.
+Owner pair: sim-engineer / sim-critic
+
+**`seededSpineCells`' argument, one layout over.** No stairwell, no `stairs` field touched, no I2
+move that is not the layout's own. **It moves `noDoor`, `noCorridor` and `unsupported` in the pinned
+criterion**, so the criterion is re-taken **once, here**, as a whole tally rather than one number.
+
+**Exit criteria:**
+- `unreachable` reaches **0** on `validity.report.test.ts`'s pinned invocation **with a full-height
+  shaft declared in a TEST fixture** — proving the layout, without shipping the declaration.
+- The pinned tally compared **whole**, with the before/after printed side by side.
+- `pnpm verify` — fourteen rows PASS, `VERIFY_EXIT` read from the process.
+
+## G-038a-iii-b — `report.ts` and `scenario.ts` declare the shaft
+Status: **PLANNED.** Owner pair: sim-engineer / sim-critic
+**Depends on -a.** Owns occupancy, the report goldens, the bench golden, I5's stay count, WATCH.
+
+**THE COST QUESTION IS MEASURED BEFORE BUILD, NOT AT VERIFY.** `isDeclaredWalkway`'s
+`ctx.stairs.length !== 0` fast path is argued from *"every world in this project declares no
+stairwell"* — **which this goal inverts.** After it, **no shipped world takes that path**, so
+`hasStairAt`'s binary search is paid on every candidate landing per moving guest per tick, every
+neighbour in the door walk, and every cell of the reachability fill. **And `stepTowards` is called
+~2.1x as often** — `travel.stairs.report.test.ts` already measures bench moves **910 -> 1,948**.
+
+> **ADR-0056 froze the tripwire bound at 1.4640 and `tripwire.mjs` REFUSES TO RUN if the bound and
+> its derivation disagree. If this reddens there is NO in-goal remedy.** Measure it paired and
+> interleaved at PLAN, with a predicted reading, before a line is written.
+
+**THE SITING DECIDES THE OCCUPANCY PIN, so it cannot be re-taken until -a settles the layout.** On
+the pin's own instrument (60 rooms, arrival every 96, seed 42, 43,200 ticks, exact count):
+**baseline 850 · shaft (0,0) 814 · shaft (8,0) 836.** `tripwire.mjs` records
+`occupancyWhenTaken: 872` and **prints the gap; it widens from 2.5% to 6.6% at (0,0)** — say in the
+block that the goal is spending that margin. *(The tripwire's configuration guard compares rooms /
+arrivals / seed / days and NOT occupancy, so the re-take itself is safe.)*
+
+**`travel.stairs.report.test.ts` HAS TO BE RE-FOUNDED**: it asserts
+`expect(without.world.stairs).toEqual([])` **as its control arm**, which becomes structurally
+impossible. Its whole with/without pairing goes with it.
+
+**`stamp:set` plus four digest rewrites are DELIVERABLES of this goal, not of REFLECT** — `stamp.mjs`
+cross-checks the measure golden against the digest headings, and the bench golden pins
+`checkedOut` `toBe(5)`.
+
+**WATCH — and the block's instrument claim was wrong.** `tools/viewer` draws **ALL floors as stacked
+bands and collapses the ROW axis entirely**, so **the shaft's row leg is invisible there no matter
+what, while the climb is visible** — the opposite of what I wrote. The one-floor instrument is
+`apps/game/scripts/record-frames.ts --floor 0`. **And WATCH #18 already recorded the watchable one
+goal ago** with frames; what is genuinely new here is only that it becomes a **shipped** run rather
+than a test-declared shaft. Claim the smaller thing.
+
+## G-038a-iii-c — `determinism-log.ts` gets vertical circulation of its own
+Status: **PLANNED.** Owner pair: sim-engineer / sim-critic
+**Owns the I2 hash and the `noCorridor` coverage repair, alone.**
+
+**Not a borrowed column — vertical circulation designed for a harness that has none.** And the
+`noCorridor` coverage that `WITHHELD_CELLS` buys must be **repaired in the same change**, or the
+goal ships a silent coverage regression inside the gate that proves it.
+
+**Exit criteria:**
+- `validity.determinism.test.ts`'s tally compared **whole**, with `noCorridor` still pinned at a
+  stated value and **the reason it holds written at the assertion.**
+- The new I2 hash recorded in all four digests via `pnpm stamp:set`.
+- `pnpm verify` — fourteen rows PASS, `VERIFY_EXIT` read from the process.
+
+### ALREADY DONE — struck from all three, so no builder re-runs them
+
+- **Parked hypothesis 1** (a room over a stairwell severs validity but not the mover): **both halves
+  are already asserted** in `travel.stairs.test.ts:334, :335, :387, :418`, and the **named acceptance
+  was already made at G-038a-ii-α.** The remaining ruling is routed to M5 and needs an instrument
+  that cannot exist before then.
+- **Parked hypothesis 2's watchable**: recorded at **WATCH #18** with frames, one goal ago.
+- **The shaft column arithmetic**: `travel.stairs.report.test.ts:26-46` already derives
+  `(column 1, row 0)` as circulation on every seeded floor and the basement, and `scenario.ts`'s
+  `spine()` makes `(column 0, row 0)` circulation on all three floors it serves. **Only
+  `report.ts`'s player floor and `determinism-log.ts` were ever open** — which is exactly the split.
 
 ## G-039b — REWRITTEN AND SPLIT at PLAN, 2026-08-21. Most of it was already done.
 Status: **split into G-039b-α (the layout re-take) / G-039b-β (the campaign that actually drifted).**

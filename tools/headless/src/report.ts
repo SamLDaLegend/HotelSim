@@ -300,8 +300,17 @@ export const COLUMNS_PER_ROOM = 2;
  * and the pinned criterion invocation affords only a few dozen. Filling column by column needs
  * three whole columns — `3 x depth` builds — before any room has a neighbour on both sides;
  * filling row by row needs two neighbours in the same row and one behind, so the first sealed
- * room appears within TEN builds. A layout whose defining mistake is unreachable inside the run
- * that measures it is the ADR-0007 shape, and making that mistake is what this walk is for.
+ * room appears within SIXTEEN builds. A layout whose defining mistake is unreachable inside the
+ * run that measures it is the ADR-0007 shape, and making that mistake is what this walk is for.
+ *
+ * **TEN UNTIL G-038a-iii-a, AND THE SIX IS THE SPINE'S BILL RATHER THAN A WORSE FILL ORDER.**
+ * The ten counted the PLOT'S EDGE as the fourth wall: the packing started on `minRow`, so the
+ * third build was sealed left, right and behind with open air in front of it that no guest could
+ * stand in. The packing now starts one row back and that edge row is the spine, so a real
+ * four-sided seal costs a room in the row behind — index 8, closed by index 15. The pinned
+ * criterion runs THIRTY build attempts and reports `noDoor` 3, so the mistake is still made
+ * inside the run that measures it; `report.test.ts` asserts the 16 and that no earlier index is
+ * sealed, so the day it stops fitting inside a run's budget it fails there rather than silently.
  * ==========================================================================================
  */
 export function builtRoomCell(index: number, bounds: GridBounds, startFloor: number): Cell {
@@ -323,10 +332,17 @@ export function builtRoomCell(index: number, bounds: GridBounds, startFloor: num
       Math.floor(onFloor / perBlock) * PLAYER_COLUMNS_PER_BLOCK +
       (inBlock % columnsPerBlock),
     // ONE ROW FURTHER BACK EVERY TIME THE BLOCK'S WIDTH IS EXHAUSTED (G-036a). See the docblock
-    // above for why this order and not the other, and `playerCorridorCells` for why no row is
-    // a lane. It reads the plot's own `minRow` rather than a literal 0, which is what keeps
-    // this layout correct on a test plot that starts somewhere else.
-    row: bounds.minRow + Math.floor(inBlock / columnsPerBlock),
+    // above for why this order and not the other, and `playerCorridorCells` for the one row
+    // that IS a lane. It reads the plot's own `minRow` rather than a literal 0, which is what
+    // keeps this layout correct on a test plot that starts somewhere else.
+    //
+    // AND IT STARTS ONE ROW BACK SINCE G-038a-iii-a, WHICH IS THE SAME OFFSET `roomCell` TOOK
+    // ONE GOAL EARLIER AND THE SAME HELPER RATHER THAN A SECOND SPELLING OF IT. `spineRow` is
+    // `minRow` for both plates — the entrance's row — so a player floor that packed rooms along
+    // it had nothing for its own cross-corridor to run through. `plateRowOffset` is 0 on a
+    // one-row plot, so a migrated strip degenerates to the pre-goal walk instead of stepping
+    // off the plot.
+    row: bounds.minRow + plateRowOffset(bounds) + Math.floor(inBlock / columnsPerBlock),
   };
 }
 
@@ -348,16 +364,23 @@ export function builtRoomCell(index: number, bounds: GridBounds, startFloor: num
  *   is necessary and no longer SUFFICIENT** — the door rule probes four neighbours, so a room
  *   with rooms east and west and open space in front of it HAS a door. What supplies the other
  *   two is THE PLOT'S DEPTH, which is why `grid.ts` derives a depth of at least 3: the row axis
- *   carries no lane here, so a room's front and back neighbours are rooms wherever the fill has
- *   reached them. `validity.report.test.ts` counts the result rather than trusting this.
+ *   carries no lane PER BLOCK, so a room's front and back neighbours are rooms wherever the fill
+ *   has reached them. **AMENDED AT G-038a-iii-a rather than left**: it read *"the row axis
+ *   carries no lane here"*, and there is now exactly ONE lane row on the floor — the spine along
+ *   `spineRow`, which the packing starts one row behind. It is the whole floor's cross-corridor
+ *   rather than a lane inside a block, so it puts a free neighbour in front of the plate's FIRST
+ *   ROW and in front of nothing else; from `minRow + 1` back this clause holds exactly as it
+ *   did. `validity.report.test.ts` counts the result rather than trusting this.
  *
  *   A DIVISOR OF THE SHIPPED PLOT'S WIDTH (80), so no floor ends in a ragged part-block whose
  *   last room's verdict depends on arithmetic nobody meant. 4, 8, 10, 16, 20 all qualify. The
- *   row axis owes nothing here: with no lane rows there are no row part-blocks to be ragged.
+ *   row axis owes nothing here: one lane row for the whole floor makes no row part-blocks.
  *
  *   AND AS FEW CORRIDORS AS THAT ALLOWS, because the point of this layout is a player who
- *   under-provides circulation. **THIS IS THE CLAUSE THAT DECIDED THE ROW AXIS GETS NO LANE OF
- *   ITS OWN.** A lane every eighth column running the FULL DEPTH keeps the ratio the strip had
+ *   under-provides circulation. **THIS IS THE CLAUSE THAT DECIDED THE ROW AXIS GETS NO LANE PER
+ *   BLOCK** — and it is what the spine at G-038a-iii-a was measured against: ONE row across the
+ *   whole floor costs the block's first row and leaves rows 2..d packed, where a lane every
+ *   fourth row would not. A lane every eighth column running the FULL DEPTH keeps the ratio the strip had
  *   exactly: of the block's seven columns, the two beside a lane work and the five between them
  *   are walled in, at every row. Give the row axis its own lane every fourth row and the block
  *   becomes 7 x 3 rooms of which 16 work and 5 do not — **the player's floor would mostly WORK,
@@ -384,11 +407,18 @@ function roomColumnsPerBlock(bounds: GridBounds): number {
 }
 
 /**
- * How deep the packing goes: EVERY row of the plot (G-036a). No row is a lane — see
- * `PLAYER_COLUMNS_PER_BLOCK`'s third clause for the count that decided that.
+ * How deep the packing goes: every row of the plot EXCEPT the one the spine takes
+ * (G-038a-iii-a). It read `maxRow - minRow + 1` — EVERY row — until this goal.
+ *
+ * IT IS `plateRows` RATHER THAN A COPY OF IT, and that is the point rather than a saving. The
+ * seeded plate gave the same row to the same `spineRow` at G-039b-alpha; two layouts that hand
+ * one row each to ONE cross-corridor row owe the same arithmetic, and writing it twice is how
+ * the two would drift a goal from now. `PLAYER_COLUMNS_PER_BLOCK`'s third clause — no lane
+ * ROWS, because a lane every fourth row would make the player's floor mostly WORK — is
+ * untouched: this is ONE row for the whole floor, not a lane per block.
  */
 function rowsPerFloor(bounds: GridBounds): number {
-  return bounds.maxRow - bounds.minRow + 1;
+  return plateRows(bounds);
 }
 
 /**
@@ -427,21 +457,33 @@ function rowsPerFloor(bounds: GridBounds): number {
  * in mid-air, so `unsupported` swallows them and the eviction case dies again for a second
  * reason. Offset by one and every block's end rooms sit over rooms. Measured both ways.
  *
- * THE ROW AXIS NEEDS NO SUCH OFFSET, AND THAT IS ARITHMETIC RATHER THAN LUCK (G-036a) — BUT
- * NOT THE SAME ARITHMETIC, WHICH IS WHY IT IS SPELLED OUT RATHER THAN ASSUMED SYMMETRIC.
+ * THE ROW AXIS NEEDS NO SUCH PARITY OFFSET, AND THAT IS ARITHMETIC RATHER THAN LUCK (G-036a) —
+ * BUT NOT THE SAME ARITHMETIC, WHICH IS WHY IT IS SPELLED OUT RATHER THAN ASSUMED SYMMETRIC.
  * The inherited plate takes NO STRIDE ON THE ROW AXIS (`roomCell`): it banks rooms along EVERY
- * row of the even columns it reaches. So on this axis there is no parity to line up with —
- * a player room standing over an even column is supported at whatever row it is on, out to the
- * depth `--rooms` reached, and `report.test.ts` asserts exactly that.
+ * row of the columns it reaches. So on this axis there is no parity to line up with — a player
+ * room standing over one of the plate's columns is supported at whatever row it is on, out to
+ * the depth `--rooms` reached, and `report.test.ts` asserts exactly that.
+ *
+ * IT DOES TAKE A ONE-ROW OFFSET SINCE G-038a-iii-a, AND IT IS NOT A PARITY. Both plates now
+ * start at `minRow + 1` because `spineRow` is `minRow` for both: the offset lines the packing up
+ * with a CROSS-CORRIDOR rather than with the plate below it, and it is the same shift on the
+ * seeded floor and on the player's. See `playerSpineCells`.
  *
  * SO `unsupported` COMES FROM THE COLUMN AXIS AND FROM DEMOLITION, NOT FROM THE ROW AXIS, AND
  * THAT IS MEASURED RATHER THAN REASONED. At `validity.report.test.ts`'s pinned criterion the
- * tally is 15: ELEVEN player rooms on ODD columns, standing over the lanes of the hotel below,
- * and FOUR on even columns whose seeded room the demolish walk has already taken away — which
- * is the same event `evictedRoomUnusable` counts from the guest's side. Both cases are wanted:
- * the supported ones are what let a sealed room reach the DOOR rule at all (`unsupported` is
- * checked first and would otherwise swallow every seal), and the unsupported ones are what keep
- * `unsupported` itself in the tally.
+ * tally is 13: ELEVEN player rooms on the EVEN columns, standing over the lanes of the hotel
+ * below, and TWO on odd columns whose seeded room the demolish walk has already taken away —
+ * which is the same event `evictedRoomUnusable` counts from the guest's side. Both cases are
+ * wanted: the supported ones are what let a sealed room reach the DOOR rule at all
+ * (`unsupported` is checked first and would otherwise swallow every seal), and the unsupported
+ * ones are what keep `unsupported` itself in the tally.
+ *
+ * (It read *"the tally is 15: ELEVEN on ODD columns and FOUR on even"*, which was stale twice
+ * over: the count had moved to 17 and G-039b-alpha had inverted the parity under it. The 11 + 2
+ * above is counted room by room in this tree rather than restated. **What is NOT claimed is a
+ * decomposition of the fall from 17 to 13**, because the two runs do not hold the same rooms —
+ * one more build is affordable after the change — so the difference is not a subset of either
+ * tally. The whole tally is compared instead, in `validity.report.test.ts`.)
  */
 export function playerCorridorCells(floor: number, bounds: GridBounds): readonly Cell[] {
   const cells: Cell[] = [];
@@ -681,6 +723,12 @@ function plateRowOffset(bounds: GridBounds): number {
  * plate there is no room-free row for a cross-corridor to run along, so joining requires MOVING
  * ROOMS"*. This is that row, and `plateRows` is where the rooms moved from.
  *
+ * IT WAS ONE ROW SHORT OF "NO LAYOUT", AND THAT IS RECORDED HERE BECAUSE THIS DOCBLOCK IS WHERE
+ * A READER WILL LOOK. G-039b-alpha gave the SEEDED plate a spine and left `builtRoomCell` — the
+ * player's own floor, in this same file — with nine parallel lanes and nothing across them.
+ * `playerSpineCells` is that layout's row, added at G-038a-iii-a, and it took the same one row
+ * out of the same `spineRow` for the same reason.
+ *
  * WHAT IT IS FOR, IN THE ORDER THE RULES ASK IT:
  *
  *   - `isWalkableFor` admits a declared corridor cell that no room stands on. Every lane of the
@@ -707,15 +755,74 @@ function plateRowOffset(bounds: GridBounds): number {
  * ==========================================================================================
  */
 export function seededSpineCells(floor: number, bounds: GridBounds): readonly Cell[] {
-  const cells: Cell[] = [];
-  const row = spineRow(bounds);
-  const last = Math.min(
-    bounds.maxColumn,
+  return spineCells(
+    floor,
+    bounds,
     bounds.minColumn + plateColumnOffset(bounds) + COLUMNS_PER_ROOM * (plateColumns(bounds) - 1),
   );
+}
+
+/**
+ * ==========================================================================================
+ * AND THE PLAYER'S FLOOR GETS ONE TOO (G-038a-iii-a) — the same row, the same rule, the width
+ * of the PLAYER's plate rather than of the seeded one.
+ *
+ * WHY IT WAS OWED, AS A COUNT RATHER THAN AS A TIDINESS ARGUMENT. `playerCorridorCells` lays a
+ * lane every eighth column running the full depth, and until this goal NOTHING JOINED THEM: the
+ * player's floor was nine parallel strips with banks of bedrooms between them, and a guest in
+ * one strip could not walk to another. It was invisible because `unreachable` — the sixth
+ * room-invalidity reason, G-038a-ii-beta's — is inert while no world declares a stairwell: with
+ * no stairwell the floor axis spends from EVERY cell, so the fill drops onto each strip from
+ * above and every strip is reached. **Declare a shaft and the strips are islands.** Measured on
+ * `validity.report.test.ts`'s pinned invocation with a full-height shaft, over columns 0..17 x
+ * rows 0..7 plus four off-plate columns: the global minimum was **2, and no siting reached 0**
+ * — because the defect was the layout and not where the shaft went. With this spine it is 0 at
+ * every siting tried. `validity.reach.player.report.test.ts` is that measurement, kept.
+ *
+ * IT COSTS THE PLAYER'S PLATE ONE ROW, exactly as the seeded plate paid at G-039b-alpha, and
+ * `rowsPerFloor` is where it is paid. Nothing else about the layout moves: still a lane every
+ * eighth column, still seven room columns between them, still packed across the block and then
+ * back into it, so the ratio `PLAYER_COLUMNS_PER_BLOCK` derives — two working columns to five
+ * walled-in ones — is unchanged and the mistakes this walk exists to stage are all still made.
+ *
+ * IT RUNS TO THE LAST ROOM COLUMN OF THE LAST BLOCK, NOT TO THE LAST LANE AND NOT TO THE PLOT'S
+ * EDGE, and the two ends are decided by different arguments:
+ *
+ *   - PAST THE LAST LANE, because stopping ON it would leave the final block's seven room
+ *     columns the only ones on the floor with no spine in front of them — the same rooms
+ *     reported under a different reason than their opposite numbers in every other block, for
+ *     no reason but arithmetic. `seededSpineCells` covers its own plate's room columns for the
+ *     same reason and says so.
+ *   - SHORT OF THE PLOT'S EDGE, because the columns past the last block hold nothing the player
+ *     can ever build on (`blocksPerFloor` floors the division), so corridor out there joins
+ *     nothing and only makes floor space walkable — which is how `noCorridor` gets deleted
+ *     quietly, the failure `seededSpineCells`' own last paragraph names.
+ * ==========================================================================================
+ */
+export function playerSpineCells(floor: number, bounds: GridBounds): readonly Cell[] {
+  return spineCells(
+    floor,
+    bounds,
+    bounds.minColumn +
+      (blocksPerFloor(bounds) - 1) * PLAYER_COLUMNS_PER_BLOCK +
+      roomColumnsPerBlock(bounds),
+  );
+}
+
+/**
+ * One run of corridor along `spineRow`, from the plot's left edge to `last` — the shape both
+ * spines are, spelled ONCE so the two cannot differ in their row, their order or their clamp.
+ *
+ * CLAMPED TO THE PLOT, because `layCorridor` throws off it and a narrow test plot must still
+ * lay a legal (if short) spine rather than fail to build.
+ */
+function spineCells(floor: number, bounds: GridBounds, last: number): readonly Cell[] {
+  const cells: Cell[] = [];
+  const row = spineRow(bounds);
+  const rightmost = Math.min(bounds.maxColumn, last);
   // Emitted left to right, ascending, which is `compareCells`'s own order — `playerCorridorCells`
   // says the same about its own emission and for the same reason.
-  for (let column = bounds.minColumn; column <= last; column += 1) cells.push({ floor, column, row });
+  for (let column = bounds.minColumn; column <= rightmost; column += 1) cells.push({ floor, column, row });
   return cells;
 }
 
@@ -1330,6 +1437,12 @@ export function schedule(
         // the moment it exists rather than one tick later. See `playerCorridorCells`.
         for (const stub of playerCorridorCells(at.floor, bounds)) {
           commands.push({ tick, command: { kind: 'layCorridor', at: stub } });
+        }
+        // AND THE SPINE THAT JOINS THEM (G-038a-iii-a). The lanes above run front to back and
+        // never meet; this is the one row across them, laid on the same tick and before the
+        // build for the reason the lanes are. `playerSpineCells` says what it buys.
+        for (const cell of playerSpineCells(at.floor, bounds)) {
+          commands.push({ tick, command: { kind: 'layCorridor', at: cell } });
         }
       }
       commands.push({ tick, command: { kind: 'buildRoom', roomType: entityKind, at } });

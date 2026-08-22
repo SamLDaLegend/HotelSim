@@ -631,7 +631,25 @@ describe('the same workload with the player churning the building', () => {
     // over different ground and the plain arm's guests can reach providers they could not.
     // **Unlike the last two, this one moves counters** — on the plain arm (see above). The
     // controls asserted below this line are what say which of them moved on THIS arm.
-    expect(hashState(churn)).toBe('86a99eadfabb3e19');
+    //
+    // ==========================================================================================
+    // MOVED AGAIN AT G-038a-iii-a, `86a99eadfabb3e19` -> `18b389412e4f9365`, AND THIS TIME THE
+    // SIBLINGS PART COMPANY AGAIN — THE PLAIN ARM DOES NOT MOVE AT ALL.
+    //
+    // That is the reading, and it is the change's own scope stated as a hash: this goal touched
+    // ONLY the layout the PLAYER builds on. `roomCell`, `amenityCell` and `seededSpineCells` are
+    // untouched, so a workload with no `--build` in it produces a byte-identical world. The
+    // churn arm builds, so two things move in it: `World.corridors` gains the player's spine —
+    // hashed state, and enough on its own — and every room the player builds sits one row
+    // further back, because the near row is now that spine.
+    //
+    // **AND NOT ONE COUNTER MOVES ON THIS ARM.** checkedOut 0, leftDissatisfied 51,
+    // evictedRoomGone 19, evictedRoomUnusable 0, insufficientFunds 23, built 7, demolished 20,
+    // five guests at the horizon — every one of them asserted below this line and every one of
+    // them unchanged. A hash that moves while every counter holds is exactly what this literal
+    // is for: `Guest.at`, `Entity.at` and the corridor plan are state no counter reports.
+    // ==========================================================================================
+    expect(hashState(churn)).toBe('18b389412e4f9365');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
