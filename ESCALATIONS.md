@@ -1835,3 +1835,77 @@ full `tsx` CLI child per arm. **Not scheduled, and it should not be smuggled int
 a fallback.** It did, with the arithmetic. **That is the outcome the permission was written for** —
 the failure mode being avoided is a builder quietly raising a literal to ~150,000 ms so a red bar
 turns green, which is §2.1's superstition with CI access and would have passed unnoticed.
+
+---
+
+## E-011 — The rate re-derivation is SOUND and turns `check:scaling`'s density axis red. Loop stopped.
+**Opened 2026-08-22 (G-041). Work preserved at `8026e2f` on branch `g041-rate-rederivation`; `main`
+is clean and green at `b949dfb`.** Nothing is lost and nothing is committed on red.
+
+### THE GATE'S PREMISE BECAME FALSE — the content did not break it
+
+`check:scaling`'s density axis asserts **`dense-providers / full-vector > 1`**: a densely provisioned
+hotel costs more per tick than a sparse one. **It reads 0.9594.**
+
+**Why, and it is a consequence rather than a bug:** at the re-derived rates a well-provisioned
+hotel's guests are **idle roughly 70% of the stay**, and an idle guest is cheap. **Provider density
+now buys about a quarter LESS tick-cost.** Paired, interleaved, one sitting, quiet `win32/12cpu`,
+5 samples per arm, alternating NEW/OLD/NEW/OLD:
+
+| | round 1 | round 2 |
+|---|---|---|
+| pre-G-041 content | 1.4936 | 1.4178 |
+| G-041 content | 1.1219 | 1.1957 |
+
+**The ratio is the finding: 1.26x.**
+
+**And the axis can no longer support a DIRECTION claim at all near 1**: the same quantity read
+**1.0547 and 0.9732 in two `pnpm verify` runs on the SAME tree.** The floor straddles its own noise.
+
+### THE OPTIONS, AND I RECOMMEND (a)
+
+**(a) Re-derive the density axis to `direction: false` and bound the MAGNITUDE — with precedent from
+one goal ago.** G-039b-β1 did exactly this for the `needs` axis: its loaded arm carried 0.9827, so
+`direction: false` became *warranted by the campaign's own readings* rather than asserted. **Same
+mechanism, same file, one goal apart.** The magnitude bound must sit outside the ±0.04 noise the two
+same-tree readings show, which the 1.26x effect comfortably clears. **Recommended.**
+
+**(b) Reject the rate change.** Available, but it re-opens a ruling you already made — ADR-0057
+option (a) — and the derivation is sound: **`f = 5,000` is not the best candidate, it is the ONLY
+one**, forced by two requirements (a deficit must fall by an integer per tick, so `f` divides
+10,000; and a guest must finish a helping before rest comes due, so `r <= 20`).
+
+**(c) Change the density arms so the direction survives.** **This is tuning a workload to keep a
+test interesting**, which G-039b-α refused by name and §9 makes a stop condition. **Listed only so
+it is visibly rejected.**
+
+### THREE CONSEQUENCES THAT ARE NOT ABOUT THE GATE, AND ARE YOURS RATHER THAN MINE
+
+**1. `guestCellsPerTick: 3` now sits EXACTLY on its floor.** The re-derivation moves the speed floor
+**2 -> 3**, leaving **40 ticks of headroom where there were 104**. Shipped content stays legal by one
+rung. **Any future goal that lengthens a journey makes it illegal**, and this milestone has shipped
+three such goals in two days.
+
+**2. The legal plot depth falls 60 -> 27** (`DEFAULT_MAX_ROW`'s derivation in `grid.ts`). **That is a
+game-design constraint, not a number**: the isometric ruling makes rooms player-designed, and this
+more than halves how deep a player may build.
+
+**3. The build loop's amenity axis GOES FLAT below 15 concurrent guests.** One provider sustains
+`1 + refillPerTick` = 15 and the ladder holds at most 12, so at `--arrivals 120` a three-room hotel
+reads **354 / 354 / 354** across one, two and three amenities — **and the worst engagement need gets
+WORSE** (1,277 -> 1,428 bp). Above the bottleneck it is alive and strong. **This is the BUILD LOOP —
+one of the three the charter says every decision must serve — and "buying another amenity does
+nothing" is the kind of thing the milestone question exists to catch.**
+
+*(Also open, recorded in the test rather than papered over: the engagement-only provisioning ladder
+**inverts at the top rung** — worst 2,302 / 1,276 / 887 / **1,285**. The statistic that still falls
+is the one including lodging, which ADR-0034 §3(b) calls an occupancy statistic in disguise.)*
+
+### WHAT THE GOAL GOT RIGHT, so it is not re-litigated when it resumes
+
+The derivation is executed rather than asserted — `needs.rates.test.ts` re-runs the candidate scan
+and **asserts the shipped table is its unique survivor**, and nothing in that file asserts a rate.
+**The blast radius was four numbers wider than the block said** (`visitDurationTicks` 208 -> 98,
+`dissatisfactionCapacityTicks` 431 -> 301, plus the two above), and it was only visible because
+`dissatisfaction.content.test.ts` **computes its bounds instead of quoting them** — the green row
+was restating 129 and 431 while both were false.
