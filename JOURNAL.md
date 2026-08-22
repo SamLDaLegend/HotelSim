@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-c is DONE and the stairwell rollout is COMPLETE: determinism-log.ts has vertical circulation of its own — a forced spine row, per-room teeth, and a midpoint shaft at column 39 spanning floors -2..20 — so unreachable is 0 at both 40,000 and 100,000 ticks, newly pinned at both. I2 moved BY DESIGN to 2b5369e4461a9140, agreeing across three processes. WITHHELD_CELLS is no longer nine hand-chosen cells: noCorridor now has a pass of its own, a back-of-house pair, and the list is DERIVED from it. A red row stopped the goal and was escalated rather than tuned — recovery.determinism.test.ts pinned loan debt to exactly 0, a zero-margin coincidence (300,000 / 10,000 = exactly 30 nights) whose comment named a capped-payment branch that is UNREACHABLE on any run. Re-founded into four claims with margins stated, proven strictly stronger by mutation against the old log rather than asserted. Through-wall landings fell 236 -> 29 on the bench at the previous goal. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **State**: save **v21** · summary **v4** · I2 `2b5369e4461a9140` · measure golden
   `760558b631beb552` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
@@ -2116,3 +2116,58 @@ falsifiable ones.*
 **A stale claim inside the stamp, found by the builder**: *"I2 ca7bee4a4d6ea416 UNMOVED"*,
 **unbackticked — which is exactly why `check:stamp` never compared it.** A gate that checks only its
 backticked facts is a gate whose prose can lie.
+
+### G-039b-β1 — A gate had been green for eight days over a hotel where nobody walked.
+
+**The block said the fingerprint could not SEE travel being turned on. Git says the readings were
+taken before travel EXISTED.** `16ef890` recorded the campaign on 2026-08-14; `dfe26b9` turned travel
+on on 2026-08-21; the campaign commit is an ancestor of it. **ADR-0067 has the ancestry and the
+re-taken tables.**
+
+> **`check:scaling` has been green over every goal since — three of which moved every seeded room,
+> declared a stairwell, and took occupancy 850 -> 827.** A green row is not evidence that a claim
+> holds; it is evidence that *some* claim holds, and nobody had checked which.
+
+**And the goal numbering reads the other way.** G-032a *sounds* later than G-023b-ii. **A goal id is
+not a timestamp** — the second time this session that ordering by goal name misled, after
+ADR-0059's rulings. **When the question is "which came first", the answer is `git merge-base`, never
+the ledger.**
+
+### THE BLINDNESS WAS WATCHED, NOT ARGUED, AND THAT IS THE PART TO COPY
+
+The builder did not reason about what the guard reads. **It shortened the spine by one cell — the
+same class of change G-039b-α made — and ran the gate at HEAD: EXIT 0, four rows PASS.** Then ran
+the new guard on the same tree: EXIT 1.
+
+**That is the history argument, executed.** A paired A/B on the defect itself is worth more than any
+amount of correct reasoning about a fingerprint's fields, and it cost one probe.
+
+**The new terms are read from the thing they describe** — `commandsFor(arm, world)`, the same call
+`once()` times, extracted — so *"a fingerprint of a different schedule than the one measured is not
+expressible."* The guard cannot drift from its subject because it reads its subject. **That is the
+general repair for the ADR-0039 §2 class, not just this instance.**
+
+### TWO UP, TWO DOWN — WHICH IS WHAT AN HONEST RE-TAKE LOOKS LIKE
+
+`needs` 1.7181 -> **1.8219** looser · `density` 2.1856 -> **2.1063** tighter · `rooms-saturated`
+5.6532 -> **5.5888** tighter · `rooms-bench` 4.1218 -> **4.4592** looser.
+
+**Nobody touched the rule, and the numbers moved both ways.** Adjusting numbers to fit does not
+produce that shape. **`needs` is the thin axis again at 1.0584x pooled** — and the builder took the
+two consequences rather than deferring them: `direction: false` is now warranted by the campaign's
+own readings, and an out-of-campaign observation from the replaced configuration is **retired rather
+than carried**.
+
+**The "load can only push a ratio down" generalisation is false in a third shape** — medians up on 3
+of 4 axes, maxes up on 3 of 4.
+
+### MY EXIT CRITERION COULD NOT BE RUN
+
+I wrote `pnpm exec vitest run tools/gates/scaling.bound.test.ts`. **That path does not exist** — the
+file is under `tools/headless/src/`, and the command exits 1 with *"No test files found"*.
+
+> **An exit criterion that cannot be run is not an exit criterion**, and this one fails in the worst
+> direction: a builder reporting it honestly reports a non-zero exit for a reason unrelated to the
+> work. **Ten goals running now.** The briefs keep getting more specific and the corrections keep
+> coming, which I read as the process working rather than failing — **but a wrong path is not a
+> subtle error, and I should be running the commands I write into exit criteria.**

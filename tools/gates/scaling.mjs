@@ -253,7 +253,7 @@ for (const axis of axes) {
   // recorded sub-1 observation, and `scaling.bound.test.ts` refuses a flag either way round.
   //
   // *(This named DENSITY as the axis whose spread crosses 1. That was true of the cadence-32
-  // campaign and the re-take replaced it — density's shipped minimum is 1.2453. The axis that
+  // campaign and two re-takes have replaced it — density's shipped minimum is 1.2321. The axis that
   // declines it now is `needs`, whose lever collapsed to 4-against-3. A duplicated explanation
   // in a second file, still describing the array it had outlived.)*
   if (wrongDirection) {

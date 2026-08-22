@@ -49,7 +49,8 @@
 //   density           1.9  -> 2.0239   LOOSER BY 6.5%, AND NOT FORCED — it moved because the
 //                                      MEDIAN moved, and the rule is applied uniformly
 //
-// AND WHAT THE G-032a RE-TAKE DID, WHICH IS THE SHIPPED SET. ADR-0015's REPLACE half: the
+// AND WHAT THE G-032a RE-TAKE DID. **HISTORY: these are not the shipped numbers either.**
+// Kept for the same reason as the row above it. ADR-0015's REPLACE half: the
 // workload moved on three counts at once — the cadence 32 -> 96 (ADR-0021), the `one-need` arm's
 // vector 1 -> 3 (G-027b made a lodging-only table unbindable), and `stayDurationTicks` 480 ->
 // 1440 under every arm in both rotations (ADR-0017). The campaign was re-taken and REPLACES; not
@@ -66,6 +67,46 @@
 // THREE TIGHTER, ONE LOOSER, ON A RULE NOBODY TOUCHED. That is the same evidence the G-020c row
 // above offers: a derivation that only moves when a reading moves cannot be steered, and the
 // direction of the movement is not a thing its author chose.
+//
+// AND WHAT THE G-039b-B1 RE-TAKE DID, WHICH IS THE SHIPPED SET.
+//
+// THE DRIFT GUARD COULD NOT SEE THE BUILDING GET CIRCULATION. The fingerprints below were spelled
+// `name:rooms/arrivals/amenities/needTypes/stay` and nothing else, so three workload changes
+// landed after G-032a without moving one character of them: `guestCellsPerTick`, a CONTENT dial
+// that decides whether a guest walks at all; G-039b-alpha's CORRIDOR SPINE; and G-038a-iii-b's
+// STAIRWELL. **Proof by history rather than by argument, and checked against the commit: 91d8e37
+// moved every seeded room in both of these rotations and the recorded fingerprint string did not
+// change one byte.** `check:scaling` was green over it and over the two goals after it. That is
+// ADR-0039 §2's own sentence — *"a guard spelled entirely in the flags it guards cannot see the
+// content redefine what a flag means"* — ONE CONTENT FIELD OVER FROM THE FILE THAT WROTE IT.
+//
+// AND IT IS WORSE THAN "A DIAL COULD MOVE UNSEEN": THE SHIPPED READINGS WERE TAKEN WITH TRAVEL
+// OFF. `dfe26b9` (G-023b-ii, "travel is ON in the shipped game") ADDED `guestCellsPerTick` to
+// `guest-rules.json` on 2026-08-21, and `16ef890` (G-032a) recorded the campaign on 2026-08-14 —
+// `git merge-base --is-ancestor 16ef890 dfe26b9` is true. So for the goals between them the four
+// bounds were derived from a hotel in which no guest ever walked, judging one in which every guest
+// does, and the drift guard had no term that could say so. The goal ordering reads the other way
+// round and is not the evidence; the commit graph is.
+//
+// SO THE READINGS WERE STALE AND NOT ONLY THE REFUSAL, AND THE CHEAP-LOOKING MOVE WAS REFUSED.
+// Editing the recorded fingerprint to the new format and keeping the arrays would have left four
+// bounds judging a workload the campaign was never taken at — pooling across configurations, which
+// is the exact move ADR-0015's REPLACE half forbids, in the file that forbids it. The campaign was
+// RE-TAKEN instead: twelve quiet and eight loaded readings per axis, all four axes, both rotations,
+// in ONE SITTING with the blocks alternating quiet/loaded and a discarded warm-up reading opening
+// each regime. Not one reading was pooled, and the guard now carries the guest speed and the two
+// counts of circulation commands each arm's own schedule emits.
+//
+//   needs             1.7181 -> 1.8219   LOOSER, AND THIS IS NOW THE AXIS TO WATCH: its pooled
+//                                        margin is 1.0584x, the thinnest figure in this file
+//   density           2.1856 -> 2.1063   TIGHTER, and it is no longer the thin one at 1.2329x
+//   rooms-saturated   5.6532 -> 5.5888   TIGHTER
+//   rooms-bench       4.1218 -> 4.4592   LOOSER
+//
+// TWO TIGHTER, TWO LOOSER, ON A RULE NOBODY TOUCHED — the third campaign in a row whose directions
+// were not a thing its author chose. The four movements are stated as the history of a CONSTANT,
+// which is what a diff shows; they are NOT a measurement compared across sittings, and no reading
+// from an earlier campaign is quoted against one below (`CLAUDE.md` rule 3).
 //
 // THE REJECTED ALTERNATIVE, RECORDED BECAUSE IT LOOKS SAFER AND IS NOT: cap each new bound at
 // the incumbent, so a bound may only ever tighten. That imports a median measured inside
@@ -118,27 +159,44 @@
 // n=12 quiet and n=8 loaded per axis (the readings below):
 //
 //   axis              quiet median -> loaded median      quiet max -> loaded max
-//   needs                  1.1454 -> 1.1307  (-1.3%)        1.2446 -> 1.2793   (+2.8%)
-//   density                1.4571 -> 1.6144 (+10.8%)        1.4946 -> 2.0415  (+36.6%)
-//   rooms-saturated        3.7688 -> 4.0638  (+7.8%)        3.9925 -> 4.4252  (+10.8%)
-//   rooms-bench            2.7479 -> 2.7241  (-0.9%)        2.9546 -> 3.1600   (+7.0%)
+//   needs                  1.2146 -> 1.2154  (+0.1%)        1.3518 -> 1.7213  (+27.3%)
+//   density                1.4042 -> 1.4646  (+4.3%)        1.5466 -> 1.7084  (+10.5%)
+//   rooms-saturated        3.7259 -> 3.5485  (-4.8%)        4.0662 -> 4.4884  (+10.4%)
+//   rooms-bench            2.9728 -> 2.9846  (+0.4%)        3.5301 -> 3.4326   (-2.8%)
 //
-// THE GENERALISATION IS STILL FALSE AND THE RE-TAKE SAYS SO IN A NEW SHAPE. Two of four move up
-// on the median and FOUR OF FOUR move up on the max. The previous campaign read three and three;
-// the sentence that stood here described those readings and has been re-derived from these
-// rather than carried, because a load claim is a claim about a measurement and this measurement
-// is a different one (ADR-0015 REPLACE; ADR-0027 on what a replacement inherits).
+// THE GENERALISATION IS STILL FALSE AND THE RE-TAKE SAYS SO IN A THIRD SHAPE. Three of four move
+// up on the median and three of four move up on the max. The two campaigns before this one read
+// (2 up, 4 up) and (3 up, 3 up); the sentence that stands here is re-derived from THESE readings
+// rather than carried, because a load claim is a claim about a measurement and this measurement is
+// a different one (ADR-0015 REPLACE; ADR-0027 on what a replacement inherits). The three counts
+// are not quoted against each other as measurements — they agree only on the sign of the answer to
+// "can load push a ratio up", which is yes, in every campaign that has asked.
+//
+// AND `rooms-bench` IS THE CASE THAT SHOWS WHY THE FLOOR POOLS RATHER THAN PREFERRING A REGIME:
+// its worst reading in this campaign is a QUIET one (3.5301 against a loaded 3.4326), so a floor
+// taken from the loaded arm alone would sit under a reading a normal `pnpm verify` produced.
 //
 // What is true and what this file relies on instead: the FLOOR pools every reading in every
 // regime observed, so a bound is placed above what load has actually been seen doing rather than
 // above a model of what it ought to do.
 //
-// AND THE DENSITY AXIS IS NOW THE THIN ONE — SAID HERE BECAUSE IT IS THE FIRST THING A LATER
-// READER SHOULD KNOW. Its loaded max is 2.0415 against a ceiling of 2.1856: a margin of 1.07x,
-// where the other three sit at 1.34x, 1.28x and 1.30x. Nothing refuses — `bound > floor` holds —
-// but this is the closest this project has come to ADR-0016's crossing, and the pre-registered
-// response if it ever crosses is in this file's header: MORE SAMPLES PER READING AND A RE-TAKEN
-// CAMPAIGN, never a wider number.
+// AND THE `needs` AXIS IS NOW THE THIN ONE — SAID HERE BECAUSE IT IS THE FIRST THING A LATER
+// READER SHOULD KNOW, AND IT IS NO LONGER `density`. `needs` has a loaded max of 1.7213 against a
+// ceiling of 1.8219: a pooled margin of 1.0584x, where the other three sit at 1.2329x, 1.2452x and
+// 1.2632x. Nothing refuses — `bound > floor` holds on all four — but this is the closest this
+// project has come to ADR-0016's crossing, and the pre-registered response if it ever crosses is in
+// this file's header: MORE SAMPLES PER READING AND A RE-TAKEN CAMPAIGN, never a wider number.
+//
+// THE QUIET MARGIN IS THE ONE A RED `pnpm verify` SHOULD BE READ AGAINST, and on this axis it is
+// 1.3478x — `verify` runs quiet, and the 1.0584x above is what a hostile regime has already been
+// measured eating. Both are printed by the gate on every row, for exactly this reason.
+//
+// WHY THIS AXIS AND NOT ANOTHER, STATED SO IT IS NOT MISTAKEN FOR THE SIM GETTING SLOWER: `needs`
+// is `full-vector` against `one-need` and G-027b collapsed that lever from 4 needs against 1 to 4
+// against 3. Its two arms are the CLOSEST IN COST of any pair in this file — a quiet median of
+// 1.2146 against density's 1.4042 and the room axes' 3.7259 and 2.9728 — so it is the axis where
+// the instrument's spread is largest RELATIVE to the signal, which is also why it is the one axis
+// that declines the direction assertion.
 //
 // THE PART THAT SURVIVES, because it needs no stopwatch: contention adds an absolute cost to
 // every arm, so a ratio between two arms of SIMILAR cost is compressed. That is a statement
@@ -203,10 +261,16 @@ export const NOT_OVERHEAD_DOMINATED = 2;
  */
 export const CAMPAIGN = Object.freeze({
   what: "the sim's per-tick cost ratio between two arms of one rotation, measured by tools/headless/src/scaling-harness.ts",
-  workload: '60 rooms, an arrival every 96 ticks, seed 42, 4,320 ticks (six simulated hours); the rooms rotation varies rooms and arrivals together',
-  samples: 'each reading is a ratio of medians of 5 in-process samples, arms interleaved with the order alternating, one warm-up discarded',
+  workload:
+    '60 rooms, an arrival every 96 ticks, seed 42, 4,320 ticks (six simulated hours); the rooms rotation varies rooms ' +
+    'and arrivals together; every arm is built by the runner schedule that lays a stairwell and a corridor spine, and ' +
+    'runs under content declaring guestCellsPerTick, so guests walk — see the rotation fingerprints below',
+  samples:
+    'each reading is a ratio of medians of 5 in-process samples, arms interleaved with the order alternating, one ' +
+    'warm-up discarded; 12 quiet and 8 loaded readings per axis, taken in one sitting with the blocks alternating ' +
+    'quiet/loaded and one further whole reading discarded at the start of each regime',
   aggregation: 'MEDIAN of the quiet readings for the signal; MAX over every reading in every regime for the noise floor',
-  regime: 'quiet and loaded both measured on win32/12cpu, node 22.16; loaded = 12 busy processes on 12 cores (tools/gates/arm/load.mjs)',
+  regime: 'quiet and loaded both measured on win32/12cpu, node 22.16.0; loaded = 12 busy processes on 12 cores (tools/gates/arm/load.mjs --workers 12)',
   // Compared against the arms module at startup, because a campaign is only evidence for the
   // configuration it was taken at (ADR-0015's REPLACE half, and the executable version of it in
   // `tripwire.mjs`'s configuration-drift refusal: a 3-day arm ran under a 30-day bound at exit 0
@@ -233,6 +297,25 @@ export const CAMPAIGN = Object.freeze({
   // BYTE-IDENTICAL to the campaign's, so it would have been judged against readings taken at a
   // third of its occupancy. A guard spelled entirely in the flags it guards cannot see the
   // content redefine what a flag means.
+  //
+  // AND THE GUEST SPEED AND THE CIRCULATION ARE TERMS SINCE G-039b-B1, BECAUSE THE SENTENCE ABOVE
+  // WAS APPLIED TO ONE FIELD AND WENT ON BEING TRUE OF THE NEXT ONE. `guestCellsPerTick` decides
+  // whether a guest walks at all; `layCorridor` and `layStair` counts are what the arm's own
+  // schedule emits, so G-039b-alpha's spine — which moved EVERY seeded room in both rotations —
+  // and G-038a-iii-b's stairwell now move the string. The terms are `Nv`, `Nc` and `Nx`;
+  // `scaling-harness.ts` carries the legend.
+  //
+  // PROVEN BY A PAIRED MUTATION RATHER THAN BY THE ARGUMENT ABOVE (ADR-0022 recipe, files copied
+  // out and sha256-compared after). One cell was taken off `spineCells` — the same class of change
+  // G-039b-alpha made, and it moves every seeded floor's corridor count:
+  //
+  //   guard at HEAD (`.../4n/1440s`)             `check:scaling` EXIT 0, four rows PASS
+  //   guard with these terms                     EXIT 1, "THE CAMPAIGN WAS TAKEN AT A DIFFERENT
+  //                                              CONFIGURATION", 21c/98c/99c/156c -> 20c/96c/97c/154c
+  //
+  // The same A/B was run for the stairwell (`shaftCells` one floor shorter: 23x -> 22x, EXIT 1)
+  // and for the content dial (`3v` -> `9v`, EXIT 1). The first row is the defect this goal exists
+  // for, executed: the old guard is not merely thought to be blind, it was watched being blind.
   configuration: Object.freeze({
     rooms: 60,
     arrivalEveryTicks: 96,
@@ -241,9 +324,9 @@ export const CAMPAIGN = Object.freeze({
     samplesPerArm: 5,
     fingerprints: Object.freeze({
       needs:
-        'idle:0r/999999a/1m/4n/1440s one-need:60r/96a/1m/3n/1440s full-vector:60r/96a/1m/4n/1440s dense-providers:60r/96a/20m/4n/1440s',
+        'idle:0r/999999a/1m/4n/1440s/3v/21c/23x one-need:60r/96a/1m/3n/1440s/3v/98c/23x full-vector:60r/96a/1m/4n/1440s/3v/99c/23x dense-providers:60r/96a/20m/4n/1440s/3v/156c/23x',
       rooms:
-        'idle:0r/999999a/1m/4n/1440s saturated-25:25r/20a/1m/4n/1440s saturated-100:100r/5a/1m/4n/1440s bench-25:25r/60a/1m/4n/1440s bench-100:100r/15a/1m/4n/1440s',
+        'idle:0r/999999a/1m/4n/1440s/3v/21c/23x saturated-25:25r/20a/1m/4n/1440s/3v/64c/23x saturated-100:100r/5a/1m/4n/1440s/3v/157c/23x bench-25:25r/60a/1m/4n/1440s/3v/64c/23x bench-100:100r/15a/1m/4n/1440s/3v/157c/23x',
     }),
   }),
   axes: Object.freeze({
@@ -260,42 +343,37 @@ export const CAMPAIGN = Object.freeze({
       // That is ADR-0027's class exactly: a replacement inheriting an assumption from the
       // thing it replaced, in the re-take whose entire subject is not doing that.
       //
-      // THE EVIDENCE IS A READING THE SHIPPED GATE PRODUCED, not an argument. On a `pnpm
-      // verify` run immediately after the campaign landed, `check:scaling` reported
+      // THE EVIDENCE WAS A READING THE SHIPPED GATE PRODUCED, AND G-039b-B1 REPLACED IT WITH ONE
+      // FROM ITS OWN CAMPAIGN. Until this re-take the warrant was a single out-of-campaign
+      // `observations` entry — `FAIL needs 0.9732 full-vector / one-need`, reported by
+      // `check:scaling` on a `pnpm verify` run just after the G-032a campaign landed. **That
+      // reading was taken at a configuration this campaign REPLACES** — no corridor spine, no
+      // declared stairwell — so carrying it forward as live evidence about the arms measured below
+      // is the pooling ADR-0015's REPLACE half forbids. It is retired, and the `observations` array
+      // on this axis with it. The mechanism is untouched: `directionProblems` still reads
+      // `observations`, and `scaling.bound.test.ts` still drives it over an axis that has one.
       //
-      //     FAIL  needs  0.9732  full-vector / one-need
+      // WHAT REPLACES IT IS IN THE ARRAYS THEMSELVES: this campaign's loaded arm carries **0.9827**
+      // — the full vector measuring CHEAPER than the smallest bindable one, at the shipped
+      // configuration, in the twenty readings below. The flag is now warranted by a reading the
+      // derivation already holds rather than by a note standing beside it, which is strictly the
+      // stronger version of "derived from the readings".
       //
-      // — the full vector measured CHEAPER than the smallest bindable one. Same instrument,
-      // same configuration, same 5-sample protocol as every reading below; it is simply the
-      // 21st reading, and it is under 1. **At a one-need lever the arms differed by 4x the
-      // per-need work and the order was never in doubt. At 4-against-3 the true ratio is close
-      // enough to 1 that this instrument's own spread crosses it**, which is precisely the
-      // state `density` declines the assertion for.
+      // **At a one-need lever the arms differed by 4x the per-need work and the order was never in
+      // doubt. At 4-against-3 the true ratio is close enough to 1 that this instrument's own spread
+      // crosses it** — the quiet arm's lowest is 1.0247 and the loaded arm's is 0.9827.
       //
-      // IT IS NOT POOLED INTO THE QUIET ARRAY BELOW, AND THE REASON IS `DECLARED_READINGS` —
-      // THE TWO REASONS FIRST GIVEN WERE BOTH WRONG AND ARE WITHDRAWN.
+      // AND THE SUB-1 READING IS A LOADED ONE, WHICH IS SAID RATHER THAN GLOSSED. The SIGNAL in
+      // this file is taken from the quiet arm alone, on purpose. `direction` is not a signal: it is
+      // the claim that these two arms cannot swap places, and an arm pair that swaps under
+      // contention is an arm pair that swaps. `deriveAxis` pools every observed regime for exactly
+      // the questions that are about the instrument rather than about the sim.
       //
-      //   ~~Adding it would move the median and therefore the bound.~~ **It would not.** The
-      //   median is `sorted[floor(n/2)]`: index 6 of 12 and index 6 of 13 are both 1.1454, so
-      //   `trunc(1.1454 x 1.5, 4)` is 1.7181 either way — and the floor is a MAX, which a low
-      //   tail cannot move. Checked, not reasoned: the arithmetic is one line and it was never
-      //   run. `PARKING.md`'s entry on this axis states it correctly, so the same commit carried
-      //   both the right arithmetic and the wrong one, in two ledgers.
-      //
-      //   ~~Pairing is within a sitting, so a reading from another sitting cannot pool.~~ **This
-      //   repository has already ruled against that position.** G-020b's admitted arm spanned
-      //   TWO sittings, was ruled in on ADR-0015's anti-curation clause — a reading does not stop
-      //   counting because it was filed under a different heading — and it moved the bound.
-      //   `tripwire.mjs` records that as "the mechanism working".
-      //
-      // WHAT IS ACTUALLY TRUE, AND IT IS EXECUTED RATHER THAN ARGUED: `DECLARED_READINGS` pins
-      // this arm at twelve, and `deriveAxis` REFUSES when an array's length disagrees with the
-      // declared count — *"re-take the campaign and update the declared count together; do not do
-      // either alone."* A thirteenth reading is therefore not a thing that can be quietly added;
-      // it is a re-take. That is the guard talking, not a preference, and it is the one reason
-      // that survives contact with the file.
-      //
-      // It is recorded here, where the decision it informs is made.
+      // A READING CANNOT BE ADDED TO AN ARRAY BY HAND EITHER, AND THAT IS EXECUTED RATHER THAN
+      // ARGUED: `DECLARED_READINGS` pins the quiet arm at twelve and the loaded arm at eight, and
+      // `deriveAxis` REFUSES when an array's length disagrees with the declared count — *"re-take
+      // the campaign and update the declared count together; do not do either alone."* A
+      // twenty-first reading is not a thing that can be quietly added; it is a re-take.
       //
       // WHAT IS LOST, STATED RATHER THAN ABSORBED: nothing now catches the two arms swapping
       // places on this axis. That was worth having and it is not available — an assertion the
@@ -305,28 +383,26 @@ export const CAMPAIGN = Object.freeze({
       // =================================================================================
       direction: false,
       // ===============================================================================
-      // THE OBSERVATION THAT WARRANTS DECLINING IT — AS DATA, NOT AS PROSE (verification pass).
+      // NO `observations` ARRAY, AND THE MECHANISM IS STILL THERE (G-039b-B1).
       //
-      // This was `directionWaiver: '0.9732 — check:scaling, shipped gate, ...'`, a STRING, and
-      // the predicate read the first number-ish run of text out of it and asked only that it be
-      // <= 1. So `'0.5 — I decided this'` passed, and so did `'0'`. **The free parameter had
-      // moved from the boolean to the string the boolean deferred to** — in the block whose
-      // headline is that this file has none.
+      // The field exists for a reading the campaign arrays do not hold, and it was built once the
+      // hard way: it began as `directionWaiver: '0.9732 — check:scaling, shipped gate, ...'`, a
+      // STRING, whose predicate read the first number-ish run of text out of it and asked only
+      // that it be <= 1 — so `'0.5 — I decided this'` passed, and so did `'0'`. **The free
+      // parameter had moved from the boolean to the string the boolean deferred to**, in the
+      // block whose headline is that this file has none. A `value` the predicate reads as a
+      // NUMBER, beside the `source` that says where it came from, is the smallest thing that is
+      // actually evidence.
       //
-      // A `value` the predicate reads as a NUMBER, beside the `source` that says where it came
-      // from, is the smallest thing that is actually evidence. It is not pooled into the arrays
-      // above: `DECLARED_READINGS` pins those at twelve and eight, and `deriveAxis` refuses a
-      // count that disagrees — which is what makes admitting a reading a re-take rather than an
-      // edit, in both directions.
+      // NO SHIPPED AXIS NEEDS ONE ANY MORE. The single entry it carried was a reading from the
+      // configuration this campaign replaces, and the re-taken loaded arm holds a sub-1 reading of
+      // its own — so the warrant moved from a note beside the arrays INTO them. `directionProblems`
+      // is unchanged and `scaling.bound.test.ts` drives it over axes that do carry observations,
+      // including the two shapes that made the string version worthless.
       // ===============================================================================
-      observations: Object.freeze([
-        Object.freeze({
-          value: 0.9732,
-          source: 'check:scaling, shipped gate, on a pnpm verify run during G-032a',
-        }),
-      ]),
       // ===================================================================================
-      // THE LEVER COLLAPSED, AND THAT IS WHY THIS AXIS FELL FROM ~2.08 TO ~1.15 (G-032a).
+      // THE LEVER COLLAPSED AT G-032a, AND THAT IS WHY THIS AXIS SITS NEAR 1 AT ALL — its quiet
+      // median was ~2.08 before it and reads 1.2146 in the campaign below.
       //
       // `one-need` is no longer one need. G-027b's stock model made a table with a lodging need
       // and nothing else UNBINDABLE — the lodging stock decays only in away time, and away time
@@ -340,9 +416,9 @@ export const CAMPAIGN = Object.freeze({
       // than anybody choosing.
       // ===================================================================================
       quiet: Object.freeze([
-        1.0357, 1.0712, 1.0866, 1.1003, 1.1177, 1.1454, 1.1454, 1.1572, 1.1703, 1.1752, 1.2045, 1.2446,
+        1.0247, 1.0415, 1.0882, 1.1027, 1.1898, 1.1986, 1.2146, 1.2509, 1.2663, 1.3385, 1.3464, 1.3518,
       ]),
-      loaded: Object.freeze([1.0226, 1.0642, 1.0691, 1.0759, 1.1307, 1.1326, 1.2726, 1.2793]),
+      loaded: Object.freeze([0.9827, 1.0714, 1.1566, 1.2040, 1.2154, 1.3464, 1.6352, 1.7213]),
     }),
     density: Object.freeze({
       rotation: 'needs',
@@ -351,9 +427,10 @@ export const CAMPAIGN = Object.freeze({
       //
       // It read: *"measured rather than inherited ... the density ratio's own QUIET spread
       // crosses 1 — 0.9915 is in the readings below."* **0.9915 was in the CADENCE-32 array and
-      // this diff replaced it.** The shipped minimum is 1.2453 quiet and 1.2881 loaded; nothing
-      // in either array is under 1, and three post-campaign readings (1.4252 / 1.5046 / 1.5258)
-      // are not either.
+      // the G-032a diff replaced it**, leaving a warrant citing a number that was no longer in the
+      // file. G-039b-B1 replaced those arrays in turn, so the figures that discharged it are
+      // restated below FROM THE CURRENT ARRAYS rather than carried — which is the same discipline
+      // the paragraph is about, applied to the paragraph.
       //
       // So the one axis claiming its declined assertion was MEASURED is the one that inherited
       // it — **eight lines below the block that hunts exactly this on `needs` and cites this
@@ -362,31 +439,37 @@ export const CAMPAIGN = Object.freeze({
       //
       // TURNING IT ON IS A TIGHTENING DERIVED FROM READINGS, NOT A CHOICE. The dense arm runs
       // twenty of each amenity against the sparse arm's one at the same need count, so it must
-      // cost more, and every reading on record agrees. The two axes' distances above 1 are
-      // stated rather than divided: density's lowest recorded reading is 1.2453, and `needs`'
-      // campaign low was 1.0357 before the shipped gate read 0.9732.
+      // cost more, and every reading on record agrees. **RE-CHECKED AGAINST THE G-039b-B1 ARRAYS
+      // RATHER THAN CARRIED**, which is the whole of the defect this block records: the lowest
+      // reading in the twenty below is 1.2321, and it is a LOADED one — nothing in either array is
+      // under 1. The two axes' distances above 1 are stated rather than divided: density's lowest
+      // is 1.2321 and `needs`' is 0.9827, which is why one asserts the direction and one does not.
       // ===============================================================================
       direction: true,
       quiet: Object.freeze([
-        1.2453, 1.3883, 1.4118, 1.4206, 1.4231, 1.4269, 1.4571, 1.4581, 1.4693, 1.4706, 1.4719, 1.4946,
+        1.3093, 1.3263, 1.3557, 1.3651, 1.3963, 1.3994, 1.4042, 1.4181, 1.4415, 1.4601, 1.4890, 1.5466,
       ]),
-      loaded: Object.freeze([1.2881, 1.2893, 1.4572, 1.5739, 1.6144, 1.6489, 1.7593, 2.0415]),
+      loaded: Object.freeze([1.2321, 1.2798, 1.3733, 1.3745, 1.4646, 1.5550, 1.6744, 1.7084]),
     }),
     'rooms-saturated': Object.freeze({
       rotation: 'rooms',
       direction: true,
       quiet: Object.freeze([
-        3.5561, 3.5588, 3.5631, 3.6499, 3.6736, 3.7287, 3.7688, 3.7902, 3.7984, 3.8014, 3.8625, 3.9925,
+        3.2047, 3.3396, 3.4521, 3.5013, 3.5348, 3.6978, 3.7259, 3.7511, 3.8281, 3.9399, 3.9702, 4.0662,
       ]),
-      loaded: Object.freeze([3.5177, 3.6514, 3.8244, 3.8416, 4.0638, 4.1837, 4.3324, 4.4252]),
+      loaded: Object.freeze([3.1185, 3.2345, 3.2771, 3.3011, 3.5485, 3.8434, 3.9761, 4.4884]),
     }),
     'rooms-bench': Object.freeze({
       rotation: 'rooms',
       direction: true,
+      // THE ONE AXIS WHOSE WORST READING IS A QUIET ONE (G-039b-B1): 3.5301 quiet against 3.4326
+      // loaded, so the pooled floor and the quiet floor are the same number and the two margins
+      // the gate prints are equal. That is not a curiosity — it is the reason the floor pools
+      // every regime instead of taking the loaded arm as "the worst case".
       quiet: Object.freeze([
-        2.6317, 2.6508, 2.6590, 2.6854, 2.6890, 2.7374, 2.7479, 2.7489, 2.8086, 2.8088, 2.8388, 2.9546,
+        2.7255, 2.7930, 2.8239, 2.8575, 2.8780, 2.9466, 2.9728, 3.0515, 3.0679, 3.0982, 3.1789, 3.5301,
       ]),
-      loaded: Object.freeze([2.0609, 2.1989, 2.2163, 2.4875, 2.7241, 2.9744, 3.0225, 3.1600]),
+      loaded: Object.freeze([2.2629, 2.4729, 2.7697, 2.9614, 2.9846, 3.0621, 3.3323, 3.4326]),
     }),
   }),
 });
@@ -401,10 +484,10 @@ export const CAMPAIGN = Object.freeze({
  * gives: a bound that only ever exists as an expression is a bound no diff ever shows moving.
  */
 export const BOUNDS = Object.freeze({
-  needs: 1.7181,
-  density: 2.1856,
-  'rooms-saturated': 5.6532,
-  'rooms-bench': 4.1218,
+  needs: 1.8219,
+  density: 2.1063,
+  'rooms-saturated': 5.5888,
+  'rooms-bench': 4.4592,
 });
 
 /**
@@ -420,16 +503,19 @@ export const BOUNDS = Object.freeze({
  * the LOOSER choice on every axis.
  *
  * TABLE-ROW-PIN — `scaling.bound.test.ts` parses the four rows below and recomputes both
- * columns from the readings. One row was wrong when it was written (rooms-bench read 4.5502 and
- * +1.36%; it is 4.5576 and +1.19%), found by `sim-critic` recomputing it by hand, in a table
- * whose whole point was to make the free parameter's cost checkable. A table built to be
- * checkable and left unchecked is this project's oldest defect wearing a new hat.
+ * columns from the readings. One row was wrong when it was written — at the G-020c readings, which
+ * two campaigns have since replaced, `rooms-bench` read 4.5502 and +1.36% where the arithmetic gave
+ * 4.5576 and +1.19% — found by `sim-critic` recomputing it by hand, in a table whose whole point
+ * was to make the free parameter's cost checkable. **Those two figures are HISTORY and are not in
+ * the table below**; what stops the incident recurring is the parse-and-recompute arm, which is why
+ * the four rows are re-derived and not retyped on every re-take. A table built to be checkable and
+ * left unchecked is this project's oldest defect wearing a new hat.
  *
  *   axis              upper middle (shipped)   mean of middles   difference
- *   needs                    1.7181                 1.7181         +0.00%
- *   density                  2.1856                 2.1630         +1.04%
- *   rooms-saturated          5.6532                 5.6231         +0.54%
- *   rooms-bench              4.1218                 4.1139         +0.19%
+ *   needs                    1.8219                 1.8099         +0.66%
+ *   density                  2.1063                 2.1027         +0.17%
+ *   rooms-saturated          5.5888                 5.5677         +0.38%
+ *   rooms-bench              4.4592                 4.4395         +0.44%
  *
  * KEPT, FOR TWO REASONS THAT ARE NOT "IT WAS ALREADY LIKE THAT". A median that is one of the
  * OBSERVED readings is a reading the instrument actually produced, which is the property every

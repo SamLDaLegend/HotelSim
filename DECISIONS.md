@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-c is DONE and the stairwell rollout is COMPLETE: determinism-log.ts has vertical circulation of its own — a forced spine row, per-room teeth, and a midpoint shaft at column 39 spanning floors -2..20 — so unreachable is 0 at both 40,000 and 100,000 ticks, newly pinned at both. I2 moved BY DESIGN to 2b5369e4461a9140, agreeing across three processes. WITHHELD_CELLS is no longer nine hand-chosen cells: noCorridor now has a pass of its own, a back-of-house pair, and the list is DERIVED from it. A red row stopped the goal and was escalated rather than tuned — recovery.determinism.test.ts pinned loan debt to exactly 0, a zero-margin coincidence (300,000 / 10,000 = exactly 30 nights) whose comment named a capped-payment branch that is UNREACHABLE on any run. Re-founded into four claims with margins stated, proven strictly stronger by mutation against the old log rather than asserted. Through-wall landings fell 236 -> 29 on the bench at the previous goal. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -5579,3 +5579,93 @@ The builder found the as-of stamp asserting *"I2 ca7bee4a4d6ea416 UNMOVED"* — 
 is precisely why `check:stamp` does not compare it and nothing went red.** Now false of the tree, and
 rewritten with this goal's stamp. **A gate that compares only the backticked facts is a gate whose
 prose can lie**, which is the same shape as the digest-body drift ADR-0048 §1 records.
+
+---
+
+## ADR-0067 — The scaling bounds were derived from a hotel in which no guest ever walked.
+
+**Date**: 2026-08-22 · **Status**: accepted · **G-039b-β1.**
+
+### THE FINDING IS WORSE THAN THE GOAL CLAIMED, AND GIT PROVES IT
+
+The block said the fingerprint *"cannot see travel being turned on."* **The truth is that the
+shipped readings were taken before travel existed at all.** Verified by ancestry, independently:
+
+- **`16ef890` — the campaign, recorded 2026-08-14.**
+- **`dfe26b9` — *"travel is ON in the shipped game"*, 2026-08-21.**
+- `git merge-base --is-ancestor 16ef890 dfe26b9` — **true.**
+
+> **HEAD's four `BOUNDS` were derived from a hotel in which no guest ever walked**, and
+> `check:scaling` has been green over every goal since — including three that moved every seeded
+> room, declared a stairwell, and took occupancy 850 -> 827.
+
+**The goal numbering reads the other way and is not the evidence.** G-032a *sounds* later than
+G-023b-ii; the commits say otherwise. **A goal id is not a timestamp**, and this is the second time
+this session that ordering by goal name has misled — the first was ADR-0059's rulings.
+
+### THE GUARD, AND ITS BLINDNESS WAS WATCHED RATHER THAN ARGUED
+
+Three new fingerprint terms: **`v` = `guestCellsPerTick`, `c` = `layCorridor` count, `x` =
+`layStair` count**. The two counts come from **`commandsFor(arm, world)` — the same call `once()`
+times, extracted** — so *"a fingerprint of a different schedule than the one measured is not
+expressible."* That is the right shape: the guard cannot drift from its subject because it reads
+the subject.
+
+**The proof is a paired A/B on the defect itself**, shortening the spine by one cell — the same
+class of change G-039b-α made:
+
+| tree | `node tools/gates/scaling.mjs` |
+|---|---|
+| **guard at HEAD + spine shortened** | **EXIT 0, four rows PASS** — *the blindness, watched* |
+| new guard + spine shortened | EXIT 1, `21c/98c/99c/156c` -> `20c/96c/97c/154c` |
+| new guard + shaft one floor shorter | EXIT 1, `23x` -> `22x` |
+| new guard + campaign `3v` -> `9v` | EXIT 1, **and** `scaling.bound.test.ts` red |
+
+**The first row is the executed version of the history argument.** A gate's blindness demonstrated
+by running it, not by reasoning about what it reads.
+
+### THE RE-TAKEN CAMPAIGN
+
+*what* per-tick cost ratio between two arms of one rotation · *workload* 60 rooms / arrival every 96
+/ seed 42 / 4,320 ticks, **every arm built by the runner schedule that now lays a stairwell and a
+spine**, content declaring `guestCellsPerTick: 3` · *samples* each reading a ratio of medians of 5,
+arms interleaved with the order alternating, warm-up discarded; **n=12 quiet, n=8 loaded per axis** ·
+*aggregation* median of quiet -> ceiling, max over every reading in every regime -> floor · *regime*
+`win32/12cpu`, node 22.16.0, one sitting, blocks alternating quiet/loaded, **loaded =
+`load.mjs --workers 12`**.
+
+| axis | bound | was | direction | pooled margin |
+|---|---|---|---|---|
+| needs | **1.8219** | 1.7181 | looser | **1.0584x** |
+| density | **2.1063** | 2.1856 | tighter | 1.2329x |
+| rooms-saturated | **5.5888** | 5.6532 | tighter | 1.2452x |
+| rooms-bench | **4.4592** | 4.1218 | looser | 1.2632x |
+
+**Two up and two down on a rule nobody touched** — which is what a genuine re-take looks like, and
+is not what adjusting numbers to fit looks like. **No axis crosses, nothing pooled from an earlier
+campaign, and the fingerprint was byte-identical across all 20 readings.**
+
+**`needs` is the thin axis again at 1.0584x**, thinner than density's 1.0706x was; **density is no
+longer thin.** Two consequences taken rather than deferred: the `needs` loaded arm carries
+**0.9827**, so `direction: false` is **now warranted by the campaign's own readings**; and the
+out-of-campaign `observations` entry (0.9732, from the configuration this campaign replaces) is
+**retired rather than carried.**
+
+**And the "load can only push a ratio down" generalisation stays false in a third shape** — medians
+up on 3 of 4 axes, maxes up on 3 of 4.
+
+### MY BRIEF'S ERRORS
+
+**Exit criterion 2 named a path that does not exist** — `tools/gates/scaling.bound.test.ts` returns
+*"No test files found"*; the file is under `tools/headless/src/`. **An exit criterion that cannot be
+run is not an exit criterion**, and a builder that took it literally would have reported a pass on a
+command that exits 1 for the wrong reason.
+
+**And the stale-numbers correction I carried in was right about HEAD and is reversed by this goal**:
+I told the builder `density` was thinnest; after the re-take it is `needs`. `PARKING.md`'s parked
+entry is **directionally right again**, though its 1.0472x is still from the cadence-32 campaign and
+does not transfer.
+
+*(Also incidental and correctly swept: three superseded figures in comments describing arrays that
+had already been replaced, and a pair of incident numbers now labelled as G-020c history because
+they appear in no table in the file.)*

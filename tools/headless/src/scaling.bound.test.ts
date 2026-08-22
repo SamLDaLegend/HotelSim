@@ -31,6 +31,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 // @ts-expect-error — plain ESM gate helper, no types by design (tools/gates has no tsconfig).
 import { AXES, BOUNDS, CAMPAIGN, DECLARED_READINGS, deriveAll, NOT_OVERHEAD_DOMINATED } from '../../gates/scaling-bound.mjs';
+import { guestSpeedOf, stayDurationOf } from '@hotelsim/sim';
 import { ARRIVAL_EVERY_TICKS, FLOORS, ORDERS, RATIOS, ROOMS, ROTATION_NAMES, ROTATIONS, SEED, TICKS } from './scaling-arms.js';
 import { loadContent } from './content-loader.js';
 
@@ -179,11 +180,17 @@ describe('the DIRECTION flag is derived from the readings, not chosen (G-032a sw
   //   `needs`    kept `true` while the lever collapsed 4-against-1 to 4-against-3 — the shipped
   //              gate then read 0.9732 on an ordinary `pnpm verify` and went red.
   //   `density`  kept `false` on the warrant *"0.9915 is in the readings below"* — a number the
-  //              same diff deleted. Its shipped minimum is 1.2453.
+  //              same diff deleted.
   //
   // The rule below makes the flag a consequence: an axis may decline the assertion only with a
-  // recorded sub-1 observation, and may carry it only without one. Both instances above go red
-  // here, which is what "derived" has to mean if it is not to be a word.
+  // recorded sub-1 reading or observation, and may carry it only without one. Both instances above
+  // go red here, which is what "derived" has to mean if it is not to be a word.
+  //
+  // G-039b-B1's re-take is where it earned its keep for the second time: it replaced all eighty
+  // readings, and BOTH flags were re-checked against the new arrays rather than carried — which is
+  // this arm running, not a promise. `needs` keeps `false` because its own loaded arm now holds a
+  // sub-1 reading, and the out-of-campaign `observations` entry it used to lean on was retired as
+  // a reading from a configuration the campaign replaces (ADR-0015).
   // ===========================================================================================
   it.each(AXES as readonly string[])('%s: the flag agrees with every reading on record', (axis) => {
     expect(directionProblems(axis, axisReadings[axis] as AxisReadings)).toEqual([]);
@@ -510,6 +517,45 @@ describe('the seam: the instrument holds no bound, and the two lists agree', () 
       'seed',
       'ticks',
     ]);
+  });
+
+  it('the recorded fingerprints carry the CONTENT dials and the CIRCULATION, not only the flags', () => {
+    // =====================================================================================
+    // ADR-0039 §2 WAS APPLIED TO ONE FIELD AND WENT ON BEING TRUE OF THE NEXT ONE (G-039b-B1).
+    //
+    // The fingerprints were `name:rooms/arrivals/amenities/needTypes/stay`, and every term but
+    // the last was a FLAG. So three workload changes landed without moving one character of
+    // either string: `guestCellsPerTick` (travel), G-039b-alpha's corridor spine — which moved
+    // EVERY seeded room in both rotations — and G-038a-iii-b's stairwell. `check:scaling` stayed
+    // green across all three.
+    //
+    // EVERY EXPECTED VALUE HERE IS READ FROM THE CONTENT, never written down: a guard checked
+    // against a copy of the number it guards agrees with itself (ADR-0021, and the reason
+    // `scaling-arms.ts` imports `workload.mjs` rather than restating it).
+    // =====================================================================================
+    const speed = guestSpeedOf(FULL);
+    const stay = stayDurationOf(FULL);
+    expect(speed, 'the shipped content declares no guestCellsPerTick').toBeDefined();
+    expect(stay, 'the shipped content declares no stayDurationTicks').toBeDefined();
+
+    const fingerprints = CAMPAIGN.configuration.fingerprints as Readonly<Record<string, string>>;
+    // Not vacuous: a fingerprint set that lost a rotation would pass a for-loop over nothing.
+    expect(Object.keys(fingerprints).sort()).toEqual(['needs', 'rooms']);
+    for (const [rotation, fingerprint] of Object.entries(fingerprints)) {
+      const arms = fingerprint.split(' ');
+      expect(arms.length, `${rotation} records no arms`).toBeGreaterThan(1);
+      for (const arm of arms) {
+        const terms = arm.slice(arm.indexOf(':') + 1).split('/');
+        // rooms / arrivals / amenities / needTypes / stay / speed / corridors / stairs
+        expect(terms, `${rotation}: ${arm}`).toHaveLength(8);
+        expect(terms[4], `${rotation}: ${arm} stay`).toBe(`${stay}s`);
+        expect(terms[5], `${rotation}: ${arm} guestCellsPerTick`).toBe(`${speed}v`);
+        // The two circulation counts must be POSITIVE, or the terms are zeroes nobody would
+        // notice moving — every arm's schedule lays a stairwell and at least one spine.
+        expect(Number(terms[6]?.replace('c', '')), `${rotation}: ${arm} corridors`).toBeGreaterThan(0);
+        expect(Number(terms[7]?.replace('x', '')), `${rotation}: ${arm} stairs`).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('the gate applies both the bounds and the anti-vacuity floor it imports', () => {

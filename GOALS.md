@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-c is DONE and the stairwell rollout is COMPLETE: determinism-log.ts has vertical circulation of its own — a forced spine row, per-room teeth, and a midpoint shaft at column 39 spanning floors -2..20 — so unreachable is 0 at both 40,000 and 100,000 ticks, newly pinned at both. I2 moved BY DESIGN to 2b5369e4461a9140, agreeing across three processes. WITHHELD_CELLS is no longer nine hand-chosen cells: noCorridor now has a pass of its own, a back-of-house pair, and the list is DERIVED from it. A red row stopped the goal and was escalated rather than tuned — recovery.determinism.test.ts pinned loan debt to exactly 0, a zero-margin coincidence (300,000 / 10,000 = exactly 30 nights) whose comment named a capped-payment branch that is UNREACHABLE on any run. Re-founded into four claims with margins stated, proven strictly stronger by mutation against the old log rather than asserted. Through-wall landings fell 236 -> 29 on the bench at the previous goal. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -3858,7 +3858,11 @@ processes on 12 cores — **oversubscribed by construction.**
 `PARKING.md` already carried this candidate and the block did not cite it.
 
 ## G-039b-β1 — The scaling campaign, re-taken rather than re-fingerprinted
-Status: **PLANNED.** Owner pair: sim-engineer / sim-critic
+Status: **DONE 2026-08-22 (ADR-0067).** Re-taken, not re-fingerprinted. The shipped bounds
+predate travel: campaign 16ef890 (08-14) is an ancestor of dfe26b9 (08-21), so they were
+derived from a hotel where no guest walked. Three terms added, read from commandsFor.
+Blindness WATCHED: HEAD guard exits 0 on a shortened spine, new guard exits 1. Bounds moved
+both ways; needs is thin again at 1.0584x. Fourteen rows PASS, VERIFY_EXIT=0.
 
 **Part 1's claim is TRUE and the critic verified every clause against the bytes**, with a proof by
 history rather than by argument: **G-039b-α moved every seeded room in the scaling arms and the

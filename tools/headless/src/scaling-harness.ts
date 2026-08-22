@@ -23,7 +23,8 @@
 // drift cancels, MEDIAN after a discarded warm-up, and in-process timing of `run()` only so
 // process startup is not in the measurement.
 
-import { createWorld, hashState, run, stayDurationOf } from '@hotelsim/sim';
+import { createWorld, guestSpeedOf, hashState, run, stayDurationOf } from '@hotelsim/sim';
+import type { ScheduledCommand, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { schedule } from './report.js';
 import {
@@ -76,10 +77,21 @@ function parseArguments(argv: readonly string[]): Options {
   return { rotation, samples };
 }
 
+/**
+ * THE COMMAND LOG AN ARM RUNS — ONE SPELLING, BECAUSE TWO CALLERS NEED IT.
+ *
+ * `once` measures this schedule and `fingerprintOf` counts the circulation in it. A second copy
+ * of the call would let the two drift, and a fingerprint describing a different schedule from the
+ * one that was timed is worse than no fingerprint at all — that is ADR-0021's duplicated-constant
+ * defect, which this file's own guard exists to catch.
+ */
+const commandsFor = (arm: ArmSpec, world: World): readonly ScheduledCommand[] =>
+  schedule(TICKS, arm.content, world.grid, arm.rooms, arm.arrivals, 0, 0, 0, arm.amenities);
+
 /** The state hash is ignored by the ratio; this is a stopwatch. Cost per tick, microseconds. */
 function once(arm: ArmSpec): { readonly microsecondsPerTick: number; readonly stateHash: string; readonly arrived: number } {
   const world = createWorld(SEED, arm.content);
-  const commands = schedule(TICKS, arm.content, world.grid, arm.rooms, arm.arrivals, 0, 0, 0, arm.amenities);
+  const commands = commandsFor(arm, world);
   const started = process.hrtime.bigint();
   const after = run(world, arm.content, TICKS, commands);
   const microsecondsPerTick = Number(process.hrtime.bigint() - started) / 1e3 / TICKS;
@@ -187,16 +199,57 @@ const orders = (ORDERS[options.rotation] ?? []).map((spec) => ({
  * `-` for content with no lodging need at all (a food court, θ-b2): a stay length that does not
  * exist is written as absent rather than as zero, because 0 is a number a table could hold.
  * ===========================================================================================
+ *
+ * ===========================================================================================
+ * AND THE BUILDING GAINED CIRCULATION WITHOUT MOVING ONE CHARACTER OF IT (G-039b-B1).
+ *
+ * ADR-0039 §2 was applied to `stayDurationTicks` and to nothing else, so the sentence it wrote
+ * — *"a guard spelled entirely in the flags it guards cannot see the content redefine what a
+ * flag means"* — went on being true ONE FIELD OVER for three more goals:
+ *
+ *   `guestCellsPerTick`  a CONTENT dial. Absent, arriving is instantaneous and no guest ever
+ *                        walks; declared, every guest pays a journey each time it forms a need.
+ *                        Turning travel on or off changes what every arm below costs and moved
+ *                        no term of this string.
+ *   the SPINE            G-039b-alpha laid a corridor spine per seeded floor and MOVED EVERY SEEDED
+ *                        ROOM in both rotations. `check:scaling` stayed green over it and the
+ *                        fingerprint was byte-identical — verified against the commit.
+ *   the STAIRWELL        G-038a-iii-b declared a shaft, which moved occupancy. Same silence.
+ *
+ * So the string now also carries the guest speed and the two counts of CIRCULATION COMMANDS the
+ * arm's own schedule emits. They are read from `schedule` rather than from a copy of its rules,
+ * for `scaling-arms.ts`'s reason: a guard fed by a second spelling of the thing it guards is a
+ * guard that agrees with itself (ADR-0021).
+ *
+ * THE TERMS, IN ORDER, so a reader meeting `full-vector:60r/96a/1m/4n/1440s/3v/99c/23x` on a
+ * refusal can read it: `r` rooms, `a` ticks between arrivals, `m` amenities of each kind, `n` need
+ * types,
+ * `s` `stayDurationTicks`, `v` `guestCellsPerTick`, `c` `layCorridor` commands, `x` `layStair`
+ * commands. The last three are the ones this goal added.
+ *
+ * NO STOPWATCH RUNS IN HERE AND NO SIMULATION IS STEPPED — `schedule` builds a command list and
+ * `createWorld` allocates a grid. It runs once per arm AFTER the last sample has been taken, so
+ * whatever it costs is outside every measurement rather than merely small.
+ * ===========================================================================================
  */
-const fingerprint = arms
-  .map((arm) => {
-    const stay = stayDurationOf(arm.content);
-    return (
-      `${arm.name}:${arm.rooms}r/${arm.arrivals}a/${arm.amenities}m/` +
-      `${(arm.content.content.needTypes ?? []).length}n/${stay ?? '-'}s`
-    );
-  })
-  .join(' ');
+const fingerprintOf = (arm: ArmSpec): string => {
+  const stay = stayDurationOf(arm.content);
+  const speed = guestSpeedOf(arm.content);
+  const commands = commandsFor(arm, createWorld(SEED, arm.content));
+  let corridors = 0;
+  let stairs = 0;
+  for (const scheduled of commands) {
+    if (scheduled.command.kind === 'layCorridor') corridors += 1;
+    else if (scheduled.command.kind === 'layStair') stairs += 1;
+  }
+  return (
+    `${arm.name}:${arm.rooms}r/${arm.arrivals}a/${arm.amenities}m/` +
+    `${(arm.content.content.needTypes ?? []).length}n/${stay ?? '-'}s/` +
+    `${speed ?? '-'}v/${corridors}c/${stairs}x`
+  );
+};
+
+const fingerprint = arms.map(fingerprintOf).join(' ');
 
 process.stdout.write(
   `${JSON.stringify({
