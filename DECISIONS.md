@@ -4755,6 +4755,12 @@ ADR rather than extending it.
 
 ---
 
+> **AMENDED 2026-08-22 (G-040 plan review).** This ADR's cost paragraph said the pin and the
+> tripwire campaign are re-taken TOGETHER. **STRUCK.** `workload.concurrency.test.ts` records
+> that instruction as **UNEXECUTABLE** and ADR-0058 discharges it: `tripwire.mjs` refuses to run
+> when the bound and its derivation disagree, so re-taking the campaign would require editing a
+> bound ADR-0056 (human) froze. **The obligation is `TARGET_CONCURRENT_HUNDREDTHS` alone.**
+
 ## ADR-0056 — THE TRIPWIRE KEEPS 1.4640 AND SAYS WHAT IT CANNOT CATCH. Option (b).
 
 **Date**: 2026-08-21 · **Status**: accepted · **HUMAN RULING** on the 2026-08-14 escalation, open

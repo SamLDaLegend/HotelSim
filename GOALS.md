@@ -2720,25 +2720,170 @@ completed **zero stays** over a simulated year); the provider tie-break routed g
 room, so a player building a fourth café watched their rating **fall**; and the harness's furnishing
 cycle made an existing amenity worse when you bought another.
 
-## G-040 — A party is a thing, and it arrives together
-Status: **PLANNED.** Human ruling ADR-0055, option (a) — taken with its cost stated back.
-Milestone: M3 · Owner pair: sim-engineer / sim-critic
-Statement: a **party** of 1..N guests arrives together and takes one room. `capacity` bounds the
-  party. **Two strangers still never share a room** — that is §6.1 and it is not relaxed.
+## G-040 — SPLIT at PLAN, 2026-08-22. Three BLOCKERs, ten MAJORs; the seam is the number/behaviour line.
+Status: **split into G-040a (a party is a thing) / G-040b (and it arrives together).** Seam named by
+`ai-critic` under §5.6 and taken. **Ninth plan review, ninth split.**
 
-**THIS FINALLY HONOURS A SCHEMA COMMENT THAT HAS BEEN UNFALSIFIABLE SINCE M0.** `capacity` is
-documented as *the size of the PARTY a room holds*, and **there has never been a party** — so the
-field described a concept the simulation did not have, read by nothing, for thirty-odd goals.
+### FIRST, THE QUESTION THAT DECIDED THE ORDER: G-040 IS **NOT** BLOCKED BY E-011
 
-**THE COST, WHICH THE HUMAN NAMED WHEN CHOOSING IT**: arrivals (a party, not a guest, is what walks
-in) · the guest store (`claimEntity`'s throw becomes a bound, `held` becomes a count,
-`countOrphanedReservations` is re-defined, and `findFreeRoom`'s `exhausted` memo means *no room
-with room enough* rather than *no unheld room*) · **and every occupancy pin —
-`TARGET_CONCURRENT_HUNDREDTHS` and the tripwire campaign re-taken TOGETHER in one commit**, per
-`workload.concurrency.test.ts`'s own instruction.
+**Checked by file rather than by argument.** `git diff --stat main...g041-rate-rederivation` touches
+**35 files, and not one of them is `guests.ts`, `tick.ts`, `commands.ts`, `save.ts`, `entities.ts`,
+`validity.ts` or `report.ts`.** **No line of the party mechanic reads a rate** — not `refillPerTick`,
+`capacityTicks`, `visitDurationTicks`, `dissatisfactionCapacityTicks` or `guestCellsPerTick`.
 
-**It precedes G-037b, and makes G-037b small**: capacity stops being a mechanism and goes back to
-being the fold ADR-0051 wanted.
+**And the two E-011 consequences that could have bitten, do not**: the speed floor sitting exactly on
+`guestCellsPerTick: 3` needs a journey-length change, and a party changes no geometry; the flat
+amenity axis below 15 concurrent guests points the **other** way, since a party raises concurrency
+*past* that bottleneck.
+
+> **The coupling is a MERGE COST, and it is measured: 19 of the 22 test files G-041 already rewrites
+> carry `stateHash` / `arrived` / `checkedOut` / `gaveUp` assertions that any occupancy-moving goal
+> must rewrite too.** `cli.stdout.test.ts` 42 hits, `outcome.report.test.ts` 40,
+> `bench.workload.golden.test.ts` 25, and nine more. **Whichever lands second re-takes all of them a
+> second time.** **G-040a's intersection with the branch is state-hash literals ONLY** — which is
+> the reason the seam is cut where it is.
+
+### BLOCKER 1 — MY BLOCK CITED A FILE AS ORDERING THE OPPOSITE OF WHAT IT SAYS, AND THE WORK IT ORDERED IS FORBIDDEN
+
+The block said the pin and the tripwire campaign are *"re-taken TOGETHER in one commit, per
+`workload.concurrency.test.ts`'s own instruction."* **That file says, by name:**
+
+> *"re-take `TARGET_CONCURRENT_HUNDREDTHS` **ALONE** … **Do NOT** widen the tick-cost bound and
+> **do NOT** re-take the bound campaign"* — and, four lines on, *"THIS MESSAGE USED TO SAY … TOGETHER
+> … **THAT INSTRUCTION WAS UNEXECUTABLE** and ADR-0058 discharges it."*
+
+**The clause was deleted from the file one commit before the block was written, and the block cites
+that file as its authority.** Worse than stale: **it orders forbidden work.** `tripwire.mjs` reads
+`if (BOUND !== derived)` and **refuses to run**; re-taking the campaign moves `NOISE_CEILING` and
+therefore `derived`, so the only way to land it is to **edit a bound ADR-0056 (human) froze** —
+which CLAUDE.md forbids outright. **STRUCK here and struck from ADR-0055's cost paragraph.**
+**The obligation is `TARGET_CONCURRENT_HUNDREDTHS` alone**, and the file already names G-040 as one
+of the two goals that re-take it that way.
+
+### BLOCKER 2 — THE CAPACITY FILTER WOULD ARM A PER-HOTEL MEMO WITH A PER-GUEST FACT
+
+`findFreeRoom`'s `exhausted` memo is recorded **once per tick and read by every later guest** — exact
+only while the candidate set is the same for all of them. **Room-enough-ness is per PARTY SIZE.** So
+a party of 2 finding no free capacity-2 room would **mark lodging exhausted for every party of 1
+behind it in the same tick**: a guest standing in the lobby beside an empty room it could have had.
+
+**This is the third rule to change the candidate set** (after G-036c's access rule and G-038c's floor
+filter) **and the only one whose denial is per-guest rather than per-hotel.** Fix: capacity denial
+sets **`deniedThisGuestOnly`**, exactly as `reservedForItsOwnGuest` already does — one line, matching
+the shipped split. **And `release` must become size-aware for the same reason**: freeing one bed in a
+capacity-2 room re-arms the need for parties of 1 but not for parties of 2.
+
+### BLOCKER 3 — A PARTY LARGER THAN 2 CAN NEVER BE HOUSED, AND NOTHING REFUSES IT
+
+**`night_rest` is provided by exactly one room type — `standard_room`, `capacity: 2`.** So the
+block's *"a party of 1..N"* has an observable domain of **{1, 2}**. Any distribution emitting 3 ships
+a party whose lodging need **has no provider anywhere in the building**: every member accumulates
+dissatisfaction it cannot shed and departs `gaveUp`. **Guaranteed unhappiness rather than
+difficulty** — §6.1's first shape.
+
+**The refusal precedent sits four lines away**: `assertNeedDemandIsServiceable` refuses a need table
+no guest could keep up with. **`bindContent` must refuse content whose maximum party size exceeds
+`max(capacity)` over room types providing the lodging need.**
+
+## G-040a — A party is a thing
+Status: **PLANNED. Buildable on main NOW; independent of E-011.**
+Milestone: M3 · Owner pair: sim-engineer / ai-critic
+
+**`Guest.partyId`, save **v22** and its migration, `held` as a count, `claimEntity`'s bound,
+`countOrphanedReservations` redefined, `findFreeRoom`'s capacity filter and its memo clause, and
+`bindContent`'s refusal — WITH THE SHIPPED PARTY SIZE PINNED AT 1.**
+
+**Non-vacuous and testable against hand-built worlds**: a save with two lodgers in a capacity-2 room
+now **loads** instead of throwing; `capacity: 1` on `standard_room` now **refuses** a party of 2.
+
+**It moves the state hash, because `partyId` is hashed state — that is not being hidden. It moves
+NOTHING ELSE**: occupancy, arrival and departure counters, revenue, reviews, the bench cost and the
+scaling campaign are byte-identical, **and that is provable rather than asserted.**
+
+**The migration invents nothing**: `partyId = guest.id`, every existing guest a party of one —
+**which is what `schema.ts` has said since M0.**
+
+**THREE THINGS THE BUILDER MUST NOT REACH FOR:**
+
+- **Leader-holds-the-room is NOT AVAILABLE.** `atHome` requires `guest.roomEntityId !== NO_ENTITY`,
+  so a member pointing at a leader **never rests, whatever it is standing in**, and its lodging need
+  becomes structurally unsatisfiable. **Every member carries the shared room id** — which is exactly
+  why ADR-0055's *"held becomes a count"* is forced rather than chosen. *(A builder reaches for
+  leader-holds first because it is smaller, and the failure is silent for a whole build.)*
+- **One count destroys two of the five shapes `countOrphanedReservations` detects.** Its docblock says
+  *"ONE set for both kinds of reservation, which is what makes shape 5 visible at all."* Under a
+  single count, *two lodgers in a capacity-2 room* (legal), *one lodger + one engager* (CROSSED) and
+  *two guests at one provider* (DOUBLE-ENGAGED) become indistinguishable. **Count the two claim kinds
+  SEPARATELY** — lodging bounded by the room type's capacity, engagement still bounded by 1, the
+  cross-clause kept as its own predicate. **This is an I6 surface as well as a §6.1 one.**
+- **The memo fix from BLOCKER 2** — `deniedThisGuestOnly`, not a memo keyed by size.
+
+## G-040b — And it arrives together
+Status: **PLANNED. Depends on G-040a.** Owner pair: sim-engineer / ai-critic
+**Sequence it AFTER E-011 is ruled**, or pay the 19-file re-take twice.
+
+The distribution enters content, arrivals carry the size, **the party-level lodging decision**,
+**departure cohesion**, every re-pin in one commit, and the WATCH.
+
+**THE LODGING DECISION IS PARTY-LEVEL OR THE PARTY SLEEPS APART ON TICK ONE.** `reserve` is called
+once per guest; if each member calls `findFreeRoom` independently, member 1 takes room 3 and member 2
+finds it held and takes room 4. **That is what the shipped loop does with no further change.**
+**The party rule is a CANDIDATE-SET FILTER (`capacity >= size`) over the same canonical ascending-id
+list, never an ordering change** — G-036c's and G-038c's shape, and `guests.ts` says why in as many
+words. **Resolve by a single forward pass over `guests.list` with the lowest-id member deciding; any
+`Map<partyId, GuestId[]>` that is later ITERATED is an I2 violation.**
+
+**A PARTY WILL BE SPLIT MID-STAY AND THE BLOCK MUST SAY WHAT HAPPENS.** Of six departure paths, four
+cohere for free; **`leftDissatisfied` does not** — the stock is per-guest and diverges the moment two
+members engage different amenities. Three rulings owed at PLAN:
+
+- **the room is released only when the LAST member leaves** (refcount), or it leaks or is double-let;
+- **`partyId` must NOT be the leader's live guest id**, or a departed leader strands the remainder.
+  Derive it from `guests.nextId` — keeps the id space, needs no `nextPartyId` field, invents nothing;
+- **`payForStay` is called per departing room-holder**, so a party of 2 books **TWO** `roomRevenue`
+  transactions against **ONE** room's upkeep. **ADR-0055's "a party is one booking" reads as one
+  charge; the shipped call site gives N.** *A money-loop change the size of the mechanic, and the
+  block named neither it nor the ledger.*
+
+**PARTY FORMATION AS RANDOMNESS IS A CHOICE, AND IT IS THE EXPENSIVE ONE.** `stepGuests` draws
+nothing today by design, and `advanceTime` advances the stream exactly one draw per tick **so that
+stream position is a pure function of tick count.** Drawing in-sim makes both false and reddens two
+shipped tests — one of which says in as many words *"TO WHOEVER LANDS THE M4 DEMAND MODEL: this test
+going red is its DESIGNED RETIREMENT… Do not 'fix' it."* **Retiring an M4 test at M3 is legitimate
+but must be deliberate and journaled, not a side effect.** **Preferred: party size is a deterministic
+function of the arrival ordinal and a content weight table** — no draw, both tests stay green, and
+randomness lands with demand at M4. **If the RNG route is taken anyway, the goal owes a REPLACEMENT
+invariant for "stream position is a function of tick count".**
+
+**`check:scaling`'s FINGERPRINT NEEDS A FOURTH TERM, AND IT OBLIGES A CAMPAIGN RE-TAKE.** Party size
+**multiplies the guest population of every arm without moving one character** of either recorded
+string — **the third instance of the class ADR-0039 §2 and ADR-0067 each fixed once.** Tick cost is
+O(guests). **Budget the term AND the 20-reading re-take (n=12 quiet, n=8 loaded, arms interleaved),
+or rule at PLAN that party size is out of the fingerprint and say why. Do not discover it at VERIFY.**
+
+**WATCH — and only one instrument can show it.** `tools/viewer`'s spot key is `${floor},${column}`
+and `drawGuests` lays guests on one cell side by side, **so two guests in one bedroom draw as two
+figures**; the current maximum observed is 2 on one cell, so the party case is inside the pitch
+maths' working range. **`record-frames.ts` CANNOT** — `scenario.ts`'s arrival is a literal
+`[{ kind: 'guestArrives' }]`, so the iso recorder keeps issuing parties of one and shows nothing new.
+**Either update that line or state that the WATCH is the replay viewer.**
+
+*(Flagged as a design hazard with the file:line that names the class, NOT as a "reads as stupid"
+finding — there is no diff and no frame, and ADR-0013 §3 forbids the finding without one:
+`viewer.js`'s `filled` cue is `roomEntityId !== NO_ENTITY`, earned by catching *"a basement of
+contented eaters and NO SIGNAL AT ALL that three quarters of them would never get a bed"*. **Under
+leader-holds a sleeping party member would draw hollow and grey — homeless and idle — while asleep in
+a bed.** One more reason leader-holds is struck.)*
+
+### ALSO CORRECTED, so no builder re-runs them
+
+- **G-037c's block says "hence v21 plus a migration" — STALE.** v21 shipped at G-038a-ii-α. **Its
+  bump is v22, the same version G-040a claims; whichever lands second renumbers.**
+- **ADR-0053's proof-of-bite must mutate `capacity` DOWNWARD.** `capacity: 99` will still produce a
+  byte-identical report after this goal, because the party never exceeds 2. **`capacity: 1` is the
+  mutation that bites** — a green `capacity: 99` arm would read as proof the goal worked and be proof
+  of nothing.
+- **The pin is 827 on main and 1203 on the branch. Re-measure; never compose the two** (rule 3).
 
 ## G-037b — Capacity, and a room that holds more than one guest
 Status: **PLANNED — and BLOCKED on a mechanic nobody has written. See ADR-0053.**
