@@ -2684,6 +2684,54 @@ state ruling made and one consumer; (ii) reception becomes the second consumer a
 abstraction generalises. **The matched critic should take it or say why not** (§5.6) — and if it is
 taken, (ii) is the goal that tests whether the ruling in (i) was right.
 
+## G-042 — The density axis is re-derived, and the gate gets teeth
+Status: **DONE 2026-08-22 (ADR-0069 human ruling, ADR-0070).** Landed on `main` at the G-041 merge.
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+Statement: execute E-011's ruling — `check:scaling`'s density axis becomes `direction: false` with a
+  **derived** magnitude bound, because at the re-derived rates an idle guest is cheap and provider
+  density buys **less** tick-cost rather than more.
+
+**WRITTEN AFTER THE FACT, AND THAT IS THE DEFECT IT RECORDS.** ADR-0070 named G-042 as a goal and
+**no block existed on either branch.** `CLAUDE.md`'s own digest says *"a goal with no block is not
+counted."* **Found by the builder doing the merge, not by a gate** — and the gate cannot see it:
+`check-status.mjs` scans `git log --no-merges` **subjects**, the branch commit's subject names no
+goal id, and the merge commit is excluded as a merge. **A goal that enters the tree only through a
+merge is invisible to the status gate.** *(Parked with its falsification test.)*
+
+**THE RESULT — a tightening, proven by mutation rather than argued.** Work made quadratic in the
+provider count inside `providersFor`:
+
+| arm | bound module | `scaling.mjs` |
+|---|---|---|
+| mutated | **new** | **EXIT 1** — density 1.7812 at or above 1.6386 |
+| mutated | the campaign it replaces | **EXIT 0 — PASS 1.7355, BLIND** |
+| clean | new | EXIT 0 — 1.1862 (control) |
+
+**A direction flag was removed and the axis got stronger.**
+
+**THE BOUND IS DERIVED, AND THE ORDER PROVES IT**: the file's uniform 1.5x rule applied to the quiet
+median (1.0924) gives **1.6386**; the separation from the worst reading in any regime (1.4894) is
+**0.1492**, **3.7x the ±0.04 same-tree band** — and it was **computed afterwards, not aimed at.**
+The retired `ratio > 1` floor was not near the noise, it was **inside the readings**: 5 of 20 sat
+under 1.
+
+**Confirmed independently on the merged tree**: density read **0.9906** in a standalone run **with
+G-040a present** — a run the retired floor would have failed. **The ruling reproduces on a tree it
+was not measured on.**
+
+### CARRIES FORWARD
+
+- **All four axes moved, three tighter**, because the rates compress every ratio in the file. On the
+  merged tree the thinnest is `needs` at **74.5% of its bound**; nothing is close to firing, so
+  **G-040a's absence from the campaign cost nothing** — checked rather than assumed.
+- **`scaling-arms.ts`'s density `because` string still says the dense hotel must cost more**, which
+  the campaign now contradicts. `needs` has been in that state since G-039b-β1, so **fixing one and
+  not the other would be worse.** Belongs to whatever goal revisits the arms.
+- **The builder refused a `direction: true` its own rule would have forced onto `needs`** — twenty
+  readings above 1, but a contradicting reading at the same configuration — because turning it on
+  would have planted an assertion 0.05 above the observed minimum. **That is E-011's defect, one axis
+  over, declined by the agent applying the rule that would have caused it.**
+
 ## G-041 — The rates are re-derived, so a bare room can be worse
 Status: **DONE** (2026-08-22). Human ruling ADR-0057, option (a). **Precedes the `g037a-quality-fold`
 merge, which is NOT part of this goal.**

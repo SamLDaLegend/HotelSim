@@ -3263,3 +3263,19 @@ contention factor is 10–14x and nothing survives.**
 named `it` paired, quiet and at `--workers 12`. **Confirms if the quiet duration drops materially
 AND the contention factor falls; refutes if the factor is unchanged**, which would mean the cost is
 the work itself rather than process creation — and would close option (c) for good.
+
+### A goal that enters the tree only through a MERGE is invisible to `check:status`
+**Parked 2026-08-22 (ADR-0071, found by the builder doing the G-041 merge).** `check-status.mjs`
+scans `git log --no-merges` **subjects** for goal ids. A goal built on a branch whose commit subject
+names no id, landed by a merge commit that is then **excluded as a merge**, is never checked against
+a block. G-042 reached `main` exactly that way and `CLAUDE.md` says *"a goal with no block is not
+counted."*
+
+**Falsification test:** create a branch, commit with a subject naming no goal id, merge it with
+`--no-ff`, and run `node tools/gates/check-status.mjs`. **Confirms if it exits 0** while the goal has
+no block. **Refutes if it exits 1.** *(The block for G-042 has since been written, so re-test with a
+fresh invented id rather than with G-042.)*
+
+**Candidate fix, if confirmed**: scan merge commits' **first-parent range** rather than excluding
+them, or scan the ADR ids in `DECISIONS.md` for goal references with no matching block — the second
+catches the class rather than this instance.

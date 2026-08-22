@@ -5920,3 +5920,87 @@ that is an argument, and this is a gate. **The merged tree gets its own verify.*
 *(MINOR, deliberately not touched: `scaling-arms.ts`'s density `because` string still says the dense
 hotel must cost more. `needs` has been in that state since G-039b-β1, so fixing one and not the other
 would be worse; it belongs to whatever goal revisits the arms.)*
+
+---
+
+## ADR-0071 — The merge landed, and two of my merge instructions were mutually exclusive.
+
+**Date**: 2026-08-22 · **Status**: accepted · **G-041 + G-042 on `main` at `1aded41`.**
+**Fourteen rows PASS, `VERIFY_EXIT=0`, I2 `fb8d8fd9fd76b245`** — verified by the orchestrator.
+
+### EVERY HASH WAS RE-MEASURED, NOT PICKED
+
+Both parents had changed the same literals, so **neither side's value was correct on the merged
+tree**:
+
+| | main | branch | **MERGED (measured)** |
+|---|---|---|---|
+| bench PLAIN | c7212353b3d1784f | cba13e62265ed196 | **1e44f2c872a33aa4** |
+| bench CHURN | 29c600242aed7db8 | c37756a85a3f4f8c | **daf4823b3fdaa4f7** |
+| cli golden | 72d843e8af79257c | 5081486e2a7ec39a | **bed08ab833ca39a4** |
+| I2 | 7ff621928358cb8e | f197734f532dc62b | **fb8d8fd9fd76b245** |
+
+**And G-040a's central claim re-demonstrated itself on a third tree it was never measured on**: the
+bench golden's five non-hash tests **passed unmodified** while only the two hash assertions failed.
+*"Moves the state hash and nothing else"*, confirmed by a merge rather than by its own author.
+
+### TWO OF MY INSTRUCTIONS COULD NOT BOTH BE OBEYED, AND THE BUILDER HAS THE FAILING RUN
+
+I wrote *"resolve the digest to `main`'s text for now"* **and** *"`stamp.mjs` must exit 0."*
+
+> **`main`'s stamp paragraph itself contains the string `measure golden c7212353b3d1784f`, and
+> `stamp.mjs`'s FACTS check reads the whole digest region INCLUDING the stamp line and takes the
+> first match.** With the bullets updated to the measured golden and `main`'s stamp preserved, the
+> gate exits **1 with four violations.** **Keeping `main`'s stamp guarantees a red row the moment the
+> golden is re-measured — which the merge required.**
+
+**The right resolution is the one taken**: one byte-identical corrected stamp in all four, keeping
+`main`'s structure and correcting only what the merge made false. **The lesson is narrower than "I
+was wrong": a digest whose PROSE restates a from-the-tree fact cannot be pinned to a previous tree's
+text, ever** — and I have now written that instruction twice.
+
+### "BOTH SIDES ONLY EVER APPEND" WAS FALSE IN THREE PLACES
+
+- **`main` edited E-010's heading in place** — I did that, marking it resolved.
+- **The two sides carried two different records of the SAME escalation**: the branch's E-011 **raise
+  (OPEN)**, `main`'s E-011 **block (RESOLVED)**. **A literal union ships two `## E-011` headings, one
+  declaring OPEN on a tree the human has ruled on.** Resolved by keeping `main`'s block and
+  preserving the branch's raise beneath it with headings demoted and a bridge stating what changed —
+  **the one conflict that could not be resolved as instructed, and it is documented in the file.**
+- **The branch inserted a comment bullet into the MIDDLE OF A SENTENCE** of the preceding bullet, and
+  put its WATCH entry at the **top** of a history whose header says *"Newest last."*
+
+**The WATCH entry was also numbered #17 — already taken by G-038a-i.** Renumbered **#21** and moved
+to the end, observation verbatim, with the change stated in the file. **Two ledgers appended in
+parallel produce collisions that no gate checks**, because the numbering is prose.
+
+### AND `main` HAD FIVE COMMITS THE BRANCH LACKED, NOT FOUR
+
+I said four. **The two I missed are the docs commits that recorded G-041's escalation and corrected
+a referent error in it** — which is exactly *why* `main` carried a resolved E-011 and the branch an
+open one. **I miscounted the commits that caused the hardest conflict in the merge.**
+
+### THE GAP THAT NO GATE CAN SEE — parked with its test
+
+**ADR-0070 named G-042 as a goal and no block existed on either branch**, and `CLAUDE.md` says *"a
+goal with no block is not counted."* **`check-status.mjs` cannot catch it**: it scans
+`git log --no-merges` **subjects**, the branch commit's subject names no goal id, and **the merge
+commit is excluded as a merge.**
+
+> **A goal that enters the tree only through a merge is invisible to the status gate.** Block written
+> now; **the gate hole is parked with its falsification test.**
+
+### WHAT THE MERGE ACTUALLY DID TO THE GAME, which is the part worth rereading
+
+- **bench PLAIN**: `checkedOut` **2 -> 33**, `leftDissatisfied` 64 -> 29. **The deliberately starved
+  60-bedroom benchmark stops being starved of service** — every room serves at the ceiling and there
+  is no quality fold in this tree yet.
+- **cli golden**: comfort **12/8 -> 20/0**, entertainment **6/14 -> 14/6**, reviews `2:8 3:8` ->
+  **`3:16`**, mean **300 -> 340**. **`night_rest` does not move at all** — that row counts the sixteen
+  who never get a room, **and bed refill speed does not give anybody one.**
+- **bench CHURN evictions 18 -> 19**, and the cause is the rates rather than the party:
+  `visitDurationTicks` 208 -> 98 means guests spend less of the day walking and more standing in a
+  room, **and standing in a room when the player demolishes it is what that arm counts.**
+
+*(A prose defect the merge created was fixed in place: `main`'s G-040a comment says "it still evicts
+exactly 18, asserted three lines down", which now reads 19. Marked as history at the point of use.)*
