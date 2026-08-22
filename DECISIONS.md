@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, the reachability goal was ATTEMPTED and STOPPED by the builder, correctly — no source byte changed, because my brief's load-bearing premise was FALSE. stairLeg returns its destination unchanged when no stairwell is declared, so in every shipped world the floor axis is FREE FROM EVERY CELL, and guests are in the basement today with no stairs. That corrects G-039b-alpha's headline: its 60-of-75 was measured by a fill STRICTER THAN THE MOVER. What survives is its real achievement — the lanes are joined and the door is out of room 0. ADR-0059 rules four questions; the goal is re-planned. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-22, reachability SHIPPED, was DESTROYED by the orchestrator, and was RECOVERED — I2 comes back ca7bee4a4d6ea416 and the changed-file list is byte-for-byte the pre-loss twelve, so it is the same work rather than a rebuild resembling it (ADR-0061, ADR-0062, E-009 closed). `unreachable` is the sixth room-invalidity reason, asked last, over a fill using the SAME predicate the mover asks. It ships INERT on every shipped workload deliberately: no harness declares a stairwell, and declaring one to make a fixture go green is the workload-tuning G-039b-alpha refused by name. ADR-0060 CORRECTS ADR-0059 — I ruled the predicate must follow the mover, then derived three consequences from a predicate that does not. Next: G-038a-iii, the stairwell rollout, is what makes any of this live. Fourteen rows green, VERIFY_EXIT=0 read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -4996,3 +4996,212 @@ and the fill's cost is an exit criterion rather than an afterthought.
 byte, and refused to report gates it had not earned**: *"reporting them as this goal's gates would be
 the evidence defect this milestone keeps catching."* **That is the instruction working exactly as
 intended.** The alternative was a validity rule shipped on a premise that the simulation contradicts.
+
+---
+
+## ADR-0060 — ADR-0059's FOUR RULINGS RESTED ON THE PREDICATE THEY FORBADE. Three of them do not fire.
+
+**Date**: 2026-08-21 · **Status**: accepted · **Corrects ADR-0059**, which was mine, and which the
+builder acting on it falsified **before writing a line of the rule** — the second time in two goals.
+
+### The error, and it is the same shape as the one ADR-0059 was written to correct
+
+**ADR-0059 §1 ruled that the predicate must be SIM-FAITHFUL.** Its other three rulings were then
+computed **with a fill gated on `hasStairAt`** — *the strict predicate*. **`stairLeg` does not gate
+on that.** It reads only `stairwellOf(stairs).column/row`, so **a guest is carried to ANY floor from
+that shaft regardless of which floors declared a stair.**
+
+**Measured by effect before any rule existed — three worlds, one amenity in the basement:**
+
+| world | stairs | floors a guest visits |
+|---|---|---|
+| no stair at all | 0 | **[−1, 0]** |
+| stairwell on **floor 0 only** | 1 | **[−1, 0]** |
+| stairwell on floors −1..0 | 2 | **[−1, 0]** |
+
+**Floor −1 declares no stair in arm 2 and guests are still on it.** And the giveaway was in my own
+numbers: *"full-height 13,482 cells; confined to floors −1..0, 1,322"* **is only true of the gated
+fill** — the builder reproduced **1,322 exactly under `mode=B`** and **13,482 under the faithful
+one.**
+
+> **I ruled that the predicate must follow the mover, and then derived three consequences from a
+> predicate that does not. The ruling was right; everything I computed from it was computed the
+> other way.**
+
+### What actually happens to each ruling
+
+**RULING 3 DOES NOT FIRE.** `determinism-log.ts`'s sealed door produces a 0-cell component **only
+under a declared stairwell or the strict predicate.** Under the faithful one **the free ceiling
+routes round it: 0 unreachable, and the I2 hash does not move.** **No byte of that file changed.**
+
+**RULING 1'S INSTRUCTION AND ITS REASON CAME APART.** The reason was *"without a stairwell the
+parked fixture does not go green"* — **but both fixtures declare their own stairwell.** Declaring
+one in `report.ts` buys **0 on the CLI default and 0 on the bench**, and costs **every cross-floor
+journey a re-route through one shaft**: occupancy, every golden, I5, the hash.
+
+> **G-039b-α refused exactly that shape one goal ago — *"tuning a workload to keep a test
+> interesting."*** **So no harness declares a stairwell, and the rule ships INERT on every shipped
+> workload**, with both arms recorded so it can be overruled in one edit.
+
+**RULING 4'S HEIGHT IS NOT A LEVER.** Under the faithful predicate **any declared stairwell closes
+the ceiling equally.** The cost concern was real; it was answered by engineering rather than by
+choosing a height.
+
+**RULING 2 STANDS** — but it is now moot on the shipped tree, because with no stairwell declared the
+criterion loses **0** rooms, not 2.
+
+### The rule ships inert, and that is a defensible outcome rather than a wasted goal
+
+**It bites on both parked falsification fixtures** — the sealed one-cell void leaves **4 rooms
+`unreachable`**, and the mid-air corridor leaves its room `unreachable` **while the room beneath it
+stays valid.** **It changes no shipped hotel today**, and it becomes live the moment a world
+declares a stairwell — which is now **parked as its own behaviour goal, with its test.**
+
+### And the real work was the cost, which is the part worth keeping
+
+The first spelling cost **20.3ms per validity context** against a 0.245ms baseline. **Four spellings,
+paired in one sitting**, quiet `win32/12cpu`, 60-room bench, 200 reps:
+
+| spelling | per context |
+|---|---|
+| `Set<string>`, a template literal per cell | 20.3 ms |
+| `Set<number>`, the cell's plot index | 4.4 ms |
+| `Uint8Array`, one byte per cell | 3.1 ms |
+| **+ the empty-floor collapse** | **0.50 ms** |
+
+**`isEmptyFloor` folds a floor with no room and no corridor into ONE node — 90% of the fill on every
+shipped layout — and it is EXACT rather than a heuristic**, with a test driving a route whose only
+path runs over a folded floor. **`check:tickcost` 0.9668.**
+
+**The 20.3ms spelling was invisible to `check:tickcost`** — that workload rebuilds the context once —
+**and it was caught by six test files, including `record.replay.test.ts`, whose subject IS
+cache-free stepping.** A gate could not see it; the suite could.
+
+---
+
+## ADR-0061 — A SCRATCH COPY THAT SYMLINKS BACK TO THE ORIGINAL IS NOT A SCRATCH COPY. I destroyed `packages/` with the safe instrument.
+
+**Date**: 2026-08-22 · **Status**: accepted · **Amends ADR-0022** (the mutation recipe).
+**Cost: the whole of G-038a-ii-β's `packages/sim` work, recovered only in part.**
+
+### What happened, plainly
+
+To measure a paired arm I did the thing ADR-0022 asks for: **a scratch copy, not a mutation of the
+repo** — `git worktree add` into the scratchpad. Correct instrument. Then, to avoid a several-minute
+`pnpm install`, I **symlinked `node_modules` from the real repo into the worktree**, and the same
+for each package's nested `node_modules`.
+
+**`git worktree remove --force` then walked those links and deleted through them.** On Windows a
+recursive delete follows a directory junction and removes the TARGET's contents. It got most of the
+way through the real `packages/` before dying on a long filename, taking:
+
+- **125 tracked files** under `packages/sim` and `packages/content` — recoverable from git.
+- **The builder's uncommitted `validity.ts`** — the reachability implementation. **Not recoverable
+  from git.**
+- **`packages/sim/src/validity.reach.test.ts`, untracked** — 396 lines, 11 tests. **Never in git at
+  all.**
+- **`node_modules` itself**, which then failed `pnpm install` silently — the lockfile looked
+  satisfied, so the repair no-opped and only `--force` fixed it.
+
+### THE RULE, AND IT IS THE ONE ADR-0022 DID NOT SAY
+
+> **A scratch copy is only a copy if NOTHING inside it points back at the original. A symlink into
+> the repo converts every delete in the scratch directory into a delete in the repo.**
+
+**Install into the copy, or run the arm in the repo and accept the cost.** The minutes I was saving
+were `pnpm install`; the price was a goal.
+
+### AND THE SECOND RULE, WHICH IS THE ONE THAT ACTUALLY BIT
+
+**ADR-0022 names `git checkout --` as the dangerous command and `git stash` as the safe one. That
+list was a list of COMMANDS, and the hazard is not a command — it is UNCOMMITTED WORK WITH NO SECOND
+COPY.** The command that destroyed it this time is not on any list and never will be, because the
+next one won't be either.
+
+> **Before any operation that deletes a directory, copy every uncommitted file to a location outside
+> the repo. Not the tracked ones — git has those. The MODIFIED and the UNTRACKED ones.** One `cp`
+> loop. It is what made the difference between "recovered from a transcript" and "gone".
+
+*(The tell I read past: I had ALREADY written `-u so untracked work is included` into ADR-0022's
+recipe, because untracked work being invisible to git is the exact failure I was guarding against.
+I knew the shape and still did not take a copy first.)*
+
+### What recovery was actually possible, recorded because it will be needed again
+
+**The sub-agent transcript held the work.** `.claude/projects/<project>/<session>/subagents/agent-*.jsonl`
+carries every tool call a builder made, including full `Write` bodies. **`validity.reach.test.ts`
+came back byte-complete from there.** The builder's 18 `patch*.py` scripts also survived in the
+scratchpad.
+
+**Replay of those patches DID NOT RECONSTRUCT THE FILE**, and the reason is worth writing down:
+**the builder made 221 Bash calls and 19 Writes**, so the patch scripts are a partial record of the
+edits. Replayed in order, seven applied and three failed at a later hunk, leaving `'unreachable'` in
+a return statement and absent from the union it returns — **a half-state that typechecks as a
+contradiction.** *The patches are `assert`-guarded, which is the only reason the failure was loud
+rather than silent; credit to the builder for writing them that way.*
+
+**Ruling: reconstruct from the SPEC, not from the edit fragments.** ADR-0060, the goal block and the
+`JOURNAL` entry together describe the design completely — asked last after `noCorridor`, `climbsFrom`
+copied from `stairLeg`, the `Uint8Array` plus `isEmptyFloor` collapse, both falsification fixtures.
+**And the acceptance test is exact: I2 must come back `ca7bee4a4d6ea416`.** A rebuild that lands that
+hash on that spec is the same work, not an approximation of it.
+
+---
+
+## ADR-0062 — The rebuild was RECOVERED, not re-authored, and the hash proves it. E-009 closes.
+
+**Date**: 2026-08-22 · **Status**: accepted · **Closes E-009. Amends ADR-0061 with what worked.**
+
+### The outcome, verified by the orchestrator rather than reported by the agent
+
+**I2 `ca7bee4a4d6ea416` — the same hash the destroyed work produced.** `pnpm verify` **24 rows PASS,
+`VERIFY_EXIT=0` read from the process.** `pnpm test` 2,636 passed.
+
+**And a second, independent confirmation nobody designed:** the rebuilt tree's changed-file list is
+**byte-for-byte the same twelve files** as the `git status` taken before the loss — `validity.ts`
+plus eleven sim test files, with `guests.ts`, `stairs.ts`, `grid.ts` and `packages/content`
+untouched in both. **A hash proves the behaviour matched; the file list proves the SHAPE did.**
+
+### WHAT MADE RECOVERY POSSIBLE WAS THE BUILDER'S OWN DISCIPLINE, NOT THE ORCHESTRATOR'S
+
+The original builder followed ADR-0022 properly: **it copied `validity.ts` to the scratchpad at each
+stage and recorded a `sha256` alongside.** `validity.good.ts` survived with its `good.sha`, and the
+rebuild **verified the checkpoint against that sha before building on it** — so the base was proven
+authentic rather than assumed.
+
+> **The habit that saved the goal is the one that looks like overhead until the day it does not.**
+> Nothing the orchestrator did contributed to the recovery. **The agent's own paranoia did.**
+
+**Everything else came from the sub-agent transcript**, replayed in original order: the checkpoint,
+then `patch13` → `patch14` + its inline signature fix → `patch16` → the inline docblock edit.
+**Nothing was re-authored from the spec.** The only file the rebuild wrote itself is a *mechanical
+restriction* of `patch7` to `packages/sim`, whose output was confirmed byte-identical to the
+half-state's.
+
+### THREE CORRECTIONS TO MY OWN RECOVERY BRIEF, all found by the builder
+
+1. **`HALFSTATE`'s `guests.ts` and `stairs.ts` carry NO sibling edits.** I told the builder they did.
+   They are identical to HEAD everywhere. **This goal changed no non-test sim source outside
+   `validity.ts`** — confirmed by a mutation scan over all 240 transcript tool calls.
+2. **The recovered reach test did NOT need patches 1, 2, 11, 13, 14.** Those scripts only *mention*
+   the filename inside `validity.ts` docblock prose. **I inferred a dependency from a `grep` hit** —
+   the same defect as reading a filename in a comment as evidence of a code path (ADR-0007's family).
+3. **`patch17` and `patch18` are not this goal's** and were never run in the transcript.
+
+> **Four goals running, the builder has corrected a load-bearing claim in the brief I handed it.**
+> That is now a pattern rather than a run of luck, and it is worth naming: **the brief is written by
+> the agent with the least access to the tree.**
+
+### AND A NEW INSTANCE OF THE TEMPLATE-LITERAL CLASS, one layer down
+
+**The Bash tool collapses a doubled backslash inside a quoted heredoc.** A `<<'EOF'` heredoc — the
+form whose whole purpose is to quote literally — **did not protect the escape.** A pattern written
+as a doubled-backslash `w` arrives as a single-backslash `w`.
+
+**This is `CLAUDE.md`'s regex-in-a-template-literal rule at a different layer**: same failure, same
+silence, same place — inside a *scanner's* predicate. **The remedy is the same one that section
+already gives, and it now has a second trigger: any script containing a regex escape goes through
+the Write tool, never a heredoc, and is read back off disk and compiled before it is trusted.**
+
+*(The builder hit it twice and switched tools. Recorded because the next person will hit it once and
+not notice.)*

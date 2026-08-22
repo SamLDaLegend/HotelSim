@@ -301,6 +301,38 @@ describe('clause 6 — the same CORRIDOR PLAN (G-034b)', () => {
     expect(validRoomIds(store, BOUNDS, cache, withCorridor(elsewhere, cell(GROUND_FLOOR, 1)))).toEqual([1]);
   });
 
+  it('AND IT NOW GUARDS A SECOND ANSWER: a corridor that joins a stranded room to the door', () => {
+    // ======================================================================================
+    // G-038a-ii-beta. Clause 6 was written when a corridor decided ONE thing — whether a room
+    // has a walkway beside it. It now decides TWO: the reachable component is a function of
+    // the same plan, so a `layCorridor` can flip a room from `unreachable` to valid WITHOUT
+    // touching `noCorridor` at all.
+    //
+    // That is why this arm exists rather than resting on the one above. The existing arm
+    // drives `noCorridor`, so deleting clause 6 goes red there too — but a reader would then
+    // have no witness that the COMPONENT is cached, and a future refactor that cached the fill
+    // somewhere with its own lifetime would keep the suite green. The arm below fails for the
+    // reachability answer specifically: `noCorridor` is satisfied in BOTH halves of it.
+    //
+    // A STAIRWELL IS DECLARED, because without one the floor axis spends from every cell and
+    // nothing on a finite plot is out of reach (ADR-0059). One cell, on the door.
+    // ======================================================================================
+    const cache = createValidityCache();
+    const store = storeOf(['bedroom', cell(GROUND_FLOOR, 3)], ['bed', cell(GROUND_FLOOR, 3)]);
+    const stairs = withStair(createStairs(), cell(GROUND_FLOOR, 0));
+    // The door is circulation, and so is the cell to the room's right — so the room HAS a
+    // walkway and is not `noCorridor`. Between them, two undeclared cells on a planned floor.
+    const stranded = withCorridor(withCorridor(createCorridors(), cell(GROUND_FLOOR, 0)), cell(GROUND_FLOOR, 4));
+    expect(validRoomIds(store, BOUNDS, cache, stranded, stairs)).toEqual([]);
+    // Draw the two cells between and the room is reached. Same store, same membership, same
+    // stair plan, same plot: only the corridor plan moved, and only the ROUTE answer moved
+    // with it.
+    const joined = withCorridor(withCorridor(stranded, cell(GROUND_FLOOR, 1)), cell(GROUND_FLOOR, 2));
+    expect(validRoomIds(store, BOUNDS, cache, joined, stairs)).toEqual([1]);
+    // And back, so the clause is not simply "any second call misses".
+    expect(validRoomIds(store, BOUNDS, cache, stranded, stairs)).toEqual([]);
+  });
+
   it('and a `layCorridor` on a cell already declared KEEPS the cache, by identity', () => {
     // The other half, and the reason `withCorridor` returns its argument by reference: a host
     // issuing `layCorridor` on a blind cadence — the way `drawLoan` is issued — must not drop

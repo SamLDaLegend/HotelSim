@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, the reachability goal was ATTEMPTED and STOPPED by the builder, correctly — no source byte changed, because my brief's load-bearing premise was FALSE. stairLeg returns its destination unchanged when no stairwell is declared, so in every shipped world the floor axis is FREE FROM EVERY CELL, and guests are in the basement today with no stairs. That corrects G-039b-alpha's headline: its 60-of-75 was measured by a fill STRICTER THAN THE MOVER. What survives is its real achievement — the lanes are joined and the door is out of room 0. ADR-0059 rules four questions; the goal is re-planned. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-22, reachability SHIPPED, was DESTROYED by the orchestrator, and was RECOVERED — I2 comes back ca7bee4a4d6ea416 and the changed-file list is byte-for-byte the pre-loss twelve, so it is the same work rather than a rebuild resembling it (ADR-0061, ADR-0062, E-009 closed). `unreachable` is the sixth room-invalidity reason, asked last, over a fill using the SAME predicate the mover asks. It ships INERT on every shipped workload deliberately: no harness declares a stairwell, and declaring one to make a fixture go green is the workload-tuning G-039b-alpha refused by name. ADR-0060 CORRECTS ADR-0059 — I ruled the predicate must follow the mover, then derived three consequences from a predicate that does not. Next: G-038a-iii, the stairwell rollout, is what makes any of this live. Fourteen rows green, VERIFY_EXIT=0 read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -3075,3 +3075,117 @@ hundredth between 3 and 6 rooms, so *"a term over the MEAN is safe — building 
 is false as written. **That is not a hypothesis and it does not want a test — it wants a
 decision**, and the decision belongs to whoever writes the reputation term. It is asserted as a
 census of inversions in that file so it cannot be lost.
+
+---
+
+## From G-038a-ii-β — a room is reached, or it is not a room (2026-08-21)
+
+- **THE STAIRWELL ROLLOUT IS A BEHAVIOUR GOAL AND IT IS NOT THIS ONE.** No harness declares a
+  stairwell, so `stairLeg` leaves the floor axis free from every cell and guests reach the
+  basement through the ceiling. Turning stairs on re-routes every cross-floor journey through
+  one shaft: it moves occupancy, every golden, I5 and the I2 hash.
+  **FALSIFICATION TEST**: lay `layStair` on `(column 1, row 0)` for floors −1..0 in
+  `report.ts`'s seeded walk and re-read `--rooms 60 --amenities 5` and the criterion
+  invocation. *Measured in this goal, before deciding not to do it: `unreachable` reads
+  **0 / 0 / 0** on the CLI default, the bench and the criterion with no stairwell; **0 / 0 / 5**
+  with one confined to floors −1..0; **0 / 0 / 2** with a full-height one. If a stairwell ever
+  changes the CLI default or the bench away from zero, this note is wrong and the rollout is
+  cheaper than it looks; if it only ever moves the criterion, the rollout is buying journey
+  realism and not reachability, and it should be scheduled as such.*
+  → **its own goal**, alongside whatever re-takes `TARGET_CONCURRENT_HUNDREDTHS`.
+
+- **A ROOM DRAWN OVER THE STAIRWELL NOW SEVERS THE BUILDING, AND NOBODY HAS DECIDED WHETHER THE
+  PLAYER SHOULD BE STOPPED.** G-038a-ii-α ruled "accepted and named" because a refusal *"would
+  need a rule to derive itself from, and that rule is REACHABILITY"*. That rule now exists:
+  `travel.stairs.test.ts` drives a world where one room on the shaft's ground-floor cell makes
+  every room above it `unreachable`, while `stepTowards` still walks through it and arrives.
+  **FALSIFICATION TEST**: put a player-facing stair tool in front of somebody and watch them
+  build over their own shaft. *If they notice — the rooms above go hatched and alarm-outlined
+  with the reason on them — the verdict IS the feedback and no refusal is owed. If they do not,
+  `buildRoom` owes a sixth `BuildRefusalReason` and it is a migration of everybody's counters.*
+  → **M5**, or whichever goal first gives the player a stair.
+
+- **THE FILL'S EMPTY-FLOOR COLLAPSE BUYS NOTHING ON A HOTEL BUILT ON EVERY FLOOR.** The
+  reachability fill folds a floor with no room and no corridor into one node, which is 90% of
+  the work on every shipped layout (rooms sit on two of twenty-three floors). The I2 determinism
+  log is the counter-example: its diagonal spawn walk puts rooms on twenty-one floors, so it
+  pays the whole plot on every context rebuild — measured, `validity.determinism.test.ts` needed
+  one `ValidityCache` across its horizon to stay inside its timeout at all.
+  **FALSIFICATION TEST**: benchmark `countInvalidRooms` on the 100,000-tick determinism world
+  and on the 60-room bench, in one sitting, and compare the pair against the same benchmark with
+  the collapse deleted. *If the log's two readings are within noise of each other, the collapse
+  is doing nothing anywhere and the honest fix is a cheaper per-cell probe (an occupancy bitmap
+  read off `placementIndex`) rather than a floor-level special case. If the bench is an order of
+  magnitude apart and the log is not, the collapse is exactly right and the log is simply a
+  workload no player can build.* → **whichever goal next profiles the tick.**
+
+- **THE DOOR'S OWN CELL IS SEEDED WHATEVER STANDS ON IT, AND THAT CHARITY HAS NEVER BEEN
+  EXERCISED BY A SHIPPED WORLD.** Without it, a player who builds a room over `entranceCell`
+  gets an EMPTY component and every room in the hotel reads `unreachable` — one bedroom
+  destroying a hotel. With it, such a hotel reads exactly as it did provided the door's
+  neighbours are circulation.
+  **FALSIFICATION TEST**: `buildRoom` on `entranceCell` in a world whose plate leaves the door's
+  neighbours declared, and read the tally. *If it reads zero unreachable, the charity is load-
+  bearing and the seed stays. If every room still goes unreachable, the charity is not enough on
+  its own and the rule owes the door's walkable NEIGHBOURS as roots too — which is the
+  "charitable rooting" `layout.reach.report.test.ts` already defines for its per-floor walk.*
+  → **M5**, where a player can first draw a room on the door.
+
+### A methodological ruling invalidates the numbers that motivated it — sweep `DECISIONS.md` for the general case
+**Parked 2026-08-21 (G-038a-ii-β, ADR-0060).** ADR-0059 §1 constrained the method; §§2–4 were
+computed by the old method. **Falsification test, and it is mechanical:** for each ADR that
+contains both a ruling about HOW to measure and a table of readings, check whether the readings
+are dated after the ruling or before it. `grep -n "^## ADR-" DECISIONS.md`, then for each, whether
+a re-take is cited. **Confirms if any ADR other than 0059 has a table taken under a method its own
+text later forbids; refutes if 0059 is the only one.**
+
+### A room drawn over a stairwell severs the building for VALIDITY while the mover walks through it
+**Parked 2026-08-21 (G-038a-ii-β).** The reachability fill and `stairLeg` agree on `climbsFrom`
+but not on obstruction: the fill asks `isWalkableFor` at the stairwell cell, `stairLeg` does not.
+**Test:** declare a stairwell, draw a room over it, assert (a) every room above reports
+`unreachable` and (b) a guest with a cross-floor destination still arrives. **Confirms if both
+hold** — the divergence is real and needs a `BuildRefusalReason` or a named acceptance. Belongs to
+the stairwell rollout, which is the goal that makes any of this live.
+
+### `pnpm verify` IS NOT RE-ENTRANT, and the I3 proof-of-bite is why — with a live reproduction
+**Parked 2026-08-22 (found by the orchestrator running two verifies at once, by mistake).**
+
+`content-gate.test.ts` writes `packages/sim/src/leaked-content.gate-probe.ts` into the **REAL
+SOURCE TREE**, runs `check:content`, and deletes it in a `finally`. That is correct as a
+proof-of-bite and it is **ADR-0022's forbidden shape**: mutate the repo rather than a scratch copy.
+
+**It bit, observed rather than reasoned.** With a second `verify` running, the `typecheck` row
+failed `TS6053: File '…/leaked-content.gate-probe.ts' not found — matched by include pattern
+'src/**/*.ts'`. **tsc globbed the probe into its program and the other run's `finally` deleted it
+before tsc read it.** The row is red, the file it names does not exist, and nothing in the message
+points at the cause. `verify.mjs` runs rows sequentially (`for … await runRow`), **so this needs
+two verifies — but two verifies is exactly what an agent does when it backgrounds one and forgets.**
+
+**Falsification test:** `pnpm verify` in two shells, offset by ~60s. **Confirms if either run's
+`typecheck` or `check:content` row goes red naming a `.gate-probe.ts` that does not exist.**
+**Refutes if both runs come back green** across three attempts.
+
+**The fix, if confirmed, is one of two and both are cheap:** write the probe to a scratch directory
+and point `check-content.mjs` at it by argument, **or** give the probe a unique per-process name so
+two runs cannot collide. **Prefer the scratch directory** — ADR-0022 says so, and it makes the
+gate's subject explicit rather than implicit in a glob.
+
+### THE INTERMITTENT ROWS MAY SIMPLY BE CONTENTION, AND THIS IS THE FIRST DELIBERATE LOAD READING
+**Parked 2026-08-22.** G-039a's row-log established that both intermittent failures are
+**`Test timed out`, not assertion failures**. Under two concurrent verifies, **two MORE files
+failed the same way** — `needs.determinism.test.ts` (35,529 ms on one test) and
+`provider.determinism.test.ts` (33,805 ms) — **neither of which is one of the two known rows.**
+
+> **That widens the population from 2 to 4 and points away from any per-file cause.** Four
+> `*.determinism.test.ts` files, all timing out, all under load, none failing an assertion.
+
+**This is G-039b-β's derivation arriving as a gift**, because its exit criterion is *pair both
+files loaded against quiet, interleaved, in one sitting* — **and "loaded" now has a recipe: run a
+second `verify` alongside.** **Confirms if the quiet arm shows no timeout across ≥5 runs while the
+loaded arm times out in ≥1**, with the per-test durations as the paired reading. **Refutes if the
+quiet arm also times out**, which would mean the cause is not contention and the timeout literal is
+still undderived.
+
+*(Both readings above are single observations under an accidental regime — `win32/12cpu`, two
+concurrent `pnpm verify` invocations. **Not a measurement; a reproduction recipe.** CLAUDE.md
+rule 5: nothing here may be quoted as a number until it is re-taken paired.)*

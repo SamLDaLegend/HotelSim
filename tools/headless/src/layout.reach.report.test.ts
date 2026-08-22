@@ -43,11 +43,11 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  countInvalidRooms,
   createValidityContext,
   createWorld,
   entitiesInOrder,
   entranceCell,
-  hasStairAt,
   isRoomKind,
   isWalkableFor,
   isWithinBounds,
@@ -56,7 +56,7 @@ import {
   roomIdAt,
   stepTick,
 } from '@hotelsim/sim';
-import type { BoundContent, Cell, Command, EntityId, GridBounds, ValidityContext, World } from '@hotelsim/sim';
+import type { BoundContent, Cell, Command, EntityId, GridBounds, RoomInvalidityTally, ValidityContext, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import {
   amenityCell,
@@ -103,14 +103,29 @@ function contextOf(world: World): ValidityContext {
 const key = (cell: Cell): string => `${cell.floor}|${cell.column}|${cell.row}`;
 
 /**
- * Every cell a guest bound for `destination` could stand on, walking out from `from`.
+ * ==========================================================================================
+ * Every cell a guest bound for `destination` could stand on, walking out from `from` WITHOUT
+ * LEAVING ITS FLOOR.
  *
- * FOUR NEIGHBOURS ON THE FLOOR, PLUS A DECLARED STAIR. `stepTowards` spends its budget on the
- * column and row axes and takes the floor axis only at a stairwell (`stairs.ts`), so a flood
- * fill that crossed floors anywhere would describe a simulation this one is not. No shipped
- * harness declares a stair, which is why the basement counts below read the way they do.
+ * FOUR NEIGHBOURS AND NO FIFTH, AND THE CORRECTION IS ADR-0059's. This walk used to take the
+ * floor axis wherever `hasStairAt` was true, above a comment that read *"`stepTowards` takes
+ * the floor axis only at a stairwell"*. **That sentence is false.** `stairLeg` returns its
+ * destination unchanged when no stairwell is declared and `stepTowards` then spends the floor
+ * axis unconditionally, so in every world this harness builds the floor axis is FREE FROM
+ * EVERY CELL — and when a stairwell IS declared, `stairLeg` reads only its column and row and
+ * carries a guest to ANY floor from that shaft, whether or not that floor declared a stair.
+ * The clause was therefore dead here and stricter than the simulation everywhere else, which
+ * is the worst pair a predicate can have.
+ *
+ * SO IT IS DELETED RATHER THAN CORRECTED, AND THE QUESTION IT USED TO ANSWER MOVED. Whether a
+ * room can be reached AT ALL is now a validity rule the simulation owns —
+ * `RoomInvalidityReason`'s `unreachable`, G-038a-ii-beta — and this file asks it through
+ * `countInvalidRooms` rather than through a private copy that can drift. What is left here is
+ * the question this file was actually written to answer and the only one its numbers were ever
+ * true of: **is one floor's circulation a single piece, and is the door standing on it.**
+ * ==========================================================================================
  */
-function reachable(ctx: ValidityContext, bounds: GridBounds, stairs: World['stairs'], from: Cell, destination: EntityId): Set<string> {
+function walkedOnOneFloor(ctx: ValidityContext, bounds: GridBounds, from: Cell, destination: EntityId): Set<string> {
   const seen = new Set<string>();
   if (!isWalkableFor(ctx, from, destination)) return seen;
   const queue: Cell[] = [from];
@@ -123,10 +138,6 @@ function reachable(ctx: ValidityContext, bounds: GridBounds, stairs: World['stai
       { floor: cell.floor, column: cell.column, row: cell.row + 1 },
       { floor: cell.floor, column: cell.column, row: cell.row - 1 },
     ];
-    if (hasStairAt(stairs, cell)) {
-      next.push({ floor: cell.floor + 1, column: cell.column, row: cell.row });
-      next.push({ floor: cell.floor - 1, column: cell.column, row: cell.row });
-    }
     for (const candidate of next) {
       if (!isWithinBounds(candidate, bounds)) continue;
       if (seen.has(key(candidate))) continue;
@@ -160,7 +171,7 @@ function tally(world: World): Tally {
     rooms += 1;
     const here = entity.at !== null && entity.at.floor === entrance.floor;
     if (here) onTheEntranceFloor += 1;
-    const walked = reachable(ctx, world.grid, world.stairs, entrance, entity.id);
+    const walked = walkedOnOneFloor(ctx, world.grid, entrance, entity.id);
     const arrived = cells.some((cell) => walked.has(key(cell)));
     if (arrived) reached += 1;
     if (arrived && here) reachedOnTheEntranceFloor += 1;
@@ -243,7 +254,7 @@ describe('THE LANES ARE JOINED', () => {
     expect(isWalkableFor(ctx, nearLane, NO_ENTITY)).toBe(true);
     expect(isWalkableFor(ctx, farLane, NO_ENTITY)).toBe(true);
     expect(nearLane.column).not.toBe(farLane.column);
-    const walked = reachable(ctx, world.grid, world.stairs, nearLane, NO_ENTITY);
+    const walked = walkedOnOneFloor(ctx, world.grid, nearLane, NO_ENTITY);
     expect(walked.has(key(farLane))).toBe(true);
     // AND THE DOOR IS ON THE SAME COMPONENT, which is the half that makes it a hotel rather
     // than a maze with a nice corridor in it.
@@ -281,7 +292,7 @@ describe('THE LANES ARE JOINED', () => {
     const farLane = { floor: entrance.floor, column: PLOT.minColumn + 16, row: entrance.row + 1 };
     expect(isWalkableFor(ctx, nearLane, NO_ENTITY)).toBe(true);
     expect(isWalkableFor(ctx, farLane, NO_ENTITY)).toBe(true);
-    const walked = reachable(ctx, world.grid, world.stairs, nearLane, NO_ENTITY);
+    const walked = walkedOnOneFloor(ctx, world.grid, nearLane, NO_ENTITY);
     expect(walked.has(key(farLane))).toBe(false);
     // ONE LANE, SEVEN CELLS DEEP, AND NOTHING ELSE — which is what "parallel and unjoined" was.
     expect(walked.size).toBe(7);
@@ -292,7 +303,7 @@ describe('THE LANES ARE JOINED', () => {
   });
 });
 
-describe('COUNTED: how many rooms a guest can walk to from the door', () => {
+describe('COUNTED: how many rooms a guest can walk to from the door WITHOUT CHANGING FLOOR', () => {
   it('60 of 75 on the bench plate, and all 60 of them are the ones on the entrance floor', () => {
     // ========================================================================================
     // THE HEADLINE, AND IT IS THE NUMBER G-038a-ii-beta DEPENDS ON.
@@ -324,12 +335,20 @@ describe('COUNTED: how many rooms a guest can walk to from the door', () => {
     // **1 strict (room 0, the door's own room) / 16 charitable of 75**, which agrees with the
     // review exactly on the charitable half.
     //
-    // THE FIFTEEN THAT ARE STILL UNREACHABLE ARE THE BASEMENT AMENITIES, AND THAT IS NOT THIS
-    // GOAL'S TO FIX. `amenityCell` puts them a floor down and NO HARNESS IN THIS PROJECT
-    // DECLARES A STAIRWELL — `travel.stairs.report.test.ts` records that as a decision, because
-    // declaring one moves occupancy. So the basement is a joined floor the ground floor cannot
-    // reach, and G-038a-ii-beta's own block already names the WATCH it wants for it: the
-    // basement going red before a stair and green after.
+    // ========================================================================================
+    // AND THE FIFTEEN THAT THIS WALK DOES NOT REACH ARE THE BASEMENT AMENITIES — WHICH IS A
+    // STATEMENT ABOUT THIS WALK AND NOT ABOUT THE SIMULATION. **CORRECTED BY ADR-0059.**
+    //
+    // This block used to call them UNREACHABLE. They are not, and never were: `amenityCell`
+    // puts them a floor down, no harness declares a stairwell, and with no stairwell declared
+    // `stepTowards` spends the floor axis from EVERY cell. Guests are down there today.
+    // Verified by effect, which is how the error was found: `--days 2 --seed 42` reports
+    // `guest_entertainment` met by room, and the only room providing it is in the basement.
+    //
+    // So the number above is a PER-FLOOR number and is stated as one. What it measures — and
+    // what the spine bought — is that the entrance floor's circulation is a single piece
+    // joining the door to every room on it. The whole-building question now has an owner:
+    // `unreachable`, asked below through the simulation's own rule rather than through a copy.
     // ========================================================================================
     const after = tally(seeded(BENCH_ROOMS, BENCH_AMENITIES));
     expect(after.rooms).toBe(75);
@@ -372,7 +391,7 @@ describe('COUNTED: how many rooms a guest can walk to from the door', () => {
       if (!isRoomKind(content, entity.kind)) continue;
       const cells = roomCellsOf(entity);
       if (cells.length === 0) continue;
-      const walked = reachable(ctx, world.grid, world.stairs, lane, entity.id);
+      const walked = walkedOnOneFloor(ctx, world.grid, lane, entity.id);
       if (cells.some((cell) => walked.has(key(cell)))) reached += 1;
     }
     expect(reached).toBe(7);
@@ -400,6 +419,80 @@ describe('COUNTED: how many rooms a guest can walk to from the door', () => {
   });
 });
 
+describe('AND THE SIMULATION S OWN REACHABILITY RULE, WHICH IS A DIFFERENT QUESTION (G-038a-ii-beta)', () => {
+  // ==========================================================================================
+  // THE COUNTED READING THE RULE OWES, PER WORKLOAD, AS A WHOLE TALLY.
+  //
+  // **IT IS ZERO EVERYWHERE, AND THAT IS THE FINDING RATHER THAN A DISAPPOINTMENT.** No harness
+  // in this project declares a stairwell, so `stairLeg` leaves the floor axis free from every
+  // cell, so every walkable cell on the plot is one step from the floor above it and nothing on
+  // a finite plot is out of reach. The rule is INERT on every shipped layout.
+  //
+  // WHAT WAS REFUSED, AND WHY IT IS RECORDED HERE. The obvious way to make these numbers
+  // non-zero is to declare a stairwell in this runner. Measured both ways at the same sitting,
+  // exact deterministic integers, n = 1 is the whole distribution:
+  //
+  //     |                        | no stairwell | stairwell -1..0 | full-height stairwell |
+  //     |------------------------|--------------|-----------------|-----------------------|
+  //     | CLI default            | **0**        | 0               | 0                     |
+  //     | 60-room bench          | **0**        | 0               | 0                     |
+  //     | criterion invocation   | **0**        | 5               | 2                     |
+  //
+  // **DECLARING A STAIRWELL BUYS THE RULE NOTHING ON EITHER LAYOUT THIS FILE IS ABOUT**, and on
+  // the criterion it buys only rooms the player's own walk stranded. What it costs is every
+  // cross-floor journey in the hotel re-routed through one shaft — occupancy, every golden, the
+  // I5 bench. Turning stairs on in the shipped layouts is a BEHAVIOUR change with its own blast
+  // radius and its own goal; doing it inside this one to make a new counter interesting is
+  // tuning a workload to keep a test interesting, which G-039b-alpha refused one goal ago in as
+  // many words. The zeros stand, and they are compared WHOLE so the next goal reads the numbers
+  // rather than the assertion.
+  // ==========================================================================================
+  const tallyOf = (world: World): RoomInvalidityTally =>
+    countInvalidRooms(world.entities, world.grid, world.corridors, world.stairs, content);
+
+  it('reports ZERO unreachable rooms on the bench plate, and moves no other reason', () => {
+    expect(tallyOf(seeded(BENCH_ROOMS, BENCH_AMENITIES))).toEqual({
+      missingItem: 0,
+      noCorridor: 0,
+      noDoor: 0,
+      unplaced: 0,
+      unreachable: 0,
+      unsupported: 0,
+    });
+  });
+
+  it('and on both smaller shipped workloads', () => {
+    for (const world of [seeded(6, BENCH_AMENITIES), seeded(3, 1)]) {
+      expect(tallyOf(world)).toEqual({
+        missingItem: 0,
+        noCorridor: 0,
+        noDoor: 0,
+        unplaced: 0,
+        unreachable: 0,
+        unsupported: 0,
+      });
+    }
+  });
+
+  it('AND THE ZERO IS NOT VACUOUS: strip the spine and the DOOR half still reads zero', () => {
+    // ==========================================================================================
+    // THE ANTI-VACUITY ARM, AND ITS ANSWER IS THE ONE WORTH RECORDING. Without the spine the
+    // door is not on circulation and the per-floor walk reaches nothing — the arm above measures
+    // exactly that. The SIMULATION's rule still says zero, because the free ceiling routes round
+    // the break. **That gap between the two numbers is the whole of ADR-0059**, and it is
+    // asserted here rather than left as prose so that the day vertical travel stops being free
+    // the two answers converge and this arm goes red on purpose.
+    // ==========================================================================================
+    const stripped = seeded(BENCH_ROOMS, BENCH_AMENITIES, (command) =>
+      command.kind === 'layCorridor' && command.at.row === PLOT.minRow);
+    expect(tally(stripped).reached).toBe(0);
+    expect(tallyOf(stripped).unreachable).toBe(0);
+    // And the rooms the per-floor walk cannot reach are NOT reported invalid, so no verdict in
+    // this project rests on the difference today.
+    expect(tallyOf(stripped).noCorridor + tallyOf(stripped).noDoor).toBe(0);
+  });
+});
+
 /** The tally, rooted at the door AND at the two cells beside it. See the arm that uses it. */
 function charitable(world: World): number {
   const ctx = contextOf(world);
@@ -417,7 +510,7 @@ function charitable(world: World): number {
     const walked = new Set<string>();
     for (const root of roots) {
       if (!isWithinBounds(root, world.grid)) continue;
-      for (const cell of reachable(ctx, world.grid, world.stairs, root, entity.id)) walked.add(cell);
+      for (const cell of walkedOnOneFloor(ctx, world.grid, root, entity.id)) walked.add(cell);
     }
     if (cells.some((cell) => walked.has(key(cell)))) reached += 1;
   }

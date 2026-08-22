@@ -1586,6 +1586,8 @@ export type RunSummary = {
       readonly noCorridor: number;
       readonly noDoor: number;
       readonly unplaced: number;
+      /** No route runs from the door to the walkway the room opens onto (G-038a-ii-beta). */
+      readonly unreachable: number;
       readonly unsupported: number;
     };
   };
@@ -1959,6 +1961,11 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         noCorridor: invalidRooms.noCorridor,
         noDoor: invalidRooms.noDoor,
         unplaced: invalidRooms.unplaced,
+        // ADDITIVE AGAIN, AND FOR THE SAME REASON (G-038a-ii-beta). It reads 0 on every
+        // workload this runner ships — see `layout.reach.report.test.ts`, which counts why —
+        // and a row that is a truthful zero is worth more than a row nobody emits: the day a
+        // layout strands a room, the number moves in a document consumers already read.
+        unreachable: invalidRooms.unreachable,
         unsupported: invalidRooms.unsupported,
       },
     },
@@ -2499,7 +2506,7 @@ export function renderText(summary: RunSummary): string {
     `rooms ok    ${summary.rooms.valid}`,
     `rooms bad   ${summary.rooms.invalid.unplaced} unplaced, ${summary.rooms.invalid.unsupported} unsupported, ` +
       `${summary.rooms.invalid.noDoor} no door, ${summary.rooms.invalid.noCorridor} no corridor, ` +
-      `${summary.rooms.invalid.missingItem} no item`,
+      `${summary.rooms.invalid.unreachable} no route, ${summary.rooms.invalid.missingItem} no item`,
     `arrived     ${summary.guests.arrived}`,
     // ONE LINE PER DEPARTURE REASON (G-015), in the sim's canonical order, whether or not
     // anything ended that way — the same argument the need table makes for printing a row

@@ -156,6 +156,7 @@ describe('THE DISCRIMINATING CASE: four neighbours, not two', () => {
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
   });
@@ -313,6 +314,7 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
       noCorridor: 0,
       noDoor: 3, // the three in the middle; the two ends still open outward
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
     // AND THE SAME STORE ON THE SHIPPED PLOT IS ENTIRELY VALID — the paired arm, which is the
@@ -323,6 +325,7 @@ describe('ON A ONE-ROW PLOT THE RULE DEGENERATES TO THE 2-NEIGHBOUR RULE, EXACTL
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
   });

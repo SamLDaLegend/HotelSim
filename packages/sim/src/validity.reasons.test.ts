@@ -16,11 +16,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors, withCorridor } from './corridors.js';
-import { createStairs } from './stairs.js';
+import { createStairs, withStair } from './stairs.js';
+import type { Stairs } from './stairs.js';
 import type { Corridors } from './corridors.js';
 import { bindContent } from './content.js';
 import type { Entity, EntityStore } from './entities.js';
-import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
+import { createGridBounds, entranceCell, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell } from './grid.js';
 import {
   countInvalidRooms,
@@ -85,6 +86,15 @@ type Construction = {
    * still produce exactly the reasons they always did.
    */
   readonly corridors?: Corridors;
+  /**
+   * The stair plan this world was drawn under (G-038a-ii-beta). Absent means NONE DECLARED,
+   * which is not the same as "no vertical travel": with no stairwell `stairLeg` returns its
+   * destination unchanged and the floor axis spends from EVERY cell, so every floor of such a
+   * world is one step from every other. That is why the `unreachable` construction below is
+   * the only one that declares a stairwell — without one, nothing on a finite plot is out of
+   * reach and the reason has no world (ADR-0059).
+   */
+  readonly stairs?: Stairs;
 };
 
 const furnished = (at: Cell): readonly Spec[] => [
@@ -142,25 +152,57 @@ const CONSTRUCTIONS: readonly Construction[] = [
     store: storeOf(...furnished(cell(GROUND_FLOOR, 4))),
     corridors: withCorridor(createCorridors(), cell(GROUND_FLOOR, 10)),
   },
+  {
+    reason: 'unreachable',
+    how: 'a room whose only walkway is a corridor cell no route runs to',
+    // ======================================================================================
+    // THE DISCRIMINATING SHAPE, AND IT IS `noCorridor`'s SHAPE WITH ONE CELL MOVED. The room
+    // is supported (the earth), furnished (its bed), doored (columns 3 and 5 are empty) AND
+    // beside a declared walkway — the corridor at column 5 is its own. So all five earlier
+    // checks pass and this is the only reason left.
+    //
+    // What makes it fail is that the corridor at column 5 joins nothing: the door's own cell
+    // is twenty columns away and the floor is PLANNED, so the free cells between them are not
+    // walkable. Give the plan a run of corridor from the door to column 5 and this same store
+    // is a perfectly good room — `validity.reach.test.ts` drives exactly that pair.
+    //
+    // AND THE STAIRWELL IS WHAT MAKES THE CLAIM TRUE AT ALL. Without one the floor axis is
+    // free from every cell, so a guest at the door rises to the open-plan floor above, crosses
+    // it and comes back down onto column 5. One declared stair cell confines vertical travel
+    // to the stairwell's column, exactly as `stairLeg` does.
+    // ======================================================================================
+    store: storeOf(...furnished(cell(GROUND_FLOOR, 4))),
+    corridors: withCorridor(
+      withCorridor(createCorridors(), cell(GROUND_FLOOR, 5)),
+      entranceCell(BOUNDS),
+    ),
+    stairs: withStair(createStairs(), entranceCell(BOUNDS)),
+  },
 ];
 
-function reasonOf(store: EntityStore, corridors: Corridors = createCorridors()): RoomInvalidityReason | null {
+function reasonOf(
+  store: EntityStore,
+  corridors: Corridors = createCorridors(),
+  stairs: Stairs = createStairs(),
+): RoomInvalidityReason | null {
   const room = store.list[0];
   if (room === undefined) throw new Error('test bug: the construction has no room');
-  return roomInvalidity(createValidityContext(content, BOUNDS, corridors, createStairs(), storeEntities(store)), room);
+  return roomInvalidity(createValidityContext(content, BOUNDS, corridors, stairs, storeEntities(store)), room);
 }
 
 describe('every invalidity reason is reachable by a world constructed here', () => {
   for (const construction of CONSTRUCTIONS) {
     it(`produces ${construction.reason} from ${construction.how}`, () => {
-      expect(reasonOf(construction.store, construction.corridors)).toBe(construction.reason);
+      expect(reasonOf(construction.store, construction.corridors, construction.stairs)).toBe(construction.reason);
     });
   }
 
   it('produces EVERY reason in the union, and no reason outside it', () => {
     // The criterion itself. Sorted with the same explicit comparator the union uses, so
     // this compares sets rather than insertion orders.
-    const produced = CONSTRUCTIONS.map((construction) => reasonOf(construction.store, construction.corridors)).sort((a, b) =>
+    const produced = CONSTRUCTIONS.map((construction) =>
+      reasonOf(construction.store, construction.corridors, construction.stairs),
+    ).sort((a, b) =>
       String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0,
     );
     expect(produced).toEqual([...ROOM_INVALIDITY_REASONS]);
@@ -181,10 +223,12 @@ describe('every invalidity reason is reachable by a world constructed here', () 
         // `noCorridor` room as valid, on an open-plan floor, while `reasonOf` called it
         // invalid. Two answers from one store is exactly what a shared parameter prevents.
         construction.corridors ?? createCorridors(),
-        // AND THE SAME FOR THE STAIRWELL (G-038a-ii-alpha). None of these constructions declares
-        // one, but passing the empty set explicitly is what keeps this call and `reasonOf`
-        // answering about the same world rather than about two.
-        createStairs(),
+        // AND THE SAME FOR THE STAIRWELL (G-038a-ii-alpha, and it stopped being cosmetic at
+        // G-038a-ii-beta). One construction now DOES declare one, and it is the only thing
+        // that makes its room unreachable — passing the empty set here would have made this
+        // tally disagree with `reasonOf` about the same world, which is the exact defect the
+        // corridor parameter above was added to close.
+        construction.stairs ?? createStairs(),
         content,
       );
       expect(tally[construction.reason]).toBe(1);

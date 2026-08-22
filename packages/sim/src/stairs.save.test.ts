@@ -166,7 +166,7 @@ const V20_ENTITIES: readonly { readonly id: number; readonly kind: string; reado
 ];
 
 /** THE TALLY THOSE BYTES DESCRIBE, read off the layout above by hand under the v20 rules. */
-const V20_TALLY = { missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unsupported: 1 } as const;
+const V20_TALLY = { missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unreachable: 0, unsupported: 1 } as const;
 
 /** How many BEDROOMS of that world work: the two ends of the terrace, the lone room, the tower. */
 const V20_VALID_ROOMS = 4;

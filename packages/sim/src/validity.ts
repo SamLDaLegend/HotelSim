@@ -81,7 +81,7 @@ import {
 import type { BoundContent } from './content.js';
 import { hasCorridorAt } from './corridors.js';
 import type { Corridors } from './corridors.js';
-import { hasStairAt } from './stairs.js';
+import { hasStairAt, stairwellOf } from './stairs.js';
 import type { Stairs } from './stairs.js';
 import { NO_ENTITY, draftForEach, draftIsClean, entitiesInOrder, isPlaced } from './entities.js';
 import type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
@@ -95,6 +95,7 @@ import {
   cellsEqual,
   compareCells,
   describeCell,
+  entranceCell,
   footprintCells,
   footprintCovers,
   GROUND_FLOOR,
@@ -134,6 +135,23 @@ export type RoomInvalidityReason =
   | 'noDoor'
   /** The room occupies no cell at all, so none of the other questions can be asked. */
   | 'unplaced'
+  /**
+   * The room opens onto circulation, and that circulation does not connect to the door
+   * (G-038a-ii-beta).
+   *
+   * A THIRD CLAIM, AND IT IS THE STRICTLY STRONGER ONE OF THE PAIR ABOVE IT. `noCorridor`
+   * is a fact about ONE CELL — the plan calls something beside this room a walkway.
+   * `unreachable` is a fact about the WHOLE PLAN: two corridor cells at opposite ends of a
+   * floor with rooms banked between them are both walkways, and one of them is a void.
+   * `PARKING.md` named the difference at G-009, before either existed: *"whether that
+   * walkway CONNECTS to the entrance is a THIRD thing and not this one."*
+   *
+   * ASKED LAST, AFTER `noCorridor`, so no existing verdict is displaced anywhere: a room
+   * that would have reported one of the five earlier reasons still reports it, and this can
+   * only ever convert a room that was VALID. That is checked rather than asserted — see
+   * `computeRoomInvalidity`.
+   */
+  | 'unreachable'
   /** Nothing holds the room up: it is above ground and the cell below is empty. */
   | 'unsupported';
 
@@ -147,6 +165,7 @@ const ROOM_INVALIDITY_REASON_SET: Readonly<Record<RoomInvalidityReason, true>> =
   noCorridor: true,
   noDoor: true,
   unplaced: true,
+  unreachable: true,
   unsupported: true,
 });
 
@@ -251,6 +270,25 @@ export type ValidityContext = {
    * entity set, amortised by the cache over every tick that changed nothing.
    */
   plannedFloors: Set<number> | null;
+  /**
+   * Every cell a guest can reach from the door (G-038a-ii-beta). LOOKUP
+   * ONLY — never iterated, never ordered (I2). Null until the first reachability question.
+   *
+   * ONE FILL PER CONTEXT, NOT ONE PER ROOM, and the difference is the complexity of the
+   * whole rule: the component is a property of the PLAN, so every room on the plot asks the
+   * same set the same question. Built lazily and amortised by `ValidityCache` over every
+   * tick that changed nothing, exactly as `index` and `grounded` are — see
+   * `reachableCells` for the cost, which is bounded by the plot rather than by the entity
+   * count and is therefore not a per-entity pass over all entities.
+   */
+  reachable: ReachedCells | null;
+  /**
+   * The floors carrying at least one placed ROOM (G-038a-ii-beta). LOOKUP ONLY — never
+   * iterated, never ordered (I2). Null until the first reachability question.
+   *
+   * `plannedFloors`' shape one field over, and it answers the other half of `isEmptyFloor`.
+   */
+  builtFloors: Set<number> | null;
   /** Answers already computed. LOOKUP ONLY — never iterated (I2). */
   memo: Map<EntityId, RoomInvalidityReason | null> | null;
   /**
@@ -481,6 +519,8 @@ export function createValidityContext(
     index: null,
     grounded: null,
     plannedFloors: null,
+    reachable: null,
+    builtFloors: null,
     memo: null,
     validRooms: null,
     providers: null,
@@ -902,8 +942,372 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // being paid for anyway, so the cost order the docblock claims is undisturbed.
   if (!hasCirculation) return 'noCorridor';
 
+  // REACHED: a route runs from the door to one of those cells (G-038a-ii-beta).
+  //
+  // ASKED LAST OF ALL SIX, AND THE ORDER IS LOAD-BEARING TWICE OVER. `noCorridor` above is
+  // the same question about ONE CELL, so this is the strictly stronger claim of the pair and
+  // asking it first would silently re-label every `noCorridor` room in every harness — the
+  // outcome `noCorridor`'s own docblock says a new rule must not produce. And it is the most
+  // expensive check in the file, so the ascending-cost ordering the docblock claims still
+  // agrees with the legibility ordering rather than trading against it.
+  //
+  // THE CONSEQUENCE, STATED AS A CHOICE: this can only ever convert a room that would
+  // otherwise be VALID. Every other reason's count is therefore unchanged in every world,
+  // which is a property rather than a hope — `validity.reach.test.ts` drives it.
+  if (!isReachableRoom(ctx, cells)) return 'unreachable';
+
   return null;
 }
+
+/**
+ * ==========================================================================================
+ * WHICH CELLS THE FILL HAS REACHED — A FLAT BYTE PER CELL WHEN THE PLOT ALLOWS ONE, AND A SET
+ * OF STRINGS WHEN IT DOES NOT.
+ *
+ * THE SHAPE WAS MEASURED, NOT CHOSEN. Three spellings of the same fill, taken back to back in
+ * one sitting on the 60-room bench at 200 repetitions each, reported as milliseconds to build
+ * ONE validity context (the fold that context also does costs 0.245ms, so almost all of this
+ * is the fill):
+ *
+ *     `Set<string>`, a template literal per cell   20.3 ms
+ *     `Set<number>`, the cell's index into the plot  4.4 ms
+ *     `Uint8Array`, one byte per cell of the plot    3.1 ms
+ *     and the same, with the empty-floor collapse    0.50 ms
+ *
+ * The fold alone — everything a validity context does APART from this fill — measures 0.245ms
+ * on the same world in the same sitting, so the shipped form costs about what the rest of the
+ * file costs, and the first spelling cost eighty times it.
+ *
+ * WHY IT IS WORTH THE BYTES. This is paid once per VALIDITY CONTEXT, and a context is rebuilt
+ * whenever entity membership changes — which for a host stepping `stepTick` without a
+ * `ValidityCache` is EVERY TICK. `run` holds a cache and pays it once per call; a test loop that
+ * steps by hand does not. The plot this build ships is 23 x 80 x 8 = 14,720 cells, so the dense
+ * form is a 14 KB allocation per fill and an O(1) array index per probe.
+ *
+ * AND THE STRING SET IS NOT DEAD CODE. `assertGridBounds` requires only SAFE INTEGERS on each
+ * axis, so a legal save can carry a plot whose cell count overflows an array — or a `Number`.
+ * Indexing such a plot would collide two cells into one and report a room reachable that is
+ * not, which is a WRONG ANSWER rather than a slow one, and that is the one failure a derived
+ * rule must not have. `validity.reach.test.ts` drives a plot with 2^54 rows through this
+ * branch, because a branch nobody runs is a branch nobody has checked (ADR-0007).
+ * ==========================================================================================
+ */
+type ReachedCells = {
+  /** One byte per cell of the plot, indexed by `cellIndexAt`. Null on a plot too large. */
+  readonly dense: Uint8Array | null;
+  /** The overflow form: `floor|column|row`, injective for every plot. LOOKUP ONLY (I2). */
+  readonly sparse: Set<string>;
+  /**
+   * Floors reached IN FULL rather than cell by cell — see `isEmptyFloor`. LOOKUP ONLY, never
+   * iterated, never ordered (I2).
+   */
+  readonly wholeFloors: Set<number>;
+  /** The plot's column and row spans, so `cellIndexAt` is not re-derived per probe. */
+  readonly columns: number;
+  readonly rows: number;
+};
+
+/**
+ * The largest plot this will index densely: 2^24 cells, which is a 16 MB allocation.
+ *
+ * DERIVED FROM WHAT A FILL CAN DO RATHER THAN CHOSEN. A flood fill that visited 16,777,216
+ * cells at the ~50ns a probe costs would take most of a second per validity context, so a plot
+ * past this point is one the rule cannot serve at interactive cost in EITHER representation —
+ * the limit is where the dense form stops being the cheap one, not where it stops working. The
+ * shipped plot is 14,720 cells, three orders of magnitude inside it.
+ */
+const DENSE_REACH_LIMIT = 1 << 24;
+
+/** The cell's index into the plot, or -1 when the plot cannot be indexed by arithmetic. */
+function cellIndexAt(reached: ReachedCells, bounds: GridBounds, floor: number, column: number, row: number): number {
+  if (reached.dense === null) return -1;
+  return ((floor - bounds.minFloor) * reached.columns + (column - bounds.minColumn)) * reached.rows + (row - bounds.minRow);
+}
+
+function sparseKey(floor: number, column: number, row: number): string {
+  return `${String(floor)}|${String(column)}|${String(row)}`;
+}
+
+function hasReached(reached: ReachedCells, bounds: GridBounds, floor: number, column: number, row: number): boolean {
+  if (reached.wholeFloors.has(floor)) return true;
+  const dense = reached.dense;
+  if (dense === null) return reached.sparse.has(sparseKey(floor, column, row));
+  return dense[cellIndexAt(reached, bounds, floor, column, row)] === 1;
+}
+
+/**
+ * ==========================================================================================
+ * WHERE A GUEST CAN GO IN ONE MOVE — THE MOVER'S OWN ADJACENCY, NOT A NEATER ONE (ADR-0059).
+ *
+ * FOUR NEIGHBOURS ON THE FLOOR, PLUS THE TWO ABOVE AND BELOW WHEREVER `stairLeg` WOULD SPEND
+ * THE FLOOR AXIS. That condition is `climbsFrom` below, and it is copied from `stairLeg` in
+ * `guests.ts` because it IS `stairLeg`'s condition:
+ *
+ *     no stairwell declared   the floor axis spends from EVERY cell
+ *     a stairwell declared    it spends at the stairwell's (column, row), on EVERY FLOOR —
+ *                             `stairLeg` reads `stairwellOf(stairs)` and uses only its
+ *                             column and row, never which floors declared a stair
+ *
+ * **THE SECOND CLAUSE IS THE ONE THAT COST THIS GOAL AN ATTEMPT.** The obvious spelling — a
+ * floor step only where `hasStairAt` is true — is STRICTER THAN THE SIMULATION, and a
+ * predicate stricter than the simulation reports defects that do not exist (ADR-0059).
+ * Verified by effect rather than by reading: a world declaring a stairwell on FLOOR 0 ONLY,
+ * with its only amenities in the basement, still puts guests on floor -1 — `guest floors
+ * visited = [-1, 0]`, identical to the same world with no stairwell at all and to the same
+ * world with the stair declared on both floors. A rule that called that basement unreachable
+ * would be describing a simulation this one is not.
+ *
+ * WHAT IT DELIBERATELY DOES NOT MODEL: `stepTowards`' FALLBACK. When every candidate landing
+ * is a wall the guest takes candidate zero anyway, so the mover can always converge on
+ * anything. Modelling that would make reachability trivially true of every cell on every plot
+ * and the rule would inspect nothing (ADR-0007). The fallback is what a guest does when the
+ * building has failed it; this predicate is the question of whether the building has.
+ * ==========================================================================================
+ */
+function moverNeighbours(cell: Cell, stairwell: Cell | null): readonly Cell[] {
+  const beside: Cell[] = [cellLeft(cell), cellRight(cell), cellFront(cell), cellBack(cell)];
+  if (climbsFrom(cell, stairwell)) {
+    beside.push({ floor: cell.floor + 1, column: cell.column, row: cell.row });
+    beside.push({ floor: cell.floor - 1, column: cell.column, row: cell.row });
+  }
+  return beside;
+}
+
+/** Whether `stairLeg` would spend the floor axis from this cell. See `moverNeighbours`. */
+function climbsFrom(cell: Cell, stairwell: Cell | null): boolean {
+  return stairwell === null || (cell.column === stairwell.column && cell.row === stairwell.row);
+}
+
+/**
+ * ==========================================================================================
+ * EVERY CELL A GUEST CAN REACH FROM THE DOOR (G-038a-ii-beta). A breadth-first fill over
+ * `isWalkableFor`, which is the SAME predicate `stepTowards` asks before it lands a guest, so
+ * pathing and validity cannot drift apart.
+ *
+ * ROOTED AT `entranceCell` AND NOWHERE ELSE, because that is where the simulation puts an
+ * arriving guest. A rule rooted at "any corridor" would call a hotel connected whose door
+ * opens onto a different building.
+ *
+ * THE DOOR'S OWN CELL IS SEEDED WHATEVER STANDS ON IT, AND THAT IS CHARITY WITH A REASON. If
+ * a player builds a room over the entrance, `isWalkableFor(entrance, NO_ENTITY)` is false and
+ * a strict fill would be EMPTY — every room in the hotel `unreachable`, from one badly placed
+ * bedroom. The mover does not do that: a guest standing inside a room still steps out to any
+ * walkable landing. So the walk starts at the door and expands only through free walkable
+ * cells; a hotel whose door is inside a room but whose door's neighbours are circulation
+ * reads exactly as it did, and a hotel with no walkable cell beside its door at all reads as
+ * what it is.
+ *
+ * WHAT IT COSTS, STATED RATHER THAN DISCOVERED. The fill is O(walkable cells reachable), which
+ * is bounded by the PLOT and not by the entity count — there is no pass over all entities per
+ * entity here, and a hotel with ten times the rooms does not fill ten times the cells. It is
+ * paid ONCE per validity context and amortised by `ValidityCache` over every tick that changed
+ * nothing, which on the measured 60-room bench is one fill for a 43,200-tick run.
+ *
+ * AND THE COMPONENT IS MUCH BIGGER THAN THE WALK THAT FINDS IT. On the shipped plot the
+ * entrance's component COVERS 13,482 cells for the CLI default and 13,551 for the bench —
+ * almost the whole plot, because with no stairwell declared the floor axis is free — while the
+ * fill VISITS about 1,400 of them, because `isEmptyFloor` folds the twenty-one storeys of empty
+ * air into twenty-one marks. Those two numbers are different quantities and the difference is
+ * the optimisation.
+ *
+ * AND IT OWES THE CACHE NO NEW CLAUSE. The component is a function of the corridors, the
+ * stairs, the plot and which cells hold rooms — and the reuse predicate already compares all
+ * four. What it DID change is that clause 6 now guards a SECOND answer, so
+ * `validity.cache.test.ts` gained an arm that watches a stale component rather than only a
+ * stale `noCorridor`.
+ * ==========================================================================================
+ */
+function reachableCells(ctx: ValidityContext): ReachedCells {
+  const existing = ctx.reachable;
+  if (existing !== null) return existing;
+  const bounds = ctx.bounds;
+  const columns = bounds.maxColumn - bounds.minColumn + 1;
+  const rows = bounds.maxRow - bounds.minRow + 1;
+  const floors = bounds.maxFloor - bounds.minFloor + 1;
+  const total = floors * columns * rows;
+  const reached: ReachedCells = {
+    dense: Number.isSafeInteger(total) && total <= DENSE_REACH_LIMIT ? new Uint8Array(total) : null,
+    sparse: new Set<string>(),
+    wholeFloors: new Set<number>(),
+    columns,
+    rows,
+  };
+  const stairwell = stairwellOf(ctx.stairs);
+  const entrance = entranceCell(bounds);
+  const cellQueue: Cell[] = [];
+  const floorQueue: number[] = [];
+
+  const markCell = (floor: number, column: number, row: number): void => {
+    const dense = reached.dense;
+    if (dense === null) reached.sparse.add(sparseKey(floor, column, row));
+    else dense[cellIndexAt(reached, bounds, floor, column, row)] = 1;
+  };
+
+  /**
+   * Admit one in-bounds candidate cell, whole floor and all.
+   *
+   * THE EMPTY-FLOOR BRANCH IS AN EXACT COLLAPSE, NOT AN APPROXIMATION, and the argument is
+   * three lines: an empty floor carries no room, so `roomAtCell` is undefined for every cell
+   * of it; it carries no corridor, so `isOpenPlan` is true and `isDeclaredWalkway` admits
+   * every cell of it; and a full rectangle under 4-adjacency is connected. Reaching ONE cell
+   * of such a floor therefore reaches all of it, and `isWalkableFor` would answer true for
+   * every one of them — which is why this branch does not ask.
+   */
+  const admit = (floor: number, column: number, row: number): void => {
+    if (reached.wholeFloors.has(floor)) return;
+    if (isEmptyFloor(ctx, reached, floor)) {
+      reached.wholeFloors.add(floor);
+      floorQueue.push(floor);
+      return;
+    }
+    if (hasReached(reached, bounds, floor, column, row)) return;
+    // FREE AND WALKABLE. `NO_ENTITY` is the destination room, so no room's own footprint is
+    // admitted: the component is CIRCULATION, and a guest crosses a room only to arrive in it.
+    // Spelled with a room's own id instead, a bank of bedrooms would be a corridor.
+    const beside: Cell = { floor, column, row };
+    if (!isWalkableFor(ctx, beside, NO_ENTITY)) return;
+    markCell(floor, column, row);
+    cellQueue.push(beside);
+  };
+
+  // THE DOOR IS SEEDED WHATEVER STANDS ON IT — see the docblock. On an empty floor that is the
+  // whole floor, which is the same statement.
+  if (isEmptyFloor(ctx, reached, entrance.floor)) {
+    reached.wholeFloors.add(entrance.floor);
+    floorQueue.push(entrance.floor);
+  } else {
+    markCell(entrance.floor, entrance.column, entrance.row);
+    cellQueue.push(entrance);
+  }
+
+  // TWO FRONTIERS, ONE LOOP. Cells first, then whole floors, then round again — the ORDER is
+  // irrelevant to the answer (a reachable set does not depend on the order it was discovered
+  // in) and it is fixed anyway, which is what I2 asks of it.
+  let cellHead = 0;
+  let floorHead = 0;
+  while (cellHead < cellQueue.length || floorHead < floorQueue.length) {
+    while (cellHead < cellQueue.length) {
+      const cell = cellQueue[cellHead];
+      cellHead += 1;
+      // Unreachable: the index is strictly inside the array. Kept as the postcondition of that
+      // rather than as evidence anything was checked (ADR-0010's amendment).
+      if (cell === undefined) continue;
+      // THE SAME `moverNeighbours` THE ROOM-SIDE QUESTION ASKS, AND IT IS THE SAME CALL RATHER
+      // THAN THE SAME SHAPE. This was briefly written out as scalar offsets, to save the array
+      // and the six `Cell` objects per cell — and that made the fill's adjacency a SECOND
+      // SPELLING of the mover's, which is the drift class this whole goal exists inside. The
+      // empty-floor collapse below took the fill from ~13,500 cells to ~1,400 on the shipped
+      // plot, so the allocation it was avoiding is no longer worth a duplicated predicate.
+      for (const beside of moverNeighbours(cell, stairwell)) {
+        // BOUNDS FIRST, and it must come first: an off-plot cell has no index into the plot.
+        if (!isWithinBounds(beside, bounds)) continue;
+        admit(beside.floor, beside.column, beside.row);
+      }
+    }
+    while (floorHead < floorQueue.length) {
+      const floor = floorQueue[floorHead];
+      floorHead += 1;
+      if (floor === undefined) continue;
+      // A WHOLE FLOOR HAS NO HORIZONTAL EXITS LEFT — it is already whole. Its only exits are
+      // vertical, and they are the mover's: from every cell when no stairwell is declared,
+      // from the stairwell's own column and row when one is (`climbsFrom`).
+      for (const next of [floor + 1, floor - 1]) {
+        if (next < bounds.minFloor || next > bounds.maxFloor) continue;
+        if (reached.wholeFloors.has(next)) continue;
+        if (isEmptyFloor(ctx, reached, next)) {
+          reached.wholeFloors.add(next);
+          floorQueue.push(next);
+          continue;
+        }
+        if (stairwell !== null) {
+          if (isWithinBounds({ floor: next, column: stairwell.column, row: stairwell.row }, bounds)) {
+            admit(next, stairwell.column, stairwell.row);
+          }
+          continue;
+        }
+        // NO STAIRWELL: the floor axis spends from every cell of the whole floor, so every
+        // walkable cell of the neighbouring floor is one step away. This is the only loop in
+        // the fill that is proportional to the plot rather than to the component — it runs at
+        // most once per (whole floor, neighbouring floor) pair, and `DENSE_REACH_LIMIT` bounds
+        // it, because the collapse is only taken on a plot small enough to index densely.
+        for (let column = bounds.minColumn; column <= bounds.maxColumn; column += 1) {
+          for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) admit(next, column, row);
+        }
+      }
+    }
+  }
+  ctx.reachable = reached;
+  return reached;
+}
+
+/**
+ * ==========================================================================================
+ * WHETHER THIS FLOOR IS ONE UNOBSTRUCTED OPEN-PLAN SLAB — no room stands on it and no corridor
+ * is declared on it — SO THAT REACHING ANY CELL OF IT REACHES ALL OF IT.
+ *
+ * WHY THE FILL NEEDS THIS, MEASURED RATHER THAN ASSUMED. The shipped plot is 23 floors, and on
+ * every workload this project runs, the rooms sit on two of them: the entrance floor and the
+ * basement. The other 21 are empty air. Filled cell by cell they are **12,150 of the bench's
+ * 13,551 reached cells — 90% of the work to establish that empty space is empty.** Collapsed,
+ * the fill is proportional to the floors somebody has BUILT on.
+ *
+ * IT IS NOT AN APPROXIMATION AND IT IS NOT A HEURISTIC. See `admit` for the three-line proof.
+ * The exits are still the mover's own — `climbsFrom` decides them, exactly as for a single
+ * cell — so a route that leaves a floor and comes back down somewhere else is still a route
+ * this finds. `validity.reach.test.ts` drives exactly that: two corridor islands on the
+ * entrance floor whose ONLY connection is over the empty floor above them.
+ *
+ * ONLY WHEN THE PLOT IS DENSE-INDEXABLE, because the collapse's one plot-proportional loop
+ * (a whole floor's exits onto a neighbouring built floor) has no other bound. On a plot too
+ * large to index, the fill runs cell by cell and visits only what it can reach.
+ * ==========================================================================================
+ */
+function isEmptyFloor(ctx: ValidityContext, reached: ReachedCells, floor: number): boolean {
+  // ONLY ON A DENSE-INDEXABLE PLOT — see the docblock's last paragraph. Read off the component
+  // being built rather than recomputed, so the fill and the collapse cannot disagree about
+  // which plot they are on.
+  if (reached.dense === null) return false;
+  if (isPlannedFloor(ctx, floor)) return false;
+  return !builtFloorsOf(ctx).has(floor);
+}
+
+/** The floors carrying at least one placed ROOM. LOOKUP ONLY — never iterated (I2). */
+function builtFloorsOf(ctx: ValidityContext): Set<number> {
+  const existing = ctx.builtFloors;
+  if (existing !== null) return existing;
+  const floors = new Set<number>();
+  for (const entry of placementIndex(ctx)) {
+    if (isRoomKind(ctx.content, entry.entity.kind)) floors.add(entry.at.floor);
+  }
+  ctx.builtFloors = floors;
+  return floors;
+}
+
+/**
+ * Whether a guest could walk from the door to any cell of this room.
+ *
+ * THE ROOM'S OWN CELLS COUNT, AND SO DO THEIR MOVER-NEIGHBOURS. A room's cells are not in the
+ * component — the fill admits only free cells — so the question is whether the component
+ * comes far enough to step in, which is one move by the same adjacency the fill used. The
+ * room's own cells are asked as well because of the entrance seed above: the room a badly
+ * placed door stands inside is reached by a guest who is already standing in it.
+ */
+function isReachableRoom(ctx: ValidityContext, cells: readonly Cell[]): boolean {
+  const reached = reachableCells(ctx);
+  const bounds = ctx.bounds;
+  const stairwell = stairwellOf(ctx.stairs);
+  for (const cell of cells) {
+    if (hasReached(reached, bounds, cell.floor, cell.column, cell.row)) return true;
+    for (const beside of moverNeighbours(cell, stairwell)) {
+      // An off-plot neighbour is never in the component, and asking would index outside the
+      // dense array — so the bounds question is asked here exactly as the fill asks it.
+      if (!isWithinBounds(beside, bounds)) continue;
+      if (hasReached(reached, bounds, beside.floor, beside.column, beside.row)) return true;
+    }
+  }
+  return false;
+}
+
 
 /**
  * WHETHER THE PLAN CALLS `cell` A WALKWAY (G-034b).
@@ -978,8 +1382,14 @@ function isDeclaredWalkway(ctx: ValidityContext, cell: Cell): boolean {
 
 /** Whether no corridor has been declared on this floor. See `isDeclaredWalkway`. */
 function isOpenPlan(ctx: ValidityContext, floor: number): boolean {
+  return !isPlannedFloor(ctx, floor);
+}
+
+/** Whether the player has drawn any corridor on this floor. `isOpenPlan`'s own question, named
+ *  so the reachability fill asks it rather than negating a negation. */
+function isPlannedFloor(ctx: ValidityContext, floor: number): boolean {
   const planned = (ctx.plannedFloors ??= plannedFloorsOf(ctx.corridors));
-  return !planned.has(floor);
+  return planned.has(floor);
 }
 
 /** The floors carrying at least one declared corridor. LOOKUP ONLY — never iterated (I2). */
@@ -1398,6 +1808,8 @@ export function describeRoomInvalidity(room: Entity, reason: RoomInvalidityReaso
       return `${what} has no free cell beside it on its floor, so it has no door and nobody can get in.`;
     case 'unplaced':
       return `${what} stands on no cell at all, so it is not part of the building.`;
+    case 'unreachable':
+      return `${what} opens onto a walkway, but no route runs from the door to it, so nobody can get there.`;
     case 'unsupported':
       return `${what} has nothing beneath it, so it has no floor to stand on.`;
     default: {
@@ -1430,6 +1842,7 @@ export function countInvalidRooms(
     noCorridor: 0,
     noDoor: 0,
     unplaced: 0,
+    unreachable: 0,
     unsupported: 0,
   };
   for (const entity of entitiesInOrder(entities)) {

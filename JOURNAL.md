@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-21, the reachability goal was ATTEMPTED and STOPPED by the builder, correctly — no source byte changed, because my brief's load-bearing premise was FALSE. stairLeg returns its destination unchanged when no stairwell is declared, so in every shipped world the floor axis is FREE FROM EVERY CELL, and guests are in the basement today with no stairs. That corrects G-039b-alpha's headline: its 60-of-75 was measured by a fill STRICTER THAN THE MOVER. What survives is its real achievement — the lanes are joined and the door is out of room 0. ADR-0059 rules four questions; the goal is re-planned. Fourteen rows green. Unreliable: 2 gates, 0 defects.*
+*As of 2026-08-22, reachability SHIPPED, was DESTROYED by the orchestrator, and was RECOVERED — I2 comes back ca7bee4a4d6ea416 and the changed-file list is byte-for-byte the pre-loss twelve, so it is the same work rather than a rebuild resembling it (ADR-0061, ADR-0062, E-009 closed). `unreachable` is the sixth room-invalidity reason, asked last, over a fill using the SAME predicate the mover asks. It ships INERT on every shipped workload deliberately: no harness declares a stairwell, and declaring one to make a fixture go green is the workload-tuning G-039b-alpha refused by name. ADR-0060 CORRECTS ADR-0059 — I ruled the predicate must follow the mover, then derived three consequences from a predicate that does not. Next: G-038a-iii, the stairwell rollout, is what makes any of this live. Fourteen rows green, VERIFY_EXIT=0 read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
   `5cfb73ca16c3463e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
@@ -14,10 +14,14 @@
   (`check:tickcost`, `check:tickcost:proof`, `check:scaling`: one ADR-0015 configuration debt,
   human-accepted, re-take owed) · **all six invariants green** · CI green on three platforms
   (G-022, run #7).
-- **THE THREE RED ROWS ARE NOT "UNRELIABLE".** Unreliable is 0 gates / 0 defects, and a third
-  unreliable gate is a stop condition (§2). A *ruled* red is a configuration refusal that a human
-  accepted with a re-take scheduled. **Do not let the two counts merge** — that is the
-  §4.1 denominator failure that has already resolved a measurement disagreement into a definition.
+- **A RULED RED IS NOT AN UNRELIABLE GATE, AND THE BOARD BEING GREEN DOES NOT DISSOLVE THE
+  DISTINCTION.** All fourteen rows are green today; the as-of line still reports **2 unreliable** because a green
+  row can still carry an ADR-0015 configuration debt a human accepted with a re-take scheduled.
+  **That 2 is INHERITED, not re-measured** — the next goal that touches those gates re-takes it. A *third* genuinely unreliable gate is a stop condition (§2). **Do not let the two
+  counts merge** — that is the §4.1 denominator failure that has already resolved a measurement
+  disagreement into a definition. *(This bullet read "THE THREE RED ROWS" for several goals after
+  the last one went green — a digest bullet outliving its subject is the same defect as a stale
+  as-of line, and nothing checks the body.)*
 - **A DEFECT CLASS IS CLOSED BY ENUMERATION, NOT BY SWEEPING** (ADR-0024, and it paid the day it
   was written). Five passes hunting one class yielded 5 / 3 / 8 / 11 / 8 — **not converging,
   because each pass sampled and reported the sample as progress.** Enumerating the same tree:
@@ -1823,3 +1827,84 @@ no longer any such move, because there is a lane to turn into.**
 **Nothing read as stupid**: no guest inside a wall, none in a stranger's room, none stalled, none
 drawn twice — **and the ground floor's plan now reads as a hotel floor: a lobby corridor across the
 front with the door at its left end, lanes running back off it, rooms banked between them.**
+
+---
+
+## WATCH #20 — G-038a-ii-β. The rule that changed no frame, and that is the observation.
+
+**3,602 frames at `--every 1`**, `pnpm --filter @hotelsim/game record -- --every 1 --ticks 900
+--floor 0`, seed 7, the scenario host — gitignored, reproducible, deleted after watching.
+
+**EVERY ONE OF THE 901 CENSUS LINES READS `invalid 0` AND `hollow 0`.** The scenario stands on
+four floors (−1, 0, 1, 2) with 53 declared corridors and **no stairwell**, and its whole-world
+tally at tick 900 is
+`{missingItem 0, noCorridor 0, noDoor 0, unplaced 0, unreachable 0, unsupported 0}`.
+
+### THE PREDICTION IN THE OLD BLOCK WAS ALREADY FALSIFIED; THIS IS THE ONE THAT REPLACED IT, AND IT HELD
+
+The block predicted *"the scenario's upper floors and basement go red before the stair and green
+after."* ADR-0059 killed that: with no stairwell declared, `stairLeg` leaves the floor axis free
+from every cell, so the basement was never unreachable and there is no red to go green. **The
+replacement prediction was that the rule is INERT on every shipped workload and therefore changes
+no frame at all.** It is, and it did not — measured on five workloads before the recording was
+taken and confirmed on the sixth by the recording itself.
+
+### WHAT A WATCHER WOULD SEE IF IT BIT, AND WHY NO HOST IN THE TREE CAN SHOW THEM
+
+An `unreachable` room draws exactly as `noCorridor` does — hatched, alarm-outlined, labelled with
+its reason — because `scene.ts` renders whatever string `roomInvalidity` returns. **So the render
+side is finished and untested by this recording, and saying so is more useful than a frame of a
+room that is not there.** The frame that would show it is the parked fixture — a sealed one-cell
+void, four rooms around it, a stairwell declared so the ceiling is not free — and **no host in
+this tree builds one**: `report.ts`, `determinism-log.ts` and `scenario.ts` all lay connected
+plates and none declares a stairwell. `packages/sim/src/validity.reach.test.ts` builds it and
+counts it; a WATCHER cannot yet be shown it. Parked with the invocation that would.
+
+### AND ONE THING THE RECORDING DID SETTLE, WHICH THE COUNTS COULD NOT
+
+**The scenario is the only four-floor host in the project**, so it is the only place a watcher
+could see the free ceiling as motion. **Guests DO leave the entrance floor** — the census's
+`elsewhere` column takes every value from 0 to 4 across the 901 ticks, and every guest arrives at
+`entranceCell` on floor 0, so each of those is a guest that changed floor **in a world that
+declares no stairwell**. *(Stated after re-measuring: the first draft of this paragraph said no
+guest ever left, off the last twenty lines of the run rather than the whole of it. `CLAUDE.md`
+rule 5 — the reading was re-taken over all 901 lines and it disagreed.)*
+
+**WHAT A FLOOR-0 RECORDING CANNOT SHOW IS HOW THEY LEFT**, and that is the honest limit of this
+instrument on this question: the guest simply stops being drawn. Whether it reads as stupid needs
+a frame of the floor it arrives ON, beside the column it left from — WATCH #17's residual class
+on a third subject. **It is not this goal's to fix**: the rule follows the mover and the mover is
+what walks through ceilings. It belongs to the stairwell rollout, and it is parked with its test.
+
+### G-038a-ii-β — ORCHESTRATOR REFLECT. I ruled that the predicate must follow the mover, then derived three consequences from a predicate that does not.
+
+**This is the second goal running in which the builder falsified the brief's load-bearing premise
+before writing a line, and the first in which the premise was a RULING OF MINE rather than a
+number I had inherited.**
+
+ADR-0059 §1 said: the predicate must be sim-faithful. Rulings 2, 3 and 4 were then computed with a
+fill **gated on `hasStairAt`** — the strict predicate, the one §1 forbids. **I did not notice
+because I wrote §1 last**, after the measurements, as the lesson drawn FROM them; it never
+occurred to me to go back and re-take the numbers under the rule I had just written.
+
+> **A ruling that constrains a method invalidates every number the old method produced, including
+> the numbers that motivated the ruling. Re-take them in the same edit, or the ADR ships with its
+> own counter-example inside it.**
+
+**The tell was in my own text and I read past it.** *"Full-height 13,482 cells; confined to floors
+−1..0, 1,322"* is only true of the gated fill — the builder reproduced **1,322 exactly under
+`mode=B`** and **13,482 under the faithful one**, which is as clean a falsification as this project
+has produced. **It cost a wasted first attempt and a second brief.** The mechanism that caught it
+was not a gate and not a critic: it was **a builder measuring the premise by effect** — three
+worlds, one amenity in the basement, and a guest standing on floor −1 in the world that declares
+no stair there.
+
+**AND THE OUTCOME IS A RULE THAT SHIPS INERT, WHICH I AM RECORDING AS CORRECT RATHER THAN AS A
+DISAPPOINTMENT.** The alternative was to declare a stairwell in `report.ts` so the fixture would
+go green — **which G-039b-α refused one goal ago, by name: *"tuning a workload to keep a test
+interesting."*** Both arms are recorded, so the decision is one edit to overrule.
+
+**The standing question from ADR-0048 §1, asked and answered:** *does anything else here have this
+problem?* — **yes, and it is the general form of this defect.** Every ADR in this file that pairs a
+methodological ruling with measurements taken before it is suspect in exactly this way. **Not
+swept this goal; parked with the invocation that would sweep it.**

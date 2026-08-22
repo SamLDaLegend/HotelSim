@@ -32,6 +32,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bindContent,
   createGridBounds,
+  createValidityCache,
   createWorld,
   dissatisfactionCapacityOf,
   dissatisfactionReliefOf,
@@ -119,8 +120,17 @@ const peakOver = (content: ReturnType<typeof bindContent>, days: number, rooms: 
   }
   let world = initial;
   let peak = 0;
+  // ONE `ValidityCache` ACROSS THE WALK, WHICH IS WHAT `run` HOLDS (G-038a-ii-beta). Stepping
+  // by hand to watch per-tick state is right; stepping by hand WITHOUT a cache rebuilds every
+  // derived index in the simulation on every tick — the placement index, the grounded set, the
+  // valid-room list and, since this goal, the reachable component — which is a configuration no
+  // host uses and which G-010 exists to have removed. **This changes no answer and that is a
+  // checked fact, not a claim**: `validity.cache.test.ts` asserts a run with a cache and a run
+  // without one produce the same state hash. The workload, the schedule and the tick count are
+  // untouched.
+  const cache = createValidityCache();
   for (let i = 0; i < options.ticks; i += 1) {
-    world = stepTick(world, content, (byTick.get(world.tick) ?? []) as never);
+    world = stepTick(world, content, (byTick.get(world.tick) ?? []) as never, cache);
     for (const guest of guestsInOrder(world.guests)) {
       if (guest.dissatisfaction > peak) peak = guest.dissatisfaction;
     }

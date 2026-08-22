@@ -121,7 +121,7 @@ const V16_ENTITIES: readonly { readonly id: number; readonly kind: string; reado
 ];
 
 /** THE TALLY THOSE BYTES DESCRIBE, read off the layout above by hand under the v16 rule. */
-const V16_TALLY = { missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unsupported: 1 } as const;
+const V16_TALLY = { missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unreachable: 0, unsupported: 1 } as const;
 
 const needs = (): readonly unknown[] => [
   { needId: 'rest', deficit: 40, metBy: 'room', abandonCount: 0, unservedTicks: 3 },

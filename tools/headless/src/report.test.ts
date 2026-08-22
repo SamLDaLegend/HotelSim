@@ -633,7 +633,7 @@ const distinct: RunSummary = {
   },
   rooms: {
     valid: 133,
-    invalid: { missingItem: 134, noCorridor: 138, noDoor: 135, unplaced: 136, unsupported: 137 },
+    invalid: { missingItem: 134, noCorridor: 138, noDoor: 135, unplaced: 136, unreachable: 153, unsupported: 137 },
   },
   money: {
     transactions: 117,
@@ -692,7 +692,7 @@ describe('renderers', () => {
         'need types  108',
         'entities    109',
         'rooms ok    133',
-        'rooms bad   136 unplaced, 137 unsupported, 135 no door, 138 no corridor, 134 no item',
+        'rooms bad   136 unplaced, 137 unsupported, 135 no door, 138 no corridor, 153 no route, 134 no item',
         'arrived     110',
         // One line per row, in table order, each carrying its own distinct sentinel — so a
         // renderer that printed the rows in the wrong order, or printed one twice, fails here.

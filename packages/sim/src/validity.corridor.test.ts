@@ -221,6 +221,7 @@ describe('the rule is asked LAST, so no earlier verdict is displaced', () => {
       noCorridor: 5,
       noDoor: 1,
       unplaced: 1,
+      unreachable: 0,
       unsupported: 1,
     });
   });

@@ -381,7 +381,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
   },
   rooms: {
     valid: 6,
-    invalid: { missingItem: 0, noCorridor: 0, noDoor: 0, unplaced: 0, unsupported: 0 },
+    invalid: { missingItem: 0, noCorridor: 0, noDoor: 0, unplaced: 0, unreachable: 0, unsupported: 0 },
   },
   money: {
     // 18 rather than 17 since G-011, and the one extra is the opening capital. A hotel
@@ -468,7 +468,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     'need types  4',
     'entities    11',
     'rooms ok    6',
-    'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no corridor, 0 no item',
+    'rooms bad   0 unplaced, 0 unsupported, 0 no door, 0 no corridor, 0 no route, 0 no item',
     'arrived     24',
     // G-027a: `satisfied` and `gaveUpWaiting` became `checkedOut` and `gaveUp` (ADR-0017),
     // and the SPLIT moved with them — 4 and 16 where it was 15 and 5. A stay is 1,440 ticks
@@ -1058,7 +1058,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     };
     rooms: {
       valid: number;
-      invalid: { missingItem: number; noCorridor: number; noDoor: number; unplaced: number; unsupported: number };
+      invalid: { missingItem: number; noCorridor: number; noDoor: number; unplaced: number; unreachable: number; unsupported: number };
     };
     money: {
       revenuePennies: number;

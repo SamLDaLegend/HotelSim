@@ -131,7 +131,7 @@ const V17_ENTITIES: readonly { readonly id: number; readonly kind: string; reado
 ];
 
 /** THE TALLY THOSE BYTES DESCRIBE, read off the layout above by hand under the v17 rule. */
-const V17_TALLY = { missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unsupported: 1 } as const;
+const V17_TALLY = { missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unreachable: 0, unsupported: 1 } as const;
 
 /** How many rooms of that world WORK. Three: the two ends of the terrace and the lone room. */
 const V17_VALID_ROOMS = 3;
@@ -354,6 +354,7 @@ describe('THE MIGRATION KEEPS EVERY VALIDITY VERDICT (G-034b)', () => {
       noCorridor: 3,
       noDoor: 1,
       unplaced: 1,
+      unreachable: 0,
       unsupported: 1,
     });
   });

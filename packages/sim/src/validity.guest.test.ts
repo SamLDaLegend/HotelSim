@@ -242,6 +242,7 @@ describe('a guest will not take an invalid room', () => {
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
     expect(guestsInOrder(world.guests)[0]?.roomEntityId).toBe(2);

@@ -35,7 +35,10 @@ import { bindContent } from './content.js';
 import type { BoundContent } from './content.js';
 import { createGridBounds, entranceCell, GROUND_FLOOR } from './grid.js';
 import type { Cell } from './grid.js';
+import { entitiesInOrder } from './entities.js';
 import { run, stepTick } from './tick.js';
+import { stepTowards } from './guests.js';
+import { createValidityContext, roomIdAt, roomInvalidity, storeEntities } from './validity.js';
 import { createWorld, hashState } from './world.js';
 import type { World } from './world.js';
 
@@ -328,8 +331,8 @@ describe('NO GUEST GETS STUCK', () => {
 //  A ROOM DRAWN OVER THE STAIRWELL, WHICH IS THE RULING THIS GOAL OWED.
 // ==========================================================================================
 
-describe('a room drawn over the stairwell does NOT sever the building', () => {
-  it('the guest walks THROUGH it and still climbs — `stepTowards`’ fallback, one axis over', () => {
+describe('a room drawn over the stairwell severs it for VALIDITY, and not for the mover', () => {
+  it('the MOVER still walks through it and climbs — `stepTowards`’ fallback, one axis over', () => {
     // ==========================================================================================
     // THE RULING, AND IT IS "ACCEPTED AND NAMED" RATHER THAN A SIXTH REFUSAL REASON.
     //
@@ -339,10 +342,24 @@ describe('a room drawn over the stairwell does NOT sever the building', () => {
     // wall makes `stepTowards` take candidate ZERO, so the guest converges on the stairwell
     // anyway, stands inside the room for a tick, and climbs. Nothing is severed.
     //
-    // What a room over a stairwell costs is LEGIBILITY — a guest seen standing in a stranger's
-    // bedroom on its way up, which is WATCH #17's residual class on a new subject. A refusal
-    // would need a rule to derive itself from, and that rule is REACHABILITY, which is
-    // G-038a-ii-beta's and is out of scope here by ruling.
+    // What a room over a stairwell costs the MOVER is LEGIBILITY — a guest seen standing in a
+    // stranger's bedroom on its way up, which is WATCH #17's residual class on a new subject.
+    //
+    // ==========================================================================================
+    // AND THE DEFERRED HALF NOW HAS ITS ANSWER (G-038a-ii-beta). This block used to be headed
+    // *"does NOT sever the building"*, over a comment that said a refusal *"would need a rule to
+    // derive itself from, and that rule is REACHABILITY, which is G-038a-ii-beta's and is out of
+    // scope here by ruling."* **That rule now exists, and its answer is that the building IS
+    // severed — for VALIDITY.** The two halves are both true and they are separated here rather
+    // than reconciled:
+    //
+    //   THE MOVER      converges anyway, through the room, and arrives. This arm.
+    //   THE RULES      report every room above as `unreachable`, so no guest is ever SENT.
+    //                  The arm below.
+    //
+    // Which is why the mover half is driven through `stepTowards` directly from here on. It
+    // used to be driven through the guest loop, and the guest loop no longer books a room in a
+    // severed building — the tick would have nothing to walk.
     // ==========================================================================================
     const blocked: Command[] = [
       // A lane on the entrance floor, so the floor is PLANNED and the room over the stairwell
@@ -352,16 +369,53 @@ describe('a room drawn over the stairwell does NOT sever the building', () => {
       { kind: 'spawnEntity', entityKind: 'shaft', at: cell(GROUND_FLOOR, STAIRWELL_COLUMN) },
       ...stairsUpTo(ROOM_FLOOR),
     ];
-    const path = walkOf(SLOW, 14, blocked);
-    // It stands ON the built-over stairwell cell — inside a room it is not going to — and then
-    // it climbs. THAT is the finding, and it is the frame WATCH #17's residual class predicts.
-    expect(path[0], describeCells(path)).toEqual(cell(GROUND_FLOOR, STAIRWELL_COLUMN));
-    expect(path[1], describeCells(path)).toEqual(cell(GROUND_FLOOR + 1, STAIRWELL_COLUMN));
-    // AND IT ARRIVES, which is the claim that matters: the floors above are still reachable.
-    expect(path[10], describeCells(path)).toEqual(cell(ROOM_FLOOR, ROOM_COLUMN));
-    // AND THE WHOLE PATH IS THE UNBLOCKED ONE, to the cell: the room costs the journey nothing,
-    // which is why this is a legibility finding rather than a severed building.
-    expect(describeCells(path)).toBe(describeCells(walkOf(SLOW, 14, stairsUpTo(ROOM_FLOOR))));
+    const world = hotel(SLOW, blocked);
+    const ctx = createValidityContext(SLOW, world.grid, world.corridors, world.stairs, storeEntities(world.entities));
+    // PHASE ONE, from the door: the leg `stairLeg` derives is the stairwell's own cell on this
+    // floor, and the guest lands ON it — inside a room it is not going to. That is the frame
+    // WATCH #17's residual class predicts, and it is what `stepTowards` does when the only
+    // candidate is a wall: it takes candidate zero.
+    const door = entranceCell(world.grid);
+    const onTheStair = cell(GROUND_FLOOR, STAIRWELL_COLUMN);
+    expect(stepTowards(door, onTheStair, 1, ctx, roomIdAt(ctx, onTheStair))).toEqual(onTheStair);
+    // PHASE TWO, from there: the floor axis spends and it climbs out of the room it is in.
+    const destination = cell(ROOM_FLOOR, ROOM_COLUMN);
+    const upOne = stepTowards(onTheStair, cell(ROOM_FLOOR, STAIRWELL_COLUMN), 1, ctx, roomIdAt(ctx, destination));
+    expect(upOne).toEqual(cell(GROUND_FLOOR + 1, STAIRWELL_COLUMN));
+  });
+
+  it('AND THE RULES NOW REFUSE IT: every room above reports `unreachable`, so nobody is sent', () => {
+    // ==========================================================================================
+    // THE OTHER HALF, AND IT IS THIS GOAL'S. The stairwell is the only way up; a room standing
+    // on its ground-floor cell means the door's component cannot climb, so the bedroom on floor
+    // 3 has no route. `stepTowards` would still get there — the arm above proves it — which is
+    // exactly why this has to be a VALIDITY rule rather than something the mover discovers.
+    //
+    // The control is the same hotel with the shaft cell left clear: the room is valid and the
+    // guest books it. One entity's worth of difference, and the verdict turns on it.
+    // ==========================================================================================
+    const lane: Command = { kind: 'layCorridor', at: cell(GROUND_FLOOR, 0) };
+    const clear = run(hotel(SLOW, [lane, ...stairsUpTo(ROOM_FLOOR)]), SLOW, 20, [
+      { tick: 1, command: { kind: 'guestArrives' } },
+    ]);
+    const blocked = run(
+      hotel(SLOW, [
+        lane,
+        { kind: 'spawnEntity', entityKind: 'shaft', at: cell(GROUND_FLOOR, STAIRWELL_COLUMN) },
+        ...stairsUpTo(ROOM_FLOOR),
+      ]),
+      SLOW,
+      20,
+      [{ tick: 1, command: { kind: 'guestArrives' } }],
+    );
+    expect(clear.guests.list[0]?.roomEntityId).not.toBe(0);
+    expect(blocked.guests.list[0]?.roomEntityId).toBe(0);
+    // AND THE REASON IS NAMED, not merely "no room": the bedroom is still supported, furnished
+    // and doored — it is the ROUTE that is gone.
+    const ctx = createValidityContext(SLOW, blocked.grid, blocked.corridors, blocked.stairs, storeEntities(blocked.entities));
+    const bedroom = entitiesInOrder(blocked.entities).find((entity) => entity.kind === 'bedroom');
+    expect(bedroom).toBeDefined();
+    if (bedroom !== undefined) expect(roomInvalidity(ctx, bedroom)).toBe('unreachable');
   });
 });
 
@@ -371,11 +425,21 @@ describe('a room drawn over the stairwell does NOT sever the building', () => {
 
 describe('a declared stair is a declared walkway', () => {
   it('gives a room on a PLANNED floor its circulation, so the rule is strictly widening', () => {
-    // Floor 3 gets a lane at column 9 — so the floor is planned — and the bedroom at column 8
-    // touches it, which keeps it valid. The stairwell at column 1 adds walkable cells and
-    // takes none away: a union gains a clause. That monotonicity is the whole proof that
-    // `migrateV20ToV21`'s empty set rewrites no verdict, and it is asserted rather than argued.
-    const planned: Command[] = [{ kind: 'layCorridor', at: cell(ROOM_FLOOR, ROOM_COLUMN + 1) }];
+    // Floor 3 gets a lane — so the floor is planned — and the bedroom at column 8 touches it,
+    // which keeps it valid. The stairwell at column 1 adds walkable cells and takes none away:
+    // a union gains a clause. That monotonicity is the whole proof that `migrateV20ToV21`'s
+    // empty set rewrites no verdict, and it is asserted rather than argued.
+    //
+    // THE LANE RUNS FROM THE STAIRWELL'S COLUMN TO THE ROOM'S SINCE G-038a-ii-beta, and that is
+    // a repair to the FIXTURE rather than a weakening of the claim. It was one cell, at column
+    // 9, joined to nothing — and a lane that reaches no stair is a lane no guest can get onto
+    // once vertical travel is modelled, so the `with_` arm's room became `unreachable` and this
+    // test would have been comparing a severed hotel with a whole one. `isDeclaredWalkway` is
+    // still strictly widening; what moved is that the fixture now describes a hotel.
+    const planned: Command[] = Array.from({ length: ROOM_COLUMN + 2 - STAIRWELL_COLUMN }, (_, i) => ({
+      kind: 'layCorridor' as const,
+      at: cell(ROOM_FLOOR, STAIRWELL_COLUMN + i),
+    }));
     const without = run(hotel(SLOW, planned), SLOW, 20, [{ tick: 1, command: { kind: 'guestArrives' } }]);
     const with_ = run(hotel(SLOW, [...planned, ...stairsUpTo(ROOM_FLOOR)]), SLOW, 20, [
       { tick: 1, command: { kind: 'guestArrives' } },

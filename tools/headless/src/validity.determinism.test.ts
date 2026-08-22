@@ -50,6 +50,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countGuestsInInvalidRooms,
   countInvalidRooms,
+  createValidityCache,
   createValidityContext,
   createWorld,
   departureCountOf,
@@ -58,6 +59,7 @@ import {
   isRoomKind,
   roomInvalidity,
   run,
+  stepTick,
   storeEntities,
   totalInvalidRooms,
 } from '@hotelsim/sim';
@@ -103,6 +105,7 @@ describe('the I2 harness reaches rooms that do not work', () => {
       noCorridor: 1,
       noDoor: 3,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 39,
     });
   });
@@ -340,8 +343,25 @@ describe('every departure reason is still occurring at the END of the proof, not
     let world: World = initial;
     let previous = new Map<string, number>();
     const last = new Map<string, number>();
+    // ONE CACHE ACROSS THE WHOLE HORIZON, WHICH IS WHAT `run` DOES INTERNALLY (G-038a-ii-beta).
+    //
+    // This loop used to call `run(world, content, 1, ...)` a hundred thousand times, and `run`
+    // makes a fresh `ValidityCache` per call — so every tick of it rebuilt every derived index
+    // in the simulation from scratch, including, since this goal, the reachable component. That
+    // is a cost no host pays: `run` holds one cache for its whole span and so does the tick
+    // loop in `report.ts`. **This is the test paying what a real caller pays, not a workload
+    // tuned to be fast**: `validity.cache.test.ts` asserts a run with a cache and a run without
+    // one produce the same state hash, so the answers this loop reads are unchanged.
+    //
+    // MEASURED PAIRED, IN ONE SITTING, ON THIS FILE: **22.1s with the cache against OVER TEN
+    // MINUTES without it** — the second arm was still running when the stopwatch was stopped,
+    // so that ratio is a floor and not a reading. This log is the one workload in the project
+    // whose rooms stand on TWENTY-ONE FLOORS (its diagonal spawn walk), so the reachability
+    // fill's empty-floor collapse buys it nothing and it pays for the whole plot on every
+    // rebuild — which is exactly the caller this cache exists for.
+    const cache = createValidityCache();
     for (let i = 0; i < 100_000; i += 1) {
-      world = run(world, content, 1, (byTick.get(world.tick) ?? []).map((command) => ({ tick: world.tick, command })) as never);
+      world = stepTick(world, content, (byTick.get(world.tick) ?? []) as never, cache);
       for (const row of world.guestOutcomes.departures) {
         if ((previous.get(row.reason) ?? 0) !== row.count) last.set(row.reason, world.tick);
       }

@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
-import { createStairs } from './stairs.js';
+import { createStairs, withStair } from './stairs.js';
 import { bindContent } from './content.js';
 import type { Entity } from './entities.js';
 import { entitiesInOrder } from './entities.js';
@@ -115,15 +115,47 @@ function worldOfEveryReason(): World {
   // `noDoor` room would be the only thing left unchanged — a fixture rewritten by a rule rather
   // than a fixture testing one. `(30, row 1)` is the same argument for the third blocker
   // G-036a added: it is scenery, it must stay valid, so its own walkway is declared behind it.
+  //
+  // AND SINCE G-038a-ii-beta THOSE STUBS ARE JOINED TO THE DOOR, WITH ONE DELIBERATE EXCEPTION.
+  // The sixth reason is `unreachable`, and a world where every reason is represented has to
+  // contain one — so this world grew a RUN of corridor along the entrance's own row, from the
+  // door out to column 51, which is what puts rooms 7, 9 and 13 on a route rather than beside
+  // an island. `(30, row 2)` is deliberately NOT joined to it: room 11's only walkway is that
+  // one cell, walled in by room 5 in front of it and undeclared cells on every other side, so
+  // room 11 is the sealed-one-cell-void case arriving in the fixture that already had the
+  // shape. **Room 11 was scenery that stayed valid, and it is now scenery that is unreachable
+  // — the comment above is amended rather than deleted, because the pair it describes (rooms 7
+  // and 9 valid, room 5 `noDoor`) is untouched.**
+  //
+  // AND THE STAIRWELL IS WHAT MAKES ANY OF THAT TRUE. Without one, `stairLeg` leaves the floor
+  // axis free from every cell and a guest reaches the island by way of the open-plan floor
+  // above it (ADR-0059). One declared cell, on the door, confines vertical travel to the
+  // door's own column.
   return {
     ...createWorld(9, content),
     entities: { nextId: 17, list },
     corridors: [
-      cell(GROUND_FLOOR, 28),
-      cell(GROUND_FLOOR, 32),
+      // THE SPINE, on row 3, which no room in this world stands on — and NOT column 30, so
+      // room 11's island below stays an island. Rows 4's three cells carry the run around
+      // the gap that leaves.
+      ...Array.from({ length: 52 }, (_, column) => column).filter((column) => column !== 30)
+        .map((column) => cell(GROUND_FLOOR, column, 3)),
+      cell(GROUND_FLOOR, 29, 4),
+      cell(GROUND_FLOOR, 30, 4),
+      cell(GROUND_FLOOR, 31, 4),
+      // THE DOOR ONTO IT. `entranceCell` is (ground, column 0, row 0) and the floor is
+      // planned, so the door needs declaring or the walk starts nowhere.
+      cell(GROUND_FLOOR, 0, 0),
+      cell(GROUND_FLOOR, 0, 1),
+      cell(GROUND_FLOOR, 0, 2),
+      // AND THE THREE STUBS, each joined to the spine: rooms 7, 9 and 13 keep the verdicts
+      // this world was built to give them.
+      ...[28, 32, 51].flatMap((column) => [0, 1, 2].map((row) => cell(GROUND_FLOOR, column, row))),
+      // ROOM 11'S WALKWAY, AND IT IS JOINED TO NOTHING. Room 5 is in front of it, the spine
+      // skips its column, and the cells either side are undeclared on a planned floor.
       cell(GROUND_FLOOR, 30, 2),
-      cell(GROUND_FLOOR, 51),
     ].reduce(withCorridor, createCorridors()),
+    stairs: withStair(createStairs(), cell(GROUND_FLOOR, 0)),
   };
 }
 
@@ -183,7 +215,18 @@ describe('validity adds nothing to the save', () => {
     // PLAN is saved state (it is what the player drew), while the VERDICT computed from it must
     // not be — which is the distinction this whole file is about, and the reason the two words
     // sit on opposite sides of it (G-034b).
-    for (const word of ['valid', 'invalid', 'unsupported', 'noDoor', 'noCorridor', 'missingItem', 'unplaced']) {
+    for (const word of [
+      'valid',
+      'invalid',
+      'unsupported',
+      'noDoor',
+      'noCorridor',
+      'missingItem',
+      'unplaced',
+      // `stairs` is on the same side of this line as `corridors`: the PLAN is saved and the
+      // verdict computed from it is not (G-038a-ii-beta).
+      'unreachable',
+    ]) {
       expect(json).not.toContain(word);
     }
   });
@@ -196,7 +239,17 @@ describe('a world full of invalid rooms', () => {
     const world = worldOfEveryReason();
     const tally = countInvalidRooms(world.entities, BOUNDS, world.corridors, world.stairs, content);
     for (const reason of ROOM_INVALIDITY_REASONS) expect(tally[reason]).toBeGreaterThan(0);
-    expect(totalInvalidRooms(tally)).toBe(5);
+    // SIX SINCE G-038a-ii-beta, one per reason, and compared as a whole rather than as a total
+    // so a reason that moved says which one it was.
+    expect(tally).toEqual({
+      missingItem: 1,
+      noCorridor: 1,
+      noDoor: 1,
+      unplaced: 1,
+      unreachable: 1,
+      unsupported: 1,
+    });
+    expect(totalInvalidRooms(tally)).toBe(6);
   });
 
   it('serialises, deserialises and re-hashes identically', () => {
@@ -235,6 +288,7 @@ describe('a world full of invalid rooms', () => {
       noCorridor: 1,
       noDoor: 1,
       unplaced: 1,
+      unreachable: 1,
       unsupported: 1,
     });
   });
@@ -270,6 +324,7 @@ describe('the permanent v1 fixture', () => {
       noCorridor: 0,
       noDoor: 0,
       unplaced: 3,
+      unreachable: 0,
       unsupported: 0,
     });
   });

@@ -271,6 +271,7 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 6,
     });
   });
@@ -289,6 +290,7 @@ describe('enclosure: the floor beneath is the one piece of shell another entity 
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
   });
@@ -600,7 +602,7 @@ describe('counting invalid rooms', () => {
       ...walledIn(cell(GROUND_FLOOR, 41, 3)), //     and the four rooms that do it
     );
     const tally = countInvalidRooms(store, BOUNDS, createCorridors(), createStairs(), content);
-    expect(tally).toEqual({ missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unsupported: 1 });
+    expect(tally).toEqual({ missingItem: 1, noCorridor: 0, noDoor: 1, unplaced: 1, unreachable: 0, unsupported: 1 });
     // Every key of the union, always — the `BuildOutcomes.refused` contract, so a host
     // rendering the tally never has to guard against a missing key.
     for (const reason of ROOM_INVALIDITY_REASONS) {
@@ -615,6 +617,7 @@ describe('counting invalid rooms', () => {
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
   });
@@ -630,6 +633,7 @@ describe('counting invalid rooms', () => {
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
   });

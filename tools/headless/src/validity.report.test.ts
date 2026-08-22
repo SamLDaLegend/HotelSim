@@ -183,6 +183,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
       // furnished and doored — the rule biting on its own.
       noCorridor: 2,
       unplaced: 0,
+      unreachable: 0,
     });
     expect(summary.rooms.valid).toBe(64);
   });
@@ -241,7 +242,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // a regular expression: the same run that took `noDoor` to 0 would have matched it with a
     // literal `0` in that slot. THREE reasons, at their counts, through a real process.
     expect(stdout).toContain(
-      'rooms bad   0 unplaced, 17 unsupported, 1 no door, 2 no corridor, 0 no item',
+      'rooms bad   0 unplaced, 17 unsupported, 1 no door, 2 no corridor, 0 no route, 0 no item',
     );
   }, 60_000);
 });
@@ -262,6 +263,7 @@ describe('the shipped hotel still works', () => {
       noCorridor: 0,
       noDoor: 0,
       unplaced: 0,
+      unreachable: 0,
       unsupported: 0,
     });
     // Three bedrooms and one of each amenity since G-012 — the amenities are in the
