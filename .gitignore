@@ -10,9 +10,12 @@ coverage/
 # command log — it is regenerated in seconds and must never be committed.
 *.ndjson
 
-# Probe files written into packages/sim/src by tools/headless/src/content-gate.test.ts
-# to prove the I3 gate actually bites. They are removed in a `finally`; this pattern is
-# the second line of defence, so a probe that survives a hard kill cannot be committed.
+# I3 gate-bite probes. AT G-039b-β2 `content-gate.test.ts` STOPPED WRITING THESE INTO THE
+# REPOSITORY — the probe now lives in a materialised tree under the system temp directory,
+# because a file inside `packages/sim/src` is inside a tsconfig include and a concurrent run's
+# `tsc` could glob it and then find it gone (TS6053). The pattern stays as a third line of
+# defence: if anybody ever reaches for the old shape again, the probe still cannot be
+# committed. Nothing in the tree writes one today, and `content-gate.test.ts` asserts that.
 *.gate-probe.ts
 
 # SVG frame recordings from `pnpm --filter @hotelsim/game record` (G-035). Same rule as the
@@ -25,3 +28,9 @@ recording/
 # rather than re-run (G-039a). Derived from one run of one tree; the next run rewrites it.
 # It exists because three sightings of an intermittent row produced no captured text at all.
 .verify-logs/
+
+# The `pnpm verify` mutual-exclusion lock (G-039b-beta2). One verify at a time per tree: two
+# concurrent runs are two full worker pools on one core budget, which is the regime that
+# produced five unexplained `Test timed out` rows. Created and removed by tools/gates/verify.mjs
+# and stolen from a dead owner on the next run, so it never needs to be committed or cleaned.
+.verify-lock/

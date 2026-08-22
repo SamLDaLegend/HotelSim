@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, reachability SHIPPED, was DESTROYED by the orchestrator, and was RECOVERED — I2 comes back ca7bee4a4d6ea416 and the changed-file list is byte-for-byte the pre-loss twelve, so it is the same work rather than a rebuild resembling it (ADR-0061, ADR-0062, E-009 closed). `unreachable` is the sixth room-invalidity reason, asked last, over a fill using the SAME predicate the mover asks. It ships INERT on every shipped workload deliberately: no harness declares a stairwell, and declaring one to make a fixture go green is the workload-tuning G-039b-alpha refused by name. ADR-0060 CORRECTS ADR-0059 — I ruled the predicate must follow the mover, then derived three consequences from a predicate that does not. Next: G-038a-iii, the stairwell rollout, is what makes any of this live. Fourteen rows green, VERIFY_EXIT=0 read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-039b-beta2 is DONE: the five-sighting intermittent is CLOSED and the cause was the orchestrator running two `pnpm verify` at once. `verify.mjs` now takes an atomic mkdir lock: one verify per tree, waits for a live owner, steals a dead one. The derivation has NO free parameter — vitest sizes its own pool from the machine, so one verify already owns the core budget and two exceed it by exactly two, on every machine (ADR-0063). A worker cap was measured CHEAP (0.997x) and USELESS (removes 0 of 5 timeout cells) and is rejected for ineffectiveness, not cost — my brief's cost figure was from another session and would have got the right verdict by a false argument. Both gate-probe files now materialise OUTSIDE the repo. E-010 is open and does NOT stop the loop: one exit criterion I wrote is ill-posed, asking the policy to hold under a 24-worker arm that breaks its own premise. Reachability shipped and was destroyed and recovered on 2026-08-21 (ADR-0061, ADR-0062). Next up is the stairwell rollout, which is what makes reachability live. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 ca7bee4a4d6ea416. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -3189,3 +3189,77 @@ still undderived.
 *(Both readings above are single observations under an accidental regime — `win32/12cpu`, two
 concurrent `pnpm verify` invocations. **Not a measurement; a reproduction recipe.** CLAUDE.md
 rule 5: nothing here may be quoted as a number until it is re-taken paired.)*
+
+### CORRECTIONS 2026-08-22 to the two entries above, all found by `sim-critic` at plan review
+**Both entries were written by the orchestrator the same day and both mis-stated their evidence.**
+
+1. **"Four `*.determinism.test.ts` files, all timing out" — FALSE.** Only two are determinism files.
+   The other two are **`hysteresis.report.test.ts > STARVED (1 amenity of each)`** and
+   **`scorer.report.test.ts > and it moves at EVERY room count`** — report tests, and **they are the
+   two rows the goal was created for.** The inference ("points away from any per-file cause")
+   survives; **the pattern offered as evidence does not exist**, and a builder would have hunted a
+   shared property of four determinism files that is not there.
+
+2. **The re-entrancy falsification test does not discriminate.** It names only `.gate-probe.ts`, so
+   it cannot detect the second instance (`needs3-arm.identity-probe.ts`), and **"refutes if both
+   runs come back green across three attempts" cannot refute a race** — three clean attempts is the
+   *expected* outcome of a narrow window. **The mechanism is provable by inspection** (fixed path,
+   tsc glob, delete in `finally`), so the honest form is **a mechanism statement plus a population
+   census**, not a coin-flip. Superseded by G-039b-β2's exit criteria.
+
+3. **The contention falsification test confirms what nobody doubts.** Quiet-vs-loaded separates
+   contention from per-file cost — **which G-039a's row log already settled.** It does not separate
+   the two live remedies (timeout literal vs concurrency policy), which is what the goal needs. And
+   **"loaded" carried no intensity**: the answer changes sign between `--workers 12` (no timeout) and
+   `--workers 24` (timeout, 2 of 2). Superseded by G-039b-β2.
+
+4. **"THE `needs` AXIS HAS THE THINNEST MARGIN IN THE REPO — 1.0472x" is STALE**, and G-039b-β1's
+   builder will read it while re-taking the campaign. From the shipped file: **`needs` is
+   1.7181 / 1.2793 = 1.3430**, and **`density` is 2.1856 / 2.0415 = 1.0706** — *density is now the
+   thin one*, which `scaling-bound.mjs` already says. The parked entry still describes the cadence-32
+   campaign.
+
+> **Fifth goal running in which the agent acting on my brief corrected a load-bearing claim in it.**
+> Here it was five, two of them BLOCKERs that ordered the goal. **The pattern is structural, not
+> bad luck: the brief is written by the agent with the least access to the tree**, and the fix is
+> the plan review itself — which has now found BLOCKERs eight times out of eight.
+
+### A THIRD Windows I4 failure signature: `3221225794` (`0xC0000142`), with ZERO timeouts
+**Parked 2026-08-22 (G-039b-β2).** Not signature B (exit 1, 0 tests failed, RPC starvation) and not
+a timeout. **~32 tests failed with child `status` 3221225794 = `STATUS_DLL_INIT_FAILED`** — process
+creation failing wholesale — **and not one `Test timed out` in the whole run.**
+
+**The builder caused it with its own harness** and says so: it appeared late in a session that had
+created an enormous number of processes, and **vanished after killing every stray node process**;
+the clean re-run was green on both halves. **It says nothing about the tree.**
+
+**Why it is parked rather than dropped: it will be misread as a code defect by whoever meets it
+next.** A red I4 whose message is `expected 3221225794 to be +0` looks like a broken child, not an
+exhausted machine.
+
+**Falsification test:** run a full suite after roughly 10^5 process creations in one session and
+look for `3221225794` — **not** for a timeout. **Confirms if the signature appears with zero
+`Test timed out` and clears after killing stray node processes without any tree change. Refutes if
+it reproduces on a freshly booted machine**, which would make it a real defect.
+
+### The per-process CPU census undercounts by ~3.7x — use the system counter
+**Parked 2026-08-22 (G-039b-β2), withdrawn by its own author under rule 5.** Sampling per-process
+`TotalProcessorTime` deltas **silently loses every process that exits between samples**. On this
+suite it read **2.12 cores against 7.70 measured system-wide.**
+
+**Anyone re-taking any CPU-utilisation reading in this repo must use
+`\Processor(_Total)\% Processor Time`**, not a per-process sum. **Confirms trivially:** take both
+simultaneously over the same window and compare. *(Recorded because the wrong method is the obvious
+one, and the number it produces is plausible rather than absurd — which is what let it stand long
+enough to reach a report.)*
+
+### The four expensive tests spawn a full `tsx` CLI child per arm — they could get cheaper
+**Parked 2026-08-22 (G-039b-β2). Named in E-010 option (c) and deliberately NOT scheduled there.**
+`scorer.report.test.ts` and `hysteresis.report.test.ts` spawn a full CLI child per arm from inside
+vitest's pool. Quiet headroom is 3.8–5.8x, which is comfortable; **under a 24-worker stress arm the
+contention factor is 10–14x and nothing survives.**
+
+**Falsification test:** replace one arm's child spawn with an in-process call and re-measure the
+named `it` paired, quiet and at `--workers 12`. **Confirms if the quiet duration drops materially
+AND the contention factor falls; refutes if the factor is unchanged**, which would mean the cost is
+the work itself rather than process creation — and would close option (c) for good.

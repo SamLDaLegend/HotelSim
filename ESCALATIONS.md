@@ -1791,3 +1791,47 @@ departure from §5.4, which says the loop stops until the human resolves it.**
 **The human call that remains open is not "may I rebuild" — it is whether ADR-0061's rule is
 sufficient**, and that is a review of a written rule rather than a blocked loop. **Left here for
 the milestone question rather than holding M3.**
+
+---
+
+## E-010 — An exit criterion I wrote is UNSATISFIABLE by any change inside this repository. §2.0.
+**Opened 2026-08-22 (G-039b-β2). The loop does NOT stop** — the goal shipped its real subject; this
+is the residue, and it needs a human call rather than another campaign.
+
+### The criterion
+
+> *"`node tools/gates/arm/load.mjs --workers 24 -- pnpm test` completes with zero `Test timed out`."*
+
+**It asks the policy to hold in a regime that violates the policy's own premise.** `--workers 24`
+puts **24 CPU-bound spinners on 12 cores before the suite starts** — *"processes <= cores"* is
+already broken by a factor of two **by the harness**, so no policy evaluated inside the repository
+can restore it.
+
+### The measurement that closes it
+
+Contention factors under that arm are **10–14x** — `needs` 108,574 ms, `provider` 110,153 ms,
+`hysteresis` 114,834 ms, `scorer` 55,876 ms — against **3.8–5.8x of headroom.**
+
+> **No timeout literal below roughly 150,000 ms survives `--workers 24`, and no concurrency policy
+> inside this repository can.** The criterion is not hard; it is **ill-posed.**
+
+### The three ways out, and I recommend the first
+
+**(a) Strike the criterion and state the load arm's ceiling instead.** The honest claim this goal
+earned is *"`pnpm verify` is mutually exclusive, so the failure mode that produced five sightings
+cannot recur"* — which is verified. **`--workers 24` is a stress arm for finding tests, not a bar
+for passing them.** Recommended.
+
+**(b) Keep a bar, but state N at or below the core count.** `--workers 12` produced **no timeout**
+in the readings behind ADR-0063, so a criterion at N=12 is satisfiable today — **but it pins a
+number to a machine**, and CI is a different regime the whole goal was steered away from.
+
+**(c) Accept that the four tests need to get cheaper.** Real, and a different goal: they spawn a
+full `tsx` CLI child per arm. **Not scheduled, and it should not be smuggled into this one.**
+
+### Why this is a §2.0 entry and not a defect
+
+**The criterion was mine, and the builder was explicitly permitted to escalate rather than reach for
+a fallback.** It did, with the arithmetic. **That is the outcome the permission was written for** —
+the failure mode being avoided is a builder quietly raising a literal to ~150,000 ms so a red bar
+turns green, which is §2.1's superstition with CI access and would have passed unnoticed.

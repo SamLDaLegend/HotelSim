@@ -6,6 +6,7 @@
 // Every gate runs even if an earlier one fails, so one command tells you everything
 // that is broken instead of the first thing.
 
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, resolve } from 'node:path';
 import { escapeAnnotation, tail } from './lib/annotate.mjs';
@@ -107,6 +108,110 @@ const CI = process.env.GITHUB_ACTIONS === 'true';
  */
 const LOG_DIR = join(ROOT, '.verify-logs');
 
+// ==========================================================================================
+// ONE VERIFY AT A TIME, PER TREE — A CONCURRENCY POLICY, NOT A TIMEOUT (G-039b-β2).
+//
+// THE REQUIREMENT, WHICH A PERSON CAN WRITE DOWN: *no more concurrent CPU-bound processes
+// than cores.* §2.1 wants a threshold derivable from a stated requirement, and a duration is
+// not one — "30,000 ms" is a fact about one desk, whereas this sentence is evaluated in
+// whatever regime it runs in and therefore transfers to a 2-vCPU CI runner unchanged.
+//
+// THE DERIVATION HAS NO FREE PARAMETER, WHICH IS THE WHOLE POINT:
+//
+//   1. The `I4 test` row is `vitest run`. Vitest sizes its own pool from the machine:
+//      `getDefaultThreadsCount` is `Math.max(availableParallelism() - 1, 1)` (read out of
+//      the shipped `vitest@4.1.10` bytes, `dist/chunks/cli-api.BK8pd4xc.js`), plus the main
+//      process that transforms and reports.
+//   2. So ONE `pnpm verify` already provisions itself to the whole core budget. That is
+//      vitest obeying the requirement, and it is why capping `--maxWorkers` further is NOT
+//      the policy: the cap would need a "children per worker" factor nobody can source, which
+//      is the same superstition one level up, and it is measured expensive besides.
+//   3. Therefore TWO concurrent `pnpm verify` runs exceed the requirement by a factor of
+//      exactly two, on every machine, at every core count, with nothing to tune.
+//
+// So the policy is: a tree runs one verify at a time. The second WAITS rather than refusing,
+// because a refusal would fail the thing the human actually does — start a second verify a
+// minute after the first — and because the second run's readings were never the problem;
+// running them alongside the first was.
+//
+// WHAT THIS IS NOT. It changes no verdict, adds no lever and cannot turn a red row green: the
+// only thing it does is postpone. It is `HOTELSIM.md` §2.0's rule applied at the source —
+// "an intermittent gate is not red, it is UNRELIABLE" — by removing the one regime, observed
+// five times on this desk, in which the tree measures itself against a machine it is fighting.
+//
+// A LOCK THAT CANNOT WEDGE. `mkdir` is atomic, so the race is decided by the filesystem. The
+// owner writes its pid; a waiter that finds a DEAD owner steals the lock, so a hard kill
+// self-heals on the next run rather than needing a stale-after-N-seconds rule — which would
+// have been another undderivable duration. The path is per-tree, so the mirrored trees in
+// `verify.annotations.test.ts` lock themselves and never this one.
+// ==========================================================================================
+const LOCK = join(ROOT, '.verify-lock');
+const OWNER = join(LOCK, 'owner.json');
+
+/** A poll cadence, not a bound: the row being waited on is minutes long, so one second is
+ *  below the resolution of the thing it is waiting for and bounds nothing. */
+const POLL_MS = 1000;
+
+function ownerOf() {
+  try {
+    const parsed = JSON.parse(readFileSync(OWNER, 'utf8'));
+    return typeof parsed?.pid === 'number' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `EPERM` means the pid exists and belongs to somebody else — alive, not absent. */
+function isAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
+async function acquireLock() {
+  let announced = false;
+  for (;;) {
+    try {
+      mkdirSync(LOCK);
+      writeFileSync(OWNER, `${JSON.stringify({ pid: process.pid, platform: process.platform })}\n`, 'utf8');
+      if (announced) process.stdout.write('verify: the other run finished — starting.\n');
+      return;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+    }
+    const held = ownerOf();
+    if (held === undefined || !isAlive(held.pid)) {
+      // Nobody owns it: either the owner died mid-run, or it died between `mkdir` and the
+      // write below. Clear it and race for it again.
+      rmSync(LOCK, { recursive: true, force: true });
+      continue;
+    }
+    if (!announced) {
+      announced = true;
+      process.stdout.write(
+        `\nverify: another \`pnpm verify\` is running in this tree (pid ${held.pid}).\n` +
+          '        Waiting for it rather than measuring the gates against a machine this run\n' +
+          '        does not have to itself (§2.0). Ctrl-C to stop; if that pid is not a verify,\n' +
+          `        remove ${relative(ROOT, LOCK).split('\\').join('/')} and re-run.\n\n`,
+      );
+    }
+    await new Promise((resolve_) => setTimeout(resolve_, POLL_MS));
+  }
+}
+
+await acquireLock();
+// `process.exit` below skips a `finally`, so the release rides on the exit event instead. It
+// releases only a lock this process still owns, so a stolen lock is never removed twice.
+process.on('exit', () => {
+  if (ownerOf()?.pid === process.pid) rmSync(LOCK, { recursive: true, force: true });
+});
+
+// AFTER the lock, not before: `prepareLogDir` empties `.verify-logs`, and a second run doing
+// that while the first is still writing into it is the same collision one paragraph up.
 prepareLogDir(LOG_DIR, GATES.map(([, script]) => script));
 
 const results = [];

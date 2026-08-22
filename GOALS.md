@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, reachability SHIPPED, was DESTROYED by the orchestrator, and was RECOVERED — I2 comes back ca7bee4a4d6ea416 and the changed-file list is byte-for-byte the pre-loss twelve, so it is the same work rather than a rebuild resembling it (ADR-0061, ADR-0062, E-009 closed). `unreachable` is the sixth room-invalidity reason, asked last, over a fill using the SAME predicate the mover asks. It ships INERT on every shipped workload deliberately: no harness declares a stairwell, and declaring one to make a fixture go green is the workload-tuning G-039b-alpha refused by name. ADR-0060 CORRECTS ADR-0059 — I ruled the predicate must follow the mover, then derived three consequences from a predicate that does not. Next: G-038a-iii, the stairwell rollout, is what makes any of this live. Fourteen rows green, VERIFY_EXIT=0 read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-039b-beta2 is DONE: the five-sighting intermittent is CLOSED and the cause was the orchestrator running two `pnpm verify` at once. `verify.mjs` now takes an atomic mkdir lock: one verify per tree, waits for a live owner, steals a dead one. The derivation has NO free parameter — vitest sizes its own pool from the machine, so one verify already owns the core budget and two exceed it by exactly two, on every machine (ADR-0063). A worker cap was measured CHEAP (0.997x) and USELESS (removes 0 of 5 timeout cells) and is rejected for ineffectiveness, not cost — my brief's cost figure was from another session and would have got the right verdict by a false argument. Both gate-probe files now materialise OUTSIDE the repo. E-010 is open and does NOT stop the loop: one exit criterion I wrote is ill-posed, asking the policy to hold under a 24-worker arm that breaks its own premise. Reachability shipped and was destroyed and recovered on 2026-08-21 (ADR-0061, ADR-0062). Next up is the stairwell rollout, which is what makes reachability live. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 ca7bee4a4d6ea416. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -3714,36 +3714,138 @@ I gave and flagged the contradiction. **Standing correction: a builder MAY edit 
 from-the-tree facts — the save version and the measure golden — and nothing else.**
 
 
-## G-039b-β — The campaign that actually drifted
-Status: **PLANNED.** No layout, no WATCH, and it does not block β.
-Milestone: M3 · Owner pair: sim-engineer / sim-critic
+## G-039b-β — SPLIT at PLAN, 2026-08-22. Two BLOCKERs, both in the amendment the ORCHESTRATOR wrote.
+Status: **split into G-039b-β1 (the scaling campaign re-take) / G-039b-β2 (contention policy +
+re-entrancy).** The seam is the critic's, taken as offered (§5.6).
 
-**`scaling-bound.mjs` HAS NOT BEEN TOUCHED SINCE G-032a** — *before travel, before corridors, before
-footprints, before stairs.* **Its configuration fingerprint carries no `guestCellsPerTick` term and
-no corridor or stair term**, so **the drift refusal cannot see travel being turned on.**
+### THE TWO FALSE CLAIMS WERE MINE, WRITTEN THE DAY BEFORE, AND BOTH ORDERED THE GOAL
 
-> **It is the identical class that file's own comment records ADR-0039 §2 fixing for
-> `stayDurationTicks` — *"a guard spelled entirely in the flags it guards cannot see the content
-> redefine what a flag means"* — one content field over, IN THE FILE THAT WROTE THE SENTENCE.**
+**(1) "The load arm requires two concurrent verifies, so the probe race blocks the measurement."
+FALSE.** `tools/gates/arm/load.mjs` already exists, takes `--workers N`, **and is the regime every
+reading in `scaling-bound.mjs` was taken under.** It reproduces the failure **on a single file with
+no second `verify` and therefore no probe race** — 2 of 2, both `Test timed out in 30000ms`:
 
-**THE TWO INTERMITTENT ROWS COME HERE, AND THE REMEDY IS NOT WHAT I CALLED IT.** I wrote *"a bounded
-change to two literals with a stated regime"*. **Both halves of that are wrong:**
+```
+node tools/gates/arm/load.mjs --workers 24 -- \
+  pnpm exec vitest run tools/headless/src/scorer.report.test.ts --reporter=verbose
+```
 
-- **The number has no derivation.** The hysteresis timeout is **already at 60,000** — raising it
-  again is raising an already-raised literal — **and the comment above it WITHDRAWS the two previous
-  justifications as unpaired**, ending *"this file's behaviour under deliberate load is UNOBSERVED
-  for this tree."* **The file itself says the measurement that would derive the number has never
-  been taken.** Picking a bigger literal is §2.1's superstition with CI access.
-- **It covers ONE of the two rows.** The other is `check:scaling`, whose bound is a ratio of medians
-  of timings and **whose remedy ADR-0056 explicitly PARKED with a falsification test.** No timeout
-  literal touches it.
+> **My recipe was not merely unnecessary, it was the WORSE instrument**: "two concurrent verifies"
+> **has no stateable intensity**, so a number taken under it cannot fill `CLAUDE.md` rule 4's regime
+> slot — **the exact ground the block stands on.** I invented a load arm while the repo's own
+> parameterised one sat in `tools/gates/arm/`. **ADR-0048 §1's standing question, fired again:
+> a solved problem that never propagated.**
 
-**So the honest form is: DERIVE the timeout, with the pairing as the exit criterion** — pair both
-files loaded against quiet, interleaved, in one sitting. **G-039a's row log makes that cheap**, which
-is the instrument paying for itself a second time.
+**(2) "Derive the timeout as isolation x an observed contention factor." FALSE — there is no unique
+factor.** Paired, interleaved, warm-up discarded, quiet `win32/12cpu`, node 22.16.0, HEAD `4c6d9a5`,
+single file, the named `it`'s own duration, `scorer.report.test.ts > and it moves at EVERY room
+count`:
 
-**STRUCK RATHER THAN SCHEDULED — the tick-cost campaign re-take.** It is **discharged for the
-occupancy constant and FORBIDDEN for the bound.** *Leaving it in a block is what makes a builder
-attempt it.*
+| arm | n | median | vs quiet |
+|---|---|---|---|
+| quiet | 3 | 5,583 ms | — |
+| `load.mjs --workers 12` | 3 | 16,407 ms | **2.94x** |
+| `load.mjs --workers 24` | 2 | 44,277 ms | **7.93x** |
 
+**The factor is a free parameter of the load arm.** A timeout derived as `isolation x factor` is
+therefore *"a number nobody can source"* — **§2.1's superstition with CI access, committed one level
+up from the literal the block refuses to raise for that very reason.**
 
+### AND THE CRITIC FOUND THE MECHANISM, WHICH IS WHY A POLICY EXISTS TO DERIVE
+
+`scorer.report.test.ts:48` and `hysteresis.report.test.ts` **spawn a full `tsx` CLI child per arm
+from inside vitest's worker pool**, so the suite runs up to `maxWorkers x children` CPU-bound
+processes on 12 cores — **oversubscribed by construction.**
+
+> **"No more concurrent CPU-bound processes than cores" is a requirement someone can write down.
+> "30,000 ms" is not.** And a POLICY transfers to CI because it is evaluated in the regime it runs
+> in, whereas a DURATION derived on `win32/12cpu` does not. **That dissolves the hidden fourth part
+> rather than deferring it.**
+
+`PARKING.md` already carried this candidate and the block did not cite it.
+
+## G-039b-β1 — The scaling campaign, re-taken rather than re-fingerprinted
+Status: **PLANNED.** Owner pair: sim-engineer / sim-critic
+
+**Part 1's claim is TRUE and the critic verified every clause against the bytes**, with a proof by
+history rather than by argument: **G-039b-α moved every seeded room in the scaling arms and the
+recorded fingerprint string did not change one byte.** `check:scaling` is green over it right now.
+
+**WHAT THE BLOCK DID NOT SAY, AND IT IS THE WHOLE COST: THE READINGS ARE STALE, NOT JUST THE
+REFUSAL.** Under ADR-0015's REPLACE half, the four `BOUNDS` are judging a workload the campaign was
+never taken at. **So adding a term obliges a FULL RE-TAKE** — and **the cheap-looking move (edit the
+recorded fingerprint string to the new format, keep the arrays) is precisely the pooling-across-
+configurations the file forbids.** Say **"re-take"**, in those words, so no builder reaches for it.
+
+**The stopwatch is not the cost**: ~8.5 s per reading, 12 quiet + 8 loaded is about five minutes.
+**The cost is the derivation edit and ~90 hand-transcribed numbers** into `BOUNDS`, the two arrays
+per axis, `DECLARED_READINGS`, and the four-row free-parameter table that `scaling.bound.test.ts`
+recomputes.
+
+**Exit criteria** — commands, not adjectives:
+- `pnpm check:scaling` green with a fingerprint containing a `guestCellsPerTick` term, **and a
+  mutation probe (ADR-0022 recipe) showing the refusal goes RED when that term changes.**
+- `pnpm exec vitest run tools/gates/scaling.bound.test.ts` green against the re-taken arrays.
+- `pnpm verify` — **fourteen rows** PASS, `VERIFY_EXIT` read from the process.
+
+## G-039b-β2 — Oversubscription is the subject, not a duration
+Status: **DONE 2026-08-22.** Shipped a mutual-exclusion lock, not a timeout (ADR-0063). The
+worker cap was measured CHEAP (0.997x) and USELESS (removes 0 timeouts) and is rejected for
+ineffectiveness. Both probe instances now materialise outside the repo. **E-010 records the one
+exit criterion that is unsatisfiable by any in-repo change.** Fourteen rows PASS, VERIFY_EXIT=0.
+G-038a-iii moves occupancy, every golden, the hash and I5 at once.
+Owner pair: sim-engineer / sim-critic
+
+**THE SUBJECT IS A CONCURRENCY POLICY DERIVED FROM A STATED REQUIREMENT**, not a timeout literal.
+Candidate: *processes <= cores*, with the wall-clock tax measured and IN the exit criterion —
+`--maxWorkers=2` is already recorded at **1.564x quiet / 2.0x loaded**, so the cost is real.
+**If no policy survives measurement, close it as a §2.0 escalation rather than shipping a literal.**
+
+**DO NOT INHERIT THE `--maxWorkers` FALSIFICATION.** That campaign classified runs by *signature B*
+(exit 1, 0 tests failed, RPC starvation), **recorded no per-test durations and says nothing about
+timeouts.** A builder will meet "the cap was measured out" and stop; **it does not answer this
+question.** ADR-0027's class.
+
+**THE FOUR AFFECTED TESTS, NAMED WITH THEIR OWN ISOLATION READINGS** *(quiet `win32/12cpu`, node
+22.16.0, HEAD `4c6d9a5`, single file, `--reporter=verbose`, the named `it`'s duration)*:
+
+| test | n | median | limit | headroom |
+|---|---|---|---|---|
+| `hysteresis.report.test.ts > STARVED (1 amenity of each)` | 3 | 10,335 ms | 60,000 | 5.81x |
+| `scorer.report.test.ts > and it moves at EVERY room count` | 5 | 5,465 ms | 30,000 | 5.49x |
+| `needs.determinism.test.ts > runs guests that carry EVERY need` | 3 | 7,804 ms | 30,000 | **3.84x** |
+| `provider.determinism.test.ts > DELIVERS SATISFACTIONS BY AN ITEM` | — | owed | 30,000 | owed |
+
+**The first two are the rows this goal was created for; the last two were found by accident.** My
+amendment quoted 3.8x **without naming its test** — and that is the file with the LEAST headroom and
+the shortest history, **so a remedy sized on it is sized on the outlier.** Take the fourth reading.
+
+### THE RE-ENTRANCY REPAIR RIDES HERE — it has the only clean exit command today
+
+**TWO instances, not one.** The block named `leaked-content.gate-probe.ts`; there is also
+`tools/headless/src/needs3-arm.identity-probe.ts`, written into the real tree by
+`needs-history.spawn.test.ts:128` and removed in `afterAll`. **`tools/headless/tsconfig.json`
+includes `src/**/*.ts`, so it has the same TS6053 window — and it is NOT gitignored**
+(`.gitignore` covers `*.gate-probe.ts` only; `git check-ignore` exits 1 on it). **Fix both, or the
+goal ships a re-entrancy claim it has not earned.**
+
+**"A unique per-process name" is STRUCK, not ranked.** It stops two runs deleting each other's file;
+**it does not stop run B's `tsc` globbing run A's live probe and run A's `finally` removing it
+mid-program** — which is the TS6053 actually observed. Worse: a successfully-read foreign probe
+**turns run B's `check:content` red on a deliberate I3 violation that is not run B's.** Only keeping
+the probe out of every scanned root fixes it.
+
+**AND THE PREFERRED FIX NEEDS A DECISION AT PLAN, BECAUSE IT TOUCHES AN INVARIANT GATE.**
+`check-content.mjs` takes **no arguments** — `ROOT` comes from `import.meta.url`. *"Pass the path"*
+means **adding a `--root` lever to I3's gate**, and a scratch tree must also carry
+`packages/content/data` or the vacuity refusal fires. **The repo already has a precedent used four
+times that needs no gate change: materialise a scratch tree, copy the gate into it, run it there.**
+Pick one at PLAN; do not leave it to BUILD.
+
+**Exit criteria** — commands, not adjectives:
+- Two `pnpm verify` runs started ~60 s apart both reach `VERIFY_EXIT=0`, **three attempts**.
+- `node tools/gates/arm/load.mjs --workers 24 -- pnpm test` completes with **zero** `Test timed out`,
+  or the policy is escalated with its measured tax.
+- `grep -rn "gate-probe\|identity-probe" packages tools --include=*.test.ts` shows **no write into a
+  tsconfig-scanned root.**
+- `pnpm verify` — **fourteen rows** PASS.

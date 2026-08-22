@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, reachability SHIPPED, was DESTROYED by the orchestrator, and was RECOVERED — I2 comes back ca7bee4a4d6ea416 and the changed-file list is byte-for-byte the pre-loss twelve, so it is the same work rather than a rebuild resembling it (ADR-0061, ADR-0062, E-009 closed). `unreachable` is the sixth room-invalidity reason, asked last, over a fill using the SAME predicate the mover asks. It ships INERT on every shipped workload deliberately: no harness declares a stairwell, and declaring one to make a fixture go green is the workload-tuning G-039b-alpha refused by name. ADR-0060 CORRECTS ADR-0059 — I ruled the predicate must follow the mover, then derived three consequences from a predicate that does not. Next: G-038a-iii, the stairwell rollout, is what makes any of this live. Fourteen rows green, VERIFY_EXIT=0 read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-039b-beta2 is DONE: the five-sighting intermittent is CLOSED and the cause was the orchestrator running two `pnpm verify` at once. `verify.mjs` now takes an atomic mkdir lock: one verify per tree, waits for a live owner, steals a dead one. The derivation has NO free parameter — vitest sizes its own pool from the machine, so one verify already owns the core budget and two exceed it by exactly two, on every machine (ADR-0063). A worker cap was measured CHEAP (0.997x) and USELESS (removes 0 of 5 timeout cells) and is rejected for ineffectiveness, not cost — my brief's cost figure was from another session and would have got the right verdict by a false argument. Both gate-probe files now materialise OUTSIDE the repo. E-010 is open and does NOT stop the loop: one exit criterion I wrote is ill-posed, asking the policy to hold under a 24-worker arm that breaks its own premise. Reachability shipped and was destroyed and recovered on 2026-08-21 (ADR-0061, ADR-0062). Next up is the stairwell rollout, which is what makes reachability live. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 ca7bee4a4d6ea416. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
   `5cfb73ca16c3463e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
@@ -1908,3 +1908,55 @@ interesting."*** Both arms are recorded, so the decision is one edit to overrule
 problem?* — **yes, and it is the general form of this defect.** Every ADR in this file that pairs a
 methodological ruling with measurements taken before it is suspect in exactly this way. **Not
 swept this goal; parked with the invocation that would sweep it.**
+
+### G-039b-β2 — Five sightings, and the answer was that two verifies were running.
+
+**A defect that survived five sightings across three goals turned out to be the orchestrator running
+two `pnpm verify` invocations at once** — which is exactly what I did again yesterday, by accident,
+and which is how the reproduction was finally found. **The instrument that caught it was G-039a's
+row log, on its third payout.**
+
+**The fix is a lock, and the derivation has no free parameter**: vitest sizes its own pool from the
+machine, so one verify already owns the core budget and two exceed it by exactly two, everywhere.
+**ADR-0063 has the arithmetic.** It transfers to CI unchanged because it is a policy evaluated in
+its own regime, which is the property the whole goal was steered toward when the critic showed my
+"derive the timeout" plan had no unique factor to derive.
+
+### THE PART WORTH KEEPING IS WHY THE CAP WAS REJECTED
+
+I wrote into the brief that a worker cap would cost ~1.564x, from another session — **rule 3, in a
+brief of mine.** Re-measured paired at the cap the requirement actually derives, it costs
+**0.997x: nothing.** And it removes **not one timeout**, in 5 of 5 cells, while running 1.081x
+slower under load.
+
+> **So the brief's reason and the correct verdict pointed the same way and were unrelated.** Had the
+> builder inherited *"too expensive"* it would have shipped the right answer on a false premise, and
+> the next goal to reopen this would have re-measured the cost, found it free, and re-adopted a
+> useless cap. **An argument that happens to agree with the truth is not evidence, and it is the
+> hardest kind of error to notice because nothing goes red.**
+
+### SIX CORRECTIONS CAME BACK, AND THE MECHANISM WAS ONE OF THEM
+
+The block said the suite was oversubscribed by `maxWorkers x children`. **`spawnSync` blocks the
+calling worker**, so that product counts processes that *exist*, not processes that *run* — 36 node
+processes on 12 cores at 64.2% utilisation. **The real oversubscription was a second whole run**,
+which is the thing the goal shipped against. Also struck: my "least headroom" outlier (3.84 vs 3.88
+— there is no outlier, there is a population, and it is 12+ files rather than 4).
+
+**And the builder withdrew one of its OWN numbers under rule 5, unprompted** — its first CPU census
+undercounted by 3.7x because a per-process sum loses processes that exit between samples. **That is
+the rule working in the direction it is hardest to apply.**
+
+### E-010 IS THE HONEST RESIDUE
+
+One exit criterion I wrote — zero timeouts under `load.mjs --workers 24` — **asks the policy to hold
+in a regime that breaks the policy's own premise before the suite starts.** 24 spinners on 12 cores
+is 2x oversubscribed by the harness; contention runs 10–14x against 3.8–5.8x of headroom, and **no
+literal below ~150,000 ms survives it.**
+
+**The builder escalated instead of reaching for a fallback, which is what the permission was written
+for.** The failure mode avoided was a quiet bump to 150,000 ms turning a red bar green — §2.1's
+superstition with CI access, and nothing would have gone red to reveal it.
+
+**WATCH: none owed.** No guest, room or economy behaviour changed; I2 is `ca7bee4a4d6ea416`,
+unmoved, and no sim source was touched.

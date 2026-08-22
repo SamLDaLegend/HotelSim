@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, reachability SHIPPED, was DESTROYED by the orchestrator, and was RECOVERED — I2 comes back ca7bee4a4d6ea416 and the changed-file list is byte-for-byte the pre-loss twelve, so it is the same work rather than a rebuild resembling it (ADR-0061, ADR-0062, E-009 closed). `unreachable` is the sixth room-invalidity reason, asked last, over a fill using the SAME predicate the mover asks. It ships INERT on every shipped workload deliberately: no harness declares a stairwell, and declaring one to make a fixture go green is the workload-tuning G-039b-alpha refused by name. ADR-0060 CORRECTS ADR-0059 — I ruled the predicate must follow the mover, then derived three consequences from a predicate that does not. Next: G-038a-iii, the stairwell rollout, is what makes any of this live. Fourteen rows green, VERIFY_EXIT=0 read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-039b-beta2 is DONE: the five-sighting intermittent is CLOSED and the cause was the orchestrator running two `pnpm verify` at once. `verify.mjs` now takes an atomic mkdir lock: one verify per tree, waits for a live owner, steals a dead one. The derivation has NO free parameter — vitest sizes its own pool from the machine, so one verify already owns the core budget and two exceed it by exactly two, on every machine (ADR-0063). A worker cap was measured CHEAP (0.997x) and USELESS (removes 0 of 5 timeout cells) and is rejected for ineffectiveness, not cost — my brief's cost figure was from another session and would have got the right verdict by a false argument. Both gate-probe files now materialise OUTSIDE the repo. E-010 is open and does NOT stop the loop: one exit criterion I wrote is ill-posed, asking the policy to hold under a 24-worker arm that breaks its own premise. Reachability shipped and was destroyed and recovered on 2026-08-21 (ADR-0061, ADR-0062). Next up is the stairwell rollout, which is what makes reachability live. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 ca7bee4a4d6ea416. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -5205,3 +5205,92 @@ the Write tool, never a heredoc, and is read back off disk and compiled before i
 
 *(The builder hit it twice and switched tools. Recorded because the next person will hit it once and
 not notice.)*
+
+---
+
+## ADR-0063 — `pnpm verify` is MUTUALLY EXCLUSIVE per tree. The cap was cheap and useless; the mechanism I gave was wrong.
+
+**Date**: 2026-08-22 · **Status**: accepted · **G-039b-β2.**
+
+### THE POLICY, AND ITS DERIVATION HAS NO FREE PARAMETER — which is the whole point
+
+`verify.mjs` takes an **atomic `mkdir` lock** at `<ROOT>/.verify-lock` before it prepares the log
+dir, writes its pid, **waits** (never refuses) while a live owner holds it, **steals** it when the
+owner is dead, and releases on exit.
+
+From *"no more concurrent CPU-bound processes than cores"*, in three steps, none of which admits a
+tunable:
+
+1. The `I4 test` row is `vitest run`, and **vitest sizes its own pool from the machine** —
+   `Math.max(availableParallelism() - 1, 1)`, read out of the shipped `vitest@4.1.10` bytes — plus
+   the main process.
+2. **One `pnpm verify` therefore already provisions itself to the whole core budget.** Measured, not
+   assumed: a quiet full `pnpm test` runs at **mean 64.2% of 12 cores**, **23.5% of samples at
+   >= 90%**, peaking at **100%**.
+3. **So two concurrent verifies exceed the budget by exactly two — on every machine, at every core
+   count.**
+
+> **It is evaluated in the regime it runs in, so it transfers to the three-OS matrix unchanged**,
+> where it is a no-op: one runner, one verify. **That is the property a duration does not have, and
+> it is why the subject had to stop being a timeout.**
+
+**Exercised in the field the day it shipped**: a builder found the orchestrator's verify holding the
+lock, confirmed the owner pid was live, **and declined to kill it.** Three paired attempts ~60 s
+apart, every run `VERIFY_EXIT=0`, the second observably waiting each time — and one attempt
+exercised the **steal** path for real against a lock left by a killed process.
+
+### THE CAP IS REJECTED FOR INEFFECTIVENESS, NOT COST — and the brief would have got the right verdict by the wrong argument
+
+**Tax of `--maxWorkers=6`** *(what: `vitest run` wall clock · workload: 152 files / 2,646 tests ·
+n=3 per arm, warm-up discarded, arms alternated D,C,D,C,D,C in one sitting · median · regime: quiet
+`win32/12cpu`, node 22.16.0, HEAD `4c6d9a5` + this diff)*: **511,414 ms vs 509,840 ms — 0.997x.**
+**No measurable tax.** Arm spreads are ±2.6% and ±2.9% and the campaign drifted upward across the
+sitting, so the ratio is the finding and it is 1.00 within noise.
+
+**Effect of the cap** *(same four files, n=5 interleaved, median, regime:
+`load.mjs --workers 24`, `win32/12cpu`)*: **5 of 5 cells time out in BOTH arms**, and the capped arm
+is **1.081x SLOWER**. **It removes not one timeout.**
+
+> **My brief said the cap would cost ~1.564x and might not be worth it. That figure came from
+> another session — `CLAUDE.md` rule 3, in a brief I wrote.** Re-measured paired at the cap the
+> requirement actually derives (**6**, not 2), it is free. **Had the builder inherited my reason it
+> would have reached the correct verdict by an argument that is false**, and the next goal to
+> re-open this would have found the cost claim and not the effectiveness claim.
+
+### THE MECHANISM IN THE BLOCK WAS WRONG, AND IT WAS MINE
+
+*"`maxWorkers x children` CPU-bound processes — oversubscribed by construction."* **Both spawners
+use `spawnSync`, which BLOCKS the calling worker.** A worker waiting on a child burns no CPU.
+**The product counts processes that EXIST, not processes that RUN** — measured: a quiet `pnpm test`
+peaks at **36 node processes on 12 cores** while consuming **64.2% of the machine.**
+
+**The oversubscription that actually matters is not internal multiplication. It is a second whole
+run** — which is what shipped.
+
+### AND THERE IS NO OUTLIER; THERE IS A POPULATION
+
+With the fourth reading taken — `provider.determinism.test.ts > DELIVERS SATISFACTIONS BY AN ITEM`,
+n=5, median **7,724 ms**, **3.88x** headroom — `needs` at 3.84x and `provider` at 3.88x are
+**indistinguishable.** My brief called `needs` "the file with the LEAST headroom" and warned against
+sizing on an outlier; **there was never an outlier.** And the population is larger than four: the
+same file carries a second ~7.7 s test, and the full-suite load arm reddened **12+ files.**
+
+*(The builder also **withdrew its own first census**: sampling per-process `TotalProcessorTime`
+deltas silently loses every process that exits between samples and undercounted by **3.7x**. Anyone
+re-taking this must use `\Processor(_Total)\% Processor Time`. **Rule 5 applied to its own number,
+unprompted.**)*
+
+### PART B — the probe race, fixed OUT of every scanned root rather than renamed
+
+**Two instances, not the one the block named**: `leaked-content.gate-probe.ts` in `packages/sim/src`,
+and `needs3-arm.identity-probe.ts` in `tools/headless/src` — **the second not gitignored at all.**
+
+**Both now materialise a scratch tree outside the repository**, using the precedent already used four
+times, **rather than adding a `--root` lever to an invariant gate.** The builder's reason is better
+than the block's: a `--root` on `check-content.mjs` is *"a new CI-reachable lever on an I1/I3 gate
+for a test's convenience"*, **and it would still leave the probe inside `packages/sim/src` for
+`depcruise` and `check:unpinned` to trip over.** A tree outside the repo is out of **all** scanned
+roots, not just the one that was observed.
+
+Proof of bite, ADR-0022 recipe, sha256 captured and re-checked identical: **commenting out
+`acquireLock()` turns 3 of 6 cells red.**
