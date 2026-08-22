@@ -34,6 +34,7 @@ import {
   createWorld,
   departureCountOf,
   evictedGuests,
+  firstEconomy,
   outstandingDebtOf,
   run,
   sumByReason,
@@ -74,11 +75,99 @@ describe('the I2 harness reaches the loan', () => {
     expect(world.loanOutcomes.refused.notEligible).toBeGreaterThan(0);
   });
 
-  it('and repays it in full out of trade, so the repayment path runs inside the gate', () => {
-    // Not merely "a repayment happened": the debt reaches exactly zero, which exercises the
-    // final partial payment capped at the outstanding amount rather than the nightly rate.
-    expect(sumByReason(world.ledger, 'loanRepayment')).toBeLessThan(0);
-    expect(outstandingDebtOf(world.ledger)).toBe(0);
+  it('and repays it out of trade ALL RUN LONG, including a payment the nightly rate does not explain', () => {
+    // ==================================================================================
+    // RE-FOUNDED AT G-038a-iii-c, AND NOT BECAUSE IT LOST ITS MARGIN. IT NEVER TESTED WHAT
+    // ITS OWN COMMENT SAID IT TESTED.
+    //
+    // It read `expect(outstandingDebtOf(world.ledger)).toBe(0)`, justified as: *"the debt
+    // reaches exactly zero, which exercises the final partial payment capped at the
+    // OUTSTANDING amount rather than the nightly rate."* Do the arithmetic on the shipped
+    // content rather than on the sentence:
+    //
+    //     loanPrincipalPence 300,000 / loanRepaymentPerNightPence 10,000 = EXACTLY 30
+    //
+    // `loanRepaymentFor` pays `Math.min(debt, rate, cash)`. With the principal an exact
+    // multiple of the rate, the last payment of a completed repayment is
+    // `min(10,000, 10,000, cash)` — the debt term and the rate term are EQUAL, so the
+    // debt-capped arm is never the one that decides, on this content, on ANY run. Measured
+    // on the tree this goal started from: thirty repayments, every one of them exactly
+    // 10,000, the last at tick 48,959. **The branch the comment named was unreachable, not
+    // merely unvisited.** That is ADR-0007's shape — a check whose comment names a thing it
+    // does not do — and it predates this goal by many goals.
+    //
+    // AND THE OLD PIN HAD NO MARGIN, WHICH IS THE SECOND FINDING AND THE SMALLER ONE. Thirty
+    // nights of cash were needed and thirty were had; any change that costs this harness one
+    // night's cash at settlement takes the debt off zero. It is not a function of how well
+    // the hotel trades — measured across six configurations of this harness at the gate's
+    // horizon, arrangements with IDENTICAL revenue and IDENTICAL `checkedOut` produced
+    // outstanding debts of 0 and of 75,000. A pin on a whole-run cash coincidence reports
+    // the coin, not the hotel.
+    //
+    // SO THE CLAIM IS RE-FOUNDED ON FOUR THINGS, EACH WITH ITS BAR TRACED TO SOMETHING
+    // SOMEBODY WROTE DOWN, AND THE SET IS STRICTLY STRONGER THAN WHAT IT REPLACES — the tree
+    // this goal started from would go RED on two of them. Observed readings are exact
+    // deterministic counts over this log at 100,000 ticks, seed 42; no stopwatch, so no
+    // regime slot.
+    //
+    //   1  CONSERVATION, ACROSS THREE INDEPENDENT SOURCES. What is still owed plus what was
+    //      repaid equals what the LOAN OUTCOME COUNTER says was drawn, times the principal
+    //      CONTENT declares. Spelled that way on purpose: `outstandingDebtOf` is itself
+    //      `sum(loanDraw) + sum(loanRepayment)`, so comparing it against those two sums would
+    //      be an identity of the function rather than a fact about the run. Against
+    //      `loanOutcomes.drawn` and `economy.loanPrincipalPence` it is a real claim: a draw
+    //      recorded as an outcome but not booked, or booked at the wrong amount, fails here.
+    //      Observed 291,500 + 8,500 = 1 x 300,000.
+    //   2  NEVER OVER-PAYS. `Math.min`'s `debt` term is what stops the nightly rate running
+    //      the balance past zero into a credit; this is that postcondition, and it is the
+    //      surviving half of what the old comment was reaching for. No bar to source: zero is
+    //      the edge of the quantity itself.
+    //   3  STILL PAYING AT THE END. The bar is three quarters of the horizon, and it is the
+    //      SAME fraction and the same rule `validity.determinism.test.ts` states for every
+    //      covered path: *"a reason that is reachable for the first third of the run and gone
+    //      by the end is a reason the gate's FINAL hash says nothing about."* Observed last
+    //      repayment tick 99,359, with FIVE of the thirty-one payments after the bar — so the
+    //      margin is five events, not one. **The old tree fails this**: its last repayment is
+    //      tick 48,959, less than half way.
+    //   4  THE CASH-CAPPED PAYMENT, which is the arm of `Math.min` the old comment has been
+    //      describing for its whole life and which becomes reachable here for the first time.
+    //      A payment strictly between zero and the nightly rate can only come from the `cash`
+    //      term: the hotel had less in the bank than the night's instalment and paid what it
+    //      had. Observed TWO — 500p at tick 66,239 and 1,000p at tick 97,919 — against
+    //      twenty-nine at the full rate. **The old tree fails this too**: thirty payments,
+    //      none of them partial.
+    //
+    //      IT IS THE THINNEST ROW HERE AND IS SAID SO IN PLACE, exactly as
+    //      `evictedRoomUnusable` is said to be next door: two events from vacuous. WHAT TO DO
+    //      IF IT MOVES — read what moved and decide whether the hotel is still the hotel this
+    //      log is for. Do NOT weaken it back to "a repayment happened"; that is the assertion
+    //      this one exists to replace.
+    // ==================================================================================
+    const economy = firstEconomy(content);
+    if (economy === undefined) throw new Error('recovery harness: the injected content defines no economy');
+
+    const repayments = world.ledger.filter((entry) => entry.reason === 'loanRepayment');
+    // Positive pence, because a repayment is booked negative and every number below reads
+    // better as an amount than as a direction.
+    const repaid = 0 - sumByReason(world.ledger, 'loanRepayment');
+    const outstanding = outstandingDebtOf(world.ledger);
+
+    // 1 — the fold closes against the outcome counter and against content.
+    expect(repaid).toBeGreaterThan(0);
+    expect(repaid + outstanding).toBe(world.loanOutcomes.drawn * economy.loanPrincipalPence);
+    // 2 — and never past zero.
+    expect(outstanding).toBeGreaterThanOrEqual(0);
+
+    // 3 — still paying in the last quarter. A MAX rather than the last element: the ledger is
+    // append-only in tick order (I4), but this claim does not need to rest on that.
+    const lastRepaymentTick = repayments.reduce((latest, entry) => (entry.tick > latest ? entry.tick : latest), -1);
+    expect(lastRepaymentTick).toBeGreaterThan(Math.floor((TICKS * 3) / 4));
+
+    // 4 — the cash-capped arm of `Math.min(debt, rate, cash)`.
+    const partial = repayments.filter(
+      (entry) => 0 - entry.amount > 0 && 0 - entry.amount < economy.loanRepaymentPerNightPence,
+    );
+    expect(partial.length).toBeGreaterThan(0);
   });
 
   it('records one outcome per drawLoan command, which is the per-tick law over a whole run', () => {

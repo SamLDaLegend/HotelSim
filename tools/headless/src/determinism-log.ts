@@ -149,6 +149,158 @@ const SHIPPED_ENTRANCE_FLOOR = 0;
 const SHIPPED_LAST_ROW = 7;
 /** How many rows the plot above has. Derived from the two literals, never counted twice. */
 const SHIPPED_ROWS = SHIPPED_LAST_ROW - SHIPPED_FIRST_ROW + 1;
+/**
+ * The floors the shipped plot has, as literals, for `SHIPPED_FIRST_ROW`'s reason exactly
+ * (G-038a-iii-c). The spawn diagonal walks `spawnIndex % 21` and the terrace waves land on -1
+ * and -2, so these two numbers are what this log has ALWAYS been written against; they are
+ * named here because the shaft below has to span them and a shaft that stopped short would be
+ * a stairwell with floors above it nobody can climb to.
+ */
+const SHIPPED_LOWEST_FLOOR = -2;
+const SHIPPED_HIGHEST_FLOOR = 20;
+/** The plot's own left and right edges, as literals, for the same reason. `layCorridor` and
+ *  `layStair` both THROW off the plot, and the shaft's column is derived from these two. */
+const SHIPPED_FIRST_COLUMN = 0;
+const SHIPPED_LAST_COLUMN = 79;
+
+// ============================================================================
+// THE GROUND FLOOR'S CIRCULATION, IN THREE PIECES, AND THE SHAFT THAT LEAVES IT
+// (G-038a-iii-c).
+//
+// THE PROBLEM THIS SOLVES, AND IT WAS INVISIBLE UNTIL A STAIRWELL EXISTED. Before this goal
+// the ground floor's plan was a scatter of ISLANDS — the corridor pass declares the four
+// neighbours of every floor-0 room and nothing else, so the lane beside the room at column 14
+// and the lane beside the room at column 18 were never joined. That cost nothing while no
+// world declared a stairwell, because `reachableCells` then spends the floor axis from EVERY
+// cell: the fill dropped onto floor 0 from the empty air above it, at every column at once,
+// and every island was reached from the sky. Declare a shaft and that stops. Measured on this
+// log at the gate's own horizon, a full-height shaft at the entrance corner with the plan
+// unchanged: **`unreachable` 0 -> 13, `checkedOut` 636 -> 0.** The hotel stopped trading
+// because its front door opened onto nothing.
+//
+// SO THE FLOOR GETS A SPINE, A TOOTH PER ROOM, AND A SHAFT ON THE SPINE:
+//
+//   THE SPINE   one lane across the whole plot at row 3, and the row is FORCED rather than
+//               picked. A lane under a room is not circulation, so the spine has to be on a
+//               row no floor-0 room stands on: this log's entrance floor is occupied on rows
+//               0, 1, 2, 4, 5 and 7 (the spawn diagonal reaches this floor at
+//               `spawnIndex % 21 === 0`, so at rows 0, 5, 2, 7 and 4; the amenity waves, the
+//               churn and the seal hosts are row 0; the seal blockers and one terrace arm are
+//               row 1; one spawn is row 2), which leaves rows 3 and 6. And the spine may not
+//               cross a WITHHELD cell either, or it is cut in two and the far end of the hotel
+//               goes with it — the back-of-house pass below sits on row 5, so its withheld
+//               neighbours occupy rows 4, 5 and 6. **Row 3 is what is left.**
+//   THE TEETH   for every floor-0 room, the cells of its own column between it and the spine.
+//               A room on row 0 already has `(column, 1)` declared by the neighbour rule, so
+//               its tooth is the single cell `(column, 2)`; a room at the back of the plot
+//               gets a longer one. This is what joins each island to the spine, and it is a
+//               rule over the schedule rather than a list, exactly as the neighbour pass is.
+//   THE SHAFT   THE MIDDLE OF THE PLOT, ON THE SPINE. Both halves are derived rather than
+//               chosen. ON THE SPINE, because a stairwell that is not on the lane is a
+//               stairwell nobody can walk to: floor 0 is the one floor of this plot that has a
+//               PLAN, so the shaft's foot has to be a cell that plan names. IN THE MIDDLE,
+//               because stairs are ALIGNED — one column through the plot — so the walk to the
+//               stairwell from a cell at column `c` is `|c - X|`, and the worst of those over
+//               the plot is `max(X - first, last - X)`, which is least at the midpoint. That
+//               is `stairs.ts`' own worst-journey arithmetic applied to the one free variable
+//               this log has. `(0 + 79) >> 1` is 39, and it lands on a legal cell without
+//               adjustment: the spawn diagonal's row at a given column is always `column % 8`,
+//               so column 39 is only ever touched at row 7; the builds walk columns 40..78;
+//               the terraces columns 60..74; the sky tower column 79; no floor-0 pass in this
+//               log stands anything on row 3 at all.
+//
+//               AND IT IS DECLARED A CORRIDOR AS WELL AS A STAIR — it is already on the spine,
+//               so this costs nothing, but it makes the claim structural rather than
+//               incidental: the shaft stands on circulation the plan names, not on
+//               `isDeclaredWalkway`'s stair clause alone.
+//
+// STAIRS ARE ALIGNED (`stairs.ts`), so this is ONE `(column, row)` through the whole plot and
+// there is no second shaft to choose.
+//
+// ==========================================================================================
+// WHAT THE SITING COSTS, MEASURED ACROSS EIGHTEEN OF THEM RATHER THAN ARGUED (G-038a-iii-c).
+//
+// A stairwell makes every cross-floor journey walk to one column first, so this hotel trades
+// differently whatever column it goes in — `stairLeg` reads only the stairwell's column and
+// row, so no choice of shaft HEIGHT and no choice of which floors declare it can avoid the
+// bill. Exact deterministic counts at the gate's horizon, seed 42, `checkedOut`:
+//
+//   no shaft (before this goal) 636 · column 0 (the entrance's own column) 561 · column 20 663
+//   column 32 708 · column 36 713 · **column 39 (this one) 708** · column 44 741 · column 72 716
+//
+// So the midpoint siting leaves this harness's hotel trading ELEVEN PER CENT MORE than it did
+// with no stairwell at all, which is the opposite direction from the one `report.ts` paid at
+// G-038a-iii-b — and the reason is that this log's rooms are spread over eighty columns rather
+// than gathered on a plate, so halving the walk to the core is worth more than the walk costs.
+// ==========================================================================================
+const SPINE_ROW = 3;
+const SHAFT_COLUMN = (SHIPPED_FIRST_COLUMN + SHIPPED_LAST_COLUMN) >> 1;
+const SHAFT_ROW = SPINE_ROW;
+
+// ============================================================================
+// BACK OF HOUSE — `noCorridor` GETS A PASS OF ITS OWN (G-038a-iii-c), WHICH IS WHAT EVERY
+// OTHER REASON IN THIS LOG ALREADY HAS.
+//
+// `unsupported` has the sky tower. `noDoor` has the terrace crosses. `missingItem` has the
+// unfurnished half of the spawn walk. `noCorridor` had **a hand-written list of nine cells**
+// withheld from the plan, chosen so that three rooms OTHER passes happened to spawn came out
+// stranded — and one of the three was the room standing on the FRONT DOOR. That list is gone.
+// Two reasons, and the second is the one that matters:
+//
+//   1. IT COULD NOT SURVIVE A SPINE. The front door's own two neighbours were withheld, so a
+//      plan that joins the ground floor cannot also strand the room on the mat: the entrance
+//      would be sealed off from the building it is the entrance to, and every room on the
+//      floor would read `unreachable` — a DIFFERENT reason, and not the one the withholding
+//      was for. You cannot strand the front door and still have a hotel.
+//   2. IT WAS TUNED TO ROOMS IT DID NOT OWN. The other two cells strand rooms the amenity
+//      wave and the spawn diagonal happen to put there, and both of those rooms live and die
+//      by the id-walking despawn and demolish passes. Any change to what this hotel EARNS
+//      moves how many rooms it BUILDS, which moves every later id, which moves what those
+//      walks take away — so the coverage this reason depends on was a function of the
+//      economy. Twice over, that is a workload tuned until a number came back.
+//
+// SO THE REASON IS PRODUCED BY CONSTRUCTION: furnished, grounded, doored lodging rooms on the
+// entrance floor whose four neighbours the plan deliberately omits. They are BACK OF HOUSE — a
+// room with no lane onto it — and their neighbours are the ONLY cells this log withholds, so
+// the withheld list is DERIVED from this list rather than written down beside it.
+//
+//   TWO OF THEM, EARLY AND LATE, WHICH IS THE TERRACE WAVES' OWN ARGUMENT ONE REASON OVER.
+//   A low-id room cannot be relied on to reach the horizon — the despawn walk (1, 4, 7 …), the
+//   demolish walk (2, 7, 12 …) and the `underfoot` walk all climb from the bottom, and this
+//   file already says of the first terrace wave that its rooms "have been picked apart by tick
+//   ~40,000". A high-id room cannot be present at the START. So the reason needs one of each,
+//   and neither can do the other's job:
+//
+//     tick 51       LOW ID, so the reason is present from the first arrival onwards, and it is
+//                   a room every arriving guest would otherwise have taken (`findFreeRoom`
+//                   walks ascending id). Whether it reaches the horizon is not claimed here —
+//                   it is a COUNT in `validity.determinism.test.ts`, at both horizons, and if
+//                   an id walk ever swallows it that count is what says so.
+//     tick 70,001   ABOVE EVERYTHING the three id walks reach, which is the third terrace
+//                   wave's own argument: by then this log has issued far more spawns than the
+//                   `3k + 1`, `5k + 2` and `underfoot` walks have ids. So the reason is still
+//                   being produced AT THE HORIZON THE GATE COMPARES — the claim a count at
+//                   tick 100,000 can check and a comment cannot.
+//
+//   ROW 5, COLUMNS 25 AND 27. The row is two back from the spine, so withholding the cells
+//   `(column, 4)` and `(column, 6)` around each room leaves row 3 whole — a withheld cell ON
+//   the spine row would cut the spine in half and take the far end of the hotel with it. The
+//   columns are two apart so the single cell between them, `(26, 5)`, is a neighbour of both
+//   and is withheld once; and nothing else in this log touches columns 24..28 on floor 0 (the
+//   spawn diagonal reaches this floor at columns 0, 21, 42, 63 and 4; the amenity waves start
+//   at 10, 44 and 64 and step by two; the seal hosts are 30 and 35; the churn is 70).
+//
+// AND THE CONSEQUENCE IS REAL, WHICH IS WHAT THE HASH CAN SEE. Validity is derived and no
+// field carries it, so a stranded room only reaches the state hash if it is a room a guest
+// would otherwise have used. Both of these are lodging rooms on the entrance floor of a hotel
+// that turns guests away — `gaveUp` is non-zero at every horizon this log is read at — so a
+// working room here would have been slept in.
+// ============================================================================
+const BACK_OF_HOUSE_ROW = 5;
+const BACK_OF_HOUSE: readonly { readonly tick: number; readonly column: number }[] = [
+  { tick: 51, column: 25 },
+  { tick: 70_001, column: 27 },
+];
 
 export function commandLog(ticks: number, content: BoundContent): readonly ScheduledCommand[] {
   // The kind comes from the LOADED CONTENT, not from a literal. So the 100,000-tick
@@ -940,8 +1092,22 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     schedule.push({ tick, command: { kind: 'demolishRoom', id: underfoot } });
     underfoot += 1;
   }
+  // THE BACK-OF-HOUSE PAIR — `noCorridor`'s own pass. See `BACK_OF_HOUSE` above for why it
+  // exists and why its cells are where they are. FURNISHED, because `computeRoomInvalidity`
+  // asks for the bed BEFORE it asks for the lane: an unfurnished room here would report
+  // `missingItem` and this pass would cover nothing at all.
+  //
+  // IT RUNS AFTER EVERY OTHER SPAWNING PASS AND BEFORE THE CORRIDOR PLAN, and both halves of
+  // that are load-bearing. After, so it shifts no id in any pass above it. Before, so the
+  // corridor pass below reads these rooms out of the schedule with all the others — which is
+  // what makes the withheld list a DERIVATION rather than a second copy of these cells.
+  for (const room of BACK_OF_HOUSE) {
+    const at = { floor: SHIPPED_ENTRANCE_FLOOR, column: room.column, row: BACK_OF_HOUSE_ROW };
+    schedule.push({ tick: room.tick, command: { kind: 'spawnEntity', entityKind, at } });
+    furnish(room.tick, at, schedule);
+  }
   // ============================================================================
-  // WHERE PEOPLE WALK ON THE GROUND FLOOR (G-034b), AND THE TWO CELLS DELIBERATELY LEFT OFF
+  // WHERE PEOPLE WALK ON THE GROUND FLOOR (G-034b), AND THE CELLS DELIBERATELY LEFT OFF
   // THE PLAN.
   //
   // THE FOURTH INVALIDITY REASON HAS THE SAME COVERAGE PROBLEM THE OTHER THREE HAVE, AND THE
@@ -951,26 +1117,13 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // whose rule the gate cannot witness — *"a tower placed late changed nothing, because guests
   // take the lowest-id valid free room and this hotel is almost never short of one."*
   //
-  // SO THE GROUND FLOOR IS PLANNED AND TWO CELLS OF THE PLAN ARE WITHHELD:
-  //
-  //   column 1   the door of the FIRST room this log ever spawns (floor 0, column 0, tick 13,
-  //              furnished, on the earth). It is the lowest-id lodging room in the hotel, so
-  //              it is the room every arriving guest would otherwise take, and it is
-  //              `noCorridor` from the moment the first guest walks in at tick 101.
-  //   columns 41
-  //   and 43     the two doors of the room at column 42, spawned at tick 42,391 with an id far
-  //              above anything the despawn walk reaches — so the reason is still being
-  //              produced AT THE HORIZON the gate compares, which is the argument the second
-  //              terrace wave already makes for `noDoor`.
-  //   columns 53
-  //   and 55     the two doors of the amenity at column 54, and this pair is the one that
-  //              makes the reason present IN THE MIDDLE of the run as well as at both ends.
-  //              MEASURED, not assumed: with only the two withholdings above, `noCorridor` is
-  //              1 at tick 100,000 and **0 at tick 40,000** — the first room has been picked
-  //              apart by the despawn walk by then and the second is not spawned until tick
-  //              42,391. 40,000 is the horizon `validity.determinism.test.ts` reads, so the
-  //              suite would have been asserting a reason the world it inspects does not
-  //              contain. This amenity is spawned before 40,000 and is never despawned.
+  // SO THE GROUND FLOOR IS PLANNED, AND THE ONLY CELLS WITHHELD FROM THE PLAN ARE THE FOUR
+  // NEIGHBOURS OF EACH BACK-OF-HOUSE ROOM. That pass is above, with its whole argument;
+  // what belongs here is only the consequence for the plan, and it is one sentence: the
+  // withheld list is a FUNCTION of `BACK_OF_HOUSE`, so a cell can be withheld only because a
+  // room this log deliberately strands stands beside it. **Nothing is withheld to keep a
+  // count where it was** (G-038a-iii-c), which is what the nine hand-chosen cells here before
+  // this goal were for.
   //
   // EVERYTHING ELSE ON THE GROUND FLOOR KEEPS ITS EXACT VERDICT. Declaring any corridor on
   // floor 0 makes the WHOLE FLOOR planned — open plan is a per-floor property
@@ -1001,62 +1154,85 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // WITHHELD CELLS, NOT WITHHELD COLUMNS (G-036a). A room on a plan has FOUR neighbours, so
   // withholding the two beside it leaves the two behind and in front of it declared and the
   // room connected — `noCorridor` would have gone to zero while this list still looked right.
-  // Each entry below is EVERY free neighbour of one room, which is what it takes to strand it:
   //
-  //   (1,0) and (0,1)                       the two on-plot neighbours of the FIRST room this
-  //                                         log spawns, at (floor 0, column 0, row 0), tick 13.
-  //                                         The other two are off the plot. It is the lowest-id
-  //                                         lodging room in the hotel, so it is the room every
-  //                                         arriving guest would otherwise take.
-  //   (41,2) (43,2) (42,1) (42,3)           all four neighbours of the room at column 42, row 2
-  //                                         — spawn index 42, tick 42,391, with an id far above
-  //                                         anything the despawn walk reaches, so the reason is
-  //                                         still produced AT THE HORIZON the gate compares.
-  //   (53,0) (55,0) (54,1)                  the three on-plot neighbours of the amenity at
-  //                                         column 54, which is the pair that makes the reason
-  //                                         present IN THE MIDDLE of the run as well: spawned
-  //                                         before tick 40,000 and never despawned.
+  // SO IT IS EVERY ON-PLOT NEIGHBOUR OF EVERY BACK-OF-HOUSE ROOM, DERIVED (G-038a-iii-c). The
+  // list of nine hand-chosen cells that stood here is gone; `BACK_OF_HOUSE` above carries the
+  // whole argument for which rooms are stranded and why, and this is the one place that turns
+  // those rooms into cells. A cell one back-of-house room needs withheld is a cell ALL of them
+  // need withheld — `(26,5)` is a neighbour of both — so the set is a union and the duplicate
+  // costs nothing.
+  //
+  // AND A BACK-OF-HOUSE ROOM'S OWN CELL IS NEVER WITHHELD FROM ITSELF. Two of them placed one
+  // column apart would each name the other's cell, and withholding it would change nothing
+  // (a room stands there, so the plan's opinion of it is moot) — but the set would then say
+  // something false about what this pass omits, and the `add` below reads it. Kept as the
+  // postcondition of "two apart" rather than as evidence anything was checked.
   // ==========================================================================================
-  const WITHHELD_CELLS: readonly { readonly column: number; readonly row: number }[] = [
-    { column: 1, row: 0 },
-    { column: 0, row: 1 },
-    { column: 41, row: 2 },
-    { column: 43, row: 2 },
-    { column: 42, row: 1 },
-    { column: 42, row: 3 },
-    { column: 53, row: 0 },
-    { column: 55, row: 0 },
-    { column: 54, row: 1 },
-  ];
-  // The plot's own edges, as literals, for `SHIPPED_FIRST_ROW`'s reason — this log is written
-  // against the plot it was written against, and `layCorridor` THROWS off it.
-  const FIRST_COLUMN = 0;
-  const LAST_COLUMN = 79;
+  const WITHHELD_CELLS: readonly { readonly column: number; readonly row: number }[] = BACK_OF_HOUSE.flatMap(
+    (room) => [
+      { column: room.column - 1, row: BACK_OF_HOUSE_ROW },
+      { column: room.column + 1, row: BACK_OF_HOUSE_ROW },
+      { column: room.column, row: BACK_OF_HOUSE_ROW - 1 },
+      { column: room.column, row: BACK_OF_HOUSE_ROW + 1 },
+    ],
+  ).filter((cell) => !BACK_OF_HOUSE.some((room) => room.column === cell.column && cell.row === BACK_OF_HOUSE_ROW));
+  // The plot's own edges — module constants since G-038a-iii-c, because the shaft's column is
+  // derived from them and a second copy here would be G-018's duplicated constant with a
+  // derivation resting on it.
+  const FIRST_COLUMN = SHIPPED_FIRST_COLUMN;
+  const LAST_COLUMN = SHIPPED_LAST_COLUMN;
   // KEYED BY `column:row` AND NEVER ITERATED IN INSERTION ORDER (I2) — see the sort below.
   const planned = new Set<string>();
   const withheld = (column: number, row: number): boolean =>
     WITHHELD_CELLS.some((cell) => cell.column === column && cell.row === row);
+  /** Put one cell on the plan, if it is on the plot and not withheld. Every rule below goes
+   *  through it, so "withheld" means the same thing to all three. */
+  const declare = (column: number, row: number): void => {
+    if (column < FIRST_COLUMN || column > LAST_COLUMN) return;
+    if (row < SHIPPED_FIRST_ROW || row > SHIPPED_LAST_ROW) return;
+    if (withheld(column, row)) return;
+    planned.add(`${column}:${row}`);
+  };
+  const groundFloorRooms: { readonly column: number; readonly row: number }[] = [];
   for (const entry of schedule) {
     const command = entry.command;
     const at = command.kind === 'spawnEntity' ? command.at : command.kind === 'buildRoom' ? command.at : undefined;
     const kind = command.kind === 'spawnEntity' ? command.entityKind : command.kind === 'buildRoom' ? command.roomType : undefined;
     if (at === undefined || kind === undefined) continue;
-    if (at.floor !== 0 || !isRoomKind(content, kind)) continue;
-    // ALL FOUR NEIGHBOURS, BECAUSE THE DOOR RULE PROBES ALL FOUR. Two would declare half the
-    // circulation a ground-floor room can open onto and report the other half `noCorridor` —
-    // a whole floor changing verdict for a reason this goal did not intend.
-    for (const beside of [
-      { column: at.column - 1, row: at.row },
-      { column: at.column + 1, row: at.row },
-      { column: at.column, row: at.row - 1 },
-      { column: at.column, row: at.row + 1 },
-    ]) {
-      if (beside.column < FIRST_COLUMN || beside.column > LAST_COLUMN) continue;
-      if (beside.row < SHIPPED_FIRST_ROW || beside.row > SHIPPED_LAST_ROW) continue;
-      if (withheld(beside.column, beside.row)) continue;
-      planned.add(`${beside.column}:${beside.row}`);
+    if (at.floor !== SHIPPED_ENTRANCE_FLOOR || !isRoomKind(content, kind)) continue;
+    groundFloorRooms.push({ column: at.column, row: at.row });
+  }
+  // RULE 1 — ALL FOUR NEIGHBOURS, BECAUSE THE DOOR RULE PROBES ALL FOUR. Two would declare
+  // half the circulation a ground-floor room can open onto and report the other half
+  // `noCorridor` — a whole floor changing verdict for a reason this goal did not intend.
+  for (const at of groundFloorRooms) {
+    declare(at.column - 1, at.row);
+    declare(at.column + 1, at.row);
+    declare(at.column, at.row - 1);
+    declare(at.column, at.row + 1);
+  }
+  // RULE 2 — THE SPINE. One lane across the whole plot at `SPINE_ROW`; see its docblock for
+  // why row 3 and for what a floor of disconnected islands cost the moment a shaft existed.
+  for (let column = FIRST_COLUMN; column <= LAST_COLUMN; column += 1) declare(column, SPINE_ROW);
+  // RULE 3 — A TOOTH PER ROOM. The cells of a room's own column between it and the spine, so
+  // its island is joined to the lane. The room's OWN cell is skipped: a corridor under a room
+  // is a legal declaration and an inert one, but declaring it would say this plan runs through
+  // the room rather than up to it. A room already ON the spine row gets no tooth, and a room
+  // whose tooth is withheld keeps its island to itself — which is exactly what strands the
+  // back-of-house pair.
+  for (const at of groundFloorRooms) {
+    const from = at.row < SPINE_ROW ? at.row : SPINE_ROW;
+    const to = at.row < SPINE_ROW ? SPINE_ROW : at.row;
+    for (let row = from; row <= to; row += 1) {
+      if (row === at.row) continue;
+      declare(at.column, row);
     }
   }
+  // RULE 4 — THE SHAFT'S FOOT IS ON THE PLAN. A stair is a declared walkway in its own right
+  // (`isDeclaredWalkway`'s third clause), so this changes no verdict — what it changes is the
+  // claim: the stairwell stands on circulation the plan names, on the one floor of this plot
+  // that HAS a plan, rather than on the stair clause alone.
+  declare(SHAFT_COLUMN, SHAFT_ROW);
   // SORTED ASCENDING WITH AN EXPLICIT COMPARATOR before anything is emitted. `layCorridor` is
   // idempotent and the corridor plan sorts itself, so the world would be identical either way
   // — but a Set walked in insertion order is a habit this project does not keep (I2), and the
@@ -1070,7 +1246,31 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   for (const cell of cells) {
     schedule.push({
       tick: 0,
-      command: { kind: 'layCorridor', at: { floor: 0, column: cell.column, row: cell.row } },
+      command: { kind: 'layCorridor', at: { floor: SHIPPED_ENTRANCE_FLOOR, column: cell.column, row: cell.row } },
+    });
+  }
+  // ============================================================================
+  // AND THE SHAFT, AT TICK 0, FULL HEIGHT (G-038a-iii-c).
+  //
+  // FULL HEIGHT AND NOT "the floors this log builds on", which is `report.ts`'s own ruling one
+  // harness over: `stairLeg` reads only the stairwell's column and row, so which floors declared
+  // a stair changes nothing about travel — what it changes is which cells `reachableCells`
+  // admits. A shaft that stopped at the last seeded floor would be a building whose stairs end
+  // below its top storey, and this log puts rooms on all twenty-one of them.
+  //
+  // ASCENDING, so the array `withStair` builds is in insertion order as well as in sorted
+  // order. It sorts on the way in either way (`stairs.ts`), so this is legibility rather than
+  // correctness — but the command log is the artefact the whole gate rests on, and a reader
+  // should not have to check.
+  //
+  // AT TICK 0, BEFORE ANYTHING STANDS ON IT, for the corridor plan's own reason: the plan is
+  // drawn once and never edited, so every verdict in this run is a function of what was built
+  // rather than of when the plan was drawn.
+  // ============================================================================
+  for (let floor = SHIPPED_LOWEST_FLOOR; floor <= SHIPPED_HIGHEST_FLOOR; floor += 1) {
+    schedule.push({
+      tick: 0,
+      command: { kind: 'layStair', at: { floor, column: SHAFT_COLUMN, row: SHAFT_ROW } },
     });
   }
   return schedule;

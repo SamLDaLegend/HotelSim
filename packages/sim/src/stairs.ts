@@ -69,9 +69,12 @@
 // **THAT MOMENT WAS G-038a-iii-b**, which declared the shaft in `tools/headless/src/report.ts`
 // and in `apps/game/src/scenario.ts` and paid the bill the sentence above predicted: occupancy
 // 850 -> 827, the CLI golden, the bench golden, I5's stay count and every report golden in one
-// commit. **The I2 log is the exception and it is deliberate** — `determinism-log.ts` declares
-// no stairwell yet (G-038a-iii-c owns it, together with the `noCorridor` coverage that
-// `WITHHELD_CELLS` buys), so the 100,000-tick proof still runs a stairless world.
+// commit. **AND G-038a-iii-c CLOSED THE SET**: `tools/headless/src/determinism-log.ts` declares
+// a full-height shaft at the middle of its plot, so the 100,000-tick I2 proof runs a world with
+// a stairwell in it and `stairLeg` is inside the gate rather than beside it. **No harness in
+// this project declares an empty stair set any more.** What still reads one is a MIGRATED v20
+// save and a fixture that names none — which is the population `migrateV20ToV21` was written
+// for and the only one left.
 //
 // WHAT A DECLARED STAIR CELL IS *NOT*: it does not make its floor PLANNED. `isDeclaredWalkway`
 // adds this set as a third clause, never as a fourth branch of `isOpenPlan`, so declaring a

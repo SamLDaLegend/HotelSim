@@ -2,9 +2,9 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-b is DONE: report.ts and apps/game/src/scenario.ts DECLARE THE STAIRWELL, so stairs-as-coordinates (G-038a-ii-α) and unreachable (G-038a-ii-β) are both LIVE on every shipped world. Shaft DERIVED not picked — the second cell of the intersection of the two spines, (column 1, row 0), full height. unreachable is 0 on the pinned invocation with the shaft SHIPPED and the whole tally is byte-identical to the stairless one. Occupancy 850 -> 827, re-taken ALONE (ADR-0058); the tripwire campaign gap widens 2.5% -> 5.2% against occupancyWhenTaken 872 and the bound stays 1.4640 (ADR-0056). check:tickcost PREDICTED IDENTICAL and READ MEASURED — 0.9719 quiet and 1.0172 inside verify, both PASS and both NULLS: ARM_PATHS covers packages/sim/src so the ADR-0007 prose sweep made the arms differ in bytes but not in semantics, and harnessFor copies report.ts into BOTH arms, so this gate still cannot see the shaft's cost. I2 ca7bee4a4d6ea416 UNMOVED, checked not assumed. Through-wall landings 236 -> 29 on the bench and 16 -> 0 on the CLI default; moves roughly double everywhere; I5 1.8% of budget. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-c is DONE and the stairwell rollout is COMPLETE: determinism-log.ts has vertical circulation of its own — a forced spine row, per-room teeth, and a midpoint shaft at column 39 spanning floors -2..20 — so unreachable is 0 at both 40,000 and 100,000 ticks, newly pinned at both. I2 moved BY DESIGN to 2b5369e4461a9140, agreeing across three processes. WITHHELD_CELLS is no longer nine hand-chosen cells: noCorridor now has a pass of its own, a back-of-house pair, and the list is DERIVED from it. A red row stopped the goal and was escalated rather than tuned — recovery.determinism.test.ts pinned loan debt to exactly 0, a zero-margin coincidence (300,000 / 10,000 = exactly 30 nights) whose comment named a capped-payment branch that is UNREACHABLE on any run. Re-founded into four claims with margins stated, proven strictly stronger by mutation against the old log rather than asserted. Through-wall landings fell 236 -> 29 on the bench at the previous goal. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
-- **State**: save **v21** · summary **v4** · I2 `ca7bee4a4d6ea416` · measure golden
+- **State**: save **v21** · summary **v4** · I2 `2b5369e4461a9140` · measure golden
   `760558b631beb552` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
@@ -2059,3 +2059,60 @@ elsewhere. **Upheld, with the distinction written down so the next goal cannot r
 **And `apps/game/src/scenario.ts` ships covered by no test.** The builder flagged it rather than
 letting it pass silently. **Nothing will go red if it is wrong** — which is exactly why it is
 recorded here and not only in the diff.
+
+### G-038a-iii-c — The stairwell rollout closes, and the goal's best moment was a refusal.
+
+**`unreachable` is 0 at both horizons of the I2 log, and I2 moved by design for the first time in
+this rollout** — `ca7bee4a4d6ea416` -> `2b5369e4461a9140`. **ADR-0066 has the construction**, all of
+it derived: the spine row is what is left after the room rows and the back-of-house pass take
+theirs, and the shaft column is the midpoint because the worst walk to an aligned shaft is least
+there.
+
+**The finding that pays for the goal**: declaring the shaft over the old plan gives `unreachable` 13
+**and `checkedOut` 636 -> 0.** Floor 0 was a scatter of islands the whole time — **invisible only
+because the fill dropped onto every floor from the empty air above.** The free floor axis was
+hiding a broken plan, not decorating a working one.
+
+### THE REFUSAL
+
+The goal went red on an unrelated pin, and the builder could have made it green two ways — drop a
+back-of-house room, or move the shaft to a column where the number falls out. **It did neither and
+escalated**, naming both. That is the §9 line held under the exact pressure that makes it tempting:
+**thirteen rows green, one red, and two one-line fixes in reach.**
+
+### AND THE ASSERTION HAD NEVER TESTED ITS OWN CLAIM
+
+Adjudicated by **arithmetic**, not measurement: 300,000 / 10,000 = **exactly 30**, so the final
+payment is always exactly the nightly rate and the comment's *"final partial payment capped at the
+outstanding amount"* names a branch **unreachable on any run.**
+
+> **A pin can be green for many goals, be cited as coverage, and test nothing it says it tests.**
+> Nothing catches this: it passes, it looks specific, and its comment reads like a warrant. **What
+> caught it was an unrelated change removing its margin** — the pin was 30 payments against 30
+> nights, and any change costing the harness one night's cash breaks it.
+
+### THE BUILDER CORRECTED MY RULING, INSIDE THE RULING WRITTEN TO PREVENT THAT CLASS
+
+I specified the replacement as *"repaid + outstanding equals the principal drawn."* Against
+`sumByReason(ledger,'loanDraw')` that is **vacuous** — `outstandingDebtOf` IS that sum plus the
+repayments, so it is an identity of the function. **ADR-0007 arriving inside the repair for an
+ADR-0007 defect.** The builder compared against the outcome counter times content instead: **three
+independent sources**, and a draw booked at the wrong amount now fails where it could not before.
+
+**And it proved "strictly stronger" by mutation rather than asserting it** — against the old log,
+claims 3 and 4 both go red (0 cash-capped payments vs 2; last repayment at tick 48,959 vs 99,359).
+**Claim 4 is flagged in place as two events from vacuous, with instructions not to weaken it back**,
+which is the disclosure `evictedRoomUnusable` already carries next door.
+
+### FOUR MORE OF MY CLAIMS WERE FALSE, AND ONE NAMED TWO IMPOSSIBLE CASES
+
+The measure golden does not move; `tools/viewer` cannot record this world at all; the trap table
+understated its own premise. **And I named the sky tower and the floating builds as the rooms that
+might not be servable — `unsupported` is asked BEFORE `unreachable`, so neither can ever reach the
+question.** *Nine goals running, the agent acting on my brief has corrected a load-bearing claim in
+it. The rate is not falling; the briefs are getting more specific, and specific claims are
+falsifiable ones.*
+
+**A stale claim inside the stamp, found by the builder**: *"I2 ca7bee4a4d6ea416 UNMOVED"*,
+**unbackticked — which is exactly why `check:stamp` never compared it.** A gate that checks only its
+backticked facts is a gate whose prose can lie.

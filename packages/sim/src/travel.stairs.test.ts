@@ -20,9 +20,14 @@
 //  falls monotonically and the phases advance strictly. `NO GUEST GETS STUCK` below is the
 //  swept proof, in G-038a-i's shape.
 //
-//  AND THE CONTROL THAT MATTERS MOST TO THIS GOAL IS THE NEGATIVE ONE. Every world in this
-//  project declares NO stair — the harnesses, the I2 log, the bench, every migrated save — and
-//  under an empty set this file's own hotel must be byte-identical to the pre-goal build.
+//  AND THE CONTROL THAT MATTERS MOST TO THIS GOAL IS THE NEGATIVE ONE. When this file was
+//  written every world in this project declared NO stair — the harnesses, the I2 log, the
+//  bench, every migrated save. **That is now true only of the migrated saves and of fixtures
+//  that name none**: `report.ts` and `apps/game/src/scenario.ts` declared shafts at
+//  G-038a-iii-b and `determinism-log.ts` did at G-038a-iii-c, so the CLI, the bench and the I2
+//  proof all run with a stairwell. The control below is unaffected and is the reason it is
+//  restated rather than struck — under an empty set this file's own hotel must still be
+//  byte-identical to the pre-goal build.
 //  `A WORLD WITH NO STAIRWELL IS THE PRE-GOAL SIMULATION` is that arm, and it is what makes
 //  `migrateV20ToV21`'s empty set a reading of v20 bytes rather than a hope.
 // ==========================================================================================

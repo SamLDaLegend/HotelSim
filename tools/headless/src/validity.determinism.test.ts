@@ -16,10 +16,17 @@
 //     deterministic, which is the mirror image of the hole G-004 found.
 //
 // SINCE G-034b THERE ARE FIVE REASONS AND THE HARNESS PRODUCES FOUR OF THEM. The log declares
-// circulation on its ground floor and WITHHOLDS the free neighbours of three rooms, so
-// `noCorridor` is produced by rooms a guest would otherwise have taken — the sky-tower argument
-// applied to a rule whose consequence, like every other validity verdict, the hash can only see
-// indirectly.
+// circulation on its ground floor and WITHHOLDS the free neighbours of its BACK-OF-HOUSE rooms,
+// so `noCorridor` is produced by rooms a guest would otherwise have taken — the sky-tower
+// argument applied to a rule whose consequence, like every other validity verdict, the hash can
+// only see indirectly.
+//
+// AND SINCE G-038a-iii-c THE FIFTH REASON IS ASKED FOR THE FIRST TIME HERE. `determinism-log.ts`
+// now declares a STAIRWELL, so this harness's floor axis is no longer free — a room whose lane
+// does not join the rest of the building is `unreachable` rather than merely off-plan, and this
+// file pins that count at both horizons. It was vacuous before: with no stair declared,
+// `reachableCells` drops onto every floor from the empty air above it, so nothing on any plot
+// this project builds could ever have been unreachable.
 //
 // ============================================================================
 //  AND SINCE G-036a EVERY ONE OF THOSE TALLIES IS ASSERTED AS A COUNT RATHER THAN AS "MORE
@@ -130,16 +137,42 @@ describe('the I2 harness reaches rooms that do not work', () => {
   });
 
   it('CONTAINS A ROOM WHOSE DOOR OPENS ONTO NOWHERE ANYBODY WALKS (G-034b)', () => {
-    // The fourth reason a placement can produce, and the log withholds the free neighbours of
-    // three ground-floor rooms to produce it — see `determinism-log.ts` for which and why. The
-    // sky tower's argument applies here word for word: validity is DERIVED, so the state hash
-    // can only see this rule's CONSEQUENCE, and the consequence exists only if the room it
-    // refuses is one a guest would otherwise have taken. The first room this log ever spawns is
-    // one of the three, which is the lowest-id lodging room in the hotel.
+    // ==================================================================================
+    // ONE, AND THE REASON IT IS ONE IS A DATE (G-038a-iii-c).
     //
-    // ONE, AND IT IS THE OTHER KNIFE EDGE. The other two withheld rooms are alive at different
-    // parts of the run; at this horizon exactly one of the three is both standing and stranded.
+    // `determinism-log.ts`'s BACK-OF-HOUSE pass places exactly two rooms whose four
+    // neighbours the corridor plan omits, and it places them at ticks 51 and 70,001. At this
+    // horizon — 40,000 — the second has not been spawned yet, so the count is the first one
+    // alone. That is the whole of the arithmetic: **two producers, one of them not yet born.**
+    //
+    // WHY IT IS A CONSTRUCTION AND NOT A LIST. Until this goal the reason was kept alive by
+    // nine hand-chosen cells withheld from the plan, picked so that three rooms OTHER passes
+    // happened to spawn came out stranded — and one of those three stood on the FRONT DOOR,
+    // which a floor with a spine cannot strand without reporting every room on it
+    // `unreachable` instead. The other two lived and died by this log's id-walking despawn
+    // and demolish passes, so the coverage was a function of how much money the hotel made.
+    // Now the reason has a pass of its own, exactly as `unsupported` has the sky tower and
+    // `noDoor` has the terrace crosses, and the withheld list is DERIVED from it.
+    //
+    // The sky tower's argument still applies word for word: validity is DERIVED, so the state
+    // hash can only see this rule's CONSEQUENCE, and the consequence exists only if the room
+    // it refuses is one a guest would otherwise have taken. The tick-51 room is a furnished,
+    // grounded lodging room with a LOW id, in a hotel that turns guests away at every horizon
+    // this file reads — `gaveUp` is asserted non-zero below — so it is a room guests were
+    // queuing for.
+    // ==================================================================================
     expect(tally.noCorridor).toBe(1);
+  });
+
+  it('AND NO ROOM THIS HOTEL CANNOT WALK TO, WHICH THE SHAFT IS WHAT MAKES ASKABLE', () => {
+    // ZERO, AND IT IS THE HARD ZERO OF THIS GOAL RATHER THAN A FREE ONE. `determinism-log.ts`
+    // declares a full-height stairwell since G-038a-iii-c, so `reachableCells` no longer drops
+    // onto each floor from the empty air above it: everything above and below the entrance
+    // floor is now reached through ONE column. Declaring that shaft over the plan as it stood
+    // took `unreachable` from 0 to 13 and this harness's `checkedOut` from 636 to 0 — the
+    // ground floor's plan was a scatter of islands and the front door opened onto none of
+    // them. The spine and the per-room teeth are what put it back to zero.
+    expect(tally.unreachable).toBe(0);
   });
 
   it('and the harness DECLARES a corridor plan at all, so the rule is not vacuous there', () => {
@@ -153,6 +186,27 @@ describe('the I2 harness reaches rooms that do not work', () => {
     // `withCorridor` keeps true through a run.
     const keys = world.corridors.map((at) => `${at.floor}:${at.column}:${at.row}`);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('AND DECLARES A STAIRWELL, full height and ALIGNED, so the vertical rule is not vacuous either', () => {
+    // The same argument one axis over (G-038a-iii-c). A world with no stair declared reads as
+    // *"the floor axis spends unconditionally"* (`stairs.ts`), which is what this harness was
+    // until this goal — so `unreachable` above could not have been anything but zero and
+    // `stairLeg` never ran inside the I2 proof at all. The shaft is hashed state, so this is
+    // also the claim that the gate's final hash carries it.
+    //
+    // TWENTY-THREE CELLS, one per floor of the shipped plot (-2..20), and ONE `(column, row)`
+    // between them — which is `stairs.ts`' alignment rule, the thing that keeps `stairLeg` O(1)
+    // and the shipped `guestCellsPerTick: 3` inside its derived window.
+    expect(world.stairs.length).toBe(23);
+    const columns = new Set(world.stairs.map((at) => at.column));
+    const rows = new Set(world.stairs.map((at) => at.row));
+    expect(columns.size).toBe(1);
+    expect(rows.size).toBe(1);
+    const floors = world.stairs.map((at) => at.floor);
+    expect(floors).toEqual([...floors].sort((a, b) => a - b));
+    expect(floors[0]).toBe(-2);
+    expect(floors[floors.length - 1]).toBe(20);
   });
 
   it('contains no unplaced room, because only a migration can make one', () => {
@@ -272,7 +326,26 @@ describe('the replay is the thing the gate runs', () => {
     // ==================================================================================
     const tally = countInvalidRooms(horizon.entities, horizon.grid, horizon.corridors, horizon.stairs, content);
     expect(tally.noDoor).toBe(1);
+    // TWO, AND THEY ARE THE WHOLE BACK-OF-HOUSE PASS (G-038a-iii-c) — the room placed at tick
+    // 51 and the room placed at tick 70,001, both still standing and both still with every
+    // neighbour off the plan. The 40,000-tick assertion above counts ONE for the same reason
+    // read from the other end: the late one is not born yet there.
+    //
+    // THE LATE ONE IS THE STRUCTURAL HALF OF THE PAIR and it is why this line is not a
+    // restatement of the one at 40,000. It lands above everything this log's three id-walking
+    // passes reach — `despawnEntity` at `3k + 1`, `demolishRoom` at `5k + 2`, and the
+    // `underfoot` walk — so it is producing the reason AT THE HORIZON THE GATE COMPARES by
+    // construction rather than by surviving. That is the third terrace wave's argument one
+    // reason over, and it replaces a hand-tuned list of nine withheld cells whose survival was
+    // a function of how much money this hotel happened to make.
     expect(tally.noCorridor).toBe(2);
+    // ZERO AT THE HORIZON TOO, and unlike every other row here this one is NEW rather than
+    // re-taken: `determinism-log.ts` declares a stairwell as of this goal, so a room the fill
+    // cannot reach is a verdict this world could produce and did not. The shaft is at the
+    // middle of the plot on the ground floor's spine and every ground-floor island has a tooth
+    // joining it to that spine, so every room that is supported, doored, furnished and on the
+    // plan is also walkable-to. Declaring the shaft WITHOUT the spine gives 13.
+    expect(tally.unreachable).toBe(0);
     expect(tally.missingItem).toBe(4);
     // G-038c: 76 -> 75. The log's player builds land on floors 5..19 and the first one on each
     // floor now pays `floorConstructionCostPence` as well (ADR-0047 B8), so one fewer is
@@ -285,7 +358,23 @@ describe('the replay is the thing the gate runs', () => {
     // `insufficientFunds` 18 -> 20. The other four rows are unchanged at the horizon, including
     // `noDoor` 1: the third terrace wave lands at tick 70,001 with ids above everything the
     // despawn pass reaches, and no amount of walking moves an id.
-    expect(tally.unsupported).toBe(73);
+    //
+    // G-038a-iii-c: 73 -> 69, AND THE 40,000-TICK TALLY DID NOT MOVE AT ALL — every row of it
+    // is byte-identical, which places all four in the second half. Two causes, both counted
+    // rather than reasoned:
+    //
+    //   -2  THE HOTEL BUILDS FEWER. `built` 9 -> 7 over the horizon, and every room the build
+    //       rotation places lands on floors 5..19 with nothing beneath it, so a build the hotel
+    //       cannot afford is an `unsupported` room that never appears. That it builds fewer
+    //       while EARNING MORE (`checkedOut` 636 -> 708) is this log's own economics: a richer
+    //       hotel opens more storeys, and each first room on a floor pays
+    //       `floorConstructionCostPence` as well (ADR-0047 B8).
+    //   -2  THE ID WALKS TAKE A DIFFERENT SET. Two fewer builds and two added back-of-house
+    //       rooms shift every later entity id, so `despawnEntity` at `3k + 1`, `demolishRoom`
+    //       at `5k + 2` and the `underfoot` walk land on different rooms of the spawn diagonal.
+    //       Six floating rooms that used to survive to the horizon no longer do and four that
+    //       did not now do.
+    expect(tally.unsupported).toBe(69);
     expect(tally.unplaced).toBe(0);
   });
 

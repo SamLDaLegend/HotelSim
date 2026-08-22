@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-b is DONE: report.ts and apps/game/src/scenario.ts DECLARE THE STAIRWELL, so stairs-as-coordinates (G-038a-ii-α) and unreachable (G-038a-ii-β) are both LIVE on every shipped world. Shaft DERIVED not picked — the second cell of the intersection of the two spines, (column 1, row 0), full height. unreachable is 0 on the pinned invocation with the shaft SHIPPED and the whole tally is byte-identical to the stairless one. Occupancy 850 -> 827, re-taken ALONE (ADR-0058); the tripwire campaign gap widens 2.5% -> 5.2% against occupancyWhenTaken 872 and the bound stays 1.4640 (ADR-0056). check:tickcost PREDICTED IDENTICAL and READ MEASURED — 0.9719 quiet and 1.0172 inside verify, both PASS and both NULLS: ARM_PATHS covers packages/sim/src so the ADR-0007 prose sweep made the arms differ in bytes but not in semantics, and harnessFor copies report.ts into BOTH arms, so this gate still cannot see the shaft's cost. I2 ca7bee4a4d6ea416 UNMOVED, checked not assumed. Through-wall landings 236 -> 29 on the bench and 16 -> 0 on the CLI default; moves roughly double everywhere; I5 1.8% of budget. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-c is DONE and the stairwell rollout is COMPLETE: determinism-log.ts has vertical circulation of its own — a forced spine row, per-room teeth, and a midpoint shaft at column 39 spanning floors -2..20 — so unreachable is 0 at both 40,000 and 100,000 ticks, newly pinned at both. I2 moved BY DESIGN to 2b5369e4461a9140, agreeing across three processes. WITHHELD_CELLS is no longer nine hand-chosen cells: noCorridor now has a pass of its own, a back-of-house pair, and the list is DERIVED from it. A red row stopped the goal and was escalated rather than tuned — recovery.determinism.test.ts pinned loan debt to exactly 0, a zero-margin coincidence (300,000 / 10,000 = exactly 30 nights) whose comment named a capped-payment branch that is UNREACHABLE on any run. Re-founded into four claims with margins stated, proven strictly stronger by mutation against the old log rather than asserted. Through-wall landings fell 236 -> 29 on the bench at the previous goal. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -5473,3 +5473,109 @@ smaller threshold is the move §2.1 forbids.** The whole-step claim moved to `am
 The builder flagged it: that file is the render-engineer's tree and **the suite does not exercise
 it.** The goal named it explicitly so it was done, **but it ships unverified by design** — worth
 knowing at M5, and worth not forgetting because nothing will go red if it is wrong.
+
+---
+
+## ADR-0066 — The I2 harness gets circulation of its own, and a zero-margin assertion that never tested its own claim is re-founded.
+
+**Date**: 2026-08-22 · **Status**: accepted · **G-038a-iii-c. The stairwell rollout is complete.**
+
+### THE HARNESS
+
+`determinism-log.ts` had corridors on **floor 0 only**, no spine, and rooms scattered across
+twenty-one floors. It now has circulation designed for it, and **every part of it is derived rather
+than chosen**:
+
+- **The spine row is FORCED.** Floor-0 rooms occupy rows 0, 1, 2, 4, 5, 7, and the back-of-house
+  pass takes 4, 5, 6. **Row 3 is what is left.**
+- **Teeth** — for every floor-0 room, the cells of its own column between it and the spine.
+- **The shaft column is the derived MIDPOINT**, `(first + last) >> 1` = 39, floors −2..20, aligned:
+  the worst walk to an aligned stairwell is `max(X − first, last − X)`, least at the midpoint.
+
+**`unreachable` is 0 at BOTH 40,000 and 100,000 ticks, newly pinned at both.** The 40,000 tally is
+byte-identical; only `unsupported` moved at the horizon (73 → 69), with its cause written at the
+assertion.
+
+> **Declaring the shaft over the plan as it stood gives `unreachable` 13 and `checkedOut` 636 → 0 —
+> the hotel stops trading entirely.** Floor 0 was a scatter of islands the whole time, **invisible
+> while no stairwell existed because the fill dropped onto every floor from the empty air above.**
+
+**I2 moved BY DESIGN: `ca7bee4a4d6ea416` → `2b5369e4461a9140`**, three processes agreeing.
+
+### `WITHHELD_CELLS` IS NO LONGER A HAND-TUNED LIST, AND THAT WAS THE POINT OF THE GOAL
+
+The nine hand-chosen cells are **deleted**. `noCorridor` now has **a pass of its own** — as
+`unsupported` has the sky tower and `noDoor` has the terrace crosses — a **back-of-house pair** of
+furnished, grounded, doored rooms, and `WITHHELD_CELLS` is **derived from it**.
+
+**Why the old list could not survive, and it is a real finding**: two of the nine were **the two
+neighbours of the entrance cell**, so a floor with a spine that also withholds them reports every
+room `unreachable` — *a different reason*. The other two lived and died by the id walks, **i.e. by
+how much money the hotel made.**
+
+### THE ESCALATION, AND THE ASSERTION THAT NEVER TESTED ITS OWN CLAIM
+
+The goal went red on an unrelated pin: `recovery.determinism.test.ts` asserted
+`outstandingDebtOf(ledger) === 0`, reading 8,500. **The builder refused both cheap fixes** — dropping
+a back-of-house room, or re-siting the shaft to a column where the number comes out — **and
+escalated.** Correct: choosing a shaft siting because a number falls out of it is hunting a number,
+whatever the number is.
+
+**Adjudicated by ARITHMETIC rather than by measurement.** `loanPrincipalPence` **300,000** ÷
+`loanRepaymentPerNightPence` **10,000** = **exactly 30.** The final payment is therefore always
+exactly the nightly rate, so the comment's *"final partial payment capped at the outstanding amount
+rather than the nightly rate"* names a branch **unreachable on ANY run** — not one it merely happens
+to miss.
+
+> **The check never tested what it claimed, and had not for many goals.** Re-founding it is the
+> repair, not a weakening — and the goal that exposed it is the right place to pay for it.
+
+**Four claims where there was one**, each with its bar traced to something written down: the fold
+closes, debt never goes past zero, repayments still happen in the last quarter, **and the
+cash-capped arm of `min(debt, rate, cash)` fires** — the assertion the comment has been describing
+for its whole life, **true for the first time on this tree.**
+
+### THE BUILDER CORRECTED MY RULING, AND THE CORRECTION IS THE BEST PART OF IT
+
+I specified claim 1 as *"total repaid + outstanding equals the principal drawn."* **Spelled against
+`sumByReason(ledger,'loanDraw')` that is VACUOUS**: `outstandingDebtOf` **is**
+`sum(loanDraw) + sum(loanRepayment)`, so the equation is an identity of the function rather than a
+fact about the run.
+
+> **ADR-0007 arriving inside the repair for an ADR-0007 defect, in a ruling written to prevent
+> exactly that.** The builder compared against **`loanOutcomes.drawn × economy.loanPrincipalPence`**
+> instead — ledger against outcome counter against content, **three independent sources** — so a
+> draw recorded as an outcome but not booked, or booked at the wrong amount, now fails. It could
+> not before.
+
+**And "strictly stronger" was PROVEN rather than asserted**, by mutation against the old log
+(ADR-0022 recipe, sha256 verified on restore, I2 re-read afterwards):
+
+| | old log | shipped |
+|---|---|---|
+| cash-capped repayments | **0** | **2** |
+| last repayment tick | **48,959** | **99,359** |
+| repayments after tick 75,000 | **0** | **5** |
+
+**Claims 3 and 4 both go red on the tree this goal started from.** Claim 4 is flagged in place as
+the thinnest row — *"two events from vacuous"* — with instructions not to weaken it back.
+
+### FOUR MORE BRIEF CORRECTIONS, AND ONE NAMED TWO IMPOSSIBLE CASES
+
+- **The measure golden does NOT move** — `check-measure.mjs` reads `report.ts`'s workload, not the
+  I2 log. I told the builder to expect it to.
+- **`tools/viewer` cannot record this world at all**: `--record` lives on `cli.ts`, which runs
+  `report.ts`'s schedule. I called it "the right instrument"; reaching the I2 world needs a
+  throwaway script calling `recordRun`.
+- **My "interesting cases" were structurally impossible.** I named the sky tower and the floors-5..19
+  builds as the rooms that might not be servable. **`unsupported` is asked BEFORE `unreachable`, so a
+  floating room never reaches the question.**
+- **The trap table understated its own premise**: a shaft over the old plan does not merely cost
+  coverage, **it takes `checkedOut` to 0.**
+
+### AND A STALE CLAIM INSIDE THE STAMP THAT NO GATE COMPARES
+
+The builder found the as-of stamp asserting *"I2 ca7bee4a4d6ea416 UNMOVED"* — **unbackticked, which
+is precisely why `check:stamp` does not compare it and nothing went red.** Now false of the tree, and
+rewritten with this goal's stamp. **A gate that compares only the backticked facts is a gate whose
+prose can lie**, which is the same shape as the digest-body drift ADR-0048 §1 records.

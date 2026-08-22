@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-038a-iii-b is DONE: report.ts and apps/game/src/scenario.ts DECLARE THE STAIRWELL, so stairs-as-coordinates (G-038a-ii-α) and unreachable (G-038a-ii-β) are both LIVE on every shipped world. Shaft DERIVED not picked — the second cell of the intersection of the two spines, (column 1, row 0), full height. unreachable is 0 on the pinned invocation with the shaft SHIPPED and the whole tally is byte-identical to the stairless one. Occupancy 850 -> 827, re-taken ALONE (ADR-0058); the tripwire campaign gap widens 2.5% -> 5.2% against occupancyWhenTaken 872 and the bound stays 1.4640 (ADR-0056). check:tickcost PREDICTED IDENTICAL and READ MEASURED — 0.9719 quiet and 1.0172 inside verify, both PASS and both NULLS: ARM_PATHS covers packages/sim/src so the ADR-0007 prose sweep made the arms differ in bytes but not in semantics, and harnessFor copies report.ts into BOTH arms, so this gate still cannot see the shaft's cost. I2 ca7bee4a4d6ea416 UNMOVED, checked not assumed. Through-wall landings 236 -> 29 on the bench and 16 -> 0 on the CLI default; moves roughly double everywhere; I5 1.8% of budget. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-038a-iii-c is DONE and the stairwell rollout is COMPLETE: determinism-log.ts has vertical circulation of its own — a forced spine row, per-room teeth, and a midpoint shaft at column 39 spanning floors -2..20 — so unreachable is 0 at both 40,000 and 100,000 ticks, newly pinned at both. I2 moved BY DESIGN to 2b5369e4461a9140, agreeing across three processes. WITHHELD_CELLS is no longer nine hand-chosen cells: noCorridor now has a pass of its own, a back-of-house pair, and the list is DERIVED from it. A red row stopped the goal and was escalated rather than tuned — recovery.determinism.test.ts pinned loan debt to exactly 0, a zero-margin coincidence (300,000 / 10,000 = exactly 30 nights) whose comment named a capped-payment branch that is UNREACHABLE on any run. Re-founded into four claims with margins stated, proven strictly stronger by mutation against the old log rather than asserted. Through-wall landings fell 236 -> 29 on the bench at the previous goal. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `ca7bee4a4d6ea416` · measure golden `760558b631beb552`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `2b5369e4461a9140` · measure golden `760558b631beb552`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -3621,7 +3621,11 @@ goal ago** with frames; what is genuinely new here is only that it becomes a **s
 than a test-declared shaft. Claim the smaller thing.
 
 ## G-038a-iii-c — `determinism-log.ts` gets vertical circulation of its own
-Status: **PLANNED.** Owner pair: sim-engineer / sim-critic
+Status: **DONE 2026-08-22 (ADR-0066).** A forced spine row, per-room teeth, a derived midpoint
+shaft at column 39 over floors -2..20. unreachable 0 at 40,000 AND 100,000, newly pinned at
+both. I2 moved BY DESIGN: ca7bee4a4d6ea416 -> 2b5369e4461a9140, three processes agreeing.
+WITHHELD_CELLS is DERIVED from a back-of-house pass, not nine hand-chosen cells. A red row
+was ESCALATED, not tuned; the loan assertion is re-founded and proven stronger by mutation.
 **Owns the I2 hash and the `noCorridor` coverage repair, alone.**
 
 **Not a borrowed column — vertical circulation designed for a harness that has none.** And the
