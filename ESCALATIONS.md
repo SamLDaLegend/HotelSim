@@ -1794,7 +1794,7 @@ the milestone question rather than holding M3.**
 
 ---
 
-## E-010 — An exit criterion I wrote is UNSATISFIABLE by any change inside this repository. §2.0.
+## E-010 [RESOLVED 2026-08-22] — An exit criterion I wrote is UNSATISFIABLE by any change inside this repository. §2.0.
 **Opened 2026-08-22 (G-039b-β2). The loop does NOT stop** — the goal shipped its real subject; this
 is the residue, and it needs a human call rather than another campaign.
 
@@ -1838,7 +1838,7 @@ turns green, which is §2.1's superstition with CI access and would have passed 
 
 ---
 
-## E-011 — The rate re-derivation is SOUND and turns `check:scaling`'s density axis red. Loop stopped.
+## E-011 [RESOLVED 2026-08-22] — The rate re-derivation is SOUND and turns `check:scaling`'s density axis red. Loop stopped.
 **Opened 2026-08-22 (G-041). Work preserved at `8026e2f` on branch `g041-rate-rederivation`; `main`
 is clean and green at `b949dfb`.** Nothing is lost and nothing is committed on red.
 
@@ -1941,3 +1941,22 @@ with what would discharge it.**
 > **Ranked against the other three: this one is about whether the BUILD LOOP works at all**, and it
 > sits beside the flat amenity axis rather than apart from it. The plot-depth and speed-floor items
 > are constraints to accept or reject; **these two are the loop not paying the player back.**
+
+---
+
+### E-010 [RESOLVED 2026-08-22 — human ruling] — struck; the load arm is a stress arm, not a bar.
+Option (a) taken. Full reasoning in **ADR-0069**. `--workers 24` puts 2x cores of CPU-bound work on
+the machine before the suite starts, so the criterion asked the policy to hold in a regime that
+breaks its own premise. **The claim G-039b-β2 earned stands and is verified.**
+
+### E-011 [RESOLVED 2026-08-22 — human ruling] — option (a): the density axis is re-derived.
+`direction: false` with a magnitude bound, on the precedent G-039b-β1 set for the `needs` axis one
+goal earlier. **Three conditions carried into the work** (ADR-0069): the bound sits outside the
+±0.04 same-tree noise and is derived from the campaign rather than chosen; the campaign is
+**re-taken on the branch's content** rather than composed from main's readings; and **option (c),
+changing the arms so the direction survives, stays refused as workload-tuning.**
+
+**TWO OF THE FOUR CONSEQUENCES ARE NOT DISCHARGED BY THIS RULING** and are parked as their own goal:
+the **amenity axis going flat below 15 concurrent guests**, and the **engagement ladder inverting at
+the top rung**. Both are the build loop failing to pay the player back, and **folding them into a
+merge would be the largest scope leak this project has had.**

@@ -5765,3 +5765,158 @@ been wrong for every guest-level field ever added.
 arrival every 96, seed 42, 30 days, 6 samples per arm interleaved, median of ratios, two regimes
 straddling 1.0, both far inside 1.4640. **No tick-cost claim is made beyond "not measurable at this
 instrument's resolution."** I5 bench 2.0% of budget.)*
+
+---
+
+## ADR-0069 — HUMAN RULING: E-010 struck, E-011 takes option (a). Both escalations close.
+
+**Date**: 2026-08-22 · **Status**: accepted · **Human ruling** ("Agree with your recommendations").
+
+### E-010 — STRUCK, and the load arm's ceiling is stated instead
+
+The criterion *"`load.mjs --workers 24 -- pnpm test` completes with zero `Test timed out`"* **asked
+the concurrency policy to hold in a regime that breaks the policy's own premise before the suite
+starts**: 24 CPU-bound spinners on 12 cores is already 2x oversubscribed by the harness. Contention
+there runs **10–14x against 3.8–5.8x of headroom**, so **no literal below ~150,000 ms survives it and
+no policy inside this repository can.**
+
+> **`--workers 24` is a STRESS ARM for finding tests, not a bar for passing them.** The claim
+> G-039b-β2 actually earned — *"`pnpm verify` is mutually exclusive, so the failure mode that
+> produced five sightings cannot recur"* — is verified and stands.
+
+**Recorded rather than deleted**, so the next goal that meets a timeout under a load arm does not
+re-derive the same non-answer.
+
+### E-011 — OPTION (a): the density axis is re-derived to `direction: false`
+
+`check:scaling`'s density axis asserts `dense-providers / full-vector > 1`. **At the re-derived rates
+a well-provisioned hotel's guests are idle roughly 70% of the stay, and an idle guest is cheap**, so
+**provider density now buys about a quarter LESS tick-cost — 1.26x, paired and interleaved.**
+
+**The gate's premise became false; the content did not break it.** And the axis **cannot support a
+direction claim near 1 at all**: the same quantity read **1.0547 and 0.9732 in two runs on the SAME
+tree.**
+
+**The precedent is one goal old and in the same file.** G-039b-β1 set `direction: false` for the
+`needs` axis when its loaded arm carried 0.9827 — *warranted by the campaign's own readings* rather
+than asserted. **Same mechanism, same file.**
+
+**REQUIRED, and these are the conditions that make it a re-derivation rather than a climb-down:**
+
+1. **The magnitude bound must sit OUTSIDE the ±0.04 noise** the two same-tree readings show. The
+   1.26x effect clears it comfortably; **the bound must be derived from the campaign, not chosen to
+   clear it.**
+2. **The campaign is RE-TAKEN on the branch's content**, not composed from `main`'s readings —
+   ADR-0067's recipe: n=12 quiet, n=8 loaded, arms interleaved, warm-up discarded, one sitting,
+   `load.mjs --workers 12`, five slots on every number.
+3. **Option (c) — changing the density arms so the direction survives — stays REFUSED.** It is
+   tuning a workload to keep a test interesting; G-039b-α refused it by name and §9 makes it a stop
+   condition. **Recorded so the refusal is visible rather than assumed.**
+
+### AND THE FOUR CONSEQUENCES ARE ACCEPTED WITH THE RULING, WHICH MEANS TWO OF THEM BECOME GOALS
+
+The human accepted the recommendation as a whole, and the recommendation named four consequences.
+**Two are constraints to live with; two are the build loop not paying the player back**, and those
+two are **not** discharged by this ADR:
+
+- **`guestCellsPerTick: 3` sits exactly on its floor** — 40 ticks of headroom, was 104. **Any future
+  goal that lengthens a journey makes shipped content illegal**, and this milestone shipped three
+  such goals in two days. **A tripwire is owed**: the speed floor must be re-derived by any goal that
+  moves journey length, and nothing enforces that today.
+- **Legal plot depth 60 -> 27.** A constraint, accepted; it interacts with the isometric ruling's
+  player-designed rooms and belongs in the milestone question rather than in a gate.
+- **The amenity axis goes FLAT below 15 concurrent guests** — 354 / 354 / 354 across one, two and
+  three amenities, and the worst engagement need gets *worse*. **This is the BUILD LOOP.**
+- **The engagement-only provisioning ladder INVERTS at the top rung** — 2,302 / 1,276 / 887 /
+  **1,285** — which is **ADR-0034 §3(b)'s own falsification arm going red**, with the still-monotone
+  statistic being the one that includes lodging, i.e. *an occupancy statistic in disguise*.
+
+> **The last two are parked as a goal of their own, not folded into the merge.** They are about
+> whether buying a thing pays the player back, which is one of the three loops the charter says every
+> decision must serve — **and a merge that quietly carried them would be the largest scope leak this
+> project has had.**
+
+---
+
+## ADR-0070 — The density re-derivation is a TIGHTENING WITH TEETH, and the old bound was blind to a real regression.
+
+**Date**: 2026-08-22 · **Status**: accepted · **G-042**, executing ADR-0069's ruling on branch
+`g041-rate-rederivation` (`faf8747`). **Fourteen rows PASS, `VERIFY_EXIT=0`.**
+
+### THE ANSWER TO "DID YOU JUST WEAKEN THE GATE?" IS A MUTATION PROBE, NOT AN ARGUMENT
+
+Mutation = work quadratic in the provider count inside `providersFor` — **the regression class this
+axis exists to catch.** ADR-0022 recipe; `sha256` and `git status --porcelain` identical after.
+
+| arm | sim | bound module | `scaling.mjs` |
+|---|---|---|---|
+| A | mutated | **new (shipped)** | **EXIT 1** — density 1.7812 at or above the 1.6386 bound |
+| B | mutated | **the campaign it replaces** | **EXIT 0 — PASS 1.7355, BLIND TO IT** |
+| C | clean | new | EXIT 0 — PASS 1.1862 (control) |
+
+> **Row B is the finding. The re-derivation names a regression that would have shipped GREEN under
+> the numbers it replaces.** A direction flag was removed and the axis got *stronger*.
+
+### THE BOUND IS DERIVED, AND THE ORDER OF OPERATIONS IS THE PROOF
+
+```
+quiet median (upper middle of twelve)   1.0924
+BOUND = trunc(1.0924 x 1.5, 4dp)        1.6386   <- the file's uniform rule, untouched
+worst reading in ANY regime (floor)     1.4894
+SEPARATION                              0.1492   <- 3.7x the +/-0.04 same-tree band
+```
+
+**The rule was applied first and the separation computed afterwards. No step contains a number this
+goal picked.** And had the floor landed within reach of the ceiling, `deriveAxis` refuses the axis —
+**the pre-registered response is more samples and a re-take, never a wider number.**
+
+**The retired `ratio > 1` floor was not NEAR the noise, it was INSIDE THE READINGS**: 5 of 20 sit
+under 1 (0.9645 / 0.9669 quiet; 0.9466 / 0.9862 / 0.9982 loaded).
+
+### ALL FOUR AXES MOVED, THREE TIGHTER — because the rates compress every ratio in the file
+
+| axis | bound | was | direction | pooled margin |
+|---|---|---|---|---|
+| needs | 1.8729 | 1.8219 | looser · stays `false` | 1.1342x |
+| **density** | **1.6386** | 2.1063 | **tighter 22% · `true` -> `false`** | **1.1002x** |
+| rooms-saturated | 5.2458 | 5.5888 | tighter | 1.2280x |
+| rooms-bench | 2.6487 | 4.4592 | **tighter 41%** | 1.1282x |
+
+**Every axis is a busier arm over a quieter one, and an idle guest is now cheap.** Three of four now
+sit under 1.14x where the replaced campaign had three of four above 1.23x. *Live* headroom in the
+verify run was thinnest on **rooms-bench** — 2.2373 against 2.6487, 84.5% of its bound.
+
+### THE BUILDER REFUSED A FLAG ITS OWN RULE WOULD HAVE FORCED ON, AND THAT IS THE JUDGEMENT CALL OF THE GOAL
+
+**All twenty new `needs` readings are above 1** (lowest 1.0502), so the file's derived-direction rule
+**would have set `direction: true`.** It did not, because it holds a **contradicting reading of the
+same instrument at the same configuration — 0.8986, loaded** — recorded as an `observations` entry
+instead.
+
+> **Turning it on would have planted a `ratio > 1` assertion 0.05 above the observed minimum — which
+> is the exact defect E-011 was raised about, one axis over.** A rule that would have manufactured
+> the failure it was written to prevent, declined by the agent applying it.
+
+### AND THE BRANCH WAS NEVER DETERMINISTICALLY RED
+
+**The builder's first action on the untouched branch was to run the gate: EXIT 0, four rows PASS,
+density 1.0949.** It put that on record rather than banking a lucky green.
+
+**That does not weaken the ruling — it IS the ruling.** *"The floor straddles its own noise"* was
+E-011's second finding, and a gate that fires on weather is one whose green means nothing either.
+**The 0.1492 separation is what fixes it.**
+
+*(Also reported rather than buried: a first sitting was contaminated by the builder's own repo-wide
+`grep` and **the whole sitting was discarded and re-taken clean.** One reading is carried out of it,
+with its `source` field stating all of that.)*
+
+### THE ONE THING TO CHECK BEFORE THE MERGE, NAMED BY THE BUILDER
+
+**The branch does not contain `main`'s last four commits, including G-040a.** So this campaign
+measured a sim **without the party feature**, and **the rotation fingerprints carry no party term, so
+they will not say so.** G-040a's own evidence is that it moves the state hash and nothing else — but
+that is an argument, and this is a gate. **The merged tree gets its own verify.**
+
+*(MINOR, deliberately not touched: `scaling-arms.ts`'s density `because` string still says the dense
+hotel must cost more. `needs` has been in that state since G-039b-β1, so fixing one and not the other
+would be worse; it belongs to whatever goal revisits the arms.)*
