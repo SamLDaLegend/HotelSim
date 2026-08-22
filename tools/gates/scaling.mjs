@@ -252,10 +252,12 @@ for (const axis of axes) {
   // G-032a that is enforced rather than intended: an axis may decline the assertion only with a
   // recorded sub-1 observation, and `scaling.bound.test.ts` refuses a flag either way round.
   //
-  // *(This named DENSITY as the axis whose spread crosses 1. That was true of the cadence-32
-  // campaign and two re-takes have replaced it — density's shipped minimum is 1.2321. The axis that
-  // declines it now is `needs`, whose lever collapsed to 4-against-3. A duplicated explanation
-  // in a second file, still describing the array it had outlived.)*
+  // *(This sentence has named the wrong axis twice, because it is a duplicated explanation living
+  // one file away from the arrays that decide it. So it names none: which axes decline the
+  // assertion is `scaling-bound.mjs`'s `direction` flags, each with the readings that warrant it
+  // written beside it, and the gate prints every axis's ratio on the row above. At G-042 BOTH
+  // axes of the `needs` rotation decline it and both room axes carry it — but a reader should
+  // check that against the flags rather than against this comment.)*
   if (wrongDirection) {
     failures.push(`${axis.axis}: ratio ${ratio.ratio.toFixed(4)} is not above 1 — ${ratio.because}`);
   }

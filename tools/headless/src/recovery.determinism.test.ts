@@ -35,6 +35,7 @@ import {
   departureCountOf,
   evictedGuests,
   firstEconomy,
+  hashState,
   outstandingDebtOf,
   run,
   sumByReason,
@@ -158,16 +159,63 @@ describe('the I2 harness reaches the loan', () => {
     // 2 — and never past zero.
     expect(outstanding).toBeGreaterThanOrEqual(0);
 
-    // 3 — still paying in the last quarter. A MAX rather than the last element: the ledger is
-    // append-only in tick order (I4), but this claim does not need to rest on that.
+    // ==================================================================================
+    // 3 AND 4 WERE RE-DERIVED AT G-041, AND ONE OF THEM WAS RESTING ON THE WRONG PROPERTY.
+    //
+    // WHAT MOVED, MEASURED ON THIS LOG: thirty repayments, every one at the full 10,000p
+    // nightly rate, the debt clear at tick **46,079** where it used to run to 99,359 — and no
+    // partial payment anywhere. The cause is the need rates (ADR-0054, ADR-0057): guests are
+    // served faster at the declared rate, more stays COMPLETE, and `payForStay` charges on
+    // completion — so this hotel earns enough to pay the full instalment every night instead
+    // of paying what the till happened to hold. Not one price moved.
+    //
+    // **3 IS REPLACED BY THE PROPERTY IT WAS REACHING FOR, WHICH IS STRICTLY STRONGER.** The
+    // old bar was "still paying in the last quarter", and its stated warrant was quoted from
+    // `validity.determinism.test.ts`: *"a reason that is reachable for the first third of the
+    // run and gone by the end is a reason the gate's FINAL hash says nothing about."* That is
+    // true THERE, where `roomInvalidity` is DERIVED per tick and a reason that stops occurring
+    // leaves no trace. **It is false here.** The ledger is APPEND-ONLY (I4) and hashed: a
+    // repayment booked at tick 46,079 is still in the ledger at tick 100,000 and still in the
+    // gate's final hash, whatever the last quarter does. The rule was imported from a place
+    // where the state is derived into a place where it is not, and G-041 is only what made
+    // that visible. So the assertion below DEMONSTRATES the property instead of proxying it:
+    // strike the repayments out of the final world and the hash moves.
+    //
+    // **4 IS RETIRED FROM THIS LOG AND SAID SO, NOT WEAKENED.** The cash-capped arm of
+    // `Math.min(debt, rate, cash)` is unreachable in this hotel now, at any tick — the till is
+    // never short. It is NOT uncovered: `recovery.settlement.test.ts`'s *"pays only what the
+    // till holds when that is less than the nightly rate"* drives that arm directly, in
+    // `packages/sim`, over a hand-built ledger. What is lost is the end-to-end confirmation
+    // inside the 100,000-tick proof, and the honest report is to name the loss rather than
+    // lower the bar to something this run happens to satisfy.
+    //
+    // **THE OBLIGATION THAT COMES WITH IT**: G-037a's quality fold makes rooms serve at the
+    // BARE rate rather than the ceiling, which is the direction that makes this hotel poor
+    // again. A goal that merges it should re-take this arm and see whether the cash-capped
+    // payment comes back; if it does, restore 4 as an assertion here. If it does not, the
+    // right answer is a second granted draw late in the log, not a smaller number.
+    // ==================================================================================
     const lastRepaymentTick = repayments.reduce((latest, entry) => (entry.tick > latest ? entry.tick : latest), -1);
-    expect(lastRepaymentTick).toBeGreaterThan(Math.floor((TICKS * 3) / 4));
+    expect(repayments).toHaveLength(30);
+    expect(lastRepaymentTick).toBe(46_079);
+    // 3 — THE FINAL HASH CARRIES THEM. Not "a repayment happened" and not "one happened late":
+    // the gate's own hash function, over the gate's own final world, moves when the repayment
+    // entries are taken out of it. That is the claim the old bar was a proxy for.
+    const withoutRepayments = { ...world, ledger: world.ledger.filter((entry) => entry.reason !== 'loanRepayment') };
+    expect(withoutRepayments.ledger.length).toBe(world.ledger.length - repayments.length);
+    expect(hashState(withoutRepayments)).not.toBe(hashState(world));
+    // ...and every one of the thirty is inside the horizon the gate runs to, which is what
+    // makes the sentence above a statement about THIS gate rather than about hashing.
+    expect(lastRepaymentTick).toBeLessThan(TICKS);
+    expect(repayments.every((entry) => entry.tick >= 0 && entry.tick < TICKS)).toBe(true);
 
-    // 4 — the cash-capped arm of `Math.min(debt, rate, cash)`.
+    // 4 — RETIRED, AND PINNED AS RETIRED so that its return is a red line rather than a
+    // silence. Every payment is at the full nightly rate; the partial arm fires nowhere.
     const partial = repayments.filter(
       (entry) => 0 - entry.amount > 0 && 0 - entry.amount < economy.loanRepaymentPerNightPence,
     );
-    expect(partial.length).toBeGreaterThan(0);
+    expect(partial).toHaveLength(0);
+    expect(repayments.every((entry) => 0 - entry.amount === economy.loanRepaymentPerNightPence)).toBe(true);
   });
 
   it('records one outcome per drawLoan command, which is the per-tick law over a whole run', () => {

@@ -138,11 +138,37 @@ const peakOver = (content: ReturnType<typeof bindContent>, days: number, rooms: 
   return peak;
 };
 
-describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tables', () => {
+/**
+ * THE ARRIVAL BACKLOG, COMPUTED RATHER THAN WRITTEN DOWN (G-041).
+ *
+ * It was the literal `129` in five places in this file until G-041 moved it to 63 — and every one
+ * of those five was a restatement of the fold the first test in this file already runs. A number
+ * duplicated across prose and predicate, where only some of the copies are checked, is ADR-0027's
+ * row-count class; the re-derivation is what made it cheaper to fix than to update.
+ *
+ * A guest arrives at its want line on every need and is served ONE at a time, so the queue
+ * lengthens as it is worked. The stock stops climbing when the LAST need begins being served —
+ * the other two are back below their lines and the lodging need is EXCUSED (ADR-0026 as amended)
+ * — so the fill is the chase minus its last leg.
+ */
+const arrivalBacklogTicks = (): number => {
+  const lodgingNeed = lodgingNeedOf(SHIPPED);
+  const wantAt = wantAtOf(SHIPPED);
+  let elapsed = 0;
+  let last = 0;
+  for (const entry of needTypesInOrder(SHIPPED).filter((need) => need.id !== lodgingNeed?.id)) {
+    const line = Math.floor((wantAt * entry.capacityTicks) / ONE_WHOLE_BASIS_POINTS);
+    last = Math.ceil((line + elapsed) / entry.refillPerTick);
+    elapsed += last;
+  }
+  return elapsed - last;
+};
+
+describe('THE LOWER CLIFF — 63, derived and then measured on the shipped tables', () => {
   const lodging = lodgingNeedOf(SHIPPED);
   const engagement = needTypesInOrder(SHIPPED).filter((entry) => entry.id !== lodging?.id);
 
-  it('the arrival backlog fills for 60 + 69 = 129 ticks, computed from the need table', () => {
+  it('the arrival backlog fills for 30 + 33 = 63 ticks, computed from the need table', () => {
     // A guest arrives at its want line on every need and is served ONE at a time. Each need it
     // is not yet serving keeps decaying while it waits, so the queue lengthens as it is worked:
     // the nth need starts from its line PLUS everything spent on the ones before it.
@@ -155,15 +181,21 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
       visits.push(visit);
       elapsed += visit;
     }
-    expect(visits).toEqual([60, 69, 79]);
-    expect(elapsed).toBe(208);
+    // 30 / 33 / 35 AT G-041, WHERE IT READ 60 / 69 / 79. What moved is `refillPerTick` 7 -> 14 —
+    // ADR-0054 makes the declared rate the one a FULLY APPOINTED room reaches, and this chase is
+    // therefore the chase in the BEST hotel the content permits. In the worst one it is the old
+    // 60 / 69 / 79 exactly, because the floor rate is the old declared rate (`needs.rates.test.ts`).
+    expect(visits).toEqual([30, 33, 35]);
+    expect(elapsed).toBe(98);
     // AND THE LAST VISIT FILLS NOTHING, WHICH IS THE AMENDMENT AS ARITHMETIC. While the third
     // need is being served the other two are back below their want lines, and the lodging need
     // is EXCUSED because the guest chose to be out (ADR-0026 as amended) — so the stock stops
     // climbing 79 ticks before the chase ends. The fill is the chase MINUS its last leg.
     const fill = elapsed - (visits[visits.length - 1] ?? 0);
-    expect(fill).toBe(129);
+    expect(fill).toBe(63);
     expect(lodging).toBeDefined();
+    // AND THE HELPER EVERY OTHER TEST IN THIS FILE READS IS THIS FOLD, not a fourth copy of it.
+    expect(arrivalBacklogTicks()).toBe(fill);
   });
 
   it('and a hotel that serves everything reaches the chase PLUS ITS LEGS, both bounded', () => {
@@ -205,13 +237,21 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     expect(worstJourney).toBe(194);
     expect(legs).toBe(198);
 
+    const backlog = arrivalBacklogTicks();
     const uncontended = peakOver(SHIPPED, 10, 60, 3);
-    expect(uncontended).toBeGreaterThanOrEqual(129);
-    expect(uncontended).toBeLessThanOrEqual(129 + legs);
-    // AND THE BOUND STILL BINDS SOMETHING. 129 + 198 = 327, comfortably under the 431 ceiling —
+    expect(uncontended).toBeGreaterThanOrEqual(backlog);
+    expect(uncontended).toBeLessThanOrEqual(backlog + legs);
+    // AND THE BOUND STILL BINDS SOMETHING. 63 + 198 = 261, under the 301 ceiling —
     // which is the property the speed floor below is derived from, asserted here so that
     // widening the journey can never quietly pass this arm by making the bound vacuous.
-    expect(129 + legs).toBeLessThan(dissatisfactionCapacityOf(SHIPPED) ?? 0);
+    // ...BY 40 TICKS, WHERE IT WAS 104 BEFORE G-041, AND THAT NARROWING IS A FINDING RATHER THAN
+    // AN INCIDENTAL. Both ends moved: the backlog fell 129 -> 63 with the rates, and the ceiling
+    // fell 431 -> 301 because it is the geometric mean of that backlog and the stay. The journey
+    // did not move at all, so the SAME plot now eats a larger share of the window — which is why
+    // the speed floor below comes out at 3 rather than 2 and the legal plot depth at 27 rather
+    // than 60. A goal that widens the plot again meets this inequality first.
+    expect(backlog + legs).toBeLessThan(dissatisfactionCapacityOf(SHIPPED) ?? 0);
+    expect((dissatisfactionCapacityOf(SHIPPED) ?? 0) - (backlog + legs)).toBe(40);
     // PINNED AS WELL AS BOUNDED. The bound above is worst-case over the whole plot and the
     // seeded hotel is nowhere near it, so on its own it would admit a 98-tick regression
     // without a murmur. The literal is what keeps this arm sharp; the bound is what keeps it
@@ -221,7 +261,7 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // vertical leg in it — so the deepest any need in this hotel gets is two ticks deeper. It
     // is still an order of magnitude inside the 129 + 198 bound above, which is the property
     // that arm asserts and the reason this literal is a sharpener rather than the claim.
-    expect(uncontended).toBe(141);
+    expect(uncontended).toBe(78);
     // AND THE SIX-ROOM ARM STILL DOES NOT MOVE, at 179, THROUGH THE STAIRWELL AS WELL AS
     // THROUGH TRAVEL. The paragraph above calls that evidence rather than luck — its peak
     // belongs to guests queueing for a bed, and a guest nobody has given a room is going
@@ -253,17 +293,40 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // plot ALLOWS is the thing a content bound has to survive.
     // ========================================================================================
     const ceiling = dissatisfactionCapacityOf(SHIPPED) ?? 0;
-    const reachableAt = (speed: number): number => 129 + engagement.length * worstJourneyTicks(speed);
+    const reachableAt = (speed: number): number =>
+      arrivalBacklogTicks() + engagement.length * worstJourneyTicks(speed);
     // THE CLIFF, FROM BOTH SIDES — ADR-0007's two-sided form, over the dial rather than over
     // the ceiling.
+    //
+    // ==========================================================================================
+    // THE FLOOR ROSE 2 -> 3 AT G-041, AND NOTHING ABOUT TRAVEL OR THE PLOT MOVED. Both ends of
+    // this inequality are downstream of the need rates: the backlog is the arrival chase (129 ->
+    // 63) and the ceiling is its geometric mean with the stay (431 -> 301). The journey is the
+    // same 194 cells it was. So the window shrank around a fixed cost, and the smallest speed
+    // that fits went up:
+    //
+    //     speed 1   63 + 3 x (86 + 22 + 86) = 645  >  301   the ceiling is BREACHED
+    //     speed 2   63 + 3 x (43 + 11 + 43) = 354  >  301   BREACHED, and it CLEARED before G-041
+    //     speed 3   63 + 3 x (29 +  8 + 29) = 261  <  301   clears, and is what ships
+    //
+    // **THE SHIPPED 3 IS NOW EXACTLY ON THE FLOOR RATHER THAN ONE ABOVE IT**, with 40 ticks of
+    // headroom where it had 104. `guestCellsPerTick` was a PREFERENCE inside [2, 108] and is now
+    // a preference inside [3, 108] that happens to sit at its lower end — so the next goal that
+    // widens the plot, deepens the shaft or lowers this dial meets a derived bound rather than a
+    // comfortable margin. That is recorded here rather than left to be discovered.
+    // ==========================================================================================
     expect(reachableAt(1)).toBeGreaterThan(ceiling);
-    expect(reachableAt(2)).toBeLessThan(ceiling);
+    expect(reachableAt(2)).toBeGreaterThan(ceiling);
+    expect(reachableAt(3)).toBeLessThan(ceiling);
     // SMALLEST ADMISSIBLE SPEED, computed rather than asserted, so a content change to the
-    // ceiling or a plot change to the depth moves it here instead of leaving a stale 2.
+    // ceiling or a plot change to the depth moves it here instead of leaving a stale number.
     let floor = 1;
     while (reachableAt(floor) > ceiling) floor += 1;
-    expect(floor).toBe(2);
+    expect(floor).toBe(3);
     expect(guestSpeedOf(SHIPPED) ?? 0).toBeGreaterThanOrEqual(floor);
+    // AND IT IS AT THE FLOOR, NOT ABOVE IT. Asserted so that a future edit which lowers the dial
+    // to 2 cannot pass by reading only the inequality above.
+    expect(guestSpeedOf(SHIPPED) ?? 0).toBe(floor);
     // AND THE UPPER ENDPOINT, WHICH IS WHERE THE DIAL STOPS DOING ANYTHING — AND IT DID NOT
     // MOVE WITH THE JOURNEY, WHICH IS WORTH SAYING BECAUSE THE OBVIOUS EDIT WOULD HAVE MOVED IT.
     // `stepTowards` clamps at the destination, so the dial saturates at THE LONGEST SINGLE LEG
@@ -324,31 +387,53 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
       return 2 * Math.ceil(horizontal / speed) + Math.ceil(vertical / speed);
     };
     const legal = (depth: number): boolean =>
-      129 + engagementNeeds * atDepth(depth) < ceiling && atDepth(depth) < (toleranceOf(SHIPPED) ?? 0);
+      arrivalBacklogTicks() + engagementNeeds * atDepth(depth) < ceiling &&
+      atDepth(depth) < (toleranceOf(SHIPPED) ?? 0);
     // COMPUTED, NOT ASSERTED, so a content change to the ceiling or a plot change to the width
-    // moves it here instead of leaving a stale 60.
+    // moves it here instead of leaving a stale number — WHICH IS EXACTLY WHAT G-041 DID. The
+    // rates moved the backlog and the backlog moved the ceiling, and the legal plot depth fell
+    // 60 -> 27 without a line of `grid.ts` being touched. `DEFAULT_MAX_ROW` is 7 (depth 8) and
+    // still sits well inside, so nothing is broken; what changed is how much room the next goal
+    // that wants a deeper plot has, and its docblock is updated in this change rather than left
+    // citing a bound this file no longer produces.
     let deepest = 1;
     while (legal(deepest + 1)) deepest += 1;
-    expect(deepest).toBe(60);
+    expect(deepest).toBe(27);
     // THE CLIFF, FROM BOTH SIDES.
     expect(legal(deepest)).toBe(true);
     expect(legal(deepest + 1)).toBe(false);
     // AND THE SHIPPED PLOT CLEARS IT. `DEFAULT_MAX_ROW` is 7, so the depth is 8.
     expect(bounds.maxRow - bounds.minRow + 1).toBe(8);
     expect(legal(bounds.maxRow - bounds.minRow + 1)).toBe(true);
-    // The old ceiling of 79 is no longer legal, which is the finding rather than a footnote.
+    // The old ceiling of 79 is no longer legal, which is the finding rather than a footnote —
+    // and neither is the 60 this same inequality produced before G-041 moved the rates.
     expect(legal(79)).toBe(false);
+    expect(legal(60)).toBe(false);
   });
 
   it('THE CEILING CLEARS IT, with the margin the placement rule produces', () => {
+    // IT READ 431 AGAINST A BACKLOG OF 129 UNTIL G-041, AND IT WAS RESTATING BOTH. The ceiling is
+    // the geometric mean of the backlog and the stay — equal multiplicative margin from each — so
+    // when the rates moved the backlog, this number moved with it whether or not anybody edited
+    // it. The three assertions below now RUN that derivation instead of quoting its output, which
+    // is the difference between a bound and a remembered number (§2.1).
     const ceiling = dissatisfactionCapacityOf(SHIPPED);
-    expect(ceiling).toBe(431);
-    expect(ceiling).toBeGreaterThan(129);
-    // Equal multiplicative margin: the two ratios agree to five significant figures, which is
-    // the property being bought and the reason 431 rather than any other number between them.
-    expect(Math.round(((ceiling ?? 0) * 10_000) / 129)).toBe(33_411);
-    expect(Math.round(((stayDurationOf(SHIPPED) ?? 0) * 10_000) / (ceiling ?? 1))).toBe(33_411);
-    expect(Math.round(Math.sqrt(129 * (stayDurationOf(SHIPPED) ?? 0)))).toBe(431);
+    const backlog = arrivalBacklogTicks();
+    const stay = stayDurationOf(SHIPPED) ?? 0;
+    expect(backlog).toBe(63);
+    expect(ceiling).toBe(301);
+    expect(ceiling).toBeGreaterThan(backlog);
+    expect(Math.round(Math.sqrt(backlog * stay))).toBe(ceiling);
+    // Equal multiplicative margin, to within the rounding `sqrt(90,720) = 301.197` forces: the
+    // two ratios are 47,778 and 47,841 basis points and agree to better than a seventh of one
+    // percent. (They agreed to five significant figures at 129/431/1,440 because 185,760 is very
+    // nearly a perfect square. Asserting five figures again would have been asserting that
+    // coincidence, so the tolerance is stated instead of inherited.)
+    const lower = Math.round(((ceiling ?? 0) * 10_000) / backlog);
+    const upper = Math.round((stay * 10_000) / (ceiling ?? 1));
+    expect(lower).toBe(47_778);
+    expect(upper).toBe(47_841);
+    expect(Math.abs(upper - lower) / lower).toBeLessThan(0.002);
   });
 
   it('and a ceiling UNDER the cliff evicts a perfectly provisioned hotel — the cliff, from below', () => {
@@ -357,8 +442,8 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     //
     // ---------------------------------------------------------------------------
     // IT TAKES THE LOBBY TOLERANCE DOWN WITH IT, AND THAT IS A FINDING RATHER THAN A WORKAROUND.
-    // A ceiling of 129 against the shipped `toleranceTicks` of 180 is REFUSED — the partition
-    // floor is `tolerance + 1` = 181, which is ABOVE the 129-tick backlog. **Holding the shipped
+    // A ceiling at the backlog against the shipped `toleranceTicks` of 180 is REFUSED — the
+    // partition floor is `tolerance + 1` = 181, which is ABOVE the 63-tick backlog. **Holding the shipped
     // tolerance of 180 fixed, then, the partition floor binds above the cliff and no admissible
     // ceiling can evict a perfectly provisioned guest.**
     //
@@ -371,7 +456,12 @@ describe('THE LOWER CLIFF — 129, derived and then measured on the shipped tabl
     // Lowering both leaves the arm's own behaviour untouched: at sixty rooms nobody queues for a
     // bed, so `toleranceTicks` is inert here and only the ceiling is doing anything.
     // ---------------------------------------------------------------------------
-    const tooTight = rebound({ dissatisfactionCapacityTicks: 100, toleranceTicks: 20 });
+    // 100 -> 50 AT G-041, AND THE VALUE IS DERIVED FROM THE CLIFF RATHER THAN CHOSEN. The arm
+    // needs a ceiling UNDER the arrival backlog, because that is what "the cliff, from below"
+    // means; the backlog fell 129 -> 63 with the rates, so 100 stopped being under it and this
+    // arm evicted nobody. 50 is under 63 and over the partition floor of `toleranceTicks + 1`.
+    expect(arrivalBacklogTicks()).toBeGreaterThan(50);
+    const tooTight = rebound({ dissatisfactionCapacityTicks: 50, toleranceTicks: 20 });
     const options = { seed: 7, ticks: 14_400 };
     const initial = createWorld(options.seed, tooTight);
     const world = run(
@@ -411,21 +501,27 @@ describe('THE UPPER CLIFF — the stay, and the rule is dead at or above it', ()
 });
 
 describe('THE RELIEF RATE — 1, the smallest that clears the recovery requirement', () => {
-  it('r x 351 >= 129: the drain window is the cycle minus the backlog', () => {
-    // The first need re-crosses its want line at `visit + line` ticks — 60 + 420 = 480 on the
-    // shipped table — so a guest that stops filling at 129 has 351 ticks before anything is
-    // wanted again. Anything slower than 129/351 leaves a residue that compounds every cycle.
+  it('r x 387 >= 63: the drain window is the cycle minus the backlog', () => {
+    // The first need re-crosses its want line at `visit + line` ticks — 30 + 420 = 450 on the
+    // shipped table — so a guest that stops filling at 63 has 387 ticks before anything is
+    // wanted again. Anything slower than 63/387 leaves a residue that compounds every cycle.
     const wantAt = wantAtOf(SHIPPED);
     const lodging = lodgingNeedOf(SHIPPED);
     const first = needTypesInOrder(SHIPPED).find((entry) => entry.id !== lodging?.id);
     expect(first).toBeDefined();
     const line = Math.floor((wantAt * (first?.capacityTicks ?? 0)) / ONE_WHOLE_BASIS_POINTS);
     const cycle = Math.ceil(line / (first?.refillPerTick ?? 1)) + line;
-    expect(cycle).toBe(480);
-    const window = cycle - 129;
-    expect(window).toBe(351);
+    // 450 AT G-041, WHERE IT READ 480: the helping is 30 ticks at the declared rate instead of
+    // 60, and the 420-tick decay is unchanged because decay is one per tick whatever a room is
+    // worth. This is the same 450 the lodging capacity is derived from one file over — the
+    // engagement PERIOD at the ceiling — and the two are the same quantity rather than two
+    // numbers that happen to agree.
+    expect(cycle).toBe(450);
+    const backlog = arrivalBacklogTicks();
+    const window = cycle - backlog;
+    expect(window).toBe(387);
     const relief = dissatisfactionReliefOf(SHIPPED) ?? 0;
-    expect(relief * window).toBeGreaterThanOrEqual(129);
+    expect(relief * window).toBeGreaterThanOrEqual(backlog);
     // SMALLEST INTEGER: one lower is zero, which `cloneDissatisfaction` refuses outright because
     // a stock that never drains is a ratchet.
     expect(relief).toBe(1);
@@ -436,7 +532,7 @@ describe('THE PARTITION — the ceiling must outlast the lobby, and it is refuse
   it('the shipped pair satisfies it, and the partition floor is the BINDING lower bound', () => {
     expect(dissatisfactionCapacityOf(SHIPPED)).toBeGreaterThan(toleranceOf(SHIPPED) ?? 0);
     // The two lower bounds on this number, and which one wins AT THE SHIPPED TOLERANCE: the
-    // arrival backlog says 129 and the partition says `toleranceTicks + 1` = 181. **181 is
+    // arrival backlog says 63 and the partition says `toleranceTicks + 1` = 181. **181 is
     // higher**, so with `toleranceTicks` at 180 the refusal is what actually keeps a well-run
     // hotel from evicting. Stated because a reader deriving the ceiling would otherwise conclude
     // that anything above 129 is admissible on the shipped table, and it is not.

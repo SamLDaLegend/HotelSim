@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bindContent,
   idleShareBasisPoints,
+  serviceFloorRefill,
   isSettlementTick,
   lodgingNeedOf,
   needTypesInOrder,
@@ -85,19 +86,23 @@ describe('the shipped stay duration', () => {
     // lodging need costs a further slice of the away time the engagement needs generate.
     //
     // The complement of that demand is the IDLE SHARE, and it is the same fold — one
-    // derivation, two readers, so the number a gate refuses on and the number a criterion is
-    // written against can never describe different hotels. At the shipped rates the table
-    // demands 7,500 basis points and leaves 2,500.
+    // derivation, two READINGS since G-041, so the number a gate refuses on and the number a
+    // criterion is written against can never describe different hotels. At the DECLARED rates
+    // the table demands 2,997 basis points and leaves 7,003; at the SERVICE FLOOR it demands
+    // 7,500 and leaves 2,500, which is the pair this project simulated as a single number until
+    // ADR-0054 made `refillPerTick` a ceiling. See `needShareBasisPoints`.
     const lodging = lodgingNeedOf(content);
     expect(lodging).toBeDefined();
-    expect(lodging?.capacityTicks).toBe(600);
-    expect(lodging?.refillPerTick).toBe(1);
+    expect(lodging?.capacityTicks).toBe(300);
+    expect(lodging?.refillPerTick).toBe(2);
+    expect(lodging === undefined ? undefined : serviceFloorRefill(lodging)).toBe(1);
     for (const needType of needTypesInOrder(content)) {
       if (needType.id === lodging?.id) continue;
       expect(needType.capacityTicks).toBe(1_400);
-      expect(needType.refillPerTick).toBe(7);
+      expect(needType.refillPerTick).toBe(14);
+      expect(serviceFloorRefill(needType)).toBe(7);
     }
-    expect(idleShareBasisPoints(content)).toBe(2_500);
+    expect(idleShareBasisPoints(content)).toBe(7_003);
     // And the stay is still long enough for the lodging need to become wanted twice, which is
     // the refusal that replaced the floor. `bindContent` accepted this content, so it is.
     expect(stay).toBe(1_440);

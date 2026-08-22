@@ -388,6 +388,11 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   `evictedGuests`, the abandonment count and the departure table's seven-row SHAPE are
     //   unchanged. `check:stamp` reads this literal out of the tree, so the digest's
     //   measure-golden line moves with it.
+    //
+    //   *(Those three lines are the tail of the G-038a-iii-b entry above. The G-041 branch
+    //   inserted its own entry BETWEEN `arrived,` and `evictedGuests,` — mid-sentence, mid-list —
+    //   and the merge put the sentence back together. Its entry follows, in its own place.)*
+    //
     //   `760558b631beb552` -> `c7212353b3d1784f`   G-040a gave every guest a `partyId` and took
     //   the save to **v22**. **ONE cause, and it is a FIELD rather than a behaviour** — the
     //   `418cf36055a3408c` row's shape exactly, and this time it is checked over three
@@ -398,7 +403,30 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   **THE CONTROL BLOCK BELOW HOLDS IN FULL**, which is what says the hash moved because the
     //   world grew a key and not because the hotel changed. `check:stamp` reads this literal out
     //   of the tree, so the digest's measure-golden line moves with it.
-    expect(hashState(plain)).toBe('c7212353b3d1784f');
+    //
+    //   `760558b631beb552` -> `cba13e62265ed196` AT G-041, ON THE BRANCH, and the cause is the
+    //   need RATES (ADR-0054, ADR-0057). Every rate in `need-types.json` is now the ceiling a
+    //   fully appointed room reaches, and this tree has no quality fold in it yet — so every room
+    //   in this workload serves at that ceiling and the sixty-bedroom / two-amenity hotel this
+    //   benchmark is deliberately starved at stops being starved of SERVICE. **THAT LITERAL IS
+    //   NOT IN THIS FILE AND MUST NOT BE**: it was measured on `faf8747`, which does not contain
+    //   G-040a, and both branches moved this one literal off the same base. The merged value is
+    //   the row below. (The branch's own entry stated the still-in-the-hotel column both
+    //   "unmoved at 9" and "moving 9 -> 13" in consecutive sentences; the merged tree's four
+    //   columns are re-measured and asserted below rather than reconciled in prose.)
+    //
+    // - `c7212353b3d1784f` -> `1e44f2c872a33aa4` AT THE G-041/G-042 MERGE, WITH TWO CAUSES IN
+    //   ONE LITERAL, AND IT IS RE-MEASURED ON THE MERGED TREE RATHER THAN TAKEN FROM A PARENT.
+    //   `main` moved this literal to `c7212353b3d1784f` (G-040a's `partyId`) and the branch moved
+    //   THE SAME literal from THE SAME base to `cba13e62265ed196` (G-041's need rates), so
+    //   **neither parent's value is correct on this tree and a hash cannot be hand-merged.** The
+    //   behavioural half of the move is entirely the branch's; the party half moves the hash and
+    //   nothing else, which is what the control block below re-checks on the merged tree.
+    //   **checkedOut 2 -> 33, leftDissatisfied 64 -> 29, still-in-the-hotel 9 -> 13**, the
+    //   conservation closing on **33 + 29 + 13 = 75 arrived**; `arrived`, `evictedGuests` and
+    //   `gaveUp` at zero and the departure table's seven-row SHAPE unchanged. `check:stamp`
+    //   reads this literal out of the tree, so the digest's measure-golden line moves with it.
+    expect(hashState(plain)).toBe('1e44f2c872a33aa4');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -475,8 +503,15 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // still-in-the-hotel column is UNMOVED at 9 — the guests moved between the two departure
     // rows and nowhere else.
     // ==========================================================================================
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(2);
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(64);
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(33);
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(29);
+    // AND THE STILL-IN-THE-HOTEL COLUMN IS WHAT MOVED, 9 -> 13, WHICH IS THE FOURTH NUMBER THE
+    // CONSERVATION NEEDS AND THE ONE THIS ARM HAD NEVER PINNED. 33 + 29 + 13 = 75, every other
+    // departure row is zero, and `gaveUp` is still zero — nobody in this hotel fails to get a
+    // room, they are served faster and more of them finish. Pinned so the next reader who finds
+    // three columns that do not add up has the fourth in front of them.
+    expect(departureCountOf(plain.guestOutcomes, 'gaveUp')).toBe(0);
+    expect(plain.guests.list.length).toBe(13);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -702,14 +737,30 @@ describe('the same workload with the player churning the building', () => {
     // the moment it is demolished, because the guests are elsewhere on the way to the stairs.
     // `4ca40a2319b272bf` -> `29c600242aed7db8` AT G-040a: `Guest.partyId` is hashed state and
     // every guest now carries one. **NOT ONE COUNTER MOVES**, which on this arm is the whole
-    // claim — eviction is its subject and it still evicts exactly 18, asserted three lines
-    // down, and every counter named in the block above is asserted below this line unchanged.
-    expect(hashState(churn)).toBe('29c600242aed7db8');
+    // claim — eviction is its subject and it still evicted exactly 18 on the tree that
+    // paragraph was written against, and every counter named in the block above was asserted
+    // below this line unchanged. **THAT SENTENCE IS NOW HISTORY: the assertion three lines down
+    // reads 19, for the reason in the next paragraph.**
+    //
+    // `29c600242aed7db8` -> `daf4823b3fdaa4f7` AT THE G-041/G-042 MERGE, and this literal is
+    // RE-MEASURED ON THE MERGED TREE rather than carried from either parent. **Both parents
+    // moved this same literal from the same base** — `main` to `29c600242aed7db8` for G-040a's
+    // `partyId`, the branch to `c37756a85a3f4f8c` for the re-derived need rates — so neither
+    // parent's value can be correct here and hand-merging a hash is not a thing that can be
+    // done. The two causes are independent and both are in this tree.
+    //
+    // **THE COUNTER THAT MOVES IS EVICTION, AND IT MOVES BACK: 18 -> 19.** The rates, not the
+    // party: G-041 shortened `visitDurationTicks` 208 -> 98, so guests spend less of the day
+    // walking to the basement and more of it standing in a room — and standing in a room at the
+    // moment the player demolishes it is precisely what this arm counts. 19 is also the value
+    // this arm carried before G-038a-iii-b's stairwell took it to 18; the stairwell's mechanism
+    // (guests are elsewhere, on the stairs) is simply outweighed by the shorter errand.
+    expect(hashState(churn)).toBe('daf4823b3fdaa4f7');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
     expect(evictedGuests(churn.guestOutcomes)).toBeGreaterThan(0);
-    expect(evictedGuests(churn.guestOutcomes)).toBe(18);
+    expect(evictedGuests(churn.guestOutcomes)).toBe(19);
     expect(hashState(churn)).not.toBe(hashState(runWorkload(0, 0)));
   });
 
@@ -731,7 +782,7 @@ describe('the same workload with the player churning the building', () => {
     // The split earned its keep twice over. A single `evicted` counter would have gone 19 ->
     // 35 -> 19 and said nothing about which half did it.
     // ============================================================================
-    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(18);
+    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(19);
     expect(departureCountOf(churn.guestOutcomes, 'evictedRoomUnusable')).toBe(0);
     // Only a migration writes the third, so a run that never loaded a save must read zero.
     expect(departureCountOf(churn.guestOutcomes, 'evictedCauseUnrecorded')).toBe(0);

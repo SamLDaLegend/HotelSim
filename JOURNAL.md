@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-040a is DONE: a party is a thing, and the shipped size is PINNED AT 1. Guest.partyId is hashed state, save v22 migrates every v21 guest to a party of one (partyId = guest.id, inventing nothing — packages/content has said a party is one guest since M0), held becomes a COUNT, claimEntity becomes a BOUND rather than a refusal of the second holder, and bindContent refuses content whose largest party exceeds the roomiest room type providing the lodging need. countOrphanedReservations counts the two claim kinds SEPARATELY — lodging by party and capacity, engagement by one, the cross-clause its own lookup — because ONE count destroys three of the five shapes it detects. findFreeRoom's capacity denial sets deniedThisGuestOnly and NEVER arms the per-tick exhausted memo, and release decrements rather than deleting and un-exhausts on EVERY decrement. THE HASH MOVED AND NOTHING ELSE DID, demonstrated over three CLI invocations: --days 20 --seed 42, --days 40 --seed 7 and --days 10 --seed 1 each print a 48-line report whose only differing line is state hash. I2 7ff621928358cb8e over three processes (was 2b5369e4461a9140); measure golden c7212353b3d1784f (was 760558b631beb552). Fourteen rows green, VERIFY_EXIT read from the process. E-010 and E-011 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-041 is DONE and MERGED TO main together with G-042 (merge of g041-rate-rederivation into a90b722). The need rates are RE-DERIVED so the declared rate is a CEILING genuinely above the bare one (ADR-0054, ADR-0057 option a): serviceFloorBasisPoints 5000, engagement refillPerTick 7 to 14, night_rest 1 to 2 with capacityTicks 600 to 300, visitDurationTicks 208 to 98 and dissatisfactionCapacityTicks 431 to 301, all derived rather than dialled. check:scaling's density axis is re-derived to direction false with a magnitude bound of 1.6386, a tightening with a mutation probe behind it (ADR-0069, ADR-0070). G-040a's party rides on the same tree: Guest.partyId is hashed state, save v22, shipped party size PINNED AT 1. E-010 and E-011 are BOTH RESOLVED by ADR-0069 and the loop is not stopped. BOTH GOLDEN HASHES WERE RE-MEASURED ON THE MERGED TREE, because both parents moved the same literals off the same base and neither parent's value is correct here: I2 fb8d8fd9fd76b245 over three processes (main read 7ff621928358cb8e, the branch f197734f532dc62b); measure golden 1e44f2c872a33aa4 (main c7212353b3d1784f, the branch cba13e62265ed196). Fourteen rows green, VERIFY_EXIT read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured). Two items are deliberately NOT in this merge and are their own goal: the amenity axis going flat below 15 concurrent guests, and the engagement ladder inverting at the top rung.*
 
-- **State**: save **v22** · summary **v4** · I2 `7ff621928358cb8e` · measure golden
-  `c7212353b3d1784f` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
+- **State**: save **v22** · summary **v4** · I2 `fb8d8fd9fd76b245` · measure golden
+  `1e44f2c872a33aa4` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -2225,3 +2225,39 @@ guest-level field**, and the sentence has been wrong for every one ever added. `
 clean `git status`. **The second stall carried the anti-stall instruction that fixed the first**, so
 it is infrastructure rather than the brief. **Cost: 67 minutes and two briefs; nothing was lost
 because neither ever touched the tree.**
+
+## 2026-08-22 — WATCH #21 (G-041): the day got shorter, and nothing reads as stupid
+
+*(Moved and renumbered by the G-041/G-042 merge. It was written on the branch as **WATCH #17**, at
+the TOP of a history whose header says **"Newest last"** — and #17 was already taken by G-038a-i,
+with #20 the highest on either side. The number and the position are the only things changed; the
+observation is the branch's, verbatim.)*
+
+**INSTRUMENT AND WHY IT AND NOT THE OTHERS.** `pnpm sim:run --record` on `cli.ts`, which runs
+`report.ts`'s schedule — the only recorder that draws the hotel the shipped need rates apply to.
+`apps/game/scripts/record-frames.ts` draws `scenario.ts`'s world, not this one, and a rate change
+is only visible in a hotel with providers a guest is actually queueing for. `tools/viewer`
+collapses the ROW axis, which costs nothing here: the shipped CLI hotel is three bedrooms on floor
+0 against a basement amenity, so every journey this goal changes is a FLOOR change and the viewer's
+stacked bands show exactly that axis. Two recordings, same seed, same invocation, one sitting:
+`--days 2 --seed 42 --rooms 6 --amenities 1 --record-every 1`, pre-G-041 content against post.
+
+**WHAT MOVED, GUEST 1, BY FRAME.** Pre: four engagements of median 212 ticks alternating with four
+room stints of median 287 — out for three and a half hours, in for five. Post: seven engagements
+of median 34 ticks, and a repeating cycle visible three times over — **out 456-489, back in
+490-515, out 516-581, in 582-909**, then the same shape at 910-970/971-1034/1035-1363 and again at
+1364-1424/1425-1441. Same guest, same schedule, same room.
+
+**WHAT LOOKED WRONG: nothing that reads as broken, and one thing worth naming.** The 26-tick room
+stints at 490-515, 944-970 and 1398-1424 are power naps — the guest walks home, sleeps under half
+an hour, and goes out again. That is the shape R3 on `serviceFloorBasisPointsSchema` was written to
+bound and it clears it: rest comes due after 90 away-ticks against a 30-tick helping at the
+declared rate, so rest never interrupts a helping and the guest is never holding two wants at once.
+A watcher sees short errands and short naps rather than a guest bouncing off a door.
+
+**WHAT A WATCHER WOULD NOT SEE, AND IT IS THE POINT OF THE GOAL.** Every room in this recording is
+serving at the CEILING, because the quality fold is not in this tree. The day above is the BEST day
+the content permits; the day at the service floor is the 212/287 rhythm of the pre-recording, to
+the tick. That pair is the range G-037a's fold is supposed to move a room inside, and the two
+recordings are the two ends of it — which is the first time this project has been able to watch
+both.

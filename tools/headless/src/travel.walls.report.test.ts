@@ -236,9 +236,15 @@ describe('the workloads the gates run', () => {
   it('COUNTED: 60 rooms, 5 amenities, the tick-cost workload’s shape — 219 → 236 of 613 landings', () => {
     const argv = ['--days', '2', '--seed', '42', '--rooms', '60', '--amenities', '5', '--arrivals', '96'];
     const taken = cliCensus(argv);
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_948, 373, 29]);
+    // 1,948/373/29 -> 1,796/401/33 AT G-041. The need rates were re-derived (ADR-0054,
+    // ADR-0057) and this tree carries no quality fold, so every room serves at the CEILING:
+    // guests reach what they came for in half the ticks, so there are FEWER move events on
+    // the same schedule, and more of the landings that remain are inside a room. The
+    // through-wall count is the subject and it rises by four on 152 fewer moves — a larger
+    // share of a smaller total, which is what the inequality two lines down is for.
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_796, 401, 33]);
     // THE BEFORE ARM, SAME SITTING, SAME INSTRUMENT, ONE DECLARATION APART.
-    expect(cliCensus(argv, false).throughWall).toBe(236);
+    expect(cliCensus(argv, false).throughWall).toBe(223);
     // STILL FAR BELOW THE PRE-G-038a-i WORLD, which is the claim this file was written to make
     // and the one the spine does not touch: 293 was the count with no walkability rule at all.
     expect(taken.throughWall).toBeLessThan(293);
@@ -249,19 +255,26 @@ describe('the workloads the gates run', () => {
       '--days', '2', '--seed', '42', '--rooms', '20', '--arrivals', '20', '--build', '1440', '--demolish', '5760',
     ];
     const taken = cliCensus(argv);
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_265, 276, 0]);
+    // 1,265/276/0 -> 2,772/553/0 AT G-041, and this workload moves the OTHER way from the one
+    // above because it BUILDS: `--build 1440` gives the hotel more rooms as it goes, faster
+    // service means more completed stays means more money means more of those builds get
+    // afforded, and every extra room is somewhere else for a guest to walk. **The zero is
+    // unmoved**, which is the claim this arm makes.
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_772, 553, 0]);
     expect(taken.throughWall).toBeLessThan(119);
     // AND THE ZERO IS NOT THE INSTRUMENT GOING BLIND: the same census on the same schedule with
     // the shaft subtracted still reads 66.
-    expect(cliCensus(argv, false).throughWall).toBe(66);
+    expect(cliCensus(argv, false).throughWall).toBe(219);
   });
 
   it('COUNTED: 6 rooms, 5 amenities — ADR-0017’s configuration — 118 → 116', () => {
     const argv = ['--days', '2', '--seed', '42', '--rooms', '6', '--amenities', '5'];
     const taken = cliCensus(argv);
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([994, 224, 23]);
+    // 994/224/23 -> 1,025/242/24 AT G-041, the smallest move of the three: six rooms and five
+    // amenities was already well provisioned, so serving it at the ceiling changes little.
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_025, 242, 24]);
     expect(taken.throughWall).toBeLessThan(129);
-    expect(cliCensus(argv, false).throughWall).toBe(116);
+    expect(cliCensus(argv, false).throughWall).toBe(109);
   });
 });
 
@@ -295,14 +308,18 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
     // WATCH #16's own finding and the reason a `--every 240` recording shows nothing. **The
     // guest-frame count is UNMOVED at 11,756**, so the extra motion is longer journeys by the
     // same guests rather than a different population.
+    // AND IT IS STILL 11,756 ACROSS G-041, which is worth an explicit note rather than silence:
+    // the need rates changed how guests SPEND a stay and not how many are in the building, so
+    // the denominator this share is read against is the same one it has always been and the
+    // move counts beside it are comparable to the pre-G-041 readings without a caveat.
     expect(taken.guestFrames).toBe(11_756);
-    expect(taken.moves).toBe(383);
+    expect(taken.moves).toBe(453);
     // 16 -> 0 AT G-038a-iii-b. On a hotel of three bedrooms and one basement amenity EVERY
     // engagement journey is cross-floor, so every one of them now runs along the spine and
     // through the shaft, and there is no longer an occasion to land in a bedroom that is not
     // the destination. The before arm below is what says the counter still works.
     expect(taken.throughWall).toBe(0);
-    expect(cliCensus(['--days', '2', '--seed', '42'], false).throughWall).toBe(16);
+    expect(cliCensus(['--days', '2', '--seed', '42'], false).throughWall).toBe(19);
     // AND IT IS A FALL IN THE SHARE AS WELL AS IN THE COUNT, which is the half a raw count
     // cannot say: 33/163 = 20.2% before, 16/191 = 8.4% after.
     expect(taken.throughWall * 163).toBeLessThan(33 * taken.moves);
@@ -310,10 +327,10 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
 
   it('and the fall HOLDS at four days, so it is the LAYOUT and not the sample', () => {
     const taken = cliCensus(['--days', '4', '--seed', '42']);
-    expect(taken.moves).toBe(752);
+    expect(taken.moves).toBe(945);
     expect(taken.throughWall).toBe(0);
     // AND THE FOUR-DAY BEFORE ARM TOO, so "holds at four days" is a pair at four days rather
     // than a level at four days beside a pair at two.
-    expect(cliCensus(['--days', '4', '--seed', '42'], false).throughWall).toBe(42);
+    expect(cliCensus(['--days', '4', '--seed', '42'], false).throughWall).toBe(41);
   });
 });

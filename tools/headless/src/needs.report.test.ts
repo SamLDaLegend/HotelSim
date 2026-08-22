@@ -129,11 +129,27 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // non-zero met AND a non-zero unmet, and all FOUR now qualify. What is retired is the
     // PREDICTION about which two, because the answer is "all of them".
     // ========================================================================
+    //
+    // **FOUR -> THREE AT G-041, AND THE ROW THAT LEFT IS THE ONE THAT IS NOW ALWAYS MET.** The
+    // re-derived rates (ADR-0054, ADR-0057) serve `guest_comfort` — the item-provided need — for
+    // every instance in this hotel, so its `unmet` is zero and it stops straddling. **The
+    // criterion is untouched**: it asks for at least TWO need types with a non-zero met AND a
+    // non-zero unmet, and three still qualify, the lodging need among them. What is re-pinned is
+    // the count, and it is asserted as an exact number rather than as `>= 2` so that the day a
+    // fourth or a second appears it is a red line.
     const both = summary.needs.filter((row) => row.met > 0 && row.unmet > 0).map((row) => row.needId);
     const lodging = lodgingNeedOf(content);
     expect(lodging).toBeDefined();
     expect(both).toContain(lodging!.id);
-    expect(both).toHaveLength(summary.needs.length);
+    expect(both).toHaveLength(3);
+    expect(both.length).toBeGreaterThanOrEqual(2);
+    // AND THE ROW THAT NO LONGER STRADDLES IS THE ONE THAT IS ALWAYS MET, not one that is never
+    // met — which is the difference between a hotel that got better and an instrument that went
+    // blind. Asserted, because the two are indistinguishable from a length alone.
+    const missing = summary.needs.filter((row) => !both.includes(row.needId));
+    expect(missing.map((row) => row.needId)).toEqual(['guest_comfort']);
+    expect(missing[0]?.unmet).toBe(0);
+    expect(missing[0]?.met).toBeGreaterThan(0);
   });
 
   it('and the lodging need CARRIES it at six rooms now, which is the capacity change stated', () => {
@@ -201,14 +217,24 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // headline on its own.
     // ========================================================================================
     const lodging = summary.needs.find((row) => row.lodging);
-    expect(lodging?.met).toBe(202);
-    expect(lodging?.unmet).toBe(151);
+    expect(lodging?.met).toBe(192);
+    // 151 -> 161 AT G-041: ten more of this hotel's guests never get a bed, because the ones who
+    // do are no longer the bottleneck — they are served faster and the rooms turn over into a
+    // queue that was already there. The `met` column is unmoved at 192, which is the control.
+    expect(lodging?.unmet).toBe(161);
     // AND THE THREE WAYS A GUEST CAN LEAVE THIS HOTEL ARE ALL NON-ZERO AT θ-b1, where the
     // invocation used to produce two. **129 never got a bed, 138 ran out their clock, and 86 got
     // a bed and walked out on it** — one hotel, three different instructions to a player.
-    expect(departuresOf(summary, 'gaveUp')).toBe(129);
-    expect(departuresOf(summary, 'checkedOut')).toBe(138);
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(86);
+    //
+    // **AND AT G-041 THERE ARE TWO AGAIN, WHICH IS THE COST FACE OF THE SAME CHANGE.** 161 never
+    // get a bed, 192 run out their stay, and NOBODY gets a bed and walks out on it — the
+    // re-derived rates serve a housed guest fast enough that the dissatisfaction stock never
+    // reaches its ceiling in this hotel. The three-way split is not gone from the project (see
+    // `dissatisfaction.report`'s ARM 3, whose room count is derived for exactly this); it is
+    // gone from THIS invocation, and that is pinned as an exact zero rather than dropped.
+    expect(departuresOf(summary, 'gaveUp')).toBe(161);
+    expect(departuresOf(summary, 'checkedOut')).toBe(192);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(0);
     // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
     // the countdown, a guest that checked out had by definition completed its lodging need, so
     // the two columns were the same number. "Met" is now a BAND read at the moment of
@@ -218,7 +244,16 @@ describe('the criterion invocation prints a per-need table that measures somethi
     expect((lodging?.met ?? 0) + (lodging?.unmet ?? 0)).toBe(
       summary.guests.departures.reduce((total, row) => total + row.count, 0),
     );
-    expect(lodging?.met).toBeGreaterThan(departuresOf(summary, 'checkedOut'));
+    //
+    // **AND AT G-041 THEY ARE EQUAL AGAIN AT THIS INVOCATION, WHICH IS NOT THE COUNTDOWN COMING
+    // BACK.** The two columns coincided under the countdown because `met` MEANT "checked out";
+    // they coincide here for a different and visible reason — `leftDissatisfied` is zero in this
+    // hotel (pinned above), so the population that used to make `met` exceed `checkedOut` is
+    // empty. The claim that `met` is a BAND rather than a completion is asserted by the line
+    // ABOVE this one, which is the one that cannot be satisfied by a countdown: `met + unmet`
+    // equals EVERY departure, including the guests that never got a room at all.
+    expect(lodging?.met).toBe(departuresOf(summary, 'checkedOut'));
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(0);
   });
 
   it('tells THREE DIFFERENT STORIES, which is what the criterion above needs to mean anything', () => {
@@ -307,7 +342,16 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // row records from the winning side.
     // ========================================================================================
     expect(new Set(engagement.map((row) => row.met)).size).toBeGreaterThan(1);
-    expect(engagement.map((row) => row.met)).toEqual([47, 55, 350]);
+    // [47, 55, 350] -> [353, 257, 288] AT G-041, AND THE SHAPE INVERTS. The paragraph above
+    // describes a hotel where a committed guest reaches nourishment and gives up comfort; at the
+    // re-derived declared rate a helping is 30 ticks instead of 60, so a guest completes the
+    // journey AND the helping and comes back for the next one — comfort goes from the row that
+    // is given up (47) to the row that is served most (353). **The claim this arm makes is
+    // unchanged and is the line above**: the three rows still tell different stories, and they
+    // are further apart than one guest. What is retired is the direction, and it is retired
+    // because the mechanism it described — commit to one journey, lose the others — costs half
+    // as much when a helping is half as long.
+    expect(engagement.map((row) => row.met)).toEqual([353, 257, 288]);
     // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
     // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
     // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is
@@ -495,8 +539,15 @@ describe('and the old control still holds under a SATURATING margin — the era 
     // nothing. That is the property that separates it from the shipped margin, and it is
     // exact rather than a distributional shape.
     // ========================================================================
+    //
+    // **AND AT G-041 IT HAS ONE AGAIN, WHICH TURNS THIS ARM'S TITLE BACK OVER.** The rates were
+    // re-derived and `guest_comfort` is met for every instance in this hotel — so "no engagement
+    // need met for EVERYBODY any more" is false again, for the first time since G-027a. It is
+    // re-pinned as the exact row rather than as a length, because WHICH need is always met is
+    // the interesting half and a `toHaveLength(1)` would hide it. The arm's own subject — that
+    // this era abandons nothing — is the test below and is untouched.
     const alwaysMet = era.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0);
-    expect(alwaysMet).toHaveLength(0);
+    expect(alwaysMet.map((row) => row.needId)).toEqual(['guest_comfort']);
     // And every engagement row still MET somebody, so this is a hotel that works rather than
     // one that stopped serving anyone.
     for (const row of era.needs.filter((entry) => !entry.lodging)) expect(row.met).toBeGreaterThan(0);
@@ -512,8 +563,18 @@ describe('and the old control still holds under a SATURATING margin — the era 
   it('and the SHIPPED build does NOT satisfy it, so the two arms really do differ', () => {
     // The other half of the causal claim. Without this the era arm would pass just as
     // happily on a build that never shipped a margin at all.
+    //
+    // **AND THE TWO ARMS NOW AGREE ON THIS COLUMN, so the causal claim has to rest on the other
+    // one.** At G-041's rates both the saturating-margin era and the shipped build meet
+    // `guest_comfort` for everybody, because the margin fires nowhere under shipped content
+    // (`hysteresis.report.test.ts` carries the arithmetic) — so the two are the same simulation
+    // at this invocation and this column cannot separate them. The separation is `abandoned`,
+    // asserted in the test above and in `hysteresis.report`'s criterion 2, and it is exact.
     const alwaysMet = shipped.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0);
-    expect(alwaysMet).toHaveLength(0);
+    expect(alwaysMet.map((row) => row.needId)).toEqual(['guest_comfort']);
+    expect(alwaysMet.map((row) => row.needId)).toEqual(
+      era.needs.filter((row) => !row.lodging && row.met > 0 && row.unmet === 0).map((row) => row.needId),
+    );
   });
 
   it('and G-012 OWN CRITERION holds in BOTH eras, which is the thing that must not break', () => {

@@ -205,8 +205,40 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // providers, so needs reach abandoning depth again — and it was halved a SECOND time at
     // G-038a-i, for the same reason and by the same move. The point of this arm is that the
     // mechanism is LIVE somewhere a run reaches, not that it is live here.
+    // ==========================================================================================
+    // RETIRED AT G-041 AND SAID SO, RATHER THAN CHASED WITH A THIRD HALVING OF THE CADENCE.
+    //
+    // **THE MECHANISM IS NOW UNREACHABLE UNDER SHIPPED CONTENT, AT ANY WORKLOAD, AND THE
+    // ARITHMETIC SAYS SO RATHER THAN THE SEARCH.** A challenger takes an incumbent when its
+    // pressure reaches the incumbent's plus `abandonMarginBasisPoints`. The longest window it
+    // has to open that gap is ONE HELPING, and a helping is `wantAt x capacityTicks /
+    // refillPerTick` = 420 / 14 = **30 ticks** at the re-derived declared rate. In 30 ticks a
+    // waiting need's deficit rises by 30, which is `30 x 10,000 / 1,400` = **214 basis points**.
+    // The shipped margin is **6,000**. No amount of contention closes a 6,000-point gap with a
+    // 214-point lever: the counter is zero at `--rooms 60 --arrivals 24`, at `--arrivals 12`, at
+    // `--arrivals 6`, and at `--rooms 120 --arrivals 12` — measured, four arms, all zero.
+    //
+    // THE HALVINGS ABOVE WERE LEGITIMATE AND A THIRD ONE WOULD NOT BE. Each earlier retune moved
+    // the arm to a hotel where the mechanism still lived; there is no such hotel now, so
+    // searching for one would be searching for a workload that makes a dead check green — which
+    // is what G-039b-alpha refused by name. The honest report is the zero and the reason.
+    //
+    // **THE OBLIGATION**: `marginBoundOver` — the floor below which a guest switches BACK within
+    // one visit — fell 5,715 -> 5,358 with the same rate change, so the margin has MORE room
+    // above its thrash floor and LESS reach at the same time. That is a real design question for
+    // whoever next opens `abandonMarginBasisPoints`, and `hysteresis.bound.test.ts` records the
+    // other half of it. G-037a's quality fold makes rooms serve at the BARE rate, which doubles
+    // the helping back to 60 ticks and the lever to 428 basis points — still short of 6,000, so
+    // the fold alone does NOT bring this back. A goal that wants the mechanism live has to move
+    // the margin or the capacities, and it now has both numbers to do it with.
+    // ==========================================================================================
     const contended = reportOf(['--rooms', '60', '--arrivals', '24', '--seed', '42']);
-    expect(abandonmentsIn(contended)).toBeGreaterThan(0);
+    expect(abandonmentsIn(contended)).toBe(0);
+    // AND THE LEVER, COMPUTED, so this retirement is a derivation rather than four zeroes.
+    const helpingTicks = Math.floor((3_000 * 1_400) / ONE_WHOLE_BASIS_POINTS) / 14;
+    expect(helpingTicks).toBe(30);
+    expect(Math.floor((helpingTicks * ONE_WHOLE_BASIS_POINTS) / 1_400)).toBe(214);
+    expect(Math.floor((helpingTicks * ONE_WHOLE_BASIS_POINTS) / 1_400)).toBeLessThan(SHIPPED_MARGIN);
     // 24 -> 3 AT θ-b1, AND THE MECHANISM IS THE SAME ONE THIS ARM IS ABOUT. A need only reaches
     // abandoning depth if the guest is still here to feel it, and once a guest can leave, most
     // of the ones being failed do — so there are fewer guest-ticks of deep want to switch on.
@@ -261,8 +293,15 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // occasions to abandon, which is the same direction the thrash arm moves in criterion 3's
     // table. **The arm is not widened again**: the instruction the G-014b entry left was to
     // widen rather than delete IF THE NUMBER GOES TO ZERO, and 278 is nowhere near it.
+    //
+    // 278 -> 0 AT G-041, AND THE NUMBER HAS NOW GONE TO ZERO. The instruction quoted above is
+    // answered in the arm three tests up rather than here: the mechanism is unreachable under
+    // shipped content at ANY workload, and the reason is 30-tick helpings against a 6,000-point
+    // margin — arithmetic, not a search that came up empty. Widening this arm would be looking
+    // for a hotel in which a dead check goes green. The literal stays an EXACT assertion so the
+    // day it stops being zero is a red line rather than a shrug.
     // ======================================================================================
-    expect(abandonmentsIn(contended)).toBe(278);
+    expect(abandonmentsIn(contended)).toBe(0);
   });
 
   it('and it abandons FAR less than a margin of zero, so the margin is doing the work', () => {
@@ -294,7 +333,7 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // separately from the claim**: the shipped arm is still ZERO, so the separation this
     // criterion rests on is 9,821 against 0 — the ordering assertion above this line is the
     // claim, and it does not care which way a five-figure gap moved.
-    expect(abandonmentsIn(thrash)).toBe(9_821);
+    expect(abandonmentsIn(thrash)).toBe(22_546);
   });
 
   it('and the separation is a factor, not a rounding difference', () => {
@@ -322,8 +361,14 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // about, because a total whose definition changed cannot be adjusted by argument.
     const engagementMet = (summary: Summary): number =>
       summary.needs.filter((row) => !row.lodging).reduce((total, row) => total + row.met, 0);
-    expect(engagementMet(shipped)).toBe(1_095);
-    expect(engagementMet(eraA)).toBe(1_095);
+    expect(engagementMet(shipped)).toBe(1_133);
+    // 1,095 -> 1,133, AND THE EQUALITY THIS ARM RESTS ON IS RESTORED RATHER THAN COINCIDENTAL:
+    // the shipped margin never fires at this invocation, so the two arms are the same
+    // simulation and must report the same total. Before G-041 they differed by 38, which was
+    // the shipped margin firing a handful of times; it fires zero times now, so they agree
+    // exactly. The assertion below is the one that would catch a re-pin that broke it.
+    expect(engagementMet(eraA)).toBe(1_133);
+    expect(engagementMet(eraA)).toBe(engagementMet(shipped));
     // AND THE THRASH ARM NOW MEETS MORE THAN EITHER, WHICH REVERSES G-014b's FINDING. Recorded
     // rather than hidden inside a re-pin: under a stock a guest that re-decides every tick is
     // topping up whatever is emptiest, and topping up is cheap — 60 ticks buys a whole visit's
@@ -349,7 +394,13 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // **shipped and eraA are BOTH STILL 1,095, byte-identical across the stairwell**, so the
     // whole move is on the thrash arm again. The reversal this block records narrows for the
     // third goal running without closing: 1,862 -> 1,712 -> 1,586 -> 1,517 against 1,095.
-    expect(engagementMet(thrash)).toBe(1_517);
+    //
+    // AND IT WIDENS AGAIN AT G-041 — 1,517 -> 1,694 against 1,133 — which is the first time in
+    // four goals that it has. A thrashing guest tops up whatever is emptiest, and a top-up is
+    // cheaper at the declared rate than it was: 30 ticks buys a whole helping where it used to
+    // buy half of one. The reversal is a fact about a stock model and faster service makes it
+    // MORE true, not less.
+    expect(engagementMet(thrash)).toBe(1_694);
     expect(engagementMet(shipped)).toBe(engagementMet(eraA));
     expect(engagementMet(thrash)).toBeGreaterThan(engagementMet(shipped));
   });
@@ -548,14 +599,38 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // than a swap — comfort at 517 of 711 and entertainment at 386 of 708. Neither is served
     // throughout any more, and the ceiling has not moved by a single instance.
     //
+    // ==========================================================================================
+    // AND AT G-041 THE CEILING MOVES FOR THE FIRST TIME, WHICH IS THE ONE THING THIS TABLE HAD
+    // NEVER SEEN. 1,095 -> 1,133, and the blend goes back to a clean SWAP:
+    //
+    //     row                  travel off      travel on       + the shaft     + G-041's rates
+    //     guest_comfort        [711,   0, 0]   [195, 516, 0]   [517, 194, 0]   [711,   0, 0]
+    //     guest_entertainment  [192, 519, 0]   [708,   3, 0]   [386, 325, 0]   [230, 481, 0]
+    //     guest_nourishment    [192, 519, 0]   [192, 519, 0]   [192, 519, 0]   [192, 519, 0]
+    //
+    //     engagement `met`      1,095           1,095           1,095           1,133
+    //
+    // **"EXACTLY ONE NEED TOPPED UP" IS NO LONGER THE SENTENCE.** `guest_comfort` is back to
+    // 711 of 711 — served for every instance, as it was before travel — and `guest_entertainment`
+    // gains 38 on top of that rather than losing them to comfort. The rates are why: a helping
+    // is 30 ticks at the declared rate instead of 60, so the hotel gets through more of them and
+    // the ceiling this table had held across three mechanics finally lifts. `guest_nourishment`
+    // and `night_rest` are unmoved to the instance, exactly as they were across the other three
+    // columns, which is the control that says this is service and not a re-shuffle.
+    //
+    // THE PARKED EXPERIMENT IS UNAFFECTED and gains a fourth data point: the two rows that move
+    // are still the item-provided one and the room-provided one, and nourishment — also
+    // room-provided — still does not move at all.
+    // ==========================================================================================
+    //
     // THE PARKED FALSIFICATION TEST IS UNCHANGED AND THIS IS A THIRD DATA POINT FOR IT: comfort
     // is provided by an ITEM in the lounge and entertainment by the games ROOM, and the two are
     // otherwise identical rows in `need-types.json`. `PARKING.md` carries the experiment — give
     // `hotel_lounge` a `provides` entry and see whether the split follows the provision kind.
     // ==========================================================================================
     expect(table(eraA)).toEqual({
-      guest_comfort: [517, 194, 0],
-      guest_entertainment: [386, 325, 0],
+      guest_comfort: [711, 0, 0],
+      guest_entertainment: [230, 481, 0],
       guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
@@ -577,8 +652,8 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // shipped margin never fires, so the two arms are the same simulation and travel moved both
     // of them the same way. The day they separate, this says so.
     expect(table(shipped)).toEqual({
-      guest_comfort: [517, 194, 0],
-      guest_entertainment: [386, 325, 0],
+      guest_comfort: [711, 0, 0],
+      guest_entertainment: [230, 481, 0],
       guest_nourishment: [192, 519, 0],
       night_rest: [192, 519, 0],
     });
@@ -604,10 +679,17 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // journey through the shaft has fewer moments at which a tie can be evaluated against a
     // provider it is close to. `night_rest` is unmoved at 192/519 in all three arms, which is
     // the anchor that survives every one of these re-pins.
+    // AND G-041 MOVES ALL THREE ENGAGEMENT ROWS AGAIN, IN THE OPPOSITE DIRECTION FROM THE SHAFT:
+    // abandonments RISE sharply (comfort 3,315 -> 9,263, entertainment 3,122 -> 9,342,
+    // nourishment 3,384 -> 3,941). A margin-zero guest re-decides on every tie, and at the
+    // declared rate a helping is 30 ticks instead of 60 — so the same stay contains twice as
+    // many opportunities to re-decide. `night_rest` is unmoved at 192/519 for the fourth
+    // re-pin running, which is the anchor that says the engagement rows moved for a reason
+    // about engagement.
     expect(table(thrash)).toEqual({
-      guest_comfort: [368, 343, 3_315],
-      guest_entertainment: [476, 235, 3_122],
-      guest_nourishment: [673, 38, 3_384],
+      guest_comfort: [540, 171, 9_263],
+      guest_entertainment: [566, 145, 9_342],
+      guest_nourishment: [588, 123, 3_941],
       night_rest: [192, 519, 0],
     });
     // AND THE ABANDONMENT COLUMN IS UNTOUCHED BY G-028b, WHICH IS THE CONTROL FOR THE ROWS
@@ -616,7 +698,7 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // indistinguishable from the simulation behaving differently.
     const abandonments = (summary: Summary): number[] =>
       summary.needs.map((row) => row.abandoned);
-    expect(abandonments(thrash)).toEqual([3_315, 3_122, 3_384, 0]);
+    expect(abandonments(thrash)).toEqual([9_263, 9_342, 3_941, 0]);
     expect(abandonments(shipped)).toEqual([0, 0, 0, 0]);
   });
 
@@ -737,9 +819,21 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // ------------------------------------------------------------------
     const total = at(1, ONE_WHOLE_BASIS_POINTS);
     const margin = at(1, SHIPPED_MARGIN);
+    // 1 -> 0 AT G-041, FOR THE REASON THE CONTENDED ARM ABOVE CARRIES IN FULL: at the
+    // re-derived declared rate a helping is 30 ticks and a challenger can open at most 214
+    // basis points inside one, against a 6,000-point margin. The mechanism is off everywhere
+    // under shipped content, and the leanest level of this sweep is no exception. The standing
+    // instruction from the entry quoted above — WIDEN rather than delete when a count goes to
+    // zero — is honoured by the arithmetic above rather than by a wider search.
     expect(total.abandoned).toBe(0);
-    expect(margin.abandoned).toBe(1);
-    expect([total.met, margin.met]).toEqual([736, 719]);
+    expect(margin.abandoned).toBe(0);
+    // AND THE TWO ARMS ARE NOW THE SAME SIMULATION AT THIS LEVEL, which is what a margin that
+    // never fires means and is stated so the equality below is read as a consequence.
+    expect(margin).toEqual(total);
+    // [736, 719] -> [1192, 1192]: the two arms are the same simulation now (the margin fires
+    // nowhere), so they report the same total rather than differing by the seventeen the one
+    // abandonment used to cost. The rise is the declared rate serving this level faster.
+    expect([total.met, margin.met]).toEqual([1_192, 1_192]);
     // ------------------------------------------------------------------
     // AND THE PIN IS STILL THE RIGHT ONE — BUT NOT VIA THE `met` COLUMN ANY MORE, AND THE
     // REASON IS A PROPERTY OF THE NEW DEFINITION THAT A LATER READER MUST NOT REDISCOVER.
@@ -782,10 +876,28 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // NEIGHBOURING cadence the lean arm completes stays and the comparison still holds by a wide
     // margin, which is what says the claim is about the amenity count rather than about the
     // phase. No multiple is chosen — the margin is folded from the two runs.
+    // ==========================================================================================
+    // THE MULTIPLE COLLAPSED AT G-041 AND IT IS RE-TAKEN AS A PAIR RATHER THAN AS A FACTOR.
+    //
+    // Measured at the neighbouring cadence: **lean 184, rich 196**. It was 0-ish against a wide
+    // margin, and `x 10` was a comfortable statement about a lean arm that completed almost
+    // nothing. It completes plenty now — one amenity of each kind serves this hotel — so the
+    // factor is 1.07 and asserting `x 10` would be asserting a hotel this content no longer
+    // describes.
+    //
+    // **THE ORDERING IS THE CLAIM AND IT SURVIVES; THE SIZE IS RECORDED AS THE SIZE.** That the
+    // gap shrank is the finding, not the failure: ADR-0054 makes `refillPerTick` the rate a
+    // fully appointed room reaches, and this tree has no quality fold yet, so ONE amenity is
+    // nearly as good as two. **G-037a's fold is what is supposed to open this back up** — a bare
+    // amenity serves at the floor, and a player who wants the second one has to be able to see
+    // why. A goal that merges the fold and leaves this factor at 1.07 has shipped a build loop
+    // with nothing to buy, and this pair is one of the two places that would say so.
+    // ==========================================================================================
     const leanNeighbour = completed(1, ['--arrivals', '59']);
     const richNeighbour = completed(2, ['--arrivals', '59']);
-    expect(leanNeighbour).toBeGreaterThan(0);
-    expect(richNeighbour).toBeGreaterThan(leanNeighbour * 10);
+    expect(leanNeighbour).toBe(184);
+    expect(richNeighbour).toBe(196);
+    expect(richNeighbour).toBeGreaterThan(leanNeighbour);
     // AND THE STAY DISTRIBUTIONS DIFFER, which is the mechanism the comment above names and the
     // one the `met` column could not be compared across: the richer arm's completed stays are a
     // large share of its departures and the lean arm's are a handful.
@@ -896,8 +1008,42 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // the move §9 forbids.
   }, 60_000);
 
-  it('and MORE amenities than three change nothing, so the sweep really does saturate', () => {
-    expect(at(4, SHIPPED_MARGIN)).toEqual(at(3, SHIPPED_MARGIN));
-    expect(at(5, SHIPPED_MARGIN)).toEqual(at(3, SHIPPED_MARGIN));
-  }, 60_000);
+  it('and the sweep NO LONGER SATURATES at three, which is G-041 undoing this pin', () => {
+    // ==========================================================================================
+    // THE TITLE USED TO READ *"MORE amenities than three change nothing, so the sweep really
+    // does saturate"*, AND THAT SENTENCE IS FALSE ON THE G-041 RATES. It is rewritten rather
+    // than re-pinned, because a re-pin would have asserted equality between numbers that are
+    // no longer equal and the claim would have survived only in the title.
+    //
+    // MEASURED, one sitting, exact deterministic counts, `met` over the engagement needs at
+    // the shipped margin, amenity levels 1..6:
+    //
+    //     level     1      2      3      4      5      6
+    //     met    1,192  1,133  1,095  1,127  1,614  1,133
+    //
+    // **IT IS NOT MONOTONE AND IT DOES NOT FLATTEN.** Under the pre-G-041 rates levels 3, 4 and
+    // 5 were byte-identical, which is what "saturate" meant here. They are not now, and the 5
+    // is not a rounding — it is 47% above the 3.
+    //
+    // WHAT IS AND IS NOT CLAIMED. `met` is a per-need BAND count (ADR-0037), not a smooth
+    // quality measure, and more amenities also means amenities placed further apart, so this
+    // column mixes provision with walking distance. **The player-facing axis is the review
+    // mean, and that one is still monotone non-decreasing across this range** — measured over
+    // the CLI at 6 rooms: 100 / 255 / 322 / 322 / 322 at 0 / 1 / 3 / 5 / 8 amenities. So the
+    // right reading is that the SWEEP's instrument has lost its saturation, not that the build
+    // loop has gained a level.
+    //
+    // WHAT THIS PIN IS FOR NOW: it is the table above, asserted, so the next goal to touch the
+    // rates or the fold reads six numbers rather than an equality that used to hold. G-037a's
+    // fold is expected to push the whole row down and the saturation back — and if it restores
+    // level-3 saturation exactly, this test goes back to being the equality it was.
+    // ==========================================================================================
+    expect([1, 2, 3, 4, 5, 6].map((level) => at(level, SHIPPED_MARGIN).met)).toEqual([
+      1_192, 1_133, 1_095, 1_127, 1_614, 1_133,
+    ]);
+    expect(at(4, SHIPPED_MARGIN)).not.toEqual(at(3, SHIPPED_MARGIN));
+    // AND THE ABANDONMENT COLUMN IS ZERO AT EVERY LEVEL, which is the mechanism this whole file
+    // is about being off under shipped content — see the contended arm's arithmetic above.
+    for (const level of [1, 2, 3, 4, 5, 6]) expect(at(level, SHIPPED_MARGIN).abandoned).toBe(0);
+  }, 120_000);
 });

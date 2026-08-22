@@ -58,7 +58,32 @@ const count = (summary: RunSummary, reason: string): number =>
 
 const wellProvisioned = armOf(['--rooms', '6', '--amenities', '5']);
 const noAmenities = armOf(['--rooms', '6', '--amenities', '0']);
-const contended = armOf(['--rooms', '6', '--amenities', '1', '--arrivals', '96']);
+/**
+ * ARM 3'S HOTEL, AND ITS ROOM COUNT IS DERIVED FROM THE TWO THINGS THE ARM'S NAME PROMISES.
+ *
+ * It was `--rooms 6 --amenities 1 --arrivals 96` and produced `leftDissatisfied` 0 after G-041,
+ * so the arm stopped being able to make its own claim. **The fix is the hotel, not the bar** —
+ * "contended" is a property a workload either has or has not, and this one stopped having it
+ * when `refillPerTick` became the rate a fully appointed room reaches (ADR-0054, ADR-0057).
+ *
+ * TWO INEQUALITIES BOUND THE ROOM COUNT, AND BOTH COME FROM NUMBERS ALREADY ON DISK:
+ *
+ *   SOME GUESTS MUST BE TURNED AWAY, or `gaveUp` is zero. Occupancy is capped by the arrival
+ *   cadence at `stayDurationTicks / arrivals` = 1,440 / 96 = **15**, so a hotel with 15 rooms or
+ *   more turns nobody away. Hence `rooms <= 14`.
+ *
+ *   ONE AMENITY MUST NOT KEEP UP, or `leftDissatisfied` is zero. A need is served for
+ *   `1/(1 + rate)` of the time, so one provider sustains `1 + rate` concurrent guests
+ *   (`determinism-log.ts`'s `copiesFor`, the same relation). At the SERVICE FLOOR that is
+ *   `1 + 7` = **8**. Hence `rooms >= 9`.
+ *
+ * **MEASURED, AND THE LOWER BOUND LANDS EXACTLY ON THE ARITHMETIC**: at 8 rooms
+ * `leftDissatisfied` is 0, at 9 it is 1, at 10 it is 13, at 12 it is 166, and at 16 `gaveUp`
+ * falls to 0. The window `[9, 14]` is derived; **12 is a preference inside it**, taken because
+ * both ends of the window are then clear by a margin rather than by one event, and said to be a
+ * preference rather than dressed up as forced (ADR-0013 §4).
+ */
+const contended = armOf(['--rooms', '12', '--amenities', '1', '--arrivals', '96']);
 const starvedOfRooms = armOf(['--rooms', '1', '--amenities', '5']);
 
 describe('ARM 1 — a hotel that works notices nothing', () => {

@@ -68,7 +68,7 @@
 // above offers: a derivation that only moves when a reading moves cannot be steered, and the
 // direction of the movement is not a thing its author chose.
 //
-// AND WHAT THE G-039b-B1 RE-TAKE DID, WHICH IS THE SHIPPED SET.
+// AND WHAT THE G-039b-B1 RE-TAKE DID. **HISTORY: these are not the shipped numbers either.**
 //
 // THE DRIFT GUARD COULD NOT SEE THE BUILDING GET CIRCULATION. The fingerprints below were spelled
 // `name:rooms/arrivals/amenities/needTypes/stay` and nothing else, so three workload changes
@@ -107,6 +107,58 @@
 // were not a thing its author chose. The four movements are stated as the history of a CONSTANT,
 // which is what a diff shows; they are NOT a measurement compared across sittings, and no reading
 // from an earlier campaign is quoted against one below (`CLAUDE.md` rule 3).
+//
+// AND WHAT THE G-042 RE-TAKE DID, WHICH IS THE SHIPPED SET.
+//
+// A HUMAN RULING RATHER THAN A SWEEP FINDING (ADR-0069, E-011). G-041 re-derived the need rates
+// around ADR-0054's "refillPerTick is the rate a FULLY APPOINTED room reaches" (ADR-0057, option
+// a). At those rates a well-provisioned hotel's guests are idle roughly 70% of the stay, and AN
+// IDLE GUEST IS CHEAP. Every axis in this file is a ratio of a busier arm over a quieter one, so
+// a content change that makes guests cheap compresses ALL FOUR — and the density axis, whose
+// dense arm IS the well-provisioned hotel, was compressed onto its own `ratio > 1` floor. The
+// gate's premise became false; the content did not break it.
+//
+// THE RULING REQUIRED THE CAMPAIGN RE-TAKEN ON THIS CONTENT, not composed from readings taken on
+// the tree before it — `CLAUDE.md` rule 3, and ADR-0015's REPLACE half in the file that carries
+// it. Not one reading below is pooled with an earlier campaign, and no figure from one is quoted
+// against one from this.
+//
+//   needs             1.8219 -> 1.8729   LOOSER
+//   density           2.1063 -> 1.6386   TIGHTER BY 22%, and it is the thin axis again at 1.1002x
+//   rooms-saturated   5.5888 -> 5.2458   TIGHTER
+//   rooms-bench       4.4592 -> 2.6487   TIGHTER BY 41%, the largest movement this file has made
+//
+// THREE TIGHTER, ONE LOOSER — and the three are tighter because the SIM GOT CHEAPER TO RUN AT THE
+// TOP OF EVERY AXIS, which is the direction that cannot be a widening dressed as a derivation.
+// A re-take that produced four looser bounds on a content change nobody re-measured would deserve
+// the suspicion; this one hands back 22% and 41% of two windows.
+//
+// AND THE TIGHTENING HAS TEETH, WHICH IS A PAIRED MUTATION RATHER THAN THE PARAGRAPH ABOVE
+// (ADR-0022 recipe: every modified and untracked file copied out first, `sha256` and `git status
+// --porcelain` compared after, nothing reverted with `git checkout` or `git restore`). The
+// mutation is the class this axis exists to catch — work QUADRATIC IN THE PROVIDER COUNT inside
+// `providersFor`, so the dense arm pays for its twenty amenities and the sparse arm does not:
+//
+//   sim mutated + THESE bounds        EXIT 1, "density: 1.7812 is at or above the 1.6386 bound"
+//   sim mutated + the campaign        EXIT 0, "PASS density 1.7355" — the replaced bound is BLIND
+//     this one replaces                 to a regression this one catches
+//   sim clean + THESE bounds          EXIT 0, "PASS density 1.1862" — the control
+//
+// **The middle row is the point.** A re-derivation that only ever loosened would have no such row
+// to show; this one names a defect that would have shipped green under the numbers it replaces.
+//
+// AND THE DIRECTION FLAGS WERE RE-CHECKED AGAINST THE NEW ARRAYS RATHER THAN CARRIED, which is
+// ADR-0027's class and the thing every re-take in this file has had to be told twice:
+//
+//   density   `true` -> `false`, WARRANTED IN BOTH REGIMES BY THIS CAMPAIGN'S OWN ARRAYS: 2 of 12
+//             quiet readings and 3 of 8 loaded readings are below 1, the lowest 0.9466. The
+//             ruling's shape, and G-039b-B1's precedent one axis over — the flag flips because
+//             the campaign says so. See the block at the readings for the magnitude bound that
+//             replaces it and for why 1 was never a bound this instrument could carry.
+//   needs     stays `false`, and the warrant CHANGED: its twenty readings are now all above 1
+//             (lowest 1.0502), so the sub-1 reading that used to sit in its loaded arm is gone.
+//             It is warranted by an `observations` entry instead — a reading of this instrument
+//             at THIS configuration, which is the distinction G-039b-B1's retirement turned on.
 //
 // THE REJECTED ALTERNATIVE, RECORDED BECAUSE IT LOOKS SAFER AND IS NOT: cap each new bound at
 // the incumbent, so a bound may only ever tighten. That imports a median measured inside
@@ -159,44 +211,51 @@
 // n=12 quiet and n=8 loaded per axis (the readings below):
 //
 //   axis              quiet median -> loaded median      quiet max -> loaded max
-//   needs                  1.2146 -> 1.2154  (+0.1%)        1.3518 -> 1.7213  (+27.3%)
-//   density                1.4042 -> 1.4646  (+4.3%)        1.5466 -> 1.7084  (+10.5%)
-//   rooms-saturated        3.7259 -> 3.5485  (-4.8%)        4.0662 -> 4.4884  (+10.4%)
-//   rooms-bench            2.9728 -> 2.9846  (+0.4%)        3.5301 -> 3.4326   (-2.8%)
+//   needs                  1.2486 -> 1.3243  (+6.1%)        1.4911 -> 1.6513  (+10.7%)
+//   density                1.0924 -> 1.0441  (-4.4%)        1.2558 -> 1.4894  (+18.6%)
+//   rooms-saturated        3.4972 -> 3.4427  (-1.6%)        4.2307 -> 4.2717   (+1.0%)
+//   rooms-bench            1.7658 -> 1.9421 (+10.0%)        2.2433 -> 2.3477   (+4.7%)
 //
-// THE GENERALISATION IS STILL FALSE AND THE RE-TAKE SAYS SO IN A THIRD SHAPE. Three of four move
-// up on the median and three of four move up on the max. The two campaigns before this one read
-// (2 up, 4 up) and (3 up, 3 up); the sentence that stands here is re-derived from THESE readings
-// rather than carried, because a load claim is a claim about a measurement and this measurement is
-// a different one (ADR-0015 REPLACE; ADR-0027 on what a replacement inherits). The three counts
-// are not quoted against each other as measurements — they agree only on the sign of the answer to
-// "can load push a ratio up", which is yes, in every campaign that has asked.
+// THE GENERALISATION IS STILL FALSE AND THE RE-TAKE SAYS SO IN A FOURTH SHAPE, AND THIS TIME THE
+// STRONGEST ONE YET: two of four move up on the median, and ALL FOUR move up on the max. The three
+// campaigns before this one read (2 up, 4 up), (3 up, 3 up) and (3 up, 3 up); the sentence that
+// stands here is re-derived from THESE readings rather than carried, because a load claim is a
+// claim about a measurement and this measurement is a different one (ADR-0015 REPLACE; ADR-0027 on
+// what a replacement inherits). The four counts are not quoted against each other as measurements —
+// they agree only on the sign of the answer to "can load push a ratio up", which is yes, in every
+// campaign that has asked.
 //
-// AND `rooms-bench` IS THE CASE THAT SHOWS WHY THE FLOOR POOLS RATHER THAN PREFERRING A REGIME:
-// its worst reading in this campaign is a QUIET one (3.5301 against a loaded 3.4326), so a floor
-// taken from the loaded arm alone would sit under a reading a normal `pnpm verify` produced.
+// AND THE CASE THAT USED TO SHOW WHY THE FLOOR POOLS RATHER THAN PREFERRING A REGIME IS GONE: in
+// this campaign EVERY axis's worst reading is a loaded one, where in the campaign this replaces
+// `rooms-bench`'s was quiet. That is a change in the readings and not in the rule — the floor pools
+// because "the loaded arm is always the worse one" is a claim about the instrument that has been
+// false in a shipped array of this file, not because it is false today.
 //
 // What is true and what this file relies on instead: the FLOOR pools every reading in every
 // regime observed, so a bound is placed above what load has actually been seen doing rather than
 // above a model of what it ought to do.
 //
-// AND THE `needs` AXIS IS NOW THE THIN ONE — SAID HERE BECAUSE IT IS THE FIRST THING A LATER
-// READER SHOULD KNOW, AND IT IS NO LONGER `density`. `needs` has a loaded max of 1.7213 against a
-// ceiling of 1.8219: a pooled margin of 1.0584x, where the other three sit at 1.2329x, 1.2452x and
-// 1.2632x. Nothing refuses — `bound > floor` holds on all four — but this is the closest this
-// project has come to ADR-0016's crossing, and the pre-registered response if it ever crosses is in
-// this file's header: MORE SAMPLES PER READING AND A RE-TAKEN CAMPAIGN, never a wider number.
+// AND THE `density` AXIS IS THE THIN ONE AGAIN — SAID HERE BECAUSE IT IS THE FIRST THING A LATER
+// READER SHOULD KNOW, AND IT IS NO LONGER `needs`. `density` has a loaded max of 1.4894 against a
+// ceiling of 1.6386: a pooled margin of 1.1002x, where the other three sit at 1.1342x, 1.1282x and
+// 1.2280x. THREE OF FOUR NOW SIT UNDER 1.14x, where the campaign this replaces had three of four
+// above 1.23x — the whole file's windows narrowed, because G-041's rates compressed every signal
+// while the instrument's spread did not follow it down. Nothing refuses — `bound > floor` holds on
+// all four — and the pre-registered response if one ever crosses is in this file's header: MORE
+// SAMPLES PER READING AND A RE-TAKEN CAMPAIGN, never a wider number.
 //
 // THE QUIET MARGIN IS THE ONE A RED `pnpm verify` SHOULD BE READ AGAINST, and on this axis it is
-// 1.3478x — `verify` runs quiet, and the 1.0584x above is what a hostile regime has already been
+// 1.3048x — `verify` runs quiet, and the 1.1002x above is what a hostile regime has already been
 // measured eating. Both are printed by the gate on every row, for exactly this reason.
 //
-// WHY THIS AXIS AND NOT ANOTHER, STATED SO IT IS NOT MISTAKEN FOR THE SIM GETTING SLOWER: `needs`
-// is `full-vector` against `one-need` and G-027b collapsed that lever from 4 needs against 1 to 4
-// against 3. Its two arms are the CLOSEST IN COST of any pair in this file — a quiet median of
-// 1.2146 against density's 1.4042 and the room axes' 3.7259 and 2.9728 — so it is the axis where
-// the instrument's spread is largest RELATIVE to the signal, which is also why it is the one axis
-// that declines the direction assertion.
+// WHY THIS AXIS AND NOT ANOTHER, STATED SO IT IS NOT MISTAKEN FOR THE SIM GETTING SLOWER: `density`
+// is `dense-providers` against `full-vector`, and at G-041's rates one provider already sustains
+// the arm's whole occupancy, so the twenty amenities the dense arm builds buy work that nobody
+// queues for. Its two arms are the CLOSEST IN COST of any pair in this file — a quiet median of
+// 1.0924 against `needs`' 1.2486 and the room axes' 3.4972 and 1.7658 — so it is the axis where
+// the instrument's spread is largest RELATIVE to the signal, which is also why it is the axis whose
+// spread crosses 1 and declines the direction assertion. **That is the same sentence this file
+// carried about `needs` one campaign ago, moved by the readings rather than rewritten.**
 //
 // THE PART THAT SURVIVES, because it needs no stopwatch: contention adds an absolute cost to
 // every arm, so a ratio between two arms of SIMILAR cost is compressed. That is a statement
@@ -353,17 +412,26 @@ export const CAMPAIGN = Object.freeze({
       // on this axis with it. The mechanism is untouched: `directionProblems` still reads
       // `observations`, and `scaling.bound.test.ts` still drives it over an axis that has one.
       //
-      // WHAT REPLACES IT IS IN THE ARRAYS THEMSELVES: this campaign's loaded arm carries **0.9827**
-      // — the full vector measuring CHEAPER than the smallest bindable one, at the shipped
-      // configuration, in the twenty readings below. The flag is now warranted by a reading the
-      // derivation already holds rather than by a note standing beside it, which is strictly the
-      // stronger version of "derived from the readings".
+      // AND AT G-042 THE WARRANT MOVED BACK OUT, WHICH IS WHAT "DERIVED FROM THE READINGS" COSTS
+      // WHEN THE READINGS MOVE. G-039b-B1's loaded arm carried 0.9827 and this campaign's twenty
+      // readings are ALL above 1 — lowest 1.0502 — because G-041's rates made an idle guest cheap
+      // and this axis's dearer arm is the one with more needs to be idle about. So the array
+      // warrant is gone, and the flag would have to come ON if nothing else were on record.
+      //
+      // SOMETHING ELSE IS ON RECORD, AND SUPPRESSING IT TO EARN A TIGHTER FLAG WOULD BE THE
+      // DISHONEST MOVE. The `observations` entry below is a reading of THIS instrument at THIS
+      // configuration — same fingerprint, byte-compared — from the abandoned first sitting of this
+      // very campaign. **That is the distinction G-039b-B1's retirement turned on**: it retired an
+      // observation taken at a configuration the campaign REPLACED, which is pooling; this one is
+      // taken at the configuration the campaign is OF, which is evidence.
       //
       // **At a one-need lever the arms differed by 4x the per-need work and the order was never in
       // doubt. At 4-against-3 the true ratio is close enough to 1 that this instrument's own spread
-      // crosses it** — the quiet arm's lowest is 1.0247 and the loaded arm's is 0.9827.
+      // crosses it** — the quiet arm's lowest is 1.0740, the loaded arm's is 1.0502, and the
+      // instrument has been watched putting a loaded reading at 0.8986 with nothing changed.
       //
-      // AND THE SUB-1 READING IS A LOADED ONE, WHICH IS SAID RATHER THAN GLOSSED. The SIGNAL in
+      // AND THE SUB-1 READING IS A LOADED ONE, WHICH IS SAID RATHER THAN GLOSSED — it was one in
+      // G-039b-B1's arrays and it is one in G-042's observation. The SIGNAL in
       // this file is taken from the quiet arm alone, on purpose. `direction` is not a signal: it is
       // the claim that these two arms cannot swap places, and an arm pair that swaps under
       // contention is an arm pair that swaps. `deriveAxis` pools every observed regime for exactly
@@ -383,7 +451,7 @@ export const CAMPAIGN = Object.freeze({
       // =================================================================================
       direction: false,
       // ===============================================================================
-      // NO `observations` ARRAY, AND THE MECHANISM IS STILL THERE (G-039b-B1).
+      // THE `observations` ARRAY, AND WHY IT IS A NUMBER AND NOT A SENTENCE.
       //
       // The field exists for a reading the campaign arrays do not hold, and it was built once the
       // hard way: it began as `directionWaiver: '0.9732 — check:scaling, shipped gate, ...'`, a
@@ -394,15 +462,14 @@ export const CAMPAIGN = Object.freeze({
       // NUMBER, beside the `source` that says where it came from, is the smallest thing that is
       // actually evidence.
       //
-      // NO SHIPPED AXIS NEEDS ONE ANY MORE. The single entry it carried was a reading from the
-      // configuration this campaign replaces, and the re-taken loaded arm holds a sub-1 reading of
-      // its own — so the warrant moved from a note beside the arrays INTO them. `directionProblems`
-      // is unchanged and `scaling.bound.test.ts` drives it over axes that do carry observations,
-      // including the two shapes that made the string version worthless.
+      // AND IT CANNOT BE USED TO FLATTER THE FLOOR, WHICH IS THE OTHER HALF OF THE MECHANISM:
+      // `directionProblems` REFUSES an observation above the campaign's worst reading, because a
+      // high excursion belongs in the floor and pooling one by hand is the move `DECLARED_READINGS`
+      // exists to refuse. An observation can only ever make this file's claims WEAKER.
       // ===============================================================================
       // ===================================================================================
       // THE LEVER COLLAPSED AT G-032a, AND THAT IS WHY THIS AXIS SITS NEAR 1 AT ALL — its quiet
-      // median was ~2.08 before it and reads 1.2146 in the campaign below.
+      // median was ~2.08 before it and reads 1.2486 in the campaign below.
       //
       // `one-need` is no longer one need. G-027b's stock model made a table with a lodging need
       // and nothing else UNBINDABLE — the lodging stock decays only in away time, and away time
@@ -411,65 +478,116 @@ export const CAMPAIGN = Object.freeze({
       //
       // `scaling-arms.ts` states the consequence and it is worth repeating where the readings
       // are: **one need of difference is a thin lever to read a per-need cost off.** These
-      // readings are not comparable with the pre-G-027b ones and do not pool with them; the
-      // bound they derive is TIGHTER, which is the derivation following the instrument rather
-      // than anybody choosing.
+      // readings are not comparable with the pre-G-027b ones and do not pool with them; the bound
+      // they derive is far TIGHTER than the 4-against-1 era's, which is the derivation following
+      // the instrument rather than anybody choosing.
       // ===================================================================================
-      quiet: Object.freeze([
-        1.0247, 1.0415, 1.0882, 1.1027, 1.1898, 1.1986, 1.2146, 1.2509, 1.2663, 1.3385, 1.3464, 1.3518,
+      observations: Object.freeze([
+        {
+          value: 0.8986,
+          source:
+            'the needs rotation under `tools/gates/arm/load.mjs --workers 12`, 5 samples per arm, ' +
+            'arms interleaved with the order alternating, warm-up discarded — the ABANDONED FIRST ' +
+            'SITTING of the G-042 campaign, 2026-08-22, win32/12cpu, node 22.16.0, on this tree at ' +
+            'this configuration (the rotation fingerprint of that sitting was compared byte for ' +
+            'byte against the one recorded above and is identical). That sitting was discarded ' +
+            'WHOLE and re-taken because a repository-wide grep of the author\'s began during its ' +
+            'ROOMS rotation, so no reading in it could still be called quiet; this is a LOADED ' +
+            'reading and it was taken four minutes before that happened. It is recorded rather ' +
+            'than dropped because it CONTRADICTS the tighter flag: the twenty readings below would ' +
+            'otherwise force `direction: true` on an axis whose arms have been watched swapping.',
+        },
       ]),
-      loaded: Object.freeze([0.9827, 1.0714, 1.1566, 1.2040, 1.2154, 1.3464, 1.6352, 1.7213]),
+      quiet: Object.freeze([
+        1.0740, 1.1940, 1.2167, 1.2187, 1.2258, 1.2327, 1.2486, 1.2565, 1.2932, 1.3276, 1.3984, 1.4911,
+      ]),
+      loaded: Object.freeze([1.0502, 1.0928, 1.3019, 1.3053, 1.3243, 1.4680, 1.5404, 1.6513]),
     }),
     density: Object.freeze({
       rotation: 'needs',
       // ===============================================================================
-      // THE ASSERTION IS ON AGAIN, AND THIS IS THE AXIS WHOSE WARRANT HAD INHERITED (sweep 3).
+      // THE DIRECTION ASSERTION COMES OFF AND A MAGNITUDE BOUND STANDS IN ITS PLACE — HUMAN
+      // RULING, ADR-0069 ON E-011, OPTION (a). THE DERIVATION IS WRITTEN HERE, AT THE NUMBERS.
       //
-      // It read: *"measured rather than inherited ... the density ratio's own QUIET spread
-      // crosses 1 — 0.9915 is in the readings below."* **0.9915 was in the CADENCE-32 array and
-      // the G-032a diff replaced it**, leaving a warrant citing a number that was no longer in the
-      // file. G-039b-B1 replaced those arrays in turn, so the figures that discharged it are
-      // restated below FROM THE CURRENT ARRAYS rather than carried — which is the same discipline
-      // the paragraph is about, applied to the paragraph.
+      // WHAT MOVED, AND IT IS THE SIM RATHER THAN THE INSTRUMENT. G-041 re-derived the need rates
+      // around ADR-0054 (ADR-0057, option a). At the declared service floor ONE provider already
+      // sustains the whole occupancy of this rotation's arms, so the dense arm's twenty of each
+      // amenity buy capacity nobody queues for, while its guests spend roughly 70% of the stay
+      // idle — and an idle guest is cheap. The sparse arm's guests queue. **Provider density
+      // stopped buying tick cost**, which is a true statement about the simulation. ADR-0069's own
+      // measurement of that drop is a pairing of two CONTENTS and therefore lives in the ruling,
+      // not in this file; nothing below is quoted against it.
       //
-      // So the one axis claiming its declined assertion was MEASURED is the one that inherited
-      // it — **eight lines below the block that hunts exactly this on `needs` and cites this
-      // axis as its precedent**, in the commit that re-took the campaign. ADR-0027's class,
-      // twice in one file, and the second instance was inside the repair for the first.
+      // WHY `ratio > 1` CANNOT STAND, FROM THE ARRAYS BELOW AND NOTHING ELSE. **Five of these
+      // twenty readings are under 1** — 0.9645 and 0.9669 quiet, 0.9466, 0.9862 and 0.9982 loaded.
+      // A floor that a quarter of the campaign's own readings violate is not a tight gate, it is a
+      // gate that fires on weather (ADR-0016). It is not merely a loaded-arm effect either: the
+      // QUIET arm crosses too, which is the state `needs` was never in.
       //
-      // TURNING IT ON IS A TIGHTENING DERIVED FROM READINGS, NOT A CHOICE. The dense arm runs
-      // twenty of each amenity against the sparse arm's one at the same need count, so it must
-      // cost more, and every reading on record agrees. **RE-CHECKED AGAINST THE G-039b-B1 ARRAYS
-      // RATHER THAN CARRIED**, which is the whole of the defect this block records: the lowest
-      // reading in the twenty below is 1.2321, and it is a LOADED one — nothing in either array is
-      // under 1. The two axes' distances above 1 are stated rather than divided: density's lowest
-      // is 1.2321 and `needs`' is 0.9827, which is why one asserts the direction and one does not.
+      // AND THE SHIPPED GATE HAD ALREADY BEEN WATCHED STRADDLING IT: 1.0547 and 0.9732 on the SAME
+      // TREE in two `pnpm verify` runs forty minutes apart (E-011). That is the ±0.04 band the
+      // ruling requires the replacement bound to sit outside of.
+      //
+      // THE MAGNITUDE BOUND, AND EVERY STEP OF IT IS ARITHMETIC OVER THE ARRAYS:
+      //
+      //   quiet median (upper middle of twelve)            1.0924
+      //   BOUND = trunc(1.0924 x 1.5, 4dp)                 1.6386     <- the file's uniform rule
+      //   worst reading in ANY regime (the floor)          1.4894
+      //   SEPARATION = 1.6386 - 1.4894                     0.1492     <- 3.7x the +/-0.04 band
+      //   pooled margin 1.1002x, quiet margin 1.3048x
+      //
+      // **IT IS DERIVED AND NOT CHOSEN, AND THE ORDER OF OPERATIONS IS THE EVIDENCE.** The rule is
+      // the one that placed the other three bounds and it was not touched; the separation is a
+      // CONSEQUENCE of it, computed afterwards, and no step of it has a number this goal picked.
+      // Had the readings put the floor within 0.04 of the ceiling, `deriveAxis` would REFUSE the
+      // axis — `bound > floor` and `floor < ceiling` are both executed — and the pre-registered
+      // response in this file's header is more samples and a re-taken campaign, never a wider
+      // number. The retired floor at 1 fails that same test on its face: 1 is not near the
+      // readings, it is INSIDE them.
+      //
+      // WHAT THE AXIS STILL SAYS, so "it stops being able to say anything" is not quietly true.
+      // Twenty amenities of each kind against one must not cost 1.6386x the sparse arm's tick.
+      // That is the sub-linearity-in-provider-count claim this axis was built for at G-013, and it
+      // is the half that survives; `anti-vacuity` still proves both arms do real work, and the
+      // rotation's `ordering` row still checks a pair whose order is not in doubt.
+      //
+      // WHAT IS LOST, STATED RATHER THAN ABSORBED: nothing now catches these two arms swapping
+      // places. That was worth having and it is not available at this instrument's spread.
+      //
+      // AND THE ALTERNATIVE THAT WOULD HAVE KEPT IT WAS REFUSED BY NAME. E-011's option (c) —
+      // re-cut the density arms so the dense one is still service-bound and the direction survives
+      // — is **tuning a workload to keep a test interesting**. G-039b-alpha refused it by name,
+      // §9 makes it a stop condition, and ADR-0069 records the refusal so it is visible rather
+      // than assumed. The arms below are byte-identical to the ones the campaign this replaces
+      // measured; the rotation fingerprint above says so and the gate checks it every run.
       // ===============================================================================
-      direction: true,
+      direction: false,
       quiet: Object.freeze([
-        1.3093, 1.3263, 1.3557, 1.3651, 1.3963, 1.3994, 1.4042, 1.4181, 1.4415, 1.4601, 1.4890, 1.5466,
+        0.9645, 0.9669, 1.0188, 1.0646, 1.0669, 1.0854, 1.0924, 1.0964, 1.1100, 1.1122, 1.1776, 1.2558,
       ]),
-      loaded: Object.freeze([1.2321, 1.2798, 1.3733, 1.3745, 1.4646, 1.5550, 1.6744, 1.7084]),
+      loaded: Object.freeze([0.9466, 0.9862, 0.9982, 1.0043, 1.0441, 1.1907, 1.4482, 1.4894]),
     }),
     'rooms-saturated': Object.freeze({
       rotation: 'rooms',
       direction: true,
       quiet: Object.freeze([
-        3.2047, 3.3396, 3.4521, 3.5013, 3.5348, 3.6978, 3.7259, 3.7511, 3.8281, 3.9399, 3.9702, 4.0662,
+        3.1986, 3.2132, 3.2623, 3.3548, 3.3560, 3.4924, 3.4972, 3.5093, 3.5801, 3.6221, 4.0920, 4.2307,
       ]),
-      loaded: Object.freeze([3.1185, 3.2345, 3.2771, 3.3011, 3.5485, 3.8434, 3.9761, 4.4884]),
+      loaded: Object.freeze([2.9177, 2.9775, 3.1608, 3.2822, 3.4427, 3.4961, 3.5297, 4.2717]),
     }),
     'rooms-bench': Object.freeze({
       rotation: 'rooms',
       direction: true,
-      // THE ONE AXIS WHOSE WORST READING IS A QUIET ONE (G-039b-B1): 3.5301 quiet against 3.4326
-      // loaded, so the pooled floor and the quiet floor are the same number and the two margins
-      // the gate prints are equal. That is not a curiosity — it is the reason the floor pools
-      // every regime instead of taking the loaded arm as "the worst case".
+      // IT WAS THE ONE AXIS WHOSE WORST READING WAS A QUIET ONE, AND AT G-042 IT IS NOT: the
+      // shipped array before this one held 3.5301 quiet against a loaded 3.4326, and here the
+      // loaded arm's 2.3477 tops the quiet arm's 2.2433. **The example moved; the rule did not.**
+      // The floor pools every regime because "the loaded arm is the worst case" is a claim about
+      // this instrument that a shipped array of this file has already falsified once — which is
+      // an argument from the record rather than from today's twenty readings.
       quiet: Object.freeze([
-        2.7255, 2.7930, 2.8239, 2.8575, 2.8780, 2.9466, 2.9728, 3.0515, 3.0679, 3.0982, 3.1789, 3.5301,
+        1.5038, 1.5913, 1.6209, 1.6618, 1.7056, 1.7076, 1.7658, 1.8433, 1.8612, 1.9249, 1.9272, 2.2433,
       ]),
-      loaded: Object.freeze([2.2629, 2.4729, 2.7697, 2.9614, 2.9846, 3.0621, 3.3323, 3.4326]),
+      loaded: Object.freeze([1.4418, 1.6543, 1.7133, 1.8712, 1.9421, 2.0297, 2.0697, 2.3477]),
     }),
   }),
 });
@@ -484,10 +602,10 @@ export const CAMPAIGN = Object.freeze({
  * gives: a bound that only ever exists as an expression is a bound no diff ever shows moving.
  */
 export const BOUNDS = Object.freeze({
-  needs: 1.8219,
-  density: 2.1063,
-  'rooms-saturated': 5.5888,
-  'rooms-bench': 4.4592,
+  needs: 1.8729,
+  density: 1.6386,
+  'rooms-saturated': 5.2458,
+  'rooms-bench': 2.6487,
 });
 
 /**
@@ -512,10 +630,10 @@ export const BOUNDS = Object.freeze({
  * left unchecked is this project's oldest defect wearing a new hat.
  *
  *   axis              upper middle (shipped)   mean of middles   difference
- *   needs                    1.8219                 1.8099         +0.66%
- *   density                  2.1063                 2.1027         +0.17%
- *   rooms-saturated          5.5888                 5.5677         +0.38%
- *   rooms-bench              4.4592                 4.4395         +0.44%
+ *   needs                    1.8729                 1.8609         +0.64%
+ *   density                  1.6386                 1.6333         +0.32%
+ *   rooms-saturated          5.2458                 5.2421         +0.07%
+ *   rooms-bench              2.6487                 2.6050         +1.68%
  *
  * KEPT, FOR TWO REASONS THAT ARE NOT "IT WAS ALREADY LIKE THAT". A median that is one of the
  * OBSERVED readings is a reading the instrument actually produced, which is the property every

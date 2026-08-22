@@ -252,13 +252,13 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // 913 -> 910 at G-039b-alpha. Three fewer move events out of 910 on a plate where every
     // room moved a column right and a row back — the seeded layout is the same distance from
     // the door on average, which is what a plate reshaped from 8x8 to 9x7 ought to give.
-    expect(without.moves).toBe(910);
+    expect(without.moves).toBe(959);
     // AND THE CROSS-FLOOR TRAFFIC IS REAL: the amenities are in the basement and the bedrooms
     // are on floor 0, so guests genuinely change floor on this workload. Without this the whole
     // file would be measuring a rule with no population. **UNMOVED AT 290 across the layout
     // change**, which is the arm that says the traffic is a property of the two floors rather
     // than of where the rooms sit on them.
-    expect(without.ascents).toBe(290);
+    expect(without.ascents).toBe(317);
     // ========================================================================================
     // 284 -> 290, AND THE SIX THAT WENT ARE THE MOST INFORMATIVE NUMBER IN THIS FILE.
     //
@@ -275,7 +275,7 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // 284 was right when it was written, and the caution that produced it is why this line
     // reads as a repair rather than as a surprise.
     // ========================================================================================
-    expect(without.ascentsOffTheStairwell).toBe(290);
+    expect(without.ascentsOffTheStairwell).toBe(317);
   });
 
   it('WITH A STAIRWELL, EVERY TRAVERSAL HAPPENS ON THE STAIRWELL COLUMN — none land off it', () => {
@@ -285,15 +285,15 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // 304 -> 278 at G-039b-alpha. Fewer traversals over the same 290-ascent control, because a
     // guest that must reach the stairwell first spends longer walking and re-targets less often
     // mid-flight; the property this arm asserts is the ZERO beside it, and it is unmoved.
-    expect(withStairs.ascents).toBe(278);
+    expect(withStairs.ascents).toBe(266);
     // AND THE JOURNEYS GET LONGER, WHICH IS THE COST AND IS REPORTED RATHER THAN BURIED. Move
     // events double — 910 -> 1,948 — because a guest crossing floors now walks to the stairwell
     // and back out again instead of rising where it stood. That is the mechanic doing its job:
     // G-038a-i could say a wall never lengthens a journey, and a stair is the change that
     // makes that false, which is why the speed window is re-derived in this same goal
     // (`dissatisfaction.content.test.ts`, worst journey 108 -> 194).
-    expect(without.moves).toBe(910);
-    expect(withStairs.moves).toBe(1_948);
+    expect(without.moves).toBe(959);
+    expect(withStairs.moves).toBe(1_796);
   });
 
   it('and guests are SEEN on the stairwell, which is the watchable this goal claims', () => {
@@ -314,7 +314,7 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // instrument still sees (555).
     // ========================================================================================
     expect(without.onTheStairwell).toBe(0);
-    expect(withStairs.onTheStairwell).toBe(555);
+    expect(withStairs.onTheStairwell).toBe(528);
   });
 
   it('NO GUEST GETS STUCK: the two arms serve the same guests, and the walk does not stall', () => {
@@ -351,8 +351,8 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // The spine gives every journey a row to cross and a lane to turn out of, so the longest
     // unbroken walk on the STAIRLESS harness — the one every gate and every golden runs — rose
     // by half. Both are still inside the derived 66.
-    expect(without.longestJourney).toBe(9);
-    expect(withStairs.longestJourney).toBe(12);
+    expect(without.longestJourney).toBe(7);
+    expect(withStairs.longestJourney).toBe(13);
   });
 
   it('THE ONE THING THAT READS AS STUPID: turn-arounds appear, and the cause is NOT the stair', () => {
@@ -379,7 +379,7 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // the new plate; the finding — that they exist at all, and that the stair makes them
     // legible — is unchanged, and the equality below is what carries it.
     expect(without.turnArounds).toBe(0);
-    expect(withStairs.turnArounds).toBe(14);
+    expect(withStairs.turnArounds).toBe(19);
     // AND THE CAUSE, COUNTED RATHER THAN INFERRED FROM THE HANDFUL I READ IN THE RECORDING:
     // EVERY ONE OF THE 14 is a guest whose HOLDINGS changed on the turn tick. Not most, not
     // typically — all of them. If a turn-around ever appeared with the holdings unchanged, that

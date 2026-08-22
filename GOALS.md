@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-040a is DONE: a party is a thing, and the shipped size is PINNED AT 1. Guest.partyId is hashed state, save v22 migrates every v21 guest to a party of one (partyId = guest.id, inventing nothing — packages/content has said a party is one guest since M0), held becomes a COUNT, claimEntity becomes a BOUND rather than a refusal of the second holder, and bindContent refuses content whose largest party exceeds the roomiest room type providing the lodging need. countOrphanedReservations counts the two claim kinds SEPARATELY — lodging by party and capacity, engagement by one, the cross-clause its own lookup — because ONE count destroys three of the five shapes it detects. findFreeRoom's capacity denial sets deniedThisGuestOnly and NEVER arms the per-tick exhausted memo, and release decrements rather than deleting and un-exhausts on EVERY decrement. THE HASH MOVED AND NOTHING ELSE DID, demonstrated over three CLI invocations: --days 20 --seed 42, --days 40 --seed 7 and --days 10 --seed 1 each print a 48-line report whose only differing line is state hash. I2 7ff621928358cb8e over three processes (was 2b5369e4461a9140); measure golden c7212353b3d1784f (was 760558b631beb552). Fourteen rows green, VERIFY_EXIT read from the process. E-010 and E-011 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-041 is DONE and MERGED TO main together with G-042 (merge of g041-rate-rederivation into a90b722). The need rates are RE-DERIVED so the declared rate is a CEILING genuinely above the bare one (ADR-0054, ADR-0057 option a): serviceFloorBasisPoints 5000, engagement refillPerTick 7 to 14, night_rest 1 to 2 with capacityTicks 600 to 300, visitDurationTicks 208 to 98 and dissatisfactionCapacityTicks 431 to 301, all derived rather than dialled. check:scaling's density axis is re-derived to direction false with a magnitude bound of 1.6386, a tightening with a mutation probe behind it (ADR-0069, ADR-0070). G-040a's party rides on the same tree: Guest.partyId is hashed state, save v22, shipped party size PINNED AT 1. E-010 and E-011 are BOTH RESOLVED by ADR-0069 and the loop is not stopped. BOTH GOLDEN HASHES WERE RE-MEASURED ON THE MERGED TREE, because both parents moved the same literals off the same base and neither parent's value is correct here: I2 fb8d8fd9fd76b245 over three processes (main read 7ff621928358cb8e, the branch f197734f532dc62b); measure golden 1e44f2c872a33aa4 (main c7212353b3d1784f, the branch cba13e62265ed196). Fourteen rows green, VERIFY_EXIT read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured). Two items are deliberately NOT in this merge and are their own goal: the amenity axis going flat below 15 concurrent guests, and the engagement ladder inverting at the top rung.*
 
 - **Schemas**: save **v22** (G-040a — a guest gained a `partyId`; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `7ff621928358cb8e` · measure golden `c7212353b3d1784f`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `fb8d8fd9fd76b245` · measure golden `1e44f2c872a33aa4`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2685,13 +2685,31 @@ abstraction generalises. **The matched critic should take it or say why not** (�
 taken, (ii) is the goal that tests whether the ruling in (i) was right.
 
 ## G-041 — The rates are re-derived, so a bare room can be worse
-Status: **BUILT AND ESCALATED 2026-08-22 (E-011). NOT on main.** Work preserved at `8026e2f`
-on branch `g041-rate-rederivation`; main is clean and green at `b949dfb`. The derivation is
-SOUND — `f = 5,000` is the ONLY candidate, not the best — but it turns `check:scaling` density
-RED (0.9594 against a `ratio > 1` floor) because idle guests are cheap. Three consequences are
-the human call rather than the gate: the speed floor moves 2 -> 3 so `guestCellsPerTick: 3`
-sits exactly ON it (40 ticks of headroom, was 104); legal plot depth falls 60 -> 27; and the
-amenity axis goes FLAT below 15 concurrent guests. See `ESCALATIONS.md` E-011.
+Status: **DONE** (2026-08-22). Human ruling ADR-0057, option (a). **Precedes the `g037a-quality-fold`
+merge, which is NOT part of this goal.**
+
+**LANDED ON `main` 2026-08-22 by the G-041/G-042 merge**, together with G-042 (the density
+re-derivation, ADR-0070). The status above was written on the branch; E-011, which held it off
+`main`, is **[RESOLVED]** by ADR-0069. The merged tree carries `main`'s G-040a as well, so **the
+two golden hashes in `bench.workload.golden.test.ts` and `cli.stdout.test.ts` were RE-MEASURED on
+the merged tree rather than taken from either parent** — neither parent's literal is correct here,
+because both parents moved the same literals.
+
+**WHAT SHIPPED**: `serviceFloorBasisPoints` on the need type — the fraction of `refillPerTick` the
+worst legal provider delivers, 5,000 as shipped and the ONLY admissible value under R1/R2/R3 on
+`serviceFloorBasisPointsSchema`. Engagement `refillPerTick` 7 -> 14, `night_rest` 1 -> 2 and its
+`capacityTicks` 600 -> 300. `assertNeedDemandIsServiceable` re-derived to read the FLOOR rate,
+`assertLodgingBecomesWanted` re-derived at the CEILING with its arithmetic stated, and a new
+`assertServiceFloorIsARate` refusing a floor the simulation would round away.
+`needs.rates.test.ts` RE-RUNS the candidate scan and asserts the shipped table is the unique
+survivor. Duty cycle **0.2997 at the declared rate and 0.7500 at the floor**, where it was 0.75
+at the only rate there was.
+
+**TWO NUMBERS THE GOAL BLOCK DID NOT NAME MOVED WITH THE RATES, AND BOTH ARE DERIVED FROM THE NEED
+TABLE**: `visitDurationTicks` 208 -> 98 (the arrival chase) and `dissatisfactionCapacityTicks`
+431 -> 301 (the geometric mean of that chase and the stay). Those in turn moved the SPEED FLOOR
+2 -> 3 — `guestCellsPerTick: 3` now sits exactly ON its derived floor — and the legal plot depth
+60 -> 27, with `grid.ts`'s `DEFAULT_MAX_ROW` docblock updated in the same change.
 Milestone: M3 · Owner pair: economy-engineer / balance-critic
 Statement: the need rates are re-derived so the **declared** rates sit genuinely **above** the bare
   rate, restoring the headroom a quality penalty needs.

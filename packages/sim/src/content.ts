@@ -604,7 +604,7 @@ export type NeedTypeData = {
    * The denominator of this need's pressure, and the thing `wantAtBasisPoints` is a fraction
    * OF. What "decay" counts depends on the ROLE — wall time for an engagement need, AWAY time
    * for the lodging need — see `advanceNeed` in `needs.ts` and `capacityTicksSchema` in
-   * `packages/content` for the derivation of the shipped 600 / 1,400.
+   * `packages/content` for the derivation of the shipped 320 / 1,400.
    *
    * REQUIRED ON DISK AND REQUIRED HERE, which is the FIRST need-type field to be required in
    * the sim. `satisfyTicks` and `patienceTicks` were required here too; there is no era in
@@ -613,14 +613,32 @@ export type NeedTypeData = {
    */
   readonly capacityTicks: number;
   /**
-   * How much one tick of provision restores, in ticks of stock (G-027b).
+   * How much one tick of provision restores, in ticks of stock, IN A FULLY APPOINTED ROOM
+   * (G-027b; read as a CEILING since ADR-0054).
    *
    * Decay is always one per tick, so this is the only rate in the model: a need's whole shape
    * is this number against `capacityTicks`. It also fixes the need's share of a guest's time —
-   * `1/(1 + refillPerTick)` in steady state — which is what `assertNeedDemandIsServiceable`
-   * bounds and what G-028's idle share is derived from.
+   * `1/(1 + refillPerTick)` in steady state — which is what G-028's idle-share CEILING is
+   * derived from. What `assertNeedDemandIsServiceable` bounds is the share at the OTHER end of
+   * the range, `serviceFloorBasisPoints` below.
    */
   readonly refillPerTick: number;
+  /**
+   * The fraction of `refillPerTick` the WORST legal provider of this need delivers, in basis
+   * points (G-041, ADR-0054, ADR-0057). Absent means fully appointed — 10,000, no penalty.
+   *
+   * ADR-0054 ruled `refillPerTick` a CEILING rather than an achieved rate, and this is the other
+   * end of that statement. `serviceFloorRefill` below folds the two into the integer rate the
+   * simulation would run at the floor, and `assertNeedDemandIsServiceable` asks its question
+   * there — because a table a guest cannot keep up with in the worst hotel this content permits
+   * is a content bug whether or not it is serviceable in the best one.
+   *
+   * OPTIONAL, and absence is the exact historical reading: every world simulated before G-041
+   * served at the declared rate everywhere. See `serviceFloorBasisPointsSchema` in
+   * `packages/content` for the derivation of the shipped 5,000 and for why no other value of it
+   * is admissible.
+   */
+  readonly serviceFloorBasisPoints?: number | undefined;
 };
 
 /**
@@ -1779,14 +1797,38 @@ function assertDissatisfactionOutlastsTheLobby(
  * the constraint is a RATE. A guest is served ONE thing at a time, so the shares must leave
  * something over:
  *
- *     Σ over engagement needs of  1/(1 + refillPerTick)     the duty cycle of a need that
+ *     Σ over engagement needs of  1/(1 + rate)              the duty cycle of a need that
  *                                                           decays whenever it is not served
- *     + that away time / lodging refillPerTick              rest is what the activity COSTS
+ *     + that away time / lodging rate                       rest is what the activity COSTS
  *     <  ONE_WHOLE                                          a guest has one whole tick
  *
+ * ===========================================================================================
+ * `rate` IS THE FLOOR RATE AND NOT THE DECLARED ONE (G-041, ADR-0054, ADR-0057), AND THE
+ * DIFFERENCE IS THE WHOLE OF WHY THIS REFUSAL WAS RE-DERIVED RATHER THAN WIDENED.
+ *
+ * ADR-0054 ruled `refillPerTick` a CEILING: it is what a FULLY APPOINTED room delivers, and a
+ * room that merely passes its `requires` gate serves more slowly. So asking this question at the
+ * declared rate asks it about the best hotel the content permits — **and the content bug this
+ * refusal exists to catch is a guest that cannot keep up in the WORST one.** A table serviceable
+ * only when every room is fully furnished ships a hotel a player can build and nobody can live
+ * in, which is §6.1's guaranteed unhappiness reached by a longer route.
+ *
+ * So the rate folded here is `serviceFloorRefill` — `refillPerTick × serviceFloorBasisPoints`,
+ * the integer rate the simulation runs in the worst legal provider of that need. Content that
+ * declares no floor is fully appointed, and for it the two rates are the same number and this
+ * refusal asks exactly what it asked before G-041.
+ *
+ * **THIS IS THE SLOW END OF A BRACKET, AND `assertLodgingBecomesWanted` IS THE FAST END.** That
+ * one asks whether rest becomes wanted twice in a stay, which is hardest where helpings are
+ * SHORTEST, so it reads the declared rate. Between them the two refusals bound the quality range
+ * at both ends, and neither was relaxed to admit the shipped table: the RATES moved
+ * (`capacityTicksSchema` carries the derivation), the refusals did not.
+ * ===========================================================================================
+ *
  * `needShareBasisPoints` below owns the fold and states why the lodging term is not `1/(1+r)`.
- * On the shipped table the total is well under one whole, and the slack is what G-028's idle
- * share is written against — the same fold, read as `ONE_WHOLE - total`.
+ * On the shipped table the total at the floor is 7,500 of 10,000. G-028's idle share is the same
+ * fold read as `ONE_WHOLE - total` at the DECLARED rate — a different question with a different
+ * answer, and `idleShareBasisPoints` says which and why.
  *
  * IT IS NECESSARY AND NOT SUFFICIENT, AND SAYING SO IS THE POINT. Clearing it does not promise a
  * guest keeps anything full: it must still find providers free, and travel is M3's. What it
@@ -1810,16 +1852,85 @@ function assertNeedDemandIsServiceable(
   needTypes: readonly NeedTypeData[],
   lodgingNeedId: ContentId | undefined,
 ): void {
-  const share = needShareBasisPoints(needTypes, lodgingNeedId);
+  const share = needShareBasisPoints(needTypes, lodgingNeedId, serviceFloorRefill);
   if (share.total < ONE_WHOLE_BASIS_POINTS) return;
   throw new Error(
-    `bindContent: this need table demands ${share.total} basis points of a guest's time — ${share.engagement} for its ` +
-      `engagement needs and ${share.lodging} for lodging — which is ${ONE_WHOLE_BASIS_POINTS} or more, the whole of ` +
-      'it. A guest is served ONE thing at a time, so such a table ships needs no guest could ever keep up with: ' +
-      'guaranteed unhappiness rather than difficulty (HOTELSIM.md §6.1). A need held in steady state is served for ' +
-      '1/(1+refillPerTick) of the time, and the lodging need costs a further 1/refillPerTick of the away time the ' +
-      'engagement needs generate. Raise a refillPerTick.',
+    `bindContent: in the WORST room this content permits, this need table demands ${share.total} basis points of a ` +
+      `guest's time — ${share.engagement} for its engagement needs and ${share.lodging} for lodging — which is ` +
+      `${ONE_WHOLE_BASIS_POINTS} or more, the whole of it. A guest is served ONE thing at a time, so such a table ` +
+      'ships needs no guest could ever keep up with: guaranteed unhappiness rather than difficulty (HOTELSIM.md ' +
+      '§6.1). A need held in steady state is served for 1/(1+rate) of the time, and the lodging need costs a further ' +
+      '1/rate of the away time the engagement needs generate. The rate is refillPerTick × serviceFloorBasisPoints, ' +
+      'not refillPerTick — ADR-0054 makes the declared rate the CEILING a fully appointed room reaches, and a table ' +
+      'only a fully appointed hotel could keep up with is still a table a player can build a hotel out of. Raise a ' +
+      'refillPerTick, or raise a serviceFloorBasisPoints so the worst room is less bad.',
   );
+}
+
+/**
+ * THE INTEGER RATE THE SIMULATION RUNS IN THE WORST LEGAL PROVIDER OF A NEED (G-041, ADR-0054).
+ *
+ * `refillPerTick` is the CEILING and `serviceFloorBasisPoints` is the fraction of it the worst
+ * room delivers, so this is their product — and it FLOORS, because a deficit falls by an integer
+ * per tick (`advanceNeed`) and there is no fractional refill anywhere in the model.
+ *
+ * THE FLOORING IS NOT LOAD-BEARING ON SHIPPED CONTENT AND MUST NOT BECOME SO.
+ * `assertServiceFloorIsARate` refuses a table where this division discards anything, so on any
+ * content that binds, this returns the exact product. The `Math.floor` is here for the raw-host
+ * surface `bindContent` is written for — a caller that reaches this before the refusal runs — and
+ * so that the one place the product is computed cannot silently produce a fraction.
+ *
+ * Absence is fully appointed: the declared rate, unchanged, which is every world this project
+ * simulated before G-041.
+ */
+export function serviceFloorRefill(needType: NeedTypeData): number {
+  const floor = needType.serviceFloorBasisPoints;
+  if (floor === undefined) return needType.refillPerTick;
+  return Math.floor((needType.refillPerTick * floor) / ONE_WHOLE_BASIS_POINTS);
+}
+
+/**
+ * The declared rate, as a function, so the two readings of `needShareBasisPoints` are two named
+ * arguments at the call sites rather than a boolean nobody can read (G-041).
+ */
+export function declaredRefill(needType: NeedTypeData): number {
+  return needType.refillPerTick;
+}
+
+/**
+ * Refuses a `serviceFloorBasisPoints` the simulation would round away (G-041, ADR-0057).
+ *
+ * THE REQUIREMENT — **the floor is a rate, not a rounding.** `refillPerTick × f` is what a guest
+ * in the worst room actually gets, and a deficit falls by an INTEGER per tick, so where that
+ * product is fractional the number a designer wrote is not the number the simulation runs. The
+ * rate derivation on `capacityTicksSchema` is stated in terms of that product — the shipped table
+ * is `7/f` and `1/f` — so a table where it rounds is a table whose own derivation is only
+ * approximately true, and nobody can re-run it from the numbers on disk.
+ *
+ * IT IS ALSO WHAT MAKES THE SHIPPED FLOOR UNIQUE RATHER THAN CHOSEN, which is the bound ADR-0057
+ * puts on this goal: with the product required whole, `serviceFloorBasisPoints` must divide one
+ * whole, the candidate floors are 5,000 / 2,500 / 2,000 / 1,250 / … and only the first survives
+ * requirement R3 on `serviceFloorBasisPointsSchema`. Drop this refusal and the derivation stops
+ * having one answer.
+ *
+ * A need that declares no floor is untouched — there is no product to round.
+ */
+function assertServiceFloorIsARate(needTypes: readonly NeedTypeData[]): void {
+  for (const needType of needTypes) {
+    const floor = needType.serviceFloorBasisPoints;
+    if (floor === undefined) continue;
+    const product = needType.refillPerTick * floor;
+    if (product % ONE_WHOLE_BASIS_POINTS === 0) continue;
+    throw new Error(
+      `bindContent: need "${needType.id}" declares a refillPerTick of ${needType.refillPerTick} and a ` +
+        `serviceFloorBasisPoints of ${floor}, and ${needType.refillPerTick} × ${floor} / ${ONE_WHOLE_BASIS_POINTS} is ` +
+        `${String(product / ONE_WHOLE_BASIS_POINTS)} — not a whole number. A deficit falls by an INTEGER per tick, so ` +
+        `the worst room would actually serve at ${Math.floor(product / ONE_WHOLE_BASIS_POINTS)} and the declared ` +
+        'floor would be a number no guest ever experiences. The rate derivation on capacityTicksSchema is written in ' +
+        'terms of this product, so a table where it rounds is a table whose derivation cannot be re-run from the ' +
+        'numbers on disk. Choose a serviceFloorBasisPoints that divides into refillPerTick exactly.',
+    );
+  }
 }
 
 /**
@@ -1830,6 +1941,27 @@ function assertNeedDemandIsServiceable(
  * reads `ONE_WHOLE - total`. Two copies of this arithmetic would be two chances for the gate and
  * the criterion to describe different hotels, which is G-018's duplicated-constant defect and
  * ADR-0021's proxy defect wearing one another's clothes.
+ *
+ * ===========================================================================================
+ * SINCE G-041 THE TWO CALLERS READ IT AT DIFFERENT RATES, AND `rateOf` IS AN ARGUMENT SO THAT
+ * THE DIFFERENCE IS VISIBLE AT EACH CALL SITE INSTEAD OF BURIED HERE.
+ *
+ * ADR-0054 made `refillPerTick` a CEILING, so "the need's share of a guest's time" stopped being
+ * one number and became a RANGE with a room's quality moving inside it. The two questions this
+ * fold answers sit at opposite ends of that range:
+ *
+ *   assertNeedDemandIsServiceable   `serviceFloorRefill` — can a guest keep up in the WORST
+ *                                   hotel this content permits? A table that fails there is a
+ *                                   content bug however good the best hotel is.
+ *   idleShareBasisPoints            `declaredRefill` — what is the MOST idle a guest could be?
+ *                                   That is the fully appointed hotel with no contention, and
+ *                                   G-028's criterion needs a CEILING it can measure under.
+ *
+ * Passing the wrong one is the defect worth naming: a floor-rate idle share would be 2,500 and
+ * every recorded run would read above it, and a declared-rate refusal is the one ADR-0057 says
+ * "describes only the fully-appointed case". It is still ONE fold — the arithmetic below has no
+ * second copy — and that is the property the two callers were separated to keep.
+ * ===========================================================================================
  *
  * THE LODGING TERM IS NOT `1/(1+r)` AND THAT SUBSTITUTION IS THE DEFECT THIS GOAL SHIPPED AND
  * WITHDREW. `1/(1+r)` is the duty cycle of a need that decays whenever it is not served, which
@@ -1846,12 +1978,13 @@ function assertNeedDemandIsServiceable(
 function needShareBasisPoints(
   needTypes: readonly NeedTypeData[],
   lodgingNeedId: ContentId | undefined,
+  rateOf: (needType: NeedTypeData) => number,
 ): { readonly engagement: number; readonly lodging: number; readonly total: number } {
   let engagement = 0;
   let lodgingRefill: number | undefined;
   for (const needType of needTypes) {
-    if (needType.id === lodgingNeedId) lodgingRefill = needType.refillPerTick;
-    else engagement += Math.floor(ONE_WHOLE_BASIS_POINTS / (1 + needType.refillPerTick));
+    if (needType.id === lodgingNeedId) lodgingRefill = rateOf(needType);
+    else engagement += Math.floor(ONE_WHOLE_BASIS_POINTS / (1 + rateOf(needType)));
   }
   const lodging = lodgingRefill === undefined ? 0 : Math.floor(engagement / lodgingRefill);
   return { engagement, lodging, total: engagement + lodging };
@@ -2164,12 +2297,34 @@ function assertVisitRoundIsAnalysable(
  *
  * asserted as `2 × wantAt × capacity ≤ A × 10,000`, integer throughout.
  *
+ * ===========================================================================================
+ * `refillPerTick` HERE IS THE DECLARED RATE, AND SINCE ADR-0054 MADE THAT A CEILING THE CHOICE
+ * HAS TO BE ARGUED RATHER THAN INHERITED (G-041).
+ *
+ * A room's quality now moves the achieved rate between `serviceFloorRefill` and `refillPerTick`,
+ * so `A` is a range and not a number. **This refusal takes the SMALLEST `A` the content permits,
+ * and that is the one the DECLARED rate produces**: away time is bounded by the engagement needs'
+ * own service, faster service means shorter helpings, and shorter helpings mean fewer away ticks
+ * for rest to decay in. A fully appointed hotel is therefore the one where rest is hardest to
+ * want — and a lodging capacity that survives there survives everywhere.
+ *
+ * So the body below is UNCHANGED by G-041, and it was still re-derived rather than left alone:
+ * the number it checks moved. At the shipped table `A` fell from 540 to 288 when the declared
+ * rate rose 7 → 14, and `night_rest.capacityTicks` fell 600 → 320 with it, derived at this end of
+ * the range for exactly the reason above (`capacityTicksSchema` carries the arithmetic). The pair
+ * clears with a third to spare: `2 × 3,000 × 320 = 1,920,000` against `288 × 10,000 = 2,880,000`.
+ *
+ * **THIS IS THE FAST END OF A BRACKET AND `assertNeedDemandIsServiceable` IS THE SLOW END.** Both
+ * refusals ask about the hotel where their own requirement is hardest, and the two hotels are
+ * opposite. Neither was widened for the G-041 table (ADR-0057's bound on that goal).
+ * ===========================================================================================
+ *
  * THIS IS NOT A HYPOTHETICAL REFUSAL. The first number set G-027b planned — `capacityTicks`
  * 3,200 against an A of 540 — fails it by a factor of three, and the consequence was measured
  * rather than imagined: rest never became wanted, the idle share came out at 62.5% against a
  * 61.9% baseline, and the model failed to move the number it exists to move. The bound is
- * REACHABLE from the other side too: at the shipped rates a capacity of 900 sits exactly on it
- * and 901 is refused.
+ * REACHABLE from the other side too: at the shipped rates a capacity of 480 sits exactly on it
+ * and 481 is refused. (It read 900/901 against the pre-G-041 rates, where `A` was 540.)
  *
  * IT IS ASKED OF EVERY GUEST-RULES ROW, for the reason `assertEveryStayCanEnd` is: an archetype
  * at M6 with its own want line would otherwise load and be discovered by a guest.
@@ -3067,6 +3222,13 @@ export function bindContent(content: SimContent): BoundContent {
   // inside its stay — has no referent once nothing completes, and it split along the seam its
   // own comment named: the DEMAND a table places on one guest at a time (`…DemandIsServiceable`),
   // and the one need whose decay is not driven by the clock (`…LodgingBecomesWanted`).
+  // AND SINCE G-041 THEY ARE THE TWO ENDS OF A BRACKET: the demand refusal reads the FLOOR rate
+  // (the worst room the content permits) and the lodging refusal reads the DECLARED one (the best
+  // room, which generates the least away time). `assertServiceFloorIsARate` runs FIRST because
+  // both of the others are stated in terms of a product it is the only thing checking is whole —
+  // a message about a duty cycle computed from a rounded rate would send a designer to the wrong
+  // number.
+  assertServiceFloorIsARate(needTypes ?? []);
   assertNeedDemandIsServiceable(needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   assertLodgingBecomesWanted(guestRules ?? [], needTypes ?? [], lodgingNeedIn(needTypes ?? [])?.id);
   // AND THE ARRIVAL STATE ITSELF, LAST OF ALL (round 1). It is the widest of the three — it
@@ -3541,11 +3703,20 @@ export function floorConstructionCostOf(bound: BoundContent): number {
  * The share of a stay a guest has nothing to want, in basis points — **the idle share**, derived
  * from the shipped rates alone (G-027b).
  *
- * IT IS THE COMPLEMENT OF THE DEMAND `assertNeedDemandIsServiceable` REFUSES ON, computed by the
- * same fold, so the number a criterion is written against and the number a gate refuses on can
- * never describe different hotels. G-028's falsification threshold is this value; the measured
+ * IT IS THE COMPLEMENT OF THE SAME DEMAND `assertNeedDemandIsServiceable` REFUSES ON, computed by
+ * the same fold, so the number a criterion is written against and the number a gate refuses on
+ * can never describe different hotels. G-028's falsification threshold is this value; the measured
  * share of a recorded run must come in BELOW it, because contention only ever lengthens the time
  * a guest spends wanting.
+ *
+ * **IT READS THE DECLARED RATE WHERE THE REFUSAL READS THE FLOOR (G-041), AND THAT IS NOT AN
+ * INCONSISTENCY — IT IS WHAT MAKES BOTH OF THEM CEILINGS OF THEIR OWN QUANTITY.** Since ADR-0054
+ * a room's quality moves the achieved rate inside a range, and the MOST idle a guest can be is a
+ * fully appointed hotel with nothing to wait for: every room below the ceiling serves more slowly,
+ * which spends more of the stay and leaves LESS idle, in the same direction contention already
+ * pushes. So the declared rate is the right end for a ceiling on idleness, and the floor rate is
+ * the right end for a refusal on demand. `needShareBasisPoints` carries both and says which is
+ * which at each call.
  *
  * IT IS A CEILING AND NOT A PREDICTION, and the gap is one-directional for a reason worth
  * stating: a guest arrives with every need exactly at its want line, so it carries an arrival
@@ -3554,7 +3725,7 @@ export function floorConstructionCostOf(bound: BoundContent): number {
  * rather than equality, and reports the gap.
  */
 export function idleShareBasisPoints(bound: BoundContent): number {
-  const share = needShareBasisPoints(needTypesInOrder(bound), lodgingNeedOf(bound)?.id);
+  const share = needShareBasisPoints(needTypesInOrder(bound), lodgingNeedOf(bound)?.id, declaredRefill);
   return ONE_WHOLE_BASIS_POINTS - share.total;
 }
 

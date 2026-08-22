@@ -510,52 +510,193 @@ export const needRoleSchema = z.enum(['lodging', 'engagement']);
  *
  *     three one-hour meals · three one-hour lounge visits · three one-hour games visits
  *
- * so each engagement need is served 180 ticks a day in 3 visits of 60. Hence, per need:
+ * so each engagement need is served 180 ticks a day in 3 visits of 60.
  *
- *     refillPerTick   r  = stayDurationTicks / serviceTicksPerDay − 1     = 7
- *     visit length       = serviceTicksPerDay / visits                    = 60
- *     period          P  = stayDurationTicks / visits                     = 480
- *     capacityTicks   C  = (P − visit) / wantAtBasisPoints                = 1,400
+ * ===========================================================================================
+ * WHOSE DAY IS IT? G-041 MOVED THE ANSWER, AND THAT IS THE WHOLE OF THIS RE-DERIVATION.
  *
- * `guest_nourishment`'s 180 a day was the countdown era's `satisfyTicks` EXACTLY; `guest_comfort` and
- * `guest_entertainment` rise 150 → 180, and that dial had no sweep behind it either way (see
- * the note further down this file, which says so and owes it to M4).
+ * ADR-0054 ruled that `refillPerTick` is the **CEILING** — the rate a FULLY APPOINTED room
+ * achieves — and that a room which merely passes its `requires` gate serves more slowly.
+ * ADR-0057 then recorded what that ruling costs: the day above was derived at the DECLARED
+ * rate, so under a ceiling reading the declared rate is the best case and **every room in the
+ * game is worse than the one the design document describes.** At the shipped numbers the table
+ * already demanded 0.75 of a guest's whole time at the declared rate, so below ≈0.71 quality it
+ * exceeded one whole and no guest could keep up. There was no headroom for a penalty at all.
+ *
+ * > **SO THE DAY ABOVE IS RE-ATTACHED TO THE WORST LEGAL ROOM.** Three one-hour meals, three
+ * > one-hour lounge visits, three one-hour games visits, nine hours out, nine hours napping and
+ * > six hours spare is what a guest gets in a hotel of the SLOWEST rooms this content permits.
+ * > Everything a player builds above that floor buys the day back, and the declared rate is what
+ * > a fully appointed room reaches.
+ *
+ * `serviceFloorBasisPoints` (below) is the fraction of the declared rate the worst legal
+ * provider of a need may deliver, and it is the INPUT this derivation takes. Write
+ * `f = serviceFloorBasisPoints / 10,000`. Then, per engagement need:
+ *
+ *     FLOOR rate      r·f = stayDurationTicks / serviceTicksPerDay − 1     = 7
+ *     refillPerTick   r   = 7 / f                                          = 14
+ *     helping at the floor = serviceTicksPerDay / visits                   = 60
+ *     period          P   = stayDurationTicks / visits                     = 480
+ *     capacityTicks   C   = (P − helping) / wantAtBasisPoints              = 1,400
+ *
+ * **`capacityTicks` 1,400 IS UNCHANGED, and that is the check on this whole exercise**: decay
+ * is one per tick whatever a room is worth, so a capacity derived from the day's RHYTHM does not
+ * move when the SERVICE rate does. `guest_nourishment`'s 180 a day was the countdown era's
+ * `satisfyTicks` EXACTLY; `guest_comfort` and `guest_entertainment` rose 150 → 180 at G-027b, and
+ * that dial had no sweep behind it either way (see the note further down this file, which says so
+ * and owes it to M4).
+ * ===========================================================================================
  *
  * THE LODGING NEED IS DERIVED AND NOT STATED, and getting that backwards is what produced the
- * defect above. Sleep is what the day's ACTIVITY COSTS, not an independent line in the budget:
+ * defect above. Sleep is what the day's ACTIVITY COSTS, not an independent line in the budget.
+ * `refillPerTick(lodging) × f = 1` is one sentence — AN HOUR OF ACTIVITY COSTS AN HOUR OF
+ * RECOVERY, in the worst room in the game — so `refillPerTick` is `1/f` = 2, and three naps a day
+ * is the same rhythm the three engagement needs already carry.
  *
- *     away per day    A  = Σ over engagement needs of stayDurationTicks/(1+r)  = 540
- *     sleep per day      = A / refillPerTick(lodging)                          = 540
- *     wantAt × C(lodging) = A / naps per day                                   = 180
+ * **BUT `capacityTicks` FOR THE LODGING NEED IS PINNED AT THE OTHER END OF THE RANGE, AND IT HAS
+ * TO BE.** Rest decays in AWAY time and nowhere else (ADR-0017 §2), and away time is bounded by
+ * the engagement needs' own service — so the hotel that generates the LEAST of it is the FULLY
+ * APPOINTED one, where helpings are shortest. `assertLodgingBecomesWanted` refuses a capacity so
+ * large that rest never becomes wanted twice in a stay, and that refusal binds hardest at the
+ * ceiling. So the lodging capacity is derived there:
  *
- * `refillPerTick` 1 for `night_rest` is one sentence — AN HOUR OF ACTIVITY COSTS AN HOUR OF
- * RECOVERY — and three naps a day is the same rhythm the three engagement needs already carry.
- * Hence `capacityTicks` 600. The day that falls out is 9 hours out, 9 hours napping, 6 hours
- * spare, and those 6 hours are the headroom M3's travel and provider contention are spent from.
+ *     away per day     A  = Σ over engagement needs of stayDurationTicks/(1 + r)  = 3 × 96 = 288
+ *     sleep per day       = A / refillPerTick(lodging)                            = 144
+ *     engagement period P = wantAt × C + wantAt × C / r     (decay, then helping)  = 420 + 30
+ *     wantAt × C(lodging) = A × P / stayDurationTicks                             = 90
+ *     capacityTicks    C  = 90 × 10,000 / wantAtBasisPoints                       = 300
+ *
+ * and the refusal is cleared with a third to spare: `2 × 3,000 × 300 = 1,800,000 ≤ 288 × 10,000`.
+ *
+ * **THE THIRD LINE IS THE SENTENCE "THREE NAPS A DAY" USED TO BE, WRITTEN AS A RATIO SO IT
+ * SURVIVES A RATE CHANGE.** It says ONE NAP COMES DUE PER ROUND OF THE DAY'S ACTIVITIES: in the
+ * time one engagement need takes to come round again, the guest banks exactly one nap's worth of
+ * away time. The old table's "three a day" was that rhythm at rates where the engagement period
+ * happened to divide the day exactly three times — and **the ratio reproduces the old number to
+ * the tick**: `540 × 480 / 1,440 = 180`, hence the 600 this project shipped from G-027b to G-041.
+ * A generalisation that did not reproduce what it generalises would be a new dial wearing a
+ * derivation's clothes.
+ *
+ * AND THE RATIO READING IS NOT COSMETIC — THE LITERAL ONE SHIPS A DEFECT. "Three naps a day",
+ * taken as a count at the new rates, gives `wantAt × C = 96` and `C = 320`; `lcm(320, 1,400) =
+ * 11,200`, over the 10,000 bound under which `pressureBasisPoints` orders two needs exactly as
+ * un-floored cross-multiplication would (`utility.ts`'s header, read against the shipped
+ * denominators by `stock.content.test.ts`). The ratio gives 300, and `lcm(300, 1,400) = 4,200` —
+ * the SAME worst pair the old 600/1,400 table produced.
+ *
+ * > **EACH NUMBER IS FIXED AT THE END OF THE QUALITY RANGE WHERE ITS REQUIREMENT BINDS HARDEST,
+ * > AND THE TWO ENDS ARE OPPOSITE BECAUSE THE TWO REQUIREMENTS POINT OPPOSITE WAYS.** An
+ * > engagement need's requirement is the day's rhythm, which is longest — hence hardest — in the
+ * > worst room. The lodging need's requirement is that rest becomes wanted at all, which is
+ * > hardest in the best room. `assertNeedDemandIsServiceable` and `assertLodgingBecomesWanted`
+ * > BRACKET the quality range between them, one refusal at each end, and neither was widened to
+ * > admit these numbers (ADR-0057).
+ *
+ * The day at the floor is 9 hours out, 9 hours napping and 6 hours spare — the day this project
+ * has simulated since G-027b, now the WORST it contains. The day at the ceiling is 288 ticks out,
+ * 144 napping and 1,008 spare, and that spare is the headroom M3's travel and provider contention
+ * are spent from and the room a quality penalty needs.
  */
 export const capacityTicksSchema = z.int().min(1);
 
 /**
  * HOW MUCH ONE TICK OF PROVISION RESTORES, IN TICKS OF STOCK (G-027b, ADR-0017 §1).
  *
- * `refillPerTick` 7 means one tick at the café buys seven ticks before the guest is hungry
+ * `refillPerTick` 14 means one tick at the café buys fourteen ticks before the guest is hungry
  * again; 1 means being served is exactly as fast as decaying. It is the only rate in the model:
  * decay is always one per tick, so the whole shape of a need is this number against
  * `capacityTicks`.
  *
+ * **IT IS A CEILING AND NOT AN ACHIEVED RATE (ADR-0054).** This is what a FULLY APPOINTED room
+ * delivers. What the worst legal room delivers is `serviceFloorBasisPoints` of it, below, and the
+ * two together are the range a room's quality moves inside.
+ *
  * IT SETS THE NEED'S SHARE OF THE GUEST'S TIME, AND THAT IS WHY IT IS NOT A FREE DIAL. A need
- * held in steady state is served for `1/(1+refillPerTick)` of the time, so the whole table's
- * demand on one guest is
+ * held in steady state is served for `1/(1+r)` of the time, so the whole table's demand on one
+ * guest is
  *
- *     Σ over engagement needs 1/(1+r)   ×   (1 + 1/r_lodging)      = 0.75 as shipped
+ *     Σ over engagement needs 1/(1+r)   ×   (1 + 1/r_lodging)
  *
- * and `bindContent` refuses a table whose demand reaches one whole: a guest is served one thing
- * at a time, so such content ships needs no guest could ever keep up with — guaranteed
- * unhappiness rather than difficulty (`HOTELSIM.md` §6.1). What is left over — a quarter of the
- * stay as shipped — is the idle share G-028's criterion is written against, and it is derived
- * from these rates rather than chosen. See `assertNeedDemandIsServiceable`.
+ * evaluated at whichever rate the question is being asked about. As shipped that reads **0.2997
+ * at the declared rate and 0.7500 at the service floor** — the second figure is the 0.75 this
+ * project simulated from G-027b to G-041, and it is now the WORST end of the range rather than
+ * the whole of it.
+ *
+ * `bindContent` refuses a table whose demand reaches one whole **at the FLOOR**: a guest is served
+ * one thing at a time, so such content ships needs no guest could ever keep up with in a hotel it
+ * permits — guaranteed unhappiness rather than difficulty (`HOTELSIM.md` §6.1). What is left over
+ * at the DECLARED rate — 0.7003 as shipped — is the idle-share CEILING G-028's criterion is
+ * written against, and it is derived from these rates rather than chosen. Both are one fold read
+ * at two rates; see `assertNeedDemandIsServiceable` and `idleShareBasisPoints`.
  */
 export const refillPerTickSchema = z.int().min(1);
+
+/**
+ * THE FRACTION OF `refillPerTick` THE WORST LEGAL PROVIDER OF THIS NEED DELIVERS, in basis
+ * points (G-041, ADR-0054, ADR-0057). Absent means **fully appointed**: 10,000, no penalty.
+ *
+ * ADR-0054 ruled that `refillPerTick` is the rate a fully appointed room achieves and that a room
+ * which merely passes its `requires` gate serves more slowly. This is the other end of that
+ * statement, and it is the one number the rate derivation on `capacityTicksSchema` takes as an
+ * INPUT. It is content (I3): how far a bare room falls below the ceiling is a designer's
+ * question, and ADR-0054 says so in as many words.
+ *
+ * ABSENCE IS THE EXACT HISTORICAL READING. Every world this project simulated before G-041 served
+ * at the declared rate everywhere, which is `serviceFloorBasisPoints` of 10,000. A need table that
+ * declares none therefore binds, and behaves, exactly as it did — the same call the room-quality
+ * fold makes about a room type that declares no `quality`.
+ *
+ * ===========================================================================================
+ * WHY THE SHIPPED VALUE IS 5,000, AND WHY THERE IS NO OTHER ADMISSIBLE VALUE.
+ *
+ * Three requirements. Write `f = serviceFloorBasisPoints / 10,000` and `r` for a need's declared
+ * `refillPerTick`.
+ *
+ *   R1  THERE IS A PENALTY AT ALL.  `f < 1`. At `f = 1` the fold ADR-0054 ordered inspects
+ *       nothing, which is ADR-0007's founding defect class shipped as the headline feature.
+ *
+ *   R2  THE FLOOR IS A RATE, NOT A ROUNDING.  A deficit falls by an INTEGER per tick
+ *       (`advanceNeed`), so the floor rate the simulation runs is `floor(r × f)`. Where that
+ *       division discards anything, the number a designer wrote is not the number a guest gets,
+ *       and the derivation above is only approximately true. **Require `r × f` to be a whole
+ *       number for every need** — `bindContent` refuses the rest, with the need named. Since the
+ *       lodging rate is `1/f` and the engagement rate `7/f`, this says `f` divides one whole:
+ *       10,000 / serviceFloorBasisPoints is an integer.
+ *
+ *   R3  A GUEST FINISHES WHAT IT STARTS, IN THE WORST ROOM IN THE GAME.  Rest must not come due
+ *       part-way through one helping, or a guest holds two wants at once and visibly bounces
+ *       between its room and the café — the class §5 WATCH exists to catch, and the same concern
+ *       `visitRoundTicks`' property P3 states for a visitor. One helping at the floor is 60 ticks
+ *       (the design day's one-hour visit), and rest comes due after `wantAt × C(lodging)` away
+ *       ticks, which the derivation above fixes at `A × P / stayDurationTicks` — for the shipped
+ *       three-need table that is `3 × floor(1,440/(1+r)) × (420 + 420/r) / 1,440`, and it FALLS
+ *       as `r` rises: 90 at `r = 14`, 62 at `r = 20`, 59 at `r = 21`. So
+ *
+ *           wantAt × C(lodging)  >=  60      <==>      r <= 20
+ *
+ * R2 gives `r = 7 × 10,000 / serviceFloorBasisPoints`, so the candidates in descending order of
+ * penalty are `f` = 5,000 (r = 14), 2,500 (r = 28), 2,000 (r = 35), 1,250 (r = 56) and on down.
+ * **R3 admits only the first** — at `f` = 2,500 the rest want line is 44 ticks against a 60-tick
+ * helping — and R1 excludes 10,000. `f = 5,000` is not the best value: it is the ONLY value, and
+ * a reader who wants a harsher penalty has to argue with R3 rather than with a preference. Lower
+ * R3's 60-tick helping and the table below re-opens, which is exactly the shape §2.1 asks a
+ * threshold to have.
+ *
+ * THE SURVIVOR ALSO KEEPS A PROPERTY THE SHIPPED TABLE HAS ALWAYS HAD, and it is a check rather
+ * than a fourth requirement: `lcm(300, 1,400) = 4,200 < 10,000`, so `pressureBasisPoints` still
+ * orders rest against an engagement need exactly as un-floored cross-multiplication would
+ * (`utility.ts`'s header). **4,200 is the same worst pair the 600/1,400 table produced**, so the
+ * guest loop's every-tick comparison is quantised no more coarsely than before. It is worth
+ * stating because the near miss is close: reading the lodging rhythm as the literal "three naps a
+ * day" rather than as a ratio gives `C = 320`, `lcm(320, 1,400) = 11,200`, and the property is
+ * gone.
+ *
+ * `needs.rates.test.ts` RE-RUNS this whole scan from the shipped guest rules and asserts that the
+ * shipped table is the unique thing that falls out of it. It does not restate the numbers; it
+ * recomputes them, so an edit here that breaks the derivation goes red rather than unnoticed.
+ * ===========================================================================================
+ */
+export const serviceFloorBasisPointsSchema = z.int().min(1).max(10_000);
 
 /**
  * One need a guest can form (G-004, G-012, restated as a STOCK at G-027b).
@@ -567,13 +708,15 @@ export const refillPerTickSchema = z.int().min(1);
  *
  *   role            what the need is for — see `needRoleSchema`
  *   capacityTicks   how long a full stock lasts, and the denominator of the need's pressure
- *   refillPerTick   how much one tick of provision restores
+ *   refillPerTick   how much one tick of provision restores, in a FULLY APPOINTED room
+ *   serviceFloorBasisPoints   the fraction of that rate the WORST legal room delivers
  *
- * Both are counted in TICKS, never seconds and never a wall-clock duration — one tick is one
- * in-game minute (I2): `capacityTicks` is a duration and `refillPerTick` is ticks of stock bought
- * by one tick of provision. **The derivation of the shipped numbers lives on
- * `capacityTicksSchema` and `refillPerTickSchema` above — read those two first; they carry the
- * whole of it between them.**
+ * The first two are counted in TICKS, never seconds and never a wall-clock duration — one tick is
+ * one in-game minute (I2): `capacityTicks` is a duration and `refillPerTick` is ticks of stock
+ * bought by one tick of provision. The third is a fraction of the second. **The derivation of the
+ * shipped numbers lives on `capacityTicksSchema`, `refillPerTickSchema` and
+ * `serviceFloorBasisPointsSchema` above — read those three first; they carry the whole of it
+ * between them.**
  *
  * A GUEST ARRIVES AT ITS WANT LINE ON EVERY NEED, and that line is `wantAtBasisPoints` (in
  * `guest-rules.json`) OF THE CAPACITY HERE — so a capacity small enough that the shipped want
@@ -647,6 +790,7 @@ export const needTypeSchema = z.strictObject({
   role: needRoleSchema,
   capacityTicks: capacityTicksSchema,
   refillPerTick: refillPerTickSchema,
+  serviceFloorBasisPoints: serviceFloorBasisPointsSchema.optional(),
 });
 
 /**
@@ -1019,7 +1163,7 @@ export const stayDurationTicksSchema = z.int().min(1);
  * completion terminator is not merely forbidden — it is not expressible.
  *
  * ---------------------------------------------------------------------------
- * WHERE 208 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
+ * WHERE 98 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
  *
  * THE REQUIREMENT — **a visitor comes for one round of what it came for, and then goes home.**
  * It arrives with every need exactly at its want line (`formNeedVector`), and it is served ONE
@@ -1027,10 +1171,19 @@ export const stayDurationTicksSchema = z.int().min(1);
  * are served — accruing one further tick of deficit per tick it waits:
  *
  *     d  = wantAtBasisPoints x capacityTicks  = 3,000bp x 1,400 = 420    the arrival deficit
- *     r  = refillPerTick                      = 7
+ *     r  = refillPerTick                      = 14
  *     t_i = ceil( (d + Σ_{j<i} t_j) / r )
- *         = ceil(420/7)=60 · ceil(480/7)=69 · ceil(549/7)=79
- *     visitDurationTicks = Σ t_i             = 60 + 69 + 79            = 208
+ *         = ceil(420/14)=30 · ceil(450/14)=33 · ceil(483/14)=35
+ *     visitDurationTicks = Σ t_i             = 30 + 33 + 35            = 98
+ *
+ * **IT READ 208 UNTIL G-041, AND WHAT MOVED IS `r` AND NOTHING ELSE** — 7 -> 14, because ADR-0054
+ * made `refillPerTick` the rate a FULLY APPOINTED room reaches and G-041 re-derived the table so
+ * that rate sits above the bare one (`refillPerTickSchema`). A visitor served at the CEILING gets
+ * its round in 98 ticks; the same visitor in the worst room the content permits takes the old 208,
+ * which is `visitRoundTicks` read at `serviceFloorRefill` and is the arithmetic above with `r` = 7.
+ * The requirement did not change and neither did the fold — one input did, and this number is
+ * downstream of it. Leaving 208 here would have left a figure nobody could source from the table
+ * beside it, which is the one thing §2.1 forbids outright.
  *
  * THERE IS NO `+1` FOR THE ARRIVAL TICK, and an earlier draft had one. Service begins on the tick
  * after arrival and runs contiguously, so the completion AGE **is** the sum. (`maxGuestLifetimeTicks`
@@ -1043,10 +1196,13 @@ export const stayDurationTicksSchema = z.int().min(1);
  * DISSATISFACTION stock that answers for that — see `dissatisfactionCapacityTicksSchema`, whose
  * admissible window this number sets both ends of.
  *
- * WHAT IT COSTS TO GET WRONG, MEASURED: at 208 a visitor leaves with its last need exactly full
- * (deficits `[148, 79, 0]`). At 209 it leaves already decaying (`[149, 80, 1]`). And a visitor that
+ * WHAT IT COSTS TO GET WRONG, MEASURED AT THE PRE-G-041 RATE AND UNCHANGED IN SHAPE BY IT: at the
+ * round length a visitor leaves with its last need exactly full (at `r` = 7, 208 and deficits
+ * `[148, 79, 0]`); one tick later it leaves already decaying (`[149, 80, 1]`). And a visitor that
  * is never told to go home is not merely late — with nothing else able to end its visit it stays
  * forever: 30 arrivals, 30 still resident after ten simulated days, zero departures of any kind.
+ * The food-court fixture still declares 208 against its own `r` = 7 table, which is why that
+ * measurement is still executed somewhere (`visit.content.test.ts`) rather than only remembered.
  * ---------------------------------------------------------------------------
  *
  * REQUIRED HERE, OPTIONAL IN THE SIM — the `role`, `requires`, price, margin, review scale and
@@ -1222,8 +1378,9 @@ export const toleranceTicksSchema = z.int().min(1);
  *   was `100 + depth < 180` giving `depth <= 79`, evaluated at speed 1. With a stair, speed 1
  *   breaches at EVERY depth, so that form has no solution: **a depth is now legal against a
  *   SPEED, and this field is that speed.** At the shipped `3` the binding half is the ceiling
- *   below rather than tolerance, and it gives **`depth <= 60`** — so `DEFAULT_MAX_ROW` in
- *   `packages/sim/src/grid.ts` cannot be widened past 60 rows, down from 79, and that
+ *   below rather than tolerance, and it gives **`depth <= 27`** (G-041; it gave 60 while the
+ *   arrival backlog was 129 and the ceiling 431) — so `DEFAULT_MAX_ROW` in
+ *   `packages/sim/src/grid.ts` cannot be widened past 27 rows, down from 79, and that
  *   constant's own docblock cites this one. **Neither package can move alone.**
  *   `tools/headless/src/dissatisfaction.content.test.ts` COMPUTES both endpoints rather than
  *   quoting them, and `packages/sim/src/travel.movement.test.ts` MEASURES the stairless journey
@@ -1241,7 +1398,7 @@ export const toleranceTicksSchema = z.int().min(1);
  * TOLERANCE BOUND AND IS NO LONGER THE WHOLE STORY.
  *
  * THE SECOND FLOOR: A JOURNEY MUST NOT PUSH THE ARRIVAL BACKLOG THROUGH THE DISSATISFACTION
- * CEILING. `dissatisfactionCapacityTicks` (431) was placed above the arrival backlog (129) by
+ * CEILING. `dissatisfactionCapacityTicks` (301) was placed above the arrival backlog (63) by
  * equal multiplicative margin, and the requirement it encodes is that **a perfectly
  * provisioned hotel does not evict its guests**. That backlog was derived with no travel in
  * it: a guest arrives at its want line on every engagement need and is served one at a time,
@@ -1257,15 +1414,20 @@ export const toleranceTicksSchema = z.int().min(1);
  * spending part of a budget each time, so at speed 3 the true cost is 66 ticks where
  * `ceil(194/3)` says 65. The larger number is the bound.
  *
- *     speed 1   129 + 3 x (86 + 22 + 86) = 711  >  431   the ceiling is BREACHED
- *     speed 2   129 + 3 x (43 + 11 + 43) = 420  <  431   clears
- *     speed 3   129 + 3 x (29 +  8 + 29) = 327  <  431   clears, and is what ships
+ *     speed 1    63 + 3 x (86 + 22 + 86) = 645  >  301   the ceiling is BREACHED
+ *     speed 2    63 + 3 x (43 + 11 + 43) = 354  >  301   BREACHED — and it CLEARED before G-041
+ *     speed 3    63 + 3 x (29 +  8 + 29) = 261  <  301   clears, and is what ships
  *
- * (It read `129 + 3 x ceil(108/speed)` — 453 / 291 / 237 — while the floor axis was free. The
- * floor it derived was 2 then and is 2 now; what moved is the margin, from 194 ticks of
- * headroom at the shipped speed to 104.)
+ * (It read `129 + 3 x ceil(108/speed)` — 453 / 291 / 237 — while the floor axis was free, and
+ * `129 + ...` against a 431 ceiling until G-041 re-derived the need rates. **BOTH ENDS OF THIS
+ * INEQUALITY ARE DOWNSTREAM OF `refillPerTick` AND THE JOURNEY IS NOT**: ADR-0054 made the
+ * declared rate the one a fully appointed room reaches, which halved the arrival chase, which
+ * halved the ceiling derived from it — against a walking cost that did not move at all.)
  *
- * **SO THE DERIVED FLOOR IS 2, NOT 1.** It is a claim about what the PLOT permits and not
+ * **SO THE DERIVED FLOOR IS 3, NOT 2, AND THE SHIPPED VALUE SITS EXACTLY ON IT.** The headroom
+ * at the shipped speed is 40 ticks where it was 104, so this dial has stopped being a
+ * comfortable preference and become one at the bottom of its range. It is a claim about what
+ * the PLOT permits and not
  * about the shipped hotel — no shipped workload puts two providers 194 cells apart — which is
  * exactly the shape of the tolerance floor above it, and it is stated with the same scope.
  * `tools/headless/src/dissatisfaction.content.test.ts` DRIVES both sides rather than quoting

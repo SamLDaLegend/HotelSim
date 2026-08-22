@@ -107,18 +107,35 @@ describe('the I2 harness reaches rooms that do not work', () => {
     // nothing**, so `unsupported` falls by the same one, and the four other rows do not move at
     // all. Same shape as G-038c one row down, arriving from the opposite side: that goal made a
     // build cost MORE, this one makes the hotel EARN less.
+    //
+    // 39 -> 42 AT G-041, AND THE CAUSE IS INCOME AGAIN, IN THE OTHER DIRECTION. The need rates
+    // were re-derived (ADR-0054, ADR-0057) and this tree has no quality fold in it yet, so
+    // every room serves at the CEILING: guests are served faster, more stays complete,
+    // `payForStay` charges on completion and the harness can afford more builds. The rooms
+    // this walk builds are exactly the ones standing on nothing, so `unsupported` rises by
+    // three. **The other five rows do not move at all** — `missingItem` 1, `noCorridor` 1,
+    // `noDoor` 3, `unplaced` 0, `unreachable` 0 — which is the control that says this is the
+    // hotel earning more rather than the walk landing somewhere else.
+    //
+    // IT TOOK A REPAIR TO KEEP IT THAT WAY, AND THE REPAIR IS THE INTERESTING PART. This log
+    // sizes its amenity copies from a need's refill rate, and reading the DECLARED rate gave
+    // one copy where it used to give two — which took ten builds' worth of entity ids away,
+    // moved the despawn and demolish walks, and set `noCorridor` to 0 and `missingItem` to 2.
+    // Four of these six rows moved for a reason that had nothing to do with the hotel. Sizing
+    // at `serviceFloorRefill` — the slowest service the content permits, which is what that
+    // pass already argued for in prose — restores them. See `determinism-log.ts`'s `copiesFor`.
     expect(tally).toEqual({
       missingItem: 1,
       noCorridor: 1,
       noDoor: 3,
       unplaced: 0,
       unreachable: 0,
-      unsupported: 39,
+      unsupported: 42,
     });
   });
 
   it('contains rooms with nothing beneath them', () => {
-    expect(tally.unsupported).toBe(39);
+    expect(tally.unsupported).toBe(42);
   });
 
   it('contains rooms with no bed in them — AND THE COUNT IS ONE, which is a knife edge', () => {
@@ -374,7 +391,9 @@ describe('the replay is the thing the gate runs', () => {
     //       at `5k + 2` and the `underfoot` walk land on different rooms of the spawn diagonal.
     //       Six floating rooms that used to survive to the horizon no longer do and four that
     //       did not now do.
-    expect(tally.unsupported).toBe(69);
+    // 69 -> 76 AT G-041, same cause as the 40,000-tick tally above: a richer hotel affords more
+    // builds, and the builds this walk makes are the floating ones.
+    expect(tally.unsupported).toBe(76);
     expect(tally.unplaced).toBe(0);
   });
 

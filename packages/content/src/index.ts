@@ -40,6 +40,10 @@ export {
   roomAccessRuleSchema,
   roomTypeSchema,
   roomTypesSchema,
+  // G-041, ADR-0054/0057: the fraction of `refillPerTick` the worst legal room delivers. Its
+  // docblock carries the whole rate derivation and the argument that 5,000 is the only
+  // admissible value.
+  serviceFloorBasisPointsSchema,
   speedLadderSchema,
   speedRungNameSchema,
   speedRungSchema,
