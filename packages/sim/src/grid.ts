@@ -138,13 +138,21 @@ export type GridBounds = {
  *     at all: a depth is legal against a SPEED, and the speed is `guestCellsPerTick` in
  *     `packages/content/src/schema.ts` — CONTENT, which this package cannot see (ADR-0001).
  *     At the shipped speed of 3 the binding half is the dissatisfaction ceiling rather than
- *     tolerance (100 ticks against 180), and `2*ceil((78+depth)/3) + 8 <= 100` gives
- *     **`depth <= 60`**, down from 79.
+ *     tolerance, and `backlog + 3 * (2*ceil((78+depth)/3) + 8) < ceiling` is the inequality.
+ *     ~~At a backlog of 129 against a ceiling of 431 that gave **`depth <= 60`**, down from
+ *     79.~~ **RE-DERIVED AT G-041 AND IT IS NOW `depth <= 27`.** Neither this constant nor
+ *     `guestCellsPerTick` was touched: ADR-0054 made `refillPerTick` the rate a fully appointed
+ *     room reaches and G-041 re-derived the need table around that, which moved the arrival
+ *     chase 129 -> 63, which moved the dissatisfaction ceiling 431 -> 301 (it is the geometric
+ *     mean of the two). The journey is the same 194 cells. **A fixed walking cost against a
+ *     window that halved is what took the legal depth from 60 to 27** — and the speed floor
+ *     from 2 to 3 with it, so `guestCellsPerTick: 3` now sits exactly ON its floor.
  *
- *     **NEITHER PACKAGE MAY MOVE ALONE.** Widening this constant past 60 rows, or lowering
+ *     **NEITHER PACKAGE MAY MOVE ALONE.** Widening this constant past 27 rows, or lowering
  *     `guestCellsPerTick`, breaks a bound the other package derives — and the two are checked
  *     in ONE place, `tools/headless/src/dissatisfaction.content.test.ts`, which COMPUTES the
- *     deepest legal plot at the shipped speed rather than quoting 60.
+ *     deepest legal plot at the shipped speed rather than quoting a number — which is the only
+ *     reason G-041 found this bound at all rather than shipping past it.
  *     `travel.movement.test.ts` measures the STAIRLESS journey by walking it, which is still
  *     108 — ~~and is still what every world in this project does, because none declares a
  *     stair~~. **STRUCK AT G-038a-iii-b: `report.ts` and `apps/game/src/scenario.ts` both
@@ -167,7 +175,8 @@ export type GridBounds = {
  *     false necessity — ADR-0044 §2's class, and `compareCells` below already carries the
  *     project's other instance of it.** Struck rather than restated, and `grid.test.ts`
  *     stopped asserting evenness in the same edit.
- *   - **SO THE FORCED PART IS `3 <= depth <= 60`, AND 8 IS A PREFERENCE INSIDE IT.** Nothing
+ *   - **SO THE FORCED PART IS `3 <= depth <= 27` (G-041; it read 60), AND 8 IS A PREFERENCE
+ *     INSIDE IT.** Nothing
  *     anybody has stated derives 8 over 4, 6 or 9. What can be said without inventing a
  *     requirement is the CONSEQUENCE: the seeded plate in `report.ts` is square in rooms, so
  *     a depth of `d` gives `d x d` rooms a floor — 64 at 8, which is the first depth at which

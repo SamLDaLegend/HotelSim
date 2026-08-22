@@ -100,16 +100,29 @@ describe('the shipped visit duration IS DERIVED, and the criterion and the conte
     expect(floor).toBe(129);
     expect(FOOD_COURT_CEILING_TICKS).toBeGreaterThan(floor);
     expect(FOOD_COURT_CEILING_TICKS).toBeLessThan(round.total);
-    // AND THE SAME 129 IS THE LODGING ARRIVAL BACKLOG θ-b1 DERIVED INDEPENDENTLY, by this fold,
-    // for a different population. Neither was derived from the other; what they share is that a
-    // guest has one mouth. Asserted rather than remarked, so the coincidence is a pinned fact.
-    expect(visitRoundOf(SHIPPED).total - visitRoundOf(SHIPPED).last).toBe(129);
+    // AND THE SHIPPED TABLE'S OWN BACKLOG IS THE SAME FOLD OVER A DIFFERENT TABLE, which θ-b1
+    // derived independently for a different population. Neither was derived from the other; what
+    // they share is that a guest has one mouth.
+    //
+    // **THE TWO WERE THE SAME NUMBER UNTIL G-041 AND THEY ARE NOT ANY MORE**, which is worth an
+    // assertion rather than a deletion: they agreed at 129 because both tables declared
+    // `refillPerTick` 7, and the shipped table now declares 14 while this fixture still declares
+    // 7 (`needs.rates.test.ts` derives why). So the shipped backlog is 63 — and it is exactly
+    // this fixture's 129 read at HALF the rate, because 7 is the shipped table's SERVICE FLOOR.
+    // The coincidence was never structural; it was two documents agreeing on one dial.
+    expect(visitRoundOf(SHIPPED).total - visitRoundOf(SHIPPED).last).toBe(63);
+    expect(needTypesInOrder(FOOD_COURT)[0]?.refillPerTick).toBe(7);
+    expect(needTypesInOrder(SHIPPED)[0]?.refillPerTick).toBe(14);
   });
 
-  it('and the shipped hotel declares the same duration, inert', () => {
+  it('and the shipped hotel declares HALF the duration, inert', () => {
     // The mirror of the food court's inert `stayDurationTicks`. No shipped guest reads it, and
     // the tick it starts mattering is the tick a content set stops declaring a lodging need.
-    expect(visitDurationOf(SHIPPED)).toBe(208);
+    // 208 -> 98 at G-041: the number is `visitRoundOf`'s total over the SHIPPED table, and that
+    // table's declared rate doubled, so a visitor served at the ceiling gets its round in half
+    // the time. `visitDurationTicksSchema` carries the arithmetic.
+    expect(visitDurationOf(SHIPPED)).toBe(98);
+    expect(visitDurationOf(SHIPPED)).toBe(visitRoundOf(SHIPPED).total);
     expect(lodgingNeedOf(SHIPPED)?.id).toBe('night_rest');
   });
 });

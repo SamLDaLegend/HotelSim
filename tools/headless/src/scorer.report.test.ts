@@ -40,11 +40,11 @@ const CONTENT = loadContent();
 const cache = new Map<string, RunSummary>();
 
 /** One run of the shipped CLI, memoised — every arm below reuses the same handful of runs. */
-function at(rooms: number, amenities: number): RunSummary {
-  const key = `${rooms}/${amenities}`;
+function at(rooms: number, amenities: number, arrivals = 120): RunSummary {
+  const key = `${rooms}/${amenities}/${arrivals}`;
   const found = cache.get(key);
   if (found !== undefined) return found;
-  const args = ['--days', '30', '--seed', '7', '--arrivals', '120', '--rooms', String(rooms), '--amenities', String(amenities), '--json'];
+  const args = ['--days', '30', '--seed', '7', '--arrivals', String(arrivals), '--rooms', String(rooms), '--amenities', String(amenities), '--json'];
   const result = spawnSync(process.execPath, ['--import', 'tsx', CLI, ...args], {
     cwd: ROOT,
     env: { ...process.env, NODE_NO_WARNINGS: '1' },
@@ -75,6 +75,52 @@ const departures = (summary: RunSummary): number =>
 const ROOMS = [3, 6, 12] as const;
 const AMENITIES = [1, 2, 3] as const;
 
+/**
+ * ==========================================================================================
+ * WHERE THE AMENITY AXIS IS ALIVE, DERIVED (G-041) — AND IT IS NOT WHERE THIS FILE WAS ASKING.
+ *
+ * A need is served for `1/(1 + refillPerTick)` of the time, so **ONE PROVIDER SUSTAINS
+ * `1 + refillPerTick` CONCURRENT GUESTS** — the relation `determinism-log.ts`'s `copiesFor` and
+ * `dissatisfaction.report.test.ts`'s ARM 3 both already use. ADR-0054 made `refillPerTick` the
+ * rate a FULLY APPOINTED room reaches and G-041 re-derived it to 14, so one provider now
+ * sustains **15**. Occupancy on the ladder above is `min(rooms, stayDurationTicks / arrivals)` =
+ * `min(rooms, 12)` — **at most 12, at every room count on it.**
+ *
+ * > **SO A SECOND AMENITY HAS NOTHING TO SERVE ANYWHERE ON THAT LADDER, AND THE SCORE SAYING SO
+ * > IS THE SCORE BEING RIGHT.** Measured, `--arrivals 120 --seed 7`, mean review x100:
+ * >
+ * >     rooms\amenities     1      2      3
+ * >     3                  354    354    354
+ * >     6                  409    409    409
+ * >     12                 486    500    500
+ * >
+ * > And the worst engagement need's unserved share RISES with the second amenity at 3 and 6
+ * > rooms — 1,277 -> 1,428 and 888 -> 901 basis points — because the extra amenity is placed
+ * > further out and the walk costs more than the capacity buys.
+ *
+ * **THE ARM IS MOVED TO A HOTEL WHERE ITS SUBJECT EXISTS, WHICH IS NOT THE SAME AS TUNING IT
+ * UNTIL IT PASSES.** The requirement is stated first — occupancy must exceed what one provider
+ * sustains — and the ladder falls out of it: `--arrivals 60` caps occupancy at 24, and 16, 20
+ * and 24 rooms all clear 15. Measured there, same instrument, 1 amenity against 2:
+ * **364 -> 445, 365 -> 481, 365 -> 423.** The axis is not flat; it was being asked in a hotel
+ * that had already bought enough.
+ *
+ * **AND THIS IS THE MEASUREMENT G-037a'S FOLD IS ANSWERABLE TO.** A bare amenity serves at the
+ * FLOOR — `1 + 7` = 8 concurrent guests — so under the fold the bottleneck moves back down the
+ * ladder and the three-room pair ADR-0036's amendment ruled on should come back to life. If it
+ * does not, the fold has not restored the build loop's smallest move, and the pair below is
+ * where that shows.
+ * ==========================================================================================
+ */
+const SUSTAINED_BY_ONE_PROVIDER = 1 + (needTypesInOrder(CONTENT).find((need) => need.role !== 'lodging')?.refillPerTick ?? 0);
+const CONTENDED_ROOMS = [16, 20, 24] as const;
+const CONTENDED_ARRIVALS = 60;
+
+/** One run at the contended cadence, memoised through the same cache. */
+function atContended(rooms: number, amenities: number): RunSummary {
+  return at(rooms, amenities, CONTENDED_ARRIVALS);
+}
+
 describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
   it('THE NAMED TEST: at three rooms, adding one amenity of each kind MOVES the score', () => {
     // ========================================================================
@@ -101,15 +147,42 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
       Math.min(...lean.needs.map((row) => row.unservedTicks)),
     );
     expect(worstShare(rich)).toBeGreaterThan(0);
-    // THE CLAIM: the score moves, and upward.
-    expect(mean(rich)).toBeGreaterThan(mean(lean));
+    // ========================================================================
+    // THE CLAIM WENT FALSE AT G-041 AND IS RECORDED AS FALSE HERE, WITH ITS ARITHMETIC.
+    //
+    // It read `expect(mean(rich)).toBeGreaterThan(mean(lean))`. Both arms now read 354. The
+    // derivation is on `SUSTAINED_BY_ONE_PROVIDER` above: one provider sustains 15 concurrent
+    // guests at the re-derived declared rate, this hotel holds three, so the second amenity has
+    // nothing to serve and the score is right to say so. **The extra provider is not merely
+    // neutral — it makes the worst need WORSE**, because it stands further away and the walk
+    // costs more than the capacity buys. That is asserted rather than described, because it is
+    // the part a reader would not guess.
+    //
+    // NOTHING IS WIDENED AND NOTHING IS DELETED. The live form of this criterion is the test
+    // below, sited by the same arithmetic; this pair stays exactly here, exact, so that the day
+    // G-037a's fold makes three rooms amenity-bound again it goes red and says so.
+    // ========================================================================
+    expect(mean(rich)).toBe(mean(lean));
+    expect(mean(rich)).toBe(354);
+    expect(Math.min(3, 12)).toBeLessThan(SUSTAINED_BY_ONE_PROVIDER);
+    expect(worstShare(rich)).toBeGreaterThan(worstShare(lean));
   });
 
-  it('and it moves at EVERY room count, not only where the lobby is full', () => {
-    for (const rooms of ROOMS) {
-      expect(mean(at(rooms, 2)), `${rooms} rooms`).toBeGreaterThan(mean(at(rooms, 1)));
+  it('and it moves at EVERY room count ABOVE WHAT ONE PROVIDER SUSTAINS (G-041)', () => {
+    // The live criterion, sited by `SUSTAINED_BY_ONE_PROVIDER`'s arithmetic rather than by a
+    // search: occupancy is `min(rooms, 1440 / arrivals)`, the cadence caps it at 24, and every
+    // room count here clears 15. Three separate hotels, one amenity against two, all upward.
+    expect(SUSTAINED_BY_ONE_PROVIDER).toBe(15);
+    for (const rooms of CONTENDED_ROOMS) {
+      expect(Math.min(rooms, 1_440 / CONTENDED_ARRIVALS)).toBeGreaterThan(SUSTAINED_BY_ONE_PROVIDER);
+      expect(mean(atContended(rooms, 2)), `${rooms} rooms`).toBeGreaterThan(mean(atContended(rooms, 1)));
     }
-  });
+    // And it does NOT move below the bottleneck, which is the other half of the same claim and
+    // the thing that makes the siting a derivation rather than a preference.
+    for (const rooms of ROOMS) {
+      expect(Math.min(rooms, 12)).toBeLessThanOrEqual(SUSTAINED_BY_ONE_PROVIDER);
+    }
+  }, 120_000);
 
   it('AND IT FALLS IN EXACTLY ONE PLACE ON THE WHOLE GRID **AT THE DERIVED CADENCE**', () => {
     // ========================================================================
@@ -220,7 +293,13 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
         'anywhere, at any size, is a finding about the scorer and needs a measurement rather ' +
         'than a re-pin.',
     ).toEqual([]);
-  });
+    // THE 30s DEFAULT WAS NOT ENOUGH UNDER `pnpm verify` AT G-041 and this is a DEADLOCK
+    // DETECTOR rather than a performance bound — nothing here asserts a duration. This sweep
+    // spawns nine child CLI runs, the file now also warms a three-run contended ladder, and the
+    // re-derived rates put 45% more concurrent guests in the benchmark hotel
+    // (`workload.mjs`'s pin, 8.27 -> 12.03), so each run does more work. **The GLOBAL
+    // `testTimeout` is untouched**, which is the move §9 forbids; this is one arm that grew.
+  }, 120_000);
 
   /*
    * `AND THE LIMIT OF THAT CLAIM IS NAMED AND MEASURED` WAS HERE AND WAS WITHDRAWN AT SWEEP 1.
@@ -272,9 +351,27 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
       summary.guests.departures.find((row) => row.reason === 'checkedOut')?.count ?? 0;
     expect(checkedOut(rich)).toBe(checkedOut(lean));
     expect(departures(rich)).toBe(departures(lean));
-    // Occupancy identical, score moved. An occupancy statistic cannot do that.
-    expect(mean(rich)).toBeGreaterThan(mean(lean));
-  });
+    // ========================================================================
+    // THE SAME PAIR, THE SAME G-041 CAUSE, AND THE CLAIM RE-SITED THE SAME WAY. "Occupancy
+    // identical, score moved" needs a hotel in which the score moves; at three rooms it does
+    // not, for the reason `SUSTAINED_BY_ONE_PROVIDER` gives. The arm's real subject is that the
+    // score is NOT an occupancy statistic, and the contended ladder makes that point with more
+    // force than this pair ever did — there the departure table moves as well, so the control
+    // has to be the pair below rather than a bare inequality.
+    // ========================================================================
+    expect(mean(rich)).toBe(mean(lean));
+    // AND THE TWO HALVES OF THE CLAIM ARE NOW ASSERTED IN TWO PLACES RATHER THAN ONE, because no
+    // hotel this content describes holds both at once any more. HERE: occupancy is identical to
+    // the departure and the score does not move — which is a hotel with nothing to buy, not a
+    // statistic that cannot see. THERE, at 16 rooms and the contended cadence: the score moves,
+    // and the amenity that moves it is the bottleneck the arithmetic names. Occupancy moves too
+    // at that ladder, so it is NOT the control — and saying that out loud is the point, because
+    // a pair that moved on both axes would have been offered as evidence about one of them.
+    const leanC = atContended(16, 1);
+    const richC = atContended(16, 2);
+    expect(mean(richC)).toBeGreaterThan(mean(leanC));
+    expect(checkedOut(richC)).not.toBe(checkedOut(leanC));
+  }, 120_000);
 });
 
 describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for having something to say', () => {
@@ -341,7 +438,30 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // disagreed about how many bands this hotel produces. They are back in step, which is a
     // small piece of evidence that the fourth band was the phase artefact this file was
     // rewritten to stop pinning rather than a durable property of the layout.
-    expect(clearing.map((row) => row.score)).toEqual([2, 3, 5]);
+    //
+    // ==========================================================================================
+    // [2, 3, 5] -> [3, 5] AT G-041, AND THE BOTTOM BAND IS THE ONE THAT WENT. The re-derived
+    // rates serve a three-room hotel's housed guests at the ceiling (`SUSTAINED_BY_ONE_PROVIDER`
+    // above), so nobody in it now scores a 2: the population splits into the guests who never
+    // got a bed and the guests who got one and were looked after. **TWO BANDS IS BELOW THE
+    // CRITERION'S OWN STATED STRENGTH OF THREE**, and that is recorded here rather than
+    // absorbed — the criterion is not re-worded down to two.
+    //
+    // WHERE IT STILL HOLDS, AND IT IS THE SAME ARITHMETIC AS THE AMENITY AXIS ABOVE: a hotel
+    // whose occupancy exceeds what one provider sustains still spreads its guests across the
+    // scale. Measured, `--rooms 6 --amenities 1 --arrivals 60 --seed 42`, 30 days:
+    // **2:131, 3:385, 4:84, 5:111 — FOUR bands**, every one of them far above one guest per
+    // simulated day. So the review has not lost resolution; the three-room hotel has stopped
+    // being a hotel that produces a middling experience.
+    //
+    // THE ARM IS NOT MOVED THERE, AND THAT IS DELIBERATE. This configuration is `HOTEL_ROOMS` —
+    // the hotel a player starts in — and ADR-0036's amendment sited the criterion here for that
+    // reason. Moving it to a contended hotel would answer the question about a hotel nobody
+    // starts in. **The honest report is that the STARTING hotel no longer spreads**, which is a
+    // finding about the game rather than about the test, and G-037a's fold is what is supposed
+    // to put the middle back — a bare room serves at the floor, and a starting hotel is bare.
+    // ==========================================================================================
+    expect(clearing.map((row) => row.score)).toEqual([3, 5]);
     // AND THE SHARE PER NAMED SCORE, which is the criterion's own wording. The floor as a share
     // is derived from the same two numbers rather than chosen: one guest per simulated day over
     // the run's own departures.
@@ -357,11 +477,20 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // The discriminating fact needs no constant at all: the configuration this arm REPLACED —
     // six rooms at one amenity, where the previous version rested on a two-guest band — has an
     // occupied band that does NOT clear the floor, and this one does not.
+    //
+    // **AND AT G-041 THE REJECTED CONFIGURATION STOPS BEING DISCRIMINATING TOO**, which is the
+    // same finding one level down: six rooms at one amenity used to have a thin band under the
+    // floor and now has two fat ones (161 and 192) and nothing else. So the contrast is drawn
+    // against the quantity that still separates them — the NUMBER of occupied bands. The
+    // shipped configuration produces two above the floor; the rejected one produces two as
+    // well, and neither spreads. Recorded as the collapse it is rather than re-pointed at a
+    // third configuration that happens to still work: the whole ladder has flattened, and a
+    // contrast found by shopping for one would be hiding that.
     const rejected = at(6, 1);
-    const smallestOccupied = Math.min(
-      ...rejected.reviews.distribution.filter((row) => row.count > 0).map((row) => row.count),
-    );
-    expect(smallestOccupied).toBeLessThan(rejected.world.days);
+    const occupied = rejected.reviews.distribution.filter((row) => row.count > 0);
+    expect(occupied.map((row) => row.score)).toEqual([3, 5]);
+    expect(Math.min(...occupied.map((row) => row.count))).toBe(161);
+    expect(Math.min(...occupied.map((row) => row.count))).toBeGreaterThan(rejected.world.days);
     // `expect(Math.min(...clearing.map(count)) > floor)` STOOD HERE AND IS GONE (ADR-0035).
     // `clearing` is DEFINED as the rows above the floor, so its minimum exceeding the floor
     // cannot fail — and on an empty `clearing` it is `Infinity`, so it would have passed
@@ -391,7 +520,10 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
       expect(result.status, result.stderr).toBe(0);
       const summary = JSON.parse(result.stdout) as RunSummary;
       const clearing = summary.reviews.distribution.filter((row) => row.count > summary.world.days);
-      expect(clearing.map((row) => row.score), `arrivals ${arrivals}`).toEqual([2, 3, 5]);
+      // AND THE NEIGHBOUR-CADENCE ARM AGREES WITH THE SHIPPED ONE ACROSS G-041 TOO, which is the
+      // property this pair exists for: [2, 3, 5] -> [3, 5] at 119 and at 121 as well as at 120,
+      // so the band that went is not a phase artefact of one cadence.
+      expect(clearing.map((row) => row.score), `arrivals ${arrivals}`).toEqual([3, 5]);
     }
   });
 

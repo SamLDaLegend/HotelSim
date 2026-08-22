@@ -93,6 +93,11 @@ export {
   toleranceOf,
   wantAtOf,
   idleShareBasisPoints,
+  // G-041, ADR-0054/0057. The two ends of the quality range, exported so
+  // `needs.rates.test.ts` re-runs the shipped derivation through THE fold rather than keeping a
+  // second copy of the product in step with it.
+  declaredRefill,
+  serviceFloorRefill,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {

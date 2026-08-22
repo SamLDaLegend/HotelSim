@@ -60,6 +60,8 @@ import {
   isNeedWanted,
   lodgingNeedOf,
   needTypesInOrder,
+  bindContent,
+  serviceFloorRefill,
   NO_ENTITY,
   ONE_WHOLE_BASIS_POINTS,
   stayDurationOf,
@@ -107,6 +109,7 @@ const stepTheBox = (
    * literal that dropped to zero for reasons a reader has to take on trust.
    */
   withShaft = true,
+  boxContent: BoundContent = content,
 ): {
   readonly idleBasisPoints: number;
   readonly longestRunTicks: number;
@@ -115,8 +118,8 @@ const stepTheBox = (
   readonly strandedTicks: number;
   readonly longestStrandedRunTicks: number;
 } => {
-  let world = createWorld(7, content);
-  const commands = schedule(ticks, content, world.grid, rooms, arrivalEveryTicks, 0, 0, 0, amenities);
+  let world = createWorld(7, boxContent);
+  const commands = schedule(ticks, boxContent, world.grid, rooms, arrivalEveryTicks, 0, 0, 0, amenities);
   const byTick = new Map<number, ReturnType<typeof schedule>[number]['command'][]>();
   for (const scheduled of commands) {
     if (!withShaft && scheduled.command.kind === 'layStair') continue;
@@ -147,7 +150,7 @@ const stepTheBox = (
   // untouched.
   const cache = createValidityCache();
   for (let t = 0; t < ticks; t += 1) {
-    world = stepTick(world, content, byTick.get(world.tick) ?? [], cache);
+    world = stepTick(world, boxContent, byTick.get(world.tick) ?? [], cache);
     for (const guest of guestsInOrder(world.guests)) {
       if (guest.roomEntityId === NO_ENTITY) {
         runs.delete(guest.id);
@@ -157,7 +160,7 @@ const stepTheBox = (
           // THE SHIPPED PREDICATE, not a fourth spelling of its three exclusions. A guest with no
           // room excuses nothing (ADR-0026 as amended) and has no lodging room serving it, so the
           // served slots are its engagement — which is null on every tick counted here.
-          if (wantsSomethingUnserved(content, guest.needs, null, null, wantAtOf(content), null)) {
+          if (wantsSomethingUnserved(boxContent, guest.needs, null, null, wantAtOf(boxContent), null)) {
             strandedTicks += 1;
             const streak = (strandedRuns.get(guest.id) ?? 0) + 1;
             strandedRuns.set(guest.id, streak);
@@ -173,7 +176,7 @@ const stepTheBox = (
       }
       frames += 1;
       strandedRuns.set(guest.id, 0);
-      if (wantsNothing(content, guest)) {
+      if (wantsNothing(boxContent, guest)) {
         idle += 1;
         const run = (runs.get(guest.id) ?? 0) + 1;
         runs.set(guest.id, run);
@@ -201,11 +204,30 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // second path exists to catch.
     const lodging = lodgingNeedOf(content);
     const engagement = needTypesInOrder(content).filter((entry) => entry.id !== lodging?.id);
+    //
+    // IT READS THE DECLARED RATE AND NOT THE SERVICE FLOOR (G-041), and that is what keeps it a
+    // CEILING. Since ADR-0054 a room's quality moves the achieved rate inside a range, and the
+    // MOST idle a guest can be is a fully appointed hotel with nothing to wait for: every room
+    // below the ceiling serves more slowly, spends more of the stay and leaves LESS idle — the
+    // same direction contention already pushes. `assertNeedDemandIsServiceable` asks the
+    // opposite end for the opposite reason, and `needShareBasisPoints` says which is which.
+    //
+    // AND IT FLOORS PER NEED, which the un-rounded arithmetic below does not: 10,000/15 is 666
+    // and not 666.67, three times over. The two are written out separately because the gap is
+    // the direction of the approximation and this file has been bitten by a substitution here
+    // before — 7,003 against an un-floored 7,000, so the shipped fold reports MORE idle than the
+    // real numbers, which is the permissive direction for a ceiling.
     const engagementShare = engagement.reduce((total, entry) => total + 1 / (1 + entry.refillPerTick), 0);
-    const byHand = Math.round(
+    const unrounded = Math.round(
       (1 - engagementShare * (1 + 1 / (lodging?.refillPerTick ?? 1))) * ONE_WHOLE_BASIS_POINTS,
     );
-    expect(byHand).toBe(2_500);
+    expect(unrounded).toBe(7_000);
+    let byHandBusy = 0;
+    for (const entry of engagement) byHandBusy += Math.floor(ONE_WHOLE_BASIS_POINTS / (1 + entry.refillPerTick));
+    byHandBusy += Math.floor(byHandBusy / (lodging?.refillPerTick ?? 1));
+    const byHand = ONE_WHOLE_BASIS_POINTS - byHandBusy;
+    expect(byHand).toBe(7_003);
+    expect(byHand).toBeGreaterThanOrEqual(unrounded);
     expect(idleShareBasisPoints(content)).toBe(byHand);
   });
 
@@ -254,13 +276,27 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // own title as a difference rather than as a level. That is the only clause here that can
     // still distinguish "the shaft did this" from "the instrument stopped counting".
     // ==========================================================================================
-    expect(box.idleBasisPoints).toBe(0);
-    // THE CONTROL, SAME SITTING, SAME BOX, ONE DECLARATION APART. 271 is the reading this arm
-    // pinned before the shaft and it is re-measured here rather than quoted from the paragraph
-    // above (`CLAUDE.md` rule 3).
+    // ==========================================================================================
+    // 0 -> 5,747 AT G-041, AND THE LEVEL IS A RE-PIN WHILE THE PAIR BELOW IS THE CLAIM.
+    //
+    // The re-derived rates serve a guest with a room FIVE TIMES faster at the declared rate
+    // (`refillPerTick` 7 -> 14 with a service floor of a half; `capacityTicksSchema`). This box
+    // has no quality fold in it, so every room in it is FULLY APPOINTED and every guest in it is
+    // served at the ceiling — which is exactly the hotel the number below describes. `frames` is
+    // unmoved at `STAY - 1`: the instrument still sees the guest, and what moved is how much of
+    // the stay it has nothing to want in.
+    //
+    // The two structural clauses at the bottom of this test are the ones that survive a re-pin,
+    // and they are still doing work: 7,003 - 5,747 = 1,256, so the margin clause is 256 basis
+    // points from failing rather than trivially true the way `2,500 - 0` was.
+    // ==========================================================================================
+    expect(box.idleBasisPoints).toBe(5_747);
+    // THE CONTROL, SAME SITTING, SAME BOX, ONE DECLARATION APART. 271 was the reading this arm
+    // pinned before G-041 and it is re-measured here rather than quoted (`CLAUDE.md` rule 3) —
+    // the shaft still costs idleness, and the DIRECTION is the claim this pair exists for.
     const withoutTheShaft = stepTheBox(2, STAY * 3, 3, STAY, false);
     expect(withoutTheShaft.frames).toBe(box.frames);
-    expect(withoutTheShaft.idleBasisPoints).toBe(271);
+    expect(withoutTheShaft.idleBasisPoints).toBe(5_844);
     expect(withoutTheShaft.idleBasisPoints).toBeGreaterThan(box.idleBasisPoints);
     // AND THE TWO STRUCTURAL CLAUSES, WHICH SURVIVE ANY RE-PIN OF THE LITERAL ABOVE: the share
     // is under its derived ceiling, and it is under it by a margin rather than by a rounding.
@@ -296,10 +332,53 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // arrival cadence changes, which is the definition of contention. Whatever the geometry
     // costs, it costs BOTH arms identically, so it cannot be what the comparison reports.
     // ==================================================================================
+    // ==================================================================================
+    // AND AT G-041 THE ARM IS ASKED AT BOTH ENDS OF THE QUALITY RANGE, BECAUSE THE DIRECTION
+    // CLAIM IS A CLAIM ABOUT A HOTEL THAT HAS CONTENTION AND ONE OF THE TWO NO LONGER DOES.
+    //
+    // ADR-0054 made `refillPerTick` the rate a FULLY APPOINTED room reaches, and G-041 re-derived
+    // the table so that rate sits genuinely above the bare one. This box has no quality fold in
+    // it, so at the DECLARED rate every room in it is fully appointed and a helping takes 30
+    // ticks instead of 60 — and six guests over two amenities stop queueing. Measured, one
+    // sitting, exact deterministic counts:
+    //
+    //     rate               free    contended    ceiling
+    //     declared           5,785       5,943      7,003
+    //     service floor        799         550      2,500
+    //
+    // **THE DIRECTION HOLDS AT THE FLOOR AND HAS INVERTED AT THE CEILING, BY 158 BASIS POINTS
+    // AGAINST 249 THE OTHER WAY.** That is not re-pinned as a golden and it is not widened: the
+    // claim is asked in the hotel where its subject exists, which is the same move
+    // `assertNeedDemandIsServiceable` makes one file over. The floor arm is also the hotel this
+    // tree will HAVE once G-037a's fold merges and rooms stop being fully appointed by default
+    // — so a goal that lands the fold should find this claim true at both ends, and if it does
+    // not, that is a finding about the fold rather than about this arm.
+    //
+    // WHAT IS ASSERTED AT THE CEILING IS WHAT IS STILL TRUE THERE: both arms sit under the
+    // derived ceiling, which is the property that makes it a ceiling and the reason this test
+    // is in this file.
+    // ==================================================================================
     const free = stepTheBox(6, STAY * 3, 2, STAY * 2);
     const contended = stepTheBox(6, 60, 2, STAY * 2);
-    expect(contended.idleBasisPoints).toBeLessThanOrEqual(free.idleBasisPoints);
+    expect(free.idleBasisPoints).toBeLessThan(idleShareBasisPoints(content));
     expect(contended.idleBasisPoints).toBeLessThan(idleShareBasisPoints(content));
+
+    // THE SAME BOX READ AT THE SERVICE FLOOR: every rate collapsed to what the worst legal room
+    // delivers, and the floor then set to one whole because there is nothing below the worst.
+    const atServiceFloor = bindContent({
+      ...content.content,
+      needTypes: needTypesInOrder(content).map((entry) => ({
+        ...entry,
+        refillPerTick: serviceFloorRefill(entry),
+        serviceFloorBasisPoints: ONE_WHOLE_BASIS_POINTS,
+      })),
+    });
+    const freeAtFloor = stepTheBox(6, STAY * 3, 2, STAY * 2, true, atServiceFloor);
+    const contendedAtFloor = stepTheBox(6, 60, 2, STAY * 2, true, atServiceFloor);
+    expect(contendedAtFloor.idleBasisPoints).toBeLessThanOrEqual(freeAtFloor.idleBasisPoints);
+    expect(contendedAtFloor.idleBasisPoints).toBeLessThan(idleShareBasisPoints(atServiceFloor));
+    // The lever, as a number, so a change that flattens it is visible rather than merely legal.
+    expect(freeAtFloor.idleBasisPoints - contendedAtFloor.idleBasisPoints).toBeGreaterThan(200);
   });
 });
 

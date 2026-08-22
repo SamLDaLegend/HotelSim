@@ -385,10 +385,21 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   walks to that column first — and this workload's amenities are ALL in the basement.
     //   **checkedOut 5 -> 2, leftDissatisfied 61 -> 64**, the still-in-the-hotel column unmoved
     //   at 9, and the conservation closes: **2 + 64 + 9 = 75 arrived.** `arrived`,
+    //
+    // - `760558b631beb552` -> `cba13e62265ed196` AT G-041, and the cause is the need RATES
+    //   (ADR-0054, ADR-0057). Every rate in `need-types.json` is now the ceiling a fully
+    //   appointed room reaches, and this tree has no quality fold in it yet — so every room in
+    //   this workload serves at that ceiling and the sixty-bedroom / two-amenity hotel this
+    //   benchmark is deliberately starved at stops being starved of SERVICE. **checkedOut
+    //   2 -> 33, leftDissatisfied 64 -> 29**, the still-in-the-hotel column unmoved at 9, the
+    //   conservation still closing on the same three columns: **33 + 29 + 13 = 75 arrived**,
+    //   with the still-in-the-hotel column moving 9 -> 13 rather than staying put. `arrived`,
+    //   `evictedGuests`, `gaveUp` at zero and the departure table's seven-row SHAPE are all
+    //   unchanged.
     //   `evictedGuests`, the abandonment count and the departure table's seven-row SHAPE are
     //   unchanged. `check:stamp` reads this literal out of the tree, so the digest's
     //   measure-golden line moves with it.
-    expect(hashState(plain)).toBe('760558b631beb552');
+    expect(hashState(plain)).toBe('cba13e62265ed196');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -465,8 +476,15 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // still-in-the-hotel column is UNMOVED at 9 — the guests moved between the two departure
     // rows and nowhere else.
     // ==========================================================================================
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(2);
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(64);
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(33);
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(29);
+    // AND THE STILL-IN-THE-HOTEL COLUMN IS WHAT MOVED, 9 -> 13, WHICH IS THE FOURTH NUMBER THE
+    // CONSERVATION NEEDS AND THE ONE THIS ARM HAD NEVER PINNED. 33 + 29 + 13 = 75, every other
+    // departure row is zero, and `gaveUp` is still zero — nobody in this hotel fails to get a
+    // room, they are served faster and more of them finish. Pinned so the next reader who finds
+    // three columns that do not add up has the fourth in front of them.
+    expect(departureCountOf(plain.guestOutcomes, 'gaveUp')).toBe(0);
+    expect(plain.guests.list.length).toBe(13);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -690,12 +708,12 @@ describe('the same workload with the player churning the building', () => {
     // runner declares a stairwell and every basement journey is routed through it. Eviction is
     // this arm's subject and it still evicts — 19 -> 18, one guest fewer standing in a room at
     // the moment it is demolished, because the guests are elsewhere on the way to the stairs.
-    expect(hashState(churn)).toBe('4ca40a2319b272bf');
+    expect(hashState(churn)).toBe('c37756a85a3f4f8c');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
     expect(evictedGuests(churn.guestOutcomes)).toBeGreaterThan(0);
-    expect(evictedGuests(churn.guestOutcomes)).toBe(18);
+    expect(evictedGuests(churn.guestOutcomes)).toBe(19);
     expect(hashState(churn)).not.toBe(hashState(runWorkload(0, 0)));
   });
 
@@ -717,7 +735,7 @@ describe('the same workload with the player churning the building', () => {
     // The split earned its keep twice over. A single `evicted` counter would have gone 19 ->
     // 35 -> 19 and said nothing about which half did it.
     // ============================================================================
-    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(18);
+    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(19);
     expect(departureCountOf(churn.guestOutcomes, 'evictedRoomUnusable')).toBe(0);
     // Only a migration writes the third, so a run that never loaded a save must read zero.
     expect(departureCountOf(churn.guestOutcomes, 'evictedCauseUnrecorded')).toBe(0);

@@ -185,7 +185,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // byte-identical — 24 arrived, 4 checked out, 16 gave up, 4 still in the hotel, 7
     // transactions, 510,000p. The need rows, the review distribution and the mean move; see the
     // need-row block above for the numbers and the mechanism.
-    stateHash: '73ec70f0ec5bf424',
+    stateHash: '5081486e2a7ec39a',
   },
   guests: {
     arrived: 24,
@@ -363,9 +363,9 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // commits to the walk and is served on arrival, where before it re-picked a provider every
     // tick and thrashed. Two more satisfactions, and 191 fewer unserved ticks.
     // ==========================================================================================
-    { needId: 'guest_comfort', lodging: false, met: 12, unmet: 8, metByItem: 12, abandoned: 0, unservedTicks: 1_319, instanceTicks: 8_640 },
-    { needId: 'guest_entertainment', lodging: false, met: 6, unmet: 14, metByItem: 0, abandoned: 0, unservedTicks: 2_032, instanceTicks: 8_640 },
-    { needId: 'guest_nourishment', lodging: false, met: 10, unmet: 10, metByItem: 4, abandoned: 0, unservedTicks: 1_742, instanceTicks: 8_640 },
+    { needId: 'guest_comfort', lodging: false, met: 20, unmet: 0, metByItem: 20, abandoned: 0, unservedTicks: 297, instanceTicks: 8_640 },
+    { needId: 'guest_entertainment', lodging: false, met: 14, unmet: 6, metByItem: 0, abandoned: 0, unservedTicks: 837, instanceTicks: 8_640 },
+    { needId: 'guest_nourishment', lodging: false, met: 10, unmet: 10, metByItem: 4, abandoned: 0, unservedTicks: 1_265, instanceTicks: 8_640 },
     { needId: 'night_rest', lodging: true, met: 4, unmet: 16, metByItem: 0, abandoned: 0, unservedTicks: 3_000, instanceTicks: 8_640 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -424,8 +424,8 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
       // extra walk is time a guest does not have. **The two readings together are the honest
       // account of this mechanic; either alone would be a press release.**
       { score: 1, count: 0 },
-      { score: 2, count: 8 },
-      { score: 3, count: 8 },
+      { score: 2, count: 0 },
+      { score: 3, count: 16 },
       { score: 4, count: 0 },
       { score: 5, count: 4 },
     ],
@@ -554,16 +554,16 @@ const GOLDEN_2_DAYS_SEED_42 =
     // G-038a-iii-b re-records all three again, and the `night_rest` line below is STILL the
     // control at 3472 bp: the stairwell moves how a guest travels and nothing about how many
     // beds there are. See the JSON golden's need-row block for the mechanism.
-    'need       guest_comfort 12 met, 8 unmet (0 by room, 12 by item), 0 abandoned, 1526 bp unserved',
-    'need       guest_entertainment 6 met, 14 unmet (6 by room, 0 by item), 0 abandoned, 2351 bp unserved',
-    'need       guest_nourishment 10 met, 10 unmet (6 by room, 4 by item), 0 abandoned, 2016 bp unserved',
+    'need       guest_comfort 20 met, 0 unmet (0 by room, 20 by item), 0 abandoned, 343 bp unserved',
+    'need       guest_entertainment 14 met, 6 unmet (14 by room, 0 by item), 0 abandoned, 968 bp unserved',
+    'need       guest_nourishment 10 met, 10 unmet (6 by room, 4 by item), 0 abandoned, 1464 bp unserved',
     'need L     night_rest 4 met, 16 unmet (4 by room, 0 by item), 0 abandoned, 3472 bp unserved',
     // G-023b-ii: one guest moves 2 -> 3 and the mean rises with it. See the JSON golden's
     // distribution above for why a hotel whose guests must now WALK reviews slightly better.
     // G-038a-iii-b: back to G-023b-ii's own distribution, and the mean back to 300, when the
     // walk gains a vertical leg. The JSON golden carries why.
-    'reviews     1:0, 2:8, 3:8, 4:0, 5:4',
-    'mean x100   300',
+    'reviews     1:0, 2:0, 3:16, 4:0, 5:4',
+    'mean x100   340',
     'ledger      7 transactions',
     'revenue     34000p',
     'upkeep      -24000p',
@@ -663,7 +663,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // floor, so no lodging candidate is more than zero floors from the door and a reach of 2
     // cannot turn anybody away. Same 6 valid rooms, same 0/0/0/0/0 tally, same 24 arrivals,
     // same 4/16 split, same four need rows to the basis point.
-    'state hash  73ec70f0ec5bf424',
+    'state hash  5081486e2a7ec39a',
   ].join('\n') + '\n';
 
 /**
@@ -699,6 +699,25 @@ const GOLDEN_2_DAYS_SEED_42 =
  * worked before must do exactly as much business now. If `satisfied` had fallen here, the
  * rule would have broken the shipped content rather than described it — which is the one
  * way this goal could have gone quietly wrong.
+ *
+ * WHY IT MOVED AT G-041, AND WHICH HALF OF THIS DOCUMENT DID NOT.
+ *
+ * `73ec70f0ec5bf424` -> `5081486e2a7ec39a`, and the cause is the need RATES (ADR-0054,
+ * ADR-0057). `refillPerTick` is now the rate a FULLY APPOINTED room reaches and the table was
+ * re-derived so it sits above the bare one; this tree has no quality fold in it yet, so every
+ * room in this three-room hotel serves at that ceiling. `guest-rules.json` moved with the need
+ * table — `visitDurationTicks` 208 -> 98 and `dissatisfactionCapacityTicks` 431 -> 301, both
+ * DERIVED from the need table rather than dialled — so `World.contentHash` moves too.
+ *
+ * **THE GUEST AND MONEY BLOCKS ARE BYTE-IDENTICAL AND THAT IS THE CONTROL.** 24 arrived, 4
+ * checked out, 16 gave up, 4 in the hotel, 7 transactions, 34,000p revenue, -24,000p upkeep,
+ * 510,000p balance, 6 valid rooms, the 0/0/0/0/0/0 invalidity tally. What moved is exactly the
+ * three need rows and the review distribution: `guest_comfort` 12/8 -> 20/0 with its unserved
+ * share 1,526bp -> 343bp, `guest_entertainment` 6/14 -> 14/6, `guest_nourishment` unchanged in
+ * met/unmet with a smaller unserved share, and the reviews `2:8 3:8` -> `3:16`. **The same
+ * guests, the same money, the same rooms, served faster.** `night_rest` does not move at all —
+ * 4 met, 16 unmet, 3,000 ticks unserved — because in this hotel the sixteen who never get a
+ * room are what that row counts, and how fast a bed refills does not give anybody one.
  *
  * WHY IT MOVED AGAIN AT G-011, AND WHAT DID AND DID NOT MOVE WITH IT.
  *
@@ -820,7 +839,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  73ec70f0ec5bf424']);
+    expect(differing).toEqual(['seed        42', 'state hash  5081486e2a7ec39a']);
     expect(lines43).toContain('seed        43');
   });
 });

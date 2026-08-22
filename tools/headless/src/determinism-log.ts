@@ -21,6 +21,7 @@ import {
   lodgingNeedOf,
   minConstructionCostOf,
   needTypesInOrder,
+  serviceFloorRefill,
   requiredItemsOf,
   roomTypeServes,
   stayDurationOf,
@@ -639,16 +640,36 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // rather than to content, and it is the same argument `assertNeedDemandIsServiceable` makes.
   //
   // THE COUNT IS DERIVED, NOT CHOSEN, and from a relation this codebase already owns. A need is
-  // served for `1/(1 + refillPerTick)` of the time in steady state — `needShareBasisPoints`'s
-  // duty cycle — so ONE PROVIDER SUSTAINS `1 + refillPerTick` CONCURRENT GUESTS. This log's
-  // occupancy is its own two numbers: a stay of `stayDurationTicks` against an arrival every
-  // `ARRIVALS_EVERY_TICKS`. Hence:
+  // served for `1/(1 + rate)` of the time in steady state — `needShareBasisPoints`'s duty cycle
+  // — so ONE PROVIDER SUSTAINS `1 + rate` CONCURRENT GUESTS. This log's occupancy is its own two
+  // numbers: a stay of `stayDurationTicks` against an arrival every `ARRIVALS_EVERY_TICKS`.
+  // Hence:
   //
-  //     copies = ceil( (stayDurationTicks / ARRIVALS_EVERY_TICKS) / (1 + refillPerTick) )
+  //     copies = ceil( (stayDurationTicks / ARRIVALS_EVERY_TICKS) / (1 + rate) )
   //
   // On the shipped tables that is `ceil((1440 / 97) / 8)` = `ceil(1.86)` = **2**, and it is
   // computed rather than written down so that a designer who changes the stay, the cadence or a
   // refill rate gets a harness that still covers what it claims to.
+  //
+  // ==========================================================================================
+  // `rate` IS `serviceFloorRefill` AND NOT `refillPerTick` (G-041, ADR-0054, ADR-0057), AND THE
+  // PARAGRAPH BELOW IS WHY — IT WAS ALREADY THE ARGUMENT, WRITTEN BEFORE THERE WERE TWO RATES.
+  //
+  // ADR-0054 made `refillPerTick` the rate a FULLY APPOINTED room reaches, so reading it here
+  // would size this harness for the BEST hotel the content permits. The paragraph below says
+  // the sizing must go the other way — the arm that goes quiet is the starved one — and the
+  // slowest service the content permits is `refillPerTick x serviceFloorBasisPoints`. Sizing at
+  // the floor is that instruction, restated for a world where the two rates differ.
+  //
+  // **IT IS ALSO WHAT KEEPS THE COUNT AT 2 ACROSS G-041, WHICH IS THE POINT RATHER THAN A
+  // CONVENIENCE.** At the declared rate the arithmetic gives `ceil((1440/97)/15)` = 1, and one
+  // amenity of each kind cost this harness ten builds' worth of entity ids — which took the
+  // despawn and demolish walks somewhere else and quietly retired four `roomInvalidity` reasons
+  // and one provider-release cause from the I2 proof. That is the exact failure mode the block
+  // above this one was written about after ADR-0017 4(b): a harness whose hotel is the thing
+  // under test. `validity.determinism.test.ts` and `provider.determinism.test.ts` name the
+  // reasons and would have gone red; sizing at the floor is the repair, not widening them.
+  // ==========================================================================================
   //
   // IT IS A CEILING AND NOT A FLOOR, deliberately: the arm that would go quiet is the one where
   // guests are starved, and this pass exists to stop that. The opposite failure — a hotel so
@@ -666,7 +687,7 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     for (const needType of needTypesInOrder(content)) {
       if (needType.id === lodgingNeed?.id) continue;
       if (!roomTypeServes(content, roomType.id, needType.id)) continue;
-      copies = Math.max(copies, Math.ceil(concurrentGuests / (1 + needType.refillPerTick)));
+      copies = Math.max(copies, Math.ceil(concurrentGuests / (1 + serviceFloorRefill(needType))));
     }
     return copies;
   };

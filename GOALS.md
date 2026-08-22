@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-041 is DONE and the LOOP IS STOPPED ON E-011: the need rates are RE-DERIVED so the declared rate is a CEILING genuinely above the bare one (ADR-0054, ADR-0057 option a). serviceFloorBasisPoints 5000 is the ONLY value R1/R2/R3 admit, and needs.rates.test.ts RE-RUNS that scan rather than restating its answer; engagement refillPerTick 7 -> 14, night_rest 1 -> 2 and its capacityTicks 600 -> 300. The duty cycle is a RANGE now — 0.2997 declared, 0.7500 at the floor — where 0.75 used to be the only number there was. assertNeedDemandIsServiceable reads the FLOOR and assertLodgingBecomesWanted the CEILING, bracketing it, and neither was widened. visitDurationTicks 208 -> 98 and dissatisfactionCapacityTicks 431 -> 301 moved with them because they are DERIVED from the need table, taking the speed floor 2 -> 3 and the legal plot depth 60 -> 27. E-011: check:scaling density fell 1.26x paired-and-interleaved and its ratio > 1 floor now straddles the noise — thirteen rows PASS, that one RED, VERIFY_EXIT=1 read from the process, and the gate is NOT edited. I2 moved BY DESIGN 2b5369e4461a9140 -> f197734f532dc62b, three processes agreeing. E-010 also open. Unreliable: 3 gates, 0 defects (2 inherited, check:scaling density measured this goal).*
 
 - **Schemas**: save **v21** (G-034a — the grid gained a `row`; summary 4 at G-028b) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `2b5369e4461a9140` · measure golden `760558b631beb552`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `f197734f532dc62b` · measure golden `cba13e62265ed196`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2606,7 +2606,24 @@ PLAN with its measurement plan**, because a derived-at-read-time fold lands on t
 the sim, guarded by a bound under an OPEN escalation for being too wide to catch it.
 
 ## G-041 — The rates are re-derived, so a bare room can be worse
-Status: **PLANNED.** Human ruling ADR-0057, option (a). **Precedes the `g037a-quality-fold` merge.**
+Status: **DONE** (2026-08-22). Human ruling ADR-0057, option (a). **Precedes the `g037a-quality-fold`
+merge, which is NOT part of this goal.**
+
+**WHAT SHIPPED**: `serviceFloorBasisPoints` on the need type — the fraction of `refillPerTick` the
+worst legal provider delivers, 5,000 as shipped and the ONLY admissible value under R1/R2/R3 on
+`serviceFloorBasisPointsSchema`. Engagement `refillPerTick` 7 -> 14, `night_rest` 1 -> 2 and its
+`capacityTicks` 600 -> 300. `assertNeedDemandIsServiceable` re-derived to read the FLOOR rate,
+`assertLodgingBecomesWanted` re-derived at the CEILING with its arithmetic stated, and a new
+`assertServiceFloorIsARate` refusing a floor the simulation would round away.
+`needs.rates.test.ts` RE-RUNS the candidate scan and asserts the shipped table is the unique
+survivor. Duty cycle **0.2997 at the declared rate and 0.7500 at the floor**, where it was 0.75
+at the only rate there was.
+
+**TWO NUMBERS THE GOAL BLOCK DID NOT NAME MOVED WITH THE RATES, AND BOTH ARE DERIVED FROM THE NEED
+TABLE**: `visitDurationTicks` 208 -> 98 (the arrival chase) and `dissatisfactionCapacityTicks`
+431 -> 301 (the geometric mean of that chase and the stay). Those in turn moved the SPEED FLOOR
+2 -> 3 — `guestCellsPerTick: 3` now sits exactly ON its derived floor — and the legal plot depth
+60 -> 27, with `grid.ts`'s `DEFAULT_MAX_ROW` docblock updated in the same change.
 Milestone: M3 · Owner pair: economy-engineer / balance-critic
 Statement: the need rates are re-derived so the **declared** rates sit genuinely **above** the bare
   rate, restoring the headroom a quality penalty needs.

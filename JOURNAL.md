@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-039b-beta1 is DONE: the scaling campaign is RE-TAKEN, and the finding is worse than the goal claimed — git ancestry proves the shipped bounds were derived BEFORE travel existed (campaign 16ef890 on 08-14, travel dfe26b9 on 08-21, the first an ancestor of the second), so check:scaling was green for eight days over a hotel in which no guest ever walked. Three new fingerprint terms — guestCellsPerTick, layCorridor count, layStair count — read from commandsFor, the same call the timer makes, so a fingerprint of a different schedule than the one measured is not expressible. The blindness was WATCHED not argued: shorten the spine by one cell and the HEAD guard exits 0 with four rows PASS, while the new guard exits 1. Bounds moved BOTH ways on a rule nobody touched: needs 1.7181 -> 1.8219 and rooms-bench 4.1218 -> 4.4592 looser, density 2.1856 -> 2.1063 and rooms-saturated 5.6532 -> 5.5888 tighter. needs is the thin axis again at 1.0584x pooled. A goal id is not a timestamp — G-032a sounds later than G-023b-ii and is not. I2 2b5369e4461a9140 unchanged. Fourteen rows green, VERIFY_EXIT=0 read from the process. E-010 open, loop not stopped. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-22, G-041 is DONE and the LOOP IS STOPPED ON E-011: the need rates are RE-DERIVED so the declared rate is a CEILING genuinely above the bare one (ADR-0054, ADR-0057 option a). serviceFloorBasisPoints 5000 is the ONLY value R1/R2/R3 admit, and needs.rates.test.ts RE-RUNS that scan rather than restating its answer; engagement refillPerTick 7 -> 14, night_rest 1 -> 2 and its capacityTicks 600 -> 300. The duty cycle is a RANGE now — 0.2997 declared, 0.7500 at the floor — where 0.75 used to be the only number there was. assertNeedDemandIsServiceable reads the FLOOR and assertLodgingBecomesWanted the CEILING, bracketing it, and neither was widened. visitDurationTicks 208 -> 98 and dissatisfactionCapacityTicks 431 -> 301 moved with them because they are DERIVED from the need table, taking the speed floor 2 -> 3 and the legal plot depth 60 -> 27. E-011: check:scaling density fell 1.26x paired-and-interleaved and its ratio > 1 floor now straddles the noise — thirteen rows PASS, that one RED, VERIFY_EXIT=1 read from the process, and the gate is NOT edited. I2 moved BY DESIGN 2b5369e4461a9140 -> f197734f532dc62b, three processes agreeing. E-010 also open. Unreliable: 3 gates, 0 defects (2 inherited, check:scaling density measured this goal).*
 
-- **State**: save **v21** · summary **v4** · I2 `2b5369e4461a9140` · measure golden
-  `760558b631beb552` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
+- **State**: save **v21** · summary **v4** · I2 `f197734f532dc62b` · measure golden
+  `cba13e62265ed196` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -89,6 +89,37 @@ there.
 Newest last.
 
 ---
+
+## 2026-08-22 — WATCH #17 (G-041): the day got shorter, and nothing reads as stupid
+
+**INSTRUMENT AND WHY IT AND NOT THE OTHERS.** `pnpm sim:run --record` on `cli.ts`, which runs
+`report.ts`'s schedule — the only recorder that draws the hotel the shipped need rates apply to.
+`apps/game/scripts/record-frames.ts` draws `scenario.ts`'s world, not this one, and a rate change
+is only visible in a hotel with providers a guest is actually queueing for. `tools/viewer`
+collapses the ROW axis, which costs nothing here: the shipped CLI hotel is three bedrooms on floor
+0 against a basement amenity, so every journey this goal changes is a FLOOR change and the viewer's
+stacked bands show exactly that axis. Two recordings, same seed, same invocation, one sitting:
+`--days 2 --seed 42 --rooms 6 --amenities 1 --record-every 1`, pre-G-041 content against post.
+
+**WHAT MOVED, GUEST 1, BY FRAME.** Pre: four engagements of median 212 ticks alternating with four
+room stints of median 287 — out for three and a half hours, in for five. Post: seven engagements
+of median 34 ticks, and a repeating cycle visible three times over — **out 456-489, back in
+490-515, out 516-581, in 582-909**, then the same shape at 910-970/971-1034/1035-1363 and again at
+1364-1424/1425-1441. Same guest, same schedule, same room.
+
+**WHAT LOOKED WRONG: nothing that reads as broken, and one thing worth naming.** The 26-tick room
+stints at 490-515, 944-970 and 1398-1424 are power naps — the guest walks home, sleeps under half
+an hour, and goes out again. That is the shape R3 on `serviceFloorBasisPointsSchema` was written to
+bound and it clears it: rest comes due after 90 away-ticks against a 30-tick helping at the
+declared rate, so rest never interrupts a helping and the guest is never holding two wants at once.
+A watcher sees short errands and short naps rather than a guest bouncing off a door.
+
+**WHAT A WATCHER WOULD NOT SEE, AND IT IS THE POINT OF THE GOAL.** Every room in this recording is
+serving at the CEILING, because the quality fold is not in this tree. The day above is the BEST day
+the content permits; the day at the service floor is the 212/287 rhythm of the pre-recording, to
+the tick. That pair is the range G-037a's fold is supposed to move a room inside, and the two
+recordings are the two ends of it — which is the first time this project has been able to watch
+both.
 
 ## Bootstrap through M2 — archived
 

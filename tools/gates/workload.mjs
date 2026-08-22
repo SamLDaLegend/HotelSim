@@ -131,10 +131,41 @@ export const ROOMS = 60;
  * argument that its spread is occupancy-sensitive has never been made or measured, and if
  * somebody makes it the response is a re-take, not a wider bound (ADR-0021).
  *
- * AND G-040 AND G-041 STILL OWE THEIR OWN RE-TAKES, unchanged by this one.
+ * AND G-040 STILL OWES ITS OWN RE-TAKE, unchanged by this one.
+ * ===========================================================================================
+ * 827 -> 1203 AT G-041, RE-TAKEN ALONE AGAIN, UNDER THE SAME ADR-0058 RULING, AND IT IS THE
+ * LARGEST MOVE THIS CONSTANT HAS EVER MADE.
+ *
+ * **THE FIVE SLOTS.** WHAT: concurrent guests in hundredths, as guest-frames divided by ticks —
+ * an exact deterministic integer count. WORKLOAD: `--rooms 60 --amenities 1 --arrivals 96
+ * --seed 42`, 30 simulated days, this file's own constants, run through `report.ts`'s schedule.
+ * SAMPLE COUNT: n = 1, which is the whole distribution — the quantity is deterministic, so one
+ * reading IS the distribution. AGGREGATION: none; one division, rounded once. REGIME: none
+ * applies — no clock is read.
+ *
+ * WHY IT MOVED: the need RATES were re-derived (ADR-0054, ADR-0057). `refillPerTick` is now the
+ * rate a FULLY APPOINTED room reaches — 14 where it was 7, with a service floor of a half — and
+ * this tree carries no quality fold yet, so every room in this workload serves at that ceiling.
+ * **This workload is the STARVED end of the measurement on purpose**: sixty bedrooms behind ONE
+ * amenity. Its guests used to spend their stay queueing and give up; they now get served and
+ * stay, and a guest that stays is a guest-frame. 8.27 -> 12.03 concurrent guests, a 45% rise
+ * from a change that touched no room count and no cadence.
+ *
+ * **THIS IS THE MOVE THE FOLD IS EXPECTED TO REVERSE**, and saying so is the point of writing it
+ * here rather than in a journal: G-037a's quality fold makes a bare room serve at the FLOOR
+ * rather than the ceiling, and this workload's rooms are bare. A goal that merges it re-takes
+ * this constant again and should find it heading back towards 827 — if it does not, the fold is
+ * not doing what ADR-0054 ordered, and this pin is one of the two places that would say so.
+ *
+ * **THE GAP AGAINST THE CAMPAIGN WIDENS AGAIN AND `tripwire.mjs` PRINTS IT.** The bound campaign
+ * was taken at `occupancyWhenTaken: 872`; the gap was 5.2% at 872 -> 827 and is 38.0% at
+ * 872 -> 1203. The bound STAYS at 1.4640 (ADR-0056, human) and is not re-derived, and the
+ * campaign is not re-taken — two of its three arms materialise their own committed content and
+ * cannot be re-taken at today's occupancy at all (ADR-0058). What the ruling requires is that
+ * the pin describe the hotel the gate now runs, which this re-take does.
  * ===========================================================================================
  */
-export const TARGET_CONCURRENT_HUNDREDTHS = 827;
+export const TARGET_CONCURRENT_HUNDREDTHS = 1203;
 
 /**
  * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.

@@ -60,13 +60,21 @@ describe('CRITERION 5: the shipped margin clears the bound its own content impli
   });
 
   it('and the two constraints on the margin have CONVERGED, which is this goal s finding', () => {
-    // R1's floor is 5,715 and the shipped margin is 6,000: 285 basis points of room, where the
+    // R1's floor is 5,358 and the shipped margin is 6,000: 642 basis points of room, where the
     // countdown model left 4,000. A goal that wants freer switching CANNOT get it by lowering
     // the margin — below the floor a guest switches BACK within one visit, which is the thrash
     // the margin exists to forbid. It has to move the CAPACITIES. Recorded here because this is
     // the file the next goal to reach for the margin will open.
+    //
+    // 5,715 -> 5,358 AT G-041, AND NOBODY TOUCHED THE MARGIN. The bound is
+    // `ceil(10,000 x (r+1) / 2r)`, which FALLS as `r` rises, and G-041 took `r` from 7 to 14
+    // (`refillPerTickSchema`). The convergence this test is named for therefore LOOSENED — 285
+    // basis points of room became 642 — which is a real change in the opposite direction from
+    // the one this file was written to record, and it is written down rather than absorbed. It
+    // is still convergence: `< 1,000` was the claim and it still holds with room to spare.
     const bound = marginBoundOver(engagementNeedTypes(content));
-    expect(bound).toBe(5_715);
+    expect(bound).toBe(5_358);
+    expect(abandonMarginOf(content) - bound).toBe(642);
     expect(abandonMarginOf(content) - bound).toBeLessThan(1_000);
   });
 });

@@ -6,10 +6,10 @@
     "reviewScoreMin": 1,
     "reviewScoreMax": 5,
     "stayDurationTicks": 1440,
-    "visitDurationTicks": 208,
+    "visitDurationTicks": 98,
     "wantAtBasisPoints": 3000,
     "toleranceTicks": 180,
-    "dissatisfactionCapacityTicks": 431,
+    "dissatisfactionCapacityTicks": 301,
     "dissatisfactionReliefPerTick": 1,
     "maxLodgingFloorsFromEntrance": 2,
     "guestCellsPerTick": 3

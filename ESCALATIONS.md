@@ -1794,6 +1794,75 @@ the milestone question rather than holding M3.**
 
 ---
 
+## E-011 — G-041's rates cut the DENSITY axis by 1.26x, and `check:scaling`'s `ratio > 1` floor now fires on weather. OPEN.
+
+**Date**: 2026-08-22 · **Raised by**: `economy-engineer` at G-041 VERIFY · **Loop stopped.**
+
+**`pnpm verify` is VERIFY_EXIT=1 with ONE red row**: `check:scaling`, the `density` axis, at
+`ratio 0.9732` against the gate's floor of *"the dense hotel must cost more than the sparse one at
+the same need count"*. Thirteen rows PASS. Nothing else in the tree is red.
+
+### The measurement, paired and interleaved, in one sitting
+
+**WHAT**: `check:scaling`'s density ratio — `dense-providers(60r/96a/20m)` over
+`full-vector(60r/96a/1m)`, microseconds per tick. **WORKLOAD**: `scaling.mjs`'s own, seed 42,
+4,320 ticks. **SAMPLE COUNT**: 5 per arm per run, two runs per content arm, arms alternated
+NEW/OLD/NEW/OLD. **AGGREGATION**: median of medians, as the gate does it. **REGIME**: quiet,
+win32/12cpu, one sitting.
+
+|  | round 1 | round 2 |
+|---|---|---|
+| pre-G-041 content | **1.4936** | **1.4178** |
+| G-041 content | **1.1219** | **1.1957** |
+
+**THE RATIO IS THE FINDING: 1.26x.** Provider density buys about a quarter less tick-cost than it
+did. And the same quantity read **1.0547** and **0.9732** in two `pnpm verify` runs on the SAME
+tree forty minutes apart — so under the verify regime the reading straddles the gate's floor, and
+which side it lands on is the machine rather than the build.
+
+### Why it moved, and it is not a defect this goal can fix
+
+ADR-0054 makes `refillPerTick` the rate a FULLY APPOINTED room reaches, and G-041 re-derived the
+table around that (ADR-0057, option a). **A well-provisioned hotel's guests are now idle 70% of the
+stay** (`idleShareBasisPoints` 7,003 where it was 2,500), and an idle guest is cheap. The dense arm
+is exactly that hotel; the sparse arm's guests queue for one provider and cost more. So density
+stops buying cost — which is a true statement about the simulation, not a measurement error.
+
+**The rates are DERIVED and there is nothing to tune** (`serviceFloorBasisPointsSchema`: 5,000 is
+the only value R1/R2/R3 admit; `needs.rates.test.ts` re-runs the scan). Re-siting the gate's arms
+or moving its floor would be **editing a gate to make a build pass**, which §9 makes a stop
+condition and my brief forbids by name. Hence this entry rather than a commit.
+
+### The options, with their prices
+
+**(a) NARROW NOTHING, MOVE THE ARMS.** The density axis needs two hotels that differ in provider
+density AND are both service-bound. At the declared rate one provider sustains `1 + 14` = 15
+concurrent guests, so `20m` and `1m` against 60 rooms are both over-supplied on the dense side —
+`dense-providers` should be an arm where the extra providers are still being queued for. *Price*:
+a re-derived arm set and a re-taken bound, and ADR-0056 froze the tick-cost bound but says nothing
+about this one. *Risk*: this is the gate's own subject, so it is the human's call whether an agent
+may re-cut it.
+
+**(b) WAIT FOR G-037a's FOLD.** The quality fold makes a bare room serve at the FLOOR rate, which
+puts service back as the bottleneck and should push this ratio back up. **This is the same
+prediction five other arms in this commit are now waiting on**, so it costs nothing extra to test
+and the merge goal is already scheduled next. *Price*: the tree sits with one red row until then,
+and a red row that is expected is exactly the habit §9 warns about.
+
+**(c) RULE THE FLOOR UNSOUND.** `ratio > 1` on a quantity whose own instrument spans 0.97-1.05 in
+one regime is a gate that fires on weather (ADR-0056's argument, verbatim, on a different axis).
+*Price*: the density axis stops being able to say anything, and it is the only axis that checks
+providers at all.
+
+**I recommend (b) with (c) recorded**, because the fold is the next goal and it is the thing that
+would make (a) unnecessary — but the choice is a human's.
+
+### What is NOT in question
+
+The rest of G-041 is green and re-runnable: `pnpm check:content` ok, I2 `f197734f532dc62b` agreeing
+across three processes, `check:tickcost` PASS at 1.2338 and 1.2601 in two runs against a 1.4640
+bound, `check:tickcost:proof` ok, `check:stamp` ok, 2,663 tests passing.
+
 ## E-010 — An exit criterion I wrote is UNSATISFIABLE by any change inside this repository. §2.0.
 **Opened 2026-08-22 (G-039b-β2). The loop does NOT stop** — the goal shipped its real subject; this
 is the residue, and it needs a human call rather than another campaign.

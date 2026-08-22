@@ -243,7 +243,13 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // declares a stairwell and every cross-floor journey in this hotel goes through it. The
     // reading and its five slots are recorded at the constant in `workload.mjs`; this line is
     // the pin, not the derivation.
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(827);
+    // 827 -> 1203 AT G-041, RE-TAKEN **ALONE** again (ADR-0058), because the need rates were
+    // re-derived: `refillPerTick` is the rate a fully appointed room reaches (ADR-0054) and this
+    // tree has no quality fold, so this deliberately starved workload — sixty bedrooms behind
+    // ONE amenity — stops being starved of service and its guests stay instead of giving up.
+    // The bound is NOT re-derived and the campaign is NOT re-taken. `workload.mjs` carries the
+    // five slots and the expectation that G-037a's fold sends this number back down.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_203);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -537,7 +543,15 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     const below = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS - 1);
     const above = measuredConcurrentHundredths(workload.ARRIVAL_EVERY_TICKS + 1);
     const readings = `95 -> ${below}, 96 -> ${here}, 97 -> ${above}`;
-    expect([below, here, above], readings).toEqual([821, 827, 821]);
+    // 821 / 827 / 821 -> 1184 / 1203 / 1206 AT G-041. **THE SHAPE CHANGED AS WELL AS THE LEVEL,
+    // AND THAT IS THIS RE-TAKE'S OWN FINDING.** The shipped cadence used to be a LOCAL MAXIMUM —
+    // lower either side — and it is now the middle of a rising sequence: 95 -> 96 -> 97 climbs
+    // throughout. At the old rates the hotel was service-bound, so a faster cadence bought
+    // nothing and a slower one lost nothing; at the declared rate it is arrival-bound, so every
+    // extra tick of cadence is more guests in the building. The census's point survives intact —
+    // a reading is a claim about ITS cadence, and one tick moves it by 19 hundredths here where
+    // it moved it by 6 before.
+    expect([below, here, above], readings).toEqual([1_184, 1_203, 1_206]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
     // either side is a different hotel. Stated as the two inequalities that ARE the claim — see
     // the block above for why the set-size spelling came out.

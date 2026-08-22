@@ -343,7 +343,12 @@ describe('summary schema 4, and what an older consumer does with it', () => {
         'it. That is the state in which summary schema 4 would be bookkeeping rather than a ' +
         'redefinition: re-read the block above, find the invocation where the two columns still ' +
         'disagree, and move this arm to it — do not delete the claim.',
-    ).toEqual(['guest_entertainment', 'night_rest']);
+      // `guest_entertainment` -> `guest_nourishment` AT G-041. WHICH row diverges is not the
+      // claim — the claim is that SOME row does, and that the `met` column and the pooled
+      // share can still disagree about a hotel. The re-derived rates changed which need this
+      // invocation leaves behind, exactly as travel and the stairwell each did before them, and
+      // `night_rest` is the row that has been in this list through all three.
+    ).toEqual(['guest_nourishment', 'night_rest']);
   });
 
   it('THE RENAMED REASONS ARE ABSENT FROM v3, NOT ZERO — the property THIS bump exists for', () => {
@@ -545,8 +550,30 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   // leftDissatisfied, 29 evictedRoomGone, **6 evictedRoomUnusable** — all five reasons, and
   // the first time this criterion has had more than three of the thin one.
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // `--amenities 6 -> 2` AT G-041, AND THE NEW VALUE IS FORCED RATHER THAN SEARCHED FOR.
+  //
+  // The rates were re-derived (ADR-0054, ADR-0057): `refillPerTick` is the rate a FULLY
+  // APPOINTED room reaches, this tree has no quality fold, so six of each amenity now serve
+  // forty rooms comfortably and `leftDissatisfied` fell to ZERO. A criterion that needs five
+  // reasons cannot be met by a hotel that produces four.
+  //
+  // TWO INEQUALITIES FIX THE AMENITY COUNT, and both use numbers already on disk:
+  //
+  //   THE AMENITIES MUST NOT KEEP UP, or `leftDissatisfied` is zero. One provider sustains
+  //   `1 + refillPerTick` = 15 concurrent guests at the declared rate, and occupancy here is
+  //   `min(rooms, stayDurationTicks / arrivals)` = `min(40, 48)` = 40. So `copies x 15 < 40`,
+  //   i.e. **at most 2**.
+  //
+  //   SOMEBODY MUST STILL FINISH A STAY, or `checkedOut` is zero. **At least 2**: measured, one
+  //   of each amenity against forty rooms completes NO stays at all.
+  //
+  // The window is a single value and 2 is it. Measured at that value: 210 checkedOut, 315
+  // gaveUp, 870 leftDissatisfied, 29 evictedRoomGone, 1 evictedRoomUnusable — all five, with
+  // the thin row still thin and still non-zero.
+  // ---------------------------------------------------------------------------
   const ARGS = [
-    '--days', '30', '--seed', '7', '--rooms', '40', '--amenities', '6', '--arrivals', '30',
+    '--days', '30', '--seed', '7', '--rooms', '40', '--amenities', '2', '--arrivals', '30',
     '--build', '360', '--demolish', '1440',
   ];
 
@@ -623,7 +650,15 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // five non-zero reasons, so nothing is red — but the NEXT goal that moves this schedule
     // should expect step 2 rather than another re-record, and this sentence is here so that it
     // is not a surprise.
-    expect(count('evictedRoomUnusable')).toBe(3);
+    // **3 -> 1 AT G-041, AND THE SENTENCE ABOVE PREDICTED THE STEP.** The arm's amenity count
+    // moved 6 -> 2 (forced — see `ARGS`), so the hotel takes less money, affords fewer builds,
+    // and fewer rooms are standing above the one `--demolish` takes the support from. **This is
+    // ONE EVENT FROM VACUOUS and is said so in place**, which is what the paragraph above asked
+    // the next goal to do rather than re-record silently. The criterion two tests up still reads
+    // five non-zero reasons, so the claim it makes is intact — but a goal that moves this
+    // schedule again should expect to lose the row entirely, and the answer then is a schedule
+    // that reaches it, not a criterion that asks for four.
+    expect(count('evictedRoomUnusable')).toBe(1);
     // The other three, for contrast: this is what headroom looks like.
     expect(count('checkedOut')).toBeGreaterThan(50);
     expect(count('gaveUp')).toBeGreaterThan(50);
@@ -675,13 +710,19 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // on it. Three of six is still short of the criterion, which is the point of the arm, and
     // the arm is now also the cheapest demonstration in the repo that the new row occurs
     // WITHOUT flags.
+    //
+    // **THREE -> TWO AT G-041, AND THE ARM'S OWN POINT GETS STRONGER RATHER THAN WEAKER.** The
+    // re-derived rates serve a six-room hotel's guests fast enough that none of the ones with a
+    // bed walks out on it: `leftDissatisfied` is zero without flags. The criterion needs FIVE
+    // and the default hotel now offers TWO, so the gap the flags exist to close is wider than
+    // it was. Nothing here is widened — the assertion is exact, and the day the third row comes
+    // back it goes red and says so.
     const { world, options } = runWorld(['--days', '30', '--seed', '7', '--rooms', '6']);
     const { summary, violations } = buildSummary(world, content, options);
     expect(violations).toEqual([]);
     expect(summary.guests.departures.filter((row) => row.count > 0).map((row) => row.reason)).toEqual([
       'checkedOut',
       'gaveUp',
-      'leftDissatisfied',
     ]);
   });
 });
