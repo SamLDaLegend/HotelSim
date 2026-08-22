@@ -1909,3 +1909,35 @@ and **asserts the shipped table is its unique survivor**, and nothing in that fi
 `dissatisfactionCapacityTicks` 431 -> 301, plus the two above), and it was only visible because
 `dissatisfaction.content.test.ts` **computes its bounds instead of quoting them** — the green row
 was restating 129 and 431 while both were false.
+
+### E-011 — TWO CORRECTIONS, one of them to my own commit message
+
+**1. THE "FOURTEEN ROWS PASS" IN COMMIT `0dc9e3a` DESCRIBES A DIFFERENT TREE FROM THE ONE THE COMMIT
+IS ABOUT.** That reading is true of `main`, **where the rate change is absent.** On `8026e2f` the
+reading is **thirteen rows PASS, `check:scaling` density RED, `VERIFY_EXIT=1`.**
+
+> The message puts the two one paragraph apart. **That is precisely the referent error CLAUDE.md's
+> five-slot rule exists to catch — *what the number is a measurement OF* — and I made it in the
+> commit that records an escalation about measurement.** Anyone re-measuring must check out the
+> branch first.
+
+**Neither reading was wrong; the pairing was.** Recorded here rather than by amending history.
+
+**2. THERE IS A FOURTH CONSEQUENCE, AND THE BUILDER RANKS IT ABOVE PLOT DEPTH — SO DO I.**
+
+**The engagement-only provisioning ladder INVERTS at the top rung**: worst
+**2,302 / 1,276 / 887 / 1,285**, mean **1,278 / 805 / 654 / 815**. Buying the fourth engagement
+provider makes the worst-served need *worse*.
+
+**That is ADR-0034 §3(b)'s own falsification arm going red.** The statistic that still falls
+monotonically is the one that **includes lodging** — which §3(b) names as *an occupancy statistic in
+disguise*. So the metric that looks healthy is measuring how full the hotel is, not how well it
+serves; and the metric that measures service has inverted.
+
+**It was NOT re-pinned into a weaker claim.** It lives as an OPEN FINDING in
+`tools/headless/src/unserved.report.test.ts` on the branch, asserted exactly, **inversion included,
+with what would discharge it.**
+
+> **Ranked against the other three: this one is about whether the BUILD LOOP works at all**, and it
+> sits beside the flat amenity axis rather than apart from it. The plot-depth and speed-floor items
+> are constraints to accept or reject; **these two are the loop not paying the player back.**
