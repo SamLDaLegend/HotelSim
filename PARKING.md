@@ -3439,3 +3439,19 @@ stairwell column — which `stairs.ts` says would cost the derived speed window 
 this reading stops being free, because a two-shaft world could sensibly have a lift in one and
 steps in the other. **Confirms while `stairwellOf` is still an array index; refutes the moment a
 second stairwell is legal.**
+
+### THE TIMEOUT MARGIN IS NARROWING AS THE SUITE GROWS — 3.84x to 3.36x in one session
+**Parked 2026-08-23.** `needs.determinism.test.ts > runs guests that carry EVERY need` timed out in a
+**QUIET** `pnpm verify` (not the two-verify regime E-010 ruled on), then passed the re-run and passed
+alone at **8,938 ms against its 30,000 ms limit**.
+
+**The trend is the finding, not the flake.** The same test measured **7,804 ms / 3.84x headroom** at
+the start of this session; it is now **8,938 ms / 3.36x**, and the suite grew from **151 files /
+2,636 tests** to **161 / 2,806** over the same period. **Nothing regressed — the sim got bigger.**
+
+**Falsification test:** re-take the isolation reading whenever the suite crosses another ~10 files.
+**Confirms if headroom keeps falling with file count; refutes if it stabilises.** **The remedy when it
+is needed is the HOUSE PATTERN** — a declared per-test budget with its measurement at the docblock,
+as seven files already carry — **and NOT raising a shared literal**, which is what G-039b-beta2
+refused. *(Five census tests already took a 120,000 ms budget at G-040b-ii; this test was not among
+them and now has less headroom than they did.)*

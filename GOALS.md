@@ -2619,6 +2619,204 @@ them live.
 - **G-038b-iii — C5 / reception.** A separate goal: a new guest activity and a new content type,
   not a second consumer of an existing abstraction.
 
+## NEXT — the ordered plan from 2026-08-24, written 2026-08-23 with resources low
+**Read this first.** The goal blocks below are the specification; this is the ORDER and the COST.
+Every item names what it costs and what it is blocked on. **Nothing here is started.**
+
+### THE ONE THING THAT IS NOT A CODE TASK
+
+**THE MILESTONE QUESTION IS STILL OWED** (§9, ADR-0046). *Does the thing on screen still look like
+the game we meant to build?* **The human has now watched it and produced three findings in one
+sitting** — G-044, G-045, G-046 below — **which is more than thirteen goals of `ai-critic` produced
+before the instrument existed.** That is the ADR-0013 argument proved twice over. **Ask it properly
+at M3 exit rather than treating these three as the answer.**
+
+### CHEAP — do these first, they are hours not days
+
+| | goal | cost | blocked on |
+|---|---|---|---|
+| 1 | **G-044** the staircase is drawn | `apps/game/src/view` only. No sim, no content, no hash. | nothing |
+| 2 | **G-045** a rung slow enough to watch a guest | one line of `speed-ladder.json` | **the legibility requirement must be STATED and the rung DERIVED from it** (§2.1). If no requirement can be sourced, escalate rather than pick a number. |
+| 3 | **the G-046 measurement** — *not* the build | one probe | nothing. **Do it before deciding anything.** |
+
+**Item 3 is the highest-leverage cheap thing in this list.** Tightening `isWalkableFor` so a door is
+the only outside entry **will make some currently-valid rooms `unreachable`** — a room whose only
+approach is a wall it currently gets away with. **Count them before designing.** That is the same
+measurement that stopped G-038a-ii-β shipping too early, and the same shape as G-043's, which
+answered the goal before it started.
+
+### MEDIUM — the door, and it is ruled but not sized
+
+**G-046 — a door is a PLACE, entered from one cell.** Human-ruled toward **(b)**. **NOT (c).**
+
+**What (b) is**: `standingCell` returns the door cell instead of `room.at`, and `isWalkableFor`'s
+third set narrows from *the whole destination footprint* to *the door cell from outside, the
+footprint once inside.* **O(1) per candidate. No route search**, so it does not touch the bound
+ADR-0056 froze and that refused (c) twice.
+
+**What comes free**: `unreachable`'s flood fill asks the SAME predicate the mover asks (ADR-0059), so
+**tightening it makes "circulation must reach the door" a validity rule at no extra cost** — already
+paid for at G-038a-ii-β, at 0.50ms per context.
+
+> **THE RISK TO MEASURE FIRST, AND IT IS THE REASON (b) MIGHT LOOK WORSE BEFORE IT LOOKS BETTER: a
+> door makes the target SMALLER.** Today a guest aiming at a room may land on any cell of its
+> footprint; with a door it must reach **one** cell. **`stepTowards` is greedy per-axis, not a
+> search, and it has a wall-ignoring FALLBACK** (`guests.ts:3911`) — which is where the residual 29
+> through-wall landings come from. **A one-cell target will fire that fallback more often**, and
+> every firing becomes a guest conspicuously NOT using the door that was just drawn.
+
+**So the exit criterion is a COUNT, not a feeling**: how often the fallback fires against a one-cell
+target. **If it is rare, doors are done and (c) is never paid for. If it is common, that count is the
+first measured defect that could honestly re-open (c)** — which is the only thing that should, since
+it has been refused twice on anticipation.
+
+### DEFERRED WITH A REASON, not forgotten
+
+- **G-038b-ii — the lift dial.** The congestion does not occur: **max guests on the stairwell cell is
+  3 or 4 at every workload this project can produce** (ADR-0075). Needs demand, which is M4. **The
+  falsification test is the table in that ADR** — re-run it and look for a max a derivable capacity
+  could sit below.
+- **G-038b-iii — C5 / reception.** A new guest activity plus a new content type; **there is no
+  reception mechanic at all** — the word appears once in the tree, in a comment.
+
+### OPEN FINDINGS, each parked WITH its test
+
+1. **The flat amenity axis below the bottleneck survives** — three rooms reads **354 / 354 / 354**
+   across one, two and three amenities. **WATCH #23 has the frame**: nine amenity rooms, one guest,
+   every outcome identical. It is a **clamp** — every housed guest already in the top band.
+2. **Both drawing paths cap at three figures on a tile.** The iso scene turns a fourth guest into a
+   `+N` label; the replay viewer compresses them into one stripe. **§6.1's "UI that cannot express a
+   state the sim can reach", on the two instruments whose output becomes JOURNAL evidence** — and
+   **parties now put two guests in one bedroom routinely.**
+3. **`balance-critic`'s standing mandate is vacuous**: *"report the distribution across a spread of
+   seeds"* — four seeds give **identical** outcomes, because `stepGuests` draws no randomness. A
+   point mass by construction. **ADR-0007's class inside a critic's charter**, the same shape
+   ADR-0013 repaired for *"reads as stupid"*. **Fix the charter, not the sim.**
+4. **`tripwire.mjs`'s printed causal list is stale** in the sentence that exists to prevent stale
+   attributions. **The next goal that moves occupancy must touch it.**
+5. **A goal that enters the tree only through a MERGE is invisible to `check:status`** — it scans
+   `--no-merges` subjects. G-042 reached `main` that way and had no block until it was noticed by
+   hand.
+6. **`PARKING.md`'s digest count does not reproduce from its own stated command** (257 claimed, 261
+   actual) — **and the command counts `^- ` lines, so every recent `###` entry is invisible to it.**
+
+### THE STANDING PROCESS NOTE, because it is the highest-value thing this milestone learned
+
+**Eighteen goals running, the agent acting on the orchestrator's brief has corrected a load-bearing
+claim in it.** Twice the false claim was the one that ORDERED the work; once it was a whole goal's
+premise. **The plan review is what catches this and it has never once come back empty** — eleven
+reviews, ten splits and one goal ended.
+
+> **The cause is structural rather than careless: the brief is written by the agent with the least
+> access to the tree.** The mitigation that works is **measure the premise before designing**, and
+> it is why items 3 and G-046's count are placed before their builds rather than inside them.
+
+## G-044 — The staircase is drawn
+Status: **DONE 2026-08-23 (ADR-0077).** The tile says *a stair is declared here*; the mark says
+*and it continues up/down*. **The chevron claims EXTENT, never PERMISSION** — `stairLeg` uses
+only the shaft column and row, so a renderer that turned *no cell above* into *you cannot go up*
+would state a rule the sim does not have. Contrast measured at **3.48:1 vs corridor**. Nothing
+outside `apps/game/src/view`; I2 unchanged.
+From the human watching the game: *"I can't see the staircases marked as staircases (or at all)."* Milestone: M3 · Owner pair: render-engineer / render-critic
+Statement: the declared stairwell is **visible** in the iso scene.
+
+**CONFIRMED AGAINST THE CODE, NOT TAKEN ON REPORT.** `scenario.ts` **does** declare a shaft
+(`shaftCommands`), and `scene.ts` passes `world.stairs` into validity so a stairwell-served room is
+not falsely `noCorridor`. **But nothing in the view DRAWS it.** The only other `stair` hits in the
+entire view layer are a comment about luminance ordering.
+
+> **The vertical circulation that four goals were about is the one thing a player cannot see.** It is
+> invisible by omission, not by defect — which is why no gate caught it and a human did in one
+> glance.
+
+**SMALL, AND THE SEAM IS FREE**: `apps/game/src/view` only. **No sim change, no content change, no
+save bump, no hash movement, no golden.** The provable property is *"nothing outside `apps/game`
+moves."*
+
+**What it must show**: the stairwell cell **on every floor it serves**, distinguishable from a
+corridor cell. **`world.stairs` is the source** — do not re-derive it from geometry.
+
+**Exit criteria**: a frame reference showing the shaft on two adjacent floors · `pnpm verify`
+fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
+
+## G-045 — A rung slow enough to watch a guest
+Status: **PLANNED 2026-08-23. From the human watching the game** — *"movement is FAR too fast to my
+eye, people are zooming around all over the place."* Milestone: M3 · Owner pair: economy-engineer /
+balance-critic *(content, not render)*
+Statement: the speed ladder gains a rung at which a guest is legible.
+
+**IT IS NOT THE FRAME RATE, AND THAT WAS CHECKED FIRST.** `advance` earns ticks from `dtMs` off the
+wall clock with a fractional carry; the driver's docblock guards it explicitly — *"speed is in ticks
+per real second and never ticks per rendered frame"* — and §6.1's catalogue names frame-rate-coupled
+advance as a defect. **145 FPS and 60 FPS run the same hotel at the same rate.**
+
+**IT IS ARITHMETIC**, and `guestCellsPerTick: 3` is the multiplier:
+
+| rung | ticks/s | **cells/s on screen** | 80-column plot crossed in |
+|---|---|---|---|
+| Fast | 30 | **90** | 0.9 s |
+| Working | 12 | 36 | 2.2 s |
+| **Careful** | **5** | **15** | **5.3 s** |
+
+> **The slowest rung still moves a guest fifteen cells a second. The ladder was derived for how fast
+> a DAY should pass and never for whether a GUEST is legible** — a criterion nobody had written down
+> until somebody watched it.
+
+**SMALL**: one entry in `speed-ladder.json`. **`check:ladder` permits it** — it forbids the render
+layer *computing* one rung from another, not content declaring one. **`ticksPerRealSecond` never
+reaches the sim**, so I2 does not move and `arrived` is identical in both `check:tickcost` arms.
+*(Confirm both rather than assume them.)*
+
+**THE NUMBER MUST BE DERIVED FROM A STATED REQUIREMENT** (§2.1). The requirement this goal
+introduces is legibility: **state how many cells per second a watcher can follow, justify it, and
+derive the rung from it.** *A rung chosen because it "looks better" is the superstition §2.1
+forbids* — and if no requirement can be sourced, **say so and escalate rather than inventing one.**
+
+**Exit criteria**: the requirement stated and the rung derived from it · `pnpm verify` fourteen rows
+· I2 unchanged, `check:tickcost` a real ratio · the ladder's own gate green.
+
+## G-046 — Is a door a place, or a property?
+Status: **PLANNED 2026-08-23 — NEEDS A HUMAN RULING BEFORE IT CAN BE SIZED.** From the human watching
+the game: *"they seem to jump through walls rather than looking for a door (which I guess doesn't
+exist!)."* Milestone: M3 · Owner pair: sim-engineer / ai-critic
+
+**THE OBSERVATION IS EXACTLY RIGHT.** `isWalkableFor` admits a cell if a room stands on it **and it
+is the destination**; otherwise the cell must be declared circulation. **So a guest walks the
+corridor and then steps into its room across whichever wall it happens to be beside.**
+
+**AND `noDoor` DOES NOT MEAN WHAT THE NAME SUGGESTS.** It is a validity reason about a room having
+**access**, not about a cell anyone must pass through. **A door is a PROPERTY of a room, not a PLACE
+in the world.**
+
+> **G-038a's whole wall campaign — through-wall landings 236 -> 29 — was about not walking through
+> rooms EN ROUTE. It never claimed anything about how a guest ENTERS its destination**, and reading
+> it as if it did is the ADR-0007 class: a number that is true of one claim being read as evidence
+> for another.
+
+**WHY THIS NEEDS THE HUMAN AND THE OTHER TWO DO NOT.** Making a door a place is **not a rendering
+fix and not a small one**: it is a cell on a room's boundary, chosen at build time or derived, that
+every journey must route through — which means **a route search**, and G-038a measured a route search
+per guest per tick at **1.70x-1.91x against a bound ADR-0056 froze.** *That is the goal that has been
+refused twice on cost.*
+
+**THE THREE ANSWERS, WITH THEIR PRICES:**
+
+- **(a) A door stays a PROPERTY.** Zero cost, and the game keeps looking the way it looks. **Honest
+  only if the art stops implying a door** — a wall a guest walks through reads as a defect whatever
+  the model says.
+- **(b) A door is a PLACE, entered from one cell.** The room's footprint gains a boundary cell that
+  is the only admissible approach. **No route search** — `stepTowards` already walks toward a
+  destination cell, so the door simply becomes that cell. **This is the affordable version and it is
+  probably what a watcher means.**
+- **(c) A door is a place AND corridors must reach it.** Full routing. **The expensive one, refused
+  twice already.**
+
+**RECOMMENDED: (b).** It buys the readable behaviour — a guest walking to the doorway and turning in
+— **without the cost that killed (c) twice.** *(b) is a change to `standingCell`'s destination, not to
+how a guest travels.*
+
+**DO NOT BUILD UNTIL RULED.**
+
 ## G-038b-i — The queue mechanism, `packages/sim` only
 Status: **done 2026-08-23.** The half of G-038b that can be built honestly: the MECHANISM,
 **inert on shipped content** and proved against hand-built worlds — G-040a's shape (party size

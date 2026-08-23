@@ -16,7 +16,7 @@
 // only min <= max per axis, so a legal plot need not contain floor 0 at all.
 // ---------------------------------------------------------------------------------------
 
-import { entranceCell, hasCorridorAt, isPlaced } from '@hotelsim/sim';
+import { entranceCell, hasCorridorAt, hasStairAt, isPlaced } from '@hotelsim/sim';
 import type { Cell, GridBounds, World } from '@hotelsim/sim';
 import {
   cornerOf,
@@ -308,6 +308,20 @@ export function cellAt(view: View, x: number, y: number): Cell {
 /** Whether the plan declares this cell a walkway. Asked of the world, never decided here. */
 export function isCorridorCell(world: World, cell: Cell): boolean {
   return hasCorridorAt(world.corridors, cell);
+}
+
+/**
+ * Whether the plan declares this cell a STAIR (G-044). `world.stairs` is the source; nothing
+ * here re-derives a shaft from geometry, exactly as `isCorridorCell` re-derives no walkway.
+ *
+ * ASKED OF AN ARBITRARY CELL, INCLUDING ONE OFF THE PLOT. `scene.ts` asks it of the floor
+ * ABOVE and BELOW the one being drawn, and at the top and bottom of the plot those cells do
+ * not exist. `hasStairAt` is a binary search over a sorted array and answers `false` for a
+ * coordinate nobody declared, which is the right answer for both cases — so the caller does
+ * not need a bounds test and cannot get a different answer by skipping one.
+ */
+export function isStairCell(world: World, cell: Cell): boolean {
+  return hasStairAt(world.stairs, cell);
 }
 
 /** How wide one tile is on screen at this camera. For sizing marks that sit on a tile. */

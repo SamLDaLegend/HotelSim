@@ -20,6 +20,8 @@
 //   valid vs invalid              hatched, alarm-outlined, and labelled with the reason
 //   let vs empty                  one white pip per guest holding it, wherever that guest is
 //   the door                      an ochre diamond on the entrance tile, always drawn
+//   THE STAIRWELL, AND WHERE IT   a darkened tile, cyan-rimmed, with treads across it; plus
+//   GOES FROM THIS FLOOR          chevrons and a word saying UP, DN or UP/DN — see `drawStair`
 //   a guest, and what it wants    see `guest.ts`
 //
 // ---------------------------------------------------------------------------------------
@@ -47,6 +49,14 @@
 // occupancy pip. A watcher therefore sees both halves. ONE FLOOR AT A TIME MAKES THIS SHARPER
 // RATHER THAN SOFTER: the two halves can now be on two different floors, and the pip is the
 // only thing telling the player the room is let.
+//
+// ---------------------------------------------------------------------------------------
+// AND THE STAIRWELL WAS THE ONE THING A PLAYER COULD NOT SEE AT ALL (G-044). A human watched
+// the shipped build and said *"I can't see the staircases marked as staircases (or at all)"*,
+// and they were right by OMISSION rather than by defect: `scenario.ts` declares a shaft,
+// `createValidityContext` below is already handed `world.stairs` so a stairwell-served room is
+// not falsely `noCorridor` — and nothing drew it. The vertical circulation four goals were
+// about was invisible, which is why no gate caught it and one glance did. See `drawStair`.
 
 import {
   createValidityContext,
@@ -66,7 +76,7 @@ import type { BoundContent, Cell, Entity, Guest, World } from '@hotelsim/sim';
 import { isRoomEntity } from '../pick.js';
 import { colourOf, createAppearances } from './appearance.js';
 import type { Appearances } from './appearance.js';
-import { centreOf, isCorridorCell, toCanvas } from './camera.js';
+import { centreOf, isCorridorCell, isStairCell, toCanvas } from './camera.js';
 import type { View } from './camera.js';
 import { assertSingleTile, createCollector, depthOf, LAYER } from './depth.js';
 import { drawGuest, facingOf, guestGeometry, needVectorWidth } from './guest.js';
@@ -280,6 +290,24 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
           });
         }
 
+        // THE STAIRWELL, ON EVERY FLOOR THE PLAN DECLARES ONE (G-044), and — like the door
+        // above — DRAWN WHATEVER STANDS ON IT. `stairLeg` sends every floor-changing guest in
+        // the hotel to the stairwell's column and row regardless of what is built there, so a
+        // shaft hidden under a room is a guest climbing with no picture, which is §6.1's first
+        // catalogue entry. The corridor rule below it is the opposite call for the opposite
+        // reason: a covered corridor is one walkway among many and the room is the news.
+        if (isStairCell(world, cell)) {
+          drawStair(
+            collector,
+            labels,
+            view,
+            cell,
+            isStairCell(world, { floor: cell.floor + 1, column, row }),
+            isStairCell(world, { floor: cell.floor - 1, column, row }),
+            depth,
+          );
+        }
+
         if (room !== undefined) {
           // COUNTED ONCE PER ROOM, NOT ONCE PER TILE (G-036b). `SceneReport.rooms` is what the
           // HUD prints and what `record-frames.ts` puts in every caption; counting covered
@@ -386,6 +414,162 @@ function drawTile(
     points,
     fill: belowGrade ? INK.earth : INK.sky,
     stroke: { width: 1, colour: INK.floorLine, alpha: 0.8 },
+  });
+}
+
+/** How many treads are drawn across a stairwell tile. A count, not a measurement of a flight. */
+const STAIR_TREADS = 4;
+
+/**
+ * THE STAIRWELL (G-044) — a darkened tile, a cyan rim, treads across it, and a mark saying
+ * WHERE THE SHAFT GOES FROM THE FLOOR ON SCREEN.
+ *
+ * ==========================================================================================
+ * WHAT A ONE-FLOOR VIEW MAY HONESTLY SAY ABOUT A THING THAT CONNECTS TWO, WHICH IS THE WHOLE
+ * DESIGN QUESTION AND NOT A PRESENTATION ONE.
+ *
+ * `camera.ts` draws ONE floor. A stairwell is not a thing on a floor; it is a relation between
+ * floors, and every tile-shaped picture of one is therefore a claim the tile cannot fully
+ * carry. So the mark is split in two, and the split is the honesty:
+ *
+ *   THE TILE   says "the plan declares a stair here" — darkened ground, a rim, treads. That
+ *              is a fact about THIS cell and `world.stairs` is its only source.
+ *   THE MARK   says "and it continues UP / DOWN / BOTH from here" — chevrons plus the word.
+ *              That is a fact about the two cells directly above and below, read the same way
+ *              from the same array.
+ *
+ * NEITHER OF THEM SAYS "YOU MAY CLIMB HERE", AND THAT DISTINCTION IS LOAD-BEARING RATHER THAN
+ * pedantic. `stairLeg` in the simulation reads `stairwellOf(stairs)` and uses only its COLUMN
+ * AND ROW — never which floors declared a stair (ADR-0059, and `validity.ts`'s `climbsFrom`
+ * carries the same sentence, verified there by a world declaring a stair on floor 0 only and
+ * behaving identically to one declaring it on both). So the floor axis spends from the
+ * stairwell's column on EVERY floor, and a renderer that turned "no declared cell above" into
+ * "you cannot go up" would be stating a rule the simulation does not have. The chevron is a
+ * statement about the SHAFT'S EXTENT, which is a thing `world.stairs` genuinely knows.
+ *
+ * A CELL WITH NEITHER NEIGHBOUR DECLARED THEREFORE READS `STAIR` AND SHOWS NO CHEVRON, and
+ * that is the correct picture rather than a gap in one: it is a flight that connects nothing,
+ * and a watcher should see something odd, because something odd is what the plan says. The
+ * shipped scenario's shaft runs the full height of the plot, so on every floor between the
+ * bottom and the top it reads UP/DN.
+ * ==========================================================================================
+ *
+ * TREADS RUN ALONG THE OTHER AXIS FROM THE INVALID HATCH, DELIBERATELY. `drawRoom` hatches a
+ * broken room with three lines from `(u, v + t)` to `(u + 1, v + t)`; these run from
+ * `(u + t, v)` to `(u + t, v + 1)`. Same tile, crossed direction, and a different colour — so
+ * "this room is broken" and "this is the way up" cannot be confused for each other on a tile
+ * that is somehow both.
+ *
+ * WHICH WAY THE TREADS FACE MEANS NOTHING ABOUT THE WORLD, and nothing may ever be inferred
+ * from it. A shaft has no direction of travel — it serves up and down at once — so the axis
+ * here is a drawing choice in exactly the sense that "which of the two far walls is lit" is
+ * one. What carries direction is the chevron, and the chevron is derived.
+ *
+ * THE GROUND SITS ON THE FLOOR LAYER AND THE MARK GOES IN `labels`. The stairwell is the
+ * busiest cell on the plot — it is where every guest changing floor has to stand — so the
+ * treads go UNDER the guests, where they belong, and the chevrons and the word are drawn
+ * after every layer of every tile, so nothing occludes the one statement a watcher needs to
+ * read. The block below records the frame that forced that split.
+ */
+function drawStair(
+  collector: ReturnType<typeof createCollector<Primitive>>,
+  labels: Primitive[],
+  view: View,
+  cell: Cell,
+  up: boolean,
+  down: boolean,
+  depth: number,
+): void {
+  const tile = toView(cell.column, cell.row, view.orientation);
+  const points = tilePoly(view, cell.column, cell.row);
+  const centre = centreOf(view, cell.column, cell.row);
+
+  // THE OPENING. A wash rather than a fill, so the tile underneath keeps saying what it is:
+  // above or below grade, paved or bare, and built on or not. One shaft, one treatment, on
+  // every floor it passes through — see `INK.stair` for why it is not a second paving.
+  collector.add(depth, LAYER.floor, { kind: 'poly', points, fill: INK.soot, alpha: 0.45 });
+
+  for (let i = 1; i <= STAIR_TREADS; i += 1) {
+    const t = i / (STAIR_TREADS + 1);
+    const from = toCanvas(view, cornerOf(tile.u + t, tile.v));
+    const to = toCanvas(view, cornerOf(tile.u + t, tile.v + 1));
+    collector.add(depth, LAYER.floor, {
+      kind: 'line',
+      x1: from.x,
+      y1: from.y,
+      x2: to.x,
+      y2: to.y,
+      width: 2,
+      colour: INK.stair,
+      alpha: 0.95,
+    });
+  }
+
+  collector.add(depth, LAYER.floor, { kind: 'poly', points, stroke: { width: 2, colour: INK.stair, alpha: 0.9 } });
+
+  // ======================================================================================
+  // THE MARK — CHEVRONS AND A WORD, AND ALL OF IT GOES IN `labels` RATHER THAN ON THE OVERLAY
+  // LAYER. THAT IS A CORRECTION, MEASURED ON A FRAME, NOT A PREFERENCE.
+  //
+  // The first version put the chevrons at `LAYER.overlay` on the tile's near lip, on the
+  // reasoning that the overlay beats a guest standing here. It does — and it loses to the
+  // thing that actually occludes this tile. Recorded at seed 7, tick 480, floor 0: the shaft
+  // stands at the entrance's row, and the room in FRONT of it has greater depth, so ITS far
+  // wall is drawn later and rises across the shaft's near band. The down chevron was half
+  // behind that wall and half behind its own plate. `labels` is drawn after every layer of
+  // every tile, which is the property the room BADGE is already there for, and the chevron is
+  // part of this marker in exactly the sense that the badge's plate is part of that one.
+  //
+  // STACKED, WITH UP ON TOP — the one place in this file where a screen direction is allowed
+  // to mean a world direction, because the floor axis is the one axis this projection does
+  // not turn. `depthOf` rotates; up does not.
+  // ======================================================================================
+  const word = up && down ? 'UP/DN' : up ? 'UP' : down ? 'DN' : 'STAIR';
+  const wordY = centre.y + 26 * view.scale;
+  const half = Math.max(4, 8 * view.scale);
+  const rise = Math.max(4, 7 * view.scale);
+  const chevron = (apexY: number, baseY: number): void => {
+    labels.push({
+      kind: 'poly',
+      points: [centre.x, apexY, centre.x - half, baseY, centre.x + half, baseY],
+      fill: INK.stair,
+      stroke: { width: 1, colour: INK.soot, alpha: 0.9 },
+    });
+  };
+  // Measured up from the plate's top edge, so the marker is one block however many chevrons
+  // it has and the word never moves.
+  //
+  // THE GAP IS AS TALL AS THE CHEVRONS ARE, AND THAT IS A LOOK'S FINDING RATHER THAN A LAYOUT
+  // TASTE. At a two-pixel separation the two triangles met base to base and drew one solid
+  // DIAMOND — measured on the zoom of seed 7, tick 480, floor 0, at 5x. A diamond is not a
+  // pair of arrows; it is a shape with no direction in it at all, which is precisely the claim
+  // this mark exists to make.
+  const stackBottom = wordY - 8 - 3;
+  const between = rise;
+  if (down) chevron(stackBottom, stackBottom - rise);
+  if (up) {
+    const base = stackBottom - (down ? rise + between : 0);
+    chevron(base - rise, base);
+  }
+  labels.push({
+    kind: 'rect',
+    x: centre.x - (word.length * 6) / 2 - 4,
+    y: wordY - 8,
+    w: word.length * 6 + 8,
+    h: 16,
+    fill: INK.soot,
+    alpha: 0.85,
+  });
+  labels.push({
+    kind: 'text',
+    text: word,
+    x: centre.x,
+    y: wordY,
+    size: 11,
+    colour: INK.stair,
+    bold: true,
+    anchorX: 0.5,
+    anchorY: 0.5,
   });
 }
 

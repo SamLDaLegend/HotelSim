@@ -6530,3 +6530,88 @@ is `null` in every world any harness here produces.**
 *(And one corner documented rather than fixed: the wait clock does not reset when a guest's
 destination changes on the same tick its patience expires. It leaves anyway — **consistent with
 `dissatisfaction` never resetting**, and named at the point of use.)*
+
+---
+
+## ADR-0077 — The staircase is drawn, and the chevron claims EXTENT rather than PERMISSION.
+
+**Date**: 2026-08-23 · **Status**: accepted · **G-044.** From the human watching the game.
+Fourteen rows PASS, I2 `abfd91c3da10b67f` unchanged, **nothing outside `apps/game/src/view`.**
+
+### THE MARK IS SPLIT IN TWO, BECAUSE A ONE-FLOOR VIEW CAN ONLY HONESTLY CARRY ONE CLAIM PER PIECE
+
+- **The tile** says *"the plan declares a stair here"* — a wash, a 2px rim, four treads. **A fact
+  about THIS cell**, sourced from `world.stairs` via `hasStairAt`; **nothing re-derives a shaft from
+  geometry.**
+- **The mark** says *"and it continues up / down / both"* — stacked chevrons plus `UP` / `DN` /
+  `UP/DN`. **A fact about the two cells above and below**, from the same array.
+
+**Distinguishability is MEASURED, not asserted**: `INK.stair` reaches **3.48:1 against
+`INK.corridor`** — its worst case, and the value that chose the colour — clearing the same WCAG 3:1
+the palette already traces to, and **6.47:1 over the shaft's own darkened tile.** Hue 185°, **115°
+from the reserved magenta arc and furthest of any ink from `entrance`** — which matters, because the
+shipped scenario puts the shaft **next door to the door.**
+
+### THE HONESTY CONSTRAINT, AND IT IS THE PART WORTH KEEPING
+
+`stairLeg` reads `stairwellOf(stairs)` and uses **only its column and row, never which floors
+declared a stair** (ADR-0059), and `validity.ts`'s `climbsFrom` carries the same sentence. **So the
+floor axis spends from the stairwell column on EVERY floor.**
+
+> **A renderer that turned "no declared cell above" into "you cannot go up" would state a rule the
+> simulation does not have.** The chevron is therefore a claim about the **shaft's EXTENT**, which
+> `world.stairs` genuinely knows — **never a permission.** Written into `drawStair`'s docblock so the
+> next reader cannot take it the other way.
+
+**And it is drawn even when a room covers it**, because `stairLeg` sends every floor-changing guest
+there regardless of what is built on top — **a hidden shaft is a guest climbing with no picture**,
+§6.1's first catalogue entry.
+
+### TWO DEFECTS THE FRAMES CAUGHT THAT NO GATE COULD
+
+The builder **rasterised the SVGs and looked at them.** Both corrections came from that, not from
+reasoning:
+
+1. **The chevrons were at `LAYER.overlay`** — which beats a guest, but loses to the thing that
+   actually occludes this tile: **the room in front has greater depth, so its far wall is drawn later
+   and rises across the shaft's near band.** The down chevron was half behind a wall. Moved to
+   `labels`.
+2. **At 2px separation the two triangles met base-to-base and drew a solid DIAMOND** — **a shape with
+   no direction in it, which is precisely the claim the mark exists to make.**
+
+*(A third observation, from a throwaway recording: at tick 0 no marker appears on any floor, because
+the scenario's `layStair` commands apply stepping OUT of tick 0. Expected, and checked rather than
+assumed.)*
+
+### FOUR FINDINGS DELIBERATELY NOT ACTED ON, EACH WITH ITS REASON
+
+- **`floorsOf` does not offer a floor that only a stair declares.** The shipped shaft spans floors
+  **−2..20 (23 cells)**; the switcher offers **−1, 0, 1, 2**. **So 19 declared stair cells exist on
+  floors a player cannot look at.** Not fixed: adding `world.stairs` to `floorsOf` turns a 4-entry
+  switcher into a 23-entry one. **More likely an argument that `shaftCommands` should stop at the
+  plot ceiling** — a `scenario.ts` change, not a view one.
+- **The `STAIR` branch (neither neighbour declared) is unreachable on shipped content** — it needs a
+  plot boundary or a hand-built one-cell shaft. Kept, because **a shaft that connects nothing must
+  still have a picture**; flagged as an untested branch rather than hidden.
+- **At low scale the fixed 11px plate is wider than its tile** — **identical pre-existing behaviour
+  to the room badge**, so matched rather than given a second rule.
+- **`GR37` renders magenta-pink on floor −1.** The palette reserves magenta for `UNKNOWN` and asserts
+  no ladder colour lands within 35° of 300°; this one **passed that test and still reads as the
+  reserved "content error" colour to an eye.** Pre-existing and unrelated to this diff — **but it is
+  exactly the failure the reservation exists to prevent, and it wants a frame reference.**
+
+### AND MY BRIEF WAS FALSE IN THE SAME WAY, ONE GOAL LATER
+
+I told the builder the tree was clean. **`GOALS.md` carried 102 uncommitted insertions of MINE at its
+first `git status`, and 194 by the time it finished — it GREW while the builder worked**, because I
+inserted the next-week plan and three new blocks underneath a running agent.
+
+> **The previous goal's report told me this exact thing about this exact file, and I did it again
+> within the hour.** *And I also quoted a stale HEAD.* **The mitigation is not "remember": it is to
+> stop asserting tree state in a brief at all, and to say "run `git status` first and tell me what
+> you find" instead.**
+
+*(Also flagged rather than glossed: the builder had no browser tool, so it could not use the dev
+server the edit hook kept pointing at. **It took the WATCH through `record` plus headless rasterising
+instead — the shipped scene by construction — and said so, so that "I watched it" is not read as "I
+watched it in the dev server."**)*

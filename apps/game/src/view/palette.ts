@@ -313,6 +313,35 @@ export const INK = {
   corridor: 0x5a6472,
   corridorBelow: 0x4a4640,
   corridorEdge: 0x8a94a3,
+  /**
+   * THE STAIRWELL (G-044) — the one mark on the floor plane that is about LEAVING it.
+   *
+   * ONE INK, NOT TWO, AND NOT A SECOND PAVING. `corridor` needed an above/below-grade pair
+   * because paving is GROUND and with one floor on screen the ground itself has to say which
+   * side of the street line you are on. A shaft is not ground: it is the same shaft on every
+   * floor it passes through, and drawing it the same colour on every floor is the honest
+   * reading rather than a shortcut. So this is a MARK laid over whatever tile is there — the
+   * `entrance` diamond's mechanism, one axis over — and the tile underneath keeps saying
+   * whether it is above grade, below it, paved, bare, or built on.
+   *
+   * WHY IT IS THE ONE HUED PIECE OF CIRCULATION ON SCREEN, when `corridor`'s own block above
+   * argues that circulation is achromatic. That argument is about a COUNT: every room type is
+   * hued, so "room or walkway" must not be a which-hue-is-which question. There is exactly ONE
+   * stairwell column in a world (`stairs.ts`: stairs are aligned), so this ink is compared
+   * against nothing — it is a singleton mark, like `entrance` (ochre) and `alarm` (red), both
+   * of which are hued for the same reason.
+   *
+   * MEASURED, LIKE EVERY OTHER NUMBER IN THIS FILE. Against the paving it has to be told apart
+   * from, it reaches **3.48:1 on `corridor`** — its worst case, and the one that decided the
+   * value — and 5.44:1 on `corridorBelow`, both clearing the 3:1 of
+   * `MIN_CONTRAST_VS_BACKGROUND`'s own source (WCAG 2.2 SC 1.4.11, non-text contrast: a
+   * graphical object needed to understand the content). Over the shaft's own darkened tile it
+   * reaches 6.47:1 above grade and 8.20:1 below. Its hue is 185 degrees: 115 from the reserved
+   * magenta arc,
+   * and further from `entrance` (43) than any other ink on the plane — which matters because
+   * the shipped scenario puts the shaft in the cell NEXT DOOR to the door.
+   */
+  stair: 0x5fd6e0,
   /** Street level. The heaviest line on screen. */
   grade: 0xc79a4a,
   /** The building's own edge, drawn round the built extent. */
