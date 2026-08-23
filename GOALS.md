@@ -2740,7 +2740,7 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
 ## G-047 — A guest is drawn between ticks
-Status: **PLANNED 2026-08-23. Discharges `PARKING.md`'s interpolation park, whose falsification test
+Status: **PLANNED — and CONFIRMED BY THE HUMAN 2026-08-23.** E-012's experiment E1 ran and came back NEGATIVE: *"even on careful people are still teleporting around."* The rung is exonerated by eye as well as by arithmetic, so interpolation is the answer rather than a candidate. Discharges `PARKING.md`'s interpolation park, whose test FIRED at G-045.
 FIRED at G-045 (E-012).** Milestone: M3 · Owner pair: render-engineer / render-critic
 Statement: the renderer **tweens a guest between consecutive tick states**, so a walk reads as
   walking rather than as three teleports.

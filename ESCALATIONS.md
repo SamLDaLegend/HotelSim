@@ -2053,7 +2053,7 @@ bound, `check:tickcost:proof` ok, `check:stamp` ok, 2,663 tests passing.
 
 ---
 
-## E-012 — The speed rung is the WRONG DIAL. A parked falsification test fired, and it names interpolation.
+## E-012 [RESOLVED 2026-08-23] — The speed rung is the WRONG DIAL. A parked falsification test fired, and it names interpolation.
 **Opened 2026-08-23 (G-045). No number was shipped and no file in the repo changed.** The builder was
 told it could escalate rather than pick a value, and it did — **with the measurement that reframes
 the goal.**
@@ -2160,3 +2160,53 @@ criterion needs a perceptual check, and **the only perceptual instrument here wr
 6. *(A MINOR found in passing: `guest.ts:243` still reads "nothing moves yet (G-023b-i is unbuilt)" —
    **false since G-023b-ii, in the docblock of the function that decides which way the moving thing
    faces.**)*
+
+### E-012 [RESOLVED 2026-08-23 — by the human running E1] — the rung is exonerated; interpolation it is.
+
+**The human ran the experiment and reported the result: *"Even on careful people are still
+teleporting around."***
+
+> **E1 is answered and it is NEGATIVE. This is NOT a default-rung question.** Careful — **0.84 canvas
+> widths per second, the reading nobody had ever reported on** — still reads as teleporting.
+
+**So the measurement stands, confirmed by the eye rather than by the arithmetic**: `px per redraw` is
+**214.66 at every rung**, and a guest crosses **9.34 of its own body widths with nothing drawn in
+between**. **A rung changes how OFTEN that jump happens, never how big it is.**
+
+**E3 is therefore moot** — there is no threshold in real seconds for the human to state, because no
+admissible rung produces a different jump. **E2 is the answer: G-047, interpolation.** *And it was
+already the recommendation, already parked with the test that fired, and already required by the
+render charter.*
+
+**What this cost, and it is the cheap version**: one click by the human settled a question that would
+otherwise have been three integers, a perceptual ruling, and a goal spent shipping a rung that could
+not have worked. **The park that named the test was written before travel existed.**
+
+---
+
+## E-013 — The speed controls are UNREACHABLE on a short viewport, because the page cannot scroll.
+**Opened 2026-08-23. Found by the human: *"I can't see it in my browser, but I can in yours."***
+
+**`html` and `body` both carry `overflow: hidden`**, and `document.scrollHeight === innerHeight` at
+every size tested — **the page never scrolls.** The speed row is the **last** of thirteen buttons and
+sits hard against the bottom edge.
+
+> **So on a viewport shorter than the layout needs, the speed controls are not merely below the
+> fold — they are UNREACHABLE.** There is no scroll to recover them. **A player on a laptop cannot
+> change speed at all**, and the game opens at the FASTEST rung by design.
+
+**Measured**: in the agent's pane `innerHeight` 595 and the row is visible; the human's browser
+shows the same page with the row absent. **Browser chrome ate 797px of a 1392px window in the
+observed case** — which is what a real browser does and the agent's pane does not.
+
+**This is §6.1's shape one step worse than the catalogue entry**: not *a UI that cannot express a
+state the sim can reach*, but **a control the player cannot reach at all.**
+
+**FALSIFICATION TEST**: load `localhost:5180` at `innerHeight` 400, 500, 600 and try to reach the
+speed row. **Confirms if it is clipped with `scrollHeight === innerHeight` at any of them; refutes if
+the layout compresses to fit at every height a browser can produce.** *(At 460 it still fitted in the
+agent's pane, so the threshold is real but not yet bracketed — bracket it before designing.)*
+
+**Candidate fixes, cheapest first**: let the page scroll; or pin the speed bar `position: fixed` to
+the bottom; or move it into the top toolbar with the build palette. **The first is one line and the
+last is a layout decision — the human's, since it changes what the game looks like.**
