@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-040b-ii is DONE: parties ARRIVE. partySizeWeights [3, 1] gives the realised cycle 1, 1, 2 — one third of parties and one HALF of guests arrive as a pair, and the realised mix is NOT the weight ratio because a party consumes one ordinal per member. WATCH #22 confirms a party draws as TWO figures and TWO pips in one bedroom; drawing as one figure does not occur. The scaling campaign is re-taken with its eighth term in the same commit and density's direction goes back ON, which is a stricter gate. Occupancy 1203 -> 1275: +33.3% guests moved it only +6.0%, because sixty bedrooms behind one amenity are bound by service rather than beds. check:tickcost SAW the content change and returned INCOMPARABLE rather than a wrong ratio — 600 guests head against 450 base, and 450 x 4/3 = 600 confirms the cycle from a gate that knows nothing about parties. G-043's cause is now identified as a UNIT ERROR (demand counts parties, provisioning counts guests) with its falsification test already positive. The build loop moves where it was flat: one amenity at 12 rooms is worth 111 hundredths and the lean-vs-rich completion factor re-opens 1.07x -> 2.76x. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-23, G-043 is DONE and G-038b is DEFERRED on measurement — M3's goal list is closed and the milestone question is owed to the human. G-043: the engagement ladder was never inverting, it was a units mismatch (demand counted arrival commands, provisioning counted guests), now repaired in a SHARED provisioning.ts where every quantity carries its unit in its name; top rung 219 out / 252 dissatisfied becomes 464 / 0. The deciding evidence for shared over local is that the FOURTH local fix was also wrong. A prior question nobody had asked is now answered: a bedroom is claimed by ONE PARTY, not by capacity strangers, so the beds model over-estimated capacity in the unsafe direction. G-038b DEFERRED (ADR-0075): the congestion a lift queue exists to manage DOES NOT OCCUR — max guests on the stairwell cell is 3 or 4 at every workload this project can produce, so a capacity of 4+ can never bind. That is the inert-rule problem a fourth time, caught in the goal whose own block claimed to have avoided it, and it needs demand (M4) rather than code. Still open and parked: the flat amenity axis BELOW the bottleneck survives (three rooms reads 354/354/354, WATCH #23 has the frame — nine amenity rooms, one guest, every outcome identical); both drawing paths cap at three figures on a tile; and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v22** (G-040a — a guest gained a `partyId`; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -2606,83 +2606,84 @@ PLAN with its measurement plan**, because a derived-at-read-time fold lands on t
 the sim, guarded by a bound under an OPEN escalation for being too wide to catch it.
 
 ## G-038b — A route can be busy
-Status: **PLANNED 2026-08-22.** Written from the bullet it had been since G-038's split.
-Milestone: M3 · Owner pair: sim-engineer / sim-critic **plus ai-critic** (this is guest behaviour)
-Statement: vertical circulation gains **capacity**, so a route can be full as well as long — lift
-  capacity, a call queue, wait state, and C5's reception desk as the third consumer of waiting.
+Status: **DEFERRED 2026-08-23 (ADR-0075). The premise is FALSE and it was measured before a line was
+written.** Eleventh plan review; the first to end a goal rather than split it.
+Milestone: M3 · Owner pair: sim-engineer / sim-critic **plus ai-critic**
 
-**WHY IT IS NOW BUILDABLE AND WAS NOT BEFORE.** The whole G-038a chain had to land first: a route
-had to exist (`stepTowards` over `isWalkableFor`), a floor had to be reached by something
-(`stairLeg`), a room had to be reachable at all (`unreachable`), and a harness had to declare a
-shaft. **All four shipped between 2026-08-21 and 2026-08-22.** A queue for a thing nobody uses is
-the inert-rule problem this milestone has now hit three times.
+### THE CONGESTION THIS GOAL EXISTS TO MANAGE DOES NOT OCCUR
 
-### THE DESIGN QUESTION THAT MUST BE ANSWERED AT PLAN, BECAUSE IT DECIDES EVERYTHING ELSE
+Max guests simultaneously on the aligned stairwell cell, over `report.ts`'s schedule, five settings.
+**One run each is the POPULATION, not a sample — the sim is deterministic.** No stopwatch, no regime.
 
-**A stair has unbounded capacity; a lift does not.** Today `stairLeg` is a DERIVED destination
-recomputed every tick, holding no state — that is what makes it O(1) and what keeps it out of the
-save. **A queue is state**, and state is hashed, saved, migrated and iterated.
+| rooms / arrivals / seed | max on ONE cell | max on column |
+|---|---|---|
+| 60 / 96 / 42 | **3** | 4 |
+| 100 / 5 / 42 | **4** | 4 |
+| 25 / 20 / 42 | **3** | 4 |
+| 12 / 20 / 7 | **4** | 4 |
+| 60 / 15 / 42 | **3** | 4 |
 
-> **Ruling owed before BUILD: is a waiting guest's position in a queue STORED, or DERIVED from a
-> total order over the guests already there?** G-038a-ii-α ruled stairs are coordinates and not
-> entities because *"an entity costs an id, and an id is behaviour"* — lowest-id-wins is still the
-> lodging rule. **The same argument applies to a queue and must be answered the same way, in
-> writing, before a line is written.**
+> **A lift capacity of 4 or more can NEVER bind. A capacity of 2 binds on five cell-ticks out of
+> 4,320.** `floorChangeTicks` ≈ `shaftEntries` — **a guest reaches the shaft and crosses in
+> essentially one tick.**
 
-**If it is stored, it is a save-schema bump (v22) and a migration**, and the migration must invent
-nothing — the precedent is G-038a-ii-α's per-world empty stair set, whose reasoning was *"the only
-non-inventive reading of v20 bytes"*.
+**Cause, verified**: `maxLodgingFloorsFromEntrance: 2` with `guestCellsPerTick: 3` over a 23-floor
+shaft. **Guests never go more than two floors from the entrance, and cross three cells a tick.**
 
-### THE COST QUESTION, AND IT HAS A MEASURED PRECEDENT THAT CUTS BOTH WAYS
+**THIS IS THE INERT-RULE PROBLEM A FOURTH TIME, IN THE GOAL WHOSE OWN BLOCK CLAIMED TO HAVE AVOIDED
+IT.** Building it would ship a mechanic that does nothing — the exact outcome G-038a-ii-α,
+G-038a-ii-β and the player spine each spent a goal avoiding.
 
-**A per-tick queue scan is a route search by another name.** G-038a's plan review measured a route
-search per guest per tick at **1.70x / 1.91x / 1.77x** against a bound ADR-0056 froze at 1.4640 —
-and that was a deliberately generous lower bound. **A queue must not reintroduce it.**
+### WHAT WOULD MAKE THE PREMISE TRUE
 
-**But `check:tickcost` CANNOT SEE A HARNESS CHANGE** (ADR-0065): it materialises only
-`packages/sim/src`, `packages/sim/package.json` and `packages/content/data`, and `harnessFor` copies
-`report.ts` into **both arms**. **A queue in `packages/sim` IS visible to it; a harness change to
-exercise the queue is not.** Say which half of the change each gate can see, in the plan, so the
-green rows are not read as evidence they are not.
+**More vertical traffic** — `maxLodgingFloorsFromEntrance` rising, or a hotel tall enough to force
+it. **That is demand, and demand is M4.**
 
-### C5 — RECEPTION AS A QUEUE POINT (ADR-0049, brought forward by human ruling)
+**Re-open when a workload exists in which a DERIVED capacity binds** (§2.1: a capacity nobody can
+source is a superstition with CI access). **The falsification test is the table above**: re-run it
+and look for a max on one cell that a derivable capacity could sit below.
 
-The desk is **the third consumer of waiting**, after the lift and the stair. **Whatever answer the
-queue-state ruling gives must serve all three**, or the goal has built two mechanisms and called
-them one. That is the test of the ruling: **one queue abstraction, three consumers, or it is wrong.**
+### WHEN IT IS RE-OPENED, THESE ARE ALREADY SETTLED — do not re-litigate them
 
-### WHAT WILL MOVE, NAMED IN ADVANCE RATHER THAN DISCOVERED
+- **The stair precedent does NOT transfer.** G-038a-ii-α's argument is about **id allocation**, not
+  ordering. **A queue's order is an INTER-TICK temporal fact and nothing in `World` records it** —
+  `arrivedTick` is arrival at the *hotel*. **Derived order resolves to lowest-id-wins: whoever
+  checked in earliest boards first regardless of who has waited longer.** Legal and free, **but not
+  a queue** — and fairness is the one thing a watcher judges instantly. **State the choice; do not
+  present it as an application of an existing rule.**
+- **There are at most TWO consumers, not three.** A thing with unbounded capacity never queues, so
+  *"one abstraction, three consumers, or it is wrong"* **cannot be evaluated** — ADR-0007's class
+  inside the sentence meant to decide the design. **And a lift is TRANSPORT while a desk is
+  SERVICE**: the server moves to you and N board at once, versus a fixed server, one at a time, with
+  a duration.
+- **C5 is a separate goal.** There is **no reception mechanic at all** — no check-in step, no room
+  type, and `reception` appears once in the whole tree, in a comment. **It is a new guest activity
+  plus a new content type**, and ADR-0049's own parked test asks the question *after* a lift ships.
+- **The schema bumps to v23 either way.** Three test files already name the expected outcome as a new
+  departure reason (*"gave up waiting for a lift"*), and adding one inserts a row into
+  `GuestOutcomes.departures`. **The bump is not the price of the stored answer.**
+- **`check:tickcost` cannot answer the cost question in the configuration that exercises a queue.**
+  A lift needs a new command kind used by `report.ts`; the base arm then throws on it and the gate
+  returns **INCOMPARABLE, which PASSES with no ratio.** *(A tests-only commit reports IDENTICAL —
+  "no reading" and "no change" are the same observation.)*
+- **The fingerprint would need a TENTH term**, not a fourth — it carries nine (`r a m n s v c x p`).
+  **The harness counts exactly two command kinds, so a `layLift` would move no character of the
+  string.** ADR-0039 §2's blindness a fourth time, in the file whose docblock records the previous
+  three. **The term and its 80-reading re-take go in one commit or the gate refuses.**
+- **THE WATCHABLE IS NOT FREE, AND BOTH INSTRUMENTS CAP AT THREE FIGURES ON A TILE.** The iso scene
+  computes `room = floor(width / pitch)` = **2 at scale 0.5, 3 from 0.75 to the clamp**; a fourth
+  guest becomes a `+N` label. The replay viewer compresses pitch to `width / guests.length` —
+  *"one unreadable stripe of colour"* by its own comment. **§6.1's "UI that cannot express a state
+  the sim can reach", on the two instruments whose output becomes JOURNAL evidence. A queue goal must
+  budget the drawing work or it has no watchable.**
 
-Every one of these moved on the last three goals and none was in their original blocks:
+### THE SEAM, FOR WHENEVER IT IS RE-OPENED
 
-- **Occupancy** — waiting is time not spent in a room. The pin is `TARGET_CONCURRENT_HUNDREDTHS`,
-  currently **827**, re-taken alone under ADR-0058. **G-040 and G-041 each re-take it again.**
-- **The I2 hash**, every report golden, the bench golden (`checkedOut`), I5's stay count.
-- **The tripwire's campaign gap** against `occupancyWhenTaken: 872`, currently 5.2% and printed by
-  the gate. **Say how much of that margin this goal spends.**
-- **`check:scaling`'s fingerprint**, which now carries `guestCellsPerTick`, corridor and stair
-  counts (ADR-0067) — **a queue is a fourth term, and the campaign is re-taken if it is added.**
-
-### THE WATCHABLE, AND FOR ONCE IT IS THE STRONGEST ONE THIS MILESTONE HAS HAD
-
-**Guests queueing is the first thing in this project that a watcher can see and immediately judge.**
-Motion is ~158 basis points and a stairwell traversal is one frame; **a line of guests waiting at a
-lift is legible at a glance, and so is a line that never moves.** WATCH is owed, at `--every 1`,
-with frame references — and the ai-critic's *"reads as stupid"* charter finally has a subject it can
-hunt on the instrument rather than in the abstract.
-
-**Instrument notes, learned at cost**: `tools/viewer` draws all floors as stacked bands and
-**collapses the ROW axis**; `apps/game/scripts/record-frames.ts` draws `scenario.ts`'s world, not
-`report.ts`'s; `--record` on `cli.ts` runs `report.ts`'s schedule and **cannot reach the I2 world**.
-**Pick the instrument that can show a queue, and say why.**
-
-### SEAM, OFFERED IN ADVANCE
-
-**Every goal in this milestone that was reviewed at PLAN was split, eight times out of eight.** The
-natural seam here is **capacity vs the desk**: (i) the lift gains capacity and a queue, with the
-state ruling made and one consumer; (ii) reception becomes the second consumer and proves the
-abstraction generalises. **The matched critic should take it or say why not** (§5.6) — and if it is
-taken, (ii) is the goal that tests whether the ruling in (i) was right.
+Cut at the **gate-visibility** boundary, not at capacity-vs-desk: **(i) the mechanism,
+`packages/sim` only** — no content dial, no harness change — which is **the only configuration in
+which `check:tickcost` returns a real ratio** and whose provable property is G-040a's exactly;
+**(ii) the dial**, where the harness declares a lift and occupancy, the hash, every golden, the
+tripwire gap and the fingerprint move as named consequences; **(iii) C5**, separately.
 
 ## G-043 — Buying another amenity has to pay the player back
 Status: **DONE 2026-08-23 (ADR-0074).** The ladder was never inverting — a units mismatch, now

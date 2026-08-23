@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-040b-ii is DONE: parties ARRIVE. partySizeWeights [3, 1] gives the realised cycle 1, 1, 2 — one third of parties and one HALF of guests arrive as a pair, and the realised mix is NOT the weight ratio because a party consumes one ordinal per member. WATCH #22 confirms a party draws as TWO figures and TWO pips in one bedroom; drawing as one figure does not occur. The scaling campaign is re-taken with its eighth term in the same commit and density's direction goes back ON, which is a stricter gate. Occupancy 1203 -> 1275: +33.3% guests moved it only +6.0%, because sixty bedrooms behind one amenity are bound by service rather than beds. check:tickcost SAW the content change and returned INCOMPARABLE rather than a wrong ratio — 600 guests head against 450 base, and 450 x 4/3 = 600 confirms the cycle from a gate that knows nothing about parties. G-043's cause is now identified as a UNIT ERROR (demand counts parties, provisioning counts guests) with its falsification test already positive. The build loop moves where it was flat: one amenity at 12 rooms is worth 111 hundredths and the lean-vs-rich completion factor re-opens 1.07x -> 2.76x. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-23, G-043 is DONE and G-038b is DEFERRED on measurement — M3's goal list is closed and the milestone question is owed to the human. G-043: the engagement ladder was never inverting, it was a units mismatch (demand counted arrival commands, provisioning counted guests), now repaired in a SHARED provisioning.ts where every quantity carries its unit in its name; top rung 219 out / 252 dissatisfied becomes 464 / 0. The deciding evidence for shared over local is that the FOURTH local fix was also wrong. A prior question nobody had asked is now answered: a bedroom is claimed by ONE PARTY, not by capacity strangers, so the beds model over-estimated capacity in the unsafe direction. G-038b DEFERRED (ADR-0075): the congestion a lift queue exists to manage DOES NOT OCCUR — max guests on the stairwell cell is 3 or 4 at every workload this project can produce, so a capacity of 4+ can never bind. That is the inert-rule problem a fourth time, caught in the goal whose own block claimed to have avoided it, and it needs demand (M4) rather than code. Still open and parked: the flat amenity axis BELOW the bottleneck survives (three rooms reads 354/354/354, WATCH #23 has the frame — nine amenity rooms, one guest, every outcome identical); both drawing paths cap at three figures on a tile; and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -3370,3 +3370,37 @@ provider ENTITY across the amenity levels — one, two and three of each kind. *
 lowest-id provider of each kind keeps essentially all of them while the added rooms sit at or near
 zero; refutes if the load splits**, in which case the flat axis is about service capacity rather
 than about selection and the parked rate re-derivation is the whole of it.
+
+### A LIFT QUEUE HAS NOTHING TO QUEUE FOR — re-open when a derived capacity binds
+**Parked 2026-08-23 (G-038b DEFERRED, ADR-0075).** Max guests on the aligned stairwell cell is
+**3 or 4 at every workload this project can produce**, and `floorChangeTicks` is approximately
+`shaftEntries` — a guest reaches the shaft and crosses in one tick.
+
+**Falsification test:** re-run the five-setting table in ADR-0075 and look for a max on one cell
+**that a derivable capacity could sit below.** **Confirms if any workload shows sustained
+co-location above a capacity §2.1 can source; refutes if the max stays at 3–4.** The lever is
+`maxLodgingFloorsFromEntrance` (currently 2) or a hotel tall enough to force the traffic — **which
+is demand, and demand is M4.**
+
+### BOTH DRAWING PATHS CAP AT THREE FIGURES ON A TILE — §6.1 on the evidence instruments
+**Parked 2026-08-23 (ADR-0075).** The iso scene computes `room = floor(width / pitch)`, which
+evaluates to **2 at scale 0.5 and 3 from 0.75 to the clamp**; a fourth guest becomes a `+N` label.
+`tools/viewer` compresses pitch to `width / guests.length` — *"one unreadable stripe of colour"* by
+its own comment.
+
+**This is "UI that cannot express a state the sim can reach", on the two instruments whose output
+becomes JOURNAL evidence.** **Falsification test:** build a world with five guests on one cell and
+render it through both paths. **Confirms if one shows a `+N` label and the other an unreadable
+stripe; refutes if either draws five distinguishable figures.** **No frame reference is needed** —
+it is arithmetic on the shipped drawing code.
+
+### `tripwire.mjs`'s printed causal list is stale, in the sentence that exists to stop that
+**Parked 2026-08-23.** It prints the occupancy causes as *"G-023b-ii travel, G-039b-alpha's spine,
+then G-038a-iii-b's stairwell"* and its comment reads *"(850 -> 827)"*. **Parties moved it
+1203 -> 1275 at G-040b-ii and are not in the list; 827 is two goals gone.** The comment four lines
+above says the list *"is kept current, because a stale attribution is the ADR-0007 class inside the
+sentence that exists to prevent it."*
+
+**Falsification test:** `pnpm check:tickcost` and read the CAMPAIGN OCCUPANCY block. **Confirms if
+the printed list omits parties.** Pre-existing; **the next goal that moves occupancy must touch that
+line.**
