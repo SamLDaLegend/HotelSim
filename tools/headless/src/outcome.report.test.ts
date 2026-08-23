@@ -658,11 +658,57 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // five non-zero reasons, so the claim it makes is intact — but a goal that moves this
     // schedule again should expect to lose the row entirely, and the answer then is a schedule
     // that reaches it, not a criterion that asks for four.
+    // ==========================================================================================
+    // AND AT G-040b-ii THE THIN ROW HELD AT 1 WHILE **THE CONTRAST ROW COLLAPSED**: `checkedOut`
+    // 210 -> 16. THIS IS NOT A RE-RECORD OF A GOLDEN; IT IS A ROW LOSING THE PROPERTY THE LINE
+    // BELOW USED TO ASSERT, AND IT IS WRITTEN DOWN AS THAT.
+    //
+    // WHAT MOVED. The shipped content declares `partySizeWeights: [3, 1]`, realised cycle
+    // 1, 1, 2, so this invocation's 1,440 arrival commands bring 1,920 guests (exactly 4/3) and
+    // a pair sleeps in one bedroom. The whole departure table, one content line apart:
+    //
+    //     checkedOut          210 ->    16
+    //     gaveUp              315 ->   211
+    //     leftDissatisfied    870 -> 1,635
+    //     evictedRoomGone      29 ->    37
+    //     evictedRoomUnusable   1 ->     1     <- the thin row, UNMOVED
+    //
+    // **IT IS NOT SIMPLY "A THIRD MORE GUESTS", AND THAT IS MEASURED RATHER THAN ARGUED.** Same
+    // arm, same instrument, one sitting; n = 1 because these counts are exact integers of a
+    // deterministic run, so one reading is the whole distribution; no clock is read, so no
+    // regime applies:
+    //
+    //     1,879 guests arriving ALONE (`--arrivals 23`, no weights)   checkedOut  45
+    //     1,920 guests arriving under the cycle 1, 1, 2               checkedOut  16
+    //
+    // Two per cent more heads and a third of the checkouts. **The difference is CONCURRENCY**: a
+    // pair shares a room, so 40 bedrooms hold up to 80 lodgers instead of 40, and this arm has
+    // TWO amenities. More guests are housed at once, all of them want the same two providers,
+    // and the dissatisfaction clock beats the checkout clock for nearly all of them —
+    // `leftDissatisfied` absorbs 1,635 of the 1,920.
+    //
+    // **WHOSE PROBLEM IS THAT.** It is a BALANCE consequence of a dial whose balance nobody has
+    // set: `partySizeWeights` is a design number and demand is M4's, so this goal ships a mix
+    // chosen to be MEASURABLE and does not tune it against this arm. It is also the same defect
+    // class as the OPEN FINDING `unserved.report.test.ts` carries — the engagement ladder
+    // inverting at the top rung — which the human ruled belongs to G-043.
+    //
+    // **WHAT IS NOT DONE HERE, DELIBERATELY.** The threshold is not lowered to 15 to keep the
+    // shape: a bound chosen so that today's reading clears it is a bound that measures nothing
+    // (§2.1). The invocation is not retuned either: "tune the workload until the test is
+    // interesting again" is §9's stop condition, and G-039b-alpha refused it by name. The row is
+    // pinned at what it IS, beside the two rows that still have the headroom this block is
+    // about, and the criterion two tests up still reads five non-zero reasons.
+    // ==========================================================================================
     expect(count('evictedRoomUnusable')).toBe(1);
-    // The other three, for contrast: this is what headroom looks like.
-    expect(count('checkedOut')).toBeGreaterThan(50);
+    // The two rows that still have headroom, for contrast — and `checkedOut`, which no longer
+    // does, pinned exactly rather than under a bound it would have to be given to clear.
+    expect(count('checkedOut')).toBe(16);
     expect(count('gaveUp')).toBeGreaterThan(50);
     expect(count('evictedRoomGone')).toBeGreaterThan(1);
+    // AND THE ROW THAT ABSORBED THEM, so the collapse above is visibly a SHIFT rather than a
+    // loss: the five reasons still sum to the departures the conservation law counts.
+    expect(count('leftDissatisfied')).toBe(1_635);
   });
 
   it('and the numbers close, through a real process rather than in-memory', () => {
@@ -675,7 +721,13 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // `ARGS`). Derived and asserted rather than pinned by hand — 43,200 ticks at one arrival
     // every 30, plus the one at tick 0's offset — so a future retune moves this by arithmetic
     // rather than by editing.
-    expect(document.guests.arrived).toBe(1_440);
+    // 1,440 -> 1,920 AT G-040b-ii, AND IT IS STILL DERIVED RATHER THAN PINNED BY HAND: 43,200
+    // ticks at one arrival every 30 is 1,440 arrival COMMANDS, and the shipped cycle 1, 1, 2
+    // turns every three of them into four guests. 1,440 is divisible by 3, so the arithmetic is
+    // exact with no remainder — `arrived` counts guests (G-040b-i), which is what makes the
+    // conservation law above close.
+    expect(document.guests.arrived).toBe((43_200 / 30) * 4 / 3);
+    expect(document.guests.arrived).toBe(1_920);
   });
 
   it('the migration-only reason stays zero in every real run, whatever the length of the union', () => {
@@ -720,9 +772,18 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     const { world, options } = runWorld(['--days', '30', '--seed', '7', '--rooms', '6']);
     const { summary, violations } = buildSummary(world, content, options);
     expect(violations).toEqual([]);
+    //
+    // **TWO -> THREE AT G-040b-ii, AND THE ARM'S POINT IS UNCHANGED**: the criterion needs FIVE
+    // and the default hotel offers three, so neither eviction reason has a cause without flags
+    // and the gap the flags exist to close is exactly the same two rows. `leftDissatisfied`
+    // comes back because the shipped party cycle 1, 1, 2 puts a third more guests in front of
+    // the same one-of-each amenity set, and some of the guests that DO get a bed now run out
+    // their dissatisfaction clock — which is the state θ-b1 pinned here and G-041's rates took
+    // away. The assertion stays exact for the reason the paragraph above gives.
     expect(summary.guests.departures.filter((row) => row.count > 0).map((row) => row.reason)).toEqual([
       'checkedOut',
       'gaveUp',
+      'leftDissatisfied',
     ]);
   });
 });

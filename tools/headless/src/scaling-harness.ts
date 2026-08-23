@@ -23,7 +23,7 @@
 // drift cancels, MEDIAN after a discarded warm-up, and in-process timing of `run()` only so
 // process startup is not in the measurement.
 
-import { createWorld, guestSpeedOf, hashState, run, stayDurationOf } from '@hotelsim/sim';
+import { createWorld, firstGuestRules, guestSpeedOf, hashState, run, stayDurationOf } from '@hotelsim/sim';
 import type { ScheduledCommand, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { schedule } from './report.js';
@@ -221,11 +221,30 @@ const orders = (ORDERS[options.rotation] ?? []).map((spec) => ({
  * for `scaling-arms.ts`'s reason: a guard fed by a second spelling of the thing it guards is a
  * guard that agrees with itself (ADR-0021).
  *
- * THE TERMS, IN ORDER, so a reader meeting `full-vector:60r/96a/1m/4n/1440s/3v/99c/23x` on a
- * refusal can read it: `r` rooms, `a` ticks between arrivals, `m` amenities of each kind, `n` need
- * types,
+ * ===========================================================================================
+ * AND THE PARTY DISTRIBUTION IS A TERM SINCE G-040b-ii, WHICH IS ADR-0039 SECTION 2's CLASS A
+ * THIRD TIME AND THE LARGEST OF THE THREE.
+ *
+ * `scaling-arms.ts` feeds EVERY arm `loadContent()`, so `guest-rules.json` declaring
+ * `partySizeWeights` multiplies every arm's guest population — four guests for every three
+ * arrival commands under the shipped `[3, 1]` — and puts two lodgers in every bedroom. **It
+ * moves what every arm below COSTS and it moved no character of this string**: `a` is the
+ * cadence in ticks, and the cadence did not change; what changed is how many guests one tick of
+ * it brings. That is the same sentence ADR-0039 section 2 wrote about `stayDurationTicks` and
+ * G-039b-B1 wrote about `guestCellsPerTick`, one content field further on.
+ *
+ * The term is the WEIGHT TABLE rather than a derived mean, for the reason the stay duration is
+ * the table's own number rather than an occupancy: two tables with the same mean can emit
+ * different cycles (`[1, 1]` gives pairs forever and `[3, 1]` gives 1, 1, 2), and a guard that
+ * could not tell them apart would be exactly as blind as the one this replaces. `-` for content
+ * that declares none, which is the `stayDurationTicks` convention one line up.
+ * ===========================================================================================
+ *
+ * THE TERMS, IN ORDER, so a reader meeting `full-vector:60r/96a/1m/4n/1440s/3v/99c/23x/3-1p` on
+ * a refusal can read it: `r` rooms, `a` ticks between arrivals, `m` amenities of each kind, `n`
+ * need types,
  * `s` `stayDurationTicks`, `v` `guestCellsPerTick`, `c` `layCorridor` commands, `x` `layStair`
- * commands. The last three are the ones this goal added.
+ * commands, `p` `partySizeWeights`. The last one is the one this goal added.
  *
  * NO STOPWATCH RUNS IN HERE AND NO SIMULATION IS STEPPED — `schedule` builds a command list and
  * `createWorld` allocates a grid. It runs once per arm AFTER the last sample has been taken, so
@@ -242,10 +261,11 @@ const fingerprintOf = (arm: ArmSpec): string => {
     if (scheduled.command.kind === 'layCorridor') corridors += 1;
     else if (scheduled.command.kind === 'layStair') stairs += 1;
   }
+  const party = firstGuestRules(arm.content)?.partySizeWeights;
   return (
     `${arm.name}:${arm.rooms}r/${arm.arrivals}a/${arm.amenities}m/` +
     `${(arm.content.content.needTypes ?? []).length}n/${stay ?? '-'}s/` +
-    `${speed ?? '-'}v/${corridors}c/${stairs}x`
+    `${speed ?? '-'}v/${corridors}c/${stairs}x/${party === undefined ? '-' : party.join('-')}p`
   );
 };
 

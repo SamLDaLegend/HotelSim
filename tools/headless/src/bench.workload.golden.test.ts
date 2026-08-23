@@ -68,6 +68,7 @@ import {
   departedGuests,
   departureCountOf,
   evictedGuests,
+  firstGuestRules,
   guestCount,
   hashState,
   run,
@@ -132,11 +133,38 @@ function runWorkload(buildEveryTicks: number, demolishEveryTicks: number): World
   return run(world, content, TICKS, commands);
 }
 
-/** Arrivals are a closed form over the schedule, not a number read off a run. */
+/** Arrival COMMANDS are a closed form over the schedule, not a number read off a run. */
 const EXPECTED_ARRIVALS = Math.floor((TICKS - 1 - 1) / ARRIVAL_EVERY_TICKS) + 1;
+
+/**
+ * AND GUESTS ARE NOT COMMANDS SINCE G-040b-ii, WHICH IS WHY THIS SECOND CONSTANT EXISTS.
+ *
+ * `guest-rules.json` declares `partySizeWeights: [3, 1]`, and the table is read as a CYCLE over
+ * the guest-id line rather than as a probability: a party consumes one ordinal per member, so
+ * the realised sequence is **1, 1, 2** — three parties, four guests, four ordinals (ADR-0072).
+ * `party.content.test.ts` pins that off a real run.
+ *
+ * The 4/3 is written here rather than walked, and the guard against it going stale is the
+ * assertion below it: if the shipped table ever changes, this file goes red at the constant
+ * rather than at a golden three hundred lines down.
+ */
+const GUESTS_PER_COMMAND_NUMERATOR = 4;
+const GUESTS_PER_COMMAND_DENOMINATOR = 3;
+const EXPECTED_GUESTS = (EXPECTED_ARRIVALS * GUESTS_PER_COMMAND_NUMERATOR) / GUESTS_PER_COMMAND_DENOMINATOR;
 
 describe('the I5 bench workload hashes to a committed literal', () => {
   const plain = runWorkload(0, 0);
+
+  it('THE SHIPPED PARTY CYCLE IS THE ONE `EXPECTED_GUESTS` ASSUMES', () => {
+    // The guard the constant's docblock promises. `EXPECTED_GUESTS` multiplies the schedule's
+    // command count by 4/3, which is true of the cycle `[3, 1]` emits and of nothing else — so
+    // the shipped table is read back out of content here, and a goal that turns the dial goes
+    // red at this line rather than at a hash three hundred lines down.
+    expect(firstGuestRules(content)?.partySizeWeights).toEqual([3, 1]);
+    expect([GUESTS_PER_COMMAND_NUMERATOR, GUESTS_PER_COMMAND_DENOMINATOR]).toEqual([4, 3]);
+    expect(EXPECTED_GUESTS).toBe(100);
+    expect(Number.isInteger(EXPECTED_GUESTS)).toBe(true);
+  });
 
   it('PLAIN: the exact workload pnpm sim:bench runs', () => {
     // MOVED AT G-014a, and the reason is the whole of that goal: providers are chosen by
@@ -426,20 +454,36 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   conservation closing on **33 + 29 + 13 = 75 arrived**; `arrived`, `evictedGuests` and
     //   `gaveUp` at zero and the departure table's seven-row SHAPE unchanged. `check:stamp`
     //   reads this literal out of the tree, so the digest's measure-golden line moves with it.
-    expect(hashState(plain)).toBe('1e44f2c872a33aa4');
+    //
+    // - `1e44f2c872a33aa4` -> `917662dc0a756888` AT G-040b-ii, AND THE CAUSE IS ONE CONTENT LINE.
+    //   `guest-rules.json` declares `partySizeWeights: [3, 1]`, realised cycle **1, 1, 2**, so
+    //   this workload's 75 arrival COMMANDS bring **100 guests** and a pair shares a bedroom.
+    //   Two things move the hash at once and neither is code: `World.contentHash` moves because
+    //   the content document gained a field, and the run is genuinely different.
+    //   **checkedOut 33 -> 22, leftDissatisfied 29 -> 64, still-in-the-hotel 13 -> 14**, the
+    //   conservation closing on **22 + 64 + 14 = 100 arrived**; `gaveUp` and `evictedGuests` are
+    //   still zero and the departure table's seven-row SHAPE is unchanged. `check:stamp` reads
+    //   this literal out of the tree, so the digest's measure-golden line moves with it.
+    expect(hashState(plain)).toBe('917662dc0a756888');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
     // A hash alone would move for any reason and say nothing about which. These are the
     // facts a reader can re-derive: if the hash moves and these hold, something changed in
     // state that outcomes do not cover; if these move too, the simulation changed.
-    expect(plain.guestOutcomes.arrived).toBe(EXPECTED_ARRIVALS);
+    // GUESTS, NOT COMMANDS, SINCE G-040b-ii — `arrived` counts guests (G-040b-i) and the
+    // schedule's closed form counts commands, so the two are related by the shipped cycle rather
+    // than equal. Both are asserted: the command count is what the schedule emits and has not
+    // moved, and the guest count is what the hotel received.
+    expect(EXPECTED_ARRIVALS).toBe(75);
+    expect(plain.guestOutcomes.arrived).toBe(EXPECTED_GUESTS);
     // 75 WHERE IT WAS 225: a third of the arrivals, because ADR-0021 tripled the cadence to
     // hold the CONCURRENT population at the fifteen this benchmark was calibrated for.
     // `EXPECTED_ARRIVALS` is derived from `ARRIVAL_EVERY_TICKS` and re-derived itself; this
     // line is the arithmetic written out so a reader can check the derivation rather than
     // trust it.
-    expect(plain.guestOutcomes.arrived).toBe(75);
+    // 75 -> 100 AT G-040b-ii: the same 75 commands, four guests for every three of them.
+    expect(plain.guestOutcomes.arrived).toBe(100);
     // 60 of those 75 complete a stay inside five simulated days; the other 15 are the ones
     // still in the hotel at the end, which is the steady-state occupancy by construction.
     // 60 -> 4 AT θ-b1, and the missing 56 are in the new row: `leftDissatisfied` 64. Sixty
@@ -503,15 +547,46 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // still-in-the-hotel column is UNMOVED at 9 — the guests moved between the two departure
     // rows and nowhere else.
     // ==========================================================================================
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(33);
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(29);
+    // ==========================================================================================
+    // 33 + 29 -> 22 + 64 AT G-040b-ii, AND THE ROW THAT MATTERS FALLS WHILE THE POPULATION RISES.
+    // **RE-ARGUED RATHER THAN RE-PINNED**, because "more guests" predicts the opposite:
+    //
+    //   arrived            75 -> 100     four guests per three commands, exactly
+    //   checkedOut         33 ->  22     FEWER completed stays out of a THIRD MORE arrivals
+    //   leftDissatisfied   29 ->  64     and the missing ones are all here
+    //   still in the hotel 13 ->  14
+    //   gaveUp              0 ->   0     nobody fails to get a BED, then or now
+    //
+    // **THE MECHANISM IS CONCURRENCY, NOT HEAD COUNT, AND `gaveUp` AT ZERO IS THE PROOF.** Sixty
+    // bedrooms of capacity 2 can sleep a hundred and twenty people, so no guest in this hotel
+    // ever waits for a room — what a pair does is put TWO guests in one bedroom, so the
+    // building holds more residents at once and every one of them wants the same two amenities.
+    // `workload.mjs`'s occupancy pin reads the same fact from the other side: 12.03 -> 12.75
+    // concurrent guests, a 6% rise from a 33% bigger population, because the extra guests reach
+    // their dissatisfaction ceiling and leave instead of accumulating.
+    //
+    // **THIS BENCHMARK IS THE STARVED END OF THE MEASUREMENT AND IT IS NOT TUNED BACK.** The
+    // G-038a-iii-b row above says so in as many words — *"making the workload kinder to keep
+    // this number high is precisely what G-039b-alpha refused by name"* — and that is exactly as
+    // binding here, where the fall is eleven stays rather than three.
+    //
+    // **WHAT IS NOT CLAIMED**: nothing here says the game got worse. The same dial makes the
+    // three-room and six-room hotels complete MORE stays (`cli.stdout.test.ts` 4 -> 6,
+    // `dissatisfaction.report.test.ts` 192 -> 256) because those hotels have amenities in
+    // proportion. It is this workload's deliberate two-amenity starvation that turns extra
+    // residents into walk-outs, and the pair of readings is the honest account of the dial.
+    // ==========================================================================================
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(22);
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(64);
     // AND THE STILL-IN-THE-HOTEL COLUMN IS WHAT MOVED, 9 -> 13, WHICH IS THE FOURTH NUMBER THE
     // CONSERVATION NEEDS AND THE ONE THIS ARM HAD NEVER PINNED. 33 + 29 + 13 = 75, every other
     // departure row is zero, and `gaveUp` is still zero — nobody in this hotel fails to get a
     // room, they are served faster and more of them finish. Pinned so the next reader who finds
     // three columns that do not add up has the fourth in front of them.
     expect(departureCountOf(plain.guestOutcomes, 'gaveUp')).toBe(0);
-    expect(plain.guests.list.length).toBe(13);
+    // 13 -> 14 at G-040b-ii. 22 + 64 + 14 = 100, every other departure row is zero, and `gaveUp`
+    // is still zero — sixty bedrooms of capacity 2 cannot run out of beds at this cadence.
+    expect(plain.guests.list.length).toBe(14);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -755,12 +830,26 @@ describe('the same workload with the player churning the building', () => {
     // moment the player demolishes it is precisely what this arm counts. 19 is also the value
     // this arm carried before G-038a-iii-b's stairwell took it to 18; the stairwell's mechanism
     // (guests are elsewhere, on the stairs) is simply outweighed by the shorter errand.
-    expect(hashState(churn)).toBe('daf4823b3fdaa4f7');
+    //
+    // `daf4823b3fdaa4f7` -> `b1619296eccfbc0a` AT G-040b-ii, ONE CAUSE AND IT IS THE CONTENT LINE
+    // the PLAIN arm's row describes. **THE COUNTER THAT MOVES IS EVICTION, 19 -> 24, AND THE
+    // MECHANISM IS SPECIFIC TO THIS GOAL RATHER THAN A RESTATEMENT OF "MORE GUESTS".**
+    //
+    // A demolition evicts whoever is standing in the room. Until this goal a bedroom held ONE
+    // lodger, so one demolition could cost at most one eviction; a pair shares a bedroom, so a
+    // single `demolishRoom` can now take TWO guests at once. The counter is in GUESTS, so it
+    // rises faster than the population does: +26% against +33% more arrivals, and its
+    // neighbours move the other way (checkedOut 20, leftDissatisfied 43) as guests are removed
+    // from the hotel before either clock can finish.
+    //
+    // **THE CONSERVATION CLOSES: 20 + 43 + 24 + 13 still in the hotel = 100 arrived**, and
+    // `gaveUp` is zero here too.
+    expect(hashState(churn)).toBe('b1619296eccfbc0a');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
     expect(evictedGuests(churn.guestOutcomes)).toBeGreaterThan(0);
-    expect(evictedGuests(churn.guestOutcomes)).toBe(19);
+    expect(evictedGuests(churn.guestOutcomes)).toBe(24);
     expect(hashState(churn)).not.toBe(hashState(runWorkload(0, 0)));
   });
 
@@ -782,14 +871,18 @@ describe('the same workload with the player churning the building', () => {
     // The split earned its keep twice over. A single `evicted` counter would have gone 19 ->
     // 35 -> 19 and said nothing about which half did it.
     // ============================================================================
-    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(19);
+    // 19 -> 24 AT G-040b-ii, AND THE SPLIT IS UNCHANGED — every eviction in this run is still a
+    // room that GONE rather than one made unusable, which is what the demolish walk does. The
+    // block on the hash above carries why the count moved: a bedroom holding a pair loses two
+    // guests to one demolition.
+    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(24);
     expect(departureCountOf(churn.guestOutcomes, 'evictedRoomUnusable')).toBe(0);
     // Only a migration writes the third, so a run that never loaded a save must read zero.
     expect(departureCountOf(churn.guestOutcomes, 'evictedCauseUnrecorded')).toBe(0);
   });
 
   it('and every guest is still accounted for', () => {
-    expect(churn.guestOutcomes.arrived).toBe(EXPECTED_ARRIVALS);
+    expect(churn.guestOutcomes.arrived).toBe(EXPECTED_GUESTS);
     expect(departedGuests(churn.guestOutcomes) + guestCount(churn.guests)).toBe(
       churn.guestOutcomes.arrived,
     );

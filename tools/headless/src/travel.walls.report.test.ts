@@ -232,6 +232,32 @@ function cliCensus(argv: readonly string[], withShaft = true): Census {
 //  ==========================================================================================
 // ==========================================================================================
 
+// ==========================================================================================
+//  RE-RECORDED AT G-040b-ii, AND EVERY COUNT IN THIS FILE MOVED FOR ONE REASON: THERE ARE MORE
+//  GUESTS WALKING. `guest-rules.json` declares `partySizeWeights: [3, 1]`, realised cycle
+//  1, 1, 2, so four guests arrive for every three arrival commands and the guest-frame
+//  denominator on the CLI default rises 11,756 -> 15,655 (+33.2%, and 4/3 is +33.3%).
+//
+//     arm                       moves             landings in a room   THROUGH A WALL   share
+//     60 rooms / 5 amenities    1,796 -> 2,387      401 -> 532          33 -> 52     1.8 -> 2.2%
+//     the G-009 criterion       2,772 -> 2,778      553 ->  573          0 ->  0     0.0 -> 0.0%
+//     6 rooms / 5 amenities     1,025 -> 1,388      242 ->  322         24 -> 32     2.3 -> 2.3%
+//     CLI default, 2 days         453 ->   586        —                  0 ->  0     0.0 -> 0.0%
+//
+//  **THE TWO ZEROS HOLD, AND THEY ARE THE CLAIM THIS FILE MAKES.** A third more guests on the
+//  same layout produce a third more motion and NOT a new class of landing: where the shaft had
+//  removed the opportunity to land in a room that is not the destination, it still removes it.
+//  The share column is the reading — the two non-zero arms are flat to within a tenth of a
+//  point on a third more motion, which is what says the count moved with the traffic rather
+//  than with the rule.
+//
+//  **AND THE BEFORE ARMS MOVE IN BOTH DIRECTIONS, WHICH IS WHY THEY ARE ASSERTED**: 223 -> 291
+//  and 109 -> 147 rise with the traffic, and the G-009 criterion's 219 -> 194 FALLS. That arm
+//  BUILDS — a third more guests is a third more revenue is more builds afforded — so its hotel
+//  is a different shape by the end of the run and fewer of its journeys cross a bank of
+//  bedrooms. A single direction on all four would have been the suspicious reading.
+// ==========================================================================================
+
 describe('the workloads the gates run', () => {
   it('COUNTED: 60 rooms, 5 amenities, the tick-cost workload’s shape — 219 → 236 of 613 landings', () => {
     const argv = ['--days', '2', '--seed', '42', '--rooms', '60', '--amenities', '5', '--arrivals', '96'];
@@ -242,9 +268,9 @@ describe('the workloads the gates run', () => {
     // the same schedule, and more of the landings that remain are inside a room. The
     // through-wall count is the subject and it rises by four on 152 fewer moves — a larger
     // share of a smaller total, which is what the inequality two lines down is for.
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_796, 401, 33]);
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_387, 532, 52]);
     // THE BEFORE ARM, SAME SITTING, SAME INSTRUMENT, ONE DECLARATION APART.
-    expect(cliCensus(argv, false).throughWall).toBe(223);
+    expect(cliCensus(argv, false).throughWall).toBe(291);
     // STILL FAR BELOW THE PRE-G-038a-i WORLD, which is the claim this file was written to make
     // and the one the spine does not touch: 293 was the count with no walkability rule at all.
     expect(taken.throughWall).toBeLessThan(293);
@@ -260,11 +286,11 @@ describe('the workloads the gates run', () => {
     // service means more completed stays means more money means more of those builds get
     // afforded, and every extra room is somewhere else for a guest to walk. **The zero is
     // unmoved**, which is the claim this arm makes.
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_772, 553, 0]);
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_778, 573, 0]);
     expect(taken.throughWall).toBeLessThan(119);
     // AND THE ZERO IS NOT THE INSTRUMENT GOING BLIND: the same census on the same schedule with
     // the shaft subtracted still reads 66.
-    expect(cliCensus(argv, false).throughWall).toBe(219);
+    expect(cliCensus(argv, false).throughWall).toBe(194);
   });
 
   it('COUNTED: 6 rooms, 5 amenities — ADR-0017’s configuration — 118 → 116', () => {
@@ -272,9 +298,9 @@ describe('the workloads the gates run', () => {
     const taken = cliCensus(argv);
     // 994/224/23 -> 1,025/242/24 AT G-041, the smallest move of the three: six rooms and five
     // amenities was already well provisioned, so serving it at the ceiling changes little.
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_025, 242, 24]);
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_388, 322, 32]);
     expect(taken.throughWall).toBeLessThan(129);
-    expect(cliCensus(argv, false).throughWall).toBe(109);
+    expect(cliCensus(argv, false).throughWall).toBe(147);
   });
 });
 
@@ -312,14 +338,14 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
     // the need rates changed how guests SPEND a stay and not how many are in the building, so
     // the denominator this share is read against is the same one it has always been and the
     // move counts beside it are comparable to the pre-G-041 readings without a caveat.
-    expect(taken.guestFrames).toBe(11_756);
-    expect(taken.moves).toBe(453);
+    expect(taken.guestFrames).toBe(15_655);
+    expect(taken.moves).toBe(586);
     // 16 -> 0 AT G-038a-iii-b. On a hotel of three bedrooms and one basement amenity EVERY
     // engagement journey is cross-floor, so every one of them now runs along the spine and
     // through the shaft, and there is no longer an occasion to land in a bedroom that is not
     // the destination. The before arm below is what says the counter still works.
     expect(taken.throughWall).toBe(0);
-    expect(cliCensus(['--days', '2', '--seed', '42'], false).throughWall).toBe(19);
+    expect(cliCensus(['--days', '2', '--seed', '42'], false).throughWall).toBe(25);
     // AND IT IS A FALL IN THE SHARE AS WELL AS IN THE COUNT, which is the half a raw count
     // cannot say: 33/163 = 20.2% before, 16/191 = 8.4% after.
     expect(taken.throughWall * 163).toBeLessThan(33 * taken.moves);
@@ -327,10 +353,10 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
 
   it('and the fall HOLDS at four days, so it is the LAYOUT and not the sample', () => {
     const taken = cliCensus(['--days', '4', '--seed', '42']);
-    expect(taken.moves).toBe(945);
+    expect(taken.moves).toBe(1_220);
     expect(taken.throughWall).toBe(0);
     // AND THE FOUR-DAY BEFORE ARM TOO, so "holds at four days" is a pair at four days rather
     // than a level at four days beside a pair at two.
-    expect(cliCensus(['--days', '4', '--seed', '42'], false).throughWall).toBe(41);
+    expect(cliCensus(['--days', '4', '--seed', '42'], false).throughWall).toBe(47);
   });
 });

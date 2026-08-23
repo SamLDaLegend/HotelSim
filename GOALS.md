@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-041 is DONE and MERGED TO main together with G-042 (merge of g041-rate-rederivation into a90b722). The need rates are RE-DERIVED so the declared rate is a CEILING genuinely above the bare one (ADR-0054, ADR-0057 option a): serviceFloorBasisPoints 5000, engagement refillPerTick 7 to 14, night_rest 1 to 2 with capacityTicks 600 to 300, visitDurationTicks 208 to 98 and dissatisfactionCapacityTicks 431 to 301, all derived rather than dialled. check:scaling's density axis is re-derived to direction false with a magnitude bound of 1.6386, a tightening with a mutation probe behind it (ADR-0069, ADR-0070). G-040a's party rides on the same tree: Guest.partyId is hashed state, save v22, shipped party size PINNED AT 1. E-010 and E-011 are BOTH RESOLVED by ADR-0069 and the loop is not stopped. BOTH GOLDEN HASHES WERE RE-MEASURED ON THE MERGED TREE, because both parents moved the same literals off the same base and neither parent's value is correct here: I2 fb8d8fd9fd76b245 over three processes (main read 7ff621928358cb8e, the branch f197734f532dc62b); measure golden 1e44f2c872a33aa4 (main c7212353b3d1784f, the branch cba13e62265ed196). Fourteen rows green, VERIFY_EXIT read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured). Two items are deliberately NOT in this merge and are their own goal: the amenity axis going flat below 15 concurrent guests, and the engagement ladder inverting at the top rung.*
+*As of 2026-08-23, G-040b-ii is DONE: parties ARRIVE. partySizeWeights [3, 1] gives the realised cycle 1, 1, 2 — one third of parties and one HALF of guests arrive as a pair, and the realised mix is NOT the weight ratio because a party consumes one ordinal per member. WATCH #22 confirms a party draws as TWO figures and TWO pips in one bedroom; drawing as one figure does not occur. The scaling campaign is re-taken with its eighth term in the same commit and density's direction goes back ON, which is a stricter gate. Occupancy 1203 -> 1275: +33.3% guests moved it only +6.0%, because sixty bedrooms behind one amenity are bound by service rather than beds. check:tickcost SAW the content change and returned INCOMPARABLE rather than a wrong ratio — 600 guests head against 450 base, and 450 x 4/3 = 600 confirms the cycle from a gate that knows nothing about parties. G-043's cause is now identified as a UNIT ERROR (demand counts parties, provisioning counts guests) with its falsification test already positive. The build loop moves where it was flat: one amenity at 12 rooms is worth 111 hundredths and the lean-vs-rich completion factor re-opens 1.07x -> 2.76x. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v22** (G-040a — a guest gained a `partyId`; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `fb8d8fd9fd76b245` · measure golden `1e44f2c872a33aa4`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `02fe3c4fa2a7e533` · measure golden `917662dc0a756888`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2697,6 +2697,22 @@ builds a fourth engagement provider and watches the worst-served need get *worse
 difficulty; they have met a defect that looks like difficulty, **which is the one thing §6.1 says a
 sim must never do.**
 
+### THE CAUSE IS A UNIT ERROR, FOUND AT G-040b-ii, AND ITS TEST IS ALREADY POSITIVE
+
+**`DEMAND = stayDurationTicks / arrivals` counts arrival COMMANDS (parties); `PER_PROVIDER_LODGERS`
+counts GUESTS.** The top rung holds **16** and is provisioned for **12** — `ceil(12/15) = 1`
+amenity where `ceil(16/15) = 2`. **The ladder was never inverting; it was under-provisioned at the
+top by a units mismatch.**
+
+> **The falsification test in this block has been RUN and is POSITIVE.** The same rung with one
+> more amenity reads `[371, 352, 653]` against the rung below at `[1304, 1176, 368]` — engagement
+> mean **459 vs 949** — and **464 checkouts with nobody dissatisfied.**
+
+**So the goal is now: repair the rule, not the content.** The inversion got WORSE at G-040b-ii and
+reached the lodging-inclusive statistic that used to mask it, which is the same defect louder.
+**It is ADR-0039 §2 a FIFTH time** — a fourth instance was repaired in passing at G-040b-ii, where
+`scorer.report` compared parties against a guests bound.
+
 ### THE TWO MEASURED FACTS
 
 **1. THE AMENITY AXIS GOES FLAT BELOW 15 CONCURRENT GUESTS.** One provider sustains
@@ -3083,7 +3099,16 @@ silently makes that **6.8:1** for a party of 2.
 the witness is.** *Rule (a) or (b) in `DECISIONS.md` before BUILD.*
 
 ## G-040b-ii — The dial turns, and every moved number is a consequence
-Status: **PLANNED. Depends on G-040b-i.** Owner pair: economy-engineer / balance-critic + ai-critic
+Status: **DONE 2026-08-23 (ADR-0073).** `partySizeWeights: [3, 1]`, realised cycle **1, 1, 2** —
+one third of parties and one HALF of guests arrive as a pair. Campaign re-taken with its eighth
+term in the same commit; `density` direction goes back ON (stricter). Occupancy 1203 -> 1275:
+**+33.3% guests moved occupancy +6.0%**, because sixty bedrooms behind one amenity are bound by
+service rather than beds. WATCH #22: a party draws as TWO figures and TWO pips.
+cycle **1, 1, 2** — four guests per three arrival commands, a pair to a bedroom. Occupancy
+1203 -> 1275, scaling campaign re-taken with the eighth fingerprint term (`3-1p`) in the same
+commit, I2 `02fe3c4fa2a7e533`, measure golden `917662dc0a756888`. `check:tickcost` returned
+**INCOMPARABLE** — it materialises `packages/content/data` too, so it SAW the change (600 guests
+against 450) and refused to compute a ratio. Owner pair: economy-engineer / balance-critic + ai-critic
 
 **One JSON edit to `guest-rules.json`**, plus the fingerprint term, the campaign re-take,
 `TARGET_CONCURRENT_HUNDREDTHS`, the ~19 goldens, the bench golden's **re-derived** outcome blocks

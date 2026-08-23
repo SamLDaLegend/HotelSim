@@ -31,7 +31,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 // @ts-expect-error — plain ESM gate helper, no types by design (tools/gates has no tsconfig).
 import { AXES, BOUNDS, CAMPAIGN, DECLARED_READINGS, deriveAll, NOT_OVERHEAD_DOMINATED } from '../../gates/scaling-bound.mjs';
-import { guestSpeedOf, stayDurationOf } from '@hotelsim/sim';
+import { firstGuestRules, guestSpeedOf, stayDurationOf } from '@hotelsim/sim';
 import { ARRIVAL_EVERY_TICKS, FLOORS, ORDERS, RATIOS, ROOMS, ROTATION_NAMES, ROTATIONS, SEED, TICKS } from './scaling-arms.js';
 import { loadContent } from './content-loader.js';
 
@@ -535,8 +535,12 @@ describe('the seam: the instrument holds no bound, and the two lists agree', () 
     // =====================================================================================
     const speed = guestSpeedOf(FULL);
     const stay = stayDurationOf(FULL);
+    const party = firstGuestRules(FULL)?.partySizeWeights;
     expect(speed, 'the shipped content declares no guestCellsPerTick').toBeDefined();
     expect(stay, 'the shipped content declares no stayDurationTicks').toBeDefined();
+    // G-040b-ii: the third content dial to reach this guard, and the one that multiplies the
+    // guest population of every arm. Read from content like the two above it.
+    expect(party, 'the shipped content declares no partySizeWeights').toBeDefined();
 
     const fingerprints = CAMPAIGN.configuration.fingerprints as Readonly<Record<string, string>>;
     // Not vacuous: a fingerprint set that lost a rotation would pass a for-loop over nothing.
@@ -546,14 +550,18 @@ describe('the seam: the instrument holds no bound, and the two lists agree', () 
       expect(arms.length, `${rotation} records no arms`).toBeGreaterThan(1);
       for (const arm of arms) {
         const terms = arm.slice(arm.indexOf(':') + 1).split('/');
-        // rooms / arrivals / amenities / needTypes / stay / speed / corridors / stairs
-        expect(terms, `${rotation}: ${arm}`).toHaveLength(8);
+        // rooms / arrivals / amenities / needTypes / stay / speed / corridors / stairs / party
+        expect(terms, `${rotation}: ${arm}`).toHaveLength(9);
         expect(terms[4], `${rotation}: ${arm} stay`).toBe(`${stay}s`);
         expect(terms[5], `${rotation}: ${arm} guestCellsPerTick`).toBe(`${speed}v`);
         // The two circulation counts must be POSITIVE, or the terms are zeroes nobody would
         // notice moving — every arm's schedule lays a stairwell and at least one spine.
         expect(Number(terms[6]?.replace('c', '')), `${rotation}: ${arm} corridors`).toBeGreaterThan(0);
         expect(Number(terms[7]?.replace('x', '')), `${rotation}: ${arm} stairs`).toBeGreaterThan(0);
+        // AND THE PARTY TABLE, which is the term G-040b-ii added: the WEIGHTS rather than a mean,
+        // because two tables with one mean can emit different cycles. `lodgingOnly` cuts the need
+        // table for the `one-need` arm and must NOT cut this, so every arm carries it.
+        expect(terms[8], `${rotation}: ${arm} partySizeWeights`).toBe(`${party?.join('-')}p`);
       }
     }
   });

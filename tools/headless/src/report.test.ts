@@ -640,7 +640,11 @@ describe('buildSummary', () => {
       1 + requiredItemsOf(content, lodgingRoomTypeOf(content).id).length + amenityEntities,
     );
     expect(summary.rooms.valid).toBe(1 + amenityRoomTypesOf(content).length);
-    expect(summary.guests.arrived).toBe(3); // ticks 1, 701, 1401 — the cadence echoed above
+    // THREE COMMANDS, FOUR GUESTS (G-040b-ii). The cadence echoed above still emits exactly
+    // three `guestArrives` at ticks 1, 701 and 1401; the shipped cycle 1, 1, 2 makes the third
+    // of them a PAIR. This is the smallest run in the suite in which the dial is visible, and
+    // the arithmetic is the whole cycle rather than a share of it.
+    expect(summary.guests.arrived).toBe(4);
   });
 });
 

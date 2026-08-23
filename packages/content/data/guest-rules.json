@@ -12,6 +12,7 @@
     "dissatisfactionCapacityTicks": 301,
     "dissatisfactionReliefPerTick": 1,
     "maxLodgingFloorsFromEntrance": 2,
-    "guestCellsPerTick": 3
+    "guestCellsPerTick": 3,
+    "partySizeWeights": [3, 1]
   }
 ]

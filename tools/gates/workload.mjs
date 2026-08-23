@@ -164,8 +164,41 @@ export const ROOMS = 60;
  * cannot be re-taken at today's occupancy at all (ADR-0058). What the ruling requires is that
  * the pin describe the hotel the gate now runs, which this re-take does.
  * ===========================================================================================
+ * 1203 -> 1275 AT G-040b-ii, RE-TAKEN ALONE AGAIN, UNDER THE SAME ADR-0058 RULING. **THIS IS
+ * THE RE-TAKE THE G-040 ROW ABOVE SAYS IS OWED, AND IT IS THE SMALLEST MOVE THIS CONSTANT HAS
+ * MADE SINCE G-039b-alpha.**
+ *
+ * **THE FIVE SLOTS.** WHAT: concurrent guests in hundredths, as guest-frames divided by ticks —
+ * an exact deterministic integer count. WORKLOAD: `--rooms 60 --amenities 1 --arrivals 96
+ * --seed 42`, 30 simulated days, this file's own constants, run through `report.ts`'s schedule.
+ * SAMPLE COUNT: n = 1, which is the whole distribution — the quantity is deterministic, so one
+ * reading IS the distribution. AGGREGATION: none; one division, rounded once. REGIME: none
+ * applies — no clock is read.
+ *
+ * WHY IT MOVED: `guest-rules.json` declares `partySizeWeights: [3, 1]`, whose realised cycle is
+ * **1, 1, 2** — so four guests walk in for every three arrival commands and a pair shares one
+ * bedroom (ADR-0072; `party.content.test.ts` pins the cycle off a run).
+ *
+ * **AND THE INTERESTING PART IS HOW LITTLE IT MOVED: +6.0% FROM +33.3% MORE GUESTS.** This
+ * workload is sixty bedrooms behind ONE amenity — the starved end of the measurement, on purpose
+ * — so the extra arrivals are not extra residents: they reach their dissatisfaction ceiling
+ * sooner and leave. **The building is not what binds it; the service is.** A goal that reads
+ * this constant as "occupancy scales with arrivals" has the wrong model of this hotel, and 12.03
+ * -> 12.75 against a dial that multiplies the population by 4/3 is the number that says so.
+ *
+ * **THE GAP AGAINST THE CAMPAIGN WIDENS AGAIN AND `tripwire.mjs` PRINTS IT.** The bound campaign
+ * was taken at `occupancyWhenTaken: 872`; the gap was 38.0% at 872 -> 1203 and is 46.2% at
+ * 872 -> 1275. The bound STAYS at 1.4640 (ADR-0056, human) and is not re-derived, and the
+ * campaign is not re-taken — two of its three arms materialise their own committed content and
+ * cannot be re-taken at today's occupancy at all (ADR-0058). What the ruling requires is that
+ * the pin describe the hotel the gate now runs, which this re-take does.
+ *
+ * **G-037a's FOLD IS STILL EXPECTED TO SEND THIS BACK DOWN**, and the expectation is unchanged
+ * by this goal: a bare room serves at the FLOOR rather than the ceiling, and this workload's
+ * rooms are bare. The party dial pushes in the opposite direction and by far less.
+ * ===========================================================================================
  */
-export const TARGET_CONCURRENT_HUNDREDTHS = 1203;
+export const TARGET_CONCURRENT_HUNDREDTHS = 1275;
 
 /**
  * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.

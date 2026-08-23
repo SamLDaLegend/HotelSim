@@ -249,7 +249,13 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // ONE amenity — stops being starved of service and its guests stay instead of giving up.
     // The bound is NOT re-derived and the campaign is NOT re-taken. `workload.mjs` carries the
     // five slots and the expectation that G-037a's fold sends this number back down.
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_203);
+    // 1203 -> 1275 AT G-040b-ii, RE-TAKEN **ALONE** again (ADR-0058), because `guest-rules.json`
+    // declares `partySizeWeights: [3, 1]` — realised cycle 1, 1, 2 — so four guests arrive for
+    // every three arrival commands and a pair shares a bedroom. The bound is NOT re-derived and
+    // the campaign is NOT re-taken. `workload.mjs` carries the five slots, and the reading a
+    // reader should notice is that a third more guests moved this hotel's occupancy by six per
+    // cent: sixty bedrooms behind one amenity are bound by service, not by beds.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_275);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -551,7 +557,14 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     // extra tick of cadence is more guests in the building. The census's point survives intact —
     // a reading is a claim about ITS cadence, and one tick moves it by 19 hundredths here where
     // it moved it by 6 before.
-    expect([below, here, above], readings).toEqual([1_184, 1_203, 1_206]);
+    // 1184 / 1203 / 1206 -> **1261 / 1275 / 1251 AT G-040b-ii, AND THE SHAPE CHANGES BACK.** The
+    // shipped cadence is a LOCAL MAXIMUM again — higher than either neighbour — where G-041 left
+    // it the middle of a rising sequence. The mechanism is the one that block names, running the
+    // other way: a third more guests per command puts this hotel back on the service bound, and
+    // once service binds, a faster cadence stops buying residents. **The census's point is
+    // untouched and is the two inequalities below** — one tick either side is a different hotel,
+    // and it now moves the reading by 14 and 24 hundredths.
+    expect([below, here, above], readings).toEqual([1_261, 1_275, 1_251]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
     // either side is a different hotel. Stated as the two inequalities that ARE the claim — see
     // the block above for why the set-size spelling came out.

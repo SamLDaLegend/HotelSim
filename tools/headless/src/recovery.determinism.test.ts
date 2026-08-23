@@ -196,8 +196,18 @@ describe('the I2 harness reaches the loan', () => {
     // right answer is a second granted draw late in the log, not a smaller number.
     // ==================================================================================
     const lastRepaymentTick = repayments.reduce((latest, entry) => (entry.tick > latest ? entry.tick : latest), -1);
+    // AND RE-TAKEN AT G-040b-ii: still thirty repayments, still every one at the full nightly
+    // rate, and the debt is clear at tick **51,839** rather than 46,079 — FOUR SETTLEMENTS
+    // LATER. The shipped party cycle 1, 1, 2 puts a third more guests in this hotel, and this
+    // log's hotel spends the extra trade on BUILDING rather than on paying the loan down, which
+    // is COUNTED rather than reasoned: over this same 100,000-tick log `built` moves 13 -> 17
+    // and `refused.insufficientFunds` moves 16 -> 12, the two halves of one fact. More rooms
+    // afforded means the till is emptier on more nights, so the same thirty instalments are
+    // spread over four more settlements. **The property is unchanged and is the one this arm
+    // demonstrates below** — every payment is the full instalment, none is capped by the till,
+    // and striking the repayments out of the final world moves the hash.
     expect(repayments).toHaveLength(30);
-    expect(lastRepaymentTick).toBe(46_079);
+    expect(lastRepaymentTick).toBe(51_839);
     // 3 — THE FINAL HASH CARRIES THEM. Not "a repayment happened" and not "one happened late":
     // the gate's own hash function, over the gate's own final world, moves when the repayment
     // entries are taken out of it. That is the claim the old bar was a proxy for.

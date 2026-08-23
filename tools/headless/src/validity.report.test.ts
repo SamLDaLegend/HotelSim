@@ -218,14 +218,26 @@ describe('the exit criterion is a measurement, not a tautology', () => {
       // columns, over the LANES of the hotel below (the seeded plate banks rooms along the odd
       // columns since G-039b-alpha), and TWO over a seeded room the demolish walk has taken
       // away. It was 17 while the player's front row stood on the seeded plate's spine.
-      unsupported: 13,
+      // ======================================================================================
+      // 13 -> 15, 3 -> 4 AND 3 -> 2 AT G-040b-ii, WITH `valid` UNMOVED AT 66. The shipped
+      // content declares `partySizeWeights: [3, 1]` (realised cycle 1, 1, 2), so this hotel
+      // takes a third more guests through the same rooms — a pair shares a bedroom — and earns
+      // a third more. **More money means more of the walk's builds are afforded**, so the
+      // player owns MORE rooms and more of them are in mid-air: the tally moves and the count
+      // of rooms that WORK does not.
+      //
+      // That `valid` is byte-identical across a change that moved three of the five reasons is
+      // the control here, and it is a better one than any of them: the rooms that work are the
+      // ones the seeded plate and the affordable front of the walk provide, and neither moved.
+      // ======================================================================================
+      unsupported: 15,
       // THREE, AND EACH IS SEALED BY ROOMS ON ALL FOUR SIDES — no plot edge is doing any of the
       // work, and since G-038a-iii-a no plot edge COULD: the packing starts one row back, so
       // the near edge is the spine and a seal has to be bought with four real rooms.
-      noDoor: 3,
+      noDoor: 4,
       // THREE. `noCorridor` is checked LAST but one of the six, so a room counted here is
       // supported, furnished and doored — the rule biting on its own.
-      noCorridor: 3,
+      noCorridor: 2,
       unplaced: 0,
       // ZERO, AND VACUOUSLY SO IN THIS HARNESS. See the table above.
       unreachable: 0,
@@ -250,8 +262,13 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // the checkout count times the rate, so the two numbers moved together rather than apart.
     // G-038a-iii-a: 64 -> 66 valid and 1,217 -> 1,270 checkouts, the other way for the first
     // time, and the closed form still holds exactly — 1,270 x 8,500p = 10,795,000p.
-    expect(departuresOf(summary, 'checkedOut')).toBe(1_270);
-    expect(summary.money.revenuePennies).toBe(10_795_000);
+    // G-040b-ii: 1,270 -> 1,695 checkouts and 10,795,000p -> 14,407,500p, and **the closed
+    // form is what makes this a re-record rather than a coincidence**: revenue is still exactly
+    // the checkout count times the rate, because `payForStay` charges per GUEST (ADR-0072
+    // ruling 2). The same 66 valid rooms complete a third more stays, which is what a bedroom
+    // holding the party it was documented as holding does to this hotel.
+    expect(departuresOf(summary, 'checkedOut')).toBe(1_695);
+    expect(summary.money.revenuePennies).toBe(14_407_500);
     expect(departuresOf(summary, 'checkedOut') * 8_500).toBe(summary.money.revenuePennies);
   });
 
@@ -268,9 +285,14 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // guest and then be invalidated under them — which is the event this number exists to
     // count. `evictedRoomUnusable` is 2 of the 9, so the reason G-015 added is alive rather
     // than merely non-zero in aggregate.
-    expect(evictedInSummary(summary)).toBe(9);
-    expect(departuresOf(summary, 'evictedRoomUnusable')).toBe(2);
-    expect(departuresOf(summary, 'evictedRoomGone')).toBe(7);
+    // G-040b-ii: 9 -> 13, and BOTH reasons rise (2 -> 4 unusable, 7 -> 9 gone). More guests in
+    // the same rooms means more of them are standing in a room at the instant the demolish walk
+    // reaches it, which is the event this number exists to count. The thin row is thicker than
+    // it has ever been here, which is worth noting because `outcome.report.test.ts` carries the
+    // opposite reading on its own invocation.
+    expect(evictedInSummary(summary)).toBe(13);
+    expect(departuresOf(summary, 'evictedRoomUnusable')).toBe(4);
+    expect(departuresOf(summary, 'evictedRoomGone')).toBe(9);
   });
 
   it('accounts for every room: valid plus invalid, with nothing left over', () => {
@@ -296,7 +318,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     // a regular expression: the same run that took `noDoor` to 0 would have matched it with a
     // literal `0` in that slot. THREE reasons, at their counts, through a real process.
     expect(stdout).toContain(
-      'rooms bad   0 unplaced, 13 unsupported, 3 no door, 3 no corridor, 0 no route, 0 no item',
+      'rooms bad   0 unplaced, 15 unsupported, 4 no door, 2 no corridor, 0 no route, 0 no item',
     );
   }, 60_000);
 });
@@ -327,7 +349,10 @@ describe('the shipped hotel still works', () => {
     // 96 WHERE IT WAS 267 (G-027a): three rooms serve one guest a day each rather than three,
     // so the shipped default turns most of its arrivals away. The rooms are all still valid,
     // which is what this test is about.
-    expect(departuresOf(summary, 'checkedOut')).toBe(96);
+    // 96 -> 128 AT G-040b-ii, AND IT IS EXACTLY FOUR THIRDS: three bedrooms of capacity 2 turn
+    // the same 360 arrival commands into 480 guests and complete a third more stays. The rooms
+    // are all still valid, which is what this test is about.
+    expect(departuresOf(summary, 'checkedOut')).toBe(128);
     expect(violations).toEqual([]);
   });
 

@@ -393,7 +393,14 @@ describe('the replay is the thing the gate runs', () => {
     //       did not now do.
     // 69 -> 76 AT G-041, same cause as the 40,000-tick tally above: a richer hotel affords more
     // builds, and the builds this walk makes are the floating ones.
-    expect(tally.unsupported).toBe(76);
+    // 76 -> 82 AT G-040b-ii, THE SAME CAUSE ONE GOAL LATER: the shipped party cycle 1, 1, 2
+    // puts four guests in this hotel for every three arrival commands and sleeps a pair in one
+    // bedroom, so it completes more stays, earns more, and affords more of the floating builds
+    // this walk makes. Every one of them is a room on floors 5..19 with nothing beneath it, so
+    // a richer hotel is a hotel with more `unsupported` rooms — which is ADR-0009's trap being
+    // paid for out of the party dial, and the same reading `cli.stdout.test.ts`'s build arm
+    // records at a third of the size.
+    expect(tally.unsupported).toBe(82);
     expect(tally.unplaced).toBe(0);
   });
 

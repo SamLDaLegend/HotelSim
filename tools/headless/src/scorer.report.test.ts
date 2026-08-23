@@ -27,7 +27,15 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createGuestOutcomes, createWorld, needTypesInOrder } from '@hotelsim/sim';
+import {
+  createGuestOutcomes,
+  createWorld,
+  firstGuestRules,
+  firstRoomTypeProviding,
+  lodgingNeedOf,
+  needTypesInOrder,
+  stayDurationOf,
+} from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { buildSummary, meanReviewHundredths, parseArgs } from './report.js';
@@ -113,6 +121,63 @@ const AMENITIES = [1, 2, 3] as const;
  * ==========================================================================================
  */
 const SUSTAINED_BY_ONE_PROVIDER = 1 + (needTypesInOrder(CONTENT).find((need) => need.role !== 'lodging')?.refillPerTick ?? 0);
+
+/**
+ * HOW MANY GUESTS ONE ARRIVAL COMMAND BRINGS, READ FROM CONTENT (G-040b-ii).
+ *
+ * ==========================================================================================
+ * THE OCCUPANCY ARITHMETIC IN THIS FILE WAS SPELLED `min(rooms, stayDurationTicks / arrivals)`,
+ * AND BOTH TERMS OF IT COUNTED THE WRONG THING THE MOMENT A PARTY COULD HAVE TWO MEMBERS. The
+ * quotient counts arrival COMMANDS — parties — and `rooms` counts rooms, while the figure they
+ * are compared against, `SUSTAINED_BY_ONE_PROVIDER`, counts GUESTS. So the day
+ * `guest-rules.json` declared `partySizeWeights` the two sides stopped being the same unit and
+ * nothing in the expression could say so. **That is ADR-0039 section 2's class exactly** — a
+ * guard spelled in the flags it guards cannot see the content redefine what a flag means — and
+ * it is repaired here rather than left for the reading to drift again.
+ *
+ * THE TABLE IS A CYCLE OVER THE GUEST-ID LINE, NOT A PROBABILITY: a party consumes one ordinal
+ * per member, so the ordinals its members occupy are never consulted. The walk below is that
+ * reading, and the shipped `[3, 1]` gives the cycle 1, 1, 2 — three parties, four guests, four
+ * ordinals. `party.content.test.ts` pins the same ratio off a REAL RUN rather than off this
+ * walk, which is what stops the two agreeing with each other (ADR-0021).
+ * ==========================================================================================
+ */
+const GUESTS_PER_PARTY = ((): number => {
+  const weights = firstGuestRules(CONTENT)?.partySizeWeights;
+  if (weights === undefined) return 1;
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let ordinal = 1;
+  let guests = 0;
+  let parties = 0;
+  // One full period: `total` ordinals is a whole number of cycles, because the walk reads
+  // `ordinal % total` and a cycle returns to the residue it started at.
+  const until = ordinal + total;
+  while (ordinal < until) {
+    let at = ordinal % total;
+    let size = 1;
+    for (let i = 0; i < weights.length; i += 1) {
+      at -= weights[i] ?? 0;
+      if (at < 0) {
+        size = i + 1;
+        break;
+      }
+    }
+    guests += size;
+    parties += 1;
+    ordinal += size;
+  }
+  return guests / parties;
+})();
+
+/** What one lodging room holds, from content — the other half of the unit repair above. */
+const LODGING_CAPACITY = firstRoomTypeProviding(CONTENT, lodgingNeedOf(CONTENT)?.id ?? '')?.capacity ?? 1;
+
+/**
+ * Concurrent GUESTS at a rung: the beds it can fill, or the guests it is fed, whichever binds.
+ * Every comparison against `SUSTAINED_BY_ONE_PROVIDER` in this file goes through it.
+ */
+const concurrentGuests = (rooms: number, arrivals: number): number =>
+  Math.min(rooms * LODGING_CAPACITY, ((stayDurationOf(CONTENT) ?? 0) / arrivals) * GUESTS_PER_PARTY);
 const CONTENDED_ROOMS = [16, 20, 24] as const;
 const CONTENDED_ARRIVALS = 60;
 
@@ -164,7 +229,10 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // ========================================================================
     expect(mean(rich)).toBe(mean(lean));
     expect(mean(rich)).toBe(354);
-    expect(Math.min(3, 12)).toBeLessThan(SUSTAINED_BY_ONE_PROVIDER);
+    // G-040b-ii: read in GUESTS rather than in parties, and the pair is untouched by the dial —
+    // three bedrooms hold six lodgers, which is still far under what one provider sustains, so
+    // the second amenity still has nothing to serve and both arms still read 354.
+    expect(concurrentGuests(3, 120)).toBeLessThan(SUSTAINED_BY_ONE_PROVIDER);
     expect(worstShare(rich)).toBeGreaterThan(worstShare(lean));
   });
 
@@ -174,13 +242,22 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // room count here clears 15. Three separate hotels, one amenity against two, all upward.
     expect(SUSTAINED_BY_ONE_PROVIDER).toBe(15);
     for (const rooms of CONTENDED_ROOMS) {
-      expect(Math.min(rooms, 1_440 / CONTENDED_ARRIVALS)).toBeGreaterThan(SUSTAINED_BY_ONE_PROVIDER);
+      expect(concurrentGuests(rooms, CONTENDED_ARRIVALS)).toBeGreaterThan(SUSTAINED_BY_ONE_PROVIDER);
       expect(mean(atContended(rooms, 2)), `${rooms} rooms`).toBeGreaterThan(mean(atContended(rooms, 1)));
     }
     // And it does NOT move below the bottleneck, which is the other half of the same claim and
     // the thing that makes the siting a derivation rather than a preference.
     for (const rooms of ROOMS) {
-      expect(Math.min(rooms, 12)).toBeLessThanOrEqual(SUSTAINED_BY_ONE_PROVIDER);
+      // G-040b-ii: `Math.min(rooms, 12)` stood here and counted PARTIES against a bound that
+      // counts GUESTS. Read in guests it is 16 at the top rung, which is ABOVE
+      // `SUSTAINED_BY_ONE_PROVIDER` — so this loop is no longer true of the whole ladder and the
+      // exception is stated rather than smoothed: the twelve-room rung has crossed the line, and
+      // that crossing is exactly what the census arm below reports as a fall.
+      if (rooms === 12) {
+        expect(concurrentGuests(rooms, 120)).toBeGreaterThan(SUSTAINED_BY_ONE_PROVIDER);
+        continue;
+      }
+      expect(concurrentGuests(rooms, 120)).toBeLessThanOrEqual(SUSTAINED_BY_ONE_PROVIDER);
     }
   }, 120_000);
 
@@ -285,14 +362,50 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // TWELVE STEPS: three rows x two amenity steps, plus three columns x two room steps. If the
     // grid ever shrinks, this goes red before the empty census can be read as a property.
     expect(compared).toBe(12);
+    // ==========================================================================================
+    // AND AT G-040b-ii THE CENSUS HAS ONE ENTRY AGAIN, AND HERE IS THE MEASUREMENT IT DEMANDS
+    // RATHER THAN THE RE-PIN IT FORBIDS. Same grid, same invocation, both arms in one sitting,
+    // review mean x100, exact deterministic counts (n = 1 IS the distribution):
+    //
+    //                 amen 1        amen 2        amen 3
+    //     3 rooms     354 -> 354    354 -> 354    354 -> 354
+    //     6 rooms     409 -> 400    409 -> 409    409 -> 409
+    //    12 rooms     486 -> 389    500 -> 500    500 -> 500
+    //
+    // **SEVEN OF THE NINE CELLS DO NOT MOVE AT ALL, AND IT IS THE `amen 1` COLUMN THAT DOES** —
+    // the fourth time in this file's history that the same column has carried a change.
+    //
+    // WHY, AND IT IS THE FILE'S OWN ARITHMETIC RATHER THAN A STORY. `SUSTAINED_BY_ONE_PROVIDER`
+    // is 15: one provider serves fifteen concurrent GUESTS. `concurrentGuests` above reads the
+    // ladder at `--arrivals 120` as `min(rooms x 2, 12 x 4/3)` — the shipped party cycle brings
+    // four guests for every three commands — so the twelve-room rung holds **16**, and it is the
+    // first rung on this grid ever to exceed the bound. One amenity of each kind cannot serve
+    // it: at that cell `night_rest` is met for 471 of 471 guests and `guest_comfort` for 98.
+    //
+    // **THE FALL IS THE SCORE TELLING THE TRUTH ABOUT A HOTEL A PLAYER HAS UNDER-PROVISIONED**,
+    // which is the reading this file already accepted at G-023b-ii for a fall of one hundredth
+    // in the same column, and ADR-0034's amendment on the other axis. The player's repair is one
+    // amenity: the cell to its right reads 500, the ceiling of the scale, and that step is now
+    // worth **111 hundredths** where it was worth 14. The build loop at this rung is more alive
+    // than it has ever been, and the price is that the room axis dips if you do not use it.
+    //
+    // **IT IS THE SAME DEFECT CLASS AS THE OPEN FINDING IN `unserved.report.test.ts`** — the
+    // engagement ladder inverting at the top rung — which the human ruled belongs to G-043, and
+    // `review.report.test.ts`'s room-ladder census records the identical cell from the other
+    // side. **The dial is NOT tuned to hide it**: `partySizeWeights` is a design number and
+    // demand is M4's.
+    //
+    // The census keeps its shape, so a SECOND fall, a bigger one, or one in another cell is
+    // still a red line with its coordinates in the message.
+    // ==========================================================================================
     expect(
       falls,
-      'THE SCORE FALLS SOMEWHERE ON A SINGLE AXIS. Read the block above: it fell in exactly one ' +
-        'cell between G-023b-ii and G-039b-alpha — one hundredth, on the room axis, into a cell ' +
-        'a player has under-provisioned — and it does not any more. A fall reappearing, ' +
-        'anywhere, at any size, is a finding about the scorer and needs a measurement rather ' +
-        'than a re-pin.',
-    ).toEqual([]);
+      'THE SCORE FALLS SOMEWHERE NEW ON A SINGLE AXIS. Read the block above: exactly one fall ' +
+        'is known — eleven hundredths, on the room axis at one amenity, into the twelve-room ' +
+        'rung, whose 16 concurrent guests are the first on this grid to exceed what one ' +
+        'provider sustains. A second fall, a bigger one, or one in another cell is a finding ' +
+        'about the scorer and needs a measurement rather than a re-pin.',
+    ).toEqual(['room axis at 1 amenities, 6->12: -11']);
     // THE 30s DEFAULT WAS NOT ENOUGH UNDER `pnpm verify` AT G-041 and this is a DEADLOCK
     // DETECTOR rather than a performance bound — nothing here asserts a duration. This sweep
     // spawns nine child CLI runs, the file now also warms a three-run contended ladder, and the
@@ -486,11 +599,19 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // well, and neither spreads. Recorded as the collapse it is rather than re-pointed at a
     // third configuration that happens to still work: the whole ladder has flattened, and a
     // contrast found by shopping for one would be hiding that.
+    //
+    // **AND AT G-040b-ii THE REJECTED CONFIGURATION IS DISCRIMINATING AGAIN**, which is the
+    // paragraph above running backwards: six rooms at one amenity has four occupied bands
+    // (0/34/180/10/246) and the smallest holds TEN guests, under the one-per-day floor of 30. So
+    // the contrast this arm wanted is available once more — the shipped configuration's occupied
+    // bands all clear the floor and the rejected one's do not — and it is asserted rather than
+    // described. The cause is the shipped party cycle: a third more guests behind one amenity of
+    // each kind makes being served a matter of degree again.
     const rejected = at(6, 1);
     const occupied = rejected.reviews.distribution.filter((row) => row.count > 0);
-    expect(occupied.map((row) => row.score)).toEqual([3, 5]);
-    expect(Math.min(...occupied.map((row) => row.count))).toBe(161);
-    expect(Math.min(...occupied.map((row) => row.count))).toBeGreaterThan(rejected.world.days);
+    expect(occupied.map((row) => row.score)).toEqual([2, 3, 4, 5]);
+    expect(Math.min(...occupied.map((row) => row.count))).toBe(10);
+    expect(Math.min(...occupied.map((row) => row.count))).toBeLessThan(rejected.world.days);
     // `expect(Math.min(...clearing.map(count)) > floor)` STOOD HERE AND IS GONE (ADR-0035).
     // `clearing` is DEFINED as the rows above the floor, so its minimum exceeding the floor
     // cannot fail — and on an empty `clearing` it is `Infinity`, so it would have passed
@@ -557,8 +678,13 @@ describe('THE FENCE HOLDS AND THE VERDICT MOVES — two claims, not one', () => 
     const control = at(6, 5);
     const count = (reason: string): number =>
       control.guests.departures.find((row) => row.reason === reason)?.count ?? 0;
-    expect([count('checkedOut'), count('gaveUp'), count('leftDissatisfied')]).toEqual([192, 161, 0]);
-    expect(control.money.revenuePennies).toBe(1_632_000);
+    // G-040b-ii: 192 / 161 / 0 -> 256 / 214 / 0, each exactly four thirds of what it was, and
+    // the revenue with them — `payForStay` is per GUEST (ADR-0072 ruling 2), so 256 x 8,500p.
+    // **The control's own claim is untouched**: the two counters and the ledger still move only
+    // when the SIMULATION moves, and this movement is a content line rather than a review
+    // reaching back across the fence.
+    expect([count('checkedOut'), count('gaveUp'), count('leftDissatisfied')]).toEqual([256, 214, 0]);
+    expect(control.money.revenuePennies).toBe(2_176_000);
     // The distribution is no longer the one the snapshot scorer produced — every guest on one
     // score — and the shape is the two populations this hotel actually has.
     expect(distinctScores(control)).toBe(2);

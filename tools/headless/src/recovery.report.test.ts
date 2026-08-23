@@ -377,9 +377,17 @@ describe('CRITERION A: a hotel with nothing returns to a hotel that works', () =
     // is again unaffected — rooms that work, guests that paid, no borrowing — and it is worth
     // saying that the previous column was measuring a hotel that, under this build, would have
     // earned nothing at all.
-    expect(report.rooms.valid).toBe(7);
-    expect(departuresOf(report, 'checkedOut')).toBe(130);
-    expect(report.build.refused.insufficientFunds).toBe(119);
+    //
+    // RE-MEASURED AGAIN AT G-040b-ii, AND THIS COLUMN MOVES FURTHEST OF THE THREE. The shipped
+    // party cycle 1, 1, 2 brings four guests for every three arrival commands and sleeps a pair
+    // in one bedroom, so a hotel rebuilding itself from nothing earns faster: **7 -> 10 working
+    // bedrooms, 130 -> 374 completed stays, 119 -> 114 builds refused for money**, and the loan
+    // is STILL never drawn. The CRITERION is again unaffected — a hotel that started with
+    // nothing ends with rooms that work and guests that paid — and the direction is the one the
+    // build loop wants: capacity that fills pays for capacity.
+    expect(report.rooms.valid).toBe(10);
+    expect(departuresOf(report, 'checkedOut')).toBe(374);
+    expect(report.build.refused.insufficientFunds).toBe(114);
     expect(report.loans.drawn).toBe(0);
   });
 });

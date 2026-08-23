@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-22, G-041 is DONE and MERGED TO main together with G-042 (merge of g041-rate-rederivation into a90b722). The need rates are RE-DERIVED so the declared rate is a CEILING genuinely above the bare one (ADR-0054, ADR-0057 option a): serviceFloorBasisPoints 5000, engagement refillPerTick 7 to 14, night_rest 1 to 2 with capacityTicks 600 to 300, visitDurationTicks 208 to 98 and dissatisfactionCapacityTicks 431 to 301, all derived rather than dialled. check:scaling's density axis is re-derived to direction false with a magnitude bound of 1.6386, a tightening with a mutation probe behind it (ADR-0069, ADR-0070). G-040a's party rides on the same tree: Guest.partyId is hashed state, save v22, shipped party size PINNED AT 1. E-010 and E-011 are BOTH RESOLVED by ADR-0069 and the loop is not stopped. BOTH GOLDEN HASHES WERE RE-MEASURED ON THE MERGED TREE, because both parents moved the same literals off the same base and neither parent's value is correct here: I2 fb8d8fd9fd76b245 over three processes (main read 7ff621928358cb8e, the branch f197734f532dc62b); measure golden 1e44f2c872a33aa4 (main c7212353b3d1784f, the branch cba13e62265ed196). Fourteen rows green, VERIFY_EXIT read from the process. Unreliable: 2 gates, 0 defects (inherited, not re-measured). Two items are deliberately NOT in this merge and are their own goal: the amenity axis going flat below 15 concurrent guests, and the engagement ladder inverting at the top rung.*
+*As of 2026-08-23, G-040b-ii is DONE: parties ARRIVE. partySizeWeights [3, 1] gives the realised cycle 1, 1, 2 — one third of parties and one HALF of guests arrive as a pair, and the realised mix is NOT the weight ratio because a party consumes one ordinal per member. WATCH #22 confirms a party draws as TWO figures and TWO pips in one bedroom; drawing as one figure does not occur. The scaling campaign is re-taken with its eighth term in the same commit and density's direction goes back ON, which is a stricter gate. Occupancy 1203 -> 1275: +33.3% guests moved it only +6.0%, because sixty bedrooms behind one amenity are bound by service rather than beds. check:tickcost SAW the content change and returned INCOMPARABLE rather than a wrong ratio — 600 guests head against 450 base, and 450 x 4/3 = 600 confirms the cycle from a gate that knows nothing about parties. G-043's cause is now identified as a UNIT ERROR (demand counts parties, provisioning counts guests) with its falsification test already positive. The build loop moves where it was flat: one amenity at 12 rooms is worth 111 hundredths and the lean-vs-rich completion factor re-opens 1.07x -> 2.76x. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -6092,3 +6092,125 @@ not exist.
 because the bench runs SHIPPED content where every party has one member. **No arm can show a party
 diverging at G-040b-i** — divergence becomes observable the tick the dial turns, which is
 G-040b-ii's WATCH.)*
+
+---
+
+## ADR-0073 — The dial turns. A gate refused a number instead of computing a wrong one, and G-043's cause is a unit error.
+
+**Date**: 2026-08-23 · **Status**: accepted · **G-040b-ii.** Fourteen rows PASS, `VERIFY_EXIT=0`.
+
+### THE DIAL, AND THE HONEST HALF OF IT
+
+`guest-rules.json` gains one line: **`"partySizeWeights": [3, 1]`**. **The realised cycle is
+1, 1, 2** — period 4 ordinals / 3 parties / 4 guests, **exact from the first arrival.** One third of
+parties and **one half of guests** arrive as a pair. *(`[3, 1]` reads as three singles per pair and
+delivers two — the trap ADR-0072 recorded.)*
+
+**Pinned by reading the cycle OUT OF A REAL RUN** — guests grouped by `partyId` over five simulated
+days — **rather than out of `partySizeOf`**, so it is not a second reading of the function
+`guest.party.arrival.test.ts` already pins.
+
+> **The builder measured `[7,1]`, `[5,1]` and `[2,1]` on the outcome arm and then DELIBERATELY
+> IGNORED that ordering**, because choosing shipped content by which assertions survive is the §9
+> stop condition inverted. **The balance of the mix is a human/M4 call; this is a dial chosen to be
+> measurable, not tuned.** That distinction is the thing I asked for and it was honoured.
+
+### THE GATE REFUSED A NUMBER RATHER THAN COMPUTING A WRONG ONE, AND MY CLAIM WAS FALSE
+
+I wrote — **twice** — that *"`check:tickcost` cannot see this either way; it materialises only
+`packages/sim`."* **False.** `ARM_PATHS` is
+`['packages/sim/src', 'packages/sim/package.json', 'packages/content/data']`, and the dial is content.
+
+**The gate saw it, and returned `INCOMPARABLE`**: *"600 guests arrived in head, 450 in base"* — a PASS
+with **no ratio**.
+
+> **That is the honest behaviour, not blindness, and it is the opposite of what I predicted.** And it
+> came with a free confirmation: **450 x 4/3 = 600 exactly — the cycle verified by a gate that knows
+> nothing about parties.**
+
+**Where my claim came from, and it is a precision failure worth naming**: ADR-0065 established that
+`check:tickcost` cannot see a change to `report.ts`, which is true — that file is a harness and is
+**not** in `ARM_PATHS`. **I generalised "materialises only `packages/sim`" from a harness case to a
+CONTENT case, and content IS in the arm.** *The right sentence was always "it cannot see a HARNESS
+change."*
+
+### THE CAMPAIGN, RE-TAKEN WITH ITS EIGHTH TERM IN THE SAME COMMIT
+
+`p` added: `full-vector:60r/96a/1m/4n/1440s/3v/99c/23x/3-1p`. **It carries the weight TABLE, not a
+mean** — `[1,1]` and `[0,1]` have different means, and `[1,1]` and `[3,1]` have different **cycles**,
+so a mean could not tell them apart.
+
+| axis | bound | direction |
+|---|---|---|
+| needs | 1.8729 -> **1.8421** tighter | stays `false`, **warrant back in the arrays** (3 of 8 loaded below 1) |
+| density | 1.6386 -> **1.9937** looser | **`false` -> `true`** — not one of 20 readings below 1 |
+| rooms-saturated | 5.2458 -> **5.4669** | `true` |
+| rooms-bench | 2.6487 -> **3.4083** looser | `true` |
+
+**Three looser is the direction that deserves suspicion, so the mechanism is stated at the numbers**:
+the dial adds a third more guests to both arms of every pair, **but a bedroom holds two, so the arm
+with more rooms absorbs more of them — the signal grew.** The one axis whose dearer arm gains nothing
+from extra beds (`needs`) is the one that **tightened**.
+
+**`density`'s direction goes back ON, which is a STRICTER gate** — the only direction an agent may
+move one unasked. ADR-0069's magnitude bound is untouched. **`needs`' out-of-campaign observation
+(0.8986) is RETIRED** as pooling ADR-0015 forbids.
+
+### OCCUPANCY, AND THE READING WORTH NOTICING
+
+**1203 -> 1275**, re-taken alone. The tripwire's printed gap widens **38.0% -> 46.2%**.
+
+> **+33.3% guests moved occupancy +6.0%.** Sixty bedrooms behind one amenity are **bound by service,
+> not beds** — the extra arrivals leave rather than accumulate.
+
+### WATCH #22 — A PARTY DRAWS AS TWO FIGURES AND TWO PIPS
+
+**Frame `t000960-f0-reduced.svg`** (tick 960, floor 0, walls reduced), seed 7. Room 5, lodgers g3 and
+g4 both `partyId` 3: **two figure groups at `translate(785.5, 388)` and `translate(814.5, 388)`, two
+white pips at x=790 and x=799.** Room 11 likewise. Nine figures on the floor; every other room has
+exactly one pip. **A party drawing as one figure — the finding I named — does not occur.**
+
+*Instrument chosen on merit*: `record-frames.ts` draws the **shipped** scene rather than a second
+drawing that has gone stale, and writes files a reader who was not there can open. **`viewer.js`'s
+own two-pip branch is still un-run** — no browser — **so that half of the claim remains untested.**
+
+**Party members do separate during the day** (tick 720: g3 at (-1,4), g4 at (-1,0)) — **that is
+engagement, not the room, and cohesion is a room property.** Nothing read as stupid.
+
+### AND G-043's CAUSE IS A UNIT ERROR, WITH ITS FALSIFICATION TEST ALREADY POSITIVE
+
+**The OPEN FINDING was carried verbatim and is now WORSE — measured, not repaired.** The inversion
+starts a rung earlier *and* has reached the lodging-inclusive statistic that used to mask it:
+all-rows means `[2448,1387,910,611] -> [2459,1431,1132,1487]`.
+
+> **`DEMAND = stayDurationTicks / arrivals` counts arrival COMMANDS (parties) while
+> `PER_PROVIDER_LODGERS` counts GUESTS.** The top rung holds **16** and is provisioned for **12** —
+> `ceil(12/15) = 1` amenity where `ceil(16/15) = 2`.
+
+**The falsification test is already run and POSITIVE**: the same rung with one more amenity reads
+`[371, 352, 653]` against the rung below at `[1304, 1176, 368]` — engagement mean **459 vs 949** —
+and **464 checkouts with nobody dissatisfied.** *Repairing the rule is G-043's call and the builder
+did not touch it.*
+
+**The same crossing shows on three instruments and they agree.** A fourth instance of ADR-0039 §2's
+class was repaired in passing: `scorer.report` compared **parties** against a **guests** bound.
+
+### THE BUILD LOOP GETS BETTER WHERE IT WAS DEAD
+
+**The amenity axis at 6 rooms was FLAT at G-041 (409/409) and now moves (400 -> 409); at 12 rooms one
+amenity is worth 111 hundredths (389 -> 500); and the lean-vs-rich completion factor re-opens from
+1.07x to 2.76x** — *the thing G-037a's fold was expected to do, arriving from the demand side
+instead.*
+
+*(And two cheats were refused on `outcome.report`'s collapsed contrast row — lowering the bound to
+fit, and retuning the invocation. It is pinned at what it is, with a paired control: **1,879 guests
+arriving alone give 45 checkouts; 1,920 arriving under the cycle give 16** — so it is concurrency per
+room, not head count.)*
+
+### TWO MORE OF MY CLAIMS, CORRECTED
+
+- ***"The only non-test code change is a content file"* — false, and the same block required the
+  counterexample**: the fingerprint term is instrument code and the campaign and pin are gate data.
+  **The true claim is "no change to `packages/sim` or `apps/game`."**
+- ***"~19 goldens"*** — nineteen test **files** went red; **89 assertions moved.** *The larger figure
+  is the one to budget against.*

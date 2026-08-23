@@ -188,11 +188,19 @@ describe('THE EXIT CRITERION: `unreachable` reaches 0 with a full-height shaft d
     // `validity.report.test.ts`: a wrong corridor list once dropped a harness's checkouts
     // 187 -> 12 while every non-zero assertion stayed green.
     // ========================================================================================
+    //
+    // RE-RECORDED AT G-040b-ii, AND THE HEADLINE ZERO IS UNTOUCHED. The shipped party cycle
+    // 1, 1, 2 gives this invocation a third more guests, so it earns more and affords more of
+    // its walk's builds — the same movement `validity.report.test.ts` records on the same
+    // invocation, to the same three numbers (`unsupported` 13 -> 15, `noDoor` 3 -> 4,
+    // `noCorridor` 3 -> 2, `valid` unmoved at 66). **What this file asserts is `unreachable`,
+    // and more rooms in mid-air do not make any of them unreachable**: the shaft still joins
+    // every strip a player can build in.
     expect(arm(true).invalid).toEqual({
       missingItem: 0,
-      unsupported: 13,
-      noDoor: 3,
-      noCorridor: 3,
+      unsupported: 15,
+      noDoor: 4,
+      noCorridor: 2,
       unplaced: 0,
       unreachable: 0,
     });

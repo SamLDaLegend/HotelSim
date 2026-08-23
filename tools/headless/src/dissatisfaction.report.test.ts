@@ -102,13 +102,26 @@ describe('ARM 1 — a hotel that works notices nothing', () => {
     // 192 the hotel housed at the ceiling, the 161 it did not below them. The DEPARTURES are
     // what this arm is about and they are untouched — which is the claim, and it is stronger
     // for having a moving neighbour beside it.
-    expect(count(wellProvisioned, 'checkedOut')).toBe(192);
-    expect(count(wellProvisioned, 'gaveUp')).toBe(161);
+    // RE-RECORDED AT G-040b-ii, AND THE ARM'S OWN CLAIM SURVIVES INTACT: the shipped content
+    // declares `partySizeWeights: [3, 1]`, whose realised cycle is 1, 1, 2, so 360 arrival
+    // commands bring 480 guests and a pair sleeps in one of these six bedrooms. Every row scales
+    // and NOTHING CHANGES KIND — `leftDissatisfied` is still 0, both eviction rows are still 0,
+    // and the distribution still has exactly two occupied bands holding exactly the checkouts
+    // and the give-ups. That is what this arm is for: a hotel that works still notices nothing.
+    //
+    // 192 -> 256 is 4/3 EXACTLY, which is the cleanest possible statement that the extra
+    // checkouts are the extra guests and not a change of behaviour: six bedrooms of capacity 2
+    // housed 192 parties of one and now house 256 people in the same beds. Revenue follows the
+    // same multiplier because `payForStay` is per guest (ADR-0072 ruling 2) — 256 x 8,500p.
+    expect(count(wellProvisioned, 'checkedOut')).toBe(256);
+    expect(count(wellProvisioned, 'gaveUp')).toBe(214);
     expect(count(wellProvisioned, 'evictedRoomGone')).toBe(0);
     expect(count(wellProvisioned, 'evictedRoomUnusable')).toBe(0);
-    expect(wellProvisioned.guests.arrived).toBe(360);
-    expect(wellProvisioned.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 161, 0, 192]);
-    expect(wellProvisioned.money.revenuePennies).toBe(1_632_000);
+    expect(wellProvisioned.guests.arrived).toBe(480);
+    expect(wellProvisioned.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 214, 0, 256]);
+    expect(wellProvisioned.money.revenuePennies).toBe(2_176_000);
+    // The multiplier, asserted rather than asked to be noticed: four guests per three commands.
+    expect(wellProvisioned.guests.arrived * 3).toBe(360 * 4);
   });
 });
 
@@ -157,8 +170,13 @@ describe('ARM 4 — starved of rooms: the partition, and it is the one a refusal
   it('and its counts are HEAD\'s too, because nothing here reaches the new branch', () => {
     // The second control. A hotel whose guests never get a bed is untouched by a rule about
     // guests that have one — so this arm, like arm 1, moves only its hash.
-    expect(count(starvedOfRooms, 'checkedOut')).toBe(32);
-    expect(count(starvedOfRooms, 'gaveUp')).toBe(326);
+    // RE-RECORDED AT G-040b-ii. A one-room hotel now sleeps TWO people, so the row that could
+    // not move for any earlier goal moves for this one: 32 -> 43 checkouts out of a third more
+    // arrivals. **The claim is untouched and is the line above** — `leftDissatisfied` is still
+    // exactly 0, because a guest that never gets a bed still leaves as `gaveUp` long before its
+    // dissatisfaction could saturate.
+    expect(count(starvedOfRooms, 'checkedOut')).toBe(43);
+    expect(count(starvedOfRooms, 'gaveUp')).toBe(434);
   });
 });
 
