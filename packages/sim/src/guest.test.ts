@@ -481,7 +481,7 @@ describe('the phase table', () => {
     // stranded guest is what "the loop did not run" MEANS on a busy tick; the flag
     // above is what detects it on any tick at all.
     const state = withoutGuests(hotel(1), [arrive]);
-    expect(state.arrivingGuests).toBe(1);
+    expect(state.arrivingParties).toBe(1);
     expect(state.world.guests.list).toHaveLength(0);
   });
 
@@ -494,7 +494,7 @@ describe('the phase table', () => {
 
   it('consumes the arrival, so the doorway is empty by the time the tick closes', () => {
     const state = runGuests(applyCommands(beginTick(hotel(1), content, [arrive])));
-    expect(state.arrivingGuests).toBe(0);
+    expect(state.arrivingParties).toBe(0);
     expect(state.world.guests.list).toHaveLength(1);
   });
 

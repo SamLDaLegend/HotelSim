@@ -6004,3 +6004,91 @@ commit is excluded as a merge.**
 
 *(A prose defect the merge created was fixed in place: `main`'s G-040a comment says "it still evicts
 exactly 18, asserted three lines down", which now reads 19. Marked as history at the point of use.)*
+
+---
+
+## ADR-0072 — A party is carried, not counted; the stay is charged per guest; and a weight table is not a mix.
+
+**Date**: 2026-08-23 · **Status**: accepted · **G-040b-i.** Three rulings owed at PLAN, all made.
+
+### THE CLAIM, AND IT IS THE STRICTEST ONE THIS PROJECT HAS MADE
+
+**Four `sim:run` arms — varying rooms, arrivals and amenities — captured before any edit and
+re-captured after: `diff` is EMPTY on all four, state hash included.** G-040a's equivalent read
+`48c48`; **this reads `0c0`.**
+
+**No golden re-pins, no save bump (still v22), no migration, no new `World` field** — so
+`assertWorldShape` is untouched and **I6's obligation never fires** — **occupancy pin and scaling
+fingerprint unmoved, I2 `fb8d8fd9fd76b245` unchanged.**
+
+**Proof of bite** (ADR-0022 recipe, sha256 identical on restore): deleting `capacity < partySize ||`
+turns three cases red, including **`gaveUp` reading 1 instead of 2 — the stranded partner departing
+while its room-mate sleeps, reproduced.**
+
+### RULING 1 — THE SIZE IS THE PARTY'S ORIGINAL SIZE, CARRIED IN `partyId`, NEVER COUNTED
+
+`partyId` **is** the ordinal (`guests.nextId` when the party walked in), so size is
+`partySizeOf(content, partyId)` — **a pure function of already-saved state, costing no field and no
+save bump.**
+
+**A live count is wrong exactly where it would first be asked** — member 1 reserves before member 2
+exists, reads 1, takes a single — **and is a DIFFERENT RULE even where accurate**, because it shrinks
+when a member gives up. **Every member asks the same number and gets the same answer, this tick and
+every later one.**
+
+**No party-level resolver and no `Map<PartyId, GuestId[]>`**: cohesion comes from the existing
+ascending-id walk plus G-040a's own-party exemption. *(A save loaded under changed content gets the
+new answer — the `dissatisfaction` precedent ADR-0068 cites.)*
+
+### RULING 2 — `payForStay` STAYS PER-GUEST, AND THE PRICE IS PAID IN THE SAME CHANGE
+
+Option (a). It preserves `countRoomRevenueTransactions === the checkedOut row` — **the only
+cross-subsystem witness the departure table has** — now pinned directly: two transactions, two
+checkouts, one room.
+
+**Its price is not deferred**: the margin arithmetic is **re-stated on `nightlyRatePence`** —
+*nominal margin per occupied room-day = party size x (rate / upkeep)* — so **3.4 : 1 is the
+party-of-one figure and a pair earns 6.8 : 1 against one room's upkeep.** The twin paragraph on
+`stayDurationTicks` gets the matching sentence.
+
+> **This is where ADR-0055's "a party is one booking" is formally narrowed**: it is one booking in
+> the player's language and **N transactions in the ledger**, and the ledger's shape is what the
+> witness rests on. **Option (b) would have needed a party-level departure count `GuestOutcomes`
+> cannot express — new hashed state, a save bump, and a broken seam.**
+
+### RULING 3 — A PARTY > 1 IS REFUSED UNDER LODGING-FREE CONTENT
+
+`assertPartiesCanBeHoused` returned early with no lodging need, so a food court could have declared
+`maxPartySize 5` and got five guests **sharing a `partyId` and cohering in NOTHING** — no room, no
+shared terminator.
+
+**Refused.** And that has a consequence the plan review could not have known: **it kills the
+`visitEnded` divergence entirely**, because `visitEnded` requires lodging-free content and such
+content can no longer form a party. **So `leftDissatisfied` is now the ONLY one of the seven
+departure rows that can split a party**, and the cohesion ruling is written against six-of-seven
+rather than five.
+
+### THE FINDING G-040b-ii MUST NOT MEET AS A SURPRISE: A WEIGHT TABLE IS NOT A MIX
+
+I wrote that an ordinal-driven distribution is *"periodic"*. **That understates it.**
+
+> **A party consumes one ordinal PER MEMBER, so the slots its members occupy are never consulted, and
+> THE REALISED MIX IS NOT THE WEIGHT RATIO.** `[1, 1]` emits **pairs forever.** `[3, 1]` gives the
+> cycle **1, 1, 2.**
+
+**Pinned as cases and written into both docblocks. G-040b-ii must choose weights by reading the
+CYCLE, not the ratio — a dial picked as "half pairs" would ship all pairs.** *This is the kind of
+defect that ships green, reads as a balance problem for weeks, and is found by nobody.*
+
+### AND MY "DENOMINATOR" CLAIM WAS FALSE
+
+I said `arrived` is *"the denominator of several derived shares."* **It has three readers in the
+whole tree and NOTHING divides by it.** The fix was still required — **the conservation law is the
+real consumer**, and `arrived - inHotel = Σ rows` throws on load — but **I overstated its blast
+radius**, and a builder sizing the goal from my sentence would have budgeted for a sweep that does
+not exist.
+
+*(Also correctly flagged: "cohesion evidence must use the bench arm" is not executable in this half,
+because the bench runs SHIPPED content where every party has one member. **No arm can show a party
+diverging at G-040b-i** — divergence becomes observable the tick the dial turns, which is
+G-040b-ii's WATCH.)*

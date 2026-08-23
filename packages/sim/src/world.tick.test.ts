@@ -218,7 +218,7 @@ describe('tick phases', () => {
           state.committed &&
           state.guestsRun &&
           state.settlementRun &&
-          state.arrivingGuests === 0 &&
+          state.arrivingParties === 0 &&
           state.world.tick === world.tick + 1;
         if (whole) survivors.push(sequence.join('>'));
       }

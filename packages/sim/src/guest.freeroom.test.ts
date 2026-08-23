@@ -171,7 +171,7 @@ const restDeficitOf = (g: Guest): number => findNeedState(g.needs, 'rest')?.defi
 const TICK = 7;
 
 /** One tick of the guest loop over a hand-built store, with no cache. */
-function tick(guests: GuestStore, entities: EntityStore, arriving = 0) {
+function tick(guests: GuestStore, entities: EntityStore, arrivingParties = 0) {
   const draft = beginEntityDraft(entities, BOUNDS);
   return stepGuests({
     tick: TICK,
@@ -183,7 +183,7 @@ function tick(guests: GuestStore, entities: EntityStore, arriving = 0) {
     entities: draft,
     content,
     validity: tickValidityContext(null, content, BOUNDS, createCorridors(), createStairs(), draft),
-    arriving,
+    arrivingParties,
   });
 }
 

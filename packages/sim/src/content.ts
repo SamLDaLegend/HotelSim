@@ -519,8 +519,37 @@ export type GuestRulesData = {
    * party of two would need. The weights that decide how often a party of two actually arrives
    * are G-040b's, and until they land nothing in the simulation reads this field except the
    * refusal.
+   *
+   * SINCE G-040b-i IT IS DERIVED WHENEVER `partySizeWeights` IS PRESENT, and a declared value
+   * that disagrees with the table is REFUSED rather than preferred — see `clonePartySize`. Two
+   * ways to say one thing is one way to ship a party nothing can house.
    */
   readonly maxPartySize?: number | undefined;
+  /**
+   * HOW OFTEN EACH PARTY SIZE ARRIVES (G-040b-i, ADR-0055).
+   *
+   * Index `i` is the weight of a party of `i + 1` guests, so `[7, 3]` is seven parts alone to
+   * three parts a pair. The weights are integers and are read as a REPEATING PATTERN along the
+   * guest-id line rather than as a probability: `partySizeOf` takes the party's ordinal —
+   * `guests.nextId` at the moment it walks in, which is also its `partyId` — reduces it modulo
+   * the total, and walks the table. **No RNG draw, on purpose.** `advanceTime` advances the
+   * stream exactly one draw per tick so that stream position is a pure function of tick count,
+   * two shipped tests pin that, and party formation is not the thing that should retire them
+   * (demand is M4's).
+   *
+   * THE CONSEQUENCE, STATED HERE SO IT IS NOT DISCOVERED AS A DEFECT: **the pattern is periodic
+   * and the realised mix is NOT the weight ratio.** A party consumes one ordinal per member, so
+   * the slots its members occupy are never consulted — `[1, 1]` does not give half pairs, it
+   * gives ALL pairs, because a pair starting on an odd ordinal always lands on an odd ordinal
+   * again. `[3, 1]` gives the cycle 1, 1, 2 rather than three singles to one pair. A designer
+   * choosing weights must read the CYCLE, which `partySizeOf`'s cases pin, and a watcher will
+   * see the same cycle every run until M4 gives arrivals a demand model.
+   *
+   * ABSENT MEANS EVERY ARRIVAL IS ONE GUEST, which is what every build before G-040b-ii does,
+   * so content without this field reproduces those runs to the byte and its fingerprint does not
+   * move. `[1]` is the same behaviour said out loud, and is legal.
+   */
+  readonly partySizeWeights?: readonly number[] | undefined;
 };
 
 /**
@@ -993,6 +1022,7 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     dissatisfactionReliefPerTick: relief,
     maxLodgingFloorsFromEntrance: reach,
     maxPartySize: party,
+    partySizeWeights: weights,
     ...rest
   } = rules;
   const withStay = clonePartySize(
@@ -1020,6 +1050,7 @@ function cloneGuestRules(rules: GuestRulesData): GuestRulesData {
     reach,
     ),
     party,
+    weights,
   );
   if (margin === undefined) return withStay;
   if (!Number.isInteger(margin) || margin < 0 || margin > ONE_WHOLE_BASIS_POINTS) {
@@ -1078,16 +1109,110 @@ function cloneLodgingReach(id: ContentId, rest: GuestRulesData, reach: number | 
  * THE RELATION TO `capacity` IS NOT CHECKED HERE, and that is `cloneLodgingReach`'s precedent
  * one field over: the other side of the relation lives in the ROOM TYPE table, which no clone
  * in this file sees. `assertPartiesCanBeHoused` has both in hand and is where it is refused.
+ *
+ * ============================================================================================
+ * AND IT TAKES BOTH HALVES OF THE PARTY RULE AT ONCE (G-040b-i), WHICH IS THE POINT RATHER THAN
+ * A CONVENIENCE. `partySizeWeights` states how often each size arrives, and its largest entry
+ * IS a maximum party size — so two fields can now say the same thing, and a designer who writes
+ * `[1, 1, 1]` beside `maxPartySize: 2` has declared a party of three that `assertPartiesCanBeHoused`
+ * will happily wave through on the smaller number. **Every such party would then be homeless for
+ * life**, which is the failure the refusal exists to prevent, arriving through the door the
+ * distribution opens.
+ *
+ * SO THE TABLE IS THE SOURCE OF TRUTH AND THE NUMBER IS DERIVED FROM IT — and a declared number
+ * that DISAGREES is refused rather than silently overwritten, because a designer who wrote both
+ * meant something by each and the one they get should not depend on which field this function
+ * reads last.
+ *
+ * A TRAILING ZERO IS REFUSED for the same reason: `[1, 0]` declares a size that can never
+ * arrive, and it would make "the largest party this content can form" depend on whether you
+ * read the table's LENGTH or its last non-zero entry. With no trailing zero the two agree, and
+ * that identity is what lets `maxPartySizeOf` stay one line.
+ * ============================================================================================
  */
-function clonePartySize(id: ContentId, rest: GuestRulesData, size: number | undefined): GuestRulesData {
-  if (size === undefined) return rest;
-  if (!Number.isSafeInteger(size) || size < 1) {
+function clonePartySize(
+  id: ContentId,
+  rest: GuestRulesData,
+  size: number | undefined,
+  weights: readonly number[] | undefined,
+): GuestRulesData {
+  if (size !== undefined && (!Number.isSafeInteger(size) || size < 1)) {
     throw new Error(
       `bindContent: guest rules "${id}" have a maxPartySize of ${String(size)}; it must be a whole number of ` +
         'guests, one or more. A party is the unit that books a room, and the smallest one is a guest arriving alone.',
     );
   }
-  return { ...rest, maxPartySize: size };
+  if (weights === undefined) {
+    if (size === undefined) return rest;
+    return { ...rest, maxPartySize: size };
+  }
+  const table = clonePartySizeWeights(id, weights);
+  // The largest size the table can emit, which the refusal above has just made equal to its
+  // length. Named rather than inlined so the message below and the field it sets cannot drift.
+  const largest = table.length;
+  if (size !== undefined && size !== largest) {
+    throw new Error(
+      `bindContent: guest rules "${id}" declare a maxPartySize of ${String(size)} beside partySizeWeights that reach ` +
+        `${largest}. The weights are the distribution a party is drawn from, so their last entry IS the largest party ` +
+        'this content can form; two fields disagreeing about it would let one of them pass a check the other fails, ' +
+        'and every party the check missed would have no room big enough anywhere in the building. Declare one or the ' +
+        'other, or make them agree.',
+    );
+  }
+  return { ...rest, maxPartySize: largest, partySizeWeights: table };
+}
+
+/**
+ * The weight table itself: copied, validated and frozen (G-040b-i).
+ *
+ * NOT SORTED, WHICH IS THE ONE PLACE THIS DIFFERS FROM `cloneIdList`. The order of a list of ids
+ * is a designer's typing accident and is normalised away; the order HERE is the meaning — index
+ * `i` is the weight of a party of `i + 1` — so sorting it would be sorting the answer.
+ *
+ * WHAT IT REFUSES, AND EACH IS A CONTENT MISTAKE THAT WOULD READ AS AN INTENT:
+ *
+ *   AN EMPTY TABLE           says nothing at all, and absence already says "every arrival is one".
+ *   A NEGATIVE OR FRACTIONAL WEIGHT
+ *                            has no reading. The table is walked with integer arithmetic (I2 —
+ *                            floats accumulate differently across platforms), and a negative
+ *                            weight would make the walk step backwards past its own cursor.
+ *   ALL ZEROES               is content under which no party has any size, so nobody can arrive.
+ *   A TRAILING ZERO          declares a size that never arrives — see `clonePartySize`.
+ */
+function clonePartySizeWeights(id: ContentId, weights: readonly number[]): readonly number[] {
+  const table = [...weights];
+  if (table.length === 0) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have an empty partySizeWeights table. A table with no entries says nothing ` +
+        'about how large a party is; omit the field, which is the statement that every arrival is one guest.',
+    );
+  }
+  let total = 0;
+  for (let i = 0; i < table.length; i += 1) {
+    const weight = table[i];
+    if (weight === undefined || !Number.isSafeInteger(weight) || weight < 0) {
+      throw new Error(
+        `bindContent: guest rules "${id}" have a partySizeWeights entry of ${String(weight)} at index ${i}; every ` +
+          'weight must be a whole number, zero or more. Index i is the weight of a party of i + 1 guests, and zero ' +
+          'is the legal statement that that size never arrives.',
+      );
+    }
+    total += weight;
+  }
+  if (total === 0) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a partySizeWeights table of all zeroes, so no party has any size and ` +
+        'nobody could ever arrive. At least one size must carry weight.',
+    );
+  }
+  if (table[table.length - 1] === 0) {
+    throw new Error(
+      `bindContent: guest rules "${id}" have a partySizeWeights table ending in a zero, which declares a party size ` +
+        'that can never arrive. The last entry is the largest party this content can form, so it must carry weight; ' +
+        'shorten the table instead.',
+    );
+  }
+  return Object.freeze(table);
 }
 
 /**
@@ -2879,6 +3004,20 @@ function assertSomeLodgingRoomAdmitsGuests(
  * SILENT WHEN NO ROOM TYPE PROVIDES LODGING AT ALL: `assertNeedsAreSatisfiable` has already
  * refused that, and refusing it twice would report the narrower fault for the wider mistake —
  * the sentence `assertSomeLodgingRoomAdmitsGuests` carries, for the same reason.
+ *
+ * ==========================================================================================
+ * AND A PARTY LARGER THAN ONE IS REFUSED OUTRIGHT UNDER LODGING-FREE CONTENT (G-040b-i).
+ *
+ * A VISITOR BOOKS NO ROOM (θ-b2), so under content with no lodging need there is nothing for a
+ * party to be the unit OF. Its members would share a `partyId` and cohere in NOTHING: they walk
+ * in on the same tick, each pursues whatever amenity it happens to score highest, each leaves on
+ * its own engagement's timing, and no rule anywhere in the tick ever reads the id they share. A
+ * food court declaring a party of five would get five unrelated guests and a field that lies
+ * about them — which is ADR-0007's class rather than a balance choice.
+ *
+ * IT IS A REFUSAL RATHER THAN A SILENT ONE, because the two content shapes are told apart by a
+ * missing need type, and a designer who wrote a party size into a hotel with no beds has made
+ * exactly the mistake this file refuses everywhere else: a field with no reader, believed.
  * ==========================================================================================
  */
 function assertPartiesCanBeHoused(
@@ -2886,7 +3025,6 @@ function assertPartiesCanBeHoused(
   roomTypes: readonly RoomTypeData[],
   lodgingNeedId: ContentId | undefined,
 ): void {
-  if (lodgingNeedId === undefined) return;
   // ABSENT MEANS ONE (see `maxPartySize`), so content that predates parties is checked rather
   // than skipped: a hotel whose only bedroom held nobody would be refused here too.
   let largest = 1;
@@ -2897,6 +3035,16 @@ function assertPartiesCanBeHoused(
       largest = size;
       by = rules.id;
     }
+  }
+  if (lodgingNeedId === undefined) {
+    if (largest === 1) return;
+    throw new Error(
+      `bindContent: the largest party this content can form is ${largest}` +
+        `${by === '' ? '' : ` (guest rules "${by}")`}, but this content defines NO lodging need, so every guest ` +
+        'arriving under it is a VISITOR that books no room. A party is the unit that books ONE room; with no room ' +
+        'to book, its members would share a party id and cohere in nothing — they would arrive together and be ' +
+        'unrelated from that tick on. Declare a lodging need, or keep the party at one guest.',
+    );
   }
   const lodgings = roomTypes.filter((roomType) => (roomType.provides ?? EMPTY_IDS).includes(lodgingNeedId));
   if (lodgings.length === 0) return;
@@ -2915,7 +3063,8 @@ function assertPartiesCanBeHoused(
       `"${lodgingNeedId}" holds ${roomiest}${roomiestId === '' ? '' : ` ("${roomiestId}")`}. A party books ONE room ` +
       'and capacity is how large a party a room holds, so such a party has no provider anywhere in the building: ' +
       'every member would want rest for its whole life, fill its dissatisfaction with nothing draining it, and ' +
-      'leave having given up. Raise capacity on a lodging room type, or lower maxPartySize.',
+      'leave having given up. Raise capacity on a lodging room type, or lower maxPartySize — which, where ' +
+      'partySizeWeights is declared, means shortening that table, since the number is derived from it.',
   );
 }
 
@@ -3678,9 +3827,56 @@ export function maxLodgingFloorsFromEntranceOf(bound: BoundContent): number | un
  *
  * `bindContent` REFUSES content whose answer here exceeds the roomiest lodging room type
  * (`assertPartiesCanBeHoused`), so a caller may rely on this being housable.
+ *
+ * ONE LINE EVEN THOUGH TWO FIELDS CAN STATE IT, because `clonePartySize` has already made them
+ * agree: where `partySizeWeights` is declared this field is DERIVED from its length, and a
+ * declared value that disagrees is refused at bind time. Reading the table here as well would be
+ * a second place for the answer to be computed, and two places is how they diverge.
  */
 export function maxPartySizeOf(bound: BoundContent): number {
   return firstGuestRules(bound)?.maxPartySize ?? 1;
+}
+
+/**
+ * THE SIZE OF THE PARTY THAT ARRIVES AT ORDINAL `ordinal`, in guests (G-040b-i, ADR-0055).
+ *
+ * The ordinal is the party's `partyId`, which is `guests.nextId` at the moment it walked in —
+ * so this is a pure function of a number the world already saves, and asking it twice about one
+ * party always gives one answer. **That is the whole reason party size needs no field of its
+ * own**: the fact is CARRIED by the id every member already holds, rather than counted from the
+ * members present, which would answer 1 for the first member of a pair (it is created and
+ * reserved before its partner exists) and 2 for the second.
+ *
+ * A REPEATING PATTERN RATHER THAN A DRAW. `stepGuests` draws no randomness by design —
+ * `advanceTime` advances the stream exactly one draw per tick so that stream position is a pure
+ * function of tick count — so the weights are read as a cycle along the ordinal line: reduce
+ * modulo the total, walk the table, take the size whose band the remainder falls in. Integer
+ * arithmetic throughout (I2), no `Math.random`, no float.
+ *
+ * THE CYCLE IS NOT THE WEIGHT RATIO, and a designer choosing weights must read it as a cycle.
+ * A party consumes one ordinal per MEMBER, so the ordinals its members occupy are never asked:
+ * `[1, 1]` emits pairs FOREVER rather than alternating, because a pair beginning on an odd
+ * ordinal ends on an even one and the next party begins odd again. `[3, 1]` emits 1, 1, 2 over
+ * and over. Both are pinned as cases, because this is the sort of thing that is discovered as a
+ * defect if it is not written down as a consequence.
+ *
+ * `ordinal` IS NON-NEGATIVE BY CONSTRUCTION (guest ids ascend from 1) and the remainder of a
+ * non-negative integer is non-negative, so the walk below always terminates inside the table.
+ * The trailing `return 1` is unreachable and is the postcondition of `clonePartySizeWeights`
+ * refusing an all-zero table, not a fallback anybody may rely on.
+ */
+export function partySizeOf(bound: BoundContent, ordinal: number): number {
+  const weights = firstGuestRules(bound)?.partySizeWeights;
+  // The absent case is the one every build before G-040b-ii runs, and it costs one lookup.
+  if (weights === undefined) return 1;
+  let total = 0;
+  for (const weight of weights) total += weight;
+  let at = ordinal % total;
+  for (let i = 0; i < weights.length; i += 1) {
+    at -= weights[i] ?? 0;
+    if (at < 0) return i + 1;
+  }
+  return 1;
 }
 
 /**

@@ -221,6 +221,28 @@ export const fitBasisPointsSchema = basisPointsSchema.optional();
  * `nightlyUpkeepPence`, a NOMINAL margin of 3.4 : 1, which is finally what the two field
  * names imply.
  *
+ * ---------------------------------------------------------------------------
+ * AND SINCE G-040b-i IT IS PER GUEST RATHER THAN PER BOOKING, WHICH MULTIPLIES THAT MARGIN BY
+ * THE PARTY SIZE. `payForStay` is called from inside the per-guest loop, so a party of two
+ * checking out of ONE room books TWO `roomRevenue` transactions of this amount against that one
+ * room's single `nightlyUpkeepPence`:
+ *
+ *     nominal margin per occupied room-day = party size × (nightlyRatePence / nightlyUpkeepPence)
+ *
+ * So the 3.4 : 1 above is the margin for a party of ONE — which is every party under shipped
+ * content, because `partySizeWeights` is absent and absence means one. Under a distribution that
+ * emits pairs, a pair-occupied room earns 6.8 : 1 against the same upkeep. **A designer turning
+ * that dial is moving the economy as well as the occupancy**, and the arithmetic is stated here
+ * rather than discovered in a balance pass.
+ *
+ * IT IS A RULING, NOT AN OVERSIGHT (G-040b-i). Charging once per party would read the way
+ * ADR-0055's "a party is one booking" reads — and it would break the ONLY cross-subsystem
+ * witness the departure table has, `countRoomRevenueTransactions === the checkedOut row`, which
+ * holds because both sides count GUESTS. Repairing that needs a party-level departure count
+ * `GuestOutcomes` cannot express. Per-night pro-rata billing (M4) is where both this and the
+ * name are meant to be fixed together.
+ * ---------------------------------------------------------------------------
+ *
  * THE REALISED FIGURE IS SLIGHTLY HIGHER, NOT LOWER, AND THE REASON IS A DESIGN FACT RATHER
  * THAN NOISE: the stay clock runs from ARRIVAL, so a guest that queued occupies its room for
  * less than the full duration and a busy hotel turns rooms over faster than once per stay.
@@ -1104,6 +1126,11 @@ export const reviewScoreSchema = z.int();
  * trap ADR-0010 documented has not gone away; it has MOVED, from `need-types.json` to this
  * file, whose subject is guest behaviour rather than money. The sign is here so it is not
  * still pointing at the old room. See `nightlyRatePence` in `roomTypeSchema`.
+ *
+ * ONCE PER COMPLETED STAY MEANS ONCE PER GUEST THAT COMPLETES ONE (G-040b-i), so the formula
+ * above is per LODGER and a party of two earns it twice against one room's upkeep. That is a
+ * second dominant term now living in this same file — `partySizeWeights` — and it is ruled and
+ * derived at `nightlyRatePence` in `roomTypeSchema`.
  * ---------------------------------------------------------------------------
  *
  * WHERE 1,440 COMES FROM. A DERIVATION, BECAUSE §2.1 SAYS A BOUND MUST HAVE ONE.
@@ -1630,6 +1657,41 @@ export const maxLodgingFloorsFromEntranceSchema = z.int().min(0).optional();
 export const maxPartySizeSchema = z.int().min(1).optional();
 
 /**
+ * HOW OFTEN EACH PARTY SIZE ARRIVES (G-040b-i, ADR-0055).
+ *
+ * Index `i` carries the weight of a party of `i + 1` guests: `[7, 3]` is seven parts arriving
+ * alone to three parts arriving as a pair. Integers, because the sim reads them with integer
+ * arithmetic and floats accumulate differently across platforms (I2).
+ *
+ * ---------------------------------------------------------------------------
+ * IT IS A CYCLE, NOT A PROBABILITY, AND THE REALISED MIX IS NOT THE RATIO. `stepGuests` draws no
+ * randomness — the seeded stream advances exactly one draw per tick so that stream position is a
+ * pure function of tick count — so the sim reads this table as a repeating pattern along the
+ * guest-id line, indexed by the arriving party's ordinal. A party consumes one ordinal per
+ * MEMBER, so the ordinals its members occupy are never consulted:
+ *
+ *     [1, 1]  ->  pairs FOREVER, not one in two
+ *     [3, 1]  ->  the cycle 1, 1, 2
+ *
+ * A designer picking weights must read the cycle rather than the ratio. `partySizeOf` in
+ * `packages/sim/src/content.ts` is the walk, and its cases pin both examples above. Party
+ * formation becomes a draw when demand does, which is M4.
+ * ---------------------------------------------------------------------------
+ *
+ * THE LARGEST PARTY IS THE TABLE'S LENGTH, and `bindContent` derives `maxPartySize` from it
+ * rather than reading both — a table reaching 3 beside a declared `maxPartySize: 2` is REFUSED,
+ * because the refusal that keeps a party housable reads that number, and a party it waved
+ * through would have no room big enough anywhere in the building. A trailing zero is refused for
+ * the same reason: it would make "the largest party" depend on which end you read from.
+ *
+ * OPTIONAL HERE **AND** OPTIONAL ON DISK, the `maxPartySize` contract one field up. ABSENCE
+ * MEANS EVERY ARRIVAL IS ONE GUEST, which is what every build before G-040b-ii does, so content
+ * that does not declare it reproduces those runs to the byte and the permanent v1 fixture's
+ * content fingerprint does not move (ADR-0006). `[1]` is the same statement said out loud.
+ */
+export const partySizeWeightsSchema = z.array(z.int().min(0)).min(1).optional();
+
+/**
  * HOW MUCH DISSATISFACTION A GUEST CARRIES BEFORE IT WALKS OUT MID-STAY, IN TICKS (G-027b θ-b1,
  * ADR-0017 4(b), ADR-0026).
  *
@@ -1795,6 +1857,7 @@ export const guestRulesSchema = z
     guestCellsPerTick: guestCellsPerTickSchema,
     maxLodgingFloorsFromEntrance: maxLodgingFloorsFromEntranceSchema,
     maxPartySize: maxPartySizeSchema,
+    partySizeWeights: partySizeWeightsSchema,
   })
   // The one relation expressible without the need table: a scale of one score, or of none,
   // cannot separate two stays and so cannot report on either. The relation against the need

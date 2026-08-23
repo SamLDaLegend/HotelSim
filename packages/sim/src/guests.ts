@@ -35,9 +35,14 @@
 // `stepGuests`, and all of the behaviour is here.
 //
 // No randomness. `stepGuests` is a pure function of world state, injected content and
-// the number of guests arriving — no RNG draw, no wall clock, no `dt`. Arrival RATE is
+// the number of PARTIES arriving — no RNG draw, no wall clock, no `dt`. Arrival RATE is
 // demand, and demand is M4; today the host issues one `guestArrives` command per
 // arrival, so the command log fully describes who turned up and when (I2).
+//
+// HOW MANY GUESTS A PARTY IS, IS ALSO NOT A DRAW (G-040b-i). It is `partySizeOf` over the
+// party's ordinal and a content weight table — a repeating pattern rather than a sample, so
+// the seeded stream still advances exactly one draw per tick and stream position stays a pure
+// function of tick count. Party formation becomes random when demand does, which is M4.
 
 import {
   abandonMarginOf,
@@ -51,6 +56,7 @@ import {
   maxLodgingFloorsFromEntranceOf,
   needTypesInOrder,
   ONE_WHOLE_BASIS_POINTS,
+  partySizeOf,
   providesOf,
   stayDurationOf,
   toleranceOf,
@@ -1602,8 +1608,16 @@ export type GuestTickInput = {
    * makes a room a room, and this module owns what a guest does about it.
    */
   readonly validity: ValidityContext;
-  /** Guests arriving this tick, from `guestArrives` commands. */
-  readonly arriving: number;
+  /**
+   * PARTIES arriving this tick, one per `guestArrives` command (G-040b-i).
+   *
+   * It was `arriving` and it counted guests, which was the same number while every party had one
+   * member. It is not any more: a command is one party walking in, and how many guests that is
+   * comes from `partySizeOf` and the party's ordinal. The name says parties so that the count
+   * that reaches `outcomes.arrived` — which must be GUESTS — cannot be taken from here by
+   * somebody reading the field name.
+   */
+  readonly arrivingParties: number;
 };
 
 export type GuestTickResult = {
@@ -1701,6 +1715,16 @@ function findFreeRoom(
    * for THIS party may have room for the next one, and vice versa.
    */
   partyId: PartyId,
+  /**
+   * How many guests are in that party (G-040b-i). THE THIRD PER-GUEST INPUT, and the one that
+   * makes the capacity clause below a PARTY-level fit rather than a per-member one.
+   *
+   * IT IS THE PARTY'S ORIGINAL SIZE, DERIVED FROM ITS ORDINAL, AND NOT A COUNT OF WHO IS HERE —
+   * the ruling is written out where it is computed, in `reserve`. One guest of a pair asking
+   * this function for a room must be refused a single bed even though it would fit in one
+   * alone, or the pair is split before the second member exists.
+   */
+  partySize: number,
 ): Entity | null {
   // THE SHORT-CIRCUIT (G-010, sharpened by G-012). If a scan for this need already came up
   // empty and NOTHING THAT PROVIDES IT HAS BEEN RELEASED SINCE, the answer is still empty
@@ -1843,7 +1867,34 @@ function findFreeRoom(
     // case, and a hand-built world that broke it would find no bed rather than crash the tick.
     if (forLodging) {
       const capacity = findRoomType(search.input.content, room.kind)?.capacity ?? 0;
-      if ((standing?.lodgers ?? 0) + 1 > capacity) {
+      // ========================================================================================
+      // TWO TESTS, AND THE FIRST ONE IS THE FIX (G-040b-i). THE ROOM MUST HOLD THE WHOLE PARTY.
+      //
+      // `lodgers + 1 > capacity` alone is a PER-MEMBER fit, and a per-member fit takes a room
+      // only some of the party fits in. With a single (capacity 1) and a double (capacity 2) in
+      // one hotel — content `guest.party.save.test.ts` blesses by name, *"a hotel with singles
+      // AND doubles is a design a designer may write"* — the lower-id member of a pair takes the
+      // single and its partner takes the double: SPLIT. Put a stranger in the double first and
+      // the partner takes nothing at all, **for life**: nothing else can serve its lodging need,
+      // so its dissatisfaction fills with nothing draining it and it departs `gaveUp` while its
+      // partner sleeps. That is §6.1's first shape, and `assertPartiesCanBeHoused` cannot catch
+      // it — that refusal measures the ROOMIEST type in the content, and the hotel a player
+      // actually built is not the content.
+      //
+      // THE SECOND TEST IS KEPT AND IS NOT REDUNDANT. Party fit says the room is big enough for
+      // the party; the seat count says there is a bed free in it right now. They agree on every
+      // world the tick can produce — a member only ever joins its own party's room, and a party
+      // never has more members than its size — so this is a bound on hand-built and loaded
+      // worlds, where a room may already hold more lodgers than its type admits (content can
+      // legitimately SHRINK between saves, ADR-0068). Overfilling such a room would turn a
+      // reportable state into a growing one.
+      //
+      // BOTH SET `deniedThisGuestOnly`, because both are facts about THIS party rather than
+      // about the hotel: a full double is no answer for a pair and a perfectly good answer for
+      // the party of one queued behind it. Arming `exhausted` on either would leave that guest
+      // standing in the lobby beside a room it could have had.
+      // ========================================================================================
+      if (capacity < partySize || (standing?.lodgers ?? 0) + 1 > capacity) {
         deniedThisGuestOnly = true;
         continue;
       }
@@ -2136,11 +2187,11 @@ function depart(
  * every run hashes identically every run).
  */
 export function stepGuests(input: GuestTickInput): GuestTickResult {
-  const { tick, guests, outcomes, content, arriving } = input;
+  const { tick, guests, outcomes, content, arrivingParties } = input;
 
   // O(1) idle tick. An empty hotel costs nothing, which is what keeps a 365-day run
   // inside the I5 budget while it waits for the interesting part.
-  if (guests.list.length === 0 && arriving === 0) {
+  if (guests.list.length === 0 && arrivingParties === 0) {
     return {
       guests,
       outcomes,
@@ -2505,6 +2556,58 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     }
 
     // ========================================================================
+    // DEPARTURE COHESION, RULED AT G-040b-i AND WRITTEN HERE BECAUSE HERE IS WHERE IT WOULD BE
+    // IMPLEMENTED. **A PARTY IS THE UNIT THAT ARRIVES AND BOOKS. A GUEST IS THE UNIT THAT
+    // LEAVES.**
+    //
+    // SIX OF THE SEVEN ROWS CANNOT SPLIT A PARTY, and by construction rather than by a rule:
+    //
+    //   checkedOut          reads the stay clock and the room. Members share one `arrivedTick`
+    //                       and one room, so they reach it on the same tick.
+    //   gaveUp              reads the same clock against `toleranceTicks` and the ABSENCE of a
+    //                       room. A party that finds nothing big enough finds nothing for all of
+    //                       its members (see the arrival loop), so they wait and give up as one.
+    //   evictedRoomGone     read the room. One room, one answer.
+    //   evictedRoomUnusable
+    //   evictedCauseUnrecorded
+    //                       is not a tick-writable row at all.
+    //   visitEnded          is UNREACHABLE for a party larger than one. It requires content with
+    //                       NO lodging need, and `assertPartiesCanBeHoused` now refuses a party
+    //                       above one under exactly that content — there is nothing for a party
+    //                       to be the unit OF where nobody books a room. So the `engagement ===
+    //                       null` clause in that branch, which does diverge per member, can only
+    //                       ever diverge between parties of one.
+    //
+    // `leftDissatisfied` IS THE ONE ROW THAT CAN, and it is left that way DELIBERATELY.
+    // Dissatisfaction is a per-guest STOCK (ADR-0026): two members holding one room still queue
+    // for amenities separately, so one can saturate while its partner is being served, and the
+    // fed-up one walks out while the other sleeps on.
+    //
+    // WHY NOT MAKE IT COHERE, WITH THE PRICE OF EACH ROUTE:
+    //
+    //   WITHIN THE TICK it can only work FORWARDS. This is one ascending pass, so a member
+    //   already visited cannot be recalled — the party would still split for a tick, and the
+    //   two halves would be filed under different reasons. An asymmetric rule is worse than a
+    //   stated one.
+    //   ACROSS TICKS it needs a party-level departure record, and `GuestOutcomes` cannot express
+    //   one: it counts GUESTS. That is new hashed state, hence a save bump, hence not this
+    //   goal's seam — the same argument that rules `payForStay` per guest.
+    //   AND THERE IS NO ROW TO FILE THE FOLLOWER UNDER. Every existing reason is a statement
+    //   about what happened to THAT guest, and "its partner left" is not one of them; an eighth
+    //   row would move every report and every golden, which is exactly what this half claims it
+    //   does not do. Filing a follower under a row it did not earn would corrupt the build
+    //   loop's steering signal (ADR-0025 §2).
+    //
+    // AND IT LEAKS NOTHING, WHICH IS WHY A SPLIT IS A LAG RATHER THAN A DEFECT: `release` is
+    // refcounted (G-040a), so the room stays the party's until its LAST member leaves, and
+    // `claimEntity` bounds a lodging claim by party identity, so no stranger can take the bed
+    // the remaining member is asleep in. What a watcher would see is one of a pair walking out
+    // in a huff. Under shipped content it never happens, because every party has one member;
+    // the tick a distribution is declared it becomes observable, and that is what G-040b-ii's
+    // WATCH is for.
+    // ========================================================================
+
+    // ========================================================================
     // 6. DOES THE STAY END? TWO WAYS AND ONLY TWO (ADR-0017 §4) — AND FOUR BRANCHES, WHICH IS
     //    NOT A CONTRADICTION AND IS WORTH A LINE BECAUSE IT LOOKS LIKE ONE.
     //
@@ -2733,70 +2836,111 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   }
 
   let nextId = guests.nextId;
-  for (let i = 0; i < arriving; i += 1) {
-    // IT NO LONGER REFUSES A GUEST WITH NO LODGING NEED (θ-b2). It threw
-    // *"a guest arrived under content that defines no lodging need"*, which was the correct
-    // reading while a guest without a reason to book was a caller error; a VISITOR is now a
-    // design, and `formNeedVector` gives it the engagement needs it came for.
+  // GUESTS, NOT COMMANDS (G-040b-i). Each arrival is a PARTY and a party is one or more guests,
+  // so the two counts stopped being the same number the moment a distribution could be declared.
+  // `outcomes.arrived` is the left-hand side of the conservation law in `assertGuestOutcomes` —
+  // every guest is either still here or has exactly one recorded outcome — so counting commands
+  // here would make a world with a pair in it unloadable the moment it was saved, reporting *"1
+  // arrived but 0 departed and 2 are still here"*. That exact message is pinned as the
+  // discriminating half of the arrival case. It is also a report row and the denominator of
+  // several derived shares, and neither of those may quietly mean "parties" on one line and
+  // "guests" on the next.
+  let arrivedGuests = 0;
+  for (let party = 0; party < arrivingParties; party += 1) {
+    // THE PARTY IS NAMED BEFORE ITS FIRST MEMBER IS CREATED, and the name is the ordinal
+    // (G-040b-i). `partyId` is `guests.nextId` at the moment the party walks in — the id its
+    // first member will take — so it is unique for the life of the run, needs no second counter
+    // in hashed state, and IS the number `partySizeOf` reads the size from. Every member of the
+    // party therefore carries the fact of its own size without a field to carry it in.
+    const partyId = nextId;
+    const size = partySizeOf(content, partyId);
+    // ONE MEMBER AT A TIME, IN ASCENDING ID, EACH RESERVING BEFORE THE NEXT IS CREATED — and
+    // that ORDER is what makes the party cohere rather than an ordering rule written on top of
+    // it (G-040b-i). The lower-id member decides first and takes a room its whole party fits in;
+    // the next member meets that same room first on the same ascending candidate list, finds it
+    // held BY ITS OWN PARTY (`findFreeRoom`'s standing-claim clause exempts exactly that), and
+    // joins it. No party-level resolver, and above all no `Map<PartyId, GuestId[]>` — a lookup
+    // whose ITERATION order would decide the answer is the I2 hazard this loop is written to
+    // avoid.
     //
-    // WHAT THE OLD THROW WAS ACTUALLY PROTECTING, since a deletion is where a property goes
-    // missing (ADR-0027): that a created guest can always form a need vector, so no guest exists
-    // with nothing to want. That property is UNCHANGED and is now enforced where it belongs —
-    // `applyCommands` still refuses `guestArrives` under content with NO NEED TYPES AT ALL, which
-    // is the case that would produce an empty vector. The lodging need was never what made a
-    // vector non-empty; it was just the only need the old check knew about.
-    const id = nextId;
-    if (!Number.isSafeInteger(id + 1)) {
-      throw new Error(`stepGuests: guest ids are exhausted at ${id}; the next id would not be a safe integer`);
+    // AND THE MEMBERS CANNOT DISAGREE ABOUT WHAT IS FREE. Every release this tick happened in
+    // the loop over existing guests, which has already finished; nothing between two members of
+    // one party can free or take a room except those members. So a party that finds no room big
+    // enough finds none for ALL of its members, and arrives homeless together rather than in
+    // pieces.
+    for (let member = 0; member < size; member += 1) {
+      // IT NO LONGER REFUSES A GUEST WITH NO LODGING NEED (θ-b2). It threw
+      // *"a guest arrived under content that defines no lodging need"*, which was the correct
+      // reading while a guest without a reason to book was a caller error; a VISITOR is now a
+      // design, and `formNeedVector` gives it the engagement needs it came for.
+      //
+      // WHAT THE OLD THROW WAS ACTUALLY PROTECTING, since a deletion is where a property goes
+      // missing (ADR-0027): that a created guest can always form a need vector, so no guest
+      // exists with nothing to want. That property is UNCHANGED and is now enforced where it
+      // belongs — `applyCommands` still refuses `guestArrives` under content with NO NEED TYPES
+      // AT ALL, which is the case that would produce an empty vector. The lodging need was never
+      // what made a vector non-empty; it was just the only need the old check knew about.
+      const id = nextId;
+      if (!Number.isSafeInteger(id + 1)) {
+        throw new Error(`stepGuests: guest ids are exhausted at ${id}; the next id would not be a safe integer`);
+      }
+      nextId = id + 1;
+      // ONE INSTANCE OF EVERY NEED THE CONTENT DEFINES (G-012). Which needs a guest forms is
+      // an archetype's business at M6; today every guest wants everything.
+      //
+      // AND IT WALKS IN THROUGH THE DOOR (G-023a). THE CELL IS SET AT CREATION, not on the
+      // guest's first step, and that is load-bearing rather than tidy: this loop runs AFTER
+      // the loop over existing guests, so a guest created on tick t is not stepped until tick
+      // t + 1. A design that placed guests only while stepping them would leave every arrival
+      // unplaced for a whole tick — and `at` would have to be nullable to express it, which is
+      // the design this goal's first ruling refuses. `reserve` below may move it immediately
+      // to whatever it manages to take, exactly as it does for a guest already here.
+      const arrived: Guest = {
+        id,
+        // THE PARTY, AND THE FIELD IS WRITTEN HERE AND NOWHERE ELSE (G-040a, ADR-0055).
+        // `partyId` is the id of the party's FIRST member, drawn from `guests.nextId`, so it is
+        // unique for the life of the run without a second counter in hashed state and it is the
+        // ordinal `partySizeOf` read the size from. For a party of one — every party under
+        // shipped content, because the distribution is absent — it is this guest's own id, and
+        // every occupancy number is what it was before the field existed.
+        //
+        // NOTHING DEREFERENCES IT AS A GUEST ID. Every reader compares it for equality, so the
+        // first member departing strands nobody: the remainder keep a name that still means the
+        // party, and `release`'s refcount keeps the room theirs until the last of them leaves.
+        partyId,
+        at: standingCell(null, null, input.entities.bounds),
+        arrivedTick: tick,
+        roomEntityId: NO_ENTITY,
+        engagement: null,
+        needs: formNeedVector(content),
+        // AND IT WALKS IN CONTENT (θ-b1). Zero is not a default standing in for anything: the
+        // hotel has not had a chance to fail this guest yet, and the first tick it is stepped is
+        // the first tick anything could. A guest that arrives already impatient would be an
+        // archetype, which is M6.
+        dissatisfaction: 0,
+      };
+      // A guest that has just walked in holds nothing, so there is no incumbent provider to
+      // hand over and nothing it could abandon.
+      // `lodgingNeed?.id` since θ-b2: `undefined` is a visitor, and `reserve` already reads it as
+      // "this guest wants no room" — the gate that makes `payForStay` unreachable under
+      // lodging-free content, and therefore the reason `revenue === 0` there is structural
+      // rather than asserted.
+      next.push(reserve(search, arrived, lodgingNeed?.id, null, null, wantAt));
+      arrivedGuests += 1;
     }
-    nextId = id + 1;
-    // ONE INSTANCE OF EVERY NEED THE CONTENT DEFINES (G-012). Which needs a guest forms is
-    // an archetype's business at M6; today every guest wants everything.
-    //
-    // AND IT WALKS IN THROUGH THE DOOR (G-023a). THE CELL IS SET AT CREATION, not on the
-    // guest's first step, and that is load-bearing rather than tidy: this loop runs AFTER
-    // the loop over existing guests, so a guest created on tick t is not stepped until tick
-    // t + 1. A design that placed guests only while stepping them would leave every arrival
-    // unplaced for a whole tick — and `at` would have to be nullable to express it, which is
-    // the design this goal's first ruling refuses. `reserve` below may move it immediately
-    // to whatever it manages to take, exactly as it does for a guest already here.
-    const arrived: Guest = {
-      id,
-      // A PARTY OF ONE, AND THE FIELD IS WRITTEN HERE AND NOWHERE ELSE (G-040a, ADR-0055).
-      // `id` comes from `guests.nextId`, so the party id is drawn from the guest id space and
-      // is unique for the life of the run without a second counter in hashed state. G-040b is
-      // where one arrival becomes several guests sharing this value; until then every party
-      // has exactly one member, and every occupancy number is what it was before the field
-      // existed.
-      partyId: id,
-      at: standingCell(null, null, input.entities.bounds),
-      arrivedTick: tick,
-      roomEntityId: NO_ENTITY,
-      engagement: null,
-      needs: formNeedVector(content),
-      // AND IT WALKS IN CONTENT (θ-b1). Zero is not a default standing in for anything: the
-      // hotel has not had a chance to fail this guest yet, and the first tick it is stepped is
-      // the first tick anything could. A guest that arrives already impatient would be an
-      // archetype, which is M6.
-      dissatisfaction: 0,
-    };
-    // A guest that has just walked in holds nothing, so there is no incumbent provider to
-    // hand over and nothing it could abandon.
-    // `lodgingNeed?.id` since θ-b2: `undefined` is a visitor, and `reserve` already reads it as
-    // "this guest wants no room" — the gate that makes `payForStay` unreachable under lodging-free
-    // content, and therefore the reason `revenue === 0` there is structural rather than asserted.
-    next.push(reserve(search, arrived, lodgingNeed?.id, null, null, wantAt));
   }
 
   // Ids came from a counter, existing guests were visited in ascending order and
-  // arrivals were appended after them, so `next` is strictly ascending by construction
-  // and no sort exists here to get wrong — the same property `EntityStore.list` has.
+  // arrivals were appended after them — members of one party included, which take consecutive
+  // ids in the order they were created — so `next` is strictly ascending by construction and no
+  // sort exists here to get wrong. The same property `EntityStore.list` has.
   const nextGuests: GuestStore = { nextId, list: next };
   const nextOutcomes: GuestOutcomes = {
     // ARRIVALS ARE COUNTED HERE AND NOWHERE ELSE, and the rows are counted at the departure
     // sites above. Neither is computed from the other, which is what makes the conservation law
-    // in `assertGuestOutcomes` a check rather than an identity.
-    arrived: outcomes.arrived + arriving,
+    // in `assertGuestOutcomes` a check rather than an identity. `arrivedGuests` rather than the
+    // command count, because the law counts GUESTS on both sides (G-040b-i).
+    arrived: outcomes.arrived + arrivedGuests,
     departures: addDepartures(
       outcomes.departures,
       checkedOut,
@@ -2995,7 +3139,37 @@ function reserve(
       // the room, so gating it on already being one would make every bedroom carrying the rule
       // unbookable. `staffOnly` still bites here, and should: no guest books a bed in the
       // linen store.
-      const room = findFreeRoom(search, lodgingNeedId, true, NO_ENTITY, result.partyId);
+      // ======================================================================================
+      // THE PARTY'S SIZE IS ITS ORIGINAL SIZE, CARRIED RATHER THAN COUNTED (G-040b-i). RULED
+      // HERE, AT THE POINT OF USE, BECAUSE THE TWO READINGS ARE DIFFERENT BEHAVIOURS.
+      //
+      // The alternative — count the party's LIVE members — is the shape the tick already builds
+      // twice over, and it is WRONG in the one place it would first be asked. `stepGuests`
+      // creates and reserves arrivals ONE AT A TIME, so at the moment the first member of a pair
+      // calls this function its partner does not exist: a live count answers 1 for it and 2 for
+      // the partner, and **the first member takes a single**. The pair is split silently, by the
+      // mechanism meant to keep it together, the moment a second lodging room type exists. (The
+      // `held` map is built before the arrival loop and cannot see this tick's arrivals at all,
+      // so a per-tick size lookup built there is blind in exactly the same way.)
+      //
+      // AND THE LIVE COUNT IS A DIFFERENT RULE EVEN WHERE IT IS ACCURATE: it SHRINKS when a
+      // member gives up, so a pair reduced to one would then fit a single, and a party's room
+      // would depend on how its members had fared. That is a design, and it is not this one.
+      // What ADR-0055 rules is that a party books ONE room, so what the room must hold is the
+      // party that walked in.
+      //
+      // IT COSTS NO FIELD AND NO SAVE BUMP, which is why the ruling is affordable: `partyId` IS
+      // the ordinal the size was drawn at (`guests.nextId` when the party walked in), and
+      // `partySizeOf` is a pure function of it. Every member of a party asks the same question
+      // of the same number and gets the same answer, on this tick and on every later one.
+      //
+      // A save written under one distribution and loaded under another gets the NEW answer, and
+      // that is the `dissatisfaction` precedent ADR-0068 cites rather than a defect: content can
+      // legitimately change between saves, and a world carrying a pair under content that now
+      // forms singles is a true statement about the build that wrote it.
+      // ======================================================================================
+      const partySize = partySizeOf(content, result.partyId);
+      const room = findFreeRoom(search, lodgingNeedId, true, NO_ENTITY, result.partyId, partySize);
       if (room !== null) {
         // THE CLAIM GROWS RATHER THAN BEING SET (G-040a): `findFreeRoom` returns a room this
         // guest's own party may already be in, and overwriting the entry would lose the members
@@ -3138,7 +3312,13 @@ function reserve(
     // room's vending machine until the next one — a guest walking past the thing it just
     // rented. `reserve` never reassigns a room a guest already holds, so this value is final
     // for the rest of the guest's stay.
-    const provider = findFreeRoom(search, need.needId, false, result.roomEntityId, result.partyId);
+    // THE PARTY'S SIZE IS NOT COMPUTED HERE AND THE LITERAL IS NOT A PLACEHOLDER (G-040b-i).
+    // `capacity` bounds the party a ROOM sleeps, not a queue at a café: an engagement claim is a
+    // flat refusal — one guest at a time, whatever the provider is — so the capacity clause is
+    // inside `forLodging` and this argument is never read on this path. One guest is what an
+    // engagement is for, and passing the real size would buy a content lookup per engaged guest
+    // per tick to feed a branch that cannot run.
+    const provider = findFreeRoom(search, need.needId, false, result.roomEntityId, result.partyId, 1);
     if (provider === null) continue;
     bestPressure = pressure;
     bestNeed = need;

@@ -3026,7 +3026,11 @@ arrivals at all.)*
 > passed down explicitly.
 
 ## G-040b-i — The mechanism, and not one number moves
-Status: **PLANNED. Buildable now.** Owner pair: sim-engineer / ai-critic
+Status: **DONE 2026-08-23 (ADR-0072).** Four sim:run arms, diff EMPTY on all four, state hash
+included - 0c0 where G-040a read 48c48. No golden re-pins, no save bump, no migration, no new
+World field, occupancy and scaling fingerprint unmoved, I2 fb8d8fd9fd76b245 unchanged. The
+defect fixed was PARTIAL FIT, not the cohesion my block named: delete the one-line guard and
+gaveUp reads 1 instead of 2 - a stranded partner departing while its room-mate sleeps.
 
 The content field(s) and their `bindContent` checks; **the arrival loop creating N guests**;
 **`arrived` counting GUESTS rather than commands**; **`capacity >= size` in `findFreeRoom`**;

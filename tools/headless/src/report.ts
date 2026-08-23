@@ -101,6 +101,12 @@ import type { BoundContent, Cell, GridBounds, RoomTypeData, ScheduledCommand, Wo
  * hotel that could never disappoint anybody would make "checkedOut" a number nobody
  * could interpret.
  *
+ * "12 GUESTS A DAY" IS "12 PARTIES A DAY" AND THE TWO AGREE ONLY WHILE THE DISTRIBUTION IS
+ * ABSENT (G-040b-i). A `guestArrives` command is one PARTY walking in; shipped content declares
+ * no `partySizeWeights`, so every party is one guest and the sentence above is true as written.
+ * The goal that declares a distribution owes this line a second look, because the arrival
+ * cadence stops being the guest cadence on the same edit.
+ *
  * These constants are the DEFAULTS for `--rooms` and `--arrivals`. The default run —
  * no flags — is pinned byte-for-byte by the golden test, and `pnpm sim:bench` times
  * it, so changing either literal is a deliberate, visible act, not a side effect.

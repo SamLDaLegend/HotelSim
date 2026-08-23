@@ -55,7 +55,7 @@
 // I4: there is no stored balance here or anywhere. `applyCommands` folds `balanceOf`
 // ONCE per tick, on the first build-family command, into a TICK-LOCAL number that is
 // never hashed, never saved and discarded at the end of the tick — the same contract
-// `arrivingGuests` has. Ticks with no build command fold nothing.
+// `arrivingParties` has. Ticks with no build command fold nothing.
 //
 // I2: no Set and no Map in anything this module puts in `World`. `BuildOutcomes.refused`
 // is a plain object with a fixed key set, and every ordered iteration goes through

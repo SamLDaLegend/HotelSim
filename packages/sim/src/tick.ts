@@ -172,11 +172,17 @@ export type TickState = {
   /** The open entity draft, or null when no draft is open. */
   readonly entities: EntityDraft | null;
   /**
-   * Guests arriving this tick, staged by `applyCommands` and consumed by `runGuests`.
+   * PARTIES arriving this tick, staged by `applyCommands` and consumed by `runGuests`.
    *
    * Tick-local: never hashed, never saved. It is a COUNT rather than a list because an
-   * arrival carries nothing — a guest has no archetype (M6) and no party size at M0.
-   * When it does, this becomes a list of arrival specs and nothing else moves.
+   * arrival carries nothing — a guest has no archetype (M6) and a party carries no size.
+   *
+   * IT STAYED A COUNT WHEN PARTIES ARRIVED, WHICH THIS COMMENT PREDICTED WRONGLY (G-040b-i). It
+   * said *"a guest has no party size at M0; when it does, this becomes a list of arrival specs"*
+   * — and the size is NOT a command payload: it is a pure function of the party's ordinal and
+   * the content's weight table (`partySizeOf`), so a command still carries nothing and the
+   * count still says everything. What changed is the UNIT: one command is one party, and how
+   * many guests that is, is `stepGuests`' answer rather than this field's.
    *
    * `runGuests` zeroes it on the way out, for the same reason `applyCommands` blanks
    * the command log: intent that has been applied must not be readable again.
@@ -186,7 +192,7 @@ export type TickState = {
    * relying on it meant the guarantee held on busy ticks and inspected an empty doorway
    * on quiet ones.
    */
-  readonly arrivingGuests: number;
+  readonly arrivingParties: number;
   /**
    * Whether the guest loop has already run this tick.
    *
@@ -257,7 +263,7 @@ export function beginTick(
     content,
     commands,
     entities: null,
-    arrivingGuests: 0,
+    arrivingParties: 0,
     guestsRun: false,
     settlementRun: false,
     committed: false,
@@ -274,7 +280,7 @@ export function beginTick(
  */
 type CommandAccumulator = {
   /** Guests put in the lobby by `guestArrives`, consumed by `runGuests`. */
-  arrivingGuests: number;
+  arrivingParties: number;
   ledger: readonly Transaction[];
   outcomes: BuildOutcomes;
   /**
@@ -564,7 +570,7 @@ function applyCommand(
           'applyCommands: a guest arrived, but the injected content defines no need type for one to form',
         );
       }
-      accumulator.arrivingGuests += 1;
+      accumulator.arrivingParties += 1;
       return;
     default: {
       const exhaustive: never = command;
@@ -601,10 +607,10 @@ export function applyCommands(state: TickState): TickState {
   // could have failed: the per-tick law below asks whether the outcomes object was
   // touched, and with no command there is no code that could have touched it.
   if (state.commands.length === 0) {
-    return { ...state, entities, arrivingGuests: 0, commands: NO_COMMANDS };
+    return { ...state, entities, arrivingParties: 0, commands: NO_COMMANDS };
   }
   const accumulator: CommandAccumulator = {
-    arrivingGuests: 0,
+    arrivingParties: 0,
     corridors: state.world.corridors,
     stairs: state.world.stairs,
     ledger: state.world.ledger,
@@ -708,7 +714,7 @@ export function applyCommands(state: TickState): TickState {
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
   // in the tick" stops being a rule a later phase could break and becomes a fact about
   // what is in scope: there is nothing left to read.
-  return { ...state, world, entities, arrivingGuests: accumulator.arrivingGuests, commands: NO_COMMANDS };
+  return { ...state, world, entities, arrivingParties: accumulator.arrivingParties, commands: NO_COMMANDS };
 }
 
 /**
@@ -784,7 +790,7 @@ export function runGuests(state: TickState): TickState {
       state.world.stairs,
       state.entities,
     ),
-    arriving: state.arrivingGuests,
+    arrivingParties: state.arrivingParties,
   });
   // An untouched guest loop returns its inputs by reference, so an idle tick allocates
   // no world either.
@@ -803,7 +809,7 @@ export function runGuests(state: TickState): TickState {
           reviewOutcomes: result.reviewOutcomes,
           ledger: result.ledger,
         };
-  return { ...state, world, arrivingGuests: 0, guestsRun: true };
+  return { ...state, world, arrivingParties: 0, guestsRun: true };
 }
 
 /**
@@ -997,7 +1003,7 @@ export function stepTick(
   // And the guest loop ran, exactly once. A table that has lost `runGuests` still
   // opens, commits and advances perfectly, so this is the only thing that notices —
   // and it must notice on EVERY tick, not only on one where somebody happened to walk
-  // in. It used to be the `arrivingGuests` check below, which on a quiet tick inspected
+  // in. It used to be the `arrivingParties` check below, which on a quiet tick inspected
   // an empty doorway and passed: a check that can succeed while looking at nothing,
   // relied on as proof that something was checked (ADR-0007). The flag is set by the
   // phase itself, so it cannot be satisfied by anything except the phase running.
@@ -1015,9 +1021,9 @@ export function stepTick(
   // rather than the guarantee itself: `runGuests` always consumes the doorway, so this
   // cannot fail while `guestsRun` is true. Kept because it is what "took them in"
   // actually means, and it fires if that ever stops being so.
-  if (state.arrivingGuests !== 0) {
+  if (state.arrivingParties !== 0) {
     throw new Error(
-      `stepTick: ${state.arrivingGuests} guest(s) arrived and no phase took them in; the phase table is missing runGuests`,
+      `stepTick: ${state.arrivingParties} party/parties arrived and no phase took them in; the phase table is missing runGuests`,
     );
   }
   // The guest store and the entity store agree, and every guest is accounted for. Not

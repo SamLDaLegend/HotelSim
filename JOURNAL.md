@@ -2261,3 +2261,51 @@ the content permits; the day at the service floor is the 212/287 rhythm of the p
 the tick. That pair is the range G-037a's fold is supposed to move a room inside, and the two
 recordings are the two ends of it — which is the first time this project has been able to watch
 both.
+
+### G-040b-i — `0c0`. Four arms, no diff at all, hash included.
+
+**The strictest claim this project has made, and it is a diff rather than an argument.** G-040a
+proved *"moves the state hash and nothing else"* at `48c48`. **This half proves nothing moves at
+all** — no golden re-pins, no save bump, no migration, no new `World` field, occupancy and the
+scaling fingerprint untouched. **ADR-0072 has the three rulings.**
+
+> **That is what a seam is FOR**, and it took ten plan reviews to cut one this cleanly. The whole
+> party mechanism — arrival, fit, cohesion, refusals, the money ruling — is in the tree and **the
+> shipped game has not changed by one byte.** The dial is a separate goal and a separate commit.
+
+### THE DEFECT IT FIXED IS ONE MY BLOCK NEVER NAMED
+
+`findFreeRoom` tested a **per-member** fit, so with a single and a double a party took a room only
+some of it fits in — and with a stranger in the double, **one member was homeless for life**,
+departing `gaveUp` while its partner slept. **Reproduced by proof-of-bite: delete
+`capacity < partySize ||` and `gaveUp` reads 1 instead of 2.**
+
+**My block prescribed a party-level resolver for a defect that did not exist** (cohesion was already
+free) **and would have introduced the `Map` iteration hazard my own paragraph warned against.**
+
+### THE FINDING THAT WILL SAVE THE NEXT GOAL, AND NOBODY ASKED FOR IT
+
+I called an ordinal-driven distribution *"periodic"*.
+
+> **A party consumes one ordinal PER MEMBER, so the slots its members occupy are never consulted:
+> `[1, 1]` emits PAIRS FOREVER, and `[3, 1]` gives the cycle 1, 1, 2. THE REALISED MIX IS NOT THE
+> WEIGHT RATIO.**
+
+**G-040b-ii must choose weights by reading the cycle rather than the ratio — a dial picked as "half
+pairs" would ship all pairs.** This is the class that ships green, reads as a balance problem for
+weeks, and is found by nobody. **It was found by a builder pinning its own mechanism as test cases.**
+
+### AND A RULING WHOSE CONSEQUENCE THE REVIEW COULD NOT HAVE KNOWN
+
+Refusing a party > 1 under lodging-free content **kills the `visitEnded` divergence entirely** —
+that path requires lodging-free content, which can no longer form a party. **So `leftDissatisfied`
+is now the only one of seven departure rows that can split a party**, and the cohesion ruling is
+written against six-of-seven rather than five. **A refusal made for §6.1 reasons narrowed a
+correctness surface as a side effect.**
+
+### MY OWN CLAIM, OVERSTATED
+
+I said `arrived` is *"the denominator of several derived shares."* **Nothing in the tree divides by
+it** — three readers, none of them a division. The fix was still required, because the conservation
+law throws on load, **but a builder sizing the goal from my sentence would have budgeted a sweep
+that does not exist.** *Fifteen goals running.*
