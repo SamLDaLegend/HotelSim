@@ -22,6 +22,11 @@
         font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         overflow: hidden;
       }
+      /* THREE ROWS, AND THE MIDDLE ONE IS THE ONLY ONE THAT YIELDS (E-013, G-048).
+         `1fr` with `min-height: 0` on #stage means the picture gives up its height so the
+         chrome keeps its own. Every CONTROL now lives in the first row, so a control's
+         distance from the top of the page is bounded by the controls above it and by
+         nothing else — in particular not by how tall the viewport happens to be. */
       #app {
         display: grid;
         grid-template-rows: auto 1fr auto;
@@ -38,10 +43,6 @@
         padding: 6px 10px;
         background: #14181f;
         border-bottom: 1px solid #232833;
-      }
-      #transport {
-        border-bottom: none;
-        border-top: 1px solid #232833;
       }
       #stage {
         position: relative;
@@ -79,10 +80,14 @@
       button.on .u {
         color: #cfe0ff;
       }
+      /* The one thing left below the stage, and it is a READOUT rather than a control —
+         which is the whole of E-013's lesson: the bottom edge of a page that cannot scroll
+         is where you put things the player may lose, never things they must press. */
       #guests {
         padding: 4px 10px;
         color: #6b7787;
         background: #14181f;
+        border-top: 1px solid #232833;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -91,21 +96,40 @@
   </head>
   <body>
     <div id="app">
+      <!-- EVERY CONTROL IS IN HERE, AND THAT IS THE RULING (G-048, human: "fine for it to
+           be at the top, everything else is"). E-013: `html` and `body` both carry
+           `overflow: hidden` and `scrollHeight === innerHeight` at every size, so the page
+           NEVER SCROLLS — a control pushed past the bottom edge is not below the fold, it
+           is gone, and there is nothing the player can do to get it back. The transport
+           row was the last element on the page and its bottom edge WAS the viewport's
+           bottom edge, measured flush at `bottom === innerHeight` at every height tested.
+           It survived only because #stage yielded; it had zero pixels of margin. -->
       <div>
         <div id="hud"></div>
-        <!-- The build tools sit under the HUD and above the stage: the player reads the
-             cash, picks a room, then clicks the building. -->
+        <!-- The build tools sit under the HUD: the player reads the cash, picks a room,
+             then clicks the building. -->
         <div id="tools"></div>
+        <!-- THE SPEED LADDER AND PAUSE, moved here from the foot of the page (G-048).
+             Beside the build palette because that is where the human put it and because
+             everything else the player presses is already here.
+
+             PAUSE TRAVELS WITH THE RUNGS. §2.1.1 is explicit that pause is "a transport
+             state, not a rate" and beneath the ladder — it is drawn apart from the rungs
+             inside this row (see `renderTransport`), not banished to a different one.
+
+             NOTHING ABOUT THE LADDER ITSELF MOVED: the rungs are still read from content
+             in content order, still labelled `rung.name`, still printed as
+             `ticksPerRealSecond`, and the game still opens on the same rung. This goal is
+             about REACH, not pace — pace is G-047. -->
+        <div id="transport"></div>
         <!-- ONE FLOOR IS DRAWN AT A TIME (HOTELSIM.md §1, ADR-0046), so the switcher is a
              first-class control rather than a corner of the toolbar. It sits directly above
              the stage because it changes what the stage shows and nothing else. -->
         <div id="floors"></div>
       </div>
       <div id="stage"></div>
-      <div>
-        <div id="guests"></div>
-        <div id="transport"></div>
-      </div>
+      <!-- A READOUT, not a control. See the #guests rule above. -->
+      <div id="guests"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

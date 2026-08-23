@@ -2210,3 +2210,49 @@ agent's pane, so the threshold is real but not yet bracketed — bracket it befo
 **Candidate fixes, cheapest first**: let the page scroll; or pin the speed bar `position: fixed` to
 the bottom; or move it into the top toolbar with the build palette. **The first is one line and the
 last is a layout decision — the human's, since it changes what the game looks like.**
+
+### E-013 — CORRECTED 2026-08-23. My MECHANISM was wrong; the DEFECT was real and is fixed.
+
+**I wrote that the speed controls are UNREACHABLE on a short viewport. That could not be
+reproduced**, and E-013's own falsification test **refutes on its own terms inside the bracket it
+named.** Roughly **40 baseline readings in real Chrome over CDP** — heights 250–720 × widths
+420/640/800/1000/1280/1392 × dPR 1 / 1.25 / 1.5, after a 75-second warm-up to let the HUD grow — and
+**at every height from 400 up the row was inside the viewport AND passed `elementFromPoint`.** The
+first height that clips is **250px at 420 wide: a phone, far below the stated bracket.**
+
+**WHAT IS REAL, AND IT IS WORSE-SOUNDING WHEN STATED PRECISELY:**
+
+> **The row had EXACTLY ZERO pixels of margin — `bottom === innerHeight` in all forty readings —
+> beneath `overflow: hidden` with no scroll.** One more row of chrome, a taller HUD, a scrollbar, or
+> a UA whose layout viewport exceeds its visual viewport, **and it is gone with no recovery.**
+
+**That is a fragility rather than a failure, and the ruling was right anyway.** After the move the
+row sits at a **constant** `top 99 / bottom 138` that **does not depend on viewport height at all** —
+verified independently by the orchestrator at `innerHeight` 595: **headroom 457** where it used to be
+**0**, hit-test landing on `pause`.
+
+**AND SOMETHING ABOUT THE HUMAN'S BROWSER IS STILL UNEXPLAINED.** E-013's own sentence is that the
+agent's pane at `innerHeight` 595 showed the row and the human's browser did not — **and no
+height-only explanation covers that**, because both were near the same height. A specific
+alternative was chased and eliminated: at dPR 1.25/1.5 the Pixi canvas **does** overflow `#stage`,
+but **by 1px** — nowhere near enough to cover the row.
+
+**OPEN, and it needs the human rather than another probe**: **browser zoom** is the leading
+candidate, or a much taller HUD after long play. **The fix has landed regardless and the row is now
+reachable by construction** — but *why the human could not see it* is not yet known, and **a fix
+that works for the wrong reason is worth exactly one sentence of doubt.**
+
+### AND MY EXIT CRITERION WAS UNSATISFIABLE AS WRITTEN
+
+I required *"`git diff --stat` touches nothing outside `apps/game/src`."* **The page's layout IS
+`apps/game/index.html`, which is outside `src`.** The only way to obey the letter would have been to
+move the node from `main.ts` at boot and set the border rule as an inline style from TypeScript —
+**page layout smuggled into the render entrypoint to satisfy a path glob.**
+
+**The builder declined that and edited the HTML, which is right.** *(G-047's block says "nothing
+outside `apps/game`"; G-048's said `apps/game/src` — a transcription slip of mine, and the builder
+read the intent correctly as "no sim, no content, no tools".)* **One file changed, zero in
+`packages/` or `tools/`.**
+
+*(Also corrected: I said "the last of thirteen buttons". It is **fifteen**, and the floor count is
+world-dependent, so no fixed number is stable there.)*

@@ -3455,3 +3455,22 @@ is needed is the HOUSE PATTERN** — a declared per-test budget with its measure
 as seven files already carry — **and NOT raising a shared literal**, which is what G-039b-beta2
 refused. *(Five census tests already took a 120,000 ms budget at G-040b-ii; this test was not among
 them and now has less headroom than they did.)*
+
+### TWO MORE FILES JOIN THE TIMEOUT POPULATION, and both spawn CLI subprocesses
+**Parked 2026-08-23 (G-048).** A verify went red with **two 30s timeouts, not assertions** —
+`cli.stdout.test.ts` ("byte-identical stdout") and `scorer.report.test.ts` ("adding one amenity of
+each kind MOVES the score"). **Both spawn CLI subprocesses.** Re-run alone: **44/44 passed, 29.9s
+wall**; full verify re-run: exit 0. No stray processes during either run.
+
+**It cannot be the diff**: vitest does not include `apps/game`, and the change was an HTML file
+nothing in `tools/headless` imports.
+
+**The population keeps growing and the shared property is now visible**: the affected files are the
+ones that **spawn child processes inside a 30s per-test budget under full vitest parallelism.**
+Earlier members were `needs.determinism` and `provider.determinism`; G-040b-ii gave five census tests
+a declared budget; these two were not among them.
+
+**Falsification test:** classify every timeout by whether its `it` spawns a child process.
+**Confirms if the affected set is exactly the child-spawning tests; refutes if a pure in-process test
+times out.** **The remedy when it is needed is the house pattern — a declared per-test budget with
+its measurement at the docblock — and NOT raising a shared literal.**

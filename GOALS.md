@@ -2740,7 +2740,7 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
 ## G-048 — The speed controls move to the top, where everything else is
-Status: **PLANNED 2026-08-23. HUMAN RULING** — *"Fine for it to be at the top. Everything else is."*
+Status: **DONE 2026-08-23.** The row now sits at a CONSTANT `top 99 / bottom 138` that does not depend on viewport height — **headroom 457 where it was 0**, verified independently. One file, `apps/game/index.html`. **My "unreachable" mechanism did NOT reproduce and is corrected in E-013**; what was real is that the row had exactly zero pixels of margin under `overflow: hidden` with no scroll.
 Discharges **E-013**. Milestone: M3 · Owner pair: render-engineer / render-critic
 Statement: the speed rungs are **reachable at any viewport height a real browser produces.**
 
