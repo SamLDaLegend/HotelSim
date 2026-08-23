@@ -2050,3 +2050,113 @@ would make (a) unnecessary — but the choice is a human's.
 The rest of G-041 is green and re-runnable: `pnpm check:content` ok, I2 `f197734f532dc62b` agreeing
 across three processes, `check:tickcost` PASS at 1.2338 and 1.2601 in two runs against a 1.4640
 bound, `check:tickcost:proof` ok, `check:stamp` ok, 2,663 tests passing.
+
+---
+
+## E-012 — The speed rung is the WRONG DIAL. A parked falsification test fired, and it names interpolation.
+**Opened 2026-08-23 (G-045). No number was shipped and no file in the repo changed.** The builder was
+told it could escalate rather than pick a value, and it did — **with the measurement that reframes
+the goal.**
+
+### THE STEP SIZE IS INVARIANT UNDER EVERY RUNG. That is the whole finding.
+
+`Guest.at` is an integer `Cell`; `stepTowards` spends the whole 3-cell budget in one assignment;
+**nothing in `apps/game/src/view` or `tools/viewer` tweens.**
+
+> **A slower rung reduces how OFTEN a guest teleports three tiles. It never reduces how far.**
+
+| rung | day | median walk | **px per redraw** |
+|---|---|---|---|
+| 30 Fast **(the default)** | 48 s | 0.10 s | **214.66** |
+| 12 Working | 2.0 min | 0.25 s | **214.66** |
+| 5 Careful | 4.8 min | 0.60 s | **214.66** |
+| 4 / 3 / 2 | 6 / 8 / 12 min | 0.75 / 1.0 / 1.5 s | **214.66** |
+| ~~1~~ | 24 min | 3.0 s | **DEAD by §2.1.1** |
+
+**The constant column is the finding as a table.** My brief's model — *slower rung ⇒ guest reads as
+walking* — **is false at every value.**
+
+### WHAT A GUEST ACTUALLY DOES, MEASURED
+
+*Shipped scenario, 1,440 ticks, 11,968 guest-ticks, full histogram, deterministic:*
+
+- **96.22% of guest-ticks are STATIONARY.** A guest is in motion on **3.78%** of its ticks.
+- Of moving ticks: 1 cell 27.88%, 2 cells 36.28%, **3 cells 35.84%.** Mean **2.08**, not 3.
+- **A journey lasts a median of THREE TICKS** (p90 5, max 6) and covers **7 cells** (max 13).
+
+> **At Careful a guest's entire walk is over in 0.60 s; at the rung the game OPENS at, 0.10 s.**
+> There is no rung at which three ticks is a walk.
+
+### THE PARKED TEST FIRED, AND IT WAS WRITTEN BEFORE THE FACT BY SOMEBODY ELSE
+
+`PARKING.md:1570` — *"INTERPOLATED MOVEMENT BETWEEN TICK STATES -> the first goal after G-023b …*
+***FALSIFICATION TEST**: once travel lands, watch one journey at the CAREFUL rung … if the guest
+visibly jumps more than one cell between redraws, interpolation is needed and it is its own goal."*
+
+**326 of 452 moving guest-ticks — 72.1% — jump two or more cells between redraws. 35.84% jump the
+full three.** **The test fired positive and its own stated consequence is a goal.**
+
+**And it is OVERDUE**: its scope reads *"the first goal after G-023b"*, and its deferral was
+justified by *"nothing moves until G-023b"* — **a precondition that expired many goals ago**, which
+§2.1.1 names by name as *"ADR-0007's class waiting to happen."* **`render-engineer.md:61` already
+states it as charter: *"Interpolate between the sim's tick states."***
+
+### THE FRAME THAT SHOWS IT
+
+`t000003-fm1-reduced.svg` -> `t000004-fm1-reduced.svg`, `--every 1`. Guest 1 translates
+**(640, 244) -> (832, 340)** — **214.66 px in one redraw**, exactly 3 cells, **confirming
+`guestCellsPerTick: 3` from the shipped drawing path independently of the sim.**
+
+> **The guest silhouette is 22.98 px wide. It moves 9.34 of its own body widths with nothing drawn
+> in between — 16.8% of a 1280 px canvas, per redraw, at EVERY rung.**
+
+**A second finding with frames**: guest 1 is on the entrance floor for **exactly one tick** and then
+vanishes, because the camera draws one floor at a time — **33 ms of screen presence at the default
+rung.** No rung fixes the vanishing; it only lengthens it.
+
+### AND THE DIAL IS PINNED FROM BOTH SIDES
+
+- **`guestCellsPerTick` cannot be lowered**: G-041 took the plot depth 60 -> 27 and the speed floor
+  2 -> 3 with it, so **3 sits exactly ON its derived floor**, computed rather than quoted.
+- **The rung space is three integers.** The schema is `z.int().min(1)` and **§2.1.1 killed rung 1 by
+  name** (*"a ladder whose lowest rung is dead is not a ladder"*). So 4, 3 or 2 — **and nothing in
+  the project separates them**, which is why picking one is a ruling rather than a derivation.
+- **§2.1.1 already records the human predicting 48 s/day would read sluggish, watching it, and
+  finding it BRISK.** That is 30 ticks/s — **and `main.ts` opens at the FASTEST rung deliberately**,
+  so a new slow rung changes nothing about first impressions unless the default moves too.
+
+### THE THREE WAYS OUT, IN THE ORDER I WOULD RUN THEM
+
+**E1 — costs minutes, do it first.** **Open the game and click "Careful".** The game opens at Fast by
+design, so the complaint almost certainly describes **5.03 canvas widths per second**; nobody has
+ever reported on **0.84**. **If Careful reads acceptably, this is a DEFAULT-RUNG question — one line
+in `main.ts` — not a new rung.**
+
+**E2 — interpolation, and it is the recommendation.** **Costs zero day pace**, is already required by
+the render charter, fixes the 9.34-body-width jump **that no rung can touch**, and its park is
+overdue. **G-047.**
+
+**E3 — only if a rung is still wanted after E1 and E2, and then the HUMAN states the threshold in
+real seconds.** A perceptual threshold is the human's by charter, ADR-0013 says a perceptual
+criterion needs a perceptual check, and **the only perceptual instrument here writes static SVGs.**
+**Any of 4, 3 or 2 that an agent picked would be picked because it looks better — the superstition
+§2.1 forbids.**
+
+### SIX CORRECTIONS TO MY BRIEF, AND TWO ARE LOAD-BEARING
+
+1. **"80-column plot crossed in 0.9 / 2.2 / 5.3 s" — the arithmetic is right and the WORKLOAD IS
+   FICTIONAL.** No guest crosses the plot: measured max journey is **13 cells**, median **7**. **It
+   made the problem look like a long traverse when it is three teleports.**
+2. **"Fifteen cells a second" is a peak, not a rate** — mean 2.08 cells over moving ticks gives
+   **10.4 realised**, and a guest moves on 3.78% of ticks. **The operative quantity is not cells/s at
+   all.**
+3. **"`check:tickcost` should give a real ratio" — it CANNOT for an uncommitted change.** Arms are
+   read out of the object store and **never touch the working tree**, so a content edit yields a
+   ratio only once committed. *(My `ARM_PATHS` sub-claim was right; the timing was not.)*
+4. **"One entry in `speed-ladder.json`" understates the constraint** — three admissible values, not a
+   continuum.
+5. **The game opens at the FASTEST rung**, which I did not know and which changes what the complaint
+   is about.
+6. *(A MINOR found in passing: `guest.ts:243` still reads "nothing moves yet (G-023b-i is unbuilt)" —
+   **false since G-023b-ii, in the docblock of the function that decides which way the moving thing
+   faces.**)*

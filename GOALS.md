@@ -2739,8 +2739,72 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 **Exit criteria**: a frame reference showing the shaft on two adjacent floors · `pnpm verify`
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
+## G-047 — A guest is drawn between ticks
+Status: **PLANNED 2026-08-23. Discharges `PARKING.md`'s interpolation park, whose falsification test
+FIRED at G-045 (E-012).** Milestone: M3 · Owner pair: render-engineer / render-critic
+Statement: the renderer **tweens a guest between consecutive tick states**, so a walk reads as
+  walking rather than as three teleports.
+
+**IT IS NOT A NEW REQUIREMENT. Three places already asked for it:**
+
+- **`PARKING.md`'s park** — *"the first goal after G-023b"* — with the test that has now fired:
+  **72.1% of moving guest-ticks jump two or more cells between redraws; 35.84% jump the full three.**
+- **`render-engineer.md:61`, as charter**: *"Movement and animation must be frame-rate independent.
+  **Interpolate between the sim's tick states.**"*
+- **§2.1.1's own warning**, because the park's deferral reason — *"nothing moves until G-023b"* —
+  **expired many goals ago**, which is *"ADR-0007's class waiting to happen"* in its own words.
+
+### WHY NO SPEED RUNG CAN DO THIS JOB
+
+**`px per redraw` is 214.66 at EVERY rung** — 30, 12, 5, and any of 4/3/2. A rung changes how *often*
+a guest teleports three tiles, **never how far**. And the dial is pinned from both sides:
+`guestCellsPerTick: 3` **sits exactly on its derived floor** (G-041 took the plot depth 60 -> 27 and
+the floor 2 -> 3 with it), and the rung space below Careful is **three integers**, with rung 1 killed
+by name in §2.1.1.
+
+> **A guest translates 9.34 of its own body widths — 16.8% of a 1280px canvas — with nothing drawn in
+> between.** *Frame reference: `t000003-fm1` -> `t000004-fm1`, (640,244) -> (832,340), `--every 1`.*
+
+### THE CONSTRAINT THAT MAKES THIS SAFE, AND IT IS ALREADY PROVEN HERE
+
+**Interpolation is a RENDER-ONLY concern and must not reach the sim.** `driver.ts` is *"the last place
+wall-clock exists"*, and `tick.ts` says from the other side: *"`dt` is not a parameter and never will
+be: the tick IS the unit of time."*
+
+**So the tween lives on the far side of that boundary, reading two tick states rather than a clock
+the sim can see.** **The provable property is G-044's**: *nothing outside `apps/game` moves* — no sim
+change, no content change, no save bump, **and I2 unchanged.**
+
+### WHAT TO DECIDE AT PLAN
+
+- **What is interpolated**: position certainly. **The need-vector bars and the occupancy pips are
+  probably NOT** — a bar that eases between values invents readings the sim never held, which is the
+  §6.1 failure of *drawing a state the sim cannot reach.*
+- **What happens when a guest's tick state jumps non-contiguously** — a stair leg crosses floors, and
+  the camera draws **one floor at a time**. **A tween across a floor change is a guest sliding
+  through a ceiling.** Rule it: snap on floor change, or do not tween that step.
+- **The one-tick vanishing**, measured at G-045: a guest is on the entrance floor for **exactly one
+  tick** before the camera loses it — **33 ms at the default rung.** Interpolation lengthens the
+  presence but does not fix the disappearance; **say which of the two this goal claims.**
+
+### EXIT CRITERIA
+
+- **A frame sequence at `--every 1` showing sub-cell positions between two tick states** — the same
+  instrument that produced the finding, so the fix is checked by what caught it.
+- `pnpm verify` — **fourteen rows** PASS, `VERIFY_EXIT` read from the process.
+- **I2 unchanged**, and `git diff --stat` touching **nothing outside `apps/game`.**
+- **Frame-rate independence demonstrated, not asserted** — the charter requires it and §6.1 lists
+  *"animation that runs faster on a 144Hz monitor"* as a defect. **The human is on 145 FPS**, which is
+  the machine that would show it.
+
 ## G-045 — A rung slow enough to watch a guest
-Status: **PLANNED 2026-08-23. From the human watching the game** — *"movement is FAR too fast to my
+Status: **ESCALATED 2026-08-23 (E-012). No number shipped; the rung is the WRONG DIAL.**
+Measured: **96.22% of guest-ticks are stationary**, a journey lasts a **median of three ticks**,
+and **px-per-redraw is 214.66 at EVERY rung** — a slower rung changes how OFTEN a guest teleports
+three tiles, never how far. A guest crosses **9.34 of its own body widths** with nothing drawn in
+between. `PARKING.md`'s interpolation falsification test — written before the fact — **FIRED**:
+72.1% of moving guest-ticks jump 2+ cells between redraws, and its stated consequence is a goal.
+**Superseded by G-047 (interpolation).** See `ESCALATIONS.md` E-012 for the three ways out.
 eye, people are zooming around all over the place."* Milestone: M3 · Owner pair: economy-engineer /
 balance-critic *(content, not render)*
 Statement: the speed ladder gains a rung at which a guest is legible.
