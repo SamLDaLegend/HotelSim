@@ -2739,6 +2739,55 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 **Exit criteria**: a frame reference showing the shaft on two adjacent floors · `pnpm verify`
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
+## G-048 — The speed controls move to the top, where everything else is
+Status: **PLANNED 2026-08-23. HUMAN RULING** — *"Fine for it to be at the top. Everything else is."*
+Discharges **E-013**. Milestone: M3 · Owner pair: render-engineer / render-critic
+Statement: the speed rungs are **reachable at any viewport height a real browser produces.**
+
+### THE DEFECT, MEASURED
+
+**`html` and `body` both carry `overflow: hidden`**, and `document.scrollHeight === innerHeight` at
+every size tested — **the page never scrolls.** The speed row is the **last of thirteen buttons** and
+sits hard against the bottom edge.
+
+> **So on a short viewport the speed controls are not below the fold — they are UNREACHABLE.** And
+> **the game opens at the FASTEST rung by design** (`main.ts`), so a player on a laptop is stuck at
+> Fast with no way to slow down.
+
+**§6.1's catalogue one step worse**: not *a UI that cannot express a state the sim can reach*, but
+**a control the player cannot reach at all.**
+
+**AND THE INSTRUMENT HID IT.** The agent's embedded pane has **no browser chrome**; the human's real
+browser ate **797px of a 1392px window.** The pane is systematically more forgiving than the thing
+players use, **which is why this survived until a human looked.** *Worth remembering the next time a
+render claim rests on a pane screenshot.*
+
+### THE RULING
+
+**Move the speed controls into the top toolbar with the build palette, demolish, tool and export.**
+The human's reason is the whole justification: **everything else is already there.**
+
+### WHAT NOT TO DO
+
+- **Do NOT merely make the page scroll.** That was the cheap fix and the human chose the layout one;
+  a control you have to scroll to find is still a control that opens off-screen.
+- **Do NOT change the ladder, the rung values, or the default rung.** G-045/E-012 settled that the
+  rung is the wrong dial and **interpolation (G-047) is the answer** — this goal is about REACH, not
+  about pace. **Changing the default here would confound the two.**
+- **Do NOT compute one rung from another** — `check:ladder` forbids exactly that (§2.1.1), and the
+  HUD must keep reading rungs from content, in content order, with `rung.name` as the label.
+- **`pause` travels with them.** It is a transport state, not a speed (§2.1.1), and it is part of the
+  same control.
+
+### EXIT CRITERIA
+
+- **The speed controls are reachable at `innerHeight` 400, 500, 600 and 720** — the bracket E-013's
+  falsification test asked for, now an assertion rather than a question. **Report the readings.**
+- `pnpm verify` — **fourteen rows** PASS, `VERIFY_EXIT` read from the process.
+- **I2 unchanged**, and `git diff --stat` touching **nothing outside `apps/game/src`.**
+- `check:ladder` green.
+- **A frame or a DOM reading showing the row in the top toolbar** at the smallest of those heights.
+
 ## G-047 — A guest is drawn between ticks
 Status: **PLANNED — and CONFIRMED BY THE HUMAN 2026-08-23.** E-012's experiment E1 ran and came back NEGATIVE: *"even on careful people are still teleporting around."* The rung is exonerated by eye as well as by arithmetic, so interpolation is the answer rather than a candidate. Discharges `PARKING.md`'s interpolation park, whose test FIRED at G-045.
 FIRED at G-045 (E-012).** Milestone: M3 · Owner pair: render-engineer / render-critic
