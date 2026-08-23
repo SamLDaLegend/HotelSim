@@ -105,6 +105,8 @@ import { withCorridor } from './corridors.js';
 import type { Corridors } from './corridors.js';
 import { withStair } from './stairs.js';
 import type { Stairs } from './stairs.js';
+import { withLift } from './lift.js';
+import type { Lift } from './lift.js';
 import { hasContentId, isRoomKind, needTypesInOrder } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
@@ -315,6 +317,14 @@ type CommandAccumulator = {
    * identity in its seventh clause.
    */
   stairs: Stairs;
+  /**
+   * The lift as this tick's commands have left it (G-038b-i).
+   *
+   * Threaded exactly as `stairs` is, and for the same three reasons: replaced by value, never
+   * mutated, and returned by REFERENCE when nothing installed anything — which is what keeps
+   * the idle-tick guarantee below.
+   */
+  lift: Lift | null;
 };
 
 /** The one place the balance is folded, and the one place it is folded only once. */
@@ -544,6 +554,30 @@ function applyCommand(
       assertCell(command.at, state.world.grid, 'layStair');
       accumulator.stairs = withStair(accumulator.stairs, command.at);
       return;
+    case 'installLift':
+      // THE SHAFT IS SERVED BY A LIFT (G-038b-i). `layStair`'s contract, one question over: the
+      // structural door, a throw on a world this simulation has no reading of, no charge, no
+      // outcome and no id — so neither per-tick law below has anything to say about it either.
+      //
+      // AGAINST THE PLAN AS THIS TICK HAS LEFT IT, not `state.world.stairs`, on the same no-lag
+      // rule `buildInput` uses: a `layStair` earlier in this batch is a shaft for an
+      // `installLift` later in it, so a scenario can draw its shaft and fit its lift in one log.
+      //
+      // THE SHAFT REQUIREMENT IS RAISED HERE RATHER THAN IN `withLift`, and that split is
+      // deliberate: `withLift` sees the declaration and `assertLift` sees the declaration, so
+      // neither can see the stairs. This is the one place a command has both in hand — which is
+      // exactly the shape `assertWorldShape` uses for the same law on the save side.
+      if (accumulator.stairs.length === 0) {
+        throw new Error(
+          'installLift: this world has declared no stair, so there is no shaft to install a lift in. ' +
+            'A lift is a rate on the shaft `layStair` declares, not a second connector; see lift.ts.',
+        );
+      }
+      accumulator.lift = withLift(accumulator.lift, {
+        capacity: command.capacity,
+        waitToleranceTicks: command.waitToleranceTicks,
+      });
+      return;
     case 'guestArrives':
       // Checked here rather than in the guest system, alongside `spawnEntity`'s
       // unknown-kind check and for the same reason: a guest that could form no need is
@@ -613,6 +647,7 @@ export function applyCommands(state: TickState): TickState {
     arrivingParties: 0,
     corridors: state.world.corridors,
     stairs: state.world.stairs,
+    lift: state.world.lift,
     ledger: state.world.ledger,
     outcomes: state.world.buildOutcomes,
     balance: 0,
@@ -700,7 +735,10 @@ export function applyCommands(state: TickState): TickState {
     accumulator.corridors === state.world.corridors &&
     // BY IDENTITY, for `corridors`' reason exactly: `withStair` on a cell already declared
     // returns the same array (G-038a-ii-alpha).
-    accumulator.stairs === state.world.stairs
+    accumulator.stairs === state.world.stairs &&
+    // BY IDENTITY, for `stairs`' reason exactly: `withLift` returns the same object when the
+    // lift installed is the lift already there (G-038b-i).
+    accumulator.lift === state.world.lift
       ? state.world
       : {
           ...state.world,
@@ -709,6 +747,7 @@ export function applyCommands(state: TickState): TickState {
           loanOutcomes: accumulator.loanOutcomes,
           corridors: accumulator.corridors,
           stairs: accumulator.stairs,
+          lift: accumulator.lift,
         };
 
   // The log is consumed, so it is blanked. "Commands are applied at one defined point
@@ -791,6 +830,10 @@ export function runGuests(state: TickState): TickState {
       state.entities,
     ),
     arrivingParties: state.arrivingParties,
+    // THIS TICK'S LIFT, on the same no-lag rule the stairwell has: an `installLift` earlier in
+    // this tick's log serves the guests of this tick (G-038b-i).
+    lift: state.world.lift,
+    liftQueue: state.world.liftQueue,
   });
   // An untouched guest loop returns its inputs by reference, so an idle tick allocates
   // no world either.
@@ -799,7 +842,11 @@ export function runGuests(state: TickState): TickState {
     result.outcomes === state.world.guestOutcomes &&
     result.needOutcomes === state.world.needOutcomes &&
     result.reviewOutcomes === state.world.reviewOutcomes &&
-    result.ledger === state.world.ledger
+    result.ledger === state.world.ledger &&
+    // BY IDENTITY (G-038b-i). `settleLiftQueue` returns the line it was given when nobody
+    // joined it and nobody left it, so a world with a lift and a steady line still takes the
+    // idle-tick path — and a world with no lift never reaches that function at all.
+    result.liftQueue === state.world.liftQueue
       ? state.world
       : {
           ...state.world,
@@ -808,6 +855,7 @@ export function runGuests(state: TickState): TickState {
           needOutcomes: result.needOutcomes,
           reviewOutcomes: result.reviewOutcomes,
           ledger: result.ledger,
+          liftQueue: result.liftQueue,
         };
   return { ...state, world, arrivingParties: 0, guestsRun: true };
 }

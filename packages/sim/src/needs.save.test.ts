@@ -523,6 +523,7 @@ describe('assertWorldShape inspects the new field and the new guest shape', () =
           // count, and that distinction is the reason it is spelled here rather than omitted.
           { reason: 'visitEnded' as const, count: 0 },
           { reason: 'gaveUp' as const, count: 3 },
+          { reason: 'gaveUpWaitingForLift' as const, count: 0 },
           { reason: 'leftDissatisfied' as const, count: 0 },
           { reason: 'evictedRoomGone' as const, count: 1 },
           { reason: 'evictedRoomUnusable' as const, count: 0 },

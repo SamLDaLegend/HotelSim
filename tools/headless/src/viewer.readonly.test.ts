@@ -293,6 +293,25 @@ const DELIBERATELY_NOT_DRAWN: Readonly<Record<string, string>> = {
   // are the CLI report's subject, and `sim:run` prints both.
   buildOutcomes: 'counters for player commands; the building itself is what is drawn',
   loanOutcomes: 'counters for player commands; the report is where these are read',
+  // G-038b-i. THE LIFT AND ITS QUEUE, AND THIS PAIR IS EXEMPTED WITH A DEBT ATTACHED RATHER
+  // THAN BECAUSE A WATCHER COULD NOT USE THEM.
+  //
+  // A line of guests at a lift is exactly the sort of thing a watcher WOULD read, and the two
+  // entries above are exempt because nothing about them is watchable. These are different, and
+  // saying so is the point: G-038b-i ships the mechanism INERT — `world.lift` is `null` in every
+  // world any harness produces, so the viewer would be drawing a permanent `null` and a
+  // permanently empty array — and ADR-0075 measured what drawing it would cost:
+  //
+  //   > *"neither drawing path can express a queue. The iso scene computes
+  //   > `room = floor(width / pitch)`, 3 from scale 0.75 to the clamp; a fourth guest becomes a
+  //   > `+N` label. The replay viewer compresses pitch to `width / guests.length` — one
+  //   > unreadable stripe of colour."*
+  //
+  // **So the drawing work is G-038b-ii's and it must budget it.** These two lines are the debt,
+  // written where the goal that pays it will be forced to read them: the moment a harness
+  // installs a lift, a watcher with no line drawn is looking at a hotel that is lying to it.
+  lift: 'inert until G-038b-ii declares one; drawing a queue is that goal and ADR-0075 prices it',
+  liftQueue: 'always empty until G-038b-ii declares a lift; the drawing work is budgeted there',
 };
 
 describe('the viewer shows what the simulation records, or says why not', () => {

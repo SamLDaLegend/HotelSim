@@ -154,9 +154,12 @@ const FORBIDDEN_IN_SAVE_TS = [
   // G-015. `createGuestOutcomes()` returns the same five zero rows `V8_MIGRATION_GUEST_OUTCOMES`
   // holds, so ADR-0008 (3) applies exactly: no value assertion can tell the two apart, and the
   // freeze only becomes observable on the day `GuestDepartureReason` gains a member. A
-  // departure taxonomy is precisely the union that grows — M3's "gave up waiting for a lift" is
-  // the obvious next one — and on that day a migration that folded the live list would start
-  // writing a row for a reason that did not exist when those v7 bytes were written.
+  // departure taxonomy is precisely the union that grows — M3's "gave up waiting for a lift" was
+  // the obvious next one **and G-038b-i shipped it, at index 3** — and on that day a migration
+  // that folded the live list would have started writing a row for a reason that did not exist
+  // when those v7 bytes were written. **The freeze is now observable rather than latent**, which
+  // is the whole of ADR-0008 (3): `V8_MIGRATION_GUEST_OUTCOMES` still has five rows and
+  // `createGuestOutcomes()` now has eight.
   // `GUEST_DEPARTURE_REASONS` is the back door: a step that built the table by walking the live
   // reason list is the same defect wearing a different hat. `departureCountOf` and
   // `evictedGuests` are listed because they are how you would READ the new shape, and a
@@ -368,6 +371,9 @@ describe('the 2 -> 3 migration cannot reach for the current default plot', () =>
       'checkedOut',
       'visitEnded',
       'gaveUp',
+      // A FOURTH INSERTION, AT G-038b-i, AND THE SUFFIX CLAIM BELOW NEEDED NO RE-TYPING — which
+      // is the prediction three lines up landing exactly as written.
+      'gaveUpWaitingForLift',
       'leftDissatisfied',
       'evictedRoomGone',
       'evictedRoomUnusable',

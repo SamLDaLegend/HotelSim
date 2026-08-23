@@ -16,12 +16,14 @@ import { createCorridors } from './corridors.js';
 import type { Corridors } from './corridors.js';
 import { createStairs } from './stairs.js';
 import type { Stairs } from './stairs.js';
+import { NO_LIFT } from './lift.js';
+import type { Lift } from './lift.js';
 import { createEntityStore } from './entities.js';
 import type { EntityStore } from './entities.js';
 import { createGridBounds } from './grid.js';
 import type { GridBounds } from './grid.js';
-import { createGuestOutcomes, createGuestStore } from './guests.js';
-import type { GuestOutcomes, GuestStore } from './guests.js';
+import { createGuestOutcomes, createGuestStore, createLiftQueue } from './guests.js';
+import type { GuestOutcomes, GuestStore, LiftQueue } from './guests.js';
 import { createNeedOutcomes } from './needs.js';
 import type { NeedOutcome } from './needs.js';
 import { createReviewOutcomes } from './reviews.js';
@@ -160,6 +162,43 @@ export type World = {
    */
   readonly stairs: Stairs;
   /**
+   * WHAT SERVES THAT SHAFT — a lift with a capacity, or `null` for a staircase (G-038b-i,
+   * ADR-0075).
+   *
+   * A RATE ON THE SHAFT `stairs` ALREADY DESCRIBES, NOT A SECOND SHAFT. Where a guest may climb
+   * is `stairs`; how many may climb at once is this. Folding them together would make "may the
+   * floor axis spend?" and "how fast?" one question, and `lift.ts` is the argument that they are
+   * not — the same split `stairs` itself makes against `corridors`.
+   *
+   * `null` IS A RULE AND NOT AN ABSENCE: *the shaft is a staircase, and a staircase has
+   * unbounded capacity*, which is what every build before this one did and exactly what a v22
+   * save says. **It is `null` in every world this build ships**; no content declares a lift and
+   * no harness installs one. G-038b-ii owns the dial (ADR-0075: the congestion a lift manages
+   * does not occur at any workload this project can currently produce, so a capacity would not
+   * be derivable from a stated requirement yet — §2.1).
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, which is why it is a field: a shaft with a lift in it and
+   * a shaft with stairs in it are the same cells everywhere else in `World`.
+   */
+  readonly lift: Lift | null;
+  /**
+   * WHO IS STANDING IN THE LINE FOR THAT LIFT, IN ORDER, FRONT FIRST (G-038b-i).
+   *
+   * STATE, NOT A DECLARATION, WHICH IS WHY IT IS A SECOND FIELD AND NOT A KEY ON `lift`. The
+   * project keeps a player's DECISION about the building (`corridors`, `stairs`, `lift`) apart
+   * from what the simulation is doing in it (`guests`, `guestOutcomes`), and mixing the two
+   * would put a value the tick rewrites inside a value only a command may touch.
+   *
+   * NOT DERIVABLE FROM ANYTHING ELSE, and ADR-0075 is the citation: **a queue's order is an
+   * INTER-TICK temporal fact and nothing else in `World` records it** — `arrivedTick` is arrival
+   * at the HOTEL, not at the lift. The alternative, deriving the order from ascending guest id,
+   * was available and free and is rejected in `LiftQueue`'s docblock for a reason and with its
+   * consequence.
+   *
+   * ALWAYS EMPTY WHILE `lift` IS `null`, checked by `assertWorldShape` rather than assumed.
+   */
+  readonly liftQueue: LiftQueue;
+  /**
    * What the player's build commands have done, counted (G-008).
    *
    * NOT DERIVABLE FROM ANYTHING ELSE, which is why it is a field rather than a fold. A
@@ -219,6 +258,8 @@ const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   guestOutcomes: true,
   guests: true,
   ledger: true,
+  lift: true,
+  liftQueue: true,
   loanOutcomes: true,
   needOutcomes: true,
   reviewOutcomes: true,
@@ -301,6 +342,13 @@ export function createWorld(seed: number, content: BoundContent): World {
     // simulation did before stairs existed, and is why opening a world under this build
     // changes no journey. See `stairs.ts`.
     stairs: createStairs(),
+    // NO LIFT, AND THAT IS THE SAME KIND OF STATEMENT (G-038b-i). A new hotel's shaft — when it
+    // draws one — is a staircase, so the shaft carries as many guests at once as want to use it
+    // and nobody ever queues, which is exactly what this simulation did before lifts existed.
+    // Nothing in this build ever writes anything else here. See `lift.ts`.
+    lift: NO_LIFT,
+    // And so nobody is standing in a line that does not exist.
+    liftQueue: createLiftQueue(),
     buildOutcomes: createBuildOutcomes(),
     loanOutcomes: createLoanOutcomes(),
   };

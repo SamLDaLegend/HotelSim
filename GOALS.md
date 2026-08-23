@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-043 is DONE and G-038b is DEFERRED on measurement — M3's goal list is closed and the milestone question is owed to the human. G-043: the engagement ladder was never inverting, it was a units mismatch (demand counted arrival commands, provisioning counted guests), now repaired in a SHARED provisioning.ts where every quantity carries its unit in its name; top rung 219 out / 252 dissatisfied becomes 464 / 0. The deciding evidence for shared over local is that the FOURTH local fix was also wrong. A prior question nobody had asked is now answered: a bedroom is claimed by ONE PARTY, not by capacity strangers, so the beds model over-estimated capacity in the unsafe direction. G-038b DEFERRED (ADR-0075): the congestion a lift queue exists to manage DOES NOT OCCUR — max guests on the stairwell cell is 3 or 4 at every workload this project can produce, so a capacity of 4+ can never bind. That is the inert-rule problem a fourth time, caught in the goal whose own block claimed to have avoided it, and it needs demand (M4) rather than code. Still open and parked: the flat amenity axis BELOW the bottleneck survives (three rooms reads 354/354/354, WATCH #23 has the frame — nine amenity rooms, one guest, every outcome identical); both drawing paths cap at three figures on a tile; and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-23, G-038b-i is DONE — the lift QUEUE MECHANISM ships INERT in `packages/sim`, and G-038b-ii (the dial) stays deferred on ADR-0075's measurement. A lift is a CAPACITY ON THE EXISTING SHAFT rather than a second connector, so `stairLeg` and `climbsFrom` — the two hand-kept copies of one condition — did not move, and reachability is untouched because `capacity >= 1` is refused at both doors: a queue is temporal, reachability is topological, and a lift can never sever a building. The queue ORDER IS STORED, deliberately and against the free alternative: lowest-id-wins is not a queue (whoever checked in earliest boards first), and the give-up rule needs a wait clock in hashed state anyway, so one field answers both questions or one field answers one. Save v23: `lift` (null), `liftQueue` (empty) and a `gaveUpWaitingForLift` row at departures[3]. PROVED BYTE-IDENTICAL on four `sim:run` arms — the state hash moves and one zero row appears, and NOTHING ELSE in the report changes. `check:tickcost` returned a REAL ratio for once (equal `arrived` in both arms): 0.9514 / 0.9610 / 0.9742 over three campaigns, no measurable per-tick cost. Owed to G-038b-ii: the derived capacity, the fingerprint's TENTH term, and the DRAWING — both paths cap at three figures on a tile, and `viewer.readonly.test.ts` now carries that debt as two exemption lines. Still open and parked: the flat amenity axis BELOW the bottleneck (three rooms reads 354/354/354, WATCH #23 has the frame); and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 abfd91c3da10b67f. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
-- **Schemas**: save **v22** (G-040a — a guest gained a `partyId`; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v23** (G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `02fe3c4fa2a7e533` · measure golden `917662dc0a756888`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `abfd91c3da10b67f` · measure golden `6a3bc5aa1383196e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2606,9 +2606,100 @@ PLAN with its measurement plan**, because a derived-at-read-time fold lands on t
 the sim, guarded by a bound under an OPEN escalation for being too wide to catch it.
 
 ## G-038b — A route can be busy
-Status: **DEFERRED 2026-08-23 (ADR-0075). The premise is FALSE and it was measured before a line was
-written.** Eleventh plan review; the first to end a goal rather than split it.
-Milestone: M3 · Owner pair: sim-engineer / sim-critic **plus ai-critic**
+Status: **SPLIT 2026-08-23 (ADR-0075). The DIAL is deferred on measurement; the MECHANISM is
+buildable now.** Eleventh plan review. **Deferring the whole goal would have been a scope cut,
+and that is the human's call, not the orchestrator's** — so the half that can be built honestly
+is built, on the precedent that shipped stairs and `unreachable` INERT before G-038a-iii made
+them live.
+
+- **G-038b-i — the mechanism, `packages/sim` only. DONE 2026-08-23.** Inert on shipped content,
+  proved against hand-built worlds. **This is G-040a's and G-040b-i's shape exactly.**
+- **G-038b-ii — the dial.** DEFERRED: the congestion does not occur (table below). Needs demand,
+  which is M4.
+- **G-038b-iii — C5 / reception.** A separate goal: a new guest activity and a new content type,
+  not a second consumer of an existing abstraction.
+
+## G-038b-i — The queue mechanism, `packages/sim` only
+Status: **done 2026-08-23.** The half of G-038b that can be built honestly: the MECHANISM,
+**inert on shipped content** and proved against hand-built worlds — G-040a's shape (party size
+pinned at 1) and G-040b-i's (a mechanism with zero behaviour change), and the route that shipped
+stairs and `unreachable` inert before G-038a-iii made them live. **The DIAL is G-038b-ii and
+stays deferred on ADR-0075's measurement.**
+Milestone: M3 · Owner pair: sim-engineer / sim-critic
+Statement: a lift carries only so many guests at once, the rest form a line in the order they
+  joined it, and a guest that waits too long leaves and is counted as having done so.
+Exit criteria:
+  - `pnpm exec vitest run lift` (all green)
+  - the state hash moves and NOTHING ELSE does, on several `pnpm sim:run` arms
+  - `pnpm check:tickcost` returns a real ratio (not INCOMPARABLE) for the added per-tick work
+  - `pnpm test:save` green with the v23 chain entry; `git diff --numstat
+    packages/sim/src/fixtures/save-v1.ts` is EMPTY
+  - `pnpm verify` — fourteen rows, `VERIFY_EXIT=0` read from the process
+Out of scope: the shipped capacity, the fingerprint term, the drawing (-> G-038b-ii); C5 /
+  reception (-> G-038b-iii)
+Critique rounds used: 0/3
+
+**A LIFT IS A CAPACITY ON THE SHAFT THAT ALREADY EXISTS, NOT A SECOND CONNECTOR.** `world.lift`
+is two integers (`capacity`, `waitToleranceTicks`) or `null`; where the shaft IS remains
+`world.stairs`. That is what answers the cost this block named in advance: **`stairLeg` and
+`climbsFrom` — the two hand-kept copies of one condition — DID NOT MOVE, and neither did
+`unreachable`.** The argument is structural rather than incidental: `capacity >= 1` is refused
+at both doors (`installLift`, `assertLift`), so every floor the stair reached the lift still
+reaches. **Reachability is topological; a queue is temporal; a lift can never sever a building.**
+The boarding predicate reads `stairLeg`'s OWN OUTPUT rather than making a third copy of its
+condition. A lift with no stairwell is refused at both doors too — it would be silently inert,
+which is the failure ADR-0075 spent a plan review on.
+
+**THE ORDER IS STORED, AND THE CHOICE WAS MADE RATHER THAN INHERITED** (ADR-0075's first
+ruling). `world.liftQueue` is an ordered array of `{guestId, since}`, strictly ascending by
+`(since, guestId)`, rebuilt every tick from the guests that actually needed the shaft — so the
+second record of a fact about guests cannot drift from the first, and `assertWorldShape` checks
+it against the guest list on the way in from a save. The free alternative, lowest-id-wins, was
+rejected in writing at the point of use: **it is not a queue** — whoever checked in earliest
+boards first regardless of who has waited longer. **And it saves nothing**: the give-up rule
+needs a wait clock in hashed state anyway, so one field answers both questions or one field
+answers one. **No sort runs anywhere**; the rebuild is a merge, because everybody already in
+the line joined on an earlier tick than anybody joining now.
+
+**THE OWNED CONSEQUENCE: THE CAR SPENDS ONE TICK UNLOADING.** A place is released at the END of
+the tick on which its holder stopped needing the shaft, because that is the tick the pass
+discovers it. Promoting somebody mid-pass would hand the freed place to the lowest guest ID
+still in the line rather than to the guest nearest the FRONT — **the repair would break the one
+property the stored order exists to provide** — so it is refused. One tick per TRIP, not per
+waiter.
+
+**WHAT IS *NOT* MODELLED, ON ADR-0075's OWN INSTRUCTION**: the car's position and its trip time.
+*"Any queue that did form would be manufactured by the lift's own trip time, not by the hotel
+being busy."* So the model is the smallest honest one: the shaft carries `capacity` guests at a
+time and the rest form a line.
+
+**EVIDENCE.**
+- **BYTE-IDENTICAL, ON FOUR ARMS** varying rooms / arrivals / amenities / seed
+  (`6/60/2/42`, `12/96/1/42`, `1/-/5/7`, `25/20/3/42`): the state hash moves, ONE zero row
+  appears in `departures`, and **every other byte of the `--json` report is identical** —
+  checked by stripping those two and comparing the documents.
+- **`check:tickcost` RETURNED A REAL RATIO**, which this configuration is the only one that can
+  (ADR-0075: a harness change makes the base arm throw and the gate return INCOMPARABLE).
+  **0.9514 / 0.9610 / 0.9742** — head = this working tree, base = `bb92941`, over the gate's
+  60-room / arrival-every-96 / seed-42 / 43,200-tick workload with **600 guests arrived in both
+  arms**, 6 samples per arm interleaved and alternating, medians of medians, three campaigns,
+  QUIET on a win32 / 12-cpu box. **No measurable per-tick cost**, and the mechanism is one null
+  comparison per moving guest until a lift exists.
+- **NON-VACUOUS BEHAVIOUR, AGAINST HAND-BUILT WORLDS ONLY** (`lift.queue.test.ts`): a capacity
+  that binds and one that does not, a guest that stands still while it waits, the order surviving
+  three ticks without a re-stamp, and `gaveUpWaitingForLift` firing on exactly the tick the clock
+  says. **Every capacity in the tree is a FIXTURE and is named as one** — §2.1 is not satisfiable
+  for a shipped one until G-038b-ii has a workload in which one binds.
+- Save **v23** with `migrateV22ToV23` (three changes: `lift` null, `liftQueue` empty,
+  `departures[3]` inserted at 0) and `without-lift.ts`. **`fixtures/save-v1.ts` has a zero-line
+  diff.**
+
+**OWED TO G-038b-ii, WRITTEN DOWN HERE BECAUSE IT WILL BE READ HERE.** The derived capacity and
+the patience's owner (lift or guest — `lift.ts` poses it); the fingerprint's **TENTH** term, since
+the harness counts exactly two command kinds and an `installLift` would move no character of it;
+and **the DRAWING**, which is not free — both paths cap at three figures on a tile, and
+`viewer.readonly.test.ts` now carries that debt as two exemption lines with ADR-0075's arithmetic
+beside them.
 
 ### THE CONGESTION THIS GOAL EXISTS TO MANAGE DOES NOT OCCUR
 

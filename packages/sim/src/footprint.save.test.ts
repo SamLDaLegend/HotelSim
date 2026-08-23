@@ -54,6 +54,7 @@ import { createWorld, hashState, WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 import { stripEditCounters } from './without-edits.js';
 import { stripStairs } from './without-stairs.js';
+import { stripLift } from './without-lift.js';
 import { stripFootprints } from './without-footprints.js';
 
 const content = bindContent({
@@ -117,7 +118,7 @@ function drawnWorld(): World {
 
 /** The same world written the way an era with no word for a footprint wrote it. */
 const asV18 = (world: World): Record<string, unknown> =>
-  stripStairs(stripEditCounters(stripFootprints(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)));
+  stripLift(stripStairs(stripEditCounters(stripFootprints(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))));
 
 describe('the chain walks 1 -> ... -> today, and the 18 -> 19 step is the eighteenth of it', () => {
   it('ships one step per version, gapless', () => {
@@ -248,7 +249,7 @@ describe('the step refuses to destroy a footprint somebody drew', () => {
     // TODAY'S KEYS MINUS THE ONES LATER STEPS ADD. The 18 -> 19 step produces a v19 world, and
     // `stairs` does not arrive until the 20 -> 21 step (G-038a-ii-alpha) — so excluding it is
     // what keeps this arm about the claim in its own title rather than about the current era.
-    const laterThanV19 = ['stairs'];
+    const laterThanV19 = ['stairs', 'lift', 'liftQueue'];
     expect(Object.keys(migrated).sort()).toEqual([...WORLD_KEYS].filter((key) => !laterThanV19.includes(key)));
   });
 });

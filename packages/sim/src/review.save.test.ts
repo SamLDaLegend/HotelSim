@@ -59,6 +59,7 @@ import { onEraPlot, stripDepth } from './without-depth.js';
 import { stripCorridors } from './without-corridors.js';
 import { stripEditCounters } from './without-edits.js';
 import { stripStairs } from './without-stairs.js';
+import { stripLift } from './without-lift.js';
 import { stripFootprints } from './without-footprints.js';
 
 /** The 9 -> 10 step itself. Index 8, the ninth link. */
@@ -173,6 +174,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed', 
       [19, 20],
       [20, 21],
       [21, 22],
+      [22, 23],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -380,9 +382,9 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
   const asV9Bytes = (world: World): string => {
     // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v9 floor was a
     // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
-    const { reviewOutcomes: _drop, ...rest } = stripStairs(stripEditCounters(
+    const { reviewOutcomes: _drop, ...rest } = stripLift(stripStairs(stripEditCounters(
       stripFootprints(stripCorridors(stripDepth(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))),
-    ));
+    )));
     // AND THE v14 FIELD COMES OFF EVERY GUEST (θ-b1), for the reason `reviewOutcomes` comes off
     // the world: "the same world written in the v9 SHAPE" means every difference v9 had, and a
     // v9 guest had no mood. `migrateV13ToV14` refuses a guest that already carries one.

@@ -464,7 +464,19 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   conservation closing on **22 + 64 + 14 = 100 arrived**; `gaveUp` and `evictedGuests` are
     //   still zero and the departure table's seven-row SHAPE is unchanged. `check:stamp` reads
     //   this literal out of the tree, so the digest's measure-golden line moves with it.
-    expect(hashState(plain)).toBe('917662dc0a756888');
+    //
+    // - `917662dc0a756888` -> `6a3bc5aa1383196e` AT G-038b-i, AND NO CONTENT AND NO BEHAVIOUR
+    //   MOVED WITH IT. `World` gained `lift` (`null`) and `liftQueue` (empty), and
+    //   `guestOutcomes.departures` gained a zero row at index 3 (save v23). `World.contentHash`
+    //   is UNCHANGED — no content document was touched — so this is the narrowest cause this
+    //   literal has ever moved for: two new fields and one new row in the hashed shape.
+    //   **checkedOut 22, leftDissatisfied 64, still-in-the-hotel 14, conservation still closing
+    //   on 100 arrived, `gaveUp` and `evictedGuests` still zero**, and the new row is zero too
+    //   — a queue can only form where `world.lift !== null`, which no harness here sets. The
+    //   departure table's SHAPE is eight rows rather than seven, which is the one thing about
+    //   this bump that a consumer can see. `check:stamp` reads this literal out of the tree, so
+    //   the digest's measure-golden line moves with it.
+    expect(hashState(plain)).toBe('6a3bc5aa1383196e');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -844,7 +856,12 @@ describe('the same workload with the player churning the building', () => {
     //
     // **THE CONSERVATION CLOSES: 20 + 43 + 24 + 13 still in the hotel = 100 arrived**, and
     // `gaveUp` is zero here too.
-    expect(hashState(churn)).toBe('b1619296eccfbc0a');
+    //
+    // G-038b-i MOVES THIS LITERAL FOR THE SHAPE AND NOT FOR THE RUN: `b1619296eccfbc0a` ->
+    // `1f87907208053fbe`, two new `World` fields and one new zero departure row (save v23), no
+    // content and no behaviour. **20 + 43 + 24 + 13 still in the hotel = 100 arrived, exactly as
+    // above**, and the new row is zero — this arm installs no lift either.
+    expect(hashState(churn)).toBe('1f87907208053fbe');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

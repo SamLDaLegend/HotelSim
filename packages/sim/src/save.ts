@@ -9,11 +9,12 @@ import { assertBuildOutcomes } from './build.js';
 import type { BuildOutcomes } from './build.js';
 import { assertCorridors } from './corridors.js';
 import { assertStairs } from './stairs.js';
+import { assertLift } from './lift.js';
 import { assertEntityStoreInvariants } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
 import { assertGridBounds } from './grid.js';
 import type { GridBounds } from './grid.js';
-import { assertGuestOutcomes, assertGuestStoreInvariants, departedGuests } from './guests.js';
+import { assertGuestOutcomes, assertGuestStoreInvariants, assertLiftQueue, departedGuests } from './guests.js';
 import type { Guest, GuestOutcomes, GuestStore } from './guests.js';
 import type { Transaction } from './ledger.js';
 import { assertLoanOutcomes } from './loan.js';
@@ -26,7 +27,7 @@ import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 22;
+export const SAVE_SCHEMA_VERSION = 23;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -567,9 +568,9 @@ function migrateV6ToV7(world: unknown): unknown {
  * in `guests.ts` built the same five rows and the two were ALLOWED to diverge later; that
  * divergence is correct rather than a bug to repair (ADR-0008 (1)).
  *
- * **THEY HAVE NOW DIVERGED, AND THE PREDICTION WAS ONLY HALF RIGHT.** This comment expected
- * the union to GAIN a member ("gave up waiting for a lift"). What actually happened at
- * G-027a was a RENAME: `satisfied -> checkedOut` and `gaveUpWaiting -> gaveUp`. The two
+ * **THEY HAVE NOW DIVERGED, AND THE PREDICTION WAS RIGHT IN THE END — LATE, AND NOT FIRST.**
+ * This comment expected the union to GAIN a member ("gave up waiting for a lift"), and
+ * G-038b-i finally added exactly that at index 3. What happened FIRST, at G-027a, was a RENAME: `satisfied -> checkedOut` and `gaveUpWaiting -> gaveUp`. The two
  * names above are v7-era spellings and MUST NOT be updated to match the live list — a v7
  * world's rows are carried onto v8's names, and `migrateV11ToV12` renames them onwards from
  * there. A migration that folded the live list would rename these bytes twice, silently, and
@@ -2218,6 +2219,164 @@ function migrateV21ToV22(world: unknown): unknown {
 }
 
 /**
+ * What a v22 world's shaft was served by: nothing, because the word did not exist.
+ *
+ * A FROZEN `null` RATHER THAN `NO_LIFT`, and the distinction is ADR-0008 (1)'s. `NO_LIFT` is a
+ * live constant whose value the day somebody changes it would silently re-write history; this
+ * literal is what these BYTES say, permanently. The source scan in
+ * `migration-scan.build.grid.provider.outcome.travel.save.test.ts` forbids this file from naming
+ * the live constructors for exactly that reason, and this one is spelled out to match.
+ */
+const V23_MIGRATION_LIFT = null;
+
+/** And so nobody was standing in a line: a v22 world had nothing to queue for. */
+const V23_MIGRATION_LIFT_QUEUE = Object.freeze([]);
+
+/** The v22 departure table, spelled out rather than read from the live union. */
+const V22_MIGRATION_DEPARTURE_ROWS = Object.freeze([
+  'checkedOut',
+  'visitEnded',
+  'gaveUp',
+  'leftDissatisfied',
+  'evictedRoomGone',
+  'evictedRoomUnusable',
+  'evictedCauseUnrecorded',
+]);
+
+/** Where `gaveUpWaitingForLift` goes: immediately after `gaveUp`, its twin in the lobby. */
+const V23_MIGRATION_INSERT_AT = 3;
+
+/** What the inserted row is called, spelled here rather than read from the live union. */
+const V23_MIGRATION_INSERTED_REASON = 'gaveUpWaitingForLift';
+
+/**
+ * v22 -> v23: a world whose shaft was a staircase, and in which nobody could queue (G-038b-i,
+ * ADR-0075).
+ *
+ * ADR-0006 fires for the TWENTY-SECOND time, and this step carries THREE changes at once —
+ * `migrateV13ToV14`'s shape, one more. They are stated separately because their era arguments
+ * are different and a reader checking one should not have to hold the others:
+ *
+ *   lift           ADDED, null.     A v22 world declared no lift because the word did not
+ *                                   exist, and its shaft carried as many guests at once as
+ *                                   wanted to climb. `null` is not a default standing in for
+ *                                   missing information — it is the RULE `stairLeg` has always
+ *                                   applied: the floor axis is unbounded.
+ *
+ *   liftQueue      ADDED, [].       Nobody was waiting, because there was nothing to wait for.
+ *                                   Exact rather than tolerant: no v22 tick could write a
+ *                                   waiter, so the empty line is the only value these bytes
+ *                                   support.
+ *
+ *   departures[3]  INSERTED, 0.     A v22 guest could not give up on a lift, so the count is 0
+ *                                   EXACTLY. Like `migrateV13ToV14`'s insertion and unlike
+ *                                   `migrateV11ToV12`'s rename, this inserts a row NOBODY COULD
+ *                                   HAVE FILLED — a strictly weaker claim — and the conservation
+ *                                   law in `assertGuestOutcomes` is untouched because 0 adds
+ *                                   nothing to the sum.
+ *
+ * ADR-0075 PREDICTED THIS BUMP BEFORE A LINE OF IT WAS WRITTEN, and the prediction is worth
+ * keeping because it removes an argument rather than settling one: three test files already
+ * name this goal's expected outcome as a new departure reason, and adding one inserts a row into
+ * `GuestOutcomes.departures`, so the schema bumps EVEN IF the queue order is derived. The stored
+ * order therefore costs no schema version that the departure row was not already spending —
+ * which is half of why it was chosen (see `LiftQueue` in `guests.ts`).
+ *
+ * THE INSERTION INDEX IS 3 RATHER THAN AN APPEND, for `migrateV13ToV14`'s reason exactly:
+ * `isCutShort` partitions this union into the stays the GUEST ended and the three the HOTEL
+ * ended, and a guest that walks out of a lift queue ended its own stay. Appending would have put
+ * a not-cut-short row after the evictions and broken the contiguity `evictedGuests` folds.
+ *
+ * THE OVERWRITE GUARDS ARE ONE OF EACH KIND, matching what each part does. The two added fields
+ * refuse a world that already carries the key (`Object.keys().includes`, because `JSON.parse`
+ * makes `__proto__` an own key — G-003). The inserted row refuses a table that is not spelled
+ * the way v22 spelled it, which catches a v23 document fed in as v22 — its index 3 already reads
+ * `gaveUpWaitingForLift` — and a corrupt table alike.
+ *
+ * Reads no content and no live constant, so the same v22 bytes produce the same v23 world
+ * however the shipped world changes afterwards (ADR-0008; see `V23_MIGRATION_LIFT`).
+ *
+ * NOT TESTED BY THE PERMANENT v1 FIXTURE, AND SAYING SO IS THE POINT. That fixture's world holds
+ * no guests at all and reaches this step with a table of zeroes, over which any insertion
+ * whatsoever looks correct — ADR-0007's exact shape, and the paragraph `migrateV20ToV21`,
+ * `migrateV13ToV14` and `migrateV7ToV8` all carry. `lift.save.test.ts` drives a HAND-BUILT v22
+ * world with a stairwell, a guest walking between floors and all seven counters distinct and
+ * non-zero through this step, and asserts both that its journey is unchanged across 22 -> 23 and
+ * that each counter lands under its v23 index.
+ */
+function migrateV22ToV23(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  // The one way the first two halves could destroy data — overwriting a lift somebody installed
+  // or a line somebody was standing in — is the one thing they refuse to do, exactly as all
+  // twenty-one earlier steps refuse.
+  if (Object.keys(world).includes('lift')) {
+    throw new Error(
+      'world already has a "lift" field, so it is not a v22 world; migrating it would overwrite a real lift',
+    );
+  }
+  if (Object.keys(world).includes('liftQueue')) {
+    throw new Error(
+      'world already has a "liftQueue" field, so it is not a v22 world; migrating it would overwrite a real queue',
+    );
+  }
+
+  const outcomes = world['guestOutcomes'];
+  if (!isRecord(outcomes)) {
+    throw new Error('Save is corrupt: world.guestOutcomes is missing, so its departures cannot gain a row');
+  }
+  if (!Object.keys(outcomes).includes('departures')) {
+    throw new Error('Save is corrupt: world.guestOutcomes has no "departures" field, so it is not a v22 world');
+  }
+  const rows = outcomes['departures'];
+  if (!Array.isArray(rows)) {
+    throw new Error('Save is corrupt: world.guestOutcomes.departures is missing or not an array');
+  }
+  if (rows.length !== V22_MIGRATION_DEPARTURE_ROWS.length) {
+    throw new Error(
+      `Save is corrupt: world.guestOutcomes.departures has ${rows.length} row(s) where a v22 world has ` +
+        `${V22_MIGRATION_DEPARTURE_ROWS.length}; this is not a v22 departure table`,
+    );
+  }
+  // CHECKED BEFORE ANYTHING IS INSERTED, so a table that is not v22's comes out unmodified and
+  // says why — rather than gaining a row in the middle of a shape nobody recognises.
+  const carried = V22_MIGRATION_DEPARTURE_ROWS.map((reason, index) => {
+    const row = rows[index];
+    if (!isRecord(row)) {
+      throw new Error(`Save is corrupt: world.guestOutcomes.departures[${index}] is not an object`);
+    }
+    if (row['reason'] !== reason) {
+      throw new Error(
+        `world.guestOutcomes.departures[${index}] is "${String(row['reason'])}" where a v22 world carries ` +
+          `"${reason}", so it is not a v22 departure table; inserting a row into it would shift counts onto ` +
+          'reasons that do not describe them',
+      );
+    }
+    const count = row['count'];
+    if (typeof count !== 'number') {
+      throw new Error(
+        `Save is corrupt: world.guestOutcomes.departures[${index}].count is missing or not a number, so this ` +
+          "world's stays cannot be counted",
+      );
+    }
+    return { reason, count };
+  });
+  const departures = [
+    ...carried.slice(0, V23_MIGRATION_INSERT_AT),
+    { reason: V23_MIGRATION_INSERTED_REASON, count: 0 },
+    ...carried.slice(V23_MIGRATION_INSERT_AT),
+  ];
+
+  return {
+    ...world,
+    lift: V23_MIGRATION_LIFT,
+    liftQueue: V23_MIGRATION_LIFT_QUEUE,
+    guestOutcomes: { ...outcomes, departures },
+  };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -2247,6 +2406,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 19, to: 20, migrate: migrateV19ToV20 }),
   Object.freeze({ from: 20, to: 21, migrate: migrateV20ToV21 }),
   Object.freeze({ from: 21, to: 22, migrate: migrateV21ToV22 }),
+  Object.freeze({ from: 22, to: 23, migrate: migrateV22ToV23 }),
 ]);
 
 /**
@@ -2684,6 +2844,29 @@ export function assertWorldShape(value: unknown): asserts value is World {
   // guest on the plot to whichever one happened to sort first. See `stairs.ts`.
   assertStairs(value['stairs'], grid as unknown as GridBounds);
 
+  // WHAT SERVES THAT SHAFT (G-038b-i). Two integers or `null`; it names no coordinate, which is
+  // why it takes no plot where `assertStairs` does. A fractional capacity would be a float in
+  // hashed state and a capacity of 0 would sever the building permanently while `unreachable`
+  // went on saying every floor is reachable — see `lift.ts`.
+  assertLift(value['lift']);
+
+  // THE FIRST CROSS-FIELD LAW OF THE PAIR: A LIFT NEEDS A SHAFT TO BE INSTALLED IN.
+  //
+  // Raised here rather than in `assertLift`, because this is the one place both fields are in
+  // hand — the same split `installLift` makes on the command side, and the same reason
+  // `assertGuestStoreInvariants` is called from here rather than from `guests.ts`'s own door.
+  // Without it a lift with no stairwell loads happily and is SILENTLY INERT: there is no cell
+  // for a line to form at, so no guest ever queues and nothing anywhere reports it. That is the
+  // inert-mechanism failure ADR-0075 spent a plan review on, and it is refused rather than
+  // documented.
+  const stairs = value['stairs'];
+  if (value['lift'] !== null && Array.isArray(stairs) && stairs.length === 0) {
+    throw new Error(
+      'Save is corrupt: world.lift is declared but world.stairs is empty, so the lift has no shaft. ' +
+        'A lift is a rate on the shaft the stairs declare, not a second connector; see lift.ts.',
+    );
+  }
+
   const entities = value['entities'];
   if (!isRecord(entities)) {
     throw new Error('Save is corrupt: world.entities is missing');
@@ -2766,6 +2949,41 @@ export function assertWorldShape(value: unknown): asserts value is World {
     grid as unknown as GridBounds,
   );
   assertGuestOutcomes(guestOutcomes as unknown as GuestOutcomes, guests as unknown as GuestStore);
+
+  // THE LINE FOR THE LIFT (G-038b-i). Shape and ORDER first — the order IS the queue, so a save
+  // carrying the same waiters in a different sequence would load happily and board them in an
+  // order the world that wrote it never used.
+  assertLiftQueue(value['liftQueue']);
+
+  // THE SECOND CROSS-FIELD LAW OF THE PAIR, IN TWO HALVES, AND IT RUNS AFTER THE GUESTS FOR
+  // `assertGuestOutcomes`' REASON: a line can only be judged against the guests it claims to
+  // describe.
+  //
+  //   NO LIFT => NO LINE. There is nothing to wait for, so a waiter would be standing in a
+  //     queue the simulation cannot serve, forever, until its own clocks ran out.
+  //   EVERY WAITER IS A LIVE GUEST. The line is a SECOND record of a fact about guests, and
+  //     `LiftQueue`'s docblock argues it cannot drift because the tick rebuilds it from the
+  //     guests that actually climbed. That argument covers the tick and nothing else: the only
+  //     way a stale id can enter the world is from OUTSIDE it, through here — which is
+  //     precisely the reasoning `assertGuestStoreInvariants` is called from this function for.
+  const liftQueue = value['liftQueue'] as readonly { readonly guestId: number }[];
+  if (value['lift'] === null && liftQueue.length !== 0) {
+    throw new Error(
+      `Save is corrupt: world.liftQueue holds ${liftQueue.length} waiter(s) but world.lift is null, so there is ` +
+        'nothing for them to be waiting for',
+    );
+  }
+  for (const waiter of liftQueue) {
+    // A LINEAR SCAN OVER A LIST THAT IS ASCENDING BY ID, at load time only, once per waiter.
+    // `guestList` is the same array `assertGuestStoreInvariants` has just walked; this asks a
+    // different question of it and is not on any tick path.
+    if (!guestList.some((guest: unknown) => isRecord(guest) && guest['id'] === waiter.guestId)) {
+      throw new Error(
+        `Save is corrupt: world.liftQueue holds guest ${String(waiter.guestId)}, who is not in world.guests.list. ` +
+          'A guest that departs leaves the line in the same tick; see LiftQueue in guests.ts.',
+      );
+    }
+  }
 
   // The per-need tally (G-012). Same function the tick calls at its own boundary, so "a
   // valid need tally" has one definition rather than two that drift. Checked AFTER the

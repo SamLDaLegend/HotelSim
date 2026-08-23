@@ -248,6 +248,46 @@ export type Command =
    */
   | { readonly kind: 'layStair'; readonly at: Cell }
   /**
+   * THE SHAFT IS SERVED BY A LIFT (G-038b-i, ADR-0075).
+   *
+   * Declares that this world's stairwell carries at most `capacity` guests at a time, and that
+   * a guest standing in the line outside the car gives up after `waitToleranceTicks`. It
+   * declares no cell: WHERE the shaft is, is `layStair`'s; this says what serves it. See
+   * `lift.ts` for why a lift is a rate on the existing shaft rather than a second connector.
+   *
+   * IDEMPOTENT — installing the lift that is already installed is a deterministic no-op
+   * returning the SAME object, which is what keeps `applyCommands`' idle-tick guarantee exact
+   * rather than conservative — and it costs nothing, for the reason `layStair` costs nothing:
+   * what a lift COSTS is a designer's number and therefore content, and there is none yet.
+   *
+   * IT THROWS ON TWO THINGS, AND BOTH ARE "A WORLD THIS SIMULATION HAS NO READING OF" RATHER
+   * THAN A REFUSED PLAYER DECISION — `layStair`'s misaligned cell, one axis over:
+   *
+   *   A CAPACITY BELOW ONE, OR NOT A WHOLE NUMBER. Zero severs the building permanently while
+   *     `unreachable` goes on saying every floor is reachable, which is the ADR-0008 drift this
+   *     whole design is arranged to avoid; a fraction is a float in hashed state (I2).
+   *   NO STAIRWELL TO INSTALL IT IN. A lift with no shaft would be silently inert — there is no
+   *     cell for a line to form at — and an inert mechanism nobody checked for is what ADR-0075
+   *     spent a plan review on. Lay the shaft first, in the same tick's log if you like: the
+   *     accumulator sees a `layStair` from earlier in the batch.
+   *
+   * **NEITHER NUMBER IS SHIPPED AND NEITHER IS DERIVED.** No content declares a lift and no
+   * harness issues this command, so `world.lift` is `null` in every world this build produces.
+   * Every capacity in this repository today is a TEST FIXTURE. G-038b-ii owns the dial, and
+   * ADR-0075 says why it cannot be settled here: the congestion a lift manages does not occur at
+   * any workload this project can currently produce, so no capacity would be derivable from a
+   * stated requirement (§2.1).
+   *
+   * THERE IS NO `removeLift` YET, deliberately, and it is `layStair`'s reason exactly: a plan
+   * that can only grow is enough for a rule that only reads it. Removal lands with the ruling on
+   * what happens to the guests standing in the line when it goes.
+   */
+  | {
+      readonly kind: 'installLift';
+      readonly capacity: number;
+      readonly waitToleranceTicks: number;
+    }
+  /**
    * One guest walks in (G-004).
    *
    * NO PAYLOAD. A guest has no archetype (M6) and no party size at M0, so there is

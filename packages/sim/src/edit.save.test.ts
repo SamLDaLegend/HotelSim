@@ -61,6 +61,7 @@ import { createWorld, hashState } from './world.js';
 import type { World } from './world.js';
 import { stripEditCounters } from './without-edits.js';
 import { stripStairs } from './without-stairs.js';
+import { stripLift } from './without-lift.js';
 
 const content = bindContent({
   roomTypes: [
@@ -125,7 +126,7 @@ function editedWorld(): World {
 
 /** The same world written the way an era with no verb for an edit wrote it. */
 const asV19 = (world: World): Record<string, unknown> =>
-  stripStairs(stripEditCounters(JSON.parse(JSON.stringify(world)) as Record<string, unknown>));
+  stripLift(stripStairs(stripEditCounters(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)));
 
 describe('the chain walks 1 -> ... -> today, and the 19 -> 20 step is the nineteenth of it', () => {
   it('ships one step per version, gapless', () => {

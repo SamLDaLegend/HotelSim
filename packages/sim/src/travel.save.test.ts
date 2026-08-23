@@ -176,7 +176,9 @@ const v10World = (grid?: Record<string, number>): Record<string, unknown> => {
     // FROZEN, NOT `createGuestOutcomes()`, and for the reason `V10_BASE` is frozen one level
     // up: a departure taxonomy is the union `V8_MIGRATION_GUEST_OUTCOMES` exists because it
     // grows, and a "v10" world folding the LIVE list would silently gain a sixth row the day
-    // M3 adds "gave up waiting for a lift". Five guests arrived and none has left.
+    // M3 adds "gave up waiting for a lift" — **and G-038b-i did, at index 3, which is why this
+    // frozen five-row literal now differs from the live eight-row union**. Five guests arrived
+    // and none has left.
     guestOutcomes: {
       arrived: 5,
       // THE v10-ERA SPELLINGS, AND THEY ARE NOT THE LIVE ONES SINCE G-027a. `satisfied` and
@@ -248,6 +250,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
       [19, 20],
       [20, 21],
       [21, 22],
+      [22, 23],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });

@@ -132,6 +132,13 @@ export { assertCorridors, createCorridors, hasCorridorAt, withCorridor } from '.
 // are' in a renderer is the drift `corridors.ts` refuses for the plan itself.
 export type { Stairs } from './stairs.js';
 export { assertStairs, createStairs, hasStairAt, stairwellOf, withStair } from './stairs.js';
+// THE LIFT (G-038b-i). A DECLARATION about the shaft the stairs describe, not a second
+// connector — see `lift.ts`. Exported for the reason `stairwellOf` is: a host that wants to
+// draw the car, or to offer a lift tool, must read the same declaration the tick reads.
+// `NO_LIFT` is exported because "this world has no lift" is a RULE with a name rather than a
+// bare `null` a caller has to know the meaning of.
+export type { Lift } from './lift.js';
+export { assertLift, liftsEqual, NO_LIFT, withLift } from './lift.js';
 export type { Cell, Footprint, GridBounds } from './grid.js';
 export {
   assertCell,
@@ -173,10 +180,13 @@ export type {
   GuestStore,
   GuestTickInput,
   GuestTickResult,
+  LiftQueue,
+  LiftWaiter,
   TickDepartureReason,
 } from './guests.js';
 export {
   assertGuestOutcomes,
+  assertLiftQueue,
   assertGuestStoreInvariants,
   countGuestsInInvalidRooms,
   countOrphanedReservations,
@@ -184,6 +194,7 @@ export {
   countStuckGuests,
   createGuestOutcomes,
   createGuestStore,
+  createLiftQueue,
   departedGuests,
   departureCountOf,
   evictedGuests,

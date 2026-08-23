@@ -243,6 +243,13 @@ describe('the 1 -> 2 step itself', () => {
       // while measuring something else. Empty, which is what an era whose floor axis spent
       // unconditionally declared.
       stairs: [],
+      // AND NO LIFT SINCE v23 (G-038b-i), for the fifth time and with the identical failure
+      // mode: `assertWorldShape` reaches `lift` before it reaches the guests, so a document
+      // without one is refused for the wrong field and the assertion below would pass while
+      // measuring something else. `null` and an empty line, which is what an era whose shaft
+      // carried everybody who wanted to climb declared.
+      lift: null,
+      liftQueue: [],
       // AND A FOOTPRINT ON EVERY ENTITY SINCE v19 (G-036b), for the third time and with the
       // identical failure mode: `assertEntity` reaches `footprint` before `assertWorldShape`
       // reaches the guests, so a document without one is refused for the wrong field and the

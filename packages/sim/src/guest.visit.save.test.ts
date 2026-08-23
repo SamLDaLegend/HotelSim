@@ -87,7 +87,21 @@ describe('migrateV14ToV15 — the row goes in at a frozen index, with every coun
     const byReason = new Map(outcomes.departures.map((row) => [row.reason, row.count]));
     for (const row of v14Departures()) expect(byReason.get(row.reason)).toBe(row.count);
     // AND THE ORDER, which is what `assertGuestOutcomes` compares and what the state hash carries.
-    expect(outcomes.departures.map((row) => row.reason)).toEqual([...GUEST_DEPARTURE_REASONS]);
+    //
+    // SPELLED OUT AS v15's OWN TABLE SINCE G-038b-i, NOT COMPARED TO THE LIVE UNION. It read
+    // `[...GUEST_DEPARTURE_REASONS]`, which was true only for as long as v15 happened to be the
+    // current version — and v23 inserts `gaveUpWaitingForLift` at index 3, so the live union is
+    // no longer what this step produces. An oracle taken from the live union agrees with
+    // whatever the live union does, which is the tautology this file's own title is about.
+    expect(outcomes.departures.map((row) => row.reason)).toEqual([
+      'checkedOut',
+      'visitEnded',
+      'gaveUp',
+      'leftDissatisfied',
+      'evictedRoomGone',
+      'evictedRoomUnusable',
+      'evictedCauseUnrecorded',
+    ]);
   });
 
   it('CONSERVES: the inserted row adds nothing, so the law that held still holds', () => {
@@ -147,9 +161,14 @@ describe('the migration does not read the live union — ADR-0008', () => {
     // era sizes are asserted rather than described — the numerals below are the whole claim, so
     // no sentence restates them.
     expect(v14Departures()).toHaveLength(6);
-    expect(GUEST_DEPARTURE_REASONS).toHaveLength(7);
     const outcomes = migrated()['guestOutcomes'] as { departures: unknown[] };
-    expect(outcomes.departures).toHaveLength(GUEST_DEPARTURE_REASONS.length);
+    expect(outcomes.departures).toHaveLength(7);
+    // AND THE PROPERTY IS NOW ACTUALLY DEMONSTRATED, WHICH IT WAS NOT BEFORE G-038b-i. This
+    // line read `toHaveLength(GUEST_DEPARTURE_REASONS.length)` — true because v15 was the
+    // current version, so the step and the live union agreed and no assertion here could tell
+    // a frozen literal from a live one (ADR-0007). v23 inserted a row, the union moved on, and
+    // the step's output did not: that gap IS the claim in the title.
+    expect(GUEST_DEPARTURE_REASONS.length).toBeGreaterThan(7);
     expect(v14Departures().length).toBeLessThan(GUEST_DEPARTURE_REASONS.length);
   });
 });

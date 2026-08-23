@@ -83,6 +83,7 @@ import {
 } from './needs.js';
 import type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 import type { Corridors } from './corridors.js';
+import type { Lift } from './lift.js';
 import { stairwellOf } from './stairs.js';
 import type { Stairs } from './stairs.js';
 import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
@@ -299,6 +300,306 @@ export type GuestStore = {
 };
 
 /**
+ * One guest's place in the line for the lift, and when it took that place (G-038b-i).
+ *
+ * `since` IS THE TICK IT JOINED THE LINE, NOT THE TICK IT ARRIVED AT THE HOTEL. ADR-0075 is
+ * explicit that nothing in `World` recorded the second fact: *"`arrivedTick` is arrival at the
+ * HOTEL, not at the queue point"*. This is the field that records the first.
+ */
+export type LiftWaiter = {
+  readonly guestId: GuestId;
+  readonly since: number;
+};
+
+/**
+ * ==========================================================================================
+ * THE LINE FOR THE LIFT, IN ORDER, FRONT FIRST (G-038b-i, ADR-0075).
+ *
+ * The first `lift.capacity` entries are IN THE CAR. Everything behind them is waiting.
+ *
+ * ------------------------------------------------------------------------------------------
+ * THE ORDER IS STORED, AND THAT IS A DECISION TAKEN HERE RATHER THAN AN APPLICATION OF AN
+ * EXISTING RULE. ADR-0075 required the choice to be made explicitly and the consequence
+ * written at the point of use, so this is that paragraph.
+ *
+ * THE ALTERNATIVE WAS FREE AND WAS REJECTED. Every other ordering question in this simulation
+ * is derived from ascending guest id — `findFreeRoom` walks it, and the two rules added since
+ * G-034b change the CANDIDATE SET rather than the ORDER. Applying that here costs no field, no
+ * schema shape and no code. **But lowest-id-wins is not a queue.** It means whoever CHECKED IN
+ * EARLIEST boards first regardless of who has been standing at the doors longer, so the line
+ * visibly reorders every time a long-resident guest walks up — and fairness is the one thing a
+ * watching player can judge about a queue instantly (§5 WATCH, §6.1).
+ *
+ * AND THE STORED ANSWER TURNS OUT TO COST NOTHING THE DERIVED ONE SAVES, which is what
+ * decided it. This goal must also make a guest GIVE UP after waiting too long, and *"how long
+ * has this guest been waiting"* is the same inter-tick fact as *"who was here first"*. A
+ * derived order still needs a wait clock in hashed state for the give-up; it just cannot use
+ * it for the ordering. **One field answers both questions, or one field answers one of them.**
+ * The schema bumps to v23 either way (ADR-0075: the new departure row forces it).
+ *
+ * THE CONSEQUENCE TO OWN: a queue is now a second record of a fact about guests, and a second
+ * record can drift from the first. **It cannot drift here, because it is REBUILT EVERY TICK
+ * from the guests that actually needed the shaft during that tick** — see `stepGuests`. An id
+ * in this array is therefore always a guest that was alive and climbing at the end of the tick
+ * that wrote it, which `assertWorldShape` checks against the guest list on the way in from a
+ * save rather than trusting.
+ * ------------------------------------------------------------------------------------------
+ *
+ * I2 NOTES, AND THEY ARE `corridors.ts`'S AND `stairs.ts`'S:
+ *   - AN ARRAY, STRICTLY ASCENDING BY `(since, guestId)`. It is hashed and saved state, so two
+ *     worlds whose lines contain the same guests must be the same world — and they are,
+ *     because that order is total and `assertLiftQueue` refuses any other. No Set, no Map:
+ *     neither has a canonical serialisation and both iterate in insertion order.
+ *   - the ordering key is exactly what the rebuild produces: survivors keep their relative
+ *     order (a filter preserves it) and the guests that joined this tick are appended in
+ *     ascending id with `since = tick`, which is strictly greater than every `since` already
+ *     in the array. **The rebuild is a MERGE, not a sort** — O(line), never O(line log line),
+ *     and never a comparator that could disagree with this invariant.
+ *   - every field is an INTEGER, checked by `assertLiftQueue` on the way in from a save.
+ * ==========================================================================================
+ */
+export type LiftQueue = readonly LiftWaiter[];
+
+/** The empty line. Frozen because it is shared by every world in which nobody is waiting. */
+const NO_ONE_WAITING: LiftQueue = Object.freeze([]);
+
+/**
+ * A world in which nobody is standing at the lift.
+ *
+ * WHAT AN EMPTY LINE MEANS IS THE ABSENCE OF WAITING, NOT THE ABSENCE OF A LIFT — that is
+ * `world.lift === null`, and the two are independent: a world with a lift nobody is queueing
+ * for has an empty line, and a world with no lift can never have anything else.
+ *
+ * Deliberately NOT called by any migration (ADR-0008 (1), and the source scan in
+ * `migration-scan.build.grid.provider.outcome.travel.save.test.ts` enforces it for the
+ * constructors it lists): a migration's output must be a function of its input bytes and its
+ * own era. `V23_MIGRATION_LIFT_QUEUE` in `save.ts` is the frozen literal.
+ */
+export function createLiftQueue(): LiftQueue {
+  return NO_ONE_WAITING;
+}
+
+/**
+ * Throws unless `queue` is a strictly ascending line of integer-keyed waiters.
+ *
+ * Called from `assertWorldShape`, so a save carrying a scrambled, duplicated or fractional
+ * line is refused at LOAD rather than producing a world that boards guests in a different
+ * order from the one that wrote it.
+ *
+ * IT DOES NOT LOOK AT THE GUESTS AND IT DOES NOT LOOK AT THE LIFT. Those are cross-field
+ * laws — *"every waiter is a live guest"* and *"no lift means no line"* — and they live in
+ * `assertWorldShape` beside the fields they relate, which is where every other cross-field
+ * law in that file already lives. This one is about the array's own shape.
+ */
+export function assertLiftQueue(queue: unknown): asserts queue is LiftQueue {
+  if (!Array.isArray(queue)) {
+    throw new Error('Save is corrupt: world.liftQueue is missing or not an array');
+  }
+  let previous: LiftWaiter | null = null;
+  for (let i = 0; i < queue.length; i += 1) {
+    const entry: unknown = queue[i];
+    if (entry === null || typeof entry !== 'object') {
+      throw new Error(`Save is corrupt: world.liftQueue[${i}] is not a waiter`);
+    }
+    const waiter = entry as LiftWaiter;
+    if (!Number.isInteger(waiter.guestId) || waiter.guestId <= NO_GUEST) {
+      throw new Error(
+        `Save is corrupt: world.liftQueue[${i}].guestId is ${String(waiter.guestId)}; a waiter is a guest and ` +
+          'guest ids are whole numbers from 1 up',
+      );
+    }
+    if (!Number.isInteger(waiter.since) || waiter.since < 0) {
+      throw new Error(
+        `Save is corrupt: world.liftQueue[${i}].since is ${String(waiter.since)}; a guest joined the line on a ` +
+          'whole tick that is not before the start of the run',
+      );
+    }
+    const keys = Object.keys(waiter);
+    if (keys.length !== 2) {
+      throw new Error(
+        `Save is corrupt: world.liftQueue[${i}] carries ${keys.length} key(s) (${keys.join(', ')}); a waiter is ` +
+          'exactly a guest id and the tick it joined the line',
+      );
+    }
+    // THE ORDER IS THE QUEUE. A line that is not ascending by `(since, guestId)` is not a line
+    // this build could have written, and loading it would board guests in an order the world
+    // that wrote it never used — the same class of silent divergence `assertStairs` refuses
+    // for a misaligned stairwell.
+    if (previous !== null && compareWaiters(previous, waiter) >= 0) {
+      throw new Error(
+        `Save is corrupt: world.liftQueue must be strictly ascending by (since, guestId), found guest ` +
+          `${String(waiter.guestId)} waiting since ${String(waiter.since)} after guest ${String(previous.guestId)} ` +
+          `waiting since ${String(previous.since)}`,
+      );
+    }
+    previous = waiter;
+  }
+}
+
+/**
+ * The queue order, written once: longest wait first, guest id breaking a tie.
+ *
+ * A TIE IS NOT A CORNER CASE, IT IS THE COMMON CASE — every guest that joins the line on the
+ * same tick shares a `since` — so the tie-break is what makes the order TOTAL and therefore
+ * what makes I2 hold. Ascending id is the project's canonical tie-break (`findFreeRoom`), and
+ * here it costs nothing to fairness: two guests that arrived at the doors on the same tick
+ * have waited exactly as long as each other.
+ */
+function compareWaiters(a: LiftWaiter, b: LiftWaiter): number {
+  if (a.since !== b.since) return a.since - b.since;
+  return a.guestId - b.guestId;
+}
+
+/**
+ * ==========================================================================================
+ * THE LIFT AS ONE TICK SEES IT (G-038b-i). Tick-local, mutable, never hashed and never saved
+ * — exactly what `held` and `exhausted` are, and for the same reason.
+ *
+ * IT IS BUILT ONCE PER TICK AND ONLY WHEN A LIFT IS DECLARED. `search.lift` is `null` in every
+ * world this build ships, in the I2 log, in the bench and in every golden, so the whole
+ * mechanism costs one null comparison per moving guest per tick until G-038b-ii declares one.
+ *
+ * WHY THE ANSWER CAN BE DECIDED BEFORE THE PASS RUNS, WHICH IS THE LOAD-BEARING ARGUMENT.
+ * *"Who wants to climb this tick"* is not knowable in advance — a destination is derived deep
+ * inside `reserve`, per guest, and a pre-pass to discover it would duplicate the whole guest
+ * step. So the car is allocated from what the PREVIOUS tick already knows:
+ *
+ *   - everybody in `queue` joined the line on an earlier tick, so every `since` is < `tick`;
+ *   - everybody who joins DURING this tick gets `since === tick`;
+ *   - therefore the standing line comes first, in its own stored order, and this tick's
+ *     newcomers come after it in ascending guest id — and the pass visits guests in ascending
+ *     id, so the greedy allocation below hands out places in EXACTLY the order
+ *     `compareWaiters` defines.
+ *
+ * **That is not an approximation of the queue order, it IS the queue order.** No sort runs
+ * anywhere in this mechanism, on any tick.
+ *
+ * THE ONE CONSEQUENCE TO OWN: A PLACE HELD BY A GUEST THAT CHANGES ITS MIND IS NOT REFILLED
+ * UNTIL THE NEXT TICK. `spare` is computed from the length of the standing line, and a guest
+ * in that line whose destination stopped being on another floor only reveals that when the
+ * pass reaches it. So a car can travel with an empty place on the tick somebody stopped
+ * needing it. It is one place for one tick, it cannot compound — the line is rebuilt below
+ * from who actually needed the shaft — and the alternative is a second pass over every guest,
+ * which is the O(n) per guest per tick that `sim:bench` exists to catch.
+ * ==========================================================================================
+ */
+type LiftTick = {
+  /** The declaration, read once per tick. Two integers; nothing here re-reads `world.lift`. */
+  readonly spec: Lift;
+  /** The line as the tick opened, front first. Iterated ONLY in array order (I2). */
+  readonly queue: LiftQueue;
+  /**
+   * The guests in the car this tick: the first `capacity` of `queue`. LOOKUP ONLY (I2): never
+   * iterated, never ordered, never hashed — `held` and `exhausted`'s contract exactly.
+   */
+  readonly riding: Set<GuestId>;
+  /** When each guest in the standing line joined it. LOOKUP ONLY (I2), for `riding`'s reason. */
+  readonly since: Map<GuestId, number>;
+  /** Places left for guests joining the line this tick, after the standing line has its own. */
+  spare: number;
+  /** Which of `queue` still needed the shaft this tick. LOOKUP ONLY (I2). */
+  readonly stillClimbing: Set<GuestId>;
+  /** Guests that joined the line this tick, in the pass's own ascending-id order. */
+  readonly joined: GuestId[];
+};
+
+/**
+ * The lift as this tick sees it, or `null` when this world has no lift.
+ *
+ * O(line), and the line is empty in every shipped world. The two lookup structures are built
+ * here rather than per guest for the reason `RoomSearch.speed` is read here: it is the same
+ * answer for every guest in the hotel and the declaration cannot change inside a tick.
+ */
+function beginLiftTick(lift: Lift | null, queue: LiftQueue): LiftTick | null {
+  if (lift === null) return null;
+  const riding = new Set<GuestId>();
+  const since = new Map<GuestId, number>();
+  for (let i = 0; i < queue.length; i += 1) {
+    const waiter = queue[i];
+    if (waiter === undefined) continue;
+    since.set(waiter.guestId, waiter.since);
+    // THE FRONT OF THE LINE IS THE CAR. Ordered array access, never a Set iteration.
+    if (i < lift.capacity) riding.add(waiter.guestId);
+  }
+  return {
+    spec: lift,
+    queue,
+    riding,
+    since,
+    // NEGATIVE IS NOT A STATE: a line longer than the car simply offers newcomers nothing.
+    spare: Math.max(0, lift.capacity - queue.length),
+    stillClimbing: new Set<GuestId>(),
+    joined: [],
+  };
+}
+
+/**
+ * THE BOARDING RULE. A guest needs the shaft this tick: does it move, or does it stand?
+ *
+ * CALLED EXACTLY ONCE PER CLIMBING GUEST PER TICK, from `placed`, and calling it twice would
+ * hand one guest two places. `placed` is the single site at which a guest's cell changes, so
+ * that is structural rather than a promise.
+ *
+ * A PLACE IS RELEASED AT THE END OF THE TICK ON WHICH ITS HOLDER STOPPED NEEDING THE SHAFT, SO
+ * THE CAR SPENDS ONE TICK UNLOADING. That is a consequence of the design rather than a slip,
+ * and it is refused a repair on purpose. `settleLiftQueue` is what discovers that a rider has
+ * finished — it cannot be known earlier, because a destination is derived per guest deep inside
+ * `reserve` — so the freed place is available from the NEXT tick. Promoting somebody during the
+ * pass instead would hand it to the lowest guest ID still in the line rather than to the guest
+ * nearest the FRONT, because the pass runs in ascending id and not in queue order: **the repair
+ * would break the one property the stored order exists to provide.** The cost is one tick per
+ * TRIP, not per waiter, and it reads as the car unloading.
+ *
+ * A PLACE IS KEPT WHETHER OR NOT THE GUEST MOVES, AND THAT IS THE CORRECTION THIS RULE NEEDED.
+ * A rider keeps its place until its climb is DONE, not until it has moved once: with a guest
+ * speed below the height of the shaft a climb takes several ticks, and a rider that gave its
+ * place back after one of them would be ejected half way up and re-join at the BACK of the
+ * line. So `capacity` is *how many guests the shaft is carrying*, and it equals *how many
+ * board per tick* only when a climb fits in one tick — which is the shipped speed's case and
+ * is exactly why the distinction has to be written down rather than discovered later.
+ */
+function boardLift(lift: LiftTick, id: GuestId): boolean {
+  if (lift.since.has(id)) {
+    lift.stillClimbing.add(id);
+    return lift.riding.has(id);
+  }
+  // A NEWCOMER JOINS THE BACK OF THE LINE WHETHER OR NOT IT GETS A PLACE. The two cases differ
+  // only in whether it moves this tick; both are "standing in the line since `tick`", and a
+  // rider that is not recorded would give its place up on the next tick mid-climb.
+  lift.joined.push(id);
+  if (lift.spare > 0) {
+    lift.spare -= 1;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * The line as this tick leaves it: everybody who still needed the shaft, in order.
+ *
+ * A MERGE AND NOT A SORT, which is what keeps the tick linear (see `LiftTick`). The survivors
+ * of the standing line keep their relative order because a filter preserves it, and this
+ * tick's newcomers are appended in ascending guest id with a `since` strictly greater than
+ * every `since` already present — so the result is strictly ascending by `(since, guestId)`,
+ * which is precisely what `assertLiftQueue` refuses to load anything else for.
+ *
+ * IDENTITY-RETURNING WHEN THE LINE DID NOT CHANGE, for `addDepartures`' reason: this runs on
+ * every tick of every world that has a lift, and rebuilding an unchanged array to hold the
+ * same guests is the per-tick allocation §6.1 asks `sim-critic` to watch for.
+ */
+function settleLiftQueue(lift: LiftTick, tick: number): LiftQueue {
+  if (lift.joined.length === 0 && lift.stillClimbing.size === lift.queue.length) return lift.queue;
+  const next: LiftWaiter[] = [];
+  for (const waiter of lift.queue) {
+    if (lift.stillClimbing.has(waiter.guestId)) next.push(waiter);
+  }
+  for (const id of lift.joined) next.push({ guestId: id, since: tick });
+  // The shared frozen empty, so a hotel whose line has just emptied stops allocating a new
+  // array on every tick for the rest of the run.
+  return next.length === 0 ? createLiftQueue() : next;
+}
+
+/**
  * WHY A STAY ENDED. A closed union, in the canonical order the table is stored in.
  *
  * NOT CONTENT (I3, ADR-0003). These are code-level reasons in the same family as
@@ -315,6 +616,8 @@ export type GuestStore = {
  *   gaveUp                stepGuests step 6, a roomless guest reached `toleranceTicks`
  *                         (it read "the lodging need ran out of patience" until θ-a sweep 2,
  *                         which is the countdown model's name for the same row)
+ *   gaveUpWaitingForLift  stepGuests step 6, a guest stood in the lift queue, outside the car,
+ *                         for `lift.waitToleranceTicks` (G-038b-i)
  *   leftDissatisfied      stepGuests step 6, a guest's dissatisfaction stock saturated
  *   evictedRoomGone       stepGuests step 1, the room entity is no longer in the draft
  *   evictedRoomUnusable   stepGuests step 1, the entity is there and is not a valid room
@@ -398,6 +701,7 @@ export const GUEST_DEPARTURE_REASONS = Object.freeze([
   'checkedOut',
   'visitEnded',
   'gaveUp',
+  'gaveUpWaitingForLift',
   'leftDissatisfied',
   'evictedRoomGone',
   'evictedRoomUnusable',
@@ -431,6 +735,13 @@ export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnr
  * `GUEST_DEPARTURE_REASONS` — and it is answered anyway, because "the cause was not
  * recorded" does not make the eviction less of one.
  *
+ * `gaveUpWaitingForLift` IS **NOT** CUT SHORT EITHER, and it is the row where the distinction is
+ * finest (G-038b-i). The hotel certainly caused it — the car was full — but so did the hotel
+ * cause `gaveUp` by having no free room, and that row sits in the same half. What this
+ * predicate partitions on is AGENCY, not blame: the guest walked out on its own feet with its
+ * own clock, exactly as it does in the lobby. The evictions are the three where the guest had
+ * no say at all.
+ *
  * `leftDissatisfied` IS **NOT** CUT SHORT, and it is the row where the question is worth asking
  * out loud (θ-b1). The guest walked out mid-stay, so its stay was certainly shorter than the
  * clock said — but this predicate is not about length, it is about AGENCY: G-019 gives a
@@ -446,6 +757,7 @@ export function isCutShort(reason: GuestDepartureReason): boolean {
     // whatever the hotel managed to give it. Nothing cut it short (θ-b2).
     case 'visitEnded':
     case 'gaveUp':
+    case 'gaveUpWaitingForLift':
     case 'leftDissatisfied':
       return false;
     case 'evictedRoomGone':
@@ -1618,6 +1930,19 @@ export type GuestTickInput = {
    * somebody reading the field name.
    */
   readonly arrivingParties: number;
+  /**
+   * THE LIFT INSTALLED IN THIS WORLD'S SHAFT, or `null` when it has none (G-038b-i).
+   *
+   * `null` IS A RULE AND NOT A MISSING VALUE — *no lift means the shaft is a staircase and the
+   * floor axis is unbounded*, which is what every build before this one did. It is `null` in
+   * every world this build ships and in every world it migrates; see `lift.ts`.
+   */
+  readonly lift: Lift | null;
+  /**
+   * THE LINE FOR THAT LIFT as the tick opens, front first (G-038b-i). Empty whenever `lift` is
+   * `null`, which `assertWorldShape` checks rather than assumes.
+   */
+  readonly liftQueue: LiftQueue;
 };
 
 export type GuestTickResult = {
@@ -1626,6 +1951,12 @@ export type GuestTickResult = {
   readonly needOutcomes: readonly NeedOutcome[];
   readonly reviewOutcomes: readonly ReviewOutcomeRow[];
   readonly ledger: readonly Transaction[];
+  /**
+   * THE LINE AS THIS TICK LEAVES IT (G-038b-i), returned BY REFERENCE when nobody joined it and
+   * nobody left it — which is every tick of every world that has no lift, and most ticks of one
+   * that has. `runGuests` compares it by identity to decide whether the tick allocated a world.
+   */
+  readonly liftQueue: LiftQueue;
 };
 
 /**
@@ -1968,6 +2299,17 @@ type RoomSearch = {
    */
   readonly stairwell: Cell | null;
   /**
+   * THE LIFT AS THIS TICK SEES IT, or `null` when this world has no lift (G-038b-i).
+   *
+   * BUILT ONCE PER TICK, for the reason `stairwell` is read once per tick: the declaration
+   * cannot change inside a tick and the standing line is the same line for every guest. When it
+   * is `null` — every shipped world — the whole mechanism is one comparison per moving guest.
+   *
+   * Tick-local and mutable exactly like `held` and `exhausted`: `boardLift` writes to it as the
+   * pass runs and `settleLiftQueue` reads it once at the end. Nothing in it is ever hashed.
+   */
+  readonly lift: LiftTick | null;
+  /**
    * Rooms currently held, as bedrooms OR as engagements, AND BY HOW MANY (G-040a). Lookup only:
    * never iterated, never ordered, never hashed (I2), exactly like `EntityDraft.removed`.
    *
@@ -2198,6 +2540,9 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       needOutcomes: input.needOutcomes,
       reviewOutcomes: input.reviewOutcomes,
       ledger: input.ledger,
+      // BY REFERENCE. An empty hotel has nobody in the line, so there is nothing to settle and
+      // nothing to allocate — the O(1) idle tick this branch exists for.
+      liftQueue: input.liftQueue,
     };
   }
 
@@ -2228,6 +2573,10 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     // THE STAIRWELL (G-038a-ii-alpha), read here for `speed`'s reason: one array index per tick
     // rather than one per moving guest. O(1) only because stairs are aligned.
     stairwell: stairwellOf(input.validity.stairs),
+    // THE LIFT (G-038b-i), read here for `stairwell`'s reason: one pass over the standing line
+    // per tick rather than one per climbing guest. `null` — every shipped world — costs one
+    // comparison and allocates nothing at all.
+    lift: beginLiftTick(input.lift, input.liftQueue),
     exhausted: null,
     needOutcomes: input.needOutcomes,
     reviewOutcomes: input.reviewOutcomes,
@@ -2271,6 +2620,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
   let checkedOut = 0;
   let visitEnded = 0;
   let gaveUp = 0;
+  let gaveUpWaitingForLift = 0;
   let leftDissatisfied = 0;
   let evictedRoomGone = 0;
   let evictedRoomUnusable = 0;
@@ -2786,6 +3136,60 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       gaveUp += 1;
       continue;
     }
+    // ========================================================================
+    // 6d. IT GAVE UP ON THE LIFT (G-038b-i, ADR-0075). It has been standing in the line, outside
+    //     the car, for `lift.waitToleranceTicks`.
+    //
+    //     IT READS THE LINE AS THE TICK OPENED, which is the only line that exists at this
+    //     point: step 6 runs before step 7, and step 7 is where `placed` joins guests to it. So
+    //     a guest that joins the line on tick t starts its clock at t and can first give up on
+    //     t + tolerance — the same off-by-one discipline `gaveUp`'s three-fact argument above
+    //     spells out for the lobby.
+    //
+    //     A GUEST IN THE CAR NEVER GIVES UP, AND THAT EXCLUSION IS EXACT RATHER THAN KIND.
+    //     `boardLift` returns true for every id in `riding` unconditionally, so a guest at the
+    //     front of the line that still wants to climb WILL climb this tick. Letting it give up
+    //     one line before it moves would be a guest walking out as the doors open, which is
+    //     §6.1's "correct but reads as stupid" in its literal form. (A rider that has stopped
+    //     wanting to climb leaves the line anyway, in `settleLiftQueue`, so nothing is kept
+    //     alive by this clause.)
+    //
+    //     IT SHORTENS LIVES AND NEVER LENGTHENS ONE, so `maxGuestLifetimeTicks` is untouched.
+    //     Checkout reads a clock and a room and does not care where the guest is standing; the
+    //     lobby give-up reads age. Both still fire on exactly the tick they fired on before.
+    //
+    //     NO ENGAGEMENT DEFERRAL, AND THE OMISSION IS DELIBERATE (against ADR-0026's shape two
+    //     branches down). That deferral protects a guest that is BEING SERVED, and `atAmenity`
+    //     requires `hasArrivedAt` — a guest in the line has by construction not arrived at its
+    //     provider, because its provider is on another floor. Adding the guard would instead let
+    //     a guest that reserved a table it can never reach stand in the line forever.
+    //
+    //     `>=` AND NOT `===`, for checkout's reason: a guest loaded from a save taken under a
+    //     more generous tolerance arrives here already past it, and an equality would let it
+    //     stand there forever.
+    //
+    //     AND THE CLOCK DOES NOT RESET WHEN THE DESTINATION CHANGES, which is a corner worth
+    //     naming rather than discovering. Step 5 can release an engagement, and step 1 can take
+    //     a provider away, so a guest CAN reach this line on the very tick its reason for
+    //     climbing evaporated — and if its patience expired on that same tick it leaves anyway.
+    //     That is deliberate and it is `dissatisfaction`'s rule: **the waiting really happened**,
+    //     and a stock that erased its history the moment the hotel finally did something right
+    //     would be the resetting counter ADR-0026 measured and rejected. It costs a one-tick
+    //     coincidence — the destination must change on exactly the tick the clock runs out — and
+    //     the guest that leaves has, by construction, stood in a line for its whole patience.
+    // ========================================================================
+    if (search.lift !== null) {
+      const waitingSince = search.lift.since.get(guest.id);
+      if (
+        waitingSince !== undefined &&
+        !search.lift.riding.has(guest.id) &&
+        tick - waitingSince >= search.lift.spec.waitToleranceTicks
+      ) {
+        depart(search, content, guest, lodgingRoom, engagedRoom, 'gaveUpWaitingForLift', tick);
+        gaveUpWaitingForLift += 1;
+        continue;
+      }
+    }
     // ADR-0017 4(b), LANDED. The guest has had enough: it wanted things this hotel did not give
     // it, often enough and for long enough that the stock reached its ceiling.
     //
@@ -2946,6 +3350,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       checkedOut,
       visitEnded,
       gaveUp,
+      gaveUpWaitingForLift,
       leftDissatisfied,
       evictedRoomGone,
       evictedRoomUnusable,
@@ -2957,6 +3362,10 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     needOutcomes: search.needOutcomes,
     reviewOutcomes: search.reviewOutcomes,
     ledger,
+    // THE LINE, REBUILT FROM WHO ACTUALLY NEEDED THE SHAFT (G-038b-i). A guest that boarded,
+    // that stopped needing to climb, or that departed for any reason simply is not in it — which
+    // is why this second record of a fact about guests cannot drift from the first.
+    liftQueue: search.lift === null ? input.liftQueue : settleLiftQueue(search.lift, tick),
   };
 }
 
@@ -2974,8 +3383,9 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
  *
  * ONE POSITIONAL COUNT PER TICK-WRITABLE REASON AND NOT A TABLE, still, at θ-b2's seventh row.
  * A parameter per reason is the shape that makes a forgotten row a TYPE ERROR at the call site
- * rather than a zero nobody notices — and it has now worked twice: adding `leftDissatisfied`
- * reddened the one call site and the switch below at once, and adding `visitEnded` did it again.
+ * rather than a zero nobody notices — and it has now worked three times: `leftDissatisfied`,
+ * `visitEnded`, and G-038b-i's `gaveUpWaitingForLift`, each reddening the one call site and the
+ * switch below at once.
  * (The count is deliberately no longer spelled as a numeral. It read "FIVE POSITIONAL COUNTS …
  * at θ-b1's sixth row" — a sentence carrying two numbers that must both be re-typed whenever the
  * union grows, which is the row-count claim class this goal enumerated and drove to zero.)
@@ -2985,6 +3395,7 @@ function addDepartures(
   checkedOut: number,
   visitEnded: number,
   gaveUp: number,
+  gaveUpWaitingForLift: number,
   leftDissatisfied: number,
   evictedRoomGone: number,
   evictedRoomUnusable: number,
@@ -2993,6 +3404,7 @@ function addDepartures(
     checkedOut === 0 &&
     visitEnded === 0 &&
     gaveUp === 0 &&
+    gaveUpWaitingForLift === 0 &&
     leftDissatisfied === 0 &&
     evictedRoomGone === 0 &&
     evictedRoomUnusable === 0
@@ -3011,6 +3423,9 @@ function addDepartures(
         break;
       case 'gaveUp':
         added = gaveUp;
+        break;
+      case 'gaveUpWaitingForLift':
+        added = gaveUpWaitingForLift;
         break;
       case 'leftDissatisfied':
         added = leftDissatisfied;
@@ -3402,6 +3817,34 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
   // another floor, the target is a LEG of the journey rather than its end. Derived every tick
   // from `guest.at`, the destination and the plan; never stored. See `stairLeg`.
   const leg = stairLeg(guest.at, at, search.stairwell);
+  // ==========================================================================================
+  // THE LIFT GATE (G-038b-i). A guest whose leg CHANGES FLOOR is asking the shaft to carry it,
+  // and a shaft with a lift in it carries only so many at a time.
+  //
+  // `leg.floor !== guest.at.floor` IS THE WHOLE PREDICATE, AND IT IS `stairLeg`'S OWN OUTPUT
+  // RATHER THAN A SECOND COPY OF ITS CONDITION. That matters more than it looks: `climbsFrom`
+  // in `validity.ts` exists because reachability had to RE-DERIVE when the floor axis spends,
+  // and its docblock says so — *"copied from `stairLeg` because it IS `stairLeg`'s condition"*.
+  // A third copy here would be a third thing to keep in step. Reading the leg asks the question
+  // once, of the function that answers it. **Neither of the existing two moves in this goal.**
+  //
+  // AND THE GUEST IS NECESSARILY STANDING ON THE SHAFT CELL OF ITS OWN FLOOR WHEN THIS FIRES,
+  // which is what makes the line a PLACE rather than an abstraction: `stairLeg` returns a
+  // different floor only for a guest already on the stairwell's column and row. A guest still
+  // walking towards the stairwell is not in the line, because it is not there yet.
+  //
+  // A LIFT IMPLIES A STAIRWELL — refused by `installLift` on the way in from a command and by
+  // `assertWorldShape` on the way in from a save — so there is no world in which this fires
+  // with no shaft to fire at.
+  //
+  // IT RETURNS THE GUEST UNCHANGED, which is a WAIT rather than a special case: the guest is
+  // already standing where it wants to be standing, so "does not board" and "does not move" are
+  // the same sentence. It costs no allocation, which is the same identity return a sleeping
+  // guest takes four lines above.
+  // ==========================================================================================
+  if (search.lift !== null && leg.floor !== guest.at.floor && !boardLift(search.lift, guest.id)) {
+    return guest;
+  }
   // THE ROOM STANDING ON THE DESTINATION CELL, RESOLVED ONCE AND ONLY FOR A GUEST THAT IS
   // ACTUALLY MOVING (G-038a-i). It is asked AFTER the `cellsEqual` return above, so a
   // sleeping guest — which is almost every guest on almost every tick — pays nothing for

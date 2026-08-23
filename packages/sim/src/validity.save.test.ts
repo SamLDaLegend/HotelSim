@@ -177,6 +177,13 @@ describe('validity adds nothing to the save', () => {
       'guestOutcomes',
       'guests',
       'ledger',
+      // G-038b-i. WHAT SERVES THE SHAFT, and WHO IS STANDING IN THE LINE FOR IT. The first is
+      // `stairs`' argument exactly — a record of what the player INSTALLED — and the second is
+      // the only one of the sixteen that is neither a drawing nor a derived property: it is
+      // inter-tick guest state that nothing else in `World` records (ADR-0075). Neither is a
+      // cached property of the building, which is what this test is about.
+      'lift',
+      'liftQueue',
       'loanOutcomes',
       'needOutcomes',
       // G-019. A field a GUEST writes on its way out, not a cached property of the building —

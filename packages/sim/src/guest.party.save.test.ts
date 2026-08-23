@@ -149,7 +149,11 @@ describe('the v21 -> v22 step exists and the chain has not passed it by', () => 
   it('is in the chain and lands where it says', () => {
     expect(step).toBeDefined();
     expect(step?.to).toBe(22);
-    expect(SAVE_SCHEMA_VERSION).toBe(22);
+    // RELATIVE, NOT ABSOLUTE, SINCE G-038b-i. This file's subject is the 21 -> 22 link, and
+    // an era pin here made every later bump edit a test about a different step. The absolute
+    // pin lives in `save.fixture.test.ts`, whose whole subject is the walk from v1 to today —
+    // the `provider.save.test.ts` and `review.save.test.ts` precedent.
+    expect(SAVE_SCHEMA_VERSION).toBeGreaterThanOrEqual(22);
   });
 });
 

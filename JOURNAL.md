@@ -2,10 +2,10 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-043 is DONE and G-038b is DEFERRED on measurement — M3's goal list is closed and the milestone question is owed to the human. G-043: the engagement ladder was never inverting, it was a units mismatch (demand counted arrival commands, provisioning counted guests), now repaired in a SHARED provisioning.ts where every quantity carries its unit in its name; top rung 219 out / 252 dissatisfied becomes 464 / 0. The deciding evidence for shared over local is that the FOURTH local fix was also wrong. A prior question nobody had asked is now answered: a bedroom is claimed by ONE PARTY, not by capacity strangers, so the beds model over-estimated capacity in the unsafe direction. G-038b DEFERRED (ADR-0075): the congestion a lift queue exists to manage DOES NOT OCCUR — max guests on the stairwell cell is 3 or 4 at every workload this project can produce, so a capacity of 4+ can never bind. That is the inert-rule problem a fourth time, caught in the goal whose own block claimed to have avoided it, and it needs demand (M4) rather than code. Still open and parked: the flat amenity axis BELOW the bottleneck survives (three rooms reads 354/354/354, WATCH #23 has the frame — nine amenity rooms, one guest, every outcome identical); both drawing paths cap at three figures on a tile; and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-23, G-038b-i is DONE — the lift QUEUE MECHANISM ships INERT in `packages/sim`, and G-038b-ii (the dial) stays deferred on ADR-0075's measurement. A lift is a CAPACITY ON THE EXISTING SHAFT rather than a second connector, so `stairLeg` and `climbsFrom` — the two hand-kept copies of one condition — did not move, and reachability is untouched because `capacity >= 1` is refused at both doors: a queue is temporal, reachability is topological, and a lift can never sever a building. The queue ORDER IS STORED, deliberately and against the free alternative: lowest-id-wins is not a queue (whoever checked in earliest boards first), and the give-up rule needs a wait clock in hashed state anyway, so one field answers both questions or one field answers one. Save v23: `lift` (null), `liftQueue` (empty) and a `gaveUpWaitingForLift` row at departures[3]. PROVED BYTE-IDENTICAL on four `sim:run` arms — the state hash moves and one zero row appears, and NOTHING ELSE in the report changes. `check:tickcost` returned a REAL ratio for once (equal `arrived` in both arms): 0.9514 / 0.9610 / 0.9742 over three campaigns, no measurable per-tick cost. Owed to G-038b-ii: the derived capacity, the fingerprint's TENTH term, and the DRAWING — both paths cap at three figures on a tile, and `viewer.readonly.test.ts` now carries that debt as two exemption lines. Still open and parked: the flat amenity axis BELOW the bottleneck (three rooms reads 354/354/354, WATCH #23 has the frame); and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 abfd91c3da10b67f. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
-- **State**: save **v22** · summary **v4** · I2 `02fe3c4fa2a7e533` · measure golden
-  `917662dc0a756888` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
+- **State**: save **v23** · summary **v4** · I2 `abfd91c3da10b67f` · measure golden
+  `6a3bc5aa1383196e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (2026-08-21)
   *(all four re-verified by the orchestrator 2026-08-13. **`check:stamp` compares only the
   as-of LINE**, so the facts beneath it drifted a whole schema version while the gate stayed
   green — `GOALS.md` was two behind. Found by `ai-critic` at sweep 3. **A gate that checks the
@@ -2448,3 +2448,118 @@ exactly that, and parked with what would discharge it.
 **AND NOTHING ELSE READ AS WRONG.** Twelve bedrooms on floor 0 in both twelve-room arms, no invalid
 rooms in any frame, no guest on floor 1 in any frame (there is nothing there), and the amenity floor
 never held more guests than it had rooms.
+
+## 2026-08-23 — G-038b-i: a lift is a RATE on the shaft, and the line it makes is stored on purpose
+
+**The goal was re-scoped before it was built, and the boundary is the finding.** ADR-0075
+measured the congestion a lift queue exists to manage and found it **does not occur** — max 3 or
+4 guests on the aligned stairwell cell at every workload this project can produce — so a
+capacity of 4+ can never bind and the DIAL is M4's. What was left is the MECHANISM, and it ships
+**inert**: `world.lift` is `null` in every world any harness here produces.
+
+### THE DESIGN CALL THAT MADE THE GOAL SMALL
+
+**A lift is a capacity on the shaft that already exists.** Two integers beside `world.stairs`,
+not a second set of cells. That single choice discharged the cost the goal block named in
+advance: `stairLeg` (where the floor axis is spent) and `climbsFrom` (where a mover's vertical
+neighbours are derived) are two hand-kept copies of one condition, and **neither moved**. Nor did
+`unreachable`. The boarding predicate does not make a third copy either — it reads `stairLeg`'s
+own OUTPUT (`leg.floor !== guest.at.floor`), so the question is asked once, of the function that
+answers it.
+
+**And the reason reachability may go on not knowing lifts exist is structural rather than lucky.**
+`capacity >= 1` is refused at both doors, so every floor the stair reached the lift still reaches
+— later, but reachably. **Reachability is topological; a queue is temporal; a lift cannot sever a
+building.** A capacity of 0 would have made `unreachable` disagree with the simulation
+permanently, which is the ADR-0008 drift the whole arrangement exists to avoid, so it is refused
+rather than documented.
+
+The other refusal is the mirror of it: **a lift with no stairwell is refused at both doors too.**
+It would load happily and be *silently inert* — no cell for a line to form at, nobody ever queues,
+nothing anywhere reports it. That is the failure ADR-0075 spent a plan review on, and an
+inert-because-unchecked mechanism is worse than an inert-and-declared one.
+
+### THE ORDER: A DECISION, NOT AN INHERITANCE
+
+ADR-0075 required this to be chosen explicitly and written at the point of use, because the stair
+precedent does **not** transfer — G-038a-ii-α's argument is about ID ALLOCATION and says nothing
+about ordering.
+
+**Stored.** `world.liftQueue` is an ordered array of `{guestId, since}`. The free alternative was
+lowest-id-wins, and it was rejected for two reasons, both in `LiftQueue`'s docblock:
+
+1. **It is not a queue.** Whoever checked in earliest boards first regardless of who has been
+   standing there longer, so the line visibly reorders — and fairness is the one thing a watching
+   player judges instantly.
+2. **It saves nothing.** The give-up rule needs a wait clock in hashed state whatever the ordering
+   is. One field answers both questions, or one field answers one of them. The schema bumps to
+   v23 either way, exactly as ADR-0075 predicted before a line was written.
+
+**The rebuild is a MERGE and not a sort**, which is what keeps the tick linear: everybody already
+in the line joined on an earlier tick than anybody joining now, so survivors keep their order (a
+filter preserves it) and newcomers append in ascending id. The greedy allocation the pass performs
+is therefore not an approximation of `(since, guestId)` order — **it IS that order**.
+
+### THE CONSEQUENCE I OWN RATHER THAN HID
+
+**The car spends one tick unloading.** A place is released at the END of the tick on which its
+holder stopped needing the shaft, because that is the tick the pass discovers it. The obvious
+repair — promote somebody mid-pass — hands the freed place to the lowest guest ID still in the
+line rather than to the guest nearest the FRONT, because the pass runs in id order and not in
+queue order. **The repair breaks the one property the stored order exists to provide**, so it is
+refused, and `lift.queue.test.ts` asserts the gap cell by cell rather than papering over it. One
+tick per TRIP, not per waiter.
+
+### THE EVIDENCE
+
+- **BYTE-IDENTICAL ON FOUR ARMS.** `--rooms/--arrivals/--amenities/--seed` at `6/60/2/42`,
+  `12/96/1/42`, `1/-/5/7`, `25/20/3/42`: the state hash moves, ONE zero row appears in
+  `departures`, and **every other byte of the `--json` report is identical** — checked
+  mechanically by stripping those two and comparing the documents, not by eye.
+- **A REAL `check:tickcost` RATIO**, which this configuration is the only one that can produce
+  (a harness change makes the base arm throw on an unknown command and the gate returns
+  INCOMPARABLE, which passes with no number). **0.9514 / 0.9610 / 0.9742.** *What: this working
+  tree against `bb92941`. Workload: the gate's 60 rooms, arrival every 96 ticks, seed 42, 43,200
+  ticks, `600 guests arrived in BOTH arms`. Samples: 6 per arm, 1 repetition, three campaigns.
+  Aggregated: medians per arm, arms interleaved and alternating, judged on the median ratio.
+  Regime: QUIET, win32 / 12 cpu.* **No measurable per-tick cost** — which is what a mechanism
+  gated behind one null comparison should read.
+- **NON-VACUOUS BEHAVIOUR AGAINST HAND-BUILT WORLDS ONLY.** A capacity that binds and one that
+  does not (and the second is asserted position-by-position against the no-lift control), a guest
+  that stands still while it waits, a line that survives three ticks without a re-stamp, and
+  `gaveUpWaitingForLift` firing on exactly the tick the clock says and not one earlier.
+- **Save v23**, `without-lift.ts`, and `fixtures/save-v1.ts` with a zero-line diff.
+
+### WHAT I WOULD FLAG TO WHOEVER TAKES G-038b-ii
+
+**Every capacity in this repository is a FIXTURE and every one of them says so.** Not one is
+derivable from a stated requirement yet (§2.1), and the reason is ADR-0075's table rather than
+laziness. The other three debts are written where they will be read: the patience's owner is
+posed in `lift.ts`, the fingerprint's **TENTH** term in the goal block, and the DRAWING in
+`viewer.readonly.test.ts`'s exemption list — that pair of entries is exempt **with a debt
+attached**, not because a watcher could not use them, and it says so.
+
+**No WATCH is owed and none was manufactured.** Nothing shipped changes behaviour, and ADR-0075
+already priced the drawing: both paths cap at three figures on a tile, so a recording of an inert
+mechanism would have shown a permanently empty line and called it evidence.
+
+### THE THREE TESTS THAT WERE REPAIRED RATHER THAN RE-TYPED
+
+A schema insertion reddens tests that compare an ERA against the LIVE union, and two of them were
+tautologies that only looked like assertions:
+
+- `guest.visit.save.test.ts` compared the v15 step's output to `[...GUEST_DEPARTURE_REASONS]` and
+  asserted `migrated.departures.toHaveLength(GUEST_DEPARTURE_REASONS.length)` — both true only
+  because v15 happened to be the current version. **Its own title is "the migration does not read
+  the live union", and no assertion in it could tell a frozen literal from a live one.** Now the
+  era's seven rows are spelled out and the union is asserted to have grown PAST them, so the
+  property is demonstrated for the first time.
+- `guest.party.save.test.ts` carried an absolute era pin (`SAVE_SCHEMA_VERSION === 22`) in a file
+  whose subject is the 21 -> 22 link. Made relative, on `provider.save.test.ts`'s precedent. The
+  one absolute pin in the repo is still `save.fixture.test.ts`'s, and it went red exactly as it
+  is meant to.
+- `save.test.ts`'s generated I6 coverage loop asserts every `World` key is refused when `null` —
+  and **`lift` is the first nullable field in `World`**, so that arm would have demanded the
+  loader reject every world this build writes. The value is SUBSTITUTED per field rather than the
+  key being skipped, because skipping would have left `lift` with only the deletion arm, and three
+  lift-specific arms carry what only that field can be wrong in.

@@ -16,6 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCorridors } from './corridors.js';
 import { createStairs } from './stairs.js';
+import { NO_LIFT } from './lift.js';
 import { bindContent } from './content.js';
 import { beginEntityDraft } from './entities.js';
 import type { EntityStore } from './entities.js';
@@ -28,7 +29,7 @@ import {
   stepGuests,
 } from './guests.js';
 import type { Guest, GuestStore } from './guests.js';
-import { createGuestOutcomes } from './guests.js';
+import { createGuestOutcomes, createLiftQueue } from './guests.js';
 import { createNeedOutcomes, findNeedState } from './needs.js';
 import { createReviewOutcomes } from './reviews.js';
 import { tickValidityContext } from './validity.js';
@@ -184,6 +185,11 @@ function tick(guests: GuestStore, entities: EntityStore, arrivingParties = 0) {
     content,
     validity: tickValidityContext(null, content, BOUNDS, createCorridors(), createStairs(), draft),
     arrivingParties,
+    // NO LIFT (G-038b-i): this file is about a room released mid-tick, and a world with no lift
+    // behaves exactly as it did before lifts existed. See `lift.queue.test.ts` for the arms that
+    // install one.
+    lift: NO_LIFT,
+    liftQueue: createLiftQueue(),
   });
 }
 

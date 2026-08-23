@@ -270,9 +270,15 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
   });
 
   it('adds exactly ONE top-level key, and it is the one this goal is about', () => {
+    // AGAINST TODAY'S KEYS MINUS THE ONES LATER STEPS ADD, spelled as a list since G-038b-i for
+    // the reason `corridors.save.test.ts` spells one: this asserts what the 20 -> 21 step
+    // produces, which is a v21 world, and the two lift fields do not arrive until 22 -> 23.
+    const laterThanV21 = ['lift', 'liftQueue'];
     const migrated = Object.keys(migrate() as unknown as Record<string, unknown>).sort();
-    expect(migrated).toEqual([...WORLD_KEYS]);
-    expect(Object.keys(v20World()).sort()).toEqual([...WORLD_KEYS].filter((key) => key !== 'stairs'));
+    expect(migrated).toEqual([...WORLD_KEYS].filter((key) => !laterThanV21.includes(key)));
+    expect(Object.keys(v20World()).sort()).toEqual(
+      [...WORLD_KEYS].filter((key) => key !== 'stairs' && !laterThanV21.includes(key)),
+    );
   });
 });
 
@@ -338,7 +344,29 @@ describe('a v20 blob loads, and what it becomes is a world this build could have
     // The migration and the current writer agree about the same history. If the step wrote
     // anything but an empty set — or wrote it under a different key — these two would differ.
     const loaded = deserialise(v20Blob());
-    const byHand = { ...(v20World() as unknown as typeof loaded), stairs: [] } as unknown as typeof loaded;
+    const byHand = {
+      ...(v20World() as unknown as typeof loaded),
+      stairs: [],
+      // AND THE 22 -> 23 STEP: no lift, nobody waiting, and a zero row at index 3 (G-038b-i),
+      // because a v20 world's shaft carried everybody who wanted to climb and no v20 guest
+      // could give up on a lift. Spelled here rather than read back out of the step, which is
+      // what makes the two hashes an independent agreement rather than a tautology.
+      lift: null,
+      liftQueue: [],
+      guestOutcomes: {
+        arrived: 3,
+        departures: [
+          { reason: 'checkedOut', count: 2 },
+          { reason: 'visitEnded', count: 0 },
+          { reason: 'gaveUp', count: 1 },
+          { reason: 'gaveUpWaitingForLift', count: 0 },
+          { reason: 'leftDissatisfied', count: 0 },
+          { reason: 'evictedRoomGone', count: 0 },
+          { reason: 'evictedRoomUnusable', count: 0 },
+          { reason: 'evictedCauseUnrecorded', count: 0 },
+        ],
+      },
+    } as unknown as typeof loaded;
     expect(hashState(loaded)).toBe(hashState(byHand));
   });
 });

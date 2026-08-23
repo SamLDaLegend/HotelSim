@@ -36,6 +36,7 @@ import { onEraPlot, stripDepth } from './without-depth.js';
 import { stripCorridors } from './without-corridors.js';
 import { stripEditCounters } from './without-edits.js';
 import { stripStairs } from './without-stairs.js';
+import { stripLift } from './without-lift.js';
 import { stripFootprints } from './without-footprints.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
@@ -328,7 +329,8 @@ describe('the 7 -> 8 step maps three counters onto rows and invents nothing', ()
     // in executable code, and asserts each reason is spelled out as its own literal `0`. The
     // failure it prevents is a REFACTOR: two identical five-row literals a hundred lines
     // apart invite deduplication, nothing goes red the day somebody does it, and the bill
-    // arrives when `GuestDepartureReason` gains a member — M3's "gave up waiting for a lift"
+    // arrives when `GuestDepartureReason` gains a member — **which HAPPENED at G-038b-i, where
+    // `gaveUpWaitingForLift` went in at index 3** — M3's "gave up waiting for a lift"
     // is the obvious next one — disguised as "the migrated fixture hash moved for no reason".
     const world = deserialise(v7Blob());
     expect(world.guestOutcomes.departures.map((row) => row.reason)).toEqual([
@@ -420,7 +422,9 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     );
     // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v7 floor was a
     // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
-    const { reviewOutcomes: _noReviews, ...withoutV10 } = stripStairs(stripEditCounters(stripFootprints(stripCorridors(stripDepth(json)))));
+    const { reviewOutcomes: _noReviews, ...withoutV10 } = stripLift(
+      stripStairs(stripEditCounters(stripFootprints(stripCorridors(stripDepth(json))))),
+    );
     return JSON.stringify({
       schemaVersion: 7,
       world: {

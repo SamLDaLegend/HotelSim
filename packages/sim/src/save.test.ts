@@ -195,6 +195,23 @@ describe('I6 field coverage — assertWorldShape inspects every World key', () =
   // `assertWorldShape` actually LOOKS at them. Those are different claims, and only the
   // second one catches a field that was added to `World` and to `WORLD_KEYS` but
   // forgotten in `save.ts` — which is the omission §6.1 tells sim-critic to hunt for.
+  /**
+   * WHAT "PRESENT BUT MEANINGLESS" IS FOR ONE FIELD, WHICH IS `null` FOR ALL OF THEM BUT ONE.
+   *
+   * `world.lift` IS THE FIRST NULLABLE FIELD IN `World`, AND ITS `null` IS A RULE RATHER THAN
+   * A GAP (G-038b-i): *this world's shaft is a staircase and the floor axis is unbounded*. So
+   * the generated `null` case would assert that a legal, shipped, default value is refused —
+   * a criterion that can only pass by making the loader reject every world this build writes.
+   *
+   * IT IS SUBSTITUTED RATHER THAN SKIPPED, and that distinction is the whole point: skipping
+   * would leave `lift` with only the DELETION arm, and this loop exists precisely to catch a
+   * field `assertWorldShape` fails to look at. A bare number is meaningless for a lift in
+   * exactly the way `null` is meaningless for a ledger, so the claim the arm makes is
+   * unchanged — the value it makes it with is not. (See the two lift-specific arms below for
+   * the values only that field can be wrong in.)
+   */
+  const meaningless = (key: keyof World): unknown => (key === 'lift' ? 3 : null);
+
   for (const key of WORLD_KEYS) {
     it(`refuses a save with no world.${key}`, () => {
       const blob = blobOf(livedInWorld());
@@ -202,14 +219,52 @@ describe('I6 field coverage — assertWorldShape inspects every World key', () =
       expect(() => deserialise(JSON.stringify(blob))).toThrow(new RegExp(key));
     });
 
-    it(`refuses a save whose world.${key} is null`, () => {
+    it(`refuses a save whose world.${key} is meaningless`, () => {
       // Stronger than deletion: this fails a check written as `key in world`, which
       // would accept a present-but-meaningless value.
       const blob = blobOf(livedInWorld());
-      (blob['world'] as Record<string, unknown>)[key] = null;
+      (blob['world'] as Record<string, unknown>)[key] = meaningless(key);
       expect(() => deserialise(JSON.stringify(blob))).toThrow(new RegExp(key));
     });
   }
+
+  /**
+   * THE ARMS THE GENERATED LOOP CANNOT MAKE, because they are about the values only a lift can
+   * be wrong in (G-038b-i). `meaningless` above substitutes a bare number for this field; these
+   * are the shapes that are OBJECTS, or that are legal on their own and illegal beside another
+   * field, and still describe a world the simulation has no reading of — which is where a
+   * nullable field's real risk lives. (Deliberately not counted in this sentence: a numeral
+   * here would have to be re-typed the next time one is added, which is the claim class
+   * `addDepartures` records driving to zero.)
+   */
+  it('refuses a save whose world.lift severs the building', () => {
+    // A capacity of 0 means no guest can EVER change floor — while `unreachable` goes on saying
+    // every floor is reachable, because reachability is topological and a queue is temporal.
+    // The two would then disagree permanently, which is the ADR-0008 drift `lift.ts` is
+    // arranged to prevent, so it is refused at the door rather than documented.
+    const blob = blobOf(livedInWorld());
+    (blob['world'] as Record<string, unknown>)['lift'] = { capacity: 0, waitToleranceTicks: 5 };
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/lift\.capacity/);
+  });
+
+  it('refuses a save whose world.lift carries a float', () => {
+    // A fractional capacity is a float in hashed state, which is the one thing I2 has no
+    // tolerance to absorb.
+    const blob = blobOf(livedInWorld());
+    (blob['world'] as Record<string, unknown>)['lift'] = { capacity: 2.5, waitToleranceTicks: 5 };
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/lift\.capacity/);
+  });
+
+  it('refuses a save whose world.lift has no shaft to be installed in', () => {
+    // THE CROSS-FIELD LAW. A lift with no stairwell loads happily and is SILENTLY INERT: there
+    // is no cell for a line to form at, so nobody ever queues and nothing anywhere reports it.
+    // That is the inert-mechanism failure ADR-0075 spent a plan review on. `livedInWorld`
+    // declares no stair, so this world is exactly that case.
+    const blob = blobOf(livedInWorld());
+    expect((blob['world'] as { stairs: unknown[] }).stairs).toEqual([]);
+    (blob['world'] as Record<string, unknown>)['lift'] = { capacity: 2, waitToleranceTicks: 5 };
+    expect(() => deserialise(JSON.stringify(blob))).toThrow(/lift is declared but world\.stairs is empty/);
+  });
 });
 
 describe('I6 unknown top-level keys', () => {

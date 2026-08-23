@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-043 is DONE and G-038b is DEFERRED on measurement — M3's goal list is closed and the milestone question is owed to the human. G-043: the engagement ladder was never inverting, it was a units mismatch (demand counted arrival commands, provisioning counted guests), now repaired in a SHARED provisioning.ts where every quantity carries its unit in its name; top rung 219 out / 252 dissatisfied becomes 464 / 0. The deciding evidence for shared over local is that the FOURTH local fix was also wrong. A prior question nobody had asked is now answered: a bedroom is claimed by ONE PARTY, not by capacity strangers, so the beds model over-estimated capacity in the unsafe direction. G-038b DEFERRED (ADR-0075): the congestion a lift queue exists to manage DOES NOT OCCUR — max guests on the stairwell cell is 3 or 4 at every workload this project can produce, so a capacity of 4+ can never bind. That is the inert-rule problem a fourth time, caught in the goal whose own block claimed to have avoided it, and it needs demand (M4) rather than code. Still open and parked: the flat amenity axis BELOW the bottleneck survives (three rooms reads 354/354/354, WATCH #23 has the frame — nine amenity rooms, one guest, every outcome identical); both drawing paths cap at three figures on a tile; and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 02fe3c4fa2a7e533. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-23, G-038b-i is DONE — the lift QUEUE MECHANISM ships INERT in `packages/sim`, and G-038b-ii (the dial) stays deferred on ADR-0075's measurement. A lift is a CAPACITY ON THE EXISTING SHAFT rather than a second connector, so `stairLeg` and `climbsFrom` — the two hand-kept copies of one condition — did not move, and reachability is untouched because `capacity >= 1` is refused at both doors: a queue is temporal, reachability is topological, and a lift can never sever a building. The queue ORDER IS STORED, deliberately and against the free alternative: lowest-id-wins is not a queue (whoever checked in earliest boards first), and the give-up rule needs a wait clock in hashed state anyway, so one field answers both questions or one field answers one. Save v23: `lift` (null), `liftQueue` (empty) and a `gaveUpWaitingForLift` row at departures[3]. PROVED BYTE-IDENTICAL on four `sim:run` arms — the state hash moves and one zero row appears, and NOTHING ELSE in the report changes. `check:tickcost` returned a REAL ratio for once (equal `arrived` in both arms): 0.9514 / 0.9610 / 0.9742 over three campaigns, no measurable per-tick cost. Owed to G-038b-ii: the derived capacity, the fingerprint's TENTH term, and the DRAWING — both paths cap at three figures on a tile, and `viewer.readonly.test.ts` now carries that debt as two exemption lines. Still open and parked: the flat amenity axis BELOW the bottleneck (three rooms reads 354/354/354, WATCH #23 has the frame); and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 abfd91c3da10b67f. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **257 top-level items**, counted below the digest so the figure does not include itself:
   `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
@@ -3404,3 +3404,38 @@ sentence that exists to prevent it."*
 **Falsification test:** `pnpm check:tickcost` and read the CAMPAIGN OCCUPANCY block. **Confirms if
 the printed list omits parties.** Pre-existing; **the next goal that moves occupancy must touch that
 line.**
+
+## From G-038b-i — the queue mechanism, and the two questions it did not answer (2026-08-23)
+
+### THE CAR SPENDS ONE TICK UNLOADING, AND NOBODY KNOWS WHETHER THAT MATTERS
+**Parked 2026-08-23 (G-038b-i).** A place in the lift is released at the END of the tick on which
+its holder stopped needing the shaft, because `settleLiftQueue` is what discovers it — a
+destination is derived per guest deep inside `reserve`, so it cannot be known earlier. The obvious
+repair is refused on purpose: promoting somebody during the pass hands the freed place to the
+lowest guest ID still in the line rather than to the guest nearest the FRONT, because the pass runs
+in id order and not in queue order, **which breaks the one property the stored order exists to
+provide.** The cost is one tick per TRIP, not per waiter.
+
+**The belief:** at any capacity a real workload would use, the unload is invisible against the
+queueing it is embedded in. **Falsification test:** in G-038b-ii's arm, install a lift at the
+derived capacity in `report.ts` and record `gaveUpWaitingForLift` and the mean queue length; then
+apply the ADR-0022 mutation recipe to release a place during the pass instead (a second pass over
+the guests, in queue order) and re-run the same arm. The sim is deterministic, so there is no
+spread to hide in. **Confirms if both readings are identical; refutes if the departure count moves
+at all** — and if it moves, G-038b-ii has to decide whether the second pass is worth its tick cost
+or whether the fair-but-slower car is the mechanic.
+
+### A LIFT REPLACES THE STAIR IN ITS SHAFT, AND NOTHING LETS A WORLD HAVE BOTH
+**Parked 2026-08-23 (G-038b-i).** `world.lift` is read as *"the shaft is a lift shaft"*, on
+ADR-0075's first ruling: **a thing with unbounded capacity never queues**, so a staircase beside a
+lift would make the queue unjoinable and the mechanism inert by construction. There is therefore no
+way to express *"a tower with a lift AND a fire escape"*, and no way for a player to trade a slow
+free stair against a fast bounded lift — which is the decision a build-loop mechanic would be made
+of.
+
+**The belief:** one connector per world is enough until a player can draw more than one shaft.
+**Falsification test:** the day `withStair`'s alignment invariant is relaxed to more than one
+stairwell column — which `stairs.ts` says would cost the derived speed window and the O(1) leg —
+this reading stops being free, because a two-shaft world could sensibly have a lift in one and
+steps in the other. **Confirms while `stairwellOf` is still an array index; refutes the moment a
+second stairwell is legal.**

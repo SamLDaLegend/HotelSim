@@ -243,7 +243,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // once and neither is a code change: `World.contentHash` moves because the content document
     // gained a field, and the run itself is genuinely different.
     // ==========================================================================================
-    stateHash: '6061c97185a796a5',
+    stateHash: 'e3c3857d7108fc79',
   },
   guests: {
     arrived: 32,
@@ -259,6 +259,11 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
       // therefore cannot exist under it.
       { reason: 'visitEnded', count: 0 },
       { reason: 'gaveUp', count: 21 },
+      // G-038b-i, ADDITIVE AND WITHOUT A SCHEMA BUMP — `report.ts`'s published policy again: a
+      // new row renames nothing and removes nothing, so every schema-4 consumer still finds
+      // every string it knew. Zero here because `world.lift` is `null` in every world any
+      // harness in this project produces, so the branch that writes it is unreachable.
+      { reason: 'gaveUpWaitingForLift', count: 0 },
       { reason: 'leftDissatisfied', count: 0 },
       { reason: 'evictedRoomGone', count: 0 },
       { reason: 'evictedRoomUnusable', count: 0 },
@@ -622,6 +627,13 @@ const GOLDEN_2_DAYS_SEED_42 =
     // this hotel", this one is "it cannot happen under this content".
     'left visitEnded             0',
     'left gaveUp                 21',
+    // G-038b-i: the EIGHTH row, and it is ZERO for the strongest structural reason any zero in
+    // this table has. `world.lift` is `null` in every world any harness in this project
+    // produces — no content declares a lift and no scenario installs one — so the branch that
+    // writes this row is unreachable on this run and on every other shipped run. That is what
+    // "inert on shipped content" means, stated as a number a reader can check. **Every other
+    // count in this document is unchanged**, which is the hand-checked half of the same claim.
+    'left gaveUpWaitingForLift   0',
     // θ-b1: the sixth row, and it is ZERO here — which is the golden earning its keep. In a
     // three-room hotel almost nobody gets a bed, and a guest with no bed leaves as `gaveUp`
     // long before its dissatisfaction could saturate (`assertDissatisfactionOutlastsTheLobby`
@@ -753,7 +765,21 @@ const GOLDEN_2_DAYS_SEED_42 =
     // floor, so no lodging candidate is more than zero floors from the door and a reach of 2
     // cannot turn anybody away. Same 6 valid rooms, same 0/0/0/0/0 tally, same 24 arrivals,
     // same 4/16 split, same four need rows to the basis point.
-    'state hash  6061c97185a796a5',
+    //
+    // G-038b-i: ONE LINE ADDED, ONE LINE MOVED, AND EVERY COUNT ABOVE THEM IS BYTE-IDENTICAL —
+    // the same shape as G-038c above, and for a stricter reason. `6061c97185a796a5` ->
+    // `e3c3857d7108fc79`, for TWO hashed-state causes and NO behaviour: `World` gained `lift`
+    // (`null`) and `liftQueue` (empty), and `guestOutcomes.departures` gained a zero row at
+    // index 3 (save v23). **`World.contentHash` did NOT move** — no content file changed, which
+    // is what makes this the narrowest golden move in the file's history: the hash carries two
+    // new fields and one new row, and nothing else.
+    //
+    // THE MECHANISM IS INERT AND THAT IS STRUCTURAL RATHER THAN LUCKY. A queue can only form
+    // where `world.lift !== null`, `installLift` is the only thing that can set it, and no
+    // harness in this repository issues that command. So the same 6 valid rooms, the same
+    // 0/0/0/0/0/0 tally, the same 32 arrivals, the same 6/21 split, the same four need rows to
+    // the basis point, the same 9 transactions, the same 51,000p and the same 527,000p.
+    'state hash  e3c3857d7108fc79',
   ].join('\n') + '\n';
 
 /**
@@ -929,7 +955,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  6061c97185a796a5']);
+    expect(differing).toEqual(['seed        42', 'state hash  e3c3857d7108fc79']);
     expect(lines43).toContain('seed        43');
   });
 });

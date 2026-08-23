@@ -169,6 +169,7 @@ describe('the table has one row per reason and nothing else', () => {
       'checkedOut',
       'visitEnded',
       'gaveUp',
+      'gaveUpWaitingForLift',
       'leftDissatisfied',
       'evictedRoomGone',
       'evictedRoomUnusable',
@@ -181,6 +182,10 @@ describe('the table has one row per reason and nothing else', () => {
     expect(GUEST_DEPARTURE_REASONS.map((reason) => isCutShort(reason))).toEqual([
       false,
       false,
+      false,
+      // `gaveUpWaitingForLift` (G-038b-i). The hotel's full car caused it, but the guest walked
+      // out on its own clock and on its own feet, so it belongs in the head with the lobby row
+      // it is the twin of — the same agency test the four before it pass.
       false,
       false,
       true,
@@ -235,7 +240,7 @@ describe('L1: the conservation law, and it can fail', () => {
       departures: full.departures.filter((row) => row.reason !== 'evictedRoomUnusable'),
     };
     expect(() => assertGuestOutcomes(missingZero, store(2))).toThrow(
-      /6 departure row\(s\) against 7 known reason\(s\)/,
+      /7 departure row\(s\) against 8 known reason\(s\)/,
     );
   });
 
@@ -243,7 +248,7 @@ describe('L1: the conservation law, and it can fail', () => {
     const rows: GuestOutcomeRow[] = [...table(10, { checkedOut: 5, gaveUp: 3 }).departures];
     rows.splice(1, 0, { reason: 'checkedOut', count: 0 });
     expect(() => assertGuestOutcomes({ arrived: 10, departures: rows }, store(2))).toThrow(
-      /8 departure row\(s\) against 7 known reason\(s\)/,
+      /9 departure row\(s\) against 8 known reason\(s\)/,
     );
   });
 

@@ -256,7 +256,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
     // AGAINST TODAY'S KEYS MINUS THE ONES LATER STEPS ADD, and the exclusion is spelled as a
     // list rather than a single name since G-038a-ii-alpha: this asserts what the 17 -> 18 step
     // produces, which is a v18 world, and `stairs` does not arrive until the 20 -> 21 step.
-    const laterThanV18 = ['stairs'];
+    const laterThanV18 = ['stairs', 'lift', 'liftQueue'];
     const migrated = Object.keys(migrate() as unknown as Record<string, unknown>).sort();
     expect(migrated).toEqual([...WORLD_KEYS].filter((key) => !laterThanV18.includes(key)));
     expect(Object.keys(v17World()).sort()).toEqual(
@@ -401,6 +401,10 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
     const byHand = {
       ...(era as unknown as typeof loaded),
       corridors: [],
+      // AND THE 22 -> 23 STEP: no lift and nobody waiting for one (G-038b-i), because a v17
+      // world's shaft carried everybody who wanted to climb.
+      lift: null,
+      liftQueue: [],
       // AND THE 20 -> 21 STEP: an empty stairwell (G-038a-ii-alpha), because a v17 world's
       // floor axis spent unconditionally and no v17 fact can name a cell as a stair.
       stairs: [],
@@ -414,6 +418,24 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
       entities: {
         ...eraEntities,
         list: eraEntities.list.map((entity) => ({ ...entity, footprint: { columns: 1, rows: 1 } })),
+      },
+      // AND THE 22 -> 23 STEP AGAIN: the departure table gains a row at index 3, because a
+      // v17 guest could not give up on a lift that did not exist (G-038b-i). Spelled out in
+      // the v23 order rather than spliced into the era table, for the reason the era table
+      // itself is spelled out: an oracle that edits the live union agrees with whatever the
+      // live union does.
+      guestOutcomes: {
+        arrived: 9,
+        departures: [
+          { reason: 'checkedOut', count: 4 },
+          { reason: 'visitEnded', count: 0 },
+          { reason: 'gaveUp', count: 3 },
+          { reason: 'gaveUpWaitingForLift', count: 0 },
+          { reason: 'leftDissatisfied', count: 0 },
+          { reason: 'evictedRoomGone', count: 0 },
+          { reason: 'evictedRoomUnusable', count: 0 },
+          { reason: 'evictedCauseUnrecorded', count: 0 },
+        ],
       },
       buildOutcomes: {
         ...eraOutcomes,
