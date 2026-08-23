@@ -74,6 +74,12 @@ export {
   minFootprintCellsOf,
   needTypesInOrder,
   ONE_WHOLE_BASIS_POINTS,
+  // G-043. Exported for `stayDurationOf`'s reason, and for `visitRoundOf`'s more sharply: the
+  // provisioning rule in `tools/headless/src/provisioning.ts` needs the realised party CYCLE to
+  // turn an arrival cadence into a guest count, and the copy of this walk that a harness kept
+  // instead answered a different mean for any table whose cycle does not start at the first
+  // ordinal. One fold, called from outside, rather than two that can disagree.
+  partySizeOf,
   providesOf,
   requiredItemsOf,
   ROOM_ACCESS_RULES,

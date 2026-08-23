@@ -2685,7 +2685,15 @@ abstraction generalises. **The matched critic should take it or say why not** (�
 taken, (ii) is the goal that tests whether the ruling in (i) was right.
 
 ## G-043 — Buying another amenity has to pay the player back
-Status: **PLANNED 2026-08-22.** Parked out of E-011 by human ruling (ADR-0069) rather than folded
+Status: **DONE 2026-08-23 (ADR-0074).** The ladder was never inverting — a units mismatch, now
+repaired in a SHARED `provisioning.ts` where every quantity carries its unit in its name. Top
+rung 219 out / 252 dissatisfied -> **464 / 0**. The deciding evidence for shared-over-local: the
+**fourth** local fix was also wrong, shipping a beds model in the repair aimed at this class.
+A prior question nobody had asked, now answered: **a bedroom is claimed by ONE PARTY, not by
+`capacity` strangers** — the beds model over-estimated capacity in the unsafe direction.
+The flat axis BELOW the bottleneck **survives and is parked**: three rooms still reads
+354/354/354, and WATCH #23 has the frame — nine amenity rooms, one guest, every outcome
+identical. I2 unchanged, no golden moved.
 into the merge. Milestone: M3 · Owner pair: economy-engineer / balance-critic **plus ai-critic**
 Statement: the **build loop** — spend cash, add capacity and quality, raise reputation, raise demand
   — currently stops paying the player back above a bottleneck, and inverts at the top rung of one

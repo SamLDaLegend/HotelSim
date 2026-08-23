@@ -3279,3 +3279,94 @@ fresh invented id rather than with G-042.)*
 **Candidate fix, if confirmed**: scan merge commits' **first-parent range** rather than excluding
 them, or scan the ADR ids in `DECISIONS.md` for goal references with no matching block — the second
 catches the class rather than this instance.
+
+### `determinism-log.ts` counts PARTIES where its bound counts GUESTS — the fifth site, unrepaired
+**Parked 2026-08-23 (G-043, §5.8 census).** `copiesFor` divides
+`concurrentGuests = stayDurationTicks / ARRIVALS_EVERY_TICKS` — arrival COMMANDS — by
+`1 + serviceFloorRefill(needType)`, which counts guests. On shipped content the two readings are
+`ceil((1440/97)/8) = 2` and `ceil((1440/97) * 4/3 / 8) = 3`, so the I2 determinism log's first two
+amenity waves are provisioned for two thirds of the guests they actually get. **Not repaired at
+G-043**: it moves the log's entity ids and therefore the I2 hash, and it trades against a coverage
+balance that file set deliberately — its own note records a wave with more amenities making the
+hotel *"WORK too well"*, stopping `leftDissatisfied` at tick 60,046 and costing the gate the row the
+wave was added for.
+
+**Falsification test:** multiply that binding by the realised guests per command (call
+`guestsPerArrivalCommand` from `tools/headless/src/provisioning.ts`), then run
+`pnpm test:determinism` and `pnpm exec vitest run determinism`, and read `leftDissatisfied` and the
+`roomInvalidity` / provider-release reason coverage out of the log. **Confirms the repair is free if
+`leftDissatisfied` survives to the horizon and no reason drops out** — then it is a one-line goal
+plus a hash re-stamp. **Refutes it if either falls**, in which case the WAVE COUNTS are the goal and
+the units are only its cause.
+
+### What one provider "sustains" is a CEILING, and nobody has derived the realised figure
+**Parked 2026-08-23 (G-043).** `guestsPerProvider` is flow conservation — decay equals refill, so
+one provider serves `refillPerTick + 1` guests. It charges nothing for the walk to the provider and
+nothing for the deeper deficit a guest that queued arrives with, so it over-states service; how much
+by has never been measured. **The gap is visible and large**: at six rooms the rule puts the
+concurrent population comfortably under the bound and provisions one amenity of each kind, and a
+second amenity still takes the mean over engagement needs from 949 to 541 basis points with the same
+guests giving up either way.
+
+**Falsification test (already in the tree, as an arm):** `provisioning.report.test.ts` >
+*"a hotel the rule provisions with one amenity is still relieved by a second"*. **A re-derivation
+that charges for travel and for the queued deficit confirms itself when that pair reads as a small
+improvement rather than a halving**; the arm goes red and says by how much. **It must not be tuned
+until the ladder in `unserved.report.test.ts` is monotone** — that is the §9 stop condition and
+G-039b-alpha refused the shape by name. It is a rates goal in G-041's shape or it is nothing.
+
+### The provisioning ladder has a `ceil` SAWTOOTH, and rung 3 is the tooth
+**Parked 2026-08-23 (G-043) — this is the narrowed remainder of the OPEN FINDING.** After the units
+repair both engagement-only folds still rise from rung 2 to rung 3 of the diagonal ladder and
+nowhere else: mean 866 -> 949, worst 1,124 -> 1,304. The rule provisions three rooms (four
+concurrent guests) and six rooms (eight) with the SAME single provider because both round up to one,
+so rung 3 carries twice rung 2's load on the same hardware, while rung 4 clears a whole provider,
+gets two, and pools them. **The ladder is therefore not a constant-provisioning diagonal**, which is
+a property of `ceil` rather than of the simulation.
+
+**Falsification test, run once and POSITIVE:** six rooms with a second amenity of each kind reads
+engagement mean 541 and worst 905, both below rung 2's 866 and 1,124 — strictly decreasing. **So the
+rise is granularity.** The two candidate repairs are a rule that provisions to LOAD rather than to a
+whole provider, and the rate re-derivation parked above. **Confirms whichever is taken if the
+engagement folds go strictly decreasing across all four rungs WITHOUT any content edit; refutes it
+if they do not**, which would mean the residue is layout (`amenityCell` spreads providers further
+out as the count grows) and belongs to whoever owns that.
+
+### Below the bottleneck the review scale is CLAMPED, so buying an amenity cannot move the score
+**Parked 2026-08-23 (G-043, WATCH #23) — measured, not suspected.** At three rooms and an arrival
+every 120 ticks the review mean reads the same number at one, two and three amenities of each kind,
+and it is not a defect in the scorer: the departures are IDENTICAL at all three levels (what turns
+guests away is beds), every housed guest is already in the TOP band, and every unhoused one is in
+the band a guest with no room gets. **There is no guest whose band an amenity could move.** WATCH
+#23's frame shows the cost in the picture — nine amenity rooms with one guest in them.
+
+**Falsification test (already in the tree, as an arm):** `provisioning.report.test.ts` > *"AND THE
+FLAT AXIS BELOW THE BOUND IS THE REVIEW SCALE CLAMPED"*. **Any change that makes a housed guest at
+that rung score below the top band confirms the diagnosis** — the arm goes red at the occupied-band
+literal and the axis starts moving. **A change that moves the mean while the bands stay at
+`3:346,5:128` refutes it** and means something else was flat. *(Related but distinct from the
+`ceil` sawtooth above: that one is about which rung of the ladder is worst-provisioned; this one is
+about a scale that cannot express an improvement at all.)*
+
+### The provider tie-break does NOT route to the worst room on `main` — and what it does do is live
+**Parked 2026-08-23 (G-043), after checking the parked `g037a-quality-fold` claim against `main`.**
+That branch records *"the provider tie-break routed guests to the WORST room"*, named as a candidate
+cause of the ladder inversion. **It cannot be that on `main`, because `main` has no per-room
+quality**: `compareProviderPreference` in `packages/sim/src/utility.ts` ranks by
+`fitBasisPoints` — a per-ROOM-TYPE designer ranking — and then by LOWER entity id. There is no
+instance-level term for a room to be worst at. **So the branch's finding is a finding about the
+branch and contributed nothing to the inversion measured here**, which had a units cause.
+
+**What the same comparator DOES do on `main` is stated in its own docblock and is live**:
+*"it does not spread guests across equally-ranked providers: with four concurrent guests and five
+cafés, the lowest-id café still takes most of the traffic."* That is a strong candidate mechanism
+for the flat axis below the bottleneck parked above, and for WATCH #23's frame of nine amenity rooms
+with one guest in them — an extra provider is only ever reached once the lowest-id one is contended.
+**The docblock also names the cure and its owner**: a term that varies between two identical rooms,
+and *"the only honest one is distance, which is M3's."*
+
+**Falsification test:** at three rooms and an arrival every 120 ticks, count engagement instances per
+provider ENTITY across the amenity levels — one, two and three of each kind. **Confirms if the
+lowest-id provider of each kind keeps essentially all of them while the added rooms sit at or near
+zero; refutes if the load splits**, in which case the flat axis is about service capacity rather
+than about selection and the parked rate re-derivation is the whole of it.

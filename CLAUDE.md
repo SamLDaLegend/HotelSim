@@ -5,8 +5,17 @@ survives context compaction; where the two disagree, `HOTELSIM.md` wins.
 
 ## What this is
 
-A casual, cartoon-styled hotel building and management sim. Side-on cross-section
-view (SimTower / Project Highrise), not isometric.
+A casual, cartoon-styled hotel building and management sim. **Isometric floorplan**
+(Theme Hospital / RollerCoaster Tycoon), multi-floor, **one floor rendered at a time**,
+cityscape behind. **Rooms are designed by the player**: draw a footprint, place items,
+and the room is scored on what it contains.
+
+> **RULED 2026-08-16 by the human (ADR-0046).** This paragraph read *"Side-on
+> cross-section view (SimTower / Project Highrise), not isometric"* from before the first
+> line of code until goal 33 — **and it was still reading that here on 2026-08-23**, seven
+> days and forty goals after the ruling, in the one document whose stated purpose is
+> surviving compaction. `HOTELSIM.md` §1 was corrected on the day; this short form was not.
+> **A ruling is not landed until every copy of the sentence it reverses is dead.**
 
 Three nested feedback loops. Every design and code decision traces to one of them:
 

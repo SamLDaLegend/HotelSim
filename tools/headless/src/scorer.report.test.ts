@@ -27,17 +27,10 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import {
-  createGuestOutcomes,
-  createWorld,
-  firstGuestRules,
-  firstRoomTypeProviding,
-  lodgingNeedOf,
-  needTypesInOrder,
-  stayDurationOf,
-} from '@hotelsim/sim';
+import { createGuestOutcomes, createWorld, needTypesInOrder } from '@hotelsim/sim';
 import type { World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
+import { concurrentGuests as concurrentGuestsAt } from './provisioning.js';
 import { buildSummary, meanReviewHundredths, parseArgs } from './report.js';
 import type { RunSummary } from './report.js';
 
@@ -123,7 +116,8 @@ const AMENITIES = [1, 2, 3] as const;
 const SUSTAINED_BY_ONE_PROVIDER = 1 + (needTypesInOrder(CONTENT).find((need) => need.role !== 'lodging')?.refillPerTick ?? 0);
 
 /**
- * HOW MANY GUESTS ONE ARRIVAL COMMAND BRINGS, READ FROM CONTENT (G-040b-ii).
+ * CONCURRENT GUESTS AT A RUNG — the population every comparison against
+ * `SUSTAINED_BY_ONE_PROVIDER` in this file goes through.
  *
  * ==========================================================================================
  * THE OCCUPANCY ARITHMETIC IN THIS FILE WAS SPELLED `min(rooms, stayDurationTicks / arrivals)`,
@@ -132,52 +126,30 @@ const SUSTAINED_BY_ONE_PROVIDER = 1 + (needTypesInOrder(CONTENT).find((need) => 
  * are compared against, `SUSTAINED_BY_ONE_PROVIDER`, counts GUESTS. So the day
  * `guest-rules.json` declared `partySizeWeights` the two sides stopped being the same unit and
  * nothing in the expression could say so. **That is ADR-0039 section 2's class exactly** — a
- * guard spelled in the flags it guards cannot see the content redefine what a flag means — and
- * it is repaired here rather than left for the reading to drift again.
+ * guard spelled in the flags it guards cannot see the content redefine what a flag means.
  *
- * THE TABLE IS A CYCLE OVER THE GUEST-ID LINE, NOT A PROBABILITY: a party consumes one ordinal
- * per member, so the ordinals its members occupy are never consulted. The walk below is that
- * reading, and the shipped `[3, 1]` gives the cycle 1, 1, 2 — three parties, four guests, four
- * ordinals. `party.content.test.ts` pins the same ratio off a REAL RUN rather than off this
- * walk, which is what stops the two agreeing with each other (ADR-0021).
+ * ==========================================================================================
+ * **AND THE G-040b-ii REPAIR THAT REPLACED IT GOT THE OTHER HALF WRONG, WHICH IS WHY THIS IS
+ * NOW ONE SHARED MODULE INSTEAD OF A THIRD LOCAL COPY (G-043).**
+ *
+ * It fixed the party unit and then bounded the population by `rooms * capacity` — BEDS. The
+ * simulation does not pool strangers: `guests.ts` skips a lodging room holding a standing claim
+ * from a different party, so a bedroom is claimed by ONE PARTY and a single guest occupies a
+ * whole one. The beds model therefore names a smaller hotel as "saturated" than the simulation
+ * does, and `provisioning.report.test.ts` settles that by asking which room count actually stops
+ * turning guests away.
+ *
+ * **NO VERDICT IN THIS FILE TURNS ON THE DIFFERENCE**, at either cadence and at every room count
+ * below — checked rather than assumed, and that is exactly how a wrong model survives a repair:
+ * it was never asked a question it could fail. The arithmetic moves; the readings do not.
+ *
+ * The cycle walk that stood here is gone with it. It was a second copy of `partySizeOf`'s band
+ * walk (ADR-0021), and it answered a different mean for any table whose cycle does not begin at
+ * the first ordinal. `provisioning.ts` calls the shipped fold; `party.content.test.ts` pins the
+ * ratio off a REAL RUN, which is what stops the two agreeing with each other.
  * ==========================================================================================
  */
-const GUESTS_PER_PARTY = ((): number => {
-  const weights = firstGuestRules(CONTENT)?.partySizeWeights;
-  if (weights === undefined) return 1;
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  let ordinal = 1;
-  let guests = 0;
-  let parties = 0;
-  // One full period: `total` ordinals is a whole number of cycles, because the walk reads
-  // `ordinal % total` and a cycle returns to the residue it started at.
-  const until = ordinal + total;
-  while (ordinal < until) {
-    let at = ordinal % total;
-    let size = 1;
-    for (let i = 0; i < weights.length; i += 1) {
-      at -= weights[i] ?? 0;
-      if (at < 0) {
-        size = i + 1;
-        break;
-      }
-    }
-    guests += size;
-    parties += 1;
-    ordinal += size;
-  }
-  return guests / parties;
-})();
-
-/** What one lodging room holds, from content — the other half of the unit repair above. */
-const LODGING_CAPACITY = firstRoomTypeProviding(CONTENT, lodgingNeedOf(CONTENT)?.id ?? '')?.capacity ?? 1;
-
-/**
- * Concurrent GUESTS at a rung: the beds it can fill, or the guests it is fed, whichever binds.
- * Every comparison against `SUSTAINED_BY_ONE_PROVIDER` in this file goes through it.
- */
-const concurrentGuests = (rooms: number, arrivals: number): number =>
-  Math.min(rooms * LODGING_CAPACITY, ((stayDurationOf(CONTENT) ?? 0) / arrivals) * GUESTS_PER_PARTY);
+const concurrentGuests = (rooms: number, arrivals: number): number => concurrentGuestsAt(CONTENT, rooms, arrivals);
 const CONTENDED_ROOMS = [16, 20, 24] as const;
 const CONTENDED_ARRIVALS = 60;
 

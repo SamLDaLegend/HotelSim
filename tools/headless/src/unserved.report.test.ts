@@ -31,8 +31,8 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { needTypesInOrder, stayDurationOf, toleranceOf, wantAtOf, wantLineOf } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
+import { amenitiesFor as amenitiesForAt, saturatingRooms } from './provisioning.js';
 import { meanReviewHundredths, unservedShareBasisPoints } from './report.js';
 import type { RunSummary } from './report.js';
 
@@ -57,73 +57,34 @@ const at = (rooms: number, amenities: number, arrivals = ARRIVALS): RunSummary =
   run([...BASE.slice(0, 4), '--arrivals', String(arrivals), '--rooms', String(rooms), '--amenities', String(amenities)]);
 
 // ============================================================================
-//  THE PROVISIONING RULE, READ OFF CONTENT.
+//  THE PROVISIONING RULE — NOW IN `provisioning.ts`, AND THE UNITS ARE WHY (G-043).
+//
+//  EVERY TERM OF THIS RULE USED TO LIVE HERE, and it divided a PARTY count by a bound that
+//  counts GUESTS: `stayDurationTicks / arrivals` counts arrival COMMANDS, and one command has
+//  brought more than one guest since the dial shipped. So the rule under-provisioned every rung
+//  by the mean party size, and bit at the first rung whose population crossed what one provider
+//  sustains — which is the TOP rung, and is the whole of the OPEN FINDING recorded below.
+//
+//  IT IS SHARED RATHER THAN REPAIRED IN PLACE because this was the FIFTH sighting of that class
+//  in five places, and the fourth repair — `scorer.report.test.ts` — fixed the party unit while
+//  bounding occupancy by BEDS, which the simulation does not do. Two copies that disagree about
+//  the model is how the fifth one survived. `provisioning.report.test.ts` asks the simulation
+//  which model is right rather than asserting it.
 // ============================================================================
 
-/**
- * How many concurrent guests the cadence asks for: a stay divided by the gap between arrivals.
- * At the shipped table this is the population a hotel has to be able to hold.
- */
-const DEMAND = Math.round(stayDurationOf(CONTENT)! / ARRIVALS);
+/** The rule, at this file's cadence. Every rung's amenity count comes through here. */
+const amenitiesFor = (rooms: number): number => amenitiesForAt(CONTENT, rooms, ARRIVALS);
 
 /**
- * How many LODGERS one provider of a kind sustains — `refillPerTick + 1`, by flow conservation
- * over a closed cycle: a need's decay equals its refill, so the served fraction is
- * `1 / (1 + refillPerTick)` whatever the capacity and the want line.
+ * The room count at which the cadence stops being the binding constraint — the ladder's top
+ * rung, and the room count several arms below use as "the saturated hotel".
  *
- * Read off the engagement needs rather than typed, and asserted to be uniform across them: the
- * rule is one number, so content whose engagement needs disagreed about it would need a rule per
- * need and this ladder would be measuring something else.
+ * A PARTY COUNT READ AS A ROOM COUNT, which is legitimate because a lodging room is claimed by
+ * one party; `provisioning.report.test.ts` settles that against the simulation rather than
+ * assuming it. It is the same value this file called `DEMAND`, and the rename is the point: it
+ * was being used as a room count, a party count and a guest count in three different places.
  */
-const engagementRefills = needTypesInOrder(CONTENT)
-  .filter((needType) => needType.role !== 'lodging')
-  .map((needType) => needType.refillPerTick);
-const PER_PROVIDER_LODGERS = (engagementRefills[0] ?? 0) + 1;
-
-/**
- * HOW LONG ONE SERVING TAKES: the ticks to refill an engagement need from its want line to full,
- * `wantLine / refillPerTick`.
- *
- * DERIVED, AND IT USED TO BE THE LITERAL 60. That number came off θ-b2's occupancy note, and the
- * file's own header claims nothing in this ladder is a number somebody chose — which was false of
- * it, and load-bearing: it sets the amenity count of every rung, so a different value moves the
- * whole ladder and with it the amenity pair the golden below rests on. It is not a free constant
- * at all: a guest engages at its want line and is released at FULL (the far side of the
- * hysteresis, `reserve` and step 5), so the ticks it holds a provider for are the deficit it
- * arrived with over the rate that provider fills it at.
- *
- * IT IS THE UNCONTENDED MINIMUM RATHER THAN THE HOLD, which is ADR-0033's own reading of the rule
- * as a FLOOR and not a prediction. A guest's other needs decay while it is being served, so a
- * guest walking to its SECOND provider engages BELOW its want line — deeper than this — and holds
- * that provider longer. `ceil` is what makes the difference immaterial here: the realised hold
- * runs above this figure and the amenity count it produces is unchanged at every rung.
- */
-const engagementServiceTicks = needTypesInOrder(CONTENT)
-  .filter((needType) => needType.role !== 'lodging')
-  .map((needType) => wantLineOf(needType, wantAtOf(CONTENT)) / needType.refillPerTick);
-const SERVICE_TICKS = engagementServiceTicks[0] ?? 0;
-
-/** And how many LOBBY guests one provider sustains: `toleranceTicks` over one serving. */
-const PER_PROVIDER_LOBBY = toleranceOf(CONTENT)! / SERVICE_TICKS;
-
-/**
- * The amenity count a rung needs, at the load that rung converges to.
- *
- * `L` is the lodgers it can hold and `Q` the guests waiting: a hotel with fewer rooms than the
- * cadence demands has a lobby, and one with enough rooms does not. `Q` is the arrival rate times
- * the tolerance window — how many guests are waiting at once before they give up — which is
- * where `toleranceTicks` enters twice, once as a population and once as a service rate.
- *
- * THE `ceil` HAS TWO FIXED POINTS AND THIS IS THE STABLE ONE (ADR-0033): a starved hotel
- * suppresses the concurrency the rule is measured on, so provisioning to the CONVERGED load
- * rather than to the demand is what makes the rungs comparable. The arm below asserts that
- * each rung's own occupancy reproduces the count it was provisioned with.
- */
-const amenitiesFor = (rooms: number): number => {
-  const lodgers = Math.min(rooms, DEMAND);
-  const lobby = rooms < DEMAND ? toleranceOf(CONTENT)! / ARRIVALS : 0;
-  return Math.ceil(lodgers / PER_PROVIDER_LODGERS + lobby / PER_PROVIDER_LOBBY);
-};
+const DEMAND = saturatingRooms(CONTENT, ARRIVALS);
 
 /**
  * The ladder: room counts spanning starved to saturated, each provisioned to its own load.
@@ -153,30 +114,34 @@ const strictlyIncreasing = (values: readonly number[]): boolean =>
 const spread = (values: readonly number[]): number => Math.max(...values) - Math.min(...values);
 
 describe('the provisioning rule is derived from content, and the ladder is built from it', () => {
-  it('the rule needs ONE refill and ONE service length, and this content has one of each', () => {
+  it('the ladder is provisioned by THE rule, and the rungs it produces are on the page', () => {
     // ========================================================================
-    // WHAT IS PINNED HERE IS UNIFORMITY, AND NOTHING ELSE. The rule is ONE expression with one
-    // number per term, so it is expressible only while every engagement need agrees about its
-    // refill and about how long one serving takes. A table whose needs disagreed would need a
-    // rule per need, and this ladder would be measuring something else — that is the failure
-    // these lines catch, and a content edit is how it would arrive.
+    // WHAT THE ARM THIS REPLACES ASSERTED, AND WHERE IT WENT (G-043).
     //
-    // THREE LINES THAT RE-SPELLED THE CONSTANTS ARE GONE. They asserted `PER_PROVIDER_LODGERS`,
-    // `DEMAND` and `PER_PROVIDER_LOBBY` against the same pure expressions over the same module
-    // constants that DEFINE them, so the only proposition any of them could falsify was a typo
-    // in its own copy — verbatim the epitaph written five lines below for the `amenitiesFor`
-    // line deleted a round earlier, in this same block, one of the three carrying the very
-    // derivation that fix was for. That these constants are read off the shipped table rather
-    // than typed is true BY CONSTRUCTION: there is no literal in any of them to go stale.
+    // It pinned that the engagement needs agree about their refill and about how long one
+    // serving takes — the uniformity without which the rule is not one expression. That claim
+    // is about `provisioning.ts` rather than about this ladder, and it is asserted there, once,
+    // beside the module it constrains. Keeping a second copy here would be the duplicated
+    // constant ADR-0021 is about, in the file whose header says nothing in this ladder is a
+    // number somebody chose.
     //
-    // What the rule has to satisfy is asserted where it is OBSERVED instead: the fixed-point arm
-    // below reads each rung's own occupancy back out of the run.
+    // WHAT IS ASSERTED HERE INSTEAD IS THE THING THIS FILE OWNS: which rungs the rule produces.
+    // The counts below are the ladder every literal in this file is measured on, so a content
+    // edit that re-provisions a rung goes red HERE, with the rung named, rather than at whichever
+    // golden happens to sit lowest in the file.
+    //
+    // THE TOP RUNG IS THE ONE G-043 MOVED. Read in guests it needs two amenities of each kind
+    // where the party-counting rule gave it one, and every other rung is unchanged — which is
+    // why three of these four runs are byte-identical to the ones this file measured before the
+    // repair, and the fourth is the whole of the finding below.
     // ========================================================================
-    expect(new Set(engagementRefills).size).toBe(1);
-    expect(new Set(engagementServiceTicks).size).toBe(1);
-    // A whole number of ticks: `amenitiesFor` divides by it, and content that made it fractional
-    // would provision against a rate no provider can actually run at.
-    expect(Number.isInteger(SERVICE_TICKS)).toBe(true);
+    //
+    // ONE ASSERTION, NOT TWO. A second line saying the top rung's count exceeds one was written
+    // here and taken out again: it is entailed by the array, so it forbids no state the array
+    // permits (ADR-0035). The claim it was reaching for — that the two units fall on opposite
+    // sides of what one provider sustains — is asserted in `provisioning.report.test.ts`, where
+    // both units are in scope.
+    expect(ROOM_LADDER.map((rooms) => amenitiesFor(rooms))).toEqual([1, 1, 1, 2]);
   });
 
   it('and the top rung is the saturation point the cadence implies, not a number somebody picked', () => {
@@ -233,11 +198,19 @@ describe('the provisioning rule is derived from content, and the ladder is built
     // G-040b-ii: [1,285, 936, 224, 0] -> [2,882, 2,849, 216, 0], AND SATURATION SURVIVES IT
     // EXACTLY AGAIN. The top rung's engagement rows more than double because the party cycle
     // puts 16 guests behind the one amenity this ladder's rule provisions it with (see the block
-    // on `THE SHARE FALLS AT EVERY RUNG`), and the LODGING row goes to zero — twelve bedrooms of
-    // capacity 2 hold everybody, so nobody waits for a bed at all. The property this arm asserts
-    // is untouched: the top rung and TWICE the top rung are the same run, row for row.
-    expect(sharesIn(LADDER[LADDER.length - 1]!)).toEqual([2_882, 2_849, 216, 0]);
-    expect(sharesIn(twice)).toEqual([2_882, 2_849, 216, 0]);
+    // on `THE SHARE FALLS AT EVERY RUNG`), and the LODGING row goes to zero — twelve bedrooms
+    // hold twelve parties, which is every party in flight, so nobody waits for a bed at all. The
+    // property this arm asserts is untouched: the top rung and TWICE the top rung are the same
+    // run, row for row.
+    // ========================================================================================
+    // **G-043: [2,882, 2,849, 216, 0] -> [371, 352, 653, 0], AND SATURATION SURVIVES IT A THIRD
+    // TIME.** Both arms are re-run at the amenity count the REPAIRED rule gives this rung — two
+    // of each kind rather than one — and they are still the same run, row for row. That is the
+    // strongest form this arm has taken: the re-provisioning moves all three engagement rows by
+    // thousands of basis points and moves the equality by nothing.
+    // ========================================================================================
+    expect(sharesIn(LADDER[LADDER.length - 1]!)).toEqual([371, 352, 653, 0]);
+    expect(sharesIn(twice)).toEqual([371, 352, 653, 0]);
     // AND ALL FOUR ROWS ARE EXACTLY EQUAL AGAIN — a `toHaveLength(3)` stood here for one goal,
     // while one row of four differed, and it is restored to the full width rather than left at
     // the weaker count.
@@ -344,30 +317,77 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     // design number, demand is M4's, and tuning content until a ladder behaves is exactly what
     // section 9 makes a stop condition. What this goal owes is the numbers, and they are here.
     // ==========================================================================================
+    // ==========================================================================================
+    // **G-043 — THE RULE IS REPAIRED, AND THE FINDING IS DISCHARGED AT THE TOP RUNG ON EVERY
+    // STATISTIC. WHAT SURVIVES IS AT RUNG 3, IT IS NOT A UNITS ERROR, AND IT IS NARROWED TO
+    // EXACTLY THAT RATHER THAN SOFTENED.**
+    //
+    // The ladder is re-provisioned by `provisioning.ts`, which counts guests on both sides of the
+    // division. Only the TOP rung's amenity count moves — one of each kind to two — so three of
+    // these four runs are the same runs the column on the left was taken from and the fourth is
+    // the repair. Same invocation, unserved share in basis points, exact deterministic counts
+    // (n = 1 IS the distribution; no clock is read, so no regime applies):
+    //
+    //     statistic                the party-counting rule    the guest-counting rule
+    //     all four rows, mean      2,459  1,431  1,132  1,487   2,459  1,431  1,132    344
+    //     all four rows, worst     5,938  3,128  1,679  2,882   5,938  3,128  1,679    653
+    //     ENGAGEMENT only, mean    1,299    866    949  1,982   1,299    866    949    459
+    //     ENGAGEMENT only, worst   2,011  1,124  1,304  2,882   2,011  1,124  1,304    653
+    //     REVIEW mean (hundredths)   318    354    400    389     318    354    400    500
+    //
+    // **BOTH ALL-ROWS STATISTICS ARE STRICTLY DECREASING AGAIN, AND THE REVIEW MEAN IS STRICTLY
+    // INCREASING AGAIN, ACROSS ALL FOUR RUNGS.** The top rung stops being the worst-served hotel
+    // on the ladder and becomes the best-served one, by a factor of three to four on every
+    // engagement fold. Its departures say it louder than the shares do: 219 checked out with 252
+    // walking out dissatisfied becomes 464 checked out with NOBODY dissatisfied.
+    //
+    // **WHAT SURVIVES, STATED EXACTLY: BOTH ENGAGEMENT-ONLY FOLDS RISE FROM RUNG 2 TO RUNG 3, AND
+    // NOWHERE ELSE.** 866 -> 949 on the mean and 1,124 -> 1,304 on the worst. That rise is not
+    // new — it arrived at G-040b-ii, one rung below the one this repair fixes, and the block
+    // above records it as the inversion "starting one rung EARLIER".
+    //
+    // **ITS CAUSE IS THE `ceil`, NOT THE UNIT, AND THE ARITHMETIC IS AT THE NUMBERS.** The rule
+    // provisions rung 2 and rung 3 with the SAME single amenity of each kind, because both land
+    // under one whole provider — and the two rungs do not carry the same load: three rooms hold
+    // four concurrent guests and six rooms hold eight, so rung 3 puts twice the population behind
+    // one provider that rung 2 does. **The ladder is a diagonal with a sawtooth in it, and rung 3
+    // is the tooth.** Rung 4 clears one whole provider, gets two, and pools them.
+    //
+    // **THE MEASUREMENT THAT WOULD DISCHARGE THE REMAINDER, RUN, AND POSITIVE**: six rooms with a
+    // second amenity of each kind reads an engagement mean of 541 and a worst of 905, both BELOW
+    // rung 2's 866 and 1,124 — strictly decreasing. So the residue is provisioning GRANULARITY.
+    // The two candidate repairs are a rule that provisions to load rather than to a whole
+    // provider, and a re-derivation of what one provider really sustains (`provisioning.ts`'s
+    // figure is a ceiling that charges nothing for the walk). **Neither is done here**: the first
+    // changes what this ladder measures and the second is a rates goal in G-041's shape.
+    // **Choosing either because it makes this ladder monotone is the §9 stop condition**, and
+    // G-039b-α refused that shape by name.
+    // ==========================================================================================
     const means = LADDER.map((summary) => meanShare(sharesIn(summary)));
-    expect(means).toEqual([2_459, 1_431, 1_132, 1_487]);
-    // **AND THE ALL-ROWS STATISTIC NO LONGER FALLS AT EVERY RUNG**, which is the half of this
-    // finding that is new at G-040b-ii. It is asserted as the falsehood it is, beside the rungs
-    // where it still holds, so the day a fold repairs it the shape of the change is legible.
-    expect(strictlyDecreasing(means)).toBe(false);
-    expect(strictlyDecreasing(means.slice(0, 3))).toBe(true);
+    expect(means).toEqual([2_459, 1_431, 1_132, 344]);
+    // **AND THE ALL-ROWS STATISTIC FALLS AT EVERY RUNG AGAIN**, which is the half of the finding
+    // the repair discharges. The predicate is restored beside the literals rather than instead of
+    // them, so the margin at each rung stays visible.
+    expect(strictlyDecreasing(means)).toBe(true);
     // AND THE WORST-SERVED NEED FALLS TOO, which is the stronger statement: a mean can fall
     // while one need is abandoned entirely, and a guest with one need starved does not care that
     // the others were fine.
     const worst = LADDER.map((summary) => Math.max(...sharesIn(summary)));
-    expect(worst).toEqual([5_938, 3_128, 1_679, 2_882]);
-    expect(strictlyDecreasing(worst)).toBe(false);
-    expect(strictlyDecreasing(worst.slice(0, 3))).toBe(true);
-    // AND WITH THE LODGING ROW DROPPED IT DOES NOT — see the block above. Both engagement
-    // ladders are asserted EXACTLY so the inversion cannot be mistaken for noise and cannot be
-    // fixed by anything that does not move these numbers.
+    expect(worst).toEqual([5_938, 3_128, 1_679, 653]);
+    expect(strictlyDecreasing(worst)).toBe(true);
+    // AND WITH THE LODGING ROW DROPPED IT STILL DOES NOT, AT ONE RUNG — see the block above. Both
+    // engagement ladders are asserted EXACTLY so the residue cannot be mistaken for noise and
+    // cannot be fixed by anything that does not move these numbers.
     const worstEngagement = LADDER.map((summary) => Math.max(...engagementSharesIn(summary)));
-    expect(worstEngagement).toEqual([2_011, 1_124, 1_304, 2_882]);
+    expect(worstEngagement).toEqual([2_011, 1_124, 1_304, 653]);
     expect(strictlyDecreasing(worstEngagement)).toBe(false);
-    // It falls over the first TWO rungs at G-040b-ii where it fell over the first three — the
-    // inversion starting a rung earlier, which is the block above's second finding. That is the
-    // part that is true rather than the whole claim, and the slice says how much of it.
+    // WHERE IT FALLS AND WHERE IT DOES NOT, BOTH ASSERTED, so the surviving claim names the rung
+    // rather than the ladder. It falls over rungs 1 -> 2, rises over 2 -> 3, and falls again over
+    // 3 -> 4 by more than it rose — which is the `ceil` sawtooth the block above derives, and it
+    // is a different shape from a ladder that turns over at the top.
     expect(strictlyDecreasing(worstEngagement.slice(0, 2))).toBe(true);
+    expect(strictlyDecreasing(worstEngagement.slice(2))).toBe(true);
+    expect(worstEngagement[3]!).toBeLessThan(worstEngagement[1]!);
   });
 
   it('AND IT IS NOT THE LODGING ROW DOING ALL THE WORK — the falsification, as an arm', () => {
@@ -386,10 +406,19 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     // 949 / 1,982, so rung 3 is already above rung 2. The block on `THE SHARE FALLS AT EVERY
     // RUNG` carries the cause, the arithmetic and the experiment; this is the same inversion
     // read through the mean instead of the maximum.
+    // ==========================================================================================
+    // **AND AT G-043 THE TOP RUNG IS DISCHARGED AND THE RUNG-3 RISE IS ALL THAT IS LEFT** —
+    // 1,299 / 866 / 949 / 459. The top rung falls to well under half the rung below it, so this
+    // fold agrees with the maximum, with the all-rows folds and with the review mean about where
+    // the ladder now turns over and where it does not. The cause of the surviving rise is the
+    // `ceil` sawtooth derived in the block above; **this fold is not evidence for it and does not
+    // restate it**, it is the same rung read through a different aggregation.
+    // ==========================================================================================
     const engagementMeans = LADDER.map((summary) => meanShare(engagementSharesIn(summary)));
-    expect(engagementMeans).toEqual([1_299, 866, 949, 1_982]);
+    expect(engagementMeans).toEqual([1_299, 866, 949, 459]);
     expect(strictlyDecreasing(engagementMeans)).toBe(false);
     expect(strictlyDecreasing(engagementMeans.slice(0, 2))).toBe(true);
+    expect(strictlyDecreasing(engagementMeans.slice(2))).toBe(true);
     // And a row really is being excluded, so this is not the same fold under another name: every
     // rung carries exactly one lodging row, and the engagement fold is one shorter than the full
     // one. Without this the arm could pass by folding the same four rows twice.
@@ -502,19 +531,39 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     // instruments and agree with this to the hundredth. The cause, the arithmetic and the
     // experiment are in the block on `THE SHARE FALLS AT EVERY RUNG`; nothing here repairs it.
     // ==========================================================================================
+    // ==========================================================================================
+    // **AND AT G-043 THE DISCHARGE IS WHOLE AGAIN, ON THE PLAYER-FACING STATISTIC.**
+    // [318, 354, 400, 389] -> [318, 354, 400, 500]: the three rungs the repair does not touch are
+    // unmoved to the hundredth, and the rung whose sixteen concurrent guests now get the two
+    // amenities of each kind the guest-counting rule provisions them with goes from ELEVEN
+    // HUNDREDTHS BELOW the rung under it to a hundred above it. The ladder is strictly increasing
+    // across all four rungs.
+    //
+    // **AND THE TOP RUNG IS A POINT MASS AT THE TOP BAND AGAIN**, which is the cost of the
+    // repair and is stated rather than enjoyed: every guest at that rung checks out with every
+    // need met, so the review has nothing left to resolve there. That is a real property of a
+    // hotel provisioned to its own load, and it is also the CLAMP this file's phase block is
+    // careful about — the phase arm below reads it back and says so rather than reporting
+    // robustness.
+    //
+    // The rung-1-to-rung-2 margin is UNMOVED at 36, so the knife-edge that has broken twice in
+    // this file's history is untouched by the repair, for the reason it was untouched by the
+    // dial: nothing at one and three rooms changed.
+    // ==========================================================================================
     const reviewMeans = LADDER.map((summary) => meanReviewHundredths(summary)!);
-    expect(reviewMeans).toEqual([318, 354, 400, 389]);
+    expect(reviewMeans).toEqual([318, 354, 400, 500]);
     expect(reviewMeans[1]! - reviewMeans[0]!).toBe(36);
-    // THE DISCHARGE HOLDS FROM RUNG 2 TO RUNG 3 AND NO FURTHER, asserted as both halves so the
-    // break is a reading rather than a deletion.
-    expect(strictlyIncreasing(reviewMeans.slice(1))).toBe(false);
-    expect(strictlyIncreasing(reviewMeans.slice(0, 3))).toBe(true);
-    expect(strictlyIncreasing(reviewMeans)).toBe(false);
-    // And the SHARE statistic breaks at the same rung and only there, which is the contrast this
-    // file was built to draw: the two instruments now agree about WHERE the ladder turns over.
+    // THE DISCHARGE HOLDS ACROSS THE WHOLE LADDER AGAIN. One predicate, not two: a `slice(1)`
+    // clause stood here beside the whole-ladder one and is entailed by it (ADR-0035), which is
+    // the shape this file has already deleted three of.
+    expect(strictlyIncreasing(reviewMeans)).toBe(true);
+    // AND THE TWO INSTRUMENTS AGREE RUNG FOR RUNG, which is what this file was built to draw and
+    // is not a second copy of either ladder's own ordering: the review's best rung is the share's
+    // lowest rung and the review's worst is the share's highest, at the ends the two folds have
+    // no arithmetic in common at all.
     const means = LADDER.map((summary) => meanShare(sharesIn(summary)));
-    expect(strictlyDecreasing(means.slice(0, 3))).toBe(true);
-    expect(strictlyDecreasing(means)).toBe(false);
+    expect(reviewMeans.indexOf(Math.max(...reviewMeans))).toBe(means.indexOf(Math.min(...means)));
+    expect(reviewMeans.indexOf(Math.min(...reviewMeans))).toBe(means.indexOf(Math.max(...means)));
   });
 });
 
@@ -605,9 +654,15 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
         [1_304, 1_176, 368],
         [266, 452, 905],
       ],
+      // RE-TAKEN AT G-043. The twelve-room `lean` arm is now the rung the repaired rule
+      // provisions — two amenities of each kind, not one — so this pair has become the move a
+      // player makes ABOVE the provisioning point rather than the move that rescues a rung which
+      // was under-provisioned by a unit error. The row movements shrink by an order of magnitude
+      // with it, and that is the finding rather than a loss: the experiment the block on `THE
+      // SHARE FALLS AT EVERY RUNG` named is no longer an experiment, it is the ladder.
       12: [
-        [2_882, 2_849, 216],
         [371, 352, 653],
+        [254, 435, 607],
       ],
     };
     for (const rooms of [6, DEMAND]) {
@@ -616,12 +671,17 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
         PAIRS[rooms]?.map((row) => [...row]),
       );
       // TWO ROWS OF THREE IMPROVE AT BOTH ROOM COUNTS, and by far more than the third loses:
-      // 1,038 + 724 against 537 at six rooms, and 2,511 + 2,497 against 437 at twelve. **The
-      // build move is still worth making at both, and at twelve rooms it is now worth more than
-      // any other move in this file** — 219 checkouts and 252 dissatisfied walk-outs become 464
-      // checkouts and none. **The build move is still worth making at both** — what the block above records is that the WORST
-      // row and the MEAN over engagement rows stop falling monotonically along the LADDER,
-      // which is a different quantity from this pair and is measured on a different axis.
+      // 1,038 + 724 against 537 at six rooms, and 117 + 46 against 83 at twelve.
+      //
+      // **THE TWELVE-ROOM MARGINS SHRANK BY AN ORDER OF MAGNITUDE AT G-043 AND THAT IS THE
+      // REPAIR SHOWING, NOT A REGRESSION.** The `lean` arm used to be a rung the party-counting
+      // rule left with one amenity of each kind behind sixteen guests, so the extra amenity was
+      // rescuing a starved hotel and was worth thousands of basis points. The rung is now
+      // provisioned to its own load before this pair starts, so the extra amenity is what it
+      // should be — a real but ordinary improvement on a hotel that already works. **The move
+      // is still worth making at both room counts**, which is what this arm asserts; what the
+      // block above records is a property of the LADDER, a different quantity on a different
+      // axis.
       const improved = engagementSharesIn(rich).filter((value, index) => value < engagementSharesIn(lean)[index]!);
       expect(improved, `${rooms} rooms`).toHaveLength(2);
     }
@@ -814,7 +874,11 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
     expect(bottleneck(after)).toBe(2);
     // 581 -> 653 at G-040b-ii, and the row identity is unmoved: `guest_nourishment` is still the
     // row the extra amenity's guest-ticks come out of at this rung.
-    expect(engagementSharesIn(rich)[bottleneck(after)]).toBe(653);
+    // 653 -> 607 at G-043, with the row identity STILL unmoved through a re-provisioning that
+    // moved the lean arm's other two rows by thousands of basis points. The pair now spans a
+    // hotel that is already provisioned to its load, so the amenity is bought on top of enough
+    // rather than instead of enough — and the same need still pays for it.
+    expect(engagementSharesIn(rich)[bottleneck(after)]).toBe(607);
   });
 });
 
@@ -898,8 +962,28 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
     // G-041 read 40% and G-039b-alpha read a clamped 0.5%. That is the honest pair, and no ratio
     // is claimed from a clamp because there is no longer a clamp to claim one from.
     // ==========================================================================================
-    expect(phases.map((summary) => meanReviewHundredths(summary))).toEqual([388, 389, 384, 392]);
-    expect(reviewPhaseSpread).toBe(8);
+    // ==========================================================================================
+    // **AND AT G-043 IT IS A CLAMP AGAIN, WHICH THIS BLOCK PRE-REGISTERED IN THOSE WORDS.** The
+    // G-041 paragraph above says: *"A goal that merges G-037a's fold re-takes this arm; if the
+    // rung saturates again the clamp reading returns and this becomes `<= 1` once more."* The
+    // rung saturates again — not through the fold, but because the repaired rule gives it the
+    // second amenity of each kind its sixteen guests need — and the reading returns exactly as
+    // described: every guest in the TOP band at all four cadences, spread zero.
+    //
+    // **SO NO RATIO IS CLAIMED FROM IT, AGAIN, AND THAT IS THE WHOLE POINT OF THE PARAGRAPHS
+    // ABOVE.** A zero here is the ceiling of the scale showing through, not robustness. What
+    // carries the arm's subject is the SHARE half below, which is not clamped at either end.
+    //
+    // **THREE FOLDS OF ONE FACT STOOD HERE AND THERE ARE NOW TWO (ADR-0035).** The occupied
+    // DISTRIBUTIONS below, the review MEANS and the SPREAD over those means are the same
+    // observation at three depths, and each entails the next: a cadence whose whole population
+    // sits in one band has a mean of that band, and four equal means have a spread of zero. The
+    // middle one is gone. What is kept is the distributions — the only one of the three that
+    // forbids anything the others do not — and the spread, which is this arm's SUBJECT and would
+    // otherwise not appear in the arm named for it. It is asserted EXACTLY rather than as a
+    // bound, because with the distributions pinned there is no range left for a bound to permit.
+    // ==========================================================================================
+    expect(reviewPhaseSpread).toBe(0);
     // And it is a clamp BECAUSE the rung is saturated, which is the precondition that makes the
     // reading a clamp. Without this line the bound above reads as robustness.
     //
@@ -941,12 +1025,12 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
     // the mass in band 4, a thin top band of 21 to 30 guests. That uniformity is what makes the
     // spread above 8 rather than 68, and it is the same fact the review mean and the engagement
     // share report from their own ends: a rung where everybody is housed and nobody is served.
-    expect(occupancy).toEqual([
-      '3:78,4:374,5:22',
-      '3:80,4:361,5:30',
-      '3:94,4:351,5:21',
-      '3:60,4:358,5:24',
-    ]);
+    // G-043: SATURATED AT ALL FOUR CADENCES — one band, the top one, at every cadence. The rung
+    // is provisioned to its own load in GUESTS now, so every guest that walks in gets a bed AND
+    // gets served, and which tick it departs on decides nothing. That is what makes the spread
+    // above a clamp rather than robustness, and the literals are kept at full width for the
+    // reason the block above gives: a second band growing by one guest must go red here.
+    expect(occupancy).toEqual(['5:468', '5:464', '5:461', '5:438']);
     for (const summary of phases) {
       const occupied = summary.reviews.distribution.filter((row) => row.count > 0);
       // THE MODAL BAND IS NO LONGER THE TOP BAND AT EVERY CADENCE (G-041) — at cadence 119 it
@@ -989,8 +1073,15 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
     // terms fell and the numerator fell further, which is the same uniformity the review half
     // above records: a top rung whose guests are all housed and all under-served responds less
     // to the arrival phase than one whose guests were being served at different depths.
-    expect(sharePhaseSpread).toBe(108);
-    expect(ladderShareEffect).toBe(972);
+    // G-043: 108 -> 11 against a ladder effect of 972 -> 2,115, so the multiple goes from 9.0x
+    // to 192x and the order of magnitude the retired `x 10` asked for is cleared many times
+    // over. **Both terms moved and they moved in opposite directions**, which is the repair
+    // rather than luck: the top rung's share collapses when it is provisioned in guests, so the
+    // ladder's span grows at the same time as the phase response at its top rung shrinks. The
+    // `x 10` is still not re-chosen — the two quantities are asserted exactly and the multiple
+    // is read off them.
+    expect(sharePhaseSpread).toBe(11);
+    expect(ladderShareEffect).toBe(2_115);
   });
 
   it('and the departure counts move with the cadence, so the perturbation is real', () => {

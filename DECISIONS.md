@@ -6214,3 +6214,128 @@ room, not head count.)*
   **The true claim is "no change to `packages/sim` or `apps/game`."**
 - ***"~19 goldens"*** — nineteen test **files** went red; **89 assertions moved.** *The larger figure
   is the one to budget against.*
+
+---
+
+## ADR-0074 — The ladder was never inverting. And the FOURTH fix for this class was also wrong.
+
+**Date**: 2026-08-23 · **Status**: accepted · **G-043.** Fourteen rows PASS, `VERIFY_EXIT=0`,
+I2 `02fe3c4fa2a7e533` **unchanged**, **no golden moved.**
+
+### THE MEASUREMENT CAME FIRST AND DECIDED THE SHAPE
+
+Run **before any design**, `--days 30 --seed 7`, exact deterministic counts, engagement rows, at
+one / two / three amenities:
+
+| | worst-served | engagement mean |
+|---|---|---|
+| **above** 12 rooms / arr 120 | 2,882 -> 653 -> 607 | 1,982 -> 459 -> 432 |
+| **above** 16 rooms / arr 60 | 5,156 -> 2,894 -> 692 | 3,403 -> 1,690 -> 584 |
+| **above** 24 rooms / arr 60 | 5,112 -> 3,143 -> 783 | 3,464 -> 1,964 -> 601 |
+| **below** 3 rooms / arr 120 | 1,124 -> **1,439** -> **1,482** | 866 -> 804 -> **863** |
+| **below** 6 rooms / arr 120 | 1,304 -> 905 -> **930** | 949 -> 541 -> **590** |
+
+> **The inversion does not survive above the bottleneck. Above it both folds fall at every extra
+> amenity at all three room counts; below it neither does at either.** **One repair, one parked
+> defect — not one defect.** The block asked exactly this question and the answer changed the goal.
+
+### AND A PRIOR QUESTION NOBODY HAD ASKED: WHAT IS A HOTEL'S CAPACITY MEASURED IN?
+
+The first room count that stops turning guests away is **8 / 11 / 22** at arrivals 180 / 120 / 60.
+**The beds model (`rooms x capacity`) predicts 6 / 8 / 16 — wrong at two of three, in the UNSAFE
+direction.**
+
+> **A bedroom is claimed by ONE PARTY, not by `capacity` strangers.** Every piece of provisioning
+> arithmetic in this project that multiplied rooms by capacity was over-estimating what a hotel can
+> hold.
+
+### THE REPAIR IS SHARED, AND THE DECIDING EVIDENCE IS THAT THE FOURTH FIX WAS ALSO WRONG
+
+`tools/headless/src/provisioning.ts`. **Every quantity carries its unit in its name, and the
+party -> guest conversion happens in exactly one function.**
+
+I asked whether a fifth local fix or a shared helper was right. **The builder answered with
+evidence rather than preference**: `scorer.report.test.ts`'s repair at G-040b-ii — *the fourth fix
+for this class* — **fixed the party unit and introduced the beds model in the same change**, plus a
+hand copy of `partySizeOf`'s band walk that **answers a different mean for any table whose cycle
+does not start at the first ordinal.**
+
+> **No verdict in that file turned on it — which is exactly how a wrong model survives a repair
+> aimed at it.** Four goals fixed this class locally and the fourth shipped a new instance while
+> doing so. **That is the case for the shared helper, and it is measured rather than argued.**
+
+**Proof of bite** (ADR-0022 recipe, `sha256sum -c` both ways): `guestsPerArrivalCommand -> 1` turns
+**11 arms red**; `saturatingRooms -> beds model` turns **5 arms red**.
+
+*(`packages/sim/src/index.ts` gains one line — `partySizeOf` exported, in the idiom the file already
+uses. Additive, no behaviour, no hash movement, and **flagged as a change to another agent's
+package** rather than made quietly.)*
+
+### THE OPEN FINDING: DISCHARGED AT THE TOP RUNG, NARROWED TO RUNG 3 — AND THE REST NOT TAKEN
+
+| statistic | party-counting | guest-counting |
+|---|---|---|
+| all four rows, mean | 2,459 1,431 1,132 **1,487** | 2,459 1,431 1,132 **344** |
+| engagement worst | 2,011 1,124 1,304 **2,882** | 2,011 1,124 1,304 **653** |
+| review mean | 318 354 400 **389** | 318 354 400 **500** |
+
+**Both all-rows folds strictly decreasing again; review mean strictly increasing again.** Top rung
+**219 checked out / 252 dissatisfied -> 464 / 0.**
+
+**What survives is pinned exactly**: both engagement-only folds rise from rung 2 to rung 3 **and
+nowhere else**. **Cause is the `ceil`, not the unit** — three rooms (4 concurrent guests) and six
+rooms (8) both round to one provider, so rung 3 carries twice rung 2's load on the same hardware.
+
+> **The discharging measurement was RUN and is POSITIVE — and deliberately NOT TAKEN.** A
+> load-proportional rule changes what the ladder measures, and re-deriving the sustained figure is a
+> rates goal. **Choosing either to make a ladder monotone is the §9 stop condition**, and the
+> builder said so rather than reaching for it.
+
+**Only the top rung's amenity count moved, so three of four ladder runs are byte-identical.**
+
+### WATCH #23 — A "READS AS STUPID" WITH A FRAME, AND IT IS THE MILESTONE'S BEST ONE
+
+**`watch23-3rooms/a3/t004320-fm1.svg`, tick 4,320, floor −1: NINE amenity rooms and ONE GUEST in
+them**, against `a1/` with three rooms and zero. **The player triples the basement and every outcome
+is identical** — 48 / 11 / 32 / 0 in both arms, five guests in the hotel at every sampled tick.
+
+**It is below the bottleneck**: what turns those guests away is **beds**, and every housed guest is
+already in the top band — **a clamp, ADR-0034 §3(a)'s own trap.** *Pinned and parked, not fixed.*
+
+**The purchase that DOES pay, for contrast**: 12 rooms, 1 -> 2 amenities, three days —
+**17 out / 18 dissatisfied becomes 32 out / 0.**
+
+*(Instrument note: `record-frames.ts` steps `scenario.ts`, which has **no amenity count**, so a
+purchase cannot be recorded with it. The builder reused its exact drawing path over `report.ts`'s
+schedule from a disposable script outside the repo — **the shipped drawing, a workload it can
+express.**)*
+
+### THREE OF MY CLAIMS, AND ONE OF THE PROJECT'S, FALSIFIED
+
+1. **"The flat axis may already be gone" — FALSE.** Re-measured today: **3 rooms still reads
+   354 / 354 / 354**, exactly as pre-dial, and the worst engagement need still gets worse. What
+   G-040b-ii saw move was **6 rooms and 12 rooms** — both true, **neither is the dead axis.**
+2. **The `g037a-quality-fold` tie-break CANNOT be a cause on `main`.** `compareProviderPreference`
+   ranks by **per-room-TYPE** `fitBasisPoints`, and **there is no per-room-INSTANCE quality on
+   `main`** for a room to be worst at. *(What that comparator does do is live and parked: it does not
+   spread guests across equally-ranked providers — the lowest-id café still takes most of the
+   traffic.)*
+3. **`PARKING.md`'s digest says "257 top-level items" and states the command to re-derive it. The
+   command gives 261 on HEAD, before anything was touched** — **and it counts `^- ` lines, so every
+   recent `###` entry is invisible to it entirely.** A count that does not reproduce from its own
+   stated method.
+4. **`balance-critic`'s standing §6.1 mandate is VACUOUS**: *"run across a spread of seeds and report
+   the distribution of outcomes."* Four seeds (7/1/13/99) give **identical departures, unserved rows
+   and balance** — only the state hash differs, because `stepGuests` draws no randomness. **The
+   distribution is a point mass by construction.** *That is ADR-0007's class sitting inside a
+   critic's charter, exactly like the "reads as stupid" mandate ADR-0013 repaired.*
+
+### AND THE CHARTER'S SHORT FORM WAS STILL CARRYING THE SENTENCE THE HUMAN REVERSED
+
+**`CLAUDE.md` read *"Side-on cross-section view (SimTower / Project Highrise), not isometric"* on
+2026-08-23 — seven days and forty goals after ADR-0046 reversed it**, in **the one document whose
+stated purpose is surviving compaction.** `HOTELSIM.md` §1 was corrected on the day; the short form
+was not, and its own precedence rule was the only thing preventing harm.
+
+> **A ruling is not landed until every copy of the sentence it reverses is dead.** Corrected, with
+> the delay recorded in place so the next ruling is swept rather than filed.

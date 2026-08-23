@@ -2309,3 +2309,142 @@ I said `arrived` is *"the denominator of several derived shares."* **Nothing in 
 it** — three readers, none of them a division. The fix was still required, because the conservation
 law throws on load, **but a builder sizing the goal from my sentence would have budgeted a sweep
 that does not exist.** *Fifteen goals running.*
+
+## 2026-08-23 — G-043: the rule counted parties, the bound counted guests, and the ladder is monotone again
+
+**THE BOTTLENECK QUESTION WAS ANSWERED BEFORE ANYTHING WAS DESIGNED, WHICH IS WHAT THE BLOCK ASKED
+FOR.** Are the flat amenity axis below fifteen concurrent guests and the inverting provisioning
+ladder the same defect? **No.** Measured on today's tree, `--days 30 --seed 7`, exact deterministic
+counts, unserved share in basis points, engagement rows only, one amenity of each kind then two then
+three:
+
+    ABOVE the bound          worst-served need          mean over engagement needs
+    12 rooms / arrivals 120  2,882 ->   653 ->   607    1,982 ->   459 ->   432
+    16 rooms / arrivals  60  5,156 -> 2,894 ->   692    3,403 -> 1,690 ->   584
+    24 rooms / arrivals  60  5,112 -> 3,143 ->   783    3,464 -> 1,964 ->   601
+
+    BELOW the bound
+     3 rooms / arrivals 120  1,124 -> 1,439 -> 1,482      866 ->   804 ->   863
+     6 rooms / arrivals 120  1,304 ->   905 ->   930      949 ->   541 ->   590
+
+**The inversion does not survive above the bottleneck.** Above it the worst-served engagement need
+and the mean over engagement needs fall at EVERY extra amenity at all three room counts; below it
+neither does at either. So this is one repair and one parked defect, not one defect.
+
+### THE REPAIR IS SHARED, AND THE REASON IS THAT THE FOURTH LOCAL FIX WAS ALSO WRONG
+
+`tools/headless/src/provisioning.ts`. Every quantity carries its unit in its name and the
+party-to-guest conversion happens in exactly one function. `unserved.report.test.ts` and
+`scorer.report.test.ts` both call it; `packages/sim/src/index.ts` gains one export, `partySizeOf`,
+so the harness stops keeping a second copy of the cycle walk.
+
+> **G-040b-ii repaired this class in `scorer.report.test.ts` and introduced a second error in the
+> same repair**: it fixed the party unit and then bounded occupancy by `rooms * capacity` — BEDS.
+> **The simulation does not pool strangers.** `guests.ts` skips a lodging room holding a standing
+> claim from a different party, so a bedroom is claimed by ONE PARTY and a lone guest occupies a
+> whole one. **Measured, at three cadences**: the first room count that stops turning guests away is
+> 8 / 11 / 22 at arrivals 180 / 120 / 60, where the beds model predicts 6 / 8 / 16. **No verdict in
+> that file turned on the difference**, which is exactly how a wrong model survives a repair aimed
+> at it — it was never asked a question it could fail. It is asked one now.
+
+### WHAT MOVED ON THE LADDER, AND WHAT DID NOT
+
+Only the TOP rung's amenity count moves — one of each kind to two — so three of the four ladder runs
+are byte-identical to the ones the file measured before the repair.
+
+    statistic                the party-counting rule    the guest-counting rule
+    all four rows, mean      2,459 1,431 1,132 1,487    2,459 1,431 1,132   344
+    all four rows, worst     5,938 3,128 1,679 2,882    5,938 3,128 1,679   653
+    ENGAGEMENT only, mean    1,299   866   949 1,982    1,299   866   949   459
+    ENGAGEMENT only, worst   2,011 1,124 1,304 2,882    2,011 1,124 1,304   653
+    REVIEW mean, hundredths    318   354   400   389      318   354   400   500
+
+**Both all-rows folds are strictly decreasing again and the review mean is strictly increasing again,
+across all four rungs.** The top rung's departures move from 219 checked out with 252 walking out
+dissatisfied to 464 checked out with nobody dissatisfied. The phase block's clamp reading returns
+exactly as that block pre-registered it: the rung saturates, the review spread goes to zero, and no
+ratio is claimed from it — while the share half, which is not clamped, goes from a 9.0x margin over
+its own ladder effect to 192x (spread 108 -> 11 against 972 -> 2,115).
+
+**THE OPEN FINDING IS NOT FULLY DISCHARGED AND IS NARROWED TO EXACTLY WHAT SURVIVES.** Both
+engagement-only folds still rise from rung 2 to rung 3 and nowhere else. **The cause is the `ceil`,
+not the unit**: the rule provisions three rooms (four concurrent guests) and six rooms (eight) with
+the same single provider, because both land under one whole one — so rung 3 carries twice rung 2's
+load on the same hardware, while rung 4 clears a whole provider, gets two, and pools them. **The
+discharging measurement is run and positive**: six rooms with a second amenity reads mean 541 and
+worst 905, both below rung 2's 866 and 1,124. **Neither candidate repair is taken here** — a
+load-proportional rule changes what the ladder measures, and re-deriving what one provider sustains
+is a rates goal in G-041's shape. Choosing either because it makes this ladder monotone is the §9
+stop condition, and G-039b-alpha refused that shape by name.
+
+### §5.8 — WHERE ELSE THE CLASS LIVES. FIVE SITES, NAMED, WITH A RESULT EACH
+
+`unserved.report.test.ts` carried it (repaired) · `scorer.report.test.ts` carried it (repaired) ·
+**`determinism-log.ts` CARRIES IT AND IS NOT REPAIRED HERE** — read in guests its amenity count goes
+from two of each kind to three, which moves the I2 log's entity ids and the I2 hash, and that file's
+own note records that a wave with more amenities made the hotel *"WORK too well"* and cost the gate
+its `leftDissatisfied` coverage. Parked with its falsification test ·
+`bench.workload.golden.test.ts` checked, clean, two constants with the shipped table read back at
+the constant · `tools/gates/workload.mjs` checked, clean, **and it is the model answer**: it retired
+the same quotient at G-032a in favour of an occupancy MEASURED off the run. The full census with the
+reasoning is the header of `provisioning.ts`.
+
+### PROOF OF BITE, ADR-0022 RECIPE, ON A SCRATCH COPY WITH `sha256sum -c` BOTH WAYS
+
+- `guestsPerArrivalCommand` returns 1 — the party unit dropped: **11 arms red** across both files.
+- `saturatingRooms` returns the beds-model room count: **5 arms red**, including the arm whose whole
+  subject is telling the two models apart.
+
+Restored byte-identically and re-run green after each. Never `git checkout --`, never a stash over
+the repo.
+
+### AND ONE DEFECT IN MY OWN TEST, FOUND BY THE FULL SUITE AND NOT BY THE FILE
+
+The first `pnpm verify` went red on a **timeout**, not an assertion: an arm that spawned nine CLI
+processes inside an `it` exceeded the 30-second per-test bound under full-suite contention, while
+the same file passed alone in 38 seconds. The runs are a FIXTURE and are hoisted to module scope,
+which is the idiom `unserved.report.test.ts` already uses for its ladder and for this exact reason.
+**Reported because a green solo run is not evidence about a suite run**, and the file would have
+shipped red.
+
+## 2026-08-23 — WATCH #23 (G-043): the player buys six rooms and not one guest notices
+
+**INSTRUMENT, AND WHY IT AND NOT THE OTHERS.** A purchase is a change to an amenity COUNT, and
+`apps/game/scripts/record-frames.ts` steps `scenario.ts`, which has no amenity count — it builds one
+room per amenity type, full stop. So the drawing path was reused verbatim (`createScene` + `viewFor`
++ `frameSvg` — the SHIPPED scene, not a second drawing of it) over `report.ts`'s `schedule`, which
+takes `rooms` and `amenities` as arguments. Disposable, run from outside the repo, nothing added to
+any shipped instrument (§9). Seed 7, an arrival every 120 ticks, three days, frames at ticks 1,440 /
+2,880 / 4,320 on every floor, walls in the default reduced position.
+
+**THE PURCHASE THAT PAYS — 12 rooms, one amenity of each kind against two.** The basement goes from
+3 rooms (`GR25 C27 L28`) to 6 (`GR25 GR27 C29 C30 L31 L33`). Over three days: **48 arrive, 17 check
+out and 18 WALK OUT DISSATISFIED** with one; **48 arrive, 32 check out and NOBODY walks out** with
+two. The building visibly empties in the lean arm — 16 guests at tick 1,440, 12 at tick 2,880 — and
+holds at 16 at every sampled tick in the rich one. That is the rung this goal re-provisions, seen
+rather than tabulated.
+
+**AND THE PURCHASE THAT DOES NOT — 3 rooms, one amenity of each kind against three. This is the
+finding.**
+
+> **Frame `a3/t004320-fm1.svg`, tick 4,320, floor -1: NINE amenity rooms (`GR7 GR9 GR11 C13 C14 C15
+> L16 L18 L20`) and ONE guest standing in them.** Against `a1/t004320-fm1.svg` at the same tick:
+> three amenity rooms and zero guests. The player has tripled the basement and **every outcome is
+> identical** — 48 arrived, 11 checked out, 32 gave up, 0 dissatisfied, in both arms, with five
+> guests in the hotel at every sampled tick either way.
+
+**THAT READS AS STUPID AND IT HAS A FRAME REFERENCE** (ADR-0013 §3). A player who spends on eight
+rooms nobody ever enters, and watches the review mean read the same number to the hundredth three
+times running, is being told nothing by a game with plenty to tell them: this hotel is short of BEDS,
+not of cafés.
+
+**IT IS NOT THE UNITS DEFECT THIS GOAL REPAIRS, AND THE MEASUREMENT SAYS SO RATHER THAN THE
+ARGUMENT.** It is below the bottleneck; the departures are identical across all three levels because
+what turns those guests away is beds; and every housed guest is already in the TOP band, so there is
+no guest whose score an amenity could move. **The flat review is a CLAMP** — ADR-0034 §3(a)'s own
+trap, which that ADR caught an earlier claim in. It is pinned in `provisioning.report.test.ts` as
+exactly that, and parked with what would discharge it.
+
+**AND NOTHING ELSE READ AS WRONG.** Twelve bedrooms on floor 0 in both twelve-room arms, no invalid
+rooms in any frame, no guest on floor 1 in any frame (there is nothing there), and the amenity floor
+never held more guests than it had rooms.
