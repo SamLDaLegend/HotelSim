@@ -2739,6 +2739,83 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 **Exit criteria**: a frame reference showing the shaft on two adjacent floors · `pnpm verify`
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
+## G-049 — Two needs are structurally advantaged, and the player's fix subsidises the wrong one
+Status: **PLANNED 2026-08-24. From the human watching a day-839 run** — *"Comfort and Entertainment
+are the biggest causes of dissatisfaction, but nourishment and rest always are satisfied."*
+Milestone: M3 · Owner pair: economy-engineer / balance-critic
+Statement: the supply asymmetry between the four needs is **stated and derived**, or removed.
+
+### THE OBSERVATION IS EXPLAINED BY THE CONTENT, AND IT IS STRUCTURAL RATHER THAN EMERGENT
+
+Read out of `room-types.json` and `item-types.json`, resolving `requires` as well as `provides`:
+
+| need | provided by | independent sources |
+|---|---|---|
+| `night_rest` | **the guest's OWN `standard_room`** | **its own bedroom** — every housed guest has one |
+| `guest_nourishment` | `hotel_cafe` (room) **and** `vending_machine` (item) | **TWO** |
+| `guest_comfort` | `arm_chair`, which lives in a `hotel_lounge` | **one** |
+| `guest_entertainment` | `games_room` (room) | **one** |
+
+**THE TWO SATISFIED NEEDS ARE EXACTLY THE TWO WITH AN EXTRA SUPPLY ROUTE, and the two starved ones
+are exactly the two without.** The human read the shape off the screen at day 839; the content says
+the same thing in four lines.
+
+### AND THE CROSS-FEED IS THE PART THAT MAKES IT A TRAP
+
+**`games_room` REQUIRES `vending_machine`. `vending_machine` PROVIDES `guest_nourishment`.**
+
+> **So every games room a player builds to fix ENTERTAINMENT also ships a NOURISHMENT provider
+> inside it.** The fix for the starved need **subsidises the already-fed one**, and the gap widens
+> the more the player does the sensible thing.
+
+*(The mirror holds for comfort and is the reason it is not worse still: `hotel_lounge` requires
+`arm_chair`, so a lounge is the only way to buy comfort at all — comfort has no room-level provider
+of its own.)*
+
+**`night_rest` is a different case again and probably correct**: it is served by the guest's own
+bedroom, so it has **zero contention by construction** — a housed guest is always at a provider.
+**That is a design property worth keeping, not a bug**, but it means `night_rest` can never be the
+starved need and **any balance statistic that averages over all four needs is diluted by one that
+cannot fail.**
+
+### WHAT TO DECIDE — and the block deliberately does not choose
+
+**This is a content-shape question, and §2.1 says the answer must be derivable from a stated
+requirement rather than picked.** The candidates, each with its cost:
+
+- **(a) State the asymmetry as intended and stop calling it a defect.** Free. Honest only if
+  something then explains why two needs are meant to be easier — **and the statistics that average
+  over four needs must say so**, or they keep reporting a number diluted by an unfailable need.
+- **(b) Give comfort and entertainment a second route each**, mirroring nourishment. Content only.
+  **But it doubles the provider population and every provisioning number moves with it** —
+  `provisioning.ts` is fresh from G-043 and would be re-derived.
+- **(c) Remove the cross-feed** — `games_room` requires something that does not provide nourishment.
+  **The smallest change, and it directly targets the trap** rather than the asymmetry.
+
+**RECOMMENDED: measure before choosing.** The cheap measurement is the four needs' unserved
+basis-points against **provider counts per need**, on a hotel the player would actually build. **If
+the gap tracks provider count, (b) or (c). If it does not, the cause is elsewhere and this block is
+wrong.**
+
+### WHAT MAKES THIS MEASURABLE NOW WHEN IT WAS NOT BEFORE
+
+**G-043 shipped `provisioning.ts`**, where every quantity carries its unit and the party→guest
+conversion happens in one place — **so "how many providers does this need have per guest" is now a
+question the tree can answer** rather than a hand count. **Use it.**
+
+**And the instrument exists**: the report's per-need rows already carry met / unmet / unserved
+basis-points, and `unserved.report.test.ts` walks provisioning ladders. **This goal should be a
+measurement and a ruling, not a rewrite.**
+
+### CAUTION FROM THE LAST FOUR BALANCE GOALS
+
+- **Do not tune content so a statistic moves** — §9, and G-039b-α refused it by name.
+- **`arrived` counts parties; guests are what providers serve.** That units mismatch was G-043's
+  whole finding and it has now been made five times. **`provisioning.ts` is the one place that
+  converts.**
+- **The day-839 observation is a SINGLE long run.** Vary rooms / arrivals / amenities rather than
+  seeds — **four seeds give identical outcomes on this sim** and that is already recorded.
+
 ## G-048 — The speed controls move to the top, where everything else is
 Status: **DONE 2026-08-23.** The row now sits at a CONSTANT `top 99 / bottom 138` that does not depend on viewport height — **headroom 457 where it was 0**, verified independently. One file, `apps/game/index.html`. **My "unreachable" mechanism did NOT reproduce and is corrected in E-013**; what was real is that the row had exactly zero pixels of margin under `overflow: hidden` with no scroll.
 Discharges **E-013**. Milestone: M3 · Owner pair: render-engineer / render-critic
