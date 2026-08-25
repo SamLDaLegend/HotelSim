@@ -2739,8 +2739,90 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 **Exit criteria**: a frame reference showing the shaft on two adjacent floors · `pnpm verify`
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
+## G-050 — Fit scales satisfaction, not just selection
+Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §2).** Milestone: M3
+Owner pair: ai-engineer / ai-critic · **RECOMMENDED FIRST of the three ADR-0079 opens.**
+Statement: **`fitBasisPoints` changes HOW MUCH a need is satisfied**, not only which provider is
+  chosen — *"nourishment from a vending machine is not the same as a 3 course meal in a restaurant."*
+
+**THE FIELD ALREADY EXISTS AND ALREADY DOES HALF THE JOB.** `fitBasisPoints` is on room types and
+item types — `hotel_cafe` **7500**, `arm_chair` **2500**, `vending_machine` **2500** — **and it is
+read ONLY by `compareProviderPreference`, which RANKS.** A vending machine and a cafe satisfy
+nourishment **identically today**; the machine is merely chosen last.
+
+> **So this goal adds a reader, not a field.** The content is already shaped for it, the values are
+> already declared, and **I3 holds without a schema change.**
+
+### WHY THIS ONE FIRST
+
+- **It is the term that makes ADR-0078's 3.3x VISIBLE.** A need served only by its worst provider
+  should read differently from one served by its best; today both read the same. **Fixing the
+  ordering defect before anything can perceive quality would be fixing a statistic with no
+  consumer** — which is why the tie-break stays parked.
+- **It gives the review channel more than one bit.** Reviews are flat 500 above the bottleneck
+  (ADR-0078), and quality-of-service is the obvious second dimension.
+- **It is the cheapest of the three opens** and needs no new system.
+
+### WHAT TO DECIDE AT PLAN
+
+- **Where fit multiplies.** The refill? The satisfaction recorded? The dissatisfaction shed? **These
+  are different games** — pick one, state why, and put the arithmetic where the number lives.
+- **`serviceFloorBasisPoints` is already a scaling term** (5000 on all four needs, G-041's derived
+  service floor). **Two multiplicative quality terms need a stated relationship or they will be
+  tuned against each other.** Read ADR-0057 and the `serviceFloorIsARate` refusal first.
+- **The speed floor sits EXACTLY on its derived minimum** (`guestCellsPerTick: 3`, G-041). **Anything
+  that changes how long a helping takes re-derives it** — check before building, not at VERIFY.
+
+### WATCH
+
+**Owed, and it is the point**: two hotels identical but for provider quality should **look
+different** to a watching player. **If they do not, the goal has not landed** — and reviews being one
+bit is the reason to check the review distribution, not just the unserved rows.
+
+## G-051 — Somewhere for the money to go
+Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §3).** Milestone: M3
+Owner pair: economy-engineer / balance-critic
+Statement: expensive room types — **Spa, Theatre, conference** — so cash has a sink.
+
+**MEASURED CAUSE, not a guess**: 12 rooms / arrivals 120 / 1,000 days reaches **97,364,000p** with
+**nothing to spend it on**. `--build` only builds bedrooms, and past saturation bedrooms do nothing
+either. **The human's diagnosis — absence rather than imbalance — is the right one and the parked
+finding is re-labelled to match.**
+
+**CONTENT ONLY. I3 means no code**: a room type is a JSON entry with a cost, an upkeep, a capacity,
+what it provides and what it requires. **Genuinely cheap, and the only one of ADR-0079's three opens
+that is.**
+
+**But name the trap before building it**: ADR-0078 showed **every amenity above the optimum is
+strictly dominated** — each costs 4,500,000p and buys nothing. **A Spa that is merely a more
+expensive Lounge inherits that.** **An expensive room has to buy something the cheap one cannot**, or
+it is a bigger number with the same dominance. **That is what G-050 is for, which is why it goes
+first.**
+
+## G-052 — Staff, and the third of the money loop that does not exist
+Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §3). NOT SMALL — and likely M4.**
+Owner pair: economy-engineer / balance-critic · **This is C4, named at ADR-0047 and not built.**
+Statement: staff exist, occupy rooms, and are **paid**.
+
+> **`CLAUDE.md` defines the money loop as *"room revenue against WAGES and upkeep, settled
+> nightly."*** **The ledger has nine transaction reasons and NONE is a wage.** **The money loop has
+> been running on two of its three declared terms since M0**, and this is the only declared term of
+> any of the three loops with no implementation at all.
+
+**`accessRule: staffOnly` is ALREADY IN THE SCHEMA** and its own docblock says the value is
+**unreachable today** because no shipped room type is a staff room. **The seam was cut for this
+before it was needed.**
+
+**DO NOT CALL THIS SMALL.** A staff role is a content type, an entity with an id (**and an id is
+behaviour** — lowest-id-wins is still the lodging rule), a nightly ledger transaction, and something
+that occupies rooms and therefore interacts with capacity, reachability and the queue. **Estimating
+this as cheap is the error this project has made most often.**
+
+**It is also the goal that makes G-051 matter**: wages give cash a *recurring* sink where expensive
+rooms give it a one-off one.
+
 ## G-049 — Two needs are structurally advantaged, and the player's fix subsidises the wrong one
-Status: **RE-SCOPED 2026-08-24 by its own measurement (ADR-0078). The supply asymmetry is the SMALLER half.** Verdict on the falsifiable question: **NO, with a boundary.** BELOW the provider bottleneck the gap tracks provider count decisively (13.5x) — that is the regime the day-839 observation came from and the block is right there. **ABOVE it the gap tracks the need's position in ASCENDING CONTENT-ID ORDER (3.3x), proven by renaming the ids and changing nothing else** — and nourishment, with twice the supply, is the WORST-served engagement need at every plausible player hotel. **Cause: the need tie-break at `guests.ts:3723` falls to the lower id, and all three engagement needs are exactly tied by shipped content.** Remedies (b) and (c) both act on supply and would leave the 3.3x ordering as the ONLY remaining asymmetry. **The tie-break is the subject now; the remedy is the human's.**
+Status: **DESIGN HALF CLOSED 2026-08-24 by human ruling (ADR-0079). Remedies (b) and (c) are WITHDRAWN.** The human ruled the needs are asymmetrical BY DESIGN — *"they will be met by different things"* — so the below-bottleneck supply asymmetry is a FEATURE, and both remedies existed only to make the needs symmetrical. **What survives is narrower: above the bottleneck which need starves is decided by ascending content-id SPELLING (3.3x, ADR-0078), and nothing in the ruling defends that.** It stays PARKED rather than fixed because it still has no consumer — reviews are one bit and no outcome moves. **Re-open it after G-050 makes quality perceptible.**
 are the biggest causes of dissatisfaction, but nourishment and rest always are satisfied."*
 Milestone: M3 · Owner pair: economy-engineer / balance-critic
 Statement: the supply asymmetry between the four needs is **stated and derived**, or removed.

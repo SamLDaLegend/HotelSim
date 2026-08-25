@@ -6714,3 +6714,79 @@ lower-regime half.** *The remedy is not mine to choose — the critic said so an
 where shipped is **14**, and `:87` says "600 / 1,400 / 1,400 / 1,400" where `night_rest` is now
 **300**. The lcm conclusion survives by luck. **This is the one header a future reader consults about
 whether the tie-break is benign, and both of its numbers are from a dead table.**)*
+
+---
+
+## ADR-0079 — HUMAN RULING: needs are asymmetrical BY DESIGN; fit must scale satisfaction, not just selection; and the money loop is missing a third of itself.
+
+**Date**: 2026-08-24 · **Status**: accepted · **Human ruling**, answering the question ADR-0078 left
+open. **Closes G-049's design half.**
+
+### RULING 1 — THE ASYMMETRY IS A FEATURE
+
+> *"Certainly makes sense for them not to be symmetrical, as they will be met by different things."*
+
+**So the below-bottleneck supply asymmetry that the day-839 observation found is NOT a defect**, and
+G-049's remedies (b) *"give each need a second route"* and (c) *"remove the cross-feed"* are
+**WITHDRAWN** — both existed to make the needs symmetrical, and symmetry is not wanted.
+
+**What survives as a possible defect is narrower and is ADR-0078's finding**: above the bottleneck,
+**which need starves is decided by ascending content-id order** — 3.3x, proven by renaming. **That
+is not asymmetry by design, it is asymmetry by SPELLING**, and nothing in the ruling defends it.
+*It remains parked rather than fixed, because it still has no consumer: reviews are one bit and no
+outcome moves.*
+
+### RULING 2 — SUB-SCORING: A VENDING MACHINE IS NOT A THREE-COURSE MEAL
+
+> *"Likely there needs to be some sub-scoring which can be influenced by varying factors (like for
+> example nourishment from a vending machine is not the same as a 3 course meal in a restaurant)."*
+
+**CHECKED AGAINST THE BYTES, AND THE FIELD ALREADY EXISTS BUT DOES THE WRONG JOB.**
+`fitBasisPoints` is on both room types and item types — `hotel_cafe` 7500, `arm_chair` 2500,
+`vending_machine` 2500 — **and it is read ONLY by `compareProviderPreference`, which RANKS
+providers.**
+
+> **Fit decides WHO a guest goes to. It does not decide HOW MUCH the guest gets.** A vending machine
+> and a restaurant satisfy nourishment **identically** today; the machine is merely chosen last.
+> **That is exactly the gap the ruling names, and the field to carry it is already in the schema and
+> already content (I3).**
+
+**This is the goal, and it is well-shaped**: make `fitBasisPoints` scale the *satisfaction*, not only
+the *choice*. **It is also the term that would make ADR-0078's 3.3x VISIBLE** — a need served only by
+its worst provider would read differently from one served by its best, where today both read the
+same.
+
+### RULING 3 — THE MONEY SINK IS MISSING CONTENT AND A MISSING SYSTEM, NOT A BALANCE BUG
+
+> *"Currently there isn't much to spend on so that's why it accumulates, we still miss some expensive
+> things like Spa or Theatre, conferences, etc. And we also don't have staff to pay wages to, or
+> upkeep, etc."*
+
+**So ADR-0078's "97M with nothing to spend it on" is correctly diagnosed as ABSENCE, not
+imbalance** — and the parked finding is re-labelled accordingly rather than treated as something to
+tune.
+
+**AND THE SECOND HALF IS SHARPER THAN IT LOOKS. CHECKED: THE LEDGER HAS NINE TRANSACTION REASONS AND
+NONE OF THEM IS A WAGE** — `construction`, `demolitionRefund`, `floorConstruction`, `loanDraw`,
+`loanFee`, `loanRepayment`, `roomRevenue`, `startingCapital`, `upkeep`.
+
+> **`CLAUDE.md` defines the money loop as *"room revenue against WAGES and upkeep, settled
+> nightly."*** **Wages are in the charter's own definition of one of the three loops, and they do not
+> exist. The money loop has been running on two of its three declared terms since M0.**
+
+**`accessRule: staffOnly` is already in the schema** and its docblock says *"C4's staff are NAMED and
+not built (ADR-0047), so today this value is unreachable… no shipped room type is a staff room."*
+**The hole is known and named; what is new is that it is now the largest one, because it is the only
+declared money-loop term with no implementation.**
+
+### WHAT THIS OPENS, AND WHAT IT IS HONEST TO CALL SMALL
+
+- **Expensive room types (Spa, Theatre, conference)** are **content only** — a JSON entry each, and
+  I3 means no code. **Genuinely cheap, and they give cash somewhere to go before staff exist.**
+- **Staff and wages are NOT cheap.** A staff role is a content type, an entity, a nightly
+  transaction, and a thing that occupies rooms — **and it is C4, which ADR-0047 named and did not
+  build.** *Calling it small would be the estimate error this project has made most often.*
+- **Sub-scoring is medium and is the one that changes how the game READS**, because it is the term
+  that makes a quality difference perceptible at all.
+
+**Priority is the human's. My recommendation is recorded in the goal blocks rather than here.**
