@@ -2883,6 +2883,62 @@ forward.**
    `VERIFY_EXIT` read from the process.
 8. **I2 unchanged** — checked, not assumed. *Bound 5 again, from the other side.*
 
+## G-054 — Which need starves must not be decided by a spelling
+Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0081 §3.1) — FIRST after the orphan sweep.**
+Milestone: M4 · Owner pair: ai-engineer / ai-critic · **Should be small.**
+Statement: **the need tie-break stops being settled by ascending content-id order.**
+
+### WHY IT GOES FIRST, AND THIS IS THE ARGUMENT I MISSED
+
+I parked this as *"a statistic with no consumer"* — reviews are one bit, no outcome moves.
+
+> **It has no consumer TODAY, and the next two goals ARE the consumers.** *"Everything G-050 and
+> G-051 measure sits on top of it, so fixing it afterwards INVALIDATES whatever they conclude."*
+
+**And the defect's own shape is why it cannot wait**: *"deterministic but arbitrary, which is the
+worst combination because it is stable enough to look intentional."*
+
+### THE MEASUREMENT, ALREADY TAKEN (ADR-0078)
+
+`guests.ts:3723` is `if (pressure <= bestPressure) continue;` — **strictly greater, so an exact tie
+keeps the LOWER need id.** All three engagement needs ship `capacityTicks: 1400` and
+`refillPerTick: 14`, **so they are exactly tied whenever none has been served — the common case, not
+a corner**, and I2 forbids randomness so nothing re-randomises it.
+
+**Proven by renaming the three need ids and changing nothing else**: **pos0 126–254 bp · pos1
+337–453 · pos2 569–613.** `guest_nourishment`, with **twice** the supply, **moved 3.3x purely by
+being renamed.**
+
+**And `utility.ts:60-62` named itself as the tripwire**: *"'Entertainment last' is DISSOLVED, not
+preserved, and **no final need is privileged**; if that ever stops being true, the content changed
+and this header is where to start."* **A final need IS privileged, negatively, by 3.3x. That sentence
+is false and it pointed at the answer.**
+
+### WHAT TO DECIDE AT PLAN — and one option is already ruled out
+
+- **Differentiating the content so ties stop happening is REFUSED.** `utility.ts` says a table with
+  different capacities or refills *"makes the 'every order costs the same' line red and re-opens the
+  question this paragraph answers."* **It reopens a settled derivation, turns a green assertion red,
+  and is tuning content to work around a code behaviour** — §9's shape.
+- **So the tie-break itself is the subject.** Candidates: round-robin on a per-guest cursor;
+  least-recently-served; a deterministic rotation keyed on something already hashed. **All are I2-safe
+  only if they are functions of existing hashed state or add hashed state DELIBERATELY.**
+- **A per-guest field means a SAVE BUMP** — v23 is current, so v24, with a migration that invents
+  nothing. **Say so in the plan rather than discovering it.**
+- **`pressureBasisPoints`' exact ordering must survive.** `utility.ts`'s lcm argument (4,200, under
+  10,000) is what makes pressures comparable without float; **check it against the SHIPPED table,
+  because two numbers in that header are stale** — it says *"refill 7"* where shipped is **14** and
+  *"600 / 1,400 / 1,400 / 1,400"* where `night_rest` is now **300**.
+
+### EXIT CRITERIA
+
+- **The renaming experiment REPRODUCED and its spread collapsed**: rename the three need ids, and the
+  per-need unserved figures must **no longer track id position**. *That is ADR-0078's own instrument
+  turned into a regression test.*
+- **`utility.ts`'s tripwire sentence is TRUE again**, or struck and replaced pointing forward.
+- **I2 moves by design if hashed state is added; unchanged if not.** State which before building.
+- `pnpm verify` fourteen rows, `VERIFY_EXIT` read from the process.
+
 ## G-050 — Fit scales satisfaction, not just selection
 Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §2).** Milestone: M3
 Owner pair: ai-engineer / ai-critic · **RECOMMENDED FIRST of the three ADR-0079 opens.**

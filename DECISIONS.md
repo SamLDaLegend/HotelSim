@@ -6927,3 +6927,38 @@ not the bench alone, which makes a bench-specific explanation less likely rather
 
 **Parked with its falsification test rather than absorbed into the sweep**, because it is a
 behaviour question and the sweep moves no `packages/sim` code.
+
+---
+
+## ADR-0082 — HUMAN RULING: reputation and star rating are TWO systems, both feeding demand.
+
+**Date**: 2026-08-24 · **Status**: accepted · **Human ruling. Discharges §3.4's pre-planning check
+for G-051.**
+
+> *"There are likely two systems — a reputation based on guest satisfaction, and a star rating based
+> on professional inspection, both of which are likely to increase demand (and probably go hand in
+> hand in fairness)."*
+
+**The check I asked for is answered: they are DISTINCT and both are kept.**
+
+| | judged on | source |
+|---|---|---|
+| **reputation** | **guest satisfaction** — how the stay went | already designed: `reviews.ts` says *"reputation, demand and pricing all read reviews"* |
+| **star rating** | **professional inspection** — what the hotel HAS | new; does not exist anywhere |
+
+**Both feed demand.** *"Probably go hand in hand in fairness"* — **a correlation is expected and is
+not a duplication**: a hotel with a Spa tends to please guests too. **The test of distinctness is
+whether they can DISAGREE**, and they can — a hotel with every facility and terrible service earns
+stars and loses reputation; a small, immaculate hotel earns reputation and stays capped on stars.
+
+> **That is the discriminator to write into G-051's block**, because it is what stops the two
+> collapsing into one number the first time someone tries to simplify them.
+
+**Consequence for sequencing, and it is a real one**: **demand is M4**, and both systems feed it. So
+**both can ship WITHOUT a demand consumer and be visible-only** — which this project has done three
+times deliberately and been right each time. **G-051 ships the rating; wiring either to demand is
+M4's, with the milestone that declares it.**
+
+*(And it leaves ADR-0080's mechanical argument intact: the review channel is one bit above the
+bottleneck, so **a rating judged on facilities present is what carries information where reviews
+cannot** — that was the reason for the second system and it survives the ruling.)*
