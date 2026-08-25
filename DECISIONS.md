@@ -6790,3 +6790,69 @@ declared money-loop term with no implementation.**
   that makes a quality difference perceptible at all.
 
 **Priority is the human's. My recommendation is recorded in the goal blocks rather than here.**
+
+---
+
+## ADR-0080 — HUMAN RULING: an inspector's star rating is NOT customer satisfaction, and it is what makes an expensive facility worth building.
+
+**Date**: 2026-08-24 · **Status**: accepted · **Human ruling.** **Re-scopes G-051 and answers the
+objection I raised against it.**
+
+> *"For G-051 I would want to define more facilities than that … having a Spa might be the difference
+> between a 4 or 5 star rating from a hotel inspector (which is different to customer satisfaction
+> and probably also not in the goals)."*
+
+### IT ANSWERS THE TRAP I NAMED, AND I DID NOT SEE THE ANSWER
+
+I wrote into G-051: *"a Spa that is merely a more expensive Lounge inherits the dominance problem —
+an expensive room has to buy something the cheap one cannot."* **I then offered only G-050's
+sub-scoring as that something.**
+
+> **A STAR RATING IS A SECOND CURRENCY, and it is the better answer.** A Spa need not serve a need
+> *better* to be worth building — **it can be worth building because it unlocks a TIER.** That
+> breaks the dominance without touching satisfaction arithmetic at all.
+
+### AND IT IS A DIFFERENT CHANNEL FROM THE ONE ALREADY DESIGNED
+
+**Checked: there is no reputation, no star rating and no inspector anywhere** in `packages/sim` or
+the schema. **The only file that mentions the words is `reviews.ts`**, and what it says is:
+
+> *"reputation, demand and pricing all read reviews and all belong to a [later] goal."*
+
+**So the design already on file assumes reputation is DERIVED FROM REVIEWS — i.e. from guest
+outcomes.** The human's ruling is that a star rating is **judged on what the hotel HAS, not on how
+its guests felt.** *Those are two different quality channels and the project had only imagined one.*
+
+**That distinction matters mechanically**, because ADR-0078 measured the review channel as **one
+bit** — flat 500 at and above the bottleneck. **A rating judged on facilities present would not
+collapse that way**, since it does not depend on guest outcomes at all.
+
+### THE FINDING THIS EXPOSES, AND IT IS THE SAME SHAPE AS THE WAGES ONE
+
+`CLAUDE.md` defines the build loop as *"spend cash, add capacity and quality, raise REPUTATION, raise
+demand, back to the guest loop."*
+
+| loop term | state |
+|---|---|
+| spend cash | **exists** |
+| add capacity | **exists** |
+| add quality | **on an unmerged branch** (`g037a-quality-fold`) |
+| **raise reputation** | **DOES NOT EXIST** |
+| raise demand | **M4** |
+
+> **So the build loop is currently: spend cash, add capacity, stop.** Together with ADR-0079's
+> finding that the money loop has no wages, **two of the three loops the charter says every decision
+> must serve are running on a minority of their declared terms.**
+
+**That is not a defect to fix in one goal** — it is the honest map of where M3 leaves the project,
+and it belongs in front of the human at the milestone question rather than buried in a block.
+
+### WHAT THE RULING CHANGES
+
+- **G-051 is re-scoped**: not three room types, but **a FACILITY SET plus the rating that makes it
+  worth buying.** *"More facilities than that"* is the human's, and the list is theirs to set.
+- **The rating is a NEW system and G-051 is no longer content-only.** My *"genuinely cheap"* estimate
+  is **withdrawn** — it was true of three JSON entries and is false of a rating.
+- **G-050 still goes first.** Sub-scoring is what makes a *guest* feel the difference; the star
+  rating is what makes the *player* see a reason to build. **They are complementary, not
+  alternatives** — and G-050 is smaller and already has its field in the schema.

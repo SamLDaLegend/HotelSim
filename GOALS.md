@@ -2779,25 +2779,64 @@ nourishment **identically today**; the machine is merely chosen last.
 different** to a watching player. **If they do not, the goal has not landed** — and reviews being one
 bit is the reason to check the review distribution, not just the unserved rows.
 
-## G-051 — Somewhere for the money to go
-Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §3).** Milestone: M3
-Owner pair: economy-engineer / balance-critic
-Statement: expensive room types — **Spa, Theatre, conference** — so cash has a sink.
+## G-051 — A facility set, and the inspector who makes it worth buying
+Status: **RE-SCOPED 2026-08-24 by human ruling (ADR-0080). NOT content-only — my "genuinely cheap"
+is WITHDRAWN.** Milestone: M3 · Owner pair: economy-engineer / balance-critic
+Statement: **a set of facilities the player can build, and a STAR RATING judged on what the hotel
+  HAS — which is not customer satisfaction.**
 
-**MEASURED CAUSE, not a guess**: 12 rooms / arrivals 120 / 1,000 days reaches **97,364,000p** with
-**nothing to spend it on**. `--build` only builds bedrooms, and past saturation bedrooms do nothing
-either. **The human's diagnosis — absence rather than imbalance — is the right one and the parked
-finding is re-labelled to match.**
+### THE RULING ANSWERS THE OBJECTION I RAISED AGAINST THIS GOAL
 
-**CONTENT ONLY. I3 means no code**: a room type is a JSON entry with a cost, an upkeep, a capacity,
-what it provides and what it requires. **Genuinely cheap, and the only one of ADR-0079's three opens
-that is.**
+I wrote that *"a Spa that is merely a more expensive Lounge inherits the dominance problem"* — every
+amenity above the optimum currently costs 4,500,000p and buys nothing (ADR-0078). **I offered only
+G-050's sub-scoring as the way out.**
 
-**But name the trap before building it**: ADR-0078 showed **every amenity above the optimum is
-strictly dominated** — each costs 4,500,000p and buys nothing. **A Spa that is merely a more
-expensive Lounge inherits that.** **An expensive room has to buy something the cheap one cannot**, or
-it is a bigger number with the same dominance. **That is what G-050 is for, which is why it goes
-first.**
+> **A star rating is a SECOND CURRENCY and it is the better answer. A Spa need not serve a need
+> BETTER to be worth building — it can be worth building because it unlocks a TIER.**
+
+### IT IS A DIFFERENT CHANNEL FROM THE ONE ALREADY ON FILE
+
+**There is no reputation, star rating or inspector anywhere in `packages/sim` or the schema.** The
+only mention is `reviews.ts:12`: *"reputation, demand and pricing all read reviews."*
+
+> **So the design already on file assumes reputation is derived FROM GUEST OUTCOMES. The ruling is
+> that a star rating is judged on WHAT THE HOTEL HAS.** Two different channels; the project had
+> imagined one.
+
+**And that is mechanically load-bearing**: the review channel is **one bit** — flat 500 at and above
+the bottleneck (ADR-0078). **A rating judged on facilities present cannot collapse that way**,
+because it does not read guest outcomes at all.
+
+### WHAT IS THE HUMAN'S TO SET
+
+- **The facility list.** *"More facilities than that"* — Spa, Theatre, conference were examples, not
+  the set.
+- **What each tier REQUIRES.** A star tier is a predicate over what the hotel has; **the predicate is
+  a design statement, not a derivation**, and §2.1 does not apply to a design choice the way it
+  applies to a threshold. **Say which it is in the block.**
+- **Whether the rating feeds anything yet.** It can exist and be *displayed* without feeding demand —
+  **demand is M4** — and shipping it inert-but-visible is a legitimate first half. *This project has
+  shipped three rules inert on purpose and been right each time.*
+
+### WHAT TO GET RIGHT, from what the last four balance goals cost
+
+- **I3: the tiers and their requirements are CONTENT.** No star threshold in code. A rating is
+  exactly the kind of thing that grows a hard-coded table.
+- **Do NOT make an expensive facility simply a bigger number.** ADR-0078 measured strict dominance
+  above the optimum; a facility that does not change a tier or a satisfaction inherits it.
+- **Beware the second clamp.** Reviews went one-bit because everything saturates above the
+  bottleneck. **A rating with few tiers and a low top will do the same** — check the distribution
+  across a build ladder before declaring it works.
+- **The build loop's own terms are the acceptance criteria.** `CLAUDE.md`: *"spend cash, add capacity
+  and quality, raise reputation, raise demand."* **This goal is the "raise reputation" term** — and
+  **it is the first of that loop's declared terms to be built since capacity.**
+
+### WHY IT IS NOT SMALL ANY MORE
+
+Three JSON entries were cheap. **A rating is a new derived quantity, a new thing to display, a new
+content shape, and a new question about what reads it.** My earlier estimate was true of the
+facilities and false of the system, and **calling the second one cheap because the first one was is
+the estimate error this project has made most often.**
 
 ## G-052 — Staff, and the third of the money loop that does not exist
 Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §3). NOT SMALL — and likely M4.**
