@@ -2797,91 +2797,95 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 **Exit criteria**: a frame reference showing the shaft on two adjacent floors · `pnpm verify`
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
-## G-053 — The orphan sweep
-Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0081). Runs BEFORE M4 opens.**
-Milestone: M3 exit · Owner pair: sim-engineer / sim-critic · **Round budget: 3, and if it overruns
-the seam is §2.1 alone (the charter's loop terms) as its own goal, everything else after.**
+## G-053 — SPLIT at REPORT, 2026-08-24. The sweep was never ruled, so the scope grew before the first repair.
+Status: **split into G-053a (the charter's loop terms) / G-053b (everything else).** **The seam I
+named for an overrun is taken IMMEDIATELY** — §2.0's report found the scope larger than the block
+assumed, and taking a seam because of a measurement is cheaper than taking it because of an overrun.
+**ADR-0083 carries the report.**
 
-> **IT IS NOT A CLEANUP. An orphan is not clutter — it is a TRAP.** A parked item resting on a world
-> that no longer exists, cited by a future goal, **builds the wrong thing.** **M4 is where the
-> economy gets tuned, and tuning against stale premises is the expensive kind of wrong.**
+**Six false claims in my own brief and block**, the two load-bearing ones being that the isometric
+sweep *"was ruled before G-034a"* (**it was never ruled at all**) and that §2.2's measurement had
+expired (**all three cited causes are ANCESTORS of the deferral**).
 
-### §2.0 — REPORT BEFORE REPAIRING
+## G-053a — The charter's loop terms are marked
+Status: **PLANNED. Small, and the ONLY part with a consumer waiting** — M4 tunes the economy against
+these definitions. Milestone: M3 exit · Owner pair: sim-critic / sim-engineer
 
-**Did the isometric orphan sweep ever run?** It was ruled before G-034a and the project has moved
-three milestones since. **If it ran, say so and scope this to what accumulated after it. If it did
-not, THAT IS ITSELF A FINDING and this goal absorbs it.**
+**RULED (ADR-0081): the loop terms are SPECIFICATIONS, not descriptions.** Mark every term in
+`HOTELSIM.md` §1 **`exists`** or **`owed to milestone N`**.
 
-**Report a COUNT PER CLASS across §2.1–§2.5 before repairing anything**, so the size is known before
-the work is chosen.
+**Counted at REPORT: 14 terms across 3 loops, 0 of 14 marked.** **9 exist · 4 do not** — `wages`,
+`quality`, `reputation`, `demand` — **· 1 partial**: `capacity`, where rooms exist but per-room
+capacity is blocked at G-037b (*"a room holds one guest by enforced invariant"*).
 
-### §2.1 — THE CHARTER'S OWN LOOP DEFINITIONS *(the important one)*
+**Verified against the tree rather than taken on report**: `TransactionReason` is exactly nine
+members and **none is a wage**; `reputation` appears **once in all of `packages/sim`**, in a comment;
+`demand` appears only as M4 deferrals.
 
-**RULED: the loop terms are SPECIFICATIONS, not descriptions.** Mark each term in `HOTELSIM.md` §1
-**`exists`** or **`owed to milestone N`**:
+**AND THE `quality` TERM CARRIES A DEBT THIS GOAL MAY NOT PAY.** Three docblocks **on main, inside
+`packages/sim`**, assert the mechanic in the **present tense** — *"A room's quality NOW moves the
+achieved rate…"* — **and nothing on main reads a room's quality.** **Bound 5 forbids touching
+`packages/sim`.** **Record it as an obligation on the goal that merges `g037a-quality-fold`; do NOT
+weaken bound 5 to reach it.**
 
-- **Money loop** — *"room revenue against WAGES and upkeep"*. **Nine ledger reasons, none a wage.**
-- **Build loop** — *"spend cash, add capacity and QUALITY, raise REPUTATION, raise DEMAND"*. Quality
-  is on an unmerged branch; reputation does not exist; demand is M4.
+**Exit criteria**: a grep for the four named terms returns a **marked** line for each · the `partial`
+term names what blocks it · `check:stamp` green · **`git diff --stat` touches no file under
+`packages/sim`** · I2 unchanged.
 
-### §2.2 — DEFERRED-ON-MEASUREMENT ITEMS
+## G-053b — Everything else, and the surface is bigger than the block assumed
+Status: **PLANNED. Scope is EVERYTHING SINCE ADR-0046**, not "what accumulated since a sweep",
+because there was no sweep. Milestone: M3 exit · Owner pair: sim-critic / sim-engineer
 
-**The lift dial and C5 reception were deferred because the congestion does not occur. That is a
-measurement, and MEASUREMENTS EXPIRE.** Parties landed after it, density was re-derived, and G-050
-and G-051 change guest behaviour again.
+**§2.5 IS THE PRIORITY AND ITS OWN RULE WAS BLIND.**
 
-**Confirm both are parked with the falsification test attached — the invocation, the reading, the
-comparison that would reopen them.** *A deferral whose evidence has moved is an orphan that looks
-like a decision.*
+- **ADR-0034 — the priority item.** Two amendments, never struck, **headline rule dead twice over**,
+  and **cited live in NINE places**, several citing sections its own AMENDMENT 2 declared
+  **UNRUNNABLE**. **ADR-0043 §3's census named the wrong four ADRs, and 0034's second amendment sits
+  800 lines above the ruling that missed it.**
+- **ADR-0007 — SEVEN amendments, not the six the digest advertises**, and **never assessed**, because
+  **amendments are spelled two ways and the census counted only one.** **Any recount must cover both
+  spellings or the answer is an artefact of a grep.** *(It may genuinely be the "incomplete, not
+  wrong" case exit criterion 3 allows — but that must be written, not assumed.)*
+- **ADR-0025 and ADR-0028** are deferred in writing under *"restate only if cited again"* — **and
+  both are cited from code today.** **Check whether those citations postdate the rule; nobody has.**
 
-### §2.3 — BRANCHES
+**§2.2 — the two deferrals.** **Neither carries an executable falsification test**, so both fail exit
+criterion 4 as written. **The template exists two entries away in the same file.** **And the stated
+reason for expiry is false** — re-derive the reason or withdraw the claim.
 
-- **`g037a-quality-fold` — RE-TEST.** Its blocker was content that no longer exists, **and quality is
-  one of the build loop's missing terms**, so this may be a shortcut to §2.1's obligation rather than
-  a dead branch.
-- **`g041-rate-rederivation` — merged. DELETE.**
+**§2.3 — `g041-rate-rederivation` delete** (merged; deleting a merged ref deletes no history, so
+bound 1 holds). **`g037a-quality-fold` is ALIVE and its blocker is discharged by G-041** — 45 commits
+behind, five moved files, a save bump off v23. **Alive, not free.**
 
-### §2.4 — FINDINGS FROM WATCHING
+**§2.4 — all four watching-findings are ALREADY discharged as decisions**, including the one whose
+mechanism was wrong, which already points forward correctly. **Confirm and close; no work expected.**
 
-The staircase, the speed controls, the interpolation dial, the needs asymmetry. **Each came from a
-sitting rather than a gate.** Confirm each is recorded as a **decision** rather than living only in a
-WATCH note — **including the one whose stated mechanism was wrong and was corrected, which must
-POINT FORWARD rather than be edited.**
+**§2.6 — the seven bounds carry unchanged.** **§2.7 — criterion 7 is RESTATED per ADR-0083 ruling 1**:
+twelve reliable rows green, the two unreliable rows green **in isolation** with the run recorded.
 
-### §2.5 — AMENDMENT CHAINS
+**AND THE SURFACE NOBODY HAS SCOPED**: `GOALS-ARCHIVE.md` and `JOURNAL-ARCHIVE.md` were **not swept**
+and are **outside the five stated classes** — **but given the isometric sweep never ran, that is
+where an absorbed one would have to look.** **Decide deliberately rather than by omission.**
 
-**96 ADRs. Report every ADR carrying two or more amendments.** Standing rule: **a second amendment
-means the decision was WRONG, not incomplete — restate as one ADR and strike the originals pointing
-forward.**
+## G-055 — The unreliable gates are repaired, because §2.0 says that is the remedy
+Status: **PLANNED. §2.0's own escalation, owed rather than parked a fifth time.**
+Milestone: M3 exit · Owner pair: sim-engineer / sim-critic
 
-### §2.6 — BOUNDS, STATED BACK
+**`HOTELSIM.md` §2.0**: *"An intermittent gate is its own escalation with its own remedy — **REPAIR
+THE INSTRUMENT, NEVER REINTERPRET THE RESULT**."* **The repair has been parked four times and has now
+blocked a goal's exit criteria.**
 
-1. **No history is deleted. Strike and point forward; never remove.**
-2. **The v1 fixture is untouched.**
-3. **No invariant is weakened. No gate is edited.**
-4. **No parked item is dropped for being old — only for being IMPOSSIBLE, each naming why.**
-5. **No simulation behaviour changes. This goal moves NO `packages/sim` code.**
-6. **No sign-off is reopened.**
-7. **This does not become a documentation-maintenance mechanism. One sweep, one goal. New ledger
-   machinery is scope leak and goes to `PARKING.md`.**
+**The population and its shared property are already measured**: the affected tests are the ones that
+**spawn child processes inside a 30s per-test budget under full vitest parallelism** —
+`needs.determinism`, `provider.determinism`, and at G-048 also `cli.stdout` and `scorer.report`.
+**All pass in isolation**; the two current ones pass in **18.9s together**.
 
-### §2.7 — EXIT CRITERIA
+**DO NOT RAISE THE SHARED TIMEOUT.** `vitest.config.ts` argues at length why 30s is derived, and
+moving it to make a row green is **§9's stop condition wearing a config key**. **The house pattern is
+a declared PER-TEST budget with its measurement at the docblock** — seven files already carry one.
 
-1. **A count per class in §2.1–§2.5, reported BEFORE any repair and again after** — the before/after
-   pair is the deliverable, not the after alone.
-2. **`HOTELSIM.md` §1 carries `exists` / `owed to milestone N` on every term of all three loops**, and
-   **a grep for the four named terms returns a marked line for each.**
-3. **Every two-amendment ADR is either restated as one ADR with its originals struck-and-pointing-
-   forward, or justified IN WRITING as genuinely incomplete rather than wrong** — one line each, no
-   silent passes.
-4. **Both deferred items carry an executable falsification test** — invocation, reading, comparison.
-   **A test nobody can run is not a test.**
-5. **`g041-rate-rederivation` deleted; `g037a-quality-fold` re-tested with its result stated** —
-   alive, dead, or blocked on something named.
-6. **`git diff --stat` touches NO file under `packages/sim`.** *That is bound 5 as a command.*
-7. **`node tools/gates/stamp.mjs` green and `pnpm verify` green across all FOURTEEN rows**,
-   `VERIFY_EXIT` read from the process.
-8. **I2 unchanged** — checked, not assumed. *Bound 5 again, from the other side.*
+**And the count is the guard**: **we are at two unreliable gates and §2.0 says a THIRD IS A STOP
+CONDITION.** *"Each one is defensible alone, which is exactly how a suite stops being evidence."*
 
 ## G-054 — Which need starves must not be decided by a spelling
 Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0081 §3.1) — FIRST after the orphan sweep.**

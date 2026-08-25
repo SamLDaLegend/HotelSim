@@ -6962,3 +6962,98 @@ M4's, with the milestone that declares it.**
 *(And it leaves ADR-0080's mechanical argument intact: the review channel is one bit above the
 bottleneck, so **a rating judged on facilities present is what carries information where reviews
 cannot** — that was the reason for the second system and it survives the ruling.)*
+
+---
+
+## ADR-0083 — The orphan sweep's REPORT phase, and it found the sweep was never ruled. Seam taken now.
+
+**Date**: 2026-08-24 · **Status**: accepted · **G-053 §2.0 executed read-only.** One BLOCKER, five
+MAJORs, **six false claims in my own brief and block.**
+
+### RULING 1 — MY EXIT CRITERION 7 WAS UNSATISFIABLE BY CONSTRUCTION, and §2.0 says why
+
+I required *"`pnpm verify` green across all FOURTEEN rows, `VERIFY_EXIT` read from the process."*
+**Read from the process at HEAD today it is 1** — thirteen PASS, one FAIL, and the failing row is the
+**two known load-sensitive TIMEOUTS** that pass in 18.9s in isolation.
+
+**`HOTELSIM.md` §2.0 is sharper than my criterion assumed:**
+
+> ***"'Green on the run I took' is unsafe for exactly the same reason 'red on the run I took' is:
+> NEITHER READING CARRIES INFORMATION."***
+
+**So demanding a green reading from an unreliable gate is not a strict criterion — it is a criterion
+that cannot mean anything.** A goal whose close depends on a coin flip cannot close honestly in
+either direction.
+
+**RULED, in two parts:**
+
+1. **Criterion 7 is restated** as: **the twelve reliable rows green, and the two UNRELIABLE rows
+   green in isolation with the isolation run recorded.** That is not reinterpreting a result — **it
+   is applying the classification §2.0 already made and the digest already carries** (*"Unreliable: 2
+   gates, 0 defects"*).
+2. **AND §2.0's actual remedy is owed rather than deferred again.** *"An intermittent gate is its own
+   escalation with its own remedy — REPAIR THE INSTRUMENT, never reinterpret the result."* **The
+   repair has been parked four times** and has now blocked a goal's exit criteria. **It becomes
+   G-055.** *We are at two unreliable gates; §2.0 says a third is a stop condition.*
+
+### RULING 2 — THE ISOMETRIC ORPHAN SWEEP WAS NEVER RULED, so the scope is larger and THE SEAM IS TAKEN NOW
+
+I wrote *"it was ruled before G-034a."* **It was not.** Searched every ledger: no such ruling, no
+goal block, nothing. **The thing that ran before G-034a is ADR-0047 — a FORWARD decision register
+(*"the blocking set, and what is parked"*) that swept what the new direction NEEDS.** It never looked
+**backward** at what the dead sentence left behind.
+
+> **So the scope is not "what accumulated since a sweep" — it is EVERYTHING SINCE ADR-0046**, and the
+> human's fallback fires: *"if it did not, that is itself a finding and this goal absorbs it."*
+
+**The seam I named for an overrun is taken IMMEDIATELY instead**, because the scope grew before the
+first repair rather than during it:
+
+- **G-053a — the charter's loop terms alone.** Small, and **the only part with a consumer waiting**:
+  M4 tunes the economy against those definitions.
+- **G-053b — everything else**, now including the pre-ADR-0046 surface and the archives.
+
+### THE FINDINGS THAT CHANGE WHAT G-053b MUST DO
+
+**ADR-0034 is the priority item and the rule that governs it could not see it.** Two amendments,
+never struck, **its headline rule dead twice over** (superseded by ADR-0037 §1, which was itself
+struck into ADR-0045) — **and it is cited live in NINE places**, several of them citing §3(a) and
+§3(b), *sections its own AMENDMENT 2 declared UNRUNNABLE*. **ADR-0043 §3's census said four ADRs
+carried two amendments and named the wrong four; ADR-0034's second amendment sits 800 lines ABOVE
+the ruling that missed it.**
+
+**ADR-0007 has SEVEN amendments, not the six the digest advertises** — **and the rule was
+STRUCTURALLY BLIND to it**: amendments are spelled two ways in that file, `## ADR-XXXX AMENDMENT`
+headings and inline `**Amendment (...)` blocks, **and ADR-0043 §3's census only ever counted the
+heading form.** *The most-cited ADR in the project is 3.5x past the threshold of the rule that
+governs it.*
+
+**AND THE LARGEST §2.1 ORPHAN CANNOT BE REPAIRED BY THIS GOAL.** Three docblocks **on main, inside
+`packages/sim`**, assert the quality mechanic **in the present tense** — *"A room's quality NOW moves
+the achieved rate…"* — **and nothing on main reads a room's quality.** `quality.ts` exists only on
+`g037a-quality-fold`. **Bound 5 forbids touching `packages/sim`, so the sweep that found it may not
+fix it.** **Named as an obligation on the goal that merges the branch. Bound 5 is NOT weakened to
+reach it.**
+
+### AND §2.2's STATED REASON IS FALSE, verified three ways
+
+I wrote that the lift deferral's measurement expired because *"parties landed after it, density was
+re-derived."* **Both are ANCESTORS of the deferral commit** — `git merge-base --is-ancestor` returns
+true for the party content, the party mechanism **and** the density re-derivation. **ADR-0075's
+measurement was taken on a tree that already had all three.** The third ground, G-050/G-051, is
+**future tense**. **The measurement has NOT expired.** *§2.2's conclusion may still be right; the
+reason on file is not.*
+
+*(Also corrected: "96 ADRs" is 82 distinct and 98 headings; and neither §2.2 item carries an
+executable falsification test today, so both fail exit criterion 4 as written — the template exists
+two entries away in the same file.)*
+
+### THE BRANCH IS ALIVE, and that matters for §2.1
+
+**`g037a-quality-fold`'s blocker is DISCHARGED.** Its commit message names it — the duty cycle at the
+declared rates — **and G-041 moved exactly that**: the refusal now folds `serviceFloorRefill`, and
+the shipped total at the floor is 7,500 of 10,000. **The headroom ADR-0054 needs exists.**
+
+**Not cheap**: 45 commits behind, touching five files that all moved, and it ships a save test — **a
+bump off v23.** **Alive, not free**, and it is a candidate route to the build loop's missing
+`quality` term.
