@@ -2740,7 +2740,7 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
 
 ## G-049 — Two needs are structurally advantaged, and the player's fix subsidises the wrong one
-Status: **PLANNED 2026-08-24. From the human watching a day-839 run** — *"Comfort and Entertainment
+Status: **RE-SCOPED 2026-08-24 by its own measurement (ADR-0078). The supply asymmetry is the SMALLER half.** Verdict on the falsifiable question: **NO, with a boundary.** BELOW the provider bottleneck the gap tracks provider count decisively (13.5x) — that is the regime the day-839 observation came from and the block is right there. **ABOVE it the gap tracks the need's position in ASCENDING CONTENT-ID ORDER (3.3x), proven by renaming the ids and changing nothing else** — and nourishment, with twice the supply, is the WORST-served engagement need at every plausible player hotel. **Cause: the need tie-break at `guests.ts:3723` falls to the lower id, and all three engagement needs are exactly tied by shipped content.** Remedies (b) and (c) both act on supply and would leave the 3.3x ordering as the ONLY remaining asymmetry. **The tie-break is the subject now; the remedy is the human's.**
 are the biggest causes of dissatisfaction, but nourishment and rest always are satisfied."*
 Milestone: M3 · Owner pair: economy-engineer / balance-critic
 Statement: the supply asymmetry between the four needs is **stated and derived**, or removed.

@@ -3474,3 +3474,42 @@ a declared budget; these two were not among them.
 **Confirms if the affected set is exactly the child-spawning tests; refutes if a pure in-process test
 times out.** **The remedy when it is needed is the house pattern — a declared per-test budget with
 its measurement at the docblock — and NOT raising a shared literal.**
+
+### THE REVIEW CHANNEL IS ONE BIT, so the per-need asymmetry is invisible to the player
+**Parked 2026-08-24 (ADR-0078).** Mean review is **387 below the provider bottleneck and a flat 500
+at and above it** — 12 rooms / arrivals 120 / 1,000 days, amenities 1 through 8, exact deterministic
+counts. **`met = 15984, unmet = 0, reviews = [0,0,0,0,15984]` in every well-provisioned cell.**
+
+> **So a hotel scores PERFECT while one need is chronically 3.3x worse served than another.** The
+> unserved basis-point statistic moves freely over 126–655 and **nothing the player sees reflects
+> it.**
+
+**Falsification test:** take mean review across the amenity ladder and across a need-id renaming.
+**Confirms if review is flat at 500 while unserved bp spans 3.3x; refutes if review tracks the
+spread.** **This is what a watching player CANNOT find** — the human spotted the below-bottleneck
+version at day 839 because reviews were still moving there.
+
+### ABOVE THE BOTTLENECK THE BUILD LOOP HAS ONE ANSWER AND NO MONEY SINK
+**Parked 2026-08-24 (ADR-0078).** 12 rooms / arrivals 120 / 1,000 days: **amenities 2 is optimal at
+97,364,000p; every step above costs exactly 4,500,000p and buys nothing** — identical departures,
+identical reviews, and the unserved figures do not improve monotonically (655, 607, 592, 597, 613,
+616). **Cash reaches 97M with nothing to spend it on**: `--build` only builds bedrooms, and past
+saturation bedrooms do nothing either — **24 rooms / 2 amenities gives byte-identical guest outcomes
+to 12 rooms / 2 amenities for 30,000,000p more upkeep.**
+
+**Falsification test:** walk the amenity ladder past the bottleneck and compare departures, reviews
+and balance. **Confirms if every rung above the optimum is strictly dominated; refutes if any rung
+buys a measurable outcome.** **This is the build loop — one of the three the charter says every
+decision must serve.**
+
+### ENTERTAINMENT IS ROOM-ONLY, and that is a granularity asymmetry the supply table misses
+**Parked 2026-08-24 (ADR-0078).** `comfort` is **item-only** (`arm_chair`), `night_rest` is room-only,
+`nourishment` is **both**, and **`entertainment` is ROOM-ONLY — there is no entertainment item.**
+`placeItem` exists and a machine in a bedroom is blessed by name in `guests.ts`, **so comfort and
+nourishment can be bought as FURNITURE while entertainment can only be bought as a whole 250,000p
+room.**
+
+**Falsification test:** needs a `--placeItem` flag on the headless runner, which does not exist —
+**so this is UNMEASURED and the measurement is the first cost of investigating it.** **Confirms if a
+loose `arm_chair` in a bedroom moves the comfort row; refutes if item placement changes nothing
+outside a room's own footprint.**

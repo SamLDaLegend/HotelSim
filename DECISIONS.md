@@ -6615,3 +6615,102 @@ inserted the next-week plan and three new blocks underneath a running agent.
 server the edit hook kept pointing at. **It took the WATCH through `record` plus headless rasterising
 instead — the shipped scene by construction — and said so, so that "I watched it" is not read as "I
 watched it in the dev server."**)*
+
+---
+
+## ADR-0078 — Which need starves is decided by ALPHABETICAL SPELLING above the bottleneck, and my block was right only below it.
+
+**Date**: 2026-08-24 · **Status**: accepted · **G-049's measurement.** No code changed; the tree is
+clean. **The question was posed falsifiably and it came back NO, with a boundary.**
+
+### THE VERDICT, IN TWO REGIMES
+
+**BELOW the provider bottleneck the gap DOES track provider count — decisively, 13.5x** (196–216 bp
+for the doubled need against 2,679–2,948 for the single ones), **and id position is invisible.**
+**My block is right here, and this is the regime the day-839 observation came from** — one amenity of
+each kind, 12 rooms, where comfort and entertainment sit below `guestsPerProvider` = 15 and
+nourishment's two sources put it above.
+
+**ABOVE the bottleneck the gap does NOT track provider count. It tracks the need's POSITION IN
+ASCENDING CONTENT-ID ORDER.**
+
+> **Proven by renaming the three need ids and changing NOTHING else** — scratch content dirs via
+> `--content`, repo untouched, identical rooms, cells, entity ids and fits:
+>
+> | | pos0 | pos1 | pos2 |
+> |---|---|---|---|
+> | span over amenities 3/4/6 | **126–254 bp** | **337–453 bp** | **569–613 bp** |
+>
+> **`guest_nourishment`, holding TWICE the supply throughout, reads 181–230 at pos0, 337–386 at pos1
+> and 593–613 at pos2 — the same need, the same doubled supply, moved 3.3x purely by renaming it.**
+
+**And at every plausible player hotel measured (12 rooms, 2–8 amenities), nourishment — the need with
+twice the supply — is the WORST-served engagement need. My block's mechanism is inverted there.**
+
+### THE CAUSE, AND THE FILE NAMED ITSELF AS THE TRIPWIRE
+
+`guests.ts:3723` is `if (pressure <= bestPressure) continue;` — **strictly greater, so an exact tie
+keeps the lower need id.** All three engagement needs ship `capacityTicks: 1400` and
+`refillPerTick: 14`, **so they are formed together and are EXACTLY tied whenever none has been served
+— the common case, not a corner.** The tie falls the same way for every guest, every cycle, for a
+whole 1,440-tick stay, **and I2 forbids randomness, so nothing re-randomises it.**
+
+**`utility.ts:60-62` says, in its own words:**
+
+> ***"'Entertainment last' is DISSOLVED, not preserved, and no final need is privileged; if that ever
+> stops being true, the content changed and this header is where to start."***
+
+**Against the shipped table a final need IS privileged — negatively, by 3.3x. That sentence is now
+false, and it told us exactly where to look.** *This is the same defect class `utility.ts` records
+G-014a fixing — a term never meant to order needs deciding which need starves — returned through the
+id tie-break instead of through fit.*
+
+### THREE MORE FINDINGS, AND TWO CHANGE HOW THE GAME READS
+
+**1. `night_rest` CAN fail, and my "structurally unfailable" claim was wrong.** The need row folds
+over **every departed guest, including guests that never got a room**, so a `gaveUp` guest carries
+`night_rest` unserved for its whole life. **At 1 room / 1 amenity it reads 5,927 bp — the MOST
+unserved row in that run**; 3,125 at three rooms, 1,697 at six, **0 at twelve.**
+
+> **So the four-need average is not DILUTED, it is BIMODAL**: rest is 0 in saturated hotels and the
+> largest term in under-roomed ones. **It conflates amenity supply and room supply into one number
+> that means neither.**
+
+**2. Above the bottleneck the build loop has ONE correct answer and no money sink.** 12 rooms /
+arrivals 120 / 1,000 days: **amenities 2 is the optimum at 97,364,000p, and every step above it costs
+exactly 4,500,000p and buys NOTHING** — identical departures, identical reviews, and the unserved
+figures do not even improve monotonically. **Cash reaches 97M with nothing to spend it on**, because
+`--build` only builds bedrooms and past saturation bedrooms do nothing either.
+
+**3. REVIEWS ARE A ONE-BIT SIGNAL — mean 387 below the bottleneck, a flat 500 at and above it.**
+
+> **So the 3.3x per-need asymmetry is INVISIBLE to the player through the review channel. The hotel
+> scores perfect while one need is chronically three times worse served than another.** *That is the
+> finding a watching player could never have produced, and it is the one I would act on.*
+
+### AND NOURISHMENT'S SECOND ROUTE IS INERT WHERE IT MATTERS
+
+`compareProviderPreference` ranks by fit, and **`hotel_cafe` is 7,500 against `vending_machine`'s
+2,500**, so a guest reaches a machine only when every cafe is claimed. **`metByItem` on the
+nourishment row: 6,098 of 15,989 at one amenity; 5 of 15,984 at two; 0 at four.** **"Two independent
+sources" is two only BELOW the bottleneck** — a second reason my ranking does not appear above it.
+
+*(And the sharper structural asymmetry is one my table missed: **comfort is item-only, entertainment
+is ROOM-ONLY — there is no entertainment item.** `placeItem` exists, so comfort and nourishment can
+be bought as furniture while **entertainment can only be bought as a whole 250,000p room.** That is
+an asymmetry in the GRANULARITY of the build decision, and the headless runner has no `--placeItem`
+flag, so it is unmeasured.)*
+
+### WHAT THIS DOES TO G-049's THREE REMEDIES
+
+**Both (b) "a second route each" and (c) "remove the cross-feed" act on SUPPLY — and supply is not
+the term that moves this above the bottleneck.** **Removing the below-bottleneck asymmetry leaves the
+3.3x ordering intact and makes it the ONLY remaining asymmetry.**
+
+**So G-049 is re-scoped: the tie-break is the subject, and the supply asymmetry is the smaller,
+lower-regime half.** *The remedy is not mine to choose — the critic said so and was right to.*
+
+*(Two stale numbers in `utility.ts`'s own header, checked against the bytes: `:49` says "refill 7"
+where shipped is **14**, and `:87` says "600 / 1,400 / 1,400 / 1,400" where `night_rest` is now
+**300**. The lcm conclusion survives by luck. **This is the one header a future reader consults about
+whether the tie-break is benign, and both of its numbers are from a dead table.**)*
