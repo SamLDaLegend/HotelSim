@@ -6856,3 +6856,74 @@ and it belongs in front of the human at the milestone question rather than burie
 - **G-050 still goes first.** Sub-scoring is what makes a *guest* feel the difference; the star
   rating is what makes the *player* see a reason to build. **They are complementary, not
   alternatives** — and G-050 is smaller and already has its field in the schema.
+
+---
+
+## ADR-0081 — M3 IS SIGNED OFF. The milestone question is answered, qualified, and the qualification is the record.
+
+**Date**: 2026-08-24 · **Status**: accepted · **Human ruling (§9).**
+
+### THE MILESTONE QUESTION, ANSWERED BY THE HUMAN
+
+> *"Does the thing on screen still look like the game I meant to build?"*
+> **"Yes, in its foundations — and that is a QUALIFIED yes, not an enthusiastic one. Record the
+> qualification, because an unqualified yes here would be the drift §9 exists to catch."**
+
+**What is right**: an isometric floorplan hotel; guests move through it and queue; the staircase
+reads; the speed controls work; **the building is a place rather than a diagram.**
+
+**What is not yet the game**: **two of the three declared loops are running on a minority of their
+terms.** The build loop is *spend cash, add capacity, stop.* Above a low bottleneck the game is
+solved, cash reaches 97M with no sink, and reviews are a one-bit signal. **That is not a defect in
+M3 — M3 delivered circulation — but it is the honest answer to what is on screen.**
+
+**What would make it unqualified, stated so it is TESTABLE at M4's exit**: **the build loop carrying
+more than one term, and reviews carrying information rather than a constant.**
+
+### AND THE TWO THINGS THE HUMAN NAMED AS THE MILESTONE'S BEST WORK
+
+**Neither is code.** *"The best work in the milestone was the two goals resolved by deciding not to
+build them"* — the lift dial and C5 reception, deferred because the congestion **does not occur**.
+**A measured "this problem does not exist" is a finding**, and this project now produces them
+routinely.
+
+**And: four findings came from a human watching, in a handful of sittings, against thirteen goals of
+automated critique before the instrument existed.** *ADR-0013's argument closing for the second
+time* — and the reason the milestone question is asked of a person rather than derived from a gate.
+
+### RULING — THE CHARTER'S LOOP TERMS ARE SPECIFICATIONS, NOT DESCRIPTIONS
+
+**Nobody had drawn the distinction.** `HOTELSIM.md` §1 declares three loops naming terms that do not
+exist — **wages** in the money loop, **quality**, **reputation** and **demand** in the build loop.
+
+> **As DESCRIPTIONS they are false, and have been for the life of the project — read by every agent,
+> every goal, as a statement of what the game IS. As SPECIFICATIONS they are obligations.**
+> **RULED: specifications.**
+
+**Each term in §1 is marked `exists` or `owed to milestone N`.** That converts a false description
+into a tracked obligation for the cost of a few words — **the same move ADR-0013 made for perceptual
+criteria: a claim that cannot be checked becomes one that can.**
+
+*This is the unexamined-decision class again, at the charter's first paragraph, which is where it
+lives every time.*
+
+### THE THROUGH-WALL RESIDUAL: ONLY IMPROVED, NOT UNDERSTOOD — and the premise needs one correction
+
+**Asked: is the 29 understood, or only improved? ANSWER: ONLY IMPROVED.**
+
+**Nothing attributes it.** `236 -> 29` is recorded as a number in ADR-0065 and the JOURNAL and **no
+measurement decomposes it.** A *plausible* mechanism is documented — `stepTowards` takes candidate
+zero when every candidate landing is a wall, so a guest converges on a blocked stairwell and stands
+inside a stranger's bedroom for a tick — **but nobody has shown the 29 ARE those landings.**
+
+**And one correction to the framing**: *"the CLI default is clean, so the residual is
+bench-specific"* — **the six-room arm is 116 -> 23, also non-zero.** So it is **two of four arms**,
+not the bench alone, which makes a bench-specific explanation less likely rather than more.
+
+> **The human's hypothesis is the right shape and is untested: a 92% reduction leaving a stable
+> remainder usually means a SECOND CAUSE sharing the first one's symptom.** `travel.walls.report`'s
+> own comment already warns *"THE MECHANISM IS NOT THE WALL RULE AND IT IS IMPORTANT NOT TO CLAIM IT
+> IS."*
+
+**Parked with its falsification test rather than absorbed into the sweep**, because it is a
+behaviour question and the sweep moves no `packages/sim` code.

@@ -2711,6 +2711,64 @@ reviews, ten splits and one goal ended.
 > access to the tree.** The mitigation that works is **measure the premise before designing**, and
 > it is why items 3 and G-046's count are placed before their builds rather than inside them.
 
+
+### THE ORDER AFTER THE SWEEP — REVISED BY THE HUMAN 2026-08-24, and my ordering was wrong
+
+**Supersedes the "NEXT" ordering above.** **G-053 (the orphan sweep) runs first, before M4 opens.**
+Then:
+
+**3.1 — THE ALPHABETICAL TIE-BREAK GOES FIRST, AND IT WAS NOT IN MY LIST AT ALL.**
+
+> **"One need chronically 3.3x worse served, decided by the spelling of a content id, is a
+> CORRECTNESS defect — deterministic but arbitrary, which is the worst combination because it is
+> stable enough to look intentional."**
+
+**And the ordering argument is the part I missed**: *"everything G-050 and G-051 measure sits on top
+of it, so fixing it afterwards INVALIDATES whatever they conclude."* **I had parked it as a statistic
+with no consumer. It has no consumer TODAY — and the next two goals are the consumers.** *Should be
+small.*
+
+**3.2 — G-047 (interpolation) MOVES UP, not down.**
+
+> **"M3's declared statement is WAIT TIME as a first-class satisfaction input. An instrument that
+> teleports cannot show queueing, cannot show wait, and cannot answer whether circulation reads as
+> fair."**
+
+**Cheap, confirmed by eye, and every watch after it benefits. Instrument improvements compound** —
+which is the argument G-017's viewer and G-039a's row log both proved, and which I had not applied
+here.
+
+**3.3 — G-050 (fit scales satisfaction).** The cheapest thing that makes reviews carry information,
+and the field already exists. **Reviews being flat 500 is an INSTRUMENT FAILURE INSIDE THE GAME'S OWN
+OUTPUT** — and every balance judgement is currently measured through it.
+
+**3.4 — G-051 (facilities + inspector rating) — CHECK ONE THING BEFORE PLANNING IT.**
+
+> **M4's declared statement includes REPUTATION FEEDING DEMAND. An inspector rating and a reputation
+> are plausibly TWO NAMES FOR ONE MECHANIC.** **Establish they are distinct before building the
+> first**, or ship two overlapping systems and an ADR reconciling them.
+
+*(`reviews.ts` already says "reputation, demand and pricing all read reviews", so the existing design
+derives reputation from GUEST OUTCOMES while the ruling judges a rating on WHAT THE HOTEL HAS. That
+is the distinction to confirm or collapse — in writing, before planning.)*
+
+**3.5 — G-052 (staff and wages) is M4 CONTENT.** *"Wages are the money loop's missing term and they
+belong with the milestone that DECLARES them, not before it."*
+
+### AND THE RESIDUAL QUESTION, ANSWERED: ONLY IMPROVED
+
+**Through-wall landings went 236 -> 29, not to zero, and NOTHING ATTRIBUTES THE 29.** A plausible
+mechanism is documented — `stepTowards` takes candidate zero when every landing is a wall — **but
+nobody has shown the 29 ARE those landings.**
+
+**One correction to the premise**: *"the CLI default is clean, so the residual is bench-specific"* —
+**the six-room arm is 116 -> 23, also non-zero.** **Two of four arms, not the bench alone**, which
+makes a bench-specific explanation *less* likely.
+
+**The hypothesis is the right shape and untested**: *a 92% reduction leaving a stable remainder
+usually means a SECOND CAUSE sharing the first one's symptom.* **Parked with its falsification test;
+it is a behaviour question and the sweep moves no sim code.**
+
 ## G-044 — The staircase is drawn
 Status: **DONE 2026-08-23 (ADR-0077).** The tile says *a stair is declared here*; the mark says
 *and it continues up/down*. **The chevron claims EXTENT, never PERMISSION** — `stairLeg` uses
@@ -2738,6 +2796,92 @@ corridor cell. **`world.stairs` is the source** — do not re-derive it from geo
 
 **Exit criteria**: a frame reference showing the shaft on two adjacent floors · `pnpm verify`
 fourteen rows · `git diff --stat` touching **nothing outside `apps/game/src/view`**.
+
+## G-053 — The orphan sweep
+Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0081). Runs BEFORE M4 opens.**
+Milestone: M3 exit · Owner pair: sim-engineer / sim-critic · **Round budget: 3, and if it overruns
+the seam is §2.1 alone (the charter's loop terms) as its own goal, everything else after.**
+
+> **IT IS NOT A CLEANUP. An orphan is not clutter — it is a TRAP.** A parked item resting on a world
+> that no longer exists, cited by a future goal, **builds the wrong thing.** **M4 is where the
+> economy gets tuned, and tuning against stale premises is the expensive kind of wrong.**
+
+### §2.0 — REPORT BEFORE REPAIRING
+
+**Did the isometric orphan sweep ever run?** It was ruled before G-034a and the project has moved
+three milestones since. **If it ran, say so and scope this to what accumulated after it. If it did
+not, THAT IS ITSELF A FINDING and this goal absorbs it.**
+
+**Report a COUNT PER CLASS across §2.1–§2.5 before repairing anything**, so the size is known before
+the work is chosen.
+
+### §2.1 — THE CHARTER'S OWN LOOP DEFINITIONS *(the important one)*
+
+**RULED: the loop terms are SPECIFICATIONS, not descriptions.** Mark each term in `HOTELSIM.md` §1
+**`exists`** or **`owed to milestone N`**:
+
+- **Money loop** — *"room revenue against WAGES and upkeep"*. **Nine ledger reasons, none a wage.**
+- **Build loop** — *"spend cash, add capacity and QUALITY, raise REPUTATION, raise DEMAND"*. Quality
+  is on an unmerged branch; reputation does not exist; demand is M4.
+
+### §2.2 — DEFERRED-ON-MEASUREMENT ITEMS
+
+**The lift dial and C5 reception were deferred because the congestion does not occur. That is a
+measurement, and MEASUREMENTS EXPIRE.** Parties landed after it, density was re-derived, and G-050
+and G-051 change guest behaviour again.
+
+**Confirm both are parked with the falsification test attached — the invocation, the reading, the
+comparison that would reopen them.** *A deferral whose evidence has moved is an orphan that looks
+like a decision.*
+
+### §2.3 — BRANCHES
+
+- **`g037a-quality-fold` — RE-TEST.** Its blocker was content that no longer exists, **and quality is
+  one of the build loop's missing terms**, so this may be a shortcut to §2.1's obligation rather than
+  a dead branch.
+- **`g041-rate-rederivation` — merged. DELETE.**
+
+### §2.4 — FINDINGS FROM WATCHING
+
+The staircase, the speed controls, the interpolation dial, the needs asymmetry. **Each came from a
+sitting rather than a gate.** Confirm each is recorded as a **decision** rather than living only in a
+WATCH note — **including the one whose stated mechanism was wrong and was corrected, which must
+POINT FORWARD rather than be edited.**
+
+### §2.5 — AMENDMENT CHAINS
+
+**96 ADRs. Report every ADR carrying two or more amendments.** Standing rule: **a second amendment
+means the decision was WRONG, not incomplete — restate as one ADR and strike the originals pointing
+forward.**
+
+### §2.6 — BOUNDS, STATED BACK
+
+1. **No history is deleted. Strike and point forward; never remove.**
+2. **The v1 fixture is untouched.**
+3. **No invariant is weakened. No gate is edited.**
+4. **No parked item is dropped for being old — only for being IMPOSSIBLE, each naming why.**
+5. **No simulation behaviour changes. This goal moves NO `packages/sim` code.**
+6. **No sign-off is reopened.**
+7. **This does not become a documentation-maintenance mechanism. One sweep, one goal. New ledger
+   machinery is scope leak and goes to `PARKING.md`.**
+
+### §2.7 — EXIT CRITERIA
+
+1. **A count per class in §2.1–§2.5, reported BEFORE any repair and again after** — the before/after
+   pair is the deliverable, not the after alone.
+2. **`HOTELSIM.md` §1 carries `exists` / `owed to milestone N` on every term of all three loops**, and
+   **a grep for the four named terms returns a marked line for each.**
+3. **Every two-amendment ADR is either restated as one ADR with its originals struck-and-pointing-
+   forward, or justified IN WRITING as genuinely incomplete rather than wrong** — one line each, no
+   silent passes.
+4. **Both deferred items carry an executable falsification test** — invocation, reading, comparison.
+   **A test nobody can run is not a test.**
+5. **`g041-rate-rederivation` deleted; `g037a-quality-fold` re-tested with its result stated** —
+   alive, dead, or blocked on something named.
+6. **`git diff --stat` touches NO file under `packages/sim`.** *That is bound 5 as a command.*
+7. **`node tools/gates/stamp.mjs` green and `pnpm verify` green across all FOURTEEN rows**,
+   `VERIFY_EXIT` read from the process.
+8. **I2 unchanged** — checked, not assumed. *Bound 5 again, from the other side.*
 
 ## G-050 — Fit scales satisfaction, not just selection
 Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §2).** Milestone: M3

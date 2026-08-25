@@ -3513,3 +3513,23 @@ room.**
 **so this is UNMEASURED and the measurement is the first cost of investigating it.** **Confirms if a
 loose `arm_chair` in a bedroom moves the comfort row; refutes if item placement changes nothing
 outside a room's own footprint.**
+
+### THE THROUGH-WALL RESIDUAL IS ONLY IMPROVED, NOT UNDERSTOOD
+**Parked 2026-08-24 (ADR-0081), on the human's question.** Landings went **236 -> 29** on the bench
+and **116 -> 23** on the six-room arm; **criterion and CLI default went to ZERO.** **Nothing
+attributes the remainder.**
+
+**A plausible mechanism is documented and UNTESTED**: `stepTowards` takes candidate zero when every
+candidate landing is a wall, so a guest converges on a blocked stairwell and stands inside a
+stranger's bedroom for a tick. **Nobody has shown the 29 ARE those landings.** And
+`travel.walls.report`'s own comment warns *"THE MECHANISM IS NOT THE WALL RULE AND IT IS IMPORTANT
+NOT TO CLAIM IT IS."*
+
+> **A 92% reduction leaving a STABLE remainder usually means a SECOND CAUSE sharing the first one's
+> symptom.** Two of four arms are non-zero, **so it is not bench-specific** — which makes a
+> workload-shaped explanation less likely, not more.
+
+**Falsification test:** instrument each through-wall landing with whether `stepTowards` reached its
+fallback (every candidate a wall) or chose a wall-crossing landing on merit. **Confirms if the 29 and
+the 23 are all fallback landings — one cause, understood; refutes if any is a chosen landing, which
+means a second cause and a second goal.** **Run it before M4 tunes anything that moves journeys.**
