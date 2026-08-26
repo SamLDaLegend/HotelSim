@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-26, G-055 is DONE — the I4 row's five-sighting intermittency is ONE CAUSE and it is a TIMEOUT, measured rather than argued, and the second and worse reading is FALSIFIED rather than merely unobserved. INSTRUMENTED BEFORE IT WAS REPAIRED: `pnpm test` now records EVERY case's duration — PASSES AS WELL AS FAILURES, because instrumenting only the flips is selecting on the dependent variable — into `.verify-logs/test-durations.json`, printed by `pnpm test:durations`. Five full `pnpm test` runs on an UNCHANGED tree, one sitting, win32/12cpu quiet, run 1 cold and KEPT rather than discarded because a CI runner is always cold: exit codes 1, 1, 1, 1, 0, and the two red cases read 45,018 / 35,968 / 33,352 / 33,570 / 24,435 ms and 43,443 / 35,154 / 37,583 / 33,526 / 25,136 ms. EVERY FAIL CARRIES A DURATION ABOVE 30,000ms AND THE SINGLE PASS CARRIES ONE BELOW IT, 5 of 5, for both cases — the flip with every duration inside budget was looked for across five runs and does not occur. THE DEFECT IS ONE RATIO: the same two cases cost 7,816ms ISOLATED (median of 3, same sitting, 3.8% spread, exit 0 every time) against 33,570ms IN-SUITE (median of 5) — A CONTENTION FACTOR OF 4.29x ON A BUDGET WORTH 3.84 ISOLATED COSTS, so THE BUDGET WAS SMALLER THAN THE CONTENTION and nothing about the simulation, the log or the assertions is involved. AND THE PASSING TAIL IS THE OTHER HALF OF THE EVIDENCE: thirty-six readings sat above 30,000ms across the five runs and only EIGHT were red, the other twenty-eight green because they had DECLARED a budget — the two red cases were not the slowest in the suite, they were the undeclared ones, and which case pays a memoised fixture is a fact about DECLARATION ORDER. REPAIRED BY THE HOUSE PATTERN APPLIED TO THE MEASURED POPULATION RATHER THAN TO THE SIGHTINGS: THIRTY-ONE cases in TWELVE files declare 3x their own worst reading over NINE full-suite runs, rounded up to 30s for legibility, each carrying that reading on its own line, with the derivation stated ONCE in `vitest.config.ts`; the shared `testTimeout` is BYTE-UNCHANGED at 30,000ms and raising it was refused by name, along with tuning the workload, capping the workers and a per-project timeout. Why a bigger literal is nearly free is READ OUT OF THE SHIPPED BYTES rather than assumed: `withTimeout` cannot interrupt a SYNCHRONOUS case (all thirty-one are, checked mechanically — 31 annotated, 0 async), so a synchronous hang is never caught at ANY value and the budget decides exactly one thing, whether a COMPLETED run with every assertion PASSING is reported red. THE SCOPE GREW ON A MEASUREMENT RATHER THAN A HUNCH: `layout.reach.player.report.test.ts` measured 59,236ms against a declared 60,000ms — a 1.3% margin, green on every run, one cold cache from being the THIRD unreliable item that §2.0 makes a stop condition, and visible ONLY because the instrument records passes. THREE CLAIMS IN THE BRIEF WERE FALSE AND ARE CORRECTED: the affected tests do NOT spawn child processes (both are synchronous in-process 100,000-tick replays; the property was true of the G-048 pair and was carried forward to this pair unchecked, which is ADR-0085's own class); the "67% spread in isolated timings" is THREE SITTINGS BY TWO PEOPLE, the comparison `CLAUDE.md` rule 3 forbids by name, and three isolated readings in ONE sitting span 1.6% (17.96 / 17.68 / 17.83s); and G-039b-α refused tuning CONTENT so a statistic moves, not tuning a workload. EVIDENCE, because a single green is exactly what this goal exists to refuse: SIX full `pnpm verify` runs, serial and unattended so the box stayed quiet, VERIFY_EXIT=0 read from the process into a file every time, FOURTEEN ROWS PASS every time, INCLUDING THE SLOWEST RUN OF THE CAMPAIGN (932,160ms wall, 1.6x the fastest) in which every case still passed — and the repair bit without needing a mutation probe, the previously-red case measuring 34,246ms and PASSING, the same reading with the opposite verdict. APPLYING THE RULE ONCE WAS NOT ENOUGH AND THAT IS THE HONEST SHAPE OF IT: the first pass scored thirty cases against the five diagnosis runs, and re-scored against all nine ONE more had crossed the line (8,058ms to 11,480ms); RE-SCORED AGAIN AT ELEVEN RUNS IT WOULD NAME SIX MORE, so the iteration is stopped on a stated ground rather than because the diff got boring — `worst` is a MAXIMUM OVER THE SAMPLE and the maximum of a sample grows with the sample, so a threshold defined against it HAS NO FIXED POINT and "apply until nothing crosses" does not terminate. The rule guaranteed a ONE-TIME sizing; the reading that needs no arithmetic is that the slowest run taken was ALL GREEN, the largest of 30,866 test readings being 63,810ms against a 180,000ms budget. THIS IS A MONITORING PROBLEM WEARING A THRESHOLD'S CLOTHES, and the monitor is what shipped. The word SYNCHRONOUS in the rule is load-bearing: on an ASYNC case the timer DOES fire and the budget IS the hang detector, so the one async case the arithmetic would have swept up (`verify.lock.test.ts`, worst 12,871ms) is EXCLUDED ON THE MECHANISM rather than overlooked. AND MY OWN ANALYSIS SCRIPT WAS A SCANNER NARROWER THAN ITS NAME, in the goal about instruments: it read numeric budgets only, so the nine cases declaring `SPAWN_BOUND_MS` scored as if they inherited 30,000ms and one read 42.8% of budget where it sits at 10.7% — no wrong edit resulted and `git diff` shows that file untouched, but the shipped instrument is immune only because it deliberately parses no budgets at all. NO FILE UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged. `check:scaling` IS NOT REPAIRED AND IS NOT CLAIMED TO BE — it passed six of six IN THE REGIME THAT NEVER BROKE IT, its one captured red came from an agent working on the same box while verify ran, and a green taken where the failure does not live is not evidence; parked with the loaded campaign that would settle it. Unreliable: 1 gate, 0 defects — the unit is a `pnpm verify` ROW, of which there are fourteen, and the two-vs-three naming is reconciled below: the two "twos" were DIFFERENT PAIRS, this digest's counting rows and ADR-0083's counting tests inside one row, which is how 13 rows plus 2 tests reached 14.*
+*As of 2026-08-26, G-053b is DONE — the orphan sweep RAN, and the trap it was written about was sitting in an agent's own standing instructions. THE HEADLINE, because it is the one thing that must survive compaction: `.claude/agents/render-engineer.md:43` still reads "the Pixi.js side-on cross-section view (SimTower / Project Highrise, not isometric)" in its `Your domain` section — THE SENTENCE ADR-0046 REVERSED ON 2026-08-16, VERBATIM, PARENTHETICAL AND ALL, IN THE BRIEF OF THE AGENT THAT WOULD BUILD M5 — with two more copies at `:3` (the `description:` field, which is what selects the agent) and `:37`, one at `apps/game/src/scenario.ts:36-37`, and a fourth at `HOTELSIM.md:611`, §8's M5 row in the source of truth. `CLAUDE.md`'s own banner states the rule this breaks — A RULING IS NOT LANDED UNTIL EVERY COPY OF THE SENTENCE IT REVERSES IS DEAD — and it names two files; NOBODY RAN THE GREP. `HOTELSIM.md:611` IS REPAIRED; THE OTHER THREE ARE RECORDED AND DELIBERATELY NOT TOUCHED, because the first is agent configuration and the second is `render-engineer`'s domain, and a sim goal rewriting either on its own initiative is a worse precedent than a stale line with a due date — both are blocking obligations on M5, in `PARKING.md` and in `HOTELSIM.md`'s own strike note, with `git grep -in "cross-section\|SimTower\|Project Highrise\|side-on"` attached as the test. THE COUNTS, BEFORE AND AFTER, EACH NAMING ITS UNIT (§4.1): quality orphans 5 sites / 2 files unchanged (bound 5 forbids the fix and the obligation on G-037a was CONFIRMED to read five across two); deferrals with no EXECUTABLE falsification test 2 → 0; branches 2 → 1; watching findings outstanding 0 of 4 → 0 of 4; ADRs at two-or-more amendments over BOTH SPELLINGS 6 with four unaddressed → 6 with ZERO unaddressed; live copies of the dead sentence 6 sites in 3 files → 5 in 2; stale `Milestone:` on non-done blocks 14, recorded not re-milestoned; blocks whose status trails their own commit 1 → 0. §2.5 IS SIX ADRs AND NOT THE FOUR ADR-0043 §3 NAMED, because amendments are spelled two ways and the census counted only `## ADR-XXXX AMENDMENT` headings (16) and not the inline `**Amendment (…)` blocks (8): ADR-0034 RESTATED as ADR-0090 (headline dead twice over — superseded by ADR-0037 §1, itself struck into ADR-0045 — with the two live traps §3(a) and §3(b) carried forward and their unslotted figures WITHDRAWN); ADR-0025 RESTATED as ADR-0091; ADR-0007 JUSTIFIED IN WRITING at SEVEN amendments (the digest read SIX for eleven days) because all seven EXTEND the headline and none contradicts it; ADR-0028's deferral re-verified as still standing; ADR-0036 and ADR-0037 re-verified struck. AND THE RULE THAT PRODUCED THE STRIKE LIST COUNTED A PROXY: "reaching a second amendment" stands in for "wrong rather than incomplete" and the two come apart BOTH WAYS — ADR-0007 has seven and is right, ADR-0034 has two and is dead — so the discriminator is whether an amendment CONTRADICTS the headline or EXTENDS it, which is ADR-0086 pointed at a count. ADR-0025's deferral was CONDITIONAL — "restate only if cited again" — and THE CONDITION FIRED TWICE, at `8026e2f` 2026-08-22 and `a145a05` 2026-08-23, both by builders with no way to know a rule existed, and sat fired for four days; ADR-0028's has NOT fired (`e1623b4` 2026-08-14 11:26 against ADR-0043's own `c4067e5` 18:51 the same day) and ADR-0091 §5 now carries the one-line `git log -S` that fires it, deliberately as a written invocation rather than a fifteenth gate. `g041-rate-rederivation` DELETED with the ancestor proof taken on BOTH sides of the delete (ancestor of `main`, 0 commits ahead, and `faf8747` still an ancestor afterwards, so no history was removed); `g037a-quality-fold` KEPT and RE-TESTED in a `git worktree` outside the repo with its own `pnpm install` and no symlink back (ADR-0061 — 301 symlinks enumerated, 0 outside the worktree, `sha256` sentinel on `save.ts` identical either side) reading 80 failed / 2,423 passed across 2,503 tests, 16 files, ALL `tools/headless`, ZERO `packages/sim`, exit 1 — EXACTLY its own commit message five days on — AND ITS RED IS NOT EVIDENCE AGAINST G-041's DISCHARGE, because `87c0101` predates G-041 and only a REBASE can test that. FOUR CLAIMS IN THE BRIEF ARE FALSE AND THE FIRST IS THIS PROJECT'S SIGNATURE DEFECT: "sections its own AMENDMENT 2 declared UNRUNNABLE" — AMENDMENT 2 NAMES §4 SIX TIMES AND §3 NOT ONCE, a correct quotation of a thing that was never said, in the brief for the goal about ADR-0084; "45 commits behind" is 51 now and 46 at the report commit, so never 45; "five moved files" is 15 code files and was 15 at the report commit too, so wrong when written rather than drifted; and "a save bump off v23" is FALSE AND EXPENSIVE — the branch bumps NOTHING and its own save test is titled "THE QUALITY FOLD ADDS NO SAVE FIELD", so a goal briefed to expect a migration builds one nothing needs. THE FOURTH OPEN CONTRADICTION IS NEW AND IS THE ONE M4 SHOULD READ FIRST: `HOTELSIM.md:609` requires the scenario-capital mechanism BEFORE THE FIRST M4 GOAL while `PARKING.md`'s C1 routes it to M6 in the same sentence that says M4 consumes it, and the tree says it is unbuilt — one global `startingCapitalPence` of 500,000p and no scenario type in the schema — while every balance figure in this project was taken with `--rooms N` seeding ~75% extra opening capital. THE ARCHIVES ARE OUT OF SCOPE ON A STATED GROUND rather than by omission: they record what was believed when written, striking a belief there falsifies the record, and the one class that would have changed the answer was checked and is empty — six archive hits on the dead-sentence grep, every one inside a narrative of what a goal did; `GOALS-ARCHIVE.md` is not inert, though, because `check-status.mjs` resolves goal IDs into it, so its BLOCKS are machine-read and its PROSE is not. AND MY OWN TWO SCANNERS WERE WRONG IN THE GOAL ABOUT SCANNERS BEING WRONG: the stale-`Milestone:` counter anchored `/^Milestone:/` and returned 7 where the both-spellings count is 14, the identical failure as the amendment census four hours after writing it up; and the symlink safety check before an `rm -rf` used `grep -c "Documents.HotelSim"` whose unescaped `.` matched the `-` in the scratch directory's own name and reported 301 symlinks into the repo where a fixed-string check reports 0 of 301. NOTHING UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged, checked rather than assumed. Unreliable: 1 gate, 0 defects — the unit is a `pnpm verify` ROW, of which there are fourteen; `test` (I4) is repaired at G-055 and `check:scaling` is not, and a THIRD is still a stop condition. M3 EXIT IS COMPLETE. M4 DOES NOT OPEN (ADR-0092): its OWN HARD PREREQUISITE — the scenario-capital mechanism, HOTELSIM.md section 8, human ruling — is UNBUILT, and opening the economy-tuning milestone against a 75%-inflated balance is the failure that prerequisite exists to prevent. G-057 is the last action before the gate.*
 
 - **Schemas**: save **v23** (G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -67,11 +67,29 @@
   block): **five docblocks on main inside `packages/sim` assert the quality mechanic in the PRESENT
   TENSE and nothing on main reads a room's quality** — `content.ts` 1948 / 2075 / 2429 / 3910 and
   `index.ts:102`. **ADR-0083 named three, in one file; it is five, across two.**
-- **OPEN CONTRADICTION, handed to G-053b**: **ADR-0053 and G-037b's block are STALE.** *"A room
-  holds one guest by enforced invariant"* and *"there is no party concept in `packages/sim`"* were
-  both true when written and were **superseded by G-040a/G-040b-i/G-040b-ii**. `capacity` has three
-  non-test readers today and **two guests share a bedroom on shipped content**. *An ADR is a
-  decision, not a live reading of the tree.*
+- **DISCHARGED AT G-053b — the ADR-0053 / G-037b contradiction is STRUCK AND POINTS FORWARD.**
+  *"A room holds one guest by enforced invariant"* and *"there is no party concept in
+  `packages/sim`"* were true when written and were **superseded by G-040a/G-040b-i/G-040b-ii**.
+  **Both blocks now carry the strike with the symbols that re-run it**: the verbatim
+  `grep -rn "\.capacity[^T]" packages tools apps` returned **1** line then and returns **26** now —
+  **three of them non-test readers of a room type's capacity** (`content.ts:3054-3055`,
+  `guests.ts:1513`, `guests.ts:2200`) — `claimEntity` admits a party member (`guests.ts:1819-1827`)
+  so the invariant is **a room holds one PARTY**, and `standard_room` ships `capacity: 2`.
+  *An ADR is a decision, not a live reading of the tree — and so is a goal block.*
+- **THE ORPHAN SWEEP IS EXECUTED (G-053b — ADR-0089/0090/0091).** **Six ADRs stood at the amendment
+  threshold, not the four ADR-0043 §3 named** — the census counted one of two spellings — and **all
+  six are now restated or justified in writing**: ADR-0034 → **ADR-0090**, ADR-0025 → **ADR-0091**,
+  ADR-0007 justified at **seven** amendments (*"the digest's SIX is corrected"*), ADR-0028's deferral
+  re-verified as **not fired**. **ADR-0025's condition HAD fired, twice, and sat fired for four
+  days.** **`g041-rate-rederivation` deleted** (ancestor of `main`, 0 ahead, re-checked after);
+  **`g037a-quality-fold` re-tested — 80 red / 2,423 green, all `tools/headless`, exactly its own
+  commit message — and IT BUMPS NO SAVE VERSION**, which three ledgers said it did.
+- **LIVE OBLIGATION ON M5, and it is the sweep's headline**: **`.claude/agents/render-engineer.md`
+  lines 3, 37 and 43 still specify *"side-on cross-section view (SimTower / Project Highrise, not
+  isometric)"*** — the sentence ADR-0046 reversed, **verbatim, in the standing instructions of the
+  agent that would build M5** — plus `apps/game/src/scenario.ts:36-37`. **`HOTELSIM.md:611` was the
+  fourth copy and is repaired.** **Not fixed here on purpose**: agent configuration and
+  `render-engineer`'s domain. Parked with its grep.
   `verify` now keeps a red row's own output in `.verify-logs/` (G-039a), which is how the fourth
   and fifth sightings were finally diagnosed.
 - **The re-take goal carries THREE campaigns**: tickcost, scaling, and `PARKING.md`'s
@@ -114,8 +132,12 @@
   predicate** — and every instance was written by someone who had just demonstrated they
   understood the rule; the last acquired its overclaim **while being repaired for the opposite
   one**. **Repair by assertion, never by a better sentence.**
-- **Open contradictions**: G-012's criterion pins a content property any provider can flip ·
-  `--rooms N` contaminates every balance sweep · seeds inert until M4.
+- **Open contradictions — FOUR, and the new one is the biggest**: G-012's criterion pins a content
+  property any provider can flip · `--rooms N` contaminates every balance sweep · seeds inert until
+  M4 · **AND `HOTELSIM.md:609` REQUIRES SCENARIO CAPITAL BEFORE THE FIRST M4 GOAL WHILE `PARKING.md`'s
+  C1 ROUTES IT TO M6** (G-053b, ADR-0089 §7(b)). *The second and fourth are the same defect at two
+  altitudes: a contaminated evidence base, and the mechanism that would clean it, disagreeing about
+  when it lands — on the milestone that tunes the economy.*
 
 ---
 
@@ -1788,8 +1810,17 @@ carrying more than one term, and reviews carrying information rather than a cons
 > that TRACKS it says so.** *The orchestrator wrote the ADR and left the tracker.*
 
 **What remains before M4 opens** — the human's ordering (ADR-0081 §2, §3): **G-055 done** ·
-**G-056 done** · **G-053b** (the rest of the orphan sweep). Then M4, planned around **CLOSURE**
-rather than around ticking off terms (ADR-0085).
+**G-056 done** · **G-053b done 2026-08-26** (the rest of the orphan sweep — ADR-0089/0090/0091).
+**NOTHING REMAINS. M4 OPENS**, planned around **CLOSURE** rather than around ticking off terms
+(ADR-0085).
+
+> **AND G-053b HANDS M4 ONE THING BEFORE ITS FIRST GOAL, WHICH IS WHERE §8 ALREADY PUT IT.**
+> `HOTELSIM.md:609` — *"the scenario-capital mechanism lands **before the first M4 goal starts**"* —
+> against `PARKING.md`'s C1 — *"→ **M6**, and M4 consumes it."* **A prerequisite of M4 cannot land at
+> M6, and the contradiction is inside one sentence of C1.** The tree says it is **unbuilt**: one
+> global `startingCapitalPence` of 500,000p and **no scenario type in the schema**, while every
+> balance figure in this project was taken with `--rooms N` seeding ~75% extra opening capital.
+> **The ORDERING is a planning ruling and the sweep did not make it** (ADR-0089 §7(b)).
 
 When **G-022 to G-026** are `done`, that is a §5.4 escalation. Write it to `ESCALATIONS.md`
 and stop.
@@ -2627,8 +2658,29 @@ NOTHING ON MAIN READS A ROOM'S QUALITY** — no field, no fold, no reader; `qual
 > behind. **Whichever goal merges the branch discharges ALL FIVE**: either the mechanic lands and the
 > present tense becomes true, or each docblock is restated to say what is true today and point
 > forward. **Neither is optional and "we merged the branch" does not discharge it by itself** — the
-> branch is 45 commits behind and touches five files that all moved, so the docblocks must be
-> re-read against the merged text rather than assumed correct by arrival.
+> branch is ~~45~~ **51** commits behind and touches ~~five~~ **15 code** files that all moved, so
+> the docblocks must be re-read against the merged text rather than assumed correct by arrival.
+
+> **THREE FIGURES THAT STOOD HERE ARE CORRECTED, RE-MEASURED AT `26f9f88` (G-053b, ADR-0089 §6).**
+> ***"45 commits behind"*** is **51** (`git rev-list --count g037a-quality-fold..main`), and it was
+> **46** at the report commit `2ab5949`, so it was never 45. ***"Five files that all moved"*** is
+> **15 code files** (18 with the ledgers), by
+> `comm -12 <(git diff --name-only $MB g037a-quality-fold|sort) <(git diff --name-only $MB main|sort)`
+> — and it was 15 at the report commit too, so **that one was wrong when written, not drifted**.
+> ***"It ships a save test — a bump off v23"*** is **FALSE AND IS THE EXPENSIVE ONE: THE BRANCH BUMPS
+> NOTHING.** `packages/sim/src/save.ts` is **not in the branch's diff at all**, and
+> `quality.save.test.ts`'s own title is **"THE QUALITY FOLD ADDS NO SAVE FIELD"** — the score is
+> DERIVED from footprint, contents and neighbours, all already saved, *"which is why this goal bumps
+> NO schema version."* **A goal briefed to expect a migration would build one nothing needs**, and
+> inventing a stored field for a derived quantity is ADR-0053's defect authored on purpose.
+>
+> **AND THE BRANCH WAS RE-TESTED RATHER THAN REASONED ABOUT** — `git worktree` outside the repo, its
+> own `pnpm install`, no symlink back (ADR-0061): **80 failed / 2,423 passed across 2,503 tests, 16
+> files, ALL under `tools/headless`, ZERO under `packages/sim`, exit 1** — **exactly what
+> `87c0101`'s commit message claims, reproduced verbatim in every number.** **The red is NOT
+> evidence against G-041's discharge**: `87c0101` predates G-041 and carries its own pre-G-041
+> content, so re-testing it in place can never show the discharge. **The test that would is a
+> REBASE, and that is this goal's work.**
 
 **AND THE MARK MOVES IN THE SAME COMMIT** (§1.1 rule 2): `HOTELSIM.md` §1.1's `quality` row, its
 `[OWED TO M4]` inline mark, the room-design sentence's three marks in §1, and `CLAUDE.md`'s build-loop
@@ -2895,6 +2947,65 @@ assumed, and taking a seam because of a measurement is cheaper than taking it be
 **Six false claims in my own brief and block**, the two load-bearing ones being that the isometric
 sweep *"was ruled before G-034a"* (**it was never ruled at all**) and that §2.2's measurement had
 expired (**all three cited causes are ANCESTORS of the deferral**).
+
+## G-057 — Scenario capital, the last action before the M4 gate
+Status: **PLANNED 2026-08-26 (ADR-0092). M4's OWN HARD PREREQUISITE, unbuilt.**
+Milestone: M3 exit · Owner pair: economy-engineer / balance-critic
+Statement: **a scenario declares its opening capital**, so a balance figure means what it says.
+
+### THE PREREQUISITE, IN THE CHARTER'S OWN WORDS
+
+> **`HOTELSIM.md` §8 (ADR-0013 §5, human ruling): *"the scenario-capital mechanism lands BEFORE THE
+> FIRST M4 GOAL STARTS. `--rooms N` seeds stock that is cash at the refund rate — `--rooms 3` carries
+> 375,000p against a 500,000p starting constant — and EVERY BALANCE SWEEP IN THIS PROJECT USED THAT
+> FLAG. Tuning demand and pricing against a 75%-INFLATED OPENING BALANCE is how a whole milestone's
+> evidence base goes bad quietly."***
+
+**Verified unbuilt**: one global `startingCapitalPence: 500000` in `economy.json`, **no scenario type
+in the schema.**
+
+**M4 is the milestone that tunes the economy.** *Opening it against a 75%-inflated opening balance is
+exactly the failure the prerequisite exists to prevent.*
+
+### THE DATING CONTRADICTION, RESOLVED
+
+`HOTELSIM.md:609` says **before M4**; `PARKING.md`'s **C1** routes it to **M6 in the same sentence
+that says M4 consumes it.** **`CLAUDE.md`: *"`HOTELSIM.md` is the source of truth… where the two
+disagree, `HOTELSIM.md` wins."*** **And `PARKING.md` already knew — its own note reads *"a
+prerequisite of M4 cannot land at M6."*** *A contradiction self-evident in the file carrying it, open
+anyway.*
+
+### WHAT THIS IS NOT
+
+- **NOT the scenario system.** C1 rules **scenarios over sandbox** and builds that at M6. **This goal
+  is the CAPITAL mechanism only** — enough that an opening balance is declared rather than implied by
+  a CLI flag. **If the plan grows a scenario type with objectives, it has become C1 and it stops.**
+- **NOT a re-take of every balance figure.** *That is M4's own first act, and it is the reason this
+  lands first.* **Say in the block which existing figures become quotable again and which do not.**
+
+### WHAT TO GET RIGHT
+
+- **I3: the capital is CONTENT.** A scenario's opening balance is a declared number, not a constant
+  in code.
+- **I4: the ledger is append-only and cash is a FOLD.** `startingCapital` is already a
+  `TransactionReason` — **the mechanism probably shapes that transaction rather than adding a
+  concept.** *Check before designing.*
+- **The `--rooms N` interaction is the whole point.** Seeded rooms are stock, and stock is cash at the
+  refund rate. **State what a seeded room contributes and whether the declared capital replaces or
+  supplements it** — that choice is what makes a figure quotable.
+- **`check:tickcost`'s `ARM_PATHS` includes `packages/content/data`**, so a content change is visible
+  to it and may return `INCOMPARABLE` if `arrived` moves. **Predict the verdict before running it**
+  (ADR-0065's lesson).
+
+### EXIT CRITERIA
+
+- **A scenario's opening capital is declared in content and read once**, with the `startingCapital`
+  transaction as the single site.
+- **The 75% figure is RE-MEASURED on this tree**, not quoted — *the charter's `--rooms 3` example is
+  two milestones old and this project has been wrong about every inherited number it did not re-take.*
+- **A statement of which existing balance figures become quotable and which are withdrawn.**
+- `pnpm verify` **fourteen rows**, `VERIFY_EXIT` read from the process · **I2 stated** (it may move —
+  content is hashed) · `check:stamp` green.
 
 ## G-055 — The unreliable gates are repaired, because §2.0 says that is the remedy
 Status: **DONE 2026-08-26. ONE CAUSE, AND IT IS A TIMEOUT — the second and worse reading is
@@ -3203,7 +3314,17 @@ sweep ADRs):
    the criterion was executed in the form that is checkable and the reading is in `JOURNAL.md`.
 
 ## G-056 — Every gate states its predicate, so a reader can tell what it does NOT check
-Status: **PLANNED 2026-08-26. HUMAN RULING (ADR-0086).** Milestone: M3 exit
+Status: **DONE 2026-08-26 — ADR-0088.** Fourteen predicate lines, fifteen omissions, fourteen rows
+PASS twice, I2 `abfd91c3da10b67f`, **no new file under `tools/gates` and no gate logic changed.**
+Milestone: M3 exit
+
+> **THIS LINE READ `PLANNED` UNTIL G-053b, ONE COMMIT AFTER ITS OWN WORK LANDED** at `26f9f88`,
+> with ADR-0088 written for it and the `M3 exit` block already listing it **done**. **`check:status`
+> was green over it and always would be** — its predicate is *"no goal referenced by a commit reads
+> `pending`"*, and `PLANNED` is not `pending`, which is the omission G-056 itself wrote down.
+> **ADR-0088's own subject was a sign-off landing in `DECISIONS.md` and not in its tracker; it then
+> left an instance of that behind in its own block.** *ADR-0089 §7(c). The class survives the goal
+> that names it, one more time.*
 Owner pair: sim-engineer / sim-critic · **Small. May ride with G-053b if that goal has budget.**
 Statement: **each of the fourteen gates carries a one-line predicate statement**, narrow enough that
   a reader can see what it does not cover.
@@ -3259,8 +3380,12 @@ just the rule.**
 - **I2 unchanged**, `check:stamp` green, and `pnpm verify` per ADR-0083's restated criterion.
 
 ## G-053b — Everything else, and the surface is bigger than the block assumed
-Status: **PLANNED. Scope is EVERYTHING SINCE ADR-0046**, not "what accumulated since a sweep",
-because there was no sweep. Milestone: M3 exit · Owner pair: sim-critic / sim-engineer
+Status: **DONE 2026-08-26 — ADR-0089, ADR-0090, ADR-0091.** Scope was **EVERYTHING SINCE ADR-0046**,
+and the surface was bigger than THIS block assumed too: **six ADRs stood at the amendment threshold,
+not four**, and **the sentence ADR-0046 reversed is alive in four more places, one of them an agent's
+own standing instructions.** `git diff --stat` touches **no file under `packages/sim`**; **I2
+`abfd91c3da10b67f`, unchanged and read from the gate.**
+Milestone: M3 exit · Owner pair: sim-critic / sim-engineer
 
 **§2.5 IS THE PRIORITY AND ITS OWN RULE WAS BLIND.**
 
@@ -3292,6 +3417,122 @@ twelve reliable rows green, the two unreliable rows green **in isolation** with 
 **AND THE SURFACE NOBODY HAS SCOPED**: `GOALS-ARCHIVE.md` and `JOURNAL-ARCHIVE.md` were **not swept**
 and are **outside the five stated classes** — **but given the isometric sweep never ran, that is
 where an absorbed one would have to look.** **Decide deliberately rather than by omission.**
+
+### THE COUNTS, BEFORE AND AFTER — the PAIR is the deliverable, and each row names its unit
+
+**The full table with its invocations is ADR-0089.** In brief, and every count naming its noun (§4.1):
+
+| class | unit | BEFORE | AFTER |
+|---|---|---|---|
+| §2.1 present-tense quality orphans | sites / files | **5 / 2** | **5 / 2** — bound 5 forbids the fix; obligation CONFIRMED on G-037a and it does read five across two |
+| §2.2 deferrals with no EXECUTABLE test | items | **2** | **0** |
+| §2.3 branches | refs | **2** | **1** |
+| §2.4 watching findings outstanding | findings | **0 of 4** | **0 of 4** |
+| §2.5 ADRs at ≥2 amendments (BOTH spellings) | ADRs | **6**, four unaddressed | **6**, **zero** unaddressed |
+| ADR-0046's dead sentence, LIVE copies | sites / files | **6 / 3** | **5 / 2**, all named |
+| stale `Milestone:` on non-done blocks | blocks | **14** | **14**, recorded not re-milestoned |
+| blocks whose status trails their own commit | blocks | **1** | **0** |
+
+### §2.5 — THE AMENDMENT TABLE, WITH WHAT WAS DONE TO EACH. NO SILENT PASSES.
+
+| ADR | amendments | disposition |
+|---|---|---|
+| **ADR-0007** | **7** (inline) | **JUSTIFIED IN WRITING as incomplete, not wrong** — seven extend the headline, **zero contradict it**. The digest's *"SIX amendments deep"* is corrected to **seven**. |
+| **ADR-0025** | 2 | **RESTATED → ADR-0091.** Its deferral condition **FIRED TWICE** and nobody checked. |
+| **ADR-0028** | 2 | **JUSTIFIED — deferral STANDS**, condition **not** fired, re-verified by dated citation rather than inherited. |
+| **ADR-0034** | 2 | **RESTATED → ADR-0090.** Headline dead twice over; the two traps and one rule survive. |
+| ADR-0036 | 2 | **already struck → ADR-0044**, re-verified. |
+| ADR-0037 | 2 | **already struck → ADR-0045**, re-verified. |
+
+> **AND THE RULE THAT PRODUCED THE STRIKE LIST COUNTED THE WRONG THING.** *"Reaching a second
+> amendment"* is a **proxy** for *"the decision was wrong rather than incomplete"*, and the two come
+> apart **in both directions** — ADR-0007 has seven and is right; ADR-0034 has two and is dead. **The
+> discriminator ADR-0043 §3 needed and never gave: does an amendment CONTRADICT the headline or
+> EXTEND it?** *ADR-0086 pointed at a COUNT: an amendment count is a NAME for a property, and this
+> name had authority — it produced a strike list.*
+
+### §2.3 — ONE DELETED WITH PROOF, ONE RE-TESTED WITH A RESULT
+
+**`g041-rate-rederivation` DELETED.** Ancestor of `main`, **0 commits ahead**, and the commit
+`faf8747` was confirmed **still an ancestor of `main` AFTER the delete** — bound 1 checked on both
+sides rather than argued once.
+
+**`g037a-quality-fold` KEPT AND RE-TESTED** in a `git worktree` outside the repo with its own
+`pnpm install` and **no symlink back** (ADR-0061; 301 symlinks enumerated, **0 outside the
+worktree**, before an `rm`, with a `sha256` sentinel on `save.ts` identical either side).
+**RESULT: 80 failed / 2,423 passed across 2,503 tests, 16 files, ALL `tools/headless`, ZERO
+`packages/sim`, exit 1** — **exactly its own commit message, five days on.** **The red is not
+evidence against G-041's discharge**: the branch predates G-041, so **only a REBASE can test that**,
+and a rebase is the merging goal's work.
+
+### FOUR CLAIMS IN THE BRIEF AND THE BLOCK THAT ARE FALSE (ADR-0089 §6, ADR-0090 §3)
+
+1. ***"Several citing §3(a)/§3(b), sections its own AMENDMENT 2 declared UNRUNNABLE."*** **AMENDMENT
+   2 declares no such thing** — it names **§4 six times and §3 not once**
+   (`sed -n '2877,2934p' DECISIONS.md | grep "§3"` returns nothing). The substance survives and is
+   applied: §3's own figures carry no slots either, so the rule reaches them and **both figures are
+   withdrawn.** *A correctly-quoted report, quoting a thing that was not said — ADR-0084's class, in
+   the brief for the goal about ADR-0084's class.*
+2. ***"45 commits behind"*** → **51** now, **46** at the report commit. Never 45.
+3. ***"Five moved files"*** → **15 code files**, and **15 at the report commit too**, so it was wrong
+   when written rather than drifted.
+4. ***"A save bump off v23"*** → **THE BRANCH BUMPS NOTHING**, and its own save test is titled *"THE
+   QUALITY FOLD ADDS NO SAVE FIELD"*. **The expensive one**: a goal briefed to expect a migration
+   builds one nothing needs.
+
+*(A fifth, softer: **both §2.2 items DO carry a bolded FALSIFICATION TEST heading** — what neither
+carried is an executable one. The property was right; the page was not.)*
+
+### THE ARCHIVES — DECIDED DELIBERATELY, WHICH THE BLOCK ASKED FOR
+
+**OUT OF SCOPE, on a stated ground rather than by omission.** `GOALS-ARCHIVE.md` and
+`JOURNAL-ARCHIVE.md` are **history**: they record what was believed when it was written, and
+striking a belief there falsifies the record rather than repairing it. **The trap this goal exists to
+close is a FUTURE GOAL citing an orphan, and a goal cites live ledgers.**
+
+**The one class that would have changed the answer was checked and is empty**: the dead-sentence grep
+returns **6 archive hits, and every one is inside a narrative of what a goal did** — no live
+specification, no forward obligation. **`GOALS-ARCHIVE.md` is not inert, though, and that is worth
+recording**: `check-status.mjs` resolves goal IDs into it, and ADR-0088 found an unresolvable ID
+**passes** as *"not judged"*. **Its BLOCKS are machine-read; its PROSE is not.**
+
+### WHAT WAS FOUND THAT NO CLASS NAMED — and the first is why this goal existed
+
+- **THE SENTENCE ADR-0046 REVERSED IS IN AN AGENT'S OWN BRIEF.**
+  `.claude/agents/render-engineer.md:43` reads *"the Pixi.js **side-on cross-section view (SimTower
+  / Project Highrise, not isometric)**"*, in **Your domain**, with copies at **:3** and **:37**;
+  `apps/game/src/scenario.ts:36-37` carries the premise in the present tense; and
+  **`HOTELSIM.md:611` — §8's M5 row — said *"Pixi cross-section view"* in the source of truth.**
+  **The charter's own banner says a ruling is not landed until every copy of the sentence it reverses
+  is dead, and nobody ran the grep.** **`HOTELSIM.md` is REPAIRED here. The other three are RECORDED
+  AND NOT TOUCHED** — agent configuration and `render-engineer`'s domain — **and are blocking
+  obligations on M5** in `PARKING.md` and in `HOTELSIM.md`'s own strike note.
+- **M4's HARD PREREQUISITE IS UNBUILT AND TWO FILES DISAGREE ABOUT WHEN IT LANDS.**
+  `HOTELSIM.md:609` says scenario capital lands **before the first M4 goal**; `PARKING.md`'s C1
+  says **M6, and M4 consumes it**. **A prerequisite of M4 cannot land at M6.** The tree says it is
+  unbuilt — one global `startingCapitalPence`, no scenario type. **This is the last goal before M4
+  and the ordering is the human's.**
+- **A GOAL'S STATUS TRAILED ITS OWN COMMIT.** **G-056 read `PLANNED`** with its work at `26f9f88`
+  and `M3 exit` already calling it done. **Fixed.** `check:status` is green over it by
+  construction — *"no goal referenced by a commit reads `pending`"* — **which is the omission G-056
+  itself wrote down.**
+- **AND MY OWN TWO SCANNERS WERE NARROWER, AND WIDER, THAN THEIR NAMES — in the goal about that.**
+  The stale-`Milestone:` counter anchored `/^Milestone:/` and returned **7**; the tree spells it
+  **inline on the `Status:` line too**, and the both-spellings count is **14** — *the identical
+  failure as ADR-0043 §3's amendment census, four hours after writing it up.* And the symlink safety
+  check used `grep -c "Documents.HotelSim"`, whose unescaped **`.` matched the `-` in the scratch
+  directory's own name**, reporting **301 symlinks into the repo** where a fixed-string check reports
+  **0**. *`CLAUDE.md`'s regex-in-a-scanner rule, arriving through a dot instead of a backslash.*
+
+### EXIT CRITERIA, SAID RATHER THAN TICKED
+
+1. **a count per class BEFORE and AFTER** — the table above, every row with its invocation in ADR-0089.
+2. **every ≥2-amendment ADR restated or justified in writing, over BOTH spellings** — six of six, table above.
+3. **both deferred items carry an executable falsification test** — `PARKING.md`, invocation + reading + comparison, and the C5 greps were **read back off disk and executed** rather than retyped.
+4. **`g041-rate-rederivation` deleted; `g037a-quality-fold` re-tested with its result stated** — done, with the ancestor proof and the 80/2,423 reading.
+5. **`git diff --stat` touches no `packages/sim` file; I2 unchanged** — both checked, not assumed.
+6. **`pnpm verify` fourteen rows PASS, `VERIFY_EXIT` read from the process into a file.**
+7. **`check:stamp` green, four stamps byte-identical, naming a goal marked done.**
 
 ## G-054 — Which need starves must not be decided by a spelling
 Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0081 §3.1) — FIRST after the orphan sweep.**
@@ -4425,9 +4666,28 @@ count, the throw becomes a bound, `countOrphanedReservations` is re-defined, and
 
 **AND THE SHIPPED SCHEMA FORBIDS THE MOTIVATING EXAMPLE**: *"capacity is the size of the PARTY a
 room holds, NOT a count of unrelated bookings… two strangers sharing a room would read as stupid to
-a watching player."* **There is no party concept in `packages/sim`.** So this goal is downstream of
-**a party / group-arrival mechanic that is nowhere in M3** — that is the escalation, and it is the
-human's call whether it enters M3 or waits.
+a watching player."* ~~**There is no party concept in `packages/sim`.** So this goal is downstream of
+a party / group-arrival mechanic that is nowhere in M3 — that is the escalation, and it is the
+human's call whether it enters M3 or waits.~~
+
+> **STRUCK 2026-08-26 (G-053b, ADR-0089; the strike this goal was handed by the digest).** **The
+> party mechanic SHIPPED** — G-040a, G-040b-i, G-040b-ii. **`world` carries `partyId` at save v22**,
+> `standard_room` ships `capacity: 2` (`packages/content/data/room-types.json:5`), and **two guests
+> share a bedroom on shipped content today** (occupancy 1203 → 1275, WATCH #22).
+>
+> **`claimEntity` NO LONGER THROWS UNCONDITIONALLY**: `guests.ts:1819-1827` admits a second claim
+> when it is *"another member of the party already lodging there"*, so the invariant reads **a room
+> holds one PARTY**, not one guest. **The paragraph above it — `capacity` has one reader, capacity 99
+> produces a byte-identical report — is history too**: the verbatim invocation
+> `grep -rn "\.capacity[^T]" packages tools apps` returned **one** line when it was written and
+> returns **26** at `26f9f88`, of which **three are non-test readers of a room type's capacity in
+> `packages/sim`** — `content.ts:3054-3055`, `guests.ts:1513`, `guests.ts:2200`.
+>
+> **WHAT SURVIVES, AND IT IS WHY THE BLOCK IS NOT DELETED**: only ONE lodging room type ships, so the
+> player's lever is still more rooms rather than bigger ones, and **the last paragraph's obligation
+> is untouched** — whichever goal makes capacity a player-facing dial re-takes the occupancy pin and
+> the tripwire campaign in one commit, and adds a COUNTED assertion on `gaveUp`. *An ADR is a
+> decision, not a live reading of the tree — and so is a goal block (ADR-0084).*
 
 **Whichever goal makes capacity live RE-TAKES THE OCCUPANCY PIN AND THE TRIPWIRE CAMPAIGN IN ONE
 COMMIT** (`TARGET_CONCURRENT_HUNDREDTHS`), **and adds a COUNTED assertion on `gaveUp`** — because in

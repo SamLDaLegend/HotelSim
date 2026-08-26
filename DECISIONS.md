@@ -2,13 +2,15 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-26, G-055 is DONE — the I4 row's five-sighting intermittency is ONE CAUSE and it is a TIMEOUT, measured rather than argued, and the second and worse reading is FALSIFIED rather than merely unobserved. INSTRUMENTED BEFORE IT WAS REPAIRED: `pnpm test` now records EVERY case's duration — PASSES AS WELL AS FAILURES, because instrumenting only the flips is selecting on the dependent variable — into `.verify-logs/test-durations.json`, printed by `pnpm test:durations`. Five full `pnpm test` runs on an UNCHANGED tree, one sitting, win32/12cpu quiet, run 1 cold and KEPT rather than discarded because a CI runner is always cold: exit codes 1, 1, 1, 1, 0, and the two red cases read 45,018 / 35,968 / 33,352 / 33,570 / 24,435 ms and 43,443 / 35,154 / 37,583 / 33,526 / 25,136 ms. EVERY FAIL CARRIES A DURATION ABOVE 30,000ms AND THE SINGLE PASS CARRIES ONE BELOW IT, 5 of 5, for both cases — the flip with every duration inside budget was looked for across five runs and does not occur. THE DEFECT IS ONE RATIO: the same two cases cost 7,816ms ISOLATED (median of 3, same sitting, 3.8% spread, exit 0 every time) against 33,570ms IN-SUITE (median of 5) — A CONTENTION FACTOR OF 4.29x ON A BUDGET WORTH 3.84 ISOLATED COSTS, so THE BUDGET WAS SMALLER THAN THE CONTENTION and nothing about the simulation, the log or the assertions is involved. AND THE PASSING TAIL IS THE OTHER HALF OF THE EVIDENCE: thirty-six readings sat above 30,000ms across the five runs and only EIGHT were red, the other twenty-eight green because they had DECLARED a budget — the two red cases were not the slowest in the suite, they were the undeclared ones, and which case pays a memoised fixture is a fact about DECLARATION ORDER. REPAIRED BY THE HOUSE PATTERN APPLIED TO THE MEASURED POPULATION RATHER THAN TO THE SIGHTINGS: THIRTY-ONE cases in TWELVE files declare 3x their own worst reading over NINE full-suite runs, rounded up to 30s for legibility, each carrying that reading on its own line, with the derivation stated ONCE in `vitest.config.ts`; the shared `testTimeout` is BYTE-UNCHANGED at 30,000ms and raising it was refused by name, along with tuning the workload, capping the workers and a per-project timeout. Why a bigger literal is nearly free is READ OUT OF THE SHIPPED BYTES rather than assumed: `withTimeout` cannot interrupt a SYNCHRONOUS case (all thirty-one are, checked mechanically — 31 annotated, 0 async), so a synchronous hang is never caught at ANY value and the budget decides exactly one thing, whether a COMPLETED run with every assertion PASSING is reported red. THE SCOPE GREW ON A MEASUREMENT RATHER THAN A HUNCH: `layout.reach.player.report.test.ts` measured 59,236ms against a declared 60,000ms — a 1.3% margin, green on every run, one cold cache from being the THIRD unreliable item that §2.0 makes a stop condition, and visible ONLY because the instrument records passes. THREE CLAIMS IN THE BRIEF WERE FALSE AND ARE CORRECTED: the affected tests do NOT spawn child processes (both are synchronous in-process 100,000-tick replays; the property was true of the G-048 pair and was carried forward to this pair unchecked, which is ADR-0085's own class); the "67% spread in isolated timings" is THREE SITTINGS BY TWO PEOPLE, the comparison `CLAUDE.md` rule 3 forbids by name, and three isolated readings in ONE sitting span 1.6% (17.96 / 17.68 / 17.83s); and G-039b-α refused tuning CONTENT so a statistic moves, not tuning a workload. EVIDENCE, because a single green is exactly what this goal exists to refuse: SIX full `pnpm verify` runs, serial and unattended so the box stayed quiet, VERIFY_EXIT=0 read from the process into a file every time, FOURTEEN ROWS PASS every time, INCLUDING THE SLOWEST RUN OF THE CAMPAIGN (932,160ms wall, 1.6x the fastest) in which every case still passed — and the repair bit without needing a mutation probe, the previously-red case measuring 34,246ms and PASSING, the same reading with the opposite verdict. APPLYING THE RULE ONCE WAS NOT ENOUGH AND THAT IS THE HONEST SHAPE OF IT: the first pass scored thirty cases against the five diagnosis runs, and re-scored against all nine ONE more had crossed the line (8,058ms to 11,480ms); RE-SCORED AGAIN AT ELEVEN RUNS IT WOULD NAME SIX MORE, so the iteration is stopped on a stated ground rather than because the diff got boring — `worst` is a MAXIMUM OVER THE SAMPLE and the maximum of a sample grows with the sample, so a threshold defined against it HAS NO FIXED POINT and "apply until nothing crosses" does not terminate. The rule guaranteed a ONE-TIME sizing; the reading that needs no arithmetic is that the slowest run taken was ALL GREEN, the largest of 30,866 test readings being 63,810ms against a 180,000ms budget. THIS IS A MONITORING PROBLEM WEARING A THRESHOLD'S CLOTHES, and the monitor is what shipped. The word SYNCHRONOUS in the rule is load-bearing: on an ASYNC case the timer DOES fire and the budget IS the hang detector, so the one async case the arithmetic would have swept up (`verify.lock.test.ts`, worst 12,871ms) is EXCLUDED ON THE MECHANISM rather than overlooked. AND MY OWN ANALYSIS SCRIPT WAS A SCANNER NARROWER THAN ITS NAME, in the goal about instruments: it read numeric budgets only, so the nine cases declaring `SPAWN_BOUND_MS` scored as if they inherited 30,000ms and one read 42.8% of budget where it sits at 10.7% — no wrong edit resulted and `git diff` shows that file untouched, but the shipped instrument is immune only because it deliberately parses no budgets at all. NO FILE UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged. `check:scaling` IS NOT REPAIRED AND IS NOT CLAIMED TO BE — it passed six of six IN THE REGIME THAT NEVER BROKE IT, its one captured red came from an agent working on the same box while verify ran, and a green taken where the failure does not live is not evidence; parked with the loaded campaign that would settle it. Unreliable: 1 gate, 0 defects — the unit is a `pnpm verify` ROW, of which there are fourteen, and the two-vs-three naming is reconciled below: the two "twos" were DIFFERENT PAIRS, this digest's counting rows and ADR-0083's counting tests inside one row, which is how 13 rows plus 2 tests reached 14.*
+*As of 2026-08-26, G-053b is DONE — the orphan sweep RAN, and the trap it was written about was sitting in an agent's own standing instructions. THE HEADLINE, because it is the one thing that must survive compaction: `.claude/agents/render-engineer.md:43` still reads "the Pixi.js side-on cross-section view (SimTower / Project Highrise, not isometric)" in its `Your domain` section — THE SENTENCE ADR-0046 REVERSED ON 2026-08-16, VERBATIM, PARENTHETICAL AND ALL, IN THE BRIEF OF THE AGENT THAT WOULD BUILD M5 — with two more copies at `:3` (the `description:` field, which is what selects the agent) and `:37`, one at `apps/game/src/scenario.ts:36-37`, and a fourth at `HOTELSIM.md:611`, §8's M5 row in the source of truth. `CLAUDE.md`'s own banner states the rule this breaks — A RULING IS NOT LANDED UNTIL EVERY COPY OF THE SENTENCE IT REVERSES IS DEAD — and it names two files; NOBODY RAN THE GREP. `HOTELSIM.md:611` IS REPAIRED; THE OTHER THREE ARE RECORDED AND DELIBERATELY NOT TOUCHED, because the first is agent configuration and the second is `render-engineer`'s domain, and a sim goal rewriting either on its own initiative is a worse precedent than a stale line with a due date — both are blocking obligations on M5, in `PARKING.md` and in `HOTELSIM.md`'s own strike note, with `git grep -in "cross-section\|SimTower\|Project Highrise\|side-on"` attached as the test. THE COUNTS, BEFORE AND AFTER, EACH NAMING ITS UNIT (§4.1): quality orphans 5 sites / 2 files unchanged (bound 5 forbids the fix and the obligation on G-037a was CONFIRMED to read five across two); deferrals with no EXECUTABLE falsification test 2 → 0; branches 2 → 1; watching findings outstanding 0 of 4 → 0 of 4; ADRs at two-or-more amendments over BOTH SPELLINGS 6 with four unaddressed → 6 with ZERO unaddressed; live copies of the dead sentence 6 sites in 3 files → 5 in 2; stale `Milestone:` on non-done blocks 14, recorded not re-milestoned; blocks whose status trails their own commit 1 → 0. §2.5 IS SIX ADRs AND NOT THE FOUR ADR-0043 §3 NAMED, because amendments are spelled two ways and the census counted only `## ADR-XXXX AMENDMENT` headings (16) and not the inline `**Amendment (…)` blocks (8): ADR-0034 RESTATED as ADR-0090 (headline dead twice over — superseded by ADR-0037 §1, itself struck into ADR-0045 — with the two live traps §3(a) and §3(b) carried forward and their unslotted figures WITHDRAWN); ADR-0025 RESTATED as ADR-0091; ADR-0007 JUSTIFIED IN WRITING at SEVEN amendments (the digest read SIX for eleven days) because all seven EXTEND the headline and none contradicts it; ADR-0028's deferral re-verified as still standing; ADR-0036 and ADR-0037 re-verified struck. AND THE RULE THAT PRODUCED THE STRIKE LIST COUNTED A PROXY: "reaching a second amendment" stands in for "wrong rather than incomplete" and the two come apart BOTH WAYS — ADR-0007 has seven and is right, ADR-0034 has two and is dead — so the discriminator is whether an amendment CONTRADICTS the headline or EXTENDS it, which is ADR-0086 pointed at a count. ADR-0025's deferral was CONDITIONAL — "restate only if cited again" — and THE CONDITION FIRED TWICE, at `8026e2f` 2026-08-22 and `a145a05` 2026-08-23, both by builders with no way to know a rule existed, and sat fired for four days; ADR-0028's has NOT fired (`e1623b4` 2026-08-14 11:26 against ADR-0043's own `c4067e5` 18:51 the same day) and ADR-0091 §5 now carries the one-line `git log -S` that fires it, deliberately as a written invocation rather than a fifteenth gate. `g041-rate-rederivation` DELETED with the ancestor proof taken on BOTH sides of the delete (ancestor of `main`, 0 commits ahead, and `faf8747` still an ancestor afterwards, so no history was removed); `g037a-quality-fold` KEPT and RE-TESTED in a `git worktree` outside the repo with its own `pnpm install` and no symlink back (ADR-0061 — 301 symlinks enumerated, 0 outside the worktree, `sha256` sentinel on `save.ts` identical either side) reading 80 failed / 2,423 passed across 2,503 tests, 16 files, ALL `tools/headless`, ZERO `packages/sim`, exit 1 — EXACTLY its own commit message five days on — AND ITS RED IS NOT EVIDENCE AGAINST G-041's DISCHARGE, because `87c0101` predates G-041 and only a REBASE can test that. FOUR CLAIMS IN THE BRIEF ARE FALSE AND THE FIRST IS THIS PROJECT'S SIGNATURE DEFECT: "sections its own AMENDMENT 2 declared UNRUNNABLE" — AMENDMENT 2 NAMES §4 SIX TIMES AND §3 NOT ONCE, a correct quotation of a thing that was never said, in the brief for the goal about ADR-0084; "45 commits behind" is 51 now and 46 at the report commit, so never 45; "five moved files" is 15 code files and was 15 at the report commit too, so wrong when written rather than drifted; and "a save bump off v23" is FALSE AND EXPENSIVE — the branch bumps NOTHING and its own save test is titled "THE QUALITY FOLD ADDS NO SAVE FIELD", so a goal briefed to expect a migration builds one nothing needs. THE FOURTH OPEN CONTRADICTION IS NEW AND IS THE ONE M4 SHOULD READ FIRST: `HOTELSIM.md:609` requires the scenario-capital mechanism BEFORE THE FIRST M4 GOAL while `PARKING.md`'s C1 routes it to M6 in the same sentence that says M4 consumes it, and the tree says it is unbuilt — one global `startingCapitalPence` of 500,000p and no scenario type in the schema — while every balance figure in this project was taken with `--rooms N` seeding ~75% extra opening capital. THE ARCHIVES ARE OUT OF SCOPE ON A STATED GROUND rather than by omission: they record what was believed when written, striking a belief there falsifies the record, and the one class that would have changed the answer was checked and is empty — six archive hits on the dead-sentence grep, every one inside a narrative of what a goal did; `GOALS-ARCHIVE.md` is not inert, though, because `check-status.mjs` resolves goal IDs into it, so its BLOCKS are machine-read and its PROSE is not. AND MY OWN TWO SCANNERS WERE WRONG IN THE GOAL ABOUT SCANNERS BEING WRONG: the stale-`Milestone:` counter anchored `/^Milestone:/` and returned 7 where the both-spellings count is 14, the identical failure as the amendment census four hours after writing it up; and the symlink safety check before an `rm -rf` used `grep -c "Documents.HotelSim"` whose unescaped `.` matched the `-` in the scratch directory's own name and reported 301 symlinks into the repo where a fixed-string check reports 0 of 301. NOTHING UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged, checked rather than assumed. Unreliable: 1 gate, 0 defects — the unit is a `pnpm verify` ROW, of which there are fourteen; `test` (I4) is repaired at G-055 and `check:scaling` is not, and a THIRD is still a stop condition. M3 EXIT IS COMPLETE. M4 DOES NOT OPEN (ADR-0092): its OWN HARD PREREQUISITE — the scenario-capital mechanism, HOTELSIM.md section 8, human ruling — is UNBUILT, and opening the economy-tuning milestone against a 75%-inflated balance is the failure that prerequisite exists to prevent. G-057 is the last action before the gate.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
   v10** (G-013 paid v7, G-015 v8, G-014b v9, G-019 v10), never regenerated. **ADR-0002 was
   paid off in evidence at G-022**: integer pence is why one hash survives two architectures.
-- **Cited most, SIX amendments deep**: **ADR-0007** — a check that succeeds while inspecting
+- **Cited most, SEVEN amendments deep** (*corrected at G-053b: this line read SIX for eleven days,
+  and the missing one is amendment 4, whose content is carried in the "Reading a defect count"
+  bullet below — nothing was lost, a DENOMINATOR was*): **ADR-0007** — a check that succeeds while inspecting
   nothing is not a check. Vacuous ≠ unreachable · promoted by a threshold, exit on one · a
   threshold must itself be derivable · deleting a bad check is not evidence a good one
   exists · a comment offered as evidence may not carry a figure no test pins · **a REPAIR of
@@ -26,24 +28,43 @@
   after G-032b/c, debts deferred to an M3-exit goal in G-022's shape — **except a debt that makes a
   gate stop being evidence, which escalates rather than defers** · **an ADR reaching a SECOND
   amendment was wrong, not incomplete**, and is restated once with the originals struck.
-- **STRUCK, do not cite**: ADR-0036 + 2 amendments → **ADR-0044** · ADR-0037 + 2 amendments →
-  **ADR-0045**. Six banners in place. ADR-0025 and ADR-0028 restate only if cited again.
+- **STRUCK, do not cite**: ADR-0036 + 2 → **ADR-0044** · ADR-0037 + 2 → **ADR-0045** ·
+  **ADR-0034 + 2 → ADR-0090** · **ADR-0025 + 2 → ADR-0091** (G-053b). **Twelve banners in place, and
+  no line was removed from any struck block.** **ADR-0028 alone still restates only if cited again**
+  — its condition is **not** fired (newest citation `e1623b4` 2026-08-14 11:26, against ADR-0043's
+  own `c4067e5` 18:51 the same day) and **ADR-0091 §5 carries the one-line `git log -S` that fires
+  it.** *ADR-0025's fired twice and nobody was watching, which is why the invocation is now written
+  down instead of the rule.*
+- **"AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE" IS ADR-0084, NOT ADR-0085.** Six live
+  citations get it wrong — including **`CLAUDE.md`'s rule bullet, the copy that survives
+  compaction** — while ADR-0085 is *"G-055 goes to the FRONT"* and carries only the
+  proportionate-scope half. **A signpost now sits under ADR-0085's heading with the full table**,
+  because repairing a pointer at its DESTINATION catches every follower and edits no historical
+  entry (G-053b, ADR-0089 §7(e)).
+- **THE AMENDMENT COUNT WAS THE WRONG PREDICATE (ADR-0089 §1).** *"Reaching a second amendment"* is a
+  **proxy** for *"wrong rather than incomplete"* and they come apart **both ways** — ADR-0007 has
+  seven and is right, ADR-0034 has two and its headline is dead twice over. **Ask instead: does an
+  amendment CONTRADICT the headline, or EXTEND it?** *ADR-0086 pointed at a count.*
 - **The newer rulings live in the charter, not here** — §2.0, §4.1, §5.5–5.8, §7.1.
-- **Open contradictions**: **three**, in `GOALS.md`'s digest. **I4 is no longer among them** —
+- **Open contradictions**: **FOUR** (was three), in `GOALS.md`'s digest — **G-053b added the one
+  that matters before M4: scenario capital is owed BEFORE M4's first goal by `HOTELSIM.md:609` and
+  routed to M6 by `PARKING.md`'s C1.** **I4 is no longer among them** —
   0 gates / 0 defects since G-022, and the three falsified remedies for its defect B are
   recorded in `vitest.config.ts` so nobody re-argues them.
 - **ADR-0081 IS EXECUTED** (G-053a): `HOTELSIM.md` §1's loop terms are **specifications**, and every
   one now reads `[EXISTS]` or `[OWED TO M4]` with its evidence in §1.1. **Ten exist, four are owed.**
   `CLAUDE.md`'s copy is marked with it — **the mark moves in the same commit as the term, in both.**
-- **STALE, DO NOT CITE AS A LIVE READING — ADR-0053's capacity finding.** *"A room holds one guest
-  by enforced invariant"* and the grep returning *"exactly one reader, and it is a test"* were true
-  when written and were **superseded by G-040a, G-040b-i and G-040b-ii**. Today `capacity` has
-  **three non-test readers** in `packages/sim` and **two guests share a bedroom on shipped content**.
-  **G-053b owns the strike-and-point-forward**; it is flagged here so nobody cites it in the interim.
-  > **THE GENERAL RULE THIS INSTANCE ARGUES FOR, and G-053b should decide whether to write it down:
-  > AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE.** Every false clause in G-053a's brief was
-  > a correctly-quoted ADR. ADR-0007's fifth amendment already forbids offering a *comment* as
-  > evidence of current behaviour; nobody had generalised it to the file where decisions live.
+- **DISCHARGED AT G-053b — ADR-0053's capacity finding CARRIES ITS STRIKE, in place, pointing
+  forward.** *"A room holds one guest by enforced invariant"* and *"exactly one reader, and it is a
+  test"* were true when written and were **superseded by G-040a, G-040b-i and G-040b-ii**. **The
+  banner names the symbols so it can be re-run rather than believed**: the verbatim grep returned
+  **1** and returns **26**, three of them non-test readers; `claimEntity` admits a party member;
+  `standard_room` ships `capacity: 2`. **The RULING — multi-occupancy is a mechanism, not a fold —
+  is untouched.**
+  > **AND THE GENERAL RULE IS WRITTEN DOWN: AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE
+  > (ADR-0084, and `CLAUDE.md`).** *G-053b's own brief then proved it again: its load-bearing false
+  > clause — that ADR-0034 AMENDMENT 2 "declared §3(a)/§3(b) UNRUNNABLE" — was a correct quotation of
+  > a thing that was never said. The amendment names §4 six times and §3 not once.*
 
 ---
 
@@ -1610,6 +1631,12 @@ explanation is only useful if the reader can re-run it. (Re-run by the orchestra
 
 ## ADR-0025 — θ-b's seam is TAKEN; and a departure reason is the BUILD LOOP'S STEERING SIGNAL, so it gets two rows
 
+> **STRUCK — SUPERSEDED BY [ADR-0091]. DO NOT CITE THIS BLOCK.** Reached a second amendment.
+> ADR-0043 §3 deferred the restatement with a CONDITION — *"strike-and-restate only if a goal needs
+> to cite them again"* — and **the condition FIRED twice, on 2026-08-22 and 2026-08-23, and nobody
+> executed it** (G-053b). Kept unedited as history. **Read ADR-0091 instead**; §2's ruling is intact
+> there and both of this block's mispriced costs are dead.
+
 **Date**: 2026-08-13 · **Status**: accepted · **Relates to**: §5.5 (seams), ADR-0024
 (enumeration), ADR-0017 4(b), G-015 (departure reasons) · **Raised by**: `ai-engineer` at θ-b PLAN.
 
@@ -1771,6 +1798,9 @@ step function, not to the consequence.** The graded form is also what G-024's qu
 G-028's outcome table is already stock-shaped, so all three converge.
 
 ## ADR-0025 AMENDMENT — the summary bump named in §2 was WRONG, and the builder caught it against the shipped policy
+
+> **STRUCK — SUPERSEDED BY [ADR-0091]. DO NOT CITE THIS BLOCK.** Kept unedited as history.
+> **Read ADR-0091 instead.**
 
 **Date**: 2026-08-13 · **Amends**: ADR-0025 §2 · **Raised by**: `ai-engineer` at θ-b1's plan revision.
 
@@ -1959,6 +1989,9 @@ class of claims** — found by the critic reading for the class instead.
 > **Enumerating a list is not enumerating a class. The list is always the part somebody noticed.**
 
 ## ADR-0025 AMENDMENT 2 — §1's "θ-b2 carries no schema" was wrong, and the builder named it rather than quietly paying it
+
+> **STRUCK — SUPERSEDED BY [ADR-0091]. DO NOT CITE THIS BLOCK.** Kept unedited as history.
+> **Read ADR-0091 instead.**
 
 **Date**: 2026-08-13 · **Amends**: ADR-0025 §1 · **Raised by**: `ai-engineer` at θ-b2 PLAN.
 
@@ -2680,6 +2713,12 @@ what makes the split safe**, and it is itself the first thing its critic should 
 
 ## ADR-0034 — THE REVIEW IS PER-NEED, WORST NEED DECIDES. And the pooled ladder is withdrawn.
 
+> **STRUCK — SUPERSEDED BY [ADR-0090]. DO NOT CITE THIS BLOCK.** Reached a second amendment;
+> ADR-0043 §3 rules that such an ADR was wrong rather than incomplete, and is replaced by a single
+> restated ADR. **§1's headline rule is dead TWICE OVER** — superseded by ADR-0037 §1, which was
+> itself struck into ADR-0045. Kept unedited as history. **Read ADR-0090 instead**, which says what
+> survives here, what is dead, and where each live citation should now point.
+
 **Date**: 2026-08-14 · **Status**: accepted · **Relates to**: ADR-0027, ADR-0031, ADR-0033 (+
 amendment) · **Raised by**: `balance-critic` at G-028a plan review — **two BLOCKERs and six MAJORs
 before a line of code.**
@@ -2803,6 +2842,10 @@ chosen configurations, the next question is about the predicate, not the third c
 
 ## ADR-0034 AMENDMENT — worst-need-decides INVERTS on the amenity axis, and G-028b must confront it before the scorer ships
 
+> **STRUCK — SUPERSEDED BY [ADR-0090]. DO NOT CITE THIS BLOCK.** The question it pinned was
+> ANSWERED by ADR-0044 §1 (the inversion is in the report row, not the score). Kept unedited as
+> history. **Read ADR-0090 instead.**
+
 **Date**: 2026-08-14 · **Amends**: ADR-0034 §1 · **Raised by**: `balance-critic` at G-028a sweep 2.
 
 ### The measurement
@@ -2875,6 +2918,10 @@ leaves less unserved"*. **Re-title it to what it tests** — monotone along the 
 diagonal — and let the golden carry the rest. ADR-0032's class: a claim wider than its predicate.
 
 ## ADR-0034 AMENDMENT 2 — the cliff and the inversion tables were UNRUNNABLE, and both are obligations somebody else has to answer
+
+> **STRUCK — SUPERSEDED BY [ADR-0090]. DO NOT CITE THIS BLOCK.** Its RULE survives and is carried
+> forward verbatim into ADR-0090 §4 — *a number parked as an obligation carries its invocation, not
+> just its slots.* Kept unedited as history. **Read ADR-0090 instead.**
 
 **Date**: 2026-08-14 · **Amends**: ADR-0034 §4 and its first amendment · **Raised by**:
 `balance-critic` at G-028a sweep 3.
@@ -4608,6 +4655,29 @@ it ships as two positions rather than being tuned until it is.**
 ---
 
 ## ADR-0053 — ADR-0051's PREMISE WAS FALSE. `capacity` has no reader, and the fix is a MECHANISM.
+
+> **ITS TREE READING IS STRUCK — the RULING is not (G-053b, 2026-08-26).** This is the instance
+> ADR-0084 was written from, and the strike is owed by `DECISIONS.md`'s own digest.
+>
+> **DEAD — do not cite as a live reading:** *"exactly one reader, and it is a test"* · *"nothing in
+> `packages/sim` reads it"* · *"a room holds one guest by enforced invariant, whatever its type
+> says"* · *"`claimEntity` THROWS on a second holder"* · *"six bedrooms × 99 housed nobody extra"*.
+>
+> **WHAT THE TREE SAYS NOW, with the symbols so this can be re-run rather than believed (§1.1's
+> rule).** Superseded by **G-040a / G-040b-i / G-040b-ii** (parties). The verbatim invocation,
+> `grep -rn "\.capacity[^T]" packages tools apps`, returned **exactly one** line when this ADR was
+> written and returns **26** at `26f9f88`; of those, **three are non-test readers of a ROOM TYPE's
+> capacity in `packages/sim`** — `content.ts:3054-3055` (`roomiest`), `guests.ts:1513`,
+> `guests.ts:2200`. **`claimEntity` no longer throws unconditionally**: `guests.ts:1819-1827` admits
+> a second claim when it is *"another member of the party already lodging there"*, so the invariant
+> is now **a room holds one PARTY**, not one guest. **`standard_room` ships `capacity: 2`**
+> (`packages/content/data/room-types.json:5`) and two guests share a bedroom on shipped content
+> today (occupancy 1203 → 1275, WATCH #22).
+>
+> **THE RULING STANDS AND IS NOT WEAKENED**: multi-occupancy was a MECHANISM rather than a fold, it
+> was its own goal, and it took three. *One honest caveat kept from G-053a: only one lodging room
+> type ships, so the player's lever is more rooms rather than bigger ones.* **The rest of this block
+> — ADR-0051's correction, the schema's party sentence — is unaffected and still citable.**
 
 **Date**: 2026-08-16 · **Status**: accepted · **Corrects ADR-0051**, found by `ai-critic` at G-037's
 plan review, before any code.
@@ -7163,6 +7233,48 @@ and **each is byte-identical to HEAD, 4 of 4.**
 
 ## ADR-0085 — G-055 goes to the FRONT: the harness that verifies determinism is not deterministic.
 
+> **READ THIS FIRST IF A CITATION SENT YOU HERE (added 2026-08-26 by G-053b, ADR-0089).**
+>
+> **If you arrived for *"AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE"*, THAT RULE IS
+> ADR-0084.** This ADR carries only its **proportionate-scope half** — *new ADRs carry the symbol;
+> existing ADRs are re-verified AT THE POINT OF CITATION, not proactively* — and the ruling that
+> G-055 goes first.
+>
+> **SIX LIVE CITATIONS POINT HERE FOR ADR-0084's RULE**, across FIVE files, all written within three
+> days of each other. **They are listed by NAME rather than by line number, because inserting this
+> note moved two of them** — `prose-citations.test.ts`'s own warning, arriving inside the fix for a
+> citation defect:
+>
+> | where | what it says |
+> |---|---|
+> | **`CLAUDE.md`'s rule bullet** — the copy that survives compaction | *"An ADR is a DECISION, not a live reading of the tree (ADR-0085)"* — its FIRST sentence is **ADR-0084's**; only its second is this ADR's |
+> | `GOALS.md`'s G-055 block | *"ADR-0085's own class"* |
+> | **ADR-0087** | *"ADR-0085's own class, in the brief that cites ADR-0085"* — the phrase WRAPS across two lines, which is why a grep misses it |
+> | **ADR-0088** | *"ADR-0085's class arriving from the other direction"* |
+> | `JOURNAL.md`'s G-055 entry | *"ADR-0085's class, in the brief that cites ADR-0085"* |
+> | `PARKING.md`'s scanner item | *"which is ADR-0085 from the other direction"* |
+>
+> **TWO CITATIONS OF THIS ADR ARE CORRECT and are named so the list is not read as condemning all of
+> them**: `PARKING.md`'s *"Parked 2026-08-26 (ADR-0085)"* — this ADR really did park the
+> status-scanner question — and ADR-0091's *"ADR-0085's proportionate-scope ruling"*.
+>
+> **A GREP FINDS MOST OF THEM AND NOT ALL, WHICH IS WHY THE TABLE IS THE RECORD**:
+> `git grep -n "ADR-0085" -- '*.md' | grep -i "own class\|live reading\|other direction"` **misses
+> the two whose phrase wraps across a line, and now MATCHES THIS NOTE** — ADR-0088's
+> self-invalidating-citation class, twice in one goal.
+>
+> **THE SIGNPOST GOES AT THE DESTINATION RATHER THAN AT THE FIVE SOURCES, AND THAT IS BOUND 1 DOING
+> ITS JOB.** ADR-0043 §3's form is *strike and point forward — not edited*; rewriting five historical
+> entries to fix a pointer is the documentation-maintenance mechanism G-053b's bound 7 forbids, and
+> **one of the five is `CLAUDE.md`, which a sim goal does not edit on its own initiative.** **One
+> note here repairs every one of them, because a wrong pointer is only wrong at the moment somebody
+> follows it.**
+>
+> **AND THE INSTANCE IS THE JOKE THE PROJECT KEEPS TELLING ITSELF**: *the rule about ADRs going stale
+> was misfiled by one digit, five times in three days, and the misfiling reached the compaction copy.*
+> **ADR-0007's own first amendment sat under ADR-0011 for a week for the same reason.** *A number is
+> a name, and a name is not evidence (ADR-0086).*
+
 **Date**: 2026-08-26 · **Status**: accepted · **Human ruling.** **G-055 is promoted above the rest of
 the sweep, not merely above the queue.**
 
@@ -7508,3 +7620,612 @@ the predicate had to be derived from `package.json`, `vitest.config.ts` and four
 numbers, all in the tree today.** **The digest is the copy people quote.** *Reconciled at this
 REFLECT: the campaign was seven builder runs plus the orchestrator's, and every later count should
 read eight.*
+
+---
+
+## ADR-0089 — The orphan sweep, EXECUTED. Six ADRs were at the threshold, not four, and the dead sentence has a fourth copy.
+
+**Date**: 2026-08-26 · **Status**: accepted · **G-053b.** `git diff --stat` touches **no file under
+`packages/sim`**; I2 unmoved; **the seven bounds held and are shown holding rather than asserted.**
+
+### THE COUNTS, BEFORE AND AFTER — the PAIR is the deliverable
+
+**Every row names its unit (§4.1) and carries the invocation that reproduces it**, because a sweep
+whose numbers cannot be re-taken is the thing it exists to remove.
+
+| class | unit | BEFORE | AFTER | how to re-take it |
+|---|---|---|---|---|
+| §2.1 present-tense quality orphans | docblock sites / files | **5 / 2** | **5 / 2** | `git grep -n "quality" -- packages/sim/src/content.ts packages/sim/src/index.ts` |
+| §2.2 deferrals with no EXECUTABLE test | parked items | **2** | **0** | read the two entries; each must name a command, a reading and a comparison |
+| §2.3 stale branches | refs | **2** | **1** | `git branch --list` |
+| §2.4 watching findings outstanding | findings | **0 of 4** | **0 of 4** | see §5 — and the roster is not on disk, which is its own finding |
+| §2.5 ADRs at ≥2 amendments, BOTH spellings | ADRs | **6**, of which **4 unaddressed** | **6**, of which **0 unaddressed** | the two greps in §1 |
+| §2.5 amendments, both spellings | amendment blocks | **24** (16 heading + 8 inline) | **24** | ditto — nothing was removed (bound 1) |
+| ADR-0046's dead sentence, LIVE copies | sites | **6** in 3 files | **5** in 2 files | `git grep -in "cross-section\|SimTower\|Project Highrise\|side-on"` |
+| stale `Milestone:` on non-done blocks | goal blocks | **14** | **14**, all recorded | the awk in §7 |
+| goal blocks whose status trails their own commit | blocks | **1** | **0** | §7 |
+
+**§2.1 IS UNCHANGED ON PURPOSE AND THAT IS BOUND 5 DOING ITS JOB.** The five docblocks were
+re-verified site by site — `content.ts:1948, 2075, 2429, 3910` and `index.ts:102`, all present tense,
+against a tree where `git grep roomQuality` over `packages`, `tools` and `apps` returns **nothing**.
+**The obligation is recorded on G-037a and reads five across two files**, checked rather than
+assumed. *A sweep that fixes what its bounds forbid has broken a bound, not closed a class.*
+
+### 1. THE AMENDMENT CENSUS, OVER BOTH SPELLINGS — and it is six, not four
+
+**Two invocations, because the file spells an amendment two ways and ADR-0043 §3's census ran only
+the first** (`awk` maps each inline block to its containing `## ADR-` heading):
+
+```
+grep -c "^## ADR-[0-9]* AMENDMENT" DECISIONS.md                       -> 16   heading form
+grep -c '^\*\*Amendment\|^\*\*AMENDMENT' DECISIONS.md                 ->  8   inline form
+```
+
+| ADR | amendments | spelling | what its headline rule did | disposition |
+|---|---|---|---|---|
+| **ADR-0007** | **7** | inline | **EXTENDED seven times, contradicted zero times** | **JUSTIFIED — genuinely incomplete** (§2) |
+| **ADR-0025** | 2 | heading | ruling INTACT; two COST claims wrong | **RESTATED — ADR-0091** (condition fired, §3) |
+| **ADR-0028** | 2 | heading | ruling intact; bound tightened, refusal widened | **JUSTIFIED — deferral stands, condition NOT fired** (§3) |
+| **ADR-0034** | 2 | heading | **headline DEAD TWICE OVER** | **RESTATED — ADR-0090** |
+| ADR-0036 | 2 | heading | superseded | **already struck → ADR-0044** (re-verified) |
+| ADR-0037 | 2 | heading | superseded | **already struck → ADR-0045** (re-verified) |
+
+**ADR-0043 §3 said *"four ADRs with two amendments each"* and named ADR-0036, ADR-0037, ADR-0025 and
+ADR-0028. It missed TWO, and only one of them is the grep's fault.** ADR-0007's seven are inline, so
+the census could not see them. **ADR-0034's two are in the heading form the census DID count, and its
+second amendment sits 800 lines above the ruling that missed it.**
+
+> **AND THE RULE ITSELF COUNTED THE WRONG THING — this is the finding, not the miscount.**
+> *"Reaching a second amendment"* is a **PROXY** for *"the decision was wrong rather than
+> incomplete"*, and the two come apart in both directions. **ADR-0007 has SEVEN and is not wrong.
+> ADR-0034 has two and its headline is dead twice over.** The discriminator the ruling needed and
+> never gave: **does an amendment CONTRADICT the headline, or EXTEND it?** Contradiction is what
+> makes a decision unholdable in one piece; extension is what a live rule looks like when it keeps
+> being right somewhere new.
+>
+> **That is ADR-0086 pointed at a COUNT.** *An amendment count is a NAME for a property, and a name
+> is not evidence.* Read as a description, "two amendments" claims the ADR was wrong; read as a
+> specification it claims only that somebody wrote twice. **Third instance of the class in three
+> days, and this one had CI-adjacent authority: it produced a strike list.**
+
+### 2. ADR-0007 IS JUSTIFIED IN WRITING AS INCOMPLETE, NOT WRONG — and the count is corrected to SEVEN
+
+**Assessed clause by clause, which is what exit criterion 2 forbids skipping.** The headline —
+*"a check that can succeed while inspecting nothing is not a check"* — **is contradicted by none of
+its seven amendments.** Each takes the class somewhere new:
+
+| # | amendment | what it does to the headline |
+|---|---|---|
+| 1 | G-016 — a criterion that cannot fail in the state that created its goal | **extends** it to GOALS |
+| 2 | ADR-0013 — a threshold must be derivable | **extends** it to THRESHOLDS |
+| 3 | G-013 — deleting a bad check is not evidence no good one exists | **extends** it to the RESPONSE |
+| 4 | G-013 (human) — how a defect COUNT is read | **extends** it to EVIDENCE ABOUT ITSELF |
+| 5 | G-013 (human) — a comment offered as evidence | **extends** it from code to PROSE |
+| 6 | G-003 — vacuous and unreachable are opposites | **bounds** it; a defensive assert is not the defect |
+| 7 | G-014b — a repair of this class is not itself exempt | **extends** it to REPAIRS |
+
+**Not one reverses anything. Six extend the scope and the seventh narrows the reading without
+touching the rule.** **RULED: ADR-0007 is NOT restated.** Restating it would collapse seven
+distinct, individually-cited rules into one block and lose the thing that makes them usable —
+*which is exactly the cost ADR-0043 §3 was trying to avoid, arriving from the other side.*
+
+**THE DIGEST'S *"SIX amendments deep"* IS CORRECTED TO SEVEN**, and the arithmetic of how it went
+wrong is worth one line: the bullet lists **six clauses** and they are all real; **the missing one is
+amendment 4**, whose content the digest carries **in a separate bullet** (*"Reading a defect count"*).
+**Nothing was lost — a denominator was.** *§4.1's own failure mode, in the file that states it.*
+
+### 3. ADR-0025's DEFERRAL CONDITION FIRED AND NOBODY EXECUTED IT. ADR-0028's DID NOT.
+
+ADR-0043 §3 deferred both with one sentence: ***"ADR-0025 and ADR-0028 are closed subjects;
+strike-and-restate only if a goal needs to cite them again."*** **A conditional deferral, and nobody
+has ever checked the condition.** It is checkable exactly:
+
+```
+git log -S "ADR-0025" --format="%h %ad %s" --date=iso -- packages tools       # citations, dated
+git log --format="%ad" --date=iso -S "## ADR-0043 —" -- DECISIONS.md          # the rule's own date
+```
+
+**ADR-0043 landed at `c4067e5`, 2026-08-14 18:51. ADR-0025 was cited into code TWICE after it:**
+
+- **`8026e2f`, 2026-08-22** (G-041) — `tools/headless/src/stock.content.test.ts:263`, a new
+  `ADR-0025 §2` citation.
+- **`a145a05`, 2026-08-23** (G-040b, the party mechanism) — `packages/sim/src/guests.ts:2949`, a new
+  `ADR-0025 §2` citation.
+
+**ADR-0028's newest citation-adding commit is `e1623b4`, 2026-08-14 11:26 — seven and a half hours
+BEFORE the rule.** So the two ADRs the ruling bracketed together have **opposite** answers, and
+nobody could have known that without dating the citations.
+
+> **A DEFERRAL WITH A CONDITION IS AN OBLIGATION ON WHOEVER TRIPS IT, AND NOBODY IS WATCHING THE
+> TRIPWIRE.** Two builders wrote the citation that fires it, nine and ten days ago, and neither had
+> any way to know a rule existed. **Recorded rather than automated** — a fourth scanner is what
+> ADR-0086 warns against — but the invocation is now written down where the rule is.
+
+**ADR-0025 is RESTATED as ADR-0091. ADR-0028's deferral STANDS, re-verified rather than inherited**,
+and the ADR-0091 §5 note names the invocation that will fire it.
+
+### 4. §2.2's TWO DEFERRALS BOTH CARRIED A HEADING AND NEITHER CARRIED A TEST
+
+**And the precise shape matters, because the brief's *"neither carries an executable falsification
+test"* is right about the property and loose about the page.** Both entries carry a bolded
+**FALSIFICATION TEST** label. **Neither carries an executable one**, and they fail differently:
+
+- **The lift dial** said *"re-run the five-setting table in ADR-0075"* — **which names a TABLE, not
+  an invocation**, and ADR-0075's table publishes `rooms / arrivals / seed` and a statistic (*max
+  guests simultaneously on the aligned stairwell cell*) that **no shipped command prints**. **That is
+  ADR-0034 AMENDMENT 2's own rule, unapplied**: *a number parked as an obligation carries its
+  invocation, not just its slots.*
+- **C5 reception** said *"if M3's queue machinery cannot express a check-in desk without changing
+  shape"* — **a design judgement**. No command, no reading, no comparison. It cannot come back
+  negative.
+
+**Both rewritten with an invocation, a reading and a comparison.** *The template really was two
+entries away: C1 in the same section already reads "express the bench workload as a scenario file and
+run `sim:bench` from it."*
+
+**AND THE STATED REASON FOR THE LIFT DEFERRAL'S EXPIRY IS WITHDRAWN, NOT RE-DERIVED.** ADR-0083
+verified three ways that parties, the party mechanism and the density re-derivation are all
+**ancestors** of the deferral commit, so ADR-0075's measurement was taken on a tree that already had
+all three. **Re-verified here rather than inherited** (ADR-0084) — and the claim stays withdrawn.
+**What replaces it is a condition rather than a date**: the deferral expires when a workload exists
+in which a capacity §2.1 can source would bind, and the rewritten entry says how to look.
+
+### 5. §2.4 IS CLOSED, AND THE ROSTER OF *"ALL FOUR"* IS NOWHERE ON DISK
+
+**Confirmed and closed; no work was expected and none was needed.** Every WATCH-sourced finding
+since ADR-0046 that was left open is discharged into a decision that points forward:
+
+| finding | discharged into | still open? |
+|---|---|---|
+| WATCH #23 — nine amenity rooms, one guest, every outcome identical | ADR-0078, then **ADR-0080** (a star rating is a SECOND CURRENCY) → G-051 | no |
+| the review channel is ONE BIT — flat 500 at and above the bottleneck | ADR-0078 → **ADR-0079 §2** → G-050 | no |
+| WATCH #12 — the hotel has no lobby | ADR-0049, then **ADR-0075** (*"C5 is not a second consumer of an existing abstraction"*) → C5 | no, and its park is now executable (§4) |
+| the through-wall residual — 29 landings, **mechanism WRONG** | **ADR-0081**, parked with its test, and `travel.walls.report`'s own comment already says *"THE MECHANISM IS NOT THE WALL RULE AND IT IS IMPORTANT NOT TO CLAIM IT IS"* | no — **this is the one that points forward correctly** |
+
+> **BUT *"ALL FOUR WATCHING-FINDINGS"* NAMES A SET NOBODY WROTE DOWN.** §2.4's roster lived in a
+> brief and in a report; **it is in no file a later goal can read**, so the table above is a
+> RECONSTRUCTION and is labelled one. **A closed class whose membership is unrecorded cannot be
+> re-audited — the next sweep must re-derive the roster before it can confirm anything about it.**
+> *ADR-0086 again: "all four" is a name, and the name is the only evidence there was.*
+
+### 6. THE BRANCHES — one deleted, one re-tested, and the re-test says something the brief did not
+
+**`g041-rate-rederivation`: DELETED.** `git merge-base --is-ancestor g041-rate-rederivation main`
+returns true and `git rev-list --count main..g041-rate-rederivation` is **0**, so **the ref pointed at
+a commit `main` already contains and deleting it removed no history** (bound 1 holds, checked twice
+rather than argued once).
+
+**`g037a-quality-fold`: KEPT, and RE-TESTED IN A WORKTREE OUTSIDE THE REPO** (`git worktree add`, its
+own `pnpm install`, **no symlink into this repository** — ADR-0061). **The result:**
+
+```
+Test Files  16 failed | 126 passed (142)
+     Tests  80 failed | 2423 passed (2503)      exit 1
+```
+
+**80 red across 16 files, ALL under `tools/headless`, ZERO under `packages/sim`** — which is
+**exactly** what `87c0101`'s own commit message claims, reproduced five days later, verbatim in every
+number. *A branch that describes itself accurately is worth more than a green one that does not.*
+
+> **AND THE RE-TEST ANSWERS A QUESTION THE BRIEF POSED WRONGLY.** *"The blocker is discharged by
+> G-041"* is a statement about **`main`**, not about the branch: `87c0101` predates G-041 and carries
+> its own pre-G-041 content, so **re-testing it in place can never show the discharge.** The test
+> that would is a **rebase**, and that is the merging goal's work. **The branch is still red, and
+> that is not evidence against the discharge.**
+
+**THREE FIGURES IN THE BRIEF AND IN G-037a's BLOCK ARE STALE OR WRONG, all re-measured at `26f9f88`:**
+
+- ***"45 commits behind"*** → **51** (`git rev-list --count g037a-quality-fold..main`). It was **46**
+  at the report commit `2ab5949`, so it was never 45.
+- ***"five moved files"*** → **15 code files** (18 including the four ledgers) have been touched on
+  both sides of the merge base. **It was 15 at the report commit too**, so this is not drift — the
+  figure was wrong when written.
+- ***"a save bump off v23"*** → **THE BRANCH BUMPS NOTHING.** `packages/sim/src/save.ts` is not in the
+  branch's diff at all, and `quality.save.test.ts`'s own title is **"THE QUALITY FOLD ADDS NO SAVE
+  FIELD"**: the score is DERIVED from footprint, contents and neighbours, all already saved, *"which
+  is why this goal bumps NO schema version."* **A goal briefed to expect a migration would build one
+  nothing needs** — and it would then have to be un-built, because inventing a field for a derived
+  quantity is ADR-0053's defect authored deliberately.
+
+### 7. WHAT THE SWEEP FOUND THAT NO CLASS NAMED — and the first one is the reason this goal exists
+
+**(a) THE SENTENCE ADR-0046 REVERSED IS ALIVE IN FOUR MORE PLACES, AND ONE OF THEM IS AN AGENT'S OWN
+BRIEF.** `CLAUDE.md`'s banner states the general form — ***"a ruling is not landed until every copy of
+the sentence it reverses is dead"*** — and names two files. **Nobody ran the grep.**
+
+```
+git grep -in "cross-section\|SimTower\|Project Highrise\|side-on"
+```
+
+- **`.claude/agents/render-engineer.md:43`** — *"the Pixi.js **side-on cross-section view (SimTower /
+  Project Highrise, not isometric)**"*, in the **Your domain** section. **The reversed sentence,
+  verbatim, parenthetical and all, in the standing instructions of the agent that would build M5.**
+  Also **`:3`** (the `description:` field, which is what selects the agent) and **`:37`**.
+- **`HOTELSIM.md:611`** — §8's milestone table: ***"M5 — Render. Pixi cross-section view…"***, in the
+  source of truth, **ten days and four goals after §1 was corrected.**
+- **`apps/game/src/scenario.ts:36-37`** — present tense: *"ADR-0014 asks whether a SIDE-ON
+  CROSS-SECTION reads clearly at all"*, in the file the WATCH recorder steps.
+
+> **THIS IS THE GOAL'S THESIS IN ITS PUREST FORM. An orphan is a TRAP: a parked premise resting on a
+> world that no longer exists, cited by a future goal, builds the wrong thing.** A render agent
+> spawned at M5 reads its domain section, finds "side-on cross-section, not isometric" stated as its
+> assignment, and **the whole of `apps/game` is thrown away for the second time.**
+
+**`HOTELSIM.md:611` is REPAIRED here.** **`.claude/agents/render-engineer.md` and
+`apps/game/src/scenario.ts` are RECORDED AND NOT TOUCHED** — the first is agent configuration and the
+second is `render-engineer`'s domain, and a sim goal rewriting either on its own initiative is a
+worse precedent than a stale line with a due date. **Both are named as blocking obligations on M5 in
+`GOALS.md` and parked with the grep above as their test.** *Said plainly so the silence is not read as
+coverage: three live copies survive this goal, deliberately, and here is the command that finds them.*
+
+> **AND THE GREP'S RAW COUNT IS NOT THE READING, disclosed here rather than discovered later.** It
+> returned **41 at `26f9f88`** and returns **55 after this commit** — **the rise is this ADR and its
+> parked sibling QUOTING the dead sentence in order to record it.** **ADR-0088's
+> self-invalidating-citation class**, in the goal that reads it. **The reading is the DISCRIMINATOR,
+> not the number**: does the hit DESCRIBE the tree or SPECIFY it? *Which is why the count in the
+> table above says "LIVE copies" and names its unit.*
+
+**AND ONE SITE THAT LOOKS LIKE THE CLASS AND IS NOT.** `tools/viewer/viewer.js:306` reads *"Side-on
+cross-section: columns left to right, floors bottom to top"* — **and that is TRUE**, because the
+replay viewer really does draw side-on; `ESCALATIONS.md:1304` is the ruling that says so and that this
+is why it is not the surface of record. **A grep for a dead sentence returns live ones too, and the
+discriminator is whether the sentence describes the tree or specifies it** — ADR-0081's distinction,
+arriving in a sweep.
+
+**(b) M4's HARD PREREQUISITE IS UNBUILT AND TWO FILES DISAGREE ABOUT WHEN IT LANDS — and M4 is next.**
+`HOTELSIM.md:609`: *"the scenario-capital mechanism lands **before the first M4 goal starts**."*
+`PARKING.md`'s C1: *"→ **M6**, and M4 consumes it."* **A prerequisite of M4 cannot land at M6, and the
+contradiction is inside a single sentence.** The tree says it is unbuilt: `startingCapitalPence` is
+**one global constant** (`packages/content/data/economy.json:5`, 500,000p) and `git grep scenario` over
+`packages/content/src/schema.ts` returns **two comments and no type**. **Recorded as an open
+contradiction; the ordering is a planning ruling and is not this goal's to make.**
+
+**(c) A GOAL'S STATUS TRAILED ITS OWN COMMIT BY ONE COMMIT.** **G-056's block read
+`Status: PLANNED 2026-08-26`** while its work is committed at `26f9f88`, ADR-0088 is written for it,
+and the `M3 exit` block already lists it **done**. **`check:status` is green over it and always would
+be** — its predicate is *"no goal referenced by a commit reads `pending`"*, and `PLANNED` is not
+`pending`. **Fixed here.** *ADR-0088 found the same shape one level up two days ago and its own goal
+left an instance behind: the sign-off tracker was closed and the goal that closed it was not.*
+
+**(d) FOURTEEN GOAL BLOCKS STILL READ `Milestone: M3` OR `M3 exit` WHILE NOT DONE, and M3 is signed
+off.** Twelve are genuinely stale; two (`G-053b`, `G-056`) are correctly labelled `M3 exit`.
+**RECORDED, NOT SILENTLY RE-MILESTONED** — assigning twelve goals to M4, M5 or M6 is a planning
+decision and bound 7 forbids this goal growing one. Parked with its invocation.
+
+> **AND MY OWN COUNTER WAS A SCANNER NARROWER THAN ITS NAME, in the goal about scanners narrower than
+> their names.** The first `awk` anchored `/^Milestone:/` and returned **7**. The tree spells it two
+> ways — on its own line, and inline on the `Status:` line — and the both-spellings count is **14**.
+> **The identical failure as ADR-0043 §3's amendment census, in the instrument built to audit it,
+> four hours later.** *Recorded because ADR-0086 says the fourth instance should be caught by the
+> question, and this one was caught by the question.*
+
+**(e) THE RULE ABOUT ADRs GOING STALE IS ITSELF MISFILED, BY ONE DIGIT, SIX TIMES IN THREE DAYS —
+AND THE MISFILING REACHED THE COMPACTION COPY.** *"An ADR is a DECISION, not a live reading of the
+tree"* is **ADR-0084**. **`CLAUDE.md`'s rule bullet attributes it to ADR-0085**, and so do
+`GOALS.md`'s G-055 block, ADR-0087, ADR-0088, `JOURNAL.md`'s G-055 entry and `PARKING.md`'s scanner
+item. **ADR-0085 is *"G-055 goes to the FRONT"*** and carries only the rule's proportionate-scope
+half. **Two other citations of ADR-0085 are CORRECT and are named as such**, so the list is not read
+as condemning all of them.
+
+**REPAIRED WITH ONE NOTE AT THE DESTINATION RATHER THAN SIX AT THE SOURCES** — a signpost under
+ADR-0085's heading, carrying the table. **That is bound 1's own form** (*strike and point forward,
+not edited*); it is **not** the documentation-maintenance mechanism bound 7 forbids; and **it does
+not require editing `CLAUDE.md`, which a sim goal does not do on its own initiative.** **A wrong
+pointer is only wrong at the moment somebody follows it, and a note at the destination catches every
+follower.**
+
+> ***ADR-0007's own first amendment sat filed under ADR-0011 for a week for exactly this reason***,
+> and this ADR's §2 had to recount it. **A number is a name, and a name is not evidence (ADR-0086).**
+
+### 8. THE BOUNDS, SHOWN HOLDING
+
+1. **No history deleted.** Six strike banners added, **zero lines removed from any struck block**;
+   `git diff` shows insertions only in the amended regions.
+2. **The v1 fixture is untouched** — `packages/sim/src/fixtures/save-v1.ts` is not in the diff.
+3. **No gate edited, no invariant weakened.** `tools/gates` is not in the diff.
+4. **No parked item dropped, and none dropped for being old.** **Two rewritten executable, FIVE added**; `PARKING.md` went 50 sections to 51 (bullets unchanged at 261, because the new items are prose blocks — *the two units moving independently is why that line names both*).
+5. **No `packages/sim` file moved** — `git diff --stat` names none, and **I2 is unchanged**, read from
+   the gate rather than assumed.
+6. **No sign-off reopened.** M3's block is read, not edited.
+7. **No new ledger machinery.** No file added under `tools/gates`, no new test, no new scanner. *The
+   deferral tripwire in §3 is a written invocation, deliberately not a fourth scanner.*
+
+---
+
+## ADR-0090 — WHAT SURVIVES ADR-0034, said in one piece. The aggregation is dead; the two traps are alive.
+
+**Date**: 2026-08-26 · **Status**: accepted · **SUPERSEDES ADR-0034 and its two amendments**
+(ADR-0043 §3: an ADR reaching a second amendment is restated, not amended again). **Read this instead
+of them.** · **G-053b.**
+
+**Nine files cite ADR-0034 today** — `needs.ts`, `reviews.ts`, `review.test.ts`,
+`review.scorer.test.ts`, `cadence.census.test.ts`, `provisioning.report.test.ts`,
+`review.report.test.ts`, `scorer.report.test.ts`, `unserved.report.test.ts`. **Not one is edited by
+this restatement, because that is what "strike and point forward" is FOR**: the struck blocks stay
+where they are, so every existing citation still lands, and this ADR says what the reader should
+conclude when it does. *Four of the nine are under `packages/sim`, which bound 5 forbids touching in
+any case — and the arrangement is the reason that costs nothing.*
+
+### 1. THE AGGREGATION IS DEAD, AND IT DIED TWICE
+
+**ADR-0034 §1 ruled `worst need decides`.** ADR-0037 §1 superseded it; **ADR-0037 was itself struck
+into ADR-0045.** The live rule is **ADR-0045: the review is the MEAN of per-need bands** —
+`score = min + floor(sum of band_i / N)`, per-need band FIRST, then the mean.
+
+**The symbol, so this is one grep rather than a belief** (§1.1's rule): `packages/sim/src/reviews.ts`
+carries a header titled *"WHY THE MEAN OF BANDS AND NOT THE WORST BAND, WHICH IS WHAT ADR-0034 FIRST
+RULED"*.
+
+**WHAT SURVIVES §1, AND IT IS WHAT THE CODE ACTUALLY CITES: the POOLED score is refused, and the
+vector that refutes it.** *A guest whose one need is unserved for 80% of its stay, with the other
+three perfect, scores the TOP band under pooling* — and **4** under per-need banding. **Every citation
+of "ADR-0034 §1" in the tree is to THIS**, not to the aggregation: `review.scorer.test.ts:24,325`,
+`review.test.ts:335`, `reviews.ts:389`. **The refusal is live, is pinned by tests, and is not
+weakened here.**
+
+### 2. REVIEW LAW A IS RESTORED — but by the MEAN, not by the worst
+
+ADR-0034 §2's mechanism (*worst-need-decides restores law A by construction*) is dead with §1.
+**ADR-0045 restores it by a different construction**: `floor(mean) = bands-1` **iff** every band is
+top, measured **0 red of 30 cells**. **A guest that never got a bed can never leave a top review**,
+because a lodging band of 0 caps the mean.
+
+**And §2's transferable line is kept, because three goals have cited it since**: ***"Enumerating a
+list is not enumerating a class."***
+
+### 3. THE TWO TRAPS ARE LIVE, AND THEY ARE WHY THIS ADR IS STILL CITED NINE TIMES
+
+Both are **method** claims rather than measurements, which is exactly why they outlived the ruling
+they were written under.
+
+- **§3(a) — YOU CANNOT MEASURE NOISE AT A SATURATED POINT.** A score reading 500/500/500/500 is a
+  **CLAMP**, not a measurement. **Live, and re-confirmed twice since**: ADR-0078 measured mean review
+  **flat at 500 at and above the provider bottleneck** across the whole amenity ladder, and WATCH #23
+  saw it as *"the review mean reads the same number to the hundredth three times running."* Cited by
+  `provisioning.report.test.ts:291` and `unserved.report.test.ts:909,931`.
+- **§3(b) — A STATISTIC THAT TRACKS A LADDER ONLY BECAUSE BIGGER HOTELS GIVE MORE GUESTS A ROOM IS
+  AN OCCUPANCY STATISTIC IN DISGUISE.** **Live as the falsification arm six citations rest on**:
+  `scorer.report.test.ts:18,424`, `unserved.report.test.ts:239,264,294,394`, `ESCALATIONS.md:1902,1932`.
+  **`unserved.report.test.ts:239` says its arm *"NEEDS A RULING, NOT A RE-PIN"* — that obligation is
+  carried forward unchanged and is not discharged here.**
+
+> **A CORRECTION TO ADR-0083, and it is this project's own class arriving in the report about it.**
+> ADR-0083 wrote that these are *"sections its own AMENDMENT 2 declared UNRUNNABLE."* **AMENDMENT 2
+> declares no such thing.** It names **§4** six times and **§3, §3(a) and §3(b) not once** — checked
+> with `sed -n '2877,2934p' DECISIONS.md | grep "§3"`, which returns nothing.
+>
+> **What IS true is narrower and is applied here rather than quoted**: §3(a)'s *"0.19 band against
+> 0.10"* and §3(b)'s *"to within 0.02 band at every rung"* carry **no days, no seed, no cadence and
+> no invocation**, so **AMENDMENT 2's RULE reaches them and nobody ever applied it.** **Both figures
+> are WITHDRAWN, not restated** (`CLAUDE.md` rule 5). **The two claims stand on their arguments,
+> which need no stopwatch: you cannot measure spread inside a clamp, and a size-invariant control
+> cannot discriminate a size-invariant statistic.**
+
+### 4. THE OBLIGATIONS, WITH THE INVOCATIONS THAT REGENERATE THEM
+
+**ADR-0034's rule about its own figures is the part that generalised furthest, and it is carried
+forward verbatim:**
+
+> **A number parked as an obligation carries its INVOCATION, not just its slots.** The five slots
+> tell a reader what a figure means; an obligation needs the command that regenerates it, because
+> the person who must answer it was not there when it was taken.
+
+- **§4's money cliff** — *revenue is 0p below the amenity cliff; the dominant strategy is DO NOT
+  BUILD.* **Invocation, restored by AMENDMENT 2 and repeated here so it survives the strike**:
+  `--days 1000`, seed 42, **`--arrivals 32` (the 45-lodger cadence)**, shipped content, one
+  deterministic run per cell, balance and revenue in pennies. **Still owed to M4** — and **ADR-0078
+  has since measured the modern shape at a different cadence** (12 rooms / `--arrivals 120` /
+  1,000 days: optimum at **two** amenities, 97,364,000p, every rung above strictly dominated).
+  **Two cadences, two shapes; whoever answers this reads both and says which it is answering.**
+- **The amenity-axis inversion** — AMENDMENT 1's question, *"why does the worst-need statistic get
+  worse when a player builds an amenity?"* — **is ANSWERED, by ADR-0044 §1: the inversion is in the
+  REPORT ROW, not in the score**, because `max` does not commute with a population average. The
+  golden's row is *ratio of sums per need, then max across needs*; the scorer is *a per-need band
+  within a guest, then a mean over guests*. **Two different objects.**
+- **AMENDMENT 1's table is dead and its measurement is alive**: it was withdrawn when seven of its
+  eight cells stopped matching the tree, and **it now lives as a fold in
+  `tools/headless/src/unserved.report.test.ts`'s golden** (`describe` at :570), which recomputes it
+  from the shipped table on every run and **cannot go stale**. **Run the golden; it prints the
+  current answer.**
+
+### 5. WHERE A READER OF THE STRUCK BLOCKS SHOULD GO
+
+| you followed a citation to | read instead |
+|---|---|
+| ADR-0034 §1's *aggregation* | **ADR-0045** |
+| ADR-0034 §1's *pooled-score refusal* | **§1 above** — unchanged and live |
+| ADR-0034 §2 (law A) | **ADR-0045 §1**, and §2 above |
+| ADR-0034 §3(a) / §3(b) | **§3 above** — live, with the figures withdrawn |
+| ADR-0034 §4 (the cliff) | **§4 above**, plus ADR-0078 |
+| the first amendment (the inversion) | **ADR-0044 §1**, and the golden at `unserved.report.test.ts:570` |
+| the second amendment (unrunnable numbers) | **§4 above** — its rule, carried forward |
+
+---
+
+## ADR-0091 — ADR-0025 RESTATED: the two-row ruling is intact and both of its cost claims are dead.
+
+**Date**: 2026-08-26 · **Status**: accepted · **SUPERSEDES ADR-0025 and its two amendments**
+(ADR-0043 §3). **Read this instead of them.** · **G-053b.**
+
+**WHY NOW, WHEN THE RULING DEFERRED IT.** ADR-0043 §3 said *"strike-and-restate only if a goal needs
+to cite them again."* **Two goals did** — G-041 at `8026e2f` (2026-08-22,
+`stock.content.test.ts:263`) and G-040b at `a145a05` (2026-08-23, `guests.ts:2949`), both citing
+**§2** — and the condition has been sitting fired for four days. **The deferral was correct and its
+condition was met; this is the deferral executing, not being overturned.**
+
+### 1. THE RULING, INTACT: TWO DEPARTURE ROWS, AND THE REASON IS THE BUILD LOOP
+
+**Twenty-one citations live in ten code files, and the breakdown says which section a restatement
+actually owes**: **16 cite `§2`** — this ruling — **2 cite `§3`**, **1 cites the seam**, and **2 are
+bare** (`save.ts:1223, 1363`, migration epitaphs). **Sixteen of twenty-one point here, and none of it
+has moved.**
+
+| the guest left because | what the player should build |
+|---|---|
+| nobody would give it a room | **more rooms** |
+| it had a bed and nothing to do | **more amenities** |
+
+**Those are opposite instructions. One counter averages them into a number that tells a player they
+are doing badly and not which lever to pull** — and the build loop is one of the three loops every
+feature must feed. **A departure reason is not bookkeeping; it is the steering signal.**
+
+**The symbols, so a reader confirms rather than believes**: `packages/sim/src/guests.ts:700-709`
+(`GUEST_DEPARTURE_REASONS`), `content.ts:1906`, `guests.ts:2949, 2969, 3046`, and the four
+`tools/headless` report arms that fold the rows.
+
+**THE RULING GREW RATHER THAN ERODED.** It was argued for **two** rows; the table ships **eight**,
+including `visitEnded` (θ-b2) and `gaveUpWaitingForLift` (G-038b-i). **Each addition is the same
+argument applied again: a departure a player would answer differently gets a row of its own.**
+
+### 2. BOTH COST CLAIMS IN THE ORIGINAL ARE DEAD, AND THE SECOND IS THE ONE THAT MATTERS
+
+- **§2 priced the ruling at *"a summary-schema bump for the reason strings."* THAT COST DOES NOT
+  EXIST.** `report.ts`'s published policy: *"an ADDITIVE block or field does NOT bump this. A
+  removal, a rename, or a type change DOES."* **A new departure row is additive.**
+  `SUMMARY_SCHEMA_VERSION` is **4** today. It has moved **once** since, at `e1623b4` (G-028b, *the
+  review reads the integral*), **for a type change in the review block — and not once for a departure
+  row**, which is the published policy doing exactly what the amendment said it would.
+- **§1's seam table said *"θ-b1 carries the schema bump and θ-b2 carries none."* WRONG.** θ-b2 carried
+  a **seventh departure row at index 1 and save v15**. **Current is v23.**
+
+> **THE ASYMMETRY THAT EXPLAINS BOTH, and it is the reusable part:** *a SAVE bump is owed for any
+> field, because old bytes must still load; a REPORT is generated fresh every run.* **Both mistakes
+> came from pricing a change by its SHAPE — "a new row is a schema change, schemas get bumped" —
+> rather than by the policy the schema actually publishes.**
+
+### 3. WHAT WAS NOT RULED, AND IS STILL NOT
+
+**No bind-time refusal for the reachability bound** (`ageAtGiveUp ≤ stayDuration`). It was bought back
+with an **executed two-sided boundary test over the shipped bytes**, on the ground that content where
+a stay ends before anything runs dry is a short stay rather than a bug. **Live:
+`tools/headless/src/dissatisfaction.content.test.ts:492`.** *The trade `assertLodgingBecomesWanted`
+went the other way on, and the difference — a dead rule versus a guest stuck forever — is still the
+difference.*
+
+### 4. TWO TREE READINGS IN THE ORIGINAL ARE STRUCK (ADR-0084)
+
+- ***"AXIS 1 is currently inverted — one room scores 3.90 against twelve rooms' 3.58, pending
+  G-028."*** **G-028a and G-028b landed.** ADR-0078 measured the current shape: mean review **387
+  below the provider bottleneck and a flat 500 at and above it**. **The inversion argued from is
+  gone; the ruling never rested on it** — §2 says so in its own words, *"argued on the loop, not on
+  the price"* — **but nobody should cite 3.90/3.58 as a live reading.**
+- ***"25 candidate sites… the block names 4."*** A count of a population at θ-b PLAN, superseded by
+  θ-b2's **37 behavioural sites**. **History, not a live reading.** *The growth is evidence of method
+  rather than of scope creep, which is ADR-0024's point and is the part worth keeping.*
+
+### 5. THE TRIPWIRE THAT FIRED HERE IS STILL ARMED FOR ADR-0028
+
+**ADR-0028's deferral STANDS** — its newest citation-adding commit is `e1623b4`, **2026-08-14 11:26,
+seven and a half hours BEFORE ADR-0043 landed at `c4067e5` 18:51** — so its condition has **not**
+fired. **Re-verified at `26f9f88` rather than inherited.** **The invocation, written down so the next
+person does not have to invent it:**
+
+```
+git log -S "ADR-0028" --format="%h %ad %s" --date=iso -- packages tools apps | head -1
+# newer than c4067e5's date  =>  the condition has fired; restate ADR-0028 the way this ADR
+#                                restates ADR-0025.  Not newer  =>  the deferral still stands.
+```
+
+> **Deliberately a written invocation and NOT a fifteenth gate.** ADR-0086: *a scanner that checks the
+> scanners has the same problem one level up.* **The cost of this rule is one grep at the moment
+> somebody cites ADR-0028, which is exactly where the risk is** (ADR-0085's proportionate-scope
+> ruling, applied).
+
+---
+
+## ADR-0092 — M4 DOES NOT OPEN. Its own hard prerequisite is unbuilt, and the trap was in an agent's charter.
+
+**Date**: 2026-08-26 · **Status**: accepted · **G-053b's REFLECT, and the M3 exit ruling.**
+
+### RULING 1 — M4 IS BLOCKED BY ITS OWN STATED PREREQUISITE
+
+G-053b's digest closes *"M3 EXIT IS COMPLETE. M4 DOES NOT OPEN (ADR-0092): its OWN HARD PREREQUISITE — the scenario-capital mechanism, HOTELSIM.md section 8, human ruling — is UNBUILT, and opening the economy-tuning milestone against a 75%-inflated balance is the failure that prerequisite exists to prevent. G-057 is the last action before the gate."* **The first half is right. The second is
+overruled by the goal's own fourth finding.**
+
+**`HOTELSIM.md` §8 (ADR-0013 §5, human ruling):**
+
+> *"M4 HARD PREREQUISITE: the scenario-capital mechanism lands **before the first M4 goal starts**.
+> `--rooms N` seeds stock that is cash at the refund rate — `--rooms 3` carries 375,000p against a
+> 500,000p starting constant — and **every balance sweep in this project used that flag**. Tuning
+> demand and pricing against a **75%-inflated opening balance** is how a whole milestone's evidence
+> base goes bad quietly."*
+
+**Verified: it is unbuilt.** One global `startingCapitalPence: 500000` and **no scenario type in the
+schema.**
+
+> **M4 is the milestone that tunes the economy. Opening it against a 75%-inflated opening balance is
+> precisely the failure its own prerequisite was written to prevent** — and this project has now
+> spent a week proving that a stale premise costs more than the goal that rests on it.
+
+**RULED: M4 does not open. The scenario-capital mechanism is G-057, and it is the last action before
+the gate.**
+
+### RULING 2 — THE DATING CONTRADICTION RESOLVES TO `HOTELSIM.md`
+
+`HOTELSIM.md:609` says **before the first M4 goal**; `PARKING.md`'s **C1** routes it to **M6 — in the
+same sentence that says M4 consumes it.**
+
+**`CLAUDE.md`'s first line settles it**: *"`HOTELSIM.md` is the source of truth… where the two
+disagree, `HOTELSIM.md` wins."* **And `PARKING.md` already knew**: its own note reads *"a prerequisite
+of M4 cannot land at M6."* **The contradiction was self-evident in the file that carried it and sat
+open anyway.**
+
+### THE TRAP WAS IN AN AGENT'S OWN CHARTER, AND THAT IS WHY IT SURVIVED TEN DAYS
+
+**`.claude/agents/render-engineer.md` read *"the Pixi.js side-on cross-section view (SimTower /
+Project Highrise, not isometric)"* — the sentence ADR-0046 reversed on 2026-08-16 — verbatim,
+parenthetical and all, on 2026-08-26.** Three copies: `:43` in **Your domain**, `:37`, and **`:3`, the
+`description:` field that SELECTS the agent.**
+
+> **`CLAUDE.md`'s banner states the rule this breaks — *a ruling is not landed until every copy of the
+> sentence it reverses is dead* — and it names two files. NOBODY RAN THE GREP.**
+
+**REPAIRED, and the builder was right to leave it for me**: a sim goal rewriting the render agent's
+charter on its own initiative is a worse precedent than a stale line with a due date. **An agent
+charter is OPERATIONAL rather than documentation** — it is what tells the harness which agent to
+select and what tells that agent what game it is building — **and it was the last copy to fall.**
+
+*(`apps/game/src/scenario.ts:36-37` remains, recorded as a blocking M5 obligation. `main.ts:7` is a
+QUOTATION inside a supersession banner and correctly stays.)*
+
+### AND `CLAUDE.md` CITED THE WRONG ADR FOR THE RULE ABOUT CITING WRONGLY
+
+**`CLAUDE.md`'s new bullet read *"An ADR is a DECISION, not a live reading of the tree (ADR-0085)."*
+That rule is ADR-0084. ADR-0085 is *"G-055 goes to the FRONT."*** **Six live citations carried the
+error, including the compaction-surviving copy.**
+
+> **The rule against mis-citing an ADR, mis-citing an ADR, in the file that survives compaction.**
+> Corrected at the source and signposted once at ADR-0085's heading rather than patched six times.
+
+### FIVE MORE CORRECTIONS TO MY BRIEF, AND THE EXPENSIVE ONE IS SECOND
+
+1. ***"Sections its own AMENDMENT 2 declared UNRUNNABLE"* — AMENDMENT 2 SAYS NO SUCH THING.** It
+   names **§4 six times and §3 not once.** *The substance survives — §3's figures carry no slots
+   either — but this was **a correct quotation of a thing that was never said, in the brief for the
+   goal about ADR-0084.***
+2. ***"A save bump off v23"* — THE BRANCH BUMPS NOTHING**, and its own save test is titled **"THE
+   QUALITY FOLD ADDS NO SAVE FIELD."** **A goal briefed to expect a migration builds one nothing
+   needs.**
+3. *"45 commits behind"* — **51 now, 46 at the report commit. Never 45.**
+4. *"Five moved files"* — **15 code files, and 15 at the report commit too: wrong when written, not
+   drifted.**
+5. *"Neither carries an executable falsification test"* — **both carry a bolded FALSIFICATION TEST
+   heading; neither carries an executable one.** Right about the property, loose about the page.
+
+### THE AMENDMENT RULE COUNTED A PROXY, AND THE DISCRIMINATOR IS NOW NAMED
+
+**ADR-0043 §3 named four and the true count over both spellings is six.** But the deeper finding is
+that ***"reaching a second amendment"* is a PROXY for *"wrong rather than incomplete"*, and the two
+come apart BOTH WAYS**: **ADR-0007 has seven and is right; ADR-0034 has two and is dead.**
+
+> **The discriminator is whether an amendment CONTRADICTS the headline or EXTENDS it** — which is
+> ADR-0086 pointed at a count.
+
+**And ADR-0025's conditional deferral — *"restate only if cited again"* — FIRED TWICE and sat fired
+for four days**, by builders with no way to know the rule existed. *Restated as ADR-0091, with the
+`git log -S` that fires it written down as an invocation rather than a fifteenth gate.*
+
+*(And the builder's own two scanners were wrong in the goal about scanners being wrong: a
+`/^Milestone:/` anchor returned 7 where both spellings give 14 — **the identical failure as the
+amendment census, four hours after writing it up** — and an unescaped `.` in a symlink safety grep
+reported 301 where a fixed-string check reports 0.)*

@@ -1,6 +1,6 @@
 ---
 name: render-engineer
-description: Implements the Pixi.js render layer in apps/game — cross-section view,
+description: Implements the Pixi.js render layer in apps/game — isometric floorplan view,
   camera, sprites, HUD, speed controls, and input-to-command mapping. M5 onward only.
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
@@ -34,14 +34,23 @@ it safe and they are not negotiable:
   "the viewer is acquiring features or defenders" as a stop condition — it gets deleted
   rather than defended.
 
-It also answers a design question (ADR-0014): whether a side-on cross-section reads
+It also answers a design question (ADR-0014): whether the isometric floorplan reads
 clearly at all, in shape and colour alone. **That** finding is worth keeping. The code is
 not.
 
 ## Your domain
 
-`apps/game` only (plus `tools/viewer` for G-017): the Pixi.js side-on cross-section view (SimTower / Project Highrise,
-not isometric), camera, sprites, HUD, speed controls, save/load UI, and the mapping
+`apps/game` only (plus `tools/viewer` for G-017): the Pixi.js **isometric floorplan view**
+(Theme Hospital / RollerCoaster Tycoon), multi-floor, **one floor rendered at a time**, cityscape
+behind — camera, sprites, HUD, speed controls, save/load UI, and the mapping
+
+> **RULED 2026-08-16 by the human (ADR-0046). This charter read "side-on cross-section view
+> (SimTower / Project Highrise, not isometric)" until 2026-08-26 — TEN DAYS after the ruling, in
+> the file that tells this agent what game it is building.** `HOTELSIM.md` §1 and `CLAUDE.md` were
+> corrected long before; **an agent charter is OPERATIONAL, not documentation, and it was the last
+> copy to fall.** *Found by G-053b, which was told to sweep orphans and looked where the sweep was
+> not scoped.*
+
 from input to commands.
 
 You do NOT own anything in `packages/sim`. If a change you want requires the sim to

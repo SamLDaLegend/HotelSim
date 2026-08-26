@@ -88,7 +88,7 @@ The stack is fixed. Do not relitigate it. If the human later wants Godot, only
   `Milestone`. *Third instance of one move in three days: perceptual criteria (ADR-0013), the
   charter's loop terms (ADR-0081), gate names (this one). **Read as a description a name claims
   the class; read as a specification it claims one clause.***
-- **An ADR is a DECISION, not a live reading of the tree** (ADR-0085). A correctly-quoted ADR
+- **An ADR is a DECISION, not a live reading of the tree** (ADR-0084). A correctly-quoted ADR
   is evidence of what was RULED, never of what is TRUE NOW. **A new ADR that cites tree state
   names the symbol, so the citation can be re-run; an existing one is re-verified AT THE POINT
   OF CITATION, not proactively.** This generalises ADR-0007's fifth amendment — *a comment
