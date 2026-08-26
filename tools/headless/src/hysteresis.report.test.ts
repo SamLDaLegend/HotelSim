@@ -302,7 +302,7 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // day it stops being zero is a red line rather than a shrug.
     // ======================================================================================
     expect(abandonmentsIn(contended)).toBe(0);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 17,522ms
 
   it('and it abandons FAR less than a margin of zero, so the margin is doing the work', () => {
     expect(abandonmentsIn(thrash)).toBeGreaterThan(abandonmentsIn(shipped));
@@ -1002,7 +1002,7 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // this file's behaviour under deliberate load is UNOBSERVED for this tree — stated rather
     // than covered, which is ADR-0015's move when a regime cannot be measured before shipping.
     // ------------------------------------------------------------------
-  }, 60_000);
+  }, 150_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 48,065ms
 
   it('SATURATED (3 of each): the margin cannot fire at all, and still changes NO outcome', () => {
     const total = at(3, ONE_WHOLE_BASIS_POINTS);
@@ -1133,5 +1133,5 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // AND THE ABANDONMENT COLUMN IS ZERO AT EVERY LEVEL, which is the mechanism this whole file
     // is about being off under shipped content — see the contended arm's arithmetic above.
     for (const level of [1, 2, 3, 4, 5, 6]) expect(at(level, SHIPPED_MARGIN).abandoned).toBe(0);
-  }, 120_000);
+  }, 180_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 55,798ms
 });

@@ -151,7 +151,7 @@ describe('THE CONTROL — a valid tree, so a red arm below means the mutation an
       const tree = makeTree({ goals: block('G-042 — a goal', status), subjects: ['docs: the plan (G-042)'] });
       expect(run(tree.gate).status, status).toBe(0);
     }
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 10,820ms
 });
 
 describe('AND IT BITES — starting with the case that produced the ruling', () => {

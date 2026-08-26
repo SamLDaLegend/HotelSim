@@ -320,7 +320,7 @@ describe('the exit criterion is a measurement, not a tautology', () => {
     expect(stdout).toContain(
       'rooms bad   0 unplaced, 15 unsupported, 4 no door, 2 no corridor, 0 no route, 0 no item',
     );
-  }, 60_000);
+  }, 90_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 20,735ms
 });
 
 describe('the shipped hotel still works', () => {

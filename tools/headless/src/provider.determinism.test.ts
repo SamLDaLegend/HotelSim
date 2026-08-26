@@ -138,6 +138,23 @@ function replayed(): World {
  * MEASURED.** 120,000ms is three times the worst reading above; it is not a threshold anybody
  * has to defend, because nothing PASSES or FAILS on its value — it is the point at which vitest
  * stops waiting, and the assertions are the claims. What it must not be is under the cost.
+ *
+ * **AND THAT LAST SENTENCE WAS RIGHT AND UNEXPLAINED — G-055 SUPPLIES THE MECHANISM, AND IT
+ * ALSO RE-MEASURED THE READING THIS PARAGRAPH RESTS ON.** Why the value is nearly free: vitest
+ * cannot interrupt a SYNCHRONOUS case, so it decides the timeout only after the work is already
+ * paid for, which means on a case like this one the budget cannot catch a hang at all and
+ * decides exactly one thing — whether a completed, passing run is reported red. The derivation,
+ * the campaign behind it and the four alternatives that were refused are stated once in
+ * `vitest.config.ts`. **The 39.9s above is now 44,254ms, the worst of NINE full-suite readings**
+ * (win32/12cpu quiet, one sitting, run 1 cold), so `keeps guests engaged with items throughout`
+ * carries **150,000ms**. The other four census cases still read 120,000ms and that is correct
+ * rather than an oversight: `census()` is MEMOISED, so only the FIRST case to call it pays the
+ * walk and the rest measure single-digit milliseconds.
+ *
+ * **THE CASE THAT WENT RED WAS NOT ONE OF THESE.** It was `DELIVERS SATISFACTIONS BY AN ITEM`,
+ * the first case in the file, which pays the OTHER memo — `replayed()` — and declared nothing.
+ * Which case pays a memoised fixture is a fact about DECLARATION ORDER, and G-038a-iii-b
+ * budgeted the fixture it had measured rather than every case that can be first to touch one.
  * ==========================================================================================
  */
 type ReleaseCensus = {
@@ -214,7 +231,7 @@ describe('the 100,000-tick log reaches items as providers (G-013)', () => {
       byItem += needOutcomeOf(world.needOutcomes, needType.id)?.metByItem ?? 0;
     }
     expect(byItem).toBeGreaterThan(0);
-  });
+  }, 150_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 43,443ms
 
   it('AND BY A ROOM, so both branches of the attribution occur in one run', () => {
     const world = replayed();
@@ -238,7 +255,7 @@ describe('the 100,000-tick log reaches items as providers (G-013)', () => {
 
   it('keeps guests engaged with items throughout, not merely once', () => {
     expect(census().guestTicksEngagedWithAnItem).toBeGreaterThan(1_000);
-  }, 120_000);
+  }, 150_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 44,254ms
 
   it('leaves nobody stuck, nothing orphaned and nobody served by something broken', () => {
     const world = replayed();

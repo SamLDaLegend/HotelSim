@@ -206,7 +206,7 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // the second amenity still has nothing to serve and both arms still read 354.
     expect(concurrentGuests(3, 120)).toBeLessThan(SUSTAINED_BY_ONE_PROVIDER);
     expect(worstShare(rich)).toBeGreaterThan(worstShare(lean));
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 18,169ms
 
   it('and it moves at EVERY room count ABOVE WHAT ONE PROVIDER SUSTAINS (G-041)', () => {
     // The live criterion, sited by `SUSTAINED_BY_ONE_PROVIDER`'s arithmetic rather than by a
@@ -231,7 +231,7 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
       }
       expect(concurrentGuests(rooms, 120)).toBeLessThanOrEqual(SUSTAINED_BY_ONE_PROVIDER);
     }
-  }, 120_000);
+  }, 180_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 54,846ms
 
   it('AND IT FALLS IN EXACTLY ONE PLACE ON THE WHOLE GRID **AT THE DERIVED CADENCE**', () => {
     // ========================================================================
@@ -384,7 +384,7 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // re-derived rates put 45% more concurrent guests in the benchmark hotel
     // (`workload.mjs`'s pin, 8.27 -> 12.03), so each run does more work. **The GLOBAL
     // `testTimeout` is untouched**, which is the move §9 forbids; this is one arm that grew.
-  }, 120_000);
+  }, 150_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 42,241ms
 
   /*
    * `AND THE LIMIT OF THAT CLAIM IS NAMED AND MEASURED` WAS HERE AND WAS WITHDRAWN AT SWEEP 1.
@@ -618,7 +618,7 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
       // so the band that went is not a phase artefact of one cadence.
       expect(clearing.map((row) => row.score), `arrivals ${arrivals}`).toEqual([3, 5]);
     }
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 10,229ms
 
   it('and the saturated hotel IS a point mass, which is a content limit and is stated as one', () => {
     // ========================================================================

@@ -52,6 +52,43 @@ const content = loadContent();
  */
 const TICKS = 100_000;
 
+/**
+ * ==========================================================================================
+ * ~~"a few seconds"~~ — **MEASURED AT G-055 AND IT IS NOT, INSIDE A FULL `pnpm test`.**
+ *
+ * The first case below to call this pays the WHOLE 100,000-tick replay, and it inherited the
+ * shared 30,000ms default that nobody had sized against it. Five full-suite runs on an
+ * UNCHANGED tree (win32/12cpu quiet, one sitting, run 1 cold), the first case's own duration —
+ * these five are the DIAGNOSIS sample, and the budget on the line itself is derived from a wider
+ * one of nine, for the reason `vitest.config.ts` gives:
+ *
+ *     45,018 · 35,968 · 33,352 · 33,570 · 24,435 ms      F   F   F   F   P
+ *
+ * **That is the I4 row's intermittency, and it is a timeout rather than anything worse**: every
+ * FAIL sits above 30,000ms and the single PASS sits below it. Isolated, this file and
+ * `provider.determinism.test.ts` together have been read at 13.02s / 18.66s / 21.73s, which is
+ * why the row looked like it was guessing — the same work costs two to three times as much when
+ * the suite's other workers are all busy, and 30,000ms sits inside that band.
+ *
+ * **WHICH CASE PAYS IS DECLARATION ORDER, AND THAT IS STATED RATHER THAN RELIED ON QUIETLY.**
+ * The memo is file-scoped and lazy, so the FIRST case pays the whole replay and the seven below
+ * it measure milliseconds. That is stable — `sequence.shuffle` is unset, so `BaseSequencer` runs
+ * a file's cases in declaration order (`vitest@4.1.10`, `dist/chunks/coverage.DM_a_rWm.js:477`)
+ * — but it is stable for a reason that has nothing to do with the case itself. **Only the case
+ * that MEASURES the cost declares a budget; INSERT A NEW CASE ABOVE IT AND THE 45s MOVES TO THE
+ * NEW ONE, WHICH WILL INHERIT 30,000ms AND GO RED.** `pnpm test:durations` prints that the
+ * moment it happens, which is the whole reason that instrument exists. The alternative —
+ * declaring 150,000ms on eight cases, six of which cost two milliseconds — buys robustness with
+ * six numbers that describe nothing, and this repository has a rule about numbers like that.
+ *
+ * The sibling file has the same shape and the same history: `provider.determinism.test.ts`
+ * budgeted the fixture G-038a-iii-b had measured and left the file's first case, which pays a
+ * DIFFERENT memo, on the default. Both are repaired in this commit.
+ *
+ * The number, the factor, the campaign and the four alternatives that were refused are stated
+ * ONCE in `vitest.config.ts`. The shared `testTimeout` is untouched.
+ * ==========================================================================================
+ */
 let cached: World | undefined;
 function replayed(): World {
   cached ??= run(createWorld(42, content), content, TICKS, commandLog(TICKS, content));
@@ -69,7 +106,7 @@ describe('the determinism log reaches the need vector', () => {
     for (const guest of guestsInOrder(world.guests)) {
       expect(guest.needs.map((entry) => entry.needId)).toEqual(needTypes.map((entry) => entry.id));
     }
-  });
+  }, 150_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 45,018ms
 
   it('MEETS AND MISSES AT LEAST TWO DIFFERENT NEED TYPES over 100,000 ticks', () => {
     // The vector's own coverage claim. Without amenities in the log every engagement need
@@ -158,7 +195,7 @@ describe('the determinism log reaches the need vector', () => {
       .map((roomType) => roomType.id);
     expect(amenityKinds.length).toBeGreaterThan(0);
     expect(full.entities.list.filter((entity) => amenityKinds.includes(entity.kind)).length).toBeGreaterThan(0);
-  }, 60_000);
+  }, 90_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 23,851ms
 
   it('is reproducible: two replays of the same log agree exactly', () => {
     // The gate's own claim, in miniature and in one process. The gate runs three PROCESSES,

@@ -174,7 +174,7 @@ describe('the shaft is a fixture, and it is a live one', () => {
     // AND THE CONTROL ARM STRIPS IT BACK OUT (G-038a-iii-b) — the runner declares one now, so
     // "no stairs" is a world this file SUBTRACTS rather than one it inherits.
     expect(arm(false).stairs).toBe(0);
-  }, 60_000);
+  }, 180_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 59,236ms
 });
 
 describe('THE EXIT CRITERION: `unreachable` reaches 0 with a full-height shaft declared', () => {
@@ -237,7 +237,7 @@ describe('THE EXIT CRITERION: `unreachable` reaches 0 with a full-height shaft d
     const stripped = arm(true, isPlayerSpine);
     expect(stripped.invalid.unreachable).toBe(7);
     expect(stripped.valid).toBe(59);
-  }, 60_000);
+  }, 90_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 22,917ms
 
   it('and WITHOUT the shaft the same strip reports zero, which is ADR-0059 in two numbers', () => {
     // ========================================================================================
@@ -250,5 +250,5 @@ describe('THE EXIT CRITERION: `unreachable` reaches 0 with a full-height shaft d
     expect(stripped.invalid.unreachable).toBe(0);
     // And it is not zero because the strip did nothing: the same strip with the shaft reads 7.
     expect(arm(true, isPlayerSpine).invalid.unreachable).toBe(7);
-  }, 60_000);
+  }, 90_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 21,653ms
 });

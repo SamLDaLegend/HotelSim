@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-25, G-053a is DONE — `HOTELSIM.md` §1's loop terms are MARKED, because the human ruled they are SPECIFICATIONS rather than descriptions (ADR-0081): as descriptions four of them were false for the life of the project and every agent read them as what the game IS, as specifications they are obligations, and a term with no mark is a claim nobody has checked. FOURTEEN TERMS, FIFTEEN MARKS across the three loops — TEN EXIST, FOUR OWED TO M4 (`wages` G-052, `quality` G-037a, `reputation` G-051, `demand` on §8's own M4 line) — and the fifteenth is the build loop's CLOSURE, which is FALSE today: `guestArrives` is a command with no payload, so nothing a player builds changes how many guests arrive. THE ORDERED SPLIT WAS WRONG IN ONE PLACE, AND IT WAS RE-MEASURED RATHER THAN INHERITED: `capacity` is NOT partial, it EXISTS. ADR-0053's "a room holds one guest by enforced invariant" and its one-reader grep were superseded by G-040a/G-040b-i/G-040b-ii; three non-test readers sit in `packages/sim` today, `claimEntity` admits a second lodger of the same party instead of throwing, and shipped content puts TWO GUESTS IN ONE BEDROOM (occupancy 1203 -> 1275, WATCH #22). Every false clause in the block was a correctly-quoted ADR: AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE, which is the rule ADR-0007 already applies to comments. §1's ROOM-DESIGN sentence is the same class and takes three further marks, counted separately; its `function` half SPLITS, because required equipment is a GATE (`validity.ts` returns `missingItem`) where the sentence promises a SCORE. THE DEBT THAT COULD NOT BE PAID: five docblocks on main inside `packages/sim` assert the quality mechanic in the PRESENT TENSE while nothing on main reads a room's quality — ADR-0083 named three in one file, it is FIVE across TWO — and bound 5 forbade touching `packages/sim` and was NOT weakened, so the repair is a named obligation on G-037a's block. Two rules keep a mark from rotting into the description it replaced: every EXISTS names the symbol that makes it true, and the mark moves in the same commit as the term. `CLAUDE.md`'s copy is marked too, for the reason its own banner records. NO FILE UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged, and the I2 reading is what "no behaviour changed" means as evidence rather than as assurance. Fourteen rows green, VERIFY_EXIT=0 read from the process into a log rather than chained on a tail; the two load-sensitive tests were ALSO run in isolation and recorded, TWICE (`needs.determinism` + `provider.determinism`, 2 files / 18 tests, exit 0 both times, 13.02s and 18.66s in one sitting — the 43% spread between two isolated runs of the same two files is the load sensitivity that makes them unreliable in the first place, and it is reported rather than reduced to the flattering figure), because §2.0 says a green reading from an unreliable instrument carries no more information than a red one. AND ADR-0083 RULING 1 MIXES DENOMINATORS, which is §4.1's own named failure: "twelve reliable rows plus two unreliable rows" adds 13 ROWS to 2 TESTS to reach 14 — verify has fourteen ROWS and the two unreliable items are TESTS inside one of them (`test`, I4). Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-26, G-055 is DONE — the I4 row's five-sighting intermittency is ONE CAUSE and it is a TIMEOUT, measured rather than argued, and the second and worse reading is FALSIFIED rather than merely unobserved. INSTRUMENTED BEFORE IT WAS REPAIRED: `pnpm test` now records EVERY case's duration — PASSES AS WELL AS FAILURES, because instrumenting only the flips is selecting on the dependent variable — into `.verify-logs/test-durations.json`, printed by `pnpm test:durations`. Five full `pnpm test` runs on an UNCHANGED tree, one sitting, win32/12cpu quiet, run 1 cold and KEPT rather than discarded because a CI runner is always cold: exit codes 1, 1, 1, 1, 0, and the two red cases read 45,018 / 35,968 / 33,352 / 33,570 / 24,435 ms and 43,443 / 35,154 / 37,583 / 33,526 / 25,136 ms. EVERY FAIL CARRIES A DURATION ABOVE 30,000ms AND THE SINGLE PASS CARRIES ONE BELOW IT, 5 of 5, for both cases — the flip with every duration inside budget was looked for across five runs and does not occur. THE DEFECT IS ONE RATIO: the same two cases cost 7,816ms ISOLATED (median of 3, same sitting, 3.8% spread, exit 0 every time) against 33,570ms IN-SUITE (median of 5) — A CONTENTION FACTOR OF 4.29x ON A BUDGET WORTH 3.84 ISOLATED COSTS, so THE BUDGET WAS SMALLER THAN THE CONTENTION and nothing about the simulation, the log or the assertions is involved. AND THE PASSING TAIL IS THE OTHER HALF OF THE EVIDENCE: thirty-six readings sat above 30,000ms across the five runs and only EIGHT were red, the other twenty-eight green because they had DECLARED a budget — the two red cases were not the slowest in the suite, they were the undeclared ones, and which case pays a memoised fixture is a fact about DECLARATION ORDER. REPAIRED BY THE HOUSE PATTERN APPLIED TO THE MEASURED POPULATION RATHER THAN TO THE SIGHTINGS: THIRTY-ONE cases in TWELVE files declare 3x their own worst reading over NINE full-suite runs, rounded up to 30s for legibility, each carrying that reading on its own line, with the derivation stated ONCE in `vitest.config.ts`; the shared `testTimeout` is BYTE-UNCHANGED at 30,000ms and raising it was refused by name, along with tuning the workload, capping the workers and a per-project timeout. Why a bigger literal is nearly free is READ OUT OF THE SHIPPED BYTES rather than assumed: `withTimeout` cannot interrupt a SYNCHRONOUS case (all thirty-one are, checked mechanically — 31 annotated, 0 async), so a synchronous hang is never caught at ANY value and the budget decides exactly one thing, whether a COMPLETED run with every assertion PASSING is reported red. THE SCOPE GREW ON A MEASUREMENT RATHER THAN A HUNCH: `layout.reach.player.report.test.ts` measured 59,236ms against a declared 60,000ms — a 1.3% margin, green on every run, one cold cache from being the THIRD unreliable item that §2.0 makes a stop condition, and visible ONLY because the instrument records passes. THREE CLAIMS IN THE BRIEF WERE FALSE AND ARE CORRECTED: the affected tests do NOT spawn child processes (both are synchronous in-process 100,000-tick replays; the property was true of the G-048 pair and was carried forward to this pair unchecked, which is ADR-0085's own class); the "67% spread in isolated timings" is THREE SITTINGS BY TWO PEOPLE, the comparison `CLAUDE.md` rule 3 forbids by name, and three isolated readings in ONE sitting span 1.6% (17.96 / 17.68 / 17.83s); and G-039b-α refused tuning CONTENT so a statistic moves, not tuning a workload. EVIDENCE, because a single green is exactly what this goal exists to refuse: SIX full `pnpm verify` runs, serial and unattended so the box stayed quiet, VERIFY_EXIT=0 read from the process into a file every time, FOURTEEN ROWS PASS every time, INCLUDING THE SLOWEST RUN OF THE CAMPAIGN (932,160ms wall, 1.6x the fastest) in which every case still passed — and the repair bit without needing a mutation probe, the previously-red case measuring 34,246ms and PASSING, the same reading with the opposite verdict. APPLYING THE RULE ONCE WAS NOT ENOUGH AND THAT IS THE HONEST SHAPE OF IT: the first pass scored thirty cases against the five diagnosis runs, and re-scored against all nine ONE more had crossed the line (8,058ms to 11,480ms); RE-SCORED AGAIN AT ELEVEN RUNS IT WOULD NAME SIX MORE, so the iteration is stopped on a stated ground rather than because the diff got boring — `worst` is a MAXIMUM OVER THE SAMPLE and the maximum of a sample grows with the sample, so a threshold defined against it HAS NO FIXED POINT and "apply until nothing crosses" does not terminate. The rule guaranteed a ONE-TIME sizing; the reading that needs no arithmetic is that the slowest run taken was ALL GREEN, the largest of 30,866 test readings being 63,810ms against a 180,000ms budget. THIS IS A MONITORING PROBLEM WEARING A THRESHOLD'S CLOTHES, and the monitor is what shipped. The word SYNCHRONOUS in the rule is load-bearing: on an ASYNC case the timer DOES fire and the budget IS the hang detector, so the one async case the arithmetic would have swept up (`verify.lock.test.ts`, worst 12,871ms) is EXCLUDED ON THE MECHANISM rather than overlooked. AND MY OWN ANALYSIS SCRIPT WAS A SCANNER NARROWER THAN ITS NAME, in the goal about instruments: it read numeric budgets only, so the nine cases declaring `SPAWN_BOUND_MS` scored as if they inherited 30,000ms and one read 42.8% of budget where it sits at 10.7% — no wrong edit resulted and `git diff` shows that file untouched, but the shipped instrument is immune only because it deliberately parses no budgets at all. NO FILE UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged. `check:scaling` IS NOT REPAIRED AND IS NOT CLAIMED TO BE — it passed six of six IN THE REGIME THAT NEVER BROKE IT, its one captured red came from an agent working on the same box while verify ran, and a green taken where the failure does not live is not evidence; parked with the loaded campaign that would settle it. Unreliable: 1 gate, 0 defects — the unit is a `pnpm verify` ROW, of which there are fourteen, and the two-vs-three naming is reconciled below: the two "twos" were DIFFERENT PAIRS, this digest's counting rows and ADR-0083's counting tests inside one row, which is how 13 rows plus 2 tests reached 14.*
 
 - **State**: save **v23** · summary **v4** · I2 `abfd91c3da10b67f` · measure golden
   `6a3bc5aa1383196e` · `pnpm verify` is **FOURTEEN** rows — **ALL GREEN** (re-measured 2026-08-25 at
@@ -2675,3 +2675,132 @@ finding, the absolute is not.
 
 **No WATCH is owed and none was manufactured.** No simulation behaviour changed; the I2 hash is the
 reading that says so.
+
+## G-055 — The unreliable gates are repaired — REFLECT
+
+**The instrument that verifies determinism was not deterministic, and the reason turned out to be
+one number being smaller than another.** Five sightings across seven goals, five parkings, and the
+diagnosis cost one afternoon once anybody recorded a duration.
+
+### WHAT MADE IT TAKE SEVEN GOALS, AND IT IS ONE SENTENCE
+
+**Every sighting recorded the FAILURE and none recorded a DURATION.** `Test timed out in 30000ms`
+plus a row name is compatible with two very different worlds — a case crossing its budget, or the
+runner disagreeing with itself — and no reading on file could separate them. G-039a had already
+learned the general form of this lesson and fixed half of it: *a red row's own output is kept, on
+screen and on disk*. **The half it did not fix is that a green run keeps nothing**, and the passing
+durations are exactly what the one-cause story makes a prediction about. **Instrumenting only the
+flips is selecting on the dependent variable**, and it is why three isolated readings taken on three
+different days were the entire evidence base.
+
+`pnpm test` now writes every case's duration — passes included — to
+`.verify-logs/test-durations.json`, and `pnpm test:durations` prints it. **The next sighting arrives
+with its own distribution attached.**
+
+### ONE CAUSE, AND THE FALSIFYING CASE WAS LOOKED FOR RATHER THAN ASSUMED ABSENT
+
+Five full `pnpm test` runs, unchanged tree, one sitting, quiet, win32/12cpu. **Exit codes 1, 1, 1,
+1, 0** — the flip reproduced. The two red cases:
+
+```
+needs.determinism    case 1   45,018 · 35,968 · 33,352 · 33,570 · 24,435 ms   F F F F P
+provider.determinism case 1   43,443 · 35,154 · 37,583 · 33,526 · 25,136 ms   F F F F P
+```
+
+**Every FAIL above 30,000ms; the single PASS below it; 5 of 5, both cases.** The status is a
+function of the duration and nothing else. **A flip with every duration inside budget — the second
+and worse problem — does not occur in any of the five runs.**
+
+**And the passing tail is the other half.** Thirty-six readings sat above 30,000ms across the five
+runs and **only eight were red**. The rest passed because they had declared a budget. *The two red
+cases were not the slowest in the suite; they were the ones nobody had declared.*
+
+### THE DEFECT WAS ONE RATIO, WHICH IS WHY IT LOOKED LIKE MAGIC
+
+Isolated, in the same sitting, the two cases cost **7,842 / 7,554 / 7,816 ms** and **7,812 / 7,638 /
+7,813 ms** — a **3.8% spread**, exit 0 every time. In-suite the same work costs **33,570ms** at the
+median. **That is a contention factor of 4.29x against a budget worth 3.84 isolated costs.**
+
+> **THE BUDGET WAS SMALLER THAN THE CONTENTION.** Eleven sibling workers on six physical cores
+> charge a synchronous case between four and six times its own cost, and 30,000ms sits inside that
+> band. Nothing about the simulation, the log or the assertions is involved.
+
+**It was never mysterious; it was never measured.** Five goals looked at a red row and reasoned
+about it. One goal put a stopwatch on the passes.
+
+### THE THING I DID NOT EXPECT, AND IT CHANGED THE SCOPE
+
+`layout.reach.player.report.test.ts`'s first case measured **59,236ms against a declared 60,000ms —
+a margin of 764ms, 1.3%.** It was GREEN on every run and it is one cold cache away from being the
+third unreliable item, which §2.0 makes a stop condition. **I only saw it because the instrument
+records passes.** Repairing two cases and leaving that one would have been repairing the sightings
+rather than the defect, so the rule was applied to the whole measured population: **thirty-one cases
+in twelve files, each declaring 3x its own worst reading.** The diff is mechanical and every literal
+carries the measurement that produced it, on the same line.
+
+**And applying it once was not enough, which is the honest shape of this kind of repair.** The first
+pass scored thirty cases against the five diagnosis runs. Re-scored against all nine full-suite runs
+— the five plus the four `pnpm verify` runs afterwards — **one more case had crossed the line**, its
+worst having moved from 8,058ms to 11,480ms. **So I ran two more verify runs and re-scored a third
+time, and at eleven runs it named SIX MORE.** That is when I stopped, and the ground for stopping
+matters more than the stopping:
+
+> `worst` is a **maximum over the sample**, and the maximum of a sample grows with the sample. Run 11
+> happened to be the slowest of the campaign — 932s against a 580-713s spread, something outside my
+> campaign had the box — and it lifted seven cases' worst readings at once. **A threshold defined
+> against a growing maximum has no fixed point. "Apply until nothing crosses" is not a terminating
+> procedure**, and I would have discovered that on run 20 instead.
+
+**The reading that needs no arithmetic is better than the one that does**: run 11 was the slowest
+anybody took and **every case in it passed**, the largest of 30,866 test readings being 63,810ms
+against a 180,000ms budget. *This was a monitoring problem wearing a threshold's clothes all along,
+and the difference between the two is the thing this goal actually shipped.*
+
+**One more thing the mechanism gave me for free, and it changed the rule's wording.** The argument
+that a bigger literal is nearly free depends on vitest being unable to interrupt the case. **On an
+ASYNC case the timer really does fire, so the budget really is the hang detector.** There is exactly
+one async case that the arithmetic would have swept up — `verify.lock.test.ts`'s *waits without
+refusing* — and it is **left alone on purpose**. The rule says "synchronous" because the mechanism
+says so, not because it was convenient.
+
+**And my own analysis script was a scanner narrower than its name — in the goal about instruments.**
+It paired each case with its budget by reading numeric literals only, so the nine cases in
+`determinism-gate.test.ts` that declare `SPAWN_BOUND_MS` were scored as inheriting 30,000ms; one
+showed at 42.8% of budget when it sits at 10.7%. **No wrong edit came of it** — the applier's pattern
+did not match that spelling either, so it skipped the file, and `git diff` confirms it untouched —
+but I read a wrong number off my own instrument for an hour. *The shipped one is immune because it
+deliberately parses no budgets at all, which I chose for a different reason and which turned out to
+be the reason.*
+
+### THREE CLAIMS IN THE BRIEF I HAD TO CORRECT, AND ONE OF THEM IS THE PROJECT'S OWN RULE
+
+1. **"The affected tests spawn child processes."** They do not — both are synchronous in-process
+   replays; `grep` for `spawn`/`child_process` returns only the word *despawn*, in comments. The
+   property was true of the G-048 pair and was carried forward to this pair without re-checking.
+   **ADR-0085's class, in the brief that cites ADR-0085.**
+2. **"A 67% spread in isolated timings."** The readings are real and were taken **in three different
+   sittings by two people** — the comparison `CLAUDE.md` rule 3 forbids by name. **Three isolated
+   readings in one sitting: 17.96 / 17.68 / 17.83s, a 1.6% spread.** The instrument was not guessing
+   in isolation; the project was comparing across sessions.
+3. **"G-039b-α refused [tuning a workload] by name."** What it refused by name is tuning **content
+   so a statistic moves.** Same shape, different words.
+
+*Twenty-four goals of the human asking for this, and the third one is the one that matters: the
+number that made the goal urgent was an artefact of the measurement rule the project already has.*
+
+### EVIDENCE, BECAUSE A SINGLE GREEN IS WHAT THE GOAL EXISTS TO REFUSE
+
+**Four full `pnpm verify` runs, serial and unattended so the box stayed quiet, VERIFY_EXIT read from
+the process into a file rather than chained on a tail. Four times 0, fourteen rows PASS each time.**
+And the repair bit without a mutation probe: in the second run the previously-red case measured
+**34,246ms — above the bound that had been failing it — and passed.**
+
+**No WATCH is owed.** No simulation behaviour changed: `git diff --stat` touches no file under
+`packages/sim` and the I2 hash is unmoved at `abfd91c3da10b67f`, which is what that means as a
+reading rather than as an assurance.
+
+**`check:scaling` IS NOT REPAIRED and is not claimed to be.** It passed four of four — **in the
+regime that never broke it.** Its one captured red came from an agent working on the same box while
+verify ran, and G-055 ran everything unattended precisely to avoid that. **A green taken where the
+failure does not live is not evidence**, which is §2.0 pointed at my own result. Parked with the
+loaded campaign that would settle it.

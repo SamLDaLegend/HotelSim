@@ -685,7 +685,7 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
       const improved = engagementSharesIn(rich).filter((value, index) => value < engagementSharesIn(lean)[index]!);
       expect(improved, `${rooms} rooms`).toHaveLength(2);
     }
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 12,361ms
 
   it('and the SUM and the MEAN over the same rows fall — AND SINCE G-023b-ii the MAX falls too', () => {
     // OVER THE SAME ROWS MEANS OVER THE SAME ROWS. Both folds here are ENGAGEMENT-only, which is
@@ -703,7 +703,7 @@ describe('GOLDEN (ADR-0034 amendment): ON THE AMENITY AXIS ALONE, THE WORST NEED
         meanShare(engagementSharesIn(lean)),
       );
     }
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 14,256ms
 
   it('and at six rooms there is NO CONFOUND: the same guests, the same stays, more capacity', () => {
     // The inversion is not a population effect. Same departure table, same denominator on every

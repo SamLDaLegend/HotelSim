@@ -198,7 +198,7 @@ describe('THE LIFETIME BOUND, MEASURED OVER THE CONTENT THAT SHIPS', () => {
     expect(worst).toBe(275);
     expect(bound - worst).toBe(24);
     expect(worst).toBeGreaterThan(visitDurationOf(FOOD_COURT)!);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 12,165ms
 });
 
 describe('the CLI can build and run one', () => {

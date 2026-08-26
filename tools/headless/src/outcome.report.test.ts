@@ -597,7 +597,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
       'leftDissatisfied',
     ]);
     expect(nonZero).toHaveLength(5);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 19,239ms
 
   it('AND THE MARGIN IS THREE — read this first if the test above just went red', () => {
     // MEASURED, AND NARROW. Four of the five reasons arrive in the dozens or hundreds — 841 /
@@ -709,7 +709,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // AND THE ROW THAT ABSORBED THEM, so the collapse above is visibly a SHIFT rather than a
     // loss: the five reasons still sum to the departures the conservation law counts.
     expect(count('leftDissatisfied')).toBe(1_635);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 16,946ms
 
   it('and the numbers close, through a real process rather than in-memory', () => {
     const document = JSON.parse(runCli([...ARGS, '--json']).stdout) as {
@@ -728,7 +728,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // conservation law above close.
     expect(document.guests.arrived).toBe((43_200 / 30) * 4 / 3);
     expect(document.guests.arrived).toBe(1_920);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 18,055ms
 
   it('the migration-only reason stays zero in every real run, whatever the length of the union', () => {
     const document = JSON.parse(runCli([...ARGS, '--json']).stdout) as {
@@ -740,7 +740,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     expect(unrecorded?.count).toBe(0);
     // Not a gap: `outcome.save.test.ts` produces it by loading a v7 save with evictions,
     // which is the only history that can.
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 12,377ms
 
   it('the text report shows the same five, so a human sees what the JSON says', () => {
     const printed = runCli(ARGS).stdout;
@@ -748,7 +748,7 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
       expect(printed).toMatch(new RegExp(`left ${reason}\\s+[1-9]`));
     }
     expect(printed).toMatch(/left evictedCauseUnrecorded\s+0/);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 13,436ms
 
   it('and the default hotel produces only THREE, which is why the criterion needs flags', () => {
     // Recorded as a measurement rather than a claim: this is the invocation the goal block

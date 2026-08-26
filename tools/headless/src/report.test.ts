@@ -581,7 +581,7 @@ describe('the build walk stays on the plot', () => {
       expect(summary.build.constructionTransactions).toBeGreaterThan(0);
       expect(summary.build.refused.insufficientFunds).toBeGreaterThan(0);
     }
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 10,794ms
 });
 
 describe('buildSummary', () => {

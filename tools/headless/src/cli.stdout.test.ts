@@ -866,7 +866,7 @@ describe('byte-identical stdout across runs (G-006 exit criterion, verbatim)', (
     // Raw bytes, two real processes. A timestamp, a duration, or any run-varying
     // value anywhere in the report makes this red.
     expect(first.stdout.equals(second.stdout)).toBe(true);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 14,439ms
 
   it('two runs of --days 30 --seed 42 --json produce byte-identical stdout', () => {
     const first = runCli(['--days', '30', '--seed', '42', '--json']);
@@ -874,7 +874,7 @@ describe('byte-identical stdout across runs (G-006 exit criterion, verbatim)', (
     expect(first.status).toBe(0);
     expect(second.status).toBe(0);
     expect(first.stdout.equals(second.stdout)).toBe(true);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 17,924ms
 });
 
 describe('the golden literal', () => {
@@ -1316,7 +1316,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     // (G-008's cross-subsystem law) reading 1 against a 750,000p spend and no way to tell why.
     expect(summary().money.floorConstructionPennies).toBe(-500_000);
     expect(summary().build.floorConstructionTransactions).toBe(1);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 11,480ms
 
   it('matches the hand-derived closed form, penny for penny', () => {
     const s = summary();
@@ -1513,7 +1513,7 @@ describe('G-008 exit criterion: a build schedule, and a balance that folds', () 
     const second = runCli(BUILD_ARGS);
     expect(first.stdout.equals(second.stdout)).toBe(true);
     expect(first.status).toBe(0);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 12,706ms
 });
 
 describe('G-008: --demolish, and the eviction path a real run can finally reach', () => {
@@ -1545,7 +1545,7 @@ describe('G-008: --demolish, and the eviction path a real run can finally reach'
     expect(summary().guests.orphanedReservations).toBe(0);
     expect(summary().guests.stuck).toBe(0);
     expect(summary().build.demolished).toBeGreaterThan(0);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 10,769ms
 
   it('closes conservation with rooms disappearing underneath people', () => {
     const g = summary().guests;
@@ -1578,7 +1578,7 @@ describe('G-008: --demolish, and the eviction path a real run can finally reach'
     // And the original invocation still demolishes real rooms — it simply no longer misses.
     expect(summary().build.demolished).toBeGreaterThan(0);
     expect(summary().build.refused.noSuchRoom).toBe(0);
-  });
+  }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 10,533ms
 
   it('leaves the default run untouched: the flags are OFF unless asked for', () => {
     // The reason `pnpm sim:bench` still measures the workload it always has, in the goal
