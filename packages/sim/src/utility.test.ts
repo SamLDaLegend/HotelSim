@@ -5,9 +5,12 @@
 // A guest makes TWO decisions in a fixed order, and they use different terms:
 //
 //     WHICH NEED      by PRESSURE — the fraction of that need's own `capacityTicks` already
-//                                   drawn down, in basis points. Ties go to the lower need id.
-//                                   (It read "own patience already spent" until θ-a sweep 2;
-//                                   that field is deleted, and the fraction is now of a stock.)
+//                                   drawn down, in basis points. Ties go to the lower
+//                                   `needTieBreakRank`, which is per GUEST (G-054); it read
+//                                   "the lower need id" until then, and ADR-0078 measured
+//                                   what that cost. (It read "own patience already spent"
+//                                   until θ-a sweep 2; that field is deleted, and the
+//                                   fraction is now of a stock.)
 //     WHICH PROVIDER  by FIT      — the designer's ranking of the providers OF THAT NEED.
 //                                   Ties go to the lower entity id.
 //
@@ -213,7 +216,7 @@ describe('pressure is the fraction of a need\'s OWN capacity already drawn down'
 });
 
 describe('FIT NEVER REORDERS NEEDS — pressure decides which, fit only decides where', () => {
-  it('at EQUAL pressure the lower need id wins, whatever the two providers are worth', () => {
+  it('at EQUAL pressure the tie-break wins, whatever the two providers are worth', () => {
     // THE PROPERTY THIS GOAL'S FIRST BUILD DID NOT HAVE, AND THE ONE WATCHING CAUGHT. Scoring
     // `pressure * FIT_SCALE + fit` across needs is sound for UNEQUAL pressure and says
     // nothing about equal pressure — which is not a corner here but the normal case: every
@@ -223,8 +226,10 @@ describe('FIT NEVER REORDERS NEEDS — pressure decides which, fit only decides 
     // the hotel.
     //
     // `food` (2500 machine, in a lobby) against `fun` (7500 games room), both untouched, so
-    // both are at zero pressure. The lower need id must win even though its only provider is
-    // the worst thing in the table.
+    // both are at zero pressure. The need the guest's own tie-break picks must win even though
+    // its only provider is the worst thing in the table — WHICH need that is stopped being
+    // "the lower id" at G-054 and is now per guest; for this one it is `food`, and the claim
+    // under test is that FIT did not reorder them, not which of the two came out on top.
     const world = stepTick(createWorld(13, content), content, [
       spawn('bedroom', 0, 0),
       spawn('lobby', 0, 4),
@@ -531,9 +536,9 @@ describe('the quantised score orders needs exactly as the exact comparison did, 
     // A need with a capacity of 3 against one of 30,000: lcm 30,000, three times the bound.
     // `1/3` and `9999/30000` are different fractions that both floor to 3,333 basis points, so
     // the exact comparison separates them and the quantised one ties — and the tie then falls
-    // to the lower need id. That is a real behaviour change, it is content a need table could
-    // produce, and it is why a pair under the bound is driven exhaustively above rather than
-    // assumed.
+    // to `needTieBreakRank` (to the lower need id before G-054). That is a real behaviour
+    // change, it is content a need table could produce, and it is why a pair under the bound
+    // is driven exhaustively above rather than assumed.
     expect(exactOrder(1, 3, 9_999, 30_000)).not.toBe(0);
     expect(quantisedOrder(1, 3, 9_999, 30_000)).toBe(0);
 

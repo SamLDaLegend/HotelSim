@@ -5,7 +5,9 @@
 //
 //       WHICH NEED      by PRESSURE  — how far down that need's own stock is, as a fraction
 //                                      of its `capacityTicks`, in basis points. Ties go to
-//                                      the lower need id.
+//                                      the lower `needTieBreakRank`, which is PER GUEST
+//                                      (G-054). It read "the lower need id" until then, and
+//                                      the cost of that is measured at the tripwire below.
 //       WHICH PROVIDER  by FIT       — the designer's ranking of the providers OF THAT NEED.
 //                                      Ties go to the lower entity id.
 //
@@ -46,8 +48,15 @@
 // a need is a level with no terminal state, so there is nothing for an order to strand a need
 // IN. Being served refills it whenever the guest gets round to it. All six orders now satisfy
 // all three, and the shipped table makes the three engagement needs IDENTICAL (1,400 ticks of
-// capacity, refill 7), so permuting them permutes nothing — measured, not assumed: all six
+// capacity, refill 14), so permuting them permutes nothing — measured, not assumed: all six
 // reach the same maximum depth.
+//
+// **"REFILL 7" WAS STALE FROM SOME EARLIER TABLE AND IS CORRECTED ABOVE (G-054).** It was read
+// out of `packages/content/data/need-types.json` on 2026-08-26, where all three engagement rows
+// say `"refillPerTick": 14`. It is a genuine correction and not a value that moved: nothing in
+// this goal touches content. **The second stale number in this header is at the lcm paragraph
+// below, and neither of them changed an answer on the day it shipped — which is the whole
+// hazard, because this is the header a reader consults about whether the tie-break is benign.**
 //
 // SO THE SUCCESSOR TEST IS WEAKER AND IS WRITTEN AS SUCH. What it still asserts is a BOUND —
 // no order drives a need to EMPTY, which is where `pressureBasisPoints` saturates at 9,999 and
@@ -57,9 +66,43 @@
 // WHY THE TEST STILL EXISTS AND WHY IT POINTS BACK HERE: deleting a check is not evidence a
 // property holds (ADR-0007's amendment). A future table that differentiates the three needs
 // — different capacities, different refills — makes the "every order costs the same" line red
-// and re-opens the question this paragraph answers. **"Entertainment last" is DISSOLVED, not
-// preserved, and no final need is privileged**; if that ever stops being true, the content
-// changed and this header is where to start.
+// and re-opens the question this paragraph answers.
+//
+// ----------------------------------------------------------------------------
+// THE TRIPWIRE FIRED, AND IT FIRED ON THE CODE RATHER THAN ON THE CONTENT (G-054, ADR-0078).
+//
+// THE SENTENCE THAT STOOD HERE, STRUCK RATHER THAN EDITED, because what it was wrong ABOUT is
+// the finding:
+//
+//     ~~"'Entertainment last' is DISSOLVED, not preserved, and NO FINAL NEED IS PRIVILEGED;
+//       if that ever stops being true, the CONTENT changed and this header is where to
+//       start."~~
+//
+// **A final need WAS privileged — negatively, by 3.3x — and the content had not changed.** The
+// sentence named the right tripwire and the wrong suspect: it watched the table and the
+// privilege was being manufactured HERE, by `reserve` keeping the first maximum of a walk in
+// ascending content-id order. Three needs with identical capacity and refill are EXACTLY tied
+// whenever none has been served, which is the common case rather than a corner, so the tie fell
+// the same way for every guest of every cycle of every stay — and I2 forbids randomness, so
+// nothing re-rolled it. Measured by renaming the three ids and changing nothing else: the
+// lowest-sorting slot read 126–254 basis points unserved, the middle 337–445, the last 569–613.
+//
+// WHAT MAKES THE CLAIM TRUE AGAIN, AND IT IS NOW POINTED FORWARD RATHER THAN BACK. Ties are
+// settled by `needTieBreakRank` below, which is a function of the GUEST as well as the need, so
+// across a population every slot leads for about a third of guests and no position in the table
+// is privileged. **The claim is now about a DISTRIBUTION, and a distribution needs a
+// measurement rather than a sentence** — so the live statement is
+// `tools/headless/src/needtie.rename.test.ts`, which re-runs the renaming experiment and fails
+// if a need's own unserved figure moves when its id is changed, and
+// `packages/sim/src/utility.needtie.test.ts`, which fails if any slot takes half the hotel.
+// **If those go red, read them before reading this paragraph: prose may describe, it may not
+// measure (ADR-0007).**
+//
+// AND WHAT THIS DOES NOT DO, because the two are easy to blur: **it does not make the needs
+// symmetrical.** ADR-0079 rules the asymmetry a FEATURE — they are met by different things, and
+// nourishment having two routes while entertainment has one is a design. What G-054 removes is
+// the ordering imposed on top of that by a SPELLING. Those are different things.
+// ----------------------------------------------------------------------------
 //
 // A CORRECTION FROM THE COUNTDOWN ERA, KEPT BECAUSE THE REASONING IS REUSABLE: the paragraph
 // above first said "the ONE order", and that a lower-need-id tie-break was the only tie-break
@@ -84,15 +127,28 @@
 //
 // THE DENOMINATOR IS NOW `capacityTicks`, AND THE SHIPPED TABLE STILL CLEARS THE CONDITION —
 // but it is a different table and the old reading of this paragraph (300 / 360 / 300, worst
-// lcm 1,800) describes fields that no longer exist. It is 600 / 1,400 / 1,400 / 1,400: the
+// lcm 1,800) describes fields that no longer exist. It is 300 / 1,400 / 1,400 / 1,400: the
 // engagement pairs have an lcm of 1,400 and the lodging pairs 4,200, both well under 10,000,
-// so the exact and quantised orders agree everywhere. THAT IS EXECUTED IN TWO PLACES RATHER
+// so the exact and quantised orders agree everywhere.
+//
+// **THE LODGING CAPACITY READ 600 HERE AND IS 300 ON DISK — corrected at G-054, and the
+// CONCLUSION SURVIVED BY LUCK.** lcm(600, 1400) and lcm(300, 1400) are both 4,200, so the
+// paragraph's answer was right about a table it was describing wrongly. Read out of
+// `packages/content/data/need-types.json` on 2026-08-26; nothing in G-054 touches content, so
+// this is a correction and not a value that moved. **A number that happens to be harmless is
+// still an unpinned number, which is why `stock.content.test.ts` is what actually holds the
+// bound and this paragraph is only allowed to explain it.**
+//
+// THAT IS EXECUTED IN TWO PLACES RATHER
 // THAN ASSERTED HERE, because the shipped table is content and this package never sees it:
 // `utility.test.ts` drives the arithmetic exhaustively over a fixed pair of denominators, with
 // a counter-example table beside it so the claim stays a measurement and not a law, and
 // `stock.content.test.ts` in tools/headless checks the SHIPPED capacities against the bound. A
-// tie the exact form would have separated falls through to the lower need id, which is the
-// rule the exact form used for its own ties.
+// tie the exact form would have separated falls through to `needTieBreakRank` — no longer to
+// the lower need id, which is what the exact form used for its own ties and what G-054 removed.
+// **The quantisation hazard is unchanged in KIND by that**: a lossy tie is still a tie the
+// scorer cannot separate, and what settles it is still not pressure. What changed is that it no
+// longer settles the same way for every guest in the building.
 //
 // WHY A NUMBER AND NOT A COMPARATOR, given that the two decisions are now separate: G-014b
 // needs "beats it by a MARGIN", and a comparator cannot express one. `a beats b` and `a
@@ -113,6 +169,61 @@ import type { Entity } from './entities.js';
 import type { NeedState } from './needs.js';
 
 export { MAX_FIT_BASIS_POINTS } from './content.js';
+
+/**
+ * WHICH OF TWO EXACTLY-TIED NEEDS THIS PARTICULAR GUEST REACHES FOR FIRST (G-054). Lower wins.
+ *
+ * IT IS A TIE-BREAK AND NOTHING ELSE. `pressureBasisPoints` still decides which need a guest
+ * pursues; this is consulted only when two candidates score the SAME basis point, which is the
+ * case ADR-0078 measured and is the common one rather than a corner. Nothing here can reorder
+ * needs whose pressures differ — `reserve` asks for it only on `pressure === bestPressure`.
+ *
+ * WHY IT TAKES THE GUEST, WHICH IS THE ENTIRE POINT. The rule it replaces was "the lower need
+ * id", and a need id is a SPELLING: three needs with identical `capacityTicks` and
+ * `refillPerTick` are tied whenever none has been served, so the same need led for every guest,
+ * on every tick, for the life of the hotel — and I2 forbids randomness, so nothing re-rolled
+ * it. Renaming the three shipped engagement needs and changing nothing else moved
+ * `guest_nourishment` 3.3x. Keyed on the guest, the population spreads: each need leads for
+ * about a third of guests and no slot in the table is privileged.
+ *
+ * I2, AND IT ADDS NO STATE. Both arguments are already hashed — `guest.id` is world state and
+ * the index is the need's position in a vector built in the content table's own order — so this
+ * is a pure function of things the save already carries. **No `Guest` field, no schema bump, no
+ * migration**; `SAVE_SCHEMA_VERSION` does not move for this. Every operation is `Math.imul` and
+ * a shift over uint32, exactly specified on every platform, and nothing accumulates a float.
+ *
+ * THE ORDER IS TOTAL FOR ONE GUEST, AND THAT IS A PROOF RATHER THAN AN OBSERVATION. The
+ * splitmix32 finaliser is a bijection on uint32 (an xor-shift-right is invertible, and both
+ * multipliers are odd), and `Math.imul(index, ODD)` is injective in `index` mod 2^32, so for a
+ * FIXED `guestId` distinct indices cannot collide. That matters because a tie-break which
+ * returned equal for two distinct needs would hand the decision straight back to walk order —
+ * this defect wearing a different hat. `utility.needtie.test.ts` drives it rather than trusting
+ * the argument.
+ *
+ * WHY NOT A ROTATION, WHICH IS THE OBVIOUS CHEAPER ANSWER AND IS WRONG. `start = guestId % n`
+ * over the need vector looks equivalent and is not: the vector contains the LODGING need, which
+ * the walk always skips, so two of the four rotations of a four-need table produce the same
+ * engagement order and the population splits 50/25/25 with the first slot still ahead. That is
+ * the defect at half strength, and it would have read as fixed. A rank is uniform over whatever
+ * subset of the vector turns out to be a candidate on the tick.
+ *
+ * WHY NOT LEAST-RECENTLY-SERVED, THE OTHER CANDIDATE AT PLAN. It does not answer the case that
+ * was measured. ADR-0078's tie is precisely "none of them has been served", so every candidate
+ * carries the same absent service time and LRS falls through to a secondary rule — which would
+ * be the lower need id again. It also needs a per-need timestamp, hence a save bump, to buy a
+ * decision it cannot make.
+ *
+ * WHY IT IS FIXED FOR A GUEST'S WHOLE STAY rather than advancing as needs are met: a tie-break
+ * that moved under a guest could flip its preference between two providers it is choosing
+ * between, which is the thrash the abandon margin exists to prevent. Stable within the guest,
+ * spread across the population — hysteresis and fairness are not in tension here.
+ */
+export function needTieBreakRank(guestId: number, needIndex: number): number {
+  let z = (Math.imul(guestId >>> 0, 0x9e3779b9) + Math.imul(needIndex >>> 0, 0x85ebca6b)) >>> 0;
+  z = Math.imul(z ^ (z >>> 16), 0x21f0aaad) >>> 0;
+  z = Math.imul(z ^ (z >>> 15), 0x735a2d97) >>> 0;
+  return (z ^ (z >>> 15)) >>> 0;
+}
 
 /**
  * How hard a need presses, as the fraction of its OWN STOCK already gone, in basis points: 0

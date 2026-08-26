@@ -183,15 +183,30 @@ describe('a guest is served by an ITEM, and the need records that (G-013)', () =
 
 describe('the tally counts by provider kind, and by-room is derived (G-013)', () => {
   it('splits one need type across a room and an item in the same run', () => {
-    // Two guests, one café and one machine, both serving `food`. The lowest id wins, so the
-    // first guest takes the café and the second the machine — and the row must show one of
+    // Two guests, one café and one machine, both serving `food` — and the row must show one of
     // each rather than two of either.
+    //
+    // NO GAMES ROOM, AND THE OMISSION IS THE TEST (G-054). This hotel used to include one, and
+    // the split then rested on both guests reaching for `food` first because `food` sorts below
+    // `fun` — a tie settled by a spelling, which is the defect ADR-0078 measured and G-054
+    // removed. With a per-guest tie-break one guest went for `fun` instead, released nothing
+    // the other needed, and came back to a café that was free by then: `metByItem` read 0 and
+    // this test failed for a reason that had nothing to do with what it measures.
+    //
+    // Building nothing for `fun` makes `food` the only engagement either guest can act on, so
+    // the two contend for the two food providers on the same tick whatever order they rank
+    // their needs in. **The claim under test is that the tally splits by provider KIND**, and
+    // it is now independent of the need ordering rather than quietly resting on it. `fun` is
+    // still DECLARED — a need with no provider built is a hotel, not a broken table.
+    //
+    // The machine therefore stands in the second bedroom rather than in a games room, which is
+    // the shipped shape `guests.ts` already blesses by name: an item provides wherever it is
+    // placed, and its host room type is a content decision rather than a rule of the engine.
     const world = stepTick(createWorld(11, content), content, [
       spawn('bedroom', 0, 0),
       spawn('bedroom', 0, 2),
       spawn('cafe', 0, 4),
-      spawn('gamesRoom', 0, 6),
-      spawn('machine', 0, 6),
+      spawn('machine', 0, 2),
     ]);
     const after = run(world, content, STAY + 6, [at(world.tick, arrive), at(world.tick, arrive)]);
     expect(departureCountOf(after.guestOutcomes, 'checkedOut')).toBe(2);

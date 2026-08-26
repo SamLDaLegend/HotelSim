@@ -420,15 +420,32 @@ describe('the workloads the gates run', () => {
     // the same schedule, and more of the landings that remain are inside a room. The
     // through-wall count is the subject and it rises by four on 152 fewer moves — a larger
     // share of a smaller total, which is what the inequality two lines down is for.
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_387, 532, 52]);
-    // AND WHICH BRANCH PRODUCED THEM (G-058). All fifty-two fell through to `fallback`.
-    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 52, 0]);
+    // 2,387/532/52 -> 2,244/545/96 AT G-054, AND THIS IS THE ARM THAT MOVED MOST — READ IT.
+    // The need tie-break is settled per guest now rather than by ascending content id
+    // (`needTieBreakRank`, ADR-0078), so sixty guests no longer walk to the SAME amenity in the
+    // same order: they spread across five, and a spread of destinations is a spread of
+    // journeys. **The through-wall count nearly doubles, and as a SHARE it does: 52/2,387 =
+    // 2.18% before, 96/2,244 = 4.28% after.**
+    //
+    // **THAT IS A PRE-EXISTING DEFECT FIRING MORE OFTEN, NOT A NEW ONE, AND THE BRANCH SPLIT IS
+    // THE EVIDENCE**: every one of the 96 is `fallback`, exactly as every one of the 52 was, so
+    // the population is the same kind. G-058 attributed the whole residual to one cause —
+    // `stepTowards` taking candidate zero when every admissible landing is a wall — and this
+    // goal gives that cause more occasions rather than adding a second one. **It is recorded
+    // here rather than absorbed, because a defect getting twice as visible is a finding even
+    // when the mechanism is somebody else's.**
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_244, 545, 96]);
+    // AND WHICH BRANCH PRODUCED THEM (G-058). All ninety-six fell through to `fallback`.
+    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 96, 0]);
     // THE BEFORE ARM, SAME SITTING, SAME INSTRUMENT, ONE DECLARATION APART.
     const before = cliCensus(argv, false);
-    expect(before.throughWall).toBe(291);
+    // 291 -> 364 AT G-054, and the BEFORE arm rising with the after arm is what says the change
+    // is in the journeys rather than in the shaft: the ratio the pin exists for is 291/52 = 5.6
+    // against 364/96 = 3.8, so the spine still removes most of them.
+    expect(before.throughWall).toBe(364);
     // THE POPULATION THE SHAFT REMOVED IS THE SAME KIND AS THE ONE IT LEFT, which is the
     // reading that refutes the parked hypothesis rather than merely failing to confirm it.
-    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 291, 0]);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 364, 0]);
     // STILL FAR BELOW THE PRE-G-038a-i WORLD, which is the claim this file was written to make
     // and the one the spine does not touch: 293 was the count with no walkability rule at all.
     expect(taken.throughWall).toBeLessThan(293);
@@ -444,14 +461,20 @@ describe('the workloads the gates run', () => {
     // service means more completed stays means more money means more of those builds get
     // afforded, and every extra room is somewhere else for a guest to walk. **The zero is
     // unmoved**, which is the claim this arm makes.
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_778, 573, 0]);
+    // 2,778/573/0 -> 2,345/491/0 AT G-054. **THE ZERO IS UNMOVED AND THAT IS THE POINT OF
+    // THIS ARM**: a hotel the player is building and demolishing under has no amenities at all,
+    // so there is no tie for the new rule to break and the only thing that moves is how far the
+    // same guests walk to the same beds.
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_345, 491, 0]);
     expect(taken.throughWall).toBeLessThan(119);
     expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 0, 0]);
     // AND THE ZERO IS NOT THE INSTRUMENT GOING BLIND: the same census on the same schedule with
     // the shaft subtracted still reads 66.
     const before = cliCensus(argv, false);
-    expect(before.throughWall).toBe(194);
-    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 194, 0]);
+    // 194 -> 230 AT G-054. The AFTER arm on this workload is still 0, so the shaft is removing
+    // more than it was rather than less.
+    expect(before.throughWall).toBe(230);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 230, 0]);
   });
 
   it('COUNTED: 6 rooms, 5 amenities — ADR-0017’s configuration — 118 → 116', () => {
@@ -459,13 +482,18 @@ describe('the workloads the gates run', () => {
     const taken = cliCensus(argv);
     // 994/224/23 -> 1,025/242/24 AT G-041, the smallest move of the three: six rooms and five
     // amenities was already well provisioned, so serving it at the ceiling changes little.
-    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_388, 322, 32]);
+    // 1,388/322/32 -> 1,239/325/56 AT G-054, the same mechanism as the sixty-room arm above
+    // and the same size: 2.31% of moves before, 4.52% after, every one of them `fallback`. Six
+    // rooms behind five amenities is the other configuration where guests have somewhere to
+    // spread TO, which is why these two arms move and the two below do not.
+    expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_239, 325, 56]);
     expect(taken.throughWall).toBeLessThan(129);
-    // AND WHICH BRANCH PRODUCED THEM (G-058). All thirty-two fell through to `fallback`.
-    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 32, 0]);
+    // AND WHICH BRANCH PRODUCED THEM (G-058). All fifty-six fell through to `fallback`.
+    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 56, 0]);
     const before = cliCensus(argv, false);
-    expect(before.throughWall).toBe(147);
-    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 147, 0]);
+    // 147 -> 170 AT G-054, the sixty-room arm's note applies here unchanged.
+    expect(before.throughWall).toBe(170);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 170, 0]);
   });
 });
 
@@ -504,7 +532,9 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
     // the denominator this share is read against is the same one it has always been and the
     // move counts beside it are comparable to the pre-G-041 readings without a caveat.
     expect(taken.guestFrames).toBe(15_655);
-    expect(taken.moves).toBe(586);
+    // 586 -> 665 AT G-054. **The guest-frame count is UNMOVED AGAIN at 15,655**, so this is the
+    // same population walking further, which is the reading this pin exists to make possible.
+    expect(taken.moves).toBe(665);
     // 16 -> 0 AT G-038a-iii-b. On a hotel of three bedrooms and one basement amenity EVERY
     // engagement journey is cross-floor, so every one of them now runs along the spine and
     // through the shaft, and there is no longer an occasion to land in a bedroom that is not
@@ -512,8 +542,10 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
     expect(taken.throughWall).toBe(0);
     expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 0, 0]);
     const before = cliCensus(['--days', '2', '--seed', '42'], false);
-    expect(before.throughWall).toBe(25);
-    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 25, 0]);
+    // 25 -> 27 AT G-054. The counter is still alive with the shaft subtracted, which is the
+    // whole job of this arm; the after arm beside it is still 0.
+    expect(before.throughWall).toBe(27);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 27, 0]);
     // AND IT IS A FALL IN THE SHARE AS WELL AS IN THE COUNT, which is the half a raw count
     // cannot say: 33/163 = 20.2% before, 16/191 = 8.4% after.
     expect(taken.throughWall * 163).toBeLessThan(33 * taken.moves);
@@ -521,14 +553,18 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
 
   it('and the fall HOLDS at four days, so it is the LAYOUT and not the sample', () => {
     const taken = cliCensus(['--days', '4', '--seed', '42']);
-    expect(taken.moves).toBe(1_220);
+    // 1,220 -> 1,320 AT G-054, and the ZERO beside it is the reading that matters: three
+    // bedrooms and one basement amenity give a guest nothing to spread across, so a per-guest
+    // tie-break has nothing to decide and the through-wall count stays where the spine put it.
+    expect(taken.moves).toBe(1_320);
     expect(taken.throughWall).toBe(0);
     expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 0, 0]);
     // AND THE FOUR-DAY BEFORE ARM TOO, so "holds at four days" is a pair at four days rather
     // than a level at four days beside a pair at two.
     const before = cliCensus(['--days', '4', '--seed', '42'], false);
-    expect(before.throughWall).toBe(47);
-    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 47, 0]);
+    // 47 -> 57 AT G-054, same reading as the two-day arm above.
+    expect(before.throughWall).toBe(57);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 57, 0]);
   });
 });
 

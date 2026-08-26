@@ -290,13 +290,21 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // and they are still doing work: 7,003 - 5,747 = 1,256, so the margin clause is 256 basis
     // points from failing rather than trivially true the way `2,500 - 0` was.
     // ==========================================================================================
-    expect(box.idleBasisPoints).toBe(5_747);
+    // 5,747 -> 5,914 AT G-054. The tie between equally-pressed needs is settled per guest now
+    // (`needTieBreakRank`, ADR-0078), so the stepped guest in this box no longer walks the
+    // three needs in one fixed order and spends 167 more basis points of its stay with nothing
+    // it can act on. **The two structural clauses at the foot are what carry the claim and
+    // both still hold**; the margin clause is 7,003 - 5,914 = 1,089, so it is 89 basis points
+    // from failing rather than 256 — closer, and still a real gap rather than a trivial one.
+    expect(box.idleBasisPoints).toBe(5_914);
     // THE CONTROL, SAME SITTING, SAME BOX, ONE DECLARATION APART. 271 was the reading this arm
     // pinned before G-041 and it is re-measured here rather than quoted (`CLAUDE.md` rule 3) —
     // the shaft still costs idleness, and the DIRECTION is the claim this pair exists for.
     const withoutTheShaft = stepTheBox(2, STAY * 3, 3, STAY, false);
     expect(withoutTheShaft.frames).toBe(box.frames);
-    expect(withoutTheShaft.idleBasisPoints).toBe(5_844);
+    // 5,844 -> 6,004 AT G-054, moving with the arm above and keeping the DIRECTION this pair
+    // exists for: the shaft still costs idleness.
+    expect(withoutTheShaft.idleBasisPoints).toBe(6_004);
     expect(withoutTheShaft.idleBasisPoints).toBeGreaterThan(box.idleBasisPoints);
     // AND THE TWO STRUCTURAL CLAUSES, WHICH SURVIVE ANY RE-PIN OF THE LITERAL ABOVE: the share
     // is under its derived ceiling, and it is under it by a margin rather than by a rounding.

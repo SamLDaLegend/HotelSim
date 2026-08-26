@@ -261,7 +261,12 @@ describe('THE LOWER CLIFF — 63, derived and then measured on the shipped table
     // vertical leg in it — so the deepest any need in this hotel gets is two ticks deeper. It
     // is still an order of magnitude inside the 129 + 198 bound above, which is the property
     // that arm asserts and the reason this literal is a sharpener rather than the claim.
-    expect(uncontended).toBe(78);
+    // 78 -> 88 AT G-054. Guests spread across the amenities instead of queueing at the
+    // alphabetically first one (`needTieBreakRank`, ADR-0078), so the deepest any need in the
+    // 60-room hotel gets is ten ticks deeper. **It is still an order of magnitude inside the
+    // 129 + 198 bound the arm above asserts**, which is the derived property; this literal is
+    // the sharpener, and it is re-pinned rather than widened.
+    expect(uncontended).toBe(88);
     // AND THE SIX-ROOM ARM STILL DOES NOT MOVE, at 179, THROUGH THE STAIRWELL AS WELL AS
     // THROUGH TRAVEL. The paragraph above calls that evidence rather than luck — its peak
     // belongs to guests queueing for a bed, and a guest nobody has given a room is going

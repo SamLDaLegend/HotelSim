@@ -207,7 +207,12 @@ describe('the I2 harness reaches the loan', () => {
     // demonstrates below** — every payment is the full instalment, none is capped by the till,
     // and striking the repayments out of the final world moves the hash.
     expect(repayments).toHaveLength(30);
-    expect(lastRepaymentTick).toBe(51_839);
+    // 51,839 -> 44,639 AT G-054. The hotel trades slightly differently — guests reach for
+    // different things first (`needTieBreakRank`, ADR-0078) — so the thirtieth repayment falls
+    // five simulated days earlier. **The claim is the one on the line above and it is unmoved:
+    // thirty repayments, spread ALL RUN LONG rather than clustered at the nightly settlement**,
+    // and 44,639 is still deep inside the run rather than at its start.
+    expect(lastRepaymentTick).toBe(44_639);
     // 3 — THE FINAL HASH CARRIES THEM. Not "a repayment happened" and not "one happened late":
     // the gate's own hash function, over the gate's own final world, moves when the repayment
     // entries are taken out of it. That is the claim the old bar was a proxy for.

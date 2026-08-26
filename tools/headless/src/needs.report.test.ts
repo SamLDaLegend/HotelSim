@@ -264,8 +264,15 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // line rather than a hotel in which the outcome was impossible. A goal that moves this
     // schedule should expect it to cross back.
     expect(departuresOf(summary, 'gaveUp')).toBe(214);
-    expect(departuresOf(summary, 'checkedOut')).toBe(255);
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(1);
+    // 255 -> 254 AT G-054, and the `leftDissatisfied` row below goes 1 -> 2. **The row this
+    // block calls "the thinnest this invocation has ever carried" got one event thicker**,
+    // which is the crossing the paragraph above predicted a schedule change would produce —
+    // recorded here because a prediction that is met is worth as much as one that is not. The
+    // cause is the need tie-break becoming per guest (`needTieBreakRank`, ADR-0078): a guest
+    // that reaches for a different thing first spends its stay differently, and one more of
+    // them walks out on a bed it was given.
+    expect(departuresOf(summary, 'checkedOut')).toBe(254);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(2);
     // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
     // the countdown, a guest that checked out had by definition completed its lodging need, so
     // the two columns were the same number. "Met" is now a BAND read at the moment of
@@ -294,7 +301,7 @@ describe('the criterion invocation prints a per-need table that measures somethi
     expect(lodging?.met).toBe(
       departuresOf(summary, 'checkedOut') + departuresOf(summary, 'leftDissatisfied'),
     );
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(1);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(2);
   });
 
   it('tells THREE DIFFERENT STORIES, which is what the criterion above needs to mean anything', () => {
@@ -401,7 +408,14 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // three rows still tell different stories and the spread is wider than one guest. What the
     // dial adds to the file's history is that provider COUNT, not provider distance, is what
     // decides a row when the population grows.
-    expect(engagement.map((row) => row.met)).toEqual([309, 319, 455]);
+    // [309, 319, 455] -> [299, 311, 460] AT G-054, AND THE ORDER OF THE THREE ROWS IS
+    // UNCHANGED. The tie between equally-pressed needs is settled per guest now
+    // (`needTieBreakRank`, ADR-0078) rather than by ascending content id, so comfort and
+    // entertainment give up ten and eight guests each to nourishment, which has two providers
+    // and can absorb them. **The claim this arm makes is the line above and it still holds** —
+    // three rows, three different stories, a spread far wider than one guest — and the reading
+    // the previous block adds still stands: provider COUNT is what decides a row.
+    expect(engagement.map((row) => row.met)).toEqual([299, 311, 460]);
     // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
     // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
     // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is

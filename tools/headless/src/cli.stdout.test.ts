@@ -250,7 +250,29 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // once and neither is a code change: `World.contentHash` moves because the content document
     // gained a field, and the run itself is genuinely different.
     // ==========================================================================================
-    stateHash: '110b25ef862153fb',
+    // ==========================================================================================
+    // THE THREE ENGAGEMENT ROWS MOVED AT G-054, AND THIS DOCUMENT IS WHERE THE GOAL IS EASIEST
+    // TO READ. Paired, one sitting, the two arms one character apart in `reserve`
+    // (`pressure <` against `pressure <=`), exact deterministic counts on this exact invocation:
+    //
+    //     comfort         22 met /  5 unmet,   944 unserved ticks  ->  17 / 10,  1,573
+    //     entertainment   22 met /  5 unmet, 1,026 unserved ticks  ->  19 /  8,  1,371
+    //     nourishment     16 met / 11 unmet, 1,476 unserved ticks  ->  23 /  4,    798
+    //
+    // **NOURISHMENT WENT FROM WORST-SERVED TO BEST-SERVED, AND THAT IS THE DESIGN REASSERTING
+    // ITSELF RATHER THAN A NUMBER MOVING.** It is the one need with TWO routes — the café is a
+    // room and the vending machine is an item — so on a hotel this starved it ought to be the
+    // best-served row, and ADR-0078 recorded that it was the WORST and called the mechanism
+    // "inverted". The inversion was the tie-break: every guest reached for `guest_comfort`
+    // first because `guest_comfort` sorts first, and nourishment was pursued only by guests
+    // that had already got the other two. With the tie settled per guest
+    // (`needTieBreakRank`), supply decides again and the row order follows provider count.
+    //
+    // The `stateHash` moves for ONE cause and it is that behaviour change: no content moved,
+    // no `World` field was added, `SAVE_SCHEMA_VERSION` is unchanged at 23 and no migration is
+    // owed. Everything structural in this document is untouched.
+    // ==========================================================================================
+    stateHash: '0cb08d18d7dc0bbc',
   },
   guests: {
     arrived: 32,
@@ -458,9 +480,12 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // there is ONE arm chair in this hotel and it now serves a third more guests, so its share
     // more than doubles. Rooms scale with parties; a single item does not.
     // ==========================================================================================
-    { needId: 'guest_comfort', lodging: false, met: 22, unmet: 5, metByItem: 22, abandoned: 0, unservedTicks: 944, instanceTicks: 12_420 },
-    { needId: 'guest_entertainment', lodging: false, met: 22, unmet: 5, metByItem: 0, abandoned: 0, unservedTicks: 1_026, instanceTicks: 12_420 },
-    { needId: 'guest_nourishment', lodging: false, met: 16, unmet: 11, metByItem: 4, abandoned: 0, unservedTicks: 1_476, instanceTicks: 12_420 },
+    // MOVED AT G-054 — the paired before/after and the reason nourishment overtakes the other
+    // two are at `stateHash` above. `instanceTicks` is UNMOVED at 12,420 on every row, which is
+    // what says the population is the same and only its choices differ.
+    { needId: 'guest_comfort', lodging: false, met: 17, unmet: 10, metByItem: 17, abandoned: 0, unservedTicks: 1_573, instanceTicks: 12_420 },
+    { needId: 'guest_entertainment', lodging: false, met: 19, unmet: 8, metByItem: 0, abandoned: 0, unservedTicks: 1_371, instanceTicks: 12_420 },
+    { needId: 'guest_nourishment', lodging: false, met: 23, unmet: 4, metByItem: 6, abandoned: 0, unservedTicks: 798, instanceTicks: 12_420 },
     { needId: 'night_rest', lodging: true, met: 6, unmet: 21, metByItem: 0, abandoned: 0, unservedTicks: 4_020, instanceTicks: 12_420 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -670,9 +695,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     // G-038a-iii-b re-records all three again, and the `night_rest` line below is STILL the
     // control at 3472 bp: the stairwell moves how a guest travels and nothing about how many
     // beds there are. See the JSON golden's need-row block for the mechanism.
-    'need       guest_comfort 22 met, 5 unmet (0 by room, 22 by item), 0 abandoned, 760 bp unserved',
-    'need       guest_entertainment 22 met, 5 unmet (22 by room, 0 by item), 0 abandoned, 826 bp unserved',
-    'need       guest_nourishment 16 met, 11 unmet (12 by room, 4 by item), 0 abandoned, 1188 bp unserved',
+    // The three rows below move at G-054 — see the note at `stateHash` above for the paired
+    // before/after and why nourishment overtaking the other two is the finding.
+    'need       guest_comfort 17 met, 10 unmet (0 by room, 17 by item), 0 abandoned, 1266 bp unserved',
+    'need       guest_entertainment 19 met, 8 unmet (19 by room, 0 by item), 0 abandoned, 1103 bp unserved',
+    'need       guest_nourishment 23 met, 4 unmet (17 by room, 6 by item), 0 abandoned, 642 bp unserved',
     'need L     night_rest 6 met, 21 unmet (6 by room, 0 by item), 0 abandoned, 3236 bp unserved',
     // G-023b-ii: one guest moves 2 -> 3 and the mean rises with it. See the JSON golden's
     // distribution above for why a hotel whose guests must now WALK reviews slightly better.
@@ -807,7 +834,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // `seededStock` is `supplementsCapital`, which is what every build before this goal did, so
     // the same 6 valid rooms, the same 32 arrivals, the same 6/21 split, the same four need rows
     // to the basis point, the same 9 transactions, the same 51,000p and the same 527,000p.
-    'state hash  110b25ef862153fb',
+    'state hash  0cb08d18d7dc0bbc',
   ].join('\n') + '\n';
 
 /**
@@ -983,7 +1010,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  110b25ef862153fb']);
+    expect(differing).toEqual(['seed        42', 'state hash  0cb08d18d7dc0bbc']);
     expect(lines43).toContain('seed        43');
   });
 });

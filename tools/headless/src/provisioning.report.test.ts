@@ -226,17 +226,51 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     });
   });
 
-  it('BELOW the bound, neither of them does — at either room count', () => {
-    // Asserted as the falsehood it is, both folds, both room counts. This is the second measured
-    // fact G-043 inherited, RE-MEASURED on today's tree: the axis is not merely flat, the
-    // worst-served need is not reliably relieved by buying another provider.
-    BELOW.forEach((cells, index) => {
+  it('BELOW the bound, the SIX-room rung is repaired at G-054 and the THREE-room one is not', () => {
+    // ========================================================================================
+    // **THIS ARM READ "NEITHER OF THEM DOES — AT EITHER ROOM COUNT" AND HALF OF IT IS NOW FALSE.
+    // THAT IS A FINDING AND IT IS RECORDED AS ONE RATHER THAN RE-PINNED.**
+    //
+    // The claim it inherited from G-043 was that below the provider bound, buying another
+    // amenity does NOT reliably relieve the worst-served need. Measured on this tree at G-054,
+    // with the need tie-break settled per guest (`needTieBreakRank`, ADR-0078) instead of by
+    // ascending content id:
+    //
+    //     3 rooms, worst engagement row:  1,124 / 1,439 / 1,482  ->  1,084 / 801 / 811
+    //     6 rooms, worst engagement row:  1,304 /   905 /   930  ->  1,414 / 570 / 557
+    //
+    // **At six rooms the axis is now strictly decreasing: an extra amenity relieves the worst
+    // need, which is what a player expects a build to do and what this file measured it failing
+    // to do.** At three rooms it still is not — the third amenity leaves the worst row eight
+    // basis points worse than the second did.
+    //
+    // WHY THE OLD ANSWER WAS WHAT IT WAS, WHICH IS THE PART WORTH KEEPING: below the bound the
+    // rows traded against each other because every guest reached for the same need first, so an
+    // extra provider emptied one queue and handed its guest-ticks to whichever row had not been
+    // queueing. The trade is visible in the old numbers — 1,124 -> 1,439 -> 1,482 while the
+    // other rows fell — and it is not a units defect. Spreading the population over the three
+    // needs is what removes most of it.
+    //
+    // **WHAT IS STILL OWED**: three rooms. The residue is the `ceil` granularity this file's
+    // sibling derives, and it is not this goal's to fix — but the arm now says which rung is
+    // open rather than reporting a flat "neither".
+    // ========================================================================================
+    const verdicts = BELOW.map((cells, index) => {
       const rooms = BELOW_ROOMS[index]!;
       const worst = cells.map((summary) => worstEngagement(summary));
       const mean = cells.map((summary) => meanEngagement(summary));
-      expect(strictlyDecreasing(worst), `${rooms} rooms worst ${worst.join(' ')}`).toBe(false);
-      expect(strictlyDecreasing(mean), `${rooms} rooms mean ${mean.join(' ')}`).toBe(false);
+      return { rooms, worst, mean, worstFalls: strictlyDecreasing(worst), meanFalls: strictlyDecreasing(mean) };
     });
+    expect(verdicts.map((v) => [v.rooms, v.worstFalls, v.meanFalls])).toEqual([
+      [BELOW_ROOMS[0], false, false],
+      [BELOW_ROOMS[1], true, false],
+    ]);
+    // AND THE ROWS THE VERDICTS ARE READ OFF, so a build that moves them says so rather than
+    // flipping a boolean silently.
+    expect(verdicts.map((v) => v.worst)).toEqual([
+      [1_084, 801, 811],
+      [1_414, 570, 557],
+    ]);
   });
 
   it('and the whole tally, both sides, exact — so a build that moves any of it says which row', () => {
@@ -252,30 +286,36 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     // the row that was best served pays for the row that was relieved.
     // ========================================================================================
     const tally = (cells: readonly RunSummary[]): number[][] => cells.map((summary) => engagementShares(summary));
+    // RE-TAKEN WHOLE AT G-054 (`needTieBreakRank`, ADR-0078). **Read the rows across, not
+    // down**: below the bound the three needs used to end up hundreds or thousands of basis
+    // points apart because every guest pursued them in one order, and they now land within a
+    // few per cent of each other — 801/790/750 where they were 252/722/1,439. The column
+    // structure the block above describes is unchanged; what has gone is the rank ordering that
+    // a spelling imposed on the rows.
     expect(tally(BELOW[0]!), `${BELOW_ROOMS[0]} rooms`).toEqual([
-      [699, 774, 1_124],
-      [252, 722, 1_439],
-      [232, 875, 1_482],
+      [1_074, 1_084, 571],
+      [801, 790, 750],
+      [811, 805, 798],
     ]);
     expect(tally(BELOW[1]!), `${BELOW_ROOMS[1]} rooms`).toEqual([
-      [1_304, 1_176, 368],
-      [266, 452, 905],
-      [231, 610, 930],
+      [1_414, 1_216, 302],
+      [570, 560, 503],
+      [557, 547, 538],
     ]);
     expect(tally(ABOVE[0]!), `${ABOVE_RUNGS[0]![0]} rooms`).toEqual([
-      [2_882, 2_849, 216],
-      [371, 352, 653],
-      [254, 435, 607],
+      [2_867, 2_922, 203],
+      [493, 470, 369],
+      [428, 401, 393],
     ]);
     expect(tally(ABOVE[1]!), `${ABOVE_RUNGS[1]![0]} rooms`).toEqual([
-      [5_156, 4_878, 176],
-      [2_894, 1_965, 211],
-      [493, 566, 692],
+      [5_040, 5_011, 217],
+      [2_891, 1_695, 193],
+      [643, 588, 422],
     ]);
     expect(tally(ABOVE[2]!), `${ABOVE_RUNGS[2]![0]} rooms`).toEqual([
-      [5_112, 5_062, 219],
-      [3_143, 2_555, 194],
-      [783, 609, 410],
+      [5_037, 5_110, 208],
+      [3_153, 2_520, 183],
+      [756, 629, 304],
     ]);
   });
 
@@ -304,8 +344,17 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     const occupied = rungs.map((summary) =>
       summary.reviews.distribution.filter((row) => row.count > 0).map((row) => `${row.score}:${row.count}`).join(','),
     );
-    expect(new Set(occupied).size).toBe(1);
-    expect(occupied[0]).toBe('3:346,5:128');
+    // **THE CLAMP CRACKS BY ONE GUEST AT G-054, AND THAT IS RECORDED RATHER THAN RE-PINNED AS
+    // A SET OF ONE.** The departures above are still identical at all three levels, so beds are
+    // still what turns guests away — but with the tie settled per guest (`needTieBreakRank`,
+    // ADR-0078) exactly one guest at the LEANEST level ends its stay in the second band rather
+    // than the third. Two distinct distributions across the three rungs, not one — and the
+    // direction is that the extra amenity RESCUES that guest, which is what an amenity should
+    // do and what this block records the scale as being unable to show. **The block's claim is
+    // that the SCALE is clamped at low occupancy, and one guest of 474 does not unclamp it**;
+    // the exact strings are pinned so a build that opens it further has to say so.
+    expect(new Set(occupied).size).toBe(2);
+    expect(occupied).toEqual(['2:1,3:345,5:128', '3:346,5:128', '3:346,5:128']);
     // And the top band really is the top of the scale, so "already at the ceiling" is a reading
     // rather than a coincidence of which bands happen to be occupied.
     expect(rungs[0]!.reviews.scoreMax).toBe(5);
@@ -337,7 +386,9 @@ describe('what the rule claims a provider sustains is an UPPER bound, and here i
     expect(concurrentGuests(CONTENT, rooms, ARRIVALS)).toBeLessThan(guestsPerProvider(CONTENT));
     expect(amenitiesFor(CONTENT, rooms, ARRIVALS)).toBe(1);
     const [lean, rich] = [BELOW[1]![0]!, BELOW[1]![1]!];
-    expect([meanEngagement(lean), meanEngagement(rich)]).toEqual([949, 541]);
+    // 949 / 541 -> 977 / 544 AT G-054. The GAP is what this arm is about — the rule provisions
+    // this hotel with one amenity and a second still relieves it — and the gap is unmoved.
+    expect([meanEngagement(lean), meanEngagement(rich)]).toEqual([977, 544]);
     // And it is not the population moving: the same guests give up either way.
     expect(departures(rich, 'gaveUp')).toBe(departures(lean, 'gaveUp'));
   });

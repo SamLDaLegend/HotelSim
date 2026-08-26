@@ -584,11 +584,14 @@ describe('a guest pursues the need that has drawn down most of its own capacity'
   //
   //   ranks by the FRACTION spent   -> `utility.test.ts`, on `pressureBasisPoints`
   //   an exact tie goes to the lower need id
-  //                                 -> the two behavioural tests below, which is a stronger
-  //                                    place for it: the tie is now resolved by `reserve`
-  //                                    walking the vector in ascending id, so a unit test on
-  //                                    a deleted comparator would have pinned nothing the
-  //                                    guest loop actually does
+  //                                 -> WITHDRAWN AT G-054. That rule starved the
+  //                                    alphabetically last need 3.3x (ADR-0078); the tie is
+  //                                    settled per guest by `needTieBreakRank` now, and the
+  //                                    live statement is `utility.needtie.test.ts` plus
+  //                                    `needtie.rename.test.ts` in tools/headless. The
+  //                                    behavioural tests below still pin that the tie is
+  //                                    resolved inside `reserve` rather than by whatever
+  //                                    order the vector was written down in.
   //   the ordering is independent of how the vector was written down
   //                                 -> `formNeedVector`'s ascending order, already asserted
   //                                    above, plus `utility.test.ts`'s two insertion orders
@@ -607,7 +610,8 @@ describe('a guest pursues the need that has drawn down most of its own capacity'
     // the guest is in the games room, and the guest RETURNS. One guest, one stay, two visits.
     let world = stepTick(hotel(), content, [arrive]);
     // Both are equally urgent on the tick it walks in — 20 of 200 and 40 of 400 are the same
-    // fraction — so the tie goes to the lower id and it eats first.
+    // fraction — so the tie goes to this guest's `needTieBreakRank`, and for this guest it
+    // eats first. Pinned as an observation, not as a rule: see the withdrawal note above.
     expect(only(world).engagement?.needId).toBe('food');
 
     const visits: string[] = ['food'];

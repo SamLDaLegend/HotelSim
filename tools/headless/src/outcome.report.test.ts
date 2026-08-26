@@ -348,7 +348,14 @@ describe('summary schema 4, and what an older consumer does with it', () => {
       // share can still disagree about a hotel. The re-derived rates changed which need this
       // invocation leaves behind, exactly as travel and the stairwell each did before them, and
       // `night_rest` is the row that has been in this list through all three.
-    ).toEqual(['guest_nourishment', 'night_rest']);
+      // `guest_nourishment` DROPS OUT AT G-054, AND THE COUNT IS BACK TO ONE. The tie between
+      // equally-pressed needs is settled per guest now (`needTieBreakRank`, ADR-0078), so this
+      // invocation no longer leaves one engagement need behind: nourishment's pooled share and
+      // its `met` column stop disagreeing because its guests stop being a distinct sub-population
+      // that only reached it last. **The arm's message fires at ZERO and this is ONE**, so the
+      // claim stands where it is — but the margin the search bought is now spent, and the next
+      // goal that moves this invocation's service picture will have to find a new witness.
+    ).toEqual(['night_rest']);
   });
 
   it('THE RENAMED REASONS ARE ABSENT FROM v3, NOT ZERO — the property THIS bump exists for', () => {
@@ -703,12 +710,20 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     expect(count('evictedRoomUnusable')).toBe(1);
     // The two rows that still have headroom, for contrast — and `checkedOut`, which no longer
     // does, pinned exactly rather than under a bound it would have to be given to clear.
-    expect(count('checkedOut')).toBe(16);
+    // 16 -> 50 AT G-054, AND THIS ROW GETS ITS HEADROOM BACK. **Three times as many guests
+    // complete a stay on the same schedule** because the tie between equally-pressed needs is
+    // settled per guest (`needTieBreakRank`, ADR-0078) instead of by ascending content id, so
+    // the hotel's amenities serve a wider slice of the population instead of the same slice
+    // repeatedly. The block above records the threshold NOT being lowered to keep this row
+    // interesting; it did not have to be, and that is worth reading beside the refusal.
+    expect(count('checkedOut')).toBe(50);
     expect(count('gaveUp')).toBeGreaterThan(50);
     expect(count('evictedRoomGone')).toBeGreaterThan(1);
     // AND THE ROW THAT ABSORBED THEM, so the collapse above is visibly a SHIFT rather than a
     // loss: the five reasons still sum to the departures the conservation law counts.
-    expect(count('leftDissatisfied')).toBe(1_635);
+    // 1,635 -> 1,603 AT G-054: the 34 extra checkouts come out of here, which is the shift
+    // this line exists to make visible.
+    expect(count('leftDissatisfied')).toBe(1_603);
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 16,946ms
 
   it('and the numbers close, through a real process rather than in-memory', () => {

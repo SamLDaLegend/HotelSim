@@ -130,12 +130,17 @@ describe('the I2 harness reaches rooms that do not work', () => {
       noDoor: 3,
       unplaced: 0,
       unreachable: 0,
-      unsupported: 42,
+      // 42 -> 41 AT G-054. The tie between equally-pressed needs is settled per guest now
+      // (`needTieBreakRank`, ADR-0078), so guests spend their money and their stays slightly
+      // differently, the player's build cadence lands on a different balance, and one fewer
+      // room ends up floating. **The claim is that every reason is still PRODUCED**, which the
+      // tally beside it carries; the literals are here so a reason that dies is a red line.
+      unsupported: 41,
     });
   });
 
   it('contains rooms with nothing beneath them', () => {
-    expect(tally.unsupported).toBe(42);
+    expect(tally.unsupported).toBe(41);
   });
 
   it('contains rooms with no bed in them — AND THE COUNT IS ONE, which is a knife edge', () => {
@@ -400,7 +405,9 @@ describe('the replay is the thing the gate runs', () => {
     // a richer hotel is a hotel with more `unsupported` rooms — which is ADR-0009's trap being
     // paid for out of the party dial, and the same reading `cli.stdout.test.ts`'s build arm
     // records at a third of the size.
-    expect(tally.unsupported).toBe(82);
+    // 82 -> 80 AT G-054, same cause as the 42 -> 41 above and the same claim beside it: the
+    // reason is still being produced at the gate's own horizon, which is what this arm asserts.
+    expect(tally.unsupported).toBe(80);
     expect(tally.unplaced).toBe(0);
   });
 

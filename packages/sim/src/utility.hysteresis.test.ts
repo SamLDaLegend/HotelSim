@@ -192,9 +192,17 @@ const rulesWithoutMargin: readonly GuestRulesData[] = [
 /**
  * The standard hotel of this file: a bedroom, a provider of `aaa` and a provider of `bbb`.
  *
- * `aaa` sorts before `bbb`, so a guest whose needs are all at zero pressure engages `aaa`
- * first — needs are walked in ascending id and the loop keeps the incumbent on a tie. That
- * makes `aaa` the INCUMBENT in every case below without anything having to arrange it.
+ * A guest whose needs are all at zero pressure engages `aaa` first, which makes it the
+ * INCUMBENT in every case below without anything having to arrange it.
+ *
+ * WHY IT IS `aaa` CHANGED AT G-054 AND THE OUTCOME DID NOT. It used to be structural — needs
+ * were walked in ascending id and the loop kept the incumbent on a tie, so the alphabetically
+ * first need led for every guest in every hotel, which is the defect ADR-0078 measured. The
+ * tie now goes to the lower `needTieBreakRank(guest.id, i)`, and for the single guest this
+ * file runs it still falls to `aaa`. **That is an observation about one guest id and not a
+ * property**: a file that needed `aaa` to lead for a REASON would have to arrange it, and the
+ * assertions below do not need it — they are about what the margin does once an incumbent
+ * exists, whichever one it is.
  */
 const twoNeeds = (margin: number | undefined, extra: Partial<SimContent> = {}): BoundContent =>
   bindContent({
@@ -381,10 +389,18 @@ describe('the boundary: a gap of margin - 1 keeps the engagement, a gap of margi
 //  CRITERION 4 — TIES AMONG CHALLENGERS THAT BOTH CLEAR THE MARGIN.
 // ============================================================================
 
-describe('two challengers tied on pressure, both clearing the margin: the LOWER NEED ID wins', () => {
+describe('two challengers tied on pressure, both clearing the margin: neither ORDER decides', () => {
   // THE TIE THIS GOAL INTRODUCES, which is not the one G-014a pinned. G-014a settled two
   // PROVIDERS of one need; this settles two NEEDS that are equally desperate and equally
   // available, at the moment a guest decides to walk out on a third.
+  //
+  // THIS BLOCK WAS TITLED "the LOWER NEED ID wins" UNTIL G-054, AND THAT RULE IS GONE. A need
+  // id is a spelling, and settling every tie in the hotel by one starved the alphabetically
+  // last need 3.3x (ADR-0078). The tie now goes to the lower `needTieBreakRank(guest.id, i)`,
+  // so it is settled per GUEST. **What this block is actually for survives that change
+  // untouched, and it is the more valuable half**: neither the order the needs are DECLARED
+  // in nor the order the providers are SPAWNED in may decide anything. All four arms below
+  // still have to agree with each other; which need they agree ON is the part that moved.
   const content = (declarationOrder: readonly NeedTypeData[]): BoundContent =>
     bindContent({
       roomTypes: [
@@ -403,7 +419,7 @@ describe('two challengers tied on pressure, both clearing the margin: the LOWER 
   // TWO KINDS OF ORDER, AND BOTH ARE MEANINGFUL HERE. The order the needs are DECLARED in
   // decides nothing (`bindContent` normalises), and the order the providers are SPAWNED in
   // decides their entity ids. Neither may decide which need the guest reaches for; only the
-  // need id may. One order alone cannot tell "lowest need id" from "first found".
+  // guest's own rank may. One order alone cannot tell a rank from "first found".
   const orders: readonly (readonly Command[])[] = [
     [spawn('roomB', 4), spawn('roomC', 6)],
     [spawn('roomC', 6), spawn('roomB', 4)],
@@ -417,7 +433,7 @@ describe('two challengers tied on pressure, both clearing the margin: the LOWER 
       ['B then C', orders[0]!],
       ['C then B', orders[1]!],
     ] as const) {
-      it(`needs declared ${declaredAs}, providers spawned ${spawnedAs}: the guest goes to bbb`, () => {
+      it(`needs declared ${declaredAs}, providers spawned ${spawnedAs}: the guest goes to ccc`, () => {
         const bound = content(declared);
         const world = build(bound, spawn('bedroom', 0), spawn('roomA', 2), ...providers);
         // Both challengers wait side by side from the same tick, so their pressures are equal
@@ -430,7 +446,12 @@ describe('two challengers tied on pressure, both clearing the margin: the LOWER 
         // decaying untouched from the same want line, so neither is ahead of the other and the
         // tie is a real tie rather than a rounding artefact.
         expect(bbb.deficit).toBe(ccc.deficit);
-        expect(engagedKind(served, guest)).toBe('roomB');
+        // `ccc` RATHER THAN `bbb` SINCE G-054, AND IT IS A LITERAL RATHER THAN A CALL TO
+        // `needTieBreakRank`. Recomputing the rank here would assert the implementation
+        // against itself and pass for any rank function, including a broken one; a literal
+        // says what the shipped rule does to THIS guest and goes red if the rule moves. The
+        // claim that matters is that all four arms below reach the same answer.
+        expect(engagedKind(served, guest)).toBe('roomC');
         expect(abandonCountOf(guest, 'aaa')).toBe(1);
       });
     }

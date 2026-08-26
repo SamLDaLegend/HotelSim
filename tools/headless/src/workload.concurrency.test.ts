@@ -255,7 +255,15 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // the campaign is NOT re-taken. `workload.mjs` carries the five slots, and the reading a
     // reader should notice is that a third more guests moved this hotel's occupancy by six per
     // cent: sixty bedrooms behind one amenity are bound by service, not by beds.
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_275);
+    // 1275 -> 1258 AT G-054, RE-TAKEN **ALONE** again (ADR-0058), because an exact tie between
+    // equally-pressed needs is settled per guest now (`needTieBreakRank`, ADR-0078) instead of
+    // by ascending content id, so these sixty guests no longer queue at the one amenity in the
+    // same order. No content moved and no dial moved. The bound is NOT re-derived and the
+    // campaign is NOT re-taken. **-1.3% is the smallest move this constant has made, and the
+    // reason is worth reading**: this workload is sixty bedrooms behind ONE amenity, so almost
+    // nobody is served whatever they reach for first, and the tie-break has next to nothing to
+    // decide. `workload.mjs` carries the five slots.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_258);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -564,7 +572,17 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     // once service binds, a faster cadence stops buying residents. **The census's point is
     // untouched and is the two inequalities below** — one tick either side is a different hotel,
     // and it now moves the reading by 14 and 24 hundredths.
-    expect([below, here, above], readings).toEqual([1_261, 1_275, 1_251]);
+    // 1261 / 1275 / 1251 -> **1252 / 1258 / 1259 AT G-054, AND THE SHAPE CHANGES A THIRD TIME.**
+    // The shipped cadence is back to being the middle of a RISING sequence, and the sensitivity
+    // has collapsed to 6 and 1 hundredths from 14 and 24. Cause: the need tie-break is settled
+    // per guest now (`needTieBreakRank`, ADR-0078) rather than by ascending content id, so the
+    // sixty guests of this hotel no longer queue at the SAME single amenity in the same order.
+    // **The census's claim is undamaged and the +1 side is where to look if it ever breaks**: at
+    // one hundredth of a guest, the inequality below is one arrival command away from being an
+    // equality, which would make the shipped cadence indistinguishable from its neighbour. That
+    // is a claim about THIS workload's sensitivity, not about the tie-break, and it is recorded
+    // here so a future re-take reads it as a narrowing margin rather than as a surprise.
+    expect([below, here, above], readings).toEqual([1_252, 1_258, 1_259]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
     // either side is a different hotel. Stated as the two inequalities that ARE the claim — see
     // the block above for why the set-size spelling came out.

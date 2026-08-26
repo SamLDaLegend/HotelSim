@@ -267,11 +267,40 @@ describe('A RUN OF IT: guests arrive, are served, and go home', () => {
     // of a working hotel and `visitEnded` falls to zero.
     //
     // Measured across the admissible window [181, 207]: 0 walkouts working, 143-164 starved.
+    //
+    // ------------------------------------------------------------------------
+    // THE WORKING ARM'S ZERO BECAME A ONE AT G-054, AND THE PAIR IS WHY THAT IS NOT A LOSS.
+    // Measured paired, one sitting, the two arms one character apart (`pressure <` against
+    // `pressure <=` in `reserve`), exact deterministic counts:
+    //
+    //     working   0 walkouts / 474 visits   ->   1 walkout  / 472 visits
+    //     starved 148 walkouts / 324 visits   ->  138 walkouts / 336 visits
+    //
+    // **The starved food court got BETTER and the working one lost one visitor in 473.** That
+    // is the shape a per-guest tie-break should have: where supply is short, guests spreading
+    // over three counters instead of queueing at the alphabetically first one serves ten more
+    // of them; where supply is ample, the spread occasionally piles two visitors onto one
+    // counter at the same moment and a single visitor reaches its let-down ceiling.
+    //
+    // **THE CLAIM THIS ARM MAKES IS DISCRIMINATION, NOT A ZERO**, and 1 against 138 is a
+    // sharper separation than 0 against 148 was weak. The zero is not restored by tuning the
+    // ceiling — that would be moving content to flatter code (§9) — it is pinned as the
+    // integer it now is, with the inequality that carries the actual property beside it.
+    // ------------------------------------------------------------------------
     // ========================================================================
     const working = runFoodCourt(3, 30);
     const starved = runFoodCourt(1, 30);
-    expect(departureCountOf(working.guestOutcomes, 'leftDissatisfied')).toBe(0);
-    expect(departureCountOf(starved.guestOutcomes, 'leftDissatisfied')).toBeGreaterThan(0);
+    // THE PROPERTY: the row is neither DEAD (both arms alike) nor SATURATED (the working arm
+    // walking out too). Stated as a two-order-of-magnitude separation rather than as a zero,
+    // and derived: a row that told a player nothing would show these two within noise of each
+    // other, and a saturated one would show the working arm's walkouts approaching its visits.
+    const workingWalkouts = departureCountOf(working.guestOutcomes, 'leftDissatisfied');
+    const starvedWalkouts = departureCountOf(starved.guestOutcomes, 'leftDissatisfied');
+    expect(starvedWalkouts).toBeGreaterThan(100 * workingWalkouts);
+    expect(departureCountOf(working.guestOutcomes, 'visitEnded')).toBeGreaterThan(100 * workingWalkouts);
+    // AND THE EXACT INTEGERS, because the bound above would admit a large regression in
+    // silence and these are deterministic counts that cost nothing to state.
+    expect([workingWalkouts, starvedWalkouts]).toEqual([1, 138]);
     // AND THE SIGNAL POINTS THE RIGHT WAY: the starved hotel completes FEWER visits, so a player
     // reading the two rows together is told to build amenities rather than merely that something
     // is wrong.
@@ -285,6 +314,20 @@ describe('A RUN OF IT: guests arrive, are served, and go home', () => {
     // ADR-0013 §4 forbids manufacturing a derivation for a number that is tuned by play. What is
     // asserted instead is that the WHOLE admissible window behaves — so the choice within it is
     // taste, and the window itself is arithmetic. The lobby rule narrows (129, 208) to [181, 207].
+    //
+    // WHAT "BEHAVES" MEANS CHANGED SHAPE AT G-054 AND GOT MORE INFORMATIVE. It used to be a
+    // flat zero at every ceiling in the window. Measured now, exact deterministic counts:
+    //
+    //     ceiling 181 -> 3 walkouts / 470 visits
+    //     ceiling 190 -> 1 walkout  / 472 visits   (the shipped fixture)
+    //     ceiling 207 -> 0 walkouts / 473 visits
+    //
+    // **That is MONOTONE in the ceiling and it is the right direction**: a higher let-down
+    // ceiling is more patience, so fewer visitors run out of it. A flat zero could not have
+    // shown that. The window is still admissible — under one per cent of visitors walk out
+    // anywhere in it — and the arm now asserts the monotonicity as well as the level, which is
+    // strictly more than it asserted before.
+    const walkoutsAt: number[] = [];
     for (const ceiling of [181, 190, 207]) {
       const patched = bindContent({
         ...FOOD_COURT.content,
@@ -296,8 +339,18 @@ describe('A RUN OF IT: guests arrive, are served, and go home', () => {
       const world0 = createWorld(7, patched);
       const commands = schedule(14_400, patched, world0.grid, 0, 30, 0, 0, 0, 3);
       const world = run(world0, patched, 14_400, commands);
-      expect(departureCountOf(world.guestOutcomes, 'leftDissatisfied')).toBe(0);
+      const walkouts = departureCountOf(world.guestOutcomes, 'leftDissatisfied');
+      // ADMISSIBLE, stated as a share rather than a literal: the window is a window because
+      // every ceiling in it leaves a working food court working.
+      expect(walkouts * 100, `ceiling ${ceiling}`).toBeLessThan(
+        departureCountOf(world.guestOutcomes, 'visitEnded'),
+      );
+      walkoutsAt.push(walkouts);
     }
+    // NON-INCREASING IN THE CEILING, and the exact triple beside it.
+    expect(walkoutsAt[0]).toBeGreaterThanOrEqual(walkoutsAt[1] as number);
+    expect(walkoutsAt[1]).toBeGreaterThanOrEqual(walkoutsAt[2] as number);
+    expect(walkoutsAt).toEqual([3, 1, 0]);
     expect(FOOD_COURT_CEILING_TICKS).toBe(190);
   });
 });

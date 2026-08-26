@@ -100,7 +100,7 @@ import {
   validRoomsProviding,
 } from './validity.js';
 import type { ValidityContext } from './validity.js';
-import { abandonThresholdBasisPoints, pressureBasisPoints } from './utility.js';
+import { abandonThresholdBasisPoints, needTieBreakRank, pressureBasisPoints } from './utility.js';
 
 /**
  * Opaque guest handle. Monotonic, never reused, within a run or across a save — the
@@ -3681,6 +3681,11 @@ function reserve(
   const needTypes = needTypesInOrder(content);
   const maybeAligned = result.needs.length === needTypes.length;
   let bestPressure = bar;
+  // THE INCUMBENT'S RANK IS NEVER READ, so this initial value can never decide anything: the
+  // only path that compares against it requires `bestNeed` to be defined, and only a real
+  // candidate defines it. Zero rather than a sentinel because a sentinel would suggest
+  // otherwise.
+  let bestRank = 0;
   let bestNeed: NeedState | undefined;
   let bestProvider: Entity | null = null;
   for (let i = 0; i < result.needs.length; i += 1) {
@@ -3716,11 +3721,49 @@ function reserve(
     // resolving the type is the expensive part G-016 spent a goal making positional.
     if (!isNeedWanted(needType, need, wantAt, false)) continue;
     const pressure = pressureBasisPoints(needType, need);
-    // STRICTLY GREATER, so an exact tie keeps the need already held — and needs are walked
-    // in ascending id, so a tie is settled by the LOWER NEED ID. That is `compareNeedPriority`'s
-    // own tie rule, preserved deliberately rather than inherited: see the header note in
-    // `utility.ts` on why fit is not allowed to settle it.
-    if (pressure <= bestPressure) continue;
+    // ============================================================================
+    // THE TIE-BREAK, AND UNTIL G-054 IT WAS A SPELLING (ADR-0078).
+    //
+    // This line read `if (pressure <= bestPressure) continue;` — strictly greater, over a walk
+    // in ascending content-id order, so an EXACT tie kept the LOWER NEED ID. That is
+    // `compareNeedPriority`'s own tie rule, carried forward deliberately, and it was wrong for
+    // a reason nobody had looked for: the three shipped engagement needs have identical
+    // `capacityTicks` and `refillPerTick`, so they are exactly tied whenever none has been
+    // served — **the common case, not a corner** — and I2 forbids randomness, so the tie fell
+    // the same way for every guest, every cycle, for the life of the hotel. Renaming the three
+    // ids and changing nothing else moved `guest_nourishment` 3.3x; the alphabetically last
+    // need read 569-613 basis points unserved against the first one's 126-254.
+    //
+    // NOW: pressure still decides, and only an EXACT tie consults `needTieBreakRank`, which is
+    // a function of THIS GUEST as well as of the need. Across a population every need leads for
+    // about a third of guests. `utility.ts`'s docblock carries the two rejected candidates and
+    // the reason a rotation is not equivalent.
+    //
+    // THE THREE-WAY SPLIT IS NOT COSMETIC — read the ordering of these branches:
+    //
+    //   pressure  <  bestPressure   loses. `pressureBasisPoints`' order is untouched by this
+    //                               goal and nothing below can reorder two unequal pressures.
+    //   pressure === bestPressure   AND `bestNeed` is undefined: this is the INCUMBENT'S BAR,
+    //                               not a rival need. A challenger must EXCEED the bar to
+    //                               abandon (G-014b), so equality loses — and it must lose here
+    //                               rather than later, or `abandonThresholdBasisPoints` moves by
+    //                               one basis point and the hysteresis boundary shifts.
+    //   pressure === bestPressure   AND `bestNeed` is defined: a real tie between two
+    //                               candidates. Lower rank wins.
+    //
+    // AND THE PROVIDER LOOKUP STAYS BEHIND ALL OF IT, which is the property G-016 bought and
+    // this goal must not spend. A tie that loses on rank costs one `Math.imul` chain and no
+    // search. A tie that WINS on rank costs a search that the old code would not have made —
+    // but only after an earlier search already succeeded, which is the tick a guest engages on
+    // rather than every tick it spends waiting. Where nothing is free every candidate is
+    // searched under both rules, because a failed search leaves `bestPressure` untouched.
+    // ============================================================================
+    if (pressure < bestPressure) continue;
+    const rank = needTieBreakRank(guest.id, i);
+    if (pressure === bestPressure) {
+      if (bestNeed === undefined) continue;
+      if (rank >= bestRank) continue;
+    }
     // `result.roomEntityId` RATHER THAN `guest.roomEntityId`, AND THE DIFFERENCE IS ONE TICK
     // (G-036c). The lodging branch above may have just assigned a room to `result`, and reading
     // the parameter instead would mean a guest that checked in this tick could not use its own
@@ -3736,6 +3779,7 @@ function reserve(
     const provider = findFreeRoom(search, need.needId, false, result.roomEntityId, result.partyId, 1);
     if (provider === null) continue;
     bestPressure = pressure;
+    bestRank = rank;
     bestNeed = need;
     bestProvider = provider;
   }

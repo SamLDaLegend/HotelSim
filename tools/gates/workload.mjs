@@ -197,8 +197,37 @@ export const ROOMS = 60;
  * by this goal: a bare room serves at the FLOOR rather than the ceiling, and this workload's
  * rooms are bare. The party dial pushes in the opposite direction and by far less.
  * ===========================================================================================
+ * 1275 -> 1258 AT G-054, RE-TAKEN ALONE AGAIN, UNDER THE SAME ADR-0058 RULING. **-1.3%, and it
+ * is the smallest move this constant has ever made.**
+ *
+ * **THE FIVE SLOTS.** WHAT: concurrent guests in hundredths, as guest-frames divided by ticks —
+ * an exact deterministic integer count. WORKLOAD: `--rooms 60 --amenities 1 --arrivals 96
+ * --seed 42`, 30 simulated days, this file's own constants, run through `report.ts`'s schedule.
+ * SAMPLE COUNT: n = 1, which is the whole distribution — the quantity is deterministic, so one
+ * reading IS the distribution. AGGREGATION: none; one division, rounded once. REGIME: none
+ * applies — no clock is read.
+ *
+ * WHY IT MOVED: G-054 stopped settling an exact tie between equally-pressed needs by ascending
+ * content id and started settling it per guest (`needTieBreakRank`, ADR-0078). No content moved,
+ * no room count moved, no cadence moved: the guests of this hotel now reach for different things
+ * first, so they queue at different providers and their stays end fractionally sooner.
+ *
+ * **AND THE SIZE IS THE INTERESTING PART, AGAIN IN THE SAME DIRECTION AS THE G-040b-ii NOTE.**
+ * This workload is sixty bedrooms behind ONE amenity, so essentially nobody is served whatever
+ * they reach for first — **the tie-break has almost nothing to decide here, and -1.3% is what
+ * "almost nothing" reads as**. A goal that expects G-054 to move a starved hotel has the wrong
+ * model of it: the change acts on WHICH need goes unserved, and at one amenity the answer is
+ * still all of them. The hotels where it matters are the ones above the provider bottleneck,
+ * which this one is a long way below.
+ *
+ * **THE GAP AGAINST THE CAMPAIGN NARROWS FOR THE FIRST TIME AND `tripwire.mjs` PRINTS IT.** The
+ * bound campaign was taken at `occupancyWhenTaken: 872`; the gap was 46.2% at 872 -> 1275 and is
+ * 44.3% at 872 -> 1258. The bound STAYS at 1.4640 (ADR-0056, human) and is not re-derived, and
+ * the campaign is not re-taken — two of its three arms materialise their own committed content
+ * and cannot be re-taken at today's occupancy at all (ADR-0058).
+ * ===========================================================================================
  */
-export const TARGET_CONCURRENT_HUNDREDTHS = 1275;
+export const TARGET_CONCURRENT_HUNDREDTHS = 1258;
 
 /**
  * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.

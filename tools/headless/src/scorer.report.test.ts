@@ -176,13 +176,39 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     expect(rich.needs.map((row) => row.instanceTicks)).toEqual(lean.needs.map((row) => row.instanceTicks));
     expect(rich.input.amenities).toBe(lean.input.amenities + 1);
     expect(rich.rooms.valid).toBeGreaterThan(lean.rooms.valid);
-    // And the service really did improve, on the row the extra provider serves — folded from the
-    // report rather than quoted, so the arm cannot go stale the way ADR-0034's table did.
+    // And the two arms really are DIFFERENT hotels — folded from the report rather than quoted,
+    // so the arm cannot go stale the way ADR-0034's table did.
     const worstShare = (summary: RunSummary): number =>
       Math.max(...summary.needs.filter((row) => !row.lodging).map((row) => row.unservedTicks / row.instanceTicks));
-    expect(Math.min(...rich.needs.map((row) => row.unservedTicks))).toBeLessThan(
-      Math.min(...lean.needs.map((row) => row.unservedTicks)),
-    );
+    // ======================================================================================
+    // BOTH ENDS OF THIS PAIR FLIPPED AT G-054, IN OPPOSITE DIRECTIONS, AND THAT IS ONE FACT
+    // RATHER THAN TWO. Measured on this exact pair, three rooms, one amenity against two:
+    //
+    //     best-served row, raw unserved ticks   14,094  ->  18,502   (WORSE)
+    //     worst-served row, unserved share      0.1084  ->  0.0802   (BETTER)
+    //
+    // **The second amenity now COMPRESSES the vector instead of stretching it.** The old
+    // readings were the other way round and the block below explains why in the words it still
+    // uses: with the tie settled by ascending content id, one row was served almost
+    // continuously — its raw ticks were tiny and it is what `Math.min` was finding — while the
+    // row nobody reached carried the whole shortfall. Both of those rows were artefacts of the
+    // spelling. With the tie settled per guest (`needTieBreakRank`, ADR-0078) the three rows
+    // start close together and the extra provider pulls them closer.
+    //
+    // **THE CLAIM WORTH ASSERTING IS THEREFORE THE COMPRESSION, NOT EITHER END**, and it is
+    // asserted as the spread over the engagement rows. Two clauses that used to sit here are
+    // gone because each of them now pins the artefact rather than the property.
+    //
+    // **AND THE PAIR'S OWN SUBJECT IS UNTOUCHED**: the review mean still reads 354 on both arms,
+    // so a hotel whose service demonstrably improved scores identically. That is this file's
+    // standing finding about the review channel and G-054 sharpens it rather than repairing it.
+    // ======================================================================================
+    const engagementSpread = (summary: RunSummary): number => {
+      const shares = summary.needs.filter((row) => !row.lodging).map((row) => row.unservedTicks / row.instanceTicks);
+      return Math.max(...shares) - Math.min(...shares);
+    };
+    expect(engagementSpread(rich)).toBeLessThan(engagementSpread(lean));
+    expect(worstShare(rich)).toBeLessThan(worstShare(lean));
     expect(worstShare(rich)).toBeGreaterThan(0);
     // ========================================================================
     // THE CLAIM WENT FALSE AT G-041 AND IS RECORDED AS FALSE HERE, WITH ITS ARITHMETIC.
@@ -205,7 +231,10 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // three bedrooms hold six lodgers, which is still far under what one provider sustains, so
     // the second amenity still has nothing to serve and both arms still read 354.
     expect(concurrentGuests(3, 120)).toBeLessThan(SUSTAINED_BY_ONE_PROVIDER);
-    expect(worstShare(rich)).toBeGreaterThan(worstShare(lean));
+    // `expect(worstShare(rich)).toBeGreaterThan(worstShare(lean))` STOOD HERE AND IS INVERTED AT
+    // G-054 — see the block above. The extra provider no longer makes the worst need worse; it
+    // makes it better, by 282 basis points of share, and the review mean still does not notice.
+    expect(worstShare(rich)).toBeLessThan(worstShare(lean));
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 18,169ms
 
   it('and it moves at EVERY room count ABOVE WHAT ONE PROVIDER SUSTAINS (G-041)', () => {
@@ -377,7 +406,29 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
         'rung, whose 16 concurrent guests are the first on this grid to exceed what one ' +
         'provider sustains. A second fall, a bigger one, or one in another cell is a finding ' +
         'about the scorer and needs a measurement rather than a re-pin.',
-    ).toEqual(['room axis at 1 amenities, 6->12: -11']);
+      // -11 -> -15 AT G-054, SAME CELL, AND THE MESSAGE ABOVE DEMANDS A MEASUREMENT RATHER THAN
+      // A RE-PIN FOR A BIGGER FALL, SO HERE IT IS. Paired, one sitting, the two arms one
+      // character apart in `reserve`, at 12 rooms / 1 amenity / one arrival per 120 ticks, exact
+      // deterministic counts over 471 and 469 departures:
+      //
+      //     met/unmet   comfort 98/373 -> 109/360 . entertainment 109/362 -> 90/379
+      //                 nourishment 471/0 -> 469/0 . night_rest 471/0 -> 469/0
+      //     reviews     3:80  4:361 5:30   ->   3:93 4:362 5:14
+      //
+      // **THE TOP BAND HALVES AND NOTHING ELSE MOVES MUCH.** Nourishment is met for everybody in
+      // BOTH arms — it has two providers — and the two single-provider needs share about two
+      // hundred `met` between them either way. What changed is WHO gets both: under the old rule
+      // the guests that happened to arrive when the fixed order was clear got the whole vector,
+      // and thirty of them did; spreading the tie per guest spreads those helpings out, so more
+      // guests get two of three and fewer get all three.
+      //
+      // **THAT IS A PROPERTY OF THE REVIEW SCORER, NOT OF THE TIE-BREAK, AND IT IS THE FINDING**:
+      // the mean rewards CONCENTRATION of satisfaction in a few guests over the same total
+      // spread across many. Parked with its falsification test rather than acted on here — a
+      // hotel where one guest gets everything and nine get nothing should not out-score one
+      // where all ten get most of it, and today it does. **The cell is still under-provisioned
+      // and the player's repair is still one amenity**: the cell to its right reads 500.
+    ).toEqual(['room axis at 1 amenities, 6->12: -15']);
     // THE 30s DEFAULT WAS NOT ENOUGH UNDER `pnpm verify` AT G-041 and this is a DEADLOCK
     // DETECTOR rather than a performance bound — nothing here asserts a duration. This sweep
     // spawns nine child CLI runs, the file now also warms a three-run contended ladder, and the
@@ -582,7 +633,9 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     const rejected = at(6, 1);
     const occupied = rejected.reviews.distribution.filter((row) => row.count > 0);
     expect(occupied.map((row) => row.score)).toEqual([2, 3, 4, 5]);
-    expect(Math.min(...occupied.map((row) => row.count))).toBe(10);
+    // 10 -> 6 AT G-054. The contrast this arm wants is the rejected configuration failing the
+    // one-guest-per-simulated-day floor, and it fails it by more than it did.
+    expect(Math.min(...occupied.map((row) => row.count))).toBe(6);
     expect(Math.min(...occupied.map((row) => row.count))).toBeLessThan(rejected.world.days);
     // `expect(Math.min(...clearing.map(count)) > floor)` STOOD HERE AND IS GONE (ADR-0035).
     // `clearing` is DEFINED as the rows above the floor, so its minimum exceeding the floor
@@ -674,10 +727,36 @@ describe('THE FENCE HOLDS AND THE VERDICT MOVES — two claims, not one', () => 
     // the report calls fully met cannot also be the row it says went unserved for most of the
     // stay. Asserted as an ordering over the rows rather than as a figure.
     const control = at(6, 5);
-    const rows = [...control.needs].sort((a, b) => a.unservedTicks / a.instanceTicks - b.unservedTicks / b.instanceTicks);
-    for (let i = 1; i < rows.length; i += 1) {
-      expect(rows[i]!.met, `${rows[i]!.needId} vs ${rows[i - 1]!.needId}`).toBeLessThanOrEqual(rows[i - 1]!.met);
+    // ------------------------------------------------------------------------------------
+    // **THE ORDERING IS ASSERTED BETWEEN SEPARATED ROWS ONLY SINCE G-054, AND THE MARGIN IS
+    // DERIVED RATHER THAN CHOSEN.** The claim in the paragraph above is about a disagreement of
+    // TWO ORDERS OF MAGNITUDE — a row called fully met that the same line says went unserved for
+    // most of the stay — and the total order over all four rows was a proxy for it that only
+    // held while one row was starved by its spelling. Measured here now:
+    //
+    //     comfort 369 met, 517 bp . entertainment 361 met, 529 bp . nourishment 380 met, 539 bp
+    //     night_rest 256 met, 1,676 bp
+    //
+    // The three engagement rows sit within 22 basis points of each other — **`met` is a count of
+    // guests in a band and moves in whole guests out of 470, so it cannot resolve four per cent
+    // of a time integral, and requiring it to is requiring two aggregations to agree below the
+    // resolution of one of them.** The lodging row, which IS separated, agrees decisively.
+    //
+    // So the assertion is: where one row's unserved share is at least TWICE another's, its `met`
+    // must not exceed that row's. Twice is the order-of-magnitude claim taken at its weakest,
+    // and it is what the paragraph above says in words.
+    // ------------------------------------------------------------------------------------
+    const share = (row: (typeof control.needs)[number]): number => row.unservedTicks / row.instanceTicks;
+    let compared = 0;
+    for (const worse of control.needs) {
+      for (const better of control.needs) {
+        if (share(worse) < 2 * share(better)) continue;
+        expect(worse.met, `${worse.needId} vs ${better.needId}`).toBeLessThanOrEqual(better.met);
+        compared += 1;
+      }
     }
+    // A loop that compared nothing would pass in silence — the defect this repo produces.
+    expect(compared).toBe(3);
   });
 });
 
