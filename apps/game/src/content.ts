@@ -17,7 +17,15 @@
 // A failure here throws before a world exists, which is the same ordering `cli.ts:66` uses
 // and for the same reason — a half-loaded registry must never reach a tick.
 
-import { parseContent, parseEconomies, parseGuestRules, parseItemTypes, parseNeedTypes, parseSpeedLadder } from '@hotelsim/content';
+import {
+  parseContent,
+  parseEconomies,
+  parseGuestRules,
+  parseItemTypes,
+  parseNeedTypes,
+  parseScenarios,
+  parseSpeedLadder,
+} from '@hotelsim/content';
 import type { SpeedRung } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
@@ -27,6 +35,7 @@ import guestRulesJson from '@hotelsim/content/data/guest-rules.json';
 import itemTypesJson from '@hotelsim/content/data/item-types.json';
 import needTypesJson from '@hotelsim/content/data/need-types.json';
 import roomTypesJson from '@hotelsim/content/data/room-types.json';
+import scenariosJson from '@hotelsim/content/data/scenarios.json';
 import speedLadderJson from '@hotelsim/content/data/speed-ladder.json';
 
 /**
@@ -46,6 +55,11 @@ export function loadContent(): BoundContent {
     itemTypes: parseItemTypes(itemTypesJson, 'item-types.json'),
     economy: parseEconomies(economyJson, 'economy.json'),
     guestRules: parseGuestRules(guestRulesJson, 'guest-rules.json'),
+    // WHAT THE HOTEL OPENS WITH (G-057). Since that goal this is the only table declaring an
+    // opening balance, so omitting it here would give the renderer a hotel with no capital and
+    // the headless host one with 500,000p — two hosts disagreeing about the same content, which
+    // is the drift this file's header says the shared parsers exist to prevent.
+    scenarios: parseScenarios(scenariosJson, 'scenarios.json'),
   };
   return bindContent(registry);
 }

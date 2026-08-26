@@ -62,6 +62,7 @@ import {
   ITEM_TYPES_PATH,
   NEED_TYPES_PATH,
   ROOM_TYPES_PATH,
+  SCENARIOS_PATH,
 } from './content-loader.js';
 import {
   buildSummary,
@@ -550,7 +551,7 @@ describe('the same invocation through a real process', () => {
 describe('and the old control still holds under a SATURATING margin — the era before this goal', () => {
   const dir = mkdtempSync(join(tmpdir(), 'hotelsim-needs-era-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
-  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH]) {
+  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, SCENARIOS_PATH]) {
     copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
   }
   const rules = JSON.parse(readFileSync(GUEST_RULES_PATH, 'utf8')) as {

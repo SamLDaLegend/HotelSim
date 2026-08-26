@@ -31,6 +31,10 @@ export type {
   BoundContent,
   EconomyData,
   GuestRulesData,
+  // G-057 — HOTELSIM.md section 8's M4 hard prerequisite: what the hotel OPENS with, and what a
+  // room the host places FREE does to that number.
+  ScenarioData,
+  SeededStockPolicyData,
   ItemTypeData,
   NeedRole,
   NeedTypeData,
@@ -53,6 +57,11 @@ export {
   findRoomType,
   firstEconomy,
   firstGuestRules,
+  firstScenario,
+  isSeededStockPolicy,
+  SEEDED_STOCK_POLICIES,
+  seededStockDrawOf,
+  seededStockPolicyOf,
   firstRoomTypeProviding,
   fitOf,
   // G-038c. Exported for `demolitionRefundOf`'s reason: the harness reports what a floor cost

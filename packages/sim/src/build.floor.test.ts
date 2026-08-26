@@ -48,7 +48,6 @@ const roomType = (id: string, cost: number): RoomTypeData => ({
 const economy = (floorCost: number | undefined): EconomyData => ({
   id: 'houseEconomy',
   name: 'House Economy',
-  startingCapitalPence: 0,
   loanPrincipalPence: 300_000,
   loanFeeBasisPoints: 1_000,
   loanRepaymentPerNightPence: 10_000,

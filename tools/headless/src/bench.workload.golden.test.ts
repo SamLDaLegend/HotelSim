@@ -476,7 +476,20 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   departure table's SHAPE is eight rows rather than seven, which is the one thing about
     //   this bump that a consumer can see. `check:stamp` reads this literal out of the tree, so
     //   the digest's measure-golden line moves with it.
-    expect(hashState(plain)).toBe('6a3bc5aa1383196e');
+    //
+    // - `6a3bc5aa1383196e` -> `c0b590c8d85d0d9c` AT G-057, AND THE CAUSE IS `World.contentHash`
+    //   ALONE. `HOTELSIM.md` section 8's M4 hard prerequisite: the shipped content gained
+    //   `scenarios.json` and `economy.json` lost `startingCapitalPence`, so the content document
+    //   is a different document and fingerprints as one (G-002's design). **No `World` field, no
+    //   save bump, no migration, and NO BEHAVIOUR** — the shipped `seededStock` is
+    //   `supplementsCapital`, which is exactly what every build before this goal did, and the
+    //   opening balance is the same 500,000p at its new address. **checkedOut 22,
+    //   leftDissatisfied 64, still-in-the-hotel 14, conservation still closing on 100 arrived,
+    //   `gaveUp` and `evictedGuests` still zero**, and the departure table's eight-row shape is
+    //   untouched — all of which the outcome test below re-checks rather than this comment
+    //   asserting it. `check:stamp` reads this literal out of the tree, so the digest's
+    //   measure-golden line moves with it.
+    expect(hashState(plain)).toBe('c0b590c8d85d0d9c');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -861,7 +874,14 @@ describe('the same workload with the player churning the building', () => {
     // `1f87907208053fbe`, two new `World` fields and one new zero departure row (save v23), no
     // content and no behaviour. **20 + 43 + 24 + 13 still in the hotel = 100 arrived, exactly as
     // above**, and the new row is zero — this arm installs no lift either.
-    expect(hashState(churn)).toBe('1f87907208053fbe');
+    //
+    // G-057 MOVES THIS LITERAL FOR THE CONTENT DOCUMENT AND NOT FOR THE RUN:
+    // `1f87907208053fbe` -> `2af307ac42e1fb88`, one cause, `World.contentHash`. The shipped
+    // content gained `scenarios.json` and `economy.json` lost `startingCapitalPence`; the
+    // opening balance is the same 500,000p at its new address and the shipped `seededStock` is
+    // `supplementsCapital`, which is what the structural door always did. **20 + 43 + 24 + 13
+    // still in the hotel = 100 arrived, exactly as above**, and `gaveUp` is still zero.
+    expect(hashState(churn)).toBe('2af307ac42e1fb88');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

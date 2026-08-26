@@ -1904,10 +1904,12 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  * easy table and a hard one — are the shape this grows into at M6, and it costs nothing
  * to be that shape now.
  *
- *   startingCapitalPence        what the hotel opens with, booked as ONE `startingCapital`
- *                               transaction at tick 0. There is no `balance` field to set
- *                               (I4), so an opening balance can only exist as a
- *                               transaction — which is also why it is explained.
+ * WHAT THE HOTEL OPENS WITH IS NOT HERE ANY MORE (G-057). `startingCapitalPence` was the first
+ * field in this list until `HOTELSIM.md` section 8's M4 prerequisite was built; it is now
+ * `openingCapitalPence` on `scenarioSchema` below, because the economy is the HOUSE RULES and an
+ * opening balance is the SITUATION. See that docblock. The "per-scenario economies at M6" note
+ * above stands and is untouched: what wanted separating FIRST was the capital, not the economy.
+ *
  *   loanPrincipalPence          cash a draw provides. Deliberately ABOVE one room's
  *                               construction cost, or a loan drawn by a stuck player
  *                               leaves them still stuck.
@@ -2033,7 +2035,10 @@ export const guestRulesTableSchema = z.array(guestRulesSchema).min(1);
  * single night. The charge is only ever levied BY A BUILD, so the quantity that has to clear the
  * opening capital is the PAIR:
  *
- *     floorConstructionCostPence + cheapest constructionCostPence  >  startingCapitalPence
+ *     floorConstructionCostPence + cheapest constructionCostPence  >  openingCapitalPence
+ *
+ * (`openingCapitalPence` on `scenarioSchema`, and it was `economySchema`'s own `startingCapitalPence`
+ * until G-057. The inequality and both of its numbers are unchanged — only the address is.)
  *
  * Walking the whole multiples of the cheapest room, which is the unit a designer thinks in:
  *
@@ -2057,7 +2062,6 @@ export const floorConstructionCostPenceSchema = penceSchema.min(0).optional();
 export const economySchema = z.strictObject({
   id: contentIdSchema,
   name: z.string().min(1),
-  startingCapitalPence: penceSchema.min(0),
   loanPrincipalPence: penceSchema.min(0),
   loanFeeBasisPoints: basisPointsSchema,
   loanRepaymentPerNightPence: penceSchema.min(0),
@@ -2067,6 +2071,96 @@ export const economySchema = z.strictObject({
 
 /** The whole `economy.json` document. A top-level array, for the same reason. */
 export const economiesSchema = z.array(economySchema).min(1);
+
+/**
+ * WHAT A SEEDED ROOM DOES TO THE MONEY (G-057) — the choice the M4 prerequisite is about.
+ *
+ * `spawnEntity` is the STRUCTURAL door: it places a room free, and `demolishRoom` then refunds
+ * `demolitionRefundBasisPoints` of a construction cost nobody was charged. So a hotel handed to
+ * the player is also cash at the refund rate, and until this field existed nothing anywhere
+ * declared how much. That is the whole of `HOTELSIM.md` §8's M4 hard prerequisite.
+ *
+ *   supplementsCapital  the seeded hotel is a GIFT ON TOP of the declared capital. The opening
+ *                       position is `openingCapitalPence + (seeded rooms x their refund)`, so it
+ *                       moves with however many rooms the host chose to seed. This is what every
+ *                       build before G-057 did, and it is what the shipped scenario declares —
+ *                       explicitly, so the number is a decision rather than an accident.
+ *   drawnFromCapital    the seeded hotel is DRAWN FROM the declared capital, at the refund rate,
+ *                       as `startingCapital` lines in the ledger. The opening position is then
+ *                       exactly `openingCapitalPence` however many rooms are seeded — the hotel
+ *                       holds it in bricks instead of in cash, and scrapping converts it back.
+ *
+ * WHY THE SHIPPED VALUE IS `supplementsCapital`, MEASURED RATHER THAN ASSUMED (G-057). The other
+ * branch was built first and run against the whole suite: 35 tests in 9 files move, and four of
+ * them are PINNED EXIT CRITERIA of earlier goals — `layout.reach.player.report.test.ts`'s
+ * `unreachable` reaches 0, and `validity.report.test.ts`'s room-verdict census among them — which
+ * go vacuous rather than merely different, because a hotel seeded with 60 rooms opens 7,375,000p
+ * in the red and its player can then build NOTHING. A single global declared capital cannot serve
+ * both a bare-plot scenario and a 60-room bench arm; serving both needs a scenario the harness
+ * SELECTS, which is `PARKING.md`'s C1 and is ruled to M6. So the mechanism lands here, the switch
+ * is real and both of its branches are tested, and flipping it is M4's own first act — with the
+ * re-take of every figure that flipping it requires.
+ *
+ * ABSENT MEANS `supplementsCapital`, AND THAT IS A HISTORICAL STATEMENT RATHER THAN A DEFAULT.
+ * Content that does not declare this is content from before G-057, and in that era a seeded room
+ * drew nothing. Omitting the key reproduces such a run to the byte.
+ */
+export const seededStockPolicySchema = z.enum(['supplementsCapital', 'drawnFromCapital']).optional();
+
+/**
+ * A SCENARIO, AND TODAY IT DECLARES EXACTLY ONE THING: WHAT THE HOTEL OPENS WITH (G-057).
+ *
+ * `HOTELSIM.md` §8 makes this table a HARD PREREQUISITE OF M4 (ADR-0013 §5, human ruling): *"the
+ * scenario-capital mechanism lands before the first M4 goal starts … every balance sweep in this
+ * project used that flag. Tuning demand and pricing against an inflated opening balance is how a
+ * whole milestone's evidence base goes bad quietly."*
+ *
+ * IT IS THE CAPITAL MECHANISM AND NOT THE SCENARIO SYSTEM. There are no objectives here, no win
+ * condition, no starting date and no declared provisioning. `PARKING.md`'s C1 rules scenarios over
+ * sandbox and builds that at M6; a field added here that is not about opening money has become C1.
+ *
+ * WHY IT IS A TABLE OF ITS OWN RATHER THAN A FIELD ON `economySchema`, where `startingCapitalPence`
+ * lived until this goal. The economy is the HOUSE RULES — what a loan costs, what a floor costs,
+ * how much of a build a scrap returns — and those are properties of the game. What a particular
+ * hotel opens with is a property of the SITUATION the player is dropped into, and at M6 there will
+ * be several of those against one set of house rules. Keeping the number on the economy meant the
+ * two could never vary independently, and it is why `--rooms N` could quietly move an opening
+ * balance nobody had written down.
+ *
+ * A TOP-LEVEL ARRAY WITH AN `id`, like every other table here, for `economySchema`'s two mechanical
+ * reasons: `check:content` fails a content file in which it can find no `id` at any depth, and the
+ * sim reaches this through `firstScenario`, which takes the LOWEST id after normalisation, so no
+ * snake_case literal ever enters `packages/sim` (ADR-0003).
+ *
+ *   openingCapitalPence  the CASH the hotel opens with, booked as `startingCapital` transactions
+ *                        at tick 0 by `createWorld`. There is no `balance` field to set (I4), so
+ *                        an opening balance can only exist as a line in the ledger — which is also
+ *                        why it is explained rather than appearing from nowhere.
+ *   seededStock          what a room the HOST places free does to that number. See above.
+ *
+ * ---------------------------------------------------------------------------
+ * SHIPPED: 500,000 — UNMOVED FROM WHERE IT WAS, AND THE DERIVATION MOVES WITH IT.
+ *
+ * The requirement is `floorConstructionCostPence` above: *a hotel must not be able to open its
+ * second storey out of the money it opened with*, i.e.
+ *
+ *     floorConstructionCostPence + cheapest constructionCostPence  >  openingCapitalPence
+ *
+ * At the shipped numbers 500,000 + 250,000 = 750,000 > 500,000, so the hotel must trade first.
+ * That derivation is written out in full on `floorConstructionCostPenceSchema`; it is cited rather
+ * than copied here, because a figure with two derivations has none. G-057 MOVED THIS NUMBER
+ * BETWEEN TABLES AND DID NOT RE-SIZE IT — re-sizing is a balance decision and belongs to M4.
+ * ---------------------------------------------------------------------------
+ */
+export const scenarioSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  openingCapitalPence: penceSchema.min(0),
+  seededStock: seededStockPolicySchema,
+});
+
+/** The whole `scenarios.json` document. A top-level array, for the same reason. */
+export const scenariosSchema = z.array(scenarioSchema).min(1);
 
 /**
  * A rung's LABEL, which travels with its value (G-021, human ruling).
@@ -2187,4 +2281,6 @@ export type NeedType = z.infer<typeof needTypeSchema>;
 export type NeedRole = z.infer<typeof needRoleSchema>;
 export type ItemType = z.infer<typeof itemTypeSchema>;
 export type Economy = z.infer<typeof economySchema>;
+export type Scenario = z.infer<typeof scenarioSchema>;
+export type SeededStockPolicy = NonNullable<z.infer<typeof seededStockPolicySchema>>;
 export type SpeedRung = z.infer<typeof speedRungSchema>;

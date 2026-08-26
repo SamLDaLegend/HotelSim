@@ -174,12 +174,18 @@ async function loadArm(dir) {
     return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
   };
   const guestRules = optional('guest-rules.json');
+  // OPTIONAL FOR `guest-rules.json`'s REASON: an arm at a revision before G-057 has no scenario
+  // table, and such a revision's own `bindContent` reads its opening capital off the economy
+  // record where it lived then. Each arm runs its OWN sim against its OWN content, so requiring
+  // this file would refuse to measure every revision older than the goal that added it.
+  const scenarios = optional('scenarios.json');
   const content = sim.bindContent({
     roomTypes: data('room-types.json'),
     needTypes: data('need-types.json'),
     itemTypes: data('item-types.json'),
     economy: data('economy.json'),
     ...(guestRules === undefined ? {} : { guestRules }),
+    ...(scenarios === undefined ? {} : { scenarios }),
   });
   return { sim, harness, content };
 }

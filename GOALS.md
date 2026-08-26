@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-26, G-053b is DONE — the orphan sweep RAN, and the trap it was written about was sitting in an agent's own standing instructions. THE HEADLINE, because it is the one thing that must survive compaction: `.claude/agents/render-engineer.md:43` still reads "the Pixi.js side-on cross-section view (SimTower / Project Highrise, not isometric)" in its `Your domain` section — THE SENTENCE ADR-0046 REVERSED ON 2026-08-16, VERBATIM, PARENTHETICAL AND ALL, IN THE BRIEF OF THE AGENT THAT WOULD BUILD M5 — with two more copies at `:3` (the `description:` field, which is what selects the agent) and `:37`, one at `apps/game/src/scenario.ts:36-37`, and a fourth at `HOTELSIM.md:611`, §8's M5 row in the source of truth. `CLAUDE.md`'s own banner states the rule this breaks — A RULING IS NOT LANDED UNTIL EVERY COPY OF THE SENTENCE IT REVERSES IS DEAD — and it names two files; NOBODY RAN THE GREP. `HOTELSIM.md:611` IS REPAIRED; THE OTHER THREE ARE RECORDED AND DELIBERATELY NOT TOUCHED, because the first is agent configuration and the second is `render-engineer`'s domain, and a sim goal rewriting either on its own initiative is a worse precedent than a stale line with a due date — both are blocking obligations on M5, in `PARKING.md` and in `HOTELSIM.md`'s own strike note, with `git grep -in "cross-section\|SimTower\|Project Highrise\|side-on"` attached as the test. THE COUNTS, BEFORE AND AFTER, EACH NAMING ITS UNIT (§4.1): quality orphans 5 sites / 2 files unchanged (bound 5 forbids the fix and the obligation on G-037a was CONFIRMED to read five across two); deferrals with no EXECUTABLE falsification test 2 → 0; branches 2 → 1; watching findings outstanding 0 of 4 → 0 of 4; ADRs at two-or-more amendments over BOTH SPELLINGS 6 with four unaddressed → 6 with ZERO unaddressed; live copies of the dead sentence 6 sites in 3 files → 5 in 2; stale `Milestone:` on non-done blocks 14, recorded not re-milestoned; blocks whose status trails their own commit 1 → 0. §2.5 IS SIX ADRs AND NOT THE FOUR ADR-0043 §3 NAMED, because amendments are spelled two ways and the census counted only `## ADR-XXXX AMENDMENT` headings (16) and not the inline `**Amendment (…)` blocks (8): ADR-0034 RESTATED as ADR-0090 (headline dead twice over — superseded by ADR-0037 §1, itself struck into ADR-0045 — with the two live traps §3(a) and §3(b) carried forward and their unslotted figures WITHDRAWN); ADR-0025 RESTATED as ADR-0091; ADR-0007 JUSTIFIED IN WRITING at SEVEN amendments (the digest read SIX for eleven days) because all seven EXTEND the headline and none contradicts it; ADR-0028's deferral re-verified as still standing; ADR-0036 and ADR-0037 re-verified struck. AND THE RULE THAT PRODUCED THE STRIKE LIST COUNTED A PROXY: "reaching a second amendment" stands in for "wrong rather than incomplete" and the two come apart BOTH WAYS — ADR-0007 has seven and is right, ADR-0034 has two and is dead — so the discriminator is whether an amendment CONTRADICTS the headline or EXTENDS it, which is ADR-0086 pointed at a count. ADR-0025's deferral was CONDITIONAL — "restate only if cited again" — and THE CONDITION FIRED TWICE, at `8026e2f` 2026-08-22 and `a145a05` 2026-08-23, both by builders with no way to know a rule existed, and sat fired for four days; ADR-0028's has NOT fired (`e1623b4` 2026-08-14 11:26 against ADR-0043's own `c4067e5` 18:51 the same day) and ADR-0091 §5 now carries the one-line `git log -S` that fires it, deliberately as a written invocation rather than a fifteenth gate. `g041-rate-rederivation` DELETED with the ancestor proof taken on BOTH sides of the delete (ancestor of `main`, 0 commits ahead, and `faf8747` still an ancestor afterwards, so no history was removed); `g037a-quality-fold` KEPT and RE-TESTED in a `git worktree` outside the repo with its own `pnpm install` and no symlink back (ADR-0061 — 301 symlinks enumerated, 0 outside the worktree, `sha256` sentinel on `save.ts` identical either side) reading 80 failed / 2,423 passed across 2,503 tests, 16 files, ALL `tools/headless`, ZERO `packages/sim`, exit 1 — EXACTLY its own commit message five days on — AND ITS RED IS NOT EVIDENCE AGAINST G-041's DISCHARGE, because `87c0101` predates G-041 and only a REBASE can test that. FOUR CLAIMS IN THE BRIEF ARE FALSE AND THE FIRST IS THIS PROJECT'S SIGNATURE DEFECT: "sections its own AMENDMENT 2 declared UNRUNNABLE" — AMENDMENT 2 NAMES §4 SIX TIMES AND §3 NOT ONCE, a correct quotation of a thing that was never said, in the brief for the goal about ADR-0084; "45 commits behind" is 51 now and 46 at the report commit, so never 45; "five moved files" is 15 code files and was 15 at the report commit too, so wrong when written rather than drifted; and "a save bump off v23" is FALSE AND EXPENSIVE — the branch bumps NOTHING and its own save test is titled "THE QUALITY FOLD ADDS NO SAVE FIELD", so a goal briefed to expect a migration builds one nothing needs. THE FOURTH OPEN CONTRADICTION IS NEW AND IS THE ONE M4 SHOULD READ FIRST: `HOTELSIM.md:609` requires the scenario-capital mechanism BEFORE THE FIRST M4 GOAL while `PARKING.md`'s C1 routes it to M6 in the same sentence that says M4 consumes it, and the tree says it is unbuilt — one global `startingCapitalPence` of 500,000p and no scenario type in the schema — while every balance figure in this project was taken with `--rooms N` seeding ~75% extra opening capital. THE ARCHIVES ARE OUT OF SCOPE ON A STATED GROUND rather than by omission: they record what was believed when written, striking a belief there falsifies the record, and the one class that would have changed the answer was checked and is empty — six archive hits on the dead-sentence grep, every one inside a narrative of what a goal did; `GOALS-ARCHIVE.md` is not inert, though, because `check-status.mjs` resolves goal IDs into it, so its BLOCKS are machine-read and its PROSE is not. AND MY OWN TWO SCANNERS WERE WRONG IN THE GOAL ABOUT SCANNERS BEING WRONG: the stale-`Milestone:` counter anchored `/^Milestone:/` and returned 7 where the both-spellings count is 14, the identical failure as the amendment census four hours after writing it up; and the symlink safety check before an `rm -rf` used `grep -c "Documents.HotelSim"` whose unescaped `.` matched the `-` in the scratch directory's own name and reported 301 symlinks into the repo where a fixed-string check reports 0 of 301. NOTHING UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged, checked rather than assumed. Unreliable: 1 gate, 0 defects — the unit is a `pnpm verify` ROW, of which there are fourteen; `test` (I4) is repaired at G-055 and `check:scaling` is not, and a THIRD is still a stop condition. M3 EXIT IS COMPLETE. M4 DOES NOT OPEN (ADR-0092): its OWN HARD PREREQUISITE — the scenario-capital mechanism, HOTELSIM.md section 8, human ruling — is UNBUILT, and opening the economy-tuning milestone against a 75%-inflated balance is the failure that prerequisite exists to prevent. G-057 is the last action before the gate.*
+*As of 2026-08-26, G-057 is DONE — scenario capital is DECLARED, and the charter's own inflation figure was wrong by a factor of two. THE HEADLINE, because it is the one number a whole milestone was about to be tuned against: HOTELSIM.md section 8 and ADR-0013 section 5 both say "--rooms 3 carries 375,000p against a 500,000p starting constant", a "75%-inflated opening balance" — AND BOTH NUMBERS ARE THE ARITHMETIC OF THREE BEDROOMS WHILE THE DEFAULT INVOCATION SEEDS NINE ROOMS. `--amenities` defaults to 1 and seeds one of EACH amenity room type, of which the shipped content has three, each scrapping for the same 125,000p as a bedroom, so the seeded stock is (rooms + 3 x amenities) x 125,000p and the charter counted the first term only. RE-MEASURED ON THIS TREE, five slots: what = `money.startingCapitalPennies` against `money.liquidationValuePennies` from `sim:run --json`; workload = `--days 5 --seed 42` per arm with no `--build`, `--demolish` or `--loan`; sample count = EXACT DETERMINISTIC INTEGERS, 3 repeats and 4 seeds (1/7/42/99) returning the identical pair; aggregation = NONE, no average is taken; regime = win32/12cpu quiet, `npx tsx` against this tree. THE READINGS: `--rooms 0 --amenities 0` 0% · `--rooms 3 --amenities 0` 75% (the charter's arm, which no sweep has ever run) · THE DEFAULT `--rooms 3` 150% · `--rooms 12` 375% · `--rooms 6 --amenities 5` 525% · THE `--rooms 60` BENCH AND TICKCOST ARM 1,575%. THE ERROR IS NOT DRIFT: construction cost 250,000p and refund 5,000bp are untouched since G-011 and nothing that moved at G-040 or G-041 touches this — it is A COUNT TAKEN OVER ONE OF TWO POPULATIONS, the third instance of that exact shape in four days by three authors after G-053b's amendment census (16 headings, 8 inline blocks) and its stale-`Milestone:` counter (7 against 14), and it is now parked with an executable falsification test. THE MECHANISM: `packages/content/data/scenarios.json` declares `openingCapitalPence`, `scenarioSchema`/`scenariosSchema` validate it, `parseScenarios(Json)` parses it, `loadScenariosFrom` loads it and it is the SIXTH file required of a `--content` directory; `createWorld` in `packages/sim/src/world.ts` reads it ONCE through `firstScenario` — lowest id after normalisation, so no snake_case literal enters `packages/sim` (ADR-0003) — and books the SINGLE `startingCapital` transaction, which is I4's argument unchanged: there is no `balance` field to set, so an opening balance can only exist as a line in the ledger. `startingCapitalPence` IS REMOVED FROM `economySchema` AND FROM `economy.json`, because the economy is the HOUSE RULES and an opening balance is the SITUATION, and while they shared a record they could not vary independently — which is exactly what let `--rooms N` move a balance nobody had written down. The number is UNMOVED at 500,000p and its derivation is unmoved with it (floor plus cheapest room must exceed it); G-057 changed the address, not the size, and re-sizing is a balance decision that belongs to M4. REPLACES OR SUPPLEMENTS IS RULED **SUPPLEMENTS**, AND THE RULING RESTS ON A MEASUREMENT RATHER THAN A PREFERENCE. `seededStock` is content, admits exactly two values, has ONE reader (`seededStockDrawOf`), and absence reads as `supplementsCapital` — a statement about the pre-G-057 era, not a default, the `floorConstructionCostPence` argument exactly. `drawnFromCapital` books one negative `startingCapital` line per structurally-placed room at the REFUND rate (not the construction cost, because the refund is what a seeded room is worth as capital) and buys the law balanceOf(ledger) + stockValueOf(entities) === openingCapitalPence at EVERY room count; it is built, tested at 0/1/3/6/12/60 seeded rooms, and driven end to end through the real loader. IT WAS BUILT FIRST AND MEASURED BEFORE ANYTHING WAS DESIGNED AROUND IT: 35 tests in 9 files move, and FOUR ARE PINNED EXIT CRITERIA OF EARLIER GOALS THAT GO VACUOUS RATHER THAN MERELY DIFFERENT — `layout.reach.player.report.test.ts`'s "unreachable reaches 0 on the pinned invocation" and `validity.report.test.ts`'s room-verdict census among them — because a hotel seeded with 60 rooms opens 7,375,000p IN THE RED and its player can then build NOTHING, so every `--build` arm collapses into `funds` refusals. That is not a golden to update, it is evidence being destroyed. A SINGLE GLOBAL DECLARED CAPITAL CANNOT SERVE BOTH A BARE-PLOT SCENARIO AND A 60-ROOM BENCH ARM; serving both needs a scenario the harness SELECTS, which is PARKING.md's C1 and is ruled to M6. So the mechanism ships with both branches, the shipped value is the no-op, and THE FLIP IS NOW ONE FIELD IN ONE JSON FILE. C1's discharge condition had two clauses — "a scenario type exists in the schema AND `--rooms N` stops seeding capital" — and THIS GOAL DISCHARGES THE FIRST AND ARMS THE SECOND. WHAT BECOMES QUOTABLE: any balance figure that states its arms, because the opening position is now openingCapitalPence + (rooms + 3 x amenities) x 125,000 and the report prints both halves (`capital`, `scrap value`). WHAT IS WITHDRAWN AS A LIVE READING: section 8's "375,000p" and "75%" and ADR-0013 section 5's "75% more effective opening capital" (annotated where they stand rather than rewritten, because an ADR is a decision and not a live reading — ADR-0084); every state-hash golden, for ONE cause and it is `World.contentHash`; and any balance figure quoted WITHOUT its `--rooms`/`--amenities` arms, because the number alone cannot say what the run opened with. NOT WITHDRAWN, CHECKED RATHER THAN ASSUMED: 500,000p and its derivation, the upkeep-dodge threshold 247,500p, the refund rate 5,000bp, `constructionCostPence` 250,000p, save v23 and summary 4 — no room-type number moved, no `World` field was added, and no migration was owed. GATE READINGS, ALL FROM THE PROCESS: `pnpm verify` FOURTEEN ROWS PASS with VERIFY_EXIT=0 read into a log; I2 `07d81ab917935a25`, MOVED (from `abfd91c3da10b67f`) exactly as G-057's block predicted it might, since content is hashed; measure golden `c0b590c8d85d0d9c` (was `6a3bc5aa1383196e`); CHURN `1f87907208053fbe` to `2af307ac42e1fb88`; the CLI document golden `e3c3857d7108fc79` to `110b25ef862153fb`, and that document's ONLY changed line is the hash — the narrowest golden move in its history. `check:tickcost` WAS PREDICTED BEFORE IT WAS RUN, because reading a green nobody predicted is the trap G-038a-iii-b journaled: `ARM_PATHS` contains both `packages/sim/src` and `packages/content/data`, so the arms genuinely differ and the gate MEASURES rather than reporting IDENTICAL, but `arrived` cannot move because the shipped policy is a no-op — READ ON EVERY `pnpm verify` RUN OF THIS TREE AND THE SAME EVERY TIME: verdict=MEASURED (never INCOMPARABLE), 600 guests arrived IN BOTH ARMS, PASS. Ratios spanned 0.984-1.001 against a bound of 1.4640 across 4 runs, samples=6 each, regime win32/12cpu — a spread of 0.017, i.e. WITHIN NOISE OF 1.00, which is what a no-op policy should read. THE INVARIANT IS STATED HERE AND THE INDIVIDUAL READINGS LIVE IN G-057's BLOCK, deliberately: a digest that enumerates readings goes stale on the next run that takes one, which is this goal's own headline defect pointed at itself — it was written as "twice" and then "3 of 3" while further runs were in flight, and corrected twice. `check:scaling` four axes PASS; `check:purity`, `check:content`, `check:ladder`, `check:unpinned` and `test:save` (27 files, 526 tests) all ok. WATCHED: two runs at `--days 3 --seed 7 --rooms 6`, the shipped arm recorded through the existing serialiser and the `drawnFromCapital` arm through `--content` with the one field flipped — revenue 161,500p, upkeep -58,500p, the review distribution and every guest counter IDENTICAL across the two, and only the money differing (capital 500,000p/scrap 1,125,000p/balance 603,000p against capital -625,000p/scrap 1,125,000p/balance -522,000p, the second pair summing to exactly the declared 500,000p). Nothing looked wrong. Unreliable: 1 gate, 0 defects — the unit is a `pnpm verify` ROW, of which there are fourteen; `check:scaling` is still the unrepaired one and a THIRD is still a stop condition. M4'S HARD PREREQUISITE IS DISCHARGED AND M4 MAY OPEN. Its FIRST goal flips `seededStock` to `drawnFromCapital`, re-takes every balance figure against a declared opening position, and re-expresses the arms that need more than 500,000p as scenarios that say so.*
 
 - **Schemas**: save **v23** (G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `abfd91c3da10b67f` · measure golden `6a3bc5aa1383196e`. *(Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `07d81ab917935a25` · measure golden `c0b590c8d85d0d9c`. *(Both MOVED at G-057 and neither for a behaviour: the shipped content gained `scenarios.json` and `economy.json` lost `startingCapitalPence`, so `World.contentHash` is a different fingerprint — no `World` field, no save bump, no migration. Re-verified by the orchestrator 2026-08-14. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -2949,63 +2949,168 @@ sweep *"was ruled before G-034a"* (**it was never ruled at all**) and that §2.2
 expired (**all three cited causes are ANCESTORS of the deferral**).
 
 ## G-057 — Scenario capital, the last action before the M4 gate
-Status: **PLANNED 2026-08-26 (ADR-0092). M4's OWN HARD PREREQUISITE, unbuilt.**
+Status: **DONE 2026-08-26. THE MECHANISM IS BUILT AND THE CHARTER'S OWN FIGURE IS WRONG — the
+inflation at the DEFAULT invocation is 150%, not 75%, and the missing half is `--amenities`.**
+A scenario declares its opening capital in `packages/content/data/scenarios.json`; `createWorld`
+reads it ONCE and books the single `startingCapital` transaction; `startingCapitalPence` is GONE
+from `economy.json` and from `economySchema`. `pnpm verify` **fourteen rows PASS**,
+`VERIFY_EXIT=0` read from the process. **I2 MOVED, as the block predicted it might** —
+`abfd91c3da10b67f` -> `07d81ab917935a25`, one cause and it is `World.contentHash`.
 Milestone: M3 exit · Owner pair: economy-engineer / balance-critic
 Statement: **a scenario declares its opening capital**, so a balance figure means what it says.
 
-### THE PREREQUISITE, IN THE CHARTER'S OWN WORDS
+### THE FIGURE, RE-MEASURED ON THIS TREE — AND THE CHARTER'S EXAMPLE IS WRONG BY A FACTOR OF TWO
 
-> **`HOTELSIM.md` §8 (ADR-0013 §5, human ruling): *"the scenario-capital mechanism lands BEFORE THE
-> FIRST M4 GOAL STARTS. `--rooms N` seeds stock that is cash at the refund rate — `--rooms 3` carries
-> 375,000p against a 500,000p starting constant — and EVERY BALANCE SWEEP IN THIS PROJECT USED THAT
-> FLAG. Tuning demand and pricing against a 75%-INFLATED OPENING BALANCE is how a whole milestone's
-> evidence base goes bad quietly."***
+**`HOTELSIM.md` §8 says *"`--rooms 3` carries 375,000p against a 500,000p starting constant"* and
+calls that a **75%-inflated opening balance**. Both numbers are the arithmetic of THREE BEDROOMS.
+The default invocation seeds NINE ROOMS.**
 
-**Verified unbuilt**: one global `startingCapitalPence: 500000` in `economy.json`, **no scenario type
-in the schema.**
+`--amenities` defaults to **1** and seeds **one of EACH amenity room type**, of which the shipped
+content has **three** (`hotel_lounge`, `games_room`, `hotel_cafe`), each costing 250,000p at
+5,000bp — **the same 125,000p of scrap as a bedroom**. So the seeded stock is
 
-**M4 is the milestone that tunes the economy.** *Opening it against a 75%-inflated opening balance is
-exactly the failure the prerequisite exists to prevent.*
+    (rooms + 3 x amenities) x 125,000p
 
-### THE DATING CONTRADICTION, RESOLVED
+and the charter's example counted the first term only. **The 75% reading is real but it belongs to
+`--rooms 3 --amenities 0`, an arm no sweep in this project has ever run.**
 
-`HOTELSIM.md:609` says **before M4**; `PARKING.md`'s **C1** routes it to **M6 in the same sentence
-that says M4 consumes it.** **`CLAUDE.md`: *"`HOTELSIM.md` is the source of truth… where the two
-disagree, `HOTELSIM.md` wins."*** **And `PARKING.md` already knew — its own note reads *"a
-prerequisite of M4 cannot land at M6."*** *A contradiction self-evident in the file carrying it, open
-anyway.*
+| invocation | declared | seeded stock | opening POSITION | inflation |
+|---|---|---|---|---|
+| `--rooms 0 --amenities 0` | 500,000p | 0p | 500,000p | **0%** |
+| `--rooms 3 --amenities 0` | 500,000p | 375,000p | 875,000p | **75%** *(the charter's arm)* |
+| **`--rooms 3`** *(the DEFAULT)* | 500,000p | **750,000p** | **1,250,000p** | **150%** |
+| `--rooms 6 --amenities 5` | 500,000p | 2,625,000p | 3,125,000p | **525%** |
+| `--rooms 12` | 500,000p | 1,875,000p | 2,375,000p | **375%** |
+| **`--rooms 60`** *(the I5 bench / tickcost arm)* | 500,000p | **7,875,000p** | 8,375,000p | **1,575%** |
 
-### WHAT THIS IS NOT
+> **AND THE TREE ALREADY KNEW.** `tools/headless/src/recovery.report.test.ts:57-65`, written at
+> **G-012**, states the missing term exactly: *"`--amenities` defaults to one of every amenity
+> room type, seeded free through `spawnEntity` and refundable at 50%, so every scenario silently
+> acquired **375,000p** of liquidation value that `canDrawLoan` counts as the player's own
+> resources."* Two exit criteria carry an explicit `--amenities 0` because of it. And
+> `cli.stdout.test.ts` had the contradiction on adjacent lines — a comment reading *"three rooms
+> … worth 375,000p"* directly above the literal **`750000`** it asserts. **Both are swept in this
+> goal's diff.** *The fact was never missing from the repository; it was missing from the
+> sentence everybody quoted.*
 
-- **NOT the scenario system.** C1 rules **scenarios over sandbox** and builds that at M6. **This goal
-  is the CAPITAL mechanism only** — enough that an opening balance is declared rather than implied by
-  a CLI flag. **If the plan grows a scenario type with objectives, it has become C1 and it stops.**
-- **NOT a re-take of every balance figure.** *That is M4's own first act, and it is the reason this
-  lands first.* **Say in the block which existing figures become quotable again and which do not.**
+**FIVE SLOTS.** *What*: `money.startingCapitalPennies` and `money.liquidationValuePennies` from
+`sim:run --json`, i.e. the declared capital against the scrap value of everything standing —
+`liquidationValuePennies` is the same quantity `canDrawLoan` adds to the balance. *Workload*:
+`--days 5 --seed 42` with the arms above, no `--build`, no `--demolish`, no `--loan`, so nothing
+but seeding touches stock. *Sample count*: **exact deterministic integers**, not estimates — 3
+repeats of the default arm and 4 seeds (1/7/42/99) all return the identical pair, which is what
+"exact" is being claimed on rather than asserted. *Aggregation*: **none — no average is taken**,
+because every reading is an integer the sim computes. *Regime*: win32 / 12 cpu, quiet, `npx tsx`
+against this tree.
 
-### WHAT TO GET RIGHT
+> **THE FINDING IS THAT THE FIGURE WAS NEVER RE-TAKEN, AND THE ERROR IS NOT DRIFT.** 75% was
+> wrong the day it was written, for the same reason the amendment census and the stale-`Milestone`
+> counter were wrong at G-053b: **a count taken over one of two populations.** Rates were
+> re-derived at G-041 and capacity changed at G-040 and NEITHER MOVED THIS NUMBER — construction
+> cost 250,000p and refund 5,000bp are untouched since G-011. **The charter's arithmetic was
+> right; its denominator was three rooms out of nine.**
 
-- **I3: the capital is CONTENT.** A scenario's opening balance is a declared number, not a constant
-  in code.
-- **I4: the ledger is append-only and cash is a FOLD.** `startingCapital` is already a
-  `TransactionReason` — **the mechanism probably shapes that transaction rather than adding a
-  concept.** *Check before designing.*
-- **The `--rooms N` interaction is the whole point.** Seeded rooms are stock, and stock is cash at the
-  refund rate. **State what a seeded room contributes and whether the declared capital replaces or
-  supplements it** — that choice is what makes a figure quotable.
-- **`check:tickcost`'s `ARM_PATHS` includes `packages/content/data`**, so a content change is visible
-  to it and may return `INCOMPARABLE` if `arrived` moves. **Predict the verdict before running it**
-  (ADR-0065's lesson).
+### THE MECHANISM, AND WHERE THE CAPITAL IS READ
 
-### EXIT CRITERIA
+- **`packages/content/data/scenarios.json`** — a new table, `scenarioSchema` / `scenariosSchema`
+  in `packages/content/src/schema.ts`, parsed by `parseScenarios(Json)`, loaded by
+  `loadScenariosFrom` and required of a `--content` directory (the **sixth** such file).
+  **Three fields and no objectives**: `id`, `name`, `openingCapitalPence`, plus the policy below.
+  *A field here that is not about opening money has become `PARKING.md`'s C1 and it stops.*
+- **`startingCapitalPence` is REMOVED from `economySchema` and from `economy.json`.** The economy
+  is the HOUSE RULES — what a loan costs, what a floor costs — and an opening balance is the
+  SITUATION. While they shared a record they could not vary independently, and that is precisely
+  what let `--rooms N` move a balance nobody had written down. `strictObject` enforces the
+  separation in both directions, and `registry.test.ts` pins it.
+- **ONE READ SITE, unmoved**: `packages/sim/src/world.ts`'s `createWorld`, which books the single
+  `startingCapital` transaction. It reads `firstScenario(content)` — lowest id after
+  normalisation, so no snake_case literal enters `packages/sim` (ADR-0003). **The number is
+  UNMOVED at 500,000p and its derivation is unmoved with it** (floor + cheapest room must exceed
+  it, `floorConstructionCostPenceSchema`): G-057 changed the address, not the size. Re-sizing is a
+  balance decision and it is M4's.
 
-- **A scenario's opening capital is declared in content and read once**, with the `startingCapital`
-  transaction as the single site.
-- **The 75% figure is RE-MEASURED on this tree**, not quoted — *the charter's `--rooms 3` example is
-  two milestones old and this project has been wrong about every inherited number it did not re-take.*
-- **A statement of which existing balance figures become quotable and which are withdrawn.**
-- `pnpm verify` **fourteen rows**, `VERIFY_EXIT` read from the process · **I2 stated** (it may move —
-  content is hashed) · `check:stamp` green.
+### WHAT A SEEDED ROOM CONTRIBUTES — AND IT IS **SUPPLEMENTS**, DECLARED, WITH THE SWITCH BUILT
+
+`spawnEntity` places a room FREE and `demolishRoom` refunds a fraction of a cost nobody paid, so
+**a seeded hotel is cash at the refund rate**. `seededStock` declares what that means:
+
+- **`supplementsCapital`** — the seeded hotel is a gift ON TOP. Opening position =
+  `openingCapitalPence + seeded stock`, which moves with the room count. **SHIPPED**, and it is
+  what every build before this goal did, so nothing behavioural moves.
+- **`drawnFromCapital`** — the seeded hotel is drawn FROM it, at the refund rate, as
+  `startingCapital` lines. The law then holds at every room count:
+  `balanceOf(ledger) + stockValueOf(entities) === openingCapitalPence`.
+  **Built, tested at 0/1/3/6/12/60 seeded rooms, and driven end-to-end through the real loader**
+  (`--content` with the one field flipped: `capital -625000p`, `scrap value 1125000p`, sum
+  500,000p, and revenue/upkeep/reviews byte-identical to the shipped arm).
+- **Absence reads as `supplementsCapital`** — a statement about the pre-G-057 era, not a default,
+  the `floorConstructionCostPence` argument exactly. **One reader, `seededStockDrawOf`**, so the
+  branch cannot be spelled twice.
+
+**WHY THE SHIPPED VALUE IS THE NO-OP ONE, MEASURED RATHER THAN CHOSEN.** `drawnFromCapital` was
+built FIRST and run against the whole suite: **35 tests in 9 files move, and four are PINNED EXIT
+CRITERIA of earlier goals that go VACUOUS rather than merely different** —
+`layout.reach.player.report.test.ts`'s *"`unreachable` reaches 0 on the pinned invocation"* and
+`validity.report.test.ts`'s room-verdict census among them. The mechanism is that a hotel seeded
+with 60 rooms opens **7,375,000p in the red** and its player can then build NOTHING, so every
+`--build` arm degenerates into `funds` refusals. **A single global declared capital cannot serve
+both a bare-plot scenario and a 60-room bench arm; serving both needs a scenario the harness
+SELECTS, which is C1 and is ruled to M6.** So the mechanism lands, both branches are tested, and
+**flipping the switch is M4's own first act — with the re-take of every figure that requires.**
+
+### WHICH FIGURES BECOME QUOTABLE, AND WHICH ARE WITHDRAWN
+
+**QUOTABLE AGAIN — every balance figure that states its arms**, because the opening position is
+now computable exactly and from content: `openingCapitalPence + (rooms + 3 x amenities) x 125,000`.
+The report already prints both halves (`capital`, `scrap value`), so no figure needs a re-run to
+become interpretable — it needs its arms written beside it.
+
+**WITHDRAWN as live readings:**
+- **`HOTELSIM.md` §8's *"375,000p"* and *"75%"*, and ADR-0013 §5's *"75% more effective opening
+  capital than the shipped figure"***. Right arithmetic, wrong arm: **150% at the default and
+  1,575% at the bench**. `HOTELSIM.md` §8 is corrected in this goal's commit; the ADR is a RECORD
+  OF A RULING and is annotated rather than rewritten (ADR-0084).
+- **Every state-hash golden**, for one cause and it is `World.contentHash`:
+  I2 `abfd91c3da10b67f` -> **`07d81ab917935a25`** · measure golden `6a3bc5aa1383196e` ->
+  **`c0b590c8d85d0d9c`** · CHURN `1f87907208053fbe` -> **`2af307ac42e1fb88`** · the CLI document
+  golden `e3c3857d7108fc79` -> **`110b25ef862153fb`**. Kept in place as history, per this
+  repository's habit with goldens.
+- **Any balance figure quoted WITHOUT its `--rooms` / `--amenities` arms.** The number alone
+  cannot say what the run opened with, and that is the whole of the prerequisite.
+
+**NOT WITHDRAWN, checked rather than assumed**: the derivation of 500,000p (floor + cheapest room
+> opening capital) · the upkeep-dodge threshold **247,500p** · the refund rate **5,000bp** ·
+`constructionCostPence` **250,000p** · save **v23** · summary **4**. No room-type number moved and
+no `World` field was added, so there is no migration and none was needed.
+
+### GATE READINGS, ALL FROM THE PROCESS
+
+- `pnpm verify` **fourteen rows PASS**, `VERIFY_EXIT=0`.
+- **I2 `07d81ab917935a25`** (100,000 ticks, 3 processes). It moved, and the block predicted it.
+- **measure golden `c0b590c8d85d0d9c`**; `check:measure` ok at 60 rooms / arrival every 96 ticks.
+- **`check:tickcost` PREDICTED AND THEN READ.** Prediction, written before the run: both
+  `packages/sim/src` and `packages/content/data` are in `ARM_PATHS`, so the arms genuinely differ
+  and the gate will MEASURE rather than report IDENTICAL — but `arrived` cannot move, because the
+  shipped policy is a no-op. **Read on EVERY `pnpm verify` run of this tree — FOUR runs, and the same
+  verdict every time**, because one reading is not a distribution: `verdict=MEASURED:1` on
+  all four, **600 guests arrived IN BOTH ARMS** on all four, PASS on all four,
+  `INCOMPARABLE` on none. Ratios **0.9842 · 0.9873 · 0.9923 · 1.0008** against a bound of
+  **1.4640** — samples=6 each, regime win32/12cpu, spread **0.017**, i.e. within noise of
+  1.00, which is what a no-op policy should read and what the spread is the measure of.
+  *(This line said "twice" and then "3 of 3" while later runs were in flight, and was
+  corrected twice — a count over a population that was still moving, which is this goal's
+  own headline defect pointed at its own evidence. The digest now states the INVARIANT and
+  leaves the enumeration here, where it is closed.)*
+- `check:scaling` four axes PASS · `check:purity`, `check:content`, `check:ladder`,
+  `check:unpinned`, `test:save` (27 files / 526 tests) all ok.
+
+### WHAT IS STILL OWED TO M4, STATED SO THE SILENCE IS NOT READ AS COVERAGE
+
+**The mechanism is built; the CONTAMINATION IS NOT REMOVED, deliberately.** `PARKING.md`'s C1
+discharge test has two clauses — *"a scenario type exists in the schema AND `--rooms N` stops
+seeding capital"* — and **this goal discharges the first and arms the second.** M4's first goal
+flips `seededStock` to `drawnFromCapital`, re-takes the figures, and re-expresses the arms that
+need more than 500,000p as scenarios that say so.
 
 ## G-055 — The unreliable gates are repaired, because §2.0 says that is the remedy
 Status: **DONE 2026-08-26. ONE CAUSE, AND IT IS A TIMEOUT — the second and worse reading is

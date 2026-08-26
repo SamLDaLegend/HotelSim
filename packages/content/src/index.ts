@@ -21,6 +21,8 @@ export type {
   NeedType,
   RoomAccessRule,
   RoomType,
+  Scenario,
+  SeededStockPolicy,
   SpeedRung,
 } from './schema.js';
 export {
@@ -40,6 +42,12 @@ export {
   roomAccessRuleSchema,
   roomTypeSchema,
   roomTypesSchema,
+  // G-057: the M4 hard prerequisite (HOTELSIM.md section 8). A scenario declares what the hotel
+  // opens with, and `seededStockPolicySchema` declares what a room the host places FREE does to
+  // that number. Both docblocks carry the argument and the measurement.
+  scenarioSchema,
+  scenariosSchema,
+  seededStockPolicySchema,
   // G-041, ADR-0054/0057: the fraction of `refillPerTick` the worst legal room delivers. Its
   // docblock carries the whole rate derivation and the argument that 5,000 is the only
   // admissible value.
@@ -65,6 +73,8 @@ export {
   parseItemTypesJson,
   parseNeedTypes,
   parseNeedTypesJson,
+  parseScenarios,
+  parseScenariosJson,
   parseSpeedLadder,
   parseSpeedLadderJson,
 } from './registry.js';

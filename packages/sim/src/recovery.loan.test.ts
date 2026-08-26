@@ -60,7 +60,6 @@ const roomType: RoomTypeData = {
 const economy = (overrides: Partial<EconomyData> = {}): EconomyData => ({
   id: 'houseRules',
   name: 'houseRules',
-  startingCapitalPence: 0,
   loanPrincipalPence: PRINCIPAL,
   loanFeeBasisPoints: 1_000,
   loanRepaymentPerNightPence: 10_000,

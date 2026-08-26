@@ -308,8 +308,6 @@ export type RoomTypeData = {
 export type EconomyData = {
   readonly id: ContentId;
   readonly name: string;
-  /** Booked as one `startingCapital` transaction at tick 0 by `createWorld`. */
-  readonly startingCapitalPence: number;
   /** Cash one loan draw provides, and — because the fee is charged as money — the debt it incurs. */
   readonly loanPrincipalPence: number;
   /** What the draw costs, charged once as a `loanFee`, so the loan's price is in the ledger. */
@@ -339,6 +337,62 @@ export type EconomyData = {
    * derivation of the shipped value and for why the lender does not need to know about it.
    */
   readonly floorConstructionCostPence?: number | undefined;
+};
+
+/**
+ * WHAT A ROOM THE HOST PLACES FREE DOES TO THE MONEY (G-057).
+ *
+ * `spawnEntity` is the structural door and it charges nothing; `demolishRoom` then refunds a
+ * fraction of a construction cost nobody paid. So a seeded hotel is also cash at the refund
+ * rate. This union is the declaration of what that means, and it is content because it is a
+ * balance decision (I3). See `seededStockPolicySchema` in `packages/content` for the argument
+ * and for the measurement behind the shipped value.
+ *
+ *   supplementsCapital  the seeded hotel is a gift ON TOP of the declared capital.
+ *   drawnFromCapital    the seeded hotel is drawn FROM it, at the refund rate, so the opening
+ *                       position is the declared capital however many rooms are seeded.
+ */
+export const SEEDED_STOCK_POLICIES = ['supplementsCapital', 'drawnFromCapital'] as const;
+
+export type SeededStockPolicyData = (typeof SEEDED_STOCK_POLICIES)[number];
+
+/** Whether a raw host handed us a policy the simulation has a branch for. */
+export function isSeededStockPolicy(value: unknown): value is SeededStockPolicyData {
+  return SEEDED_STOCK_POLICIES.some((policy) => policy === value);
+}
+
+/**
+ * WHAT THE HOTEL OPENS WITH (G-057) — `HOTELSIM.md` section 8's M4 hard prerequisite.
+ *
+ * Structurally identical to `Scenario` in `@hotelsim/content` and deliberately not imported
+ * from it (ADR-0001), exactly as `EconomyData` is.
+ *
+ * WHY IT IS ITS OWN TABLE AND NOT A FIELD ON `EconomyData`, where `startingCapitalPence` lived
+ * until this goal: the economy is the HOUSE RULES and this is the SITUATION, and at M6 there
+ * will be several situations against one set of house rules. While the two shared a record they
+ * could not vary independently, and that is why `--rooms N` could move an opening balance
+ * nobody had written down.
+ *
+ * IT IS THE CAPITAL MECHANISM AND NOT THE SCENARIO SYSTEM. No objectives, no win condition, no
+ * declared provisioning — `PARKING.md`'s C1 rules those to M6.
+ */
+export type ScenarioData = {
+  readonly id: ContentId;
+  readonly name: string;
+  /**
+   * Booked as `startingCapital` transactions at tick 0 by `createWorld`. There is no `balance`
+   * field to set (I4), so an opening balance can only exist as a line in the ledger.
+   */
+  readonly openingCapitalPence: number;
+  /**
+   * What a room placed through the STRUCTURAL door does to that number.
+   *
+   * OPTIONAL, AND ABSENT MEANS `supplementsCapital` — a true historical statement rather than a
+   * default, exactly as `floorConstructionCostPence`'s absence means free. Content that predates
+   * G-057 describes a world in which a seeded room drew nothing, and omitting the key reproduces
+   * such a run to the byte.
+   */
+  readonly seededStock?: SeededStockPolicyData | undefined;
 };
 
 /**
@@ -707,6 +761,16 @@ export type SimContent = {
    * normalisation, the `firstEconomy` precedent, and the same ADR-0003 reason.
    */
   readonly guestRules?: readonly GuestRulesData[] | undefined;
+  /**
+   * What the hotel OPENS with (G-057). Optional for the reason `economy` is, and the absence is
+   * the same clean historical statement: content without this table describes a world with no
+   * declared opening capital, which is what a pre-G-011 world had — and is what keeps the
+   * permanent v1 save fixture's `8e09fe4f0fa162a3` fingerprint unmoved (ADR-0006).
+   *
+   * A LIST WITH ONE ENTRY TODAY, reached through `firstScenario` — the lowest id after
+   * normalisation, the `firstEconomy` precedent, and the same ADR-0003 reason.
+   */
+  readonly scenarios?: readonly ScenarioData[] | undefined;
 };
 
 /**
@@ -2602,7 +2666,6 @@ function cloneNeedType(needType: NeedTypeData): NeedTypeData {
  */
 function cloneEconomy(economy: EconomyData): EconomyData {
   for (const [field, value] of [
-    ['startingCapitalPence', economy.startingCapitalPence],
     ['loanPrincipalPence', economy.loanPrincipalPence],
     ['loanRepaymentPerNightPence', economy.loanRepaymentPerNightPence],
   ] as const) {
@@ -2645,6 +2708,39 @@ function cloneEconomy(economy: EconomyData): EconomyData {
     );
   }
   return { ...economy };
+}
+
+/**
+ * Clone a scenario record, validating its number and its policy at the boundary (G-057).
+ *
+ * The `cloneEconomy` discipline exactly, including the STRIPPED-WHEN-ABSENT key: an absent key
+ * and a key holding `undefined` are different documents to the fingerprint, and only the absent
+ * form is the "predates G-057" statement that keeps an older content set reproducing to the byte.
+ */
+function cloneScenario(scenario: ScenarioData): ScenarioData {
+  const capital = scenario.openingCapitalPence;
+  if (!Number.isInteger(capital) || capital < 0 || !Number.isSafeInteger(capital)) {
+    throw new Error(
+      `bindContent: scenario "${scenario.id}" has a non-integer or negative openingCapitalPence ` +
+        `(${String(capital)}); money is integer pence (ADR-0002)`,
+    );
+  }
+  // AND THE POLICY IS VALIDATED AT THE BOUNDARY, the `accessRule` discipline exactly: a raw host
+  // offering a value the simulation has no branch for dies here, with the scenario named, rather
+  // than being silently read as "not drawnFromCapital" by the one comparison that reads it. That
+  // silent reading is the worse failure of the two, because the value a typo degrades to is the
+  // one that hides the capital — which is the entire defect this table exists to end.
+  const policy = scenario.seededStock;
+  if (policy !== undefined && !isSeededStockPolicy(policy)) {
+    throw new Error(
+      `bindContent: scenario "${scenario.id}" has seededStock "${String(policy)}"; it must be one of ` +
+        `${SEEDED_STOCK_POLICIES.join(', ')} — what a room the host places FREE does to the declared ` +
+        'capital is a closed union the simulation branches on (G-057). Omitting the key entirely is ' +
+        'the different, historical statement and reads as "supplementsCapital".',
+    );
+  }
+  const { seededStock: _rawPolicy, ...rest } = scenario;
+  return policy === undefined ? { ...rest } : { ...rest, seededStock: policy };
 }
 
 /**
@@ -3300,6 +3396,10 @@ export function bindContent(content: SimContent): BoundContent {
     content.guestRules === undefined
       ? undefined
       : normaliseTable(content.guestRules, 'guest rules', cloneGuestRules);
+  const scenarios =
+    content.scenarios === undefined
+      ? undefined
+      : normaliseTable(content.scenarios, 'scenario', cloneScenario);
 
   // ROLES ARE SETTLED FIRST (G-013), and the order is load-bearing rather than tidy:
   // `assertNeedsAreSatisfiable` refuses an ITEM that provides the lodging need, so it has
@@ -3397,7 +3497,8 @@ export function bindContent(content: SimContent): BoundContent {
   const withNeeds: SimContent = needTypes === undefined ? { roomTypes } : { roomTypes, needTypes };
   const withItems: SimContent = itemTypes === undefined ? withNeeds : { ...withNeeds, itemTypes };
   const withEconomy: SimContent = economy === undefined ? withItems : { ...withItems, economy };
-  const normalised: SimContent = guestRules === undefined ? withEconomy : { ...withEconomy, guestRules };
+  const withGuestRules: SimContent = guestRules === undefined ? withEconomy : { ...withEconomy, guestRules };
+  const normalised: SimContent = scenarios === undefined ? withGuestRules : { ...withGuestRules, scenarios };
   return Object.freeze({
     content: Object.freeze(normalised),
     fingerprint: hashJson(normalised as unknown as JsonValue),
@@ -3623,6 +3724,51 @@ export function firstEconomy(bound: BoundContent): EconomyData | undefined {
  */
 export function firstGuestRules(bound: BoundContent): GuestRulesData | undefined {
   return bound.content.guestRules?.[0];
+}
+
+/**
+ * The scenario this run opens under, or `undefined` if the content declares none (G-057).
+ *
+ * The LOWEST id after normalisation — the `firstEconomy` contract exactly, for the same two
+ * reasons (I2's order-independence, and ADR-0003's no-snake_case-in-the-sim).
+ *
+ * `undefined` is the pre-G-057 world: no declared opening capital. Every caller handles it as a
+ * real case rather than a default, because a save taken under such content must keep meaning what
+ * it meant — and because the permanent v1 fixture is exactly such content (ADR-0006).
+ */
+export function firstScenario(bound: BoundContent): ScenarioData | undefined {
+  return bound.content.scenarios?.[0];
+}
+
+/**
+ * WHAT A ROOM PLACED THROUGH THE STRUCTURAL DOOR DOES TO THE DECLARED CAPITAL (G-057).
+ *
+ * THE ONE READER OF THE POLICY, so the branch cannot be spelled twice and drift. Content that
+ * declares no scenario, and content whose scenario omits the key, both read as
+ * `supplementsCapital` — which is what every build before G-057 did, so such content reproduces
+ * its runs to the byte. See `seededStockPolicySchema` in `packages/content` for the argument.
+ */
+export function seededStockPolicyOf(bound: BoundContent): SeededStockPolicyData {
+  return firstScenario(bound)?.seededStock ?? 'supplementsCapital';
+}
+
+/**
+ * WHAT ONE ROOM PLACED FREE DRAWS FROM THE DECLARED CAPITAL (G-057), in pence.
+ *
+ * ZERO UNDER `supplementsCapital`, so the caller has ONE expression rather than a branch of its
+ * own — the `demolitionRefundOf` shape, and the reason the policy has exactly one reader. Under
+ * `drawnFromCapital` it is the room type's own demolition refund, because THAT is what a seeded
+ * room is worth as capital: it is precisely the sum `stockValueOf` reports and precisely what
+ * `demolishRoom` would hand back. Drawing the CONSTRUCTION cost instead would make the opening
+ * position depend on the refund rate, which is the hidden variable this goal exists to remove.
+ *
+ * Not a room type, or a room type that refunds nothing, draws nothing — the `scrapValueOf`
+ * contract, and the same reason: nothing can sell an item.
+ */
+export function seededStockDrawOf(bound: BoundContent, entityKind: ContentId): number {
+  if (seededStockPolicyOf(bound) !== 'drawnFromCapital') return 0;
+  if (findRoomType(bound, entityKind) === undefined) return 0;
+  return demolitionRefundOf(bound, entityKind);
 }
 
 /**

@@ -18,6 +18,8 @@ import {
   parseEconomiesJson,
   parseGuestRules,
   parseGuestRulesJson,
+  parseScenarios,
+  parseScenariosJson,
 } from './registry.js';
 
 const roomType = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
@@ -318,7 +320,6 @@ describe('the economy table (G-011)', () => {
   const economy = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
     id: 'house_rules',
     name: 'House Rules',
-    startingCapitalPence: 500_000,
     loanPrincipalPence: 300_000,
     loanFeeBasisPoints: 1_000,
     loanRepaymentPerNightPence: 10_000,
@@ -336,7 +337,6 @@ describe('the economy table (G-011)', () => {
     for (const key of [
       'id',
       'name',
-      'startingCapitalPence',
       'loanPrincipalPence',
       'loanFeeBasisPoints',
       'loanRepaymentPerNightPence',
@@ -349,7 +349,7 @@ describe('the economy table (G-011)', () => {
   });
 
   it('demands integer pence and rejects a float, a negative and a string (ADR-0002)', () => {
-    for (const key of ['startingCapitalPence', 'loanPrincipalPence', 'loanRepaymentPerNightPence']) {
+    for (const key of ['loanPrincipalPence', 'loanRepaymentPerNightPence']) {
       for (const bad of [1.5, -1, '500']) {
         expect(() => parseOneEconomy({ [key]: bad })).toThrow(new RegExp(key));
       }
@@ -392,6 +392,112 @@ describe('the economy table (G-011)', () => {
   it('keeps "not JSON" and "not content" apart, like every other parser here', () => {
     expect(() => parseEconomiesJson('[{"id":', 'economy.json')).toThrow(/economy\.json is not valid JSON/);
     expect(() => parseEconomiesJson('[]', 'economy.json')).toThrow(/economy\.json is not valid content/);
+  });
+});
+
+describe('the scenario table (G-057) — what the hotel OPENS with', () => {
+  // `HOTELSIM.md` section 8, ADR-0013 section 5, human ruling: the scenario-capital mechanism is a
+  // HARD PREREQUISITE of M4, because every balance sweep in this project was taken with `--rooms N`
+  // seeding stock that is cash at the refund rate. This table is that mechanism, and it is
+  // deliberately NOT the scenario system — `PARKING.md`'s C1 rules objectives to M6, so a field
+  // here that is not about opening money has become C1.
+  const scenario = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'house_opening',
+    name: 'House Opening',
+    openingCapitalPence: 500_000,
+    seededStock: 'supplementsCapital',
+    ...overrides,
+  });
+  const parseOneScenario = (overrides: Record<string, unknown> = {}): unknown =>
+    parseScenarios([scenario(overrides)]);
+
+  it('accepts the shipped shape and returns it verbatim', () => {
+    expect(parseScenarios([scenario()])).toEqual([scenario()]);
+  });
+
+  it('demands an id, a name and a capital, because none of the three has a sensible default', () => {
+    for (const key of ['id', 'name', 'openingCapitalPence']) {
+      const entry = scenario();
+      delete entry[key];
+      expect(() => parseScenarios([entry])).toThrow(ContentError);
+    }
+  });
+
+  it('makes seededStock OPTIONAL, because its absence is a statement about an era', () => {
+    // Content that predates G-057 describes a world in which a room the host placed free drew
+    // nothing from the declared capital, and omitting the key reproduces such a run to the byte.
+    // That is the `floorConstructionCostPence` argument exactly: absence is history, not a default.
+    const entry = scenario();
+    delete entry['seededStock'];
+    expect(() => parseScenarios([entry])).not.toThrow();
+  });
+
+  it('admits exactly the two policies and refuses a third, because the sim branches on it', () => {
+    for (const good of ['supplementsCapital', 'drawnFromCapital']) {
+      expect(() => parseOneScenario({ seededStock: good })).not.toThrow();
+    }
+    // The value a typo degrades to would be the one that HIDES the capital, which is the whole
+    // defect this table exists to end — so it is refused rather than read as "not drawnFrom".
+    for (const bad of ['supplements', 'DrawnFromCapital', '', 0, true]) {
+      expect(() => parseOneScenario({ seededStock: bad })).toThrow(/seededStock/);
+    }
+  });
+
+  it('demands integer pence and rejects a float, a negative and a string (ADR-0002)', () => {
+    for (const bad of [1.5, -1, '500']) {
+      expect(() => parseOneScenario({ openingCapitalPence: bad })).toThrow(/openingCapitalPence/);
+    }
+    // Zero is a legal designer statement — "you open with nothing" — and is not the same
+    // document as a table that is absent altogether.
+    expect(() => parseOneScenario({ openingCapitalPence: 0 })).not.toThrow();
+  });
+
+  it('rejects an unknown key, because a typo that is ignored becomes a balance mystery', () => {
+    // `startingCapitalPence` was this number's name on the ECONOMY table until G-057. A document
+    // that still spells it that way here is a half-finished migration, and being told so beats
+    // opening with a silent zero.
+    expect(() => parseOneScenario({ startingCapitalPence: 500_000 })).toThrow(ContentError);
+    expect(() => parseOneScenario({ objectives: [] })).toThrow(ContentError);
+  });
+
+  it('rejects an empty document and duplicate ids', () => {
+    expect(() => parseScenarios([])).toThrow(ContentError);
+    expect(() => parseScenarios([scenario(), scenario()])).toThrow(/duplicate scenario id/);
+  });
+
+  it('demands a snake_case id, like every other content table (ADR-0003)', () => {
+    expect(() => parseOneScenario({ id: 'houseOpening' })).toThrow(/snake_case/);
+  });
+
+  it('keeps "not JSON" and "not content" apart, like every other parser here', () => {
+    expect(() => parseScenariosJson('[{"id":', 'scenarios.json')).toThrow(
+      /scenarios\.json is not valid JSON/,
+    );
+    expect(() => parseScenariosJson('[]', 'scenarios.json')).toThrow(
+      /scenarios\.json is not valid content/,
+    );
+  });
+
+  it('AND THE OPENING CAPITAL IS NO LONGER ON THE ECONOMY, which is the point of the goal', () => {
+    // The house rules are the GAME and the scenario is the SITUATION. While the two shared a
+    // record they could not vary independently, and that is how `--rooms N` came to move an
+    // opening balance nobody had written down. `strictObject` makes the separation enforced
+    // rather than documented, in both directions.
+    const houseRules = {
+      id: 'house_rules',
+      name: 'House Rules',
+      loanPrincipalPence: 300_000,
+      loanFeeBasisPoints: 1_000,
+      loanRepaymentPerNightPence: 10_000,
+      liquidationRoomsMax: 4,
+    };
+    expect(() => parseEconomies([houseRules])).not.toThrow();
+    expect(() => parseEconomies([{ ...houseRules, startingCapitalPence: 500_000 }])).toThrow(
+      ContentError,
+    );
+    expect(() => parseScenarios([{ ...scenario(), loanPrincipalPence: 300_000 }])).toThrow(
+      ContentError,
+    );
   });
 });
 

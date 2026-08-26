@@ -1321,6 +1321,19 @@ export function applyMoveItem(input: BuildInput, id: EntityId, to: Cell): BuildR
  * count it. Recorded here rather than in a commit message because the next person to add a
  * seeded-hotel scenario will not otherwise know.
  *
+ * G-057 MADE THE DECISION DECLARED RATHER THAN IMPLIED, WHICH IS `HOTELSIM.md` SECTION 8's M4
+ * HARD PREREQUISITE. A scenario now says `seededStock`, and it is content:
+ * `supplementsCapital` is the behaviour described above and is what ships, and
+ * `drawnFromCapital` books one negative `startingCapital` line per structurally-placed room at
+ * the refund rate — under which the round trip above is FLAT and the opening position is the
+ * declared capital however many rooms are seeded. The branch lives in `seededStockDrawOf`.
+ *
+ * AND THE FIGURES IN THE PARAGRAPH ABOVE COUNT BEDROOMS ONLY. `--rooms 3 --demolish 1` really
+ * does hand back 375,000p for three seeded BEDROOMS — but the default invocation also seeds
+ * `--amenities 1` of EACH of three amenity types, so the hotel it describes holds 750,000p of
+ * scrap and not 375,000p. That undercount is what made the charter's "75%" 150%; see
+ * ADR-0093 §2.
+ *
  * AN ID THAT IS NOT A LIVE ROOM IS A RECORDED REFUSAL, not a silent no-op. `despawnEntity`
  * keeps its no-op contract — a command log replayed against a slightly different world
  * must not crash — but a PLAYER ACTION that did nothing is exactly the thing this goal

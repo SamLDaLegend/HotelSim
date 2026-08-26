@@ -220,7 +220,6 @@ describe("1b. THE MIRROR BOUND: a refund too small turns the loan into a credit 
         {
           id: 'houseRules',
           name: 'houseRules',
-          startingCapitalPence: 500_000,
           loanPrincipalPence: 300_000,
           loanFeeBasisPoints: 1_000,
           loanRepaymentPerNightPence: 10_000,
@@ -274,7 +273,6 @@ describe("1b. THE MIRROR BOUND: a refund too small turns the loan into a credit 
           {
             id: 'houseRules',
             name: 'houseRules',
-            startingCapitalPence: 0,
             loanPrincipalPence: 300_000,
             loanFeeBasisPoints: 1_000,
             loanRepaymentPerNightPence: 10_000,
@@ -337,15 +335,17 @@ describe('3. the simulation: 100 nights, a dodger against a holder, through the 
       {
         id: 'houseRules',
         name: 'houseRules',
-        // Enough to build the hotel and to keep rebuilding it every night for 100 nights,
-        // so the comparison is about upkeep and never about running out of money.
-        startingCapitalPence: 100_000_000,
         loanPrincipalPence: 0,
         loanFeeBasisPoints: 0,
         loanRepaymentPerNightPence: 0,
         liquidationRoomsMax: 4,
       },
     ],
+    // Enough to build the hotel and to keep rebuilding it every night for 100 nights, so the
+    // comparison is about upkeep and never about running out of money. G-057 moved this number
+    // from the economy table to the scenario — `HOTELSIM.md` section 8's M4 prerequisite — and
+    // nothing this file asserts is about where it lives.
+    scenarios: [{ id: 'houseOpening', name: 'House Opening', openingCapitalPence: 100_000_000 }],
   });
 
   const cell = (index: number) => ({ floor: 0, column: index * 2, row: 0 });

@@ -27,7 +27,13 @@ import {
   TICKS_PER_DAY,
 } from '@hotelsim/sim';
 import type { SimContent } from '@hotelsim/sim';
-import { ECONOMY_PATH, GUEST_RULES_PATH, ROOM_TYPES_PATH, loadContent } from './content-loader.js';
+import {
+  ECONOMY_PATH,
+  GUEST_RULES_PATH,
+  ROOM_TYPES_PATH,
+  SCENARIOS_PATH,
+  loadContent,
+} from './content-loader.js';
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const content = loadContent();
@@ -291,14 +297,28 @@ describe('the money files are BYTE-IDENTICAL — this goal moved the margin and 
     // or the loan principal is exactly the move that would make the balance goldens comfortable
     // again. M4's, and §9's stop condition until then.
     // ------------------------------------------------------------------------
+    //
+    // G-057 MOVED ONE OF THE FIVE AND CHANGED NONE OF THEM. `startingCapitalPence` was the
+    // hotel's opening balance and it now lives on the SCENARIO table as `openingCapitalPence`,
+    // because the house rules are the game and an opening balance is the situation — see
+    // `scenarioSchema`. The guard is stronger for the move, not weaker: it reads the number at
+    // its new address AND asserts it is gone from its old one, so a half-finished migration
+    // that left both is red.
+    // ------------------------------------------------------------------------
     const economy = JSON.parse(bytesOf(ECONOMY_PATH)) as Record<string, number>[];
     expect(economy).toHaveLength(1);
     expect(economy[0]).toMatchObject({
-      startingCapitalPence: 500_000,
       loanPrincipalPence: 300_000,
       loanFeeBasisPoints: 1_000,
       loanRepaymentPerNightPence: 10_000,
       liquidationRoomsMax: 4,
+    });
+    expect(economy[0]).not.toHaveProperty('startingCapitalPence');
+    const scenarios = JSON.parse(bytesOf(SCENARIOS_PATH)) as Record<string, unknown>[];
+    expect(scenarios).toHaveLength(1);
+    expect(scenarios[0]).toMatchObject({
+      openingCapitalPence: 500_000,
+      seededStock: 'supplementsCapital',
     });
   });
 

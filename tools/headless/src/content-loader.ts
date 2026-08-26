@@ -21,9 +21,18 @@ import {
   parseGuestRulesJson,
   parseItemTypesJson,
   parseNeedTypesJson,
+  parseScenariosJson,
   parseSpeedLadderJson,
 } from '@hotelsim/content';
-import type { ContentRegistry, Economy, GuestRules, ItemType, NeedType, SpeedRung } from '@hotelsim/content';
+import type {
+  ContentRegistry,
+  Economy,
+  GuestRules,
+  ItemType,
+  NeedType,
+  Scenario,
+  SpeedRung,
+} from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
 
@@ -42,6 +51,8 @@ export const NEED_TYPES_PATH = resolveContent('@hotelsim/content/data/need-types
 export const ITEM_TYPES_PATH = resolveContent('@hotelsim/content/data/item-types.json');
 export const ECONOMY_PATH = resolveContent('@hotelsim/content/data/economy.json');
 export const GUEST_RULES_PATH = resolveContent('@hotelsim/content/data/guest-rules.json');
+/** What the hotel OPENS with (G-057) — HOTELSIM.md section 8's M4 hard prerequisite. */
+export const SCENARIOS_PATH = resolveContent('@hotelsim/content/data/scenarios.json');
 /**
  * The play-speed ladder (G-021). Resolved here like every other table — and read by
  * `loadSpeedLadderFrom` below, which `loadContent` deliberately never calls. The reason is
@@ -80,6 +91,11 @@ export function loadEconomyFrom(path: string): readonly Economy[] {
 /** Read and validate one guest-rules file (G-014b). Same all-or-nothing discipline. */
 export function loadGuestRulesFrom(path: string): readonly GuestRules[] {
   return parseGuestRulesJson(readContentFile(path), path);
+}
+
+/** Read and validate one scenario file (G-057). Same all-or-nothing discipline. */
+export function loadScenariosFrom(path: string): readonly Scenario[] {
+  return parseScenariosJson(readContentFile(path), path);
 }
 
 /**
@@ -140,6 +156,7 @@ export function loadContent(contentDir?: string): BoundContent {
   const itemTypesPath = contentDir === undefined ? ITEM_TYPES_PATH : join(contentDir, 'item-types.json');
   const economyPath = contentDir === undefined ? ECONOMY_PATH : join(contentDir, 'economy.json');
   const guestRulesPath = contentDir === undefined ? GUEST_RULES_PATH : join(contentDir, 'guest-rules.json');
+  const scenariosPath = contentDir === undefined ? SCENARIOS_PATH : join(contentDir, 'scenarios.json');
   const registry: ContentRegistry = {
     ...loadContentFrom(roomTypesPath),
     needTypes: loadNeedTypesFrom(needTypesPath),
@@ -153,6 +170,14 @@ export function loadContent(contentDir?: string): BoundContent {
     // whose guests silently stopped changing their minds. Absence is a statement about
     // HISTORY, and a directory somebody assembled today is not history.
     guestRules: loadGuestRulesFrom(guestRulesPath),
+    // SIX FILES SINCE G-057, and this one is required of a `--content` directory for exactly the
+    // argument the five above it make. Absence would be read as "no declared opening capital",
+    // which is a TRUE statement about content that predates G-011 and a silent zero for a
+    // directory somebody assembled today — a hotel that opens with nothing, reported as a hotel
+    // that opens with nothing, with no line anywhere saying the file was missing. Since G-057 this
+    // is the ONLY place an opening balance is declared, so a shrug here is the exact failure
+    // HOTELSIM.md section 8 is about.
+    scenarios: loadScenariosFrom(scenariosPath),
   };
   const injected: SimContent = registry;
   // `bindContent` rejects content whose needs no room type provides, content whose rooms

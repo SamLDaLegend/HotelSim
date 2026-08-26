@@ -16,9 +16,10 @@ import {
   itemTypesSchema,
   needTypesSchema,
   roomTypesSchema,
+  scenariosSchema,
   speedLadderSchema,
 } from './schema.js';
-import type { Economy, GuestRules, ItemType, NeedType, RoomType, SpeedRung } from './schema.js';
+import type { Economy, GuestRules, ItemType, NeedType, RoomType, Scenario, SpeedRung } from './schema.js';
 
 /**
  * Every content table, validated.
@@ -51,6 +52,20 @@ export type ContentRegistry = {
    * `8e09fe4f0fa162a3` unmoved (ADR-0006).
    */
   readonly economy?: readonly Economy[];
+  /**
+   * What the hotel OPENS with (G-057): the scenario's declared capital, and what a room the
+   * host places free does to it.
+   *
+   * Optional for the same absence-is-not-emptiness reason the economy is, and the historical
+   * statement is the economy's own: content that predates this table describes a world with no
+   * declared opening capital, which is exactly what a pre-G-011 world had — and is what keeps
+   * the permanent v1 save fixture's content fingerprint `8e09fe4f0fa162a3` unmoved (ADR-0006).
+   *
+   * `startingCapitalPence` lived on `economy` until G-057. The house rules and the situation the
+   * player is dropped into are different things and at M6 there will be several situations
+   * against one set of house rules; see `scenarioSchema`.
+   */
+  readonly scenarios?: readonly Scenario[];
   /**
    * The rules a guest's own behaviour obeys (G-014b): today, the hysteresis margin that
    * decides when it abandons what it is doing.
@@ -163,6 +178,25 @@ export function parseEconomies(raw: unknown, sourceLabel = 'content'): readonly 
 }
 
 /**
+ * Validate an already-parsed scenario document (G-057). Same all-or-nothing discipline,
+ * and a table rather than a registry for the same reason: one file is one table.
+ *
+ * What it does NOT check is the one relationship that matters about the number it carries —
+ * that a floor plus a room costs more than the hotel opens with, so the second storey has to
+ * be earned. That reads `openingCapitalPence` against two fields in two other files, so it
+ * lives where every other cross-table check lives; see `floorConstructionCostPenceSchema`.
+ */
+export function parseScenarios(raw: unknown, sourceLabel = 'content'): readonly Scenario[] {
+  const result = scenariosSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:
+${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'scenario');
+  return result.data;
+}
+
+/**
  * Validate an already-parsed guest-rules document (G-014b). Same all-or-nothing discipline,
  * and a table rather than a registry for the same reason: one file is one table.
  *
@@ -246,6 +280,17 @@ export function parseEconomiesJson(text: string, sourceLabel = 'content'): reado
     throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
   }
   return parseEconomies(raw, sourceLabel);
+}
+
+/** Validate a scenario JSON document. "Not JSON" and "not content" stay apart. */
+export function parseScenariosJson(text: string, sourceLabel = 'content'): readonly Scenario[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseScenarios(raw, sourceLabel);
 }
 
 /** Validate an item-type JSON document. "Not JSON" and "not content" stay apart. */

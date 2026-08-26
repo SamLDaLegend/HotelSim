@@ -237,10 +237,19 @@ function scrapValueOf(content: BoundContent, entity: Entity): number {
  *
  * IT EXISTS BECAUSE THE NUMBER WAS INVISIBLE, and invisible is what made it a problem.
  * `--rooms N` seeds a hotel through `spawnEntity`, which is free — so the seeded stock is
- * also seeded CASH at the refund rate, and the default `--rooms 3` quietly carries
- * 375,000p of it against a `startingCapitalPence` of 500,000p that this goal exists to
- * size. A designer tuning that number against seeded-hotel runs was tuning against
- * 875,000p and had no way to see it. Now the report prints both.
+ * also seeded CASH at the refund rate, and a designer tuning the opening capital against
+ * seeded-hotel runs was tuning against a number nobody had written down. Now the report
+ * prints both halves, and G-057 made the declared half a scenario's own field.
+ *
+ * AND THIS PARAGRAPH CARRIED THE WRONG FIGURE FOR TWO MILESTONES, WHICH IS WHY THE REPAIR IS
+ * RECORDED RATHER THAN QUIETLY APPLIED (G-057, ADR-0093 §2). It read *"the default `--rooms 3`
+ * quietly carries 375,000p of it … a designer … was tuning against 875,000p"*, copying
+ * `HOTELSIM.md` section 8. **The default seeds NINE rooms, not three**: `--amenities` defaults to
+ * 1 and seeds one of EACH amenity room type, of which the shipped content has three, each
+ * scrapping for the same 125,000p as a bedroom. **Seeded stock is
+ * `(rooms + 3 x amenities) x 125,000p`, so the default carries 750,000p against 500,000p —
+ * 150%, not 75% — and the `--rooms 60` bench arm carries 7,875,000p.** The arithmetic was right
+ * and the population was half of one.
  *
  * See the note on `applyDemolishRoom` in `build.ts` for the underlying asymmetry and for
  * why it is a host decision rather than a player-reachable exploit.

@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
-import type { EconomyData, RoomTypeData } from './content.js';
+import type { EconomyData, RoomTypeData, ScenarioData } from './content.js';
 import { SAVE_V1_CONTENT } from './fixtures/save-v1.js';
 import { balanceOf, sumByReason } from './ledger.js';
 import { deserialise, serialise } from './save.js';
@@ -39,7 +39,6 @@ const roomType: RoomTypeData = {
 const economy = (overrides: Partial<EconomyData> = {}): EconomyData => ({
   id: 'houseRules',
   name: 'houseRules',
-  startingCapitalPence: CAPITAL,
   loanPrincipalPence: 300_000,
   loanFeeBasisPoints: 1_000,
   loanRepaymentPerNightPence: 10_000,
@@ -47,8 +46,24 @@ const economy = (overrides: Partial<EconomyData> = {}): EconomyData => ({
   ...overrides,
 });
 
+// THE OPENING CAPITAL IS THE SCENARIO'S SINCE G-057, not the economy's. `HOTELSIM.md` section 8
+// made the move a hard prerequisite of M4: the economy is the house rules and this is the
+// situation, and while they shared a record `--rooms N` could move an opening balance nobody had
+// written down. Every assertion below is the one it always was; only the table carrying the
+// number changed.
+const scenario = (overrides: Partial<ScenarioData> = {}): ScenarioData => ({
+  id: 'houseOpening',
+  name: 'houseOpening',
+  openingCapitalPence: CAPITAL,
+  ...overrides,
+});
+
 const withCapital = (pence: number) =>
-  bindContent({ roomTypes: [roomType], economy: [economy({ startingCapitalPence: pence })] });
+  bindContent({
+    roomTypes: [roomType],
+    economy: [economy()],
+    scenarios: [scenario({ openingCapitalPence: pence })],
+  });
 
 describe('a hotel opens with the capital its content gives it', () => {
   it('books exactly one startingCapital transaction, at tick 0', () => {
@@ -126,7 +141,7 @@ describe('a hotel opens with the capital its content gives it', () => {
   it('rejects a non-integer or negative capital at the boundary, naming the table (ADR-0002)', () => {
     // A raw host — one that did not come through the zod schema — dies at bind time with
     // the economy named, rather than three subsystems later inside `appendTransaction`.
-    expect(() => withCapital(1.5)).toThrow(/startingCapitalPence/);
-    expect(() => withCapital(-1)).toThrow(/startingCapitalPence/);
+    expect(() => withCapital(1.5)).toThrow(/openingCapitalPence/);
+    expect(() => withCapital(-1)).toThrow(/openingCapitalPence/);
   });
 });

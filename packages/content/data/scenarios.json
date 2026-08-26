@@ -1,0 +1,8 @@
+[
+  {
+    "id": "house_opening",
+    "name": "House Opening",
+    "openingCapitalPence": 500000,
+    "seededStock": "supplementsCapital"
+  }
+]

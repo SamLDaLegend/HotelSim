@@ -1871,11 +1871,18 @@ export type RunSummary = {
      *
      * Reported because it was invisible and being invisible was the problem.
      * `--rooms N` seeds its hotel through `spawnEntity`, which is FREE, so seeded stock is
-     * also seeded cash at the refund rate: the default `--rooms 3` carries 375,000p of it
-     * beside a 500,000p `startingCapitalPence`. Anyone sizing that content number against
-     * seeded-hotel runs was sizing it against 875,000p and had no way to know. It is also
-     * the exact quantity `canDrawLoan` adds to the balance, so a reader can now check a
-     * loan refusal by hand.
+     * also seeded cash at the refund rate. It is also the exact quantity `canDrawLoan` adds
+     * to the balance, so a reader can check a loan refusal by hand.
+     *
+     * THIS FIELD IS HOW THE OPENING POSITION IS READ, AND ITS OWN COMMENT HAD THE FIGURE WRONG
+     * (G-057, ADR-0093 §2). It read *"the default `--rooms 3` carries 375,000p of it beside a
+     * 500,000p `startingCapitalPence` … sizing it against 875,000p"*. **The default seeds NINE
+     * rooms**: `--amenities` defaults to 1 and seeds one of EACH of three amenity room types,
+     * each scrapping for the same 125,000p as a bedroom. The quantity is
+     * `(rooms + 3 x amenities) x 125,000p` — **750,000p at the default, beside 500,000p of
+     * declared capital, which is 150% and not 75%** — and the `--rooms 60` bench arm carries
+     * 7,875,000p. `startingCapitalPennies` beside this field is now the SCENARIO's
+     * `openingCapitalPence`, so the opening position is these two numbers and nothing else.
      */
     readonly liquidationValuePennies: number;
     /**

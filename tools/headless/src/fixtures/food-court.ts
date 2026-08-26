@@ -138,11 +138,24 @@ export const FOOD_COURT_ECONOMY = [
   {
     id: 'house_rules',
     name: 'House Rules',
-    startingCapitalPence: 500000,
     loanPrincipalPence: 300000,
     loanFeeBasisPoints: 1000,
     loanRepaymentPerNightPence: 10000,
     liquidationRoomsMax: 4,
+  },
+] as const;
+
+/**
+ * WHAT THIS FOOD COURT OPENS WITH (G-057). `startingCapitalPence` was on the economy table above
+ * until `HOTELSIM.md` section 8's M4 prerequisite was built; the number is unmoved, the table
+ * carrying it is not. See `scenarioSchema` in `packages/content`.
+ */
+export const FOOD_COURT_SCENARIOS = [
+  {
+    id: 'food_court_opening',
+    name: 'Food Court Opening',
+    openingCapitalPence: 500000,
+    seededStock: 'supplementsCapital',
   },
 ] as const;
 
@@ -178,17 +191,18 @@ export const FOOD_COURT_GUEST_RULES = [
   },
 ] as const;
 
-/** The five tables as a raw `SimContent`-shaped document, for callers that bind directly. */
+/** The six tables as a raw `SimContent`-shaped document, for callers that bind directly. */
 export const FOOD_COURT_CONTENT = {
   roomTypes: FOOD_COURT_ROOM_TYPES,
   itemTypes: FOOD_COURT_ITEM_TYPES,
   needTypes: FOOD_COURT_NEED_TYPES,
   economy: FOOD_COURT_ECONOMY,
   guestRules: FOOD_COURT_GUEST_RULES,
+  scenarios: FOOD_COURT_SCENARIOS,
 };
 
 /**
- * Write the five files into a fresh temp directory and return its path, for `--content <dir>`.
+ * Write the six files into a fresh temp directory and return its path, for `--content <dir>`.
  *
  * REAL-PATHED, because `/var` is a symlink to `/private/var` on macOS and G-022 spent a fix on
  * exactly that: a test comparing a path it constructed against a path a child process reported
@@ -207,5 +221,6 @@ export function writeFoodCourtContentDir(): string {
   write('need-types.json', FOOD_COURT_NEED_TYPES);
   write('economy.json', FOOD_COURT_ECONOMY);
   write('guest-rules.json', FOOD_COURT_GUEST_RULES);
+  write('scenarios.json', FOOD_COURT_SCENARIOS);
   return dir;
 }

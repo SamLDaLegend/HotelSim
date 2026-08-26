@@ -43,7 +43,6 @@ const roomType: RoomTypeData = {
 const economy = (overrides: Partial<EconomyData> = {}): EconomyData => ({
   id: 'houseRules',
   name: 'houseRules',
-  startingCapitalPence: 0,
   loanPrincipalPence: PRINCIPAL,
   loanFeeBasisPoints: 1_000,
   loanRepaymentPerNightPence: PER_NIGHT,
@@ -175,7 +174,9 @@ describe('through the real tick, a borrowed hotel repays itself out of trade', (
     guestRules: [
       { id: 'houseRules', name: 'House Rules', stayDurationTicks: 480, toleranceTicks: 180, wantAtBasisPoints: 1_000 },
     ],
-    economy: [economy({ startingCapitalPence: 250_000 })],
+    economy: [economy()],
+    // G-057: the opening capital is the SCENARIO's now, not the economy's.
+    scenarios: [{ id: 'houseOpening', name: 'House Opening', openingCapitalPence: 250_000 }],
   });
 
   function scheduleFor(): ScheduledCommand[] {

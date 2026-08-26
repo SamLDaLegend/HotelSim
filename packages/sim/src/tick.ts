@@ -107,7 +107,7 @@ import { withStair } from './stairs.js';
 import type { Stairs } from './stairs.js';
 import { withLift } from './lift.js';
 import type { Lift } from './lift.js';
-import { hasContentId, isRoomKind, needTypesInOrder } from './content.js';
+import { hasContentId, isRoomKind, needTypesInOrder, seededStockDrawOf } from './content.js';
 import type { BoundContent } from './content.js';
 import { beginEntityDraft, commitEntityDraft, draftDespawn, draftSpawn } from './entities.js';
 import type { EntityDraft } from './entities.js';
@@ -120,7 +120,7 @@ import {
 } from './guests.js';
 import { assertNeedOutcomes } from './needs.js';
 import { assertReviewOutcomes } from './reviews.js';
-import { balanceOf, outstandingDebtOf } from './ledger.js';
+import { appendTransaction, balanceOf, outstandingDebtOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { applyDrawLoan, assertLoanOutcomes, totalLoanOutcomes } from './loan.js';
 import type { LoanOutcomes } from './loan.js';
@@ -427,6 +427,47 @@ function applyCommand(
       // this world's plot. Out of bounds throws, for the same reason an unknown kind
       // does: the caller is holding the world whose plot it just ignored.
       draftSpawn(entities, command.entityKind, command.at, command.footprint ?? UNIT_FOOTPRINT);
+      // AND THE SEEDED HOTEL IS DRAWN FROM THE DECLARED CAPITAL, IF THE SCENARIO SAYS SO (G-057).
+      //
+      // THE DEFECT THIS CLOSES, in the words `build.ts` used to record it four goals before
+      // anything acted on it: "`spawnEntity` places a room FREE ... and [demolishRoom] refunds a
+      // fraction of a construction cost that nobody was charged. So a host that seeds rooms and
+      // then demolishes them MINTS MONEY." That made a scenario's seeded stock into seeded CASH
+      // at the refund rate, undeclared, and `HOTELSIM.md` section 8 makes removing it a hard
+      // prerequisite of M4 — every balance figure in this project was taken with `--rooms N`.
+      //
+      // ONE `startingCapital` LINE PER SEEDED ROOM, NEGATIVE, RATHER THAN A NEW REASON. What the
+      // hotel opened with is one question, and the answer has a cash half and a bricks half; a
+      // tenth `TransactionReason` would have split it across two folds and left
+      // `sumByReason(ledger, 'startingCapital')` reporting a number no hotel ever held. Under this
+      // policy that fold IS the opening cash, and the law the tests pin is
+      //
+      //     balanceOf(ledger) + stockValueOf(entities)  ===  openingCapitalPence
+      //
+      // for a world that has not yet traded — however many rooms the host seeded. That invariance
+      // is what makes a balance figure quotable, which is the whole of the prerequisite.
+      //
+      // UNCONDITIONAL IN THE TICK rather than gated on tick 0. A magic condition would make the
+      // law above true only of a prefix of the run; drawing on every structural placement makes
+      // it true always, and the reason reads the same at tick 0 and tick 50,000 — the host handed
+      // this hotel something it did not pay for, and the scenario said where that comes from.
+      //
+      // ZERO UNDER `supplementsCapital`, WHICH IS WHAT THE SHIPPED CONTENT DECLARES, so this
+      // appends nothing and every run before G-057 reproduces to the byte. The branch lives in
+      // `seededStockDrawOf` and nowhere else; see `seededStockPolicySchema` for why the shipped
+      // value is the one it is, and for what flipping it was measured to cost.
+      const drawn = seededStockDrawOf(content, command.entityKind);
+      if (drawn !== 0) {
+        accumulator.ledger = appendTransaction(accumulator.ledger, {
+          tick: state.world.tick,
+          amount: -drawn,
+          reason: 'startingCapital',
+        });
+        // The tick-local fold is now stale: a build later in THIS log must see what the draw
+        // spent, exactly as it sees what an earlier build spent. Cheaper than re-folding here,
+        // and it keeps `cashOnHand` the one place the ledger is folded (I4).
+        accumulator.balanceFolded = false;
+      }
       return;
     case 'despawnEntity':
       draftDespawn(entities, command.id);

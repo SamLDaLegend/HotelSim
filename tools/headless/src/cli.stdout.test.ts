@@ -54,7 +54,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { itemTypesSchema, roomTypesSchema } from '@hotelsim/content';
-import { ECONOMY_PATH, GUEST_RULES_PATH, ITEM_TYPES_PATH, NEED_TYPES_PATH, ROOM_TYPES_PATH } from './content-loader.js';
+import {
+  ECONOMY_PATH,
+  GUEST_RULES_PATH,
+  ITEM_TYPES_PATH,
+  NEED_TYPES_PATH,
+  ROOM_TYPES_PATH,
+  SCENARIOS_PATH,
+} from './content-loader.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(ROOT, 'tools/headless/src/cli.ts');
@@ -243,7 +250,7 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // once and neither is a code change: `World.contentHash` moves because the content document
     // gained a field, and the run itself is genuinely different.
     // ==========================================================================================
-    stateHash: 'e3c3857d7108fc79',
+    stateHash: '110b25ef862153fb',
   },
   guests: {
     arrived: 32,
@@ -551,10 +558,17 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     loanDrawPennies: 0,
     loanFeePennies: 0,
     loanRepaymentPennies: 0,
-    // The seeded hotel's scrap value, printed rather than hidden (G-011 critique round
-    // 1): three rooms placed free by `spawnEntity` are still worth 375,000p if scrapped,
-    // beside the 500,000p of opening capital. Both numbers now appear in the report a
-    // designer tunes `startingCapitalPence` against.
+    // The seeded hotel's scrap value, printed rather than hidden (G-011 critique round 1).
+    //
+    // THIS COMMENT SAID 375,000p WITH 750000 ON THE LINE BENEATH IT, AND THAT IS THE CLEAREST
+    // EVIDENCE IN THE TREE THAT THE CHARTER'S FIGURE WAS WRONG (G-057, ADR-0093 §2). It read
+    // "three rooms placed free by `spawnEntity` are still worth 375,000p if scrapped" — but the
+    // default seeds NINE rooms, because `--amenities` defaults to 1 and seeds one of EACH of
+    // three amenity room types, each scrapping for the same 125,000p as a bedroom. The literal
+    // below has been 750000 since amenities landed and nobody read the two together.
+    //
+    // Both halves of the opening position appear in the report: this, and
+    // `startingCapitalPennies` above, which is now the SCENARIO's `openingCapitalPence`.
     liquidationValuePennies: 750000,
     outstandingDebtPennies: 0,
     settlements: 2,
@@ -779,7 +793,21 @@ const GOLDEN_2_DAYS_SEED_42 =
     // harness in this repository issues that command. So the same 6 valid rooms, the same
     // 0/0/0/0/0/0 tally, the same 32 arrivals, the same 6/21 split, the same four need rows to
     // the basis point, the same 9 transactions, the same 51,000p and the same 527,000p.
-    'state hash  e3c3857d7108fc79',
+    //
+    // G-057: THE HASH LINE MOVES AND NOTHING ELSE IN THIS DOCUMENT DOES — the narrowest golden
+    // move in this file's history, narrower even than G-038b-i's. `e3c3857d7108fc79` ->
+    // `110b25ef862153fb`, for ONE cause: `World.contentHash`. The shipped content gained
+    // `scenarios.json` and `economy.json` lost `startingCapitalPence`, so the FINGERPRINT moves
+    // (G-002's design — a run under different content hashes differently from tick 0, loudly),
+    // and the world's shape does not: no `World` field, no save bump, no migration.
+    //
+    // AND THE OPENING BALANCE IS THE SAME 500,000p, WHICH IS THE POINT OF THE GOAL RATHER THAN
+    // A COINCIDENCE. G-057 moved that number between content tables and did not re-size it —
+    // re-sizing is a balance decision and belongs to M4 (`HOTELSIM.md` section 8). The shipped
+    // `seededStock` is `supplementsCapital`, which is what every build before this goal did, so
+    // the same 6 valid rooms, the same 32 arrivals, the same 6/21 split, the same four need rows
+    // to the basis point, the same 9 transactions, the same 51,000p and the same 527,000p.
+    'state hash  110b25ef862153fb',
   ].join('\n') + '\n';
 
 /**
@@ -955,7 +983,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  e3c3857d7108fc79']);
+    expect(differing).toEqual(['seed        42', 'state hash  110b25ef862153fb']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -996,6 +1024,8 @@ describe('the --content contract', () => {
     copyFileSync(ITEM_TYPES_PATH, join(dir, 'item-types.json'));
     copyFileSync(ECONOMY_PATH, join(dir, 'economy.json'));
     copyFileSync(GUEST_RULES_PATH, join(dir, 'guest-rules.json'));
+    // SIX FILES SINCE G-057: what the hotel OPENS with is a table of its own.
+    copyFileSync(SCENARIOS_PATH, join(dir, 'scenarios.json'));
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
@@ -1024,6 +1054,8 @@ describe('the --content contract', () => {
     copyFileSync(ITEM_TYPES_PATH, join(dir, 'item-types.json'));
     copyFileSync(ECONOMY_PATH, join(dir, 'economy.json'));
     copyFileSync(GUEST_RULES_PATH, join(dir, 'guest-rules.json'));
+    // SIX FILES SINCE G-057: what the hotel OPENS with is a table of its own.
+    copyFileSync(SCENARIOS_PATH, join(dir, 'scenarios.json'));
     return dir;
   };
 
@@ -1142,13 +1174,19 @@ describe('the --content contract', () => {
   //  is not. A single missing-file case would also pass against a loader that refused
   //  everything.
   // ==========================================================================
-  describe('every one of the five content files is required, by name', () => {
+  describe('every one of the six content files is required, by name', () => {
     const FILES = [
       'room-types.json',
       'need-types.json',
       'item-types.json',
       'economy.json',
       'guest-rules.json',
+      // SIXTH SINCE G-057, and it earns the same argument the five above it earn. Absence would
+      // read as "no declared opening capital" — TRUE of content that predates G-011 and a silent
+      // zero for a directory somebody assembled today. Since G-057 this is the only table that
+      // declares an opening balance, so a shrug here is exactly the failure `HOTELSIM.md`
+      // section 8's M4 prerequisite is about.
+      'scenarios.json',
     ] as const;
 
     it('the complete directory loads, or the refusals below are refusals of nothing', () => {

@@ -10,7 +10,7 @@
 
 import { createBuildOutcomes } from './build.js';
 import type { BuildOutcomes } from './build.js';
-import { firstEconomy } from './content.js';
+import { firstScenario } from './content.js';
 import type { BoundContent } from './content.js';
 import { createCorridors } from './corridors.js';
 import type { Corridors } from './corridors.js';
@@ -286,10 +286,17 @@ export const WORLD_KEYS: readonly (keyof World)[] = Object.freeze(
  * IT OPENS WITH CAPITAL, AND THE CAPITAL IS A TRANSACTION (G-011). There is no `balance`
  * field to set — I4 forbids one — so the only way a hotel can start with money is for
  * that money to be a line in the ledger, which is also why it is EXPLAINED rather than
- * appearing from nowhere. `startingCapitalPence` is content, so what a hotel opens with is
+ * appearing from nowhere. `openingCapitalPence` is content, so what a hotel opens with is
  * a data edit and never a diff here.
  *
- * The append is conditional on the content DEFINING an economy, and unconditional within
+ * THE NUMBER IS THE SCENARIO'S SINCE G-057, AND THIS IS THE ONE PLACE IT IS READ. It lived on
+ * the economy table — the house rules — until `HOTELSIM.md` section 8's M4 prerequisite was
+ * built, and the move is the whole point: the house rules are the game, an opening balance is
+ * the situation, and while the two shared a record `--rooms N` could move an opening balance
+ * nobody had written down. `firstScenario` reaches it by position rather than by name, so the
+ * snake_case id that names it never enters `packages/sim` (ADR-0003).
+ *
+ * The append is conditional on the content DEFINING a scenario, and unconditional within
  * that: a table saying `0` books a zero-amount transaction, deliberately, exactly as a
  * free room type still books a `construction` of 0. Absence is the pre-G-011 world and
  * books nothing at all, so a world created under content that predates this table has the
@@ -302,13 +309,13 @@ export const WORLD_KEYS: readonly (keyof World)[] = Object.freeze(
  * afford its first room.
  */
 export function createWorld(seed: number, content: BoundContent): World {
-  const economy = firstEconomy(content);
+  const scenario = firstScenario(content);
   const ledger: readonly Transaction[] =
-    economy === undefined
+    scenario === undefined
       ? []
       : appendTransaction([], {
           tick: 0,
-          amount: economy.startingCapitalPence,
+          amount: scenario.openingCapitalPence,
           reason: 'startingCapital',
         });
   return {

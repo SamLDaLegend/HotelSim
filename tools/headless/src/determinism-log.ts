@@ -16,6 +16,7 @@ import {
   isRoomKind,
   demolitionRefundOf,
   firstEconomy,
+  firstScenario,
   findItemType,
   firstRoomTypeProviding,
   lodgingNeedOf,
@@ -407,13 +408,18 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
   // sky-tower test is what would say so"). `churnEntities` below is added into the
   // `underfoot` walk's offset for that reason — derived, never a literal.
   // ============================================================================
+  // THE OPENING CAPITAL IS THE SCENARIO'S SINCE G-057, not the economy's, and the churn still
+  // needs the ECONOMY to exist: the pass ends in a loan draw, and a world with capital and no
+  // lender would churn its way to a state nothing could exit. Both are asked for, separately,
+  // because they are now two statements about the content rather than one.
   const economy = firstEconomy(content);
+  const scenario = firstScenario(content);
   const roundTripLoss = constructionCostOf(content, entityKind) - demolitionRefundOf(content, entityKind);
   const cheapestRoom = minConstructionCostOf(content);
   const churnCycles =
-    economy === undefined || roundTripLoss <= 0 || !Number.isFinite(cheapestRoom)
+    economy === undefined || scenario === undefined || roundTripLoss <= 0 || !Number.isFinite(cheapestRoom)
       ? 0
-      : Math.max(0, Math.ceil((economy.startingCapitalPence - cheapestRoom + 1) / roundTripLoss));
+      : Math.max(0, Math.ceil((scenario.openingCapitalPence - cheapestRoom + 1) / roundTripLoss));
   let churnTick = 1;
   let churnRoomId = 1;
   for (let cycle = 0; cycle < churnCycles; cycle += 1) {
