@@ -2,6 +2,11 @@
 //
 //   pnpm check:measure
 //
+// PREDICATE (ADR-0086) — `sim:measure` still refuses each condition enumerated below, still
+// reports the workload and sample count it ran, and still holds no bound of its own. Every
+// claim on this row is about the INSTRUMENT; no reading of tick cost is judged here, so a
+// simulation twice as slow as yesterday's leaves this row green.
+//
 // NOT A §2 INVARIANT. `pnpm sim:measure` is an instrument with no verdict — no bound, no
 // threshold, nothing to pass — so there is no invariant here to break. What this file
 // checks is that the instrument MEASURES WHAT IT SAYS and REFUSES WHEN IT CANNOT. The

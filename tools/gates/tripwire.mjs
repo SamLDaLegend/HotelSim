@@ -4,6 +4,11 @@
 // run as a gate. The thing that has actually guarded tick cost for eighteen goals stops
 // being a practice and becomes a mechanism.
 //
+// PREDICATE (ADR-0086) — the median tick cost of THIS tree, divided by the median tick cost
+// of ONE earlier arm (dirty tree -> HEAD, clean tree -> HEAD~1), at one fixed workload, is
+// under the bound below. It is a single-step comparison: a regression spread over several
+// commits, each of them inside the bound, is invisible to every run of this gate.
+//
 // WHY IT EXISTS, IN ONE LINE. G-018 re-derived I5's budget from a requirement and widened
 // it ~39x, which was correct and left I5 protecting approximately nothing: it is a SANITY
 // CEILING, not a regression tripwire (`HOTELSIM.md` §2.1.3). The human's consequence of

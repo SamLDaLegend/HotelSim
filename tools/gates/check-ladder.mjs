@@ -1,5 +1,11 @@
 // `pnpm check:ladder` — NOTHING IN THE RENDER LAYER COMPUTES ONE PLAY SPEED FROM ANOTHER.
 //
+// PREDICATE (ADR-0086) — no expression in a scannable file under `apps/game` combines TWO
+// rung speeds — reads of `ticksPerRealSecond`, plus one level of aliasing — with an arithmetic
+// operator. The subject is that field: a hard-coded speed literal that never reads a rung is
+// not two rung speeds, so this gate cannot see one. One rung with arithmetic, and two rungs
+// compared, are ALLOWED by ruling and are exercised as such below.
+//
 // ---------------------------------------------------------------------------------------
 // WHY THIS EXISTS, AND WHY IT EXISTS NOW RATHER THAN LATER.
 //

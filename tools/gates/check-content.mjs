@@ -3,6 +3,11 @@
 //   No room type, item, staff role or guest archetype defined in code. All of it
 //   lives in packages/content as JSON validated against a schema.
 //
+// PREDICATE (ADR-0086) — no snake_case string literal outside the ALLOWED list appears in
+// packages/sim/src or apps/game/src, and every `id` at any depth of a packages/content JSON
+// file is snake_case and unique within its file. The SCHEMA is not run here: whether a
+// content entry's FIELDS are valid is Zod's claim in packages/content, not this file's.
+//
 // The enforceable convention that makes this machine-checkable:
 //
 //   *** A snake_case string literal is a content ID. ***

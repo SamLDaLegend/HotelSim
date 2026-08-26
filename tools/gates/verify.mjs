@@ -49,21 +49,49 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 // does — but minting a seventh §2 invariant is a human decision (§9, and `CLAUDE.md`:
 // "Changing an invariant is never an agent decision"). It sits in this column until a human
 // says otherwise. The closing line below counts the SIX, and it still says six on purpose.
+//
+// ==========================================================================================
+// THE THIRD COLUMN IS THE PREDICATE, NOT A BLURB (ADR-0086, human ruling, G-056).
+//
+// A GATE'S NAME IS A CLAIM, AND A CLAIM NAMES THE SYMBOL THAT MAKES IT TRUE. Read as a
+// DESCRIPTION, `check:status` claims it checks status; read as a SPECIFICATION it checks one
+// clause about `pending` — and five goals of green were read as "status is fine" when that
+// gate had never read a `Milestone:` line, a merge commit, or a referenced goal ID with no
+// block at all. Same mechanism as ADR-0081's loop terms, one layer down, and the same fix:
+// state the clause narrowly enough that a reader can name something the gate does NOT check.
+//
+// THE TEST EACH LINE HAD TO PASS: can a reader name ONE THING the row does not cover, FROM
+// THE LINE ALONE? "asserts the status is correct" fails it — that is the defect wearing the
+// remedy's clothes. Every line below was written off the gate's own code and nothing about
+// what a gate does was changed to make one true.
+//
+// WHY HERE AS WELL AS IN EACH GATE'S HEADER. This column is PRINTED, once per row, at the
+// moment an agent or a human is reading a `pnpm verify` run — which is where the misreading
+// actually happens. The header is what a builder opening the file reads, and each gate that
+// HAS a file carries the same sentence there marked `PREDICATE`. Three rows own no gate file
+// — `typecheck`, `test` and `test:save` are `tsc` and `vitest` invocations — so for those
+// three this table is the only place the predicate can live, which is the second reason the
+// table is the primary copy rather than the mirror.
+//
+// THE COPIES CAN DRIFT AND NOTHING PINS THEM TOGETHER. That is stated rather than fixed: a
+// scanner that checks the scanners' comments has this same problem one level up, and the
+// ruling that ordered these lines forbade the extra surface by name.
+// ==========================================================================================
 const GATES = [
-  ['—', 'typecheck', 'strict TypeScript across the workspace'],
-  ['I1', 'check:purity', 'sim imports no render layer, DOM, engine, fs or network'],
-  ['I3', 'check:content', 'no content defined in code'],
-  ['I4', 'test', 'unit tests, including the append-only ledger fold'],
-  ['I2', 'test:determinism', 'same seed + log => identical hash after 100k ticks'],
-  ['I6', 'test:save', 'serialise -> deserialise -> re-hash is identical'],
-  ['I5', 'sim:bench', '365 days headless, inside the derived budget (§2.1.2)'],
-  ['—', 'check:measure', "the tick-cost instrument's own proofs — a check, not an invariant"],
-  ['—', 'check:tickcost', 'tick cost against the previous commit, inside a derived bound (G-020b)'],
-  ['—', 'check:tickcost:proof', 'the tripwire, watched going red under two mutations'],
-  ['—', 'check:scaling', 'rooms, needs and provider density scale as claimed (G-020c, out of I4)'],
-  ['—', 'check:stamp', 'the four digests carry one as-of line (§4.1, G-022), and no goal block reads `pending` that git says shipped (ADR-0047 amdt §4, G-039a)'],
-  ['—', 'check:ladder', 'no render code computes one play speed from another (§2.1.1, G-030)'],
-  ['—', 'check:unpinned', 'no quantity printed as a claim that its own file does not pin (ADR-0032 §1, G-033)'],
+  ['—', 'typecheck', 'tsc over each package tsconfig — sim, content, headless, game; the .ts files those include, nothing executed'],
+  ['I1', 'check:purity', 'packages/sim/src imports only itself, type-only content and (in tests) vitest; no shipped file there names a host global; packages/sim declares no runtime dependency; depcruise adds the transitive edge'],
+  ['I3', 'check:content', 'no unlisted snake_case string literal in packages/sim/src or apps/game/src, and every id in packages/content data is snake_case and unique WITHIN ITS FILE, in parseable JSON'],
+  ['I4', 'test', 'vitest over every *.test.ts under packages/ and tools/, apps/ excluded by config — whatever those files assert, including the ledger fold'],
+  ['I2', 'test:determinism', 'a 100k-tick replay at seed 42 hashes alike twice per process and across three processes, seed 43 differs, and no shipped sim file names a clock or Math.random'],
+  ['I6', 'test:save', 'vitest over the test files whose PATH contains "save" — the round trip, the field coverage and the migrations those files name'],
+  ['I5', 'sim:bench', 'one 365-day headless run of the bench workload exits 0, reports its own day count, and lands under the ladder-derived ceiling (§2.1.2)'],
+  ['—', 'check:measure', 'sim:measure refuses each condition it cannot compare, reports the workload and samples it ran, and reproduces its golden state hash — it holds no bound of its own to break'],
+  ['—', 'check:tickcost', "this tree's median tick cost over the previous commit's, at one fixed workload, is under the derived bound (G-020b)"],
+  ['—', 'check:tickcost:proof', 'a byte-identical copy of the tripwire, run over a mutated copy of the sim, exits red for a guest-loop quadratic and for a constant factor'],
+  ['—', 'check:scaling', 'the room, need and provider-density arms\' ratios of median tick cost stay under their derived bounds, above 1 on the axes flagged for it, and are not ratios of overhead (G-020c)'],
+  ['—', 'check:stamp', 'the four digests carry one byte-identical as-of paragraph naming a goal GOALS.md calls done (§4.1, G-022), and no goal ID in a NON-MERGE commit SUBJECT resolves to blocks that all read `pending` (ADR-0047 amdt §4, G-039a)'],
+  ['—', 'check:ladder', 'no expression under apps/game combines TWO rung speeds arithmetically — one rung with arithmetic, and comparisons, are allowed (§2.1.1, G-030)'],
+  ['—', 'check:unpinned', 'no it/describe title or Error message under packages/ or tools/ prints a three-digit-or-longer integer or a decimal that its own file does not pin (ADR-0032 §1, G-033)'],
 ];
 // `check:unpinned` HAS NO `:proof` ROW OF ITS OWN, AND THAT IS THE OPPOSITE OF AN OVERSIGHT.
 // Its proof is `unpinned.scan.test.ts`, registered in `scanner.census.test.ts` — the mechanism

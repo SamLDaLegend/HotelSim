@@ -3,6 +3,12 @@
 //   Same seed + same command log => byte-identical state hash after 100,000 ticks,
 //   on every run and every platform.
 //
+// PREDICATE (ADR-0086) — one 100,000-tick replay at seed 42 produces the same hash twice
+// inside a process and across three processes, seed 43 produces a different one, and no
+// shipped (non-test) file under packages/sim/src names a clock or an unseeded random source.
+// IT HOLDS NO REFERENCE HASH: the runs are compared TO EACH OTHER, on THIS machine, at these
+// two seeds, so a change that is deterministic and wrong passes here by construction.
+//
 // HOTELSIM.md §2: "Do not weaken it, do not add tolerance, do not skip it just for
 // this goal." If this gate is failing, something has leaked wall-clock time, host
 // state or unseeded randomness into the simulation. Fix the leak, not the gate.

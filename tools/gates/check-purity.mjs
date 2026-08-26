@@ -3,6 +3,12 @@
 //   packages/sim imports nothing from the render layer, no DOM, no engine API,
 //   no filesystem, no network.
 //
+// PREDICATE (ADR-0086) — every import in every file under packages/sim/src is relative, or
+// type-only from @hotelsim/content, or `vitest` inside a test; no SHIPPED (non-test) file
+// there names one of the host globals listed below; and packages/sim's package.json declares
+// no runtime dependency. The subject is packages/sim/src and nothing else: this file judges no
+// other package, and it matches global NAMES in source text rather than reasoning about types.
+//
 // Three independent checks, because each catches something the others miss:
 //   1. package.json `dependencies` is empty        -> zero runtime dependencies
 //   2. no banned module specifier is imported      -> no node/pixi/apps reach-through

@@ -3,6 +3,11 @@
 //   `pnpm sim:run --days 365 --seed 42` completes in Node with no window and no
 //   renderer, inside the budget.
 //
+// PREDICATE (ADR-0086) — ONE run of the bench workload exits 0 under plain Node, reports the
+// day count it was asked for on stdout, and takes less wall-clock than the ladder-derived
+// ceiling. One sample, one seed, one machine: a reading half the ceiling and a reading a
+// tenth of it are the same verdict here, so nothing on this row can see a regression.
+//
 // THE WORD DOING THE WORK IS "HEADLESS". The time bound is a SANITY CEILING — it
 // catches a catastrophe, an accidental quadratic or a per-tick allocation storm. It
 // is not a regression tripwire and must not be used as one; the instrument for that

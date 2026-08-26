@@ -1,5 +1,12 @@
 // `pnpm check:unpinned` — A NUMBER IN PROSE IS A CLAIM WITH NO PIN.
 //
+// PREDICATE (ADR-0086) — no `it`/`test`/`describe` TITLE and no `Error` MESSAGE, in a
+// `.ts`/`.mts`/`.mjs` file under `packages/` or `tools/`, carries an integer of three or more
+// digits or a decimal that the SAME FILE does not pin. Three narrowings are deliberate and
+// each is ruled below: COMMENTS are out of scope (counted by `--census`, never failed on),
+// `apps/` and the markdown ledgers are outside the walk, and one- and two-digit integers are
+// ignored. A stale figure in a comment header is this gate's subject in name only.
+//
 // ---------------------------------------------------------------------------------------
 // WHY THIS EXISTS.
 //

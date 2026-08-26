@@ -98,7 +98,7 @@
   either, it gets a block and rejoins; if not, the slot is closed and was always empty.
   **THEN M3 RESUMES at G-023b — UNBLOCKED** (960 ticks of slack where its plan pass measured zero)
   → G-024/G-025 → G-026, last in milestone, two critics. **Four M3 goals of its own remain.**
-- **Owed by the human**: M3 exit. *(**M2.5 EXIT: SIGNED OFF 2026-08-14.** And **WATCH #11 discharged
+- **Owed by the human**: ~~M3 exit~~ **SIGNED OFF 2026-08-24 (ADR-0081), qualified.** *(**M2.5 EXIT: SIGNED OFF 2026-08-14.** And **WATCH #11 discharged
   all three owed WATCHes in one look** — napping reads as resting, the departure distinction **IS**
   visible via the lobby fuse, and the needs-met bar survives its redefinition. **ADR-0037's scoring
   ruling is human-confirmed**: responsiveness over severity. **ADR-0015's blind-spot call is
@@ -1772,6 +1772,24 @@ Critique rounds used: 0/3
   it** — this is that goal, and it should report them as results rather than re-derive them.
 
 ## M3 exit — human sign-off required
+
+Status: **SIGNED OFF 2026-08-24 by the human (ADR-0081).** The milestone question was asked and
+answered — **a QUALIFIED yes**, and the qualification is the record: *"an unqualified yes here
+would be the drift §9 exists to catch."* Right: an isometric floorplan hotel, guests moving and
+queueing, the staircase reading, the building a place rather than a diagram. **Not yet the game:
+two of the three declared loops run on a minority of their terms**, the build loop is *spend cash,
+add capacity, stop*, and reviews are a one-bit signal. **Testable at M4 exit: the build loop
+carrying more than one term, and reviews carrying information rather than a constant.**
+
+> **THE SIGN-OFF LANDED IN `DECISIONS.md` AND NOT HERE, FOR TWO DAYS.** Found by G-056, which was
+> checking whether a gate could see a stale `Milestone:` line and noticed the tree still called M3
+> exit *owed*. **ADR-0046's banner says it in the general form — *a ruling is not landed until
+> every copy of the sentence it reverses is dead* — and a sign-off is not landed until the block
+> that TRACKS it says so.** *The orchestrator wrote the ADR and left the tracker.*
+
+**What remains before M4 opens** — the human's ordering (ADR-0081 §2, §3): **G-055 done** ·
+**G-056 done** · **G-053b** (the rest of the orphan sweep). Then M4, planned around **CLOSURE**
+rather than around ticking off terms (ADR-0085).
 
 When **G-022 to G-026** are `done`, that is a §5.4 escalation. Write it to `ESCALATIONS.md`
 and stop.

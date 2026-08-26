@@ -1,5 +1,11 @@
 // `pnpm check:scaling` — THE SCALING BOUNDS, OUT OF THE PARALLEL TEST RUNNER (G-020c).
 //
+// PREDICATE (ADR-0086) — for each bounded axis, the RATIO of one arm's median tick cost to
+// another's is under a bound derived in `scaling-bound.mjs`; on the axes whose readings
+// warrant the flag it is also above 1; and no arm is close enough to an idle world for its
+// ratio to be a ratio of overhead. Every verdict here is a QUOTIENT: a change that
+// makes both arms equally dearer moves no ratio at all, and no absolute cost is judged.
+//
 // Tick cost grows linearly in room count (G-010), sub-linearly in need count (G-016) and
 // sub-linearly in provider density (G-013). Those three ratios used to be asserted inside
 // `pnpm test`, which is I4's gate. They are asserted here instead, and the reason is §2.0:

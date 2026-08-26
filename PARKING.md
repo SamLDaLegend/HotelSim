@@ -3641,3 +3641,32 @@ box, n>=3 alternated, and read the two cases' durations out of `pnpm test:durati
 toward the ~7.8s isolated figure; refutes it if they do not**, which would mean the contention is not
 sibling-worker CPU and the 4.29x needs a different explanation before it is quoted about any other
 machine. *This is a proxy for the CI regime, not the CI regime.*
+
+### `check-status.mjs` PASSES an id that resolves to NO BLOCK — and that subsumes the merge hole
+**Parked 2026-08-26 (ADR-0088, found by G-056).** A goal ID referenced by a commit that resolves to
+**no block at all** is printed *"not judged"* and **passes**. The whole-check anti-vacuity floor only
+fires if **not one** ID resolves.
+
+> **So G-042 would have passed EVEN IF MERGES WERE SCANNED.** The merge exclusion and the
+> absent-block pass are **two independent causes of one symptom**, and the parked merge item was an
+> **incomplete diagnosis of its own finding.**
+
+**Falsification test:** commit with a subject naming an invented goal id that has no block, on a
+non-merge commit, and run `node tools/gates/check-status.mjs`. **Confirms if it exits 0 while
+printing "not judged"; refutes if it exits 1.** **Fixing only the merge scan would leave the escape
+open** — that is the whole value of this entry.
+
+### THE GREP THAT PROVED A GATE'S BLINDNESS IS NOW SELF-INVALIDATING
+**Parked 2026-08-26 (ADR-0088).** `grep -c Milestone tools/gates/check-status.mjs` returned **0**
+before G-056 and returns **2** after, **because the predicate line names the omission in prose.**
+
+> **The act of documenting the blindness destroyed the invocation that demonstrated it.**
+
+**Re-runnable replacement**: strip comments first, or simply read `goalBlocks()` — it captures
+`{id, status, line, headingLine}` and **no reader below it looks at anything but the status line**.
+**Falsification test:** run the comment-stripped grep; **confirms if it returns 0, refutes if any
+executable line names `Milestone`.**
+
+**The general shape, which is ADR-0085 from the other direction**: not a stale quotation, but **a
+quotation the tree grew out from under.** *A citation a later commit can silently falsify needs its
+invocation chosen so that documenting the finding cannot break it.*

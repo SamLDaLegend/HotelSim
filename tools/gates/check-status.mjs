@@ -2,6 +2,20 @@
 //
 //   node tools/gates/check-status.mjs      (runs as the second half of `pnpm check:stamp`)
 //
+// PREDICATE (ADR-0086, the gate this rule was named after) — no goal ID appearing in the
+// SUBJECT of a NON-MERGE commit RESOLVES to blocks in `GOALS.md`/`GOALS-ARCHIVE.md` that ALL
+// read `pending`. That is the whole claim, and three things fall straight out of it. It reads
+// no line of a block except the status, so a `Milestone:` line is invisible to it whatever it
+// says. `git log --no-merges` (below) means a goal that entered through a MERGE is never
+// judged — which is how G-042 reached `main` with no block until a human noticed (`1aded41`
+// merged it, `f57782e` wrote the block afterwards). And an ID that resolves to NO block is
+// reported as "not judged" and passes, so the block's ABSENCE is not what this gate catches.
+//
+// (The `Milestone:` half used to be citable as `grep -c Milestone` returning 0 over this file
+// and over `lib/goal-blocks.mjs`. THIS COMMENT BREAKS THAT INVOCATION — the word is now here,
+// in prose, twice — so the re-runnable form is the comment-stripped one, or simply: no reader
+// below `goalBlocks()` looks at anything but the status line.)
+//
 // ==========================================================================================
 // THE RULE, IN THE HUMAN'S OWN WORDS: **"a commit referencing a goal ID implies that goal's
 // block is not `pending`."**

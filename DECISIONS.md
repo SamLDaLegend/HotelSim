@@ -7424,3 +7424,87 @@ name, in the goal about instruments** — ADR-0086 the day it was written. No wr
   a maximum over the sample and grows with it. **So the iteration was stopped on a stated ground:
   this is a MONITORING problem wearing a threshold's clothes** — and the monitor,
   `pnpm test:durations`, is what shipped.
+
+---
+
+## ADR-0088 — Fourteen predicates, fifteen omissions, and a THIRD hole that subsumes the second.
+
+**Date**: 2026-08-26 · **Status**: accepted · **G-056.** Fourteen rows PASS twice,
+I2 `abfd91c3da10b67f`, **no new file under `tools/gates`**, **no gate logic changed — proven
+mechanically, not asserted.**
+
+### THE VACUITY TEST WAS THE GOAL AND IT WAS MET
+
+**Each of the fourteen predicate lines yields one thing the gate does NOT check, from the line
+alone.** The sharpest:
+
+- **`typecheck`** does not cover **the fourteen gates themselves** — `tools/gates/*.mjs` is in **no
+  tsconfig**, so *"the code enforcing every invariant is the least type-checked code in the repo."*
+- **`test:determinism`** holds **no reference hash**: runs are compared to each other on one machine,
+  so **a change that is deterministic and wrong is green.** I2's *"every platform"* clause lives in
+  CI, not that row.
+- **`test:save`** is **a filename filter wearing an invariant's name** — its claim is *"the files with
+  `save` in the path ran"*, so **coverage of I6 depends on a naming convention nothing enforces.**
+- **`check:measure`** judges **the instrument and no measurement**: *"a simulation twice as slow
+  leaves it green."*
+- **`check:tickcost`** cannot see **multi-commit drift** — *"ten commits at 1.1x each pass every
+  run."*
+
+### THE FINDING THAT WAS NOT IN THE BRIEF, AND IT SUBSUMES ONE THAT WAS
+
+**A referenced goal ID that resolves to NO BLOCK is printed *"not judged"* and PASSES.** The
+whole-check anti-vacuity floor only fires if **not one** ID resolves.
+
+> **So G-042 would have passed EVEN IF MERGES WERE SCANNED.** The merge exclusion and the
+> absent-block pass are **two independent causes of the same escape**, and only the first was known.
+> **The parked "merge invisibility" item was therefore an incomplete diagnosis of its own symptom.**
+
+### AND THE GREP THAT PROVED THE BLINDNESS IS NOW SELF-INVALIDATING
+
+`grep -c Milestone tools/gates/check-status.mjs` returned **0** at HEAD and returns **2** now —
+**because the predicate line names the omission in prose.**
+
+> **The act of documenting the blindness destroyed the invocation that demonstrated it.** Recorded at
+> the site with a re-runnable replacement. *A citation that a later commit can silently falsify is
+> ADR-0085's class arriving from the other direction — not a stale quotation, but a quotation the
+> tree grew out from under.*
+
+### FOURTEEN ROWS, FIFTEEN PREDICATES — and the gate the ruling is named after is not a row
+
+**`check:status` is not one of the fourteen.** The population is **rows**; `check:status` is the
+**second command of the `check:stamp` row**, and `check:purity` likewise runs a gate plus
+`depcruise`. **The gate ADR-0086 is named after does not appear in the row list at all** — *itself a
+small instance of the class the ruling is about.*
+
+### WHERE THE LINES WENT, AND THE DRIFT IS DISCLOSED RATHER THAN GATED
+
+**Both copies**: the `GATES` table (printed once per row, **at the moment the misreading actually
+happens**) and each gate file's header (**what a builder hits first**). **Three rows can only carry
+it in the table** — `typecheck`, `test` and `test:save` own no gate file.
+
+**The two copies can drift and nothing pins them. Stated in `verify.mjs` rather than fixed**, because
+*a scanner checking the scanners' comments has this same problem one level up.* **No test, no new
+file. That restraint is the goal's, and it is right.**
+
+### AND MY BRIEF'S FRAMING WAS FALSE ABOUT M3 ITSELF
+
+I wrote that `G-037a` reads `Milestone: M3` **"after M3 signed off"**. **The blindness is real and
+verified — `grep -c Milestone` over the gate and its library both returned 0 at HEAD — but the
+staleness framing was not**: the tree still listed **M3 exit as owed**, and the
+`## M3 exit — human sign-off required` block was **unexecuted.**
+
+> **The human signed M3 off in conversation on 2026-08-24 and I wrote ADR-0081. I never closed the
+> block that TRACKS the sign-off.** **ADR-0046's banner states the general form — *a ruling is not
+> landed until every copy of the sentence it reverses is dead* — and a sign-off is not landed until
+> the tracker says so.** **Closed now, with the two-day gap recorded in place.**
+
+*(Also corrected: "fourteen gates" is fourteen ROWS; and *"the predicate already exists in each
+gate's code"* is true of eleven — for `typecheck`, `test` and `test:save` there is no gate code and
+the predicate had to be derived from `package.json`, `vitest.config.ts` and four tsconfigs.)*
+
+### THE VERIFY-RUN COUNT DISAGREES WITH ITSELF IN THREE PLACES
+
+**`JOURNAL.md` says four, the four digests say six, the commit says eight — one campaign, three
+numbers, all in the tree today.** **The digest is the copy people quote.** *Reconciled at this
+REFLECT: the campaign was seven builder runs plus the orchestrator's, and every later count should
+read eight.*

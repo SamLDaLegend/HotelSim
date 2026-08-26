@@ -4,6 +4,14 @@
 //   pnpm stamp:set "<text>"                    -> rewrite all four in ONE step.
 //   (equivalently: node tools/gates/stamp.mjs [--set "<text>"])
 //
+// PREDICATE (ADR-0086) — the four named ledgers carry ONE byte-identical `*As of …*`
+// paragraph, that paragraph is well-formed and names a goal `GOALS.md` records as done, and
+// each digest FACT below agrees across the four — and, where a FACT names a shipped constant,
+// agrees with that constant too (the I2 hash is agreement-ONLY). It judges AGREEMENT and
+// SHAPE, never freshness: four identical stamps that are all months old pass every check in
+// this file. (The `check:stamp` ROW runs a second scanner, `check-status.mjs`, which carries
+// its own predicate — this one is only the first half.)
+//
 // BOTH FORMS OF `stamp:set` WORK, WITH OR WITHOUT A `--` SEPARATOR, and that is a fix rather than
 // a courtesy: the documented invocation carried one, pnpm forwards it, and the gate refused the
 // separator as a malformed stamp (G-022 sweep 1).

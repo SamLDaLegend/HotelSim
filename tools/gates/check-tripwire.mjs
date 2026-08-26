@@ -2,6 +2,12 @@
 //
 //   pnpm check:tickcost:proof
 //
+// PREDICATE (ADR-0086) — a byte-identical copy of `tripwire.mjs`, spawned over a copy of the
+// sim carrying M1 (a guest-loop quadratic) and then M2 (a constant factor), exits non-zero
+// each time, and exits zero on an unmutated control. It witnesses that the gate CAN fire on
+// two large mutations; it says nothing about where the bound SITS, so the smallest regression
+// the tripwire would actually catch is not measured by anything on this row.
+//
 // A gate nobody has watched go red is a gate nobody has watched. G-018 round 3 established
 // the technique and this file is its second user: COPY the shipped gate to a temp dir,
 // break the copy in one specific way, and spawn it. Nothing under `tools/gates` changes, so
