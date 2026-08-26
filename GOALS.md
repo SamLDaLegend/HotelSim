@@ -3996,7 +3996,7 @@ reading, which is the rule ADR-0084 states, in the goal whose review cites ADR-0
 > only that.**
 
 ## G-058 — Did the chooser fall through, or choose?
-Status: **PLANNED. TINY — about two lines — and it goes FIRST.** Milestone: M4
+Status: **DONE 2026-08-26 (ADR-0097). The parked hypothesis is REFUTED — ONE cause.** Every through-wall landing on every arm is a FALLBACK landing: chosen 0 / fallback 52 on the bench, 0 / 291 on its before-arm, 0 / 32 and 0 / 147 on six-room, zero everywhere else. **The before-arms are what make it a finding**: if the shaft had removed one cause and left another the MIX would differ, and it does not. **And the zero was made readable** — both branches pinned on hand-built geometry including a CHOSEN landing (a bedroom over the stairwell), so the instrument can see the second cause and the shipped layouts do not contain it. I2 unchanged, no `World` field.
 Owner pair: sim-engineer / sim-critic
 Statement: **each through-wall landing records WHICH BRANCH produced it.**
 

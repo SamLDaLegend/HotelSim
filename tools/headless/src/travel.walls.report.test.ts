@@ -44,14 +44,23 @@ import { describe, expect, it } from 'vitest';
 import {
   cellsEqual,
   createValidityCache,
+  createValidityContext,
   createWorld,
   entitiesInOrder,
   footprintCovers,
+  guestSpeedOf,
   guestsInOrder,
   isRoomKind,
+  isWalkableFor,
+  roomIdAt,
+  stairLeg,
+  stairwellOf,
+  standingCell,
   stepTick,
+  stepTowards,
+  storeEntities,
 } from '@hotelsim/sim';
-import type { BoundContent, Cell, Command, Entity, World } from '@hotelsim/sim';
+import type { BoundContent, Cell, Command, Entity, ValidityContext, World } from '@hotelsim/sim';
 import { loadContent } from './content-loader.js';
 import { parseArgs, schedule } from './report.js';
 
@@ -66,7 +75,53 @@ type Census = {
   readonly landInAnyRoom: number;
   /** Move events landing inside a room the guest is NOT walking to. THE DEFECT. */
   readonly throughWall: number;
+  /**
+   * G-058. Through-wall landings whose candidate loop RETURNED: the landing was WALKABLE for
+   * the guest that took it. See `branchOf`.
+   */
+  readonly throughWallChosen: number;
+  /** G-058. Through-wall landings that fell through to `stepTowards`' `fallback`. */
+  readonly throughWallFallback: number;
+  /**
+   * Move events this file could not reproduce by re-running `stepTowards` over its own
+   * reconstruction of the inputs. **ASSERTED ZERO on every arm** — see `branchOf`.
+   */
+  readonly unreproduced: number;
 };
+
+/**
+ * ==========================================================================================
+ * WHICH BRANCH PRODUCED THIS LANDING (G-058). The census above counts the SYMPTOM; this is
+ * the one boolean that says which of two causes produced it.
+ *
+ * THE DISCRIMINATOR IS `isWalkableFor` OF THE LANDING ITSELF, AND NO COPY OF THE LOOP.
+ * `stepTowards` walks its candidates and returns the FIRST whose landing satisfies
+ * `isWalkableFor(walls, candidate, destinationRoom)`; when none does it returns `fallback`,
+ * which is candidate zero, which was tested and refused. So the cell it returns is walkable
+ * for that guest **iff the loop returned**, and asking `isWalkableFor` of the landing asks the
+ * branch. `travel.walls.test.ts` pins that equivalence on hand-built geometry, on both
+ * branches, because it is the whole load-bearing claim of this attribution.
+ *
+ * WHAT IT DOES NOT DO: it does not observe the sim. Nothing here is threaded through
+ * `stepTick`, no field is added to `World`, and no landing, route or hash changes — the
+ * attribution is computed OUT HERE from the post-tick world. That is only sound if this
+ * file's reconstruction of `stepTowards`' inputs is the sim's, which is why the answer is
+ * refused unless a re-run reproduces the landing exactly (`unreproduced`).
+ *
+ * THE INPUTS COME FROM THE SIM'S OWN FUNCTIONS, NEVER FROM A SECOND SPELLING. `standingCell`
+ * is where a guest is going, `stairLeg` is the cell it walks towards THIS tick, `roomIdAt`
+ * resolves the third set of `isWalkableFor` — the same three calls `placed` makes, in the
+ * same order. `placed`'s own lift-gate comment refuses a second copy of `stairLeg`'s
+ * condition for exactly this reason, and a copy in `tools/` would be no better than a copy
+ * in `packages/sim`.
+ *
+ * WHY THE GEOMETRY IS THE POST-TICK WORLD'S AND THAT IS NOT A LAG. `TICK_PHASES` runs
+ * `applyCommands` first and `commitEntities` fourth, so entity membership is frozen from the
+ * moment commands return until after the guests have moved: the rooms, corridors and stairs
+ * this context is built over are the ones `runGuests` saw this tick.
+ * ==========================================================================================
+ */
+type Branch = 'chosen' | 'fallback' | 'unreproduced';
 
 /** The room standing on `cell`, or null. The host's own copy of `roomIdAt`'s question. */
 function roomAt(rooms: readonly Entity[], cell: Cell): Entity | null {
@@ -74,6 +129,37 @@ function roomAt(rooms: readonly Entity[], cell: Cell): Entity | null {
     if (room.at !== null && footprintCovers(room.at, room.footprint, cell)) return room;
   }
   return null;
+}
+
+/**
+ * SPEED IS A PRECONDITION OF THE ATTRIBUTION AND IT IS CHECKED, NOT ASSUMED. With
+ * `guestCellsPerTick` absent `stepTowards` returns its destination before it looks at a wall,
+ * so a landing could be unwalkable with no candidate loop having run and `branchOf` would
+ * report a fallback that never happened. Injected content declares a speed; this is what
+ * would say so if it stopped (ADR-0007).
+ */
+const guestSpeed: number = ((): number => {
+  const speed = guestSpeedOf(content);
+  if (speed === undefined) {
+    throw new Error(
+      'travel.walls.report: the injected content declares no guest speed, so no guest walks and this file counts nothing',
+    );
+  }
+  return speed;
+})();
+
+/** See the docblock on `Branch`. */
+function branchOf(
+  ctx: ValidityContext,
+  from: Cell,
+  landing: Cell,
+  to: Cell,
+  stairwell: Cell | null,
+): Branch {
+  const leg = stairLeg(from, to, stairwell);
+  const destinationRoom = roomIdAt(ctx, leg);
+  if (!cellsEqual(stepTowards(from, leg, guestSpeed, ctx, destinationRoom), landing)) return 'unreproduced';
+  return isWalkableFor(ctx, landing, destinationRoom) ? 'chosen' : 'fallback';
 }
 
 /** Step `ticks` ticks and count what the guests stood on. */
@@ -85,6 +171,9 @@ function census(seed: number, ticks: number, commandsAt: (tick: number) => reado
   let moves = 0;
   let landInAnyRoom = 0;
   let throughWall = 0;
+  let throughWallChosen = 0;
+  let throughWallFallback = 0;
+  let unreproduced = 0;
 
   for (let tick = 0; tick < ticks; tick += 1) {
     world = stepTick(world, content, commandsAt(tick), cache);
@@ -94,6 +183,8 @@ function census(seed: number, ticks: number, commandsAt: (tick: number) => reado
       byId.set(entity.id, entity);
       if (entity.at !== null && isRoomKind(content, entity.kind)) rooms.push(entity);
     }
+    const ctx = createValidityContext(content, world.grid, world.corridors, world.stairs, storeEntities(world.entities));
+    const stairwell = stairwellOf(world.stairs);
     for (const guest of guestsInOrder(world.guests)) {
       guestFrames += 1;
       const before = previous.get(guest.id);
@@ -112,13 +203,26 @@ function census(seed: number, ticks: number, commandsAt: (tick: number) => reado
             ? lodging
             : null;
       const destination = host === null || host.at === null ? null : roomAt(rooms, host.at);
+      // THE BRANCH, ASKED OF EVERY MOVE EVENT AND NOT ONLY OF THE DEFECTS, so `unreproduced`
+      // is a check on the reconstruction over the whole population rather than over the
+      // handful this file happens to be counting. `standingCell` is the sim's own answer to
+      // "where is this guest going", asked here rather than re-derived from `host` — `host`
+      // is deliberately null where `standingCell` returns the door, and the through-wall
+      // definition three lines down depends on that difference.
+      const goingTo = standingCell(lodging ?? null, engaged ?? null, world.grid);
+      const branch = branchOf(ctx, before, guest.at, goingTo, stairwell);
+      if (branch === 'unreproduced') unreproduced += 1;
       const standing = roomAt(rooms, guest.at);
       if (standing === null) continue;
       landInAnyRoom += 1;
-      if (destination === null || standing.id !== destination.id) throughWall += 1;
+      if (destination === null || standing.id !== destination.id) {
+        throughWall += 1;
+        if (branch === 'chosen') throughWallChosen += 1;
+        if (branch === 'fallback') throughWallFallback += 1;
+      }
     }
   }
-  return { guestFrames, moves, landInAnyRoom, throughWall };
+  return { guestFrames, moves, landInAnyRoom, throughWall, throughWallChosen, throughWallFallback, unreproduced };
 }
 
 /**
@@ -258,6 +362,54 @@ function cliCensus(argv: readonly string[], withShaft = true): Census {
 //  bedrooms. A single direction on all four would have been the suspicious reading.
 // ==========================================================================================
 
+// ==========================================================================================
+//  G-058 — AND NOW EVERY ONE OF THOSE LANDINGS SAYS WHICH BRANCH PRODUCED IT. ONE CAUSE.
+//
+//  The counts above are a SYMPTOM. `PARKING.md` carried the residual as *"only improved, not
+//  understood"*, with the hypothesis that a large reduction leaving a stable remainder usually
+//  means a SECOND CAUSE sharing the first one's symptom. The discriminator is one boolean —
+//  did `stepTowards`' candidate loop RETURN a landing, or fall through to `fallback` because
+//  every candidate was a wall — and `branchOf` above asks it of every move event on every arm.
+//
+//  EXACT DETERMINISTIC INTEGERS, n = 1 IS THE WHOLE DISTRIBUTION, so there is no aggregation
+//  and no regime to state. Every figure in this table is asserted below rather than reported.
+//
+//     arm                          through-wall   = CHOSEN + FALLBACK   unreproduced
+//     60 rooms / 5 amenities            52          =   0   +    52          0
+//       ... its before arm             291          =   0   +   291          0
+//     6 rooms / 5 amenities             32          =   0   +    32          0
+//       ... its before arm             147          =   0   +   147          0
+//     the G-009 criterion                0          =   0   +     0          0
+//       ... its before arm             194          =   0   +   194          0
+//     CLI default, 2 days                0          =   0   +     0          0
+//       ... its before arm              25          =   0   +    25          0
+//     CLI default, 4 days                0          =   0   +     0          0
+//       ... its before arm              47          =   0   +    47          0
+//
+//  **EVERY THROUGH-WALL LANDING THIS PROJECT PRODUCES IS A FALLBACK. THE HYPOTHESIS IS
+//  REFUTED AND THE PARKED ITEM IS DISCHARGED.** There is one cause, not two.
+//
+//  AND THE BEFORE ARMS ARE WHAT MAKE THAT A FINDING RATHER THAN A COINCIDENCE. If the shaft
+//  had removed one cause and left another, the mix would differ between the 291 and the 52 —
+//  a remainder of a different KIND is exactly what the parked hypothesis predicts. It does
+//  not: both populations are 100% fallback, on both arms, at both sizes. The shaft removed
+//  OPPORTUNITIES to fall through, which is what this file said it did in prose at
+//  G-038a-iii-b, and this is the first reading that distinguishes that from the alternative.
+//
+//  WHAT IS NOT CLAIMED. "One cause" is a statement about the BRANCH, not about the geometry.
+//  Which layouts leave a guest with no admissible landing is a further question and a
+//  different instrument; this file now says that it is the ONLY question left, which is the
+//  narrowing the parked item asked for.
+//
+//  WHY THE ZERO IS READABLE, GIVEN THAT A ZERO IS THE WEAKEST PIN THERE IS. A `branchOf`
+//  stuck at `fallback` would print this table too. Two things exclude it, and neither is in
+//  this file: `travel.walls.test.ts`'s `the landing says which branch produced it` pins the
+//  discriminator on BOTH branches on hand-built geometry — including a case that reads CHOSEN
+//  while standing in a room the guest is not going to, which is the second cause built to
+//  order — and `unreproduced` asserts that the inputs this file reconstructs are the ones the
+//  sim stepped with, on every move event and not only on the defects.
+// ==========================================================================================
+
 describe('the workloads the gates run', () => {
   it('COUNTED: 60 rooms, 5 amenities, the tick-cost workload’s shape — 219 → 236 of 613 landings', () => {
     const argv = ['--days', '2', '--seed', '42', '--rooms', '60', '--amenities', '5', '--arrivals', '96'];
@@ -269,8 +421,14 @@ describe('the workloads the gates run', () => {
     // through-wall count is the subject and it rises by four on 152 fewer moves — a larger
     // share of a smaller total, which is what the inequality two lines down is for.
     expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_387, 532, 52]);
+    // AND WHICH BRANCH PRODUCED THEM (G-058). All fifty-two fell through to `fallback`.
+    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 52, 0]);
     // THE BEFORE ARM, SAME SITTING, SAME INSTRUMENT, ONE DECLARATION APART.
-    expect(cliCensus(argv, false).throughWall).toBe(291);
+    const before = cliCensus(argv, false);
+    expect(before.throughWall).toBe(291);
+    // THE POPULATION THE SHAFT REMOVED IS THE SAME KIND AS THE ONE IT LEFT, which is the
+    // reading that refutes the parked hypothesis rather than merely failing to confirm it.
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 291, 0]);
     // STILL FAR BELOW THE PRE-G-038a-i WORLD, which is the claim this file was written to make
     // and the one the spine does not touch: 293 was the count with no walkability rule at all.
     expect(taken.throughWall).toBeLessThan(293);
@@ -288,9 +446,12 @@ describe('the workloads the gates run', () => {
     // unmoved**, which is the claim this arm makes.
     expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([2_778, 573, 0]);
     expect(taken.throughWall).toBeLessThan(119);
+    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 0, 0]);
     // AND THE ZERO IS NOT THE INSTRUMENT GOING BLIND: the same census on the same schedule with
     // the shaft subtracted still reads 66.
-    expect(cliCensus(argv, false).throughWall).toBe(194);
+    const before = cliCensus(argv, false);
+    expect(before.throughWall).toBe(194);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 194, 0]);
   });
 
   it('COUNTED: 6 rooms, 5 amenities — ADR-0017’s configuration — 118 → 116', () => {
@@ -300,7 +461,11 @@ describe('the workloads the gates run', () => {
     // amenities was already well provisioned, so serving it at the ceiling changes little.
     expect([taken.moves, taken.landInAnyRoom, taken.throughWall]).toEqual([1_388, 322, 32]);
     expect(taken.throughWall).toBeLessThan(129);
-    expect(cliCensus(argv, false).throughWall).toBe(147);
+    // AND WHICH BRANCH PRODUCED THEM (G-058). All thirty-two fell through to `fallback`.
+    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 32, 0]);
+    const before = cliCensus(argv, false);
+    expect(before.throughWall).toBe(147);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 147, 0]);
   });
 });
 
@@ -345,7 +510,10 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
     // through the shaft, and there is no longer an occasion to land in a bedroom that is not
     // the destination. The before arm below is what says the counter still works.
     expect(taken.throughWall).toBe(0);
-    expect(cliCensus(['--days', '2', '--seed', '42'], false).throughWall).toBe(25);
+    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 0, 0]);
+    const before = cliCensus(['--days', '2', '--seed', '42'], false);
+    expect(before.throughWall).toBe(25);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 25, 0]);
     // AND IT IS A FALL IN THE SHARE AS WELL AS IN THE COUNT, which is the half a raw count
     // cannot say: 33/163 = 20.2% before, 16/191 = 8.4% after.
     expect(taken.throughWall * 163).toBeLessThan(33 * taken.moves);
@@ -355,8 +523,12 @@ describe('the CLI default is NO LONGER INERT, and the layout with depth is why',
     const taken = cliCensus(['--days', '4', '--seed', '42']);
     expect(taken.moves).toBe(1_220);
     expect(taken.throughWall).toBe(0);
+    expect([taken.throughWallChosen, taken.throughWallFallback, taken.unreproduced]).toEqual([0, 0, 0]);
     // AND THE FOUR-DAY BEFORE ARM TOO, so "holds at four days" is a pair at four days rather
     // than a level at four days beside a pair at two.
-    expect(cliCensus(['--days', '4', '--seed', '42'], false).throughWall).toBe(47);
+    const before = cliCensus(['--days', '4', '--seed', '42'], false);
+    expect(before.throughWall).toBe(47);
+    expect([before.throughWallChosen, before.throughWallFallback, before.unreproduced]).toEqual([0, 47, 0]);
   });
 });
+

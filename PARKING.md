@@ -3597,7 +3597,56 @@ room.**
 loose `arm_chair` in a bedroom moves the comfort row; refutes if item placement changes nothing
 outside a room's own footprint.**
 
-### THE THROUGH-WALL RESIDUAL IS ONLY IMPROVED, NOT UNDERSTOOD
+### THE THROUGH-WALL RESIDUAL IS ONLY IMPROVED, NOT UNDERSTOOD — **DISCHARGED AT G-058. ONE CAUSE.**
+
+> **DISCHARGED 2026-08-26 (G-058). THE FALSIFICATION TEST BELOW WAS RUN AND THE HYPOTHESIS IS
+> REFUTED: every through-wall landing this project produces is a FALLBACK landing. There is no
+> second cause.**
+>
+> **Exact deterministic integers, n = 1 is the whole distribution, so there is no aggregation and
+> no regime to state.** Each arm's through-wall count, split into the branch of `stepTowards` that
+> produced it, asserted in `tools/headless/src/travel.walls.report.test.ts`:
+>
+> | arm | through-wall | CHOSEN | FALLBACK | unreproduced |
+> |---|---|---|---|---|
+> | 60 rooms / 5 amenities | 52 | **0** | 52 | 0 |
+> | ... its before arm | 291 | **0** | 291 | 0 |
+> | 6 rooms / 5 amenities | 32 | **0** | 32 | 0 |
+> | ... its before arm | 147 | **0** | 147 | 0 |
+> | G-009's criterion | 0 | 0 | 0 | 0 |
+> | ... its before arm | 194 | **0** | 194 | 0 |
+> | CLI default, 2 days | 0 | 0 | 0 | 0 |
+> | ... its before arm | 25 | **0** | 25 | 0 |
+> | CLI default, 4 days | 0 | 0 | 0 | 0 |
+> | ... its before arm | 47 | **0** | 47 | 0 |
+>
+> **THE BEFORE ARMS ARE WHAT MAKE IT A FINDING RATHER THAN A COINCIDENCE.** This entry's own
+> argument was that *"a 92% reduction leaving a STABLE remainder usually means a SECOND CAUSE"* — a
+> remainder of a different KIND. It is not of a different kind: the 291 the shaft removed and the
+> 52 it left are **the same branch, 100% fallback, on both arms and at both sizes**. What the shaft
+> removed is OPPORTUNITIES to fall through, which is what `travel.walls.report`'s comment claimed in
+> prose at G-038a-iii-b and what nothing had measured until now.
+>
+> **AND THE MECHANISM THIS ENTRY CALLED "documented and UNTESTED" IS CONFIRMED AS THE ONLY ONE.**
+> `stepTowards` takes candidate zero when every candidate landing is a wall; that is every one of
+> them.
+>
+> **THE DISCRIMINATOR, so it can be re-run**: `stepTowards` returns the FIRST candidate satisfying
+> `isWalkableFor(walls, candidate, destinationRoom)` and otherwise returns `fallback`, which is
+> candidate zero, which was tested and refused — **so the landing is walkable for that guest iff the
+> loop returned.** One boolean, no copy of the loop, and no change to any landing, route or hash
+> (I2 `07d81ab917935a25`, unmoved). Pinned on both branches in
+> `packages/sim/src/travel.walls.test.ts` under *"the landing says which branch produced it"*,
+> including a built case that reads CHOSEN while standing in a room the guest is not going to —
+> a room drawn over the stairwell — so **the zeros above read as "this cause does not occur on
+> these layouts" rather than as "the instrument cannot see it".**
+>
+> **WHAT IS NOT CLAIMED, AND IT IS THE QUESTION THAT REPLACES THIS ONE.** "One cause" is a
+> statement about the BRANCH, not about the geometry: **which layouts leave a guest with no
+> admissible landing at all is still unattributed**, and it is now the only remaining question
+> behind this count. It is NOT re-parked, because it has no falsification test that does not
+> amount to building the instrument for it (§4) — **park it when a goal needs it.**
+
 **Parked 2026-08-24 (ADR-0081), on the human's question.** Landings went **291 -> 52** on the bench *(CORRECTED 2026-08-26: this entry read "236 -> 29", which was ADR-0065's reading quoted as a live one — ADR-0084's class. Re-measured: bench 52, six-room 32, criterion and CLI 0, and the figure moved 29 -> 33 -> 52 across three goals)*
 and **116 -> 23** on the six-room arm; **criterion and CLI default went to ZERO.** **Nothing
 attributes the remainder.**

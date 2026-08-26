@@ -8633,3 +8633,76 @@ written to prevent.*
 **Also the wrong instrument entirely**: `--record-every` is the headless CLI's flag feeding
 `tools/viewer`; **the instrument for an `apps/game` drawing is `record-frames.ts`**, whose flag is
 `--every` and which **draws exactly one frame per tick with no sub-tick concept.**
+
+---
+
+## ADR-0097 — ONE CAUSE, refuted with its own before-arms. Every through-wall landing is a fallback landing.
+
+**Date**: 2026-08-26 · **Status**: accepted · **G-058.** I2 `07d81ab917935a25` **unchanged**, no
+`World` field, fourteen rows PASS.
+
+### THE PARKED HYPOTHESIS IS REFUTED
+
+Parked as *"a large reduction leaving a STABLE remainder usually means a SECOND CAUSE sharing the
+first one's symptom."* **Measured, exact deterministic integers, every figure asserted rather than
+reported:**
+
+| arm | through-wall | **CHOSEN** | FALLBACK | unreproduced |
+|---|---|---|---|---|
+| 60 rooms / 5 amenities | 52 | **0** | 52 | 0 |
+| *its before-arm* | 291 | **0** | 291 | 0 |
+| 6 rooms / 5 amenities | 32 | **0** | 32 | 0 |
+| *its before-arm* | 147 | **0** | 147 | 0 |
+| criterion · CLI 2d · CLI 4d | 0 | 0 | 0 | 0 |
+| *their before-arms* | 194 · 25 · 47 | **0** | all | 0 |
+
+> **THE BEFORE-ARMS ARE WHAT MAKE IT A FINDING RATHER THAN A COINCIDENCE.** If the shaft had removed
+> one cause and left another, **the MIX would differ between the 291 and the 52. It does not** —
+> both populations are **100% fallback**, on both arms, at both sizes.
+
+**The shaft removed OPPORTUNITIES TO FALL THROUGH** — which the report file has claimed in prose
+since G-038a-iii-b and **which nothing had measured.**
+
+### AND THE ZERO WAS MADE READABLE, WHICH IS THE PART I WOULD NOT HAVE ASKED FOR
+
+**A `branchOf` stuck at `fallback` would print the identical table.** So the builder pinned **both
+branches on hand-built geometry** — including **a CHOSEN landing inside a room the guest is not going
+to: a bedroom drawn over the stairwell**, which makes that room the destination room *of the leg*,
+**exactly the second cause `stairLeg`'s docblock anticipates.**
+
+> **The instrument can see the second cause. The shipped layouts do not contain it.** *That is the
+> difference between "we found nothing" and "we looked with something that could have found it" — and
+> a zero without it is the weakest pin there is.*
+
+**Both probes bite** (ADR-0022 recipe, `sha256sum -c`): negating the discriminator reddens all five
+arms; replacing `leg` with `to` in the reconstruction gives **1,152 unreproduced** on the bench.
+**`unreproduced` is asserted zero over EVERY move event, not only the defects** — the harness
+re-runs the step and **refuses to attribute unless it reproduces the landing byte for byte.**
+
+### WHAT WAS NOT CLAIMED, AND THE RESTRAINT IS RIGHT
+
+> ***"One cause" is about the BRANCH, not the geometry.*** **Which layouts leave a guest with no
+> admissible landing is still unattributed** — and it was **deliberately NOT re-parked**, because it
+> has no falsification test that is not *"build the instrument for it."*
+
+*A park without a test is the thing this project keeps finding at the bottom of its own ledgers.*
+
+### THREE CORRECTIONS TO ME, AND THE FIRST IS STRUCTURAL
+
+1. ***"About two lines"* — true of the DISCRIMINATOR, false of the GOAL.** The boolean is one line,
+   **but it is computed INSIDE `stepTowards`, and `packages/sim` has no observation hook and may not
+   gain a `World` field.** So the sim change is **two exports**, and the attribution (~25 lines) lives
+   in the harness with ~100 lines of pinning beside it.
+   > **ADR-0096's *"about two lines, sim-side, and cheaper than this entire goal"* is RIGHT about the
+   > cost ordering and WRONG about the shape. The discriminator was cheap; OBSERVING it from `tools/`
+   > was not free.**
+2. ***"Records which branch"* — nothing is RECORDED. It is ATTRIBUTED post-hoc** from the post-tick
+   world. **Recording it would be the `World` field that breaks I2 — which is the whole reason this
+   goal was carveable at all.**
+3. **The *"23 → 43"* per-cell figure I cited as measured lives ONLY in a docblock.** **The per-cell
+   rule was never shipped, so it cannot be re-measured paired, and no test pins it.** *ADR-0007's
+   class in a number I have quoted twice — the builder took the instruction not to touch the landing
+   choice on its own merits and declined to lean on it.*
+
+*(Also: "four arms" is four workload shapes but **five `it` blocks and ten censuses**, because each
+arm drives its own before-arm — and the split is asserted on all ten.)*

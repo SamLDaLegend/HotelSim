@@ -35,11 +35,12 @@
 import { describe, expect, it } from 'vitest';
 import { bindContent } from './content.js';
 import { createCorridors, withCorridor } from './corridors.js';
-import { createStairs } from './stairs.js';
+import { createStairs, stairwellOf, withStair } from './stairs.js';
+import type { Stairs } from './stairs.js';
 import type { Corridors } from './corridors.js';
 import { NO_ENTITY } from './entities.js';
 import type { Entity, EntityStore } from './entities.js';
-import { stepTowards } from './guests.js';
+import { stairLeg, stepTowards } from './guests.js';
 import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, Footprint, GridBounds } from './grid.js';
 import { createValidityContext, isWalkableFor, roomIdAt, storeEntities } from './validity.js';
@@ -77,8 +78,13 @@ function storeOf(...specs: readonly Spec[]): EntityStore {
   return { nextId: specs.length + 1, list };
 }
 
-function contextOf(store: EntityStore, corridors: Corridors, bounds: GridBounds = BOUNDS): ValidityContext {
-  return createValidityContext(content, bounds, corridors, createStairs(), storeEntities(store));
+function contextOf(
+  store: EntityStore,
+  corridors: Corridors,
+  bounds: GridBounds = BOUNDS,
+  stairs: Stairs = createStairs(),
+): ValidityContext {
+  return createValidityContext(content, bounds, corridors, stairs, storeEntities(store));
 }
 
 /** One tick of walking toward `to`, with the room standing on `to` resolved the way `placed` does. */
@@ -222,6 +228,104 @@ describe('two equal-cost landings, and which one is taken', () => {
       DEEP,
     );
     expect(walk(sealed, cell(GROUND_FLOOR, 5, 5), cell(GROUND_FLOOR, 6, 6), 1)).toEqual(cell(GROUND_FLOOR, 6, 5));
+  });
+});
+
+// ==========================================================================================
+//  WHICH BRANCH PRODUCED THE LANDING (G-058), AND WHY ONE BOOLEAN IS ENOUGH TO SAY.
+//
+//  `travel.walls.report.test.ts` counts through-wall landings on the workloads the gates run.
+//  A count is a SYMPTOM, and the parked item it feeds — *"the through-wall residual is only
+//  improved, not understood"* — asks which of two things produced each one: did the candidate
+//  loop RETURN a landing, or did it fall through to `fallback` because every candidate was a
+//  wall? Those are different sentences about the building. The first says a guest walked into
+//  a room it may stand in for a stated reason; the second says the building left it nowhere
+//  else to go.
+//
+//  THE DISCRIMINATOR IS `isWalkableFor` OF THE LANDING, AND NOT A SECOND COPY OF THE LOOP.
+//  `stepTowards` returns the FIRST candidate satisfying `isWalkableFor(walls, candidate,
+//  destinationRoom)`; falling through returns `fallback`, which is candidate zero, which was
+//  tested and REFUSED. So the cell it returns is walkable for that guest **iff the loop
+//  returned**. This block is where that equivalence is pinned — both branches, and the
+//  precondition that a fallback is only a fallback when a loop ran at all.
+//
+//  IT PINS A CLAIM THE REPORT FILE RESTS ON AND CANNOT MAKE ITSELF. That file reads ZERO
+//  chosen on every arm; the fourth case below BUILDS a chosen one, so the zero reads as
+//  "this cause does not occur on those layouts" rather than as "the instrument cannot see it".
+// ==========================================================================================
+
+describe('the landing says which branch produced it', () => {
+  const to = cell(GROUND_FLOOR, 6, 6);
+  const from = cell(GROUND_FLOOR, 5, 5);
+
+  it('CHOSEN at candidate zero — the landing is walkable', () => {
+    const empty = contextOf(storeOf(), createCorridors(), DEEP);
+    const landing = walk(empty, from, to, 1);
+    expect(landing).toEqual(cell(GROUND_FLOOR, 6, 5));
+    expect(isWalkableFor(empty, landing, roomIdAt(empty, to))).toBe(true);
+  });
+
+  it('CHOSEN at a LATER candidate — still walkable, which is what makes the boolean the branch', () => {
+    // The column candidate is a room and the row candidate is not, so the loop returns on its
+    // second pass. A discriminator that only recognised candidate zero would call this a
+    // fallback; the landing is walkable and it is not one.
+    const blocked = contextOf(storeOf(['bedroom', cell(GROUND_FLOOR, 6, 5)]), createCorridors(), DEEP);
+    const landing = walk(blocked, from, to, 1);
+    expect(landing).toEqual(cell(GROUND_FLOOR, 5, 6));
+    expect(isWalkableFor(blocked, landing, roomIdAt(blocked, to))).toBe(true);
+  });
+
+  it('FALLBACK — every candidate a wall, and the landing is NOT walkable', () => {
+    // The same geometry as `and when BOTH candidates are walls it falls back to the column`
+    // above, asked the other question: that test pins WHICH cell, this one pins that the cell
+    // is one no guest may stand on. Both assertions are the same event and neither implies the
+    // other — a rule that landed the guest on a walkable cell here would pass this file's
+    // fallback test and falsify the attribution.
+    const sealed = contextOf(
+      storeOf(['bedroom', cell(GROUND_FLOOR, 6, 5)], ['bedroom', cell(GROUND_FLOOR, 5, 6)]),
+      planOf(cell(GROUND_FLOOR, 0, 0)),
+      DEEP,
+    );
+    const landing = walk(sealed, from, to, 1);
+    expect(landing).toEqual(cell(GROUND_FLOOR, 6, 5));
+    expect(isWalkableFor(sealed, landing, roomIdAt(sealed, to))).toBe(false);
+  });
+
+  it('and a CHOSEN landing CAN be inside a room the guest is not going to — a room over the shaft', () => {
+    // THE SECOND CAUSE, BUILT RATHER THAN ARGUED. `stairLeg`'s own docblock names it: with a
+    // room drawn over the stairwell, every cross-floor journey walks TOWARDS that room's cell,
+    // so the room over the shaft IS the destination room of the leg and landing in it is the
+    // loop returning on merit. A census that asks "is the guest standing in the room it is
+    // going to" sees a through-wall landing; the branch says CHOSEN. That is the shape the
+    // parked hypothesis proposed, and it is the shape the shipped workloads do not contain.
+    const stairwell = cell(GROUND_FLOOR, 3, 0);
+    const stairs = withStair(createStairs(), stairwell);
+    const store = storeOf(['bedroom', stairwell], ['bedroom', cell(GROUND_FLOOR + 1, 6, 0)]);
+    const ctx = contextOf(store, createCorridors(), DEEP, stairs);
+    const upstairs = cell(GROUND_FLOOR + 1, 6, 0);
+    const start = cell(GROUND_FLOOR, 0, 0);
+
+    const leg = stairLeg(start, upstairs, stairwellOf(stairs));
+    expect(leg).toEqual(stairwell);
+    const destinationRoom = roomIdAt(ctx, leg);
+    expect(destinationRoom).toBe(1);
+
+    const landing = stepTowards(start, leg, 3, ctx, destinationRoom);
+    expect(landing).toEqual(stairwell);
+    // WALKABLE — so the loop RETURNED — while the room the guest is actually going to is the
+    // other one. Both halves are asserted, because either alone is a different claim.
+    expect(isWalkableFor(ctx, landing, destinationRoom)).toBe(true);
+    expect(roomIdAt(ctx, upstairs)).toBe(2);
+  });
+
+  it('and the equivalence needs a loop to have RUN, which is why speed absent is refused', () => {
+    // With `cellsPerTick` undefined `stepTowards` returns its destination before it looks at a
+    // wall, so an unwalkable landing would mean no candidate was ever refused. The report
+    // file's census throws rather than attributing under that condition; this is the reading
+    // that says why. `NO_ENTITY` is the destination room a caller with nothing to resolve has.
+    const sealed = contextOf(storeOf(['bedroom', to]), planOf(cell(GROUND_FLOOR, 0, 0)), DEEP);
+    expect(stepTowards(from, to, undefined, sealed, NO_ENTITY)).toEqual(to);
+    expect(isWalkableFor(sealed, to, NO_ENTITY)).toBe(false);
   });
 });
 

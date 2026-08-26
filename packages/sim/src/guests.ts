@@ -3926,7 +3926,7 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
  * IT RETURNS `to` BY REFERENCE in the two unchanged cases, so the path every world in this
  * project takes today allocates nothing at all.
  */
-function stairLeg(from: Cell, to: Cell, stairwell: Cell | null): Cell {
+export function stairLeg(from: Cell, to: Cell, stairwell: Cell | null): Cell {
   if (stairwell === null || to.floor === from.floor) return to;
   if (from.column === stairwell.column && from.row === stairwell.row) {
     return { floor: to.floor, column: stairwell.column, row: stairwell.row };

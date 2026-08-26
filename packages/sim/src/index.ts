@@ -222,8 +222,18 @@ export {
   lodgingNeedStateOf,
   maxGuestLifetimeTicks,
   NO_GUEST,
+  // `stairLeg` AND `stepTowards` ARE EXPORTED FOR ONE CONSUMER, AND IT IS THE OPPOSITE OF
+  // `isCutShort`'s case above (G-058). Both had lived inside this package because nothing
+  // outside it asked; `travel.walls.report.test.ts` now asks, and asks the FUNCTIONS rather
+  // than a copy of them. It attributes each through-wall landing to the branch of
+  // `stepTowards` that produced it, which needs the leg the sim actually walked towards
+  // (`stairLeg`) and a re-run of the step to prove its reconstruction of the inputs is the
+  // sim's (`stepTowards`). A second spelling of `stairLeg`'s condition in `tools/` is
+  // exactly the drift `placed` refuses in the sim — see the lift gate's comment there.
+  stairLeg,
   standingCell,
   stepGuests,
+  stepTowards,
 } from './guests.js';
 export type { NeedOutcome, NeedState, ProviderKind } from './needs.js';
 export {
