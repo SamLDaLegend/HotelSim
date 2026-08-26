@@ -3563,3 +3563,27 @@ nobody has found and the marking's evidence list is short.
 
 **Cheap, and it has a natural home**: the goal that re-scopes or closes **G-037b**, which is already
 holding the stale half of this same field.
+
+### EVERY SCANNER THIS WEEK WAS NARROWER THAN ITS NAME — three instances, one class
+**Parked 2026-08-26 (ADR-0085).** Asked whether G-039's status scanner catches the stale-status
+class. **It shipped, and it structurally cannot.** Its stated rule is exactly one thing — *"a commit
+referencing a goal ID implies that goal's block is not `pending`"* — and **`grep -c Milestone` over
+`check-status.mjs` AND `lib/goal-blocks.mjs` returns 0 and 0.** `G-037a` reads `Milestone: M3` after
+M3 signed off **and the gate is green.**
+
+**Three instances in one week, each correct for its scope and each READING as covering the class:**
+
+1. **the status gate cannot see a stale `Milestone:` line** (this one);
+2. **`check:status` cannot see a goal that entered the tree through a MERGE** — it scans
+   `git log --no-merges` subjects;
+3. **ADR-0043 §3's amendment census could not see the inline spelling**, and so missed ADR-0007 —
+   **the most-amended ADR in the project, at seven.**
+
+**Falsification test:** for each shipped scanner, write down the class its NAME implies and the
+predicate it actually runs, then find one member of the first that is not a member of the second.
+**Confirms if any scanner admits such a member; refutes if name and predicate coincide for all of
+them.** *(Three of three so far, so the refutation would be the surprise.)*
+
+**The remedy is NOT a fourth scanner.** It is the naming: **a scanner should be named for its
+predicate, not for the class somebody hoped it covered** — `check:status` that checks one clause
+about `pending` is not a status check. *Cheap, and it is the only fix that does not add surface.*

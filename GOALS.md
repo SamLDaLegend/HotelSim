@@ -2861,6 +2861,47 @@ assumed, and taking a seam because of a measurement is cheaper than taking it be
 sweep *"was ruled before G-034a"* (**it was never ruled at all**) and that §2.2's measurement had
 expired (**all three cited causes are ANCESTORS of the deferral**).
 
+## G-055 — The unreliable gates are repaired, because §2.0 says that is the remedy
+Status: **PLANNED — and the evidence GREW at G-053a.** Three ISOLATED readings of the unchanged pair now span **13.02s / 18.66s / 21.73s — a 67% spread**, and the orchestrator read `VERIFY_EXIT=1` on the same tree the builder read 0 on three times. **An instrument whose isolated readings vary by two thirds is not reporting, it is guessing.** §2.0's own escalation, now routed around five times.
+Milestone: M3 exit · Owner pair: sim-engineer / sim-critic
+
+### THE QUESTION THE PLAN ANSWERS BEFORE ANY REPAIR — one cause or two?
+
+> **A 67% spread in isolated timings PLUS a flipping exit code is consistent with a test
+> intermittently crossing a timeout — ONE FIX. If the exit code flips WITHOUT a timing outlier,
+> that is a SECOND, WORSE problem. SAY WHICH BEFORE REPAIRING.**
+
+**Readings to date are all consistent with the one-cause reading** — 13.02s / 18.66s / 21.73s
+isolated against a 30,000ms budget — **but nobody has looked for the flip WITHOUT the outlier,
+and that is the case that distinguishes them.** *Instrument the run so a flip records its own
+per-test durations; a flip with every duration inside budget is the second problem.*
+
+### WHY IT OUTRANKS THE REST OF THE SWEEP (ADR-0085, human ruling)
+
+> **`VERIFY_EXIT` disagreeing on an unchanged tree is NON-DETERMINISM IN THE HARNESS THAT
+> VERIFIES DETERMINISM.** I2 says byte-identical, every run, every platform. **The instrument
+> checking it does not have that property.**
+
+**So every exit verification in this project is currently a SAMPLE rather than a READING** —
+**including G-053a's own**, which means *bound 1 checked rather than asserted* is good work
+resting on a guessing instrument.
+
+**`HOTELSIM.md` §2.0**: *"An intermittent gate is its own escalation with its own remedy — **REPAIR
+THE INSTRUMENT, NEVER REINTERPRET THE RESULT**."* **The repair has been parked four times and has now
+blocked a goal's exit criteria.**
+
+**The population and its shared property are already measured**: the affected tests are the ones that
+**spawn child processes inside a 30s per-test budget under full vitest parallelism** —
+`needs.determinism`, `provider.determinism`, and at G-048 also `cli.stdout` and `scorer.report`.
+**All pass in isolation**; the two current ones pass in **18.9s together**.
+
+**DO NOT RAISE THE SHARED TIMEOUT.** `vitest.config.ts` argues at length why 30s is derived, and
+moving it to make a row green is **§9's stop condition wearing a config key**. **The house pattern is
+a declared PER-TEST budget with its measurement at the docblock** — seven files already carry one.
+
+**And the count is the guard**: **we are at two unreliable gates and §2.0 says a THIRD IS A STOP
+CONDITION.** *"Each one is defensible alone, which is exactly how a suite stops being evidence."*
+
 ## G-053a — The charter's loop terms are marked
 Status: **DONE 2026-08-25.** `HOTELSIM.md` §1 and §1.1 carry the marks, `CLAUDE.md`'s copy carries
 them too, `git diff --stat` touches **no file under `packages/sim`**, and **I2 is unmoved at
@@ -3007,26 +3048,6 @@ twelve reliable rows green, the two unreliable rows green **in isolation** with 
 and are **outside the five stated classes** — **but given the isometric sweep never ran, that is
 where an absorbed one would have to look.** **Decide deliberately rather than by omission.**
 
-## G-055 — The unreliable gates are repaired, because §2.0 says that is the remedy
-Status: **PLANNED — and the evidence GREW at G-053a.** Three ISOLATED readings of the unchanged pair now span **13.02s / 18.66s / 21.73s — a 67% spread**, and the orchestrator read `VERIFY_EXIT=1` on the same tree the builder read 0 on three times. **An instrument whose isolated readings vary by two thirds is not reporting, it is guessing.** §2.0's own escalation, now routed around five times.
-Milestone: M3 exit · Owner pair: sim-engineer / sim-critic
-
-**`HOTELSIM.md` §2.0**: *"An intermittent gate is its own escalation with its own remedy — **REPAIR
-THE INSTRUMENT, NEVER REINTERPRET THE RESULT**."* **The repair has been parked four times and has now
-blocked a goal's exit criteria.**
-
-**The population and its shared property are already measured**: the affected tests are the ones that
-**spawn child processes inside a 30s per-test budget under full vitest parallelism** —
-`needs.determinism`, `provider.determinism`, and at G-048 also `cli.stdout` and `scorer.report`.
-**All pass in isolation**; the two current ones pass in **18.9s together**.
-
-**DO NOT RAISE THE SHARED TIMEOUT.** `vitest.config.ts` argues at length why 30s is derived, and
-moving it to make a row green is **§9's stop condition wearing a config key**. **The house pattern is
-a declared PER-TEST budget with its measurement at the docblock** — seven files already carry one.
-
-**And the count is the guard**: **we are at two unreliable gates and §2.0 says a THIRD IS A STOP
-CONDITION.** *"Each one is defensible alone, which is exactly how a suite stops being evidence."*
-
 ## G-054 — Which need starves must not be decided by a spelling
 Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0081 §3.1) — FIRST after the orphan sweep.**
 Milestone: M4 · Owner pair: ai-engineer / ai-critic · **Should be small.**
@@ -3129,6 +3150,21 @@ is WITHDRAWN.** Milestone: M3 · Owner pair: economy-engineer / balance-critic
 Statement: **a set of facilities the player can build, and a STAR RATING judged on what the hotel
   HAS — which is not customer satisfaction.**
 
+
+### THE CLOSURE REFRAMING — read this before planning (ADR-0085, human ruling)
+
+> **"Back to the guest loop" being FALSE means the build loop is NOT A LOOP. It is a LINE.**
+> Nothing a player builds changes how many guests arrive. **Everything else the loop is missing —
+> quality, reputation, demand — is a MISSING TERM; this is a MISSING CLOSURE, and it is the
+> difference between a game and a sandbox with a spreadsheet.**
+
+**So `demand` is not the fourth of four owed terms — it is THE ONE THAT MAKES THE OTHER THREE
+MATTER**, because **without closure a better hotel produces no more guests.** *`guestArrives` is a
+payloadless command; that is the whole mechanism of the gap.*
+
+**M4 is therefore planned around CLOSURE rather than around ticking off terms** — and this goal
+should say what it contributes to closing the loop, not only what term it supplies.
+
 ### THE RULING ANSWERS THE OBJECTION I RAISED AGAINST THIS GOAL
 
 I wrote that *"a Spa that is merely a more expensive Lounge inherits the dominance problem"* — every
@@ -3209,6 +3245,21 @@ Status: **DESIGN HALF CLOSED 2026-08-24 by human ruling (ADR-0079). Remedies (b)
 are the biggest causes of dissatisfaction, but nourishment and rest always are satisfied."*
 Milestone: M3 · Owner pair: economy-engineer / balance-critic
 Statement: the supply asymmetry between the four needs is **stated and derived**, or removed.
+
+
+### THE CLOSURE REFRAMING — read this before planning (ADR-0085, human ruling)
+
+> **"Back to the guest loop" being FALSE means the build loop is NOT A LOOP. It is a LINE.**
+> Nothing a player builds changes how many guests arrive. **Everything else the loop is missing —
+> quality, reputation, demand — is a MISSING TERM; this is a MISSING CLOSURE, and it is the
+> difference between a game and a sandbox with a spreadsheet.**
+
+**So `demand` is not the fourth of four owed terms — it is THE ONE THAT MAKES THE OTHER THREE
+MATTER**, because **without closure a better hotel produces no more guests.** *`guestArrives` is a
+payloadless command; that is the whole mechanism of the gap.*
+
+**M4 is therefore planned around CLOSURE rather than around ticking off terms** — and this goal
+should say what it contributes to closing the loop, not only what term it supplies.
 
 ### THE OBSERVATION IS EXPLAINED BY THE CONTENT, AND IT IS STRUCTURAL RATHER THAN EMERGENT
 

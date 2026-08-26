@@ -7158,3 +7158,81 @@ and **each is byte-identical to HEAD, 4 of 4.**
 > evidence yet for G-055**: an instrument whose isolated readings vary by two thirds is not
 > reporting, it is guessing. **§2.0's remedy is repair, and this is the fifth goal to route around
 > it.**
+
+---
+
+## ADR-0085 — G-055 goes to the FRONT: the harness that verifies determinism is not deterministic.
+
+**Date**: 2026-08-26 · **Status**: accepted · **Human ruling.** **G-055 is promoted above the rest of
+the sweep, not merely above the queue.**
+
+### THE ARGUMENT THAT DECIDES IT, AND IT IS NOT THE FIFTH ROUTING-AROUND
+
+> **"`VERIFY_EXIT` disagreeing on an unchanged tree is NON-DETERMINISM IN THE HARNESS THAT VERIFIES
+> DETERMINISM. I2 says byte-identical, every run, every platform. The instrument checking it does not
+> have that property."**
+
+**And the consequence names what every goal in this project has been resting on:**
+
+> **"Every exit verification in this project is currently a SAMPLE rather than a READING — including
+> G-053a's own, which means 'bound 1 checked rather than asserted' is good work resting on a guessing
+> instrument."**
+
+*The fifth routing-around is damning on its own. This is worse: it makes the verification step
+itself unfalsifiable, in the one project whose central invariant is reproducibility.*
+
+### THE QUESTION G-055's PLAN MUST ANSWER FIRST — one cause or two?
+
+> **"A 67% spread in isolated timings PLUS a flipping exit code is consistent with a test
+> intermittently crossing a timeout — ONE FIX. If the exit code flips WITHOUT a timing outlier, that
+> is a SECOND, WORSE problem. Say which before repairing."**
+
+**That is the falsifiable question and it goes in the block as a gate on starting.** *The readings to
+date — 13.02s / 18.66s / 21.73s isolated, against a 30,000ms budget — are all consistent with the
+one-cause reading, but nobody has looked for the flip WITHOUT the outlier, which is the case that
+distinguishes them.*
+
+### THE ADR-STALENESS FIX WAS INVENTED IN THE SAME GOAL THAT NEEDED IT
+
+**§1.1's rule is the answer**: *every `EXISTS` names the symbol that makes it true, so a reader
+confirms with one grep instead of believing this file.*
+
+> **That is precisely the answer to ADR-0053's grep returning *"exactly one reader, and it is a
+> test"* when it now returns three. A decision that cites TREE STATE should carry the CITATION, so
+> the citation can be re-run.**
+
+**PROPORTIONATE SCOPE, because 96 ADRs cannot be retrofitted**: **new ADRs carry the symbol; existing
+ADRs are re-verified AT THE POINT OF CITATION, not proactively.** *The cost lands where the risk is —
+an ADR quoted into a brief without re-checking its tree claim is the failure mode.* **One line in
+`CLAUDE.md`, beside the comment rule it generalises.**
+
+### AND THE SIDEWAYS QUESTION EXISTED AND DID NOT REACH HERE
+
+**ADR-0048 §1's standing REFLECT question — *"does anything else here have this problem?"* — was
+added after `assertSubject`, and it was pointed at GATES AND SCANNERS. Nobody pointed it at
+`DECISIONS.md`.**
+
+> **The rule found once and left where it was found, firing again — and this time the thing left
+> behind was the rule against leaving things behind.**
+
+**Worth recording because of what it says about HOW the question gets asked**: a standing question
+inherits the scope of the goal that produced it, and **nothing re-scopes it unless someone
+deliberately does.**
+
+### THE STATUS SCANNER: IT SHIPPED, AND IT CANNOT SEE THIS
+
+**Asked: G-039's status scanner was meant to catch the stale-status class — did it ship?**
+**IT SHIPPED, AND IT STRUCTURALLY CANNOT SEE A STALE `Milestone:` LINE.**
+
+**Verified**: `tools/gates/check-status.mjs` exists and runs as the second half of `check:stamp`. Its
+stated rule is exactly one thing — *"a commit referencing a goal ID implies that goal's block is not
+`pending`"* — and **`grep -c Milestone` over both the gate and its library returns 0 and 0.**
+**G-037a's block reads `Milestone: M3` after M3 signed off, and the gate is green.**
+
+> **THIS IS THE THIRD SCANNER THIS WEEK THAT IS NARROWER THAN ITS NAME.** The status gate cannot see
+> a stale milestone; `check:status` cannot see a goal that entered through a merge; ADR-0043 §3's
+> amendment census could not see the inline spelling and so missed the most-amended ADR in the
+> project. **Each was correct for what it was scoped to and read as covering the class.**
+
+*Parked with its falsification test rather than fixed here — G-055 comes first and this is a scanner
+question, not a determinism one.*

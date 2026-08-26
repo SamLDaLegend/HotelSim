@@ -81,6 +81,13 @@ The stack is fixed. Do not relitigate it. If the human later wants Godot, only
 - Money is **integer minor units** (pennies). Never a float (ADR-0002).
 - A **snake_case string literal is a content ID**, and must not appear in
   `packages/sim` or `apps/game` (ADR-0003).
+- **An ADR is a DECISION, not a live reading of the tree** (ADR-0085). A correctly-quoted ADR
+  is evidence of what was RULED, never of what is TRUE NOW. **A new ADR that cites tree state
+  names the symbol, so the citation can be re-run; an existing one is re-verified AT THE POINT
+  OF CITATION, not proactively.** This generalises ADR-0007's fifth amendment — *a comment
+  offered as evidence may not carry a figure no test pins* — from comments to the file where
+  decisions live. *Found because every false clause in a week of briefs was a correct quotation:
+  ADR-0053 said "exactly one reader, and it is a test" and the grep now returns three.*
 - **A perceptual criterion needs a perceptual check, or the word comes out** (ADR-0013,
   human). See "Watching the game" below — this one changed the loop.
 - **A gate threshold must be derivable from a stated requirement.** A number nobody can
