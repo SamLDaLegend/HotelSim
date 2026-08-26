@@ -8798,3 +8798,102 @@ measuring, and G-050 was already the goal about making reviews carry information
   > **Recorded because a correction must be checked like any other claim — accepting it on the
   > builder's record would have put a false statement in an ADR**, which is precisely the failure
   > mode the corrections exist to prevent.
+
+---
+
+## ADR-0099 — G-050 as scoped CANNOT BE BUILT, and the review channel carries ZERO bits, not one. The scorer goes first.
+
+**Date**: 2026-08-27 · **Status**: accepted · **G-050 plan review: four BLOCKERs.** The human's ruling
+— *"a vending machine is not a three-course meal"* — **stands as intent. The mechanism I scoped for it
+is refused by three shipped guards and could not reach a review even if it were not.**
+
+### THE HEADLINE IS WORSE THAN ADR-0078 SAID
+
+ADR-0078 called the review channel **one bit** above the provider bottleneck. **It is ZERO.**
+
+**Verified independently**: `--days 1000 --seed 42 --rooms 24 --amenities 3` returns
+**`[0, 0, 0, 0, 15984]` — 15,984 of 15,984 at score 5.** The critic's ladder shows the same in **nine
+cells** (rooms 12/24/60 × amenities 2/3/5): **every guest counter, every need row and every review
+byte-identical.** **The only cell in the grid with any resolution is `--amenities 1`.**
+
+**And there is no seed axis at all**: ten seeds at 1,000 days differ in **two lines — the seed field
+and the state hash.** *Structural, not a defect: party size is a pure function of the ordinal and the
+RNG's only consumer draws once per tick to keep the hash seed-sensitive.* **So no arm of this goal
+could ever have been evidenced by seed spread.**
+
+### FOUR BLOCKERS, AND EACH KILLS A DIFFERENT PART OF THE DESIGN
+
+**1. NEITHER SHIPPED FIT VALUE IS LEGAL AS A REFILL MULTIPLIER.** `assertServiceFloorIsARate` refuses
+a rate multiplier whose product rounds — *"the floor is a rate, not a rounding."* Against
+`refillPerTick: 14`: **14 × 2500/10000 = 3.5** and **14 × 7500/10000 = 10.5.** Both round.
+**Enumerated, the ONLY whole multipliers against 14 are {5000, 10000}** — *half speed and full speed,
+a binary that cannot express a vending machine against a three-course meal.*
+
+**2. THE REFILL BRANCH MAKES SHIPPED CONTENT UNBINDABLE.** `assertNeedDemandIsServiceable` refuses a
+table whose needs demand ≥ 10,000bp of a guest's time at the worst provider. At fit 2500 the fold
+gives **11,250** and **15,000** against a 10,000 ceiling. **Refused before a guest moves.**
+
+**3. THERE IS ONLY ONE SCALING TERM AND IT IS NOT LIVE — so my PLAN question had no answer.**
+`serviceFloorRefill` has **zero callers in the simulation**; its only non-test caller is the
+`bindContent` **refusal**. **Verified: the achieved rate is `needType.refillPerTick ?? 1`,
+unconditionally, provider-independent.**
+> **And the same falsehood is live in shipped code** — `content.ts:2493` reads *"A room's quality now
+> moves the achieved rate between `serviceFloorRefill` and `refillPerTick`."* **It does not; that is
+> the unmerged branch.** *ADR-0007's class inside the docblock my own PLAN question told the builder
+> to read* — and one of the five orphans G-053a could not touch.
+
+**4. NO FIT DESIGN CAN REACH A REVIEW AT ALL.** `reviewOf` reads only `unservedTicks`, and
+**`isNeedUnservedNow` returns false the moment ANYTHING serves the need, at any quality.**
+> **A guest eating at a vending machine and a guest eating at a café accrue the same zero.** And a
+> refill multiplier reaches it only indirectly **and with the WRONG SIGN**: a slower helping keeps the
+> badly-served need **off** the unserved counter for longer and starves the others instead.
+
+### THE ORDER FLIPS: THE SCORER GOES FIRST
+
+ADR-0098's *"the review mean rewards concentration"* **reproduces, but the mechanism is not a
+preference for concentration — THE TOP BAND IS A CONJUNCTION.** `reviewOf` returns
+`min + floor(sum/4)` and the band clamps, **so score 5 requires ALL FOUR needs at band 4.**
+
+> **Holding per-need marginals fixed and varying ONLY correlation: perfectly correlated → 70 of 100
+> at score 5; independent → 0.7³ = 34.3.** **Same need rows, top band halves — which is exactly
+> ADR-0098's 30 → 14.**
+
+**So spreading service across needs — which is what G-054 just achieved — LOWERS the review mean
+while improving service.** *The channel is not merely coarse; it is anti-correlated with the thing it
+is read as measuring.*
+
+**RULED: the scorer is its own goal and it goes BEFORE fit.** *Orthogonal to fit, and unmeasurable
+alongside it: the conjunction is saturated everywhere except `--amenities 1`, so a scorer change and
+a fit change measured together on the one live rung would be inseparable.*
+
+### FOUR MORE FINDINGS THAT RESHAPE WHAT FIT CAN EVER MEAN
+
+- **THE WATCH HAS NO VALID RUNG.** A **total inversion** of provider preference — room fits
+  7500→1000, item fits 2500→9000 — is **invisible in every reported outcome** above the bottleneck:
+  identical reviews, identical balance, identical departures; only the internal `metByItem` moves.
+  **At `--amenities 1` it moves and reads BACKWARDS**: preferring the *worse* provider **raised** the
+  top band 109 → 171, because it spread load off the contended café. *ADR-0034 §3(a)'s clamp on a new
+  dial.*
+- **FIT BECOMES A §2.1 BOUND THE DAY THIS LANDS, and the schema disclaims one by name.** Three
+  artefacts go false in the same commit, including a whole `describe` block titled *"ONLY THE ORDER OF
+  FIT VALUES MATTERS — the magnitudes are inert."* **The block owes a derivation of 2500 and 7500.**
+- **LODGING IS STRUCTURALLY EXCLUDED.** `assertFitIsReadable` refuses a fit on any type whose only
+  provided need is lodging. **So *"a suite is a better night's sleep"* — the most obvious quality axis
+  in a hotel sim, and the one G-051's facilities will want — cannot be expressed by this field at
+  all.**
+- **ON SHIPPED CONTENT FIT HAS EXACTLY ONE PLACE TO BITE, AND IT IS THE BEST-SERVED NEED.** Only
+  nourishment has two provider kinds; comfort and entertainment have one each. **So scaling them is a
+  silent content re-scale wearing a quality term's clothes — and it RE-OPENS the asymmetry G-054
+  closed four commits ago.**
+
+### AND THE SPEED FLOOR IS A CLIFF, VERIFIED
+
+The critic re-ran the derivation at arbitrary rates: **the cliff is at a best-achieved rate of 9.** At
+**10** (fit 7500) the floor stays 3 but **headroom collapses 40 → 14 ticks**; at **8 or below,
+`guestCellsPerTick: 3` becomes ILLEGAL**; and **at rate 3 (fit 2500) no speed clears at all.**
+
+### MY OWN CENSUS WAS SHORT BY ONE, AND IT IS THE ONE THAT MATTERS
+
+I listed three types declaring fit. **There are four** — `games_room` also declares **7500**. *And
+ADR-0079's ruling paragraph carries the same omission.* **It matters because the missing entry is
+entertainment's sole provider**, which is the whole of the fourth finding above.

@@ -3695,45 +3695,95 @@ is false and it pointed at the answer.**
 - **I2 moves by design if hashed state is added; unchanged if not.** State which before building.
 - `pnpm verify` fourteen rows, `VERIFY_EXIT` read from the process.
 
-## G-050 — Fit scales satisfaction, not just selection
-Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §2).** Milestone: M3
-Owner pair: ai-engineer / ai-critic · **RECOMMENDED FIRST of the three ADR-0079 opens.**
-Statement: **`fitBasisPoints` changes HOW MUCH a need is satisfied**, not only which provider is
-  chosen — *"nourishment from a vending machine is not the same as a 3 course meal in a restaurant."*
+## G-059 — The score stops being a conjunction
+Status: **PLANNED 2026-08-27 (ADR-0099). GOES BEFORE G-050** — the review channel must be able to
+carry a quality signal before anything is built to send one. Milestone: M4
+Owner pair: economy-engineer / balance-critic
+Statement: **the review score stops requiring ALL FOUR needs at the top band**, so it measures how
+  well guests were served rather than how correlated their service was.
 
-**THE FIELD ALREADY EXISTS AND ALREADY DOES HALF THE JOB.** `fitBasisPoints` is on room types and
-item types — `hotel_cafe` **7500**, `arm_chair` **2500**, `vending_machine` **2500** — **and it is
-read ONLY by `compareProviderPreference`, which RANKS.** A vending machine and a cafe satisfy
-nourishment **identically today**; the machine is merely chosen last.
+### THE MEASUREMENT, and it is worse than "one bit"
 
-> **So this goal adds a reader, not a field.** The content is already shaped for it, the values are
-> already declared, and **I3 holds without a schema change.**
+**Verified independently: `--days 1000 --seed 42 --rooms 24 --amenities 3` returns
+`[0, 0, 0, 0, 15984]`.** **Fifteen thousand nine hundred and eighty-four of 15,984 at score 5 — ZERO
+bits.** The critic's ladder finds the same across **nine cells** (rooms 12/24/60 × amenities 2/3/5),
+**every counter byte-identical.** **The only rung in the grid with resolution is `--amenities 1`.**
 
-### WHY THIS ONE FIRST
+**And there is no seed axis**: ten seeds at 1,000 days differ in **two lines** — the seed field and
+the hash.
 
-- **It is the term that makes ADR-0078's 3.3x VISIBLE.** A need served only by its worst provider
-  should read differently from one served by its best; today both read the same. **Fixing the
-  ordering defect before anything can perceive quality would be fixing a statistic with no
-  consumer** — which is why the tie-break stays parked.
-- **It gives the review channel more than one bit.** Reviews are flat 500 above the bottleneck
-  (ADR-0078), and quality-of-service is the obvious second dimension.
-- **It is the cheapest of the three opens** and needs no new system.
+### THE MECHANISM — a conjunction, not a preference
 
-### WHAT TO DECIDE AT PLAN
+`reviewOf` returns `min + floor(sum / 4)` and the band clamps at `bands - 1`, **so score 5 requires
+ALL FOUR needs at band 4.**
 
-- **Where fit multiplies.** The refill? The satisfaction recorded? The dissatisfaction shed? **These
-  are different games** — pick one, state why, and put the arithmetic where the number lives.
-- **`serviceFloorBasisPoints` is already a scaling term** (5000 on all four needs, G-041's derived
-  service floor). **Two multiplicative quality terms need a stated relationship or they will be
-  tuned against each other.** Read ADR-0057 and the `serviceFloorIsARate` refusal first.
-- **The speed floor sits EXACTLY on its derived minimum** (`guestCellsPerTick: 3`, G-041). **Anything
-  that changes how long a helping takes re-derives it** — check before building, not at VERIFY.
+> **Holding the per-need marginals fixed and varying ONLY correlation: perfectly correlated → 70 of
+> 100 guests at score 5; independent → 0.7³ = 34.3.** **Same need rows. Top band halves.**
 
-### WATCH
+**That is exactly ADR-0098's 30 → 14 — so SPREADING service across needs, which is what G-054 just
+achieved, LOWERS the review mean while IMPROVING service.** *The channel is not merely coarse; it is
+anti-correlated with what it is read as measuring.*
 
-**Owed, and it is the point**: two hotels identical but for provider quality should **look
-different** to a watching player. **If they do not, the goal has not landed** — and reviews being one
-bit is the reason to check the review distribution, not just the unserved rows.
+### WHAT TO GET RIGHT
+
+- **The needs are asymmetrical BY DESIGN** (ADR-0079, human). **A scorer that averages them away is a
+  different defect**, not a fix.
+- **`night_rest` CANNOT FAIL for a housed guest and DOES fail for a homeless one** (ADR-0078) — the
+  row folds over **every departed guest, including those that never got a room.** **So a four-need
+  fold is BIMODAL, conflating amenity supply with room supply.** Any new shape must say which it
+  measures.
+- **Measure at `--amenities 1`, the only rung with resolution** — and **state the contention control**,
+  because at that rung effects confound with load-spreading. *Preferring the WORSE provider raised the
+  top band there, by spreading load off a contended café.*
+- **§2.1**: whatever shape replaces the conjunction is **derived from a stated requirement**, not
+  chosen because the distribution looks better.
+
+## G-050 — SPLIT at PLAN, 2026-08-27. As scoped it cannot be built.
+Status: **split into G-050a (the reader) / G-050b (the content). BOTH BLOCKED ON G-059.**
+**ADR-0099 carries the review — four BLOCKERs.** The human's ruling stands as intent; **the mechanism
+I scoped is refused by three shipped guards and could not reach a review even if it were not.**
+
+**FIT MULTIPLYING THE REFILL IS DEAD, three ways over:**
+
+1. **Neither shipped value is a legal rate multiplier.** 14 × 2500/10000 = **3.5**; 14 × 7500/10000 =
+   **10.5**. Both round, and `assertServiceFloorIsARate` refuses that. **The only whole multipliers
+   against 14 are {5000, 10000}** — a binary.
+2. **It makes shipped content UNBINDABLE**: `assertNeedDemandIsServiceable` gives **11,250** and
+   **15,000** against a 10,000 ceiling.
+3. **`serviceFloorRefill` IS NOT LIVE** — zero callers in the sim; the achieved rate is
+   `refillPerTick` unconditionally. **My PLAN question *"how do the two multiplicative terms
+   relate"* had no answer: there is one term and it is inert.** *(And `content.ts:2493` asserts
+   otherwise in the present tense — one of the five orphans G-053a could not touch.)*
+
+**AND NO FIT DESIGN REACHES A REVIEW WITHOUT TOUCHING `isNeedUnservedNow`**, which **returns false
+the moment ANYTHING serves the need, at any quality.** *A vending machine and a café accrue the same
+zero.* **That line is the site. Say so, or drop the review claim.**
+
+### G-050a — the reader
+**One site, one derivation, the golden sweep, no content move.** **Fit becomes a §2.1 BOUND the day
+this lands** and the schema disclaims one by name — **the block owes a derivation of 2500 and 7500**,
+and **three artefacts go false in the same commit**, including a `describe` titled *"ONLY THE ORDER
+OF FIT VALUES MATTERS — the magnitudes are inert."*
+
+**THE SPEED FLOOR IS A CLIFF**: the best-achieved rate cliff is at **9**. At **10** headroom collapses
+**40 → 14 ticks**; at **8 or below `guestCellsPerTick: 3` is ILLEGAL**; **at rate 3, no speed clears
+at all.**
+
+### G-050b — the content
+**Re-derive the fit values as bounds; add the second providers comfort and entertainment lack;
+re-take the speed floor.** **On shipped content fit has exactly ONE place to bite — nourishment, the
+best-served need** — so **scaling comfort and entertainment is a silent content re-scale that
+RE-OPENS the asymmetry G-054 closed.**
+
+**LODGING IS STRUCTURALLY OUT OF SCOPE**: `assertFitIsReadable` refuses a fit on a lodging-only type,
+so ***"a suite is a better night's sleep"* cannot be expressed by this field at all.** **Name the goal
+that owns it.**
+
+### THE WATCH HAS NO VALID RUNG UNTIL G-059 LANDS
+**A TOTAL INVERSION of provider preference is invisible in every reported outcome above the
+bottleneck** — identical reviews, balance and departures; only internal `metByItem` moves. **At
+`--amenities 1` it reads BACKWARDS.** *The goal must state its measurement rung and its contention
+control, or it has no watchable.*
 
 ## G-051 — A facility set, and the inspector who makes it worth buying
 Status: **RE-SCOPED 2026-08-24 by human ruling (ADR-0080). NOT content-only — my "genuinely cheap"
