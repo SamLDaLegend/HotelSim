@@ -3598,7 +3598,7 @@ loose `arm_chair` in a bedroom moves the comfort row; refutes if item placement 
 outside a room's own footprint.**
 
 ### THE THROUGH-WALL RESIDUAL IS ONLY IMPROVED, NOT UNDERSTOOD
-**Parked 2026-08-24 (ADR-0081), on the human's question.** Landings went **236 -> 29** on the bench
+**Parked 2026-08-24 (ADR-0081), on the human's question.** Landings went **291 -> 52** on the bench *(CORRECTED 2026-08-26: this entry read "236 -> 29", which was ADR-0065's reading quoted as a live one — ADR-0084's class. Re-measured: bench 52, six-room 32, criterion and CLI 0, and the figure moved 29 -> 33 -> 52 across three goals)*
 and **116 -> 23** on the six-room arm; **criterion and CLI default went to ZERO.** **Nothing
 attributes the remainder.**
 

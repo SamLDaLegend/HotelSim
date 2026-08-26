@@ -3972,83 +3972,115 @@ The human's reason is the whole justification: **everything else is already ther
 - `check:ladder` green.
 - **A frame or a DOM reading showing the row in the top toolbar** at the smallest of those heights.
 
-## G-047 — A guest is drawn between ticks, and the drawing CHECKS the walk
-Status: **RE-SCOPED 2026-08-26 by human ruling (ADR-0095). FRONT OF THE QUEUE — but PLAN IT FIRST,
-it grew.** Milestone: M4 entry · Owner pair: sim-engineer / render-engineer + ai-critic
-Statement: `packages/sim` exports a **pure `pathBetween(grid, a, b)`**; the renderer **calls it** to
-  slide a guest between tick states, **and a failed lookup is LOUD**.
+## G-047 — SPLIT at PLAN, 2026-08-26. The ruling stands; the justification does not.
+Status: **split into G-058 (the discriminator, tiny, FIRST) / G-047a (the path export) / G-047b (the
+tween).** **ADR-0096 carries the review** — three BLOCKERs, seven MAJORs, **and the number I sold the
+goal on was false in both terms.**
 
-### WHY IT IS FRONT
+**ADR-0095's ruling is NOT overturned**: the sim exports the path, the renderer calls it, no second
+implementation. **What falls is the signature, the seam, the exit criteria, and the diagnostic
+argument.**
 
-**M3's declared statement is wait time as a first-class satisfaction input — and none of it is
-watchable.** Worse for what is next: **M4's milestone question gets asked against a screen where
-guests teleport, and M4 is the milestone where you most need to watch whether a better hotel produces
-more guests.**
+### THE DIAGNOSTIC DOES NOT WORK — withdrawn, and the block no longer claims it
 
-### WHY IT MUST BE PLANNED BEFORE IT IS COMMITTED
+**A failed path lookup fires IDENTICALLY on `stepTowards`' fallback and on a wall-crossing landing
+chosen on merit.** It observes the **symptom**, which `travel.walls.report` already counts on four
+arms. **It adds no attribution** — and `reachableCells`' own docblock rules exactly this out in
+advance, on ADR-0007 grounds.
 
-**It grew from *"interpolate between states"* into a sim export plus a drawing path plus a failure
-mode.** **Take the seam if the builder offers one. The natural split**: **(i)** the path export —
-`packages/sim`, testable headless, **carries the diagnostic**; **(ii)** the drawing that consumes it —
-`apps/game`, **carries the watchable**. *Separately verifiable, which is what makes the seam real
-rather than tidy.*
+**And the residual I cited is false**: bench **52** (before-arm **291**), six-room **32**, criterion
+and CLI **0** — and it moved **29 → 33 → 52** across three goals. **I quoted ADR-0065 as a live
+reading, which is the rule ADR-0084 states, in the goal whose review cites ADR-0084.**
 
-### THE THREE OPTIONS THAT WERE REFUSED, so nobody re-proposes them
+> **G-047 is worth building FOR THE WATCHABLE. That is the whole justification and the block now says
+> only that.**
 
-- **One-cell-only interpolation** — 28% of moving ticks slide and 72% snap. ***Worse than uniform
-  snapping, because the inconsistency reads as a bug.***
-- **Render-side fiction** — must be pathfinding-shaped, not a lerp, ***so the renderer reimplements
-  grid logic and can then disagree with the sim.***
-- **Sim emits the path as state** — refused twice on schema cost. ***The expense was never COMPUTE,
-  it was making the path STATE.***
+## G-058 — Did the chooser fall through, or choose?
+Status: **PLANNED. TINY — about two lines — and it goes FIRST.** Milestone: M4
+Owner pair: sim-engineer / sim-critic
+Statement: **each through-wall landing records WHICH BRANCH produced it.**
 
-### THE DESIGN THIS RESTS ON — read `guests.ts` before planning
+**This is what the parked falsification test actually asks**, and **it is cheaper than the entire
+goal that was going to approximate it.** The discriminator is **one boolean at the site**: whether
+`stepTowards`' candidate loop returned, or fell through to `fallback`.
 
-**The simulation chooses over LANDINGS, NOT CELLS CROSSED, deliberately**: *"a guest occupies exactly
-ONE cell per tick. Nothing in the simulation, in a save, in the state hash or in a recorded frame can
-observe a cell it passed through on the way."* **A per-cell rule was BUILT AND MEASURED and made the
-WATCH surface worse — 23 through-wall landings to 43.**
+**Exit criteria**: the bench and six-room arms report the split — **fallback vs chosen — as exact
+counts** · the parked item *"only improved, not understood"* is **discharged or re-aimed with the
+number** · **I2 unchanged** *(a counter that changes no landing changes no hash — check it)* ·
+`pnpm verify` fourteen rows.
 
-> **So `pathBetween` is the first thing in this project that would ever look at an intermediate
-> cell.** *That is why it is a diagnostic and not a decoration.*
+## G-047a — The sim exports a path
+Status: **PLANNED. Depends on nothing; G-058 first only because it is smaller.**
+Owner pair: sim-engineer / sim-critic
 
-### THE TWO BINDING CONDITIONS
+**THE SIGNATURE AS RULED WOULD HAVE INSPECTED NOTHING.** `world.grid` is `GridBounds` — **six
+integers, no walls.** Walkability lives in `ValidityContext` and is **guest-relative**.
 
-1. **DETERMINISTIC AND PURE.** It is `packages/sim`: **I1 and I2 apply in full** — no clock, no
-   `Math.random`, no Set/Map iteration-order dependence. **It adds no state, no schema field, no
-   migration, and must not move the hash.**
-2. **A FAILED LOOKUP IS LOUD — a visible marker AND a recorded count, never a silent straight line.**
-   > **Silence there would recreate the defect it is meant to expose.** *A renderer that quietly
-   > draws through a wall when the lookup fails is §6.1's "UI drawing a state the sim cannot
-   > reach" — and it would hide the evidence the export exists to surface.*
+> **Corrected: `pathBetween(ctx: ValidityContext, from, to, destinationRoom: EntityId, stairwell:
+> Cell | null)`.**
 
-### THE DIAGNOSTIC IS THE POINT, AND IT HAS A STANDING SUSPECT
+**BOUND THE SEARCH to the step's Manhattan distance** — a monotone search inside the ≤3×3 box is
+**≤16 cells**; **an unbounded BFS floods the floor's whole walkable component, and FAILURE is the
+common case.**
 
-**If the renderer asks for a path between two landings and gets NONE, or one CROSSING A WALL, that is
-evidence the landing chooser permitted a move the geometry does not support.**
+**Say "deterministic, no clock, no `Math.random`, no Set/Map iteration order, no world mutation"
+rather than "pure"** — `ValidityContext` carries **mutable memo fields**, and the builder should use
+them rather than refuse them.
 
-> **That is exactly the shape of the stable residual of 29 through-wall landings** — parked as
-> *"only improved, not understood"*, with the hypothesis that a 92% reduction leaving a stable
-> remainder means a SECOND CAUSE sharing the first one's symptom. **This goal is the instrument that
-> would find it.** *Report the failed-lookup count on the bench and CLI arms; a non-zero count is a
-> finding for that parked item.*
+**`check:tickcost` is a NEGATIVE CONTROL, not a cost gate**: it measures per-tick sim cost and cannot
+see render work — **but `ARM_PATHS` includes `packages/sim/src`, so adding the file makes the arms
+genuinely differ and the gate MEASURES rather than reporting INCOMPARABLE.** *A ratio at ~1.00 is
+then real evidence the tick did not change.*
 
-### EXIT CRITERIA
+## G-047b — The guest is drawn between ticks
+Status: **PLANNED. Depends on G-047a.** Owner pair: render-engineer / render-critic
+**Carries the watchable. This is why the goal exists.**
 
-- **A frame sequence at `--record-every 1` showing sub-cell positions between two tick states** —
-  the instrument that produced the finding, checking the fix.
-- **The failed-lookup count reported on at least the bench and CLI arms**, with **zero silent
-  fallbacks** — assert the marker fires.
-- **Frame-rate independence demonstrated, not asserted** — §6.1 lists *"animation that runs faster on
-  a 144Hz monitor"* as a defect, and **the human is on 145 FPS**, which is the machine that shows it.
-- **I2 unchanged** and **no save bump** — checked, not assumed.
-- `pnpm verify` **fourteen rows**, `VERIFY_EXIT` read from the process.
+**THE RENDERER CANNOT SUPPLY `destinationRoom`, and both surrogates break in OPPOSITE directions** —
+`roomIdAt` makes the marker **silent on the very case it should catch**; `NO_ENTITY` makes it fire on
+**480 of 532 legitimate in-room arrivals**. **Decide at PLAN what the renderer passes and what a
+failure therefore MEANS**: *"I cannot draw a walk here"*, **never** *"the sim did something
+illegal."*
 
-### ALREADY DONE, so it is not re-done here
+**FOUR RULINGS A NAIVE BUILD GETS WRONG:**
 
-**Undersampling is FIXED** (ADR-0095): the viewer README's example carried `--record-every 10` —
-**thirty cells of travel between frames** — and now carries the default of 1 with the arithmetic
-stated. **That was one of the three causes of "guests teleport" and it was the free one.**
+1. **FLOOR CHANGE ⇒ SNAP, and the marker MUST NOT FIRE.** `stairLeg` moves a guest **up to three
+   floors at a fixed column and row**, and a search over `moverNeighbours` **will return that
+   vertical path** — so calling `pathBetween` naively **tweens a guest through two ceilings** on a
+   camera that draws one floor at a time.
+2. **ONCE PER TICK, NOT PER FRAME.** `scene.build` runs **per rendered frame at 145 FPS** and already
+   builds a `ValidityContext` each time.
+3. **DRAW ONE TICK BEHIND**: `at(N-1) + (at(N) − at(N-1)) × carry`. Frame-rate-independent by
+   construction, **and not a boundary violation** — `driver.carry` is already render-side. **Own all
+   three consequences**: the previous cell comes from `observe` (per tick); **`restIdle` zeroes the
+   carry so pause/resume snaps**; and **the HUD prints `world.tick` while the body draws at
+   `tick − 1 + carry`** — say so, or the first WATCH reports it as a defect.
+4. **THE CROWD LAYOUT REINTRODUCES THE JUMP.** Guests are bucketed by `keyOf(guest.at)` and offset by
+   index within the tile, **so a perfectly interpolated guest still jumps one pitch at every tick
+   boundary**, and `crowdedOut` becomes a count of guests on a tile nobody stands on. **Rule the
+   bucketing before BUILD.** *`crowdedOut`'s definition does not change, and the parked
+   three-figures-per-tile cap stays out.*
+
+**NOT INTERPOLATED**: need columns and occupancy pips — **easing either invents a reading the sim
+never held** (§6.1). **The one quantity where it IS correct is `lobbyFractionOf`**, already a
+continuous function of tick — **and it must be fed the SAME lagged tick as the body**, or the fuse
+and the figure disagree about what moment is on screen.
+
+**Put the sub-cell projection helper in `iso.ts`**, which `tools/` may already import.
+`view/camera.ts` is **not** fence-admitted, and widening the list owes a `view-fence.test.ts` entry.
+
+### EXIT CRITERIA — criterion 1 is REPLACED, because it contradicted the block's own condition
+
+**The old criterion asked for sub-cell positions in a recording. A recording is a stream of
+`serialise(world)` and `Guest.at` is an integer `Cell`** — so it **could only be met by adding a
+`World` field**, which ADR-0013 makes a BLOCKER and **binding condition 1 forbids.** *It ordered the
+change the block exists to prevent.*
+
+- **Frames from `record-frames.ts`** — the instrument for an `apps/game` drawing, whose flag is
+  `--every` — **or a pure assertion over interpolated positions.**
+- **Frame-rate independence demonstrated, not asserted.**
+- **The marker's meaning asserted**, and **zero silent fallbacks.**
+- **I2 unchanged, no save bump** — checked.
 
 ## G-045 — A rung slow enough to watch a guest
 Status: **ESCALATED 2026-08-23 (E-012). No number shipped; the rung is the WRONG DIAL.**

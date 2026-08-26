@@ -8520,3 +8520,116 @@ one — the natural split is the path export and the drawing that consumes it.**
 *The export half is `packages/sim`, testable headless, and is the half that carries the diagnostic.
 The drawing half is `apps/game` and carries the watchable. **They are separately verifiable, which is
 what makes the seam real rather than tidy.***
+
+---
+
+## ADR-0096 — The diagnostic argument is WITHDRAWN. The ruling stands; the justification I sold it on does not.
+
+**Date**: 2026-08-26 · **Status**: accepted · **G-047 plan review. Three BLOCKERs, seven MAJORs.**
+**ADR-0095's ruling — the sim exports the path, the renderer calls it — is NOT overturned.** What
+falls is **the signature, the seam, the exit criteria, and the argument I used to justify it.**
+
+### THE NUMBER I CITED THREE TIMES IS FALSE, AND IT IS ADR-0084'S CLASS
+
+I wrote *"a stable residual of 29 through-wall landings"* into the block, the ADR and the brief.
+**Measured on this tree, exact deterministic integers:**
+
+| arm | through-wall |
+|---|---|
+| bench (60 rooms / 5 amenities) | **52** *(before-arm 291)* |
+| six-room | **32** *(before-arm 147)* |
+| criterion · CLI default | **0** |
+
+**And it is not stable: 29 at G-038a-iii-b, 33 at G-041, 52 at G-040b-ii** — recorded in that file's
+own header, which I did not read.
+
+> **ADR-0065 said 29 and was true when written. I quoted it as a LIVE READING.** *That is the rule
+> ADR-0084 states, broken in the goal whose plan review cites ADR-0084.* **My "236 → 29" was wrong in
+> BOTH terms: the tree reads 291 → 52.**
+
+**And the CLI arm reads ZERO**, so exit criterion 2's *"assert the marker fires"* **cannot be met on
+one of the two arms it names.**
+
+### THE DIAGNOSTIC DOES NOT WORK, AND THAT WAS THE STRONGEST ARGUMENT FOR THE OPTION
+
+**A failed path lookup fires IDENTICALLY on both branches** — `stepTowards` reaching its fallback
+(every candidate a wall) and a wall-crossing landing chosen on merit. **It observes the SYMPTOM,
+which `travel.walls.report` already counts on all four arms. It adds no attribution.**
+
+**And `reachableCells`' own docblock rules it out IN ADVANCE**: *"WHAT IT DELIBERATELY DOES NOT
+MODEL: `stepTowards`' FALLBACK… Modelling that would make reachability trivially true of every cell
+on every plot and the rule would inspect nothing (ADR-0007)."*
+
+> **THE ACTUAL DISCRIMINATOR IS ONE BOOLEAN AT THE SITE — whether the loop returned or fell through
+> to `fallback` — about two lines, sim-side, and CHEAPER THAN THIS ENTIRE GOAL.** **It becomes
+> G-058.**
+
+**So: stop selling G-047 on the residual. It is worth building for the WATCHABLE, and the block now
+says that.**
+
+### THE SIGNATURE AS RULED WOULD HAVE INSPECTED NOTHING
+
+**`world.grid` is `GridBounds` — six integers. No walls, no corridors, no rooms, no stairs.**
+Walkability lives in `ValidityContext` and is **guest-relative**: `isWalkableFor` admits a room's
+cell **only when it is that guest's destination room.**
+
+> **A `pathBetween(grid, a, b)` would return a path between any two in-bounds cells, ALWAYS —
+> ADR-0007's founding class sitting inside the diagnostic built to hunt it.**
+
+**Corrected signature**: `pathBetween(ctx: ValidityContext, from, to, destinationRoom: EntityId,
+stairwell: Cell | null)`.
+
+**AND THE RENDERER CANNOT SUPPLY `destinationRoom`** — both surrogates break it in **opposite**
+directions. `roomIdAt(ctx, b)` admits every cell of that room, so **a through-wall landing returns a
+SUCCESSFUL path and the marker goes silent on exactly the case it exists to detect.** `NO_ENTITY`
+refuses every room footprint, so **it fires on the majority of arrivals** — 480 of 532 in-room
+landings on the bench are legitimate. *The value the sim uses is three private derivations over
+engagement state the renderer does not hold and must not re-derive — which is why option 2 was
+refused.*
+
+### THE SEAM I NAMED DOES NOT SEPARATE, AND THE FENCE SAYS SO
+
+Half (i) *"carries the diagnostic"* but **cannot count anything without the destination-room
+derivation**; half (ii) carries the count but **cannot be asserted from `tools/`** — dependency-cruiser
+admits only three `view/` files and **neither `scene.ts` nor `camera.ts` is on the list.** **So my
+exit criterion 2 sat on the wrong side of a fence §9 says must not move.**
+
+**The seam taken instead**: **(i) `packages/sim`** — `pathBetween`, pure and headless **plus the
+fallback discriminator and its count** (G-058), written where `placed` already holds the destination
+and the leg; **(ii) `apps/game`** — the tween and its marker, where a failed lookup means *"I cannot
+draw a walk here"*, **not** *"the sim did something illegal."*
+
+### FOUR THINGS A NAIVE BUILD GETS WRONG, NOW RULED IN THE BLOCK
+
+1. **FLOOR CHANGE ⇒ SNAP, AND THE MARKER MUST NOT FIRE.** `stairLeg` moves a guest **up to three
+   FLOORS at a fixed column and row**, and a search over `moverNeighbours` **will return that
+   vertical path** — so a builder who "just calls `pathBetween`" **tweens a guest through two
+   ceilings on a camera that draws one floor at a time.**
+2. **COMPUTE ONCE PER TICK, NOT PER FRAME.** `scene.build` runs **per rendered frame — 145 FPS on the
+   human's machine — and already constructs a `ValidityContext` each time.** A path is constant
+   between ticks.
+3. **BOUND THE SEARCH to the step's Manhattan distance.** A monotone search inside the ≤3×3 box is
+   **≤16 cells**; an unbounded BFS floods the floor's whole walkable component **and FAILURE is the
+   case this goal expects to be common.**
+4. **INTERPOLATION MEANS DRAWING ONE TICK BEHIND** — `at(N-1) + (at(N) − at(N-1)) × carry` — which is
+   frame-rate-independent by construction and **is not a boundary violation**: `driver.carry` already
+   lives render-side and `tick.ts`'s rule is about `stepTick`'s argument list. **Three consequences
+   to own: the previous cell comes from `observe`, per tick; `restIdle` zeroes the carry so
+   pause/resume snaps; and the HUD prints `world.tick` while the body is drawn at `tick − 1 + carry`.**
+
+*(And a fifth the critic found that I had not considered: **the crowd layout reintroduces the jump.**
+Guests are bucketed by `keyOf(guest.at)` and offset by index within the tile, **so a guest
+interpolated perfectly in cell space still jumps by one pitch at every tick boundary**, and
+`crowdedOut` becomes a count of guests on a tile nobody stands on.)*
+
+### AND EXIT CRITERION 1 CONTRADICTED THE BLOCK'S OWN CONDITION, TWENTY LINES UP
+
+I required *"a frame sequence at `--record-every 1` showing sub-cell positions."* **A recording is a
+stream of `serialise(world)` blobs and `Guest.at` is an integer `Cell`** — so **a recording cannot
+carry a sub-cell position without a `World` field**, which **ADR-0013 makes a BLOCKER and which this
+block's own binding condition 1 forbids.** *Taken literally it ordered the change the block was
+written to prevent.*
+
+**Also the wrong instrument entirely**: `--record-every` is the headless CLI's flag feeding
+`tools/viewer`; **the instrument for an `apps/game` drawing is `record-frames.ts`**, whose flag is
+`--every` and which **draws exactly one frame per tick with no sub-tick concept.**
