@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-038b-i is DONE — the lift QUEUE MECHANISM ships INERT in `packages/sim`, and G-038b-ii (the dial) stays deferred on ADR-0075's measurement. A lift is a CAPACITY ON THE EXISTING SHAFT rather than a second connector, so `stairLeg` and `climbsFrom` — the two hand-kept copies of one condition — did not move, and reachability is untouched because `capacity >= 1` is refused at both doors: a queue is temporal, reachability is topological, and a lift can never sever a building. The queue ORDER IS STORED, deliberately and against the free alternative: lowest-id-wins is not a queue (whoever checked in earliest boards first), and the give-up rule needs a wait clock in hashed state anyway, so one field answers both questions or one field answers one. Save v23: `lift` (null), `liftQueue` (empty) and a `gaveUpWaitingForLift` row at departures[3]. PROVED BYTE-IDENTICAL on four `sim:run` arms — the state hash moves and one zero row appears, and NOTHING ELSE in the report changes. `check:tickcost` returned a REAL ratio for once (equal `arrived` in both arms): 0.9514 / 0.9610 / 0.9742 over three campaigns, no measurable per-tick cost. Owed to G-038b-ii: the derived capacity, the fingerprint's TENTH term, and the DRAWING — both paths cap at three figures on a tile, and `viewer.readonly.test.ts` now carries that debt as two exemption lines. Still open and parked: the flat amenity axis BELOW the bottleneck (three rooms reads 354/354/354, WATCH #23 has the frame); and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 abfd91c3da10b67f. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-25, G-053a is DONE — `HOTELSIM.md` §1's loop terms are MARKED, because the human ruled they are SPECIFICATIONS rather than descriptions (ADR-0081): as descriptions four of them were false for the life of the project and every agent read them as what the game IS, as specifications they are obligations, and a term with no mark is a claim nobody has checked. FOURTEEN TERMS, FIFTEEN MARKS across the three loops — TEN EXIST, FOUR OWED TO M4 (`wages` G-052, `quality` G-037a, `reputation` G-051, `demand` on §8's own M4 line) — and the fifteenth is the build loop's CLOSURE, which is FALSE today: `guestArrives` is a command with no payload, so nothing a player builds changes how many guests arrive. THE ORDERED SPLIT WAS WRONG IN ONE PLACE, AND IT WAS RE-MEASURED RATHER THAN INHERITED: `capacity` is NOT partial, it EXISTS. ADR-0053's "a room holds one guest by enforced invariant" and its one-reader grep were superseded by G-040a/G-040b-i/G-040b-ii; three non-test readers sit in `packages/sim` today, `claimEntity` admits a second lodger of the same party instead of throwing, and shipped content puts TWO GUESTS IN ONE BEDROOM (occupancy 1203 -> 1275, WATCH #22). Every false clause in the block was a correctly-quoted ADR: AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE, which is the rule ADR-0007 already applies to comments. §1's ROOM-DESIGN sentence is the same class and takes three further marks, counted separately; its `function` half SPLITS, because required equipment is a GATE (`validity.ts` returns `missingItem`) where the sentence promises a SCORE. THE DEBT THAT COULD NOT BE PAID: five docblocks on main inside `packages/sim` assert the quality mechanic in the PRESENT TENSE while nothing on main reads a room's quality — ADR-0083 named three in one file, it is FIVE across TWO — and bound 5 forbade touching `packages/sim` and was NOT weakened, so the repair is a named obligation on G-037a's block. Two rules keep a mark from rotting into the description it replaced: every EXISTS names the symbol that makes it true, and the mark moves in the same commit as the term. `CLAUDE.md`'s copy is marked too, for the reason its own banner records. NO FILE UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged, and the I2 reading is what "no behaviour changed" means as evidence rather than as assurance. Fourteen rows green, VERIFY_EXIT=0 read from the process into a log rather than chained on a tail; the two load-sensitive tests were ALSO run in isolation and recorded, TWICE (`needs.determinism` + `provider.determinism`, 2 files / 18 tests, exit 0 both times, 13.02s and 18.66s in one sitting — the 43% spread between two isolated runs of the same two files is the load sensitivity that makes them unreliable in the first place, and it is reported rather than reduced to the flattering figure), because §2.0 says a green reading from an unreliable instrument carries no more information than a red one. AND ADR-0083 RULING 1 MIXES DENOMINATORS, which is §4.1's own named failure: "twelve reliable rows plus two unreliable rows" adds 13 ROWS to 2 TESTS to reach 14 — verify has fourteen ROWS and the two unreliable items are TESTS inside one of them (`test`, I4). Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Schemas**: save **v23** (G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
@@ -31,6 +31,30 @@
 - **Unreliable: 2 gates, 0 defects** — §2.0's sense, which is flakiness, **not** a ruled red. Both
   are **load-sensitive TIMEOUTS under full `verify`**, both pass in isolation, **I2 green
   throughout**: `test` (two files) and `check:scaling`. **§2.0: a THIRD is a stop condition.**
+  **AND THE UNIT IS ROWS vs TESTS AND THE TWO HAVE BEEN MIXED** (G-053a): `pnpm verify` has
+  **fourteen ROWS**; `needs.determinism` and `provider.determinism` are **two TESTS inside one row**
+  (`test`, I4). ADR-0083 ruling 1's *"twelve reliable rows and the two unreliable rows"* adds 13 rows
+  to 2 tests to reach 14. **The classification is right; only the denominator is wrong** — §4.1's own
+  named failure, for the third time. **Re-measured 2026-08-25: fourteen rows PASS, VERIFY_EXIT=0
+  from the process, and the two tests ALSO green in isolation, recorded because §2.0 says the
+  full-run green from an unreliable instrument carries no information by itself. **Two isolated runs
+  of the same two files, one sitting: exit 0 both times, 13.02s and 18.66s — a 43% spread with
+  nothing else running**, which is the load sensitivity itself and is where G-055 should start.**
+- **`HOTELSIM.md` §1's LOOP TERMS ARE MARKED** (G-053a, ADR-0081): they are **specifications, not
+  descriptions**, so every term reads `[EXISTS]` or `[OWED TO M4]` and §1.1 carries the evidence.
+  **Ten exist, four are owed, and the build loop's CLOSURE is owed with `demand`** — arrivals are a
+  fixed cadence, so nothing a player builds changes how many guests arrive. **Two rules bind every
+  future goal**: an `EXISTS` names the symbol that makes it true, and **the mark moves in the same
+  commit as the term, in `HOTELSIM.md` AND `CLAUDE.md`**.
+- **LIVE OBLIGATION, on the goal that merges `g037a-quality-fold`** (written into **G-037a**'s
+  block): **five docblocks on main inside `packages/sim` assert the quality mechanic in the PRESENT
+  TENSE and nothing on main reads a room's quality** — `content.ts` 1948 / 2075 / 2429 / 3910 and
+  `index.ts:102`. **ADR-0083 named three, in one file; it is five, across two.**
+- **OPEN CONTRADICTION, handed to G-053b**: **ADR-0053 and G-037b's block are STALE.** *"A room
+  holds one guest by enforced invariant"* and *"there is no party concept in `packages/sim`"* were
+  both true when written and were **superseded by G-040a/G-040b-i/G-040b-ii**. `capacity` has three
+  non-test readers today and **two guests share a bedroom on shipped content**. *An ADR is a
+  decision, not a live reading of the tree.*
   `verify` now keeps a red row's own output in `.verify-logs/` (G-039a), which is how the fourth
   and fifth sightings were finally diagnosed.
 - **The re-take goal carries THREE campaigns**: tickcost, scaling, and `PARKING.md`'s
@@ -2545,6 +2569,36 @@ Milestone: M3 · Owner pair: ai-engineer / ai-critic
 Statement: the quality fold — **function, size, decor, adjacency** — over a workload that expresses
   it, wired to ONE consequence. Every weight and threshold is content (I3).
 
+### OBLIGATION ADDED BY G-053a (2026-08-25). THIS GOAL OWNS FIVE PRESENT-TENSE ORPHANS IT DID NOT WRITE.
+
+**`HOTELSIM.md` §1.1 marks the build loop's `quality` term OWED, and this is the goal it is owed on.**
+G-053a could not repair what it found, because **its bound 5 forbids moving any `packages/sim` file
+and the bound was not weakened to reach it** (ADR-0083). So the repair is stated here instead of left
+in prose.
+
+**FIVE DOCBLOCKS ON MAIN, INSIDE `packages/sim`, ASSERT THE QUALITY MECHANIC IN THE PRESENT TENSE, AND
+NOTHING ON MAIN READS A ROOM'S QUALITY** — no field, no fold, no reader; `quality.ts` exists only on
+`g037a-quality-fold` (`87c0101`):
+
+- `content.ts:1948` — *"the two refusals bound the quality range at both ends"*
+- `content.ts:2075` — *"became a RANGE with a room's quality moving inside it"*
+- `content.ts:2429` — *"A room's quality **now** moves the achieved rate between `serviceFloorRefill`
+  and `refillPerTick`"*
+- `content.ts:3910` — *"Since ADR-0054 a room's quality moves the achieved rate inside a range"*
+- `index.ts:102` — *"The two ends of the quality range"*
+
+> **ADR-0083 named THREE of these, in one file. There are FIVE, across TWO files** — the count and the
+> file set are G-053a's correction, and a goal repairing only the three it was handed leaves two
+> behind. **Whichever goal merges the branch discharges ALL FIVE**: either the mechanic lands and the
+> present tense becomes true, or each docblock is restated to say what is true today and point
+> forward. **Neither is optional and "we merged the branch" does not discharge it by itself** — the
+> branch is 45 commits behind and touches five files that all moved, so the docblocks must be
+> re-read against the merged text rather than assumed correct by arrival.
+
+**AND THE MARK MOVES IN THE SAME COMMIT** (§1.1 rule 2): `HOTELSIM.md` §1.1's `quality` row, its
+`[OWED TO M4]` inline mark, the room-design sentence's three marks in §1, and `CLAUDE.md`'s build-loop
+bullet all flip together, or the charter starts lying in the other direction.
+
 **THERE IS NO WORKLOAD IN THIS PROJECT IN WHICH A ROOM HAS MORE THAN ONE CELL OR MORE THAN ONE
 ITEM, so every measurement would be taken at the fold's DEGENERATE POINT.** The CLI harness
 schedules `buildRoom` only — 1×1, auto-furnished with its one required item. The I2 log says it
@@ -2808,29 +2862,115 @@ sweep *"was ruled before G-034a"* (**it was never ruled at all**) and that §2.2
 expired (**all three cited causes are ANCESTORS of the deferral**).
 
 ## G-053a — The charter's loop terms are marked
-Status: **PLANNED. Small, and the ONLY part with a consumer waiting** — M4 tunes the economy against
-these definitions. Milestone: M3 exit · Owner pair: sim-critic / sim-engineer
+Status: **DONE 2026-08-25.** `HOTELSIM.md` §1 and §1.1 carry the marks, `CLAUDE.md`'s copy carries
+them too, `git diff --stat` touches **no file under `packages/sim`**, and **I2 is unmoved at
+`abfd91c3da10b67f`** — the same hash the previous digest carried, which is what "no simulation
+behaviour changed" means as a reading rather than as an assurance.
+Milestone: M3 exit · Owner pair: sim-critic / sim-engineer
 
 **RULED (ADR-0081): the loop terms are SPECIFICATIONS, not descriptions.** Mark every term in
 `HOTELSIM.md` §1 **`exists`** or **`owed to milestone N`**.
 
-**Counted at REPORT: 14 terms across 3 loops, 0 of 14 marked.** **9 exist · 4 do not** — `wages`,
+~~**Counted at REPORT: 14 terms across 3 loops, 0 of 14 marked.** **9 exist · 4 do not** — `wages`,
 `quality`, `reputation`, `demand` — **· 1 partial**: `capacity`, where rooms exist but per-room
-capacity is blocked at G-037b (*"a room holds one guest by enforced invariant"*).
+capacity is blocked at G-037b (*"a room holds one guest by enforced invariant"*).~~ **STRUCK — the
+count of terms was right and the SPLIT was wrong. See the delivered count below.**
 
 **Verified against the tree rather than taken on report**: `TransactionReason` is exactly nine
 members and **none is a wage**; `reputation` appears **once in all of `packages/sim`**, in a comment;
 `demand` appears only as M4 deferrals.
 
-**AND THE `quality` TERM CARRIES A DEBT THIS GOAL MAY NOT PAY.** Three docblocks **on main, inside
-`packages/sim`**, assert the mechanic in the **present tense** — *"A room's quality NOW moves the
-achieved rate…"* — **and nothing on main reads a room's quality.** **Bound 5 forbids touching
-`packages/sim`.** **Record it as an obligation on the goal that merges `g037a-quality-fold`; do NOT
-weaken bound 5 to reach it.**
+~~**AND THE `quality` TERM CARRIES A DEBT THIS GOAL MAY NOT PAY.** Three docblocks **on main, inside
+`packages/sim`**, assert the mechanic in the **present tense**~~ — **STRUCK ON THE COUNT AND THE FILE
+SET: it is FIVE docblocks across TWO files, not three in one.** The rest of the sentence stands:
+*"A room's quality NOW moves the achieved rate…"* — **and nothing on main reads a room's quality.**
+**Bound 5 forbids touching `packages/sim`.** **Recorded as an obligation on the goal that merges
+`g037a-quality-fold` (G-037a's block, "OBLIGATION ADDED BY G-053a"); bound 5 was not weakened.**
 
 **Exit criteria**: a grep for the four named terms returns a **marked** line for each · the `partial`
 term names what blocks it · `check:stamp` green · **`git diff --stat` touches no file under
 `packages/sim`** · I2 unchanged.
+
+**HOW EACH ONE WAS DISCHARGED, AND ONE OF THEM WENT VACUOUS — SAID, NOT TICKED (ADR-0007).**
+
+1. **`wages`, `quality`, `reputation`, `demand`** — each returns a marked line, and the marks sit
+   **on the terms themselves** in §1's three sentences, so a grep cannot return an unmarked
+   occurrence and then be satisfied by a marked one elsewhere in the file.
+2. **All fourteen marked**, not only the four. **The ten that EXIST each name the symbol that makes
+   them true**, which is the half a future reader most needs and the half nobody was asked for.
+3. **VACUOUS, AND THAT IS THE FINDING RATHER THAN A PASS.** *"The `partial` term names what blocks
+   it"* has **no subject**: `capacity` was re-measured and it EXISTS, so there is no partial term.
+   **A criterion satisfied by the absence of its subject inspected nothing** — it is discharged by
+   **falsifying its premise**, and the caveat it was reaching for is written into the mark anyway
+   (one lodging room type ships, so the player's lever is more rooms rather than bigger ones).
+4. `git diff --stat` — **six markdown files at the repository root, zero under `packages/sim`.**
+   Checked as a command: `git diff --name-only | grep -c '^packages/sim'` returns **0**.
+5. **I2 `abfd91c3da10b67f`**, unchanged, read from `node tools/gates/determinism.mjs` rather than
+   assumed from the fact that no code moved.
+6. `node tools/gates/stamp.mjs` **green**, all four stamps rewritten in one step by the shipped
+   `--set` path.
+7. **Fourteen rows PASS, `VERIFY_EXIT=0`** into a log, twice; the two load-sensitive tests **also**
+   green in isolation, twice, **exit 0 both times at 13.02s and 18.66s** — recorded per §2.0, and
+   **both figures given** because the spread between two isolated runs is the finding and either one
+   alone would be the flattering half of it.
+
+**AND BOUND 1 WAS CHECKED RATHER THAN ASSERTED.** Every mark is an INSERTION: strip the bracketed
+marks from the four annotated sentences and each is **byte-identical to its text at HEAD**. Four of
+four. No word was changed, reordered or removed to make room for a mark.
+
+### WHAT WAS DELIVERED, AND THE COUNT THAT WAS ORDERED WAS WRONG IN ONE PLACE
+
+**14 terms across 3 loops — CONFIRMED. 0 of 14 marked — CONFIRMED. The 9/4/1 split — NO: it is
+10 EXIST · 4 OWED · 0 PARTIAL**, plus a **fifteenth mark** the block did not count.
+
+**`capacity` IS NOT PARTIAL. IT EXISTS, AND THE CLAIM THAT BLOCKED IT IS TWO GOALS STALE.**
+ADR-0053's *"a room holds one guest by enforced invariant"* and its grep result — *"exactly one
+reader, `content-loader.test.ts:66`, a test"* — were **superseded by G-040a, G-040b-i and G-040b-ii,
+all done by 2026-08-23**. Re-run on this tree, room-type `capacity` has **three non-test readers in
+`packages/sim`**:
+
+- `guests.ts:2200` — `findFreeRoom` refuses a lodging room whose type's `capacity` cannot hold the
+  **whole party** (G-040b-i's fix was PARTIAL FIT, and it is this line)
+- `guests.ts:1513` — `lodgingCapacityOf` bounds concurrent lodgers
+- `content.ts:3054` — `assertPartiesCanBeHoused` refuses content whose largest party exceeds the
+  roomiest lodging type
+
+`claimEntity` **no longer throws on the second holder unconditionally** (`guests.ts:1820`): it admits
+a second lodger of the **same party** and throws otherwise. And it is not inert — shipped content is
+`bedroom` capacity **2** with `partySizeWeights: [3, 1]`, realised cycle **1, 1, 2**, and G-040b-ii
+measured occupancy **1203 → 1275** with **WATCH #22** showing two figures in one bedroom.
+
+> **The honest qualification, marked in §1.1 rather than glossed**: only ONE lodging room type ships,
+> so the player's lever today is MORE rooms rather than BIGGER ones. **The mechanism is live; the
+> content offers no choice.** That is a content gap, not a missing term, and the two are marked
+> differently on purpose.
+
+**THE FIFTEENTH MARK: the build loop's CLOSURE.** *"back to the guest loop"* is a claim rather than a
+term and **it is false today** — arrivals come from the command log on a fixed cadence
+(`guestArrives` has no payload and `commands.ts:300` says why), so **nothing a player builds changes
+how many guests arrive**. Marked `OWED TO M4, WITH demand`, because a reader checking four missing
+nouns would never have checked whether the arrow at the end of the sentence points at anything.
+
+**AND §1's ROOM-DESIGN SENTENCE IS THE SAME CLASS AND WAS NOT IN THE BRIEF.** *"the room is scored on
+what it contains — function from required equipment, quality from size and decor"* is a
+present-tense specification in §1 with **no room scored on main**. Marked with **three** further
+marks, counted separately so the loop count stays comparable with the one ordered. **Its `function`
+half splits and the split is the finding**: required equipment is a **GATE** today — `validity.ts`
+returns `missingItem` — but a gate is binary and the sentence promises a **SCORE**.
+
+**TWO THINGS HANDED TO G-053b RATHER THAN FIXED HERE** (this goal marks the charter; it does not
+sweep ADRs):
+
+1. **ADR-0053's capacity finding is stale in `DECISIONS.md` and in G-037b's own block**, which still
+   reads *"there is no party concept in `packages/sim`"* — **`Guest.partyId` shipped at G-040a.**
+   G-037b's remaining scope is multi-occupancy by **unrelated** bookings, which its own schema
+   forbids by definition, so **G-053b should re-scope or close it rather than leave it PLANNED on a
+   dead premise.**
+2. **`ADR-0083` ruling 1 mixes denominators, which is §4.1's own named failure.** *"The twelve
+   reliable rows green and the two UNRELIABLE rows green in isolation"* counts **13 rows + 2 tests**
+   as 14: `pnpm verify` has **fourteen rows**, and `needs.determinism` and `provider.determinism` are
+   **two TESTS inside one row** (`test`, I4). The classification is right and only the unit is wrong;
+   the criterion was executed in the form that is checkable and the reading is in `JOURNAL.md`.
 
 ## G-053b — Everything else, and the surface is bigger than the block assumed
 Status: **PLANNED. Scope is EVERYTHING SINCE ADR-0046**, not "what accumulated since a sweep",
@@ -2868,7 +3008,7 @@ and are **outside the five stated classes** — **but given the isometric sweep 
 where an absorbed one would have to look.** **Decide deliberately rather than by omission.**
 
 ## G-055 — The unreliable gates are repaired, because §2.0 says that is the remedy
-Status: **PLANNED. §2.0's own escalation, owed rather than parked a fifth time.**
+Status: **PLANNED — and the evidence GREW at G-053a.** Three ISOLATED readings of the unchanged pair now span **13.02s / 18.66s / 21.73s — a 67% spread**, and the orchestrator read `VERIFY_EXIT=1` on the same tree the builder read 0 on three times. **An instrument whose isolated readings vary by two thirds is not reporting, it is guessing.** §2.0's own escalation, now routed around five times.
 Milestone: M3 exit · Owner pair: sim-engineer / sim-critic
 
 **`HOTELSIM.md` §2.0**: *"An intermittent gate is its own escalation with its own remedy — **REPAIR

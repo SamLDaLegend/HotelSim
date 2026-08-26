@@ -2,7 +2,9 @@
 
 Build a casual, cartoon-styled hotel building and management simulator. ISOMETRIC FLOORPLAN VIEW, in the Theme Hospital / RollerCoaster Tycoon tradition — multi-floor, ONE FLOOR RENDERED AT A TIME, floors switchable, with a cityscape behind and below. THE NOSTALGIC REGISTER IS THE POINT, NOT A SIDE EFFECT.
 
-AND ROOMS ARE DESIGNED BY THE PLAYER, NOT PLACED FROM A CATALOGUE. The player draws a room's footprint, places items inside it, and the room is scored on what it contains — function from required equipment, quality from size and decor, in the shape Two Point Hospital uses. A room TYPE is a constraint set in content; a room INSTANCE is the player's drawing, and that is world state (ADR-0046 §4).
+AND ROOMS ARE DESIGNED BY THE PLAYER, NOT PLACED FROM A CATALOGUE. The player draws a room's footprint, places items inside it, and the room is scored on what it contains [OWED TO M4] — function from required equipment [EXISTS AS A GATE, OWED TO M4 AS A SCORE], quality from size and decor [OWED TO M4], in the shape Two Point Hospital uses. A room TYPE is a constraint set in content; a room INSTANCE is the player's drawing, and that is world state (ADR-0046 §4).
+
+MARKED WITH THE LOOP TERMS (§1.1), BECAUSE IT IS THE SAME CLASS AND WOULD OTHERWISE HAVE ESCAPED ON A TECHNICALITY: this sentence is a SPECIFICATION too, and NO ROOM IS SCORED TODAY. `drawRoom` and `placeItem` exist, so the player's footprint and its contents are real world state; the SCORE over them is not — no fold, no field, no reader, on main. THE FUNCTION HALF SPLITS AND THE SPLIT IS THE POINT: required equipment is a GATE today — `validity.ts` returns `missingItem` for a room lacking an item its type requires, so an unequipped room serves nobody — but a gate is binary and this sentence promises a SCORE, which is a different quantity and does not exist. It is G-037a, the same goal that owes the loop's `quality`, and §1.1's `quality` row carries the evidence and the five present-tense docblocks that go with it.
 
 RULED 2026-08-16, HUMAN — ADR-0046, the largest ruling in the project. This paragraph read "Side-on cross-section view (think SimTower / Project Highrise), not isometric" from before the first line of code until goal 33, and it superseded itself only when a human looked at the screen. Every criterion, ADR and goal resting on the old sentence is superseded with it.
 
@@ -16,11 +18,99 @@ It is cheap, it is a human call by construction, and it would have caught this a
 
 The game is three nested feedback loops. Every design and code decision should be traceable to one of them:
 
-Guest loop — guest arrives, forms needs, gets them met or doesn't, pays, leaves a review.
-Money loop — room revenue against wages and upkeep, settled nightly.
-Build loop — spend cash, add capacity and quality, raise reputation, raise demand, back to the guest loop.
+Guest loop — guest arrives [EXISTS], forms needs [EXISTS], gets them met or doesn't [EXISTS], pays [EXISTS], leaves a review [EXISTS].
+Money loop — room revenue [EXISTS] against wages [OWED TO M4] and upkeep [EXISTS], settled nightly [EXISTS].
+Build loop — spend cash [EXISTS], add capacity [EXISTS] and quality [OWED TO M4], raise reputation [OWED TO M4], raise demand [OWED TO M4], back to the guest loop [OWED TO M4].
+
+EVERY TERM CARRIES ITS MARK ON THE TERM, so no reader and no grep reaches one of these words without it. Not one of the words above was changed, added or removed to fit a mark — §1.1 explains why they are marks at all, and carries the evidence for each one.
 
 If a proposed feature does not feed one of these three loops, it goes in PARKING.md, not in the sprint.
+
+1.1 THE LOOP TERMS ARE SPECIFICATIONS, NOT DESCRIPTIONS, AND EVERY ONE OF THEM IS MARKED (RULED 2026-08-24, HUMAN — ADR-0081)
+
+NOBODY HAD DRAWN THE DISTINCTION THAT MATTERS. Read as DESCRIPTIONS, the three sentences above were false for the life of the project — four of their terms name mechanics that no line of code implements — and every agent, every goal, read them as a statement of what the game IS. Read as SPECIFICATIONS they are obligations. RULED: SPECIFICATIONS.
+
+SO EVERY TERM CARRIES A MARK — EXISTS or OWED TO M-N — AND A TERM WITHOUT ONE IS A CLAIM NOBODY HAS CHECKED. This is the same move ADR-0013 made for a perceptual criterion, aimed one level further up: a claim that could not be checked becomes one that can, for the cost of a few words. It is §9's unexamined-decision class at the charter's first paragraph, which is where it lives every time.
+
+TWO RULES, AND THEY ARE WHAT KEEP THIS FROM ROTTING INTO THE THING IT REPLACED. (1) EVERY MARK OF EXISTS NAMES THE SYMBOL THAT MAKES IT TRUE, so a reader confirms it with one grep instead of believing this file — that is the whole difference between a mark and a second description. (2) THE MARK MOVES IN THE SAME COMMIT AS THE TERM: a goal that lands a term re-marks it, a goal that adds a term to a loop adds it marked, and a goal that finds a mark wrong says so rather than editing quietly. This is NOT a documentation-maintenance mechanism and must not grow into one (G-053a bound 7) — it is fifteen lines that either match the tree or do not.
+
+MARKED 2026-08-25 (G-053a), AND THE COUNT NAMES ITS UNIT BECAUSE §4.1 REQUIRES IT TO: THE THREE LOOP SENTENCES CARRY FOURTEEN TERMS AND FIFTEEN MARKS — TEN TERMS EXIST, FOUR ARE OWED, and the fifteenth mark is the build loop's CLOSURE, which is a claim rather than a term and is owed with `demand`. THREE FURTHER MARKS SIT ON §1's ROOM-DESIGN SENTENCE above and are counted separately, so that this loop count stays comparable with the one in the goal block that ordered the marking. Every EXISTS below was re-verified against the tree on that date rather than inherited from the block — and one of them came back different, which is recorded at its own row.
+
+  GUEST LOOP — five terms, five EXIST. It is the only loop running on all of its declared terms.
+
+    guest arrives              EXISTS   `guestArrives` (packages/sim/src/commands.ts) and the arrival phase of `stepGuests`
+                                        (tick.ts phase 2 of 5). IT IS A COMMAND, NOT SOMETHING THE SIMULATION DECIDES, and
+                                        deliberately so: how often guests turn up is `demand`, which is owed below. So this
+                                        term exists and its RATE does not.
+    forms needs                EXISTS   `formNeedVector` (needs.ts) builds the vector from content at arrival.
+    gets them met or doesn't   EXISTS   `advanceNeeds`, `isNeedSatisfiedIn`, `accumulateUnservedTicks`, `metAtDeparture`
+                                        (needs.ts). Both outcomes are recorded, per need, at departure.
+    pays                       EXISTS   `roomRevenue` in `TransactionReason` (ledger.ts); `countRoomRevenueTransactions`
+                                        (guests.ts). Integer pence, ADR-0002.
+    leaves a review            EXISTS   `reviewOf` and `recordReview` (reviews.ts), folded into `ReviewOutcomeRow`. IT EXISTS
+                                        AND IT CARRIES ALMOST NO INFORMATION — measured one bit above the bottleneck
+                                        (ADR-0080). That is a tuning finding owned by G-050/G-051, NOT a missing term, and
+                                        the two must not be confused: a term that exists and says little is a different
+                                        problem from a term that is not there.
+
+  MONEY LOOP — four terms, three EXIST, one OWED. It has run on two thirds of itself since M0.
+
+    room revenue               EXISTS   `roomRevenue` in `TransactionReason` (ledger.ts).
+    wages                      OWED TO M4 — G-052 (staff exist, occupy rooms, and are paid). `TransactionReason` has EXACTLY
+                                        NINE MEMBERS and none of them is a wage (ledger.ts). The only two occurrences of the
+                                        word in all of `packages/sim` are comments deferring it (build.ts:52,
+                                        settlement.ts:8). §8 puts "staff hiring and wages" in M4.
+    upkeep                     EXISTS   `upkeep` in `TransactionReason`; `nightlyUpkeepOf` (settlement.ts) folds each room
+                                        type's `nightlyUpkeepPence`.
+    settled nightly            EXISTS   `isSettlementTick` — `tick % TICKS_PER_DAY === TICKS_PER_DAY - 1` — and `settleNight`
+                                        (settlement.ts).
+
+  BUILD LOOP — five terms, two EXIST, three OWED; plus its CLOSURE, owed. THIS IS THE LOOP THE MILESTONE QUESTION WAS ANSWERED AGAINST: ADR-0081's qualified yes says the build loop is "spend cash, add capacity, stop", and these marks are that sentence made checkable.
+
+    spend cash                 EXISTS   `construction` and `floorConstruction` in `TransactionReason`, charged in
+                                        `applyDrawRoom` (build.ts); `demolitionRefund` returns part of it.
+    add capacity               EXISTS   BOTH WAYS, AND THIS ROW IS A CORRECTION — the goal block that ordered this marking
+                                        expected `partial`, blocked at G-037b on ADR-0053's "a room holds one guest by
+                                        enforced invariant". THAT READING IS TWO GOALS STALE. Hotel capacity: every
+                                        `drawRoom` adds a bed. PER-ROOM capacity is live on shipped content — `findFreeRoom`
+                                        refuses a lodging room whose type's `capacity` cannot hold the whole party
+                                        (guests.ts:2200), `lodgingCapacityOf` bounds concurrent lodgers (guests.ts:1513),
+                                        `claimEntity` admits a second lodger of the SAME party (guests.ts:1820), and
+                                        `assertPartiesCanBeHoused` refuses content whose largest party exceeds the roomiest
+                                        lodging type (content.ts:3054). Shipped: `bedroom` capacity 2 with
+                                        `partySizeWeights: [3, 1]`, realised cycle 1, 1, 2 — A PAIR SHARES A BEDROOM TODAY,
+                                        and it moved a number (occupancy 1203 -> 1275 at G-040b-ii, WATCH #22 has the frame).
+                                        ADR-0053's grep — "exactly one reader, and it is a test" — returns THREE non-test
+                                        readers now. ONE HONEST QUALIFICATION: only one lodging room type ships, so the
+                                        player's lever is MORE rooms rather than BIGGER ones. The mechanism is live; the
+                                        content offers no choice yet.
+    quality                    OWED TO M4 — G-037a (a room is scored on what is in it). NOTHING ON MAIN READS A ROOM'S
+                                        QUALITY: no quality field, no fold, no reader. `quality.ts` exists only on branch
+                                        `g037a-quality-fold` (87c0101), 45 commits behind and carrying a save bump off v23.
+                                        G-037a's block still reads Milestone: M3 and M3 signed off without it (ADR-0081) —
+                                        which milestone it moves to is the human's, and M4 is the earliest it can be.
+                                        AND FIVE DOCBLOCKS ON MAIN ASSERT THE MECHANIC IN THE PRESENT TENSE — content.ts
+                                        1948, 2075, 2429 and 3910, and index.ts:102, e.g. "A room's quality now moves the
+                                        achieved rate between `serviceFloorRefill` and `refillPerTick`". They are the
+                                        largest §2.1 orphan on the tree and G-053a could not touch them: its bound 5 forbids
+                                        moving any `packages/sim` file, and the bound was not weakened to reach it. THE GOAL
+                                        THAT MERGES THE BRANCH OWNS REPAIRING OR DISCHARGING ALL FIVE, written into G-037a's
+                                        block as an obligation rather than left in prose here.
+    raise reputation           OWED TO M4 — G-051 ships the STAR RATING, which ADR-0082 rules is a SECOND and distinct
+                                        system (professional inspection, judged on what the hotel HAS); reputation itself,
+                                        judged on guest satisfaction, is unbuilt. The word appears ONCE in all of
+                                        `packages/sim` — a comment at reviews.ts:12 — and nowhere in any other package.
+                                        §8 puts "reputation feeding demand" in M4.
+    raise demand               OWED TO M4 — §8's own M4 line. No demand model exists anywhere. Every occurrence of the word
+                                        inside `packages/sim` is either the unrelated sense — `assertNeedDemandIsServiceable`,
+                                        which is a need's demand on a guest's TIME — or an explicit deferral naming M4
+                                        (commands.ts:300, content.ts:538, content.ts:546).
+    back to the guest loop     OWED TO M4, WITH `demand`. THE FIFTEENTH MARK, AND IT IS A CLAIM RATHER THAN A TERM: that the
+                                        outer loop is a LOOP. It does not close today. Arrivals come from the command log on
+                                        a fixed cadence, so nothing a player builds changes how many guests arrive, and the
+                                        build loop is an open chain that terminates in cash. Marked separately because a
+                                        reader checking four missing nouns would not otherwise check whether the arrow at
+                                        the end of the sentence points at anything.
 
 2. Invariants — non-negotiable, machine-checkable
 

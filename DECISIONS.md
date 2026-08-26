@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-038b-i is DONE — the lift QUEUE MECHANISM ships INERT in `packages/sim`, and G-038b-ii (the dial) stays deferred on ADR-0075's measurement. A lift is a CAPACITY ON THE EXISTING SHAFT rather than a second connector, so `stairLeg` and `climbsFrom` — the two hand-kept copies of one condition — did not move, and reachability is untouched because `capacity >= 1` is refused at both doors: a queue is temporal, reachability is topological, and a lift can never sever a building. The queue ORDER IS STORED, deliberately and against the free alternative: lowest-id-wins is not a queue (whoever checked in earliest boards first), and the give-up rule needs a wait clock in hashed state anyway, so one field answers both questions or one field answers one. Save v23: `lift` (null), `liftQueue` (empty) and a `gaveUpWaitingForLift` row at departures[3]. PROVED BYTE-IDENTICAL on four `sim:run` arms — the state hash moves and one zero row appears, and NOTHING ELSE in the report changes. `check:tickcost` returned a REAL ratio for once (equal `arrived` in both arms): 0.9514 / 0.9610 / 0.9742 over three campaigns, no measurable per-tick cost. Owed to G-038b-ii: the derived capacity, the fingerprint's TENTH term, and the DRAWING — both paths cap at three figures on a tile, and `viewer.readonly.test.ts` now carries that debt as two exemption lines. Still open and parked: the flat amenity axis BELOW the bottleneck (three rooms reads 354/354/354, WATCH #23 has the frame); and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 abfd91c3da10b67f. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-25, G-053a is DONE — `HOTELSIM.md` §1's loop terms are MARKED, because the human ruled they are SPECIFICATIONS rather than descriptions (ADR-0081): as descriptions four of them were false for the life of the project and every agent read them as what the game IS, as specifications they are obligations, and a term with no mark is a claim nobody has checked. FOURTEEN TERMS, FIFTEEN MARKS across the three loops — TEN EXIST, FOUR OWED TO M4 (`wages` G-052, `quality` G-037a, `reputation` G-051, `demand` on §8's own M4 line) — and the fifteenth is the build loop's CLOSURE, which is FALSE today: `guestArrives` is a command with no payload, so nothing a player builds changes how many guests arrive. THE ORDERED SPLIT WAS WRONG IN ONE PLACE, AND IT WAS RE-MEASURED RATHER THAN INHERITED: `capacity` is NOT partial, it EXISTS. ADR-0053's "a room holds one guest by enforced invariant" and its one-reader grep were superseded by G-040a/G-040b-i/G-040b-ii; three non-test readers sit in `packages/sim` today, `claimEntity` admits a second lodger of the same party instead of throwing, and shipped content puts TWO GUESTS IN ONE BEDROOM (occupancy 1203 -> 1275, WATCH #22). Every false clause in the block was a correctly-quoted ADR: AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE, which is the rule ADR-0007 already applies to comments. §1's ROOM-DESIGN sentence is the same class and takes three further marks, counted separately; its `function` half SPLITS, because required equipment is a GATE (`validity.ts` returns `missingItem`) where the sentence promises a SCORE. THE DEBT THAT COULD NOT BE PAID: five docblocks on main inside `packages/sim` assert the quality mechanic in the PRESENT TENSE while nothing on main reads a room's quality — ADR-0083 named three in one file, it is FIVE across TWO — and bound 5 forbade touching `packages/sim` and was NOT weakened, so the repair is a named obligation on G-037a's block. Two rules keep a mark from rotting into the description it replaced: every EXISTS names the symbol that makes it true, and the mark moves in the same commit as the term. `CLAUDE.md`'s copy is marked too, for the reason its own banner records. NO FILE UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged, and the I2 reading is what "no behaviour changed" means as evidence rather than as assurance. Fourteen rows green, VERIFY_EXIT=0 read from the process into a log rather than chained on a tail; the two load-sensitive tests were ALSO run in isolation and recorded, TWICE (`needs.determinism` + `provider.determinism`, 2 files / 18 tests, exit 0 both times, 13.02s and 18.66s in one sitting — the 43% spread between two isolated runs of the same two files is the load sensitivity that makes them unreliable in the first place, and it is reported rather than reduced to the flattering figure), because §2.0 says a green reading from an unreliable instrument carries no more information than a red one. AND ADR-0083 RULING 1 MIXES DENOMINATORS, which is §4.1's own named failure: "twelve reliable rows plus two unreliable rows" adds 13 ROWS to 2 TESTS to reach 14 — verify has fourteen ROWS and the two unreliable items are TESTS inside one of them (`test`, I4). Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -32,6 +32,18 @@
 - **Open contradictions**: **three**, in `GOALS.md`'s digest. **I4 is no longer among them** —
   0 gates / 0 defects since G-022, and the three falsified remedies for its defect B are
   recorded in `vitest.config.ts` so nobody re-argues them.
+- **ADR-0081 IS EXECUTED** (G-053a): `HOTELSIM.md` §1's loop terms are **specifications**, and every
+  one now reads `[EXISTS]` or `[OWED TO M4]` with its evidence in §1.1. **Ten exist, four are owed.**
+  `CLAUDE.md`'s copy is marked with it — **the mark moves in the same commit as the term, in both.**
+- **STALE, DO NOT CITE AS A LIVE READING — ADR-0053's capacity finding.** *"A room holds one guest
+  by enforced invariant"* and the grep returning *"exactly one reader, and it is a test"* were true
+  when written and were **superseded by G-040a, G-040b-i and G-040b-ii**. Today `capacity` has
+  **three non-test readers** in `packages/sim` and **two guests share a bedroom on shipped content**.
+  **G-053b owns the strike-and-point-forward**; it is flagged here so nobody cites it in the interim.
+  > **THE GENERAL RULE THIS INSTANCE ARGUES FOR, and G-053b should decide whether to write it down:
+  > AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE.** Every false clause in G-053a's brief was
+  > a correctly-quoted ADR. ADR-0007's fifth amendment already forbids offering a *comment* as
+  > evidence of current behaviour; nobody had generalised it to the file where decisions live.
 
 ---
 
@@ -7057,3 +7069,92 @@ the shipped total at the floor is 7,500 of 10,000. **The headroom ADR-0054 needs
 **Not cheap**: 45 commits behind, touching five files that all moved, and it ships a save test — **a
 bump off v23.** **Alive, not free**, and it is a candidate route to the build loop's missing
 `quality` term.
+
+---
+
+## ADR-0084 — AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE. The rule existed for comments and nobody generalised it.
+
+**Date**: 2026-08-26 · **Status**: accepted · **G-053a.** The charter's loop terms are marked, and
+**the finding underneath the corrections is worth more than the marks.**
+
+### THE GENERAL FINDING, offered by the builder rather than asked for
+
+> **"EVERY FALSE CLAUSE IN THE BRIEF WAS A CORRECTLY-QUOTED ADR."** ADR-0053 said it, **in those
+> words**, and **it was true when written.**
+
+**`CLAUDE.md` already carries this rule for COMMENTS** — ADR-0007's fifth amendment: *a comment
+offered as evidence may not carry a figure no test pins.* **Nobody generalised it to the file where
+decisions live.**
+
+> **AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE.** A correctly-quoted ADR is evidence of
+> **what was ruled**, never of **what is true now** — and this project has spent this week's briefs
+> discovering that one clause at a time.
+
+**That is the whole explanation for a pattern I had been recording as carelessness**: twenty-three
+goals running, the agent acting on my brief has corrected a load-bearing claim in it. **Most of those
+claims were quotations.** *Flagged as an open contradiction in `DECISIONS.md`'s digest and handed to
+G-053b.*
+
+### THE MARKS, AND MY SPLIT WAS WRONG IN THE DIRECTION THAT MATTERS
+
+**14 terms and 0 marked: both confirmed. The 9/4/1 split: WRONG — it is 10 exist · 4 owed · 0
+partial**, plus marks I had not counted at all.
+
+**`capacity` is NOT partial. It EXISTS, and the claim blocking it is two goals stale.** ADR-0053's
+*"a room holds one guest by enforced invariant… exactly one reader, and it is a test"* was superseded
+by G-040a / G-040b-i / G-040b-ii. **Today `capacity` has three non-test readers** — verified
+independently — **`claimEntity` no longer throws on a second holder**, and **two guests share a
+bedroom on shipped content today** (occupancy 1203 -> 1275, WATCH #22). *One honest caveat kept in
+the mark: only one lodging room type ships, so the player's lever is more rooms rather than bigger
+ones.*
+
+**A FIFTEENTH MARK I had not counted: the build loop's CLOSURE.** *"back to the guest loop"* is a
+claim rather than a term, **and it is false** — `guestArrives` is a **payloadless command**, so
+**nothing a player builds changes how many guests arrive.** Marked `OWED TO M4, WITH demand`.
+
+**And §1's ROOM-DESIGN sentence is the same class and was in nobody's scope**: *"the room is scored
+on what it contains"*, **with no room scored on main.** Its `function` half splits — **required
+equipment is a GATE today** (`validity.ts` returns `missingItem`), **and a gate is binary where the
+sentence promises a SCORE.**
+
+### THE MARKS ARE EVIDENCE-BEARING, WHICH IS MORE THAN THE RULING ASKED FOR
+
+Marks sit **on the terms**, so **no grep reaches one of these words unmarked**. A new **§1.1** names,
+for every `EXISTS`, **the symbol that makes it true** — so a reader confirms in one grep instead of
+believing the file. **Two rules are written in: an `EXISTS` names its symbol, and the mark moves in
+the same commit as the term.**
+
+**`CLAUDE.md`'s copy is marked too** — *and its own banner records what it cost the last time a
+ruling landed in `HOTELSIM.md` and not in the short form.*
+
+**Bound 1 checked rather than asserted**: strip the bracketed marks from the four annotated sentences
+and **each is byte-identical to HEAD, 4 of 4.**
+
+### THREE MORE CORRECTIONS TO ME, AND ONE IS A UNIT ERROR IN MY OWN RULING
+
+- **The `quality` debt is FIVE docblocks across TWO files, not three in one** — `content.ts` at 1948,
+  2075, 2429, 3910 **and `index.ts:102`.** **A goal repairing only the three it was handed leaves two
+  behind, and the second file is what makes it a CLASS rather than a docblock.** Recorded as a named
+  obligation on G-037a.
+- **"The two unreliable ROWS" is a UNIT ERROR — they are two TESTS inside ONE ROW.** ADR-0083 ruling
+  1's *"twelve reliable rows and the two unreliable rows"* **adds 13 rows to 2 tests to reach 14.**
+  The classification is right; the denominator is not. **And there is a THIRD naming already in the
+  tree**: the digest names the unreliable *gates* as `test` and `check:scaling`. **Three namings of
+  one pair** — §4.1's own denominator failure, in my ruling about it.
+- **Criterion 7's premise did not hold**: **all fourteen rows were green on all three runs.** The
+  builder **took the isolation run anyway and recorded both readings — 13.02s and 18.66s**, noting
+  *"a 43% spread between two ISOLATED runs is the load sensitivity itself, and either figure alone is
+  the flattering half."* **That is §2.0 applied in the direction that costs something.**
+- **Criterion 3 went vacuous and was NOT ticked**: *"the partial term names what blocks it"* has no
+  subject once `capacity` is re-measured. **Discharged by falsifying its premise**, which is the
+  honest close.
+
+> **ORCHESTRATOR'S OWN VERIFY, appended 2026-08-26.** The builder read `VERIFY_EXIT=0` three times;
+> **mine read 1** — the same two tests, both `Test timed out in 30000ms`, **2,804 of 2,806 passed.**
+> **Isolation arm: 18 passed, exit 0, 21.73s.**
+>
+> **THE THREE ISOLATED READINGS NOW SPAN 13.02s, 18.66s AND 21.73s — a 67% spread on an UNCHANGED
+> pair.** That is the load sensitivity measured from the quiet side, and **it is the strongest
+> evidence yet for G-055**: an instrument whose isolated readings vary by two thirds is not
+> reporting, it is guessing. **§2.0's remedy is repair, and this is the fifth goal to route around
+> it.**

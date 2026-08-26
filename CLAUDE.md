@@ -19,10 +19,22 @@ and the room is scored on what it contains.
 
 Three nested feedback loops. Every design and code decision traces to one of them:
 
-- **Guest loop** — guest arrives, forms needs, gets them met or doesn't, pays, reviews.
-- **Money loop** — room revenue against wages and upkeep, settled nightly.
-- **Build loop** — spend cash, add capacity and quality, raise reputation, raise
-  demand, back to the guest loop.
+**THESE ARE SPECIFICATIONS, NOT DESCRIPTIONS** (RULED 2026-08-24, human — ADR-0081), so
+**every term carries a mark and a term without one is a claim nobody has checked**.
+`HOTELSIM.md` §1.1 carries the evidence for each; these are the marks alone.
+
+- **Guest loop** — guest arrives [E], forms needs [E], gets them met or doesn't [E],
+  pays [E], reviews [E]. *All five exist; it is the only loop that runs on all of its terms.*
+- **Money loop** — room revenue [E] against wages [**OWED M4**] and upkeep [E], settled
+  nightly [E]. *`TransactionReason` has nine members and none is a wage — G-052.*
+- **Build loop** — spend cash [E], add capacity [E] and quality [**OWED M4**], raise
+  reputation [**OWED M4**], raise demand [**OWED M4**], back to the guest loop
+  [**OWED M4**]. *Two of six. The loop does not close: arrivals are a fixed cadence
+  from the command log, so nothing a player builds changes how many guests arrive.*
+
+**This copy is marked because this file is the one that survives compaction** — and the
+banner above it records what it cost the last time a ruling landed in `HOTELSIM.md` and
+not here. **A goal that lands a term re-marks it in both files, in the same commit.**
 
 If a feature does not feed one of these three, it goes in `PARKING.md`.
 

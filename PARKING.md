@@ -2,11 +2,15 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-23, G-038b-i is DONE — the lift QUEUE MECHANISM ships INERT in `packages/sim`, and G-038b-ii (the dial) stays deferred on ADR-0075's measurement. A lift is a CAPACITY ON THE EXISTING SHAFT rather than a second connector, so `stairLeg` and `climbsFrom` — the two hand-kept copies of one condition — did not move, and reachability is untouched because `capacity >= 1` is refused at both doors: a queue is temporal, reachability is topological, and a lift can never sever a building. The queue ORDER IS STORED, deliberately and against the free alternative: lowest-id-wins is not a queue (whoever checked in earliest boards first), and the give-up rule needs a wait clock in hashed state anyway, so one field answers both questions or one field answers one. Save v23: `lift` (null), `liftQueue` (empty) and a `gaveUpWaitingForLift` row at departures[3]. PROVED BYTE-IDENTICAL on four `sim:run` arms — the state hash moves and one zero row appears, and NOTHING ELSE in the report changes. `check:tickcost` returned a REAL ratio for once (equal `arrived` in both arms): 0.9514 / 0.9610 / 0.9742 over three campaigns, no measurable per-tick cost. Owed to G-038b-ii: the derived capacity, the fingerprint's TENTH term, and the DRAWING — both paths cap at three figures on a tile, and `viewer.readonly.test.ts` now carries that debt as two exemption lines. Still open and parked: the flat amenity axis BELOW the bottleneck (three rooms reads 354/354/354, WATCH #23 has the frame); and balance-critic's mandate to report a distribution across seeds is vacuous. Fourteen rows green, VERIFY_EXIT=0 read from the process, I2 abfd91c3da10b67f. Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
+*As of 2026-08-25, G-053a is DONE — `HOTELSIM.md` §1's loop terms are MARKED, because the human ruled they are SPECIFICATIONS rather than descriptions (ADR-0081): as descriptions four of them were false for the life of the project and every agent read them as what the game IS, as specifications they are obligations, and a term with no mark is a claim nobody has checked. FOURTEEN TERMS, FIFTEEN MARKS across the three loops — TEN EXIST, FOUR OWED TO M4 (`wages` G-052, `quality` G-037a, `reputation` G-051, `demand` on §8's own M4 line) — and the fifteenth is the build loop's CLOSURE, which is FALSE today: `guestArrives` is a command with no payload, so nothing a player builds changes how many guests arrive. THE ORDERED SPLIT WAS WRONG IN ONE PLACE, AND IT WAS RE-MEASURED RATHER THAN INHERITED: `capacity` is NOT partial, it EXISTS. ADR-0053's "a room holds one guest by enforced invariant" and its one-reader grep were superseded by G-040a/G-040b-i/G-040b-ii; three non-test readers sit in `packages/sim` today, `claimEntity` admits a second lodger of the same party instead of throwing, and shipped content puts TWO GUESTS IN ONE BEDROOM (occupancy 1203 -> 1275, WATCH #22). Every false clause in the block was a correctly-quoted ADR: AN ADR IS A DECISION, NOT A LIVE READING OF THE TREE, which is the rule ADR-0007 already applies to comments. §1's ROOM-DESIGN sentence is the same class and takes three further marks, counted separately; its `function` half SPLITS, because required equipment is a GATE (`validity.ts` returns `missingItem`) where the sentence promises a SCORE. THE DEBT THAT COULD NOT BE PAID: five docblocks on main inside `packages/sim` assert the quality mechanic in the PRESENT TENSE while nothing on main reads a room's quality — ADR-0083 named three in one file, it is FIVE across TWO — and bound 5 forbade touching `packages/sim` and was NOT weakened, so the repair is a named obligation on G-037a's block. Two rules keep a mark from rotting into the description it replaced: every EXISTS names the symbol that makes it true, and the mark moves in the same commit as the term. `CLAUDE.md`'s copy is marked too, for the reason its own banner records. NO FILE UNDER `packages/sim` MOVED: save v23, summary 4, measure golden `6a3bc5aa1383196e` and I2 `abfd91c3da10b67f` all unchanged, and the I2 reading is what "no behaviour changed" means as evidence rather than as assurance. Fourteen rows green, VERIFY_EXIT=0 read from the process into a log rather than chained on a tail; the two load-sensitive tests were ALSO run in isolation and recorded, TWICE (`needs.determinism` + `provider.determinism`, 2 files / 18 tests, exit 0 both times, 13.02s and 18.66s in one sitting — the 43% spread between two isolated runs of the same two files is the load sensitivity that makes them unreliable in the first place, and it is reported rather than reduced to the flattering figure), because §2.0 says a green reading from an unreliable instrument carries no more information than a red one. AND ADR-0083 RULING 1 MIXES DENOMINATORS, which is §4.1's own named failure: "twelve reliable rows plus two unreliable rows" adds 13 ROWS to 2 TESTS to reach 14 — verify has fourteen ROWS and the two unreliable items are TESTS inside one of them (`test`, I4). Unreliable: 2 gates, 0 defects (inherited, not re-measured).*
 
-- **257 top-level items**, counted below the digest so the figure does not include itself:
-  `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '`. **The method is stated because
-  the previous figure could not be re-derived** (`CLAUDE.md` rule 5). G-022 is the newest source,
+- **261 BULLETS and 49 SECTIONS** — two units, both named, because they are **two denominators and
+  this line stated one figure under the other's noun** (§4.1). Counted below the digest so neither
+  includes itself: `awk '/^## /&&!/DIGEST/{f=1} f' PARKING.md | grep -c '^- '` gives the bullets,
+  `grep -c '^## '` gives the sections. **The method is stated because the previous figure could not
+  be re-derived** (`CLAUDE.md` rule 5) — **and re-running it at G-053a returned 261 against a stated
+  257, with the same 261 at the previous commit**, so the number had gone stale by four without
+  anybody re-deriving it. **Newest source: G-053a** (is `capacity` vacuous on non-lodging types),
   **each item with its falsification test attached** (§4). **G-020a's zero is discharged**;
   the §9 warning that PARKING must keep growing stands for next time.
 - **THE DWELL TERM IS NO LONGER A HYPOTHESIS.** Parked at G-014b PLAN with its test; the same
@@ -3533,3 +3537,29 @@ NOT TO CLAIM IT IS."*
 fallback (every candidate a wall) or chose a wall-crossing landing on merit. **Confirms if the 29 and
 the 23 are all fallback landings — one cause, understood; refutes if any is a chosen landing, which
 means a second cause and a second goal.** **Run it before M4 tunes anything that moves journeys.**
+
+---
+
+## Is `capacity` a vacuous field on every NON-lodging room type? (G-053a)
+
+**Parked 2026-08-25, from the marking of §1's build loop.** `capacity` turned out to be **live** —
+that correction is in `GOALS.md` and `HOTELSIM.md` §1.1. But every reader found is **filtered to
+lodging types**: `assertPartiesCanBeHoused` folds `roomTypes.filter(provides lodging)` before it
+takes the roomiest, and `findFreeRoom` reads `capacity` only under `if (forLodging)`.
+
+**Shipped content declares `capacity: 8` on all three amenity types**, and the hypothesis is that
+**no code path reads any of the three.** If so it is ADR-0007's class in content rather than code: a
+number sitting in a data file that looks like a constraint, that a designer would reasonably tune,
+and that nothing consumes. **A provider serving one guest at a time is a separate, real rule; this
+is about the FIELD, not the behaviour.**
+
+**Falsification test**, and it is the ADR-0053 mutation one axis over: set `capacity` to **1** on all
+three non-lodging types in `packages/content/data/room-types.json`, restore `sha256`-identical
+afterwards per ADR-0022's stash recipe, and run `pnpm sim:run --days 30 --seed 7 --rooms 6
+--amenities 3`. **CONFIRMS if the report is byte-identical apart from the `contentHash` line** — the
+field is inert on non-lodging types and either gets a reader or gets a docblock saying it is
+lodging-only. **REFUTES if any behavioural row moves**, in which case there is a fourth reader
+nobody has found and the marking's evidence list is short.
+
+**Cheap, and it has a natural home**: the goal that re-scopes or closes **G-037b**, which is already
+holding the stale half of this same field.
