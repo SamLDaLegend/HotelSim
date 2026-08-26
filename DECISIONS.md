@@ -7236,3 +7236,82 @@ stated rule is exactly one thing — *"a commit referencing a goal ID implies th
 
 *Parked with its falsification test rather than fixed here — G-055 comes first and this is a scanner
 question, not a determinism one.*
+
+---
+
+## ADR-0086 — A NAME IS NOT EVIDENCE. Third instance in three days, stated once so the fourth gets caught by the question.
+
+**Date**: 2026-08-26 · **Status**: accepted · **Human ruling.** **Generalises ADR-0013, ADR-0081 and
+the scanner class into one sentence.**
+
+### THE SCANNER PROBLEM IS THE LOOP-TERM PROBLEM, ONE LAYER DOWN
+
+> **"Three scanners narrower than their names in one week isn't a naming problem — it's the same
+> mechanism as the loop terms. `check:status` read as a DESCRIPTION claims it checks status; read as
+> a SPECIFICATION it checks one clause about `pending`. Nobody drew the distinction, so five goals of
+> green were read as *status is fine* when the gate never made that claim."**
+
+**That is exactly ADR-0081's move at a different altitude**, and it means **the fix already exists in
+this project: §1.1's.**
+
+### THE RULE
+
+> **A GATE'S NAME IS A CLAIM, AND A CLAIM NAMES THE SYMBOL THAT MAKES IT TRUE.**
+>
+> **Every scanner carries a ONE-LINE PREDICATE STATEMENT — what it checks, stated narrowly enough
+> that a reader can tell WHAT IT DOES NOT CHECK.**
+
+**`check:status` becomes *"asserts no goal referenced by a commit reads `pending`."*** **Read that and
+you immediately see it says nothing about `Milestone`.**
+
+**This is NOT a fourth scanner** — which is the thing to avoid, because a scanner that checks the
+scanners has the same problem one level up. **It is the marking pattern pointed at gates instead of
+at loop terms, and it is cheap: the predicate ALREADY EXISTS in each gate's code. Someone just has to
+write it where a reader will hit it.**
+
+### THE GENERALISATION, STATED ONCE, PLAINLY
+
+**Three distinct places in three days:**
+
+| | the name | what it actually claimed |
+|---|---|---|
+| **ADR-0013** | a perceptual criterion | *nothing*, until a perceptual check existed |
+| **ADR-0081** | the charter's loop terms | a specification, read for the project's life as a description |
+| **ADR-0086** | a gate's name | one clause, read as the class the name implies |
+
+> **A NAME IS NOT EVIDENCE.**
+
+**Stated once so the FOURTH instance is caught by the standing question rather than by a human
+noticing a green gate over a stale block.** *Added to `CLAUDE.md`, which is the copy that survives
+compaction.*
+
+### AND THE STANDING QUESTION MUST NAME ITS OWN SCOPE
+
+**The human's highest-ranked finding, and the irony is load-bearing rather than decorative:**
+
+> **"A standing question inherits the scope of the goal that produced it, and nothing re-scopes it
+> unless someone deliberately does."** — **the rule against leaving rules where they were found was
+> itself left where it was found.**
+
+**So ADR-0048 §1's standing REFLECT question now NAMES ITS OWN SCOPE** — *"pointed at: gates and
+scanners"* — **so the gap is VISIBLE rather than assumed closed.**
+
+> **"A question whose scope is implicit reads as universal and behaves as narrow, which is precisely
+> the `check:status` failure in a different costume."**
+
+*That sentence is the finding. The question and the gate failed the same way, and the question was
+the thing that should have caught the gate.*
+
+### AND G-055's DISCRIMINATOR WIDENS — record the PASSING runs too
+
+**I planned to instrument the flips. That is selecting on the dependent variable.**
+
+> **"If flips are timeout-driven you'll see the distribution's tail crossing 30,000ms; if the passing
+> runs cluster nowhere near it, the one-cause story dies faster. Three readings against a 30-second
+> budget is a small sample to be reasoning about tails from, and the cheapest way to widen it is to
+> STOP DISCARDING THE SUCCESSES."**
+
+**So G-055 records per-test durations on EVERY run, pass or fail.** **The one-cause story predicts a
+tail that reaches 30,000ms; a passing distribution clustered far below it FALSIFIES that story
+without needing to catch a flip at all** — which is both faster and cheaper than waiting for the rare
+event.

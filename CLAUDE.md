@@ -81,6 +81,13 @@ The stack is fixed. Do not relitigate it. If the human later wants Godot, only
 - Money is **integer minor units** (pennies). Never a float (ADR-0002).
 - A **snake_case string literal is a content ID**, and must not appear in
   `packages/sim` or `apps/game` (ADR-0003).
+- **A NAME IS NOT EVIDENCE** (ADR-0086). **A gate's name is a CLAIM, and a claim names the
+  symbol that makes it true.** Every scanner carries a **one-line predicate statement** — what it
+  checks, stated narrowly enough that a reader can tell **what it does NOT check**. `check:status`
+  is *"asserts no goal referenced by a commit reads `pending`"*, which visibly says nothing about
+  `Milestone`. *Third instance of one move in three days: perceptual criteria (ADR-0013), the
+  charter's loop terms (ADR-0081), gate names (this one). **Read as a description a name claims
+  the class; read as a specification it claims one clause.***
 - **An ADR is a DECISION, not a live reading of the tree** (ADR-0085). A correctly-quoted ADR
   is evidence of what was RULED, never of what is TRUE NOW. **A new ADR that cites tree state
   names the symbol, so the citation can be re-run; an existing one is re-verified AT THE POINT

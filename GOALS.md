@@ -2871,6 +2871,12 @@ Milestone: M3 exit · Owner pair: sim-engineer / sim-critic
 > intermittently crossing a timeout — ONE FIX. If the exit code flips WITHOUT a timing outlier,
 > that is a SECOND, WORSE problem. SAY WHICH BEFORE REPAIRING.**
 
+**RECORD THE PASSING RUNS TOO, NOT ONLY THE FLIPS** — instrumenting only the flips is selecting
+on the dependent variable. **The one-cause story PREDICTS a tail that reaches 30,000ms; a passing
+distribution clustered far below it FALSIFIES it without needing to catch a flip at all**, which
+is faster and cheaper than waiting for a rare event. *Three readings is a small sample to reason
+about tails from, and the cheapest way to widen it is to stop discarding the successes.*
+
 **Readings to date are all consistent with the one-cause reading** — 13.02s / 18.66s / 21.73s
 isolated against a 30,000ms budget — **but nobody has looked for the flip WITHOUT the outlier,
 and that is the case that distinguishes them.** *Instrument the run so a flip records its own
@@ -3012,6 +3018,62 @@ sweep ADRs):
    as 14: `pnpm verify` has **fourteen rows**, and `needs.determinism` and `provider.determinism` are
    **two TESTS inside one row** (`test`, I4). The classification is right and only the unit is wrong;
    the criterion was executed in the form that is checkable and the reading is in `JOURNAL.md`.
+
+## G-056 — Every gate states its predicate, so a reader can tell what it does NOT check
+Status: **PLANNED 2026-08-26. HUMAN RULING (ADR-0086).** Milestone: M3 exit
+Owner pair: sim-engineer / sim-critic · **Small. May ride with G-053b if that goal has budget.**
+Statement: **each of the fourteen gates carries a one-line predicate statement**, narrow enough that
+  a reader can see what it does not cover.
+
+### IT IS THE LOOP-TERM MOVE, ONE LAYER DOWN
+
+> **`check:status` read as a DESCRIPTION claims it checks status; read as a SPECIFICATION it checks
+> one clause about `pending`. Nobody drew the distinction, so FIVE GOALS OF GREEN were read as
+> "status is fine" when the gate never made that claim.**
+
+**Same mechanism as ADR-0081's loop terms, and the fix is the same: §1.1's.** **A gate's name is a
+claim, and a claim names the symbol that makes it true.**
+
+### THREE MEASURED INSTANCES — the class, not a hunch
+
+1. **`check:status` cannot see a stale `Milestone:` line.** `grep -c Milestone` over the gate **and**
+   its library returns **0 and 0**, and `G-037a` reads `Milestone: M3` after M3 signed off **with the
+   gate green.**
+2. **`check:status` cannot see a goal that entered through a MERGE** — it scans
+   `git log --no-merges` **subjects**. G-042 reached `main` that way and had no block until a human
+   noticed.
+3. **ADR-0043 §3's amendment census could not see the INLINE spelling**, and so missed **ADR-0007 at
+   seven amendments — the most-amended ADR in the project**, 3.5x past the threshold of the rule
+   governing it.
+
+### THE SHAPE OF THE FIX
+
+**`check:status` becomes**: *"asserts no goal referenced by a commit reads `pending`."* **Read that
+and you immediately see it says nothing about `Milestone`.**
+
+- **It is CHEAP: the predicate already exists in each gate's code.** *Someone just has to write it
+  where a reader will hit it.*
+- **NOT a fourth scanner.** A scanner that checks the scanners has the same problem one level up.
+  **The remedy adds no surface.**
+- **Where a reader hits it** is the design question: the gate's own header, its printed `ok` line, or
+  both. **The printed line is what an agent sees at VERIFY; the header is what a builder reads.**
+  Decide and say why.
+
+### WHAT WOULD MAKE THIS VACUOUS
+
+**A predicate that restates the name.** *"`check:status` asserts the status is correct"* is the
+defect wearing the remedy's clothes. **The test: can a reader name ONE THING the gate does not check,
+from the line alone?** If not, the line is not narrow enough. **Write that test into the goal, not
+just the rule.**
+
+### EXIT CRITERIA
+
+- **All fourteen gates carry a predicate line**, and for each, **one thing it does not check is
+  nameable from the line alone** — list those fourteen omissions in the goal's report. *That list is
+  the deliverable; the lines are the artefact.*
+- **No new gate, no new scanner, no new CI surface.** `git diff --stat` shows no new file under
+  `tools/gates` except documentation.
+- **I2 unchanged**, `check:stamp` green, and `pnpm verify` per ADR-0083's restated criterion.
 
 ## G-053b — Everything else, and the surface is bigger than the block assumed
 Status: **PLANNED. Scope is EVERYTHING SINCE ADR-0046**, not "what accumulated since a sweep",
