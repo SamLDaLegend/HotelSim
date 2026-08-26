@@ -8439,3 +8439,84 @@ refund, 250,000p cost, save **v23**, summary **4**.
 location, but ADR-0062's headline is "The rebuild was RECOVERED, not re-authored". **Citation sound,
 title misleading — and it bit the builder, whose `\\.` arrived as `\.` inside a quoted heredoc and
 was caught only by a Python `SyntaxWarning`.**)*
+
+---
+
+## ADR-0095 — HUMAN RULING: the sim exports a pure `pathBetween`, and the renderer that draws it also CHECKS it.
+
+**Date**: 2026-08-26 · **Status**: accepted · **Human ruling. Re-scopes G-047 and answers three
+options with a fourth.**
+
+### "GUESTS TELEPORT" HAS THREE DISTINCT CAUSES, AND THEY COMPOUND
+
+1. **UNDERSAMPLING** — `--record-every N` shows a guest up to `3N` cells further along.
+   **Cosmetic, and fixed here**: the viewer README's example carried `10`, so **thirty cells of
+   travel between frames.** *The default was always 1; the EXAMPLE is what got copied — including by
+   me, at `--record-every 20`.*
+2. **RENDER INTERPOLATION** — the renderer draws discrete tile positions, so even one-cell movement
+   snaps. **G-047.**
+3. **MULTI-TILE MOVEMENT, WHICH IS A DESIGN AND NOT A DEFECT.** `guestCellsPerTick: 3`, derived and
+   sitting exactly on its floor since G-041.
+
+### THE TAXONOMY WAS WRONG IN A WAY THE HUMAN NAMED
+
+> **"I listed multi-tile movement as *a real simulation defect*, which assumed A SYMPTOM IMPLIED A
+> CAUSE. It's a design, documented in the file's own header, with a measurement behind it showing the
+> per-cell alternative was worse. The unit check came back negative and was still worth running —
+> that's the check working, not wasted."**
+
+*Recorded because the discriminator's value did not depend on its verdict. A negative unit check on
+the fourth candidate instance in a week is evidence, not a wasted probe.*
+
+### THE FOURTH OPTION, AND IT DOMINATES THE THREE I OFFERED
+
+My three each had a real cost. **One-cell-only interpolation** makes 28% of moving ticks slide and
+72% snap — *"worse than uniform snapping because the inconsistency reads as a bug."* **Render-side
+fiction** must be pathfinding-shaped rather than a lerp, *"which means the renderer reimplements grid
+logic and can then disagree with the sim."* **Sim-emits-path** was refused twice on schema cost.
+
+> **RULED: `packages/sim` exports a pure `pathBetween(grid, a, b)`, and the renderer calls it.**
+
+**I1 forbids the sim importing the render layer; the reverse has always been fine.** So: **no new
+state, no schema field, no migration, no hash movement — and crucially NO SECOND IMPLEMENTATION**,
+which is what made render-side fiction dangerous.
+
+> **"The route between two landings three cells apart is a trivial search. The expense in option 3
+> was never COMPUTE, it was making the path STATE. This gets the path without making it state."**
+
+### AND IT TURNS G-047 FROM A COSMETIC INTO A DIAGNOSTIC
+
+> **"If the renderer asks for a path between two landings and gets NONE, or gets one CROSSING A
+> WALL, that is evidence the landing chooser permitted a move the geometry doesn't support — which
+> is exactly the shape a stable residual of 29 through-wall landings would have. The instrument
+> checks the thing it draws."**
+
+**That is the strongest argument for the option and it is not about drawing at all.** `guests.ts`
+chooses over **landings, not cells crossed**, by design — *"nothing in the simulation, in a save, in
+the state hash or in a recorded frame can observe a cell it passed through."* **`pathBetween` is the
+first thing that ever would.**
+
+**TWO CONDITIONS, both binding:**
+
+1. **The function is DETERMINISTIC and PURE.** *It is `packages/sim` — I1 and I2 apply to it in full.*
+2. **A FAILED LOOKUP IS LOUD — a visible marker and a recorded count, NEVER a silent straight line.**
+   > **"Silence there would recreate the defect it's meant to expose."**
+
+*That second condition is the whole diagnostic. A renderer that quietly draws a straight line through
+a wall when the path lookup fails is a UI drawing a state the sim cannot reach — §6.1 — and it would
+hide the very evidence the export exists to surface.*
+
+### SEQUENCING — front, but SIZED FIRST
+
+**Why front**: *"M3's declared statement is wait time as a first-class satisfaction input, and none
+of it is watchable. Worse for what's next: **M4's milestone question gets asked against a screen
+where guests teleport, and M4 is the milestone where you most need to watch whether a better hotel
+produces more guests.**"*
+
+**Why sized first**: **G-047 has grown from *"interpolate between states"* into a sim export plus a
+drawing path plus a failure mode.** **Plan before committing, and take the seam if the builder offers
+one — the natural split is the path export and the drawing that consumes it.**
+
+*The export half is `packages/sim`, testable headless, and is the half that carries the diagnostic.
+The drawing half is `apps/game` and carries the watchable. **They are separately verifiable, which is
+what makes the seam real rather than tidy.***

@@ -3972,63 +3972,83 @@ The human's reason is the whole justification: **everything else is already ther
 - `check:ladder` green.
 - **A frame or a DOM reading showing the row in the top toolbar** at the smallest of those heights.
 
-## G-047 — A guest is drawn between ticks
-Status: **PLANNED — and CONFIRMED BY THE HUMAN 2026-08-23.** E-012's experiment E1 ran and came back NEGATIVE: *"even on careful people are still teleporting around."* The rung is exonerated by eye as well as by arithmetic, so interpolation is the answer rather than a candidate. Discharges `PARKING.md`'s interpolation park, whose test FIRED at G-045.
-FIRED at G-045 (E-012).** Milestone: M3 · Owner pair: render-engineer / render-critic
-Statement: the renderer **tweens a guest between consecutive tick states**, so a walk reads as
-  walking rather than as three teleports.
+## G-047 — A guest is drawn between ticks, and the drawing CHECKS the walk
+Status: **RE-SCOPED 2026-08-26 by human ruling (ADR-0095). FRONT OF THE QUEUE — but PLAN IT FIRST,
+it grew.** Milestone: M4 entry · Owner pair: sim-engineer / render-engineer + ai-critic
+Statement: `packages/sim` exports a **pure `pathBetween(grid, a, b)`**; the renderer **calls it** to
+  slide a guest between tick states, **and a failed lookup is LOUD**.
 
-**IT IS NOT A NEW REQUIREMENT. Three places already asked for it:**
+### WHY IT IS FRONT
 
-- **`PARKING.md`'s park** — *"the first goal after G-023b"* — with the test that has now fired:
-  **72.1% of moving guest-ticks jump two or more cells between redraws; 35.84% jump the full three.**
-- **`render-engineer.md:61`, as charter**: *"Movement and animation must be frame-rate independent.
-  **Interpolate between the sim's tick states.**"*
-- **§2.1.1's own warning**, because the park's deferral reason — *"nothing moves until G-023b"* —
-  **expired many goals ago**, which is *"ADR-0007's class waiting to happen"* in its own words.
+**M3's declared statement is wait time as a first-class satisfaction input — and none of it is
+watchable.** Worse for what is next: **M4's milestone question gets asked against a screen where
+guests teleport, and M4 is the milestone where you most need to watch whether a better hotel produces
+more guests.**
 
-### WHY NO SPEED RUNG CAN DO THIS JOB
+### WHY IT MUST BE PLANNED BEFORE IT IS COMMITTED
 
-**`px per redraw` is 214.66 at EVERY rung** — 30, 12, 5, and any of 4/3/2. A rung changes how *often*
-a guest teleports three tiles, **never how far**. And the dial is pinned from both sides:
-`guestCellsPerTick: 3` **sits exactly on its derived floor** (G-041 took the plot depth 60 -> 27 and
-the floor 2 -> 3 with it), and the rung space below Careful is **three integers**, with rung 1 killed
-by name in §2.1.1.
+**It grew from *"interpolate between states"* into a sim export plus a drawing path plus a failure
+mode.** **Take the seam if the builder offers one. The natural split**: **(i)** the path export —
+`packages/sim`, testable headless, **carries the diagnostic**; **(ii)** the drawing that consumes it —
+`apps/game`, **carries the watchable**. *Separately verifiable, which is what makes the seam real
+rather than tidy.*
 
-> **A guest translates 9.34 of its own body widths — 16.8% of a 1280px canvas — with nothing drawn in
-> between.** *Frame reference: `t000003-fm1` -> `t000004-fm1`, (640,244) -> (832,340), `--every 1`.*
+### THE THREE OPTIONS THAT WERE REFUSED, so nobody re-proposes them
 
-### THE CONSTRAINT THAT MAKES THIS SAFE, AND IT IS ALREADY PROVEN HERE
+- **One-cell-only interpolation** — 28% of moving ticks slide and 72% snap. ***Worse than uniform
+  snapping, because the inconsistency reads as a bug.***
+- **Render-side fiction** — must be pathfinding-shaped, not a lerp, ***so the renderer reimplements
+  grid logic and can then disagree with the sim.***
+- **Sim emits the path as state** — refused twice on schema cost. ***The expense was never COMPUTE,
+  it was making the path STATE.***
 
-**Interpolation is a RENDER-ONLY concern and must not reach the sim.** `driver.ts` is *"the last place
-wall-clock exists"*, and `tick.ts` says from the other side: *"`dt` is not a parameter and never will
-be: the tick IS the unit of time."*
+### THE DESIGN THIS RESTS ON — read `guests.ts` before planning
 
-**So the tween lives on the far side of that boundary, reading two tick states rather than a clock
-the sim can see.** **The provable property is G-044's**: *nothing outside `apps/game` moves* — no sim
-change, no content change, no save bump, **and I2 unchanged.**
+**The simulation chooses over LANDINGS, NOT CELLS CROSSED, deliberately**: *"a guest occupies exactly
+ONE cell per tick. Nothing in the simulation, in a save, in the state hash or in a recorded frame can
+observe a cell it passed through on the way."* **A per-cell rule was BUILT AND MEASURED and made the
+WATCH surface worse — 23 through-wall landings to 43.**
 
-### WHAT TO DECIDE AT PLAN
+> **So `pathBetween` is the first thing in this project that would ever look at an intermediate
+> cell.** *That is why it is a diagnostic and not a decoration.*
 
-- **What is interpolated**: position certainly. **The need-vector bars and the occupancy pips are
-  probably NOT** — a bar that eases between values invents readings the sim never held, which is the
-  §6.1 failure of *drawing a state the sim cannot reach.*
-- **What happens when a guest's tick state jumps non-contiguously** — a stair leg crosses floors, and
-  the camera draws **one floor at a time**. **A tween across a floor change is a guest sliding
-  through a ceiling.** Rule it: snap on floor change, or do not tween that step.
-- **The one-tick vanishing**, measured at G-045: a guest is on the entrance floor for **exactly one
-  tick** before the camera loses it — **33 ms at the default rung.** Interpolation lengthens the
-  presence but does not fix the disappearance; **say which of the two this goal claims.**
+### THE TWO BINDING CONDITIONS
+
+1. **DETERMINISTIC AND PURE.** It is `packages/sim`: **I1 and I2 apply in full** — no clock, no
+   `Math.random`, no Set/Map iteration-order dependence. **It adds no state, no schema field, no
+   migration, and must not move the hash.**
+2. **A FAILED LOOKUP IS LOUD — a visible marker AND a recorded count, never a silent straight line.**
+   > **Silence there would recreate the defect it is meant to expose.** *A renderer that quietly
+   > draws through a wall when the lookup fails is §6.1's "UI drawing a state the sim cannot
+   > reach" — and it would hide the evidence the export exists to surface.*
+
+### THE DIAGNOSTIC IS THE POINT, AND IT HAS A STANDING SUSPECT
+
+**If the renderer asks for a path between two landings and gets NONE, or one CROSSING A WALL, that is
+evidence the landing chooser permitted a move the geometry does not support.**
+
+> **That is exactly the shape of the stable residual of 29 through-wall landings** — parked as
+> *"only improved, not understood"*, with the hypothesis that a 92% reduction leaving a stable
+> remainder means a SECOND CAUSE sharing the first one's symptom. **This goal is the instrument that
+> would find it.** *Report the failed-lookup count on the bench and CLI arms; a non-zero count is a
+> finding for that parked item.*
 
 ### EXIT CRITERIA
 
-- **A frame sequence at `--every 1` showing sub-cell positions between two tick states** — the same
-  instrument that produced the finding, so the fix is checked by what caught it.
-- `pnpm verify` — **fourteen rows** PASS, `VERIFY_EXIT` read from the process.
-- **I2 unchanged**, and `git diff --stat` touching **nothing outside `apps/game`.**
-- **Frame-rate independence demonstrated, not asserted** — the charter requires it and §6.1 lists
-  *"animation that runs faster on a 144Hz monitor"* as a defect. **The human is on 145 FPS**, which is
-  the machine that would show it.
+- **A frame sequence at `--record-every 1` showing sub-cell positions between two tick states** —
+  the instrument that produced the finding, checking the fix.
+- **The failed-lookup count reported on at least the bench and CLI arms**, with **zero silent
+  fallbacks** — assert the marker fires.
+- **Frame-rate independence demonstrated, not asserted** — §6.1 lists *"animation that runs faster on
+  a 144Hz monitor"* as a defect, and **the human is on 145 FPS**, which is the machine that shows it.
+- **I2 unchanged** and **no save bump** — checked, not assumed.
+- `pnpm verify` **fourteen rows**, `VERIFY_EXIT` read from the process.
+
+### ALREADY DONE, so it is not re-done here
+
+**Undersampling is FIXED** (ADR-0095): the viewer README's example carried `--record-every 10` —
+**thirty cells of travel between frames** — and now carries the default of 1 with the arithmetic
+stated. **That was one of the three causes of "guests teleport" and it was the free one.**
 
 ## G-045 — A rung slow enough to watch a guest
 Status: **ESCALATED 2026-08-23 (E-012). No number shipped; the rung is the WRONG DIAL.**
