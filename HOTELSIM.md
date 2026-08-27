@@ -20,7 +20,7 @@ The game is three nested feedback loops. Every design and code decision should b
 
 Guest loop — guest arrives [EXISTS], forms needs [EXISTS], gets them met or doesn't [EXISTS], pays [EXISTS], leaves a review [EXISTS].
 Money loop — room revenue [EXISTS] against wages [EXISTS] and upkeep [EXISTS], settled nightly [EXISTS].
-Build loop — spend cash [EXISTS], add capacity [EXISTS] and quality [OWED TO M4], raise reputation [OWED TO M4], raise demand [OWED TO M4], back to the guest loop [OWED TO M4].
+Build loop — spend cash [EXISTS], add capacity [EXISTS] and quality [OWED TO M4], raise reputation [OWED TO M4], raise demand [EXISTS], back to the guest loop [EXISTS].
 
 EVERY TERM CARRIES ITS MARK ON THE TERM, so no reader and no grep reaches one of these words without it. Not one of the words above was changed, added or removed to fit a mark — §1.1 explains why they are marks at all, and carries the evidence for each one.
 
@@ -34,14 +34,20 @@ SO EVERY TERM CARRIES A MARK — EXISTS or OWED TO M-N — AND A TERM WITHOUT ON
 
 TWO RULES, AND THEY ARE WHAT KEEP THIS FROM ROTTING INTO THE THING IT REPLACED. (1) EVERY MARK OF EXISTS NAMES THE SYMBOL THAT MAKES IT TRUE, so a reader confirms it with one grep instead of believing this file — that is the whole difference between a mark and a second description. (2) THE MARK MOVES IN THE SAME COMMIT AS THE TERM: a goal that lands a term re-marks it, a goal that adds a term to a loop adds it marked, and a goal that finds a mark wrong says so rather than editing quietly. This is NOT a documentation-maintenance mechanism and must not grow into one (G-053a bound 7) — it is fifteen lines that either match the tree or do not.
 
-MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a), AND THE COUNT NAMES ITS UNIT BECAUSE §4.1 REQUIRES IT TO: THE THREE LOOP SENTENCES CARRY FOURTEEN TERMS AND FIFTEEN MARKS — ELEVEN TERMS EXIST, THREE ARE OWED (`wages` moved at G-052a and this count moved with it, in the same change, in both files), and the fifteenth mark is the build loop's CLOSURE, which is a claim rather than a term and is owed with `demand`. THREE FURTHER MARKS SIT ON §1's ROOM-DESIGN SENTENCE above and are counted separately, so that this loop count stays comparable with the one in the goal block that ordered the marking. Every EXISTS below was re-verified against the tree on that date rather than inherited from the block — and one of them came back different, which is recorded at its own row.
+MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a AND G-051b), AND THE COUNT NAMES ITS UNIT BECAUSE §4.1 REQUIRES IT TO: THE THREE LOOP SENTENCES CARRY FOURTEEN TERMS AND FIFTEEN MARKS — TWELVE TERMS EXIST, TWO ARE OWED (`wages` moved at G-052a and `raise demand` at G-051b; each count moved in the same change as its term, in both files), and THE FIFTEENTH MARK — the build loop's CLOSURE, which is a claim rather than a term — MOVED WITH `demand` AND NOW HOLDS. The two still owed are `quality` and `raise reputation`, both in the build loop, and neither is a hole in the LOOP: the loop turns without them. THREE FURTHER MARKS SIT ON §1's ROOM-DESIGN SENTENCE above and are counted separately, so that this loop count stays comparable with the one in the goal block that ordered the marking. Every EXISTS below was re-verified against the tree on that date rather than inherited from the block — and one of them came back different, which is recorded at its own row.
 
   GUEST LOOP — five terms, five EXIST. It is the only loop running on all of its declared terms.
 
     guest arrives              EXISTS   `guestArrives` (packages/sim/src/commands.ts) and the arrival phase of `stepGuests`
-                                        (tick.ts phase 2 of 5). IT IS A COMMAND, NOT SOMETHING THE SIMULATION DECIDES, and
-                                        deliberately so: how often guests turn up is `demand`, which is owed below. So this
-                                        term exists and its RATE does not.
+                                        (tick.ts phase 3 of 6). ~~"IT IS A COMMAND, NOT SOMETHING THE SIMULATION DECIDES…
+                                        so this term exists and its RATE does not."~~ STRUCK 2026-08-27 (G-051b): THE RATE
+                                        NOW EXISTS TOO. `runDemand` (tick.ts phase 2 of 6) derives the hotel's star rating
+                                        every demand slot and puts the parties that rating earns in the same doorway a
+                                        `guestArrives` fills. The COMMAND survives and is not deprecated — it is the host's
+                                        door, the way a test puts a party in the lobby on an exact tick, and the LABORATORY
+                                        CLAMP every measured arm in this project is defined by (`Market` in
+                                        content-loader.ts). Content that declares no demand curve generates nobody, which is
+                                        every world before G-051b, so a clamped run is byte-identical to the run it was.
     forms needs                EXISTS   `formNeedVector` (needs.ts) builds the vector from content at arrival.
     gets them met or doesn't   EXISTS   `advanceNeeds`, `isNeedSatisfiedIn`, `accumulateUnservedTicks`, `metAtDeparture`
                                         (needs.ts). Both outcomes are recorded, per need, at departure.
@@ -90,7 +96,7 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a), AND THE COUNT NAMES I
     settled nightly            EXISTS   `isSettlementTick` — `tick % TICKS_PER_DAY === TICKS_PER_DAY - 1` — and `settleNight`
                                         (settlement.ts).
 
-  BUILD LOOP — five terms, two EXIST, three OWED; plus its CLOSURE, owed. THE COUNT DID NOT MOVE AT G-051a AND THAT IS DELIBERATE: a star rating is a SECOND system beside reputation (ADR-0082), not the reputation term, so `raise reputation`'s row below carries new evidence and keeps its mark. Adding a term to this sentence is a human decision. THIS IS THE LOOP THE MILESTONE QUESTION WAS ANSWERED AGAINST: ADR-0081's qualified yes says the build loop is "spend cash, add capacity, stop", and these marks are that sentence made checkable.
+  BUILD LOOP — five terms, THREE EXIST, two OWED; plus its CLOSURE, which HOLDS since G-051b. THE COUNT MOVED AT G-051b, BY ONE TERM AND BY THE CLOSURE MARK — `raise demand` and `back to the guest loop`, in the same change as the code that lands them. IT DID NOT MOVE AT G-051a AND THAT WAS DELIBERATE TOO: a star rating is a SECOND system beside reputation (ADR-0082), not the reputation term, so `raise reputation`'s row below carries new evidence and keeps its mark. Adding a term to this sentence is a human decision. THIS IS THE LOOP THE MILESTONE QUESTION WAS ANSWERED AGAINST: ADR-0081's qualified yes says the build loop is "spend cash, add capacity, stop", and these marks are that sentence made checkable.
 
     spend cash                 EXISTS   `construction` and `floorConstruction` in `TransactionReason`, charged in
                                         `applyDrawRoom` (build.ts); `demolitionRefund` returns part of it.
@@ -141,21 +147,66 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a), AND THE COUNT NAMES I
                                         re-runnable form is `grep -rn "reputation" packages/sim/src` — every hit begins with
                                         `//` or ` *`. A count is a fact about a tree and goes stale the moment the tree moves;
                                         "nothing in the sim READS one" is a fact about the design and does not.
-                                        AND THE RATING FEEDS NOTHING: no arrival, price, review or need reads it, inside
-                                        the simulation or out. §8 puts "reputation feeding demand" in M4; G-051b owns the
-                                        wiring, and until it lands this term supplies a QUANTITY and not a LOOP TERM.
+                                        ~~"AND THE RATING FEEDS NOTHING: no arrival, price, review or need reads it, inside
+                                        the simulation or out… until it lands this term supplies a QUANTITY and not a LOOP
+                                        TERM."~~ STRUCK 2026-08-27 (G-051b): THE RATING NOW FEEDS ARRIVALS. `runDemand`
+                                        reads it every demand slot and `raise demand`, the NEXT ROW DOWN, is EXISTS because of it.
+                                        Price, review and need still do not read it, and that list is what remains true.
+                                        THE MARK ON THIS ROW IS UNAFFECTED, AND THE DISTINCTION IS ADR-0082'S: what feeds
+                                        demand is the STAR RATING, judged on what the hotel HAS. REPUTATION — judged on
+                                        guest satisfaction — is still unbuilt, and `packages/sim` still declares no
+                                        identifier, field, function or type named for it (`grep -rn "reputation"
+                                        packages/sim/src`: every hit begins with `//` or ` *`). The seam is designed so it
+                                        can join later without a rewrite: `demand.ts` is handed a NUMBER, not a world, and
+                                        `runDemand` is the one place that decides what number to hand it — so a second
+                                        system feeding the same curve is an edit at that call site and nowhere else.
                                         (G-051's own block calls G-051a "the raise reputation term". That is the claim
                                         this row corrects: ADR-0082 predates it and rules otherwise.)
-    raise demand               OWED TO M4 — §8's own M4 line. No demand model exists anywhere. Every occurrence of the word
-                                        inside `packages/sim` is either the unrelated sense — `assertNeedDemandIsServiceable`,
-                                        which is a need's demand on a guest's TIME — or an explicit deferral naming M4
-                                        (commands.ts:300, content.ts:538, content.ts:546).
-    back to the guest loop     OWED TO M4, WITH `demand`. THE FIFTEENTH MARK, AND IT IS A CLAIM RATHER THAN A TERM: that the
-                                        outer loop is a LOOP. It does not close today. Arrivals come from the command log on
-                                        a fixed cadence, so nothing a player builds changes how many guests arrive, and the
-                                        build loop is an open chain that terminates in cash. Marked separately because a
-                                        reader checking four missing nouns would not otherwise check whether the arrow at
-                                        the end of the sentence points at anything.
+    raise demand               EXISTS   `runDemand` (tick.ts, phase 2 of 6) and `partiesArrivingAt` (demand.ts). HOW MANY
+                                        PARTIES A DAY A HOTEL EARNS IS A PURE FUNCTION OF ITS STAR RATING: `runDemand`
+                                        derives the rating through `starRatingIn`, reads `partiesPerDayAt`, and adds the
+                                        parties it earns to the same doorway `applyCommands` fills. THE CURVE IS CONTENT
+                                        (I3) — `demand.json`, `partiesPerDayByStars`, indexed by the rating itself — so a
+                                        rebalance is a one-file edit and not a diff in `packages/sim`.
+                                        IT IS THE ONE CONTENT TABLE IN THIS PROJECT THAT IS DERIVED RATHER THAN A DESIGN
+                                        STATEMENT, and `partiesPerDaySchema` carries the derivation at the point of use:
+                                        *a hotel that meets a tier's own requirements can FILL THE BEDROOMS THAT TIER ASKS
+                                        FOR*, which with `star-tiers.json`'s bedroom minimums and `guest-rules.json`'s
+                                        1,440-tick stay forces [0, 1, 3, 6, 12, 24] and leaves no value chosen.
+                                        `demand.report.test.ts` re-runs that arithmetic against all three files on disk.
+                                        NO RANDOMNESS, AND THE ABSENCE IS A DECISION: the arithmetic is integer work on the
+                                        tick counter, so THE SEED STILL HAS NO ECONOMIC EFFECT — measured, three seeds over
+                                        365 days, byte-identical arrivals, revenue and balance with only the state hash
+                                        moving. A stochastic demand would have made the seed an economic axis for the first
+                                        time and demoted every economic figure in this project from a reading to one draw.
+                                        NOTHING IS STORED: no demand and no rating on `World`, so SAVE_SCHEMA_VERSION did
+                                        not move and there is no migration (`starRatingIn` is memoised behind the
+                                        `ValidityCache`, which is outside state by construction — I4's own rule).
+                                        THE HONEST QUALIFICATION, IN THE SHAPE `wages` USES: the harness's DEFAULT is the
+                                        clamp. `--arrivals` still supplies arrivals and suppresses the curve, because every
+                                        arm this project has ever measured is defined by a fixed stream and a default of
+                                        `byDemand` would move all of them at once. `--demand` is the game's mode, and
+                                        `apps/game` takes it unconditionally.
+    back to the guest loop     EXISTS   THE FIFTEENTH MARK, AND IT IS A CLAIM RATHER THAN A TERM: that the outer loop is a
+                                        LOOP. ~~"It does not close today. Arrivals come from the command log on a fixed
+                                        cadence, so nothing a player builds changes how many guests arrive, and the build
+                                        loop is an open chain that terminates in cash."~~ STRUCK 2026-08-27 (G-051b).
+                                        THE CHAIN, END TO END, IN EXACT INTEGERS — three arms ONE FLAG apart, `--days 30
+                                        --seed 42 --rooms 12 --amenities 2` with `--facilities` moving 0 -> 1, one run
+                                        each, win32/12cpu quiet, pinned in `demand.report.test.ts`. `--facilities 1` seeds
+                                        ONE OF EACH of the three facility types, so it is THREE ROOMS and valid rooms go
+                                        18 -> 21:
+                                          build      `--facilities 0` -> `--facilities 1`, which is three facility rooms
+                                          rating     3 stars -> 4 stars
+                                          arrivals   240 -> 480 guests over 30 days   (6 -> 12 parties a day)
+                                          revenue    1,972,000p -> 3,944,000p
+                                          balance    1,302,000p -> 3,079,000p
+                                        THE CONTROL IS WHAT MAKES IT A MEASUREMENT RATHER THAN A COINCIDENCE: a middle arm
+                                        builds the same facilities with arrivals PINNED at the three-star rate, and its
+                                        revenue does not move by one penny while its balance falls 195,000p. So the facility
+                                        is a pure cost (ADR-0102 §3, measured), and the 1,972,000p belongs to the RATING.
+                                        Marked separately because a reader checking missing nouns would not otherwise check
+                                        whether the arrow at the end of the sentence points at anything.
 
 2. Invariants — non-negotiable, machine-checkable
 

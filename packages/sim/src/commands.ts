@@ -296,10 +296,27 @@ export type Command =
    * the id it gets is allocated by the guest store, not by the caller — the same division
    * `spawnEntity` uses.
    *
-   * Arrival is a COMMAND rather than something the simulation decides, because how
-   * often guests turn up is demand, and demand is M4. Keeping it out here means the
-   * command log fully describes who arrived and when (I2), and a test can put a guest
-   * in the lobby on an exact tick without a demand model to argue with.
+   * ~~"Arrival is a COMMAND rather than something the simulation decides, because how often
+   * guests turn up is demand, and demand is M4. Keeping it out here means the command log fully
+   * describes who arrived and when (I2)."~~ **STRUCK AT G-051b, AND THE I2 CLAUSE IS THE HALF
+   * THAT MATTERED.** Demand shipped. `runDemand` (tick.ts) creates parties from the hotel's star
+   * rating, so under content that declares a demand curve **THE COMMAND LOG DESCRIBES ONLY THE
+   * ARRIVALS A HOST ASKED FOR AND NOT THE ONES THE HOTEL EARNED** —
+   * `demand.determinism.test.ts` pins 112 and 17 guests that no command log names.
+   *
+   * WHAT I2 ACTUALLY RESTS ON NOW, because the struck sentence was the stated determinism
+   * argument for this command being payloadless and a reader must not be left holding a
+   * guarantee the tree does not give: **same seed + same command log + SAME INJECTED CONTENT**
+   * produces a byte-identical hash. Content was always part of it — `World.contentHash` is
+   * checked on every tick by `assertContentMatches` — and demand is the first mechanism that
+   * makes the content half decide WHO EXISTS rather than how they behave. Arrivals stay
+   * REPLAYABLE because `demand.ts` draws nothing: it is integer arithmetic on the tick counter.
+   *
+   * THE COMMAND SURVIVES AND IS NOT DEPRECATED. It is the host's door — a test putting a party
+   * in the lobby on an exact tick without a demand model to argue with — and it is the
+   * LABORATORY CLAMP every measured arm in this project is defined by (`Market` in
+   * content-loader.ts). Content that declares no curve generates nobody, which is every world
+   * before G-051b, and for those the struck sentence is still exactly true.
    */
   | { readonly kind: 'guestArrives' }
   /**

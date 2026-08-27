@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-27, the last goal to LAND is G-051a and it lands a SECOND CURRENCY: a set of buildable FACILITIES, and a STAR RATING derived from WHAT THE HOTEL HAS. ADR-0080 (human) is the mechanism — "a Spa need not serve a need BETTER to be worth building, it can be worth building because it unlocks a TIER" — and it exists because ADR-0078 measured STRICT DOMINANCE: above the provider bottleneck every extra amenity costs 4,500,000p and buys NOTHING, identical departures and identical reviews. THE RATING IS NOT REPUTATION AND THE TWO ARE NOT ALLOWED TO COLLAPSE (ADR-0082): reputation is judged on guest satisfaction and does not exist; a star rating is a professional INSPECTION judged on what the hotel HAS, and the test of distinctness is whether they can DISAGREE. So `HOTELSIM.md` §1.1's `raise reputation` row is RE-MARKED AND NOT DISCHARGED — the row now names `starRatingOf` as the half that exists and keeps `OWED TO M4` for the half that does not, and G-051's own block calling this goal "the raise reputation term" is the claim being corrected. IT IS DERIVED AND STORED NOWHERE, which is I4's discipline applied one quantity over: there is no `starRating` field on `World`, exactly as there is no `balance` field, and a stored rating would be a cache that can disagree with the hotel AND HASH PERFECTLY. That decision paid for itself in the gates — NO save bump (still v24), NO migration, NO `without-*` stripper, and the permanent v1 fixture untouched. IT FEEDS NOTHING: no arrival, no price, no review and no need reads it, inside the simulation or out, and the only consumers are hosts that display it — G-051b wires it to demand and this goal deliberately does not. THE TIERS AND THEIR REQUIREMENTS ARE CONTENT (I3): `star-tiers.json`, a Zod schema, ZERO content ids in `packages/sim`, and the ladder is reached by ITERATION IN A TOTAL CONTENT-DERIVED ORDER (`starTiersInOrder`). THE ORDER IS `stars` AND NOT THE ID ORDER, which is the one place this table breaks the `staffRolesInOrder` pattern and does so on purpose: `star_five` sorts below `star_four`, so reading the ladder by id would decide the game by SPELLING — ADR-0078's own finding looking for a second front door. EVERY NUMBER IS LABELLED: the tier requirements are DESIGN STATEMENTS, not derived thresholds, and `starsSchema` carries the distinction at the point of use (G-051's block rules that §2.1 does not apply to a design choice the way it applies to a gate bound); the `min(1)` bounds in the schema are STRUCTURAL, each naming the vacuity it refuses; and the ONE derived bound this goal enforces is that a `distinctTypes` minimum may not exceed its own set, because such a tier is a ceiling nobody can pass. THREE FACILITIES SHIP AND SWEEP 1 FOUND THE SPA STRICTLY DOMINATED — ADR-0078's OWN DEFECT INSIDE THE GOAL BRIEFED TO AVOID IT, and the correction is the most useful thing in this entry. The metric was wrong, not the intent: cost of ownership was defined as `constructionCostPence + n x nightlyUpkeepPence` and DROPPED THE RESIDUAL, while `stockValueOf` and `canDrawLoan` treat a scrap as real money. Net of it the Spa was 125,000 + 4,000n against the Conference Hall's 90,000 + 2,000n — cheaper on NEITHER term, losing at EVERY horizon — and the test could not see it because it recomputed the claim's own arithmetic, which is G-052a's lesson verbatim. REPRICED FROM A PRINCIPLE STATED FIRST — each facility uniquely cheapest to OWN over some horizon, net of the residual, and the three horizons naming three phases of a run: `hotel_spa` 5,000 -> 7,000bp and `conference_hall` 8,000 -> 6,000bp, two numbers, nothing else touched. Net capital is now 75,000 / 180,000 / 630,000 against upkeep 4,000 / 2,000 / 500, so the Spa owns nights 0-52, the Conference Hall 53-299 and the Theatre 301+ (n=300 is an exact TIE at 780,000p and the scan's strict `<` records no winner there — this line read 53-300 until sweep 2, and the goal's own earlier measurement had already printed 299), and the GROSS metric agrees about the ORDER so the claim does not hang on one definition. The test now calls `demolitionRefundOf` — the sim's own function — rather than recomputing a refund, requires each regime to be wider than 30 nights so a seven-night win cannot pass as 'not dominated', and PROOF-OF-BITE: restored to the old prices it returns ['conference_hall','hotel_theatre'] and goes red, sha256 identical after restore. THE SPA'S REAL AXIS IS NAMED SEPARATELY AND IT IS LIQUIDITY, not ownership cost: `applyDrawRoom` refuses on the CASH BALANCE rather than balance-plus-scrap, so between 250,000p and 450,000p it is the only facility that can be built at all. A FACILITY SERVES NO NEED, and that is a decision with two measurements behind it rather than a gap: a fourth provider of the same three needs lands in ADR-0078's dominated regime and buys nothing, and a room type that SERVES something is an amenity by `amenityRoomTypesOf`, so `--amenities N` would have started seeding three more rooms into every arm this project has ever measured — the contamination `HOTELSIM.md` §8's M4 prerequisite exists to prevent. THE HONEST CONSEQUENCE, STATED RATHER THAN DRESSED UP: while the rating buys nothing a facility is a PURE COST, so this goal does not remove ADR-0078's dominance — it builds the channel G-051b removes it through, because until now there was no quantity to attach a reason to. AND SWEEP 1 FOUND THE HEADLINE FALSE IN-RUN: there was NO INVOCATION OF THIS RUNNER IN WHICH A PLAYER PAID FOR A FACILITY — `--facilities` seeds free through `spawnEntity` and `--build` issues `buildRoom` with the LODGING type and nothing else, so across a 1,000-day campaign the rating did not move at all, and a currency nobody can buy into is not a currency (which is `starsSchema`'s own phrase). `--buy-facility N` now exists: a SECOND build cadence, off by default so no pinned arm moves, charging through the same `buildRoom` door, laying its own lane and spine because the rating counts VALID rooms and a sealed box would be a charge for a number that does not move, and cycling the facility types in content order so the `distinctTypes` clauses are reachable by playing. MEASURED, PAIRED, one flag apart, `--days 60 --seed 42 --rooms 12 --amenities 1`: stars 3 -> 4, built 0 -> 6, construction 0 -> -1,700,000p, 38 refusals for want of cash, invalid rooms 0. AND THE LIMIT IS DISCLOSED: FIVE STARS IS REACHED BY NO CAMPAIGN THIS RUNNER CAN EXPRESS — the verdict held at sweep 2 and MY EXPLANATION OF IT DID NOT, in three copies, with a parked falsification test that returned its own 'this item is misfiled' branch on the day it was written. THREE CORRECTIONS. (a) TWO FAMILIES, TWO DIFFERENT PRE-EXISTING CAUSES, WRITTEN AS ONE: with `--rooms > 0` the mechanism IS `unsupported` (`builtRoomStartFloor` puts the player walk a floor above the seeded plate), but FROM NOTHING that function returns GROUND_FLOOR and is not involved at all — the mechanism there is `noCorridor`, a different pre-existing defect, measured `unsupported` 0 and `noCorridor` 7 at the parked item's own invocation. (b) THE BEDROOM FIGURE IS WITHDRAWN AND NOT RESTATED (`CLAUDE.md` rule 5): '9 valid bedrooms in a simulated year' named none of the five slots and the two nearest arms give 10 and 3. (c) THE SPLIT WAS BACKWARDS WHERE IT MATTERS MOST — I wrote 'the facility clauses are climbable and the SCALE clauses are not', and at `--rooms 24 --amenities 1 --buy-facility 2000`, where the scale clause is satisfied at tick 0, the hotel buys EXACTLY ONE FACILITY EVER: stars 4, built 1, shortfall `1/2 distinctTypes`, identical at 60, 300 and 1,000 days. SO THE REAL FINDING IS SHARPER THAN THE ONE RECORDED — **THE SCALE CLAUSE AND THE FACILITY CLAUSE CANNOT BE SATISFIED AT THE SAME TIME**: small enough to afford facilities and you have too few bedrooms, large enough for the bedrooms and their upkeep eats the cash the facilities need, and tier 5 asks for both. That is a BALANCE finding about the shipped table rather than a defect of the player walk, it is cadence-INDEPENDENT (4,800 arrivals and 6 arrivals give the same stars and the same single purchase, while cash moves two orders of magnitude — which is why no cash figure is quoted with it), and it is G-051b's to act on. All three arms are pinned in `stars.report.test.ts` and the two walk defects are separately parked. AND THE SWEEP-2 FIXES THEMSELVES TURNED THE I4 ROW RED ONCE, WHICH IS REPORTED RATHER THAN QUIETLY REPAIRED: the new 1,000-day arm took 67,517ms in-suite against the shared 30,000ms `testTimeout` and TIMED OUT, having run clean standalone — G-055's at-risk population exactly, and the first time this project has caught one BEFORE it became an intermittent gate. THE REMEDY IS G-055's AND THE SHARED TIMEOUT IS BYTE-UNCHANGED (editing it would be the §9 gate-editing stop condition). Two cases declare 3x their own worst measured reading, 90,000ms, and now read 23,336 and 23,817ms — 26% of budget. THE THIRD WAS NOT GIVEN A BUDGET, IT WAS MADE CHEAP BY SPENDING A CONTROL: the wall reading is cadence-INDEPENDENT, which the case below it proves, so the long arm runs at `--arrivals 100000` and buys a thousand-day horizon for 3.2s instead of 23.2s — both cadences measured, agreeing to the integer on stars, built, refusedFunds and shortfall, so nothing under test was traded away and the surviving arm is the one where the wall cannot be blamed on revenue. 67,517ms -> 6,579ms, and it now sits under the SHARED default with more headroom than a declared budget would have given it. ONE MORE ORDER DECIDED BY SPELLING, FOUND AND KEPT RATHER THAN FIXED: `--buy-facility` cycles the facility types ASCENDING BY ID and the docblock said 'in CONTENT ORDER', which reads as though a designer chose it. Renaming one id moves the cash path by 238,000p and a whole facility. IT IS A MINOR AND NOT ADR-0078 RETURNING, for one reason that is now CHECKED rather than observed: the cycle advances on every EMISSION rather than on every success, so every type is always offered and THE RATING NEVER MOVES — `rating.test.ts` pins the general form, that a rating is a fold over the SET of valid rooms and not over the order they arrived in. The distinction from `normaliseStarTiers`, which refuses this same substitution for the tier ladder, is that id order there would change an OUTCOME and here it changes only the cash PATH to an unchanged outcome. THE LADDER DISTRIBUTION, and the saturation is REPORTED and not tuned away: nine rungs of `--rooms/--amenities/--facilities`, one real CLI process each, `--days 1 --seed 42`, exact deterministic integers, no aggregation, regime win32/12cpu quiet, read out of `--json` — 0/1/1/2/3/3/4/3/5, so all six declared values are reached and none is skipped. TWO FLAT REGIONS AND BOTH ARE PINNED: below the facility gate the rating is CAPPED AT THREE however many bedrooms are built (12, 24 and 60 all read 3), and above the top tier it SATURATES AT FIVE with `nextStars` null and nothing left to buy. THAT IS A REAL CLAMP AND IT IS A WIDER INTERVAL THAN THE REVIEW CHANNEL'S RATHER THAN A DIFFERENT KIND OF THING — reviews are flat 500 from TWO AMENITIES, which a default run reaches on day one, while this ceiling sits at 24 bedrooms plus two facility types, which no shipped arm seeds by default. It was NOT met by adding tiers until the histogram looked nice, which is the order §2.1 forbids and which G-059 was refused for. THE DEFAULT ARM IS TWO STARS OF FIVE and is told what the third costs — `to climb 3/6 rooms of [standard_room]` — because a rating with no price tag is a number and not a currency. AN INSPECTOR GRADES WHAT WORKS: only VALID rooms count, which deliberately disagrees with `nightlyUpkeepOf` charging an invalid room in full, and without it a player could draw five unreachable outlines and be awarded five stars. GATE READINGS, FROM THE PROCESS: `pnpm verify` FOURTEEN ROWS PASS, VERIFY_EXIT=0 read out of a log. I2 is now `c967bdb98dac9b0d` — `ffd19881b7086b9d` -> `196643d7c9813613` at BUILD and -> `c967bdb98dac9b0d` at SWEEP 1, the second move for ONE cause and no behaviour (`World.contentHash`, because two refund basis points were repriced), predicted before the run both times. THE FIRST MOVE HAD ONE NAMED CAUSE AND NO BEHAVIOUR TOO — `World.contentHash`, because `SimContent` gained `starTiers` and `roomTypes` gained three entries — so BOTH moves are content-fingerprint moves and neither is a `World` field. Save schema stays **v24** and summary schema stays **4** (every new field is additive), both predicted. Measure golden is now `a57925e09896e3a4` (`856ade18e3ed8264` -> `94e4da7a5e60acf6` -> this); the churn golden `7da8674748116abb` -> `66a20aa1cda81bb5` -> `3b5b0daf2b1790db`; the CLI golden `614f7b6eda90b4c2` -> `de29b5283ad28f0c` -> `67e13a16221d2082`, and on all of them the CONTROL IS THE WHOLE DOCUMENT: same arrivals, same departures, same need rows to the basis point, same ledger, same balance to the penny. TWO GUARDS BIT AND NEITHER WAS WEAKENED: `content.stay.test.ts`'s "no room type undercuts the pair above" caught the new rows and was SPLIT rather than relaxed (one row still earns, at 8,500p, and nothing undercuts the 250,000p cheapest build, which is `canDrawLoan`'s own yardstick); and `wall-visibility.test.ts`'s computed glass bound moved 37 -> 36 because seven room colours share the luminance band where four did, with the STRUCTURAL assertion untouched. THE PALETTE IS THE REAL CEILING ON THIS TABLE and it is derived rather than chosen: `MIN_CONTRAST_WITHIN_ROLE` is 1.3 and the arithmetic ceiling is 1.3515 at seven room types and 1.2945 at eight, so SEVEN IS THE MOST THIS PROJECT CAN SHIP UNTIL SOMETHING GIVES — three facilities is exactly the maximum, not a taste. WATCH DONE AND IT FOUND THE SAME HOLE G-052a FOUND: the star rating has NO PERCEPTUAL CHANNEL — nothing on screen says what a hotel scores — and `apps/game/src/scenario.ts` seeds amenities by what they SERVE, so the recorded scene contains no facility either; what a watcher CAN see is that every room changed colour, because the palette re-derives from the room-type count. THREE MORE THINGS SWEEP 1 CORRECTED, EACH A CLAIM WIDER THAN ITS SUPPORT. (1) §1.1's new `raise reputation` row carried a present-tense count — "the word appears ONCE in all of `packages/sim`" — that THE COMMIT WHICH WROTE IT FALSIFIED: the grep returns EIGHT. Restated as the claim that survives a moving tree: all eight are COMMENTS and the sim declares no identifier named for it. (2) The closure mis-citation is SIX instances and not five: sweep 1 called its fix "the only one left in the tree", and grepping EVERY ADR-0085 citation in context — rather than the claim's vocabulary — turned up a sixth at `GOALS.md`'s M4-opens line that three successive narrower greps had walked past. **The sweep has to be over the thing that can be WRONG, the citation, and not over the words the claim happens to use.** (3) The viewer's three hand-keyed facility colours were a NEW WORST PAIR — `hotel_theatre` at 1.021:1 against `hotel_lounge`, in the WATCH instrument itself, where `palette.contrast.test.ts` cannot reach because it builds `apps/game`'s COMPUTED ladder. Re-solved on luminance into the gaps of the existing ladder, leaving the four older colours untouched because id-stability is that table's whole design property: the worst pair involving a new colour is now 1.132:1, and the table's overall worst — 1.024:1, `games_room` against `hotel_cafe` — PREDATES this goal and is not mine to move. Unreliable: 1 gate, 0 defects — `check:scaling` is still the unrepaired one and a THIRD is still a stop condition. E-014 REMAINS OPEN ON THE HUMAN and this goal did not touch `reviews.ts`, `needBandOf`, `isCutShort` or the review scale.*
+*As of 2026-08-27, the last goal to LAND is G-051b and it CLOSES THE BUILD LOOP. `HOTELSIM.md` §1.1's fifteenth mark said the opposite in as many words — "arrivals come from the command log on a fixed cadence, so nothing a player builds changes how many guests arrive, and the build loop is an open chain that terminates in cash" — and that sentence is STRUCK. `runDemand` is a new SECOND PHASE of the tick, between `applyCommands` and `runGuests`: it derives the hotel's star rating through `starRatingIn` and puts the parties that rating earns into the same doorway a `guestArrives` fills. TWO OF THE FIFTEEN MARKS MOVE, IN THE SAME COMMIT AS THE CODE AND IN BOTH FILES — `raise demand`, which is one of the FOURTEEN TERMS, and the CLOSURE, which is the FIFTEENTH MARK and is a claim rather than a term — so the count is now TWELVE TERMS EXIST, TWO ARE OWED (`quality` and `raise reputation`, both build-loop, neither a hole in the loop) and the fifteenth mark HOLDS. THE CLOSURE, END TO END, IN EXACT INTEGERS, THREE ARMS ONE FLAG APART at `--days 30 --seed 42 --rooms 12 --amenities 2` with `--facilities` moving 0 -> 1 (which seeds ONE OF EACH of the three facility types, so THREE ROOMS, valid rooms 18 -> 21), one real CLI run each, no aggregation, regime win32/12cpu quiet: rating 3 -> 4 stars, arrivals 240 -> 480 guests, revenue 1,972,000p -> 3,944,000p, balance 1,302,000p -> 3,079,000p. THE MIDDLE ARM IS WHAT MAKES IT A MEASUREMENT RATHER THAN A COINCIDENCE: it builds the same three rooms with arrivals PINNED at the three-star rate (`--arrivals 240`) and its revenue does not move by ONE PENNY while its balance falls 195,000p — so a facility is a PURE COST exactly as ADR-0102 §3 said in prose, and the 1,972,000p belongs to the RATING. ADR-0078's dominance is removed, and it is removed through the channel G-051a built rather than by repricing anything. THE CURVE IS CONTENT (I3) — `demand.json`, one row, `partiesPerDayByStars` INDEXED BY THE RATING ITSELF because index 0 is the unrated hotel and belongs to no tier — AND IT IS THE ONE TABLE IN THIS PROJECT THAT IS DERIVED RATHER THAN A DESIGN STATEMENT. The stated requirement is "a hotel that meets a tier's own requirements can FILL THE BEDROOMS THAT TIER ASKS FOR", which with `star-tiers.json`'s bedroom minimums and `guest-rules.json`'s 1,440-tick stay against a 1,440-tick day forces [0, 1, 3, 6, 12, 24] and leaves NO VALUE CHOSEN; `partiesPerDaySchema` carries the derivation at the point of use and `demand.report.test.ts` re-runs the arithmetic against all three files ON DISK, so a ladder retune reddens it and says the curve is now a claim nothing supports. ONE NUMBER IN IT IS A DESIGN STATEMENT AND IS LABELLED ONE: the headroom multiple is 1.0 — no slack — and the requirement is MET at that multiple rather than asserted, 232/240, 464/480 and 928/960 housed at three, four and five stars, 96.7% at every rung with the shortfall being the walk to the room. THE SEED STILL HAS NO ECONOMIC EFFECT AND THAT WAS CHECKED RATHER THAN INHERITED: `demand.ts` is integer arithmetic on the tick counter and draws NOTHING, so three seeds over 365 days give byte-identical arrivals, revenue and balance with only `world.stateHash` moving. A per-tick PRNG draw was the obvious build and is refused for an evidence reason rather than a purity one — it would have made the seed an economic axis for the first time and demoted every economic figure in this project from a READING to one draw of a distribution. NOTHING IS STORED: no demand and no rating on `World`, so SAVE STAYS v24, there is no migration, no `without-*` stripper and the permanent v1 fixture is untouched (ADR-0006); `starRatingIn` is memoised behind the `ValidityCache`, which is outside state by construction, and the phase costs ONE MULTIPLY, ONE MODULO AND ONE COMPARISON on the 1,416 ticks a day that open no demand slot. THE HARNESS CLAMPS BY DEFAULT AND THAT IS WHY THE WHOLE EVIDENCE BASE SURVIVES: `loadContent`'s new `Market` parameter defaults to `commanded`, which READS AND VALIDATES `demand.json` and then WITHHOLDS it from the injected registry, so the fingerprint is missing a KEY rather than carrying an empty one and A CLAMPED RUN IS BYTE-IDENTICAL TO THE RUN IT ALWAYS WAS — the default CLI arm still hashes `c455f8fc521180e8` and the I2 gate still hashes `c967bdb98dac9b0d`, both PREDICTED BEFORE THE RUN AND BOTH UNMOVED, as were save v24 and summary 4. `--arrivals` is therefore no longer the world, it is a LABORATORY CLAMP, and `--demand` releases it; the two are REFUSED TOGETHER because a run with both sources firing is a measurement of neither. `apps/game` takes the curve unconditionally and `scenario.ts` no longer issues a single `guestArrives`, so the loop closes in the one place a human can watch it. THE I2 GATE COVERS THE PHASE AND NOT ITS ARITHMETIC, stated narrowly rather than left to be assumed: `determinism-log.ts` is COMMANDED, so `runDemand` runs on all 100,000 of the gate's ticks — preconditions, `demandRun` flag, return-by-reference, position — while not one slot opens under it. The arithmetic is covered by `demand.determinism.test.ts` in the gate's own four-check shape WITH A CENSUS proving the path fired (112 and 17 guests that no command log names), and by an exhaustive unit test over every party count the slot table can express, because `slots / parties` truncating is right at 1, 2, 3, 4, 6, 8, 12 and 24 and wrong at 5, 7, 9, 10 and 11. THE TICK'S EXHAUSTIVE PHASE SEARCH GREW 17.2x AND WAS KEPT EXHAUSTIVE: a sixth phase takes it from 19,531 sequences to 335,923, the flat enumeration TIMED OUT at vitest's 30,000ms under full-suite load while passing in 13.07s alone, and capping it was refused because the only thing that search has ever caught is a phase that could be DROPPED or DUPLICATED and both live at exactly the lengths a cap removes. It is now a PRUNED WALK whose prune is a proof — `runPhases` aborts at the first phase that throws, so every extension of a throwing prefix throws at the same phase — with a `covered` counter asserted equal to the whole space so the prune cannot quietly become a cap. Proof-of-bite: drop the `demandRun` clause and TWO sequences survive instead of one, sha256 identical after restore. AND THE GOAL FOUND A PRE-EXISTING LAW THAT ASSERTS SOMETHING FALSE, WHICH IS STRUCK RATHER THAN ROUTED AROUND: `report.ts`'s "no room type provides it => met - metByItem MUST be 0" is contradicted by `byItem`'s own docblock in `needs.ts`, which has said since G-028b that `metByItem` UNDER-counts and that a row can count into `met` having been served by no room at all. `met` became the top per-need BAND over the stay (ADR-0037), so a guest EVICTED before anything served a need is trivially in that need's top band. `--days 5 --seed 42 --rooms 24 --amenities 1 --demolish 2880 --demand` gives 4 `evictedRoomGone` and `guest_comfort` at met 32 / metByItem 31, and the report REFUSED A LEGITIMATE RUN AS A VIOLATION. No commanded schedule can reach it — `schedule` starts both walks at `BUILD_START_TICK` and commands apply in log order, so an arriving party always claims its room AFTER the same tick's demolition — which is why seven seeds times four cadences found nothing. WHAT IS LOST IS NAMED: the round-2 note claimed the law fired in BOTH directions and only the ITEM direction survives, so a build that attributed an item-served need to a ROOM is now caught by nothing; the repair is a third counter, `metByNothing`, which is a `World` field and therefore a save bump, and it is PARKED WITH ITS TEST ALREADY RUN. `byItem`'s falsified clause — "it belongs to the lodging row rather than to an engagement one" — is corrected in place, and `provider.report.test.ts`'s bite case is INVERTED rather than deleted so the absence is pinned instead of looking like a gap nobody measured. SWEEP 1 THEN FOUND THE SAME CLASS SIX MORE TIMES IN THIS GOAL'S OWN BLAST RADIUS, AND THE CLASS IS ADR-0084's: a claim that was true when written and that THIS COMMIT falsified. `commands.ts` and `guests.ts` both said the command log "fully describes who arrived and when (I2)" — the stated determinism argument for `guestArrives` being payloadless, and false under `--demand`, where this goal's own test pins 112 and 17 guests no command log names. What I2 rests on is now written where those sentences were: SAME SEED + SAME COMMAND LOG + SAME INJECTED CONTENT, with arrivals replayable because `demand.ts` draws nothing. Four more deferrals died the same way — "party formation becomes random when demand does, which is M4" in `guests.ts` and `packages/content`'s schema (demand arrived and IS NOT random, so the event retired nothing), "until M4 gives arrivals a demand model" in `content.ts` (it did, and the party cycle did not move), `report.ts`'s "a fixed cadence stands in for it" 1,150 lines above the same file's new and correct "IT WAS THE WORLD AND IT IS NOW A CLAMP", and `apps/game/src/scenario.ts`'s "there is no demand model until M4" 120 lines above the banner this same commit added saying the stand-in had expired. RE-RUNNING THE SWEEP AFTER FIXING THOSE FIVE FOUND A SIXTH FAMILY — four test files justifying an untuned `partySizeWeights` with "demand is M4's" — and THE VERIFICATION PASS THEN FOUND AN ELEVENTH AND A TWELFTH THAT SPLIT THE CLASS IN TWO. Mode (1) is THE DATE PASSES AND NOBODY LOOKS, which is the first ten. Mode (2) is THE DATE NAMED WAS NEVER THE REAL TRIGGER, and only reading past the first paragraph finds it: `cli.stdout.test.ts`'s seed-honesty test carried a STANDING INSTRUCTION TO DELETE ITSELF addressed to "whoever lands the M4 demand model" — that landed HERE and the test did NOT go red, because `demand.ts` draws nothing, so obeying it would have deleted a guard that had just become PERMANENTLY VALID rather than expiring, and its own docblock stated the true trigger four lines below the false one ("the moment GUEST BEHAVIOUR READS THE RNG"). `PARKING.md` carried the same promise ending "-> M4, as a planned retirement" and now points at a GOAL rather than a milestone. THE TWELFTH IS `PARKING.md`'s amenity-scale item, which carried BOTH modes at once and whose falsification test was RUN rather than re-parked: at `--rooms 12 --facilities 1 --demand`, one run per amenity level, the AFFORDABLE density is TWO sets (balance 3,079,000p against 1,276,000p and 2,944,000p) and the top review band is UNANIMOUS there, so it resolves in its first branch — the scale needs a term oversupply cannot buy — and routes to E-014. So the grep is NECESSARY AND NOT SUFFICIENT: it surfaces a mode-(2) site and tells the reader the wrong thing about it, and the rule that follows is that A DEFERRAL NAMES AN EVENT THE ARTEFACT CAN OBSERVE — "a milestone lands" is not one, "a guest draws from the stream" is. In every one of the twelve the ARGUMENT survived and only the DEFERRAL died, which is why each is a rewrite rather than a deletion; two further sites in DONE goal blocks and one in the M0 sign-off record are LEFT ALONE on ADR-0008, because the test is whether a sentence is a LIVE INSTRUCTION to a future reader and not whether it names a milestone. THREE REGIONS WHERE A BUILD DOES NOT PAY, AND THE THIRD IS THE SHARPEST THING THIS GOAL HANDS TO G-060. Two are FLAT: capped at 3 below the facility gate (bedrooms 7 through 11 cost upkeep and earn nothing), and flat at 5 above the top tier, where a five-star hotel that keeps building banks 192,228,000p over 1,000 days with nothing left to buy — `--rooms 24 --amenities 3 --facilities 1 --demand --days 1000 --seed 42`, 32,000 arrived, one run, exact integers. THE THIRD IS NEGATIVE AND THE DEFERRAL DID NOT NAME IT: taking the FIFTH STAR raises the rating, doubles arrivals exactly as the curve promises, and LOSES MONEY, because tier 5 doubles the bedroom clause while its amenity clause counts VARIETY and never LOAD. `--days 30 --seed 42 --amenities 2 --facilities 1 --demand`, ONE BEDROOM APART: 23 rooms is 4 stars, 480 arrived, 3,944,000p, 0 dissatisfied; 24 rooms is 5 stars, 960 arrived, 3,867,500p and 477 dissatisfied — revenue down 76,500p, balance down 151,500p, and over a year 49,504,000p against 47,846,500p with 6,026 dissatisfied. THE CLAMPED CONTROL NAMES THE COST AS DEMAND'S: the identical build at `--arrivals 120` is 75,000p of pure upkeep with zero dissatisfied. The correct play under the shipped tables is now "never take the fifth star unless you also add a third amenity set", worth +48,591,500p over a year, AND NOTHING IN THE GAME SAYS SO. It is pinned in `demand.report.test.ts` and goes RED when G-060 fixes it; the test that used to claim "the curve is monotone SO no building is strictly punished" is retitled to what it actually checks, because monotone in the CURVE is not monotone in the OUTCOME. (`90,864,000p` stood in six places here as the five-star figure and is the FOUR-star hotel — ADR-0103 §3's seed-invariance arm — wrong by 2.1x and load-bearing; a number quoted without the arm that produced it arrives meaning something else.) THE AMENITY BOTTLENECK IS THE FINDING TO HAND ON, AND THE NOVELTY CLAIM IS NARROWED TO WHAT A `--demand` ARM SUPPORTS: the bottleneck itself is pre-existing and was always visible to a harness that supplied enough arrivals, so an arm under the clamp says nothing new by this goal's own byte-identity argument. WHAT IS NEW IS THAT A PLAYER CAN NOW REACH THAT ARRIVAL RATE BY BUILDING — measured under `--demand` at 24 bedrooms and five stars, a third amenity set moves revenue from 3,867,500p to 7,888,000p over 30 days and takes 477 dissatisfied departures to zero. Amenity capacity is the largest un-bought improvement in this economy and it is discoverable only through the departure table. BOTH TAILS CHECKED, AND EACH FIGURE NAMES ITS ARM. `--rooms 1 --amenities 0` ends a year at -412,500p under BOTH regimes; `--rooms 0 --amenities 0 --build 1440` ends at -662,500p under BOTH. Demand never changes the loss, only who is disappointed: 486 and 485 departures that paid nothing, against 5,837 under the clamp on each — a twelfth as many. Overbuilding is punished and survivable: 24 bedrooms with one amenity set is 3 stars and +1,709,500p over a year under demand, against -21,784,500p when a harness supplied 24 parties a day to the same building. Winning is not automatic — from nothing at `--build 1440` the hotel reaches 3 stars and +197,000p over a year, solvent, where the same campaign under the old clamp ends at -428,500p. GATE READINGS, FROM THE PROCESS: `pnpm verify` FOURTEEN ROWS, VERIFY_EXIT read out of a log. Unreliable: 1 gate, 0 defects — `check:scaling` is still the unrepaired one and a THIRD is still a stop condition. E-014 REMAINS OPEN ON THE HUMAN and this goal did not touch `reviews.ts`, `needBandOf`, `isCutShort` or the review scale.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -7550,6 +7550,63 @@ name, in the goal about instruments** — ADR-0086 the day it was written. No wr
 
 ---
 
+## ADR-0087 AMENDMENT 1 — a critic with Bash is a second verify-capable actor, and the grant that denies contention is the thing that creates it
+
+**Date**: 2026-08-27 · **G-051b final pass.** ADR-0087 measured contention as the cause of an
+unreliable I4 and built the lock. **The lock worked exactly as designed here and nothing in this
+note weakens it.** What failed is the layer above it: the humans and agents deciding when to start
+one.
+
+### 1 — THE COLLISION, AND BOTH HALVES BELONG IN IT
+
+During sweep 1 the **critic ran `pnpm verify` without saying so**; the orchestrator, believing none
+was running, **told the builder the tree was free** and a run started a minute later. **That run sat
+blocked for roughly 48 minutes** before acquiring the lock.
+
+> **A CRITIC WITH BASH IS A SECOND VERIFY-CAPABLE ACTOR.** `HOTELSIM.md` §6 grants critics Bash
+> deliberately — *"so it can run tests and simulations"* — and the roster's enforcement mechanism is
+> that critics have **no write tools**, which says nothing about what they may RUN. **Read-only on
+> the filesystem is not read-only on the machine.** Nothing in the charter, the roster or this file
+> said so before this line.
+
+### 2 — THE GRANT IS SELF-INVALIDATING BY CONSTRUCTION, SO MAKE IT A READING
+
+*"No `pnpm verify` is running"* is a statement **issued to an agent that is expected to start one**.
+It is true when written and false a minute later **because of the message that carried it** — the
+statement creates the contention it denies.
+
+> **RULED: THE GRANT IS A READING, NOT AN ASSERTION.** Say *"as of 16:42, `.verify-lock/owner.json`
+> is absent"* — **a citation the receiver can re-run**, which is what this project already demands
+> of every number (`CLAUDE.md` rule 4, ADR-0084's re-runnable citation). **And the receiver re-runs
+> it**, exactly as it would re-check any quoted figure, rather than acting on the sentence.
+
+*This is the cheapest possible fix and it is the same one this project keeps arriving at: a claim
+about tree state travels with the command that produced it, or it does not travel.*
+
+### 3 — THE FAILURE MODE IS SILENCE, AND THAT IS THE PART WORTH THE CODE
+
+The lock announced the owner's pid ONCE and then said nothing for 48 minutes. **Forty-eight minutes
+of silence is indistinguishable from a hang**, and §2.0's argument applies directly: an instrument
+that reports nothing has stopped being an instrument. A reader cannot tell *correctly queued* from
+*wedged*, and the tempting remedy for the second — delete `.verify-lock` — is exactly wrong for the
+first.
+
+**TAKEN, AND IT IS THE ONLY CODE IN THIS NOTE.** `verify.mjs`'s wait loop now prints a heartbeat
+naming the owner pid and the elapsed wait. **`HEARTBEAT_MS` IS A CADENCE AND NOT A THRESHOLD** — it
+ends no wait, changes no verdict and gates nothing, so §2.1's derivation burden does not reach it,
+which is the same standing `POLL_MS` — **the constant directly above it** — already has, argued in
+the same voice. *(This read "three lines above it" for one draft. It is eighteen. A line count is a
+fact about a file that moves the next time anybody edits it, and "the constant directly above" is
+the same claim in a form that survives — which is the correction this very amendment is about,
+committed inside it for the second time.)* **It is exercised rather than shipped blind**: `verify.lock.test.ts` shrinks the cadence in
+its mirrored copy the way it already shrinks the gate table, and asserts the heartbeat names the
+owner pid — because a diagnostic no test ever runs is a diagnostic whose typo is invisible, which is
+ADR-0007's shape wearing a helpful costume. **PROOF OF BITE**: with the beat branch disabled the
+new case is the only one of the seven that goes red, and `verify.mjs` restores byte-identical by
+sha256 (ADR-0022's recorded fallback, not `git checkout --`).
+
+---
+
 ## ADR-0088 — Fourteen predicates, fifteen omissions, and a THIRD hole that subsumes the second.
 
 **Date**: 2026-08-26 · **Status**: accepted · **G-056.** Fourteen rows PASS twice,
@@ -9486,3 +9543,402 @@ the order they arrived in* — so the property the host leans on is a test rathe
 The Conference Hall's regime is **53–299**, not 53–300. At n=300 it and the Theatre tie exactly at
 780,000p and the scan's strict `<` records no winner. **The goal's own first measurement had already
 printed `53..299`; the table transcribed it wrong.**
+## ADR-0103 — The demand curve is DERIVED, `--arrivals` is a CLAMP and not the world, and a report law that asserted something false is struck.
+
+**Date**: 2026-08-27 · **Status**: accepted · **G-051b.** Records the calls this goal made that are
+normally the human's, the seam it took in part, and the one pre-existing law it found asserting
+something the simulation has never guaranteed.
+
+### 1 — THE SEAM WAS OFFERED AND IS TAKEN IN PART, WHICH IS A THIRD ANSWER AND IS RECORDED AS ONE
+
+G-051b's block named three things and asked which were one goal. **CLOSURE was taken. The SATURATION
+was deferred to G-060. The PERCEPTUAL CHANNEL was answered at the level this goal's own claim needs
+and no further.** The middle one is the decision worth defending:
+
+> **Re-tabling the star ladder and closing the loop are two questions whose evidence contaminates
+> each other.** *Does demand respond to the rating?* is answered by holding the ladder fixed and
+> moving one build. *Is the ladder well-shaped?* is answered by moving the ladder and reading a
+> distribution. Doing both in one diff means every figure in the first question was taken against a
+> table the second question was still changing — **which is the contamination `HOTELSIM.md` §8's M4
+> prerequisite exists to prevent**, arriving through a content edit rather than through a flag.
+
+**AND THE DEFERRED HALF INHERITS A RULING RATHER THAN A WORRY.** ADR-0102 amendment 2 §3 already
+found that *the scale clause and the facility clause cannot be satisfied at the same time*, and this
+goal adds a measured second: **the amenity clause counts VARIETY AND NEVER LOAD**, so a hotel that
+exactly meets tier 4 has three amenity rooms for twelve bedrooms and **233 of its 480 guests leave
+dissatisfied** (`--days 30 --seed 42 --rooms 12 --arrivals 120`, one run per level: 236 out at one
+amenity set, **464 out and none dissatisfied at two**, identical revenue and 135,000p more upkeep at
+three). G-060 has to answer both.
+
+### 2 — THE CURVE IS **DERIVED**, WHICH MAKES IT THE ONLY CONTENT TABLE IN THIS PROJECT THAT IS
+
+ADR-0102 §1 rules the star tiers a DESIGN STATEMENT because *there is no requirement above them to
+derive them from*. **There is one above the demand curve**, and it is the sentence that makes a tier
+mean anything:
+
+> ***A hotel that meets a tier's own requirements can FILL THE BEDROOMS THAT TIER ASKS FOR.***
+>
+>     partiesPerDayByStars[r] = bedroomMinimum(tier r) x TICKS_PER_DAY / stayDurationTicks
+
+With `star-tiers.json`'s minimums (1, 3, 6, 12, 24) and `guest-rules.json`'s 1,440-tick stay against
+a 1,440-tick day, that forces **[0, 1, 3, 6, 12, 24]**. **NOT ONE OF THOSE SIX NUMBERS WAS CHOSEN.**
+
+**INDEX 0 IS DERIVED FROM A DIFFERENT SENTENCE and it is a property of THIS ladder rather than of all
+ladders**: the first tier asks for one VALID bedroom, so an unrated hotel has nowhere for a guest to
+sleep and every arrival it received would be turned away unpaid.
+
+**THE THREE KINDS ARE SEPARATED RATHER THAN BLURRED, AT THE POINT OF USE** (`partiesPerDaySchema`),
+which is ADR-0102 §1's rule and the reason it exists:
+
+| kind | which number | where the argument lives |
+|---|---|---|
+| **derived** | every entry in `demand.json` | `partiesPerDaySchema`; re-run by `demand.report.test.ts` against three files on disk |
+| **design statement** | the headroom multiple, **1.0** | `partiesPerDaySchema` — and the requirement is MEASURED at that multiple, not asserted |
+| **structural** | the curve must cover every rating the ladder can award; entries are non-negative integers | `assertDemandCoversTheLadder` and `cloneDemand`, each naming the vacuity it refuses |
+
+**THE HEADROOM IS THE ONE JUDGEMENT AND IT IS CHECKED RATHER THAN ASSERTED.** Demand could have been
+derived at 1.25x so an awkwardly-timed room is refilled at once. It is not: **232/240, 464/480 and
+928/960 arrivals complete a stay at three, four and five stars** — 96.7% at every rung, one run each,
+`--days 30 --seed 42`, exact integers, win32/12cpu quiet — and the missing 3.3% is the walk to the
+room rather than a mis-derivation.
+
+**AND THE ORDER WAS THE ONE §2.1 REQUIRES.** The curve was derived from the requirement BEFORE any
+arm was run; the runs measure whether the requirement is met. *"Do NOT pick the curve by running the
+sim and seeing which balance looks healthy"* is the order G-059 was refused for, and it is not the
+order taken here.
+
+### 3 — NO RANDOMNESS, AND THE REASON IS EVIDENCE RATHER THAN PURITY
+
+The obvious demand model is a per-tick probability from the injected PRNG. **`demand.ts` draws
+nothing.** Ten seeds give byte-identical economics in this project today, so **every economic figure
+ever recorded here is a READING and not a sample**; a stochastic demand would make the seed an
+economic axis for the first time and silently demote all of them to one draw of a distribution.
+
+**MEASURED RATHER THAN ASSUMED, because this is exactly the claim a goal should not inherit**: three
+seeds (42, 7, 99), 365 days, `--rooms 12 --amenities 2 --facilities 1 --demand` — **5,840 arrived,
+49,504,000p revenue, 33,396,500p balance, identical at all three**, with only `world.stateHash`
+moving because the RNG stream is hashed state and `advanceTime` still turns it. The 1,000-day arm
+agrees (16,000 / 135,864,000p / 90,864,000p).
+
+> **THAT ARM IS THE FOUR-STAR HOTEL AND THE LABEL IS WRITTEN IN BECAUSE IT WAS LIFTED WITHOUT ONE.**
+> `--rooms 12 --amenities 2 --facilities 1` scores **4 stars**, and `90,864,000p` reached six places
+> in this goal's ledgers described as a FIVE-star hotel. The five-star 1,000-day figure is
+> **192,228,000p** at 32,000 arrivals (`--rooms 24 --amenities 3 --facilities 1`) — **2.1x larger**,
+> and it was the load-bearing integer of exit criterion 4 and of G-060's premise. *A number is safe
+> to quote only with the arm that produced it; this one travelled without its workload slot and
+> arrived meaning something else.*
+
+**RULED: a stochastic demand is a DELIBERATE, MEASURABLE change and deserves its own goal.** Parked
+with what would have to be re-measured.
+
+### 4 — `--arrivals` IS A LABORATORY CLAMP, IT IS THE DEFAULT, AND THAT IS WHY THE EVIDENCE BASE SURVIVES
+
+**Until this goal `--arrivals` was the only source of arrivals, so it did not look like an instrument
+— it looked like the world.** It is the same flag doing the same thing; what changed is that there is
+now something to hold it constant AGAINST.
+
+**RULED: `commanded` is `loadContent`'s default.** Every measured arm in this repository — every
+golden, every pinned integer, every bench and scaling workload — is defined by a fixed arrival
+cadence, because until today there was no other kind. **A default of `byDemand` would move all of
+them at once and leave no invocation that reproduces any figure taken before today.**
+
+**AND THE CLAMP IS EXACT RATHER THAN APPROXIMATE**, which is the property that makes it defensible:
+the table is **WITHHELD, not emptied**, so the injected content is missing a KEY rather than carrying
+an empty one and `bindContent` fingerprints exactly as it always did. **The default CLI arm still
+hashes `c455f8fc521180e8` and the I2 gate still hashes `c967bdb98dac9b0d`** — both predicted before
+the run, both unmoved, as were save **v24** and summary **4**.
+
+**THE CLAMP IS NOT A SILENT OMISSION, and that objection is answered structurally**: `demand.json` is
+**READ AND VALIDATED ON BOTH PATHS**, a `--content` directory must carry it either way (it is the
+ninth such file), and the report prints `input.market` and `rating.partiesPerDay` on every run so a
+document pasted into a ledger carries its own regime slot. What the flag changes is who gets HANDED
+the table, which is a host's decision and lives in the host (ADR-0001).
+
+**`--demand` AND `--arrivals` ARE REFUSED TOGETHER.** A run with both sources firing is a measurement
+of neither, and the guard tests whether the FLAG WAS SEEN rather than what it produced — the
+`--record-every` lesson, which failed once for exactly the other spelling.
+
+**THE GAME IS NOT A MEASUREMENT.** `apps/game` takes the curve unconditionally and `scenario.ts` no
+longer issues a single `guestArrives`. Without that edit the renderer would have had a fixed cadence
+AND an earned one, and the sum of two arrival streams is the thing `parseArgs` refuses.
+
+### 5 — THE I2 GATE COVERS THE PHASE AND NOT ITS ARITHMETIC, AND THAT IS SAID NARROWLY
+
+`determinism-log.ts` is COMMANDED, so under `pnpm test:determinism` `maxPartiesPerDayOf` is 0.
+
+- **WHAT THE GATE DOES COVER**: `runDemand` is in `TICK_PHASES` and runs on all 100,000 ticks — its
+  preconditions, its `demandRun` flag, its return-by-reference contract and its position between
+  commands and the guest loop.
+- **WHAT IT DOES NOT**: not one slot opens and not one party is generated.
+
+**THE GATE'S LOG WAS NOT SWITCHED OVER, AND THE SECOND REASON IS THE ONE THAT DECIDES IT.** (1) A log
+that both commands arrivals and earns them is the confusion §4 refuses in the runner. (2) That log's
+coverage is AIMED — `validity.determinism` and `provider.determinism` assert counts at named ticks,
+re-aimed twice already — and **re-aiming the instrument that verifies determinism is its own goal**
+(ADR-0085 promoted exactly that class to the front), not a side effect of one about the economy.
+
+**SO THE ARITHMETIC IS COVERED IN THE GATE'S OWN SHAPE ELSEWHERE**: `demand.determinism.test.ts` runs
+two-in-one-process, a sensitivity arm and **a CENSUS proving the path fired** (112 and 17 guests no
+command log names), and `demand.test.ts` is EXHAUSTIVE over every party count the slot table can
+express — because the obvious wrong implementation, `slots / parties` truncating, is **right at 1, 2,
+3, 4, 6, 8, 12 and 24 and wrong at 5, 7, 9, 10 and 11**, and every entry in the shipped curve divides
+its own peak.
+
+### 6 — A REPORT LAW THAT ASSERTED SOMETHING FALSE IS STRUCK, AND THE SENTENCE FALSIFYING IT WAS ALREADY IN THE TREE
+
+`report.ts` has held, since G-013 round 2: *"no room type provides it => `met - metByItem` MUST be
+0."* **`byItem`'s own docblock in `needs.ts` has contradicted it since G-028b**, in as many words:
+*"So a row can count into `met` and into the derived BY-ROOM column having been served by no room at
+all."* `met` stopped meaning *above the want line at departure* and became *the top per-need BAND
+over the stay* (ADR-0037), so a guest whose stay ENDS BEFORE ANYTHING SERVES A NEED counts into `met`
+with `metBy` still `null`.
+
+**NOBODY PROPAGATED THE CHANGE. ADR-0084's CLASS EXACTLY** — a correctly-written claim that stopped
+being true when something else moved — **and this time both halves were in `packages/sim` and
+`tools/headless` at once, several goals apart.**
+
+**THE ARM THAT REACHES IT IS THIS GOAL'S**, and it is reachable for a structural reason rather than a
+lucky one: `schedule` starts its arrival walk and its demolition walk at the same `BUILD_START_TICK`
+and commands apply in log order, so **a commanded party always claims its room AFTER the same tick's
+demolition**. Demand puts a party in the lobby at tick 0 of a day, one tick BEFORE the demolition at
+tick 1. `--days 5 --seed 42 --rooms 24 --amenities 1 --demolish 2880 --demand`: 40 arrived, 28
+checked out, **4 `evictedRoomGone`**, `guest_comfort` **met 32 / metByItem 31**. The commanded twin
+(`--arrivals 240`) gives 30 / 2 / 32 and is silent; **seven seeds x four demolition cadences of
+commanded arms reproduce nothing.**
+
+**RULED: the room half is STRUCK, not the run routed around.** *A law that fires on a legitimate run
+is worse than no law* is G-014b's own argument about the abandonment clause four screens up in the
+same file.
+
+- **WHAT IS LOST IS NAMED (ADR-0086).** The round-2 note claimed it fired in BOTH directions.
+  **Only the ITEM direction survives**: a build that attributed an item-served need to a ROOM is now
+  caught by nothing in this report.
+- **WHY NOT REPAIRED HERE.** The repair is a third counter, `metByNothing` on `NeedOutcomeRow` — a
+  `World` field, therefore a save bump, a migration, a `without-*` stripper and a v1-fixture round
+  trip. **Taking it would have moved this goal's save version for a reason that has nothing to do
+  with demand.** Parked, **with its test already RUN** (ADR-0102 amendment 2's lesson: a parked
+  hypothesis whose test has not been run is a guess with a procedure attached).
+- **THE PROOF-OF-BITE CASE IS INVERTED RATHER THAN DELETED**, so the absence is pinned instead of
+  looking like a gap nobody measured, and a future goal restoring the law has to come and say so.
+- `byItem`'s falsified clause — *"it belongs to the lodging row rather than to an engagement one"* —
+  is corrected IN PLACE.
+
+### 7 — THE EXHAUSTIVE PHASE SEARCH WAS KEPT EXHAUSTIVE BY A PROOF RATHER THAN A CAP
+
+A sixth tick phase takes `world.tick.test.ts`'s search from 19,531 sequences to **335,923**, and the
+flat enumeration **TIMED OUT at vitest's 30,000ms under full-suite load** while passing in 13.07s
+alone (medians of 3, win32/12cpu). **§2.0 names that state: not red, UNRELIABLE — and the project
+already carries two unreliable gates, a third being a stop condition.** Raising the timeout was the
+§9 gate-editing stop condition and capping the search was refused, because **the only thing that
+search has ever caught is a phase that could be DROPPED or DUPLICATED and both live at exactly the
+lengths a cap removes**.
+
+**THE PRUNE IS A PROOF.** `runPhases` is a left fold that ABORTS at the first phase that throws, so
+every extension of a throwing prefix throws at the same phase and can never survive. A `covered`
+counter is asserted equal to the whole space, so **a prune that quietly became a cap fails loudly** —
+`assertSubject`'s move applied to a search. Proof-of-bite: drop the `demandRun` clause and TWO
+sequences survive instead of one; sha256 identical after restore.
+
+### 8 — WHAT THE SEAM LEAVES FOR REPUTATION, STATED SO IT CAN JOIN WITHOUT A REWRITE
+
+ADR-0082 rules reputation and the star rating TWO systems, both feeding demand. Reputation does not
+exist. **`demand.ts` is handed a NUMBER, not a world** — it reads no entity, no guest, no ledger —
+and **`runDemand` is the ONE place that decides what number to hand it.** So a second system feeding
+the same curve is an edit at that call site and nowhere else: no new content table shape, no new
+phase, no save field. The curve's index is *the rating*, and what a later goal has to rule is how two
+ratings combine, which is a design statement and is the human's.
+
+---
+## ADR-0103 AMENDMENT 1 — a third region the deferral did not name, a load-bearing integer off by 2.1x, and a deferral class with twelve instances and TWO failure modes
+
+**Date**: 2026-08-27 · **G-051b sweep 1.** Four MAJOR, six MINOR, no BLOCKER. **Three of the four
+MAJORs falsify sentences in this goal's own ledgers rather than its code**, and they are recorded
+here rather than quietly edited above.
+
+### 1 — THE SATURATION DEFERRAL WAS TOO NARROW: THERE IS A THIRD REGION AND IT IS NEGATIVE
+
+ADR-0103 §1 defers the saturation to G-060 and states its consequence as **two FLAT regions**. That
+reproduces and it is incomplete. **A build that RAISES the rating and STRICTLY LOSES MONEY is a
+third region, it is sharper than either flat one, and this goal caused it.**
+
+Measured, `--seed 42 --amenities 2 --facilities 1 --demand`, **one bedroom apart**, one run each,
+exact deterministic integers, no aggregation, win32/12cpu quiet:
+
+| days | rooms | stars | arrived | revenue | dissatisfied | balance |
+|---|---|---|---|---|---|---|
+| 30 | 23 | 4 | 480 | 3,944,000p | 0 | 2,254,000p |
+| 30 | **24** | **5** | **960** | **3,867,500p** | **477** | 2,102,500p |
+| 365 | 23 | 4 | 5,840 | 49,504,000p | 0 | 23,359,000p |
+| 365 | **24** | **5** | **11,680** | **47,846,500p** | **6,026** | 20,789,000p |
+
+**THE CLAMPED CONTROL NAMES THE COST AS DEMAND'S**: the identical 23 → 24 build at `--arrivals 120`
+is **75,000p of pure upkeep over 30 days** (912,500p over a year) with **zero** dissatisfied
+departures. *Demand turns a 75,000p build into a 151,500p one and invents 477 disappointed guests.*
+
+**THE MECHANISM IS THE LADDER AND NOT THE CURVE.** Tier 5 doubles the bedroom clause 12 → 24 while
+its amenity clause counts **VARIETY** and never **LOAD**, so the fifth star doubles demand into a
+building whose service capacity the ladder never asked to scale.
+
+> **RULED: RETITLE AND DISCLOSE, NOT RETUNE.** No content and no code changed for this finding.
+> Re-deriving the curve until this arm looks healthy is picking a threshold by running the sim,
+> which `HOTELSIM.md` §2.1 forbids and which G-059 was refused for; re-tabling the ladder is
+> G-060's, and doing it here mixes *does demand respond* with *is the ladder well-shaped*, which is
+> §1's own argument for the split. **The game's physics already price the answer** — at three
+> amenity sets the same one-bedroom build is worth **+48,591,500p** over a year (21,716,500p →
+> 70,308,000p) — **and nothing in the game says so, which is the defect G-060 inherits.**
+
+**AND THE TEST TITLE THAT DENIED IT WAS POSSIBLE IS THE PART THAT WAS ACTUALLY WRONG.**
+`demand.report.test.ts` claimed *"the curve is MONOTONE in stars, SO NO BUILDING A PLAYER DOES IS
+STRICTLY PUNISHED."* **Monotone in the CURVE is not monotone in the OUTCOME.** The title now names
+what the assertion checks — the table — and **the negative region is pinned in its own case, so it
+goes RED when G-060 fixes it.** *A measured defect nothing pins is an unpinned claim, and a fix
+nobody notices is a fix nobody can score.*
+
+### 2 — A LOAD-BEARING INTEGER TRAVELLED WITHOUT ITS WORKLOAD SLOT AND ARRIVED MEANING SOMETHING ELSE
+
+*"A five-star hotel banks 90,864,000p over 1,000 days"* stood in **six places** — exit criterion 4,
+G-060's premise, and the shared digest in all four ledgers. **It is the FOUR-star hotel.** It was
+lifted from §3's seed-invariance arm, which is explicitly `--rooms 12 --amenities 2 --facilities 1`,
+and relabelled.
+
+| arm, `--days 1000 --seed 42 --demand` | stars | arrived | balance |
+|---|---|---|---|
+| `--rooms 12 --amenities 2 --facilities 1` | **4** | 16,000 | 90,864,000p |
+| `--rooms 24 --amenities 3 --facilities 1` | **5** | 32,000 | **192,228,000p** |
+
+**Wrong by 2.1x, in the integer that carries exit criterion 4 and the whole of G-060's premise.**
+Corrected in all six, and §3's own line now carries the four-star label **so the next reader cannot
+lift it the way I did**. *This session produced four dropped-workload-slot errors across two people;
+the fix that generalises is not "be careful", it is that **a figure is quoted with the invocation
+that produced it or not at all**.*
+
+### 3 — TWO ARMS WRITTEN AS ONE, AND THE NUMBER WAS 60% TOO LARGE
+
+G-060's block said the first-rung finding *"is NOT made worse by G-051b: **the same arm** under the
+old clamp ends at the same −662,500p with 5,837 disappointed against demand's 485."* **The only arm
+named in that paragraph is `--rooms 1 --amenities 0`, which measures −412,500p.** The quoted figures
+belong to `--rooms 0 --amenities 0 --build 1440`. `PARKING.md` item 14 states both arms in full and
+always did; the block compressed them with the words *"the same arm"*.
+
+Both arms, 365 days, seed 42, one run each; **the disappointed column counts every departure that
+paid nothing** (`gaveUp` + `leftDissatisfied`), which is the unit that had also gone unstated:
+
+| arm | balance, `--demand` | balance, `--arrivals 120` | disappointed, demand | disappointed, clamp |
+|---|---|---|---|---|
+| `--rooms 1 --amenities 0` | **−412,500p** | **−412,500p** | 486 | 5,837 |
+| `--rooms 0 --amenities 0 --build 1440` | **−662,500p** | **−662,500p** | 485 | 5,837 |
+
+**The conclusion is unaffected and is in fact stronger than it was written**: the balance is
+identical under both regimes on **both** arms, so demand never changes the loss — only who is
+disappointed, and it disappoints a twelfth as many.
+
+### 4 — A DEFERRAL IS A CLAIM WITH A DUE DATE, AND NOTHING IN THIS PROJECT CHECKS WHETHER THE DATE HAS PASSED
+
+Sweep 1 named five present-tense claims this commit falsified. **Re-running the grep after fixing
+them found five more**, for **ten in total**, and the class is ADR-0084's with a sharper edge: not
+*a claim that went stale*, but ***a deferral to a milestone that has now arrived***.
+
+- **`commands.ts` and `guests.ts`** — *"the command log fully describes who arrived and when
+  **(I2)**"*. **This was the stated determinism argument for `guestArrives` being payloadless**, and
+  under `--demand` it is false: this goal's own `demand.determinism.test.ts` pins **112 and 17
+  guests that no command log names**. What I2 rests on is now written where those sentences were:
+  **same seed + same command log + SAME INJECTED CONTENT**, with arrivals replayable because
+  `demand.ts` draws nothing. *`World.contentHash` was always part of it; demand is the first
+  mechanism that makes the content half decide WHO EXISTS rather than how they behave.*
+- **`guests.ts` and `packages/content/src/schema.ts`** — *"party formation becomes random when
+  demand does, which is M4"*. Demand arrived and **is not random**, so the event retired nothing.
+- **`content.ts`** — *"until M4 gives arrivals a demand model"*. It did; the party cycle did not move.
+- **`report.ts`** — *"a fixed cadence stands in for it"*, **1,150 lines above the same file's new and
+  correct *"IT WAS THE WORLD AND IT IS NOW A CLAMP"***.
+- **`apps/game/src/scenario.ts`** — *"there is no demand model until M4"*, **120 lines above the
+  banner this same commit added saying the stand-in's condition had expired.**
+- **Four test files** — *"`partySizeWeights` is a design number and demand is M4's"*, the sixth
+  family, found only by re-running the sweep.
+
+> **IN ALL TEN THE ARGUMENT SURVIVED AND ONLY THE DEFERRAL DIED**, which is why every one is a
+> rewrite rather than a deletion: party formation is still a walk, `--seed` still does not change
+> who turns up, `partySizeWeights` is still not the dial that decides how busy a hotel is.
+
+**AND AN ELEVENTH, FOUND AT THE VERIFICATION PASS, WHICH SPLITS THE CLASS IN TWO.**
+`cli.stdout.test.ts`'s seed-honesty test carried a **STANDING INSTRUCTION TO DELETE ITSELF**,
+addressed in the future tense to *"whoever lands the M4 demand model"* — a reader who had already
+arrived. **M4's demand model landed in this commit and the test did not go red**, because
+`demand.ts` draws nothing, so following the instruction would have deleted a guard that had just
+become **permanently valid rather than expiring**. `PARKING.md` carried the same promise, live and
+present tense, ending *"-> M4, as a planned retirement"*, in the ledger whose stated purpose is to
+be read by a later goal — and it survived a diff that edited `PARKING.md`.
+
+> **SO THE CLASS HAS TWO FAILURE MODES AND ONLY THE FIRST IS A GREP:**
+>
+> 1. **THE DATE PASSES AND NOBODY LOOKS** — ten instances, all in this goal's blast radius.
+> 2. **THE DATE NAMED WAS NEVER THE REAL TRIGGER** — this one. Its own docblock stated the true
+>    condition four lines below the false one: *"the moment GUEST BEHAVIOUR READS THE RNG."*
+>    **Two triggers in one docblock, and the wrong one was the one in the imperative.**
+
+**WOULD THE GREP HAVE CAUGHT THE SECOND? IT WOULD HAVE SURFACED THE SITE AND NOT THE DEFECT.**
+`grep -rn "is M4\|until M4"` lists this file, and a reader who stopped at the first paragraph would
+have concluded the due date had arrived and **deleted the test**, which is the wrong action arrived
+at by the right procedure. **Only reading the SECOND paragraph tells you the trigger was
+mis-bound.** *So the grep is necessary and not sufficient, and the rule that follows it is: a
+deferral names an EVENT THE ARTEFACT CAN OBSERVE. "A milestone lands" is not one; "a guest draws
+from the stream" is.* Both sites now name the observable event, and `PARKING.md`'s arrow points at
+a GOAL rather than a milestone.
+
+**AND A TWELFTH, FOUND BY THE SAME RE-SWEEP AND RESOLVED RATHER THAN RE-PARKED.** `PARKING.md`'s
+amenity-scale item said *"demand is a fixed cadence until M4, so 'affordable' is not decidable
+now"* — **mode (1), and it is decidable now** — and its falsification test named *"when arrivals
+respond to REPUTATION"*, which is **mode (2) again**: what shipped is the STAR RATING, and ADR-0082
+rules those two distinct systems. The precondition the test actually needed had arrived under
+another name. **RUN, per ADR-0102 amendment 2's lesson**, `--days 30 --seed 42 --rooms 12
+--facilities 1 --demand`, one run per amenity level: the affordable density is **two** sets
+(balance 3,079,000p against 1,276,000p and 2,944,000p) and the top review score is **unanimous**
+there, so the item resolves in its first branch — *the scale needs a term oversupply cannot buy* —
+and is sharper than parked, because a RIGHT-SIZED hotel now earns the top band and the third set is
+strictly dominated. **Routed to E-014**, which freezes the review scale, rather than acted on.
+
+**TWO SITES ARE LEFT ALONE DELIBERATELY AND FOR THE SAME REASON `ESCALATIONS.md:147` IS**: BOTH sit
+in `GOALS.md`'s **G-040b-ii** block — line 5430, *"until M4 gives it demand"*, and line 5450,
+*"'Long runs across several seeds' buys NOTHING until M4"*. They are records in a DONE goal block of
+what that goal said and found, and ADR-0008 says an artefact describing the past must not track the
+present. *(The second is also still TRUE: several seeds still buy nothing, because demand draws
+nothing.)* **The test for this class is whether a sentence is a LIVE INSTRUCTION to a future reader,
+not whether it names a milestone.**
+
+> **THE ATTRIBUTION IN THE FIRST DRAFT OF THIS PARAGRAPH WAS WRONG AND IS CORRECTED RATHER THAN
+> QUIETLY EDITED.** It read *"G-040b-i AND G-040b-ii blocks both carry"*. **G-040b-i, lines
+> 5334–5390, contains no occurrence of "M4" at all** — `awk 'NR>=5334 && NR<=5390 && /M4/'` over
+> `GOALS.md` returns nothing. The COUNT was right and the JUDGEMENT was right; only the block name
+> was, and it sends a reader to the wrong place. **ADR-0084 requires a citation that can be re-run,
+> and this one re-ran to a different answer** — inside the amendment about deferrals whose stated
+> trigger was never checked.
+
+**THE STRONGEST EVIDENCE THAT THIS IS A CLASS AND NOT CARELESSNESS**: `report.ts:114-118`, added by
+the round that fixed the other ten, says *"the seed-honesty test still pins it as a measured fact —
+what has gone is the clause saying M4 would retire it. **M4 arrived and did not.**"* **The sentence
+POINTING AT the artefact was corrected and the artefact was not** — §5.8's shape exactly, and the
+third premise-failure of a pattern repaired correctly twice in the same round.
+
+**THE SIDEWAYS ANSWER (§5.6), AND IT IS A ONE-LINE QUESTION RATHER THAN A SCANNER**: the two worst
+instances of mode (1) were **120 and 1,150 lines from a sentence this same commit corrected in the
+same file** — the true sentence was written and the false one walked past on the way to it.
+`grep -rn "is M4\|until M4"` is a question a REFLECT could ask **on the day any milestone term
+lands**, and it would have found all eleven sites, told the reader what to do about ten of them, and
+told them the wrong thing about the eleventh. *Recorded rather than built: automating it is the
+scanner `HOTELSIM.md` §5.6 says this question must not grow.*
+
+**AND `ESCALATIONS.md:147` IS LEFT ALONE DELIBERATELY.** It carries the same sentence inside the M0
+sign-off record, and ADR-0008 says an artefact describing the past must not track the present. It is
+history, not a live instruction, and correcting it would be the error this amendment is about
+running backwards.
+
+### 5 — AND THE ORCHESTRATOR'S CORRECTION IS RECORDED WITH THE OTHERS
+
+The dispatch flagged the closure table's balance column as belonging to a mislabelled
+`--facilities 3` arm. **It does not**: `--facilities 1` seeds one of *each* of three facility types,
+so *"+3 facilities"* is a true statement about `--facilities 1` and the valid-room count goes
+18 → 21. **The real defect is thinner and is real** — the table never stated the FLAG, both readings
+are grammatical, and they are different experiments. Every copy of that table now names
+`--facilities 0 → 1` and says what it seeds. *Two people reconstructed the wrong arm from the same
+omission, which is the strongest evidence that the omission was the defect rather than the reader.*
+
+---

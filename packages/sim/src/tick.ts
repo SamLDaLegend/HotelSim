@@ -1,10 +1,11 @@
 // The tick: five named phases, in one documented order.
 //
 //   1. applyCommands    external intent enters the world, at exactly one point
-//   2. runGuests        the guest loop runs against the staged world (G-004)
-//   3. runSettlement    the night's books close, once per night (G-005)
-//   4. commitEntities   entity membership changes exactly once, at a boundary
-//   5. advanceTime      the tick counter and the RNG stream advance
+//   2. runDemand        the hotel's own rating decides who turns up (G-051b)
+//   3. runGuests        the guest loop runs against the staged world (G-004)
+//   4. runSettlement    the night's books close, once per night (G-005)
+//   5. commitEntities   entity membership changes exactly once, at a boundary
+//   6. advanceTime      the tick counter and the RNG stream advance
 //
 // THE ORDER IS WRITTEN DOWN ONCE. `TICK_PHASES` is the order, and `stepTick` composes
 // the tick by iterating it — the documented order and the executed order are the same
@@ -18,7 +19,15 @@
 //   A command's effect is a function of its scheduled tick and its position in the log,
 //   and of nothing else, which is what makes a run replayable (I2).
 //
-//   Guests run SECOND, against the open draft, so a room built by a command this tick
+//   DEMAND runs between the two, and the position is the whole of what makes the build
+//   loop close in ONE tick rather than in two. It runs AFTER commands so that a room the
+//   player builds on tick t is already counted by the rating that decides who arrives on
+//   tick t — the same no-lag rule `layCorridor` and `installLift` already have — and
+//   BEFORE guests so the parties it creates are taken in by the same doorway a
+//   `guestArrives` fills. Reversing either half would put a day's lag between building a
+//   Spa and anybody noticing, on a mechanism whose entire purpose is that somebody does.
+//
+//   Guests run THIRD, against the open draft, so a room built by a command this tick
 //   can be occupied this tick and a room demolished this tick is already gone as far as
 //   its occupant is concerned. Systems have always belonged in this slot; G-004 is the
 //   first one to fill it.
@@ -125,6 +134,8 @@ import type { Transaction } from './ledger.js';
 import { applyDrawLoan, assertLoanOutcomes, totalLoanOutcomes } from './loan.js';
 import type { LoanOutcomes } from './loan.js';
 import { nextUint32 } from './rng.js';
+import { isDemandSlot, partiesArrivingAt } from './demand.js';
+import { starRatingIn } from './rating.js';
 import { isSettlementTick, settleNight } from './settlement.js';
 import { createValidityCache, tickValidityContext } from './validity.js';
 import type { ValidityCache } from './validity.js';
@@ -140,6 +151,7 @@ import type { World } from './world.js';
  */
 export const TICK_PHASES = Object.freeze([
   'applyCommands',
+  'runDemand',
   'runGuests',
   'runSettlement',
   'commitEntities',
@@ -213,6 +225,19 @@ export type TickState = {
    */
   readonly guestsRun: boolean;
   /**
+   * Whether the demand phase has already run this tick (G-051b).
+   *
+   * The same contract `guestsRun` has, for the same reason and with a sharper edge: demand
+   * ADDS to the doorway rather than consuming it, so a phase table listing `runDemand` twice
+   * would put two parties in the lobby where the content asked for one — an arrival that
+   * hashes perfectly, costs nothing to produce and is invisible to every other check here.
+   * A DROPPED `runDemand` is equally quiet: the hotel simply stops earning guests, which
+   * reads as a balance problem rather than as a missing phase. The flag is set by the phase
+   * itself on EVERY tick, quiet or not, so `stepTick` notices either on the very next tick.
+   * Tick-local, never hashed, never saved.
+   */
+  readonly demandRun: boolean;
+  /**
    * Whether settlement has already run this tick (G-005).
    *
    * The same contract `guestsRun` has, for the same reason: the settlement phase acts
@@ -239,7 +264,13 @@ export type TickState = {
    * the ADR-0007 shape. `run` makes exactly one per call, so nothing leaks between runs in
    * a process, which is what the determinism harness's two-runs-in-one-process check hunts.
    *
-   * Only `runGuests` reads it and only `tickValidityContext` writes it.
+   * `runGuests` AND `runDemand` read it, and only `tickValidityContext` writes it. (This said
+   * "only `runGuests` reads it" until G-051b, which added the second reader 620 lines below in
+   * the same commit.) THE EXACT READERSHIP IS THE I4 ARGUMENT FOR THIS FIELD, so it is spelled
+   * out rather than left as "the tick": every reader gets its context from `tickValidityContext`
+   * and none of them keeps one, which is what makes this a memo the world cannot disagree with.
+   * `runDemand` asking through the same call is the whole reason a rating derived every demand
+   * slot costs the valid-room walk the guest loop was going to do anyway.
    */
   readonly cache: ValidityCache | null;
 };
@@ -267,6 +298,7 @@ export function beginTick(
     entities: null,
     arrivingParties: 0,
     guestsRun: false,
+    demandRun: false,
     settlementRun: false,
     committed: false,
     cache,
@@ -655,7 +687,7 @@ function applyCommand(
 }
 
 /**
- * Phase 1 of 5. The one point at which external intent enters the world.
+ * Phase 1 of 6. The one point at which external intent enters the world.
  *
  * G-008 gave this phase money and outcomes to carry: a `buildRoom` charges the ledger and
  * a refusal increments a counter, both of which live on `World` rather than on the draft.
@@ -798,7 +830,88 @@ export function applyCommands(state: TickState): TickState {
 }
 
 /**
- * Phase 2 of 5. The guest loop: arrivals, reservations, decay, provision and payment
+ * Phase 2 of 6. Demand: the hotel's own rating decides who turns up (G-051b).
+ *
+ * ==========================================================================================
+ * THIS IS THE PHASE THAT CLOSES THE BUILD LOOP. Before it, `HOTELSIM.md` §1.1's fifteenth
+ * mark was false in as many words — *"arrivals come from the command log on a fixed cadence,
+ * so nothing a player builds changes how many guests arrive"*. This phase derives the star
+ * rating of the building as it stands THIS TICK and adds the parties that rating earns to the
+ * same doorway `applyCommands` fills. `demand.ts` owns the arithmetic; this is the plumbing,
+ * the same split `runGuests` has over `stepGuests`.
+ * ==========================================================================================
+ *
+ * IT ADDS RATHER THAN SETS, and the two sources never see each other. A host that issues
+ * `guestArrives` and content that declares a demand curve both put parties in the lobby, and
+ * `runGuests` takes the sum. That is deliberate: the command is the host's door and the
+ * laboratory clamp, and retiring it would take every test that puts a guest somewhere on an
+ * exact tick with it. Content that declares NO curve generates nothing here, which is every
+ * world before this goal — so a clamped run is byte-identical to the run it always was.
+ *
+ * ------------------------------------------------------------------------------------------
+ * WHAT IT COSTS PER TICK, BECAUSE A PHASE THAT FOLDS THE BUILDING EVERY TICK WOULD BE AN I5
+ * PROBLEM AND THIS ONE IS NOT.
+ *
+ * `isDemandSlot` is asked FIRST and is O(1) — one multiply, one modulo, one comparison over
+ * a number the content already carries. On the 1,416 ticks a day it answers `false` this phase
+ * returns its input BY REFERENCE, allocates nothing, and never resolves a validity context.
+ * On the 24 it answers `true` it asks `tickValidityContext` for the SAME context `runGuests`
+ * is about to ask for — a cache hit on any tick that changed no entity (G-010) — so the
+ * valid-room walk underneath `starRatingIn` is the one the guest loop was going to do anyway.
+ *
+ * THE CACHE IS A MEMO OUTSIDE STATE, WHICH IS THE ONLY KIND ALLOWED. `World` carries no
+ * rating, exactly as it carries no balance: a stored rating is a cache that can disagree with
+ * the hotel and HASH PERFECTLY, which is the one class of bug I2 cannot see (ADR-0102 §2 makes
+ * the argument, `loanOutcomes` makes it about the debt). So SAVE_SCHEMA_VERSION does not move
+ * for this goal, there is no migration, and the permanent v1 fixture is untouched (ADR-0006).
+ * ------------------------------------------------------------------------------------------
+ *
+ * NO RANDOMNESS. It draws nothing from the stream — `advanceTime` remains the only phase that
+ * moves it — so the seed still has no economic effect. `demand.ts`'s header says why that is a
+ * decision rather than an omission.
+ *
+ * Precondition: a draft is open, nothing has been committed, and this phase has not already
+ * run. Running twice would put two parties in the lobby where the content asked for one.
+ */
+export function runDemand(state: TickState): TickState {
+  if (state.entities === null) {
+    throw new Error('runDemand: no entity draft is open; applyCommands must run before it in the tick');
+  }
+  if (state.committed) {
+    throw new Error('runDemand: entities were already committed this tick; demand acts before the boundary');
+  }
+  if (state.guestsRun) {
+    throw new Error('runDemand: the guest loop has already run this tick; demand decides who turns up before it');
+  }
+  if (state.demandRun) {
+    throw new Error('runDemand: demand has already run this tick; it must run exactly once');
+  }
+  // THE CHEAP HALF FIRST. See the cost note above: this is what keeps an O(rooms) fold off
+  // 1,416 ticks a day, and `demand.test.ts` pins that removing it would change no answer.
+  if (!isDemandSlot(state.world.tick, state.content)) return { ...state, demandRun: true };
+  const rating = starRatingIn(
+    tickValidityContext(
+      state.cache,
+      state.content,
+      state.world.grid,
+      // THIS TICK'S PLAN and THIS TICK'S STAIRWELL, for `runGuests`'s reason exactly — and here
+      // it is the no-lag rule doing visible work rather than tidiness: a corridor laid this tick
+      // can be what makes a room VALID, and `starRatingIn` counts only valid rooms, so the
+      // player who connects their last bedroom this morning is a tier higher this morning.
+      state.world.corridors,
+      state.world.stairs,
+      state.entities,
+    ),
+  );
+  const parties = partiesArrivingAt(state.world.tick, rating.stars, state.content);
+  // An idle tick allocates no state either: a window that earns nobody returns the same object
+  // the flag branch above does, which is the contract every phase here keeps.
+  if (parties === 0) return { ...state, demandRun: true };
+  return { ...state, arrivingParties: state.arrivingParties + parties, demandRun: true };
+}
+
+/**
+ * Phase 3 of 6. The guest loop: arrivals, reservations, decay, provision and payment
  * (G-004).
  *
  * (It listed "patience, satisfaction" until θ-a sweep 3. Patience is ADR-0017's deleted
@@ -902,7 +1015,7 @@ export function runGuests(state: TickState): TickState {
 }
 
 /**
- * Phase 3 of 5. Nightly settlement: the night's books close, once per night (G-005).
+ * Phase 4 of 6. Nightly settlement: the night's books close, once per night (G-005).
  *
  * All of the behaviour is in `settlement.ts`; this is the plumbing that turns a
  * `TickState` into that module's input and back — the same split, for the same
@@ -1042,7 +1155,7 @@ export function runSettlement(state: TickState): TickState {
 }
 
 /**
- * Phase 4 of 5. Entity membership changes exactly once per tick, here.
+ * Phase 5 of 6. Entity membership changes exactly once per tick, here.
  *
  * Precondition: a draft is open, so `applyCommands` has already run.
  */
@@ -1057,7 +1170,7 @@ export function commitEntities(state: TickState): TickState {
 }
 
 /**
- * Phase 5 of 5. The tick counter advances by one and the RNG stream advances by
+ * Phase 6 of 6. The tick counter advances by one and the RNG stream advances by
  * exactly one draw, unconditionally — so the stream position stays a pure function of
  * the tick count, and the state hash stays sensitive to the seed.
  *
@@ -1084,6 +1197,7 @@ export function advanceTime(state: TickState): TickState {
  */
 const TICK_PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
+  runDemand,
   runGuests,
   runSettlement,
   commitEntities,
@@ -1121,6 +1235,13 @@ export function stepTick(
   // phase itself, so it cannot be satisfied by anything except the phase running.
   if (!state.guestsRun) {
     throw new Error('stepTick: the guest loop did not run this tick; the phase table is missing runGuests');
+  }
+  // And demand ran, exactly once (G-051b). `guestsRun`'s argument with one difference worth
+  // stating: this phase is SILENT on 1,416 ticks in 1,440 and under commanded content it is
+  // silent on all of them, so there is no observable it could be checked by. The flag is the
+  // only witness there is.
+  if (!state.demandRun) {
+    throw new Error('stepTick: demand did not run this tick; the phase table is missing runDemand');
   }
   // And settlement ran, exactly once — the same reasoning, sharpened by cadence:
   // settlement ACTS on one tick in 1,440, so without this flag a dropped phase would

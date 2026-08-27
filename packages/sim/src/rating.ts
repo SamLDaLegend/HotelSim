@@ -30,13 +30,27 @@
 //   "A STAR RATING IS A SECOND CURRENCY. A Spa need not serve a need BETTER to be worth
 //    building — it can be worth building because it unlocks a TIER."
 //
-// THIS GOAL BUILDS THE CURRENCY AND DOES NOT SPEND IT. The rating is DERIVED and REPORTED and
-// FEEDS NOTHING: no demand, no arrivals, no pricing, no review. That is deliberate and it is
-// ADR-0082's own sequencing — demand is M4's, both systems feed it, and both may ship
-// visible-only first. SO BE PRECISE ABOUT WHAT IS AND IS NOT FIXED HERE: while the rating buys
-// nothing, a facility is still a pure cost and ADR-0078's dominance still stands. What this
-// goal removes is the reason it could not be fixed — there was no quantity to attach a reason
-// to. G-051b attaches one.
+// ~~"THIS GOAL BUILDS THE CURRENCY AND DOES NOT SPEND IT. The rating is DERIVED and REPORTED and
+// FEEDS NOTHING: no demand, no arrivals, no pricing, no review… while the rating buys nothing, a
+// facility is still a pure cost and ADR-0078's dominance still stands."~~ **STRUCK AT G-051b,
+// WHICH IS THE GOAL THAT SENTENCE NAMED.** The rating now FEEDS ARRIVALS: `runDemand` (tick.ts)
+// calls `starRatingIn` below every demand slot and `partiesPerDayAt` turns the answer into
+// parties. NO PRICE, NO REVIEW AND NO NEED READS IT, and that half of the list stands.
+//
+// ADR-0078's DOMINANCE IS REMOVED, AND IT IS AN INTEGER RATHER THAN A CLAIM. Three arms one
+// change apart, `--days 30 --seed 42 --rooms 12 --amenities 2 --facilities 0|1`, one CLI run
+// each, no aggregation, win32/12cpu quiet: three facility rooms take the rating 3 -> 4, arrivals
+// 240 -> 480 and revenue 1,972,000p -> 3,944,000p. The control builds the same rooms with
+// arrivals PINNED at the three-star rate (`--arrivals 240`) and its revenue does not move by one
+// penny while its balance falls 195,000p — so the facility is still a pure cost and the GAIN IS
+// THE RATING'S.
+//
+// AND THE HONEST QUALIFICATION IS NOW THE OTHER WAY ROUND: a rating that buys arrivals can buy
+// arrivals a hotel cannot SERVE. Taking the FIFTH star at two sets of amenities doubles demand
+// into a building whose amenity capacity the ladder never asked to scale, and LOSES MONEY —
+// `--days 365 --seed 42 --amenities 2 --facilities 1 --demand`, one bedroom apart, 23 rooms
+// gives 49,504,000p and 24 rooms gives 47,846,500p with 6,026 disappointed departures where
+// there were none. `demand.report.test.ts` pins it and G-060 owns it.
 //
 // ------------------------------------------------------------------------------------------
 // DERIVED, NEVER STORED, AND THE PRECEDENT IS I4's.
@@ -221,10 +235,31 @@ export function starRatingOf(
   stairs: Stairs,
   content: BoundContent,
 ): StarRating {
-  const ctx = createValidityContext(content, bounds, corridors, stairs, storeEntities(entities));
+  return starRatingIn(createValidityContext(content, bounds, corridors, stairs, storeEntities(entities)));
+}
+
+/**
+ * The same verdict, against a validity context the CALLER already holds (G-051b).
+ *
+ * WHY THE SPLIT EXISTS, AND IT IS I5's QUESTION RATHER THAN A TIDINESS ONE. `starRatingOf` builds
+ * a context per call, which is right for a report that asks once and wrong for a TICK that asks
+ * every day: the tick already resolves a `ValidityContext` for the guest loop, and G-010's
+ * `ValidityCache` keeps that context alive across every tick that changed no entity. Asking
+ * through the tick's own context means the valid-room walk is the one the guest loop was going to
+ * do anyway, memoised on `ctx`, rather than a second walk of the same building.
+ *
+ * IT IS A MEMO OUTSIDE STATE, WHICH IS THE ONLY KIND THIS PROJECT ALLOWS. The context is not on
+ * `World`, is not hashed and is not saved, and a run with `cache: null` produces a byte-identical
+ * state hash to a run with one — `validity.ts` owns that proof. So this reads I4's rule the way
+ * `CLAUDE.md` writes it: if the fold becomes a performance problem, memoise it OUTSIDE state.
+ *
+ * NOTHING IS CACHED HERE. The tally is rebuilt on every call; what is amortised is the walk
+ * underneath it, and that is `validRoomsOf`'s memo rather than this function's.
+ */
+export function starRatingIn(ctx: ValidityContext): StarRating {
   const tally = tallyValidRooms(ctx);
   let stars = UNRATED;
-  for (const tier of starTiersInOrder(content)) {
+  for (const tier of starTiersInOrder(ctx.content)) {
     const shortfall = shortfallOf(tier, tally);
     if (shortfall.length > 0) return { stars, nextStars: tier.stars, shortfall };
     stars = tier.stars;

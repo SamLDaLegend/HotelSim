@@ -1273,9 +1273,21 @@ export function recordNeedsAtDeparture(
  *
  * IT IS A CONSERVATIVE GAP AND IT IS THE SAME DIRECTION AS BEFORE: `metByItem` UNDER-counts, so
  * `metByItem <= met` holds and the by-room column absorbs the difference. What is no longer true
- * is that the gap is unreachable — it is reachable, it is small, and it belongs to the lodging
- * row rather than to an engagement one. `needs.scorer.test.ts` drives the pair it can drive and
- * says which half is structural.
+ * is that the gap is unreachable — it is reachable and it is small. `needs.scorer.test.ts`
+ * drives the pair it can drive and says which half is structural.
+ *
+ * ~~"AND IT BELONGS TO THE LODGING ROW RATHER THAN TO AN ENGAGEMENT ONE."~~ **STRUCK AT G-051b,
+ * MEASURED FALSE.** It reaches an ENGAGEMENT row by a second route the sentence did not
+ * consider: a guest whose stay ENDS BEFORE ANYTHING SERVES A NEED is trivially in that need's
+ * top band, so the row counts into `met` with `metBy` still `null`. The reproduction is one
+ * command — `--days 5 --seed 42 --rooms 24 --amenities 1 --demolish 2880 --demand` — and it
+ * gives 4 `evictedRoomGone` departures and `guest_comfort` at met 32 / metByItem 31 under
+ * content where NO ROOM PROVIDES COMFORT.
+ *
+ * THE COST OF THE FALSE CLAUSE WAS A LAW IN `report.ts` THAT RESTED ON IT: *"no room type
+ * provides it => met - metByItem MUST be 0"*, which is struck in the same commit. The repair
+ * that would restore it is a THIRD counter here — `metByNothing` — and that is a `World` field,
+ * a save bump and a migration, so it is parked rather than taken inside a goal about demand.
  */
 function byItem(need: NeedState, met: boolean): number {
   return met && need.metBy === 'item' ? 1 : 0;

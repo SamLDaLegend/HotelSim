@@ -321,8 +321,9 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     // **WHAT IS NOT DONE HERE, DELIBERATELY.** The rule is not repaired — that changes the
     // amenity count of every rung and re-provisions the whole ladder, which is a re-derivation
     // of this file's subject and is G-043's to make. The dial is not tuned either: the mix is a
-    // design number, demand is M4's, and tuning content until a ladder behaves is exactly what
-    // section 9 makes a stop condition. What this goal owes is the numbers, and they are here.
+    // design number, demand is a TABLE OF ITS OWN (`demand.json`, G-051b, and it was "demand is M4's" until then), and tuning content until a
+    // ladder behaves is exactly what section 9 makes a stop condition. **The deferral died at
+    // G-051b and the argument did not.** What this goal owes is the numbers, and they are here.
     // ==========================================================================================
     // ==========================================================================================
     // **G-043 — THE RULE IS REPAIRED, AND THE FINDING IS DISCHARGED AT THE TOP RUNG ON EVERY

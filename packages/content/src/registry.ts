@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import {
+  demandTableSchema,
   economiesSchema,
   guestRulesTableSchema,
   itemTypesSchema,
@@ -22,6 +23,7 @@ import {
   starTiersSchema,
 } from './schema.js';
 import type {
+  Demand,
   Economy,
   GuestRules,
   ItemType,
@@ -113,6 +115,18 @@ export type ContentRegistry = {
    * — rather than as a hotel that failed an inspection, because no inspection exists to fail.
    */
   readonly starTiers?: readonly StarTier[];
+  /**
+   * HOW MANY PARTIES A DAY A HOTEL OF EACH RATING EARNS (G-051b) — the demand curve.
+   *
+   * Optional for the same absence-is-not-emptiness reason every table above it is, and the
+   * historical statement is the sharpest of the set: content that predates this table describes
+   * a world in which the HOST decided who turned up, which is exactly what every world before
+   * G-051b was. Such a world still runs — the simulation generates no arrival of its own and the
+   * command log remains the whole story of who walked in — and that is not a degraded mode, it
+   * is the LABORATORY CLAMP every measured arm in this project is defined by (see
+   * `content-loader.ts`'s `Market`).
+   */
+  readonly demand?: readonly Demand[];
 };
 
 /**
@@ -368,6 +382,36 @@ ${z.prettifyError(result.error)}`);
   }
   assertUniqueIds(result.data, 'star tier');
   return result.data;
+}
+
+/**
+ * Validate an already-parsed demand document (G-051b). Same all-or-nothing discipline, and a
+ * table rather than a registry for the same reason: one file is one table.
+ *
+ * What it does NOT check is the relationship that decides whether the curve means anything —
+ * that it covers every rating THIS content's ladder can award. That reads two files against
+ * each other, so it lives where every other cross-table check lives:
+ * `assertDemandCoversTheLadder` in `bindContent`, the one path every host goes through.
+ */
+export function parseDemand(raw: unknown, sourceLabel = 'content'): readonly Demand[] {
+  const result = demandTableSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:
+${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'demand');
+  return result.data;
+}
+
+/** Validate a demand JSON document. "Not JSON" and "not content" stay apart. */
+export function parseDemandJson(text: string, sourceLabel = 'content'): readonly Demand[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseDemand(raw, sourceLabel);
 }
 
 /** Validate a star-tier JSON document. "Not JSON" and "not content" stay apart. */

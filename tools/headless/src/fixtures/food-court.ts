@@ -214,6 +214,30 @@ export const FOOD_COURT_STAR_TIERS = [
 ] as const;
 
 /**
+ * WHAT A FOOD COURT'S RATING EARNS IT (G-051b). The table is required of a `--content` directory,
+ * so this fixture declares one — and it declares the curve a LODGING-FREE content set can
+ * honestly carry, which is ZERO AT BOTH RATINGS.
+ *
+ * IT IS NOT A SHRUG AND IT IS NOT A DISABLED FEATURE. `demandAt` is read by `runDemand`, which
+ * puts parties in the lobby; a party here forms a VISITOR's need vector (ADR-0017 §5), books no
+ * room and pays nothing, so any positive number would add unpayable footfall to a fixture whose
+ * whole job is to pin a NEED shape at an exact cadence. The fixture's arrivals are COMMANDED, by
+ * the harness, at the tick the harness chooses — which is what every test using it measures.
+ *
+ * TWO ENTRIES BECAUSE THE LADDER AWARDS ONE STAR: `assertDemandCoversTheLadder` requires an entry
+ * for every rating, and the ratings here are UNRATED and one. A shorter curve is refused, which
+ * is the cross-table check working in the admissible direction exactly as the tier table above
+ * demonstrates `assertStarTierRoomTypesExist`.
+ */
+export const FOOD_COURT_DEMAND = [
+  {
+    id: 'food_court_demand',
+    name: 'Food Court Demand',
+    partiesPerDayByStars: [0, 0],
+  },
+] as const;
+
+/**
  * The visit duration, derived. See `visitDurationTicksSchema` for the full working; the short
  * form is that a visitor arrives with every need at its want line and is served one at a time:
  *
@@ -280,5 +304,6 @@ export function writeFoodCourtContentDir(): string {
   write('scenarios.json', FOOD_COURT_SCENARIOS);
   write('staff-roles.json', FOOD_COURT_STAFF_ROLES);
   write('star-tiers.json', FOOD_COURT_STAR_TIERS);
+  write('demand.json', FOOD_COURT_DEMAND);
   return dir;
 }

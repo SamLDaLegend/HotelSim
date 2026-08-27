@@ -80,7 +80,6 @@ import {
   requiredItemsOf,
   reviewCountOf,
   reviewScaleOf,
-  roomTypeProvides,
   roomTypeServes,
   stockValueOf,
   sumByReason,
@@ -93,16 +92,30 @@ import { entitiesInOrder, GROUND_FLOOR, isRoomKind } from '@hotelsim/sim';
 // derivation, called rather than reproduced: a report that re-implemented the scan would be a
 // second definition of what a star is, and the two would drift on the first content edit.
 import { starRatingOf, starTiersInOrder } from '@hotelsim/sim';
+// G-051b — the demand curve, read through the sim's own accessor for `starRatingOf`'s reason
+// exactly: a report that re-indexed the array would be a second definition of what a rating
+// earns. `Market` is a HOST type and comes from the loader, not from the simulation (ADR-0001).
+import { partiesPerDayAt } from '@hotelsim/sim';
+import type { Market } from './content-loader.js';
 import type { BoundContent, Cell, GridBounds, RoomTypeData, ScheduledCommand, World } from '@hotelsim/sim';
 
 /**
  * The hotel this runner simulates, until there is a way to build one.
  *
  * Build and demolish commands are M1, so the host seeds a fixed stock of rooms at tick
- * 0 with the `spawnEntity` command that already exists. Arrival RATE is demand, and
- * demand is M4 — a fixed cadence stands in for it, which is why `--seed` does not yet
- * change who turns up (see the seed-honesty test in cli.stdout.test.ts, which pins
- * that sentence as a measured fact until M4 retires it).
+ * 0 with the `spawnEntity` command that already exists.
+ *
+ * ~~"Arrival RATE is demand, and demand is M4 — a fixed cadence stands in for it."~~ STRUCK AT
+ * G-051b, AND THE CORRECT SENTENCE IS 1,150 LINES DOWN ON `Options.arrivalEveryTicks`: **it was
+ * the world and it is now a CLAMP.** Demand shipped; a fixed cadence is no longer a stand-in for
+ * something missing, it is an instrument that holds arrivals constant so everything else can be
+ * measured against them, and `--demand` releases it.
+ *
+ * THE OTHER HALF OF THAT SENTENCE IS STILL TRUE AND IS KEPT, WHICH IS WHY THIS IS A REWRITE AND
+ * NOT A DELETION: **`--seed` still does not change who turns up**, under EITHER regime, because
+ * `demand.ts` draws nothing. The seed-honesty test in cli.stdout.test.ts still pins it as a
+ * measured fact — what has gone is the clause saying M4 would retire it. M4 arrived and did
+ * not.
  *
  * The two numbers are deliberately out of balance: 12 guests a day against 9 stays the
  * hotel can serve, so a 30-day run demonstrates BOTH halves of "has it met or not". A
@@ -163,6 +176,17 @@ export const HOTEL_FACILITIES = 0;
  * measurement of the same workload it has always measured.
  */
 export const BUILD_OFF = 0;
+
+/**
+ * `--demand`'s value for `arrivalEveryTicks`: the host issues NO arrivals (G-051b).
+ *
+ * A SEPARATE NAME FROM `BUILD_OFF` DESPITE BEING THE SAME INTEGER, because the two mean
+ * different things and `--arrivals 0` is REFUSED where `--build 0` is the default. Zero is not a
+ * cadence a caller may ask for here — it is the step of a schedule loop, and a step of zero is an
+ * infinite loop — so it is reachable only from inside `parseArgs`, where it means "somebody else
+ * is deciding who turns up". Sharing `BUILD_OFF`'s name would put those two facts under one word.
+ */
+export const ARRIVALS_OFF = 0;
 
 /**
  * `--loan` is OFF by default too (G-011), for the reason `--build` is: the default run is
@@ -1236,7 +1260,25 @@ export type Options = {
    * would seed three rooms nobody asked for into every arm this project has ever measured.
    */
   readonly facilities: number;
+  /**
+   * Ticks between HOST-ISSUED arrivals. `ARRIVALS_OFF` (0) means the host issues none, which is
+   * what `--demand` sets it to.
+   *
+   * IT WAS THE WORLD AND IT IS NOW A CLAMP (G-051b). Until this goal it was the only source of
+   * arrivals, so it did not look like an instrument — it looked like demand. It is the same
+   * number doing the same thing; what changed is that there is now something else it can be
+   * held constant AGAINST. See `market`.
+   */
   readonly arrivalEveryTicks: number;
+  /**
+   * WHO DECIDES WHO TURNS UP (G-051b) — `'commanded'` by default, `'byDemand'` under `--demand`.
+   *
+   * It is passed to `loadContent`, which withholds or injects the demand curve accordingly, so
+   * the switch is a HOST decision about what content the simulation is handed and never a
+   * parameter of the simulation itself (ADR-0001). Under `'commanded'` the injected content is
+   * byte-identical to what every arm before this goal was handed, fingerprint included.
+   */
+  readonly market: Market;
   /** Ticks between player build attempts. `BUILD_OFF` (0) means the player never builds. */
   readonly buildEveryTicks: number;
   /** Ticks between player demolitions. `BUILD_OFF` (0) means the player never demolishes. */
@@ -1288,6 +1330,9 @@ export function parseArgs(argv: readonly string[]): Options {
   let amenities = HOTEL_AMENITIES;
   let facilities = HOTEL_FACILITIES;
   let arrivalEveryTicks = TICKS_BETWEEN_ARRIVALS;
+  let market: Market = 'commanded';
+  /** Whether `--arrivals` was PASSED, which is not the same question as its value. */
+  let arrivalsSeen = false;
   let buildEveryTicks = BUILD_OFF;
   let demolishEveryTicks = BUILD_OFF;
   let loanEveryTicks = BUILD_OFF;
@@ -1345,7 +1390,9 @@ export function parseArgs(argv: readonly string[]): Options {
       case '--arrivals':
         // 0 is NOT legal here: it is the step of the schedule loop, and a step of
         // zero is an infinite loop, not a quiet hotel. (No arrivals = --rooms 0's
-        // opposite: pass a cadence longer than the run.)
+        // opposite: pass a cadence longer than the run.) `--demand` sets the field to
+        // `ARRIVALS_OFF` internally, which is a different thing from a caller asking for it.
+        arrivalsSeen = true;
         arrivalEveryTicks = requireNumber('--arrivals', argv[i + 1]);
         if (arrivalEveryTicks < 1) {
           throw new Error(`--arrivals requires a positive number of ticks, got "${String(argv[i + 1])}"`);
@@ -1406,6 +1453,14 @@ export function parseArgs(argv: readonly string[]): Options {
         }
         i += 1;
         break;
+      case '--demand':
+        // THE CLAMP COMES OFF (G-051b). The hotel earns its own arrivals from its star rating,
+        // and the host issues none — which is not a third mode, it is the absence of the
+        // second. A run in which BOTH sources fire measures neither, so `--arrivals` and this
+        // flag are refused together below.
+        market = 'byDemand';
+        arrivalEveryTicks = ARRIVALS_OFF;
+        break;
       case '--quiet':
         quiet = true;
         break;
@@ -1433,6 +1488,20 @@ export function parseArgs(argv: readonly string[]): Options {
   //
   // The lesson generalises past this line: a guard on "did the caller ask for this?"
   // cannot be written as a test on the answer, because the default is a legal answer.
+  // TWO SOURCES OF ARRIVALS MEASURE NEITHER (G-051b). `--demand` hands the decision to the
+  // hotel; `--arrivals` holds it fixed so everything else can be measured against an unchanging
+  // stream. A run with both would attribute the sum to whichever the reader had in mind.
+  //
+  // IT TESTS WHETHER THE FLAG WAS SEEN, NOT WHAT IT PRODUCED — `--record-every`'s lesson a few
+  // lines down, and the reason is identical: `--demand` sets `arrivalEveryTicks` itself, so a
+  // guard written against the VALUE would fire on every `--demand` run.
+  if (market === 'byDemand' && arrivalsSeen) {
+    throw new Error(
+      'Pass either --demand or --arrivals, not both: --arrivals is the laboratory clamp that holds ' +
+        'the arrival stream fixed, and --demand is the hotel deciding it. A run with both sources ' +
+        'firing is a measurement of neither.',
+    );
+  }
   if (record === undefined && recordEverySeen) {
     throw new Error('--record-every needs --record: there is nothing to sample without a path to write frames to');
   }
@@ -1445,6 +1514,7 @@ export function parseArgs(argv: readonly string[]): Options {
     amenities,
     facilities,
     arrivalEveryTicks,
+    market,
     buildEveryTicks,
     demolishEveryTicks,
     loanEveryTicks,
@@ -1654,8 +1724,13 @@ export function schedule(
   for (const facility of facilityRoomTypesOf(content)) {
     for (let i = 0; i < facilities; i += 1) seedRoom(facility.id, true);
   }
-  for (let tick = 1; tick < ticks; tick += arrivalEveryTicks) {
-    commands.push({ tick, command: { kind: 'guestArrives' } });
+  // THE HOST'S ARRIVALS — the laboratory clamp (G-051b). `ARRIVALS_OFF` means somebody else is
+  // deciding who turns up, which today is the hotel's own rating under `--demand`; the guard is
+  // what stops a step of zero being an infinite loop rather than a quiet hotel.
+  if (arrivalEveryTicks > ARRIVALS_OFF) {
+    for (let tick = 1; tick < ticks; tick += arrivalEveryTicks) {
+      commands.push({ tick, command: { kind: 'guestArrives' } });
+    }
   }
   // THE PLAYER BUILDS (G-008). The walk continues from where `--rooms` stopped, so a built
   // room never lands on an inherited one. Early attempts are refused — the hotel opens with
@@ -1877,6 +1952,17 @@ export type RunSummary = {
     readonly amenities: number;
     readonly facilities: number;
     readonly arrivalEveryTicks: number;
+    /**
+     * WHO DECIDED WHO TURNED UP (G-051b): `'commanded'` or `'byDemand'`. An ADDITIVE key, so
+     * `SUMMARY_SCHEMA_VERSION` does NOT move.
+     *
+     * IT IS THE REGIME SLOT OF EVERY ARRIVAL FIGURE IN THIS DOCUMENT (`CLAUDE.md` rule 4, fifth
+     * slot). Two runs with the same `arrivalEveryTicks` and different `market` values are two
+     * different experiments, and before this key the document could not say which one it was.
+     * `arrivalEveryTicks` reads 0 under `'byDemand'` — the host issued none — so the pair is
+     * readable without knowing the flag that produced it.
+     */
+    readonly market: string;
     readonly buildEveryTicks: number;
     readonly demolishEveryTicks: number;
     readonly loanEveryTicks: number;
@@ -2078,9 +2164,11 @@ export type RunSummary = {
    * save and none in `World`; see the header of `rating.ts` for why a stored one would be a
    * cache that can disagree with the hotel.
    *
-   * IT FEEDS NOTHING. No arrival, no price, no review and no need reads it — inside the
-   * simulation or out — and this document is the only place it appears. That is G-051a's
-   * boundary; wiring it to demand is G-051b's.
+   * ~~IT FEEDS NOTHING.~~ **IT FEEDS ARRIVALS (G-051b).** That sentence read *"no arrival, no
+   * price, no review and no need reads it — inside the simulation or out"* for exactly one goal,
+   * and the first half of it is now false: `runDemand` derives this same rating every demand
+   * window and puts the parties it earns in the lobby. Price, review and need still do not read
+   * it. `partiesPerDay` below is the number that closes the loop.
    */
   readonly rating: {
     /** Stars awarded, or 0 for an UNRATED hotel — one nobody has inspected. */
@@ -2103,6 +2191,25 @@ export type RunSummary = {
       readonly minimum: number;
       readonly have: number;
     }[];
+    /**
+     * WHAT THIS RATING ACTUALLY EARNED THIS HOTEL, in parties a day (G-051b). An ADDITIVE key,
+     * so `SUMMARY_SCHEMA_VERSION` does NOT move.
+     *
+     * IT IS WHAT HAPPENED AND NOT WHAT WOULD HAVE HAPPENED, AND THAT IS THE DECISION WORTH
+     * STATING BECAUSE THE OTHER ONE WAS AVAILABLE AND IS WORSE. Under `--arrivals` the
+     * simulation is handed no demand curve, so this reads ZERO — the hotel's rating bought it
+     * nothing, because nothing was reading its rating. Reporting the COUNTERFACTUAL instead
+     * ("what three stars would have been worth") would mean this report reading a content table
+     * the simulation never saw, which is a second source of truth one content edit away from
+     * disagreeing with the first. `starRatingOf` is called rather than reproduced for exactly
+     * that reason, one field up.
+     *
+     * SO A ZERO HERE HAS TWO CAUSES AND `input.market` SEPARATES THEM: `'commanded'` means
+     * nobody was asking, `'byDemand'` means this rating genuinely earns nothing — which on the
+     * shipped curve is true of an UNRATED hotel, one with no valid bedroom for a guest to sleep
+     * in. Both are real states and a reader must not have to guess which one produced a run.
+     */
+    readonly partiesPerDay: number;
   };
   readonly money: {
     readonly transactions: number;
@@ -2473,6 +2580,7 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       // document consumers already read.
       facilities: options.facilities,
       arrivalEveryTicks: options.arrivalEveryTicks,
+      market: options.market,
       buildEveryTicks: options.buildEveryTicks,
       demolishEveryTicks: options.demolishEveryTicks,
       loanEveryTicks: options.loanEveryTicks,
@@ -2539,6 +2647,10 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         minimum: clause.minimum,
         have: clause.have,
       })),
+      // THE SIM'S OWN ACCESSOR, not an index into the array — `starRatingOf`'s reason one field
+      // over. A report that re-indexed the curve would be a second definition of what a rating
+      // earns, and the two would disagree the first time a bind-time rule changed.
+      partiesPerDay: partiesPerDayAt(content, rating.stars),
     },
     money: {
       transactions: world.ledger.length,
@@ -2690,28 +2802,80 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   //
   // Content pins the attribution outright for any need with a single KIND of provider:
   //
-  //     no room type provides it  =>  met - metByItem MUST be 0
-  //     no item type provides it  =>  metByItem       MUST be 0
+  //     no room type provides it  =>  met - metByItem MUST be 0     <- ~~FALSE~~, STRUCK BELOW
+  //     no item type provides it  =>  metByItem       MUST be 0     <- sound, and still checked
   //
-  // Neither is an identity over the two stored numbers. Each cross-references the tally
-  // against a SEPARATE INPUT — `roomTypeProvides` / `itemTypeProvides` — which is exactly
-  // what the deleted check lacked, and it is the same shape as the law nine lines above:
-  // `met + unmet === departed` is equally "a property of the code" and is checked anyway,
-  // because a departure path that forgot to record would leave every other number here
-  // perfectly consistent.
+  // The surviving law is not an identity over the two stored numbers. It cross-references the
+  // tally against a SEPARATE INPUT — `itemTypeProvides` — which is exactly what the deleted
+  // round-1 check lacked, and it is the same shape as the law nine lines above: `met + unmet ===
+  // departed` is equally "a property of the code" and is checked anyway, because a departure
+  // path that forgot to record would leave every other number here perfectly consistent.
   //
-  // IT FIRES IN BOTH DIRECTIONS, measured on the shipped table: attributing everything to a
-  // room names `guest_comfort` (item-only), attributing everything to an item names
-  // `guest_entertainment` and `night_rest` (room-only). Three of the four shipped rows are
-  // pinned; `guest_nourishment` has both kinds of provider and is the one this cannot
-  // speak for, which is honest rather than a gap — nothing in content decides its split.
+  // ==========================================================================================
+  // THE ROOM HALF WAS STRUCK AT G-051b BECAUSE IT ASSERTED SOMETHING FALSE, AND THE SENTENCE
+  // THAT FALSIFIES IT HAS BEEN IN `needs.ts` SINCE G-028b.
+  //
+  // `byItem`'s own docblock, on the function that produces `metByItem`:
+  //
+  //     "So a row can count into `met` and into the derived BY-ROOM column having been served
+  //      by no room at all. ... IT IS A CONSERVATIVE GAP: `metByItem` UNDER-counts."
+  //
+  // `met` stopped meaning "above the want line at departure" and started meaning "the top
+  // per-need BAND over the whole stay" (ADR-0037). A guest whose stay ENDS BEFORE ANYTHING
+  // SERVED A NEED is trivially in that need's top band, so it counts into `met` with `metBy`
+  // still `null` — and `met - metByItem` therefore counts SERVED-BY-A-ROOM **plus**
+  // NEVER-SERVED-AT-ALL. The law above reads the sum as the first term alone.
+  //
+  // NOBODY PROPAGATED THE CHANGE TO THIS FILE. The law and the paragraph that falsifies it have
+  // sat in the tree together for goals — ADR-0084's class exactly, a correctly-written claim
+  // that stopped being true when something else moved. `byItem`'s paragraph also said the gap
+  // "belongs to the lodging row rather than to an engagement one"; THAT CLAUSE IS FALSIFIED TOO
+  // and is corrected in place.
+  //
+  // THE ARM THAT REACHES IT, WITH ITS FIVE SLOTS. What is needed is a guest EVICTED almost
+  // immediately after arriving, before an arm chair ever served its `guest_comfort` — and no
+  // COMMANDED schedule this runner can write produces one, because `schedule` starts both its
+  // arrival walk and its demolition walk at `BUILD_START_TICK` and commands apply in log order,
+  // so an arriving party always claims its room AFTER the same tick's demolition. Demand puts a
+  // party in the lobby at tick 0 of a day, one tick BEFORE the demolition at tick 1.
+  //
+  //     node --import tsx tools/headless/src/cli.ts --days 5 --seed 42 --rooms 24
+  //       --amenities 1 --demolish 2880 --demand
+  //
+  // one run, exact deterministic integers, no aggregation, win32/12cpu quiet: 40 arrived, 28
+  // checked out, **4 evictedRoomGone**, `guest_comfort` met 32 / metByItem 31 — one instance
+  // attributed by-room under content where NO ROOM PROVIDES COMFORT. The commanded twin
+  // (`--arrivals 240`, everything else identical) gives 30 / **2 evictions** / metByItem 32 and
+  // is silent. Seven seeds x four demolition cadences of commanded arms: no reproduction.
+  //
+  // WHAT IS LOST, STATED NARROWLY SO THE SILENCE IS NOT READ AS COVERAGE (ADR-0086). The
+  // round-2 note said this fired IN BOTH DIRECTIONS: "attributing everything to a room names
+  // `guest_comfort` (item-only), attributing everything to an item names `guest_entertainment`
+  // and `night_rest` (room-only)." **ONLY THE SECOND DIRECTION SURVIVES.** A build that
+  // attributed an item-served need to a ROOM is now caught by nothing in this report.
+  //
+  // WHY IT IS NOT REPAIRED HERE RATHER THAN STRUCK. The repair is a THIRD counter —
+  // `metByNothing` on `NeedOutcomeRow` — which is a `World` field, and therefore a save bump, a
+  // migration, a `without-*` stripper and a v1-fixture round trip (ADR-0006). That is a goal,
+  // not a footnote inside one about demand, and taking it here would mean this goal's save
+  // version moved for a reason that has nothing to do with demand. Parked WITH ITS TEST, and
+  // the test has been RUN rather than merely written down (ADR-0102 amendment 2's lesson):
+  // the invocation above is the reproduction and it is positive today.
+  //
+  // `guest_nourishment` has both kinds of provider and was never pinned by either half, which
+  // is honest rather than a gap — nothing in content decides its split.
+  // ==========================================================================================
   //
   // WHY IT CANNOT FIRE ON A LEGITIMATELY MIGRATED WORLD. A v6 save's `metBy` is all
   // `'room'`, and v6-era content had no `provides` on any item — so its content fingerprint
   // differs from any content that has one, and `beginTick` refuses to tick such a world at
   // all (G-002). A world that can run under this content was attributed under this content.
-  const providedByAnyRoomType = (needId: string): boolean =>
-    content.content.roomTypes.some((roomType) => roomTypeProvides(content, roomType.id, needId));
+  // `providedByAnyRoomType` STOOD HERE and is gone with the law it served, taking the
+  // `roomTypeProvides` import with it — this file's ONLY reader of that accessor was the struck
+  // law, which `typecheck` said out loud the moment the helper went. (The first spelling of this
+  // comment claimed the import was still used elsewhere here. It was not: `roomTypeServes` is a
+  // different accessor and is what `amenityRoomTypesOf` calls. Corrected rather than left,
+  // because an unchecked claim about the tree is the exact class the strike above is about.)
   const providedByAnyItemType = (needId: string): boolean =>
     (content.content.itemTypes ?? []).some((itemType) => itemTypeProvides(content, itemType.id, needId));
 
@@ -2760,14 +2924,6 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         `Need accounting broken at tick ${world.tick}: need "${row.needId}" records ${row.met} met and ` +
           `${row.unmet} unmet, which is ${row.met + row.unmet} instances against ${departed} departed guest(s). ` +
           'Every guest forms one instance of every need and resolves it exactly once, on the way out (G-012).',
-      );
-    }
-    const metByRoom = row.met - row.metByItem;
-    if (metByRoom > 0 && !providedByAnyRoomType(row.needId)) {
-      violations.push(
-        `Need attribution broken at tick ${world.tick}: need "${row.needId}" records ${metByRoom} satisfaction(s) ` +
-          'delivered by a room, but NO ROOM TYPE in this content provides it — only an item can have served it ' +
-          '(G-013).',
       );
     }
     if (row.metByItem > 0 && !providedByAnyItemType(row.needId)) {
@@ -3151,6 +3307,15 @@ export function renderText(summary: RunSummary): string {
         `to climb    ${clause.have}/${clause.minimum} ${clause.counting} of ` +
         `[${clause.roomTypeIds.join(', ')}]`,
     ),
+    // WHAT THE RATING EARNED, AND WHO WAS DECIDING (G-051b). Two facts on one line because they
+    // are unreadable apart: `0 parties/day` at three stars means one thing when the hotel was
+    // earning its own guests and quite another when a harness was supplying them. Naming the
+    // regime in the OUTPUT rather than leaving it in the invocation is what lets a summary
+    // pasted into a ledger carry its own regime slot (`CLAUDE.md` rule 4).
+    `demand      ${summary.rating.partiesPerDay} parties/day at ${summary.rating.stars} stars` +
+      (summary.input.market === 'byDemand'
+        ? ', earned by the hotel'
+        : `, CLAMPED — arrivals commanded every ${summary.input.arrivalEveryTicks} ticks`),
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,
     `upkeep      ${summary.money.upkeepPennies}p`,

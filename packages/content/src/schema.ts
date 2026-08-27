@@ -1675,7 +1675,10 @@ export const maxPartySizeSchema = z.int().min(1).optional();
  *
  * A designer picking weights must read the cycle rather than the ratio. `partySizeOf` in
  * `packages/sim/src/content.ts` is the walk, and its cases pin both examples above. Party
- * formation becomes a draw when demand does, which is M4.
+ * formation is a walk and not a draw. (This read "party formation becomes a draw when demand
+ * does, which is M4" until G-051b. **Demand shipped and it is not a draw either** — `demand.ts`
+ * is integer arithmetic on the tick counter, so the event this sentence deferred to has happened
+ * and changed nothing here. Whether party size should become a draw is now its own question.)
  * ---------------------------------------------------------------------------
  *
  * THE LARGEST PARTY IS THE TABLE'S LENGTH, and `bindContent` derives `maxPartySize` from it
@@ -2537,6 +2540,84 @@ export const starTiersSchema = z
   });
 
 /**
+ * HOW MANY PARTIES A DAY A HOTEL OF THIS RATING EARNS (G-051b) — the demand curve.
+ *
+ * ==========================================================================================
+ * THIS TABLE IS **DERIVED**, AND IT IS THE ONE NUMBER IN THIS FILE THAT IS. Read
+ * `starsSchema` above first: everything in `star-tiers.json` is a DESIGN STATEMENT, because
+ * there is no requirement above it to derive it from. This table is the opposite case, and
+ * saying which is which at the point of use is ADR-0102 §1's whole rule.
+ *
+ * THE STATED REQUIREMENT, in one sentence:
+ *
+ *     *A hotel that meets a tier's own requirements can FILL THE BEDROOMS THAT TIER ASKS FOR.*
+ *
+ * That sentence forces every value in the shipped curve, given two facts about the rest of
+ * the content:
+ *
+ *   1. each star tier's lodging clause names a bedroom minimum — 1, 3, 6, 12, 24 on the
+ *      shipped ladder (`star-tiers.json`);
+ *   2. a bedroom serves exactly `TICKS_PER_DAY / stayDurationTicks` parties a day, and
+ *      `guest-rules.json` declares a stay of 1,440 ticks against a 1,440-tick day, so on
+ *      shipped content that factor is exactly ONE. A lodging room is claimed by one PARTY
+ *      and not by `capacity` strangers, which is `provisioning.ts`'s measured finding.
+ *
+ *   partiesPerDayByStars[r] = bedroomMinimum(the tier awarding r) x TICKS_PER_DAY / stayDurationTicks
+ *
+ * so the shipped curve is [0, 1, 3, 6, 12, 24] and NOT ONE OF THOSE SIX NUMBERS WAS CHOSEN.
+ * `demand.report.test.ts` recomputes the whole array from `star-tiers.json` and
+ * `guest-rules.json` and fails if this file disagrees — so a designer who retunes the ladder
+ * is told, by a red test, that the demand curve is now a claim nothing supports. That is
+ * exactly the arrangement §2.1.2 records for I5's budget: a JSON-only retune re-derives the
+ * number and reddens the places that quote it, which is the ADR-0007 machinery working.
+ *
+ * THE ZERO IS DERIVED TOO, AND FROM A PROPERTY OF THE SHIPPED LADDER RATHER THAN OF ALL
+ * LADDERS: the first tier asks for one VALID bedroom, so an UNRATED hotel has nowhere for a
+ * guest to sleep and every arrival it received would be turned away unpaid. Sending guests to
+ * a hotel that cannot house them is the arrival the loop has no use for. A ladder whose first
+ * tier asked for something else would re-derive this entry with the rest.
+ *
+ * THE HEADROOM MULTIPLE IS **1.0, AND THAT ONE IS A DESIGN STATEMENT** — the only one in this
+ * table. Demand could have been derived at, say, 1.25x the bedroom minimum so that a room
+ * emptying at an awkward moment is refilled at once. It is not: the curve asks for exactly the
+ * capacity the tier declares, so an occasional empty bedroom is a true statement about timing
+ * rather than a number smoothed away. MEASURED rather than asserted, `--days 30 --seed 42`,
+ * one run per rung, no aggregation, win32/12cpu quiet: 232 of 240 arrivals housed at three
+ * stars, 464 of 480 at four, 928 of 960 at five — 96.7%, 96.7%, 96.7%. The requirement is met
+ * at a multiple of one and the remaining 3.3% is the walk to the room.
+ * ==========================================================================================
+ *
+ * STRUCTURAL `min(1)` ON THE ARRAY: a curve with no entries cannot answer for the unrated
+ * hotel, which is the one rating EVERY ladder can award. That is a vacuity, not a taste.
+ *
+ * WHAT THIS SCHEMA CANNOT CHECK, and it is the relationship that decides whether the table
+ * means anything: that the curve covers every rating THIS content's ladder can award. That
+ * reads two files against each other, so it lives where every other cross-table check lives —
+ * `assertDemandCoversTheLadder` in `bindContent`, the one path every host goes through
+ * (`parseStarTiers` says the same thing about `roomTypeIds`).
+ */
+export const partiesPerDaySchema = z.int().min(0);
+
+/**
+ * THE DEMAND CURVE (G-051b). One row, reached by iteration and never by name, for
+ * `starTierSchema`'s two mechanical reasons: `check:content` wants an `id`, and no snake_case
+ * literal may enter `packages/sim` (ADR-0003).
+ *
+ * `partiesPerDayByStars[r]` is the demand of a hotel rated `r` stars. INDEXED BY THE RATING
+ * ITSELF rather than paired with a tier id, because index 0 — the unrated hotel — belongs to
+ * no tier and `starsSchema` refuses a tier that awards zero. A table of {tierId, parties}
+ * rows could not express the entry that matters most at the start of a game.
+ */
+export const demandSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  partiesPerDayByStars: z.array(partiesPerDaySchema).min(1),
+});
+
+/** The whole `demand.json` document. A top-level array, for the reason every table is. */
+export const demandTableSchema = z.array(demandSchema).min(1);
+
+/**
  * A rung's LABEL, which travels with its value (G-021, human ruling).
  *
  * The ruling puts two things in this format beside the numbers, because this goal mints it.
@@ -2663,3 +2744,4 @@ export type SpeedRung = z.infer<typeof speedRungSchema>;
 export type StarTier = z.infer<typeof starTierSchema>;
 export type StarTierRequirement = z.infer<typeof starTierRequirementSchema>;
 export type StarTierCounting = z.infer<typeof starTierCountingSchema>;
+export type Demand = z.infer<typeof demandSchema>;

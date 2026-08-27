@@ -72,13 +72,13 @@ const ROW = [
 ].join('\n');
 
 /** A mirrored tree whose only gate row is the handshake above. */
-function makeTree(): string {
+function makeTree(heartbeatMs?: number): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'hotelsim-verify-lock-')));
   trees.push(dir);
   mkdirSync(join(dir, 'tools/gates/lib'), { recursive: true });
 
   const shipped = readFileSync(VERIFY, 'utf8');
-  const stubbed = shipped.replace(
+  let stubbed = shipped.replace(
     /const GATES = \[[\s\S]*?\n\];/,
     ["const GATES = [", "  ['—', 'row:handshake', 'a row that blocks until the test says go'],", '];'].join('\n'),
   );
@@ -92,6 +92,21 @@ function makeTree(): string {
   // if a future edit moved the lock into a lib the mirror does not carry, every cell below
   // would go green against a verify that never locks.
   expect(stubbed).toContain('acquireLock');
+
+  // AND OPTIONALLY SHRINK THE HEARTBEAT (ADR-0087 amendment 1). `HEARTBEAT_MS` ships at 60,000
+  // because a heartbeat faster than a gate row is noise; no test can wait a minute to see one, so
+  // the mirrored copy gets a small one — the same lever the GATES swap above uses, for the same
+  // reason, and NOT an env knob added to a gate for a test's benefit.
+  //
+  // THE REPLACEMENT IS ASSERTED TO HAVE BITTEN, because a pattern that matched nothing would
+  // leave 60,000 in place and the case below would sit for a minute and fail as a timeout —
+  // reading as "the heartbeat is broken" when it would mean "the stub is". That is the lesson the
+  // GATES swap above records in its own comment, applied to the second substitution in this file.
+  if (heartbeatMs !== undefined) {
+    const beaten = stubbed.replace('const HEARTBEAT_MS = 60_000;', `const HEARTBEAT_MS = ${heartbeatMs};`);
+    expect(beaten).not.toBe(stubbed);
+    stubbed = beaten;
+  }
 
   writeFileSync(join(dir, 'tools/gates/verify.mjs'), stubbed, 'utf8');
   writeFileSync(join(dir, 'tools/gates/lib/annotate.mjs'), readFileSync(join(ROOT, 'tools/gates/lib/annotate.mjs')));
@@ -199,6 +214,39 @@ describe('THE POLICY: one verify at a time in one tree', () => {
     expect(b.output()).toContain('the other run finished');
     expect(b.output()).toContain('row:handshake');
     expect(b.output()).toContain('PASS');
+  });
+
+  it('says it is STILL waiting, naming the owner pid and the elapsed seconds', async () => {
+    // ==========================================================================================
+    // THE SILENCE WAS THE DEFECT, NOT THE WAIT (ADR-0087 amendment 1). The announcement above
+    // fires ONCE; a run blocked for 48 minutes then printed nothing, and 48 minutes of silence is
+    // indistinguishable from a hang — so a reader reaches for `rm -rf .verify-lock`, which is
+    // exactly wrong for a run that is correctly queued.
+    //
+    // WHAT IS ASSERTED IS THE DIAGNOSTIC'S CONTENT AND NOT ITS TIMING. The pid is what lets a
+    // reader check whether the owner is a verify at all, and it is repeated on every beat because
+    // the announcement scrolls away. No bound is asserted on HOW LONG the wait takes or how many
+    // beats arrive: `HEARTBEAT_MS` is a cadence, this suite reads no clock (`stopwatch.scan`), and
+    // a count would be a timing assertion in `pnpm test` wearing a diagnostic's clothes.
+    // ==========================================================================================
+    const dir = makeTree(25);
+    const a = start(dir, 'A');
+    await until(() => order(dir).includes('A start'));
+
+    const b = start(dir, 'B');
+    await until(() => b.output().includes('still waiting on pid'));
+    expect(b.output()).toContain(WAITING);
+    // The BEAT names the same pid the announcement did — a reader who scrolled past the header
+    // still learns who to look for.
+    const owner = JSON.parse(readFileSync(join(dir, '.verify-lock', 'owner.json'), 'utf8')) as { pid: number };
+    expect(b.output()).toContain(`still waiting on pid ${owner.pid}`);
+    expect(b.output()).toMatch(/still waiting on pid \d+ — \d+s elapsed\./);
+
+    say(dir);
+    expect(await a.done).toBe(0);
+    expect(await b.done).toBe(0);
+    // And the release line reports the wait rather than merely announcing the start.
+    expect(b.output()).toMatch(/the other run finished after \d+s/);
   });
 
   it('leaves no lock behind after a clean run', async () => {

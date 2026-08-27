@@ -35,14 +35,23 @@ Three nested feedback loops. Every design and code decision traces to one of the
   room-night's margin: `nightlyRatePence` is charged per GUEST-night, `nightlyUpkeepPence` per
   ROOM-night, and the bound built on them is conservative rather than tight.*
 - **Build loop** — spend cash [E], add capacity [E] and quality [**OWED M4**], raise
-  reputation [**OWED M4**], raise demand [**OWED M4**], back to the guest loop
-  [**OWED M4**]. *Two of six, and the count did NOT move at G-051a. That goal shipped the
-  STAR RATING — `starRatingOf` (rating.ts), derived from what the hotel HAS, tiers in
-  `star-tiers.json` — which ADR-0082 rules is a SECOND system beside reputation, not the
-  reputation term: the test of distinctness is that they can DISAGREE. Reputation, judged on
-  guest satisfaction, is still unbuilt, and the rating FEEDS NOTHING. The loop still does not
-  close: arrivals are a fixed cadence from the command log, so nothing a player builds changes
-  how many guests arrive. `HOTELSIM.md` §1.1's `raise reputation` row carries the evidence.*
+  reputation [**OWED M4**], raise demand [E], back to the guest loop [E]. ***FOUR OF SIX, AND
+  THE LOOP CLOSES* (G-051b).** `runDemand` (tick.ts, phase 2 of 6) derives the hotel's STAR
+  RATING every demand slot and puts the parties that rating earns into the same doorway a
+  `guestArrives` fills; `partiesArrivingAt` (demand.ts) is the arithmetic and it draws NO
+  randomness, so the seed still has no economic effect — measured, three seeds, 365 days,
+  byte-identical economics. **The chain, three arms one change apart: build three facility
+  rooms -> 3 stars becomes 4 -> 240 arrivals become 480 -> 1,972,000p of revenue becomes
+  3,944,000p.** The middle arm builds the same rooms with arrivals PINNED and its revenue does
+  not move a penny, which is what makes the gain the RATING's. *THE CURVE IS CONTENT
+  (`demand.json`) AND IT IS **DERIVED**, not a design statement — the one table in this project
+  that is: `partiesPerDaySchema` carries the requirement it comes from.* **THE HARNESS STILL
+  CLAMPS BY DEFAULT**: `--arrivals` supplies arrivals and withholds the curve, because every arm
+  this project has measured is defined by a fixed stream and a clamped run is byte-identical to
+  the run it always was; `--demand` is the game's mode and `apps/game` takes it unconditionally.
+  *Still owed, and neither is a hole in the loop: `quality` (G-037a) and `raise reputation` —
+  ADR-0082 rules the star rating a SECOND system beside reputation, not the reputation term, and
+  reputation judged on guest satisfaction is unbuilt. `HOTELSIM.md` §1.1 carries the evidence.*
 
 **This copy is marked because this file is the one that survives compaction** — and the
 banner above it records what it cost the last time a ruling landed in `HOTELSIM.md` and

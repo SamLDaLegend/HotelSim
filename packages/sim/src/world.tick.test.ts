@@ -13,6 +13,7 @@ import {
   beginTick,
   commitEntities,
   run,
+  runDemand,
   runGuests,
   runSettlement,
   stepTick,
@@ -73,6 +74,7 @@ const at = (tick: number, command: Command): ScheduledCommand => ({ tick, comman
 /** The same table `stepTick` folds over, rebuilt here from the exported phases. */
 const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
+  runDemand,
   runGuests,
   runSettlement,
   commitEntities,
@@ -97,7 +99,18 @@ function permutations<T>(items: readonly T[]): T[][] {
 
 describe('tick phases', () => {
   it('documents its order as a value, with no duplicates', () => {
-    expect([...TICK_PHASES]).toEqual(['applyCommands', 'runGuests', 'runSettlement', 'commitEntities', 'advanceTime']);
+    expect([...TICK_PHASES]).toEqual([
+      'applyCommands',
+      // G-051b. SECOND, between intent and the guest loop, and the position is what makes the
+      // build loop close in ONE tick: a room built this tick is counted by the rating that
+      // decides who arrives this tick, and the parties it creates are taken in by the same
+      // doorway a `guestArrives` fills. `tick.ts`'s header carries the argument.
+      'runDemand',
+      'runGuests',
+      'runSettlement',
+      'commitEntities',
+      'advanceTime',
+    ]);
     expect(new Set(TICK_PHASES).size).toBe(TICK_PHASES.length);
   });
 
@@ -138,9 +151,11 @@ describe('tick phases', () => {
     // phase yet. Each phase now states its precondition, so a wrong order throws.
     const world = createWorld(4, content);
     const orders = permutations([...TICK_PHASES]);
-    // 5! — the settlement phase enlarged the search rather than being exempted from
-    // it, exactly as the guest phase did at G-004.
-    expect(orders).toHaveLength(120);
+    // 6! — the DEMAND phase enlarged the search rather than being exempted from it (G-051b),
+    // exactly as the settlement phase did at G-005 and the guest phase at G-004. A phase that
+    // bought itself an exemption from this search would be the one phase whose order nothing
+    // checks, which is the position the guest loop was in when it was found to be droppable.
+    expect(orders).toHaveLength(720);
 
     const survived: string[] = [];
     for (const order of orders) {
@@ -177,13 +192,11 @@ describe('tick phases', () => {
   });
 
   it('admits exactly ONE phase sequence, across every ordering, omission and repeat', () => {
-    // The G-001 property, restated for a five-phase tick and hardened. The permutation
-    // test above only ranges over orderings of DISTINCT phases; this searches every
-    // sequence of length 0..6 drawn from the five names WITH repetition — the empty one
-    // plus 5 + 25 + 125 + 625 + 3,125 + 15,625 — and demands that exactly one survives
-    // with a whole tick to show for it. Full, not capped: measured at 19,531 sequences
-    // x 2 passes it runs well inside the budget the orchestrator set for keeping it
-    // exhaustive, and a capped search that looks exhaustive is an ADR-0007 shape.
+    // The G-001 property, restated for a SIX-phase tick and hardened. The permutation test
+    // above only ranges over orderings of DISTINCT phases; this covers every sequence of
+    // length 0..7 drawn from the six names WITH repetition — the empty one plus
+    // 6 + 36 + 216 + 1,296 + 7,776 + 46,656 + 279,936 = 335,923 — and demands that exactly
+    // one survives with a whole tick to show for it.
     //
     // It caught a real regression. Before `guestsRun` existed, three sequences survived
     // and two of them produced a different world: the canonical one, the one with
@@ -193,36 +206,86 @@ describe('tick phases', () => {
     // guards rather than the one that did not. `settlementRun` (G-005) is in the
     // survivor predicate for exactly that reason: without it, a sequence with
     // `runSettlement` dropped would survive this search on every tick but midnight.
+    // `demandRun` (G-051b) is in it for the same reason and with a sharper edge: demand ADDS
+    // to the doorway and is silent on 1,416 ticks in 1,440, so a sequence that dropped it
+    // would leave `arrivingParties === 0` and satisfy every other clause below.
+    //
+    // ==========================================================================================
+    // IT IS A PRUNED WALK SINCE G-051b, AND THE PRUNE IS A PROOF RATHER THAN A CAP.
+    //
+    // A sixth phase took the space from 19,531 sequences to 335,923 — arithmetic over 6^0..6^7,
+    // not a measurement — and the flat enumeration that used to run it **timed out at vitest's
+    // 30,000ms under full-suite load** while passing in 13.07s alone (medians of 3, win32/12cpu,
+    // 12.82 / 13.07 / 14.44). `HOTELSIM.md` §2.0 is explicit about what that state is: an
+    // intermittent test is not red, it is UNRELIABLE, and the remedy is to repair the
+    // instrument. **The project is already carrying two unreliable gates and a third is a stop
+    // condition**, so raising the timeout was not available and neither was capping the search.
+    //
+    // WHAT IS PRUNED, AND WHY IT COSTS NO COVERAGE. `runPhases` is a left fold that ABORTS AT
+    // THE FIRST PHASE THAT THROWS. So if a prefix throws, every sequence extending that prefix
+    // throws at the same phase and can never survive. Walking the tree and declining to extend a
+    // throwing prefix therefore visits a subset whose complement is provably all rejections —
+    // the search is exhaustive over the same 335,923 sequences, and the assertion on
+    // `covered` below is what keeps that arithmetic honest rather than asserted.
+    //
+    // EACH NODE IS RE-RUN FROM `beginTick` RATHER THAN CONTINUED FROM ITS PARENT'S STATE, and
+    // that is deliberate: `TickState.entities` is a MUTABLE `EntityDraft`, so two sibling
+    // branches continuing from one parent state would share a draft and the second would see
+    // the first's spawns. The prune is worth having on its own — five of the six subtrees below
+    // the root die at depth 1, because only `applyCommands` may open a tick.
+    // ==========================================================================================
     const world = createWorld(4, content);
-    const sequences: TickPhase[][] = [[]];
-    for (let length = 1; length <= TICK_PHASES.length + 1; length += 1) {
-      const previous = sequences.filter((sequence) => sequence.length === length - 1);
-      for (const sequence of previous) {
-        for (const phase of TICK_PHASES) sequences.push([...sequence, phase]);
-      }
-    }
-    expect(sequences).toHaveLength(19_531);
 
-    const search = (commands: readonly Command[]): string[] => {
+    /** How many sequences of length 0..`TICK_PHASES.length + 1` exist over `TICK_PHASES`. */
+    const spaceSize = ((): number => {
+      let total = 0;
+      for (let length = 0; length <= TICK_PHASES.length + 1; length += 1) {
+        total += TICK_PHASES.length ** length;
+      }
+      return total;
+    })();
+    expect(spaceSize).toBe(335_923);
+
+    const search = (commands: readonly Command[]): { survivors: string[]; covered: number } => {
       const survivors: string[] = [];
-      for (const sequence of sequences) {
+      // Every sequence the walk accounts for: the ones it RAN, plus the ones it declined to
+      // extend into. The two must sum to the whole space, and the assertion below is what makes
+      // "exhaustive" a checked claim rather than a paragraph.
+      let covered = 0;
+      const walk = (prefix: readonly TickPhase[]): void => {
+        // How many sequences hang off this node, itself included, to the search's depth limit.
+        const subtree = ((): number => {
+          let total = 0;
+          for (let depth = 0; depth <= TICK_PHASES.length + 1 - prefix.length; depth += 1) {
+            total += TICK_PHASES.length ** depth;
+          }
+          return total;
+        })();
         let state;
         try {
-          state = runPhases(world, sequence, commands);
+          state = runPhases(world, prefix, commands);
         } catch {
-          continue; // Rejected, which is the point.
+          // Rejected — and so is every extension of it, which is the prune. The whole subtree
+          // is accounted for here and never visited.
+          covered += subtree;
+          return;
         }
+        covered += 1;
         // Exactly the postconditions `stepTick` enforces, on a hand-run sequence.
         const whole =
           state.entities === null &&
           state.committed &&
           state.guestsRun &&
+          state.demandRun &&
           state.settlementRun &&
           state.arrivingParties === 0 &&
           state.world.tick === world.tick + 1;
-        if (whole) survivors.push(sequence.join('>'));
-      }
-      return survivors;
+        if (whole) survivors.push(prefix.join('>'));
+        if (prefix.length === TICK_PHASES.length + 1) return;
+        for (const phase of TICK_PHASES) walk([...prefix, phase]);
+      };
+      walk([]);
+      return { survivors, covered };
     };
 
     const canonical = [[...TICK_PHASES].join('>')];
@@ -230,8 +293,17 @@ describe('tick phases', () => {
     // arrival in the batch, a dropped `runGuests` is caught by the stranded guest, so a
     // search that only ever ran busy ticks would report the property as held while the
     // thing holding it was the doorway rather than the flag.
-    expect(search([spawn('alpha', 0), arrive])).toEqual(canonical);
-    expect(search([])).toEqual(canonical);
+    const busy = search([spawn('alpha', 0), arrive]);
+    const quiet = search([]);
+    expect(busy.survivors).toEqual(canonical);
+    expect(quiet.survivors).toEqual(canonical);
+    // AND BOTH PASSES ACCOUNTED FOR EVERY SEQUENCE IN THE SPACE. This is the assertion that
+    // stops the prune quietly becoming a cap: a pruning bug that skipped a subtree without
+    // counting it would leave `covered` short, and a search that silently narrowed would read
+    // as a clean pass. It is the same move `assertSubject` makes for a scanner — a check that
+    // inspected nothing must not look like a check that found nothing.
+    expect(busy.covered).toBe(spaceSize);
+    expect(quiet.covered).toBe(spaceSize);
   });
 
   it('names the phase that was missing when an order is rejected', () => {

@@ -706,8 +706,9 @@ export type GuestRulesData = {
    * `guests.nextId` at the moment it walks in, which is also its `partyId` — reduces it modulo
    * the total, and walks the table. **No RNG draw, on purpose.** `advanceTime` advances the
    * stream exactly one draw per tick so that stream position is a pure function of tick count,
-   * two shipped tests pin that, and party formation is not the thing that should retire them
-   * (demand is M4's).
+   * two shipped tests pin that, and party formation is not the thing that should retire them.
+   * (This read "(demand is M4's)" until G-051b. Demand shipped, and it draws nothing either, so
+   * it did not retire them — the deferral named an event that has now happened harmlessly.)
    *
    * THE CONSEQUENCE, STATED HERE SO IT IS NOT DISCOVERED AS A DEFECT: **the pattern is periodic
    * and the realised mix is NOT the weight ratio.** A party consumes one ordinal per member, so
@@ -715,7 +716,10 @@ export type GuestRulesData = {
    * gives ALL pairs, because a pair starting on an odd ordinal always lands on an odd ordinal
    * again. `[3, 1]` gives the cycle 1, 1, 2 rather than three singles to one pair. A designer
    * choosing weights must read the CYCLE, which `partySizeOf`'s cases pin, and a watcher will
-   * see the same cycle every run until M4 gives arrivals a demand model.
+   * see the same cycle every run. (This read "until M4 gives arrivals a demand model" until
+   * G-051b. M4 gave arrivals a demand model and THE CYCLE DID NOT MOVE, because `demand.ts`
+   * draws nothing: the watcher still sees 1, 1, 2 forever. The sentence deferred to an event
+   * that has happened and was not the event that would change this.)
    *
    * ABSENT MEANS EVERY ARRIVAL IS ONE GUEST, which is what every build before G-040b-ii does,
    * so content without this field reproduces those runs to the byte and its fingerprint does not
@@ -918,6 +922,46 @@ export type SimContent = {
    * stored order is NOT `normaliseTable`'s ascending-by-id. See `starTiersInOrder`.
    */
   readonly starTiers?: readonly StarTierData[] | undefined;
+  /**
+   * HOW MANY PARTIES A DAY A HOTEL OF EACH RATING EARNS (G-051b) — the demand curve, and the
+   * only content this simulation reads to decide THAT A GUEST ARRIVES AT ALL.
+   *
+   * Optional for the reason `economy` is, and the absence is the sharpest historical statement
+   * in the set: content without this table describes a world in which the HOST decided who
+   * turned up, which is what every world before G-051b was, and what every world under the
+   * laboratory clamp still is. `runDemand` (tick.ts) generates nothing under such content, so
+   * the command log remains the whole story of who walked in — and the fingerprint, and therefore
+   * every state hash, is exactly what it was.
+   *
+   * A LIST WITH ONE ENTRY TODAY, reached through `firstDemand` — the lowest id after
+   * normalisation, the `firstEconomy` precedent, and the same ADR-0003 reason. M6's
+   * per-scenario markets want this shape anyway.
+   */
+  readonly demand?: readonly DemandData[] | undefined;
+};
+
+/**
+ * THE DEMAND CURVE (G-051b): how many parties a day a hotel of each rating earns.
+ *
+ * Structurally identical to `Demand` in `@hotelsim/content` and deliberately not imported from
+ * it (ADR-0001), exactly as `RoomTypeData` is.
+ *
+ * WHY IT IS CONTENT, AND WHY IT IS THE ONE TABLE THAT IS **DERIVED**: `CLAUDE.md` puts demand
+ * curves in `packages/content` in as many words, so a rebalance is a data edit rather than a
+ * diff in `packages/sim`. What makes this table unlike `star-tiers.json` is that every value in
+ * it is FORCED by a stated requirement rather than chosen — the derivation, its two inputs and
+ * the measurement that checks it are on `partiesPerDaySchema` in `packages/content`, which is
+ * where a designer opening the JSON will meet them.
+ *
+ * INDEXED BY THE RATING ITSELF. `partiesPerDayByStars[0]` is the UNRATED hotel; index `r` is a
+ * hotel `starRatingOf` awards `r` stars. `demandAt` is the one reader and it is total: a rating
+ * the array cannot answer for is a content error refused at bind time, not a default here.
+ */
+export type DemandData = {
+  readonly id: ContentId;
+  readonly name: string;
+  /** Parties per day, by star rating, from UNRATED at index 0. Non-negative integers. */
+  readonly partiesPerDayByStars: readonly number[];
 };
 
 /**
@@ -3032,6 +3076,80 @@ function cloneStarTier(tier: StarTierData): StarTierData {
 }
 
 /**
+ * Clone one demand row, validating what a raw host could get wrong (G-051b).
+ *
+ * ENFORCED HERE AND NOT ONLY IN THE SCHEMA, for `cloneStarTier`'s reason: `bindContent` is the
+ * one door every host goes through and Zod is not — `apps/game` parses with Zod, a test may not,
+ * and a fixture assembled by hand certainly does not.
+ *
+ * THE EMPTY-CURVE REFUSAL IS STRUCTURAL, not a taste: index 0 is the UNRATED hotel, which is the
+ * one rating EVERY ladder can award, so a curve with no entries cannot answer the question it
+ * exists to answer. The per-value integer check is ADR-0002's discipline arriving one table over
+ * — a fractional party is not a thing that walks through a door, and a float here would reach
+ * the arrival arithmetic and divide differently on two platforms (I2).
+ */
+function cloneDemand(demand: DemandData): DemandData {
+  const curve = [...(demand.partiesPerDayByStars ?? [])];
+  if (curve.length === 0) {
+    throw new Error(
+      `bindContent: demand "${demand.id}" declares no parties-per-day for any rating; index 0 is the ` +
+        'UNRATED hotel, which is the one rating every ladder can award, so an empty curve cannot ' +
+        'answer the question this table exists to answer',
+    );
+  }
+  for (let stars = 0; stars < curve.length; stars += 1) {
+    const parties = curve[stars];
+    if (parties === undefined || !Number.isSafeInteger(parties) || parties < 0) {
+      throw new Error(
+        `bindContent: demand "${demand.id}" asks for ${String(parties)} parties a day at ${stars} ` +
+          'stars; a party count is a non-negative integer (a fractional guest does not walk through ' +
+          'a door, and a float would divide differently on two platforms — I2, ADR-0002)',
+      );
+    }
+  }
+  return { id: demand.id, name: demand.name, partiesPerDayByStars: Object.freeze(curve) };
+}
+
+/**
+ * Throws if the demand curve cannot answer for a rating this content's ladder can award (G-051b).
+ *
+ * A CROSS-TABLE REFERENCE IS NOT A SCHEMA'S BUSINESS — `demand.json` and `star-tiers.json` are
+ * two documents, Zod validates each alone, and `bindContent` is the one path every host goes
+ * through. This is `assertStarTierRoomTypesExist`'s shape exactly, one table over.
+ *
+ * IT IS A **DERIVED** BOUND AND NOT A DESIGN STATEMENT, and the sentence that derives it is the
+ * one `starsSchema` uses about a tier nobody can satisfy: *a rating the curve cannot answer for
+ * is a rating whose demand is undefined*, and the only two things this simulation could do with
+ * one are invent a number or throw 1,439 ticks into a run with nothing named. Refused at the
+ * boundary, before a world exists.
+ *
+ * IT BOUNDS THE LENGTH FROM BELOW AND NOT FROM ABOVE. A curve LONGER than the ladder carries
+ * entries no hotel can reach, which is harmless and is a legitimate thing for a designer to mean
+ * while drafting a wider ladder — refusing it would be this check having a balance opinion.
+ */
+function assertDemandCoversTheLadder(
+  demand: readonly DemandData[],
+  starTiers: readonly StarTierData[],
+): void {
+  // The ladder is stored ascending by `stars` (`normaliseStarTiers`), so the top tier is last.
+  // Read from the array rather than folded with `Math.max`, because the ORDER is the thing
+  // `normaliseStarTiers` guarantees and a second fold would be a second definition of "the top".
+  const top = starTiers[starTiers.length - 1];
+  // ZERO when this content declares no ladder at all — the UNRATED hotel, which is `rating.ts`'s
+  // `UNRATED` and is spelled here rather than imported, because that module imports this one.
+  const highest = top?.stars ?? 0;
+  for (const row of demand) {
+    const curve = row.partiesPerDayByStars;
+    if (curve.length > highest) continue;
+    throw new Error(
+      `bindContent: demand "${row.id}" declares ${curve.length} entries, so it answers for ratings 0 ` +
+        `to ${curve.length - 1}, but this content's ladder awards up to ${highest} stars; a rating ` +
+        'whose demand is undefined is one this simulation would have to invent a number for',
+    );
+  }
+}
+
+/**
  * Normalise the star-tier table: `normaliseTable`'s work, then RE-SORTED BY `stars`.
  *
  * THIS IS THE ONE TABLE IN `SimContent` WHOSE STORED ORDER IS NOT ASCENDING BY ID, and the
@@ -3762,6 +3880,7 @@ export function bindContent(content: SimContent): BoundContent {
   // NOT `normaliseTable` — see `normaliseStarTiers` for why this one table is stored in `stars`
   // order rather than in id order, and for what reading it by id would cost.
   const starTiers = content.starTiers === undefined ? undefined : normaliseStarTiers(content.starTiers);
+  const demand = content.demand === undefined ? undefined : normaliseTable(content.demand, 'demand', cloneDemand);
 
   // ROLES ARE SETTLED FIRST (G-013), and the order is load-bearing rather than tidy:
   // `assertNeedsAreSatisfiable` refuses an ITEM that provides the lodging need, so it has
@@ -3799,6 +3918,10 @@ export function bindContent(content: SimContent): BoundContent {
   // exist" refusals and before every check that PRICES anything, so content naming a room type
   // it never declared says THAT rather than complaining about a number.
   assertStarTierRoomTypesExist(starTiers ?? [], roomTypes);
+  // AND THE DEMAND CURVE AGAINST THE LADDER (G-051b). After the tiers have been checked against
+  // the room table, so content naming a room type it never declared says THAT rather than
+  // complaining about the length of an array.
+  assertDemandCoversTheLadder(demand ?? [], starTiers ?? []);
   // AND THE THIRD MONEY RELATION (G-038c): a floor costs at least a room. It reads both tables
   // like `assertStockIsAReserve` and is placed after it so that content broken for the older,
   // narrower reason — a refund that lets the lender loose — still says so first.
@@ -3871,7 +3994,8 @@ export function bindContent(content: SimContent): BoundContent {
   const withGuestRules: SimContent = guestRules === undefined ? withEconomy : { ...withEconomy, guestRules };
   const withScenarios: SimContent = scenarios === undefined ? withGuestRules : { ...withGuestRules, scenarios };
   const withStaffRoles: SimContent = staffRoles === undefined ? withScenarios : { ...withScenarios, staffRoles };
-  const normalised: SimContent = starTiers === undefined ? withStaffRoles : { ...withStaffRoles, starTiers };
+  const withStarTiers: SimContent = starTiers === undefined ? withStaffRoles : { ...withStaffRoles, starTiers };
+  const normalised: SimContent = demand === undefined ? withStarTiers : { ...withStarTiers, demand };
   return Object.freeze({
     content: Object.freeze(normalised),
     fingerprint: hashJson(normalised as unknown as JsonValue),
@@ -4290,6 +4414,67 @@ export function firstGuestRules(bound: BoundContent): GuestRulesData | undefined
  */
 export function firstScenario(bound: BoundContent): ScenarioData | undefined {
   return bound.content.scenarios?.[0];
+}
+
+/**
+ * The demand curve this run reads, or `undefined` if the content declares none (G-051b).
+ *
+ * The LOWEST id after normalisation — the `firstEconomy` contract exactly, for the same two
+ * reasons (I2's order-independence, and ADR-0003's no-snake_case-in-the-sim).
+ *
+ * `undefined` IS THE COMMANDED WORLD, and it is a first-class case rather than a default: every
+ * world before G-051b, every world under the laboratory clamp, and the permanent v1 fixture
+ * (ADR-0006) are all such content. Under it the simulation generates no arrival of its own and
+ * the command log is the whole story of who walked in.
+ */
+export function firstDemand(bound: BoundContent): DemandData | undefined {
+  return bound.content.demand?.[0];
+}
+
+/**
+ * HOW MANY PARTIES A DAY A HOTEL OF `stars` STARS EARNS (G-051b). Zero under commanded content.
+ *
+ * TOTAL BY CONSTRUCTION RATHER THAN BY A FALLBACK, and the distinction is the one ADR-0007 keeps
+ * charging for. `assertDemandCoversTheLadder` has already refused content whose curve is shorter
+ * than its ladder, and `starRatingOf` returns only `UNRATED` or a rating some tier awards, so the
+ * index is in range on every path a bound world can reach. The `?? 0` below is therefore
+ * UNREACHABLE under bound content and is written anyway because `noUncheckedIndexedAccess` is on:
+ * it is the type system's cost, not a silent default, and `demand.test.ts` pins the refusal that
+ * makes it dead.
+ *
+ * NEGATIVE STARS ARE NOT A CASE. Stars come from `starRatingOf`, never from a caller.
+ */
+export function partiesPerDayAt(bound: BoundContent, stars: number): number {
+  const curve = firstDemand(bound)?.partiesPerDayByStars;
+  if (curve === undefined) return 0;
+  return curve[stars] ?? 0;
+}
+
+/**
+ * THE MOST PARTIES A DAY ANY RATING OF THIS HOTEL COULD EARN (G-051b) — the curve's maximum.
+ *
+ * IT IS THE RESOLUTION OF THE ARRIVAL CLOCK AND NOT A BALANCE NUMBER, which is why it is folded
+ * here rather than declared: `partiesArrivingAt` (demand.ts) divides the day into exactly this
+ * many SLOTS — the word is `slot` and not "window", for the I1 reason `demand.ts`'s import note
+ * records — so the finest spacing the content can ask for is the finest spacing it gets. Deriving it from the
+ * curve rather than declaring it separately is what stops the two disagreeing — a declared
+ * resolution smaller than the peak demand would silently cap it, which is a balance change
+ * wearing a performance costume.
+ *
+ * A FOLD OVER THE WHOLE CURVE AND NOT `curve[curve.length - 1]`: the curve is NOT required to be
+ * monotone (the ladder is not either — see `starTiersSchema`), and a designer who means "a
+ * five-star hotel is exclusive and quieter than a four-star one" is expressing a real design.
+ * Reading the last entry would cap that hotel's clock at its own quieter demand.
+ *
+ * ZERO under commanded content and zero under a curve of zeroes, and `partiesArrivingAt` treats
+ * both as "this simulation generates no arrivals", which is the same sentence.
+ */
+export function maxPartiesPerDayOf(bound: BoundContent): number {
+  const curve = firstDemand(bound)?.partiesPerDayByStars;
+  if (curve === undefined) return 0;
+  let most = 0;
+  for (const parties of curve) most = parties > most ? parties : most;
+  return most;
 }
 
 /**

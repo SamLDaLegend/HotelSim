@@ -112,6 +112,7 @@ import {
   // G-052a: a seventh table, required of any `--content` directory this file assembles.
   STAFF_ROLES_PATH,
   STAR_TIERS_PATH,
+  DEMAND_PATH,
 } from './content-loader.js';
 import { meanReviewHundredths } from './report.js';
 import type { RunSummary } from './report.js';
@@ -1049,7 +1050,8 @@ describe('AXIS 1: --rooms 1 and --rooms 12 review differently', () => {
     // **AND IT IS THE SAME DEFECT CLASS AS THE OPEN FINDING IN `unserved.report.test.ts`** — the
     // engagement ladder inverting at the top rung — which the human ruled belongs to G-043. It
     // is NOT repaired here and the dial is NOT tuned to hide it: `partySizeWeights` is a design
-    // number, demand is M4's, and this goal ships a mix chosen to be MEASURABLE.
+    // number, demand is a TABLE OF ITS OWN (`demand.json`, G-051b, and it was "demand is M4's" until then), and this goal ships a mix
+    // chosen to be MEASURABLE. **The deferral died at G-051b and the argument did not.**
     //
     // **WHAT IT MEANS FOR M4, IN THE TERMS THIS ARM USES.** *"A reputation term over the MEAN is
     // safe — it is monotone, so building rooms cannot hurt"* is FALSE again, and this time the
@@ -1791,7 +1793,7 @@ describe('the scale is a JSON edit, not a constant', () => {
   const contentWithScale = (min: number, max: number): string => {
     const dir = mkdtempSync(join(tmpdir(), 'hotelsim-review-'));
     tempDirs.push(dir);
-    for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH, STAR_TIERS_PATH]) {
+    for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH, STAR_TIERS_PATH, DEMAND_PATH]) {
       copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
     }
     const rules = JSON.parse(readFileSync(GUEST_RULES_PATH, 'utf8')) as Record<string, unknown>[];

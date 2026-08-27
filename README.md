@@ -112,7 +112,7 @@ and that is the behaviour ADR-0017 changes. The renderer shows both halves delib
 ## The gates
 
 ```bash
-pnpm verify         # every §2 invariant gate and check, thirteen rows
+pnpm verify         # every §2 invariant gate and check, fourteen rows
 ```
 
 | | check | what it holds |
@@ -130,6 +130,7 @@ pnpm verify         # every §2 invariant gate and check, thirteen rows
 | — | `check:scaling` | rooms, needs and provider density scale as claimed |
 | — | `check:stamp` | the four ledger digests carry one byte-identical as-of line |
 | — | `check:ladder` | no render code computes one play speed from another (§2.1.1) |
+| — | `check:unpinned` | no claim in the tree quotes a figure nothing pins |
 
 **Never edit a gate to make a build pass.** Changing an invariant is a human decision (§9).
 
@@ -137,10 +138,19 @@ pnpm verify         # every §2 invariant gate and check, thirteen rows
 
 ```bash
 pnpm sim:run --days 30 --seed 7 --rooms 6      # headless, prints a report
+pnpm sim:run --days 30 --seed 7 --rooms 6 --demand   # the HOTEL earns its guests (G-051b)
 pnpm sim:run --days 30 --seed 7 --rooms 6 --record run.ndjson --record-every 10
 pnpm viewer                                     # watch a recording (tools/viewer, disposable)
 pnpm --filter @hotelsim/game build              # bundle the render layer, as CI does
 ```
+
+**`--arrivals` is a CLAMP, not the world, and it is the DEFAULT.** Without `--demand` the host
+issues one arrival every `--arrivals` ticks and the simulation is handed no demand curve, which is
+what every measured arm in this repository is defined by — a clamped run is byte-identical to the run
+it was before demand existed. **`--demand` hands the decision to the hotel**: `runDemand` derives its
+star rating and puts the parties that rating earns in the lobby, which is what `apps/game` does
+unconditionally. The two flags are refused together, because a run with both sources firing is a
+measurement of neither.
 
 ## Layout
 

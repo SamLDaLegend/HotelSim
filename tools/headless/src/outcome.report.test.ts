@@ -695,8 +695,10 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // `leftDissatisfied` absorbs 1,635 of the 1,920.
     //
     // **WHOSE PROBLEM IS THAT.** It is a BALANCE consequence of a dial whose balance nobody has
-    // set: `partySizeWeights` is a design number and demand is M4's, so this goal ships a mix
-    // chosen to be MEASURABLE and does not tune it against this arm. It is also the same defect
+    // set: `partySizeWeights` is a design number and demand is a TABLE OF ITS OWN (`demand.json`, G-051b, and it was "demand is M4's" until then), so this
+    // goal ships a mix chosen to be MEASURABLE and does not tune it against this arm. **The
+    // deferral died at G-051b and the argument did not**: party size is still not the dial that
+    // decides how busy a hotel is, and now there is a named table that is. It is also the same defect
     // class as the OPEN FINDING `unserved.report.test.ts` carries — the engagement ladder
     // inverting at the top rung — which the human ruled belongs to G-043.
     //

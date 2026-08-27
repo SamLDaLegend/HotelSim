@@ -39,6 +39,7 @@ export type {
   // a night, and who is on the opening payroll.
   StaffPostingData,
   StaffRoleData,
+  DemandData,
   StarTierCountingData,
   StarTierData,
   StarTierRequirementData,
@@ -132,6 +133,12 @@ export {
   STAR_TIER_COUNTINGS,
   isStarTierCounting,
   starTiersInOrder,
+  // G-051b. The demand curve: the one content table this simulation reads to decide THAT A
+  // GUEST ARRIVES AT ALL. On the surface so a host can report what a hotel's rating is earning
+  // it, and re-derive that through THE accessors rather than keeping a second copy of the curve.
+  firstDemand,
+  maxPartiesPerDayOf,
+  partiesPerDayAt,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {
@@ -358,7 +365,11 @@ export {
 // of `rating.ts` for why it is not reputation and why a stored one would be a cache that can
 // disagree with the hotel.
 export type { StarRating, StarShortfall } from './rating.js';
-export { starRatingOf, UNRATED } from './rating.js';
+export { starRatingIn, starRatingOf, UNRATED } from './rating.js';
+// G-051b — DEMAND. The star rating stopped feeding nothing: `runDemand` (below) turns it into
+// arrivals, which is the arrow at the end of the build loop. See the header of `demand.ts` for
+// why the arithmetic draws no randomness and what that decision costs.
+export { isDemandSlot, partiesArrivingAt } from './demand.js';
 export type { RngState } from './rng.js';
 export { createRng, nextIntBelow, nextUint32 } from './rng.js';
 export type { Migration, SaveBlob, SaveSchema } from './save.js';
@@ -380,6 +391,7 @@ export {
   beginTick,
   commitEntities,
   run,
+  runDemand,
   runGuests,
   runSettlement,
   stepTick,

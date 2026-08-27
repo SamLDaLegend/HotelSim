@@ -4,6 +4,7 @@
 //   pnpm --silent sim:run --days 30 --seed 42 --json        (machine-readable summary)
 //   pnpm --silent sim:run --ticks 100000 --seed 7 --quiet   (prints only the state hash)
 //   pnpm sim:run --days 30 --rooms 5 --arrivals 60          (workload flags for sweeps)
+//   pnpm sim:run --days 365 --rooms 0 --build 1440 --demand (the HOTEL earns its guests, G-051b)
 //   pnpm sim:run --days 30 --seed 7 --build 2880            (the player expands, G-008)
 //   pnpm sim:run --days 30 --build 2880 --demolish 5760     (and knocks rooms down again)
 //   pnpm sim:run --days 1 --content ./my-content            (alternative content directory)
@@ -63,7 +64,11 @@ function main(): void {
   // contract in report.ts, with an EMPTY stdout, so a consumer never sees half a
   // document. The catch below prints the message alone — ContentError's message is
   // already formatted for a human.
-  const content = loadContent(options.contentDir);
+  // AND `--demand` DECIDES WHETHER THE SIMULATION IS HANDED THE DEMAND CURVE (G-051b). The
+  // default withholds it, so a run with no flags is the run it has always been, fingerprint
+  // included; see `Market` in content-loader.ts for why the clamp is the default and why the
+  // file is read and validated on both paths.
+  const content = loadContent(options.contentDir, options.market);
   // The world is created BEFORE the schedule so the schedule can be laid out on that
   // world's own plot (`world.grid`). The runner must not emit a build command it can
   // already prove is off the plot, and the only way to know the plot without keeping a

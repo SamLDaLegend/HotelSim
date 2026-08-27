@@ -35,14 +35,25 @@
 // `stepGuests`, and all of the behaviour is here.
 //
 // No randomness. `stepGuests` is a pure function of world state, injected content and
-// the number of PARTIES arriving — no RNG draw, no wall clock, no `dt`. Arrival RATE is
-// demand, and demand is M4; today the host issues one `guestArrives` command per
-// arrival, so the command log fully describes who turned up and when (I2).
+// the number of PARTIES arriving — no RNG draw, no wall clock, no `dt`.
+//
+// ~~"Arrival RATE is demand, and demand is M4; today the host issues one `guestArrives` command
+// per arrival, so the command log fully describes who turned up and when (I2)."~~ STRUCK AT
+// G-051b. Demand shipped: `runDemand` (tick.ts) creates parties from the hotel's star rating and
+// adds them to the same doorway a `guestArrives` fills, so under content declaring a demand curve
+// THE COMMAND LOG NAMES ONLY THE ARRIVALS A HOST ASKED FOR. What this function takes is unchanged
+// — a COUNT of parties — and it neither knows nor cares which source produced it, which is why
+// this file needed no edit beyond the sentence. See `commands.ts`'s `guestArrives` for what I2
+// rests on now: same seed + same command log + SAME INJECTED CONTENT.
 //
 // HOW MANY GUESTS A PARTY IS, IS ALSO NOT A DRAW (G-040b-i). It is `partySizeOf` over the
 // party's ordinal and a content weight table — a repeating pattern rather than a sample, so
 // the seeded stream still advances exactly one draw per tick and stream position stays a pure
-// function of tick count. Party formation becomes random when demand does, which is M4.
+// function of tick count. ~~"Party formation becomes random when demand does, which is M4."~~
+// STRUCK AT G-051b, AND THE PREMISE FAILED RATHER THAN THE PROPERTY: demand arrived and IS NOT
+// RANDOM, so the event this sentence was waiting for has happened and retired nothing. Party
+// formation is still a walk, the stream still advances exactly one draw per tick, and whether
+// EITHER should become a draw is now one question rather than two (`PARKING.md`).
 
 import {
   abandonMarginOf,

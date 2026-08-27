@@ -45,6 +45,7 @@ import {
   // G-052a: a seventh table, required of any `--content` directory this file assembles.
   STAFF_ROLES_PATH,
   STAR_TIERS_PATH,
+  DEMAND_PATH,
 } from './content-loader.js';
 import {
   buildSummary,
@@ -229,13 +230,34 @@ describe('THE ATTRIBUTION IS CHECKED AGAINST CONTENT, AND THE CHECK CAN FAIL (G-
     expect(buildSummary(world, content, options).violations).toEqual([]);
   });
 
-  it('FIRES when a need NO ROOM provides records a satisfaction delivered by a room', () => {
-    // Attribute the item-only need entirely to rooms. Nothing about `met` or `unmet`
-    // changes, so every other law in the report still closes — which is the point.
+  it('SAYS NOTHING when a need NO ROOM provides records a satisfaction delivered by a room', () => {
+    // ==========================================================================================
+    // THIS CASE INVERTED AT G-051b, AND THE INVERSION IS THE FINDING RATHER THAN A CONCESSION.
+    //
+    // It used to assert that the report FIRES here. The law it pinned — *"no room type provides
+    // it => met - metByItem MUST be 0"* — is FALSE, and `byItem`'s own docblock in `needs.ts`
+    // has said so since G-028b: `met` became the top per-need BAND over the stay, so a guest
+    // whose stay ends before anything serves a need counts into `met` with `metBy` still `null`,
+    // and the derived by-room column therefore counts SERVED-BY-A-ROOM **plus**
+    // NEVER-SERVED-AT-ALL. A legitimate run reaches it: `--days 5 --seed 42 --rooms 24
+    // --amenities 1 --demolish 2880 --demand` gives 4 `evictedRoomGone` departures and
+    // `guest_comfort` at met 32 / metByItem 31, and the report REFUSED IT AS A VIOLATION.
+    //
+    // A LAW THAT FIRES ON A LEGITIMATE RUN IS WORSE THAN NO LAW, which is the argument G-014b
+    // makes about the abandonment clause four screens up in `report.ts` — *"this law would fire
+    // on a legitimate run: a violation report against a frozen content document."*
+    //
+    // SO THE CASE IS KEPT AND INVERTED RATHER THAN DELETED. A deleted case would leave the
+    // struck law's absence looking like a gap nobody measured; this one PINS the absence, so a
+    // future goal that restores the law (with the `metByNothing` counter the strike names) has
+    // to come here and say so.
+    //
+    // THE COST IS NAMED IN THE STRIKE AND IT IS REAL: the round-2 note claimed this fired in
+    // BOTH directions, and only the ITEM direction survives — the next case is now the only
+    // forged attribution this report can catch.
+    // ==========================================================================================
     const forged = withAttribution(world, itemOnlyNeed!.id, 0);
-    const { violations } = buildSummary(forged, content, options);
-    expect(joined(violations)).toContain(itemOnlyNeed!.id);
-    expect(joined(violations)).toContain('NO ROOM TYPE in this content provides it');
+    expect(buildSummary(forged, content, options).violations).toEqual([]);
   });
 
   it('FIRES when a need NO ITEM provides records a satisfaction delivered by an item', () => {
@@ -270,7 +292,7 @@ describe('THE NEGATIVE CONTROL: content whose items provide nothing (G-013)', ()
   const dir = mkdtempSync(join(tmpdir(), 'hotelsim-noitems-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, GUEST_RULES_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH, STAR_TIERS_PATH]) {
+  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, GUEST_RULES_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH, STAR_TIERS_PATH, DEMAND_PATH]) {
     copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
   }
 

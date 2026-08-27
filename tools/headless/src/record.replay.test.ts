@@ -225,6 +225,10 @@ describe('D — recording is off by default, and turning it on changes nothing b
         'demolishEveryTicks',
         'facilities',
         'loanEveryTicks',
+        // `market` joined at G-051b — WHO decided who turned up, which is the regime slot of
+        // every arrival figure in the document. Like `facilities` it belongs here; the claim
+        // under test is unchanged and is about the RECORDING flags.
+        'market',
         'rooms',
         'seed',
         'ticks',

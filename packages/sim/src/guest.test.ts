@@ -40,6 +40,7 @@ import {
   beginTick,
   commitEntities,
   run,
+  runDemand,
   runGuests,
   runSettlement,
   stepTick,
@@ -451,6 +452,7 @@ describe('an empty hotel costs nothing', () => {
 describe('the phase table', () => {
   const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
     applyCommands,
+    runDemand,
     runGuests,
     runSettlement,
     commitEntities,

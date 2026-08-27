@@ -692,6 +692,10 @@ const distinct: RunSummary = {
     amenities: 139,
     facilities: 140,
     arrivalEveryTicks: 104,
+    // A STRING RATHER THAN A NUMBER, so the distinctness rule this fixture keeps is spelled
+    // differently here: `'byDemand'` cannot be confused with any other field's value, and it is
+    // deliberately NOT the default so a renderer that hard-coded `'commanded'` would show.
+    market: 'byDemand',
     buildEveryTicks: 123,
     demolishEveryTicks: 124,
     loanEveryTicks: 138,
@@ -755,6 +759,7 @@ const distinct: RunSummary = {
     // `have` IS BELOW `minimum`, which is the type's own contract — a shortfall clause the
     // hotel already meets is not a shortfall. Distinct like everything else here.
     shortfall: [{ roomTypeIds: ['star_fixture_room'], counting: 'rooms', minimum: 165, have: 164 }],
+    partiesPerDay: 167,
   },
   money: {
     transactions: 117,
@@ -842,6 +847,10 @@ describe('renderers', () => {
         // channels and ADR-0082's whole point is that they can disagree.
         'stars       159 of 163, next 161',
         'to climb    164/165 rooms of [star_fixture_room]',
+        // G-051b. The fixture's `market` is `'byDemand'`, deliberately NOT the default, so the
+        // clamped branch of this line is not the one exercised here — the golden in
+        // `cli.stdout.test.ts` is a real clamped run and pins the other half.
+        'demand      167 parties/day at 159 stars, earned by the hotel',
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',
@@ -1238,6 +1247,7 @@ describe('emitReport (print THEN fail — the contract\'s second clause)', () =>
     rooms: HOTEL_ROOMS,
     amenities: HOTEL_AMENITIES,
     facilities: HOTEL_FACILITIES,
+    market: 'commanded',
     arrivalEveryTicks: TICKS_BETWEEN_ARRIVALS,
     buildEveryTicks: 0,
     demolishEveryTicks: 0,

@@ -1,10 +1,18 @@
 // THE SHIPPED HOTEL — the building the game opens on, and who walks into it (G-030).
 //
-// THIS IS A SCENARIO, NOT A DESIGN. There is no demand model until M4 and no build tool
-// until G-031, so somebody has to say what stands on the plot at tick 0 and how often
-// somebody arrives. That somebody is the host, exactly as it is for the CLI. When the
-// player can build (G-031) and when arrivals answer to reputation (M4), this file shrinks
-// to an opening position and then to nothing.
+// THIS IS A SCENARIO, NOT A DESIGN. Somebody has to say what stands on the plot at tick 0, and
+// that somebody is the host, exactly as it is for the CLI.
+//
+// ~~"There is no demand model until M4 … and how often somebody arrives. When the player can
+// build (G-031) and when arrivals answer to reputation (M4), this file shrinks to an opening
+// position and then to nothing."~~ **HALF STRUCK AT G-051b, AND THE STRUCK HALF ALREADY HAPPENED
+// IN THIS SAME FILE 120 LINES DOWN.** There IS a demand model: `content.ts` injects the curve
+// unconditionally and `createScenario` below no longer issues a single `guestArrives`, so THIS
+// FILE NO LONGER SAYS HOW OFTEN SOMEBODY ARRIVES — the hotel's own star rating does.
+//
+// WHAT SURVIVES, AND IT IS WHY THE FILE HAS NOT SHRUNK TO NOTHING: the opening POSITION is still
+// the host's, and arrivals answer to the STAR RATING rather than to reputation — ADR-0082 rules
+// those two distinct systems and reputation is still unbuilt.
 //
 // EVERY COMMAND HERE IS AN EXISTING COMMAND, AND NONE OF IT IS A PLAYER ACTION.
 // `spawnEntity` is the structural primitive — "reach for it to set up the state a scenario
@@ -122,16 +130,20 @@ const COLUMNS_PER_ROOM = 2;
  */
 const ROWS_PER_ROOM = 1;
 
-/**
- * How often somebody walks in. Two in-game hours, which is `TICKS_BETWEEN_ARRIVALS` in
- * `report.ts:108` — the cadence every existing report and recording was taken at.
- *
- * A FIXED CADENCE IS A STAND-IN FOR DEMAND AND IS LABELLED ONE. Arrivals answer to nothing
- * — not to reputation, not to price, not to whether there is a free bed — because none of
- * that exists before M4. A player watching this must not read the arrival rate as a
- * response to anything they can see.
- */
-const TICKS_BETWEEN_ARRIVALS = 120;
+// ==========================================================================================
+// THE ARRIVAL CADENCE THAT USED TO LIVE HERE IS GONE (G-051b), AND THE PARAGRAPH IT CARRIED IS
+// KEPT AS THE RECORD OF WHAT IT WAS FOR.
+//
+//     const TICKS_BETWEEN_ARRIVALS = 120;
+//     "A FIXED CADENCE IS A STAND-IN FOR DEMAND AND IS LABELLED ONE. Arrivals answer to
+//      nothing — not to reputation, not to price, not to whether there is a free bed —
+//      because none of that exists before M4. A player watching this must not read the
+//      arrival rate as a response to anything they can see."
+//
+// **THE STAND-IN'S CONDITION HAS EXPIRED.** A player watching this may now read the arrival
+// rate as a response to something they can see — their star rating — because that is what it
+// is. `createScenario` below says what replaced it and what a watcher should expect.
+// ==========================================================================================
 
 /**
  * The room type guests sleep in: the lowest-id room type that PROVIDES the lodging need.
@@ -469,11 +481,24 @@ export function createScenario(
   bounds: GridBounds,
 ): (tick: number) => readonly Command[] {
   const seed = seedCommands(content, bounds);
-  const arrival: readonly Command[] = [{ kind: 'guestArrives' }];
   const none: readonly Command[] = [];
   return (tick: number): readonly Command[] => {
     if (tick === 0) return seed;
-    if (tick >= 1 && (tick - 1) % TICKS_BETWEEN_ARRIVALS === 0) return arrival;
+    // AND NOTHING AFTER TICK 0 (G-051b). THIS FUNCTION USED TO ISSUE `guestArrives` EVERY
+    // `TICKS_BETWEEN_ARRIVALS` TICKS, and that line was the reason the build loop did not close
+    // in the one place a human can watch it: a hotel that added a Spa got the same twelve
+    // parties a day it got before, so nothing a player built changed how many guests arrived.
+    //
+    // The simulation decides now. `content.ts` injects the demand curve, `runDemand` derives the
+    // hotel's star rating every demand window and puts the parties that rating earns in the
+    // lobby. A SCENARIO THAT ALSO ISSUED A FIXED CADENCE WOULD BE A SECOND, SILENT SOURCE ON TOP
+    // OF IT — the sum of two arrival streams, attributed to whichever the watcher had in mind,
+    // which is exactly what `parseArgs` refuses in the headless runner.
+    //
+    // WHAT A WATCHER SHOULD EXPECT AS A RESULT, said plainly because it is a visible change: an
+    // UNRATED hotel receives NOBODY. The seeded scenario opens with valid bedrooms, so this one
+    // is rated from tick 0 — but a player who demolishes their way below the first tier will
+    // watch the lobby empty, and that is the loop working rather than the game breaking.
     return none;
   };
 }

@@ -180,6 +180,24 @@ const OWNER = join(LOCK, 'owner.json');
  *  below the resolution of the thing it is waiting for and bounds nothing. */
 const POLL_MS = 1000;
 
+/**
+ * How often a blocked run says it is STILL blocked (ADR-0087 amendment 1).
+ *
+ * A CADENCE, NOT A THRESHOLD — `POLL_MS`'s standing exactly. It ends no wait, steals no lock,
+ * changes no verdict and gates nothing; moving it to 30,000 or 120,000 changes what a reader
+ * sees and nothing this file decides, so §2.1's "a gate threshold must be derivable" does not
+ * reach it. What it IS chosen against is legibility: a heartbeat slower than the rows it waits
+ * on says nothing, and one faster than a row is noise in a log somebody has to read.
+ *
+ * WHY IT EXISTS AT ALL. The announcement below used to fire ONCE, and a run blocked for 48
+ * minutes then printed nothing — measured, G-051b sweep 1, when a critic and the orchestrator
+ * both started a verify. **Forty-eight minutes of silence is indistinguishable from a hang**,
+ * and §2.0's argument reaches it: an instrument that reports nothing has stopped being one. The
+ * reader who cannot tell CORRECTLY QUEUED from WEDGED reaches for `rm -rf .verify-lock`, which
+ * is precisely wrong for the first case.
+ */
+const HEARTBEAT_MS = 60_000;
+
 function ownerOf() {
   try {
     const parsed = JSON.parse(readFileSync(OWNER, 'utf8'));
@@ -202,11 +220,16 @@ function isAlive(pid) {
 
 async function acquireLock() {
   let announced = false;
+  let waitingSince = 0;
+  let lastBeat = 0;
   for (;;) {
     try {
       mkdirSync(LOCK);
       writeFileSync(OWNER, `${JSON.stringify({ pid: process.pid, platform: process.platform })}\n`, 'utf8');
-      if (announced) process.stdout.write('verify: the other run finished — starting.\n');
+      if (announced) {
+        const waited = Math.round((Date.now() - waitingSince) / 1000);
+        process.stdout.write(`verify: the other run finished after ${waited}s — starting.\n`);
+      }
       return;
     } catch (error) {
       if (error?.code !== 'EEXIST') throw error;
@@ -220,12 +243,21 @@ async function acquireLock() {
     }
     if (!announced) {
       announced = true;
+      waitingSince = Date.now();
+      lastBeat = waitingSince;
       process.stdout.write(
         `\nverify: another \`pnpm verify\` is running in this tree (pid ${held.pid}).\n` +
           '        Waiting for it rather than measuring the gates against a machine this run\n' +
           '        does not have to itself (§2.0). Ctrl-C to stop; if that pid is not a verify,\n' +
           `        remove ${relative(ROOT, LOCK).split('\\').join('/')} and re-run.\n\n`,
       );
+    } else if (Date.now() - lastBeat >= HEARTBEAT_MS) {
+      // STILL WAITING, AND SAYING SO. See `HEARTBEAT_MS`: the silence, not the wait, was the
+      // defect. The pid is repeated on every beat rather than only in the announcement, because
+      // the announcement scrolls away and the beat is what a reader actually finds.
+      lastBeat = Date.now();
+      const waited = Math.round((lastBeat - waitingSince) / 1000);
+      process.stdout.write(`verify: still waiting on pid ${held.pid} — ${waited}s elapsed.\n`);
     }
     await new Promise((resolve_) => setTimeout(resolve_, POLL_MS));
   }

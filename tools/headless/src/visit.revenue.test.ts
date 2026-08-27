@@ -48,6 +48,7 @@ const options = (rooms: number, amenities: number): Options => ({
   amenities,
   facilities: 0,
   arrivalEveryTicks: 120,
+  market: 'commanded',
   buildEveryTicks: 0,
   demolishEveryTicks: 0,
   loanEveryTicks: 0,

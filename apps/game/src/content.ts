@@ -26,6 +26,7 @@ import {
   parseScenarios,
   parseSpeedLadder,
   parseStaffRoles,
+  parseDemand,
   parseStarTiers,
 } from '@hotelsim/content';
 import type { SpeedRung } from '@hotelsim/content';
@@ -40,6 +41,7 @@ import roomTypesJson from '@hotelsim/content/data/room-types.json';
 import scenariosJson from '@hotelsim/content/data/scenarios.json';
 import staffRolesJson from '@hotelsim/content/data/staff-roles.json';
 import starTiersJson from '@hotelsim/content/data/star-tiers.json';
+import demandJson from '@hotelsim/content/data/demand.json';
 import speedLadderJson from '@hotelsim/content/data/speed-ladder.json';
 
 /**
@@ -72,6 +74,15 @@ export function loadContent(): BoundContent {
     // renderer an UNRATED hotel and the headless host a rated one, which is two hosts
     // disagreeing about the same content.
     starTiers: parseStarTiers(starTiersJson, 'star-tiers.json'),
+    // G-051b: THE DEMAND CURVE, AND THIS HOST IS THE ONE THAT MEANS IT.
+    //
+    // `content-loader.ts`'s `Market` withholds this table by default, because every measured
+    // arm in this project is defined by a fixed arrival stream and a harness must be able to
+    // hold that constant. **THE GAME IS NOT A MEASUREMENT.** Here the table is injected
+    // unconditionally, which is what makes `HOTELSIM.md` §1.1's fifteenth mark true of the
+    // thing a player actually runs: the hotel earns its own guests from its own rating, and
+    // `scenario.ts` no longer issues a single `guestArrives`.
+    demand: parseDemand(demandJson, 'demand.json'),
   };
   return bindContent(registry);
 }

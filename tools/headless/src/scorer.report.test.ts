@@ -394,7 +394,8 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // engagement ladder inverting at the top rung — which the human ruled belongs to G-043, and
     // `review.report.test.ts`'s room-ladder census records the identical cell from the other
     // side. **The dial is NOT tuned to hide it**: `partySizeWeights` is a design number and
-    // demand is M4's.
+    // demand is a TABLE OF ITS OWN (`demand.json`, G-051b, and it was "demand is M4's" until then). **The deferral died at G-051b and
+    // the argument did not.**
     //
     // The census keeps its shape, so a SECOND fall, a bigger one, or one in another cell is
     // still a red line with its coordinates in the message.

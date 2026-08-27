@@ -40,6 +40,7 @@ import {
   ROOM_TYPES_PATH,
   SCENARIOS_PATH,
   STAFF_ROLES_PATH,
+  DEMAND_PATH,
   STAR_TIERS_PATH,
 } from './content-loader.js';
 import { loadContent } from './content-loader.js';
@@ -88,7 +89,8 @@ function contentEmploying(postings: readonly { roleId: string; count: number }[]
     ECONOMY_PATH,
     GUEST_RULES_PATH,
     STAFF_ROLES_PATH,
-  STAR_TIERS_PATH,
+    STAR_TIERS_PATH,
+    DEMAND_PATH,
   ]) {
     copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
   }

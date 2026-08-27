@@ -24,6 +24,7 @@ import {
   parseScenariosJson,
   parseSpeedLadderJson,
   parseStaffRolesJson,
+  parseDemandJson,
   parseStarTiersJson,
 } from '@hotelsim/content';
 import type {
@@ -36,6 +37,7 @@ import type {
   SpeedRung,
   StaffRole,
   StarTier,
+  Demand,
 } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
@@ -61,6 +63,8 @@ export const SCENARIOS_PATH = resolveContent('@hotelsim/content/data/scenarios.j
 export const STAFF_ROLES_PATH = resolveContent('@hotelsim/content/data/staff-roles.json');
 /** What an inspector wants before it will award a star (G-051a). */
 export const STAR_TIERS_PATH = resolveContent('@hotelsim/content/data/star-tiers.json');
+/** How many parties a day a hotel of each rating earns (G-051b). */
+export const DEMAND_PATH = resolveContent('@hotelsim/content/data/demand.json');
 /**
  * The play-speed ladder (G-021). Resolved here like every other table — and read by
  * `loadSpeedLadderFrom` below, which `loadContent` deliberately never calls. The reason is
@@ -116,6 +120,11 @@ export function loadStarTiersFrom(path: string): readonly StarTier[] {
   return parseStarTiersJson(readContentFile(path), path);
 }
 
+/** Read and validate one demand file (G-051b). Same all-or-nothing discipline. */
+export function loadDemandFrom(path: string): readonly Demand[] {
+  return parseDemandJson(readContentFile(path), path);
+}
+
 /**
  * Read and validate one speed-ladder file (G-021). Same all-or-nothing discipline.
  *
@@ -168,7 +177,39 @@ function readContentFile(path: string): string {
  * HERE, at compile time. If a required field is added to one and not the other, this
  * line stops compiling.
  */
-export function loadContent(contentDir?: string): BoundContent {
+/**
+ * WHO DECIDES WHO TURNS UP (G-051b) — and the answer is a property of the RUN, not of the game.
+ *
+ * ==========================================================================================
+ * `'commanded'` — arrivals come from the COMMAND LOG and from nowhere else. The demand table is
+ * read and validated like every other file and then WITHHELD from the injected registry, so the
+ * simulation generates nothing of its own. **This is the LABORATORY CLAMP, it is the default,
+ * and the default is the whole reason this project's evidence base survives this goal.**
+ *
+ * `'byDemand'` — the hotel earns its own arrivals from its star rating. **This is what the game
+ * does**: `apps/game` asks for it, `pnpm sim:run --demand` asks for it, and so does the
+ * determinism harness, because I2's job is to cover what the simulation DOES and a gate that
+ * clamped off the newest source of arrivals could not see it.
+ *
+ * WHY THE CLAMP IS THE DEFAULT, STATED AS A COST RATHER THAN A PREFERENCE. Every measured arm
+ * in this repository — every golden, every pinned integer, every bench and scaling workload —
+ * is defined by a fixed arrival cadence, because until this goal there was no other kind. A
+ * default of `'byDemand'` would move all of them at once and leave no invocation that reproduces
+ * any figure taken before today. Under the clamp the withheld table is an ABSENT KEY rather than
+ * an empty one, so `bindContent` fingerprints exactly as it always did (`SimContent.demand` says
+ * why that distinction is load-bearing) and a clamped run is BYTE-IDENTICAL to the run it was.
+ *
+ * AND THE CLAMP IS NOT A SILENT OMISSION, which is the objection this arrangement has to answer.
+ * The file is READ AND PARSED on both paths: a designer with a trailing comma in `demand.json`
+ * is told about it under `--arrivals` exactly as under `--demand`, and a `--content` directory
+ * must carry the file either way, for the reason the eight tables above it must. What the flag
+ * changes is who gets HANDED the table, which is a host's decision and lives here rather than in
+ * the simulation (ADR-0001).
+ * ==========================================================================================
+ */
+export type Market = 'commanded' | 'byDemand';
+
+export function loadContent(contentDir?: string, market: Market = 'commanded'): BoundContent {
   const roomTypesPath = contentDir === undefined ? ROOM_TYPES_PATH : join(contentDir, 'room-types.json');
   const needTypesPath = contentDir === undefined ? NEED_TYPES_PATH : join(contentDir, 'need-types.json');
   const itemTypesPath = contentDir === undefined ? ITEM_TYPES_PATH : join(contentDir, 'item-types.json');
@@ -177,6 +218,7 @@ export function loadContent(contentDir?: string): BoundContent {
   const scenariosPath = contentDir === undefined ? SCENARIOS_PATH : join(contentDir, 'scenarios.json');
   const staffRolesPath = contentDir === undefined ? STAFF_ROLES_PATH : join(contentDir, 'staff-roles.json');
   const starTiersPath = contentDir === undefined ? STAR_TIERS_PATH : join(contentDir, 'star-tiers.json');
+  const demandPath = contentDir === undefined ? DEMAND_PATH : join(contentDir, 'demand.json');
   const registry: ContentRegistry = {
     ...loadContentFrom(roomTypesPath),
     needTypes: loadNeedTypesFrom(needTypesPath),
@@ -212,7 +254,24 @@ export function loadContent(contentDir?: string): BoundContent {
     // line anywhere saying the file was missing. That is the shape of a measurement about a
     // building the operator did not think they were running.
     starTiers: loadStarTiersFrom(starTiersPath),
+    // NINE FILES SINCE G-051b, and this one is required of a `--content` directory for exactly
+    // the argument the eight above it make — a missing file is READ AS A STATEMENT ABOUT HISTORY
+    // and a directory somebody assembled today is not history.
+    //
+    // IT IS THE ONE TABLE WHOSE PRESENCE IN THE REGISTRY THE CALLER DECIDES (see `Market`), and
+    // the read is deliberately INSIDE this literal rather than hoisted above it. Hoisting was
+    // the first spelling and it moved which file an EMPTY directory complains about — the
+    // refusal named `demand.json` where it had always named `room-types.json`, because the
+    // hoisted read ran first. The order these tables are read in is part of this loader's
+    // observable behaviour, and `cli.stdout.test.ts`'s garbage-content case is what says so.
+    ...(market === 'byDemand' ? { demand: loadDemandFrom(demandPath) } : {}),
   };
+  // AND VALIDATED EVEN WHEN IT IS WITHHELD. `Market` promises the file is read on both paths:
+  // a designer with a trailing comma in `demand.json` is told under `--arrivals` exactly as
+  // under `--demand`, and a `--content` directory must carry it either way. Without this line
+  // the clamp would be the silent omission this loader's every comment argues against — and it
+  // would be silent in the direction that matters, because the clamp is the DEFAULT.
+  if (market !== 'byDemand') loadDemandFrom(demandPath);
   const injected: SimContent = registry;
   // `bindContent` rejects content whose needs no room type provides, content whose rooms
   // require an item nothing defines (G-009), and content whose demolition refund would

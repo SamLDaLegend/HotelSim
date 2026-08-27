@@ -62,6 +62,7 @@ import {
   ROOM_TYPES_PATH,
   SCENARIOS_PATH,
   STAFF_ROLES_PATH,
+  DEMAND_PATH,
   STAR_TIERS_PATH,
 } from './content-loader.js';
 
@@ -103,6 +104,12 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // G-051a sweep 1. The star ladder's only PAID rung, and it is OFF here: this golden is the
     // hotel this runner has always described. `stars.report.test.ts` is where it is turned on.
     buyFacilityEveryTicks: 0,
+    // G-051b. `commanded` — the LABORATORY CLAMP, which is the default and is what this golden
+    // has always been: the host issues one `guestArrives` every 120 ticks and the simulation
+    // generates none of its own. Additive, so `SUMMARY_SCHEMA_VERSION` stays 4. **It is the
+    // REGIME SLOT of every arrival figure below** (`CLAUDE.md` rule 4): before this key the
+    // document could not say which of two experiments it was.
+    market: 'commanded',
   },
   world: {
     tick: 2880,
@@ -625,6 +632,13 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     nextStars: 3,
     tiers: 5,
     shortfall: [{ roomTypeIds: ['standard_room'], counting: 'rooms', minimum: 6, have: 3 }],
+    // G-051b, AND IT IS THE NUMBER THIS WHOLE GOAL EXISTS TO PRODUCE — ZERO HERE, and the zero
+    // is the control for the entire change. This run is CLAMPED: the simulation was handed no
+    // demand curve, so this hotel's two stars earned it nobody and its 32 arrivals came from the
+    // command log exactly as they always have. Every count in this document is byte-identical to
+    // G-051a's and `world.stateHash` did not move. `input.market` above is what says which of
+    // the two zeroes this is — nobody asking, rather than a rating worth nothing.
+    partiesPerDay: 0,
   },
   money: {
     // 18 rather than 17 since G-011, and the one extra is the opening capital. A hotel
@@ -791,6 +805,13 @@ const GOLDEN_2_DAYS_SEED_42 =
     // price tag is a number; a rating with one is a currency.
     'stars       2 of 5, next 3',
     'to climb    3/6 rooms of [standard_room]',
+    // ONE LINE ADDED AT G-051b, AND IT CARRIES ITS OWN REGIME. It reads ZERO because this run is
+    // CLAMPED — the simulation was handed no demand curve, so this hotel's rating earned it
+    // nobody and its 32 arrivals came from the command log exactly as they always have.
+    // **Every count in this document is unchanged and the state hash did not move**, which is
+    // the control for the whole goal: under the clamp the injected content is missing a KEY
+    // rather than carrying an empty one, so it fingerprints as it always did (see `Market`).
+    'demand      0 parties/day at 2 stars, CLAMPED — arrivals commanded every 120 ticks',
     'ledger      11 transactions',
     'revenue     51000p',
     'upkeep      -24000p',
@@ -1104,14 +1125,34 @@ describe('the DOCUMENTED invocation, through pnpm itself', () => {
 
 describe('seed honesty', () => {
   it('two seeds differ ONLY in the seed line and the state-hash line', () => {
-    // THIS TEST IS THE PARKED --seed CAVEAT, WRITTEN AS AN ASSERTION: until M4's
-    // demand model, the guest loop draws no randomness, so the seed changes nothing
-    // but its own echo and the RNG stream carried in hashed state.
+    // THIS TEST IS THE PARKED --seed CAVEAT, WRITTEN AS AN ASSERTION: the guest loop draws no
+    // randomness, so the seed changes nothing but its own echo and the RNG stream carried in
+    // hashed state.
     //
-    // TO WHOEVER LANDS THE M4 DEMAND MODEL: this test going red is its DESIGNED
-    // RETIREMENT, not a regression. The moment guest behaviour reads the RNG, the
-    // caveat this test pins stops being true — delete the test deliberately, and
-    // say so in the goal's journal entry. Do not "fix" it.
+    // ==========================================================================================
+    // ~~"until M4's demand model…"~~ ~~"TO WHOEVER LANDS THE M4 DEMAND MODEL: this test going red
+    // is its DESIGNED RETIREMENT, not a regression… delete the test deliberately, and say so in
+    // the goal's journal entry. Do not 'fix' it."~~ **STRUCK AT G-051b, WHICH IS THE GOAL THAT
+    // INSTRUCTION WAS ADDRESSED TO.**
+    //
+    // **M4's DEMAND MODEL LANDED AND THIS TEST DID NOT GO RED**, because `demand.ts` draws
+    // nothing: `partiesArrivingAt` is integer arithmetic on the tick counter, and ADR-0103 §3
+    // records that as a decision made for an EVIDENCE reason rather than a stylistic one.
+    // Following the instruction as written would have **deleted a guard that had just become
+    // PERMANENTLY valid instead of expiring** — the worst outcome available, and the only one the
+    // paragraph offered.
+    //
+    // **THE DOCBLOCK ALREADY CARRIED THE RIGHT TRIGGER FOUR LINES BELOW THE WRONG ONE**: *"the
+    // moment GUEST BEHAVIOUR READS THE RNG, the caveat this test pins stops being true."* That is
+    // the real condition and it is restated here as the only one. A milestone is not an event
+    // this test can observe; a guest drawing from the stream is.
+    //
+    // **SO THE RETIREMENT CONDITION IS: `stepGuests`, or anything it calls, takes a draw.** Until
+    // then this test is a live guard on a property the whole economy rests on — every economic
+    // figure in this repository is a READING rather than one sample of a distribution, and this
+    // is what says so at the CLI. If it ever goes red, read `demand.ts`'s header first: the
+    // decision not to draw is recorded there, and a red row here means somebody reversed it.
+    // ==========================================================================================
     const seed42 = default2Day();
     const seed43 = runCli(['--days', '2', '--seed', '43']);
     expect(seed42.status).toBe(0);
@@ -1167,6 +1208,9 @@ describe('the --content contract', () => {
     // SEVEN SINCE G-052a: who it can employ, and what one of them costs for a night.
     copyFileSync(STAFF_ROLES_PATH, join(dir, 'staff-roles.json'));
     copyFileSync(STAR_TIERS_PATH, join(dir, 'star-tiers.json'));
+    // NINE SINCE G-051b: how many parties a day each rating earns. Required whether or not this
+    // run is handed it (`Market`) — the file is read and validated on both paths.
+    copyFileSync(DEMAND_PATH, join(dir, 'demand.json'));
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
@@ -1200,6 +1244,9 @@ describe('the --content contract', () => {
     // SEVEN SINCE G-052a: who it can employ, and what one of them costs for a night.
     copyFileSync(STAFF_ROLES_PATH, join(dir, 'staff-roles.json'));
     copyFileSync(STAR_TIERS_PATH, join(dir, 'star-tiers.json'));
+    // NINE SINCE G-051b: how many parties a day each rating earns. Required whether or not this
+    // run is handed it (`Market`) — the file is read and validated on both paths.
+    copyFileSync(DEMAND_PATH, join(dir, 'demand.json'));
     return dir;
   };
 
@@ -1318,7 +1365,7 @@ describe('the --content contract', () => {
   //  is not. A single missing-file case would also pass against a loader that refused
   //  everything.
   // ==========================================================================
-  describe('every one of the eight content files is required, by name', () => {
+  describe('every one of the nine content files is required, by name', () => {
     const FILES = [
       'room-types.json',
       'need-types.json',
@@ -1341,6 +1388,11 @@ describe('the --content contract', () => {
       // for a directory somebody assembled today: every hotel reported at zero stars, with no
       // line anywhere saying the file was missing.
       'star-tiers.json',
+      // NINTH SINCE G-051b, and it earns the same argument with the sharpest version of it.
+      // Absence would read as "the host decides who turns up" — TRUE of every content set that
+      // predates the demand curve, and for a directory somebody assembled today a hotel whose
+      // rating silently earns it nothing, reported as a hotel whose rating earns it nothing.
+      'demand.json',
     ] as const;
 
     it('the complete directory loads, or the refusals below are refusals of nothing', () => {

@@ -14,6 +14,7 @@
 // its tsconfig still has `"types": []` and cannot so much as name `node:fs`.
 
 export type {
+  Demand,
   Economy,
   GuestRules,
   ItemType,
@@ -81,6 +82,11 @@ export {
   starTierRequirementSchema,
   starTierSchema,
   starTiersSchema,
+  // G-051b: the demand curve — the one DERIVED table in the content set. `partiesPerDaySchema`
+  // carries the derivation, its stated requirement, and the measurement that checks it.
+  demandSchema,
+  demandTableSchema,
+  partiesPerDaySchema,
   // G-035, ADR-0046 §6: the optional sprite reference that makes the computed contrast
   // ladder a FALLBACK rather than the rule. Exported so a host can validate an atlas key
   // with the same schema the tables use.
@@ -107,4 +113,6 @@ export {
   parseStaffRolesJson,
   parseStarTiers,
   parseStarTiersJson,
+  parseDemand,
+  parseDemandJson,
 } from './registry.js';

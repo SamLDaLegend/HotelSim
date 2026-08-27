@@ -25,6 +25,7 @@ import {
   beginTick,
   commitEntities,
   run,
+  runDemand,
   runGuests,
   runSettlement,
   stepTick,
@@ -53,6 +54,7 @@ const spawn = (entityKind: string, column = 0): Command => ({
 
 const PHASE_FNS: Readonly<Record<TickPhase, TickPhaseFn>> = {
   applyCommands,
+  runDemand,
   runGuests,
   runSettlement,
   commitEntities,
