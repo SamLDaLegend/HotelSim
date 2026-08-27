@@ -2256,3 +2256,77 @@ read the intent correctly as "no sim, no content, no tools".)* **One file change
 
 *(Also corrected: I said "the last of thirteen buttons". It is **fifteen**, and the floor count is
 world-dependent, so no fixed number is stable there.)*
+
+---
+
+## 2026-08-27 — OPEN — What is a review a measurement OF? The scale is banded over a range the hotel cannot occupy, and a guest who storms out leaves four stars.
+
+**Trigger:** G-059 returned no code. **ADR-0100 carries the analysis.** Two coupled design calls,
+both of which change what `reviewOf` means, and one of which touches a law the human confirmed
+(ADR-0045 §2). **`ai-critic` and `balance-critic` cannot settle this between them: it is a question
+about what the game is saying, not about whether the code is right.**
+
+### THE ONE-SENTENCE VERSION
+
+**At `--rooms 24 --amenities 1`, 1,677 of 3,186 guests walk out in disgust, and the hotel's mean
+review is 3.85 out of 5.** At three amenities every guest scores 5 and nothing a player does moves
+it. **The review channel is the input to reputation, which is the input to demand — so M4's whole
+build loop is about to be wired to an instrument that is stuck at the top of its range.**
+
+### WHAT IS ACTUALLY WRONG — three findings, all verified, none of them the one I recorded last week
+
+1. **The bands divide a range no hotel can occupy.** `needBandOf` divides unserved ticks by
+   `stayDurationTicks: 1440`, but `dissatisfactionCapacityTicks: 301` ejects the guest first.
+   **Bands 0–2 are structurally unreachable for any stay that completes**, so a five-point scale has
+   two usable points.
+2. **The score means over needs, and the guest leaves on the worst one.** `dissatisfaction` is a
+   draining mood driven by whichever need is currently unserved; `unservedTicks` is an undrained
+   per-need integral. **A guest driven out by one bad need has its other three at the top band, and
+   the mean washes out the reason it left.**
+3. **Storming out is not "cut short".** `isCutShort` floors the score for the three eviction reasons
+   only. `leftDissatisfied` is scored exactly like a contented checkout.
+
+**And the mechanism I ruled last week — the conjunction — is real but INERT.** Every guest already
+satisfies it. Relaxing it changes nothing. *I verified the distribution the mechanism predicts and
+never checked whether the mechanism was binding.*
+
+### WHAT I AM ASKING — one ruling, in two parts
+
+**(a) Is a review a measurement of the WHOLE STAY, or of ITS WORST PART?**
+
+The shipped answer is "the whole stay, averaged". That is what produces a four-star storm-out. The
+alternative is that a stay is remembered by what went wrong with it — which is also how hotel
+reviews work in life, and would make the storm-out score at or near the floor.
+
+**My recommendation: the worst part, with the mean kept as a tie-break, and `leftDissatisfied` added
+to `isCutShort`.** I can derive all three from things already shipped and stated, with no appeal to
+which distribution looks nicer:
+
+> The sim already has a model of *"why this guest left"* — `dissatisfaction`, driven by the
+> worst-served need at each tick. **A scorer that means over needs is discarding the sim's own answer
+> to the question the review is asking.**
+
+**(b) Does the band domain become `dissatisfactionCapacityTicks`?**
+
+This one is sourceable and I would rule it myself if it stood alone — a band must divide a range the
+subject can occupy. **But it half-fixes**: on its own it moves the point mass from 5 to 4 rather than
+spreading it, so it is only worth landing **together with (a)**, and (a) is yours.
+
+### WHAT I AM NOT ASKING FOR
+
+**Review law A survives, untouched, under everything above** — a worst-need scorer is still
+non-decreasing in every need's served ticks, so *"meeting more needs never scores lower"* still
+holds. **I withdrew my own exit criterion instead**: I had asked for the top-band count to stop
+moving with correlation, and that is a **theorem about every law-A scorer**, not a defect. Restated
+as the review *mean*, which is what ADR-0098 actually claimed.
+
+### COST, STATED BEFORE YOU RULE
+
+**~75 assertions across ~19 files** (ADR-0098's measured figure) — every measured golden folds guest
+service. **It is one atomic change and it cannot be split**, which is exactly why it must be decided
+once rather than twice.
+
+### WHAT IS PROCEEDING WHILE THIS SITS
+
+**G-050a/b stay blocked** — they were always downstream of the scorer. **G-047a, G-051, G-037a and
+G-052 are not**, and the loop continues on those. *This escalation stops the review scale, not M4.*
