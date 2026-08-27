@@ -21,6 +21,7 @@ import { departureCountOf } from './guests.js';
 import { balanceOf, sumByReason, TRANSACTION_REASONS } from './ledger.js';
 import {
   countSettlementTransactions,
+  countWageTransactions,
   isSettlementTick,
   nightlyUpkeepOf,
 } from './settlement.js';
@@ -112,35 +113,61 @@ describe('when is night — derived from the tick counter, never stored', () => 
 });
 
 describe('one settlement transaction per simulated night', () => {
-  it('records exactly one, at midnight, charging every live room its content rate', () => {
+  // THE COUNT PER NIGHT IS TWO SINCE G-052a — a wage line and an upkeep line — and every
+  // expectation below carries the wage explicitly rather than being widened to "at least one".
+  // This content declares no scenario, so its payroll is empty and every wage is 0; that is the
+  // pre-G-052a world, and the zero is the assertion rather than the accommodation.
+  it('records exactly one upkeep, at midnight, charging every live room its content rate', () => {
     const world = run(hotel(3), content, TICKS_PER_DAY, []);
-    expect(world.ledger).toHaveLength(1);
-    const settlement = world.ledger[0]!;
+    expect(world.ledger).toHaveLength(2);
+    expect(world.ledger.map((transaction) => transaction.reason)).toEqual(['wages', 'upkeep']);
+    const settlement = world.ledger[1]!;
     expect(settlement.tick).toBe(MIDNIGHT);
     expect(settlement.reason).toBe('upkeep');
     expect(settlement.amount).toBe(-(3 * UPKEEP));
+    // The wage line of a hotel that employs nobody is a TRUE zero, not negative zero.
+    expect(world.ledger[0]!.amount).toBe(0);
+    expect(Object.is(world.ledger[0]!.amount, -0)).toBe(false);
     expect(balanceOf(world.ledger)).toBe(-(3 * UPKEEP));
   });
 
-  it('records one per night over many days: the cadence is a law, not an average', () => {
+  it('records one of each per night over many days: the cadence is a law, not an average', () => {
     const days = 3;
     const world = run(hotel(2), content, days * TICKS_PER_DAY, []);
     expect(countSettlementTransactions(world.ledger)).toBe(days);
     expect(countSettlementTransactions(world.ledger)).toBe(dayOf(world));
+    // G-052a: the wage cadence is its own law and it is the same law. Two claims — the rooms
+    // were kept tonight, the payroll was met tonight — counted separately so one counter
+    // cannot stand in for the other.
+    expect(countWageTransactions(world.ledger)).toBe(days);
+    expect(countWageTransactions(world.ledger)).toBe(countSettlementTransactions(world.ledger));
     expect(world.ledger.map((transaction) => transaction.tick)).toEqual(
-      [1, 2, 3].map((day) => day * TICKS_PER_DAY - 1),
+      [1, 1, 2, 2, 3, 3].map((day) => day * TICKS_PER_DAY - 1),
     );
+    // AND THE ORDER WITHIN EACH NIGHT, which is a decision (settlement.ts's header): wages are
+    // paid before the rooms are kept. Unobservable in the arithmetic — neither charge is
+    // capped — so nothing but this would catch a reordering.
+    expect(world.ledger.map((transaction) => transaction.reason)).toEqual([
+      'wages',
+      'upkeep',
+      'wages',
+      'upkeep',
+      'wages',
+      'upkeep',
+    ]);
   });
 
-  it('settles an EMPTY hotel too — a 0-amount record, because one per night has no exceptions', () => {
+  it('settles an EMPTY hotel too — 0-amount records, because one per night has no exceptions', () => {
     // A conditional append would hold on every watched world and fail on exactly the
     // empty ones where nothing else would notice (ADR-0007). And the zero must be a
     // true zero: IEEE negation of 0 is -0, which is different bytes for the same money.
     const world = run(hotel(0), content, TICKS_PER_DAY, []);
-    expect(world.ledger).toHaveLength(1);
-    expect(world.ledger[0]!.amount).toBe(0);
-    expect(Object.is(world.ledger[0]!.amount, -0)).toBe(false);
-    expect(world.ledger[0]!.reason).toBe('upkeep');
+    expect(world.ledger).toHaveLength(2);
+    expect(world.ledger.map((transaction) => transaction.reason)).toEqual(['wages', 'upkeep']);
+    for (const transaction of world.ledger) {
+      expect(transaction.amount).toBe(0);
+      expect(Object.is(transaction.amount, -0)).toBe(false);
+    }
   });
 
   it('charges nothing for a room type that does not price upkeep — absence is not zero-but-present', () => {
@@ -154,22 +181,26 @@ describe('one settlement transaction per simulated night', () => {
       guestRules: stayRules,
     });
     const world = run(hotel(1, mixed, 'roomA'), mixed, TICKS_PER_DAY, [at(5, spawn('roomFree', 50))]);
-    expect(world.ledger).toHaveLength(1);
-    expect(world.ledger[0]!.amount).toBe(-UPKEEP);
+    expect(world.ledger).toHaveLength(2);
+    expect(world.ledger[1]!.reason).toBe('upkeep');
+    expect(world.ledger[1]!.amount).toBe(-UPKEEP);
   });
 });
 
 describe('settlement reads the draft — the same visibility rule guests live by', () => {
   it('charges a room built at midnight for that very night', () => {
     const world = run(hotel(0), content, TICKS_PER_DAY, [at(MIDNIGHT, spawn('roomA', 50))]);
-    expect(world.ledger[0]!.amount).toBe(-UPKEEP);
+    // Index 1: the wage line is settled first since G-052a.
+    expect(world.ledger[1]!.reason).toBe('upkeep');
+    expect(world.ledger[1]!.amount).toBe(-UPKEEP);
   });
 
   it('does not charge a room demolished at midnight', () => {
     const built = hotel(1);
     const roomId = built.entities.list[0]!.id;
     const world = run(built, content, TICKS_PER_DAY, [at(MIDNIGHT, despawn(roomId))]);
-    expect(world.ledger[0]!.amount).toBe(0);
+    expect(world.ledger[1]!.reason).toBe('upkeep');
+    expect(world.ledger[1]!.amount).toBe(0);
   });
 
   it('refuses an entity whose kind the content does not define, rather than billing it 0', () => {
@@ -187,9 +218,20 @@ describe('the books close after the day\'s business', () => {
     // midnight; the night's books close after it has paid.
     const world = run(hotel(1), content, TICKS_PER_DAY, [at(MIDNIGHT - SATISFY, arrive)]);
     expect(departureCountOf(world.guestOutcomes, 'checkedOut')).toBe(1);
-    expect(world.ledger).toHaveLength(2);
-    expect(world.ledger.map((transaction) => transaction.reason)).toEqual(['roomRevenue', 'upkeep']);
-    expect(world.ledger.map((transaction) => transaction.tick)).toEqual([MIDNIGHT, MIDNIGHT]);
+    expect(world.ledger).toHaveLength(3);
+    // THE PHASE ORDER IS STILL THE OBSERVATION: revenue is booked by the guest loop, both of
+    // settlement's charges after it. G-052a inserts the wage line between the revenue and the
+    // upkeep, which is where the header says it goes.
+    expect(world.ledger.map((transaction) => transaction.reason)).toEqual([
+      'roomRevenue',
+      'wages',
+      'upkeep',
+    ]);
+    expect(world.ledger.map((transaction) => transaction.tick)).toEqual([
+      MIDNIGHT,
+      MIDNIGHT,
+      MIDNIGHT,
+    ]);
   });
 
   it('is structural: settling before the guest loop throws, on every tick', () => {
@@ -310,18 +352,27 @@ describe('the permanent v1 fixture, across a settlement boundary', () => {
 
     const advanced = run(world, fixtureContent, 1_000, []);
     expect(advanced.tick).toBe(SAVE_V1_TICK + 1_000);
-    // Ticks 5000..5999 cross exactly one midnight: 5759.
-    expect(advanced.ledger).toHaveLength(3);
+    // Ticks 5000..5999 cross exactly one midnight: 5759. FOUR SINCE G-052a — the crossed
+    // midnight now settles a wage line as well as an upkeep line, and the fixture's content
+    // declares no scenario and therefore no payroll, so that wage is 0. Absence is not
+    // emptiness here in exactly the sense it is for upkeep: this world predates the concept.
+    expect(advanced.ledger).toHaveLength(4);
     expect(advanced.ledger.map((transaction) => transaction.reason)).toEqual([
       'nightly revenue',
       'nightly upkeep',
+      'wages',
       'upkeep',
     ]);
-    const settlement = advanced.ledger[2]!;
+    const wages = advanced.ledger[2]!;
+    expect(wages.tick).toBe(5_759);
+    expect(wages.amount).toBe(0);
+    expect(Object.is(wages.amount, -0)).toBe(false);
+    const settlement = advanced.ledger[3]!;
     expect(settlement.tick).toBe(5_759);
     expect(settlement.amount).toBe(0);
     expect(countSettlementTransactions(advanced.ledger)).toBe(1);
-    // The legacy money still folds exactly as it did: 8500 - 2500 + 0.
+    expect(countWageTransactions(advanced.ledger)).toBe(1);
+    // The legacy money still folds exactly as it did: 8500 - 2500 + 0 + 0.
     expect(balanceOf(advanced.ledger)).toBe(6_000);
   });
 });

@@ -12,6 +12,7 @@
     "./data/economy.json": "./data/economy.json",
     "./data/guest-rules.json": "./data/guest-rules.json",
     "./data/scenarios.json": "./data/scenarios.json",
+    "./data/staff-roles.json": "./data/staff-roles.json",
     "./data/speed-ladder.json": "./data/speed-ladder.json"
   },
   "scripts": {

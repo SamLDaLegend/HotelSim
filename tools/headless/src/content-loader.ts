@@ -23,6 +23,7 @@ import {
   parseNeedTypesJson,
   parseScenariosJson,
   parseSpeedLadderJson,
+  parseStaffRolesJson,
 } from '@hotelsim/content';
 import type {
   ContentRegistry,
@@ -32,6 +33,7 @@ import type {
   NeedType,
   Scenario,
   SpeedRung,
+  StaffRole,
 } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
@@ -53,6 +55,8 @@ export const ECONOMY_PATH = resolveContent('@hotelsim/content/data/economy.json'
 export const GUEST_RULES_PATH = resolveContent('@hotelsim/content/data/guest-rules.json');
 /** What the hotel OPENS with (G-057) — HOTELSIM.md section 8's M4 hard prerequisite. */
 export const SCENARIOS_PATH = resolveContent('@hotelsim/content/data/scenarios.json');
+/** Who the hotel can employ, and what one of them costs for a night (G-052a). */
+export const STAFF_ROLES_PATH = resolveContent('@hotelsim/content/data/staff-roles.json');
 /**
  * The play-speed ladder (G-021). Resolved here like every other table — and read by
  * `loadSpeedLadderFrom` below, which `loadContent` deliberately never calls. The reason is
@@ -96,6 +100,11 @@ export function loadGuestRulesFrom(path: string): readonly GuestRules[] {
 /** Read and validate one scenario file (G-057). Same all-or-nothing discipline. */
 export function loadScenariosFrom(path: string): readonly Scenario[] {
   return parseScenariosJson(readContentFile(path), path);
+}
+
+/** Read and validate one staff-role file (G-052a). Same all-or-nothing discipline. */
+export function loadStaffRolesFrom(path: string): readonly StaffRole[] {
+  return parseStaffRolesJson(readContentFile(path), path);
 }
 
 /**
@@ -157,6 +166,7 @@ export function loadContent(contentDir?: string): BoundContent {
   const economyPath = contentDir === undefined ? ECONOMY_PATH : join(contentDir, 'economy.json');
   const guestRulesPath = contentDir === undefined ? GUEST_RULES_PATH : join(contentDir, 'guest-rules.json');
   const scenariosPath = contentDir === undefined ? SCENARIOS_PATH : join(contentDir, 'scenarios.json');
+  const staffRolesPath = contentDir === undefined ? STAFF_ROLES_PATH : join(contentDir, 'staff-roles.json');
   const registry: ContentRegistry = {
     ...loadContentFrom(roomTypesPath),
     needTypes: loadNeedTypesFrom(needTypesPath),
@@ -178,6 +188,13 @@ export function loadContent(contentDir?: string): BoundContent {
     // is the ONLY place an opening balance is declared, so a shrug here is the exact failure
     // HOTELSIM.md section 8 is about.
     scenarios: loadScenariosFrom(scenariosPath),
+    // SEVEN FILES SINCE G-052a, and this one is required of a `--content` directory for exactly
+    // the argument the six above it make. Absence would be read as "nobody can be employed",
+    // which is a TRUE statement about content that predates the money loop's third term and a
+    // silent empty payroll for a directory somebody assembled today — a hotel whose scenario
+    // posts a night porter would then fail at `bindContent` naming a role its own directory does
+    // define, which is a message about the wrong thing.
+    staffRoles: loadStaffRolesFrom(staffRolesPath),
   };
   const injected: SimContent = registry;
   // `bindContent` rejects content whose needs no room type provides, content whose rooms

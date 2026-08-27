@@ -19,7 +19,7 @@ It is cheap, it is a human call by construction, and it would have caught this a
 The game is three nested feedback loops. Every design and code decision should be traceable to one of them:
 
 Guest loop — guest arrives [EXISTS], forms needs [EXISTS], gets them met or doesn't [EXISTS], pays [EXISTS], leaves a review [EXISTS].
-Money loop — room revenue [EXISTS] against wages [OWED TO M4] and upkeep [EXISTS], settled nightly [EXISTS].
+Money loop — room revenue [EXISTS] against wages [EXISTS] and upkeep [EXISTS], settled nightly [EXISTS].
 Build loop — spend cash [EXISTS], add capacity [EXISTS] and quality [OWED TO M4], raise reputation [OWED TO M4], raise demand [OWED TO M4], back to the guest loop [OWED TO M4].
 
 EVERY TERM CARRIES ITS MARK ON THE TERM, so no reader and no grep reaches one of these words without it. Not one of the words above was changed, added or removed to fit a mark — §1.1 explains why they are marks at all, and carries the evidence for each one.
@@ -34,7 +34,7 @@ SO EVERY TERM CARRIES A MARK — EXISTS or OWED TO M-N — AND A TERM WITHOUT ON
 
 TWO RULES, AND THEY ARE WHAT KEEP THIS FROM ROTTING INTO THE THING IT REPLACED. (1) EVERY MARK OF EXISTS NAMES THE SYMBOL THAT MAKES IT TRUE, so a reader confirms it with one grep instead of believing this file — that is the whole difference between a mark and a second description. (2) THE MARK MOVES IN THE SAME COMMIT AS THE TERM: a goal that lands a term re-marks it, a goal that adds a term to a loop adds it marked, and a goal that finds a mark wrong says so rather than editing quietly. This is NOT a documentation-maintenance mechanism and must not grow into one (G-053a bound 7) — it is fifteen lines that either match the tree or do not.
 
-MARKED 2026-08-25 (G-053a), AND THE COUNT NAMES ITS UNIT BECAUSE §4.1 REQUIRES IT TO: THE THREE LOOP SENTENCES CARRY FOURTEEN TERMS AND FIFTEEN MARKS — TEN TERMS EXIST, FOUR ARE OWED, and the fifteenth mark is the build loop's CLOSURE, which is a claim rather than a term and is owed with `demand`. THREE FURTHER MARKS SIT ON §1's ROOM-DESIGN SENTENCE above and are counted separately, so that this loop count stays comparable with the one in the goal block that ordered the marking. Every EXISTS below was re-verified against the tree on that date rather than inherited from the block — and one of them came back different, which is recorded at its own row.
+MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a), AND THE COUNT NAMES ITS UNIT BECAUSE §4.1 REQUIRES IT TO: THE THREE LOOP SENTENCES CARRY FOURTEEN TERMS AND FIFTEEN MARKS — ELEVEN TERMS EXIST, THREE ARE OWED (`wages` moved at G-052a and this count moved with it, in the same change, in both files), and the fifteenth mark is the build loop's CLOSURE, which is a claim rather than a term and is owed with `demand`. THREE FURTHER MARKS SIT ON §1's ROOM-DESIGN SENTENCE above and are counted separately, so that this loop count stays comparable with the one in the goal block that ordered the marking. Every EXISTS below was re-verified against the tree on that date rather than inherited from the block — and one of them came back different, which is recorded at its own row.
 
   GUEST LOOP — five terms, five EXIST. It is the only loop running on all of its declared terms.
 
@@ -53,13 +53,38 @@ MARKED 2026-08-25 (G-053a), AND THE COUNT NAMES ITS UNIT BECAUSE §4.1 REQUIRES 
                                         the two must not be confused: a term that exists and says little is a different
                                         problem from a term that is not there.
 
-  MONEY LOOP — four terms, three EXIST, one OWED. It has run on two thirds of itself since M0.
+  MONEY LOOP — four terms, FOUR EXIST. IT IS THE SECOND LOOP TO RUN ON ALL OF ITS DECLARED TERMS, and it had run on THREE QUARTERS of itself from M0 until G-052a — three terms of four. (This line read "two thirds" for the length of one review round: that is the count from ADR-0079's era, which said "two of its three declared terms" because it was counting the loop's three NOUNS and not counting "settled nightly" as a term at all. The loop sentence carries FOUR marks, so the denominator here is four.)
 
     room revenue               EXISTS   `roomRevenue` in `TransactionReason` (ledger.ts).
-    wages                      OWED TO M4 — G-052 (staff exist, occupy rooms, and are paid). `TransactionReason` has EXACTLY
-                                        NINE MEMBERS and none of them is a wage (ledger.ts). The only two occurrences of the
-                                        word in all of `packages/sim` are comments deferring it (build.ts:52,
-                                        settlement.ts:8). §8 puts "staff hiring and wages" in M4.
+    wages                      EXISTS   `wages` in `TransactionReason` (ledger.ts) — the TENTH member, and the first
+                                        recurring sink attached to HEADCOUNT (`upkeep` has been one since G-005 and
+                                        scales with ROOMS; this line read "the first recurring sink in this economy"
+                                        for one review round and that was false). `settleNight` books exactly one a night,
+                                        unconditionally, BEFORE upkeep (settlement.ts, and the order is a written
+                                        decision); `nightlyWagesOf` folds it over `World.staff` at each role's
+                                        `nightlyWagePence`, which is content (`staff-roles.json`, I3). A staff role is
+                                        a content type with a schema and a bind-time bound, a staff member is a PERSON
+                                        with a deterministic id — `StaffMember` and `StaffStore` in staff.ts, NOT an
+                                        `Entity` (an entity is a spatial thing with a footprint; a staff member has no
+                                        position until G-052b, which is the seam). THE WAGE RATE IS DERIVED: one member of
+                                        staff costs the hotel's LEAST VALUABLE occupied room-night — a room earning
+                                        from exactly ONE guest, 8,500 - 2,500 = 6,000p. THE TWO FIELDS HAVE DIFFERENT
+                                        DENOMINATORS and that is deliberate: `nightlyRatePence` is charged PER
+                                        GUEST-NIGHT (`payForStay` books it once per completed stay, per guest, and a
+                                        stay is one night) while `nightlyUpkeepPence` is PER ROOM-NIGHT, so the
+                                        difference is a single-occupancy margin and the realised one is ~1.62x it.
+                                        The bound built on it is CONSERVATIVE rather than tight
+                                        (`nightlyWagePenceSchema` carries the derivation, the measurement and the
+                                        correction that produced them).
+                                        THE HONEST QUALIFICATION, AND IT IS THE SHAPE `add capacity` USES ABOVE: the
+                                        MECHANISM is live and the SHIPPED SCENARIO EMPLOYS NOBODY, so every shipped arm
+                                        settles a wage of ZERO. A compulsory payroll breaks G-011's criterion B —
+                                        measured, 441 builds against 23 — because at G-052a the player has no hire and
+                                        no fire, and a recurring charge nobody can decline is a trap rather than a
+                                        difficulty. The ROSTER is one field in `scenarios.json` and it belongs to
+                                        G-052b. §8 puts "staff hiring and wages" in M4; the wage half is built.
+                                        G-052b still owes: staff OCCUPY ROOMS, which is `accessRule: staffOnly`
+                                        becoming reachable, and it is not built.
     upkeep                     EXISTS   `upkeep` in `TransactionReason`; `nightlyUpkeepOf` (settlement.ts) folds each room
                                         type's `nightlyUpkeepPence`.
     settled nightly            EXISTS   `isSettlementTick` — `tick % TICKS_PER_DAY === TICKS_PER_DAY - 1` — and `settleNight`

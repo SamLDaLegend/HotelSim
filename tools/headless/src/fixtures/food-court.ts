@@ -160,6 +160,35 @@ export const FOOD_COURT_SCENARIOS = [
 ] as const;
 
 /**
+ * WHO THE FOOD COURT CAN EMPLOY (G-052a). The table is required of a `--content` directory, so
+ * this fixture declares one — and its scenario POSTS NOBODY, deliberately.
+ *
+ * The fixture exists to pin a NEED shape (a lodging-free hotel a visitor passes through), and
+ * a payroll on it would move every balance figure in every test that uses it for a reason none
+ * of them is measuring.
+ *
+ * WHERE THE WAGE TERM IS ACTUALLY MEASURED, AND IT IS NOT ON SHIPPED CONTENT: the shipped
+ * scenario employs NOBODY (`openingStaffSchema` carries that ruling), so a shipped run settles a
+ * wage of zero. The non-zero arm is `wages.report.test.ts`, which assembles a `--content`
+ * directory whose scenario DOES employ somebody and drives it through the real loader and the
+ * real CLI; hand-built worlds in `staff.test.ts` cover the folds.
+ *
+ * THE WAGE IS 0 AND IT IS FORCED RATHER THAN CHOSEN, which makes this fixture a live
+ * demonstration of the bound `assertWagesAreCoveredByARoomNight` enforces. Every room type here
+ * charges `nightlyRatePence: 0` — a food court sells nothing, by construction — so the best
+ * SINGLY-OCCUPIED room-night this content can sell is worth NOTHING (and so is a shared one), and the only admissible wage is 0. A penny
+ * more and `bindContent` refuses the fixture. That is the bound working: a hotel with no
+ * profitable room cannot pay anybody out of trading, whatever it does.
+ */
+export const FOOD_COURT_STAFF_ROLES = [
+  {
+    id: 'food_court_porter',
+    name: 'Food Court Porter',
+    nightlyWagePence: 0,
+  },
+] as const;
+
+/**
  * The visit duration, derived. See `visitDurationTicksSchema` for the full working; the short
  * form is that a visitor arrives with every need at its want line and is served one at a time:
  *
@@ -199,10 +228,11 @@ export const FOOD_COURT_CONTENT = {
   economy: FOOD_COURT_ECONOMY,
   guestRules: FOOD_COURT_GUEST_RULES,
   scenarios: FOOD_COURT_SCENARIOS,
+  staffRoles: FOOD_COURT_STAFF_ROLES,
 };
 
 /**
- * Write the six files into a fresh temp directory and return its path, for `--content <dir>`.
+ * Write the seven files into a fresh temp directory and return its path, for `--content <dir>`.
  *
  * REAL-PATHED, because `/var` is a symlink to `/private/var` on macOS and G-022 spent a fix on
  * exactly that: a test comparing a path it constructed against a path a child process reported
@@ -222,5 +252,6 @@ export function writeFoodCourtContentDir(): string {
   write('economy.json', FOOD_COURT_ECONOMY);
   write('guest-rules.json', FOOD_COURT_GUEST_RULES);
   write('scenarios.json', FOOD_COURT_SCENARIOS);
+  write('staff-roles.json', FOOD_COURT_STAFF_ROLES);
   return dir;
 }

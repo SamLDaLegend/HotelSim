@@ -191,6 +191,11 @@ describe('validity adds nothing to the save', () => {
       // exception to it.
       'reviewOutcomes',
       'rng',
+      // G-052a. WHO THE HOTEL EMPLOYS. Listed here for `reviewOutcomes`' reason: being in
+      // `World` is correct for it — a payroll is a fact about the hotel, not a cached property
+      // of the building — and this test asks whether VALIDITY leaked a field, not whether the
+      // type ever grows.
+      'staff',
       // G-038a-ii-alpha. WHERE THE PLAN SAYS PEOPLE CLIMB — `corridors`' argument exactly, one
       // axis over: a record of what the player DREW rather than a cached property of the
       // building, which is what this test is about.
@@ -343,12 +348,15 @@ describe('the permanent v1 fixture', () => {
     const world = deserialise(SAVE_V1_BYTES);
     const advanced = run(world, fixtureContent, 1_000);
     expect(advanced.tick).toBe(world.tick + 1_000);
-    // The run crosses one settlement tick, which books one `upkeep` transaction of
-    // amount 0 — this content prices no upkeep, and settlement is a law rather than an
-    // event (G-005). The BALANCE is what "economics unchanged" means, and it does not
-    // move: three unplaced rooms are charged exactly what they always were.
-    expect(advanced.ledger).toHaveLength(world.ledger.length + 1);
+    // The run crosses one settlement tick, which books one `upkeep` transaction of amount 0
+    // and — since G-052a — one `wages` transaction of amount 0 beside it. This content prices
+    // no upkeep and declares no scenario, so it employs nobody; settlement is a law rather than
+    // an event (G-005), so both lines are written anyway. The BALANCE is what "economics
+    // unchanged" means, and it does not move: three unplaced rooms are charged exactly what
+    // they always were, and a payroll of nobody costs nothing.
+    expect(advanced.ledger).toHaveLength(world.ledger.length + 2);
     expect(sumByReason(advanced.ledger, 'upkeep')).toBe(0);
+    expect(sumByReason(advanced.ledger, 'wages')).toBe(0);
     expect(balanceOf(advanced.ledger)).toBe(balanceOf(world.ledger));
   });
 });

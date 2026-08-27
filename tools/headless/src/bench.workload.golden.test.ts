@@ -500,7 +500,19 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   arrived, `gaveUp` and `evictedGuests` still zero** — the outcome test below re-checks
     //   that rather than this comment asserting it. `check:stamp` reads this literal out of the
     //   tree, so the digest's measure-golden line moves with it.
-    expect(hashState(plain)).toBe('289a56519ced9655');
+    // - `289a56519ced9655` -> `856ade18e3ed8264` AT G-052a, AND THERE ARE TWO CAUSES AT ONCE,
+    //   NEITHER OF THEM BEHAVIOUR. The money loop's third term landed: `World` GAINED an empty
+    //   `staff` payroll and the save went to **v24**, and `World.contentHash` MOVED because the
+    //   shipped content gained `staff-roles.json` and `scenarios.json` gained an `openingStaff`
+    //   key. The ledger also gains one zero-amount `wages` line per simulated night, which is
+    //   hashed state like every other transaction. **NO BEHAVIOUR**: the shipped scenario
+    //   employs NOBODY (`openingStaffSchema` carries that ruling and its measurement), so not a
+    //   penny moves and no guest does anything differently. **checkedOut 27, leftDissatisfied
+    //   59, still-in-the-hotel 14, conservation still closing on 100 arrived, `gaveUp` and
+    //   `evictedGuests` still zero** — the outcome test below re-checks that rather than this
+    //   comment asserting it. `check:stamp` reads this literal out of the tree, so the digest's
+    //   measure-golden line moves with it.
+    expect(hashState(plain)).toBe('856ade18e3ed8264');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -906,7 +918,13 @@ describe('the same workload with the player churning the building', () => {
     // tie-break (`needTieBreakRank`, ADR-0078). `World.contentHash` is unchanged, no save bump,
     // no migration. **20 + 43 + 24 -> the evictions rise to 25, and 100 arrived still closes**,
     // and `gaveUp` is still zero.
-    expect(hashState(churn)).toBe('fe199f507b18536c');
+    // G-052a MOVES THIS LITERAL FOR THE SHAPE AND NOT FOR THE RUN:
+    // `fe199f507b18536c` -> `7da8674748116abb`, two causes and neither is behaviour — a new
+    // `World.staff` field (save **v24**) and a `World.contentHash` that moves because the
+    // shipped content gained `staff-roles.json`, plus one zero-amount `wages` line per night in
+    // the ledger. The shipped scenario employs nobody, so no money moves. **20 + 43 + 25 and
+    // 100 arrived still closes, exactly as above**, and `gaveUp` is still zero.
+    expect(hashState(churn)).toBe('7da8674748116abb');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

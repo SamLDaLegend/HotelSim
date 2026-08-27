@@ -938,10 +938,11 @@ export function runSettlement(state: TickState): TickState {
     tick: state.world.tick,
     ledger: before,
     entities: state.entities,
+    staff: state.world.staff,
     content: state.content,
   });
-  // Local postcondition: a settlement tick appended exactly one UPKEEP transaction, any
-  // other tick appended nothing at all. `countSettlementTransactions` over the whole log
+  // Local postcondition: a settlement tick appended exactly one WAGE and exactly one UPKEEP
+  // transaction, any other tick appended nothing at all. `countSettlementTransactions` over the whole log
   // is the per-RUN law and lives with the host; this is the per-TICK half, and it cannot
   // pass while inspecting nothing because one branch or the other applies to every tick.
   //
@@ -956,7 +957,7 @@ export function runSettlement(state: TickState): TickState {
   if (ledger === before) {
     if (isSettlementTick(state.world.tick)) {
       throw new Error(
-        `runSettlement: tick ${state.world.tick} is a settlement tick and appended nothing; a settlement tick always charges upkeep, even a zero night`,
+        `runSettlement: tick ${state.world.tick} is a settlement tick and appended nothing; a settlement tick always charges wages and upkeep, even a zero night`,
       );
     }
     return { ...state, world: state.world, settlementRun: true };
@@ -966,22 +967,44 @@ export function runSettlement(state: TickState): TickState {
   // transaction — a loan repayment — and a bare length check would have quietly accepted
   // two upkeeps. Counting the appended slice by reason keeps the cadence claim exactly as
   // strong as it was.
+  let appendedWages = 0;
   let appendedUpkeep = 0;
   let appendedRepayments = 0;
   for (let i = before.length; i < ledger.length; i += 1) {
     const transaction = ledger[i];
     if (transaction === undefined) continue;
-    if (transaction.reason === 'upkeep') appendedUpkeep += 1;
+    if (transaction.reason === 'wages') appendedWages += 1;
+    else if (transaction.reason === 'upkeep') appendedUpkeep += 1;
     else if (transaction.reason === 'loanRepayment') appendedRepayments += 1;
     else {
       throw new Error(
-        `runSettlement: tick ${state.world.tick} appended a "${transaction.reason}" transaction; settlement writes upkeep and loan repayments and nothing else`,
+        `runSettlement: tick ${state.world.tick} appended a "${transaction.reason}" transaction; settlement writes wages, upkeep and loan repayments and nothing else`,
       );
     }
   }
   if (appendedUpkeep !== 1) {
     throw new Error(
       `runSettlement: tick ${state.world.tick} appended ${appendedUpkeep} upkeep transaction(s); a settlement tick appends exactly one and any other tick none`,
+    );
+  }
+  // THE WAGE HALF OF THE CADENCE (G-052a), counted separately rather than folded into the
+  // upkeep count. They are two claims — "the payroll was met tonight" and "the rooms were kept
+  // tonight" — and one counter covering both would pass a night that charged two wages and no
+  // upkeep. The law the host reads is `countWageTransactions === countSettlementTransactions`;
+  // this is its per-tick half.
+  if (appendedWages !== 1) {
+    throw new Error(
+      `runSettlement: tick ${state.world.tick} appended ${appendedWages} wage transaction(s); a settlement tick appends exactly one and any other tick none`,
+    );
+  }
+  // AND THE ORDER, WHICH IS A DECISION AND THEREFORE CHECKED (settlement.ts's header): wages
+  // are paid before the rooms are kept. It is unobservable in the arithmetic today — neither
+  // charge is capped — so nothing but this would catch a reordering, and the goal that
+  // introduces bankruptcy inherits the order rather than re-deciding it.
+  const firstAppended = ledger[before.length];
+  if (firstAppended === undefined || firstAppended.reason !== 'wages') {
+    throw new Error(
+      `runSettlement: tick ${state.world.tick} settled "${String(firstAppended?.reason)}" first; wages are paid before upkeep (G-052a)`,
     );
   }
   if (!isSettlementTick(state.world.tick)) {

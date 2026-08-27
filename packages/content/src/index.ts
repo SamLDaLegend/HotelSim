@@ -24,6 +24,8 @@ export type {
   Scenario,
   SeededStockPolicy,
   SpeedRung,
+  StaffPosting,
+  StaffRole,
 } from './schema.js';
 export {
   abandonMarginBasisPointsSchema,
@@ -55,6 +57,18 @@ export {
   speedLadderSchema,
   speedRungNameSchema,
   speedRungSchema,
+  // G-052a: the money loop's third term. `nightlyWagePenceSchema`'s docblock carries the whole
+  // derivation — one member of staff costs the hotel's LEAST VALUABLE occupied room-night, a room
+  // earning from exactly ONE guest, because `nightlyRatePence` is charged PER GUEST-NIGHT while
+  // `nightlyUpkeepPence` is PER ROOM-NIGHT — and the bound that `bindContent` enforces against the
+  // room table. (This line read "exactly one occupied room-night's margin" until round 3; that is
+  // the phrasing ADR-0101 §1 withdraws, and it survived here because the first sweep of it
+  // stopped at the two docblocks that carry the argument.)
+  nightlyWagePenceSchema,
+  openingStaffSchema,
+  staffPostingSchema,
+  staffRoleSchema,
+  staffRolesSchema,
   // G-035, ADR-0046 §6: the optional sprite reference that makes the computed contrast
   // ladder a FALLBACK rather than the rule. Exported so a host can validate an atlas key
   // with the same schema the tables use.
@@ -77,4 +91,6 @@ export {
   parseScenariosJson,
   parseSpeedLadder,
   parseSpeedLadderJson,
+  parseStaffRoles,
+  parseStaffRolesJson,
 } from './registry.js';

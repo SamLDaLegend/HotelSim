@@ -312,6 +312,21 @@ const DELIBERATELY_NOT_DRAWN: Readonly<Record<string, string>> = {
   // installs a lift, a watcher with no line drawn is looking at a hotel that is lying to it.
   lift: 'inert until G-038b-ii declares one; drawing a queue is that goal and ADR-0075 prices it',
   liftQueue: 'always empty until G-038b-ii declares a lift; the drawing work is budgeted there',
+  // G-052a. THE PAYROLL, AND THIS EXEMPTION IS STRUCTURAL RATHER THAN A DEBT — which is the
+  // difference between it and the two lines above.
+  //
+  // The lift pair is exempt because the drawing work was DEFERRED; a watcher would read a queue
+  // if there were one. A member of staff at G-052a HAS NOWHERE TO BE DRAWN: it carries an id and
+  // a role and no position, deliberately, because occupying a room is G-052b. There is no cell,
+  // no floor and no footprint to put a rectangle at, so drawing it would mean inventing a place
+  // for it — which is precisely the decision G-052b exists to make.
+  //
+  // WHAT A WATCHER LOSES BY THIS, STATED SO IT IS A CHOICE AND NOT AN OVERSIGHT: nothing on
+  // screen says the hotel is paying anybody. The wage bill is in the CLI report — `wages Np, N
+  // on the payroll, N nights` — where the other money terms are read. THE MOMENT G-052b GIVES A
+  // MEMBER OF STAFF A POSITION THIS LINE IS A LIE, and that goal must budget the drawing, in
+  // exactly the sense the lift lines say it must.
+  staff: 'no position at G-052a; G-052b places staff and owns the drawing',
 };
 
 describe('the viewer shows what the simulation records, or says why not', () => {

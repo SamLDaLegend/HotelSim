@@ -90,7 +90,7 @@ describe('I6 stored v1 save fixture', () => {
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(23);
+    expect(SAVE_SCHEMA_VERSION).toBe(24);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -145,7 +145,13 @@ describe('I6 stored v1 save fixture', () => {
     // shaft carried everybody who wanted to climb and nobody ever queued — which, like the
     // stairwell before them, is not a fact about v1 but about v22, because no era up to it had
     // a word for a lift.
-    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 11);
+    //
+    // TWELVE AFTER G-052a: `staff` (23 -> 24), the twelfth. What it says about THESE bytes is
+    // the cleanest of the twelve — a v1 world employed nobody — and unlike the stairwell and the
+    // lift it IS a fact about v1 as much as about v23, because no era up to it had a word for a
+    // staff role, a wage or a payroll. The step writes no wage transactions for nights already
+    // simulated, which is why the v1 ledger below still folds to exactly what it always did.
+    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 12);
   });
 
   it('continues to simulate from where it was saved', () => {

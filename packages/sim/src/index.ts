@@ -35,6 +35,10 @@ export type {
   // room the host places FREE does to that number.
   ScenarioData,
   SeededStockPolicyData,
+  // G-052a — the money loop's third term: who the hotel can employ, what one of them costs for
+  // a night, and who is on the opening payroll.
+  StaffPostingData,
+  StaffRoleData,
   ItemTypeData,
   NeedRole,
   NeedTypeData,
@@ -113,6 +117,12 @@ export {
   // second copy of the product in step with it.
   declaredRefill,
   serviceFloorRefill,
+  // G-052a. On the surface for `stayDurationOf`'s reason: the host reports the payroll and the
+  // wage bill, and re-derives them through THE accessors rather than keeping a second copy.
+  findStaffRole,
+  nightlyWageOf,
+  openingStaffOf,
+  staffRolesInOrder,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {
@@ -318,10 +328,22 @@ export {
 export type { SettlementInput } from './settlement.js';
 export {
   countSettlementTransactions,
+  // G-052a. `countSettlementTransactions`' twin: the host reports the wage cadence it MEASURED
+  // rather than one it inferred (ADR-0007).
+  countWageTransactions,
   isSettlementTick,
   nightlyUpkeepOf,
   settleNight,
 } from './settlement.js';
+export type { StaffId, StaffMember, StaffStore } from './staff.js';
+export {
+  assertStaffStoreInvariants,
+  createStaffStore,
+  headcountOf,
+  hireOpeningStaff,
+  nightlyWagesOf,
+  NO_STAFF,
+} from './staff.js';
 export type { RngState } from './rng.js';
 export { createRng, nextIntBelow, nextUint32 } from './rng.js';
 export type { Migration, SaveBlob, SaveSchema } from './save.js';

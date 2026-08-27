@@ -5,9 +5,31 @@
 //
 // WHAT SETTLEMENT IS AT M0. Upkeep is the money-out: every live room costs its room
 // type's `nightlyUpkeepPence` per night, a rate that lives in `packages/content` and
-// never here (I3, ADR-0003). Wages join it at M4; the phase they will join already
-// exists. Once per night the charges are folded into ONE transaction — the exit
-// criterion's "one settlement transaction per simulated night", made literal.
+// never here (I3, ADR-0003). Once per night the charges are folded into ONE transaction per
+// kind — the exit criterion's "one settlement transaction per simulated night", made literal.
+//
+// WAGES JOINED AT G-052a, IN THE PHASE THIS HEADER SAID THEY WOULD. Every live member of staff
+// costs its role's `nightlyWagePence` per night — content, never here — and the payroll is
+// `World.staff`. The deferral that stood in the paragraph above for eleven milestones' worth of
+// goals is discharged, and `HOTELSIM.md` §1.1's `wages` term is re-marked with it.
+//
+// THE ORDER IS A DECISION AND IT IS WRITTEN DOWN: WAGES, THEN UPKEEP, THEN THE LOAN REPAYMENT.
+//
+// It changes no amount today. Neither wages nor upkeep is capped by anything — a negative
+// balance is allowed (see below) — so the two charges commute arithmetically and the order
+// decides only where two lines sit in the log. It is decided now anyway, because the goal that
+// introduces bankruptcy inherits it rather than re-litigating it:
+//
+//   WAGES FIRST, BECAUSE A WAGE IS OWED TO A PERSON AND UPKEEP IS OWED TO A BUILDING. When a
+//   later goal makes a charge go unpaid, the one that must give way is the one the game can
+//   MODEL going unpaid — an unmaintained room can degrade into a condition the schema has
+//   already reserved for it (ADR-0047 B5), whereas an unpaid member of staff can only leave,
+//   which is a mechanic nothing here has. Settling wages first means the cash that runs out runs
+//   out on the term that has somewhere to go.
+//
+// The loan repayment stays LAST for G-011's own reason, which is unchanged and now covers two
+// charges instead of one: it is the only charge capped by surviving cash, so it comes out of
+// what is left after the bills the hotel cannot decline.
 //
 // "NIGHT" IS DERIVED, NEVER STORED. `isSettlementTick` is a remainder on the tick
 // counter — the same discipline as `dayOf` in world.ts, and for the same reason: a
@@ -26,7 +48,7 @@
 // `appendTransaction` rejects it at the choke point.
 //
 // SETTLEMENT NOW HAS A SECOND CHARGE, AND ITS ORDER IS A DECISION (G-011). While a loan
-// is outstanding, a repayment is taken after upkeep. Upkeep first, because it is the
+// is outstanding, a repayment is taken after upkeep. Upkeep first, because it is a
 // charge the hotel cannot decline and must never be displaced by a repayment; the
 // repayment then comes out of whatever cash survives the night's bills, and is CAPPED BY
 // THAT CASH so a loan can never drive the balance below zero on its own. The cap is what
@@ -61,6 +83,8 @@ import type { EntityDraft } from './entities.js';
 import { appendTransaction } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { repayLoan } from './loan.js';
+import { nightlyWagesOf } from './staff.js';
+import type { StaffStore } from './staff.js';
 import { TICKS_PER_DAY } from './world.js';
 
 /**
@@ -126,34 +150,73 @@ export type SettlementInput = {
   readonly ledger: readonly Transaction[];
   /** The open entity draft: spawns staged this tick are visible, despawns are not. */
   readonly entities: EntityDraft;
+  /**
+   * The payroll (G-052a). The COMMITTED store rather than a draft, because nothing in this
+   * build hires or fires mid-tick: `hireOpeningStaff` runs once, in `createWorld`. When a hire
+   * command lands it will need the draft discipline the entity store has, and that is G-052b's
+   * to decide rather than a shape guessed at here.
+   */
+  readonly staff: StaffStore;
   readonly content: BoundContent;
 };
 
 /**
  * One tick of settlement. Pure: same input, same output, on every machine.
  *
- * On a settlement tick, appends exactly one `upkeep` transaction — and then, only while a
- * loan is outstanding and there is cash to pay it with, one `loanRepayment` (G-011). On
- * every other tick, returns the input log BY REFERENCE, so the 1,439 quiet minutes of a
- * day allocate nothing (the idle-tick guarantee the rest of the sim keeps).
+ * On a settlement tick, appends exactly one `wages` transaction and exactly one `upkeep`
+ * transaction, IN THAT ORDER — and then, only while a loan is outstanding and there is cash to
+ * pay it with, one `loanRepayment` (G-011). On every other tick, returns the input log BY
+ * REFERENCE, so the 1,439 quiet minutes of a day allocate nothing (the idle-tick guarantee the
+ * rest of the sim keeps).
  *
- * The upkeep append is UNCONDITIONAL and the repayment is not, and the asymmetry is the
- * point: "one settlement per night, no exceptions" is a cadence somebody counts
- * (`countSettlementTransactions === dayOf(world)`, exactly), whereas a repayment is an
- * event that either happened or did not. `runSettlement` checks both halves against the
- * INPUT rather than against the code that appended them.
+ * The wage and upkeep appends are UNCONDITIONAL and the repayment is not, and the asymmetry is
+ * the point: "one settlement per night, no exceptions" is a cadence somebody counts
+ * (`countSettlementTransactions === dayOf(world)`, and `countWageTransactions` with it, exactly),
+ * whereas a repayment is an event that either happened or did not. `runSettlement` checks both
+ * halves against the INPUT rather than against the code that appended them.
+ *
+ * WHY WAGES ARE FIRST is the header's, and it costs nothing today: neither charge is capped, so
+ * the two commute and only their position in the log moves.
  */
 export function settleNight(input: SettlementInput): readonly Transaction[] {
   if (!isSettlementTick(input.tick)) return input.ledger;
+  const wages = nightlyWagesOf(input.staff, input.content);
+  const paid = appendTransaction(input.ledger, {
+    // `0 - wages`, never `-wages`: negating an empty payroll would record `-0`.
+    tick: input.tick,
+    amount: 0 - wages,
+    reason: 'wages',
+  });
   const upkeep = nightlyUpkeepOf(input.entities, input.content);
-  const settled = appendTransaction(input.ledger, {
+  const settled = appendTransaction(paid, {
     tick: input.tick,
     // `0 - upkeep`, never `-upkeep`: negating a zero-upkeep night would record `-0`.
     amount: 0 - upkeep,
     reason: 'upkeep',
   });
-  // AFTER upkeep, and out of what survives it. See the header.
+  // AFTER both bills, and out of what survives them. See the header.
   return repayLoan(settled, input.tick, input.content);
+}
+
+/**
+ * How many nights of wages this log records: the count of `wages` transactions.
+ *
+ * `countSettlementTransactions`' twin, and it exists for the same reason — so the CLI reports a
+ * cadence it MEASURED rather than one it inferred (ADR-0007). For a world ticked from 0 under
+ * this build the law is
+ *
+ *   countWageTransactions(world.ledger) === countSettlementTransactions(world.ledger) === dayOf(world)
+ *
+ * exactly, whether or not anybody is employed. It is deliberately NOT asserted at load, for the
+ * reason its twin is not: a save that predates G-052a legitimately violates it, because its
+ * nights were simulated by a build that paid nobody.
+ */
+export function countWageTransactions(log: readonly Transaction[]): number {
+  let count = 0;
+  for (const transaction of log) {
+    if (transaction.reason === 'wages') count += 1;
+  }
+  return count;
 }
 
 /**

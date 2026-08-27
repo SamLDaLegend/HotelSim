@@ -41,6 +41,9 @@ import { stripCorridors } from './without-corridors.js';
 import { stripEditCounters } from './without-edits.js';
 import { stripStairs } from './without-stairs.js';
 import { stripLift } from './without-lift.js';
+// G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
+// one that does, exactly as every earlier step refuses the field it is about.
+import { stripStaff } from './without-staff.js';
 import { stripFootprints } from './without-footprints.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
@@ -357,7 +360,7 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
    */
   const asV8Bytes = (world: World): string => {
     const json = stripLift(stripStairs(stripEditCounters(
-      stripFootprints(stripCorridors(stripDepth(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))),
+      stripFootprints(stripCorridors(stripDepth(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)))),
     )));
     const guests = json['guests'] as { nextId: number; list: Record<string, unknown>[] };
     // THE v10 FIELD COMES OFF TOO (G-019), for the reason the v9 fields come off below: "the

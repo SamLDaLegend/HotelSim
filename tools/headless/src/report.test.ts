@@ -596,13 +596,30 @@ describe('buildSummary', () => {
     // — the default run builds nothing, demolishes nothing and borrows nothing. The
     // capital term is G-011's: a hotel cannot open with money unless the money is a
     // transaction, because there is no balance field to put it in (I4).
+    //
+    // A SETTLEMENT IS TWO TRANSACTIONS SINCE G-052a — a wage line and an upkeep line — so the
+    // count carries `settlements + wageSettlements` rather than a doubled `settlements`. The
+    // two counters are two claims (the payroll was met tonight, the rooms were kept tonight),
+    // and multiplying one of them by two would state a law about a build that writes them in
+    // lockstep rather than about the ledger in front of it.
     expect(summary.money.startingCapitalPennies).toBeGreaterThan(0);
+    expect(summary.money.wageSettlements).toBe(summary.money.settlements);
     expect(summary.money.transactions).toBe(
-      1 + departuresOf(summary, 'checkedOut') + summary.money.settlements,
+      1 + departuresOf(summary, 'checkedOut') + summary.money.settlements + summary.money.wageSettlements,
     );
     expect(summary.money.balancePennies).toBe(
-      summary.money.startingCapitalPennies + summary.money.revenuePennies + summary.money.upkeepPennies,
+      summary.money.startingCapitalPennies +
+        summary.money.revenuePennies +
+        summary.money.upkeepPennies +
+        summary.money.wagesPennies,
     );
+    // THE SHIPPED SCENARIO EMPLOYS NOBODY (`openingStaffSchema` carries the ruling and its
+    // measurement), so this run pays a wage of ZERO — and the two lines above would close over a
+    // term that never moved, which is ADR-0007. The arm where the term DOES move is
+    // `wages.report.test.ts`, which assembles a payroll on disk and drives it through the real
+    // CLI. Asserted here rather than assumed, so this file says which of the two it is.
+    expect(summary.money.headcount).toBe(0);
+    expect(summary.money.wagesPennies).toBe(0);
     // And nothing G-011 added to the money loop has fired on a run that did not ask for it.
     expect(summary.money.demolitionRefundPennies).toBe(0);
     expect(summary.money.loanDrawPennies).toBe(0);
@@ -737,6 +754,11 @@ const distinct: RunSummary = {
     loanRepaymentPennies: -143,
     liquidationValuePennies: 148,
     outstandingDebtPennies: 144,
+    // G-052a, and DISTINCT for this fixture's reason: a renderer that printed the wage bill
+    // where the upkeep goes, or the headcount where the cadence goes, would otherwise pass.
+    wagesPennies: -154,
+    wageSettlements: 155,
+    headcount: 156,
     settlements: 120,
     nights: 121,
     balancePennies: 122,
@@ -804,6 +826,7 @@ describe('renderers', () => {
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',
+        'wages       -154p, 156 on the payroll, 155 nights',
         'built       126',
         'demolished  127',
         'placed      132',

@@ -61,6 +61,7 @@ import {
   NEED_TYPES_PATH,
   ROOM_TYPES_PATH,
   SCENARIOS_PATH,
+  STAFF_ROLES_PATH,
 } from './content-loader.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -272,7 +273,29 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // no `World` field was added, `SAVE_SCHEMA_VERSION` is unchanged at 23 and no migration is
     // owed. Everything structural in this document is untouched.
     // ==========================================================================================
-    stateHash: '0cb08d18d7dc0bbc',
+    // ==========================================================================================
+    // AND MOVED AGAIN AT G-052a to `614f7b6eda90b4c2`, FOR TWO HASHED-STATE CAUSES AND NO
+    // BEHAVIOUR AT ALL. The money loop's third term landed — `CLAUDE.md` defines the loop as
+    // *"room revenue against WAGES and upkeep, settled nightly"* and the ledger had nine reasons
+    // and none was a wage.
+    //
+    //   1. `World` GAINED `staff`, an empty payroll, and the save went to **v24**.
+    //   2. `World.contentHash` MOVED, because `SimContent` gained a `staffRoles` table and
+    //      `Scenario` gained an `openingStaff` key.
+    //
+    // **AND THE LEDGER GAINED TWO LINES, WHICH IS THE ONLY VISIBLE CHANGE IN THIS DOCUMENT**:
+    // settlement books one `wages` transaction a night, unconditionally, exactly as it books one
+    // `upkeep` a night — so `ledger` reads 11 where it read 9, and both new lines are ZERO.
+    //
+    // **THE CONTROL IS THE WHOLE DOCUMENT AND IT IS EXACT.** The shipped scenario employs
+    // NOBODY (`openingStaffSchema` carries that ruling and the measurement behind it), so no
+    // money moves: 32 arrived, 6 checked out, 21 gave up, 5 in the hotel, 51,000p revenue,
+    // -24,000p upkeep, **527,000p balance unchanged to the penny**, the same four need rows, the
+    // same review distribution, the same mean, 11 entities, 6 valid rooms, the same 0/0/0/0/0/0
+    // invalidity tally, 750,000p of scrap, no debt, and the whole build and loan blocks. A wage
+    // of zero is a line in the ledger and not a change to the economy.
+    // ==========================================================================================
+    stateHash: '614f7b6eda90b4c2',
   },
   guests: {
     arrived: 32,
@@ -566,7 +589,10 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // cannot start with money unless the money is a transaction — there is no balance
     // field to put it in (I4) — so the capital is a line in the ledger like everything
     // else, and the balance below is the fold that includes it.
-    transactions: 9,
+    // 9 -> 11 AT G-052a: settlement books a `wages` line every night beside the `upkeep` one,
+    // unconditionally, so two nights add two transactions. Both are ZERO — the shipped scenario
+    // employs nobody — which is why the balance below does not move.
+    transactions: 11,
     revenuePennies: 51000,
     // -24000 rather than -15000 since G-012: three amenity rooms at 1,500p a night for two
     // nights is 9,000p more. They earn nothing — `payForStay` charges for the LODGING room
@@ -596,6 +622,13 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // `startingCapitalPennies` above, which is now the SCENARIO's `openingCapitalPence`.
     liquidationValuePennies: 750000,
     outstandingDebtPennies: 0,
+    // G-052a — THE MONEY LOOP'S THIRD TERM. Zero pence over two nights because this scenario
+    // employs nobody, and `wageSettlements` is 2 anyway: the cadence has no exceptions, exactly
+    // as `settlements` has none, so `countWageTransactions === settlements` is a law a reader
+    // checks by putting the two lines side by side rather than a thing this build promises.
+    wagesPennies: 0,
+    wageSettlements: 2,
+    headcount: 0,
     settlements: 2,
     nights: 2,
     balancePennies: 527000,
@@ -707,9 +740,12 @@ const GOLDEN_2_DAYS_SEED_42 =
     // walk gains a vertical leg. The JSON golden carries why.
     'reviews     1:0, 2:0, 3:21, 4:0, 5:6',
     'mean x100   344',
-    'ledger      9 transactions',
+    'ledger      11 transactions',
     'revenue     51000p',
     'upkeep      -24000p',
+    // G-052a: beside upkeep, because the money loop sets revenue against the two of them
+    // together. Zero pence and nobody on the payroll — see the JSON golden's money block.
+    'wages       0p, 0 on the payroll, 2 nights',
     'built       0',
     'demolished  0',
     // G-036b: TWO NEW LINES AND FOUR NEW COLUMNS, and neither is a behaviour change. `placed`
@@ -834,7 +870,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // `seededStock` is `supplementsCapital`, which is what every build before this goal did, so
     // the same 6 valid rooms, the same 32 arrivals, the same 6/21 split, the same four need rows
     // to the basis point, the same 9 transactions, the same 51,000p and the same 527,000p.
-    'state hash  0cb08d18d7dc0bbc',
+    'state hash  614f7b6eda90b4c2',
   ].join('\n') + '\n';
 
 /**
@@ -1010,7 +1046,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  0cb08d18d7dc0bbc']);
+    expect(differing).toEqual(['seed        42', 'state hash  614f7b6eda90b4c2']);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -1053,6 +1089,8 @@ describe('the --content contract', () => {
     copyFileSync(GUEST_RULES_PATH, join(dir, 'guest-rules.json'));
     // SIX FILES SINCE G-057: what the hotel OPENS with is a table of its own.
     copyFileSync(SCENARIOS_PATH, join(dir, 'scenarios.json'));
+    // SEVEN SINCE G-052a: who it can employ, and what one of them costs for a night.
+    copyFileSync(STAFF_ROLES_PATH, join(dir, 'staff-roles.json'));
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
@@ -1083,6 +1121,8 @@ describe('the --content contract', () => {
     copyFileSync(GUEST_RULES_PATH, join(dir, 'guest-rules.json'));
     // SIX FILES SINCE G-057: what the hotel OPENS with is a table of its own.
     copyFileSync(SCENARIOS_PATH, join(dir, 'scenarios.json'));
+    // SEVEN SINCE G-052a: who it can employ, and what one of them costs for a night.
+    copyFileSync(STAFF_ROLES_PATH, join(dir, 'staff-roles.json'));
     return dir;
   };
 
@@ -1201,7 +1241,7 @@ describe('the --content contract', () => {
   //  is not. A single missing-file case would also pass against a loader that refused
   //  everything.
   // ==========================================================================
-  describe('every one of the six content files is required, by name', () => {
+  describe('every one of the seven content files is required, by name', () => {
     const FILES = [
       'room-types.json',
       'need-types.json',
@@ -1214,6 +1254,11 @@ describe('the --content contract', () => {
       // declares an opening balance, so a shrug here is exactly the failure `HOTELSIM.md`
       // section 8's M4 prerequisite is about.
       'scenarios.json',
+      // SEVENTH SINCE G-052a, and it earns the same argument. Absence would read as "nobody can
+      // be employed" — TRUE of content that predates the money loop's third term, and a silent
+      // empty payroll for a directory somebody assembled today, whose scenario would then be
+      // refused for naming a role its own directory defines.
+      'staff-roles.json',
     ] as const;
 
     it('the complete directory loads, or the refusals below are refusals of nothing', () => {

@@ -393,6 +393,59 @@ export type ScenarioData = {
    * such a run to the byte.
    */
   readonly seededStock?: SeededStockPolicyData | undefined;
+  /**
+   * WHO IS ON THE PAYROLL ON THE OPENING NIGHT (G-052a).
+   *
+   * OPTIONAL, AND ABSENT MEANS NOBODY — a true historical statement rather than a default, the
+   * `seededStock` argument one field over. Content that predates G-052a describes a world in
+   * which nobody could be employed, and omitting the key reproduces such a run's PAYROLL to the
+   * byte: `hireOpeningStaff` returns the empty store and `nightlyWagesOf` folds it to zero.
+   *
+   * SORTED ASCENDING BY `roleId` AT BIND TIME, and that is I2 rather than tidiness: the order of
+   * this array decides the order staff ids are handed out, and an id is behaviour. Document order
+   * would make two content files that declare the same payroll produce two different worlds.
+   */
+  readonly openingStaff?: readonly StaffPostingData[] | undefined;
+};
+
+/**
+ * WHAT ONE MEMBER OF STAFF COSTS FOR A NIGHT (G-052a), and it is DERIVED.
+ *
+ * Structurally identical to `StaffRole` in `@hotelsim/content` and deliberately not imported
+ * from it (ADR-0001), exactly as `EconomyData` is.
+ *
+ * THE DERIVATION LIVES IN ONE PLACE AND IT IS NOT THIS ONE — `nightlyWagePenceSchema` in
+ * `packages/content/src/schema.ts`, because a figure with two derivations has none (the
+ * `openingCapitalPence` precedent). In one line: a wage is a nightly obligation met out of
+ * nightly trading, the only nightly surplus this economy produces is an occupied room's rate net
+ * of its own upkeep, and one member of staff costs exactly one of them.
+ *
+ * WHAT A ROLE IS NOT, AT THIS GOAL: it has no room requirement, no duty and no schedule, and a
+ * staff member does not occupy a room, move, or serve anything. That is G-052b.
+ */
+export type StaffRoleData = {
+  readonly id: ContentId;
+  readonly name: string;
+  /**
+   * Charged nightly by `settleNight`, once per employed member of staff, as `wages`.
+   *
+   * REQUIRED, not optional, and that is the difference between this field and every other money
+   * field on a content type. `nightlyUpkeepPence` may be absent because a world existed in which
+   * rooms cost nothing to keep; NO WORLD HAS EVER HAD A ROLE, so there is no era in which a role
+   * without a wage means anything. A role that did not price itself would be a person the hotel
+   * employs for free, which is not a historical statement about anything.
+   */
+  readonly nightlyWagePence: number;
+};
+
+/** One line of a scenario's opening payroll (G-052a): a role, and how many of it. */
+export type StaffPostingData = {
+  readonly roleId: ContentId;
+  /**
+   * At least one. A posting of nobody and an absent posting are the same world, and two spellings
+   * of one world is a difference a save, a hash or a report can carry without meaning anything.
+   */
+  readonly count: number;
 };
 
 /**
@@ -771,6 +824,19 @@ export type SimContent = {
    * normalisation, the `firstEconomy` precedent, and the same ADR-0003 reason.
    */
   readonly scenarios?: readonly ScenarioData[] | undefined;
+  /**
+   * WHO THE HOTEL CAN EMPLOY, AND WHAT ONE OF THEM COSTS FOR A NIGHT (G-052a). Optional for the
+   * reason `economy` is, and the absence is the same clean historical statement: content without
+   * this table describes a world in which nobody could be employed and no wage was ever paid,
+   * which is what every world before G-052a was.
+   *
+   * REACHED THROUGH `findStaffRole` AND `staffRolesInOrder` — never by name, so the snake_case id
+   * that names a role never enters `packages/sim` (ADR-0003). Unlike `economy`, `guestRules` and
+   * `scenarios` this table is NOT a list-with-one-entry read through a `first*` accessor: a hotel
+   * employs several ROLES at once, so the whole table is live and its order is the ascending id
+   * order `normaliseTable` imposes.
+   */
+  readonly staffRoles?: readonly StaffRoleData[] | undefined;
 };
 
 /**
@@ -2739,8 +2805,82 @@ function cloneScenario(scenario: ScenarioData): ScenarioData {
         'the different, historical statement and reads as "supplementsCapital".',
     );
   }
-  const { seededStock: _rawPolicy, ...rest } = scenario;
-  return policy === undefined ? { ...rest } : { ...rest, seededStock: policy };
+  const { seededStock: _rawPolicy, openingStaff: _rawStaff, ...rest } = scenario;
+  const payroll = normaliseOpeningStaff(scenario);
+  const withPolicy = policy === undefined ? { ...rest } : { ...rest, seededStock: policy };
+  return payroll === undefined ? withPolicy : { ...withPolicy, openingStaff: payroll };
+}
+
+/**
+ * Copy, validate, SORT BY `roleId` and freeze one scenario's opening payroll (G-052a).
+ *
+ * THE SORT IS I2 AND NOT TIDINESS. This array decides the order `hireOpeningStaff` hands out
+ * staff ids, and an id is behaviour — lowest-id-wins is still the rule elsewhere in this
+ * simulation. Left in document order, two content files declaring the same payroll in a
+ * different order would produce two worlds with different hashes and, at G-052b, different
+ * behaviour. `normaliseTable` does exactly this for every table here; a posting is not a table
+ * entry (it has a `roleId`, not an `id`), so the sort is spelled out rather than reused.
+ *
+ * A DUPLICATE `roleId` IS REFUSED rather than summed. Two postings of the same role are two
+ * spellings of one payroll, which is the `count: 0` argument one level up, and summing them
+ * would make the refusal a silent normalisation instead.
+ */
+function normaliseOpeningStaff(scenario: ScenarioData): readonly StaffPostingData[] | undefined {
+  const postings = scenario.openingStaff;
+  if (postings === undefined) return undefined;
+  if (!Array.isArray(postings)) {
+    throw new Error(
+      `bindContent: scenario "${scenario.id}" has an openingStaff that is not a list; omitting the key ` +
+        'entirely is the way to say nobody is employed (G-052a)',
+    );
+  }
+  const out: StaffPostingData[] = [];
+  for (let i = 0; i < postings.length; i += 1) {
+    const posting = postings[i];
+    if (posting === undefined) {
+      throw new Error(`bindContent: hole in scenario "${scenario.id}"'s openingStaff at index ${i}`);
+    }
+    if (typeof posting.roleId !== 'string' || posting.roleId.length === 0) {
+      throw new Error(`bindContent: scenario "${scenario.id}"'s openingStaff at index ${i} has an empty roleId`);
+    }
+    if (!Number.isSafeInteger(posting.count) || posting.count < 1) {
+      throw new Error(
+        `bindContent: scenario "${scenario.id}" employs ${String(posting.count)} of "${posting.roleId}"; ` +
+          'a posting is at least one person, and omitting it entirely is how a scenario says nobody',
+      );
+    }
+    out.push(Object.freeze({ roleId: posting.roleId, count: posting.count }));
+  }
+  out.sort((a, b) => compareIds(a.roleId, b.roleId));
+  for (let i = 1; i < out.length; i += 1) {
+    const posting = out[i];
+    const previous = out[i - 1];
+    if (posting !== undefined && previous !== undefined && previous.roleId === posting.roleId) {
+      throw new Error(
+        `bindContent: scenario "${scenario.id}" posts "${posting.roleId}" twice; one payroll has one ` +
+          'line per role, so that the order ids are handed out in is total (G-052a)',
+      );
+    }
+  }
+  return Object.freeze(out);
+}
+
+/**
+ * Copy, validate and freeze one staff role (G-052a).
+ *
+ * The wage is validated here for `cloneScenario`'s reason: a raw host is not the schema, and a
+ * float wage would reach `appendTransaction`, which rejects it at the choke point — but only
+ * after a night of simulation, with no role named. Money is integer pence (ADR-0002).
+ */
+function cloneStaffRole(role: StaffRoleData): StaffRoleData {
+  const wage = role.nightlyWagePence;
+  if (!Number.isSafeInteger(wage) || wage < 0) {
+    throw new Error(
+      `bindContent: staff role "${role.id}" has a non-integer or negative nightlyWagePence ` +
+        `(${String(wage)}); money is integer pence (ADR-0002)`,
+    );
+  }
+  return { id: role.id, name: role.name, nightlyWagePence: wage };
 }
 
 /**
@@ -3400,6 +3540,10 @@ export function bindContent(content: SimContent): BoundContent {
     content.scenarios === undefined
       ? undefined
       : normaliseTable(content.scenarios, 'scenario', cloneScenario);
+  const staffRoles =
+    content.staffRoles === undefined
+      ? undefined
+      : normaliseTable(content.staffRoles, 'staff role', cloneStaffRole);
 
   // ROLES ARE SETTLED FIRST (G-013), and the order is load-bearing rather than tidy:
   // `assertNeedsAreSatisfiable` refuses an ITEM that provides the lodging need, so it has
@@ -3428,6 +3572,11 @@ export function bindContent(content: SimContent): BoundContent {
   // economy, because it is the LENDER that a worthless refund lets loose.
   assertRefundsCannotReopenTheDodge(roomTypes);
   assertStockIsAReserve(roomTypes, economy ?? []);
+  // THE TWO STAFF CROSS-TABLE CHECKS (G-052a), and they are ordered the way every pair here is:
+  // the one that says "this role does not exist" runs before the one that prices it, so content
+  // that posts a role it never declared says THAT rather than complaining about a wage.
+  assertOpeningStaffRolesExist(scenarios ?? [], staffRoles ?? []);
+  assertWagesAreCoveredByARoomNight(staffRoles ?? [], roomTypes);
   // AND THE THIRD MONEY RELATION (G-038c): a floor costs at least a room. It reads both tables
   // like `assertStockIsAReserve` and is placed after it so that content broken for the older,
   // narrower reason — a refund that lets the lender loose — still says so first.
@@ -3498,12 +3647,169 @@ export function bindContent(content: SimContent): BoundContent {
   const withItems: SimContent = itemTypes === undefined ? withNeeds : { ...withNeeds, itemTypes };
   const withEconomy: SimContent = economy === undefined ? withItems : { ...withItems, economy };
   const withGuestRules: SimContent = guestRules === undefined ? withEconomy : { ...withEconomy, guestRules };
-  const normalised: SimContent = scenarios === undefined ? withGuestRules : { ...withGuestRules, scenarios };
+  const withScenarios: SimContent = scenarios === undefined ? withGuestRules : { ...withGuestRules, scenarios };
+  const normalised: SimContent = staffRoles === undefined ? withScenarios : { ...withScenarios, staffRoles };
   return Object.freeze({
     content: Object.freeze(normalised),
     fingerprint: hashJson(normalised as unknown as JsonValue),
   });
 }
+
+/**
+ * Throws if any scenario posts a staff role this content does not declare (G-052a).
+ *
+ * A CROSS-TABLE REFERENCE IS NOT A SCHEMA'S BUSINESS. `scenarios.json` and `staff-roles.json`
+ * are two documents; Zod validates each alone, and `bindContent` is the one path every host goes
+ * through, so this is the `assertRequiredItemsExist` shape exactly — the check that a room type
+ * does not `require` an item nothing defines, one table over.
+ *
+ * WITHOUT IT THE FAILURE IS SILENT AND EXPENSIVE. `hireOpeningStaff` would put a member of staff
+ * with an unknown role on the payroll; `nightlyWagesOf` would then have to decide what an
+ * unpriced person costs, and every answer it could give is wrong — zero employs somebody free,
+ * and a throw arrives 1,439 ticks into a run with no role named. Refused at the boundary, before
+ * a world exists.
+ */
+function assertOpeningStaffRolesExist(
+  scenarios: readonly ScenarioData[],
+  staffRoles: readonly StaffRoleData[],
+): void {
+  for (const scenario of scenarios) {
+    for (const posting of scenario.openingStaff ?? []) {
+      if (indexOfId(staffRoles, posting.roleId) !== -1) continue;
+      throw new Error(
+        `bindContent: scenario "${scenario.id}" employs "${posting.roleId}", which no staff role defines. ` +
+          'A payroll may only post roles this content declares (G-052a).',
+      );
+    }
+  }
+}
+
+/**
+ * Throws if a role's nightly wage exceeds what a SINGLY-OCCUPIED room-night can cover (G-052a).
+ *
+ * (This line read "what one occupied room-night can cover" until round 3. The paragraphs below
+ * corrected it explicitly and the summary did not, which is the line a reader skims.)
+ *
+ * THE DERIVATION IT ENFORCES IS `nightlyWagePenceSchema`'s and is not restated here, because a
+ * figure with two derivations has none. READ IT BEFORE READING THIS: it carries the fact that
+ * `nightlyRatePence` is a PER-GUEST-NIGHT price (`payForStay` books it once per completed stay,
+ * per guest) while `nightlyUpkeepPence` is PER ROOM-NIGHT, so the difference below is the margin
+ * of a room-night earning from EXACTLY ONE GUEST rather than "the margin of a room-night". The
+ * bound:
+ *
+ *     nightlyWagePence  <=  max over room types of (nightlyRatePence - nightlyUpkeepPence)
+ *
+ * WHAT IT BUYS, AND IT IS THE RECOVERABLE-LOSS HALF OF `balance-critic`'s CHARTER — STATED IN THE
+ * TERMS THIS BOUND ACTUALLY HAS, because the first version of this line claimed a stronger
+ * property than it holds. It does NOT say *"no single room can carry a member of staff above the
+ * bound"*: `standard_room` has `capacity: 2`, so a shared bedroom-night is worth
+ * `2 x 8,500 - 2,500 = 14,500p` and a 10,000p wage IS carryable by one room — this bound refuses
+ * it anyway. The true and narrower claim:
+ *
+ *   ABOVE THE BOUND, A ROOM EARNING FROM ONE GUEST CANNOT CARRY ONE MEMBER OF STAFF, so the hotel
+ *   can meet its payroll only by relying on SHARING AND TURNOVER — and the wage becomes unpayable
+ *   exactly when occupancy falls, which is when the hotel is already in trouble.
+ *
+ * THE BOUND IS THEREFORE CONSERVATIVE ON PURPOSE: it refuses some content a busy hotel could
+ * afford and never admits content a hotel cannot. Below it a designer is free: a role costing half
+ * a room-night is admissible and needs no change here (I3).
+ *
+ * THE MAXIMUM IS TAKEN OVER EVERY ROOM TYPE rather than over lodging providers alone, and that
+ * is deliberate: the question is what the best SINGLY-OCCUPIED room-night this content can sell
+ * is worth, and a content set that later prices an amenity should widen this bound automatically
+ * rather than need a second clause. On shipped content the two readings agree, because only the
+ * bedroom charges anything.
+ *
+ * CONTENT WITH NO PROFITABLE ROOM AT ALL ADMITS NO PAID ROLE, and that is the bound working
+ * rather than an edge case: a hotel whose rooms cost more to keep than they earn cannot pay
+ * anybody out of trading, whatever it does. A role priced at 0 still loads, which is what keeps
+ * an unpaid role expressible.
+ */
+function assertWagesAreCoveredByARoomNight(
+  staffRoles: readonly StaffRoleData[],
+  roomTypes: readonly RoomTypeData[],
+): void {
+  if (staffRoles.length === 0) return;
+  let best = 0;
+  let bestRoom = '';
+  for (const roomType of roomTypes) {
+    const margin = roomType.nightlyRatePence - (roomType.nightlyUpkeepPence ?? 0);
+    if (margin > best) {
+      best = margin;
+      bestRoom = roomType.id;
+    }
+  }
+  for (const role of staffRoles) {
+    if (role.nightlyWagePence <= best) continue;
+    throw new Error(
+      `bindContent: staff role "${role.id}" is paid ${role.nightlyWagePence}p a night, and the best ` +
+        `SINGLY-OCCUPIED room-night this content sells is worth ${best}p` +
+        (bestRoom === '' ? '' : ` (room type "${bestRoom}")`) +
+        '. A wage a one-guest room cannot cover can only be met out of sharing and turnover, so it ' +
+        'becomes unpayable exactly when occupancy falls and an over-hired hotel has no play ' +
+        'available (G-052a).',
+    );
+  }
+}
+
+/**
+ * The staff roles this content declares, ascending by id — the whole table, not the first row.
+ *
+ * A `first*` ACCESSOR WOULD BE THE WRONG SHAPE HERE, and the difference is worth naming because
+ * every other optional table in this file uses one. `firstEconomy`, `firstGuestRules` and
+ * `firstScenario` exist because the simulation wants exactly ONE of those records and must reach
+ * it without naming a snake_case id (ADR-0003). A hotel employs several ROLES at once, so the
+ * table is live in full — and ADR-0003 is satisfied the way `needTypesInOrder` satisfies it: by
+ * iteration in a total, content-derived order, never by a literal.
+ */
+export function staffRolesInOrder(bound: BoundContent): readonly StaffRoleData[] {
+  return bound.content.staffRoles ?? EMPTY_STAFF_ROLES;
+}
+
+const EMPTY_STAFF_ROLES: readonly StaffRoleData[] = Object.freeze([]);
+
+/** O(log n). Returns the injected role, or undefined if this content has no such id. */
+export function findStaffRole(bound: BoundContent, id: ContentId): StaffRoleData | undefined {
+  const roles = bound.content.staffRoles;
+  if (roles === undefined) return undefined;
+  const index = indexOfId(roles, id);
+  return index === -1 ? undefined : roles[index];
+}
+
+/**
+ * What one member of staff in `roleId` costs for one night, in pence (G-052a).
+ *
+ * A ROLE THIS CONTENT DOES NOT DECLARE IS AN ERROR AND NOT A ZERO, which is the opposite of
+ * `nightlyUpkeepOf`'s reading of an absent `nightlyUpkeepPence` — and the two are consistent
+ * rather than in tension. An absent upkeep is an ERA (pre-G-005 content, including the permanent
+ * v1 fixture, priced nothing to keep a room). An unknown ROLE is not an era: `bindContent`
+ * refuses a payroll naming a role nothing declares, and `hireOpeningStaff` is the only thing that
+ * puts anyone on a payroll, so reaching here with an unknown role means a hand-built world — and
+ * silently employing that person free is exactly the "billed 0" failure `nightlyUpkeepOf`'s own
+ * unreachable throw exists to prevent.
+ */
+export function nightlyWageOf(bound: BoundContent, roleId: ContentId): number {
+  const role = findStaffRole(bound, roleId);
+  if (role === undefined) {
+    throw new Error(
+      `nightlyWageOf: staff role "${roleId}" is not in the injected content, so its wage is undefined`,
+    );
+  }
+  return role.nightlyWagePence;
+}
+
+/**
+ * The opening payroll this content declares, ascending by `roleId` — empty if it declares none.
+ *
+ * Read by `hireOpeningStaff` and by nothing else. `firstScenario` reaches the scenario by
+ * POSITION rather than by name, so the snake_case id that names it never enters the sim
+ * (ADR-0003); the order of the postings is `normaliseOpeningStaff`'s, which is total.
+ */
+export function openingStaffOf(bound: BoundContent): readonly StaffPostingData[] {
+  return firstScenario(bound)?.openingStaff ?? EMPTY_POSTINGS;
+}
+
+const EMPTY_POSTINGS: readonly StaffPostingData[] = Object.freeze([]);
 
 /** O(log n). Returns the injected record, or undefined if this content has no such id. */
 export function findRoomType(bound: BoundContent, id: ContentId): RoomTypeData | undefined {

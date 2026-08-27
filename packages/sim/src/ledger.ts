@@ -82,7 +82,35 @@ export type TransactionReason =
    */
   | 'startingCapital'
   /** One night of keeping the rooms (G-005). Negative. */
-  | 'upkeep';
+  | 'upkeep'
+  /**
+   * ONE NIGHT OF THE PAYROLL (G-052a). Negative. THE MONEY LOOP'S THIRD TERM.
+   *
+   * `CLAUDE.md` defines the money loop as *"room revenue against WAGES and upkeep, settled
+   * nightly"*, and this union had nine members and none of them was a wage — the only declared
+   * term of any of the three loops with no implementation at all (`HOTELSIM.md` §1.1). Two
+   * comments in `packages/sim` deferred it by name (build.ts, settlement.ts); both are now
+   * discharged.
+   *
+   * ONE LINE PER NIGHT FOR THE WHOLE PAYROLL, not one per person, and the reason is `upkeep`'s
+   * exactly: settlement folds the night's charges into one transaction per kind so that a
+   * cadence is a countable fact. Who was paid is `World.staff` and what a role costs is content;
+   * neither belongs in the ledger, which records that MONEY MOVED and why.
+   *
+   * APPENDED UNCONDITIONALLY, LIKE `upkeep` AND UNLIKE `loanRepayment`. A hotel employing nobody
+   * records a 0-amount wage line rather than skipping the night, so
+   * `countWageTransactions === nights` is an exact law rather than an approximation. The zero is
+   * computed as `0 - sum`, never `-sum`, because `-0` is the same money and not the same value.
+   *
+   * IT IS THE FIRST RECURRING SINK ATTACHED TO HEADCOUNT — `upkeep` has been a recurring sink
+   * since G-005, twenty lines up in this same union, and this line said "the first recurring sink
+   * in this economy" until a review round caught it. What is new is the DENOMINATOR: upkeep
+   * scales with the rooms a player builds, a wage scales with the people a player employs, and
+   * until G-052a the player had exactly one recurring cost and it came free with the building.
+   * That is the sense in which it answers the human's observation that cash accumulates with
+   * nothing to spend it on (ADR-0079 §3).
+   */
+  | 'wages';
 
 /**
  * The reasons, written down exactly once as a mapped type — the `WORLD_KEY_SET`
@@ -99,6 +127,7 @@ const TRANSACTION_REASON_SET: Readonly<Record<TransactionReason, true>> = Object
   roomRevenue: true,
   startingCapital: true,
   upkeep: true,
+  wages: true,
 });
 
 /**

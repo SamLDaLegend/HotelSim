@@ -62,6 +62,9 @@ import type { World } from './world.js';
 import { stripEditCounters } from './without-edits.js';
 import { stripStairs } from './without-stairs.js';
 import { stripLift } from './without-lift.js';
+// G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
+// one that does, exactly as every earlier step refuses the field it is about.
+import { stripStaff } from './without-staff.js';
 
 const content = bindContent({
   roomTypes: [
@@ -126,7 +129,7 @@ function editedWorld(): World {
 
 /** The same world written the way an era with no verb for an edit wrote it. */
 const asV19 = (world: World): Record<string, unknown> =>
-  stripLift(stripStairs(stripEditCounters(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)));
+  stripLift(stripStairs(stripEditCounters(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))));
 
 describe('the chain walks 1 -> ... -> today, and the 19 -> 20 step is the nineteenth of it', () => {
   it('ships one step per version, gapless', () => {

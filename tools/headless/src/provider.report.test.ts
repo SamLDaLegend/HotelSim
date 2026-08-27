@@ -42,6 +42,8 @@ import {
   NEED_TYPES_PATH,
   ROOM_TYPES_PATH,
   SCENARIOS_PATH,
+  // G-052a: a seventh table, required of any `--content` directory this file assembles.
+  STAFF_ROLES_PATH,
 } from './content-loader.js';
 import {
   buildSummary,
@@ -267,7 +269,7 @@ describe('THE NEGATIVE CONTROL: content whose items provide nothing (G-013)', ()
   const dir = mkdtempSync(join(tmpdir(), 'hotelsim-noitems-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, GUEST_RULES_PATH, SCENARIOS_PATH]) {
+  for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, GUEST_RULES_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH]) {
     copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
   }
 

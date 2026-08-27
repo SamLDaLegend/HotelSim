@@ -48,9 +48,17 @@
 //     SETTLEMENT IS A CHARGE THE WORLD IMPOSES ON YOU; A BUILD IS A CHARGE YOU CHOOSE.
 //
 // A player cannot decline upkeep, so refusing it would mean clamping a bill — a stored
-// balance by another name, which I4 forbids. A player can decline to build. M4 will
-// relitigate this the moment wages arrive: a wage is imposed, so it is settlement's
-// shape, not this one.
+// balance by another name, which I4 forbids. A player can decline to build.
+//
+// WAGES ARRIVED AT G-052a AND THE SENTENCE HELD: a wage is IMPOSED, so it took settlement's
+// shape and not this one. `settleNight` books it unconditionally, before upkeep, and nothing in
+// this file changed — `insufficientFunds` still refuses only the charge a player CHOOSES. The
+// paragraph above used to end "M4 will relitigate this the moment wages arrive"; it did, and the
+// answer was the one predicted, so the deferral is DISCHARGED rather than deleted.
+//
+// WHAT IS STILL OPEN HERE, NAMED SO THE NEXT READER DOES NOT HAVE TO INFER IT: G-052b gives the
+// player a HIRE, and a hire IS a charge you choose — so it is this file's shape, not
+// settlement's, and it is the first thing since G-011 that will need a refusal reason here.
 //
 // I4: there is no stored balance here or anywhere. `applyCommands` folds `balanceOf`
 // ONCE per tick, on the first build-family command, into a TICK-LOCAL number that is

@@ -21,13 +21,15 @@ import { assertLoanOutcomes } from './loan.js';
 import type { LoanOutcomes } from './loan.js';
 import { assertNeedOutcomes } from './needs.js';
 import type { NeedOutcome } from './needs.js';
+import { assertStaffStoreInvariants } from './staff.js';
+import type { StaffStore } from './staff.js';
 import { assertReviewOutcomes } from './reviews.js';
 import type { ReviewOutcomeRow } from './reviews.js';
 import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 23;
+export const SAVE_SCHEMA_VERSION = 24;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -2377,6 +2379,59 @@ function migrateV22ToV23(world: unknown): unknown {
 }
 
 /**
+ * The payroll a v23 world could not have had (G-052a).
+ *
+ * Frozen at the value THIS MIGRATION means, never read from `createStaffStore()`, for the reason
+ * every literal in this file is frozen (ADR-0008): a migration's output must be a pure function
+ * of its input bytes and of its own era. If it called today's constructor, the meaning of a v23
+ * save would drift with whatever a new hotel's payroll becomes, and the pinned hash of the
+ * migrated fixture would turn into a tripwire on an unrelated change.
+ */
+const V24_MIGRATION_STAFF = Object.freeze({ nextId: 1, list: Object.freeze([]) });
+
+/**
+ * v23 -> v24: a world that predates the payroll (G-052a).
+ *
+ * THE DEFAULT IS THE READING OF AN OLD SAVE RATHER THAN A CONVENIENT ONE, and here it is as
+ * clean a historical statement as this file contains. A v23 world is not a world whose staff
+ * were left out of the file. It is a world in which THE CONCEPT DID NOT EXIST: no role could be
+ * declared, nobody could be employed, and `TransactionReason` had no wage in it. So:
+ *
+ *   nextId: 1     no staff id has ever been issued. It cannot be 0 — that is `NO_STAFF` and is
+ *                 never allocated — and it must not be higher, which would claim ids were handed
+ *                 out to people the save does not contain.
+ *   list: []      nobody is on the payroll.
+ *
+ * The result is provably a legal v24 world rather than merely a plausible one:
+ * `assertStaffStoreInvariants` passes trivially, and `nightlyWagesOf` folds it to 0, so a
+ * migrated world settles every subsequent night with a wage line of exactly zero — which is what
+ * such a hotel's wage bill was.
+ *
+ * WHAT IT DOES NOT DO, AND THE OMISSION IS THE POINT: it does not go back and insert wage
+ * transactions into the ledger for nights already simulated. Those nights were played by a build
+ * that paid nobody, and writing lines for them would invent history — the reason
+ * `countWageTransactions === dayOf(world)` is deliberately NOT asserted at load, exactly as its
+ * twin `countSettlementTransactions` is not (settlement.ts).
+ *
+ * Reads no content and no live constant, so the same v23 bytes produce the same v24 world
+ * however the shipped scenario's payroll changes afterwards.
+ *
+ * THE OVERWRITE GUARD IS `Object.keys().includes` rather than `in`, because `JSON.parse` makes
+ * `__proto__` an own key (the G-003 lesson) — the same guard all twenty-two earlier steps use.
+ */
+function migrateV23ToV24(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  if (Object.keys(world).includes('staff')) {
+    throw new Error(
+      'world already has a "staff" field, so it is not a v23 world; migrating it would overwrite a real payroll',
+    );
+  }
+  return { ...world, staff: V24_MIGRATION_STAFF };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -2407,6 +2462,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 20, to: 21, migrate: migrateV20ToV21 }),
   Object.freeze({ from: 21, to: 22, migrate: migrateV21ToV22 }),
   Object.freeze({ from: 22, to: 23, migrate: migrateV22ToV23 }),
+  Object.freeze({ from: 23, to: 24, migrate: migrateV23ToV24 }),
 ]);
 
 /**
@@ -2949,6 +3005,20 @@ export function assertWorldShape(value: unknown): asserts value is World {
     grid as unknown as GridBounds,
   );
   assertGuestOutcomes(guestOutcomes as unknown as GuestOutcomes, guests as unknown as GuestStore);
+
+  // THE PAYROLL (G-052a). Checked here for the reason the guest store is: `worldToJson` is an
+  // identity cast, so a malformed staff list loads happily and then hashes as whatever it is.
+  // It takes no plot and no entity store, and that ABSENCE IS THE SEAM: a member of staff has no
+  // position at this goal, so there is nothing to check it against. G-052b gives it one, and this
+  // call grows the arguments the guest one already has.
+  const staff = value['staff'];
+  if (!isRecord(staff)) {
+    throw new Error('Save is corrupt: world.staff is missing');
+  }
+  if (!Array.isArray(staff['list'])) {
+    throw new Error('Save is corrupt: world.staff.list is missing or not an array');
+  }
+  assertStaffStoreInvariants(staff as unknown as StaffStore);
 
   // THE LINE FOR THE LIFT (G-038b-i). Shape and ORDER first — the order IS the queue, so a save
   // carrying the same waiters in a different sequence would load happily and board them in an

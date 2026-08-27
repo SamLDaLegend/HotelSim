@@ -58,6 +58,10 @@ import {
   countOrphanedReservations,
   countRoomRevenueTransactions,
   countSettlementTransactions,
+  // G-052a. The wage cadence and the headcount, read through the sim's own folds rather than
+  // recomputed here — the `countSettlementTransactions` precedent.
+  countWageTransactions,
+  headcountOf,
   countStuckGuests,
   dayOf,
   departedGuests,
@@ -1892,6 +1896,29 @@ export type RunSummary = {
      * number that says whether a recovered hotel recovered or merely borrowed.
      */
     readonly outstandingDebtPennies: number;
+    /**
+     * Negative: ONE NIGHT'S PAYROLL, every night (G-052a) — the money loop's third term.
+     *
+     * ADDITIVE, so `SUMMARY_SCHEMA_VERSION` does NOT move — the policy on that constant. No key
+     * changes meaning and none is removed.
+     *
+     * Reported for `floorConstructionPennies`' reason exactly: it was going to be invisible,
+     * folded silently into a balance nobody could take apart, and a ledger you cannot explain is
+     * a ledger you cannot balance. A hotel employing nobody reads 0 here, correctly, and
+     * `wageSettlements` beside it says the nights were still settled.
+     */
+    readonly wagesPennies: number;
+    /**
+     * How many nights the payroll was met — the count of `wages` transactions (G-052a).
+     *
+     * Beside `settlements` rather than folded into it, because they are TWO CLAIMS: the rooms
+     * were kept tonight, and the payroll was met tonight. `countWageTransactions === settlements`
+     * is the law a reader checks by putting the two lines side by side, which is what makes it a
+     * measurement rather than an inference (ADR-0007).
+     */
+    readonly wageSettlements: number;
+    /** How many people are on the payroll at the end of the run (G-052a). */
+    readonly headcount: number;
     readonly settlements: number;
     readonly nights: number;
     readonly balancePennies: number;
@@ -2241,6 +2268,12 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       loanRepaymentPennies: sumByReason(world.ledger, 'loanRepayment'),
       liquidationValuePennies: stockValueOf(world.entities, content),
       outstandingDebtPennies: debt,
+      // G-052a. The wage bill and the wage CADENCE are both folded from the ledger rather than
+      // computed from the payroll: what the hotel paid is a question asked of the log (I4), and
+      // asking the payroll instead would report what it SHOULD have paid.
+      wagesPennies: sumByReason(world.ledger, 'wages'),
+      wageSettlements: countWageTransactions(world.ledger),
+      headcount: headcountOf(world.staff),
       settlements,
       nights,
       balancePennies: balance,
@@ -2817,6 +2850,11 @@ export function renderText(summary: RunSummary): string {
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,
     `upkeep      ${summary.money.upkeepPennies}p`,
+    // G-052a. Beside upkeep, because the money loop sets revenue against the two of them
+    // together, and the headcount beside the bill because a wage bill with no headcount cannot
+    // be checked by hand.
+    `wages       ${summary.money.wagesPennies}p, ${summary.money.headcount} on the payroll, ` +
+      `${summary.money.wageSettlements} nights`,
     `built       ${summary.build.built}`,
     `demolished  ${summary.build.demolished}`,
     // G-036b: `placed` is its own line rather than a column of `built`, for the reason

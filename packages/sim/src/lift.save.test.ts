@@ -31,6 +31,9 @@ import { run, stepTick } from './tick.js';
 import { createWorld, hashState } from './world.js';
 import type { World } from './world.js';
 import { stripLift } from './without-lift.js';
+// G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
+// one that does, exactly as every earlier step refuses the field it is about.
+import { stripStaff } from './without-staff.js';
 
 const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
@@ -132,7 +135,7 @@ type Json = Record<string, unknown>;
 /** The lived-in world as a v22 document: this build's bytes with v23's three changes taken back out. */
 function v22World(): Json {
   const blob = JSON.parse(serialise(livedIn(null))) as { world: Json };
-  return stripLift(blob.world);
+  return stripLift(stripStaff(blob.world));
 }
 
 /**
@@ -246,6 +249,10 @@ describe('a v22 blob loads, and what it becomes is a world this build could have
       ...(v22WorldWithCounters() as unknown as World),
       lift: null,
       liftQueue: [],
+      // AND THE 23 -> 24 STEP: an empty payroll, no staff id ever issued (G-052a), because a
+      // v22 world had no word for a staff role. Spelled here for the reason the lift is —
+      // an oracle that read the step back agrees with whatever the step does.
+      staff: { nextId: 1, list: [] },
       guestOutcomes: {
         arrived: V22_DEPARTED + loaded.guests.list.length,
         departures: [

@@ -60,6 +60,9 @@ import { stripCorridors } from './without-corridors.js';
 import { stripEditCounters } from './without-edits.js';
 import { stripStairs } from './without-stairs.js';
 import { stripLift } from './without-lift.js';
+// G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
+// one that does, exactly as every earlier step refuses the field it is about.
+import { stripStaff } from './without-staff.js';
 import { stripFootprints } from './without-footprints.js';
 
 /** The 9 -> 10 step itself. Index 8, the ninth link. */
@@ -175,6 +178,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed', 
       [20, 21],
       [21, 22],
       [22, 23],
+      [23, 24],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -383,7 +387,7 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
     // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v9 floor was a
     // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
     const { reviewOutcomes: _drop, ...rest } = stripLift(stripStairs(stripEditCounters(
-      stripFootprints(stripCorridors(stripDepth(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))),
+      stripFootprints(stripCorridors(stripDepth(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)))),
     )));
     // AND THE v14 FIELD COMES OFF EVERY GUEST (θ-b1), for the reason `reviewOutcomes` comes off
     // the world: "the same world written in the v9 SHAPE" means every difference v9 had, and a

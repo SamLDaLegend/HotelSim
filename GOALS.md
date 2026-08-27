@@ -2,11 +2,11 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-27, the last goal to LAND is G-057 and the ledger is unchanged since it; G-059 SHIPPED NO CODE AND IS AN ESCALATION (E-014, OPEN ON THE HUMAN) — the review scale is banded over a range the hotel cannot occupy, and MY OWN ADR-0099 IS FALSIFIED AT ITS LOAD-BEARING INFERENCE. THE HEADLINE, because M4 is about to wire reputation and demand to this instrument: at `--rooms 24 --amenities 1`, 1,677 of 3,186 guests STORM OUT (`leftDissatisfied`) and the distribution is `1:0, 2:0, 3:580, 4:2497, 5:109`, mean 3.85 — so EVEN IF EVERY 3-STAR WERE A STORM-OUT, at least 1,097 guests who walked out in disgust left FOUR STARS. At three amenities every guest scores 5 and nothing a player does moves it. WHAT I GOT WRONG: ADR-0099 ruled the top band is a CONJUNCTION (`reviewOf` returns `scale.min + floor(total / needs.length)`, so score 5 with min 1 forces total 16 over four needs, forces every band to 4) and inferred that relaxing it would restore information. THE PREMISE IS TRUE AND THE INFERENCE IS DEAD: at `--amenities 3` all four needs ARE at band 4 for every guest, so the conjunction is satisfied by 100% of the population and cannot be relaxed in a direction that changes anything — the all-5 distribution I verified myself IS the proof the gate is open and everyone is through it. I verified the distribution the mechanism predicts and never checked whether the mechanism was BINDING; a saturated cell is consistent with "the gate is shut" AND with "the gate is open", and the distribution alone does not distinguish them. THE REAL MECHANISM IS THE BAND DOMAIN, sourced from two shipped numbers with existing bind-time derivations: `needBandOf` divides unserved ticks by `stayDurationTicks: 1440`, so band 4 spans a served share of [80%, 100%], while `dissatisfaction` rises by EXACTLY ONE on any tick the guest wants something nothing is serving (`guests.ts:2860` — a boolean `letDown`, NOT one per unmet need) and `dissatisfactionCapacityTicks: 301` puts the guest out of the door. Measured unserved shares at `--amenities 3`: comfort 4.25%, entertainment 3.98%, nourishment 3.95%, `night_rest` 0.00% — the entire live population sits in the top fifth of the domain and BANDS 0, 1 AND 2 ARE UNREACHABLE BY CONSTRUCTION. AND A SECOND MECHANISM, WHICH IS MINE AND NOT IN THE BUILDER'S REPORT: `dissatisfaction` is a DRAINING SCALAR and `unservedTicks` is a PER-NEED UNDRAINED INTEGRAL (`needs.ts:258` says so in terms), so the guest leaves on the MOOD and is scored on the INTEGRAL and the two can diverge without bound — a guest driven out by ONE bad need has its other three at band 4 and the MEAN washes out the reason it left. Third: `isCutShort` floors the score for the three EVICTION reasons only, so `leftDissatisfied` is scored exactly like a contented checkout. WHAT I WITHDREW, AND IT WAS MY OWN EXIT CRITERION: I asked for the top-band count to stop moving with correlation under fixed marginals. Under review law A that is A THEOREM, NOT A DEFECT — law A is a hard violation at `report.ts:2641` and `met` is DEFINED as "this need's band is top" (ADR-0045 section 1), so `count(score == max)` IS the joint probability of n top-band events, ranging from min P_i to the product of P_i by definition for every law-A scorer; ADR-0099's 70 -> 34.3 is that identity. RESTATED as the review MEAN, which is what ADR-0098 actually claimed. Note the trap in the shipped reading: the scorer measures 1.000 correlation-sensitivity at `--amenities 2` ONLY BECAUSE IT IS DEAD THERE — a channel carrying zero bits is trivially robust to everything. REVIEW LAW A SURVIVES UNTOUCHED under every shape proposed, because a worst-need scorer is still non-decreasing in every need's served ticks. THREE MORE CORRECTIONS, TWO OF THEM TO ME: "nine cells" IS THREE CELLS — `--rooms 12` and `--rooms 60` produce byte-identical per-guest departure records at every amenity rung (sha256 `308d7833...`, `7d001152...`, `fb172625...`, identical across 12/60) because 12 rooms already saturates a fixed arrival cadence, so ADR-0099's ladder is evidence about THE UNCLOSED BUILD LOOP (ADR-0085) and not about the scorer, and I presented a three-point ladder as a nine-cell grid; `reviews.ts`'s own docblock reads "every guest that gave up waiting scores the floor too" and is FALSE on shipped content — measured at `--rooms 1 --amenities 1`, 2,906 of 2,906 `gaveUp` guests score 3 and none scores 1, because the lobby has a cafe so three engagement bands are top and only lodging is 0, a G-028b-era claim that CONTENT DRIFT falsified; and `content.ts:518` cites "where 431 comes from" while the shipped ceiling is 301, a fourth orphan of the same family found in passing. WHY NO CODE SHIPPED AND IT IS THE RIGHT CALL: the one domain the builder could SOURCE (`dissatisfactionCapacityTicks`) RELOCATES the point mass rather than spreading it — a2 `[0,0,1,3183,0]`, a3 `[0,0,0,3184,0]`, i.e. 5 -> 4 — while the shape that spreads it rests on a derivation the builder FOUND BY SEARCHING THE CANDIDATE SPACE, the order section 2.1 forbids, and is the direction ADR-0045 section 3 records as falsified and predicts will be proposed again. The golden sweep is ~75 assertions across ~19 files, one atomic unsplittable change, so it must be decided ONCE BEFORE BUILD. MY RECOMMENDATION TO THE HUMAN, offered as a recommendation: a review measures the WORST PART of a stay rather than the whole stay averaged, with the mean as a tie-break, `leftDissatisfied` added to `isCutShort`, and the band domain moved to `dissatisfactionCapacityTicks` — all three derivable from things already shipped, with no appeal to which distribution looks nicer, because THE SIM ALREADY HAS A MODEL OF WHY A GUEST LEFT and a scorer that means over needs is discarding the sim's own answer to the question the review is asking. GATE READINGS, FROM THE PROCESS, ON A CLEAN TREE AT `993a6a2`: `pnpm verify` FOURTEEN ROWS PASS with VERIFY_EXIT=0 read into a log; I2 `1e17f0e4e9b36ce0` UNCHANGED AND PREDICTED UNCHANGED BEFORE THE RUN, which is the only kind of green worth reporting; `check:tickcost` verdict IDENTICAL because the tree is unchanged; save stays v23, no field, no migration. NO WATCH, correctly: nothing changed guest-visible outcomes. `apps/game/scripts/record-frames.ts` DOES exist — re-confirmed, and it is the claim a builder got wrong at G-054. AND THE STAMP GATE CAUGHT ME ON THIS VERY COMMIT, WHICH IS WORTH MORE THAN THE ESCALATION: my first docs-only run read VERIFY_EXIT=1 with TWO violations, both mine — I rewrote the digest in THREE ledgers and section 4.1 requires FOUR (`PARKING.md` was the one I missed), and the as-of stamp named G-059, which GOALS.md does not mark done because G-059 DID NOT LAND. The gate is right on both counts and NEITHER was edited to pass: the stamp now names the last goal to LAND, and all four ledgers are written in one step. Exactly one test of 2,850 failed and it was `ledger-stamp.test.ts`, the test that asserts the shipped gate passes against the four real ledgers — so the gate and its test failed together, for one cause, which is what a gate with a test SHOULD do. Unreliable: 1 gate, 0 defects — `check:scaling` is still the unrepaired one and a THIRD is still a stop condition. WHAT PROCEEDS WHILE E-014 SITS: G-050a/b stay BLOCKED, having always been downstream of the scorer; G-047a, G-051, G-037a and G-052 are NOT, and the loop continues on those. This escalation stops the review scale, not M4.*
+*As of 2026-08-27, the last goal to LAND is G-052a and it lands the MONEY LOOP'S THIRD TERM — `CLAUDE.md` defines the loop as "room revenue against WAGES and upkeep, settled nightly", `TransactionReason` had nine members and none was a wage, and `HOTELSIM.md` §1.1 marked it the only declared term of any of the three loops with NO implementation at all. It has one now: a `wages` reason (the tenth), settled every night unconditionally and BEFORE upkeep, folded over a new `World.staff` payroll at each role's `nightlyWagePence`, which is content — `packages/content/data/staff-roles.json`, a Zod schema, zero content ids in `packages/sim`. THE RATE IS DERIVED, AND ROUND 1 OF THE CRITIQUE FALSIFIED THE UNIT I FIRST GAVE IT — the number survives, its story changed, and the correction is the most useful thing in this entry. `nightlyRatePence` IS NOT A PER-ROOM-NIGHT CHARGE: `payForStay` books it once per COMPLETED STAY PER GUEST (ADR-0010 says so in terms), shipped `stayDurationTicks` is 1440 so a stay is one night, and `standard_room` has `capacity: 2` with `partySizeWeights: [3, 1]` so a pair shares a bedroom and pays twice. `nightlyUpkeepPence` IS per room-night. So 8,500 - 2,500 = 6,000p subtracts across two denominators, and what it actually names is THE MARGIN OF A ROOM-NIGHT EARNING FROM EXACTLY ONE GUEST — the hotel's WORST occupied room-night. Re-measured on this tree, `--rooms 1 --seed 7`, exact deterministic integers: revenue / checkedOut is 8,500 EXACTLY at 100 and 1,000 days (which is what makes the denominator a GUEST), and the REALISED margin is 9,740p per bedroom-night at 100 days and 9,851p at 1,000 — 1.62x. THE MULTIPLE IS STILL ONE AND THE ARGUMENT IS NOW THE RIGHT ONE: a bind-time check HAS NO WORLD, so it cannot read realised occupancy, which moves with the arrival cadence, the party weights, the plot and the build loop and is not content — and the single-occupancy margin is the only one that HOLDS AT EVERY OCCUPANCY. THE WORD CARRYING THAT ARGUMENT IS FLOOR AND NOT 'ONLY', corrected at round 3: this sentence read 'the ONLY occupancy-independent margin the content table contains', which is one word wider than its support, because `capacity` and `partySizeWeights` are content too and `capacity x rate - upkeep` = 14,500p and `E[party] x rate - upkeep` = 8,125p are both computable at bind time with no run. Single occupancy is the FLOOR of that family, and a floor is what a bound protecting recoverability has to be; the conclusion and the number are unaffected. THAT IS THE THIRD TIME IN THIS ONE GOAL that a justification was one word wider than its support, which is the pattern worth carrying forward rather than any of the three instances. A threshold sourced from a behavioural number is sourced from a run, which is the order §2.1 forbids. THE HONEST CONSEQUENCE, WHICH THE FIRST VERSION OVERSTATED: the rule of thumb is NOT 'one full bedroom behind every member of staff' — it is about 0.62 of one, so the shipped wage is a CONSERVATIVE FLOOR and the player is better off than the slogan said. `bindContent` enforces `nightlyWagePence <= max over room types of (nightlyRatePence - nightlyUpkeepPence)`, and THAT BOUND'S PROPERTY IS ALSO RESTATED: it does NOT say 'no single room can carry a member of staff' — a shared bedroom-night is worth 2 x 8,500 - 2,500 = 14,500p, so a 10,000p wage IS carryable by one room and is refused anyway. It says the narrower true thing: above the bound a room earning from ONE guest cannot carry one member of staff, so the payroll could be met only out of sharing and turnover and would become unpayable exactly when occupancy falls. The bound is CONSERVATIVE ON PURPOSE. THE TESTS NOW PIN THE PROPERTY AND NOT THE ARITHMETIC — both denominators are read off a run, the bound is asserted BELOW the realised margin and BELOW the double-occupancy margin, and the old test re-derived `best` with the same two fields, which is exactly why a wrong unit passed green. The bound still bites at one penny (6,000 loads, 6,001 throws) and still bites on a real fixture: the food court sells nothing, so its only admissible wage is 0. THE HEADLINE FINDING, AND IT DECIDED THE SHIPPED CONTENT: a COMPULSORY payroll BREAKS G-011's CRITERION B, this project's evidence for "losing must be recoverable". Measured paired, one sitting, exact deterministic integers from `sim:run --json` at `--days 1000 --seed 7 --rooms 0 --amenities 0 --build 1440 --demolish 1440 --loan 1440`, no aggregation, regime win32/12cpu quiet: employing ONE porter gives built 23 / demolished 21 / 4 entities stranded / ZERO builds in the last ten days, against 441 / 441 / 0 / still building when the scenario employs nobody. All three of the criterion's claims go false. STATE THE ARM'S LIMIT WITH THE RESULT, because the first version of this entry did not and the ADR generalised further than the measurement supports: THAT ARM EARNS NOTHING — `revenuePennies` is 0 in BOTH branches, by construction, since `--amenities 0` completes no stays — so it demonstrates that a recurring charge kills a hotel with no income, where ANY recurring charge would. THE COUNTER-ARM, which is the one that says the wage is not simply too large: shipped default flags, 1,000 days, seed 7, revenue 37,060,000p — 25,560,000p against 19,560,000p with one porter, STILL SOLVENT BY 19.5M. So a trading hotel absorbs the wage comfortably and a non-trading one cannot, which is what makes the finding about the COMPULSION rather than about the rate. IT IS THE ROSTER'S FAULT AND NOT THE WAGE'S — the wage is derived and unmoved; what breaks it is that at G-052a the player has no hire and no fire, so a recurring charge nobody can decline is a trap rather than a difficulty. SO THE MECHANISM SHIPS, BOTH BRANCHES ARE BUILT AND TESTED, AND THE SHIPPED SCENARIO EMPLOYS NOBODY — G-057's `seededStock` decision one table over, on the same kind of evidence, and the flip is one field in one JSON file owned by G-052b. THE TERM IS NOT VACUOUS AND THAT IS CHECKED RATHER THAN CLAIMED: `wages.report.test.ts` assembles a payroll on disk and drives it through the real loader and the real CLI on every `pnpm test`, and it PINS THE COLLAPSE ABOVE as a bounded ratio so the ruling is a number in the tree. THE THREE SHIPPED ARMS, PAIRED, 365 days / seed 42 / exact integers / no aggregation / win32/12cpu quiet: the default `--rooms 3` 9,635,000p -> 7,445,000p, `--rooms 12` 11,350,500p -> 9,160,500p, and the `--rooms 60 --arrivals 96` bench arm -37,949,000p -> -40,139,000p. Three notes on that row. The delta is EXACTLY -2,190,000p on all three (6,000p x 365) because none of them passes `--build`, so cash gates nothing and revenue, checkouts and every guest number are byte-identical between branches. THE BENCH ARM IS ALREADY INSOLVENT AT HEAD, BEFORE ANY WAGE EXISTS — sixty bedrooms behind one amenity pay 154,500p a night of upkeep against 17,943,500p of revenue over a year — and that is a finding this goal MEASURED rather than caused. And the shipped column reproduces HEAD to the penny on all three, which is what a no-op roster should read. GATE READINGS, FROM THE PROCESS: `pnpm verify` FOURTEEN ROWS PASS, VERIFY_EXIT=0 read out of a log. I2 is now `ffd19881b7086b9d` where it was `1e17f0e4e9b36ce0` — IT MOVED, AND THE MOVEMENT WAS PREDICTED BEFORE THE RUN with three named causes — a new hashed `World.staff` key, a `World.contentHash` that moves because `SimContent` gained `staffRoles` and `Scenario` gained `openingStaff`, and one zero-amount `wages` line per night in the ledger. Save schema is now **v24**, up from v23, predicted before the run, one migration `migrateV23ToV24` writing `{ nextId: 1, list: [] }` — the cleanest historical statement in the chain, because no era before this one had a word for a staff role — and the permanent v1 fixture has a ZERO-LINE DIFF (ADR-0006 fires for the twenty-third time). Summary schema stays **4**: every new field is additive. Measure golden is now `856ade18e3ed8264`, up from `289a56519ced9655`; `check:measure` ok. WATCH DONE AND IT FOUND SOMETHING: 26 SVG frames recorded on each branch through `apps/game/scripts/record-frames.ts` at `--ticks 2880 --every 480`, and they are IDENTICAL BYTE FOR BYTE — the recorder's scenario builds through the structural door and never consults the balance, so THE MONEY LOOP'S THIRD TERM SHIPS WITH NO PERCEPTUAL CHANNEL AT ALL. Nothing on screen says the hotel employs anybody or pays them; the wage is legible only in the CLI report line. That is an observation and not a defect of this goal, and it is G-052b's to close when a staff member acquires a position. Unreliable: 1 gate, 0 defects — `check:scaling` is still the unrepaired one and a THIRD is still a stop condition. E-014 REMAINS OPEN ON THE HUMAN and this goal did not touch `reviews.ts`, `needBandOf` or the review scale.*
 
-- **Schemas**: save **v23** (G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
+- **Schemas**: save **v24** (G-052a — the world gained a `staff` payroll, and `migrateV23ToV24` writes the empty one a pre-G-052a world had; before that v23 at G-038b-i — the world gained a `lift` and a `liftQueue`, and the departure table gained a row; a guest gained a `partyId` at G-040a; the grid gained a `row` at G-034a) · summary **4** (G-027a, and θ-b1's sixth departure row did
   **not** bump it — additive, per `report.ts`'s published policy) · I2 gate hash
-  `1e17f0e4e9b36ce0` · measure golden `289a56519ced9655`. *(Both MOVED at **G-054** and this time FOR A BEHAVIOUR: `reserve` settles an exact tie between equally-pressed needs per guest (`needTieBreakRank`) instead of by ascending content id, so `World.contentHash` is UNCHANGED — no `World` field, no save bump, no migration. **This line read `07d81ab917935a25` / `c0b590c8d85d0d9c` and credited G-057 for three goals after G-054 moved both**, which is the same defect the sentence below already records. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
+  `ffd19881b7086b9d` · measure golden `856ade18e3ed8264`. *(Both MOVED at **G-054** and this time FOR A BEHAVIOUR: `reserve` settles an exact tie between equally-pressed needs per guest (`needTieBreakRank`) instead of by ascending content id, so `World.contentHash` is UNCHANGED — no `World` field, no save bump, no migration. **This line read `07d81ab917935a25` / `c0b590c8d85d0d9c` and credited G-057 for three goals after G-054 moved both**, which is the same defect the sentence below already records. **This line read `save v12` and `452920cbe5ded417` while the tree was at v14** —
   two schema generations, through two goals, with `check:stamp` green the whole time, because
   **that gate compares the as-of LINE and never reads the body beneath it.**)*
   **DISCHARGED 2026-08-12 by CI run #8** (`31638930195`, `81961fc..ab2991c`): `compare-hashes`
@@ -3854,8 +3854,129 @@ content shape, and a new question about what reads it.** My earlier estimate was
 facilities and false of the system, and **calling the second one cheap because the first one was is
 the estimate error this project has made most often.**
 
+## G-052a — A staff role is content, a staff member exists, and it is PAID nightly
+Status: **DONE 2026-08-27. THE MONEY LOOP RUNS ON ALL FOUR OF ITS DECLARED TERMS.** `TransactionReason`
+has TEN members and the tenth is `wages` — settled every night, unconditionally, BEFORE upkeep, folded
+over a new `World.staff` payroll at a rate that is content. **The wage rate is DERIVED: one member of
+staff costs the hotel's LEAST VALUABLE occupied room-night — a room earning from exactly ONE
+guest, 8,500 - 2,500 = 6,000p** — and `bindContent` refuses any content whose wage exceeds what a
+SINGLY-OCCUPIED room-night can cover. **The two fields have different denominators on purpose**:
+`nightlyRatePence` is charged PER GUEST-NIGHT (`payForStay` books it once per completed stay, per
+guest) and `nightlyUpkeepPence` PER ROOM-NIGHT, so the difference is a single-occupancy margin and
+the realised one is ~1.62x it. *(These two sentences read "exactly one occupied room-night's margin"
+and "what one room-night can cover" until round 3 — the clauses ADR-0101 §1 withdraws, left
+standing two lines above the note saying they had been withdrawn. Every other site states its
+correction IN PLACE; this one now does too.)* **`HOTELSIM.md` §1 and §1.1 and
+`CLAUDE.md` are all re-marked in this same change**, which is the rule ADR-0081 §2 exists for.
+**CRITIQUE ROUND 1 FALSIFIED THE UNIT the rate was first justified with — the number survived, the
+story changed** — and ADR-0101 §1 carries the amendment in place.
+Milestone: M4 · Owner pair: economy-engineer / balance-critic · **The first three quarters of C4
+(ADR-0047), which was NAMED and not built.** Split from G-052 at PLAN; **G-052b is the fourth**.
+
+> **THE HEADLINE, AND IT DECIDED THE SHIPPED CONTENT: a COMPULSORY payroll BREAKS G-011's CRITERION
+> B** — *"the dead state is not absorbing"*, this project's evidence for `balance-critic`'s *"losing
+> must be recoverable"*. **Measured paired, one sitting**, exact deterministic integers from
+> `sim:run --json` at `--days 1000 --seed 7 --rooms 0 --amenities 0 --build 1440 --demolish 1440
+> --loan 1440`, no aggregation, regime win32/12cpu quiet:
+>
+> | | employs 1 porter | employs nobody |
+> |---|---|---|
+> | built | **23** | **441** |
+> | demolished | 21 | 441 |
+> | entities at end | **4** | **0** |
+> | builds in the last ten days | **0** | >0 |
+>
+> **All three of the criterion's claims go false.** It is the ROSTER's fault, not the WAGE's: the
+> rate is derived and unmoved, and what breaks the criterion is that at G-052a **the player has no
+> hire and no fire**, so a recurring charge nobody can decline is a trap rather than a difficulty.
+
+**AND THE ARM'S LIMIT IS STATED WITH THE RESULT (round 1).** Criterion B's hotel **earns nothing** —
+`revenuePennies` 0 in both branches, because `--amenities 0` completes no stays — so on its own it
+cannot separate *"a compulsory wage is a trap"* from *"a compulsory anything is a trap"*. **The
+counter-arm does**: shipped default flags, 1,000 days, seed 7, revenue 37,060,000p —
+**25,560,000p against 19,560,000p** with one porter, **still solvent by 19.5M**. A trading hotel
+absorbs the wage comfortably; a non-trading one cannot recover from it.
+
+**SO THE MECHANISM SHIPS AND THE SHIPPED SCENARIO EMPLOYS NOBODY** — G-057's `seededStock` decision
+one table over, on the same kind of evidence: build the other branch first, measure what it destroys,
+ship the one that destroys nothing, hand the flip to the goal that can carry it. **Flipping it is one
+field in one JSON file and it belongs to G-052b.** `openingStaffSchema` carries the ruling and the
+table above at the point of use.
+
+**AND THE TERM IS NOT VACUOUS, WHICH IS CHECKED RATHER THAN CLAIMED.** `wages.report.test.ts`
+assembles a `--content` directory whose scenario DOES employ somebody and drives it through the real
+loader, the real Zod schemas and the real CLI on every `pnpm test` — nine tests, including the
+bind-time bound biting at one penny and the collapse above pinned as a bounded ratio.
+
+### WHAT LANDED
+
+- **`packages/content/data/staff-roles.json`** — one role, `night_porter`, which is one of the three
+  examples **ADR-0003 itself uses** when it defines what a content id looks like. `staffRoleSchema`,
+  `staffPostingSchema`, `openingStaffSchema` and `nightlyWagePenceSchema` in `packages/content`.
+- **`packages/sim/src/staff.ts`** — `StaffStore`, `hireOpeningStaff`, `nightlyWagesOf`,
+  `assertStaffStoreInvariants`. **A staff member is a PERSON and not an entity**, for the reason a
+  guest is not: `entities` holds spatial things with footprints, and `nightlyUpkeepOf` walks it.
+- **The settlement order is a WRITTEN DECISION**: wages, then upkeep, then the loan repayment. It
+  changes no amount today — neither is capped — and it is decided now so that **the goal introducing
+  bankruptcy inherits it**: a wage is owed to a person and upkeep to a building, and the term that
+  must give way is the one the game can model going unpaid (ADR-0047 B5's reserved condition field).
+  `runSettlement` checks the order, because nothing else could.
+- **Save v23 -> v24**, one migration, `{ nextId: 1, list: [] }`. The permanent v1 fixture has a
+  **zero-line diff** (ADR-0006 fires for the twenty-third time).
+
+### THE THREE SHIPPED ARMS, PAIRED — criterion 5
+
+365 days, seed 42, exact deterministic integers, no aggregation, win32/12cpu quiet. The delta is
+**exactly -2,190,000p (6,000p x 365) on all three**, because none of them passes `--build`, so cash
+gates nothing and revenue, checkouts and every guest number are byte-identical between branches:
+
+| arm | employs nobody (SHIPPED) | employs 1 porter |
+|---|---|---|
+| default `--rooms 3 --amenities 1` | 9,635,000p | 7,445,000p |
+| `--rooms 12` | 11,350,500p | 9,160,500p |
+| `--rooms 60 --arrivals 96` (bench/tickcost) | **-37,949,000p** | **-40,139,000p** |
+
+> **THE BENCH ARM IS ALREADY INSOLVENT AT HEAD, BEFORE ANY WAGE EXISTS** — sixty bedrooms behind one
+> amenity pay 154,500p a night of upkeep against 17,943,500p of revenue over a year. **This goal
+> MEASURED that; it did not cause it**, and nothing gates on a negative balance (`settlement.ts`), so
+> the arm keeps ticking and `sim:bench` keeps measuring time. It is parked with its test.
+
+**And the shipped column reproduces HEAD to the penny on all three**, which is what a no-op roster
+should read.
+
+### GATE READINGS, ALL FROM THE PROCESS
+
+- `pnpm verify` **fourteen rows PASS**, `VERIFY_EXIT=0` read out of a log.
+- **I2 `1e17f0e4e9b36ce0` -> `ffd19881b7086b9d`. It MOVED AND THE MOVEMENT WAS PREDICTED BEFORE THE
+  RUN**, with three named causes: a new hashed `World.staff` key, a `World.contentHash` that moves
+  because `SimContent` gained `staffRoles` and `Scenario` gained `openingStaff`, and one zero-amount
+  `wages` line per night in the ledger.
+- **Save v24 predicted before the run**; summary stays **4** (every new field additive).
+- Measure golden `289a56519ced9655` -> `856ade18e3ed8264`; `check:measure` ok.
+- `check:purity`, `check:content`, `check:ladder`, `check:unpinned`, `test:save` all ok.
+
+### THE WATCH — recorded, and it FOUND something
+
+**26 SVG frames on each branch** through `apps/game/scripts/record-frames.ts` at
+`--ticks 2880 --every 480`, and **they are identical byte for byte**. The recorder's scenario builds
+through the structural door and never consults the balance, so **the money loop's third term ships
+with no perceptual channel at all**: nothing on screen says the hotel employs anybody or pays them,
+and the wage is legible only in the CLI report's `wages` line. **That is an observation rather than a
+defect of this goal** — a staff member has no position until G-052b — and it is written into
+`viewer.readonly.test.ts`'s exemption list as that goal's obligation.
+
+### WHAT G-052b STILL OWES
+
+Staff **occupy rooms**, so `accessRule: staffOnly` becomes reachable; a **hire and a fire**, which is
+what makes the flip above safe; and a staff member somewhere a watcher can see it.
+
 ## G-052 — Staff, and the third of the money loop that does not exist
-Status: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §3). NOT SMALL — and likely M4.**
+Status: **SPLIT at PLAN 2026-08-27 into G-052a (a role is content, a member exists, it is PAID) and
+G-052b (a member OCCUPIES A ROOM). G-052a is DONE; the block above carries it.** The seam was the
+orchestrator's and the builder took it: **the fourth thing this block lists — "something that occupies
+rooms and therefore interacts with capacity, reachability and the queue" — is the whole of G-052b**,
+and the first three landed without touching the grid, validity or a guest.
+Was: **PLANNED 2026-08-24. HUMAN RULING (ADR-0079 §3). NOT SMALL — and likely M4.**
 Owner pair: economy-engineer / balance-critic · **This is C4, named at ADR-0047 and not built.**
 Statement: staff exist, occupy rooms, and are **paid**.
 

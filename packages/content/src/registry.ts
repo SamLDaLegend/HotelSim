@@ -18,8 +18,18 @@ import {
   roomTypesSchema,
   scenariosSchema,
   speedLadderSchema,
+  staffRolesSchema,
 } from './schema.js';
-import type { Economy, GuestRules, ItemType, NeedType, RoomType, Scenario, SpeedRung } from './schema.js';
+import type {
+  Economy,
+  GuestRules,
+  ItemType,
+  NeedType,
+  RoomType,
+  Scenario,
+  SpeedRung,
+  StaffRole,
+} from './schema.js';
 
 /**
  * Every content table, validated.
@@ -27,9 +37,9 @@ import type { Economy, GuestRules, ItemType, NeedType, RoomType, Scenario, Speed
  * `needTypes` is OPTIONAL, and absence is not emptiness: a registry assembled from a
  * content set that predates need types omits the key, and therefore fingerprints in
  * `packages/sim` exactly as it did before the table existed. That is what keeps a save
- * taken under the older content loadable (G-002, G-004). When items, staff roles and
- * guest archetypes arrive (M6) they are fields here, and `SimContent` in `packages/sim`
- * grows to match.
+ * taken under the older content loadable (G-002, G-004). This is how items (G-009) and staff
+ * roles (G-052a) arrived; guest archetypes (M6) are the one still outstanding. Each is a field
+ * here, and `SimContent` in `packages/sim` grows to match.
  *
  * Cross-table coherence — every need having a provider — is NOT checked here. It is
  * checked by `bindContent` in `packages/sim`, which is the one path every host goes
@@ -76,6 +86,21 @@ export type ContentRegistry = {
    * world had. `bindContent` reads the absence as total commitment (ADR-0008).
    */
   readonly guestRules?: readonly GuestRules[];
+  /**
+   * WHO THE HOTEL CAN EMPLOY, AND WHAT ONE OF THEM COSTS FOR A NIGHT (G-052a).
+   *
+   * The header above has said since G-002 that *"when items, staff roles and guest archetypes
+   * arrive they are fields here"*. This is that field, arriving at M4 rather than M6 because
+   * `HOTELSIM.md` section 1.1 marks `wages` as the only declared term of any of the three loops
+   * with no implementation at all.
+   *
+   * Optional for the same absence-is-not-emptiness reason every table above it is, and the
+   * historical statement is the cleanest of the set: content that predates this table describes
+   * a world in which nobody could be employed, which is exactly what a pre-G-052a world was.
+   * Such a world still settles every night and still books a wage — of ZERO, unconditionally,
+   * the way an empty hotel still books an upkeep of zero.
+   */
+  readonly staffRoles?: readonly StaffRole[];
 };
 
 /**
@@ -280,6 +305,37 @@ export function parseEconomiesJson(text: string, sourceLabel = 'content'): reado
     throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
   }
   return parseEconomies(raw, sourceLabel);
+}
+
+/**
+ * Validate an already-parsed staff-role document (G-052a). Same all-or-nothing discipline, and
+ * a table rather than a registry for the same reason: one file is one table.
+ *
+ * What it does NOT check is the one relationship that matters about the number it carries — that
+ * a night's wage is covered by a room-night's margin. That reads `nightlyWagePence` against two
+ * fields in another file, so it lives where every other cross-table check lives:
+ * `assertWagesAreCoveredByARoomNight` in `packages/sim/src/content.ts`. Nor does it check that a
+ * scenario's `openingStaff` names a role this table defines — same reason, same place.
+ */
+export function parseStaffRoles(raw: unknown, sourceLabel = 'content'): readonly StaffRole[] {
+  const result = staffRolesSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:
+${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'staff role');
+  return result.data;
+}
+
+/** Validate a staff-role JSON document. "Not JSON" and "not content" stay apart. */
+export function parseStaffRolesJson(text: string, sourceLabel = 'content'): readonly StaffRole[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseStaffRoles(raw, sourceLabel);
 }
 
 /** Validate a scenario JSON document. "Not JSON" and "not content" stay apart. */

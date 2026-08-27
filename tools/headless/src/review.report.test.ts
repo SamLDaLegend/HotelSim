@@ -109,6 +109,8 @@ import {
   NEED_TYPES_PATH,
   ROOM_TYPES_PATH,
   SCENARIOS_PATH,
+  // G-052a: a seventh table, required of any `--content` directory this file assembles.
+  STAFF_ROLES_PATH,
 } from './content-loader.js';
 import { meanReviewHundredths } from './report.js';
 import type { RunSummary } from './report.js';
@@ -1788,7 +1790,7 @@ describe('the scale is a JSON edit, not a constant', () => {
   const contentWithScale = (min: number, max: number): string => {
     const dir = mkdtempSync(join(tmpdir(), 'hotelsim-review-'));
     tempDirs.push(dir);
-    for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, SCENARIOS_PATH]) {
+    for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH]) {
       copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
     }
     const rules = JSON.parse(readFileSync(GUEST_RULES_PATH, 'utf8')) as Record<string, unknown>[];

@@ -36,6 +36,8 @@ import { createLoanOutcomes } from './loan.js';
 import type { LoanOutcomes } from './loan.js';
 import { createRng } from './rng.js';
 import type { RngState } from './rng.js';
+import { hireOpeningStaff } from './staff.js';
+import type { StaffStore } from './staff.js';
 
 /** One tick is one in-game minute. 1440 ticks make a day. */
 export const TICKS_PER_DAY = 1440;
@@ -66,6 +68,20 @@ export type World = {
    * the run. A guest is NOT an entity; see the header of `guests.ts`.
    */
   readonly guests: GuestStore;
+  /**
+   * WHO IS ON THE PAYROLL (G-052a) — the money loop's third term made state.
+   *
+   * A member of staff is a PERSON and not an entity, for the reason a guest is not: `entities`
+   * holds spatial things with footprints and positions, and `nightlyUpkeepOf` walks it asking
+   * every member what its room type costs. See the header of `staff.ts`.
+   *
+   * At this goal the payroll is fixed for the life of the world — `hireOpeningStaff` runs once,
+   * in `createWorld`, from the scenario's declared postings — because there is no hire command
+   * and no fire command yet. It is world state rather than a fold over content anyway, and that
+   * is deliberate: G-052b gives a member of staff a position and a duty, and a save must say who
+   * this hotel employs rather than re-deriving it from whatever content is loaded next.
+   */
+  readonly staff: StaffStore;
   /**
    * What happened to every guest that has left, counted BY REASON (G-015).
    *
@@ -264,6 +280,7 @@ const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   needOutcomes: true,
   reviewOutcomes: true,
   rng: true,
+  staff: true,
   stairs: true,
   tick: true,
 };
@@ -325,6 +342,12 @@ export function createWorld(seed: number, content: BoundContent): World {
     entities: createEntityStore(),
     contentHash: content.fingerprint,
     guests: createGuestStore(),
+    // THE OPENING PAYROLL, HIRED FROM CONTENT (G-052a). Empty under content that declares no
+    // scenario or no `openingStaff` — a true historical statement rather than a default, exactly
+    // as the empty ledger above is: every world before this goal employed nobody, so such a world
+    // reproduces its payroll to the byte. Ids are handed out in ascending role order, which is
+    // `hireOpeningStaff`'s contract and is I2 rather than tidiness.
+    staff: hireOpeningStaff(content),
     guestOutcomes: createGuestOutcomes(),
     // Empty rather than one row per need type, and deliberately not a function of the
     // injected content: rows appear when a guest departs having formed one. That is what

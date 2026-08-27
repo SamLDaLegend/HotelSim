@@ -25,6 +25,7 @@ import {
   parseNeedTypes,
   parseScenarios,
   parseSpeedLadder,
+  parseStaffRoles,
 } from '@hotelsim/content';
 import type { SpeedRung } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
@@ -36,6 +37,7 @@ import itemTypesJson from '@hotelsim/content/data/item-types.json';
 import needTypesJson from '@hotelsim/content/data/need-types.json';
 import roomTypesJson from '@hotelsim/content/data/room-types.json';
 import scenariosJson from '@hotelsim/content/data/scenarios.json';
+import staffRolesJson from '@hotelsim/content/data/staff-roles.json';
 import speedLadderJson from '@hotelsim/content/data/speed-ladder.json';
 
 /**
@@ -60,6 +62,9 @@ export function loadContent(): BoundContent {
     // the headless host one with 500,000p — two hosts disagreeing about the same content, which
     // is the drift this file's header says the shared parsers exist to prevent.
     scenarios: parseScenarios(scenariosJson, 'scenarios.json'),
+    // G-052a: the money loop's third term. Loaded here for the reason every other table is —
+    // same parsers, same schemas, one definition of valid content.
+    staffRoles: parseStaffRoles(staffRolesJson, 'staff-roles.json'),
   };
   return bindContent(registry);
 }

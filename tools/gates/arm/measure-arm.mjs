@@ -179,6 +179,11 @@ async function loadArm(dir) {
   // record where it lived then. Each arm runs its OWN sim against its OWN content, so requiring
   // this file would refuse to measure every revision older than the goal that added it.
   const scenarios = optional('scenarios.json');
+  // OPTIONAL FOR `guest-rules.json`'s REASON AGAIN (G-052a): an arm at a revision before this
+  // goal has no staff-role table, and such a revision's own `bindContent` has no word for one.
+  // Omitting the KEY rather than passing an empty array is the same "absence is not emptiness"
+  // statement `SimContent` makes, and it is what keeps every older revision measurable.
+  const staffRoles = optional('staff-roles.json');
   const content = sim.bindContent({
     roomTypes: data('room-types.json'),
     needTypes: data('need-types.json'),
@@ -186,6 +191,7 @@ async function loadArm(dir) {
     economy: data('economy.json'),
     ...(guestRules === undefined ? {} : { guestRules }),
     ...(scenarios === undefined ? {} : { scenarios }),
+    ...(staffRoles === undefined ? {} : { staffRoles }),
   });
   return { sim, harness, content };
 }

@@ -25,8 +25,15 @@ Three nested feedback loops. Every design and code decision traces to one of the
 
 - **Guest loop** — guest arrives [E], forms needs [E], gets them met or doesn't [E],
   pays [E], reviews [E]. *All five exist; it is the only loop that runs on all of its terms.*
-- **Money loop** — room revenue [E] against wages [**OWED M4**] and upkeep [E], settled
-  nightly [E]. *`TransactionReason` has nine members and none is a wage — G-052.*
+- **Money loop** — room revenue [E] against wages [E] and upkeep [E], settled
+  nightly [E]. *All four exist since G-052a: `TransactionReason` has TEN members and the tenth
+  is `wages`, settled nightly before upkeep, folded over `World.staff` at a rate that is content.
+  The mechanism is live and the shipped scenario employs NOBODY — a compulsory payroll breaks
+  G-011's criterion B (441 builds against 23, measured — on an arm that EARNS NOTHING; a trading
+  hotel absorbs it, 25.56M -> 19.56M over 1,000 days) because the player has no hire and no fire
+  until G-052b, which also still owes staff OCCUPYING ROOMS. The rate is one SINGLY-OCCUPIED
+  room-night's margin: `nightlyRatePence` is charged per GUEST-night, `nightlyUpkeepPence` per
+  ROOM-night, and the bound built on them is conservative rather than tight.*
 - **Build loop** — spend cash [E], add capacity [E] and quality [**OWED M4**], raise
   reputation [**OWED M4**], raise demand [**OWED M4**], back to the guest loop
   [**OWED M4**]. *Two of six. The loop does not close: arrivals are a fixed cadence

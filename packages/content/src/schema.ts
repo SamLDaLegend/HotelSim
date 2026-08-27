@@ -2108,7 +2108,213 @@ export const economiesSchema = z.array(economySchema).min(1);
 export const seededStockPolicySchema = z.enum(['supplementsCapital', 'drawnFromCapital']).optional();
 
 /**
- * A SCENARIO, AND TODAY IT DECLARES EXACTLY ONE THING: WHAT THE HOTEL OPENS WITH (G-057).
+ * WHAT ONE MEMBER OF STAFF COSTS FOR ONE NIGHT (G-052a), in pence. DERIVED, NOT PICKED.
+ *
+ * `CLAUDE.md` defines the money loop as *"room revenue against WAGES and upkeep, settled
+ * nightly"*, and until this goal the ledger had nine transaction reasons and none of them was a
+ * wage. This is the number that term runs on, so §2.1 binds it: *a number nobody can source is
+ * not a gate, it is a superstition with CI access.*
+ *
+ * ---------------------------------------------------------------------------
+ * READ THE UNIT FIRST. THE FIRST VERSION OF THIS DERIVATION GOT IT WRONG AND THE CORRECTION IS
+ * KEPT IN PLACE, because the mistake is one anybody reading two content fields will make again.
+ *
+ * `nightlyRatePence` IS NOT A PER-ROOM-NIGHT CHARGE. `payForStay` (`guests.ts`) books it ONCE
+ * PER COMPLETED STAY, PER GUEST — ADR-0010 says so in terms — and shipped `stayDurationTicks`
+ * is 1440, so a stay is one night and the rate is a PER-GUEST-NIGHT price. `nightlyUpkeepPence`
+ * IS per room-night. **The two have different denominators**, so their difference is not "the
+ * margin of a room-night" in general.
+ *
+ * WHAT IT IS, EXACTLY: `nightlyRatePence - nightlyUpkeepPence` IS THE MARGIN OF A ROOM-NIGHT
+ * THAT EARNS FROM EXACTLY ONE GUEST. `standard_room` has `capacity: 2` and shipped
+ * `partySizeWeights: [3, 1]` puts a pair in one bedroom, so a room-night can earn TWICE
+ * (2 x 8,500 - 2,500 = 14,500p), and turnover can carry more than one stay through one bedroom
+ * in a night. Measured on this tree, `--rooms 1 --seed 7`, exact deterministic integers:
+ * revenue / checkedOut is 8,500 EXACTLY at 100 and at 1,000 days (which is what makes the
+ * denominator a GUEST), 144 stays complete over 100 bedroom-nights, and the REALISED margin is
+ * **9,740p per bedroom-night at 100 days and 9,851p at 1,000** — 1.62x the figure below.
+ * ---------------------------------------------------------------------------
+ * THE REQUIREMENT, AND IT IS THE CHARTER'S OWN SENTENCE READ AS A SPECIFICATION:
+ *
+ *   *A WAGE IS A NIGHTLY OBLIGATION MET OUT OF NIGHTLY TRADING.*
+ *
+ * The trading this economy does is a guest sleeping in a room: every other room type in shipped
+ * content sells nothing (`nightlyRatePence` 0) and every other money movement is one-off. So a
+ * wage has to be priced in occupied room-nights, and the question is WHICH occupied room-night —
+ * because they are not all worth the same.
+ *
+ *   THE WORST ONE. A MEMBER OF STAFF COSTS THE HOTEL'S LEAST VALUABLE OCCUPIED ROOM-NIGHT:
+ *   a room earning from EXACTLY ONE GUEST.
+ *
+ *     nightlyRatePence - nightlyUpkeepPence  =  8,500 - 2,500  =  6,000p
+ *
+ * WHY THE WORST ONE, AND THIS IS THE PART THAT MAKES IT A DERIVATION RATHER THAN A CHOICE.
+ * **A BIND-TIME CHECK HAS NO WORLD.** `bindContent` sees content and nothing else, so it cannot
+ * read realised occupancy — that quantity moves with the arrival cadence, the party weights, the
+ * plot and the build loop, none of which is content. The single-occupancy margin is **the only
+ * margin that holds at EVERY occupancy**, and it is the one that does not depend on how many other
+ * people happen to be in the room.
+ *
+ * THE WORD DOING THE WORK IS **FLOOR**, NOT "ONLY", and this line said "the only
+ * occupancy-independent margin the content table contains" until round 3, which is one word wider
+ * than its support. `capacity` and `partySizeWeights` are content too, so
+ * `capacity x rate - upkeep` = 14,500p and `E[party] x rate - upkeep` = 1.25 x 8,500 - 2,500 =
+ * 8,125p are BOTH computable at bind time with no run. Single occupancy is the FLOOR of that
+ * family — the value that survives every occupancy the hotel can be in — and a floor is what a
+ * bound protecting recoverability has to be. The conclusion and the number are unaffected. Every richer reading needs a
+ * behavioural number, and a §2.1 threshold sourced from a behavioural number is sourced from a
+ * run — which is the order §2.1 forbids.
+ *
+ * WHAT THAT BUYS, STATED IN THE DIRECTION IT ACTUALLY POINTS: a wage at this value is covered by
+ * a bedroom occupied by ONE guest, so it is covered by EVERY occupied bedroom-night the hotel can
+ * sell, whatever its occupancy. Under-staffing is a missed opportunity; over-staffing is a
+ * nightly loss NO SIZE OF HOTEL DILUTES, because the loss scales with heads and the cover scales
+ * with occupied rooms. Both tails behave, which is `balance-critic`'s two-sided check.
+ *
+ * AND THE HONEST CONSEQUENCE, WHICH THE FIRST VERSION OF THIS BLOCK OVERSTATED. The rule of
+ * thumb is NOT "one full bedroom behind every member of staff". At the shipped party mix and the
+ * realised turnover it is **about 0.62 of a bedroom** (6,000 / 9,740). **The shipped wage is a
+ * CONSERVATIVE FLOOR and the player is better off than the slogan suggests** — which is the safe
+ * direction for a recoverability guard and the wrong direction to be silent about.
+ *
+ * THE BOUND THAT MAKES IT ENFORCEABLE, checked by `assertWagesAreCoveredByARoomNight` in
+ * `packages/sim/src/content.ts` at bind time, over the room table the same content declares:
+ *
+ *     nightlyWagePence  <=  max over room types of (nightlyRatePence - nightlyUpkeepPence)
+ *
+ * WHAT THE BOUND DOES AND DOES NOT CLAIM — and the first version of this line claimed a property
+ * it does not have. It does NOT say *"no single room can carry a member of staff above the
+ * bound"*: at double occupancy one bedroom-night is worth 14,500p, so a 10,000p wage IS carryable
+ * by one room and this bound refuses it anyway. What it says is the narrower and true thing:
+ *
+ *   ABOVE THE BOUND, A ROOM EARNING FROM ONE GUEST CANNOT CARRY ONE MEMBER OF STAFF — so the
+ *   hotel can only meet its payroll by relying on SHARING AND TURNOVER, and the wage becomes
+ *   unpayable exactly when occupancy falls, which is when the hotel is already in trouble.
+ *
+ * That is the recoverability argument stated in the terms the bound has. **It is deliberately
+ * CONSERVATIVE**, and being conservative is why nothing downstream breaks: it refuses some
+ * content a richer hotel could afford, and it never admits content a hotel cannot.
+ *
+ * Below the bound a designer is free: a role that costs half a room-night is admissible content
+ * and needs no code change (I3). THE SHIPPED ROLE SITS AT THE BOUND, because the derivation puts
+ * it there — so lowering `nightlyRatePence` or raising `nightlyUpkeepPence` in content turns this
+ * check RED rather than quietly breaking the unit.
+ *
+ * THE PROPERTY IS PINNED BY A MEASUREMENT AND NOT BY THE SUBTRACTION (`wages.report.test.ts`):
+ * the per-GUEST denominator, the per-ROOM-NIGHT denominator and the realised margin are each read
+ * off a run, and the bound is asserted to sit BELOW the realised margin and BELOW the
+ * double-occupancy margin. Re-deriving `best` with the same two fields would pin the arithmetic
+ * and not the claim, which is how the first version of this block passed while being wrong.
+ * ---------------------------------------------------------------------------
+ */
+export const nightlyWagePenceSchema = penceSchema.min(0);
+
+/**
+ * A STAFF ROLE — the first entry in I3's own list of things that may not be defined in code
+ * (*"no room type, item, STAFF ROLE or guest archetype defined in code"*) that this project has
+ * actually built (G-052a). ADR-0047 C4 named four and built none.
+ *
+ * WHAT IT IS AND IS NOT, AT THIS GOAL. A role is a NAME AND A WAGE. It has no room requirement,
+ * no schedule, no skill and no duty, and a staff member does not occupy a room, move, serve a
+ * need or touch a guest — that is G-052b, and `accessRule: staffOnly` stays unreachable until it
+ * lands. This goal exists to make the money loop's third term real, and a term is real when
+ * money moves for it.
+ *
+ * A TOP-LEVEL ARRAY WITH AN `id`, like every other table here, for `economySchema`'s two
+ * mechanical reasons: `check:content` fails a content file in which it can find no `id` at any
+ * depth, and the sim reaches roles through `findStaffRole`/`staffRolesInOrder` — never by name —
+ * so no snake_case literal enters `packages/sim` (ADR-0003).
+ *
+ * `night_porter` is the shipped role and the id is not a coincidence: it is one of the three
+ * examples ADR-0003 itself uses when it defines what a content id looks like.
+ */
+export const staffRoleSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  nightlyWagePence: nightlyWagePenceSchema,
+});
+
+/** The whole `staff-roles.json` document. A top-level array, for the same reason. */
+export const staffRolesSchema = z.array(staffRoleSchema).min(1);
+
+/**
+ * ONE LINE OF A SCENARIO'S OPENING PAYROLL (G-052a): a role, and how many of it.
+ *
+ * WHY THE ROSTER IS THE SCENARIO'S AND NOT THE ROLE'S, and it is G-057's ruling one field over:
+ * a role is HOUSE RULES — what a night porter is and what one costs — while HOW MANY a
+ * particular hotel employs on its opening night is the SITUATION the player is dropped into.
+ * Putting a headcount on the role would make every hotel in every scenario employ the same
+ * establishment, which is the coupling G-057 removed between `economy` and opening capital.
+ *
+ * `count` IS `min(1)`, SO THERE IS EXACTLY ONE WAY TO SAY "NOBODY": omit the entry. A posting of
+ * zero people and an absent posting are the same world, and two spellings of one world is a
+ * difference a save, a hash or a report can carry without meaning anything.
+ */
+export const staffPostingSchema = z.strictObject({
+  roleId: contentIdSchema,
+  count: z.int().min(1),
+});
+
+/**
+ * THE OPENING PAYROLL (G-052a). Optional, and ABSENCE MEANS NOBODY IS EMPLOYED.
+ *
+ * That is a TRUE HISTORICAL STATEMENT rather than a default, in the shape every optional field
+ * in this file uses: content that does not declare this is content from before G-052a, and in
+ * that era no hotel had staff and no wage was ever paid. A world created under such content
+ * books a wage of 0 every night — the settlement cadence is unconditional, exactly as upkeep's
+ * is — and pays nobody.
+ *
+ * ---------------------------------------------------------------------------
+ * SHIPPED: NOBODY. MEASURED RATHER THAN ASSUMED, AND IT IS G-057's DECISION ONE TABLE OVER.
+ *
+ * The obvious value is ONE NIGHT PORTER — the smallest roster that is not vacuous, because a
+ * role no hotel employs is content nothing can observe (ADR-0007). It was built FIRST and run
+ * against the criteria before anything was decided, and it BREAKS G-011's CRITERION B: *"the
+ * dead state is not absorbing"*, which is this project's evidence for `balance-critic`'s
+ * *"losing must be recoverable"*.
+ *
+ *   `--days 1000 --seed 7 --rooms 0 --amenities 0 --build 1440 --demolish 1440 --loan 1440`
+ *   exact deterministic integers from `sim:run --json`, one sitting, no aggregation:
+ *
+ *                        employs 1 porter      employs nobody
+ *     built                     23                  441
+ *     demolished                21                  441
+ *     entities at end            4                    0
+ *     builds in the last 10 days 0                   >0
+ *
+ * The criterion asserts `built === demolished`, `entities === 0` and that the player is STILL
+ * BUILDING in the last ten days of a thousand-day run. **Under a compulsory porter all three
+ * are false**: the hotel builds a nineteenth as much, strands four rooms it can no longer scrap
+ * its way out of, and stops acting altogether.
+ *
+ * WHY THAT IS THE ROSTER'S FAULT AND NOT THE WAGE'S. The wage is derived and it is unmoved; what
+ * breaks the criterion is that the payroll is COMPULSORY. A hotel that cannot fire anybody has
+ * no play available against a recurring charge — and at G-052a there is no hire command and no
+ * fire command, because the player's lever over headcount is G-052b's. **A cost the player
+ * cannot decline and cannot remove is not a difficulty, it is a trap**, and the arm that
+ * measures recoverability is the arm that says so.
+ *
+ * SO THE MECHANISM SHIPS, BOTH BRANCHES ARE BUILT AND TESTED — `staff.test.ts` and
+ * `staff.save.test.ts` drive a real payroll and a real wage end to end, and
+ * `wages.report.test.ts` drives one through the real loader and the real CLI — AND THE SHIPPED
+ * SCENARIO EMPLOYS NOBODY. Flipping it is ONE FIELD IN ONE JSON FILE and it belongs to the goal
+ * that gives the player a hire and a fire, which is G-052b: at that point employing somebody is
+ * a DECISION, and going broke on wages is the player's doing rather than the content's.
+ *
+ * *(This is the shape G-057 chose for `seededStock` one table over, for the same reason and on
+ * the same kind of evidence: build the other branch first, measure what it destroys, ship the
+ * one that destroys nothing, and hand the flip to the goal that can carry it.)*
+ * ---------------------------------------------------------------------------
+ */
+export const openingStaffSchema = z.array(staffPostingSchema).min(1).optional();
+
+/**
+ * A SCENARIO: WHAT THE HOTEL OPENS WITH (G-057) — its capital, and since G-052a its payroll.
+ *
+ * IT DECLARED EXACTLY ONE THING UNTIL G-052a, and this line said so. `openingStaff` is the
+ * second, and it belongs to the same sentence rather than widening it: both are answers to
+ * *what does this hotel start with*, which is what separates a situation from the house rules.
+ * It is still NOT the scenario SYSTEM — no objectives, no win condition, no starting date.
  *
  * `HOTELSIM.md` §8 makes this table a HARD PREREQUISITE OF M4 (ADR-0013 §5, human ruling): *"the
  * scenario-capital mechanism lands before the first M4 goal starts … every balance sweep in this
@@ -2137,6 +2343,9 @@ export const seededStockPolicySchema = z.enum(['supplementsCapital', 'drawnFromC
  *                        an opening balance can only exist as a line in the ledger — which is also
  *                        why it is explained rather than appearing from nowhere.
  *   seededStock          what a room the HOST places free does to that number. See above.
+ *   openingStaff         who is on the payroll on the opening night (G-052a). See
+ *                        `openingStaffSchema`; absence means nobody, which is what every build
+ *                        before G-052a had.
  *
  * ---------------------------------------------------------------------------
  * SHIPPED: 500,000 — UNMOVED FROM WHERE IT WAS, AND THE DERIVATION MOVES WITH IT.
@@ -2157,6 +2366,7 @@ export const scenarioSchema = z.strictObject({
   name: z.string().min(1),
   openingCapitalPence: penceSchema.min(0),
   seededStock: seededStockPolicySchema,
+  openingStaff: openingStaffSchema,
 });
 
 /** The whole `scenarios.json` document. A top-level array, for the same reason. */
@@ -2283,4 +2493,6 @@ export type ItemType = z.infer<typeof itemTypeSchema>;
 export type Economy = z.infer<typeof economySchema>;
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type SeededStockPolicy = NonNullable<z.infer<typeof seededStockPolicySchema>>;
+export type StaffRole = z.infer<typeof staffRoleSchema>;
+export type StaffPosting = z.infer<typeof staffPostingSchema>;
 export type SpeedRung = z.infer<typeof speedRungSchema>;
