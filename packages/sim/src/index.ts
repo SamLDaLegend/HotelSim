@@ -39,6 +39,9 @@ export type {
   // a night, and who is on the opening payroll.
   StaffPostingData,
   StaffRoleData,
+  StarTierCountingData,
+  StarTierData,
+  StarTierRequirementData,
   ItemTypeData,
   NeedRole,
   NeedTypeData,
@@ -123,6 +126,12 @@ export {
   nightlyWageOf,
   openingStaffOf,
   staffRolesInOrder,
+  // G-051a. The star ladder, iterated in a total content-derived order (ADR-0003) — on the
+  // surface so the host reports the tier a hotel is climbing towards and re-derives it through
+  // THE accessor rather than keeping a second copy of the table.
+  STAR_TIER_COUNTINGS,
+  isStarTierCounting,
+  starTiersInOrder,
 } from './content.js';
 export type { ContentId, Entity, EntityDraft, EntityId, EntityStore } from './entities.js';
 export {
@@ -344,6 +353,12 @@ export {
   nightlyWagesOf,
   NO_STAFF,
 } from './staff.js';
+// G-051a — the STAR RATING. Derived from what the hotel HAS, never stored, and it feeds
+// NOTHING inside the simulation: the only consumers are hosts that display it. See the header
+// of `rating.ts` for why it is not reputation and why a stored one would be a cache that can
+// disagree with the hotel.
+export type { StarRating, StarShortfall } from './rating.js';
+export { starRatingOf, UNRATED } from './rating.js';
 export type { RngState } from './rng.js';
 export { createRng, nextIntBelow, nextUint32 } from './rng.js';
 export type { Migration, SaveBlob, SaveSchema } from './save.js';

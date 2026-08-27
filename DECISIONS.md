@@ -2,7 +2,7 @@
 
 ## DIGEST — rewritten every REFLECT, never appended to (`HOTELSIM.md` §4.1)
 
-*As of 2026-08-27, the last goal to LAND is G-052a and it lands the MONEY LOOP'S THIRD TERM — `CLAUDE.md` defines the loop as "room revenue against WAGES and upkeep, settled nightly", `TransactionReason` had nine members and none was a wage, and `HOTELSIM.md` §1.1 marked it the only declared term of any of the three loops with NO implementation at all. It has one now: a `wages` reason (the tenth), settled every night unconditionally and BEFORE upkeep, folded over a new `World.staff` payroll at each role's `nightlyWagePence`, which is content — `packages/content/data/staff-roles.json`, a Zod schema, zero content ids in `packages/sim`. THE RATE IS DERIVED, AND ROUND 1 OF THE CRITIQUE FALSIFIED THE UNIT I FIRST GAVE IT — the number survives, its story changed, and the correction is the most useful thing in this entry. `nightlyRatePence` IS NOT A PER-ROOM-NIGHT CHARGE: `payForStay` books it once per COMPLETED STAY PER GUEST (ADR-0010 says so in terms), shipped `stayDurationTicks` is 1440 so a stay is one night, and `standard_room` has `capacity: 2` with `partySizeWeights: [3, 1]` so a pair shares a bedroom and pays twice. `nightlyUpkeepPence` IS per room-night. So 8,500 - 2,500 = 6,000p subtracts across two denominators, and what it actually names is THE MARGIN OF A ROOM-NIGHT EARNING FROM EXACTLY ONE GUEST — the hotel's WORST occupied room-night. Re-measured on this tree, `--rooms 1 --seed 7`, exact deterministic integers: revenue / checkedOut is 8,500 EXACTLY at 100 and 1,000 days (which is what makes the denominator a GUEST), and the REALISED margin is 9,740p per bedroom-night at 100 days and 9,851p at 1,000 — 1.62x. THE MULTIPLE IS STILL ONE AND THE ARGUMENT IS NOW THE RIGHT ONE: a bind-time check HAS NO WORLD, so it cannot read realised occupancy, which moves with the arrival cadence, the party weights, the plot and the build loop and is not content — and the single-occupancy margin is the only one that HOLDS AT EVERY OCCUPANCY. THE WORD CARRYING THAT ARGUMENT IS FLOOR AND NOT 'ONLY', corrected at round 3: this sentence read 'the ONLY occupancy-independent margin the content table contains', which is one word wider than its support, because `capacity` and `partySizeWeights` are content too and `capacity x rate - upkeep` = 14,500p and `E[party] x rate - upkeep` = 8,125p are both computable at bind time with no run. Single occupancy is the FLOOR of that family, and a floor is what a bound protecting recoverability has to be; the conclusion and the number are unaffected. THAT IS THE THIRD TIME IN THIS ONE GOAL that a justification was one word wider than its support, which is the pattern worth carrying forward rather than any of the three instances. A threshold sourced from a behavioural number is sourced from a run, which is the order §2.1 forbids. THE HONEST CONSEQUENCE, WHICH THE FIRST VERSION OVERSTATED: the rule of thumb is NOT 'one full bedroom behind every member of staff' — it is about 0.62 of one, so the shipped wage is a CONSERVATIVE FLOOR and the player is better off than the slogan said. `bindContent` enforces `nightlyWagePence <= max over room types of (nightlyRatePence - nightlyUpkeepPence)`, and THAT BOUND'S PROPERTY IS ALSO RESTATED: it does NOT say 'no single room can carry a member of staff' — a shared bedroom-night is worth 2 x 8,500 - 2,500 = 14,500p, so a 10,000p wage IS carryable by one room and is refused anyway. It says the narrower true thing: above the bound a room earning from ONE guest cannot carry one member of staff, so the payroll could be met only out of sharing and turnover and would become unpayable exactly when occupancy falls. The bound is CONSERVATIVE ON PURPOSE. THE TESTS NOW PIN THE PROPERTY AND NOT THE ARITHMETIC — both denominators are read off a run, the bound is asserted BELOW the realised margin and BELOW the double-occupancy margin, and the old test re-derived `best` with the same two fields, which is exactly why a wrong unit passed green. The bound still bites at one penny (6,000 loads, 6,001 throws) and still bites on a real fixture: the food court sells nothing, so its only admissible wage is 0. THE HEADLINE FINDING, AND IT DECIDED THE SHIPPED CONTENT: a COMPULSORY payroll BREAKS G-011's CRITERION B, this project's evidence for "losing must be recoverable". Measured paired, one sitting, exact deterministic integers from `sim:run --json` at `--days 1000 --seed 7 --rooms 0 --amenities 0 --build 1440 --demolish 1440 --loan 1440`, no aggregation, regime win32/12cpu quiet: employing ONE porter gives built 23 / demolished 21 / 4 entities stranded / ZERO builds in the last ten days, against 441 / 441 / 0 / still building when the scenario employs nobody. All three of the criterion's claims go false. STATE THE ARM'S LIMIT WITH THE RESULT, because the first version of this entry did not and the ADR generalised further than the measurement supports: THAT ARM EARNS NOTHING — `revenuePennies` is 0 in BOTH branches, by construction, since `--amenities 0` completes no stays — so it demonstrates that a recurring charge kills a hotel with no income, where ANY recurring charge would. THE COUNTER-ARM, which is the one that says the wage is not simply too large: shipped default flags, 1,000 days, seed 7, revenue 37,060,000p — 25,560,000p against 19,560,000p with one porter, STILL SOLVENT BY 19.5M. So a trading hotel absorbs the wage comfortably and a non-trading one cannot, which is what makes the finding about the COMPULSION rather than about the rate. IT IS THE ROSTER'S FAULT AND NOT THE WAGE'S — the wage is derived and unmoved; what breaks it is that at G-052a the player has no hire and no fire, so a recurring charge nobody can decline is a trap rather than a difficulty. SO THE MECHANISM SHIPS, BOTH BRANCHES ARE BUILT AND TESTED, AND THE SHIPPED SCENARIO EMPLOYS NOBODY — G-057's `seededStock` decision one table over, on the same kind of evidence, and the flip is one field in one JSON file owned by G-052b. THE TERM IS NOT VACUOUS AND THAT IS CHECKED RATHER THAN CLAIMED: `wages.report.test.ts` assembles a payroll on disk and drives it through the real loader and the real CLI on every `pnpm test`, and it PINS THE COLLAPSE ABOVE as a bounded ratio so the ruling is a number in the tree. THE THREE SHIPPED ARMS, PAIRED, 365 days / seed 42 / exact integers / no aggregation / win32/12cpu quiet: the default `--rooms 3` 9,635,000p -> 7,445,000p, `--rooms 12` 11,350,500p -> 9,160,500p, and the `--rooms 60 --arrivals 96` bench arm -37,949,000p -> -40,139,000p. Three notes on that row. The delta is EXACTLY -2,190,000p on all three (6,000p x 365) because none of them passes `--build`, so cash gates nothing and revenue, checkouts and every guest number are byte-identical between branches. THE BENCH ARM IS ALREADY INSOLVENT AT HEAD, BEFORE ANY WAGE EXISTS — sixty bedrooms behind one amenity pay 154,500p a night of upkeep against 17,943,500p of revenue over a year — and that is a finding this goal MEASURED rather than caused. And the shipped column reproduces HEAD to the penny on all three, which is what a no-op roster should read. GATE READINGS, FROM THE PROCESS: `pnpm verify` FOURTEEN ROWS PASS, VERIFY_EXIT=0 read out of a log. I2 is now `ffd19881b7086b9d` where it was `1e17f0e4e9b36ce0` — IT MOVED, AND THE MOVEMENT WAS PREDICTED BEFORE THE RUN with three named causes — a new hashed `World.staff` key, a `World.contentHash` that moves because `SimContent` gained `staffRoles` and `Scenario` gained `openingStaff`, and one zero-amount `wages` line per night in the ledger. Save schema is now **v24**, up from v23, predicted before the run, one migration `migrateV23ToV24` writing `{ nextId: 1, list: [] }` — the cleanest historical statement in the chain, because no era before this one had a word for a staff role — and the permanent v1 fixture has a ZERO-LINE DIFF (ADR-0006 fires for the twenty-third time). Summary schema stays **4**: every new field is additive. Measure golden is now `856ade18e3ed8264`, up from `289a56519ced9655`; `check:measure` ok. WATCH DONE AND IT FOUND SOMETHING: 26 SVG frames recorded on each branch through `apps/game/scripts/record-frames.ts` at `--ticks 2880 --every 480`, and they are IDENTICAL BYTE FOR BYTE — the recorder's scenario builds through the structural door and never consults the balance, so THE MONEY LOOP'S THIRD TERM SHIPS WITH NO PERCEPTUAL CHANNEL AT ALL. Nothing on screen says the hotel employs anybody or pays them; the wage is legible only in the CLI report line. That is an observation and not a defect of this goal, and it is G-052b's to close when a staff member acquires a position. Unreliable: 1 gate, 0 defects — `check:scaling` is still the unrepaired one and a THIRD is still a stop condition. E-014 REMAINS OPEN ON THE HUMAN and this goal did not touch `reviews.ts`, `needBandOf` or the review scale.*
+*As of 2026-08-27, the last goal to LAND is G-051a and it lands a SECOND CURRENCY: a set of buildable FACILITIES, and a STAR RATING derived from WHAT THE HOTEL HAS. ADR-0080 (human) is the mechanism — "a Spa need not serve a need BETTER to be worth building, it can be worth building because it unlocks a TIER" — and it exists because ADR-0078 measured STRICT DOMINANCE: above the provider bottleneck every extra amenity costs 4,500,000p and buys NOTHING, identical departures and identical reviews. THE RATING IS NOT REPUTATION AND THE TWO ARE NOT ALLOWED TO COLLAPSE (ADR-0082): reputation is judged on guest satisfaction and does not exist; a star rating is a professional INSPECTION judged on what the hotel HAS, and the test of distinctness is whether they can DISAGREE. So `HOTELSIM.md` §1.1's `raise reputation` row is RE-MARKED AND NOT DISCHARGED — the row now names `starRatingOf` as the half that exists and keeps `OWED TO M4` for the half that does not, and G-051's own block calling this goal "the raise reputation term" is the claim being corrected. IT IS DERIVED AND STORED NOWHERE, which is I4's discipline applied one quantity over: there is no `starRating` field on `World`, exactly as there is no `balance` field, and a stored rating would be a cache that can disagree with the hotel AND HASH PERFECTLY. That decision paid for itself in the gates — NO save bump (still v24), NO migration, NO `without-*` stripper, and the permanent v1 fixture untouched. IT FEEDS NOTHING: no arrival, no price, no review and no need reads it, inside the simulation or out, and the only consumers are hosts that display it — G-051b wires it to demand and this goal deliberately does not. THE TIERS AND THEIR REQUIREMENTS ARE CONTENT (I3): `star-tiers.json`, a Zod schema, ZERO content ids in `packages/sim`, and the ladder is reached by ITERATION IN A TOTAL CONTENT-DERIVED ORDER (`starTiersInOrder`). THE ORDER IS `stars` AND NOT THE ID ORDER, which is the one place this table breaks the `staffRolesInOrder` pattern and does so on purpose: `star_five` sorts below `star_four`, so reading the ladder by id would decide the game by SPELLING — ADR-0078's own finding looking for a second front door. EVERY NUMBER IS LABELLED: the tier requirements are DESIGN STATEMENTS, not derived thresholds, and `starsSchema` carries the distinction at the point of use (G-051's block rules that §2.1 does not apply to a design choice the way it applies to a gate bound); the `min(1)` bounds in the schema are STRUCTURAL, each naming the vacuity it refuses; and the ONE derived bound this goal enforces is that a `distinctTypes` minimum may not exceed its own set, because such a tier is a ceiling nobody can pass. THREE FACILITIES SHIP AND SWEEP 1 FOUND THE SPA STRICTLY DOMINATED — ADR-0078's OWN DEFECT INSIDE THE GOAL BRIEFED TO AVOID IT, and the correction is the most useful thing in this entry. The metric was wrong, not the intent: cost of ownership was defined as `constructionCostPence + n x nightlyUpkeepPence` and DROPPED THE RESIDUAL, while `stockValueOf` and `canDrawLoan` treat a scrap as real money. Net of it the Spa was 125,000 + 4,000n against the Conference Hall's 90,000 + 2,000n — cheaper on NEITHER term, losing at EVERY horizon — and the test could not see it because it recomputed the claim's own arithmetic, which is G-052a's lesson verbatim. REPRICED FROM A PRINCIPLE STATED FIRST — each facility uniquely cheapest to OWN over some horizon, net of the residual, and the three horizons naming three phases of a run: `hotel_spa` 5,000 -> 7,000bp and `conference_hall` 8,000 -> 6,000bp, two numbers, nothing else touched. Net capital is now 75,000 / 180,000 / 630,000 against upkeep 4,000 / 2,000 / 500, so the Spa owns nights 0-52, the Conference Hall 53-299 and the Theatre 301+ (n=300 is an exact TIE at 780,000p and the scan's strict `<` records no winner there — this line read 53-300 until sweep 2, and the goal's own earlier measurement had already printed 299), and the GROSS metric agrees about the ORDER so the claim does not hang on one definition. The test now calls `demolitionRefundOf` — the sim's own function — rather than recomputing a refund, requires each regime to be wider than 30 nights so a seven-night win cannot pass as 'not dominated', and PROOF-OF-BITE: restored to the old prices it returns ['conference_hall','hotel_theatre'] and goes red, sha256 identical after restore. THE SPA'S REAL AXIS IS NAMED SEPARATELY AND IT IS LIQUIDITY, not ownership cost: `applyDrawRoom` refuses on the CASH BALANCE rather than balance-plus-scrap, so between 250,000p and 450,000p it is the only facility that can be built at all. A FACILITY SERVES NO NEED, and that is a decision with two measurements behind it rather than a gap: a fourth provider of the same three needs lands in ADR-0078's dominated regime and buys nothing, and a room type that SERVES something is an amenity by `amenityRoomTypesOf`, so `--amenities N` would have started seeding three more rooms into every arm this project has ever measured — the contamination `HOTELSIM.md` §8's M4 prerequisite exists to prevent. THE HONEST CONSEQUENCE, STATED RATHER THAN DRESSED UP: while the rating buys nothing a facility is a PURE COST, so this goal does not remove ADR-0078's dominance — it builds the channel G-051b removes it through, because until now there was no quantity to attach a reason to. AND SWEEP 1 FOUND THE HEADLINE FALSE IN-RUN: there was NO INVOCATION OF THIS RUNNER IN WHICH A PLAYER PAID FOR A FACILITY — `--facilities` seeds free through `spawnEntity` and `--build` issues `buildRoom` with the LODGING type and nothing else, so across a 1,000-day campaign the rating did not move at all, and a currency nobody can buy into is not a currency (which is `starsSchema`'s own phrase). `--buy-facility N` now exists: a SECOND build cadence, off by default so no pinned arm moves, charging through the same `buildRoom` door, laying its own lane and spine because the rating counts VALID rooms and a sealed box would be a charge for a number that does not move, and cycling the facility types in content order so the `distinctTypes` clauses are reachable by playing. MEASURED, PAIRED, one flag apart, `--days 60 --seed 42 --rooms 12 --amenities 1`: stars 3 -> 4, built 0 -> 6, construction 0 -> -1,700,000p, 38 refusals for want of cash, invalid rooms 0. AND THE LIMIT IS DISCLOSED: FIVE STARS IS REACHED BY NO CAMPAIGN THIS RUNNER CAN EXPRESS — the verdict held at sweep 2 and MY EXPLANATION OF IT DID NOT, in three copies, with a parked falsification test that returned its own 'this item is misfiled' branch on the day it was written. THREE CORRECTIONS. (a) TWO FAMILIES, TWO DIFFERENT PRE-EXISTING CAUSES, WRITTEN AS ONE: with `--rooms > 0` the mechanism IS `unsupported` (`builtRoomStartFloor` puts the player walk a floor above the seeded plate), but FROM NOTHING that function returns GROUND_FLOOR and is not involved at all — the mechanism there is `noCorridor`, a different pre-existing defect, measured `unsupported` 0 and `noCorridor` 7 at the parked item's own invocation. (b) THE BEDROOM FIGURE IS WITHDRAWN AND NOT RESTATED (`CLAUDE.md` rule 5): '9 valid bedrooms in a simulated year' named none of the five slots and the two nearest arms give 10 and 3. (c) THE SPLIT WAS BACKWARDS WHERE IT MATTERS MOST — I wrote 'the facility clauses are climbable and the SCALE clauses are not', and at `--rooms 24 --amenities 1 --buy-facility 2000`, where the scale clause is satisfied at tick 0, the hotel buys EXACTLY ONE FACILITY EVER: stars 4, built 1, shortfall `1/2 distinctTypes`, identical at 60, 300 and 1,000 days. SO THE REAL FINDING IS SHARPER THAN THE ONE RECORDED — **THE SCALE CLAUSE AND THE FACILITY CLAUSE CANNOT BE SATISFIED AT THE SAME TIME**: small enough to afford facilities and you have too few bedrooms, large enough for the bedrooms and their upkeep eats the cash the facilities need, and tier 5 asks for both. That is a BALANCE finding about the shipped table rather than a defect of the player walk, it is cadence-INDEPENDENT (4,800 arrivals and 6 arrivals give the same stars and the same single purchase, while cash moves two orders of magnitude — which is why no cash figure is quoted with it), and it is G-051b's to act on. All three arms are pinned in `stars.report.test.ts` and the two walk defects are separately parked. AND THE SWEEP-2 FIXES THEMSELVES TURNED THE I4 ROW RED ONCE, WHICH IS REPORTED RATHER THAN QUIETLY REPAIRED: the new 1,000-day arm took 67,517ms in-suite against the shared 30,000ms `testTimeout` and TIMED OUT, having run clean standalone — G-055's at-risk population exactly, and the first time this project has caught one BEFORE it became an intermittent gate. THE REMEDY IS G-055's AND THE SHARED TIMEOUT IS BYTE-UNCHANGED (editing it would be the §9 gate-editing stop condition). Two cases declare 3x their own worst measured reading, 90,000ms, and now read 23,336 and 23,817ms — 26% of budget. THE THIRD WAS NOT GIVEN A BUDGET, IT WAS MADE CHEAP BY SPENDING A CONTROL: the wall reading is cadence-INDEPENDENT, which the case below it proves, so the long arm runs at `--arrivals 100000` and buys a thousand-day horizon for 3.2s instead of 23.2s — both cadences measured, agreeing to the integer on stars, built, refusedFunds and shortfall, so nothing under test was traded away and the surviving arm is the one where the wall cannot be blamed on revenue. 67,517ms -> 6,579ms, and it now sits under the SHARED default with more headroom than a declared budget would have given it. ONE MORE ORDER DECIDED BY SPELLING, FOUND AND KEPT RATHER THAN FIXED: `--buy-facility` cycles the facility types ASCENDING BY ID and the docblock said 'in CONTENT ORDER', which reads as though a designer chose it. Renaming one id moves the cash path by 238,000p and a whole facility. IT IS A MINOR AND NOT ADR-0078 RETURNING, for one reason that is now CHECKED rather than observed: the cycle advances on every EMISSION rather than on every success, so every type is always offered and THE RATING NEVER MOVES — `rating.test.ts` pins the general form, that a rating is a fold over the SET of valid rooms and not over the order they arrived in. The distinction from `normaliseStarTiers`, which refuses this same substitution for the tier ladder, is that id order there would change an OUTCOME and here it changes only the cash PATH to an unchanged outcome. THE LADDER DISTRIBUTION, and the saturation is REPORTED and not tuned away: nine rungs of `--rooms/--amenities/--facilities`, one real CLI process each, `--days 1 --seed 42`, exact deterministic integers, no aggregation, regime win32/12cpu quiet, read out of `--json` — 0/1/1/2/3/3/4/3/5, so all six declared values are reached and none is skipped. TWO FLAT REGIONS AND BOTH ARE PINNED: below the facility gate the rating is CAPPED AT THREE however many bedrooms are built (12, 24 and 60 all read 3), and above the top tier it SATURATES AT FIVE with `nextStars` null and nothing left to buy. THAT IS A REAL CLAMP AND IT IS A WIDER INTERVAL THAN THE REVIEW CHANNEL'S RATHER THAN A DIFFERENT KIND OF THING — reviews are flat 500 from TWO AMENITIES, which a default run reaches on day one, while this ceiling sits at 24 bedrooms plus two facility types, which no shipped arm seeds by default. It was NOT met by adding tiers until the histogram looked nice, which is the order §2.1 forbids and which G-059 was refused for. THE DEFAULT ARM IS TWO STARS OF FIVE and is told what the third costs — `to climb 3/6 rooms of [standard_room]` — because a rating with no price tag is a number and not a currency. AN INSPECTOR GRADES WHAT WORKS: only VALID rooms count, which deliberately disagrees with `nightlyUpkeepOf` charging an invalid room in full, and without it a player could draw five unreachable outlines and be awarded five stars. GATE READINGS, FROM THE PROCESS: `pnpm verify` FOURTEEN ROWS PASS, VERIFY_EXIT=0 read out of a log. I2 is now `c967bdb98dac9b0d` — `ffd19881b7086b9d` -> `196643d7c9813613` at BUILD and -> `c967bdb98dac9b0d` at SWEEP 1, the second move for ONE cause and no behaviour (`World.contentHash`, because two refund basis points were repriced), predicted before the run both times. THE FIRST MOVE HAD ONE NAMED CAUSE AND NO BEHAVIOUR TOO — `World.contentHash`, because `SimContent` gained `starTiers` and `roomTypes` gained three entries — so BOTH moves are content-fingerprint moves and neither is a `World` field. Save schema stays **v24** and summary schema stays **4** (every new field is additive), both predicted. Measure golden is now `a57925e09896e3a4` (`856ade18e3ed8264` -> `94e4da7a5e60acf6` -> this); the churn golden `7da8674748116abb` -> `66a20aa1cda81bb5` -> `3b5b0daf2b1790db`; the CLI golden `614f7b6eda90b4c2` -> `de29b5283ad28f0c` -> `67e13a16221d2082`, and on all of them the CONTROL IS THE WHOLE DOCUMENT: same arrivals, same departures, same need rows to the basis point, same ledger, same balance to the penny. TWO GUARDS BIT AND NEITHER WAS WEAKENED: `content.stay.test.ts`'s "no room type undercuts the pair above" caught the new rows and was SPLIT rather than relaxed (one row still earns, at 8,500p, and nothing undercuts the 250,000p cheapest build, which is `canDrawLoan`'s own yardstick); and `wall-visibility.test.ts`'s computed glass bound moved 37 -> 36 because seven room colours share the luminance band where four did, with the STRUCTURAL assertion untouched. THE PALETTE IS THE REAL CEILING ON THIS TABLE and it is derived rather than chosen: `MIN_CONTRAST_WITHIN_ROLE` is 1.3 and the arithmetic ceiling is 1.3515 at seven room types and 1.2945 at eight, so SEVEN IS THE MOST THIS PROJECT CAN SHIP UNTIL SOMETHING GIVES — three facilities is exactly the maximum, not a taste. WATCH DONE AND IT FOUND THE SAME HOLE G-052a FOUND: the star rating has NO PERCEPTUAL CHANNEL — nothing on screen says what a hotel scores — and `apps/game/src/scenario.ts` seeds amenities by what they SERVE, so the recorded scene contains no facility either; what a watcher CAN see is that every room changed colour, because the palette re-derives from the room-type count. THREE MORE THINGS SWEEP 1 CORRECTED, EACH A CLAIM WIDER THAN ITS SUPPORT. (1) §1.1's new `raise reputation` row carried a present-tense count — "the word appears ONCE in all of `packages/sim`" — that THE COMMIT WHICH WROTE IT FALSIFIED: the grep returns EIGHT. Restated as the claim that survives a moving tree: all eight are COMMENTS and the sim declares no identifier named for it. (2) The closure mis-citation is SIX instances and not five: sweep 1 called its fix "the only one left in the tree", and grepping EVERY ADR-0085 citation in context — rather than the claim's vocabulary — turned up a sixth at `GOALS.md`'s M4-opens line that three successive narrower greps had walked past. **The sweep has to be over the thing that can be WRONG, the citation, and not over the words the claim happens to use.** (3) The viewer's three hand-keyed facility colours were a NEW WORST PAIR — `hotel_theatre` at 1.021:1 against `hotel_lounge`, in the WATCH instrument itself, where `palette.contrast.test.ts` cannot reach because it builds `apps/game`'s COMPUTED ladder. Re-solved on luminance into the gaps of the existing ladder, leaving the four older colours untouched because id-stability is that table's whole design property: the worst pair involving a new colour is now 1.132:1, and the table's overall worst — 1.024:1, `games_room` against `hotel_cafe` — PREDATES this goal and is not mine to move. Unreliable: 1 gate, 0 defects — `check:scaling` is still the unrepaired one and a THIRD is still a stop condition. E-014 REMAINS OPEN ON THE HUMAN and this goal did not touch `reviews.ts`, `needBandOf`, `isCutShort` or the review scale.*
 
 - **Load-bearing**: ADR-0001 content injected · ADR-0002 integer pence · ADR-0003
   snake_case = content ID · ADR-0006 the v1 fixture is permanent — **nine migrations deep at
@@ -8980,7 +8980,7 @@ carrying zero bits is trivially robust to everything.*
 - **"Nine cells" is THREE cells.** `--rooms 12` and `--rooms 60` produce byte-identical per-guest
   departure records at every amenity rung (sha256 `308d7833…`, `7d001152…`, `fb172625…`, identical
   across 12/60). **12 rooms already saturates a fixed arrival cadence.** So the ladder in ADR-0099 is
-  evidence about **the unclosed build loop (ADR-0085)**, not about the scorer. *I presented a
+  evidence about **the unclosed build loop (ADR-0084)**, not about the scorer. *(This read ADR-0085 until 2026-08-27. ADR-0085 is the determinism-harness ruling; ADR-0084 carries the closure finding. I repeated a wrong number I inherited from a goal block, in the ADR whose subject is citations that cannot be re-run — and the G-051a builder caught it in a brief where I had repeated it again.)* *I presented a
   three-point ladder as a nine-cell grid.*
 - **`reviews.ts`'s own docblock is false on shipped content.** It reads *"every guest that gave up
   waiting scores the floor too."* Measured at `--rooms 1 --amenities 1`: **2,906 of 2,906 `gaveUp`
@@ -9175,3 +9175,314 @@ G-052b — and it is written into `viewer.readonly.test.ts`'s exemption list as 
 in the shape the lift pair uses.
 
 ---
+
+
+## ADR-0102 — A star rating is a DESIGN STATEMENT, it is DERIVED and it feeds NOTHING; and the palette caps the room table at SEVEN.
+
+**Date**: 2026-08-27 · **Status**: accepted · **G-051a.** Records the calls this goal made that are
+normally the human's, the one claim in its own brief that it corrects, and one bound nobody knew was
+there.
+
+### 1 — THE TIER REQUIREMENTS ARE A DESIGN STATEMENT, NOT A DERIVED THRESHOLD
+
+G-051's block rules this and it is taken rather than reinterpreted: *"a star tier is a predicate over
+what the hotel has; the predicate is a DESIGN STATEMENT, not a derivation, and §2.1 does not apply to
+a design choice the way it applies to a threshold. Say which it is."*
+
+> **A DERIVED THRESHOLD answers "what does the stated requirement force this number to be?" — I5's
+> 389,333ms, `nightlyWagePence`'s bound, `MIN_CONTRAST_WITHIN_ROLE`'s 1.3. A DESIGN STATEMENT answers
+> "what shall this game ask of a player?" There is no requirement above it to derive it FROM: it IS
+> the requirement, and its honest defence is that it is CONTENT, so disagreeing with it is a one-file
+> edit.**
+
+**IT IS STATED AT THE POINT OF USE AND NOT ONLY IN A BLOCK** (`starsSchema`'s docblock), because a
+distinction that lives only in `GOALS.md` is one a reader of the JSON never meets. **The three kinds
+in this goal are separated rather than blurred:**
+
+| kind | which numbers | where the argument lives |
+|---|---|---|
+| **design statement** | every value in `star-tiers.json`; the three facility prices | this ADR; `starsSchema` |
+| **structural** | the `min(1)` bounds in the schemas | each names the vacuity it refuses |
+| **derived** | a `distinctTypes` minimum may not exceed its own set; no tier may name a room type this content does not define | *a tier nobody can satisfy is a ceiling nobody can pass, and a currency nobody can earn is not a currency* |
+
+**AND ONE PROPERTY IS CHECKED WITHOUT BEING DERIVED, which is a fourth thing and is worth separating
+from all three**: `stars.report.test.ts` computes from the shipped table that each facility is
+uniquely the cheapest to OWN over some horizon — Spa to night 100, Conference Hall 101–300, Theatre
+from 301. That does not make the prices derived; it makes a stated property of them checkable.
+
+### 2 — THE RATING IS DERIVED AND STORED NOWHERE, AND THE CHOICE PAID FOR ITSELF IN THE GATES
+
+I4's discipline applied one quantity over: there is no `starRating` on `World`, exactly as there is
+no `balance`. **A stored rating is a cache that can disagree with the hotel and HASH PERFECTLY**,
+which is the one class of bug I2 cannot see — the argument `loanOutcomes` already makes about the
+outstanding debt, in the same words.
+
+**The cost of the alternative, made concrete**: a `World` field would have meant a save bump to v25,
+a migration, a `without-*` stripper and a v1-fixture round trip. **Derived, this goal touched none of
+them.** `dayOf` and `isSettlementTick` are the precedent inside the sim; this is the same call.
+
+### 3 — IT FEEDS NOTHING, AND THAT IS ADR-0082'S OWN SEQUENCING
+
+*"Both can ship WITHOUT a demand consumer and be visible-only — which this project has done three
+times deliberately and been right each time."* **No arrival, price, review or need reads a rating,
+inside `packages/sim` or outside it.** G-051b wires it.
+
+**THE HONEST CONSEQUENCE, RECORDED SO NOBODY HAS TO REDISCOVER IT: while the rating buys nothing, a
+facility is a PURE COST, so ADR-0078's dominance is NOT removed by G-051a.** What is removed is the
+reason it could not be removed — there was no quantity to attach a reason to.
+
+### 4 — A FACILITY SERVES NO NEED, AND THE SECOND REASON IS THE LOAD-BEARING ONE
+
+1. It would buy nothing: ADR-0078's dominated regime is exactly where a fourth provider of the same
+   three needs lands. What makes a vending machine differ from a three-course meal is ADR-0079
+   ruling 2's fit-scales-satisfaction, which is **G-050's**.
+2. **A room type that SERVES something is an amenity by `amenityRoomTypesOf`**, so `--amenities N`
+   would silently have seeded three more rooms per rung into every arm this project has ever
+   measured. **That is the contamination `HOTELSIM.md` §8's M4 prerequisite exists to prevent**, and
+   it would have arrived through a content addition rather than through a flag.
+
+### 5 — CORRECTION TO G-051's OWN BLOCK: THIS IS NOT THE `raise reputation` TERM
+
+G-051's block says *"this goal is the 'raise reputation' term — and it is the first of that loop's
+declared terms to be built since capacity."* **ADR-0082 predates that sentence and rules otherwise**,
+and `HOTELSIM.md` §1.1 already carried the correct reading: reputation is judged on guest
+satisfaction, a star rating on professional inspection, and **the test of distinctness is whether
+they can disagree** — which they can.
+
+> **RULED for this goal: §1.1's `raise reputation` row is RE-MARKED, NOT DISCHARGED.** It now names
+> `starRatingOf` as the half that exists and keeps `OWED TO M4` for the half that does not.
+> **Adding a term to the charter's loop sentence is a human decision and this goal does not take
+> it**, so the build loop still reads two of six.
+
+*Same shape as ADR-0084's finding, one week on: the false clause in the brief was a correctly-quoted
+goal block.*
+
+### 6 — THE PALETTE CAPS THE SHIPPED ROOM TABLE AT SEVEN, AND NOBODY KNEW
+
+`createPalette` spreads one luminance ladder across the room types the content declares, and
+`MIN_CONTRAST_WITHIN_ROLE` is **1.3** — derived at G-030 from the build a human could not read. The
+ceiling for N colours in the band is `span^(1/(N-1))`:
+
+| N | 4 | 5 | 6 | **7** | **8** |
+|---|---|---|---|---|---|
+| ceiling | 1.8264 | 1.5711 | 1.4354 | **1.3515** | **1.2945** |
+
+> **SEVEN ROOM TYPES CLEAR THE FLOOR AND EIGHT DO NOT.** Three facilities is therefore **exactly the
+> maximum this project can ship**, not a taste — and the eighth room type turns
+> `palette.contrast.test.ts` red rather than washing out quietly, which is what that test is for.
+
+**It is a REAL constraint on content and it belongs in front of whoever adds the next room type.**
+The escape routes are known and both are parked: a colour field in content (which `palette.ts`'s
+header already names) or a wider luminance band, which would need a human's eye rather than a gate.
+
+### 7 — AND THE COST `palette.ts` PREDICTED WAS CHARGED IN FULL, ON THE FIRST EDIT
+
+The header says adding a room type *"re-derives the ladder and every existing room changes colour, so
+a `JOURNAL.md` note saying 'the green room served nobody' can be invalidated by a content edit."*
+**G-051a is the first content edit to charge it, and the collision is exact:
+`conference_hall` is now `#be004f`, which is the colour `games_room` had.** Measured in one process
+from the shipped content and the shipped content minus three rows; the table is in `JOURNAL.md`
+WATCH #25.
+
+**`tools/viewer/viewer.js` is unaffected, deliberately: it keys colours BY CONTENT ID.** So notes
+taken against the replay viewer survive this goal and notes taken against `apps/game` do not — a
+distinction nobody had needed to draw before, because no content edit had forced it.
+
+## ADR-0102 AMENDMENT 1 — the metric was wrong, the currency could not be bought into, and the sixth mis-citation
+
+**Date**: 2026-08-27 · **G-051a sweep 1.** Three MAJOR, four MINOR, no BLOCKER. **Two of the
+findings falsify sentences in this ADR as originally written**, and both are recorded here rather
+than quietly edited above.
+
+### §1 IS AMENDED: THE COST METRIC DROPPED A TERM THE GAME TREATS AS MONEY
+
+The original §1 offered, as a *"property checked without being derived"*, that each facility is
+uniquely cheapest to own over some horizon — **Spa to night 100, Conference Hall 101–300, Theatre
+from 301.** That used `constructionCostPence + n × nightlyUpkeepPence` and **dropped the residual.**
+
+> **`stockValueOf` and `liquidationValueOf` treat a room's refund as real money, and `canDrawLoan`
+> makes loan eligibility turn on it. So the metric that produced "three regimes" is not the metric
+> the game uses.** Net of the residual the Spa was **125,000 + 4,000n** against the Conference
+> Hall's **90,000 + 2,000n** — cheaper on **neither** term. **Strictly dominated at every
+> horizon**, which is ADR-0078's own defect inside the goal briefed to avoid it.
+
+**AND THE TEST COULD NOT HAVE CAUGHT IT.** It recomputed the claim's own definition of cost, so the
+claim and its check shared the error — **G-052a's lesson, verbatim, one goal later.** The
+replacement calls `demolitionRefundOf`, the sim's own function, so the test and the game cannot
+disagree about what a scrap returns, including about the rounding.
+
+**RULED: the prices are DESIGN STATEMENTS (§1 stands), so repricing is legitimate here in a way
+moving a derived threshold would not be — and the principle is stated before the numbers.** *Each
+facility uniquely cheapest to OWN over some horizon, net of the residual, with the three horizons
+naming three phases of a run.* Two basis points followed: `hotel_spa` 5,000 → 7,000, and
+`conference_hall` 8,000 → 6,000. **Nothing else in the table moved.**
+
+**A FOURTH CHECKED PROPERTY IS ADDED, and it is the one that makes the third regime honest**: each
+regime must be **wider than 30 nights**. Without it a table where one facility wins for seven
+nights passes as "not dominated" in the letter while being dominated in every way a player feels.
+
+**AND THE CHEAPEST FACILITY'S AXIS IS RENAMED. It is LIQUIDITY, not ownership cost.**
+`applyDrawRoom` refuses on the **cash balance** rather than balance-plus-scrap, so between the
+cheapest facility's price and the next one's there is a band where exactly one facility can be
+built at all. The original "best scrap" axis scored the **absolute** refund and handed it to the
+wrong row.
+
+### §8 — A CURRENCY MUST HAVE A PURCHASE PATH, AND THIS ONE HAD NONE
+
+**Verified**: `--facilities N` seeds through `spawnEntity`, which charges nothing, and `schedule`
+issues `buildRoom` with the **lodging** room type and no other. **There was no invocation of this
+runner in which a player paid for a facility**, and measured across a 1,000-day `--build` campaign
+the rating did not move at all.
+
+> **A CURRENCY NOBODY CAN BUY INTO IS NOT A CURRENCY** — and that is not a phrase borrowed for the
+> occasion: it is the justification `starsSchema` gives for one of its own derived bounds. **The
+> block was contradicted by the schema it shipped with.**
+
+**RULED: build the purchase path rather than withdraw the claim**, because the alternative leaves
+the goal's central sentence true only in principle — and in this project the runner is the only
+instrument, so an unmeasurable claim is an unchecked one (ADR-0013). **`--buy-facility N`**: a
+second build cadence, **off by default so no pinned arm moves**, charging through the same
+`buildRoom` door, laying its own circulation because the rating counts VALID rooms, and cycling
+the facility types so `distinctTypes` is reachable by playing.
+
+**Measured, paired, one flag apart** (`--days 60 --seed 42 --rooms 12 --amenities 1`): stars **3 →
+4**, built 0 → 6, construction 0 → **-1,700,000p**, **38 refusals for want of cash**, invalid rooms
+0.
+
+**AND THE LIMIT IS RECORDED WITH THE FIX: five stars is reached by no campaign this runner can
+express.** *(The explanation first given here — "`--build`'s rooms land `unsupported` above an
+inherited hotel and a from-nothing campaign reaches 9 valid bedrooms in a year" — **is superseded
+by AMENDMENT 2 below**, which found it wrong in three ways. The verdict is unchanged.)*
+
+### §9 — THE CLOSURE MIS-CITATION IS SIX, AND EACH SWEEP WAS NARROWER THAN THE CLAIM
+
+Sweep 1 corrected a fifth instance and called it *"the only one left in the tree"*. **It was not.**
+Grepping **every ADR-0085 citation and reading each in context** — rather than grepping the claim's
+vocabulary — found a **sixth** at `GOALS.md`'s M4-opens line: *"planned around CLOSURE rather than
+around ticking off terms (ADR-0085)"*.
+
+| sweep | pattern | survivor |
+|---|---|---|
+| G-053b-era | the two `THE CLOSURE REFRAMING` headers | the M4-opens line, and the section heading |
+| sweep 1 | `closure\|unclosed\|build loop` | *"CLOSING THE LOOP"* heading |
+| sweep 1 fix | *"CLOSING THE LOOP"* | the M4-opens line |
+| this | **every `ADR-0085` citation, read in context** | none |
+
+> **THE SWEEP HAS TO BE OVER THE THING THAT CAN BE WRONG — THE CITATION — AND NOT OVER THE WORDS
+> THE CLAIM HAPPENS TO USE.** Three sweeps, three vocabularies, one survivor each time.
+
+*Generalises ADR-0086 (a name is not evidence) to the sweep: **a grep's pattern is a claim about
+what it covers**, and a pattern drawn from the claim's own wording covers only the phrasings its
+author happened to think of.*
+
+### §10 — THE VIEWER PALETTE IS NOT COVERED BY THE CONTRAST GATE, AND THE FIRST THREE COLOURS WERE THE WORST PAIR IN IT
+
+`palette.contrast.test.ts` builds **`apps/game`'s COMPUTED ladder**. `tools/viewer/viewer.js` is
+**hand-keyed by content id** and nothing checks it. The first three facility colours put
+`hotel_theatre` at **1.021:1** against `hotel_lounge` — **a new worst pair in the table, in the
+WATCH instrument itself**, where ADR-0013 says a *"reads as stupid"* finding must come from.
+
+Re-solved on **luminance**, into the gaps of the existing ladder. **The four older colours are
+untouched, and that is the constraint rather than an oversight**: that table is keyed by id
+precisely so a colour survives a content edit, and every `JOURNAL.md` WATCH note naming one rests
+on it. Worst pair involving a new colour: **1.132:1**. The table's overall worst — **1.024:1**,
+`games_room` against `hotel_cafe` — **predates this goal and is not mine to move.**
+
+**Parked with its falsification test: the viewer palette has no gate, and the case for one is now
+a measurement rather than a worry.**
+
+### §11 — AND A PRESENT-TENSE COUNT FALSIFIED BY THE COMMIT THAT WROTE IT
+
+`HOTELSIM.md` §1.1's new `raise reputation` row read *"the word still appears ONCE in all of
+`packages/sim`, a comment at reviews.ts:12."* **True of the tree the row replaced; false of the tree
+it landed in** — the grep returns **eight**, four of them in `rating.ts`, the file the same commit
+added. **The MARK is unaffected; the evidence sentence was not.**
+
+Restated as **the claim that survives a moving tree**: all eight are COMMENTS, and `packages/sim`
+declares no identifier, field, function or type named for it. *A count is a fact about a tree and
+goes stale the moment the tree moves; "nothing in the sim READS one" is a fact about the design and
+does not.* **ADR-0084's class, produced by the goal that cites ADR-0084.**
+
+## ADR-0102 AMENDMENT 2 — the five-star limit is true and the cause I gave for it was not, in three copies
+
+**Date**: 2026-08-27 · **G-051a sweep 2.** One MAJOR, two MINORs, no BLOCKER. **All of sweep 1's
+mechanism was discharged; what was wrong this time was the goal's own recorded EVIDENCE.** That is
+worth naming as a shape: *the second sweep of a goal is likelier to find a false sentence than a
+false line of code, because the code has already been run and the sentences have only been read.*
+
+### 1 — A PARKED HYPOTHESIS WHOSE FALSIFICATION TEST RETURNS "MISFILED" ON THE DAY IT IS WRITTEN
+
+`PARKING.md` item 7 offered: *"run `--rooms 0 --amenities 1 --build 720 --buy-facility 20000
+--days 1460` and read `rooms.invalid.unsupported`. If the unsupported count is zero … the cause is
+cash or horizon rather than the walk and this item is misfiled."*
+
+**Run verbatim: `unsupported` is ZERO.** `noCorridor` is 7. And `builtRoomStartFloor(0)` returns
+`GROUND_FLOOR`, **so the function I named as the mechanism is not involved in that arm at all.**
+
+> **A PARKED HYPOTHESIS WHOSE TEST COMES BACK NEGATIVE ON THE DAY IT IS WRITTEN IS WORSE THAN NO
+> HYPOTHESIS**, because §4's entire argument for the form is that a *later* goal runs it and gets a
+> result. This one would have handed G-051b a refuted premise wearing the authority of a parked
+> experiment.
+
+**The lesson is cheap and general: RUN THE FALSIFICATION TEST BEFORE PARKING IT.** §4 asks for the
+invocation, the reading and the comparison; it does not ask for the answer, and it should — a park
+whose test has been run once is a result, and one whose test has not is a guess with a procedure
+attached.
+
+### 2 — TWO FAMILIES, TWO DIFFERENT PRE-EXISTING CAUSES, WRITTEN AS ONE
+
+| family | mechanism | measured |
+|---|---|---|
+| `--rooms > 0` | **`unsupported`** — the player walk starts a floor above the seeded plate | non-zero at `--rooms 12 --build 1440`, 365 days |
+| from nothing | **`noCorridor`** — a *different* pre-existing defect | `unsupported` 0, `noCorridor` 7 |
+
+**Both are real, both predate G-051a, and neither is the other.** Parked separately.
+
+### 3 — THE SPLIT WAS BACKWARDS WHERE IT MATTERS MOST, AND THE CORRECTION IS THE BETTER FINDING
+
+I wrote *"the facility clauses are climbable and the SCALE clauses are not."* At `--rooms 24
+--amenities 1 --buy-facility 2000` **the scale clause is satisfied at tick 0** — and the hotel buys
+**exactly one facility, ever**: stars 4, built 1, shortfall `1/2 distinctTypes`, **identical at 60,
+300 and 1,000 days.** So there the FACILITY clause is the wall.
+
+> **RULED AS THE FINDING OF RECORD: THE SCALE CLAUSE AND THE FACILITY CLAUSE CANNOT BE SATISFIED
+> AT THE SAME TIME.** Small enough to afford facilities and you have too few bedrooms; large enough
+> for the bedrooms and their upkeep eats the cash the facilities need. **Tier 5 asks for both.**
+
+**It is a BALANCE finding about the shipped table, not a defect of the player walk**, and it is
+**cadence-independent**, which is what makes it structural: 4,800 arrivals and 6 arrivals give the
+same stars and the same single purchase while cash moves two orders of magnitude. Pinned, with that
+control, in `stars.report.test.ts`. **G-051b inherits it**, because a rating that feeds demand
+changes the income side of exactly this arithmetic.
+
+### 4 — AND THE SUPPORTING FIGURE IS WITHDRAWN RATHER THAN RE-PINNED
+
+*"9 valid bedrooms in a simulated year"* stood in **seven places** and named **none of the five
+slots** — no cadence, no `--rooms`, no seed. The two nearest arms give **10** and **3**. `CLAUDE.md`
+rule 5: *a number you cannot re-measure paired is WITHDRAWN, not restated.* **The argument does not
+need it, which is the cleanest reason to drop it** — re-pinning would have kept a figure whose only
+job was to decorate a claim that is now made structurally.
+
+### 5 — MINOR: THE PURCHASE CYCLE IS ID-ASCENDING, AND I REFUSED THIS SUBSTITUTION ONE PACKAGE OVER
+
+`--buy-facility` cycles `facilityRoomTypesOf`, which walks `content.content.roomTypes` —
+**`normaliseTable` sorts that ascending by id.** The docblock said *"in CONTENT ORDER"*, which reads
+as though a designer chose it. **Spelling did.** Measured on one rename, against an unchanged
+control: 6 facilities and -27,000p on shipped ids, 5 and +215,000p spa-first, 5 and +197,000p
+theatre-first — **a 238,000p spread from a rename that moves no price and no tier.**
+
+**IT REMAINS A MINOR, AND THE REASON IS NOW CHECKED RATHER THAN OBSERVED: the RATING never moves.**
+The cycle advances on every EMISSION rather than on every success, so every type is always offered.
+`rating.test.ts` pins the general form — *a rating is a fold over the SET of valid rooms, not over
+the order they arrived in* — so the property the host leans on is a test rather than a coincidence.
+
+> **THE DISTINCTION FROM `normaliseStarTiers`, WHICH SPENDS A PARAGRAPH REFUSING THIS EXACT
+> SUBSTITUTION: there, id order would change an OUTCOME. Here it changes only the cash PATH to an
+> unchanged outcome.** That is a real difference and it is worth nothing unless it is written where
+> the code is, which it now is.
+
+### 6 — MINOR: an off-by-one at a tie
+
+The Conference Hall's regime is **53–299**, not 53–300. At n=300 it and the Theatre tie exactly at
+780,000p and the scan's strict `<` records no winner. **The goal's own first measurement had already
+printed `53..299`; the table transcribed it wrong.**

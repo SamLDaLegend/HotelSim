@@ -44,6 +44,7 @@ import {
   SCENARIOS_PATH,
   // G-052a: a seventh table, required of any `--content` directory this file assembles.
   STAFF_ROLES_PATH,
+  STAR_TIERS_PATH,
 } from './content-loader.js';
 import type { RunSummary } from './report.js';
 
@@ -287,7 +288,7 @@ describe('THE DIFFERENTIAL — changing the review scale changes the reviews and
   const contentWithScale = (min: number, max: number): string => {
     const dir = mkdtempSync(join(tmpdir(), 'hotelsim-boundary-'));
     tempDirs.push(dir);
-    for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH]) {
+    for (const path of [ROOM_TYPES_PATH, NEED_TYPES_PATH, ITEM_TYPES_PATH, ECONOMY_PATH, SCENARIOS_PATH, STAFF_ROLES_PATH, STAR_TIERS_PATH]) {
       copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
     }
     const rules = JSON.parse(readFileSync(GUEST_RULES_PATH, 'utf8')) as Record<string, unknown>[];

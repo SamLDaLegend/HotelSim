@@ -184,6 +184,12 @@ async function loadArm(dir) {
   // Omitting the KEY rather than passing an empty array is the same "absence is not emptiness"
   // statement `SimContent` makes, and it is what keeps every older revision measurable.
   const staffRoles = optional('staff-roles.json');
+  // OPTIONAL FOR `guest-rules.json`'s REASON A THIRD TIME (G-051a): an arm at a revision before
+  // this goal has no star-tier table, and such a revision's own `bindContent` has no word for
+  // one. It changes no measured quantity either way — nothing in the tick loop reads a rating —
+  // so the key is threaded for one reason only: `World.contentHash` is part of the state hash,
+  // and an arm that dropped the table would report a hash the real pipeline never produces.
+  const starTiers = optional('star-tiers.json');
   const content = sim.bindContent({
     roomTypes: data('room-types.json'),
     needTypes: data('need-types.json'),
@@ -192,6 +198,7 @@ async function loadArm(dir) {
     ...(guestRules === undefined ? {} : { guestRules }),
     ...(scenarios === undefined ? {} : { scenarios }),
     ...(staffRoles === undefined ? {} : { staffRoles }),
+    ...(starTiers === undefined ? {} : { starTiers }),
   });
   return { sim, harness, content };
 }

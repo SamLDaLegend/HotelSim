@@ -56,5 +56,47 @@
     "maxFootprintCells": 24,
     "accessRule": "public",
     "fitBasisPoints": 7500
+  },
+  {
+    "id": "hotel_spa",
+    "name": "Spa",
+    "capacity": 8,
+    "nightlyRatePence": 0,
+    "nightlyUpkeepPence": 4000,
+    "constructionCostPence": 250000,
+    "demolitionRefundBasisPoints": 7000,
+    "provides": [],
+    "requires": [],
+    "minFootprintCells": 1,
+    "maxFootprintCells": 24,
+    "accessRule": "public"
+  },
+  {
+    "id": "conference_hall",
+    "name": "Conference Hall",
+    "capacity": 8,
+    "nightlyRatePence": 0,
+    "nightlyUpkeepPence": 2000,
+    "constructionCostPence": 450000,
+    "demolitionRefundBasisPoints": 6000,
+    "provides": [],
+    "requires": [],
+    "minFootprintCells": 1,
+    "maxFootprintCells": 24,
+    "accessRule": "public"
+  },
+  {
+    "id": "hotel_theatre",
+    "name": "Theatre",
+    "capacity": 8,
+    "nightlyRatePence": 0,
+    "nightlyUpkeepPence": 500,
+    "constructionCostPence": 900000,
+    "demolitionRefundBasisPoints": 3000,
+    "provides": [],
+    "requires": [],
+    "minFootprintCells": 1,
+    "maxFootprintCells": 24,
+    "accessRule": "public"
   }
 ]

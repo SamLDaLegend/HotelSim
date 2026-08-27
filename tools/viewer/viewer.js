@@ -30,6 +30,32 @@ const PALETTE = {
   hotel_lounge: '#7d5aa8',
   games_room: '#c1793a',
   hotel_cafe: '#3f9c72',
+  // ---------------------------------------------------------------------------------
+  // G-051a's facilities. Added here rather than left to fall through to UNKNOWN: a magenta
+  // room means "the loaded content does not define this", and a recording of a hotel with a
+  // Spa in it must not read as a content error to whoever WATCHes it.
+  //
+  // CHOSEN ON LUMINANCE, NOT ON TASTE, AND THE FIRST THREE WERE WRONG. This table is hand-keyed
+  // and `palette.contrast.test.ts` does not reach it — it builds `apps/game`'s COMPUTED ladder —
+  // so nothing went red when the first attempt put `hotel_theatre` at 1.021:1 against
+  // `hotel_lounge`, a NEW WORST PAIR in the table and far under the 1.3 floor that whole ladder
+  // is derived from. THIS IS THE WATCH INSTRUMENT (ADR-0013): a Theatre and a Lounge rendering as
+  // one colour is a defect in the one place a "reads as stupid" finding is allowed to come from.
+  //
+  // THE FOUR OLDER COLOURS ARE UNTOUCHED, and that is the constraint rather than an oversight:
+  // this table is keyed BY CONTENT ID precisely so a colour survives a content edit, and every
+  // WATCH note in `JOURNAL.md` that names one rests on that. So these three are fitted into the
+  // GAPS of the existing luminance ladder instead — 0.185, 0.217 and 0.303 against the standing
+  // 0.145 / 0.158 / 0.253 / 0.261.
+  //
+  // MEASURED, PAIRWISE, OVER ALL SEVEN: the worst pair involving a new colour is now 1.132:1
+  // (standard_room / hotel_theatre), up from 1.021:1. The table's overall worst pair is
+  // 1.024:1 — `games_room` against `hotel_cafe` — which PREDATES this goal and is not mine to
+  // move, because moving it would change two colours older WATCH notes may name.
+  // ---------------------------------------------------------------------------------
+  hotel_spa: '#008da3',
+  conference_hall: '#ac9500',
+  hotel_theatre: '#ef0028',
   single_bed: '#dfe4ea',
   arm_chair: '#c39ae0',
   vending_machine: '#e8bf46',

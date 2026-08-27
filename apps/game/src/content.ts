@@ -26,6 +26,7 @@ import {
   parseScenarios,
   parseSpeedLadder,
   parseStaffRoles,
+  parseStarTiers,
 } from '@hotelsim/content';
 import type { SpeedRung } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
@@ -38,6 +39,7 @@ import needTypesJson from '@hotelsim/content/data/need-types.json';
 import roomTypesJson from '@hotelsim/content/data/room-types.json';
 import scenariosJson from '@hotelsim/content/data/scenarios.json';
 import staffRolesJson from '@hotelsim/content/data/staff-roles.json';
+import starTiersJson from '@hotelsim/content/data/star-tiers.json';
 import speedLadderJson from '@hotelsim/content/data/speed-ladder.json';
 
 /**
@@ -65,6 +67,11 @@ export function loadContent(): BoundContent {
     // G-052a: the money loop's third term. Loaded here for the reason every other table is —
     // same parsers, same schemas, one definition of valid content.
     staffRoles: parseStaffRoles(staffRolesJson, 'staff-roles.json'),
+    // G-051a: the star rating's content half. Loaded here for the reason every other table is —
+    // same parsers, same schemas, one definition of valid content. Omitting it would give the
+    // renderer an UNRATED hotel and the headless host a rated one, which is two hosts
+    // disagreeing about the same content.
+    starTiers: parseStarTiers(starTiersJson, 'star-tiers.json'),
   };
   return bindContent(registry);
 }

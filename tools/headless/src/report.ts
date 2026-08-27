@@ -89,6 +89,10 @@ import {
   TRANSACTION_REASONS,
 } from '@hotelsim/sim';
 import { entitiesInOrder, GROUND_FLOOR, isRoomKind } from '@hotelsim/sim';
+// G-051a — the star rating and the ladder it is read against. `starRatingOf` is the sim's own
+// derivation, called rather than reproduced: a report that re-implemented the scan would be a
+// second definition of what a star is, and the two would drift on the first content edit.
+import { starRatingOf, starTiersInOrder } from '@hotelsim/sim';
 import type { BoundContent, Cell, GridBounds, RoomTypeData, ScheduledCommand, World } from '@hotelsim/sim';
 
 /**
@@ -133,6 +137,22 @@ export const TICKS_BETWEEN_ARRIVALS = 120;
  * for and what a hotel with an amenity per guest would never show.
  */
 export const HOTEL_AMENITIES = 1;
+
+/**
+ * How many of EACH facility room type the scenario inherits (G-051a). ZERO.
+ *
+ * THE ASYMMETRY WITH `HOTEL_AMENITIES` IS THE DECISION. An amenity is what makes a hotel WORK:
+ * with none, every engagement need decays with nothing able to refill it, so the default has to
+ * be one. A FACILITY SERVES NO NEED — see `facilityRoomTypesOf` for why, and for the two
+ * measurements behind it — so a default of one would seed three rooms into every arm this
+ * project has ever run, move every pinned figure, and buy no guest anything.
+ *
+ * IT IS ALSO THE HONEST STARTING POSITION FOR THE STAR LADDER. The shipped tiers put the first
+ * facility at FOUR stars, so a default run is a hotel that has not yet bought one — which is
+ * what makes `--facilities 1` a rung the ladder measurement can step onto rather than a state
+ * every arm was already in.
+ */
+export const HOTEL_FACILITIES = 0;
 
 /**
  * `--build` and `--demolish` are OFF by default, and that is load-bearing (G-008).
@@ -1151,6 +1171,55 @@ export function amenityRoomTypesOf(content: BoundContent): readonly RoomTypeData
   return amenities;
 }
 
+/**
+ * The room types that are neither the bedroom nor an amenity: THE FACILITIES (G-051a).
+ *
+ * DERIVED FROM WHAT A ROOM TYPE SERVES, never from a list of names, exactly as
+ * `amenityRoomTypesOf` is — so adding a facility to `room-types.json` adds it to every
+ * scenario this runner can seed and no snake_case id is needed here. The three sets
+ * PARTITION the room table: the bedroom, the types that serve at least one need, and the
+ * rest. Every room type is in exactly one.
+ *
+ * ---------------------------------------------------------------------------
+ * A FACILITY SERVES NO NEED, AT THIS GOAL, AND THAT IS A DECISION WITH EVIDENCE BEHIND IT
+ * RATHER THAN A GAP.
+ *
+ * ADR-0080's ruling is that *"a Spa need not serve a need BETTER to be worth building — it can
+ * be worth building because it unlocks a TIER"*. Making one serve a need as well was available
+ * and is refused here for two reasons, both measured:
+ *
+ *   1. IT WOULD BUY NOTHING TODAY. ADR-0078 measured strict dominance above the provider
+ *      bottleneck: every amenity past the optimum costs 4,500,000p and produces IDENTICAL
+ *      departures and IDENTICAL reviews. A fourth, fifth and sixth provider of the same three
+ *      needs lands squarely in that regime. What makes a vending machine differ from a
+ *      three-course meal is `fitBasisPoints` SCALING satisfaction, which is ADR-0079 ruling 2
+ *      and belongs to G-050.
+ *
+ *   2. IT WOULD MOVE EVERY EXISTING MEASUREMENT. A room type that serves something IS an
+ *      amenity by the function above, so `--amenities N` would silently start seeding three
+ *      more rooms per rung — and `HOTELSIM.md` §8's M4 prerequisite exists because contaminating
+ *      the arms every balance sweep runs on *"is how a whole milestone's evidence base goes bad
+ *      quietly"*.
+ *
+ * SO THE FACILITIES' REASON TO EXIST IS THE TIER, AND IT IS THE ONLY ONE THEY HAVE UNTIL G-050
+ * AND G-051b LAND. That is stated plainly rather than dressed up: while the rating feeds
+ * nothing, a facility is a pure cost.
+ * ---------------------------------------------------------------------------
+ */
+export function facilityRoomTypesOf(content: BoundContent): readonly RoomTypeData[] {
+  const lodging = lodgingRoomTypeIn(content);
+  const facilities: RoomTypeData[] = [];
+  for (const roomType of content.content.roomTypes) {
+    if (roomType.id === lodging?.id) continue;
+    let servesSomething = false;
+    for (const needType of needTypesInOrder(content)) {
+      if (roomTypeServes(content, roomType.id, needType.id)) servesSomething = true;
+    }
+    if (!servesSomething) facilities.push(roomType);
+  }
+  return facilities;
+}
+
 export type Options = {
   readonly seed: number;
   readonly ticks: number;
@@ -1159,6 +1228,14 @@ export type Options = {
   readonly rooms: number;
   /** How many of EACH amenity room type the hotel is seeded with (G-012). */
   readonly amenities: number;
+  /**
+   * How many of EACH facility room type the hotel is seeded with (G-051a). DEFAULTS TO ZERO,
+   * where `--amenities` defaults to one, and the asymmetry is the point: an amenity is what
+   * makes a hotel WORK — without one every engagement need decays with nothing able to refill
+   * it — while a facility serves no need and exists to climb the star ladder. A default of one
+   * would seed three rooms nobody asked for into every arm this project has ever measured.
+   */
+  readonly facilities: number;
   readonly arrivalEveryTicks: number;
   /** Ticks between player build attempts. `BUILD_OFF` (0) means the player never builds. */
   readonly buildEveryTicks: number;
@@ -1166,6 +1243,24 @@ export type Options = {
   readonly demolishEveryTicks: number;
   /** Ticks between player loan attempts (G-011). `BUILD_OFF` (0) means the player never borrows. */
   readonly loanEveryTicks: number;
+  /**
+   * Ticks between player attempts to BUY A FACILITY (G-051a). `BUILD_OFF` (0) means never, and
+   * that is the default.
+   *
+   * IT IS A SECOND BUILD CADENCE AND NOT A WIDENING OF `--build`, and the split is the whole
+   * point. `--build` builds BEDROOMS — `schedule` issues `buildRoom` with the lodging room type
+   * and has since G-008 — so every golden, ratio and campaign in this project means "the player
+   * added capacity". Teaching that flag to place a facility would silently change what every one
+   * of those arms measured. This is a new flag, off by default, and no pinned invocation moves.
+   *
+   * WHY IT EXISTS AT ALL: without it there is NO INVOCATION OF THIS RUNNER IN WHICH A PLAYER PAYS
+   * FOR A FACILITY. `--facilities N` seeds them free through `spawnEntity` at tick 0, so the star
+   * rating was reachable only as INHERITED STOCK and never as something bought — and a currency
+   * nobody can buy into is not a currency, which is the phrase `starsSchema` uses to justify one
+   * of its own bounds. Round 1 of G-051a's critique measured the consequence: across a 1,000-day
+   * `--build` campaign the rating did not move at all.
+   */
+  readonly buyFacilityEveryTicks: number;
   readonly contentDir: string | undefined;
   /**
    * Where to write a frame recording, or `undefined` for no recording at all (G-017).
@@ -1191,10 +1286,12 @@ export function parseArgs(argv: readonly string[]): Options {
   let json = false;
   let rooms = HOTEL_ROOMS;
   let amenities = HOTEL_AMENITIES;
+  let facilities = HOTEL_FACILITIES;
   let arrivalEveryTicks = TICKS_BETWEEN_ARRIVALS;
   let buildEveryTicks = BUILD_OFF;
   let demolishEveryTicks = BUILD_OFF;
   let loanEveryTicks = BUILD_OFF;
+  let buyFacilityEveryTicks = BUILD_OFF;
   let contentDir: string | undefined;
   let record: string | undefined;
   let recordEveryTicks = RECORD_EVERY_DEFAULT;
@@ -1238,6 +1335,13 @@ export function parseArgs(argv: readonly string[]): Options {
         amenities = requireNumber('--amenities', argv[i + 1]);
         i += 1;
         break;
+      case '--facilities':
+        // 0 is legal and is the DEFAULT: a hotel with no facility is the ordinary hotel every
+        // arm before G-051a measured, and it is the low rung of the star ladder rather than a
+        // broken scenario.
+        facilities = requireNumber('--facilities', argv[i + 1]);
+        i += 1;
+        break;
       case '--arrivals':
         // 0 is NOT legal here: it is the step of the schedule loop, and a step of
         // zero is an infinite loop, not a quiet hotel. (No arrivals = --rooms 0's
@@ -1264,6 +1368,14 @@ export function parseArgs(argv: readonly string[]): Options {
         // shape every run before G-011 had. A schedule loop with a step of 0 would not
         // terminate, so `schedule` treats 0 as off rather than as a cadence.
         loanEveryTicks = requireNumber('--loan', argv[i + 1]);
+        i += 1;
+        break;
+      case '--buy-facility':
+        // 0 is legal and is the DEFAULT: a player who never buys a facility is every arm this
+        // project has ever run, and it is the low rung of the star ladder rather than a broken
+        // scenario. Same reading of 0 as `--build`, for the same reason — a schedule loop with a
+        // step of 0 would not terminate.
+        buyFacilityEveryTicks = requireNumber('--buy-facility', argv[i + 1]);
         i += 1;
         break;
       case '--content': {
@@ -1331,10 +1443,12 @@ export function parseArgs(argv: readonly string[]): Options {
     json,
     rooms,
     amenities,
+    facilities,
     arrivalEveryTicks,
     buildEveryTicks,
     demolishEveryTicks,
     loanEveryTicks,
+    buyFacilityEveryTicks,
     contentDir,
     record,
     recordEveryTicks,
@@ -1364,6 +1478,8 @@ export function schedule(
   demolishEveryTicks: number = BUILD_OFF,
   loanEveryTicks: number = BUILD_OFF,
   amenities: number = HOTEL_AMENITIES,
+  facilities: number = HOTEL_FACILITIES,
+  buyFacilityEveryTicks: number = BUILD_OFF,
 ): readonly ScheduledCommand[] {
   // The room guests SLEEP in, chosen by what it provides rather than by its position in
   // the table — see `lodgingRoomTypeOf` for the trap that closes.
@@ -1520,6 +1636,24 @@ export function schedule(
   for (const amenity of amenityRoomTypesOf(content)) {
     for (let i = 0; i < amenities; i += 1) seedRoom(amenity.id, true);
   }
+  // AND THE FACILITIES (G-051a), ON THE AMENITY WALK AND AFTER THEM. The same basement index
+  // space, continuing from wherever the amenities stopped, so no seeded room can ever land on
+  // another — `seedRoom` shares one counter and that is what makes a collision unreachable
+  // rather than unlikely (see the note on `seeded` above).
+  //
+  // AFTER rather than interleaved, and it costs nothing today but is worth stating: entity ids
+  // are handed out in command order, so seeding facilities LAST means `--facilities N` cannot
+  // renumber a single amenity. Every golden taken at `--facilities 0` therefore describes the
+  // same building it always did, which is what lets this flag be added without moving an arm.
+  //
+  // NOTHING HERE PAYS FOR THEM. `spawnEntity` is the structural door and charges nothing —
+  // `seededStock` in `scenarios.json` is where what that means to the money is declared, and it
+  // reads `supplementsCapital` on shipped content. A ladder measured through this flag is
+  // therefore a ladder of RATINGS and not of BALANCES; it says what a hotel scores, not what it
+  // could afford, and the two must not be read off one run.
+  for (const facility of facilityRoomTypesOf(content)) {
+    for (let i = 0; i < facilities; i += 1) seedRoom(facility.id, true);
+  }
   for (let tick = 1; tick < ticks; tick += arrivalEveryTicks) {
     commands.push({ tick, command: { kind: 'guestArrives' } });
   }
@@ -1589,6 +1723,95 @@ export function schedule(
       index += 1;
     }
   }
+  // ==========================================================================================
+  // AND THE PLAYER BUYS A FACILITY (G-051a) — the star ladder's only PAID rung.
+  //
+  // IT IS THE SAME DOOR THE BEDROOM WALK USES, `buildRoom`, so the purchase is CHARGED: it can be
+  // refused for want of cash, it books a `construction` transaction, and it is the difference
+  // between a rating a player EARNS and one the host handed them at tick 0. `--facilities N`
+  // seeds through `spawnEntity`, which charges nothing; the two flags therefore answer different
+  // questions and neither replaces the other.
+  //
+  // IT CONTINUES THE BASEMENT WALK RATHER THAN OPENING A THIRD ONE. `seedRoom` already walks
+  // `amenityCell` and its counter is in scope, so a purchased facility lands on the next free
+  // basement cell and CANNOT collide with a seeded room, a seeded amenity or a player-built
+  // bedroom — the "one index space" argument this file already makes, extended by one caller
+  // rather than duplicated. It shares `spined` too, so a floor the seed walk already connected is
+  // not connected twice.
+  //
+  // IT LAYS ITS OWN CIRCULATION, AND THAT IS LOAD-BEARING RATHER THAN TIDY. The star rating counts
+  // VALID rooms only, so a facility with no lane and no spine would be bought, charged for, and
+  // earn nothing — a player paying 250,000p for a number that does not move, which is the exact
+  // failure this flag exists to end. On the same tick and BEFORE the build, as the bedroom walk
+  // does, for the same reason.
+  //
+  // THE TYPES CYCLE IN ASCENDING ID ORDER, so a long campaign buys one of EACH rather than N of
+  // the cheapest — which is what makes the `distinctTypes` clauses at tiers 4 and 5 reachable by
+  // playing. Nothing here consults a price: the schedule is generated before the run and cannot
+  // observe a refusal, so a cadence the hotel cannot afford produces refusals rather than a
+  // cleverer plan. That is `--build`'s own rule and its reason.
+  //
+  // ------------------------------------------------------------------------------------------
+  // "ASCENDING ID" AND NOT "CONTENT ORDER", AND THE DIFFERENCE IS A SUBSTITUTION THIS PROJECT
+  // REFUSES ONE PACKAGE OVER. This line read "in CONTENT ORDER" until sweep 2, which sounds like
+  // a designer chose it; `facilityRoomTypesOf` walks `content.content.roomTypes` and
+  // `normaliseTable` sorts that ASCENDING BY ID, so what actually chooses is SPELLING. The
+  // shipped file reads spa, conference, theatre and the sim hands them over as conference, spa,
+  // theatre.
+  //
+  // IT MOVES MONEY. Measured by renaming ONE id, against an unchanged control that reproduced the
+  // shipped numbers and hash exactly (`--days 60 --seed 42 --rooms 12 --amenities 1
+  // --buy-facility 2000`): shipped ids buy 6 facilities and end on -27,000p; spa-first buys 5 and
+  // ends on +215,000p; theatre-first buys 5 and ends on +197,000p. **A 238,000p spread and a
+  // whole facility, from a rename that changes no price and no tier.**
+  //
+  // IT DOES NOT MOVE THE RATING, AND THAT IS THE PROPERTY BEING RELIED ON RATHER THAN A LUCKY
+  // READING. The cycle advances on every EMISSION and not on every success, so every type is
+  // offered in rotation whatever the start — across the nine measured cells the star rating is
+  // 4/4/4, 4/4/4, 3/3/3. `rating.test.ts` pins the general form (a rating is a function of the
+  // SET of valid rooms, not of the order they arrived in) so the property is checked rather than
+  // observed.
+  //
+  // WHY IT IS SAID OUT LOUD: `normaliseStarTiers` spends a paragraph refusing exactly this
+  // substitution for the TIER ladder — *"reading it by id would let a rename reorder the game"* —
+  // and it would be the same author allowing it three files away without noticing. The tier
+  // ladder is refused because id order would change an OUTCOME; this is allowed because it
+  // changes only the cash PATH to an unchanged outcome. **That is the whole of the distinction,
+  // and it is worth nothing unless it is written down where the code is.**
+  // ------------------------------------------------------------------------------------------
+  // ==========================================================================================
+  const buyable = facilityRoomTypesOf(content);
+  if (buyFacilityEveryTicks > BUILD_OFF && buyable.length === 0) {
+    throw new Error(
+      '--buy-facility was asked for, but the injected content defines no facility room type — no room type ' +
+        'that is neither the bedroom nor an amenity. There is nothing for the player to buy. Add one to ' +
+        'room-types.json, or drop the flag.',
+    );
+  }
+  if (buyFacilityEveryTicks > BUILD_OFF) {
+    let bought = 0;
+    for (let tick = BUILD_START_TICK; tick < ticks; tick += buyFacilityEveryTicks) {
+      const at = amenityCell(seededAmenities, bounds);
+      // The SIM's own bounds predicate, not a copy of it — the bedroom walk's rule, and it is
+      // what stops this emitting commands it can already prove will be refused.
+      if (!isWithinBounds(at, bounds)) break;
+      if (!spined.has(at.floor)) {
+        spined.add(at.floor);
+        for (const cell of seededSpineCells(at.floor, bounds)) {
+          commands.push({ tick, command: { kind: 'layCorridor', at: cell } });
+        }
+      }
+      const lane = { floor: at.floor, column: at.column - 1, row: at.row };
+      if (isWithinBounds(lane, bounds)) {
+        commands.push({ tick, command: { kind: 'layCorridor', at: lane } });
+      }
+      const roomType = buyable[bought % buyable.length];
+      if (roomType === undefined) break;
+      commands.push({ tick, command: { kind: 'buildRoom', roomType: roomType.id, at } });
+      seededAmenities += 1;
+      bought += 1;
+    }
+  }
   // AND THE PLAYER DEMOLISHES. Oldest first, by id, starting at 1 — so the schedule
   // demolishes the inherited rooms before anything it built, which is what puts a guest
   // in a room that stops existing and makes `evicted` a number a real run can produce.
@@ -1652,10 +1875,12 @@ export type RunSummary = {
     readonly ticks: number;
     readonly rooms: number;
     readonly amenities: number;
+    readonly facilities: number;
     readonly arrivalEveryTicks: number;
     readonly buildEveryTicks: number;
     readonly demolishEveryTicks: number;
     readonly loanEveryTicks: number;
+    readonly buyFacilityEveryTicks: number;
   };
   readonly world: {
     readonly tick: number;
@@ -1843,6 +2068,41 @@ export type RunSummary = {
       readonly unreachable: number;
       readonly unsupported: number;
     };
+  };
+  /**
+   * WHAT AN INSPECTOR WOULD SAY ABOUT THIS HOTEL (G-051a). An ADDITIVE key, so
+   * `SUMMARY_SCHEMA_VERSION` does NOT move — the policy that constant states.
+   *
+   * DERIVED AT THE MOMENT OF REPORTING, from `world.entities` against the world's OWN plot,
+   * corridors and stairs, exactly as `rooms.invalid` beside it is. There is no rating in the
+   * save and none in `World`; see the header of `rating.ts` for why a stored one would be a
+   * cache that can disagree with the hotel.
+   *
+   * IT FEEDS NOTHING. No arrival, no price, no review and no need reads it — inside the
+   * simulation or out — and this document is the only place it appears. That is G-051a's
+   * boundary; wiring it to demand is G-051b's.
+   */
+  readonly rating: {
+    /** Stars awarded, or 0 for an UNRATED hotel — one nobody has inspected. */
+    readonly stars: number;
+    /** The next tier's star count, or `null` at the top of the ladder and under no ladder. */
+    readonly nextStars: number | null;
+    /** How many tiers the injected content declares. 0 means nobody inspects anything. */
+    readonly tiers: number;
+    /**
+     * The clauses of the NEXT tier this hotel falls short of — what to build to climb.
+     *
+     * A RATING WITHOUT THIS IS A PRICE TAG WITH NO PRICE ON IT. The number alone says *three
+     * stars* and gives the player no way to learn that one Spa is what stands between them and
+     * four, which would make the second currency unspendable. Empty exactly when `nextStars`
+     * is `null`.
+     */
+    readonly shortfall: readonly {
+      readonly roomTypeIds: readonly string[];
+      readonly counting: string;
+      readonly minimum: number;
+      readonly have: number;
+    }[];
   };
   readonly money: {
     readonly transactions: number;
@@ -2134,6 +2394,11 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
   // stair is a declared walkway, so an empty set here would report `noCorridor` for a room
   // whose only walkway is the stairs. `world.stairs`, never a literal.
   const invalidRooms = countInvalidRooms(world.entities, world.grid, world.corridors, world.stairs, content);
+  // THE INSPECTION (G-051a), asked of the same five things and in the same order — the world's
+  // OWN plot, corridors and stairs, never a literal, for the reason the line above gives. It
+  // counts VALID rooms only, so it necessarily agrees with `rooms.valid` about what a room is
+  // and necessarily disagrees with `money.upkeepPennies`, which charges the invalid ones too.
+  const rating = starRatingOf(world.entities, world.grid, world.corridors, world.stairs, content);
   const guestsInInvalidRooms = countGuestsInInvalidRooms(
     world.guests,
     world.entities,
@@ -2202,10 +2467,19 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       ticks: options.ticks,
       rooms: options.rooms,
       amenities: options.amenities,
+      // ADDITIVE (G-051a), so `SUMMARY_SCHEMA_VERSION` does NOT move. It reads 0 on every
+      // invocation this project has ever pinned, which is what makes it a truthful zero rather
+      // than a key nobody emits: the day a sweep seeds a facility, the number moves in a
+      // document consumers already read.
+      facilities: options.facilities,
       arrivalEveryTicks: options.arrivalEveryTicks,
       buildEveryTicks: options.buildEveryTicks,
       demolishEveryTicks: options.demolishEveryTicks,
       loanEveryTicks: options.loanEveryTicks,
+      // ADDITIVE (G-051a), so `SUMMARY_SCHEMA_VERSION` does NOT move. It reads 0 on every
+      // invocation this project has ever pinned — the day a sweep buys a facility, the number
+      // moves in a document consumers already read.
+      buyFacilityEveryTicks: options.buyFacilityEveryTicks,
     },
     world: {
       tick: world.tick,
@@ -2254,6 +2528,17 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
         unreachable: invalidRooms.unreachable,
         unsupported: invalidRooms.unsupported,
       },
+    },
+    rating: {
+      stars: rating.stars,
+      nextStars: rating.nextStars,
+      tiers: starTiersInOrder(content).length,
+      shortfall: rating.shortfall.map((clause) => ({
+        roomTypeIds: clause.roomTypeIds,
+        counting: clause.counting,
+        minimum: clause.minimum,
+        have: clause.have,
+      })),
     },
     money: {
       transactions: world.ledger.length,
@@ -2847,6 +3132,25 @@ export function renderText(summary: RunSummary): string {
     // same reason. `n/a` — not 0 — when nobody has left yet, because a hotel no guest has
     // finished with has no average, and printing 0 would be a review nobody gave.
     `mean x100   ${meanReviewHundredths(summary) ?? 'n/a'}`,
+    // THE STAR RATING (G-051a), AND ITS PRICE TAG. Directly beneath the review block, because
+    // the two are the project's two quality channels and a reader comparing them should not
+    // have to scroll: `reviews` is what the GUESTS said, `stars` is what an INSPECTOR would say,
+    // and ADR-0082's whole point is that they can disagree.
+    //
+    // `n/a` — not 0 — for `next` when there is no next tier, for the reason `mean x100` prints
+    // `n/a` when nobody has left: a hotel at the top of the ladder and a hotel under content
+    // with no ladder both have no next tier, and printing 0 would be a tier nobody declared.
+    // `of N` carries the ladder's size beside the score so a reader can tell three-of-five from
+    // three-of-three without opening the content.
+    `stars       ${summary.rating.stars} of ${summary.rating.tiers}, next ${summary.rating.nextStars ?? 'n/a'}`,
+    // ONE LINE PER UNMET CLAUSE OF THE NEXT TIER — what to build to climb, in the tier's own
+    // clause order. NONE AT ALL when the ladder is topped out, which is the one case where
+    // silence is the correct output rather than a missing row: there is nothing to buy.
+    ...summary.rating.shortfall.map(
+      (clause) =>
+        `to climb    ${clause.have}/${clause.minimum} ${clause.counting} of ` +
+        `[${clause.roomTypeIds.join(', ')}]`,
+    ),
     `ledger      ${summary.money.transactions} transactions`,
     `revenue     ${summary.money.revenuePennies}p`,
     `upkeep      ${summary.money.upkeepPennies}p`,

@@ -180,7 +180,17 @@ function cutTo(bound: BoundContent, needTypes: NonNullable<SimContent['needTypes
     const { fitBasisPoints: _dropped, ...rest } = itemType;
     return { ...rest, provides };
   });
-  return bindContent({ ...bound.content, roomTypes, needTypes, itemTypes } satisfies SimContent);
+  // AND THE STAR LADDER GOES WITH THE ROOMS (G-051a). `bindContent` refuses a tier naming a
+  // room type this content does not define — a tier nobody can satisfy is a ceiling nobody can
+  // pass — so an arm that has just dropped the cafe may not keep a tier that wants one. It is
+  // the same rule this function already applies to `provides` and to an item's fit: KEEP ONLY
+  // WHAT THE CUT CONTENT CAN STILL NAME. The whole TIER goes rather than the clause, because
+  // dropping a clause would silently change what that tier means; and nothing in the tick loop
+  // reads a rating, so no measured quantity moves either way.
+  const starTiers = (bound.content.starTiers ?? []).filter((tier) =>
+    tier.requires.every((clause) => clause.roomTypeIds.every((id) => roomTypes.some((room) => room.id === id))),
+  );
+  return bindContent({ ...bound.content, roomTypes, needTypes, itemTypes, starTiers } satisfies SimContent);
 }
 
 const FULL = loadContent();

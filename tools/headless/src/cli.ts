@@ -79,6 +79,8 @@ function main(): void {
     options.demolishEveryTicks,
     options.loanEveryTicks,
     options.amenities,
+    options.facilities,
+    options.buyFacilityEveryTicks,
   );
   // RECORDING IS OFF BY DEFAULT AND THIS BRANCH IS THE WHOLE MECHANISM (G-017). With no
   // `--record`, this is the same `run` call, with the same arguments, that shipped before

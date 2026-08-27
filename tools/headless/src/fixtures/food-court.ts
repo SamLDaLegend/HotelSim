@@ -189,6 +189,31 @@ export const FOOD_COURT_STAFF_ROLES = [
 ] as const;
 
 /**
+ * WHAT AN INSPECTOR WANTS OF A FOOD COURT (G-051a). The table is required of a `--content`
+ * directory, so this fixture declares one — and it declares the ONE TIER a lodging-free content
+ * set can honestly carry.
+ *
+ * IT NAMES NO BEDROOM, AND IT COULD NOT: `assertStarTierRoomTypesExist` refuses a tier requiring
+ * a room type this content does not define, and a food court defines none. So the ladder here is
+ * a single tier over the amenity types this fixture DOES have — which makes the fixture a live
+ * demonstration of the cross-table refusal working in the admissible direction, exactly as its
+ * zero wage is a live demonstration of the wage bound.
+ *
+ * ONE TIER RATHER THAN FIVE, because the fixture exists to pin a NEED shape and a five-rung
+ * ladder on it would be a second copy of the shipped table drifting quietly out of step with it.
+ */
+export const FOOD_COURT_STAR_TIERS = [
+  {
+    id: 'food_court_rated',
+    name: 'Rated Food Court',
+    stars: 1,
+    requires: [
+      { roomTypeIds: ['games_room', 'hotel_cafe', 'hotel_lounge'], counting: 'distinctTypes', minimum: 2 },
+    ],
+  },
+] as const;
+
+/**
  * The visit duration, derived. See `visitDurationTicksSchema` for the full working; the short
  * form is that a visitor arrives with every need at its want line and is served one at a time:
  *
@@ -220,7 +245,7 @@ export const FOOD_COURT_GUEST_RULES = [
   },
 ] as const;
 
-/** The six tables as a raw `SimContent`-shaped document, for callers that bind directly. */
+/** The seven tables as a raw `SimContent`-shaped document, for callers that bind directly. */
 export const FOOD_COURT_CONTENT = {
   roomTypes: FOOD_COURT_ROOM_TYPES,
   itemTypes: FOOD_COURT_ITEM_TYPES,
@@ -229,10 +254,11 @@ export const FOOD_COURT_CONTENT = {
   guestRules: FOOD_COURT_GUEST_RULES,
   scenarios: FOOD_COURT_SCENARIOS,
   staffRoles: FOOD_COURT_STAFF_ROLES,
+  starTiers: FOOD_COURT_STAR_TIERS,
 };
 
 /**
- * Write the seven files into a fresh temp directory and return its path, for `--content <dir>`.
+ * Write the eight files into a fresh temp directory and return its path, for `--content <dir>`.
  *
  * REAL-PATHED, because `/var` is a symlink to `/private/var` on macOS and G-022 spent a fix on
  * exactly that: a test comparing a path it constructed against a path a child process reported
@@ -253,5 +279,6 @@ export function writeFoodCourtContentDir(): string {
   write('guest-rules.json', FOOD_COURT_GUEST_RULES);
   write('scenarios.json', FOOD_COURT_SCENARIOS);
   write('staff-roles.json', FOOD_COURT_STAFF_ROLES);
+  write('star-tiers.json', FOOD_COURT_STAR_TIERS);
   return dir;
 }

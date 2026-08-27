@@ -26,6 +26,9 @@ export type {
   SpeedRung,
   StaffPosting,
   StaffRole,
+  StarTier,
+  StarTierCounting,
+  StarTierRequirement,
 } from './schema.js';
 export {
   abandonMarginBasisPointsSchema,
@@ -69,6 +72,15 @@ export {
   staffPostingSchema,
   staffRoleSchema,
   staffRolesSchema,
+  // G-051a: the STAR RATING's content half. `starsSchema`'s docblock carries the one thing a
+  // reader must not get wrong about these numbers — a tier's requirements are a DESIGN
+  // STATEMENT and not a DERIVED THRESHOLD, which is the human's call in ADR-0080 recorded at
+  // the point of use rather than claimed in a commit message.
+  starsSchema,
+  starTierCountingSchema,
+  starTierRequirementSchema,
+  starTierSchema,
+  starTiersSchema,
   // G-035, ADR-0046 §6: the optional sprite reference that makes the computed contrast
   // ladder a FALLBACK rather than the rule. Exported so a host can validate an atlas key
   // with the same schema the tables use.
@@ -93,4 +105,6 @@ export {
   parseSpeedLadderJson,
   parseStaffRoles,
   parseStaffRolesJson,
+  parseStarTiers,
+  parseStarTiersJson,
 } from './registry.js';

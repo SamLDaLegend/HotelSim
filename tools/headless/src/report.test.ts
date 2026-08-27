@@ -38,6 +38,7 @@ import {
   departuresOf,
   emitReport,
   HOTEL_AMENITIES,
+  HOTEL_FACILITIES,
   HOTEL_ROOMS,
   lodgingRoomTypeOf,
   parseArgs,
@@ -689,10 +690,12 @@ const distinct: RunSummary = {
     ticks: 102,
     rooms: 103,
     amenities: 139,
+    facilities: 140,
     arrivalEveryTicks: 104,
     buildEveryTicks: 123,
     demolishEveryTicks: 124,
     loanEveryTicks: 138,
+    buyFacilityEveryTicks: 166,
   },
   world: { tick: 105, days: 106, roomTypes: 107, needTypes: 108, entities: 109, stateHash: 'cafe0000feed1111' },
   guests: {
@@ -740,6 +743,18 @@ const distinct: RunSummary = {
   rooms: {
     valid: 133,
     invalid: { missingItem: 134, noCorridor: 138, noDoor: 135, unplaced: 136, unreachable: 153, unsupported: 137 },
+  },
+  // G-051a, and DISTINCT for this fixture's reason: a renderer that printed the tier count
+  // where the star count goes, or the shortfall's `have` where its `minimum` goes, would
+  // otherwise pass. `nextStars` is a NUMBER here rather than `null` because the null branch is
+  // rendered separately and is pinned by its own case.
+  rating: {
+    stars: 159,
+    nextStars: 161,
+    tiers: 163,
+    // `have` IS BELOW `minimum`, which is the type's own contract — a shortfall clause the
+    // hotel already meets is not a shortfall. Distinct like everything else here.
+    shortfall: [{ roomTypeIds: ['star_fixture_room'], counting: 'rooms', minimum: 165, have: 164 }],
   },
   money: {
     transactions: 117,
@@ -823,6 +838,10 @@ describe('renderers', () => {
         // sentinel above expresses it: (7x146 + 8x147 + 9x150) / 443 = 801 hundredths.
         'reviews     7:146, 8:147, 9:150',
         'mean x100   801',
+        // G-051a. Beneath the review block, because the two are the project's two quality
+        // channels and ADR-0082's whole point is that they can disagree.
+        'stars       159 of 163, next 161',
+        'to climb    164/165 rooms of [star_fixture_room]',
         'ledger      117 transactions',
         'revenue     118p',
         'upkeep      -119p',
@@ -1218,10 +1237,12 @@ describe('emitReport (print THEN fail — the contract\'s second clause)', () =>
     json: false,
     rooms: HOTEL_ROOMS,
     amenities: HOTEL_AMENITIES,
+    facilities: HOTEL_FACILITIES,
     arrivalEveryTicks: TICKS_BETWEEN_ARRIVALS,
     buildEveryTicks: 0,
     demolishEveryTicks: 0,
     loanEveryTicks: 0,
+    buyFacilityEveryTicks: 0,
     contentDir: undefined,
     // Recording is off (G-017). `emitReport` cannot see either field — they are consumed
     // in cli.ts and never reach the summary — so this is here to satisfy `Options`, and

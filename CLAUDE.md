@@ -36,8 +36,13 @@ Three nested feedback loops. Every design and code decision traces to one of the
   ROOM-night, and the bound built on them is conservative rather than tight.*
 - **Build loop** — spend cash [E], add capacity [E] and quality [**OWED M4**], raise
   reputation [**OWED M4**], raise demand [**OWED M4**], back to the guest loop
-  [**OWED M4**]. *Two of six. The loop does not close: arrivals are a fixed cadence
-  from the command log, so nothing a player builds changes how many guests arrive.*
+  [**OWED M4**]. *Two of six, and the count did NOT move at G-051a. That goal shipped the
+  STAR RATING — `starRatingOf` (rating.ts), derived from what the hotel HAS, tiers in
+  `star-tiers.json` — which ADR-0082 rules is a SECOND system beside reputation, not the
+  reputation term: the test of distinctness is that they can DISAGREE. Reputation, judged on
+  guest satisfaction, is still unbuilt, and the rating FEEDS NOTHING. The loop still does not
+  close: arrivals are a fixed cadence from the command log, so nothing a player builds changes
+  how many guests arrive. `HOTELSIM.md` §1.1's `raise reputation` row carries the evidence.*
 
 **This copy is marked because this file is the one that survives compaction** — and the
 banner above it records what it cost the last time a ruling landed in `HOTELSIM.md` and

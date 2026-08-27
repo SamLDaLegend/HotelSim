@@ -24,6 +24,7 @@ import {
   parseScenariosJson,
   parseSpeedLadderJson,
   parseStaffRolesJson,
+  parseStarTiersJson,
 } from '@hotelsim/content';
 import type {
   ContentRegistry,
@@ -34,6 +35,7 @@ import type {
   Scenario,
   SpeedRung,
   StaffRole,
+  StarTier,
 } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
 import type { BoundContent, SimContent } from '@hotelsim/sim';
@@ -57,6 +59,8 @@ export const GUEST_RULES_PATH = resolveContent('@hotelsim/content/data/guest-rul
 export const SCENARIOS_PATH = resolveContent('@hotelsim/content/data/scenarios.json');
 /** Who the hotel can employ, and what one of them costs for a night (G-052a). */
 export const STAFF_ROLES_PATH = resolveContent('@hotelsim/content/data/staff-roles.json');
+/** What an inspector wants before it will award a star (G-051a). */
+export const STAR_TIERS_PATH = resolveContent('@hotelsim/content/data/star-tiers.json');
 /**
  * The play-speed ladder (G-021). Resolved here like every other table — and read by
  * `loadSpeedLadderFrom` below, which `loadContent` deliberately never calls. The reason is
@@ -105,6 +109,11 @@ export function loadScenariosFrom(path: string): readonly Scenario[] {
 /** Read and validate one staff-role file (G-052a). Same all-or-nothing discipline. */
 export function loadStaffRolesFrom(path: string): readonly StaffRole[] {
   return parseStaffRolesJson(readContentFile(path), path);
+}
+
+/** Read and validate one star-tier file (G-051a). Same all-or-nothing discipline. */
+export function loadStarTiersFrom(path: string): readonly StarTier[] {
+  return parseStarTiersJson(readContentFile(path), path);
 }
 
 /**
@@ -167,6 +176,7 @@ export function loadContent(contentDir?: string): BoundContent {
   const guestRulesPath = contentDir === undefined ? GUEST_RULES_PATH : join(contentDir, 'guest-rules.json');
   const scenariosPath = contentDir === undefined ? SCENARIOS_PATH : join(contentDir, 'scenarios.json');
   const staffRolesPath = contentDir === undefined ? STAFF_ROLES_PATH : join(contentDir, 'staff-roles.json');
+  const starTiersPath = contentDir === undefined ? STAR_TIERS_PATH : join(contentDir, 'star-tiers.json');
   const registry: ContentRegistry = {
     ...loadContentFrom(roomTypesPath),
     needTypes: loadNeedTypesFrom(needTypesPath),
@@ -195,6 +205,13 @@ export function loadContent(contentDir?: string): BoundContent {
     // posts a night porter would then fail at `bindContent` naming a role its own directory does
     // define, which is a message about the wrong thing.
     staffRoles: loadStaffRolesFrom(staffRolesPath),
+    // EIGHT FILES SINCE G-051a, and this one is required of a `--content` directory for exactly
+    // the argument the seven above it make. Absence would be read as "nobody inspects anything",
+    // which is a TRUE statement about content that predates the star rating and a silent UNRATED
+    // for a directory somebody assembled today — every hotel reported at zero stars, with no
+    // line anywhere saying the file was missing. That is the shape of a measurement about a
+    // building the operator did not think they were running.
+    starTiers: loadStarTiersFrom(starTiersPath),
   };
   const injected: SimContent = registry;
   // `bindContent` rejects content whose needs no room type provides, content whose rooms

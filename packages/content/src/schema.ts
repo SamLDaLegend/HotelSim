@@ -2373,6 +2373,170 @@ export const scenarioSchema = z.strictObject({
 export const scenariosSchema = z.array(scenarioSchema).min(1);
 
 /**
+ * HOW MANY STARS A TIER AWARDS (G-051a).
+ *
+ * ---------------------------------------------------------------------------
+ * READ THIS BEFORE ASKING WHERE THE NUMBER CAME FROM. A STAR TIER'S REQUIREMENTS ARE A
+ * **DESIGN STATEMENT**, NOT A **DERIVED THRESHOLD**, AND §2.1 DOES NOT APPLY TO IT THE WAY IT
+ * APPLIES TO A GATE BOUND (G-051's block says so in terms, and it is the human's call being
+ * recorded rather than a licence being claimed).
+ *
+ *   A DERIVED THRESHOLD answers *"what does the stated requirement force this number to be?"*
+ *   — `nightlyWagePenceSchema`'s bound, I5's 389,333ms, `MIN_CONTRAST_WITHIN_ROLE`'s 1.3. A
+ *   number nobody can source is a superstition with CI access.
+ *
+ *   A DESIGN STATEMENT answers *"what shall this game ask of a player?"* — *twenty-four
+ *   bedrooms and two kinds of facility make a five-star hotel*. There is no requirement above
+ *   it to derive it FROM: it IS the requirement, and the honest defence of it is that it is
+ *   content (I3), so disagreeing with it is a one-file edit and not a diff in `packages/sim`.
+ *
+ * THE TWO KINDS ARE MIXED IN THIS ONE TABLE AND THE DIFFERENCE IS MARKED AT EACH: everything
+ * in `star-tiers.json` is a DESIGN STATEMENT; the `min(1)` bounds in the schemas below are
+ * STRUCTURAL — they refuse a tier that means nothing rather than a tier somebody disagrees
+ * with, and each says which vacuity it refuses.
+ * ---------------------------------------------------------------------------
+ *
+ * `min(1)` IS STRUCTURAL: a tier awarding zero stars is the state of a hotel that has met no
+ * tier at all, so a row for it would be a second spelling of the unrated hotel — and two
+ * spellings of one state is a difference a report can carry without meaning anything
+ * (`staffPostingSchema`'s `count` rule, one table over).
+ */
+export const starsSchema = z.int().min(1);
+
+/**
+ * HOW A REQUIREMENT COUNTS WHAT THE HOTEL HAS (G-051a). Two modes, and they are not
+ * interchangeable:
+ *
+ *   rooms          at least `minimum` ROOMS whose type is in `roomTypeIds`. Asks for SCALE.
+ *                  Twelve bedrooms is twelve bedrooms.
+ *   distinctTypes  at least `minimum` of the TYPES in `roomTypeIds` are present, one room
+ *                  each. Asks for VARIETY, and it is the mode that stops a tier being bought
+ *                  by spamming whichever entry in the set is cheapest — which is exactly
+ *                  ADR-0078's dominance arriving through the rating instead of through
+ *                  satisfaction.
+ *
+ * AN ENUM RATHER THAN TWO OPTIONAL FIELDS, for `seededStockPolicySchema`'s reason: a row
+ * carrying both a room minimum and a type minimum would have four states and mean two, and
+ * the two extra states are the ones nobody tests.
+ */
+export const starTierCountingSchema = z.enum(['rooms', 'distinctTypes']);
+
+/**
+ * ONE CLAUSE OF A STAR TIER'S PREDICATE (G-051a): a set of room types, a way of counting them,
+ * and the least that will do.
+ *
+ * A TIER IS A PREDICATE OVER WHAT THE HOTEL HAS, AND NOT OVER HOW ITS GUESTS FELT — ADR-0080
+ * and ADR-0082, the human's ruling that a star rating is a professional INSPECTION and a
+ * reputation is guest satisfaction, and that the two are different systems that can DISAGREE.
+ * Nothing in this shape can reach a review, a need outcome or a departure reason, and that is
+ * the mechanical half of the ruling: the review channel measured ONE BIT above the bottleneck
+ * (ADR-0078), and a rating that cannot read guest outcomes cannot collapse the same way.
+ *
+ * THE IDS ARE STRICTLY ASCENDING, which is `normaliseTable`'s discipline applied inside a row.
+ * A duplicate would let one room type carry a `rooms` clause twice, and an arbitrary order
+ * would let a designer's text editor decide the order a shortfall is reported in (I2).
+ *
+ * A `distinctTypes` MINIMUM ABOVE THE SIZE OF ITS OWN SET IS REFUSED, and this is STRUCTURAL
+ * rather than a balance opinion: such a tier is unsatisfiable by construction, so it is a
+ * ceiling no player can ever pass however they build. A currency nobody can earn is not a
+ * currency. (The `rooms` mode has no such bound and deliberately gets none — how many rooms
+ * fit is a property of the PLOT, which is world state, and content cannot see it.)
+ */
+export const starTierRequirementSchema = z
+  .strictObject({
+    roomTypeIds: z.array(contentIdSchema).min(1),
+    counting: starTierCountingSchema,
+    /** STRUCTURAL `min(1)`: a clause asking for none of something is true of a bare plot. */
+    minimum: z.int().min(1),
+  })
+  .superRefine((requirement, ctx) => {
+    requirement.roomTypeIds.forEach((id, index) => {
+      const previous = requirement.roomTypeIds[index - 1];
+      if (previous === undefined || previous < id) return;
+      ctx.addIssue({
+        code: 'custom',
+        path: ['roomTypeIds', index],
+        message:
+          `"${previous}" then "${id}" — a requirement's roomTypeIds must be strictly ascending, ` +
+          'so a duplicate cannot be counted twice and no order depends on how the file was typed (G-051a)',
+      });
+    });
+    if (requirement.counting !== 'distinctTypes') return;
+    if (requirement.minimum <= requirement.roomTypeIds.length) return;
+    ctx.addIssue({
+      code: 'custom',
+      path: ['minimum'],
+      message:
+        `${requirement.minimum} distinct types are asked for from a set of ` +
+        `${requirement.roomTypeIds.length} — no hotel can ever satisfy this clause, so the tier ` +
+        'holding it is a ceiling nobody can pass (G-051a)',
+    });
+  });
+
+/**
+ * A STAR TIER (G-051a): what an inspector wants before it will award this many stars.
+ *
+ * THE ORDER OF THE LADDER IS `stars`, NOT THE ID ORDER, and that is the one thing about this
+ * table a reader must not assume from the others. `needTypesInOrder` and `staffRolesInOrder`
+ * iterate ascending by ID because nothing else orders those tables; a tier ladder has an
+ * INTRINSIC order, and reading it by id would put `star_five` below `star_four` and let a
+ * rename reorder the game. `starTiersSchema` refuses duplicate `stars` for exactly that
+ * reason: it is what makes the intrinsic order TOTAL (I2).
+ *
+ * EVERY NUMBER IN THE SHIPPED TABLE IS A DESIGN STATEMENT — see `starsSchema` above for what
+ * that means and for what it is being distinguished from.
+ *
+ * A TOP-LEVEL ARRAY WITH AN `id`, like every other table here, for `staffRoleSchema`'s two
+ * mechanical reasons: `check:content` fails a content file it can find no `id` in at any
+ * depth, and the sim reaches tiers by ITERATION IN A TOTAL ORDER and never by name, so no
+ * snake_case literal enters `packages/sim` (ADR-0003).
+ */
+export const starTierSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  stars: starsSchema,
+  /** STRUCTURAL `min(1)`: a tier with no clauses is awarded to a bare plot. */
+  requires: z.array(starTierRequirementSchema).min(1),
+});
+
+/**
+ * The whole `star-tiers.json` document. A top-level array, for the same reason.
+ *
+ * Uniqueness of ids is checked in `parseStarTiers` with every other table's; uniqueness of
+ * `stars` is checked HERE, because it is a property of the document rather than of a row —
+ * `speedLadderSchema`'s arrangement exactly, and for a sharper reason than that one has. Two
+ * tiers at the same star count leave the ladder's order decided by whatever the sort was
+ * stable on, and an order that is merely stable in V8 is not an order (I2).
+ *
+ * WHAT IT DELIBERATELY DOES NOT CHECK: that the tiers are MONOTONE — that a tier asks for at
+ * least what the tier below it asks for. `starRatingOf` scans upward and stops at the first
+ * unsatisfied tier, so a non-monotone table is not WRONG, it is merely a design in which a
+ * higher tier can be blocked by a clause a lower one did not have. That is a legitimate thing
+ * for a designer to mean, and refusing it here would be this schema having a balance opinion.
+ * The SHIPPED table is monotone and `rating.test.ts` pins that as a property of the CONTENT.
+ */
+export const starTiersSchema = z
+  .array(starTierSchema)
+  .min(1)
+  .superRefine((tiers, ctx) => {
+    const seen = new Map<number, number>();
+    tiers.forEach((tier, index) => {
+      const first = seen.get(tier.stars);
+      if (first === undefined) {
+        seen.set(tier.stars, index);
+        return;
+      }
+      ctx.addIssue({
+        code: 'custom',
+        path: [index, 'stars'],
+        message:
+          `tiers ${first} and ${index} both award ${tier.stars} stars — the ladder's order IS this ` +
+          'field, so a duplicate leaves two tiers with no order between them (G-051a)',
+      });
+    });
+  });
+
+/**
  * A rung's LABEL, which travels with its value (G-021, human ruling).
  *
  * The ruling puts two things in this format beside the numbers, because this goal mints it.
@@ -2496,3 +2660,6 @@ export type SeededStockPolicy = NonNullable<z.infer<typeof seededStockPolicySche
 export type StaffRole = z.infer<typeof staffRoleSchema>;
 export type StaffPosting = z.infer<typeof staffPostingSchema>;
 export type SpeedRung = z.infer<typeof speedRungSchema>;
+export type StarTier = z.infer<typeof starTierSchema>;
+export type StarTierRequirement = z.infer<typeof starTierRequirementSchema>;
+export type StarTierCounting = z.infer<typeof starTierCountingSchema>;

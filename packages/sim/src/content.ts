@@ -438,6 +438,71 @@ export type StaffRoleData = {
   readonly nightlyWagePence: number;
 };
 
+/**
+ * HOW A STAR TIER'S REQUIREMENT COUNTS WHAT THE HOTEL HAS (G-051a).
+ *
+ *   rooms          at least `minimum` ROOMS whose type is in the set. Asks for SCALE.
+ *   distinctTypes  at least `minimum` of the TYPES in the set are present. Asks for VARIETY,
+ *                  and it is the mode that stops a tier being bought by spamming whichever
+ *                  entry in the set is cheapest — ADR-0078's dominance arriving through the
+ *                  rating instead of through satisfaction.
+ *
+ * A closed union with a `some` guard, exactly as `SEEDED_STOCK_POLICIES` and
+ * `ROOM_ACCESS_RULES` are, so a host handing the sim a mode it has no branch for is refused
+ * at bind time rather than counted as zero at inspection time.
+ */
+export const STAR_TIER_COUNTINGS = ['rooms', 'distinctTypes'] as const;
+
+export type StarTierCountingData = (typeof STAR_TIER_COUNTINGS)[number];
+
+/** Whether a raw host handed us a counting mode the simulation has a branch for. */
+export function isStarTierCounting(value: unknown): value is StarTierCountingData {
+  return STAR_TIER_COUNTINGS.some((counting) => counting === value);
+}
+
+/**
+ * ONE CLAUSE OF A STAR TIER'S PREDICATE (G-051a): a set of room types, how to count them, and
+ * the least that will do.
+ *
+ * Structurally identical to `StarTierRequirement` in `@hotelsim/content` and deliberately not
+ * imported from it (ADR-0001), exactly as `EconomyData` is.
+ *
+ * NOTHING HERE CAN REACH A GUEST OUTCOME, AND THAT IS THE WHOLE MECHANISM (ADR-0080, ADR-0082).
+ * A star rating is a professional INSPECTION judged on what the hotel HAS; a reputation is
+ * judged on how its guests felt, reads `reviewOutcomes`, and does not exist. The review channel
+ * measured ONE BIT above the bottleneck, and a predicate that cannot see a review cannot
+ * collapse the same way.
+ */
+export type StarTierRequirementData = {
+  /** Strictly ascending, and `starTierRequirementSchema` is what makes that true. */
+  readonly roomTypeIds: readonly ContentId[];
+  readonly counting: StarTierCountingData;
+  readonly minimum: number;
+};
+
+/**
+ * A STAR TIER (G-051a): what an inspector wants before it will award this many stars.
+ *
+ * Structurally identical to `StarTier` in `@hotelsim/content` and deliberately not imported
+ * from it (ADR-0001), exactly as `EconomyData` is.
+ *
+ * THE LADDER'S ORDER IS `stars` AND NOT THE ID ORDER — see `starTiersInOrder`, which is where
+ * that decision is enforced and where the reason it differs from `staffRolesInOrder` is
+ * written down.
+ *
+ * EVERY NUMBER IN THE SHIPPED TABLE IS A DESIGN STATEMENT, NOT A DERIVED THRESHOLD.
+ * `starsSchema` in `packages/content` carries that distinction in full; it is not restated
+ * here, because a figure with two derivations has none.
+ */
+export type StarTierData = {
+  readonly id: ContentId;
+  readonly name: string;
+  /** At least 1. Zero stars is the UNRATED hotel and is not a row. */
+  readonly stars: number;
+  /** At least one clause. A tier with none would be awarded to a bare plot. */
+  readonly requires: readonly StarTierRequirementData[];
+};
+
 /** One line of a scenario's opening payroll (G-052a): a role, and how many of it. */
 export type StaffPostingData = {
   readonly roleId: ContentId;
@@ -837,6 +902,22 @@ export type SimContent = {
    * order `normaliseTable` imposes.
    */
   readonly staffRoles?: readonly StaffRoleData[] | undefined;
+  /**
+   * WHAT AN INSPECTOR WANTS BEFORE IT WILL AWARD A STAR (G-051a). Optional for the reason
+   * `economy` is, and the absence is the same clean historical statement: content without this
+   * table describes a world in which nobody inspected anything and no hotel had a rating, which
+   * is what every world before G-051a was. `starRatingOf` reads that as UNRATED rather than as
+   * a failed inspection.
+   *
+   * REACHED THROUGH `starTiersInOrder` AND NEVER BY NAME, so the snake_case id that names a tier
+   * never enters `packages/sim` (ADR-0003). Like `staffRoles` and unlike `economy`, `guestRules`
+   * and `scenarios`, it is NOT a list-with-one-entry read through a `first*` accessor: the whole
+   * ladder is live at once.
+   *
+   * THE ORDER IS `stars` AND NOT THE ID ORDER, and this is the one table in `SimContent` whose
+   * stored order is NOT `normaliseTable`'s ascending-by-id. See `starTiersInOrder`.
+   */
+  readonly starTiers?: readonly StarTierData[] | undefined;
 };
 
 /**
@@ -2884,6 +2965,140 @@ function cloneStaffRole(role: StaffRoleData): StaffRoleData {
 }
 
 /**
+ * Clone one star tier, including its requirement clauses (G-051a).
+ *
+ * VALIDATES AT THE BOUNDARY, exactly as `cloneRoomType` and `cloneStaffRole` do, and for the
+ * reason they do: a raw host that did not come through the Zod schema — a hand-built registry,
+ * a fixture, a gate arm reading JSON off an old revision — reaches `bindContent` and nothing
+ * else. Every property `starTierSchema` states is therefore restated here as a throw, so the
+ * two paths into the simulation admit exactly the same content. THIS IS NOT DUPLICATION OF THE
+ * SCHEMA'S OPINIONS: the schema produces a designer-facing message with a JSON path, this
+ * produces a programmer-facing one, and the alternative is a second, laxer door.
+ *
+ * `counting` IS CHECKED AGAINST THE CLOSED UNION rather than trusted, AND THIS GUARD IS THE ONLY
+ * THING HOLDING IT UP. `haveFor` in `rating.ts` is a TWO-WAY TERNARY and not an exhaustive switch —
+ * it tests for `rooms` and treats everything else as `distinctTypes` — so an unknown mode reaching
+ * it would be counted as VARIETY and a clause asking for three distinct types could be satisfied by
+ * one room. (This block said "would fall through `starRatingOf`'s SWITCH and count as zero" until
+ * sweep 1: there is no switch, and the wrong branch is the generous one rather than the empty one.
+ * Two descriptions of one mechanism, one of them wrong, inside the guard's own justification.)
+ */
+function cloneStarTier(tier: StarTierData): StarTierData {
+  const stars = tier.stars;
+  if (!Number.isSafeInteger(stars) || stars < 1) {
+    throw new Error(
+      `bindContent: star tier "${tier.id}" awards ${String(stars)} stars; a tier awards a whole ` +
+        'number of stars, at least one — zero stars is the UNRATED hotel and is not a row',
+    );
+  }
+  const requires = tier.requires ?? [];
+  if (requires.length === 0) {
+    throw new Error(
+      `bindContent: star tier "${tier.id}" requires nothing, so it would be awarded to a bare plot`,
+    );
+  }
+  const clauses: StarTierRequirementData[] = [];
+  for (const requirement of requires) {
+    if (!isStarTierCounting(requirement.counting)) {
+      throw new Error(
+        `bindContent: star tier "${tier.id}" counts by "${String(requirement.counting)}", which is not ` +
+          `one of ${STAR_TIER_COUNTINGS.join(', ')}; an unknown mode would be counted as VARIETY and the ` +
+          'clause could be satisfied by one room of one type',
+      );
+    }
+    const minimum = requirement.minimum;
+    if (!Number.isSafeInteger(minimum) || minimum < 1) {
+      throw new Error(
+        `bindContent: star tier "${tier.id}" has a clause asking for ${String(minimum)}; a clause asking ` +
+          'for none of something is true of a bare plot',
+      );
+    }
+    const roomTypeIds = cloneIdList('star tier', tier.id, 'requires', 'room type', requirement.roomTypeIds ?? []);
+    if (roomTypeIds.length === 0) {
+      throw new Error(
+        `bindContent: star tier "${tier.id}" has a clause naming no room types, so nothing can satisfy it`,
+      );
+    }
+    if (requirement.counting === 'distinctTypes' && minimum > roomTypeIds.length) {
+      throw new Error(
+        `bindContent: star tier "${tier.id}" asks for ${minimum} distinct room types from a set of ` +
+          `${roomTypeIds.length}; no hotel can ever satisfy that clause, so this tier is a ceiling ` +
+          'nobody can pass',
+      );
+    }
+    clauses.push(Object.freeze({ roomTypeIds, counting: requirement.counting, minimum }));
+  }
+  return { id: tier.id, name: tier.name, stars, requires: Object.freeze(clauses) };
+}
+
+/**
+ * Normalise the star-tier table: `normaliseTable`'s work, then RE-SORTED BY `stars`.
+ *
+ * THIS IS THE ONE TABLE IN `SimContent` WHOSE STORED ORDER IS NOT ASCENDING BY ID, and the
+ * reason is worth the exception. Every other table is id-ordered because nothing else orders
+ * it — an order that is merely the order somebody typed the file in is not an order (I2), and
+ * the id is the only total key those rows have. A TIER LADDER HAS AN INTRINSIC ORDER, `stars`,
+ * and reading it by id would put `star_five` below `star_four`, make the ladder depend on
+ * spelling, and let a rename reorder the game. That is ADR-0078's finding — *which need starves
+ * is decided by alphabetical spelling* — offered a second front door, and it is refused here.
+ *
+ * `normaliseTable` STILL RUNS FIRST, so the clone, the freeze, the empty-id check and the
+ * duplicate-ID refusal are the shared ones rather than a second copy. Only the ORDER is
+ * replaced, on a copy, because `normaliseTable` freezes what it returns.
+ *
+ * STRICTLY ASCENDING `stars` IS ENFORCED HERE AND NOT ONLY IN THE SCHEMA, for `cloneStarTier`'s
+ * reason: `bindContent` is the one door every host goes through and Zod is not. Two tiers at one
+ * star count would leave their order decided by whatever the sort was stable on, and a sort that
+ * is merely stable in V8 is not an order.
+ */
+function normaliseStarTiers(entries: readonly StarTierData[]): readonly StarTierData[] {
+  const byId = normaliseTable(entries, 'star tier', cloneStarTier);
+  const byStars = [...byId].sort((a, b) => a.stars - b.stars);
+  for (let i = 1; i < byStars.length; i += 1) {
+    const tier = byStars[i];
+    const previous = byStars[i - 1];
+    if (tier === undefined || previous === undefined) continue;
+    if (previous.stars === tier.stars) {
+      throw new Error(
+        `bindContent: star tiers "${previous.id}" and "${tier.id}" both award ${tier.stars} stars; ` +
+          "the ladder's order IS that field, so a duplicate leaves two tiers with no order between them",
+      );
+    }
+  }
+  return Object.freeze(byStars);
+}
+
+/**
+ * Throws if a star tier requires a room type this content does not define (G-051a).
+ *
+ * THE CROSS-TABLE HALF, and it is here for `assertRequiredItemsExist`'s reason: it reads
+ * `star-tiers.json` against `room-types.json`, which is a relationship between two files that
+ * no single-document schema can see, on the one path every host goes through.
+ *
+ * WHAT IT PROTECTS, AND IT IS THE SAME PROPERTY THE `distinctTypes` REACHABILITY RULE PROTECTS
+ * ONE LEVEL DOWN: a clause naming a room type nobody can build can never be satisfied, so the
+ * tier holding it is a CEILING NOBODY CAN PASS. A currency the player cannot earn is not a
+ * currency, and the failure is silent — the hotel simply never gets past four stars, with
+ * nothing anywhere saying why. A typo in an id is the ordinary way to produce it.
+ */
+function assertStarTierRoomTypesExist(
+  starTiers: readonly StarTierData[],
+  roomTypes: readonly RoomTypeData[],
+): void {
+  for (const tier of starTiers) {
+    for (const requirement of tier.requires) {
+      for (const roomTypeId of requirement.roomTypeIds) {
+        if (indexOfId(roomTypes, roomTypeId) !== -1) continue;
+        throw new Error(
+          `bindContent: star tier "${tier.id}" requires room type "${roomTypeId}", which this content ` +
+            'does not define. No hotel can ever build one, so this tier is a ceiling nobody can pass.',
+        );
+      }
+    }
+  }
+}
+
+/**
  * Throws if any need in this content could never be satisfied BY A PROVIDER A PLAYER CAN
  * REACH, or if any provider claims a need that does not exist.
  *
@@ -3544,6 +3759,9 @@ export function bindContent(content: SimContent): BoundContent {
     content.staffRoles === undefined
       ? undefined
       : normaliseTable(content.staffRoles, 'staff role', cloneStaffRole);
+  // NOT `normaliseTable` — see `normaliseStarTiers` for why this one table is stored in `stars`
+  // order rather than in id order, and for what reading it by id would cost.
+  const starTiers = content.starTiers === undefined ? undefined : normaliseStarTiers(content.starTiers);
 
   // ROLES ARE SETTLED FIRST (G-013), and the order is load-bearing rather than tidy:
   // `assertNeedsAreSatisfiable` refuses an ITEM that provides the lodging need, so it has
@@ -3577,6 +3795,10 @@ export function bindContent(content: SimContent): BoundContent {
   // that posts a role it never declared says THAT rather than complaining about a wage.
   assertOpeningStaffRolesExist(scenarios ?? [], staffRoles ?? []);
   assertWagesAreCoveredByARoomNight(staffRoles ?? [], roomTypes);
+  // AND THE STAR TIERS AGAINST THE ROOM TABLE (G-051a). Placed with the other "does this id
+  // exist" refusals and before every check that PRICES anything, so content naming a room type
+  // it never declared says THAT rather than complaining about a number.
+  assertStarTierRoomTypesExist(starTiers ?? [], roomTypes);
   // AND THE THIRD MONEY RELATION (G-038c): a floor costs at least a room. It reads both tables
   // like `assertStockIsAReserve` and is placed after it so that content broken for the older,
   // narrower reason — a refund that lets the lender loose — still says so first.
@@ -3648,7 +3870,8 @@ export function bindContent(content: SimContent): BoundContent {
   const withEconomy: SimContent = economy === undefined ? withItems : { ...withItems, economy };
   const withGuestRules: SimContent = guestRules === undefined ? withEconomy : { ...withEconomy, guestRules };
   const withScenarios: SimContent = scenarios === undefined ? withGuestRules : { ...withGuestRules, scenarios };
-  const normalised: SimContent = staffRoles === undefined ? withScenarios : { ...withScenarios, staffRoles };
+  const withStaffRoles: SimContent = staffRoles === undefined ? withScenarios : { ...withScenarios, staffRoles };
+  const normalised: SimContent = starTiers === undefined ? withStaffRoles : { ...withStaffRoles, starTiers };
   return Object.freeze({
     content: Object.freeze(normalised),
     fingerprint: hashJson(normalised as unknown as JsonValue),
@@ -3767,6 +3990,29 @@ export function staffRolesInOrder(bound: BoundContent): readonly StaffRoleData[]
 }
 
 const EMPTY_STAFF_ROLES: readonly StaffRoleData[] = Object.freeze([]);
+
+/**
+ * The star tiers this content declares, ASCENDING BY `stars` — the whole ladder, lowest first.
+ *
+ * ADR-0003 IS SATISFIED THE WAY `needTypesInOrder` AND `staffRolesInOrder` SATISFY IT: by
+ * iteration in a TOTAL, CONTENT-DERIVED ORDER, never by a literal. No snake_case tier id
+ * appears anywhere in `packages/sim`, and `starRatingOf` never asks for a tier by name.
+ *
+ * THE ORDER IS `stars` AND NOT THE ID ORDER, AND THAT IS THE DIFFERENCE FROM THE OTHER TWO. A
+ * need type and a staff role have no intrinsic order, so their id is the only total key they
+ * have; a tier ladder's order IS one of its fields. Iterating this table by id would put
+ * `star_five` between `star_four` and `star_one` — the ladder decided by SPELLING, which is
+ * precisely ADR-0078's finding looking for a second front door. The order is imposed once, at
+ * bind time, by `normaliseStarTiers`, so this accessor is a read and not a sort.
+ *
+ * EMPTY UNDER CONTENT THAT DECLARES NO TIERS, and `starRatingOf` reads that as an UNRATED hotel
+ * rather than as one that failed an inspection — the honest reading of a world nobody inspects.
+ */
+export function starTiersInOrder(bound: BoundContent): readonly StarTierData[] {
+  return bound.content.starTiers ?? EMPTY_STAR_TIERS;
+}
+
+const EMPTY_STAR_TIERS: readonly StarTierData[] = Object.freeze([]);
 
 /** O(log n). Returns the injected role, or undefined if this content has no such id. */
 export function findStaffRole(bound: BoundContent, id: ContentId): StaffRoleData | undefined {

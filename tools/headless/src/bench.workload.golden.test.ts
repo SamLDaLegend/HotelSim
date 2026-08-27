@@ -512,7 +512,25 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   `evictedGuests` still zero** — the outcome test below re-checks that rather than this
     //   comment asserting it. `check:stamp` reads this literal out of the tree, so the digest's
     //   measure-golden line moves with it.
-    expect(hashState(plain)).toBe('856ade18e3ed8264');
+    // - `856ade18e3ed8264` -> `94e4da7a5e60acf6` AT G-051a, AND THERE IS EXACTLY ONE CAUSE, WHICH
+    //   IS NOT BEHAVIOUR AND IS NOT A `World` FIELD. The star rating is DERIVED and stored
+    //   nowhere, so `World` gained no key and the save stayed at **v24** with no migration. What
+    //   moved is `World.contentHash`: the shipped content gained `star-tiers.json` and three
+    //   FACILITY room types. **NO BEHAVIOUR**: nothing in the tick loop reads a rating, a
+    //   facility serves no need, and `--facilities` defaults to 0 so this workload seeds none.
+    //   **checkedOut 27, leftDissatisfied 59, still-in-the-hotel 14, conservation still closing
+    //   on 100 arrived, `gaveUp` and `evictedGuests` still zero** — the outcome test below
+    //   re-checks that rather than this comment asserting it, and it did not move.
+    // - `94e4da7a5e60acf6` -> `a57925e09896e3a4`. G-051a SWEEP 1 MOVES IT AGAIN, FOR THE SAME ONE CAUSE AND STILL NOT BEHAVIOUR:
+    //   `World.contentHash`, because MAJOR 1 repriced two `demolitionRefundBasisPoints` values in
+    //   `room-types.json` (`hotel_spa` 5,000 -> 7,000bp, `conference_hall` 8,000 -> 6,000bp) so
+    //   that no facility is dominated NET OF THE RESIDUAL the game already treats as money. No
+    //   `World` field, no save bump, no migration, no ledger line — and no refund is ever PAID on
+    //   this arm, because `--facilities` and `--buy-facility` both default to 0 and it seeds and
+    //   buys none.
+    //   **checkedOut 27, leftDissatisfied 59, still-in-the-hotel 14, 100 arrived, `gaveUp` and
+    //   `evictedGuests` zero** — the outcome test below re-checks that and did not move.
+    expect(hashState(plain)).toBe('a57925e09896e3a4');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -924,7 +942,20 @@ describe('the same workload with the player churning the building', () => {
     // shipped content gained `staff-roles.json`, plus one zero-amount `wages` line per night in
     // the ledger. The shipped scenario employs nobody, so no money moves. **20 + 43 + 25 and
     // 100 arrived still closes, exactly as above**, and `gaveUp` is still zero.
-    expect(hashState(churn)).toBe('7da8674748116abb');
+    // G-051a MOVES THIS LITERAL FOR THE CONTENT FINGERPRINT AND NOTHING ELSE:
+    // `7da8674748116abb` -> `66a20aa1cda81bb5`, one cause — `World.contentHash`, because the
+    // shipped content gained a star-tier table and three facility room types. No `World` field,
+    // no save bump, no migration, and no ledger line. **20 + 43 + 25 and 100 arrived still
+    // closes, exactly as above**, and `gaveUp` is still zero.
+    // `66a20aa1cda81bb5` -> `3b5b0daf2b1790db`. G-051a SWEEP 1 MOVES IT AGAIN, FOR THE SAME ONE CAUSE AND STILL NOT BEHAVIOUR:
+    //   `World.contentHash`, because MAJOR 1 repriced two `demolitionRefundBasisPoints` values in
+    //   `room-types.json` (`hotel_spa` 5,000 -> 7,000bp, `conference_hall` 8,000 -> 6,000bp) so
+    //   that no facility is dominated NET OF THE RESIDUAL the game already treats as money. No
+    //   `World` field, no save bump, no migration, no ledger line — and no refund is ever PAID on
+    //   this arm, because `--facilities` and `--buy-facility` both default to 0 and it seeds and
+    //   buys none.
+    //   **20 + 43 + 25 and 100 arrived still closes**, and `gaveUp` is still zero.
+    expect(hashState(churn)).toBe('3b5b0daf2b1790db');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

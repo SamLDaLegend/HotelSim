@@ -251,15 +251,84 @@ describe('the money files are BYTE-IDENTICAL — this goal moved the margin and 
       nightlyUpkeepPence: number;
       constructionCostPence: number;
       demolitionRefundBasisPoints: number;
+      provides?: string[];
+      requires?: string[];
     }[];
     // The pin above names one row. This says no OTHER row was added or edited to move the
     // hotel's average rate — a fourth cheap room type would be a pricing change wearing a
     // content-addition hat, which is the evasion the byte guard was really for.
-    expect(rooms).toHaveLength(4);
+    //
+    // ------------------------------------------------------------------------
+    // THE TABLE GREW AT G-051a AND THE GUARD DID NOT WEAKEN — IT SPLIT.
+    //
+    // Three FACILITIES were added (ADR-0080: a star rating is a second currency, so a Spa is
+    // worth building because it unlocks a TIER). That is a content addition, and this test
+    // exists to tell one from a pricing change wearing its hat. So the property is restated in
+    // the form that still closes the evasion, over two populations rather than one:
+    //
+    //   A FACILITY EARNS NOTHING, so it cannot move the hotel's average rate however it is
+    //   priced — the clause below that pins ONE revenue-earning row, unchanged, is what carries
+    //   that and it is the sharpest thing here.
+    //
+    //   NO ROOM TYPE IS CHEAPER TO BUILD THAN THE CHEAPEST ONE ALREADY WAS. This is not
+    //   decoration: `minConstructionCostOf` IS `canDrawLoan`'s eligibility yardstick, so a
+    //   facility priced below 250,000p would silently retune the lender — a money change
+    //   arriving through a table nobody reads for money. It is the `constructionCostPence`
+    //   evasion this block already names, entering by the door G-051a opened.
+    //
+    //   AND THE FOUR PRE-G-051a ROWS ARE BYTE-UNCHANGED, asserted over the population that
+    //   excludes the facilities so the older claim survives intact rather than being averaged
+    //   away with new rows.
+    //
+    // A facility is identified here by SHAPE rather than by name: it provides nothing and
+    // requires nothing.
+    //
+    // THAT IS A PROXY FOR `facilityRoomTypesOf` AND NOT ITS DEFINITION, and the difference is
+    // worth stating because the first version of this comment claimed it WAS the definition.
+    // `facilityRoomTypesOf` (`report.ts`) is *"not the lodging type, and `roomTypeServes` is false
+    // for every need"* — and `roomTypeServes` FOLLOWS REQUIRED ITEMS. So the two disagree on a
+    // room type with `provides: []` and a `requires` on an item that itself provides nothing:
+    // this shape rule would call it an amenity, `facilityRoomTypesOf` would call it a facility.
+    // **That is precisely the route `PARKING.md`'s own item 5 names** — giving a facility its own
+    // equipment — so the divergence is a live one rather than hypothetical.
+    //
+    // THE PROXY IS KEPT ANYWAY, and deliberately: this file reads the shipped BYTES, and reaching
+    // for the sim's classifier here would make a byte guard depend on the loader it is meant to
+    // be independent of. It agrees with `facilityRoomTypesOf` on the shipped table — which
+    // `stars.report.test.ts`'s partition case checks from the other side — and the day it stops
+    // agreeing, the count assertions below go red rather than quiet.
+    // ------------------------------------------------------------------------
+    const isFacility = (room: (typeof rooms)[number]): boolean =>
+      (room.provides ?? []).length === 0 && (room.requires ?? []).length === 0;
+    // SORTED BY ID, because the shipped document is in READING order and not in id order — and
+    // an assertion over "the order somebody typed the file in" is exactly the kind of pin that
+    // goes red for a reformat and green for a retune.
+    const facilities = rooms.filter(isFacility).sort((a, b) => (a.id < b.id ? -1 : 1));
+    const older = rooms.filter((room) => !isFacility(room));
+    expect(rooms).toHaveLength(7);
+    expect(older).toHaveLength(4);
+    expect(facilities).toHaveLength(3);
+    // ONE ROW EARNS, AND IT IS THE SAME ROW AT THE SAME PRICE. Unchanged by this goal.
     expect(rooms.filter((room) => room.nightlyRatePence > 0).map((room) => room.nightlyRatePence)).toEqual([8_500]);
-    expect(rooms.map((room) => room.nightlyUpkeepPence).sort((a, b) => a - b)).toEqual([
+    // THE LENDER'S YARDSTICK IS UNMOVED: nothing undercuts the cheapest build there has ever been.
+    expect(Math.min(...rooms.map((room) => room.constructionCostPence))).toBe(250_000);
+    expect(older.map((room) => room.nightlyUpkeepPence).sort((a, b) => a - b)).toEqual([
       1_500, 1_500, 1_500, 2_500,
     ]);
+    // AND THE FACILITIES' OWN NUMBERS, pinned in ascending id order so a retune is a visible
+    // diff here. Each wins on ONE axis and no facility wins two — cheapest to build, cheapest to
+    // keep, most returned on a scrap — which is what stops the set collapsing to one correct
+    // answer (ADR-0078's dominance, refused in the table that would otherwise reintroduce it).
+    expect(facilities.map((room) => room.constructionCostPence)).toEqual([450_000, 250_000, 900_000]);
+    expect(facilities.map((room) => room.nightlyUpkeepPence)).toEqual([2_000, 4_000, 500]);
+    // THE REFUNDS MOVED AT SWEEP 1 — 8,000/5,000 -> 6,000/7,000 — and the reason is the whole of
+    // MAJOR 1. Priced the first way the Spa was cheaper than the Conference Hall on NEITHER net
+    // capital nor upkeep (125,000 + 4,000n against 90,000 + 2,000n), so it was **strictly
+    // dominated at every horizon** — ADR-0078's defect inside the goal briefed to avoid it. The
+    // refund is the term that decides it, because the game treats a scrap as real money
+    // (`stockValueOf`, `canDrawLoan`) while the first cost-of-ownership test dropped it.
+    expect(facilities.map((room) => room.demolitionRefundBasisPoints)).toEqual([6_000, 7_000, 3_000]);
+    expect(facilities.map((room) => room.nightlyRatePence)).toEqual([0, 0, 0]);
     // ------------------------------------------------------------------------
     // AND THE TWO MONEY FIELDS THIS TEST DID NOT READ, WHICH ARE THE ONES A FUTURE GOAL WOULD
     // REACH FOR. Neither was pinned against the shipped bytes ANYWHERE — `registry.test.ts`
@@ -276,8 +345,8 @@ describe('the money files are BYTE-IDENTICAL — this goal moved the margin and 
     // same shape one field over: 247,500p is the threshold at which the G-005 upkeep dodge
     // reopens, and nothing here was watching it.
     // ------------------------------------------------------------------------
-    expect(rooms.map((room) => room.constructionCostPence)).toEqual([250_000, 250_000, 250_000, 250_000]);
-    expect(rooms.map((room) => room.demolitionRefundBasisPoints)).toEqual([5_000, 5_000, 5_000, 5_000]);
+    expect(older.map((room) => room.constructionCostPence)).toEqual([250_000, 250_000, 250_000, 250_000]);
+    expect(older.map((room) => room.demolitionRefundBasisPoints)).toEqual([5_000, 5_000, 5_000, 5_000]);
   });
 
   it('economy.json carries every number it carried before this goal — ALL FIVE', () => {

@@ -19,6 +19,7 @@ import {
   scenariosSchema,
   speedLadderSchema,
   staffRolesSchema,
+  starTiersSchema,
 } from './schema.js';
 import type {
   Economy,
@@ -29,6 +30,7 @@ import type {
   Scenario,
   SpeedRung,
   StaffRole,
+  StarTier,
 } from './schema.js';
 
 /**
@@ -101,6 +103,16 @@ export type ContentRegistry = {
    * the way an empty hotel still books an upkeep of zero.
    */
   readonly staffRoles?: readonly StaffRole[];
+  /**
+   * WHAT AN INSPECTOR WANTS BEFORE IT WILL AWARD A STAR (G-051a).
+   *
+   * Optional for the same absence-is-not-emptiness reason every table above it is, and the
+   * historical statement is clean: content that predates this table describes a world in which
+   * nobody inspected anything and no hotel had a rating, which is exactly what every world
+   * before G-051a was. `starRatingOf` reads such a world as UNRATED — zero stars, no next tier
+   * — rather than as a hotel that failed an inspection, because no inspection exists to fail.
+   */
+  readonly starTiers?: readonly StarTier[];
 };
 
 /**
@@ -336,6 +348,37 @@ export function parseStaffRolesJson(text: string, sourceLabel = 'content'): read
     throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
   }
   return parseStaffRoles(raw, sourceLabel);
+}
+
+/**
+ * Validate an already-parsed star-tier document (G-051a). Same all-or-nothing discipline,
+ * and a table rather than a registry for the same reason: one file is one table.
+ *
+ * What it does NOT check is the one relationship that decides whether the table means
+ * anything — that every `roomTypeIds` entry names a room type this content actually defines.
+ * That reads two files against each other, so it lives where every other cross-table check
+ * lives: `assertStarTierRoomTypesExist` in `bindContent`, the one path every host goes
+ * through. Two definitions of "coherent content" would drift.
+ */
+export function parseStarTiers(raw: unknown, sourceLabel = 'content'): readonly StarTier[] {
+  const result = starTiersSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:
+${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'star tier');
+  return result.data;
+}
+
+/** Validate a star-tier JSON document. "Not JSON" and "not content" stay apart. */
+export function parseStarTiersJson(text: string, sourceLabel = 'content'): readonly StarTier[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseStarTiers(raw, sourceLabel);
 }
 
 /** Validate a scenario JSON document. "Not JSON" and "not content" stay apart. */

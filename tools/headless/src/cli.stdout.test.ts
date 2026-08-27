@@ -62,6 +62,7 @@ import {
   ROOM_TYPES_PATH,
   SCENARIOS_PATH,
   STAFF_ROLES_PATH,
+  STAR_TIERS_PATH,
 } from './content-loader.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -92,15 +93,24 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     ticks: 2880,
     rooms: 3,
     amenities: 1,
+    // G-051a. Additive, and ZERO on every invocation this file pins: an amenity makes a hotel
+    // work and a facility only climbs the star ladder, so the flag that seeds one defaults off.
+    facilities: 0,
     arrivalEveryTicks: 120,
     buildEveryTicks: 0,
     demolishEveryTicks: 0,
     loanEveryTicks: 0,
+    // G-051a sweep 1. The star ladder's only PAID rung, and it is OFF here: this golden is the
+    // hotel this runner has always described. `stars.report.test.ts` is where it is turned on.
+    buyFacilityEveryTicks: 0,
   },
   world: {
     tick: 2880,
     days: 2,
-    roomTypes: 4,
+    // SEVEN SINCE G-051a — the CONTENT TABLE's size, not this building's. Three facility room
+    // types joined it and this run seeds none of them, which `entities: 11` below is the check
+    // on rather than this comment.
+    roomTypes: 7,
     needTypes: 4,
     // 11 rather than 9 since G-013, and the two are ITEMS THAT PROVIDE: an `arm_chair` in
     // the lounge and a `vending_machine` in the games room. Both arrive because their room
@@ -295,7 +305,29 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // invalidity tally, 750,000p of scrap, no debt, and the whole build and loan blocks. A wage
     // of zero is a line in the ledger and not a change to the economy.
     // ==========================================================================================
-    stateHash: '614f7b6eda90b4c2',
+    // ==========================================================================================
+    // MOVED AGAIN AT G-051a to `de29b5283ad28f0c`, FOR ONE HASHED-STATE CAUSE AND NO BEHAVIOUR:
+    // `World.contentHash`, because the shipped content gained `star-tiers.json` and three
+    // FACILITY room types. **`World` GAINED NO FIELD, the save stayed at v24 and there is no
+    // migration** — the star rating is DERIVED at the moment of reporting and stored nowhere,
+    // which is I4's own discipline applied one quantity over (see the header of `rating.ts`).
+    //
+    // **THE CONTROL IS THE WHOLE DOCUMENT AND IT IS EXACT.** A facility serves no need and
+    // `--facilities` defaults to 0, so this run seeds none and no guest could reach one if it
+    // did; nothing in `packages/sim` reads a rating. 32 arrived, 6 checked out, 21 gave up, 5 in
+    // the hotel, 51,000p revenue, -24,000p upkeep, 527,000p balance to the penny, the same four
+    // need rows, the same review distribution, the same mean, 11 entities, 6 valid rooms, the
+    // same 0/0/0/0/0/0 tally, 750,000p of scrap, no debt, and the whole build and loan blocks.
+    // What is NEW in this document is the `rating` block and `input.facilities`, both additive,
+    // so `SUMMARY_SCHEMA_VERSION` stays 4.
+    // ==========================================================================================
+    // MOVED AGAIN AT G-051a SWEEP 1 to `67e13a16221d2082`, ONE cause and no behaviour: two
+    // `demolitionRefundBasisPoints` values were repriced (MAJOR 1 — the Spa was dominated net of
+    // its residual). **The control is the whole document**, and it is exact: nothing here scraps
+    // a room, so no refund is paid and every other field is byte-identical. What is NEW in this
+    // document is one key, `input.buyFacilityEveryTicks`, additive, so `SUMMARY_SCHEMA_VERSION`
+    // stays 4.
+    stateHash: '67e13a16221d2082',
   },
   guests: {
     arrived: 32,
@@ -584,6 +616,16 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     valid: 6,
     invalid: { missingItem: 0, noCorridor: 0, noDoor: 0, unplaced: 0, unreachable: 0, unsupported: 0 },
   },
+  // G-051a. The default hotel is TWO stars of five and is told what the third costs. It is
+  // DERIVED here at the moment of reporting — from `world.entities` against the world's own
+  // plot, corridors and stairs — and it is stored nowhere, which is why this block arriving
+  // moved no save version.
+  rating: {
+    stars: 2,
+    nextStars: 3,
+    tiers: 5,
+    shortfall: [{ roomTypeIds: ['standard_room'], counting: 'rooms', minimum: 6, have: 3 }],
+  },
   money: {
     // 18 rather than 17 since G-011, and the one extra is the opening capital. A hotel
     // cannot start with money unless the money is a transaction — there is no balance
@@ -682,7 +724,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     'seed        42',
     'ticks       2880',
     'days        2',
-    'room types  4',
+    // SEVEN SINCE G-051a: the four this hotel is built from, plus the three FACILITIES the star
+    // ladder's top two tiers ask for. `--facilities` defaults to 0, so none of them is seeded
+    // and `entities`, `rooms ok` and every count below are unchanged — this line is the CONTENT
+    // TABLE's size and not this building's.
+    'room types  7',
     'need types  4',
     'entities    11',
     'rooms ok    6',
@@ -740,6 +786,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     // walk gains a vertical leg. The JSON golden carries why.
     'reviews     1:0, 2:0, 3:21, 4:0, 5:6',
     'mean x100   344',
+    // TWO LINES ADDED AT G-051a, AND THE SECOND ONE IS THE POINT. The default hotel is TWO
+    // stars and is told exactly what the third costs: three more bedrooms. A rating with no
+    // price tag is a number; a rating with one is a currency.
+    'stars       2 of 5, next 3',
+    'to climb    3/6 rooms of [standard_room]',
     'ledger      11 transactions',
     'revenue     51000p',
     'upkeep      -24000p',
@@ -870,7 +921,31 @@ const GOLDEN_2_DAYS_SEED_42 =
     // `seededStock` is `supplementsCapital`, which is what every build before this goal did, so
     // the same 6 valid rooms, the same 32 arrivals, the same 6/21 split, the same four need rows
     // to the basis point, the same 9 transactions, the same 51,000p and the same 527,000p.
-    'state hash  614f7b6eda90b4c2',
+    //
+    // G-051a: THE HASH LINE MOVES, TWO LINES ARE ADDED, ONE LINE MOVES FOR THE CONTENT TABLE'S
+    // SIZE, AND NOT ONE COUNT ABOUT THIS BUILDING CHANGES. `614f7b6eda90b4c2` ->
+    // `de29b5283ad28f0c`, for ONE hashed-state cause: `World.contentHash`. The shipped content
+    // gained `star-tiers.json` and three facility room types, so the FINGERPRINT moves and the
+    // world's shape does not — NO `World` field, NO save bump, NO migration, because the star
+    // rating is DERIVED at the moment of reporting and stored nowhere (see `rating.ts`).
+    //
+    // THE MECHANISM IS INERT ON THIS HOTEL FOR STRUCTURAL REASONS RATHER THAN LUCKY ONES, which
+    // is what makes every line above the control. A facility SERVES NO NEED, so no guest can
+    // ever walk to one; `--facilities` defaults to 0, so this run seeds none; and NOTHING in
+    // `packages/sim` reads a rating, so no arrival, price, review or need can consult it. The
+    // same 6 valid rooms, the same 0/0/0/0/0/0 tally, the same 32 arrivals, the same 6/21
+    // split, the same four need rows to the basis point, the same 11 transactions, the same
+    // 51,000p and the same 527,000p.
+    //
+    // G-051a SWEEP 1: THE HASH LINE MOVES AND NOT ONE OTHER CHARACTER OF THIS GOLDEN DOES —
+    // narrower than this goal's own first move, which added two lines. `de29b5283ad28f0c` ->
+    // `67e13a16221d2082`, for ONE cause: `World.contentHash`, because MAJOR 1 repriced two
+    // `demolitionRefundBasisPoints` values so that no facility is dominated net of its residual.
+    // A refund is money only when a room is SCRAPPED, and this run scraps nothing and owns no
+    // facility, so the same 6 valid rooms, the same 32 arrivals, the same 6/21 split, the same
+    // four need rows to the basis point, the same 11 transactions, the same 51,000p and the same
+    // 527,000p — and the same two `stars` lines, because the ladder did not move.
+    'state hash  67e13a16221d2082',
   ].join('\n') + '\n';
 
 /**
@@ -1046,7 +1121,7 @@ describe('seed honesty', () => {
     const lines43 = seed43.stdout.toString('utf8').split('\n');
     expect(lines43).toHaveLength(lines42.length);
     const differing = lines42.filter((line, i) => line !== lines43[i]);
-    expect(differing).toEqual(['seed        42', 'state hash  614f7b6eda90b4c2']);
+    expect(differing).toEqual(['seed        42', `state hash  ${GOLDEN_2_DAYS_SEED_42_JSON.world.stateHash}`]);
     expect(lines43).toContain('seed        43');
   });
 });
@@ -1091,6 +1166,7 @@ describe('the --content contract', () => {
     copyFileSync(SCENARIOS_PATH, join(dir, 'scenarios.json'));
     // SEVEN SINCE G-052a: who it can employ, and what one of them costs for a night.
     copyFileSync(STAFF_ROLES_PATH, join(dir, 'staff-roles.json'));
+    copyFileSync(STAR_TIERS_PATH, join(dir, 'star-tiers.json'));
     const result = runCli(['--days', '2', '--seed', '42', '--content', dir]);
     expect(result.status).toBe(0);
     expect(result.stdout.equals(default2Day().stdout)).toBe(true);
@@ -1123,6 +1199,7 @@ describe('the --content contract', () => {
     copyFileSync(SCENARIOS_PATH, join(dir, 'scenarios.json'));
     // SEVEN SINCE G-052a: who it can employ, and what one of them costs for a night.
     copyFileSync(STAFF_ROLES_PATH, join(dir, 'staff-roles.json'));
+    copyFileSync(STAR_TIERS_PATH, join(dir, 'star-tiers.json'));
     return dir;
   };
 
@@ -1227,7 +1304,7 @@ describe('the --content contract', () => {
   });
 
   // ==========================================================================
-  //  EVERY ONE OF THE FIVE FILES IS REQUIRED, AND UNTIL G-014b NOTHING SAID SO.
+  //  EVERY ONE OF THE EIGHT FILES IS REQUIRED, AND UNTIL G-014b NOTHING SAID SO.
   //
   //  `loadContent` reads five fixed filenames and `readContentFile` throws on a missing
   //  one, so silence is refused rather than defaulted. That matters most for the file this
@@ -1241,7 +1318,7 @@ describe('the --content contract', () => {
   //  is not. A single missing-file case would also pass against a loader that refused
   //  everything.
   // ==========================================================================
-  describe('every one of the seven content files is required, by name', () => {
+  describe('every one of the eight content files is required, by name', () => {
     const FILES = [
       'room-types.json',
       'need-types.json',
@@ -1259,6 +1336,11 @@ describe('the --content contract', () => {
       // empty payroll for a directory somebody assembled today, whose scenario would then be
       // refused for naming a role its own directory defines.
       'staff-roles.json',
+      // EIGHTH SINCE G-051a, and it earns the same argument. Absence would read as "nobody
+      // inspects anything" — TRUE of content that predates the star rating, and a silent UNRATED
+      // for a directory somebody assembled today: every hotel reported at zero stars, with no
+      // line anywhere saying the file was missing.
+      'star-tiers.json',
     ] as const;
 
     it('the complete directory loads, or the refusals below are refusals of nothing', () => {

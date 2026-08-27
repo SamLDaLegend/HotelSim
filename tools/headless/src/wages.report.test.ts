@@ -40,7 +40,10 @@ import {
   ROOM_TYPES_PATH,
   SCENARIOS_PATH,
   STAFF_ROLES_PATH,
+  STAR_TIERS_PATH,
 } from './content-loader.js';
+import { loadContent } from './content-loader.js';
+import { amenityRoomTypesOf, lodgingRoomTypeOf } from './report.js';
 import type { RunSummary } from './report.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -85,6 +88,7 @@ function contentEmploying(postings: readonly { roleId: string; count: number }[]
     ECONOMY_PATH,
     GUEST_RULES_PATH,
     STAFF_ROLES_PATH,
+  STAR_TIERS_PATH,
   ]) {
     copyFileSync(path, join(dir, path.split(/[\\/]/).pop()!));
   }
@@ -143,15 +147,21 @@ describe('the wage rate is DERIVED, and the DERIVATION UNITS are read off a run'
     // The pair to the test above: one denominator is guests, the other is room-nights, and the
     // derivation subtracts across them ON PURPOSE — see `nightlyWagePenceSchema`.
     const summary = summaryOf([...UNIT_ARM]);
-    const rooms = JSON.parse(readFileSync(ROOM_TYPES_PATH, 'utf8')) as {
-      id: string;
-      nightlyUpkeepPence?: number;
-    }[];
-    // One seeded bedroom plus one of each amenity room type — the `--rooms 1` shape.
-    const bedroom = rooms.find((room) => (room.nightlyUpkeepPence ?? 0) === 2_500)!;
+    // ------------------------------------------------------------------------
+    // THE SEEDED HOTEL IS ASKED OF THE FUNCTION THAT SEEDS IT, NOT MODELLED FROM THE TABLE.
+    //
+    // This read "one bedroom plus one of each OTHER room type" until G-051a, which was the same
+    // set only while every non-bedroom room type was an amenity. It is not any more: a FACILITY
+    // is neither, `--facilities` defaults to 0, and the old model over-counted the nightly bill
+    // by three rooms the run never built. A test that models the host rather than calling it is
+    // a second definition of the seeded hotel, and this is what its drifting looks like.
+    // ------------------------------------------------------------------------
+    const content = loadContent();
+    const bedroom = lodgingRoomTypeOf(content);
+    expect(bedroom.nightlyUpkeepPence).toBe(2_500);
     const perNight =
       (bedroom.nightlyUpkeepPence ?? 0) +
-      rooms.filter((room) => room.id !== bedroom.id).reduce((total, room) => total + (room.nightlyUpkeepPence ?? 0), 0);
+      amenityRoomTypesOf(content).reduce((total, room) => total + (room.nightlyUpkeepPence ?? 0), 0);
     expect(summary.money.upkeepPennies).toBe(-(perNight * summary.money.nights));
   });
 

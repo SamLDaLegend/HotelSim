@@ -90,7 +90,7 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a), AND THE COUNT NAMES I
     settled nightly            EXISTS   `isSettlementTick` — `tick % TICKS_PER_DAY === TICKS_PER_DAY - 1` — and `settleNight`
                                         (settlement.ts).
 
-  BUILD LOOP — five terms, two EXIST, three OWED; plus its CLOSURE, owed. THIS IS THE LOOP THE MILESTONE QUESTION WAS ANSWERED AGAINST: ADR-0081's qualified yes says the build loop is "spend cash, add capacity, stop", and these marks are that sentence made checkable.
+  BUILD LOOP — five terms, two EXIST, three OWED; plus its CLOSURE, owed. THE COUNT DID NOT MOVE AT G-051a AND THAT IS DELIBERATE: a star rating is a SECOND system beside reputation (ADR-0082), not the reputation term, so `raise reputation`'s row below carries new evidence and keeps its mark. Adding a term to this sentence is a human decision. THIS IS THE LOOP THE MILESTONE QUESTION WAS ANSWERED AGAINST: ADR-0081's qualified yes says the build loop is "spend cash, add capacity, stop", and these marks are that sentence made checkable.
 
     spend cash                 EXISTS   `construction` and `floorConstruction` in `TransactionReason`, charged in
                                         `applyDrawRoom` (build.ts); `demolitionRefund` returns part of it.
@@ -121,11 +121,31 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a), AND THE COUNT NAMES I
                                         moving any `packages/sim` file, and the bound was not weakened to reach it. THE GOAL
                                         THAT MERGES THE BRANCH OWNS REPAIRING OR DISCHARGING ALL FIVE, written into G-037a's
                                         block as an obligation rather than left in prose here.
-    raise reputation           OWED TO M4 — G-051 ships the STAR RATING, which ADR-0082 rules is a SECOND and distinct
-                                        system (professional inspection, judged on what the hotel HAS); reputation itself,
-                                        judged on guest satisfaction, is unbuilt. The word appears ONCE in all of
-                                        `packages/sim` — a comment at reviews.ts:12 — and nowhere in any other package.
-                                        §8 puts "reputation feeding demand" in M4.
+    raise reputation           OWED TO M4, AND THE ROW IS RE-MARKED RATHER THAN DISCHARGED (G-051a). ADR-0082 rules
+                                        these are TWO systems and the test of distinctness is whether they can DISAGREE:
+                                        a hotel with every facility and terrible service earns stars and loses reputation.
+                                        THE STAR-RATING HALF NOW EXISTS AND NAMES ITS SYMBOL — `starRatingOf` (rating.ts),
+                                        derived from what the hotel HAS by a prefix scan over `starTiersInOrder`, whose
+                                        table is content (`star-tiers.json`, I3) ordered by `stars` and not by id. It
+                                        counts VALID rooms and reads NO guest outcome, which is the mechanical point:
+                                        ADR-0078 measured the review channel as ONE BIT above the bottleneck and a
+                                        facilities-present rating cannot collapse that way.
+                                        REPUTATION ITSELF — judged on guest satisfaction — IS STILL UNBUILT, AND THE EVIDENCE
+                                        CLAUSE HERE WAS FALSIFIED BY THE COMMIT THAT WROTE IT. It read "the word still appears
+                                        ONCE in all of `packages/sim`, a comment at reviews.ts:12", which was true of the tree
+                                        this row replaced and false of the tree it landed in: `grep -ric reputation
+                                        packages/sim/src` returns EIGHT — rating.ts x4, content.ts, index.ts, rating.test.ts,
+                                        reviews.ts. THE MARK IS UNAFFECTED AND THE COUNT IS RESTATED AS THE CLAIM THAT
+                                        SURVIVES: all eight are COMMENTS, every one of them prose about what reputation is NOT,
+                                        and `packages/sim` declares no identifier, field, function or type named for it. The
+                                        re-runnable form is `grep -rn "reputation" packages/sim/src` — every hit begins with
+                                        `//` or ` *`. A count is a fact about a tree and goes stale the moment the tree moves;
+                                        "nothing in the sim READS one" is a fact about the design and does not.
+                                        AND THE RATING FEEDS NOTHING: no arrival, price, review or need reads it, inside
+                                        the simulation or out. §8 puts "reputation feeding demand" in M4; G-051b owns the
+                                        wiring, and until it lands this term supplies a QUANTITY and not a LOOP TERM.
+                                        (G-051's own block calls G-051a "the raise reputation term". That is the claim
+                                        this row corrects: ADR-0082 predates it and rules otherwise.)
     raise demand               OWED TO M4 — §8's own M4 line. No demand model exists anywhere. Every occurrence of the word
                                         inside `packages/sim` is either the unrelated sense — `assertNeedDemandIsServiceable`,
                                         which is a need's demand on a guest's TIME — or an explicit deferral naming M4

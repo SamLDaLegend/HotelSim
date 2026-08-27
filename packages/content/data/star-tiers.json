@@ -1,0 +1,70 @@
+[
+  {
+    "id": "star_one",
+    "name": "One Star",
+    "stars": 1,
+    "requires": [{ "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 1 }]
+  },
+  {
+    "id": "star_two",
+    "name": "Two Star",
+    "stars": 2,
+    "requires": [
+      { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 3 },
+      {
+        "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
+        "counting": "distinctTypes",
+        "minimum": 1
+      }
+    ]
+  },
+  {
+    "id": "star_three",
+    "name": "Three Star",
+    "stars": 3,
+    "requires": [
+      { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 6 },
+      {
+        "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
+        "counting": "distinctTypes",
+        "minimum": 2
+      }
+    ]
+  },
+  {
+    "id": "star_four",
+    "name": "Four Star",
+    "stars": 4,
+    "requires": [
+      { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 12 },
+      {
+        "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
+        "counting": "distinctTypes",
+        "minimum": 3
+      },
+      {
+        "roomTypeIds": ["conference_hall", "hotel_spa", "hotel_theatre"],
+        "counting": "distinctTypes",
+        "minimum": 1
+      }
+    ]
+  },
+  {
+    "id": "star_five",
+    "name": "Five Star",
+    "stars": 5,
+    "requires": [
+      { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 24 },
+      {
+        "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
+        "counting": "distinctTypes",
+        "minimum": 3
+      },
+      {
+        "roomTypeIds": ["conference_hall", "hotel_spa", "hotel_theatre"],
+        "counting": "distinctTypes",
+        "minimum": 2
+      }
+    ]
+  }
+]
