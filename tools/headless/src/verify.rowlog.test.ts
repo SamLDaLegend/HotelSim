@@ -340,6 +340,22 @@ describe('the cap counts BYTES, so how the OS chunked the stream cannot change w
     expect(`${'é'.repeat(500)}END`.endsWith(keptBody)).toBe(true);
     expect(tail.dropped + Buffer.byteLength(keptBody)).toBe(Buffer.byteLength(`${'é'.repeat(500)}END`));
   });
+
+  it('and a SURROGATE PAIR is not split either, which two code units make easy to get wrong', () => {
+    // The four-byte case, and the branch that walks TWO code units for one character. A cut
+    // between the halves of a pair leaves a lone surrogate: `endsWith` would not notice, since
+    // it compares code units, so the check is a UTF-8 round trip — Node encodes a lone
+    // surrogate as U+FFFD, which does not decode back to what it came from.
+    const source = `${'\u{1F600}'.repeat(200)}END`;
+    const small = 41;
+    const tail = new lib.Tail(small);
+    tail.push(source);
+    const keptBody = body(tail.text());
+    expect(Buffer.from(keptBody, 'utf8').toString('utf8')).toBe(keptBody);
+    expect(keptBody.endsWith('END')).toBe(true);
+    expect(Buffer.byteLength(keptBody)).toBeLessThanOrEqual(small);
+    expect(tail.dropped + Buffer.byteLength(keptBody)).toBe(Buffer.byteLength(source));
+  });
 });
 
 describe('and `verify.mjs` is wired to THESE bytes, which a library test cannot see for itself', () => {
