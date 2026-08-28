@@ -61,6 +61,7 @@
 import {
   createValidityContext,
   entranceCell,
+  starRatingIn,
   findItemType,
   findRoomType,
   footprintCovers,
@@ -72,7 +73,7 @@ import {
   getEntity,
   hasEntity,
 } from '@hotelsim/sim';
-import type { BoundContent, Cell, Entity, Guest, World } from '@hotelsim/sim';
+import type { BoundContent, Cell, Entity, Guest, StarRating, ValidityContext, World } from '@hotelsim/sim';
 import { keyOf, UNOBSERVED } from '../motion.js';
 import type { Motion } from '../motion.js';
 import { isRoomEntity } from '../pick.js';
@@ -153,6 +154,28 @@ export type SceneReport = {
   /** Guests standing on a floor that is NOT being drawn. See `hud.ts`. */
   readonly guestsElsewhere: number;
   /**
+   * WHAT AN INSPECTOR WOULD SAY ABOUT THE WHOLE HOTEL AT `world.tick` (G-062).
+   *
+   * ==========================================================================================
+   * IT IS WORLD-WIDE AND NOT PER-FLOOR, like `guestsElsewhere` beside it and unlike everything
+   * above it. A rating is a verdict on a BUILDING; a hotel does not get four stars on the
+   * ground floor and three in the basement, and a per-floor figure would be a number with no
+   * referent in the simulation.
+   *
+   * IT IS READ FROM `starRatingIn`, NEVER RE-DERIVED. The renderer holds no second opinion
+   * about what a tier requires — the same rule this file already keeps for validity, where a
+   * second definition of "this room works" would eventually disagree with the simulation's and
+   * the player would be shown the wrong one.
+   *
+   * IT IS THE DRAWN TICK'S VALUE AND IT IS NEVER INTERPOLATED (§6.1). The rating is an INTEGER
+   * derived per tick from the entities in `world`, and easing it across a tween would invent a
+   * value the simulation never held — the rule G-047b honoured for need columns and occupancy
+   * pips. Everything in this report except the bodies is drawn at `world.tick`; this is one of
+   * them, and `carry` cannot reach it.
+   * ==========================================================================================
+   */
+  readonly rating: StarRating;
+  /**
    * Guests DRAWN ON THIS FLOOR whose walk between the last tick and this one could not be
    * drawn — `pathBetween` found no shortest route (G-047b, ADR-0095's second binding
    * condition: *"a failed lookup is LOUD — a visible marker and a recorded count, NEVER a
@@ -223,6 +246,58 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
   // Built once. The ladders are a property of the content, not of the frame.
   const palette = createPalette(content);
   const appearances = createAppearances(palette, sprites);
+
+  // ==========================================================================================
+  // THE RATING IS COMPUTED ONCE PER TICK, NOT ONCE PER FRAME (G-062), AND THE MEMO IS WHY.
+  //
+  // WHAT WAS CHECKED, because the goal asked and the answer is not the comfortable one: the
+  // simulation's memo does NOT already cover this call. `starRatingIn` is memoised behind
+  // `ValidityCache` — but that cache is the TICK's, keyed on an `EntityDraft`, and this file
+  // does not have one: `build` constructs a FRESH `createValidityContext` on every frame, so
+  // `validRoomsOf`'s memo is born and dies inside one frame. Asking a fresh context for a
+  // rating costs a walk of every entity in the hotel with `roomInvalidity` computed for each,
+  // and this loop runs at 145 FPS. Nothing in the sim was going to absorb that.
+  //
+  // SO THE MEMO IS HERE, AND IT IS KEYED ON THE WORLD BY IDENTITY. A `World` is immutable and
+  // `stepTick` returns a new one every tick, so `world === rated` is a proof that not one
+  // entity, corridor, stair or bound has moved since the answer was taken — the same argument
+  // `ValidityCache` makes clause by clause, with none of the clauses, because the object it
+  // compares is the whole state rather than a part of it. A stale reading is structurally
+  // impossible rather than argued.
+  //
+  // IT IS NOT SIMULATION STATE AND SURVIVES NOTHING. A derived value, keyed on the object it
+  // was derived from, thrown away the moment a new one arrives — the rule this layer runs on
+  // ("anything that matters after a reload lives in the sim") is untouched: a reload rebuilds
+  // the scene and the first frame recomputes.
+  //
+  // WHAT IT SAVES, MEASURED, AND THE ARM THAT DECIDES IT IS THE EMPTY FLOOR. Paired and
+  // interleaved in one sitting, medians of 7 x 200 calls with the warm-up discarded, on the
+  // shipped scenario at tick 1440 (49 entities), win32/12cpu quiet, `scene.build` with the memo
+  // HIT against the same code with it structurally defeated (two distinct world objects with
+  // identical contents, alternated, so the one-entry memo always looks at the other):
+  //
+  //     drawn floor 0   0.2732 -> 0.2951 ms   +8.0%
+  //     drawn floor -1  0.3428 -> 0.3778 ms   +10.2%
+  //     drawn floor 2   0.0271 -> 0.1616 ms   +496%
+  //
+  // THE RATIO IS THE FINDING AND FLOOR 2 IS WHERE IT LIVES. On a floor with rooms on it the
+  // marginal cost is small for the reason the return statement records — the tile walk has
+  // already warmed `roomInvalidity` for most of the building — but FLOOR 2 IS EMPTY, so it
+  // warms nothing and the rating pays its whole cold cost (0.1128 ms measured alone, the same
+  // sitting) on top of a frame that costs almost nothing. **A player who clicks an empty floor
+  // must not make the renderer six times slower.** The memo makes the cost the same on every
+  // floor because it is paid once per TICK: at most 30 times a second at the top rung against
+  // 145 frames, and ZERO while paused. The recorder gains more again — one frame per FLOOR plus
+  // a census frame at each recorded tick, all sharing one answer.
+  // ==========================================================================================
+  let rated: World | null = null;
+  let rating: StarRating | null = null;
+  const ratingFor = (world: World, validity: ValidityContext): StarRating => {
+    if (rated === world && rating !== null) return rating;
+    rating = starRatingIn(validity);
+    rated = world;
+    return rating;
+  };
 
   const build = (world: World, view: View, motion: Motion | null = null, carry = 1): Frame => {
     // THE MOTION MUST DESCRIBE THE ARRIVAL OF *THIS* TICK, AND A MISMATCH THROWS.
@@ -420,7 +495,21 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
     return {
       shapes: collector.take(),
       labels,
-      report: { view, crowdedOut, unwalkable, rooms: roomsHere, invalidRooms, guestsElsewhere },
+      report: {
+        view,
+        crowdedOut,
+        unwalkable,
+        rooms: roomsHere,
+        invalidRooms,
+        guestsElsewhere,
+        // ASKED LAST, AFTER THE TILE WALK, AND THAT ORDERING IS MEASURED RATHER THAN TASTE:
+        // `roomInvalidity` memoises per entity on `validity`, and the loop above has just asked
+        // it about every room on the drawn floor, so on the tick this actually recomputes the
+        // rating's walk pays only for the rooms the player is NOT looking at. Same sitting as
+        // the campaign above: 0.0219 ms marginal when floor 0 is drawn against 0.1128 ms for
+        // the same call on a cold context — the difference is the warm memo this ordering buys.
+        rating: ratingFor(world, validity),
+      },
     };
   };
 

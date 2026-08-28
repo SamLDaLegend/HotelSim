@@ -74,7 +74,11 @@ import type { World } from '@hotelsim/sim';
  */
 import { loadContent, loadSpriteRefs } from '../src/content.js';
 import { createMotion, observeMotion } from '../src/motion.js';
-import { CANVAS_HEIGHT, CANVAS_WIDTH, frameSvg, hex } from './svg.js';
+// THE SAME WORDS THE HUD PRINTS (G-062), from the same function. A recorded frame is the
+// surface of record for a WATCH, and a caption that described the rating in its own phrasing
+// would be a second opinion about the thing the player is actually shown.
+import { describeRating } from '../src/rating.js';
+import { CANVAS_HEIGHT, CANVAS_WIDTH, escape, frameSvg, hex } from './svg.js';
 import { createScenario } from '../src/scenario.js';
 import { floorsOf, guestsOnFloor, viewFor } from '../src/view/camera.js';
 import { DEFAULT_WALL_VISIBILITY, SHIPPED_ORIENTATION, WALL_VISIBILITIES } from '../src/view/iso.js';
@@ -205,6 +209,10 @@ function census(current: World, floor: number): string {
     // marked with; the second is world-wide, so a silent floor can be told apart from a silent
     // hotel — the split `elsewhere` above already makes.
     `unwalkable ${frame.report.unwalkable}/${motion.unwalkable}`,
+    // THE RATING ON THE CENSUS LINE TOO, AS DIGITS. The caption carries it in words for a
+    // human; this line is what a report greps, and `stars 4` is the same reading in the form
+    // a count belongs in.
+    `stars ${frame.report.rating.stars}`,
     `tints ${[...tints.entries()].map(([k, v]) => `${k}x${v}`).join(',') || 'none'}`,
     `facings ${[...facings.entries()].map(([k, v]) => `${k}x${v}`).join(',') || 'none'}`,
   ].join('  ');
@@ -231,12 +239,32 @@ for (let tick = 0; tick <= ticks; tick += 1) {
     for (const floor of floorsOf(current)) {
       const view = viewFor(current, floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT, walls);
       const frame = scene.build(current, view, motion, carry);
-      const caption =
+      // ==================================================================================
+      // THE CAPTION IS THREE LINES SINCE G-062, AND THE CENSUS LINE IS LAST.
+      //
+      // `frameSvg` stacks the block upward from the bottom, so the census keeps the exact
+      // position it has had since G-035 and the two rating lines grow above it. That ordering
+      // is what makes a frame taken today comparable, by eye, with every frame in the
+      // project's recordings — the census a reader looks for is where they last saw it.
+      //
+      // WHY THE RATING IS IN THE PICTURE'S OWN CAPTION AND NOT ONLY IN THE BROWSER'S HUD.
+      // `PARKING.md`'s item 3 sets this goal's falsification test as a claim about a FRAME:
+      // *"the item dies when a viewer of `t005760-fm1` can say WHY the empty rooms are
+      // there."* A HUD cell cannot discharge that — a recorded frame has no HUD. So the words
+      // travel with the picture, from the same `describeRating` the HUD calls.
+      // ==================================================================================
+      const rating = describeRating(content, frame.report.rating);
+      const caption = [
+        `stars ${rating.stars} · next ${rating.next}`,
+        rating.earnedBy === null ? '' : `earned by ${rating.earnedBy}`,
         `tick ${current.tick} · floor ${floor} · walls ${walls} · bodies at ` +
-        `${(current.tick - 1 + carry).toFixed(2)} · ${frame.report.rooms} rooms ` +
-        `(${frame.report.invalidRooms} invalid) · ${guestsOnFloor(current, floor)} guests here · ` +
-        `${frame.report.guestsElsewhere} elsewhere · ${frame.report.unwalkable} no walk drawn · ` +
-        `scale ${view.scale.toFixed(2)}`;
+          `${(current.tick - 1 + carry).toFixed(2)} · ${frame.report.rooms} rooms ` +
+          `(${frame.report.invalidRooms} invalid) · ${guestsOnFloor(current, floor)} guests here · ` +
+          `${frame.report.guestsElsewhere} elsewhere · ${frame.report.unwalkable} no walk drawn · ` +
+          `scale ${view.scale.toFixed(2)}`,
+      ]
+        .filter((line) => line !== '')
+        .join('\n');
       // THE POSITION IS IN THE FILENAME, so three recordings of one tick can sit in one
       // directory and a report can name the frame it is describing.
       // THE MOMENT IS IN THE FILENAME BESIDE THE POSITION, for the reason the position is:
@@ -279,7 +307,7 @@ const sheet = [
   ...written.map(
     (entry) =>
       `<figure style="margin:0"><img src="${entry.file}" style="width:100%;display:block" />` +
-      `<figcaption style="padding:4px 2px">${escape(entry.caption)}</figcaption></figure>`,
+      `<figcaption style="padding:4px 2px;white-space:pre-line">${escape(entry.caption)}</figcaption></figure>`,
   ),
   '</div></body>',
 ].join('\n');

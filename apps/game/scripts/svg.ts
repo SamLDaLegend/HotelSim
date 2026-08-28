@@ -24,7 +24,19 @@ export const hex = (colour: number): string => `#${colour.toString(16).padStart(
 const attr = (name: string, value: string | number | undefined): string =>
   value === undefined ? '' : ` ${name}="${value}"`;
 
-const escape = (text: string): string =>
+/**
+ * TEXT AS MARKUP, EXPORTED SINCE G-062 BECAUSE THE OTHER CALLER WAS CALLING THE WRONG THING.
+ *
+ * `record-frames.ts` writes a contact sheet and escaped its captions with the GLOBAL `escape`
+ * — the deprecated URL-encoder — so every figcaption in every contact sheet this project has
+ * produced since G-035 reads `tick%201440%20%B7%20floor`. The SVG frames themselves were never
+ * affected (they use this function), which is why nobody caught it: the readable artefact was
+ * readable and the index above it was not.
+ *
+ * ONE ESCAPER, IMPORTED, RATHER THAN A SECOND COPY BESIDE THE FIRST. It is the same rule this
+ * file's header states about the figure silhouette, applied to a smaller thing.
+ */
+export const escape = (text: string): string =>
   text.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
 
 /** `points="x,y x,y …"` from a flat list. */
@@ -98,13 +110,38 @@ function svgOf(item: Primitive): string {
   return `<g transform="translate(${item.x.toFixed(2)} ${item.y.toFixed(2)}) scale(${item.scale.toFixed(3)})">${body}</g>`;
 }
 
+/** The baseline-to-baseline distance of the caption block, at the caption's own 14px. */
+const CAPTION_LINE_HEIGHT = 18;
+
+/**
+ * THE CAPTION IS A BLOCK OF LINES, NOT A LINE (G-062).
+ *
+ * It was one `<text>` element and the recorder's caption had grown to about 140 characters —
+ * roughly 1,175px of monospace against a 1,280px frame, i.e. already at the edge. The star
+ * rating and the tier's own bill are the two things this goal exists to put in front of a
+ * watcher, and appending them to that line would have run them off the side of the picture:
+ * an SVG `<text>` does not wrap, it just stops being visible.
+ *
+ * SPLIT ON NEWLINES AND STACKED UPWARD FROM THE BOTTOM, so THE LAST LINE SITS EXACTLY WHERE
+ * THE ONLY LINE ALWAYS SAT and the extra ones grow up the frame above it. The recorder passes
+ * its census line last for that reason: the line every recording in this project's history
+ * carries is at the same y as it has been since G-035, and lines read top to bottom in the
+ * usual order. A caller passing a caption with no newline in it gets a BYTE-IDENTICAL frame to
+ * the one it got before — which is the property that lets an old recording and a new one be
+ * compared.
+ */
 export function frameSvg(shapes: readonly Primitive[], labels: readonly Primitive[], caption: string): string {
   const body = [...shapes, ...labels].map(svgOf).join('\n');
+  const lines = caption.split('\n');
+  const captions = lines.map((line, index) => {
+    const y = CANVAS_HEIGHT - 12 - (lines.length - 1 - index) * CAPTION_LINE_HEIGHT;
+    return `<text x="12" y="${y}" font-family="monospace" font-size="14" fill="#c8cfda">${escape(line)}</text>`;
+  });
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}">`,
     `<rect width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" fill="${hex(BACKGROUND)}" />`,
     body,
-    `<text x="12" y="${CANVAS_HEIGHT - 12}" font-family="monospace" font-size="14" fill="#c8cfda">${escape(caption)}</text>`,
+    ...captions,
     '</svg>',
   ].join('\n');
 }

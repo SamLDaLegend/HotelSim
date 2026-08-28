@@ -25,8 +25,9 @@ import {
   TICKS_PER_DAY,
   totalRefusals,
 } from '@hotelsim/sim';
-import type { BoundContent, Guest, RoomTypeData, World } from '@hotelsim/sim';
+import type { BoundContent, Guest, RoomTypeData, StarRating, World } from '@hotelsim/sim';
 import type { SpeedRung } from '@hotelsim/content';
+import { describeRating } from './rating.js';
 import { describeAction } from './session.js';
 import type { ResolvedAction } from './session.js';
 import type { Tool } from './input.js';
@@ -101,6 +102,16 @@ export type HudState = {
   readonly drawnTick: number;
   readonly invalidRooms: number;
   readonly rooms: number;
+  /**
+   * THE HOTEL'S STAR RATING AT `world.tick`, READ FROM THE SCENE'S REPORT (G-062).
+   *
+   * Taken rather than derived here, for the reason every other figure in this file is derived
+   * rather than stored: there must be one answer. `scene.build` already holds the validity
+   * context the rating is a fold over, so asking it a second time from the HUD would be a
+   * second walk of the same building — and, worse, a second place for the picture and the words
+   * under it to disagree about what the hotel is.
+   */
+  readonly rating: StarRating;
   readonly fps: number;
   /** How many of the player's commands are clicked and not yet spent (G-031a). */
   readonly queued: number;
@@ -238,6 +249,47 @@ function buildCells(world: World): readonly string[] {
   ];
 }
 
+/**
+ * THE SECOND CURRENCY, AND WHAT THE NEXT TIER COSTS (G-062).
+ *
+ * ---------------------------------------------------------------------------------------
+ * THE BUILD LOOP HAD ONE VISIBLE CURRENCY AND IT WAS CASH. `starRatingOf` has returned the
+ * rating, the next tier and the exact unmet clause since G-051a, and `runDemand` has spent the
+ * rating on ARRIVALS since G-051b — three star tiers are worth 240 arrivals a day against 480 —
+ * while this file showed none of it. A player could double the size of their hotel's market by
+ * building one Spa and had no way to learn that from the screen.
+ *
+ * THREE CELLS, BECAUSE A PLAYER ASKS THREE DIFFERENT QUESTIONS. What am I; why am I that; what
+ * do I do next. `describeRating` composes the words (`rating.ts`) — deliberately not here,
+ * because the recorder's SVG captions print the same three strings and that file cannot import
+ * anything that names a DOM type.
+ *
+ * `earned by` IS THE ONE THAT ANSWERS A FRAME. G-061's recording left three large bright halls
+ * — a Conference Hall, a Spa and a Theatre — with no guest inside them in any of 88 frames,
+ * because a facility serves no need (ADR-0102 §3). With nothing on screen that reads as a
+ * DEFECT. Beside a line saying the tier they bought asked for one of exactly those three, it
+ * reads as a PURCHASE. That is this goal's own success criterion and it is why the awarded
+ * tier's bill is shown and not only the next one's.
+ *
+ * THE TWO CURRENCIES ARE KEPT APART ON PURPOSE (ADR-0082). The stars cell says in words that
+ * it judges WHAT THE HOTEL HAS; `stays` and `needs met` above it are the guest side, judged on
+ * how the stays went. They can and should disagree, and the design depends on the player being
+ * able to see that they are different questions rather than two spellings of one score.
+ *
+ * NOTHING IS INTERPOLATED. See `SceneReport.rating`: an integer per tick, drawn as itself.
+ * ---------------------------------------------------------------------------------------
+ */
+function ratingCells(content: BoundContent, rating: StarRating): readonly string[] {
+  const text = describeRating(content, rating);
+  return [
+    cell('stars', text.stars),
+    text.earnedBy === null ? '' : cell('earned by', text.earnedBy),
+    // `next`, not `next star`: the value already begins with the tier's own star count, and
+    // the strip read "next star 5 stars: …" when the key said it too.
+    cell('next', text.next),
+  ];
+}
+
 export function renderHud(host: HTMLElement, state: HudState): void {
   const { world } = state;
   host.innerHTML = [
@@ -245,6 +297,9 @@ export function renderHud(host: HTMLElement, state: HudState): void {
     cell('cash', moneyOf(balanceOf(world.ledger))),
     cell('guests', String(guestCount(world.guests))),
     cell('rooms', `${state.rooms - state.invalidRooms}/${state.rooms} valid`),
+    // THE RATING SITS WITH THE BUILDING AND ABOVE THE GUESTS, which is the order the loop runs
+    // in: what you built, what it is worth, then what the guests made of it.
+    ...ratingCells(state.content, state.rating),
     ...outcomeCells(world, state.content),
     ...buildCells(world),
     cell('walls', `${state.walls}  (w)`),

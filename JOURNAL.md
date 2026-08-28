@@ -3895,3 +3895,155 @@ function of the clock.** (Run with a temporary probe importing the real `driver.
 1440, unchanged from the before arm, and `guests: peak 16 in one frame` printed on both arms. No
 frame shows a figure outside its own tile's diamond. **No marker fired on a floor change in any
 frame** — 279 climbs over the run, zero marked, which is ADR-0096's first ruling holding.
+
+
+---
+
+## WATCH #30 — G-062. The rating is on the picture, the empty halls have a receipt, and the receipt is for one hall out of three.
+
+**Instrument**: `pnpm --filter @hotelsim/game record -- --ticks 5760 --every 1440 --seed 7 --out
+.tmp/g062/after` — the shipped scene builder through the shipped content loader, `--carry` at its
+default 1. **18 frames, four floors, one arm.** `--out` is resolved against the filtered package's
+own directory, so the frames land in `apps/game/.tmp/g062/after/`. Frames are derived artefacts and
+are not committed; regenerate with the invocation above. The comparison arm is G-061's own recording
+at `.tmp/g061/shipB-long/`, still on disk from WATCH #28.
+
+### 1. THE PICTURE DID NOT MOVE, AND THAT IS THE FIRST THING THAT WAS CHECKED
+
+**Every drawn primitive in all four `t005760` frames is byte-identical to G-061's.** `diff` between
+the old and new file with only the caption lines (`<text x="12"`) removed is **empty on f0, f1, f2
+and fm1**. This goal added words under the picture and moved nothing in it — which is what a goal
+that shows an existing quantity should be able to say, and it is cheap to check because the caption
+is the only text at `x="12"`.
+
+### 2. WHAT THE FRAME SAYS NOW
+
+`apps/game/.tmp/g062/after/t005760-fm1-reduced-c100.svg`, three caption lines, quoted exactly:
+
+```
+y=672  stars ★★★★☆  4 of 5 · Four Star · what the hotel HAS, not what its guests said · next 5 stars: 24 Standard Room — has 18
+y=690  earned by 12 Standard Room · 3 kinds of Games Room/Cafe/Lounge · 1 kind of Conference Hall/Spa/Theatre
+y=708  tick 5760 · floor -1 · walls reduced · bodies at 5760.00 · 9 rooms (0 invalid) · 4 guests here · 12 elsewhere · 0 no walk drawn · scale 0.81
+```
+
+**The census line is still at `y=708`, the y it has had since G-035**, and the two new lines grow
+upward from it. That is deliberate: the line a reader looks for is where they last saw it, and a
+one-line caption still renders at exactly the coordinates it always did.
+
+**The HUD says the same three things in the same words**, from the same `describeRating`: rendered
+headless through `renderHud` with a stub host at tick 5760 —
+
+```
+rooms 9/9 valid
+stars ★★★★☆  4 of 5 · Four Star · what the hotel HAS, not what its guests said
+earned by 12 Standard Room · 3 kinds of Games Room/Cafe/Lounge · 1 kind of Conference Hall/Spa/Theatre
+next 5 stars: 24 Standard Room — has 18
+stays 64 arrived · 48 checked out
+needs met Comfort 48/48 · Entertainment 48/48 · Nourishment 48/48 · Rest 48/48
+```
+
+**The two currencies are three cells apart and say different kinds of thing**: the star line judges
+the BUILDING and says so in words; `stays` and `needs met` beneath it judge the STAYS. ADR-0082's
+test of distinctness is a disagreement, and this strip is where a player would see one.
+
+### 3. THE EMPTY HALLS — WHAT THE FRAME SHOWS, AND WHAT I INFER, KEPT APART
+
+**SHOWS.** In `t005760-fm1` the basement holds nine rooms with badges `GR37 GR39 C41 C42 L43 L45
+CH47 S48 T49`. Four guest figures are drawn, at `(224,109.75)`, `(432,213.75)`, `(588,343.75)` and
+`(692,395.75)`; each of those four tiles carries the fill of a Games Room, a Cafe or a Lounge.
+**No figure stands on a tile of `CH47` (#b5004b), `S48` (#00ce33) or `T49` (#00e7d3) in any of the
+eighteen frames** — read back out of the SVGs by matching each `translate()` against the tile
+diamonds and the badge each colour belongs to. WATCH #28's finding reproduces exactly on this tree.
+
+**INFER.** The `earned by` line names *1 kind of Conference Hall/Spa/Theatre* as part of what the
+hotel's Four Star rating was awarded for, and the badges beneath it are a Conference Hall, a Spa and
+a Theatre. A reader who reads both can now answer *why is that hall there* — which is `PARKING.md`
+item 3's stated condition. **I judge the frame passes that test, and two qualifications belong with
+the verdict rather than under it:**
+
+- **THE RECEIPT IS FOR ONE HALL AND THERE ARE THREE.** The fourth tier asks for **1 kind** and the
+  fifth for **2**; the hotel has **3**. So under the shipped tables **one facility is surplus at
+  every rung of the ladder**, and nothing on screen says which. A stranger who counts will get the
+  right answer for the first hall and no answer for the third. That is a CONTENT observation, it is
+  new, and it belongs to whoever next touches `star-tiers.json` or the scenario's basement.
+- **IT EXPLAINS THE PURCHASE, NOT THE EMPTINESS.** The caption says why the hall was BOUGHT. It does
+  not say why nobody is ever in it, and a watcher can still reasonably ask whether a Spa is supposed
+  to serve somebody. That question is ADR-0102 §4's ruling — a facility serves no need, deliberately
+  — and it is a design question that no amount of HUD can answer.
+
+### 4. THE HONEST LIMIT, SAID HERE RATHER THAN LEFT FOR THE FIRST WATCHER
+
+**The seeded hotel has 18 bedrooms and the fifth tier wants 24, so every frame this scenario will
+ever produce reads `24 Standard Room — has 18`.** The shortfall the HUD prints is one the SEEDED
+hotel never clears.
+
+**It is not, however, one nobody can clear**: six more Standard Rooms is **1,500,000p** at the
+shipped price, and the plot is nearly empty — **67 of 14,720 cells occupied** at tick 1440, floors
+-2..20 and columns 0..79. A player who builds them gets the fifth star. **And `GOALS.md` records
+that doing so LOSES money** at two amenity sets (G-060's pinned finding). **So the HUD now
+advertises, in words, a purchase this project has measured as a trap.** That is G-060's to fix;
+nothing in `star-tiers.json`, `demand.json` or the scenario was touched here, because tuning content
+to flatter a readout is the one order §2.1 forbids.
+
+### 5. THE LADDER HAS A BOTTOM RUNG AND IT IS ON SCREEN TOO
+
+`t000000-f0-reduced-c100.svg`, a bare plot before the scenario builds anything:
+
+```
+stars ☆☆☆☆☆  unrated · what the hotel HAS, not what its guests said · next 1 star: 1 Standard Room — has 0
+```
+
+**Unrated is drawn as five hollow stars and the word `unrated`, never as `0 of 5`** — `rating.ts`'s
+own distinction (a bare plot has not FAILED an inspection, it has not HAD one), and the first
+instruction the game ever gives a player is *build one bedroom*.
+
+### 6. FOUND IN PASSING — THE CONTACT SHEET'S CAPTIONS HAVE BEEN PERCENT-ENCODED SINCE G-035
+
+`record-frames.ts` escaped its `<figcaption>` text with the **global `escape`** — the deprecated URL
+encoder — so every contact sheet this project has produced reads
+`tick%201440%20%B7%20floor%20-1`. The SVG frames were never affected, because they use `svg.ts`'s
+own HTML escaper, which is why nobody caught it: the artefact people read was fine and the index
+above it was not. `svg.ts` now exports that escaper and the recorder imports it, so there is one
+escaper rather than two, and the figcaption carries `white-space: pre-line` so the three caption
+lines survive into the sheet.
+
+### 7. WHAT THE RATING COSTS PER FRAME, MEASURED, BECAUSE THE ANSWER WAS NOT THE COMFORTABLE ONE
+
+`starRatingIn` is memoised behind `ValidityCache` — **and that cache is the TICK's**, keyed on an
+`EntityDraft` the renderer does not have. `scene.build` constructs a fresh `createValidityContext`
+every frame, so the simulation's memo does not reach across frames at all: **the sim was not going
+to absorb this.**
+
+Paired and interleaved in one sitting, medians of 7 x 200 calls with the warm-up discarded, shipped
+scenario at tick 1440 (49 entities), regime win32/12cpu quiet. The arms are `scene.build` with the
+new memo HIT against **the same shipped code with the memo structurally defeated** — two distinct
+`World` objects with identical contents, alternated, so the one-entry memo always looks at the other:
+
+| drawn floor | memo hit | every call misses | ratio |
+|---|---|---|---|
+| 0 | 0.2732 ms | 0.2951 ms | 1.08x |
+| -1 | 0.3428 ms | 0.3778 ms | 1.10x |
+| **2 (empty)** | **0.0271 ms** | **0.1616 ms** | **5.96x** |
+
+**The ratio is the finding and floor 2 is where it lives.** On a floor with rooms on it the marginal
+cost is small, because the tile walk has already warmed `roomInvalidity` for most of the building —
+which is why the call is made AFTER that walk rather than before it. **Floor 2 is empty, so it warms
+nothing** and the rating pays its whole cold cost (0.1128 ms measured alone, same sitting) on top of
+a frame that costs almost nothing. Without the memo, clicking to an empty floor would make the
+renderer six times slower on that floor. With it the cost is paid **once per tick** — at most 30
+times a second at the top rung against 145 frames, and zero while paused.
+
+### 8. NOTHING ELSE LOOKED WRONG
+
+`0 invalid` on every floor of every one of the eighteen frames. `stars 4` on every census line from
+tick 1440 onward and `stars 0` at tick 0. Peak world-wide guests **16 at tick 1440**, identical to
+WATCH #28's arm B. The steady census is flat — 8 on floor 0, 4 on floor 1, 4 in the basement at
+ticks 2880, 4320 and 5760 — which is the same three-days-running flatness WATCH #28 recorded. `0 no
+walk drawn` in every frame.
+
+**NOT WATCHED, AND SAID PLAINLY: the browser was not opened.** No browser tool was available in this
+session, so the HUD evidence above is the shipped `renderHud` driven headless over the shipped
+`SceneReport`, plus the recorded frames, which carry the same strings from the same function. What
+that does NOT cover is layout: whether three more cells wrap the HUD strip onto another line and how
+much height that takes from the stage (E-013's subject). **A human opening `pnpm dev` should look at
+that first.**

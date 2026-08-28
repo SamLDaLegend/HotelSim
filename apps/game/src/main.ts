@@ -361,6 +361,9 @@ app.ticker.add(() => {
     drawnTick: driver.world.tick - 1 + driver.carry,
     invalidRooms: frame.report.invalidRooms,
     rooms: frame.report.rooms,
+    // THE RATING COMES OUT OF THE FRAME, not out of a second call (G-062). One walk of the
+    // building per tick, one answer, and the words under the picture describe the picture.
+    rating: frame.report.rating,
     guestsElsewhere: frame.report.guestsElsewhere,
     fps,
     queued: session.queue.length,
