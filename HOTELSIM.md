@@ -2,7 +2,7 @@
 
 Build a casual, cartoon-styled hotel building and management simulator. ISOMETRIC FLOORPLAN VIEW, in the Theme Hospital / RollerCoaster Tycoon tradition — multi-floor, ONE FLOOR RENDERED AT A TIME, floors switchable, with a cityscape behind and below. THE NOSTALGIC REGISTER IS THE POINT, NOT A SIDE EFFECT.
 
-AND ROOMS ARE DESIGNED BY THE PLAYER, NOT PLACED FROM A CATALOGUE. The player draws a room's footprint, places items inside it, and the room is scored on what it contains [OWED TO M4] — function from required equipment [EXISTS AS A GATE, OWED TO M4 AS A SCORE], quality from size and decor [OWED TO M4], in the shape Two Point Hospital uses. A room TYPE is a constraint set in content; a room INSTANCE is the player's drawing, and that is world state (ADR-0046 §4).
+AND ROOMS ARE DESIGNED BY THE PLAYER, NOT PLACED FROM A CATALOGUE. The player draws a room's footprint, places items inside it, and the room is scored on what it contains [OWED — G-037a, NO MILESTONE] — function from required equipment [EXISTS AS A GATE, OWED AS A SCORE — G-037a, NO MILESTONE], quality from size and decor [OWED — G-037a, NO MILESTONE], in the shape Two Point Hospital uses. A room TYPE is a constraint set in content; a room INSTANCE is the player's drawing, and that is world state (ADR-0046 §4).
 
 MARKED WITH THE LOOP TERMS (§1.1), BECAUSE IT IS THE SAME CLASS AND WOULD OTHERWISE HAVE ESCAPED ON A TECHNICALITY: this sentence is a SPECIFICATION too, and NO ROOM IS SCORED TODAY. `drawRoom` and `placeItem` exist, so the player's footprint and its contents are real world state; the SCORE over them is not — no fold, no field, no reader, on main. THE FUNCTION HALF SPLITS AND THE SPLIT IS THE POINT: required equipment is a GATE today — `validity.ts` returns `missingItem` for a room lacking an item its type requires, so an unequipped room serves nobody — but a gate is binary and this sentence promises a SCORE, which is a different quantity and does not exist. It is G-037a, the same goal that owes the loop's `quality`, and §1.1's `quality` row carries the evidence and the five present-tense docblocks that go with it.
 
@@ -20,7 +20,7 @@ The game is three nested feedback loops. Every design and code decision should b
 
 Guest loop — guest arrives [EXISTS], forms needs [EXISTS], gets them met or doesn't [EXISTS], pays [EXISTS], leaves a review [EXISTS].
 Money loop — room revenue [EXISTS] against wages [EXISTS] and upkeep [EXISTS], settled nightly [EXISTS].
-Build loop — spend cash [EXISTS], add capacity [EXISTS] and quality [OWED TO M4], raise reputation [OWED TO M4], raise demand [EXISTS], back to the guest loop [EXISTS].
+Build loop — spend cash [EXISTS], add capacity [EXISTS] and quality [OWED — G-037a, NO MILESTONE], raise reputation [OWED — POST-PLAYTEST, NO MILESTONE], raise demand [EXISTS], back to the guest loop [EXISTS]. (Both marks read OWED TO M4 until 2026-08-28; ADR-0105 re-scoped M4 and a mark may not name a milestone that no longer contains it. A destination that is an EVENT survives a re-scope; one that is a milestone does not.)
 
 EVERY TERM CARRIES ITS MARK ON THE TERM, so no reader and no grep reaches one of these words without it. Not one of the words above was changed, added or removed to fit a mark — §1.1 explains why they are marks at all, and carries the evidence for each one.
 
@@ -131,7 +131,7 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a AND G-051b), AND THE CO
                                         readers now. ONE HONEST QUALIFICATION: only one lodging room type ships, so the
                                         player's lever is MORE rooms rather than BIGGER ones. The mechanism is live; the
                                         content offers no choice yet.
-    quality                    OWED TO M4 — G-037a (a room is scored on what is in it). NOTHING ON MAIN READS A ROOM'S
+    quality                    OWED, NO MILESTONE (ADR-0105) — G-037a (a room is scored on what is in it). NOTHING ON MAIN READS A ROOM'S
                                         QUALITY: no quality field, no fold, no reader. `quality.ts` exists only on branch
                                         `g037a-quality-fold` (87c0101), 45 commits behind and carrying a save bump off v23.
                                         G-037a's block still reads Milestone: M3 and M3 signed off without it (ADR-0081) —
@@ -143,7 +143,7 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a AND G-051b), AND THE CO
                                         moving any `packages/sim` file, and the bound was not weakened to reach it. THE GOAL
                                         THAT MERGES THE BRANCH OWNS REPAIRING OR DISCHARGING ALL FIVE, written into G-037a's
                                         block as an obligation rather than left in prose here.
-    raise reputation           OWED TO M4, AND THE ROW IS RE-MARKED RATHER THAN DISCHARGED (G-051a). ADR-0082 rules
+    raise reputation           OWED, POST-PLAYTEST, NO MILESTONE (ADR-0105), AND THE ROW IS RE-MARKED RATHER THAN DISCHARGED (G-051a). ADR-0082 rules
                                         these are TWO systems and the test of distinctness is whether they can DISAGREE:
                                         a hotel with every facility and terrible service earns stars and loses reputation.
                                         THE STAR-RATING HALF NOW EXISTS AND NAMES ITS SYMBOL — `starRatingOf` (rating.ts),
@@ -714,7 +714,7 @@ M3 — Circulation. Stairs and lifts as queued shared resources. Vertical pathin
 
   WHY THE CAP EXISTS: M3 had one goal done and it was an instrument goal; the next two named were instrument goals; and three ADRs written in one day were all real findings and none was circulation. THE LOOP'S OUTPUT HAD SHIFTED FROM THE GAME TO THE LOOP, AND NO RULE NOTICED, BECAUSE EVERY INDIVIDUAL STEP WAS JUSTIFIED.
 
-M4 — Economy. Nightly settlement, staff hiring and wages, upkeep and decay, reputation feeding demand, room pricing. Balance critic runs long simulations and the results are reviewed.
+M4 — Economy. Nightly settlement, wages, and DEMAND ANSWERING THE STAR RATING. Balance critic runs long simulations and the results are reviewed. **RE-SCOPED 2026-08-28 by the human (ADR-0105), and the struck words are kept so the cut is legible: ~~staff hiring and wages~~, ~~upkeep and decay~~, ~~reputation feeding demand~~, ~~room pricing~~.** Landed: settlement (G-005/G-011), wages (G-052a), demand (G-051a/b). NEVER STARTED: hiring (G-052b, no goal block), decay (no goal block, ADR-0047 B5's field never reserved), pricing (G-037c, blocked); and the REPUTATION half of "reputation feeding demand" is unbuilt BY RULING, because ADR-0082 makes the star rating a second and distinct system and it is the RATING that feeds demand. THREE OF FIVE SCOPE ITEMS HAD NOTHING WHILE FOUR COMMITS REPORTED PROGRESS AGAINST THE MILESTONE — the third milestone running whose declared scope and built contents disagree (M2.5 four goals closed at nine; M3 declared "circulation" and signed off with G-024/025/026 pending). WHERE THE CUT ITEMS GO, EACH NAMING AN EVENT RATHER THAN A MILESTONE (G-051b's rule): DECAY IS THE FIRST POST-PLAYTEST SYSTEM, not PARKING's long tail — off the path to a stranger's first twenty minutes, and first on the path the moment that stranger has played, because nothing in this hotel gets worse on its own and the climb is monotone without it; HIRING follows decay, because staff who matter need something to fight; PRICING is parked. THE CONDITION ATTACHED TO THE RULING: every balance figure states which arm it was taken on — §4.1 requires a count to name its population and AN ARM IS A POPULATION — because M4's remaining work runs two arms with different opening capital at once, so an uncited figure is not imprecise, it is AMBIGUOUS BETWEEN TWO TRUE ANSWERS.
 
 M3 HARD PREREQUISITES, TWO, RULED BY THE HUMAN AT M2 EXIT (2026-08-10). Neither held M2 open — M2's statement is about needs, and both of these are INSTRUMENT DEBTS. Both land on M3's FIRST goal, in the same shape as scenario capital for M4.
 

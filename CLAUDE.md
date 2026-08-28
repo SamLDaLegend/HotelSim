@@ -47,8 +47,12 @@ Three nested feedback loops. Every design and code decision traces to one of the
   until G-052b, which also still owes staff OCCUPYING ROOMS. The rate is one SINGLY-OCCUPIED
   room-night's margin: `nightlyRatePence` is charged per GUEST-night, `nightlyUpkeepPence` per
   ROOM-night, and the bound built on them is conservative rather than tight.*
-- **Build loop** — spend cash [E], add capacity [E] and quality [**OWED M4**], raise
-  reputation [**OWED M4**], raise demand [E], back to the guest loop [E]. ***FOUR OF SIX, AND
+- **Build loop** — spend cash [E], add capacity [E] and quality [**OWED — G-037a, NO MILESTONE**], raise
+  reputation [**OWED — POST-PLAYTEST, NO MILESTONE**], raise demand [E], back to the guest loop [E].
+  *(Both read **OWED M4** until 2026-08-28. **ADR-0105 re-scoped M4 to settlement, wages and demand** —
+  what it turned out to be — so a mark naming M4 named a milestone that no longer contains it. **A
+  destination that is an EVENT survives a re-scope; one that is a milestone does not.** Re-marked in
+  `HOTELSIM.md` §1 and §1.1 in the same commit, which is the rule the banner above exists for.)* ***FOUR OF SIX, AND
   THE LOOP CLOSES* (G-051b).** `runDemand` (tick.ts, phase 2 of 6) derives the hotel's STAR
   RATING every demand slot and puts the parties that rating earns into the same doorway a
   `guestArrives` fills; `partiesArrivingAt` (demand.ts) is the arithmetic and it draws NO

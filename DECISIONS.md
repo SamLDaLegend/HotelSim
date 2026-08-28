@@ -10080,3 +10080,104 @@ longer measurable there. The finding stands; this file's ability to exhibit it d
 arm to a `--facilities` ladder is a goal, not a footnote.
 
 ---
+
+---
+
+## ADR-0105 — M4 IS RE-SCOPED TO WHAT IT TURNED OUT TO BE. A milestone whose declared scope and built contents disagree is a label, not a unit of work.
+
+**Date**: 2026-08-28 · **Status**: accepted · **HUMAN RULING.** Every copy moves in this commit —
+that condition is part of the ruling, not a courtesy.
+
+### THE RULING
+
+> **M4 completes by being renamed to what it was, not by building three systems nobody's path needs.**
+
+`HOTELSIM.md` §8 declared M4 as *"nightly settlement, staff hiring and wages, upkeep and decay,
+reputation feeding demand, room pricing."* **Landed: settlement (G-005/G-011), wages (G-052a), and
+demand (G-051a/b).** Never started: **hiring** (G-052b, no goal block), **decay** (no goal block, no
+implementation, ADR-0047 B5's field never reserved), **pricing** (G-037c, blocked). And the
+**reputation** half of *"reputation feeding demand"* is unbuilt **by ruling** — ADR-0082 makes the
+star rating a second and distinct system, so what feeds demand is the rating, not reputation.
+
+**Three of five scope items had nothing while four commits reported progress against the milestone.**
+
+### THE THIRD INSTANCE, WHICH IS WHY THIS IS A RULING AND NOT A TIDY-UP
+
+- **M2.5** was declared at four goals and closed at nine, through three seams and a re-split.
+- **M3** was declared *"circulation"*, shipped five circulation goals and roughly fifteen others, and
+  was signed off (ADR-0081) with **G-024, G-025 and G-026 still pending**.
+- **M4** is the third.
+
+> **A milestone whose landed contents share no member with its declared scope is not a unit of work;
+> it is a label applied afterwards.**
+
+### WHAT M4 IS, RESTATED
+
+**M4 — Economy. Nightly settlement, wages, and demand answering the star rating.** Balance critic
+runs long simulations and the results are reviewed.
+
+**Where the three cut items go, and each names an EVENT rather than a milestone** (G-051b's rule: *a
+deferral names an event the artefact can observe*):
+
+- **DECAY — the FIRST POST-PLAYTEST SYSTEM.** Not PARKING's long tail. **The human's reconciliation,
+  recorded because it looks like a contradiction and is not:** decay is *off* the path to a
+  stranger's first twenty minutes, which this re-scope ratifies, and *first* on the path **the moment
+  that stranger has played**, because the climb is monotone without it. *"Nothing in this hotel gets
+  worse on its own"* — no dirt, no breakdowns, no events — and the 192,228,000p endgame is that
+  symptom. **Its trigger is observable: the first playtest happening.**
+- **HIRING (G-052b)** — routed to the legibility path. The wage mechanism is live and the roster
+  empty **by design** (ADR-0101: a compulsory payroll with no hire and no fire breaks G-011's
+  criterion B), so a first session survives without payroll management. **Its trigger is decay:
+  staff who matter need something to fight.**
+- **PRICING (G-037c)** — PARKING. Blocked, and not needed for a first session.
+
+### THE CONDITION ATTACHED TO THE RULING, AND IT IS LOAD-BEARING
+
+> **Every balance figure states which arm it was taken on.** *"Two arms with different opening capital
+> and no citation is how you get 593% inflation quoted as a fact for three goals."*
+
+**§4.1 already requires a count to name its unit and its population — AN ARM IS A POPULATION.** M4's
+remaining work runs two arms with different opening capital at once (ADR-0104's C1 dissolution), so
+**an uncited balance figure stops being imprecise and becomes AMBIGUOUS BETWEEN TWO TRUE ANSWERS.**
+
+*This session produced six dropped-workload-slot errors — a critic's cash column, the orchestrator's
+relay of it, a `--facilities` mislabel that was the orchestrator's, a four-star figure quoted as
+five-star, two arms written as one, and a `--rooms 24` cadence. Every one was findable because there
+was a single arm to check against.*
+
+### THE FINDING THAT OUTRANKS THE RE-SCOPE
+
+> **A PREREQUISITE IN PROSE HAS NO DISCHARGE POINT.**
+
+The charter named M4's first goal, **the goal was skipped**, and **three goals of balance evidence
+were taken on the un-flipped arm before anyone noticed** — and what noticed was a stop hook asking
+about M5, not any gate. **This is the loop terms before §1.1 marked them**: a sentence stating an
+obligation with nothing that fails when it goes unmet.
+
+**`check:status` does not reach it, and G-056 established exactly how narrow its predicate is** —
+*"asserts no goal referenced by a commit reads `pending`"*, which **visibly says nothing about
+`Milestone:`** (ADR-0086). **A milestone's stated first goal should be checkable, and that is a
+scanner rather than a paragraph.** Parked as a goal with its predicate stated.
+
+### THE `Milestone: M3` LINES — AN EXPLICIT DECISION, WHICH IS THE POINT
+
+**36 lines in `GOALS.md` read `Milestone: M3` as a field** (43 contain the string anywhere; there is
+**no `GOALS-ARCHIVE.md` in this tree**, contrary to a review that cited one). **RULED: LEFT AS
+HISTORY.** They are records inside goal blocks, not live instructions to a future reader — G-051b's
+own separating test — and rewriting 36 of them would be editing what a goal *was* to match what a
+milestone is *now*, which is ADR-0008's prohibition exactly.
+
+**The decision is recorded because an unstated one is indistinguishable from an oversight**, which is
+this ADR's whole subject. *(A prior figure of "fourteen" appears in `PARKING.md`; it matches neither
+36 nor 43 and its population is unrecoverable, so it is withdrawn rather than restated.)*
+
+### AND M5 IS NOT GATED ON THIS
+
+**M5 already runs continuously and always has**: the renderer opened at G-030 and has taken work at
+G-035, G-044, G-048 and G-047 while "M5" nominally waited, because `apps/game` is the WATCH surface
+(ADR-0023) and improving it improves the evidence of every behavioural goal. **The gate survives only
+as a label**, and the label does damage — `CLAUDE.md`'s layout table still says *"do not open before
+M0 sign-off"*, and `render-engineer.md` carries a blocking obligation *"on M5"* that never comes due
+because M5 never opens.
+
+**The human sign-off and the milestone question are kept. The sequencing is what is dropped.**
