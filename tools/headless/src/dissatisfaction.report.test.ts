@@ -118,7 +118,14 @@ describe('ARM 1 — a hotel that works notices nothing', () => {
     expect(count(wellProvisioned, 'evictedRoomGone')).toBe(0);
     expect(count(wellProvisioned, 'evictedRoomUnusable')).toBe(0);
     expect(wellProvisioned.guests.arrived).toBe(480);
-    expect(wellProvisioned.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 214, 0, 256]);
+    // RE-RECORDED AT G-059: **[0, 0, 214, 0, 256] -> [214, 0, 0, 256, 0]**, both occupied bands
+    // moving and the DEPARTURE TABLE above untouched, which is exactly the shape this arm is
+    // built to make legible. The 214 give-ups fall to the floor because a guest the hotel never
+    // housed did not have a stay to review; the 256 checkouts fall 5 -> 4 because this hotel is
+    // short of the top star tier and its standing is now one of the five terms in the mean. The
+    // arm's own claim is unchanged and is the four assertions ABOVE this line: `leftDissatisfied`
+    // 0, both eviction rows 0, 480 arrived, 2,176,000p. A hotel that works still notices nothing.
+    expect(wellProvisioned.reviews.distribution.map((row) => row.count)).toEqual([214, 0, 0, 256, 0]);
     expect(wellProvisioned.money.revenuePennies).toBe(2_176_000);
     // The multiplier, asserted rather than asked to be noticed: four guests per three commands.
     expect(wellProvisioned.guests.arrived * 3).toBe(360 * 4);

@@ -2259,7 +2259,7 @@ world-dependent, so no fixed number is stable there.)*
 
 ---
 
-## 2026-08-27 — OPEN — What is a review a measurement OF? The scale is banded over a range the hotel cannot occupy, and a guest who storms out leaves four stars.
+## E-014 [RESOLVED 2026-08-27 — human ruling] — What is a review a measurement OF? The scale is banded over a range the hotel cannot occupy, and a guest who storms out leaves four stars.
 
 **Trigger:** G-059 returned no code. **ADR-0100 carries the analysis.** Two coupled design calls,
 both of which change what `reviewOf` means, and one of which touches a law the human confirmed
@@ -2330,3 +2330,55 @@ once rather than twice.
 
 **G-050a/b stay blocked** — they were always downstream of the scorer. **G-047a, G-051, G-037a and
 G-052 are not**, and the loop continues on those. *This escalation stops the review scale, not M4.*
+
+---
+
+### E-014 [RESOLVED 2026-08-27 — human ruling] — THE WHOLE STAY, INCLUDING FACILITIES. Built at G-059.
+
+**THE HEADING ABOVE WAS NEVER NUMBERED UNTIL NOW, AND THAT IS ITS OWN SMALL FINDING.** ADR-0100
+named this escalation `E-014` in three places and the entry it points at carried a DATE as its id,
+so `grep E-014 ESCALATIONS.md` returned nothing for the whole time the loop was stopped on it. The
+brief that ordered this goal cited *"`ESCALATIONS.md`'s E-014 entry"* and there was no such string
+in the file. **An id minted in one ledger and not written into the other is not an id.** Numbered
+here, retrospectively, rather than left as a cross-reference that cannot be followed.
+
+**THE RULING, VERBATIM:**
+
+> *"Measurement is of the whole stay, including facilities, etc. If you think about hotel star
+> scoring in real life, it's often criteria based and the game loop would tell the player what to
+> do to improve it — Think like Two Point Hospital's system. Guest rating is like a tripadvisor
+> score."*
+
+**IT REJECTS THE RECOMMENDATION THAT WAS PUT.** The escalation recommended a WORST-NEED scorer with
+the mean as a tie-break. **The mean survives.** What changes is what it is a mean OF.
+
+**FOUR CONSEQUENCES, AND G-059 BUILT ALL FOUR:**
+
+1. **The mean stands.** No `min` over the bands, no cap by the lowest term, nothing that is a
+   worst-part measure under another name.
+2. **The review can see the hotel.** `reviewOf` takes the hotel's star rating as a fifth argument
+   and folds it in as ONE MORE BAND beside the four needs — same quantiser, same clamp, one
+   unweighted term. Before this, a guest whose needs were equally met scored a hotel with a Spa
+   exactly as it scored a shed, and on shipped content **a facility is precisely a room that serves
+   no need**, so the blindness was structural rather than coarse.
+3. **The two systems stay distinct.** The STAR RATING is the criteria-based inspection that tells
+   the player what to build (`starRatingOf` returns `nextStars` and `shortfall`); the REVIEW is one
+   guest's impression of one stay. What crosses between them is an INTEGER, and `reviews.ts` never
+   learns what a tier is.
+4. **A guest who storms out does not file four stars.** `isCutShort` re-partitions from AGENCY to
+   COMPLETION: `checkedOut` and `visitEnded` are the stays that ran their course, and every other
+   row reviews at the floor.
+
+**AND THE BAND DOMAIN IS REPAIRED**, which was the escalation's other surviving finding.
+`letDownWindowOf` bands the served share over the ticks a completed stay CAN be let down for —
+derived from `dissatisfactionCapacityTicks`, `dissatisfactionReliefPerTick` and the dearest
+need's filling — 1,020 of 1,440 on shipped content, against the whole 1,440 it used to divide by.
+
+**ONE COST IS CARRIED FORWARD AND IT IS NOT HIDDEN.** The shipped arms now occupy `{1, 4, 5}` and
+never 2 or 3, because a score in the middle needs a stay that RAN ITS COURSE and was badly served,
+and `dissatisfactionCapacityTicks: 301` against a 1,440-tick stay ejects that guest first.
+**G-019's criterion 2 — three bands clearing a per-day floor at `--rooms 6 --arrivals 60` — is
+FAILING again and is asserted as false rather than absorbed.** It is a CONTENT question rather than
+a scorer one and it is parked with its falsification test (`PARKING.md`), because choosing a mood
+ceiling by which distribution looks better is exactly the §2.1 order this escalation exists to
+avoid.

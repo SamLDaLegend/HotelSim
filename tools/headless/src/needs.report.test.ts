@@ -419,7 +419,15 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // and can absorb them. **The claim this arm makes is the line above and it still holds** —
     // three rows, three different stories, a spread far wider than one guest — and the reading
     // the previous block adds still stands: provider COUNT is what decides a row.
-    expect(engagement.map((row) => row.met)).toEqual([299, 311, 460]);
+    // [299, 311, 460] -> [252, 292, 460] AT G-059, AND NO GUEST BEHAVED DIFFERENTLY. `met` is a
+    // per-need BAND and that band's DOMAIN narrowed: `letDownWindowOf` bands the served share
+    // over the 1,020-tick let-down window rather than over the whole 1,440-tick stay, so the top
+    // band asks for 204 unserved ticks or fewer where it asked for 288. It is STRICTLY harder,
+    // so every row could only fall or hold — and the two contended rows fall while nourishment,
+    // which has two providers and is barely failed at all, does not move by one guest.
+    // **THE CLAIM THIS ARM MAKES IS THE LINE ABOVE AND IT SURVIVES, WIDER**: three rows, three
+    // different stories, and the spread grows from 161 guests to 208.
+    expect(engagement.map((row) => row.met)).toEqual([252, 292, 460]);
     // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
     // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
     // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is

@@ -237,12 +237,16 @@ export {
   getGuest,
   guestCount,
   guestsInOrder,
-  // `isCutShort` is DELIBERATELY ABSENT (G-019, `ai-critic` MINOR 1). It escaped the ruling
-  // that withheld `experienceBasisPoints` (deleted outright at G-028b, with
-  // `lodgingWaitBasisPoints` before it at G-027a), for exactly the same reason: no consumer
-  // outside `packages/sim`. The report asks the
-  // same question with a string prefix, because a JSON document carries reasons as strings
-  // and has no union to switch on — see `EVICTION_REASON_PREFIX` there for that trade.
+  // `isCutShort` WAS DELIBERATELY ABSENT AND IS NOW EXPORTED (G-019 `ai-critic` MINOR 1;
+  // reversed at G-059). The reason it was withheld was stated as a fact about the tree — *"no
+  // consumer outside `packages/sim`"* — and that fact stopped being true: review law B in
+  // `report.ts` now asks for a floor review per stay that DID NOT RUN ITS COURSE rather than
+  // per eviction, which is this predicate's exact partition and is NOT a string prefix. So this
+  // is `stairLeg`'s case below rather than `experienceBasisPoints`': the consumer arrived, and
+  // it asks the FUNCTION rather than a copy of it. `EVICTION_REASON_PREFIX` survives for the
+  // narrower question it answers — which of the cut-short rows are evictions — and the report
+  // still reads reasons as strings, so it walks `GUEST_DEPARTURE_REASONS` to reach this.
+  isCutShort,
   isEngaged,
   isResting,
   lodgingNeedStateOf,

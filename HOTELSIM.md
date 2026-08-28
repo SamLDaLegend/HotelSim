@@ -53,11 +53,27 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a AND G-051b), AND THE CO
                                         (needs.ts). Both outcomes are recorded, per need, at departure.
     pays                       EXISTS   `roomRevenue` in `TransactionReason` (ledger.ts); `countRoomRevenueTransactions`
                                         (guests.ts). Integer pence, ADR-0002.
-    leaves a review            EXISTS   `reviewOf` and `recordReview` (reviews.ts), folded into `ReviewOutcomeRow`. IT EXISTS
-                                        AND IT CARRIES ALMOST NO INFORMATION — measured one bit above the bottleneck
-                                        (ADR-0080). That is a tuning finding owned by G-050/G-051, NOT a missing term, and
-                                        the two must not be confused: a term that exists and says little is a different
-                                        problem from a term that is not there.
+    leaves a review            EXISTS   `reviewOf` and `recordReview` (reviews.ts), folded into `ReviewOutcomeRow`.
+                                        ~~"IT EXISTS AND IT CARRIES ALMOST NO INFORMATION — measured one bit above the
+                                        bottleneck (ADR-0080). That is a tuning finding owned by G-050/G-051."~~
+                                        STRUCK 2026-08-28 (G-059). THE CHANNEL CARRIES SOMETHING NOW, and the owner named
+                                        above was wrong twice over: G-050a/b were BLOCKED ON this, and what landed it was
+                                        the human's ruling on E-014 (ADR-0104) — *the review is a measurement of the WHOLE
+                                        STAY, INCLUDING FACILITIES*. `reviewOf` takes the hotel's star rating as one more
+                                        unweighted band beside the guest's four needs, and `isCutShort` floors every stay
+                                        that did not run its course. MEASURED, one run per cell, `--days 30 --seed 42
+                                        --rooms 12 --demand`, exact integers, regime win32/12cpu quiet: BEFORE, eleven of
+                                        the fifteen cells of the facilities x amenities grid were byte-identical `5:all`;
+                                        AFTER, the facilities column separates `4:232` from `5:464` at every amenity rung
+                                        above the bottleneck, and the MEAN spans the whole scale — 1.00 at a hotel with
+                                        nothing to do, 5.00 at a provisioned four-star one, against 3.83 to 5.00 before.
+                                        THE HONEST QUALIFICATION, IN THE SHAPE THE OTHER ROWS USE: the shipped arms occupy
+                                        {1, 4, 5} and never 2 or 3, because a middle score needs a stay that RAN ITS
+                                        COURSE and was badly served, and `dissatisfactionCapacityTicks: 301` against a
+                                        1,440-tick stay ejects that guest first. That is a CONTENT question, it is parked
+                                        with its falsification test, and G-019's criterion 2 is asserted as FAILING in
+                                        `review.report.test.ts` rather than absorbed. A term that exists and says three
+                                        things is still a different problem from a term that is not there.
 
   MONEY LOOP — four terms, FOUR EXIST. IT IS THE SECOND LOOP TO RUN ON ALL OF ITS DECLARED TERMS, and it had run on THREE QUARTERS of itself from M0 until G-052a — three terms of four. (This line read "two thirds" for the length of one review round: that is the count from ADR-0079's era, which said "two of its three declared terms" because it was counting the loop's three NOUNS and not counting "settled nightly" as a term at all. The loop sentence carries FOUR marks, so the denominator here is four.)
 
@@ -135,7 +151,13 @@ MARKED 2026-08-25 (G-053a), RE-MARKED 2026-08-27 (G-052a AND G-051b), AND THE CO
                                         table is content (`star-tiers.json`, I3) ordered by `stars` and not by id. It
                                         counts VALID rooms and reads NO guest outcome, which is the mechanical point:
                                         ADR-0078 measured the review channel as ONE BIT above the bottleneck and a
-                                        facilities-present rating cannot collapse that way.
+                                        facilities-present rating cannot collapse that way. *THE PREMISE MOVED AT G-059
+                                        AND THE ARGUMENT SURVIVES: the review no longer says the same thing about every
+                                        hotel above the bottleneck — it separates on the FACILITY axis, `4:232` against
+                                        `5:464` — because ADR-0104 made it read the rating. So the two systems are now
+                                        COUPLED in one direction, and what keeps them distinct is unchanged and is
+                                        ADR-0082's own test: the rating reads no guest outcome, so a hotel with every
+                                        facility and terrible service earns stars and loses reviews.*
                                         REPUTATION ITSELF — judged on guest satisfaction — IS STILL UNBUILT, AND THE EVIDENCE
                                         CLAUSE HERE WAS FALSIFIED BY THE COMMIT THAT WROTE IT. It read "the word still appears
                                         ONCE in all of `packages/sim`, a comment at reviews.ts:12", which was true of the tree

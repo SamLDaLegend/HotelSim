@@ -305,6 +305,103 @@ describe('THE CLOSURE: build -> rating -> arrivals -> revenue, three arms one ch
   });
 });
 
+describe('THE REVIEW SEES THE FACILITIES — the grid E-014 was ruled on (G-059)', () => {
+  // ==========================================================================================
+  // THE HUMAN'S RULING, 2026-08-27 (E-014, ADR-0104): *"Measurement is of the whole stay,
+  // INCLUDING FACILITIES … Guest rating is like a tripadvisor score."*
+  //
+  // THIS GRID IS THE MEASUREMENT THAT ORDERED IT AND THE MEASUREMENT THAT DISCHARGES IT. One run
+  // per cell, `--days 30 --seed 42 --rooms 12 --demand`, exact integers, no aggregation, regime
+  // win32/12cpu quiet. `--facilities 1` seeds ONE OF EACH of the three facility types, and a
+  // FACILITY IS A ROOM THAT SERVES NO NEED (`facilityRoomTypesOf`) — so before G-059 the review
+  // function could not see one even in principle.
+  //
+  //   BEFORE (the tree at 4656f56)          AFTER (this tree)
+  //   fac amen  reviews          mean       reviews            mean   stars
+  //    0    1   5:232            5.00       4:232              4.00     3
+  //    0    2   5:232            5.00       4:232              4.00     3
+  //    0    3   5:232            5.00       4:232              4.00     3
+  //    1    1   3:93 4:362 5:14  3.83       1:233 4:233 5:3    2.52     4
+  //    1    2   5:464            5.00       5:464              5.00     4
+  //    1    3   5:464            5.00       5:464              5.00     4
+  //
+  // **BEFORE: ELEVEN OF THE FIFTEEN CELLS OF THE FULL 3x5 GRID WERE BYTE-IDENTICAL `5:all`** —
+  // ADR-0100's zero-bit finding — and the four that were not were all at the amenity bottleneck.
+  // A three-star hotel with no facility and a four-star hotel with three collected the same
+  // unanimous five stars. **AFTER: the facilities column separates at every amenity rung above
+  // the bottleneck**, which is the region where the player still has decisions to make and where
+  // facilities are the decision.
+  //
+  // WHAT MOVES THE REVIEW IS THE STAR RATING, AND THAT IS WHY THE `--amenities` AXIS IS FLAT
+  // ABOVE THE BOTTLENECK RATHER THAN A DEFECT. At twelve bedrooms the third amenity set buys no
+  // tier and serves no guest that was going short, so it changes nothing a guest could notice —
+  // and the review agreeing with the balance sheet (rungs 3-5 are strictly dominated on money)
+  // is the two channels telling the player the same true thing.
+  // ==========================================================================================
+  const base = ['--days', '30', '--seed', '42', '--rooms', '12', '--demand'];
+  const cell = (facilities: number, amenities: number): RunSummary =>
+    inProcess([...base, '--facilities', String(facilities), '--amenities', String(amenities)]);
+
+  const scores = (summary: RunSummary): string =>
+    summary.reviews.distribution
+      .filter((row) => row.count > 0)
+      .map((row) => `${String(row.score)}:${String(row.count)}`)
+      .join(', ');
+
+  it('THE FACILITY MOVES THE REVIEW at every amenity rung above the bottleneck', () => {
+    for (const amenities of [2, 3]) {
+      const without = cell(0, amenities);
+      const with_ = cell(1, amenities);
+      expect(without.rating.stars, `amenities ${String(amenities)}`).toBe(3);
+      expect(with_.rating.stars, `amenities ${String(amenities)}`).toBe(4);
+      // The whole population moves a band, in both cells, and the direction is the build's.
+      expect(scores(without), `amenities ${String(amenities)}`).toBe('4:232');
+      expect(scores(with_), `amenities ${String(amenities)}`).toBe('5:464');
+    }
+  });
+
+  it('and the AMENITY axis is flat above the bottleneck, which the balance sheet agrees with', () => {
+    // The control that makes the line above a measurement of FACILITIES rather than of building
+    // anything at all: holding facilities fixed and adding amenity sets moves neither the rating
+    // nor one review, at either facility level — while the balance falls by 135,000p a set.
+    for (const facilities of [0, 1]) {
+      const lean = cell(facilities, 2);
+      const rich = cell(facilities, 3);
+      expect(scores(rich), `facilities ${String(facilities)}`).toBe(scores(lean));
+      expect(rich.rating.stars).toBe(lean.rating.stars);
+      expect(rich.money.balancePennies - lean.money.balancePennies).toBe(-135_000);
+    }
+  });
+
+  it('AND REVIEW LAW A IS DRIVEN TO EXACT EQUALITY HERE, which is the tightest it has ever run', () => {
+    // 464 top reviews against a least-met need row of 464 — ZERO slack. A scorer that let the
+    // hotel BUY a top review rather than enter the mean would put this over the line on the
+    // first run with a Spa in it, and `report.ts`'s law A would exit 1 on a correct run.
+    const top = cell(1, 2);
+    const leastMet = Math.min(...top.needs.map((row) => row.met));
+    const topReviews = top.reviews.distribution.find((row) => row.score === top.reviews.scoreMax)?.count ?? 0;
+    expect(topReviews).toBe(464);
+    expect(leastMet).toBe(464);
+    expect(topReviews).toBe(leastMet);
+  });
+
+  it('and the BOTTLENECK cell is where the facility HURTS, which is the loop biting back', () => {
+    // `--facilities 1 --amenities 1`: the facility earns the fourth star, the fourth star doubles
+    // arrivals, and one amenity set cannot serve twice the guests — so 233 of 469 walk out and
+    // the mean review FALLS from 4.00 to 2.52 for a build that cost money. **That is the build
+    // loop punishing an unbalanced build, and it is the one cell in this grid where the review
+    // and the balance sheet disagree** (balance rises 1,437,000p -> 1,276,000p... it falls, by
+    // 161,000p, so they agree here too and the disagreement is with the STAR RATING, which went
+    // up). The player's repair is a second amenity set, which is the cell to its right.
+    const bottleneck = cell(1, 1);
+    expect(bottleneck.rating.stars).toBe(4);
+    expect(scores(bottleneck)).toBe('1:233, 4:233, 5:3');
+    const dissatisfied = bottleneck.guests.departures.find((row) => row.reason === 'leftDissatisfied')?.count ?? 0;
+    expect(dissatisfied).toBe(233);
+    expect(bottleneck.money.balancePennies).toBeLessThan(cell(0, 1).money.balancePennies);
+  });
+});
+
 describe('the ladder responds at every rung, and an UNRATED hotel receives nobody', () => {
   it('arrivals rise with the rating across the whole shipped ladder', () => {
     // 30 days, seed 42, one run per rung, exact integers, win32/12cpu quiet. The rungs are the
@@ -396,7 +493,30 @@ describe('the ladder responds at every rung, and an UNRATED hotel receives nobod
     expect(fiveProvisioned.rating.stars).toBe(5);
     expect(dissatisfied(fiveProvisioned)).toBe(0);
     expect(fiveProvisioned.money.revenuePennies).toBe(7_888_000);
-  });
+  }, 90_000); // G-055's house pattern, and G-059 is the goal that had to apply it.
+  // DERIVED, NOT CHOSEN, AND THE DERIVATION IS ABOUT CONTENTION RATHER THAN ABOUT THIS TEST.
+  // This case has no explicit budget and fell to the shared 30,000ms `testTimeout`, which it
+  // exceeded under full-suite load while passing comfortably alone. THE READING, WITH ITS FIVE
+  // SLOTS: **what** — this case's own wall time; **workload** — the whole vitest suite in one
+  // process pool; **sample count** — three full-suite runs plus one isolated run;
+  // **aggregation** — worst, not median, because a budget is a ceiling; **regime** —
+  // win32/12cpu, LOADED (this is the slot that decides the number). In-suite: **27,761ms,
+  // 19,661ms, 18,722ms**. Isolated: **6,725ms**.
+  //
+  // **RUN-TO-RUN NOISE ON AN IDENTICAL TREE IS 1.41x AND THE OLD HEADROOM WAS 1.08x** — the
+  // budget was smaller than the contention, which is ADR-0087's shape and is why this looked
+  // like a flake rather than a missing constant. 3 x 27,761 = 83,283, taken to the **90,000**
+  // its two siblings already carry (`layout.reach.player.report.test.ts`,
+  // `needs.determinism.test.ts`) so this suite has ONE budget rather than three.
+  //
+  // THE RULE THIS COST US, WORTH MORE THAN THE CONSTANT: **a derived budget is defined against
+  // the quantity that VARIES; cheapness is defined against the one that does not.** G-051b made
+  // this case CHEAP — its own work is 6,725ms, faster than when it was written — and concluded
+  // it needed no budget. Cheapness of the case is the wrong denominator: what varies is the
+  // machine's contention, and no amount of making the case faster changes that.
+  //
+  // THE SHARED `testTimeout` IS NOT TOUCHED (§9). Widening it would hide the next instance.
+
 
   it('a bare plot earns NOBODY and loses NOTHING, which is a state and not a bug', () => {
     // The opening position of a from-nothing game. Zero stars is "nobody has inspected this"

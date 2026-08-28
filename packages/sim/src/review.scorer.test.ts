@@ -41,6 +41,19 @@ import {
   totalReviews,
 } from './reviews.js';
 
+/**
+ * THE HOTEL'S STANDING, AND IT IS INERT IN THIS FILE (G-059).
+ *
+ * `reviewOf` folds the hotel in as one more band ONLY when the content declares a star ladder,
+ * and no content built here declares one — so every case below is scored on the need vector
+ * alone, exactly as it was before G-059, and this argument could hold any number without moving
+ * an assertion. `review.standing.test.ts` is where the term is driven, against content that has
+ * a ladder; keeping the two apart is what stops the properties in this file (the mean, the
+ * clamp, the floor, the migrated vector) from being re-proved through a second variable.
+ */
+const NO_STANDING = 0;
+
+
 const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   id,
   name: id,
@@ -196,7 +209,7 @@ describe('LAW A HOLDS BY CONSTRUCTION: a top review requires every need met', ()
     for (const unserved of [0, 1, 100, 333, 334, 500, 999, STAY]) {
       const needMet = needBandOf(bands, STAY, unserved) === bands - 1;
       for (const vector of [vectorOf(narrow, [0, unserved]), vectorOf(narrow, [unserved, 0])]) {
-        const score = reviewOf(narrow, vector, false, STAY)!;
+        const score = reviewOf(narrow, vector, false, STAY, NO_STANDING)!;
         expect(score === 3, `${unserved} unserved, met=${String(needMet)}`).toBe(needMet);
         if (needMet) metAndTop += 1;
         else unmetAndBelow += 1;
@@ -230,15 +243,15 @@ describe('THE CAP: a vector CONTAINING the lodging need, never served, cannot re
         if (bands - 1 < n) continue; // refused by the resolution floor; covered where it lives
         const content = build(n, min, min + bands - 1);
         const everythingElsePerfect = [STAY, ...Array.from({ length: n - 1 }, () => 0)];
-        const score = reviewOf(content, vectorOf(content, everythingElsePerfect), false, STAY)!;
+        const score = reviewOf(content, vectorOf(content, everythingElsePerfect), false, STAY, NO_STANDING)!;
         expect(score, `${bands} bands, ${n} needs`).toBeLessThan(min + bands - 1);
       }
     }
     // AND AT ONE NEED IT IS THE FLOOR RATHER THAN MERELY SHORT OF THE TOP, which is the case
     // that used to be filed as the exception.
     const one = build(1, 1, 5);
-    expect(reviewOf(one, vectorOf(one, [STAY]), false, STAY)).toBe(1);
-    expect(reviewOf(one, vectorOf(one, [0]), false, STAY)).toBe(5);
+    expect(reviewOf(one, vectorOf(one, [STAY]), false, STAY, NO_STANDING)).toBe(1);
+    expect(reviewOf(one, vectorOf(one, [0]), false, STAY, NO_STANDING)).toBe(5);
   });
 
   it('AND THE REAL EXCEPTION IS THE MIGRATED GUEST WHOSE VECTOR HAS NO LODGING NEED AT ALL', () => {
@@ -255,11 +268,11 @@ describe('THE CAP: a vector CONTAINING the lodging need, never served, cannot re
     const four = build(4, 1, 5);
     const engagementOnly = vectorOf(four, [STAY, 0, 0, 0]).filter((state) => state.needId !== 'n0');
     expect(engagementOnly).toHaveLength(3);
-    expect(reviewOf(four, engagementOnly, false, STAY)).toBe(5);
+    expect(reviewOf(four, engagementOnly, false, STAY, NO_STANDING)).toBe(5);
     // At one and at two engagement needs likewise — the exception is the ABSENCE of the lodging
     // row, not a need count, which is the variable the cap was wrongly bounded on.
-    expect(reviewOf(four, engagementOnly.slice(0, 1), false, STAY)).toBe(5);
-    expect(reviewOf(four, engagementOnly.slice(0, 2), false, STAY)).toBe(5);
+    expect(reviewOf(four, engagementOnly.slice(0, 1), false, STAY, NO_STANDING)).toBe(5);
+    expect(reviewOf(four, engagementOnly.slice(0, 2), false, STAY, NO_STANDING)).toBe(5);
   });
 
   it('and the LOWER clamp forbids a band off the bottom, which a forged save can produce', () => {
@@ -293,7 +306,7 @@ describe('THE CAP: a vector CONTAINING the lodging need, never served, cannot re
     const overrun = vectorOf(one, [STAY * 3]);
     // The clamp, at the one input that reaches it.
     expect(needBandOf(5, STAY, STAY * 3)).toBe(0);
-    const clamped = reviewOf(one, overrun, false, STAY)!;
+    const clamped = reviewOf(one, overrun, false, STAY, NO_STANDING)!;
 
     /** The same fold WITHOUT the lower clamp. A different function, so this is not a re-spelling. */
     const unclamped = (needs: readonly NeedState[]): number => {
@@ -340,7 +353,7 @@ describe('THE DOUBLE ROUNDING IS THE DESIGN, and removing it IS the rejected poo
     const four = build(4, 1, 5);
     const unserved = [800, 0, 0, 0];
     expect(pooled(5, 4, STAY, unserved)).toBe(5);
-    expect(reviewOf(four, vectorOf(four, unserved), false, STAY)).toBe(4);
+    expect(reviewOf(four, vectorOf(four, unserved), false, STAY, NO_STANDING)).toBe(4);
   });
 
   it('and the disagreement is not one point: pooling is never LOWER, and is strictly higher often', () => {
@@ -356,7 +369,7 @@ describe('THE DOUBLE ROUNDING IS THE DESIGN, and removing it IS the rejected poo
         for (const c of [0, 400, STAY]) {
           for (const d of [0, 400, STAY]) {
             const unserved = [a, b, c, d];
-            const mine = reviewOf(four, vectorOf(four, unserved), false, STAY)!;
+            const mine = reviewOf(four, vectorOf(four, unserved), false, STAY, NO_STANDING)!;
             const theirs = pooled(5, 4, STAY, unserved);
             expect(mine, `[${unserved.join(',')}]`).toBeLessThanOrEqual(theirs);
             compared += 1;

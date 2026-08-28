@@ -175,23 +175,29 @@ describe('the table has one row per reason and nothing else', () => {
       'evictedRoomUnusable',
       'evictedCauseUnrecorded',
     ]);
-    // THE PARTITION, ASSERTED. The rows the guest ended are contiguous at the head and the
-    // three the hotel ended are contiguous at the tail — which is the property `evictedGuests`
-    // folds and the reason the insertion point is not free. `visitEnded` is not cut short: a
-    // visitor that ran out its clock left when it meant to, exactly as `checkedOut` did.
+    // THE PARTITION, ASSERTED — AND IT MOVED AT G-059 WITHOUT THE ORDER MOVING, which is the
+    // property this literal is really here to hold. `isCutShort` used to split on AGENCY (the
+    // three evictions were the hotel's doing) and now splits on COMPLETION: the two rows that
+    // RAN THEIR COURSE are the head and everything else reviews at the floor. **Both cuts are
+    // contiguous in this order**, so `evictedGuests` still folds a contiguous tail — now a tail
+    // INSIDE the cut-short half — and the insertion points θ-b1 and θ-b2 chose are still the
+    // meaningful ones. `reviews.ts` carries the ruling and the measurement that reversed it.
     expect(GUEST_DEPARTURE_REASONS.map((reason) => isCutShort(reason))).toEqual([
-      false,
-      false,
-      false,
-      // `gaveUpWaitingForLift` (G-038b-i). The hotel's full car caused it, but the guest walked
-      // out on its own clock and on its own feet, so it belongs in the head with the lobby row
-      // it is the twin of — the same agency test the four before it pass.
-      false,
-      false,
+      false, // checkedOut — the clock ran out in a room
+      false, // visitEnded — a visitor's `checkedOut`; it left when it meant to
+      true, // gaveUp — the hotel never found it a room, so there was no stay to review
+      // `gaveUpWaitingForLift` (G-038b-i). It moved with `gaveUp`, which it is the twin of, and
+      // for the twin's reason: whoever is to blame, this guest never had the stay it came for.
       true,
-      true,
-      true,
+      true, // leftDissatisfied — it had a bed and walked out anyway
+      true, // evictedRoomGone
+      true, // evictedRoomUnusable
+      true, // evictedCauseUnrecorded
     ]);
+    // AND THE EVICTIONS ARE STILL A CONTIGUOUS TAIL, asserted rather than left to the eye,
+    // because that is the half of the ordering claim `evictedGuests` actually depends on.
+    const evictions = GUEST_DEPARTURE_REASONS.map((reason) => reason.startsWith('evicted'));
+    expect(evictions).toEqual([false, false, false, false, false, true, true, true]);
   });
 
   it('has no stored total: departed is a fold, so nothing can disagree with the rows', () => {

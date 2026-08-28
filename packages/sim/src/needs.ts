@@ -89,7 +89,14 @@
 // prose and no predicate can tell their tense; they are what this paragraph is for.
 // ============================================================================
 
-import { findNeedType, needTypesInOrder, wantAtOf, wantLineOf } from './content.js';
+import {
+  dissatisfactionCapacityOf,
+  dissatisfactionReliefOf,
+  findNeedType,
+  needTypesInOrder,
+  wantAtOf,
+  wantLineOf,
+} from './content.js';
 import type { BoundContent, NeedTypeData } from './content.js';
 import type { ContentId } from './entities.js';
 
@@ -1008,6 +1015,138 @@ export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boole
 }
 
 /**
+ * THE LONGEST THIS CONTENT CAN LET A GUEST DOWN ON ONE NEED IN A STAY OF `stayTicks` (G-059).
+ *
+ * **THE BANDS' DOMAIN, AND IT IS DERIVED FROM THREE CONTENT NUMBERS RATHER THAN CHOSEN.** It
+ * exists because `needBandOf` divided the served share by the WHOLE STAY, and the whole stay is
+ * a range no hotel can occupy: ADR-0100 measured the entire live population inside the top fifth
+ * of a five-band scale. That is not a distribution finding to be tuned away — the simulation
+ * FORBIDS the rest of the range, and a scale banded over a forbidden region has fewer usable
+ * points than it advertises.
+ *
+ * THE DERIVATION, from the shipped mechanism and nothing else:
+ *
+ *   1. A need's `unservedTicks` advances only on a tick the guest is LET DOWN. Both readings
+ *      come from ONE walk — `accumulateUnservedTicks` sets `UnservedWalk.letDown` to the OR of
+ *      the same per-need predicate it counts with — so a need cannot be unserved on a tick the
+ *      guest is not let down on. **Per-need unserved ticks <= let-down ticks `L`.**
+ *   2. The mood rises by exactly ONE on a let-down tick and falls by `dissatisfactionReliefPerTick`
+ *      (`r`) otherwise, clamped into `[0, dissatisfactionCapacityTicks]` (`c`) — `guests.ts`
+ *      step 4b.
+ *   3. A guest whose mood REACHES `c` departs `leftDissatisfied` (`guests.ts` step 6). The
+ *      departure defers while the guest is engaged, and the rise clamps AT `c`, so `c` itself is
+ *      the most a stay that completes can be carrying — not `c - 1`.
+ *   4. Over `T` ticks with `L` of them let-down, write `A` for the total rise DISCARDED by the
+ *      ceiling clamp — one per let-down tick taken while the mood already sits at `c`. The final
+ *      mood is then `L - A - r(T - L) + B` where `B >= 0` is what the clamp at 0 discarded, so
+ *      `L - A - r(T - L) <= c`, and hence, EXACTLY:
+ *
+ *          L <= (c + r x T + A) / (1 + r)
+ *
+ *   5. `A` IS NOT ZERO, BECAUSE THE DEPARTURE DEFERS WHILE THE GUEST IS ENGAGED — *"a guest that
+ *      is being served RIGHT NOW is not one the hotel is failing"* (`guests.ts` step 6) — so a
+ *      guest already at the ceiling keeps accruing until its table is free. **THE TERM WAS
+ *      MISSING ALTOGETHER FROM THE FIRST DRAFT AND THE RUN IN `review.window.test.ts` CAUGHT
+ *      IT** on the second assertion it made: 303 let-down ticks against a window of 302.
+ *
+ *          window = (c + r x T) / (1 + r)  +  D,   D = max_needs ceil(capacityTicks / refillPerTick)
+ *
+ * ============================================================================================
+ * SAY EXACTLY WHAT THAT LAST LINE IS, BECAUSE IT IS NOT WHAT STEP 5 PROVES AND SWEEP 1 WAS RIGHT
+ * TO SAY SO. **`D` bounds ONE at-ceiling episode; `A` is the total over the WHOLE STAY.**
+ *
+ * WHAT IS PROVED. Step 5's argument is sound per episode: step 5 releases the engagement the tick
+ * its need is FULL, step 6 runs after step 5, so no guest re-engages before the departure test
+ * sees it, and one episode therefore costs at most `D` let-down ticks. **What it does not bound
+ * is how many episodes a completing stay can have** — a guest need only drop below `c` on a
+ * non-let-down tick and engage again.
+ *
+ * WHAT THE ALLOWANCE ACTUALLY BUYS, STATED AS THE FACTOR IT IS. `A` enters INSIDE the division
+ * and `D` is added OUTSIDE it, so the shipped window is valid whenever `A <= D(1 + r)` — **at the
+ * shipped `r = 1` that is two fillings, `A <= 300`, against a `D` of 150.**
+ *
+ * AND A FULLY RIGOROUS BOUND DEGENERATES, WHICH IS WHY THIS IS AN ALLOWANCE AND NOT A THEOREM.
+ * Re-entry costs one non-let-down tick, so the episode count is bounded only by `T - L + 1`;
+ * substituting `A <= (T - L + 1)D` gives `L <= (c + rT + (T + 1)D) / (1 + r + D)`, which at the
+ * shipped numbers is **1,433 of 1,440** — the whole stay, and no repair at all. *So there is no
+ * tight structural bound to be had here, and a paragraph claiming one would be false.*
+ *
+ * WHAT MAKES THE SCALE WELL-DEFINED ANYWAY, AND IT IS NOT THIS FUNCTION. `needBandOf` CLAMPS
+ * BELOW at 0, so a guest that overruns the window lands in the bottom band — which is the right
+ * answer for the worst-served guest in the hotel, not a defect to be designed around. **The
+ * window decides where the bands SIT; it does not have to be a hard ceiling for them to be
+ * meaningful.** That is the property ADR-0035 asks for: the clamp forbids a state its neighbours
+ * permit, and it is reachable.
+ *
+ * SO THE ADEQUACY OF `D` IS MEASURED, NOT PROVED, AND THE READING CARRIES ITS FIVE SLOTS:
+ * **what** — the largest per-need `unservedTicks` any live guest holds, as a fraction of its own
+ * window; **workload** — a one-bed one-cafe hotel with a party every 30 ticks, plus the critic's
+ * five configurations; **sample count** — every live guest on every one of 4,000 ticks here, and
+ * 5 x 20,000 ticks there; **aggregation** — maximum, not mean; **regime** — win32/12cpu quiet,
+ * in-process. **Overruns: ZERO in both.** The margin on the arm that comes closest is 2 ticks of
+ * overshoot against a `D` of 100 for THAT file's own need table (`rest`, 100 / 1) — not 25, which
+ * is `food` and `fun` and is not the maximum `longestFillingIn` takes.
+ * ============================================================================================
+ *
+ * SHIPPED: `c = 301`, `r = 1`, `T = 1440` gives 870, and `need-types.json`'s dearest filling is
+ * `night_rest` at `300 / 2 = 150`, so the window is **1,020 of 1,440 ticks**. The bottom band of a
+ * five-band scale now needs 817 let-down ticks and is REACHABLE; under the whole stay it needed
+ * 1,153 and was not. *Band 0 was the only one the old domain made unreachable by this arithmetic
+ * alone — ADR-0100 and G-059's block say "bands 0-2", which is the measured population and not
+ * the bound; see the correction in `review.window.test.ts`.*
+ *
+ * THE DIRECTION OF THE ERROR IS CHOSEN AND IT IS THE SAFE ONE. A window that is slightly too WIDE
+ * understates how badly a guest was failed; one that is too NARROW puts guests in a band the
+ * arithmetic said they could not reach, which is the defect this function exists to remove. When
+ * only one of the two errors is the one being fixed, the allowance belongs on the safe side of it.
+ *
+ * `min(stayTicks, ...)` BECAUSE THE BOUND IS NOT ALWAYS BINDING, and that clause is what keeps a
+ * VISITOR honest: at `visitDurationTicks: 98` the formula gives 199, longer than the visit, and a
+ * guest cannot be let down for more ticks than it was here. On any content or any stay where the
+ * bound exceeds the stay this returns the stay and is byte-identical to what shipped before.
+ *
+ * CONTENT THAT DECLARES NO MOOD KEEPS THE WHOLE STAY, and that is ADR-0008 rather than a hedge:
+ * such content has guests that never walk out, so nothing bounds `L` below `T` and the stay IS
+ * the reachable domain. The branch is on the capacity's existence and on nothing else.
+ *
+ * IT IS AT LEAST 1 FOR EVERY STAY THAT HAPPENED, AND THERE IS NO CLAMP HERE SAYING SO (ADR-0035,
+ * which asks what a line forbids that its neighbours permit). The schema bounds `c >= 1` and
+ * `r >= 1` (`dissatisfactionCapacityTicksSchema`, `dissatisfactionReliefPerTickSchema`), so for
+ * `T >= 1` the quotient is at least `(1 + r)/(1 + r) = 1` and the floor cannot reach 0. A
+ * `Math.max(1, ...)` was written here and REMOVED before this shipped: it forbade nothing its
+ * neighbours permit, and a window of 0 is worth guarding only where it is reachable — which is
+ * `needBandOf`'s `windowTicks <= 0` branch, one call down, where a stay of no length legitimately
+ * arrives. `stayTicks <= 0` is handed straight through to it rather than answered here, so this
+ * function cannot invent a window for a stay that had none.
+ */
+export function letDownWindowOf(content: BoundContent, stayTicks: number): number {
+  if (stayTicks <= 0) return stayTicks;
+  const capacity = dissatisfactionCapacityOf(content);
+  if (capacity === undefined) return stayTicks;
+  // `?? 1` is unreachable through `bindContent`, which refuses half a stock — the same `?? 1`
+  // `stepGuests` carries at the site this arithmetic is about, and for the same reason.
+  const relief = dissatisfactionReliefOf(content) ?? 1;
+  const ceiling = Math.floor((capacity + relief * stayTicks) / (relief + 1)) + longestFillingIn(content);
+  return ceiling < stayTicks ? ceiling : stayTicks;
+}
+
+/**
+ * The longest one engagement can last: the dearest need's filling, in ticks.
+ *
+ * `?? 1` MATCHES `advanceNeed`'s OWN DEFAULT for a need type that declares no refill, so this
+ * cannot disagree with the rate the guest is actually filled at. A table with no needs gives 0,
+ * which is right: a guest with nothing to be served for cannot be engaged, so nothing defers.
+ */
+function longestFillingIn(content: BoundContent): number {
+  let longest = 0;
+  for (const needType of needTypesInOrder(content)) {
+    const ticks = Math.ceil(needType.capacityTicks / (needType.refillPerTick ?? 1));
+    if (ticks > longest) longest = ticks;
+  }
+  return longest;
+}
+
+/**
  * HOW WELL THE HOTEL SERVED ONE NEED OVER ONE STAY, as a band in `[0, bands - 1]` (G-028b,
  * ADR-0037). **THE ONE PLACE A NEED BECOMES A BAND**, and both readers of that question call it:
  * `reviewOf` averages these, and `recordNeedsAtDeparture` calls the top one `met`.
@@ -1024,10 +1163,17 @@ export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boole
  *
  * THE ARITHMETIC, AND IT IS ONE INTEGER DIVISION PER NEED:
  *
- *   band = floor( (stayTicks - unservedTicks) x bands / stayTicks )
+ *   band = floor( (windowTicks - unservedTicks) x bands / windowTicks )
  *
- * — the SERVED share of the stay, quantised. A need nothing ever served has `unservedTicks ==
- * stayTicks` and lands in band 0; a need never failed lands one PAST the top and is clamped.
+ * — the SERVED share of the WINDOW, quantised. A need failed for the whole window lands in band 0;
+ * a need never failed lands one PAST the top and is clamped.
+ *
+ * `windowTicks` WAS `stayTicks` UNTIL G-059 AND THE PARAMETER IS THE SAME SHAPE, so nothing about this
+ * function moved: what moved is what its ONE caller-side derivation hands it. The stay is the
+ * window only when the content lets a guest be failed for all of it, and shipped content does not
+ * — `letDownWindowOf` above owns that derivation and both callers go through it. Passing the stay
+ * directly is still legal and still means "band the served share of this many ticks"; it is simply
+ * no longer the domain the simulation can occupy.
  *
  * THE CLAMP IS REACHABLE AND REACHABLE ONLY AT `unservedTicks == 0` (ADR-0035, which asks what a
  * line forbids that its neighbours permit). `served == stayTicks` makes the quotient exactly
@@ -1064,10 +1210,10 @@ export function isNeedSatisfiedIn(content: BoundContent, need: NeedState): boole
  * impossibility**, and `review.scorer.test.ts` drives the consequence rather than the arithmetic.
  * ---------------------------------------------------------------------------
  */
-export function needBandOf(bands: number, stayTicks: number, unservedTicks: number): number {
-  if (stayTicks <= 0) return bands - 1;
-  const served = stayTicks - unservedTicks;
-  const band = Math.floor((served * bands) / stayTicks);
+export function needBandOf(bands: number, windowTicks: number, unservedTicks: number): number {
+  if (windowTicks <= 0) return bands - 1;
+  const served = windowTicks - unservedTicks;
+  const band = Math.floor((served * bands) / windowTicks);
   return band >= bands ? bands - 1 : band < 0 ? 0 : band;
 }
 
@@ -1108,7 +1254,11 @@ export function metAtDeparture(
   stayTicks: number,
 ): boolean {
   if (bands === undefined) return isNeedSatisfiedIn(content, need);
-  return needBandOf(bands, stayTicks, need.unservedTicks) === bands - 1;
+  // THE WINDOW, NOT THE STAY (G-059). `reviewOf` derives the same number from the same function,
+  // which is what keeps `met` and the score the same question about the same two integers — the
+  // coupling review law A rests on. A second spelling here is how that law starts comparing two
+  // different quantities on a correct run.
+  return needBandOf(bands, letDownWindowOf(content, stayTicks), need.unservedTicks) === bands - 1;
 }
 
 /**

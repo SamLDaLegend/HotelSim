@@ -32,6 +32,19 @@ import type { BoundContent, NeedTypeData, RoomTypeData, SimContent } from './con
 import { formNeedVector } from './needs.js';
 import { reviewOf, reviewScaleOf } from './reviews.js';
 
+/**
+ * THE HOTEL'S STANDING, AND IT IS INERT IN THIS FILE (G-059).
+ *
+ * `reviewOf` folds the hotel in as one more band ONLY when the content declares a star ladder,
+ * and no content built here declares one — so every case below is scored on the need vector
+ * alone, exactly as it was before G-059, and this argument could hold any number without moving
+ * an assertion. `review.standing.test.ts` is where the term is driven, against content that has
+ * a ladder; keeping the two apart is what stops the properties in this file (the mean, the
+ * clamp, the floor, the migrated vector) from being re-proved through a second variable.
+ */
+const NO_STANDING = 0;
+
+
 const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   id,
   name: id,
@@ -147,11 +160,11 @@ describe('the scale must have at least as many bands as the content has needs', 
     );
     // bands === needs, the shape the floor refuses: three perfect needs give band 3 each, the
     // starved one gives 0, so the mean is 9/4 -> 2 and the guest scores 3 of 4. **NOT the top.**
-    expect(reviewOf(fourBands, threeOfFour, false, STAY)).toBe(3);
-    expect(reviewOf(fourBands, threeOfFour, false, STAY)).toBeLessThan(reviewScaleOf(fourBands)!.max);
+    expect(reviewOf(fourBands, threeOfFour, false, STAY, NO_STANDING)).toBe(3);
+    expect(reviewOf(fourBands, threeOfFour, false, STAY, NO_STANDING)).toBeLessThan(reviewScaleOf(fourBands)!.max);
     // And on the legal shape, likewise below the top — the floor buys resolution, not this.
     const fiveBands = bindContent(raw(4, 1, 5));
-    expect(reviewOf(fiveBands, threeOfFour, false, STAY)).toBeLessThan(reviewScaleOf(fiveBands)!.max);
+    expect(reviewOf(fiveBands, threeOfFour, false, STAY, NO_STANDING)).toBeLessThan(reviewScaleOf(fiveBands)!.max);
   });
 
   it('scales up and down with the need table rather than being a fixed number', () => {
@@ -317,7 +330,7 @@ describe('THE CEILING: no more bands than the longest stay has ticks', () => {
             deficit: i < served ? 0 : 200,
             metBy: i < served ? ('room' as const) : null,
           }));
-          const score = reviewOf(content, vector, false, stay);
+          const score = reviewOf(content, vector, false, stay, NO_STANDING);
           if (score !== undefined) scores.add(score);
         }
       }
@@ -382,10 +395,10 @@ describe('THE CEILING: no more bands than the longest stay has ticks', () => {
     const three = all.map((state, index) =>
       index === 3 ? { ...state, unservedTicks: STAY, deficit: 200, metBy: null } : state,
     );
-    expect(reviewOf(withBands, all, false, STAY)).toBe(reviewOf(clean, all, false, STAY));
-    expect(reviewOf(withBands, three, false, STAY)).toBe(reviewOf(clean, three, false, STAY));
+    expect(reviewOf(withBands, all, false, STAY, NO_STANDING)).toBe(reviewOf(clean, all, false, STAY, NO_STANDING));
+    expect(reviewOf(withBands, three, false, STAY, NO_STANDING)).toBe(reviewOf(clean, three, false, STAY, NO_STANDING));
     // And under the document it named, the guest that missed a need still does NOT reach 5.
-    expect(reviewOf(withBands, three, false, STAY)).toBe(4);
+    expect(reviewOf(withBands, three, false, STAY, NO_STANDING)).toBe(4);
   });
 });
 

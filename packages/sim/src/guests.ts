@@ -97,6 +97,7 @@ import type { Corridors } from './corridors.js';
 import type { Lift } from './lift.js';
 import { stairwellOf } from './stairs.js';
 import type { Stairs } from './stairs.js';
+import { starRatingIn } from './rating.js';
 import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
 import type { ReviewOutcomeRow } from './reviews.js';
 import {
@@ -672,6 +673,10 @@ function settleLiftQueue(lift: LiftTick, tick: number): LiftQueue {
  * union: the stays the GUEST ended sit contiguously at the head and the three the HOTEL ended sit
  * contiguously at the tail, which is the order `evictedGuests` folds and the order a reader's eye
  * expects. Appending would have put a not-cut-short row after the evictions.
+ * *(G-059 MOVED THE CUT LINE AND THE ORDER STILL HOLDS, which is the property this paragraph was
+ * really buying: the predicate now splits after `visitEnded` rather than before `evictedRoomGone`,
+ * and BOTH cuts are contiguous in this order. The evictions are still a contiguous tail inside the
+ * cut-short half, so `evictedGuests` is untouched.)*
  *
  * ---------------------------------------------------------------------------
  * `visitEnded` IS INSERTED AT INDEX 1 (θ-b2), FOR THE SAME REASON AND AT SOME COST, AND THE COST
@@ -730,7 +735,7 @@ export type GuestDepartureReason = (typeof GUEST_DEPARTURE_REASONS)[number];
 export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnrecorded'>;
 
 /**
- * Whether this stay was CUT SHORT — ended by the hotel rather than by the guest (G-019).
+ * Whether this stay was CUT SHORT — it did not run its course (G-019, re-partitioned at G-059).
  *
  * AN EXHAUSTIVE SWITCH WITH A `never` FALLTHROUGH, NOT A PREFIX TEST AND NOT A BOOLEAN
  * DECIDED AT EACH CALL SITE. `evictedInSummary` in the report tests the string prefix
@@ -746,20 +751,34 @@ export type TickDepartureReason = Exclude<GuestDepartureReason, 'evictedCauseUnr
  * `GUEST_DEPARTURE_REASONS` — and it is answered anyway, because "the cause was not
  * recorded" does not make the eviction less of one.
  *
- * `gaveUpWaitingForLift` IS **NOT** CUT SHORT EITHER, and it is the row where the distinction is
- * finest (G-038b-i). The hotel certainly caused it — the car was full — but so did the hotel
- * cause `gaveUp` by having no free room, and that row sits in the same half. What this
- * predicate partitions on is AGENCY, not blame: the guest walked out on its own feet with its
- * own clock, exactly as it does in the lobby. The evictions are the three where the guest had
- * no say at all.
+ * ---------------------------------------------------------------------------
+ * IT PARTITIONS ON COMPLETION, AND IT USED TO PARTITION ON AGENCY (G-059, ADR-0104). ~~*"What
+ * this predicate partitions on is AGENCY, not blame: the guest walked out on its own feet with
+ * its own clock, exactly as it does in the lobby… forcing the floor on top would double-count
+ * the same fact."*~~ **STRUCK.** The fact it relied on — that a guest which walks out is scored
+ * badly anyway, *"by construction"* — is not one the mean carries: measured at `--days 200
+ * --seed 42 --rooms 24 --amenities 1`, **1,677 of 3,186 guests stormed out and the review
+ * distribution was `3:580, 4:2497, 5:109`**, so at least 1,097 of them filed FOUR STARS. A
+ * `leftDissatisfied` guest is driven out by ONE need and the other three are near the top; the
+ * mean washes out the one that ended the stay (ADR-0100).
  *
- * `leftDissatisfied` IS **NOT** CUT SHORT, and it is the row where the question is worth asking
- * out loud (θ-b1). The guest walked out mid-stay, so its stay was certainly shorter than the
- * clock said — but this predicate is not about length, it is about AGENCY: G-019 gives a
- * cut-short stay the floor review because the HOTEL ended it and the guest had no say. A guest
- * that got fed up and left had all of the say. It reviews on what it actually got, which is
- * already bad enough (its needs are unmet, by construction — that is why it left), and forcing
- * the floor on top would double-count the same fact.
+ * THE RULE NOW: **`checkedOut` and `visitEnded` are the stays that RAN THEIR COURSE. Everything
+ * else did not happen or did not finish, and reviews at the floor.** The human's word for this
+ * scale is a TripAdvisor score, and on that reading a guest who storms out — or one the hotel
+ * never found a room for — does not file four stars.
+ *
+ * WHAT THE OLD PARTITION BOUGHT IS NOT LOST. The AGENCY distinction is still recorded, in the
+ * place that was always its home: the DEPARTURE TABLE has a row per reason, and those rows are
+ * what tell a player which lever to pull (*"nobody would give it a room -> MORE ROOMS; it had a
+ * bed and nothing to do -> MORE AMENITIES"*, above). A five-point review scale was never able to
+ * carry that instruction and was never read for it. What this predicate decides is one thing:
+ * whether the guest had a stay to review.
+ *
+ * THE ROW ORDER STILL MAKES THE PARTITION CONTIGUOUS, which is what `GUEST_DEPARTURE_REASONS`
+ * was ordered for and is why the reordering note above still reads true: the two completed rows
+ * sit at the head, the five that are not follow, and `evictedGuests` still folds a contiguous
+ * tail inside them.
+ * ---------------------------------------------------------------------------
  */
 export function isCutShort(reason: GuestDepartureReason): boolean {
   switch (reason) {
@@ -767,10 +786,13 @@ export function isCutShort(reason: GuestDepartureReason): boolean {
     // A completed visit is the visitor's `checkedOut`: it left when it meant to, having had
     // whatever the hotel managed to give it. Nothing cut it short (θ-b2).
     case 'visitEnded':
+      return false;
+    // EVERY OTHER ROW IS A STAY THAT DID NOT RUN ITS COURSE (G-059). Three the hotel ended and
+    // three the guest ended, and the review scale no longer separates them — see `reviewOf`,
+    // which carries the ruling and the measurement that reversed the agency partition.
     case 'gaveUp':
     case 'gaveUpWaitingForLift':
     case 'leftDissatisfied':
-      return false;
     case 'evictedRoomGone':
     case 'evictedRoomUnusable':
     case 'evictedCauseUnrecorded':
@@ -2353,7 +2375,42 @@ type RoomSearch = {
    * `GuestTickResult`, never itself hashed until it reaches the world.
    */
   reviewOutcomes: readonly ReviewOutcomeRow[];
+  /**
+   * THE HOTEL'S STAR RATING AS THIS TICK SEES IT, resolved on first use (G-059).
+   *
+   * `null` MEANS "NOT ASKED YET", NOT "UNRATED" — `UNRATED` is 0 and is a value this field
+   * legitimately holds. The lazy shape is the reason it is mutable rather than read once beside
+   * `speed` and `stairwell`: **the only reader is a DEPARTURE**, and a departure happens on a
+   * small fraction of ticks (469 of 43,200 at `--days 30 --rooms 24 --amenities 1`), while
+   * `starRatingIn` is an O(rooms) tally. Reading it eagerly would put that fold on every tick of
+   * every run to serve the ticks nobody leaves on — the shape `isDemandSlot` guards against one
+   * phase up, and the shape §6.1 asks `sim-critic` to watch for.
+   *
+   * IT CANNOT GO STALE INSIDE A TICK, which is what makes one resolution per tick correct rather
+   * than merely cheap: entity membership changes exactly once, at `commitEntities`, which is
+   * phase 5 — so the draft this reads is fixed for the whole of `runGuests`.
+   *
+   * IT IS THE SAME NUMBER `runDemand` READ THIS TICK, off the same `ValidityContext` through the
+   * same `starRatingIn`. So the rating that decided who turned up and the rating a departing
+   * guest scores cannot disagree about the building. Tick-local, never hashed, never saved.
+   */
+  hotelStanding: number | null;
 };
+
+/**
+ * The hotel's star rating this tick, resolved once. See `RoomSearch.hotelStanding`.
+ *
+ * `starRatingIn` RATHER THAN AN INDEX INTO ANYTHING — the sim's own accessor, for the reason the
+ * report gives one field over: a second way of deciding what the hotel scores is a second answer
+ * that can disagree with the first.
+ */
+function hotelStandingOf(search: RoomSearch): number {
+  const resolved = search.hotelStanding;
+  if (resolved !== null) return resolved;
+  const stars = starRatingIn(search.input.validity).stars;
+  search.hotelStanding = stars;
+  return stars;
+}
 
 /**
  * A room goes back into the pool. THE ONE PLACE `held` SHRINKS.
@@ -2506,7 +2563,11 @@ function depart(
   // tally above divides by, so the review and the tally are shares of one denominator. The
   // clock-reading the old sentence was guarding against is still forbidden: this function gets a
   // duration, never a tick.
-  const score = reviewOf(content, guest.needs, isCutShort(reason), stayTicks);
+  // THE HOTEL AS IT STANDS AT THIS DEPARTURE (G-059). Resolved lazily, once per tick — and it is
+  // read AFTER the cut-short test costs nothing, because `reviewOf` needs it either way and the
+  // memo makes the second departure of a tick free. `reviews.ts` carries the ruling this
+  // implements and the defence of at-departure over at-arrival.
+  const score = reviewOf(content, guest.needs, isCutShort(reason), stayTicks, hotelStandingOf(search));
   if (score !== undefined) search.reviewOutcomes = recordReview(search.reviewOutcomes, score);
 }
 
@@ -2591,6 +2652,9 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     exhausted: null,
     needOutcomes: input.needOutcomes,
     reviewOutcomes: input.reviewOutcomes,
+    // NOT READ HERE, DELIBERATELY — unlike every field above it. `hotelStandingOf` resolves it on
+    // the first departure of the tick and most ticks have none. See the field's own note.
+    hotelStanding: null,
   };
   const lodgingNeed = lodgingNeedOf(content);
   // READ ONCE PER TICK, NOT ONCE PER GUEST (G-027a). It is one array index behind two

@@ -18,9 +18,21 @@
 //
 // AND IT IS MECHANICALLY LOAD-BEARING RATHER THAN TIDY. ADR-0078 measured the review channel
 // as ONE BIT — mean 387 below the provider bottleneck and a FLAT 500 at and above it — so
-// above a low bottleneck the review says the same thing about every hotel. A rating judged on
+// above a low bottleneck the review said the same thing about every hotel. A rating judged on
 // facilities present CANNOT COLLAPSE THAT WAY, because it does not read guest outcomes at all.
 // That is the whole reason the human ruled a second system into existence (ADR-0080).
+//
+// ~~"above a low bottleneck the review says the same thing about every hotel"~~ IS NOW FALSE ON
+// THE FACILITY AXIS, AND IT IS THIS FILE'S OWN QUANTITY THAT FALSIFIED IT (G-059, ADR-0104). The
+// human ruled that a review measures the whole stay INCLUDING facilities, so `reviewOf` now takes
+// `starRatingIn(...).stars` as one more band in its mean — above the bottleneck the review reads
+// `4:232` at three stars and `5:464` at four, on hotels that were byte-identical `5:all` before.
+// The sentence is kept in the past tense rather than deleted, because the ARGUMENT it supports is
+// unchanged: the collapse it describes is a property of reading GUEST OUTCOMES, and nothing here
+// reads one. **What did change is the direction of the coupling, and it is worth being exact
+// about: the review reads the rating; the rating reads no review.** ADR-0082's test of
+// distinctness is untouched — a hotel with every facility and terrible service earns stars and
+// loses reviews — and it is now a test something can actually fail, because both halves move.
 // ==========================================================================================
 //
 // WHAT IT IS FOR, AND WHAT IT DOES NOT DO YET. ADR-0078 also measured STRICT DOMINANCE: above

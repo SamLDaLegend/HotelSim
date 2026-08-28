@@ -31,6 +31,19 @@ import { createNeedOutcomes, metAtDeparture, needBandOf, needOutcomeOf, recordNe
 import type { NeedState } from './needs.js';
 import { reviewOf, reviewScaleOf } from './reviews.js';
 
+/**
+ * THE HOTEL'S STANDING, AND IT IS INERT IN THIS FILE (G-059).
+ *
+ * `reviewOf` folds the hotel in as one more band ONLY when the content declares a star ladder,
+ * and no content built here declares one — so every case below is scored on the need vector
+ * alone, exactly as it was before G-059, and this argument could hold any number without moving
+ * an assertion. `review.standing.test.ts` is where the term is driven, against content that has
+ * a ladder; keeping the two apart is what stops the properties in this file (the mean, the
+ * clamp, the floor, the migrated vector) from being re-proved through a second variable.
+ */
+const NO_STANDING = 0;
+
+
 const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   id,
   name: id,
@@ -104,7 +117,7 @@ describe('THE TALLY AND THE REVIEW CANNOT DISAGREE ABOUT A GUEST', () => {
       for (const b of [0, 200, 201, STAY]) {
         for (const c of [0, 201, STAY]) {
           const unserved = [a, b, c, 0];
-          const score = reviewOf(SCALED, vectorOf(SCALED, unserved), false, STAY)!;
+          const score = reviewOf(SCALED, vectorOf(SCALED, unserved), false, STAY, NO_STANDING)!;
           const rows = recordNeedsAtDeparture(SCALED, createNeedOutcomes(), vectorOf(SCALED, unserved), STAY, scale.bands);
           const everyRowMet = rows.every((row) => row.met === 1 && row.unmet === 0);
           expect(score === scale.max, `[${unserved.join(',')}]`).toBe(everyRowMet);

@@ -68,8 +68,10 @@ import {
   departureCountOf,
   entityCount,
   firstRoomTypeProviding,
+  GUEST_DEPARTURE_REASONS,
   guestCount,
   hashState,
+  isCutShort,
   isWithinBounds,
   itemTypeProvides,
   lodgingNeedOf,
@@ -2408,6 +2410,35 @@ export function evictedInSummary(summary: RunSummary): number {
 }
 
 /**
+ * Stays this report records as NOT HAVING RUN THEIR COURSE (G-059) — the superset review law B
+ * now asks about.
+ *
+ * NOT A PREFIX, AND THAT IS THE WHOLE REASON THIS FUNCTION EXISTS BESIDE `evictedInSummary`. The
+ * eviction subtotal can be a string test because every eviction reason is spelled `evicted*` by
+ * convention, pinned in `outcome.report.test.ts`. The CUT-SHORT set has no such convention — it
+ * is `gaveUp`, `gaveUpWaitingForLift`, `leftDissatisfied` and the three evictions, and the only
+ * thing they have in common is what `isCutShort` says about them. **So this asks the sim's own
+ * predicate**, which is why G-059 exported it: a copy of the partition here would be a second
+ * answer to "did this guest have a stay", and the day a seventh reason lands the copy is the one
+ * that quietly says `false`.
+ *
+ * IT WALKS `GUEST_DEPARTURE_REASONS` RATHER THAN CASTING. A summary carries reasons as strings —
+ * that is what a JSON document is — and matching against the sim's own frozen list is how a
+ * string becomes a member of the union without an assertion anybody can get wrong. A reason the
+ * list does not carry counts as not cut short, which is `departuresOf`'s contract exactly and is
+ * safe for the same reason: `assertGuestOutcomes` has already refused a table with an unknown row.
+ */
+export function cutShortInSummary(summary: RunSummary): number {
+  let total = 0;
+  for (const row of summary.guests.departures) {
+    for (const known of GUEST_DEPARTURE_REASONS) {
+      if (known === row.reason && isCutShort(known)) total += row.count;
+    }
+  }
+  return total;
+}
+
+/**
  * What makes a departure reason an eviction, as a string test.
  *
  * A PREFIX RATHER THAN A LIST, and it is a deliberate trade with a cost worth naming: the
@@ -3101,6 +3132,15 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
     // one need would produce top reviews the least-met row cannot cover, on any content.
     // `scorer.report.test.ts` drives it red by mutation rather than trusting the argument.
     //
+    // G-059 ADDED A TERM TO THE MEAN AND THE LAW IS UNMOVED, WHICH IS WHY THE HOTEL ENTERS THE
+    // MEAN AND NOT AS A BONUS ON TOP OF IT. The score is now the mean of the per-need bands AND
+    // the hotel's own standing band, so the top still requires EVERY term at the top — which
+    // still requires every need band at the top, which is still what `met` counts. An extra
+    // term can only make the top harder to reach. A facilities BONUS added after the mean would
+    // have turned this law red on the first run with a Spa in it, and that is the shape of the
+    // check this law is: it does not care what else the scorer reads, only that a top score
+    // cannot outrun the need vector.
+    //
     // THE MESSAGE BELOW SAID *"unreachable while any need is unmet — that is what this scale is
     // sized for"* UNTIL SWEEP 1, AND IT WAS A LIVE FALSE CLAIM. ADR-0036 §2 ruled that necessity
     // false and the same diff removed it from the bind-time refusal in `content.ts`, asserted
@@ -3116,29 +3156,38 @@ export function buildSummary(world: World, content: BoundContent, options: Optio
       violations.push(
         `Review attribution broken at tick ${world.tick}: ${topReviews} guest(s) left the top review of ` +
           `${reviewScale.max}, but the least-met need was met only ${leastMet} time(s). A top review is the ` +
-          'MEAN of this guest\'s per-need bands, so it reaches the top only when every one of those bands ' +
-          'does — which is exactly what "met" counts (ADR-0037). This holds at every scale. More top reviews ' +
-          'than that means the review is not reading the whole need vector (G-019).',
+          "MEAN of this guest's per-need bands and the hotel's own standing band, so it reaches the top only " +
+          'when every one of those bands does — and a top NEED band is exactly what "met" counts (ADR-0037). ' +
+          'This holds at every scale. More top reviews than that means the review is not reading the whole ' +
+          'need vector (G-019, and the standing term is G-059).',
       );
     }
-    // B — A STAY THE HOTEL CUT SHORT REVIEWS AT THE FLOOR, checked against the DEPARTURE
-    // TABLE. An eviction scores the hotel's conduct rather than the guest's experience, so
-    // every evicted stay is a floor review; other stays may be too, which is why this is an
-    // inequality and not an equality.
+    // B — A STAY THAT DID NOT RUN ITS COURSE REVIEWS AT THE FLOOR, checked against the
+    // DEPARTURE TABLE. Other stays may reach the floor too — a completed stay whose every band
+    // is 0 does — which is why this is an inequality and not an equality.
     //
-    // IT INSPECTS NOTHING IN MOST RUNS, WHICH IS WHY THE CRITERIA NAME AN ARM FOR IT.
-    // Evictions are zero in every configuration this project measures by default, so
-    // ADR-0007's second half — a case proving it can fail — is a REAL INVOCATION rather than
-    // a forged world: `--rooms 6 --amenities 5 --arrivals 60 --demolish 900`, five evictions
-    // and five floor reviews, pinned in `review.report.test.ts`.
-    const evicted = evictedInSummary(summary);
+    // IT WAS `evicted` UNTIL G-059 AND THE WIDENING IS THE POINT, not a relabelling. Under the
+    // old partition the only floored rows were the three evictions, so this law inspected
+    // NOTHING in every configuration this project measures by default and needed a demolition
+    // arm to have a case at all. It now covers `gaveUp`, `gaveUpWaitingForLift` and
+    // `leftDissatisfied` as well, which means **it inspects 1,677 of 3,186 departures on a
+    // shipped arm** (`--days 200 --seed 42 --rooms 24 --amenities 1`) instead of zero. A law
+    // that fires on ordinary runs is worth more than one that needs a special invocation to
+    // mean anything — and the special invocation is kept anyway, because it is the only arm
+    // that reaches the eviction rows.
+    //
+    // ADR-0007's second half — a case proving it can fail — is still a REAL INVOCATION rather
+    // than a forged world: `--rooms 6 --amenities 5 --arrivals 60 --demolish 900`, five
+    // evictions and five floor reviews, pinned in `review.report.test.ts`.
+    const cutShort = cutShortInSummary(summary);
     const floorReviews = reviewCountOf(world.reviewOutcomes, reviewScale.min);
-    if (floorReviews < evicted) {
+    if (floorReviews < cutShort) {
       violations.push(
-        `Review attribution broken at tick ${world.tick}: ${evicted} stay(s) ended in an eviction but only ` +
-          `${floorReviews} guest(s) left the floor review of ${reviewScale.min}. A stay the hotel cut short ` +
-          'reviews at the floor whatever else the guest got, so an eviction reviewed as an ordinary stay moves ' +
-          'one of these and not the other (G-019).',
+        `Review attribution broken at tick ${world.tick}: ${cutShort} stay(s) did not run their course but ` +
+          `only ${floorReviews} guest(s) left the floor review of ${reviewScale.min}. A guest the hotel ` +
+          'evicted, one it never found a room for and one that gave up and walked out all review at the ' +
+          'floor whatever else they got, so a stay that ended early reviewed as an ordinary stay moves one ' +
+          'of these and not the other (G-019, re-partitioned at G-059).',
       );
     }
   }

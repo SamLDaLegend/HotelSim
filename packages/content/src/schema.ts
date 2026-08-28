@@ -2435,6 +2435,10 @@ export const starTierCountingSchema = z.enum(['rooms', 'distinctTypes']);
  * the mechanical half of the ruling: the review channel measured ONE BIT above the bottleneck
  * (ADR-0078), and a rating that cannot read guest outcomes cannot collapse the same way.
  *
+ * THE ONE-BIT MEASUREMENT IS HISTORY SINCE G-059 (ADR-0104): the review reads the rating now and
+ * separates on the facility axis. The FENCE this paragraph states is what matters and it is
+ * unmoved — the coupling runs one way, and nothing declared here can see a guest outcome.
+ *
  * THE IDS ARE STRICTLY ASCENDING, which is `normaliseTable`'s discipline applied inside a row.
  * A duplicate would let one room type carry a `rooms` clause twice, and an arbitrary order
  * would let a designer's text editor decide the order a shortfall is reported in (I2).

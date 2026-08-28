@@ -334,7 +334,10 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // a room, so no refund is paid and every other field is byte-identical. What is NEW in this
     // document is one key, `input.buyFacilityEveryTicks`, additive, so `SUMMARY_SCHEMA_VERSION`
     // stays 4.
-    stateHash: '67e13a16221d2082',
+    // MOVED AGAIN AT G-059 to `bf65fd6522ddf4f1`, ONE cause: the review tally is world state and
+    // the scorer records different scores. See the `distribution` block below for both halves of
+    // the move and the text golden's `state hash` line for the control.
+    stateHash: 'bf65fd6522ddf4f1',
   },
   guests: {
     arrived: 32,
@@ -612,11 +615,34 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
       // six at the top are the six that checked out. The mean rises 340 -> 344 because the ratio
       // of housed to roomless improved slightly: a pair takes one bed between two people, so a
       // third more arrivals produce two more complete stays rather than none.
-      { score: 1, count: 0 },
+      //
+      // RE-RECORDED AGAIN AT G-059, AND THIS IS THE LARGEST MOVE THE DISTRIBUTION HAS HAD:
+      // **0/0/21/0/6 -> 21/0/0/6/0.** Both bands moved, in opposite directions, for two
+      // different reasons — and the departure table beneath is UNCHANGED, which is what makes
+      // this a scorer move rather than a simulation move. It still conserves: 21 + 6 = 27 = 6
+      // checked out + 21 who gave up.
+      //
+      //   THE 21 FELL FROM 3 TO 1. They are the guests the hotel never found a room for. Under
+      //   the agency partition a `gaveUp` stay was scored on what the guest happened to get
+      //   while it waited — three of its four bands were top because the lobby has a cafe —
+      //   and it left a THREE. On the human's TripAdvisor reading a guest that never got in
+      //   does not file three stars, and `isCutShort` now floors it.
+      //
+      //   THE 6 FELL FROM 5 TO 4, AND THAT IS THE FACILITIES TERM BITING ON A HOTEL WITH NONE.
+      //   These six were served throughout and still are: their four need bands are all top.
+      //   **This hotel is TWO STARS** — the `stars` line in the text golden says so, and has
+      //   since G-051a — so its standing band is 2 of 4, and the mean of five terms is
+      //   (4+4+4+4+2)/5 = 3.6, which floors to 3 and scores 4. A two-star hotel can no longer
+      //   collect five-star reviews for keeping the guests it managed to house comfortable.
+      //   *That sentence is the whole of E-014's second finding, on the smallest run this
+      //   project owns.*
+      //
+      // The mean falls 344 -> 167 with them.
+      { score: 1, count: 21 },
       { score: 2, count: 0 },
-      { score: 3, count: 21 },
-      { score: 4, count: 0 },
-      { score: 5, count: 6 },
+      { score: 3, count: 0 },
+      { score: 4, count: 6 },
+      { score: 5, count: 0 },
     ],
   },
   rooms: {
@@ -798,8 +824,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     // distribution above for why a hotel whose guests must now WALK reviews slightly better.
     // G-038a-iii-b: back to G-023b-ii's own distribution, and the mean back to 300, when the
     // walk gains a vertical leg. The JSON golden carries why.
-    'reviews     1:0, 2:0, 3:21, 4:0, 5:6',
-    'mean x100   344',
+    // G-059: **1:21 and 4:6**, both bands moving, the departure table unchanged. The JSON
+    // golden's distribution block carries the two mechanisms — the floor for a guest that never
+    // got a room, and a two-star hotel's standing capping its housed guests at four.
+    'reviews     1:21, 2:0, 3:0, 4:6, 5:0',
+    'mean x100   167',
     // TWO LINES ADDED AT G-051a, AND THE SECOND ONE IS THE POINT. The default hotel is TWO
     // stars and is told exactly what the third costs: three more bedrooms. A rating with no
     // price tag is a number; a rating with one is a currency.
@@ -966,7 +995,13 @@ const GOLDEN_2_DAYS_SEED_42 =
     // facility, so the same 6 valid rooms, the same 32 arrivals, the same 6/21 split, the same
     // four need rows to the basis point, the same 11 transactions, the same 51,000p and the same
     // 527,000p — and the same two `stars` lines, because the ladder did not move.
-    'state hash  67e13a16221d2082',
+    // G-059: `67e13a16221d2082` -> `bf65fd6522ddf4f1`. THE REVIEW TALLY IS WORLD STATE, so a
+    // scorer that records different scores hashes differently — and that is the ONLY cause here.
+    // The control is the whole document: the same 32 arrivals, the same 6/21 split, the same
+    // four need rows to the basis point, the same 11 transactions, the same 51,000p, the same
+    // 527,000p, the same 6 valid rooms and the same two `stars` lines. `SAVE_SCHEMA_VERSION`
+    // does not move — no field was added to `World` — and neither does `SUMMARY_SCHEMA_VERSION`.
+    'state hash  bf65fd6522ddf4f1',
   ].join('\n') + '\n';
 
 /**

@@ -472,6 +472,12 @@ export function isStarTierCounting(value: unknown): value is StarTierCountingDat
  * judged on how its guests felt, reads `reviewOutcomes`, and does not exist. The review channel
  * measured ONE BIT above the bottleneck, and a predicate that cannot see a review cannot
  * collapse the same way.
+ *
+ * THAT MEASUREMENT IS HISTORY SINCE G-059 AND THE SENTENCE ABOVE IS KEPT FOR ITS ARGUMENT. The
+ * human's E-014 ruling (ADR-0104) made the review read the rating, so the channel separates on
+ * the facility axis now — `4:232` against `5:464` above the bottleneck. The coupling runs ONE
+ * WAY: a review may read a rating, and nothing in this shape may reach a review, a need outcome
+ * or a departure reason. That fence is what this paragraph is really about and it is unmoved.
  */
 export type StarTierRequirementData = {
   /** Strictly ascending, and `starTierRequirementSchema` is what makes that true. */
@@ -1709,13 +1715,50 @@ function cloneReviewScale(
  *
  *   the report materialises one row per admitted score
  *   a score is `min + floor(SUM band / N)`, so it takes one value per band: rows == bands
- *   a band is `floor((stay - unserved) x bands / stay)` and `unserved` is an INTEGER in
- *     [0, stay], so a band can take at most `stay + 1` distinct values
- *   -> a scale with more bands than the longest stay has ticks admits rows NO GUEST CAN LAND IN
+ *   a band is `floor((windowTicks - unserved) x bands / windowTicks)` and `unserved` is an
+ *     INTEGER in [0, windowTicks], so a band can take at most `windowTicks + 1` distinct values
+ *   -> a scale with more bands than that window has ticks admits rows NO GUEST CAN LAND IN
  *
  * So `max - min <= L`, where `L` is the longest life this content's own rules permit —
  * `max(stayDurationTicks, visitDurationTicks, toleranceTicks)`, read here from the rules
  * directly because `guests.ts` imports this module and the reverse would be a cycle.
+ *
+ * ---------------------------------------------------------------------------
+ * THE DENOMINATOR MOVED AT G-059 AND THE BOUND SURVIVES BY GETTING LOOSER, WHICH IS SAID RATHER
+ * THAN LEFT FOR A READER TO NOTICE. `needBandOf` divides by `letDownWindowOf(content, stay)`
+ * now, not by the stay — 1,020 of 1,440 on shipped content — because the whole stay is a range
+ * the simulation cannot occupy (E-014, ADR-0104).
+ *
+ * THE CONSEQUENCE FOR THIS CEILING, EXACTLY: `windowTicks <= stay <= L` by construction
+ * (`letDownWindowOf` returns `min(stayTicks, ...)`), so every scale this bound admits is still
+ * at least as wide as the number of values a band can take. **The bound stays SOUND and becomes
+ * LOOSER by the difference** — the widest scale this ceiling admits is 1,441 scores, a band can
+ * take `windowTicks + 1` distinct values, so on shipped content **420 of those scores are now
+ * unreachable where 0 were before** (1,441 - 1,021 against 1,441 - 1,441). *The first draft of
+ * this line said "421 … where before it admitted 1" and was off by one at BOTH ends: the
+ * fencepost is `window + 1` values, not `window`.*
+ *
+ * SO THE SENTENCE BELOW IS AMENDED RATHER THAN KEPT: this is no longer "tighter than what it
+ * replaces AND THAT IS THE POINT" in the sense that mattered, because the quantity it is tight
+ * against moved underneath it. What it still is, and what the block is really for, is a
+ * RESOURCE bound with a stated provenance: it closes the 5,000,001-row cliff, it scales with
+ * content rather than being a literal, and it is not a judgement about which admitted scores
+ * are reachable — the parenthesis in the refusal message has always said so.
+ *
+ * TIGHTENING IT TO `windowTicks` IS NOT DONE HERE, AND THE BINDING REASON IS STRUCTURAL RATHER
+ * THAN THE DESIGN ONE THIS PARAGRAPH FIRST GAVE. **`needs.ts` imports THIS module, so this module
+ * calling `letDownWindowOf` is a CYCLE — and `.dependency-cruiser.cjs`'s `no-circular` rule is
+ * `severity: 'error'`.** It would not build. That is the same fence `reviews.ts` states three
+ * files over for taking a guest's parts rather than the guest, and it is the reason to give
+ * because it is the one something ENFORCES.
+ *
+ * The design reason is true as well and is kept as the second one: this bound MAXES over three
+ * declared durations on purpose, and `letDownWindowOf` is a per-STAY quantity that would have to
+ * be maxed over the same three to be used here — a second derivation of the window, in the file
+ * the first one is imported from, which is `topTierStarsOf`'s defect one module over. The goal
+ * that wants a tighter ceiling moves the derivation to where both callers can reach it without
+ * closing the cycle, and calls one accessor twice.
+ * ---------------------------------------------------------------------------
  *
  * IT IS NOT "THE TERMS `maxGuestLifetimeTicks` MAXES OVER", WHICH IS WHAT THIS LINE SAID AND IS
  * WRONG IN A WAY ADR-0028's SECOND AMENDMENT RULED AGAINST BY NAME. That function does not max
@@ -1727,12 +1770,13 @@ function cloneReviewScale(
  * conservative direction here where it was the loose one there. Stated because the two look
  * identical and are opposite.
  *
- * IT IS TIGHTER THAN WHAT IT REPLACES AND THAT IS THE POINT, not a side effect: the old bound
- * admitted 40,001 scores against a shipped stay of 1,440, so 38,561 of those rows were
+ * IT WAS TIGHTER THAN WHAT IT REPLACED AND THAT WAS THE POINT AT G-028b, not a side effect: the
+ * old bound admitted 40,001 scores against a shipped stay of 1,440, so 38,561 of those rows were
  * unfillable by construction and the cliff it was written for was only two orders of magnitude
- * away rather than closed. It is still LOOSE — a scale of 1..1441 binds and nothing like it is
+ * away rather than closed. It was already LOOSE — a scale of 1..1441 binds and nothing like it is
  * sensible — because this is a resource bound and not a taste, and `reviewScoreSchema` carries
- * no balance bound for the reason stated there.
+ * no balance bound for the reason stated there. **G-059 made it looser still by moving the
+ * denominator to the let-down window; the block above carries that and the arithmetic.**
  *
  * CONTENT THAT DECLARES NO DURATION AT ALL FALLS BACK TO THE PRE-G-028b BOUND rather than
  * escaping the ceiling. The first draft of this block skipped such content on an ADR-0008
@@ -1819,8 +1863,9 @@ function assertReviewScaleIsBoundedByTheNeedTable(
           : `${needTypes.length} need type(s) and NO declared duration`;
       throw new Error(
         `bindContent: guest rules "${rules.id}" declare a review scale of ${min}..${max} — ${max - min + 1} score(s) — ` +
-          `against ${against}. A need's band is its served share of the stay quantised into those scores, and the ` +
-          'share is an integer count of ticks, so a scale with more bands than the stay has ticks admits scores no ' +
+          `against ${against}. A need's band is its served share of the TICKS A COMPLETED STAY CAN BE LET ` +
+          'DOWN FOR, quantised into those scores — at most the stay itself (G-059) — and the share is an ' +
+          'integer count of ticks, so a scale with more bands than the stay has ticks admits scores no ' +
           'guest can ever land on — and the report materialises ONE ROW PER ADMITTED SCORE. The widest scale this ' +
           `content admits is ${min}..${min + ceiling}. (This bound is on the SIZE of the scale, not a judgement ` +
           'about which of the remaining scores are reachable: plenty of narrower scales have unreachable ones too.)',

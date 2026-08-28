@@ -530,7 +530,16 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   buys none.
     //   **checkedOut 27, leftDissatisfied 59, still-in-the-hotel 14, 100 arrived, `gaveUp` and
     //   `evictedGuests` zero** — the outcome test below re-checks that and did not move.
-    expect(hashState(plain)).toBe('a57925e09896e3a4');
+    // - `a57925e09896e3a4` -> `ce9bc72375ddd24f` AT G-059, AND THIS ONE **IS** BEHAVIOUR, which
+    //   is what separates it from the four moves above. The review scorer changed and the review
+    //   tally is world state. NO `World` FIELD, so the save stays at **v24** with no migration,
+    //   and `World.contentHash` did NOT move — no content file was touched. **checkedOut 27,
+    //   leftDissatisfied 59, still-in-the-hotel 14, 100 arrived, `gaveUp` and `evictedGuests`
+    //   zero** — the outcome test below re-checks that and did NOT move, which is the control:
+    //   the same guests did the same things and were scored differently for it. Fifty-nine of
+    //   this workload's hundred guests stormed out and used to review like contented checkouts;
+    //   they review at the floor now.
+    expect(hashState(plain)).toBe('ce9bc72375ddd24f');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -955,7 +964,12 @@ describe('the same workload with the player churning the building', () => {
     //   this arm, because `--facilities` and `--buy-facility` both default to 0 and it seeds and
     //   buys none.
     //   **20 + 43 + 25 and 100 arrived still closes**, and `gaveUp` is still zero.
-    expect(hashState(churn)).toBe('3b5b0daf2b1790db');
+    // `3b5b0daf2b1790db` -> `8d8d01695c3b5fa5` AT G-059, AND IT **IS** BEHAVIOUR: the review
+    //   scorer changed and the tally is world state. No `World` field, no save bump, no
+    //   migration, no ledger line, and `World.contentHash` unmoved. **20 + 43 + 25 and 100
+    //   arrived still closes**, and `gaveUp` is still zero — so the twenty-five evictions this
+    //   arm exists to produce still happen, and still review at the floor as they always did.
+    expect(hashState(churn)).toBe('8d8d01695c3b5fa5');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

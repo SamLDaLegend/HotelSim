@@ -353,8 +353,23 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     // do and what this block records the scale as being unable to show. **The block's claim is
     // that the SCALE is clamped at low occupancy, and one guest of 474 does not unclamp it**;
     // the exact strings are pinned so a build that opens it further has to say so.
-    expect(new Set(occupied).size).toBe(2);
-    expect(occupied).toEqual(['2:1,3:345,5:128', '3:346,5:128', '3:346,5:128']);
+    // **AND G-059 CLOSES THE CRACK AGAIN, WHICH IS A COST OF THAT GOAL AND IS RECORDED AS ONE.**
+    // `['2:1,3:345,5:128', '3:346,5:128', '3:346,5:128']` -> the SAME string three times. The
+    // one guest that separated the leanest rung was an unhoused one whose engagement bands
+    // differed; G-059 floors every stay that did not run its course, so all 346 give-ups now
+    // score 1 together and the rung stops separating. The 128 checkouts move 5 -> 4 for the
+    // other half of that goal: a three-room hotel is short of the star ladder, and its standing
+    // is a term in the mean now.
+    //
+    // **THIS BLOCK'S CLAIM IS UNCHANGED AND IS MORE TRUE THAN IT WAS**: the scale is clamped at
+    // low occupancy because BEDS decide who is housed, and no amenity can move a guest that
+    // never got one. G-059 repaired the band DOMAIN and made the review see the HOTEL; neither
+    // of those is the defect this block names, and neither was expected to touch it. What a
+    // reader should take from the re-pin is that the review at three rooms is a TWO-VALUED
+    // channel again — housed or not — which is the honest reading of a hotel that turns away
+    // 346 of 474 arrivals.
+    expect(new Set(occupied).size).toBe(1);
+    expect(occupied).toEqual(['1:346,4:128', '1:346,4:128', '1:346,4:128']);
     // And the top band really is the top of the scale, so "already at the ceiling" is a reading
     // rather than a coincidence of which bands happen to be occupied.
     expect(rungs[0]!.reviews.scoreMax).toBe(5);

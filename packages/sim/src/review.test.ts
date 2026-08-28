@@ -60,6 +60,19 @@ import {
   totalReviews,
 } from './reviews.js';
 
+/**
+ * THE HOTEL'S STANDING, AND IT IS INERT IN THIS FILE (G-059).
+ *
+ * `reviewOf` folds the hotel in as one more band ONLY when the content declares a star ladder,
+ * and no content built here declares one — so every case below is scored on the need vector
+ * alone, exactly as it was before G-059, and this argument could hold any number without moving
+ * an assertion. `review.standing.test.ts` is where the term is driven, against content that has
+ * a ladder; keeping the two apart is what stops the properties in this file (the mean, the
+ * clamp, the floor, the migrated vector) from being re-proved through a second variable.
+ */
+const NO_STANDING = 0;
+
+
 const roomType = (id: string, provides: readonly string[]): RoomTypeData => ({
   id,
   name: id,
@@ -165,7 +178,7 @@ function vector(content: BoundContent, unserved: Readonly<Record<string, number>
 
 /** The review a guest leaves having been served `served` perfectly and everything else never. */
 const scoreFor = (content: BoundContent, served: readonly string[]): number | undefined =>
-  reviewOf(content, vector(content, Object.fromEntries(served.map((id) => [id, 0]))), false, STAY);
+  reviewOf(content, vector(content, Object.fromEntries(served.map((id) => [id, 0]))), false, STAY, NO_STANDING);
 
 describe('the scale is read from content, and its absence is the historical case', () => {
   it('reads min, max and a DERIVED band count', () => {
@@ -184,9 +197,9 @@ describe('the scale is read from content, and its absence is the historical case
       guestRules: [{ id: 'rules', name: 'rules', stayDurationTicks: STAY, toleranceTicks: 200 }],
     });
     expect(reviewScaleOf(old)).toBeUndefined();
-    expect(reviewOf(old, vector(old, { n0: 0 }), false, STAY)).toBeUndefined();
+    expect(reviewOf(old, vector(old, { n0: 0 }), false, STAY, NO_STANDING)).toBeUndefined();
     // Including for an eviction, which is the branch that returns before anything else.
-    expect(reviewOf(old, vector(old, { n0: 0 }), true, STAY)).toBeUndefined();
+    expect(reviewOf(old, vector(old, { n0: 0 }), true, STAY, NO_STANDING)).toBeUndefined();
   });
 });
 
@@ -231,8 +244,8 @@ describe('NO NEED TYPE IS INERT — the human\'s finding, as a law over the cont
     expect(scoreFor(FOUR, ['n3'])).toBe(scoreFor(FOUR, ['n1']));
     // And with PARTIAL bands rather than only the two extremes, which the met-flag era had no
     // way to express: the same two bands attached to different needs score the same.
-    const a = reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 400, n2: 0, n3: 0 }), false, STAY);
-    const b = reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: 400 }), false, STAY);
+    const a = reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 400, n2: 0, n3: 0 }), false, STAY, NO_STANDING);
+    const b = reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: 400 }), false, STAY, NO_STANDING);
     expect(a).toBe(b);
   });
 
@@ -258,8 +271,8 @@ describe('NO NEED TYPE IS INERT — the human\'s finding, as a law over the cont
     // top band on this scale is the first fifth of the stay, so one tick past it is the
     // smallest witness the arithmetic admits.
     const bandWidth = STAY / 5;
-    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: bandWidth }), false, STAY)).toBe(5);
-    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: bandWidth + 1 }), false, STAY)).toBeLessThan(5);
+    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: bandWidth }), false, STAY, NO_STANDING)).toBe(5);
+    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: bandWidth + 1 }), false, STAY, NO_STANDING)).toBeLessThan(5);
   });
 
   it('and it holds on a NARROW scale too, which is what shows the bind-time floor is not the premise', () => {
@@ -287,9 +300,9 @@ describe("THE SUCCESSOR TO LAW A: serving any one need for LONGER never scores l
           const before = vector(FOUR, Object.fromEntries(IDS.map((id) => [id, base])));
           const after = vector(FOUR, Object.fromEntries(IDS.map((id) => [id, id === target ? better : base])));
           expect(
-            reviewOf(FOUR, after, false, STAY)!,
+            reviewOf(FOUR, after, false, STAY, NO_STANDING)!,
             `${target}: ${base} -> ${better} unserved`,
-          ).toBeGreaterThanOrEqual(reviewOf(FOUR, before, false, STAY)!);
+          ).toBeGreaterThanOrEqual(reviewOf(FOUR, before, false, STAY, NO_STANDING)!);
         }
       }
     }
@@ -309,8 +322,8 @@ describe("THE SUCCESSOR TO LAW A: serving any one need for LONGER never scores l
     // at fully-unserved (so the worst band is 0 in BOTH arms) and another improving.
     // ============================================================================
     const worstPinned = { n0: STAY };
-    const before = reviewOf(FOUR, vector(FOUR, { ...worstPinned, n1: STAY, n2: STAY, n3: STAY }), false, STAY)!;
-    const after = reviewOf(FOUR, vector(FOUR, { ...worstPinned, n1: 0, n2: 0, n3: 0 }), false, STAY)!;
+    const before = reviewOf(FOUR, vector(FOUR, { ...worstPinned, n1: STAY, n2: STAY, n3: STAY }), false, STAY, NO_STANDING)!;
+    const after = reviewOf(FOUR, vector(FOUR, { ...worstPinned, n1: 0, n2: 0, n3: 0 }), false, STAY, NO_STANDING)!;
     expect(after).toBeGreaterThan(before);
     // And the worst band really is unchanged across the pair, which is the precondition that
     // makes this a statement about the aggregation rather than about the vector: without it a
@@ -324,7 +337,7 @@ describe("THE SUCCESSOR TO LAW A: serving any one need for LONGER never scores l
     // deleted met-count scorer put it. ADR-0037 §4 rules this the price of responsiveness and
     // names the costed runner-up; the number is pinned here so that overturning the ruling is a
     // visible change rather than a drift.
-    const starved = reviewOf(FOUR, vector(FOUR, { n0: STAY, n1: 0, n2: 0, n3: 0 }), false, STAY);
+    const starved = reviewOf(FOUR, vector(FOUR, { n0: STAY, n1: 0, n2: 0, n3: 0 }), false, STAY, NO_STANDING);
     expect(starved).toBe(4);
   });
 
@@ -342,9 +355,9 @@ describe("THE SUCCESSOR TO LAW A: serving any one need for LONGER never scores l
 
 describe('a stay the hotel cut short reviews at the floor', () => {
   it('whatever else the guest got', () => {
-    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: 0 }), true, STAY)).toBe(1);
-    expect(reviewOf(FOUR, vector(FOUR, { n1: 0, n2: 0, n3: 0 }), true, STAY)).toBe(1);
-    expect(reviewOf(FOUR, vector(FOUR, {}), true, STAY)).toBe(1);
+    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: 0 }), true, STAY, NO_STANDING)).toBe(1);
+    expect(reviewOf(FOUR, vector(FOUR, { n1: 0, n2: 0, n3: 0 }), true, STAY, NO_STANDING)).toBe(1);
+    expect(reviewOf(FOUR, vector(FOUR, {}), true, STAY, NO_STANDING)).toBe(1);
   });
 
   it('and the floor is no longer the eviction\'s alone, which is a REAL weakening of the signal', () => {
@@ -362,17 +375,17 @@ describe('a stay the hotel cut short reviews at the floor', () => {
     // second is why `report.ts`'s law B is an inequality, and that is now load-bearing rather
     // than merely careful.
     // ============================================================================
-    const evictedWithThree = reviewOf(FOUR, vector(FOUR, { n1: 0, n2: 0, n3: 0 }), true, STAY);
-    const servedNothing = reviewOf(FOUR, vector(FOUR, {}), false, STAY);
+    const evictedWithThree = reviewOf(FOUR, vector(FOUR, { n1: 0, n2: 0, n3: 0 }), true, STAY, NO_STANDING);
+    const servedNothing = reviewOf(FOUR, vector(FOUR, {}), false, STAY, NO_STANDING);
     expect(evictedWithThree).toBe(1);
     expect(servedNothing).toBe(1);
     // The floor is still a real cost: the same guest, not evicted, scores well above it.
-    expect(reviewOf(FOUR, vector(FOUR, { n1: 0, n2: 0, n3: 0 }), false, STAY)!).toBeGreaterThan(1);
+    expect(reviewOf(FOUR, vector(FOUR, { n1: 0, n2: 0, n3: 0 }), false, STAY, NO_STANDING)!).toBeGreaterThan(1);
   });
 
   it('and the floor is the content\'s floor, not the number 1', () => {
     const shifted = build(4, 7, 11);
-    expect(reviewOf(shifted, vector(shifted, { n0: 0, n1: 0, n2: 0, n3: 0 }), true, STAY)).toBe(7);
+    expect(reviewOf(shifted, vector(shifted, { n0: 0, n1: 0, n2: 0, n3: 0 }), true, STAY, NO_STANDING)).toBe(7);
   });
 });
 
@@ -445,7 +458,7 @@ describe('THE SCORE IS NOT A RE-BANDED BASIS-POINT SHARE — the property `exper
     // between — on a three-band scale, where the two forms are known to differ.
     const three = build(1, 1, 3, 3, 300);
     for (const unserved of [0, 1, 2, 3]) {
-      expect(reviewOf(three, vector(three, { n0: unserved }), false, 3)).toBe(1 + oneStep(3, unserved));
+      expect(reviewOf(three, vector(three, { n0: unserved }), false, 3, NO_STANDING)).toBe(1 + oneStep(3, unserved));
     }
   });
 });
@@ -464,15 +477,15 @@ describe('the ends of the scale are both reachable, and nothing lands outside it
     // then miss, so review law A would compare against a top-review count of zero.
     expect(scoreFor(FOUR, ['n0', 'n1', 'n2', 'n3'])).toBe(5);
     // One tick of neglect on one need and the clamp is not involved at all.
-    expect(reviewOf(FOUR, vector(FOUR, { n0: 1, n1: 0, n2: 0, n3: 0 }), false, STAY)).toBe(5);
+    expect(reviewOf(FOUR, vector(FOUR, { n0: 1, n1: 0, n2: 0, n3: 0 }), false, STAY, NO_STANDING)).toBe(5);
     // The band itself, at the two inputs either side of the clamp, through a single-need table.
     const one = build(1, 1, 5, 3, 300);
-    expect(reviewOf(one, vector(one, { n0: 0 }), false, STAY)).toBe(5);
-    expect(reviewOf(one, vector(one, { n0: 1 }), false, STAY)).toBe(5);
+    expect(reviewOf(one, vector(one, { n0: 0 }), false, STAY, NO_STANDING)).toBe(5);
+    expect(reviewOf(one, vector(one, { n0: 1 }), false, STAY, NO_STANDING)).toBe(5);
     // The top band is the first fifth of the stay, so the first input BELOW it is one tick past
     // that fifth — which is where the clamp stops being involved and the division decides.
-    expect(reviewOf(one, vector(one, { n0: STAY / 5 }), false, STAY)).toBe(5);
-    expect(reviewOf(one, vector(one, { n0: STAY / 5 + 1 }), false, STAY)).toBe(4);
+    expect(reviewOf(one, vector(one, { n0: STAY / 5 }), false, STAY, NO_STANDING)).toBe(5);
+    expect(reviewOf(one, vector(one, { n0: STAY / 5 + 1 }), false, STAY, NO_STANDING)).toBe(4);
   });
 
   it('over a grid of vectors and scales, every score is an integer INSIDE the scale', () => {
@@ -491,7 +504,7 @@ describe('the ends of the scale are both reachable, and nothing lands outside it
               const unserved = Object.fromEntries(
                 ids.map((id, index) => [id, index < served ? 0 : partial]),
               );
-              const score = reviewOf(content, vector(content, unserved), cutShort, STAY);
+              const score = reviewOf(content, vector(content, unserved), cutShort, STAY, NO_STANDING);
               expect(Number.isInteger(score)).toBe(true);
               expect(score).toBeGreaterThanOrEqual(min);
               expect(score).toBeLessThanOrEqual(max);
@@ -509,21 +522,21 @@ describe('the ends of the scale are both reachable, and nothing lands outside it
     // of `0/0` is NaN still — but the failure a reader should picture is the OTHER one: any
     // implementation that treated "no needs" as "nothing went wrong" hands that guest the TOP
     // band, which is the one answer nothing could justify. Same line, opposite failure.
-    expect(reviewOf(FOUR, [], false, STAY)).toBeUndefined();
+    expect(reviewOf(FOUR, [], false, STAY, NO_STANDING)).toBeUndefined();
   });
 
   it('a guest MIGRATED with a shorter vector is reviewed on the needs it actually formed', () => {
     // A v5 guest carries one need where the content defines four. It is not marked down for
     // three needs it never had: the denominator is its own vector's length.
     const one = vector(FOUR, { n0: 0 }).slice(0, 1);
-    expect(reviewOf(FOUR, one, false, STAY)).toBe(5);
+    expect(reviewOf(FOUR, one, false, STAY, NO_STANDING)).toBe(5);
   });
 
   it('and a stay of no ticks answers the top band rather than dividing by zero', () => {
     // `depart`'s own precondition is that `stayTicks >= 1`: arrivals are appended after the loop
     // over existing guests, so a guest cannot depart on the tick it arrived. This is the
     // postcondition for that, and it is the answer that says "there was no time to fail you in".
-    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: 0 }), false, 0)).toBe(5);
+    expect(reviewOf(FOUR, vector(FOUR, { n0: 0, n1: 0, n2: 0, n3: 0 }), false, 0, NO_STANDING)).toBe(5);
   });
 });
 

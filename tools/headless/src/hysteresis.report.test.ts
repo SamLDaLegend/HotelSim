@@ -435,7 +435,11 @@ describe('CRITERION 2: abandoned(margin 0) > abandoned(shipped) > 0', () => {
     // claim and it still holds** — a margin-zero guest still meets more needs than the shipped
     // one — but the gap is closing, and the reason is this goal: much of what re-deciding every
     // tick used to buy was escaping a tie that fell the same way for everybody.
-    expect(engagementMet(thrash)).toBe(2_446);
+    // G-059: 2,446 -> 2,443, three guests, and the cause is the band DOMAIN rather than any
+    // behaviour — see the criterion 3 table below for the derivation. `met` got stricter, so
+    // this literal could only fall, and the two INEQUALITIES beneath it are what the criterion
+    // actually rests on: they are unaffected because the same rule applies to every arm.
+    expect(engagementMet(thrash)).toBe(2_443);
     expect(engagementMet(shipped)).toBe(engagementMet(eraA));
     expect(engagementMet(thrash)).toBeGreaterThan(engagementMet(shipped));
   });
@@ -777,9 +781,16 @@ describe('CRITERION 3: a SATURATING margin reproduces the pre-margin era exactly
     // and entertainment 5,415 -> 5,184 FALL while nourishment 3,672 -> 4,766 RISES: the three
     // rows converge, because a margin-zero guest re-decides on every TIE and the ties are no
     // longer resolved the same way for every guest in the building. `night_rest` is unmoved.
+    // RE-TAKEN AT G-059, IN THE `met`/`unmet` COLUMNS ONLY AND BY TWO GUESTS IN TOTAL: comfort
+    // 763/185 -> 761/187 and entertainment 792/156 -> 791/157. **`met` is a per-need BAND and
+    // G-059 narrowed the band's DOMAIN** — `letDownWindowOf` bands the served share over the
+    // let-down window (1,020 ticks on shipped content) instead of over the whole 1,440-tick stay
+    // — so the top band asks for 204 unserved ticks or fewer where it used to ask for 288. It is
+    // STRICTER, so `met` can only fall, and here it falls by one guest on each of two rows. The
+    // per-row sums are unchanged, which is the identity `assertNeedOutcomes` bounds.
     expect(table(thrash)).toEqual({
-      guest_comfort: [763, 185, 4_481],
-      guest_entertainment: [792, 156, 5_184],
+      guest_comfort: [761, 187, 4_481],
+      guest_entertainment: [791, 157, 5_184],
       guest_nourishment: [891, 57, 4_766],
       night_rest: [256, 692, 0],
     });
@@ -933,7 +944,10 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // 1,095 -> 1,071 AT G-054. **The two margins are still the SAME SIZE, which is the pair's
     // claim and the assertion above it**: the shipped margin still never fires at this starved
     // invocation, so a saturating margin and the shipped one are the same simulation here.
-    expect([total.met, margin.met]).toEqual([1_071, 1_071]);
+    // G-059: 1,071 -> 1,021 in BOTH arms, which is the point of the pair — the two arms still
+    // agree exactly, and what moved is the definition of `met` (a narrower band domain, see the
+    // criterion 3 table above) rather than anything either margin does.
+    expect([total.met, margin.met]).toEqual([1_021, 1_021]);
     // ------------------------------------------------------------------
     // AND THE PIN IS STILL THE RIGHT ONE — BUT NOT VIA THE `met` COLUMN ANY MORE, AND THE
     // REASON IS A PROPERTY OF THE NEW DEFINITION THAT A LATER READER MUST NOT REDISCOVER.
@@ -1171,7 +1185,10 @@ describe('the amenity sweep that chose this invocation, and what each level show
     // levels gain — a per-guest tie-break spreads the population over the amenities a level
     // actually has — and level 5 gives some back, so the sweep is no more monotone than it was.
     expect([1, 2, 3, 4, 5, 6].map((level) => at(level, SHIPPED_MARGIN).met)).toEqual([
-      1_071, 2_000, 1_799, 1_739, 1_828, 1_676,
+      // G-059: the level-1 rung alone moves, 1,071 -> 1,021, on the narrower band domain. The
+      // shape of the sweep — the rise to level 2 and the failure to saturate after it — is
+      // what this case is about and is untouched.
+      1_021, 2_000, 1_799, 1_739, 1_828, 1_676,
     ]);
     expect(at(4, SHIPPED_MARGIN)).not.toEqual(at(3, SHIPPED_MARGIN));
     // AND THE ABANDONMENT COLUMN IS ZERO AT EVERY LEVEL, which is the mechanism this whole file

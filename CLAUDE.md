@@ -25,6 +25,19 @@ Three nested feedback loops. Every design and code decision traces to one of the
 
 - **Guest loop** — guest arrives [E], forms needs [E], gets them met or doesn't [E],
   pays [E], reviews [E]. *All five exist; it is the only loop that runs on all of its terms.*
+  **`reviews` RE-MARKED 2026-08-28 (G-059) WITHOUT THE MARK MOVING, and it is re-marked HERE because
+  the rule is BOTH FILES IN THE SAME COMMIT and the banner above records what it cost the last time
+  only one moved.** The term has read EXISTS since G-019; what was false is the qualification
+  `HOTELSIM.md` §1.1 carried beside it — *"it carries almost no information, measured one bit above
+  the bottleneck; a tuning finding owned by G-050/G-051"*. **G-050a/b were BLOCKED ON it, and what
+  landed it was the human's ruling on E-014** (ADR-0104): *the review is a measurement of the WHOLE
+  STAY, INCLUDING FACILITIES*. `reviewOf` folds the hotel's star rating in as one more unweighted
+  band and `isCutShort` floors every stay that did not run its course. Measured, `--days 30 --seed 42
+  --rooms 12 --demand`: eleven of the fifteen facilities×amenities cells were byte-identical `5:all`
+  and the facilities column now reads `4:232` against `5:464`, with the mean spanning 1.00 to 5.00.
+  **The honest half: the shipped arms occupy {1, 4, 5} and never 2 or 3** — a middle score needs a
+  stay that ran its course and was badly served, and the mood ceiling ejects that guest first. That
+  is content, it is parked with its falsification test, and G-019's criterion 2 is asserted FAILING.
 - **Money loop** — room revenue [E] against wages [E] and upkeep [E], settled
   nightly [E]. *All four exist since G-052a: `TransactionReason` has TEN members and the tenth
   is `wages`, settled nightly before upkeep, folded over `World.staff` at a rate that is content.

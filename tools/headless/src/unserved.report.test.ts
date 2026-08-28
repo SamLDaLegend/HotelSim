@@ -578,8 +578,16 @@ describe('AXIS 1, ALONG THE PROVISIONING DIAGONAL: rooms and amenities scaled to
     // 400 -> 398 AT G-054 at rung 3, and the other three rungs are UNMOVED. The rung-1-to-rung-2
     // margin this block calls a knife-edge is still 36, and the top rung is still the point mass
     // at 500 the block above describes.
-    expect(reviewMeans).toEqual([318, 354, 398, 500]);
-    expect(reviewMeans[1]! - reviewMeans[0]!).toBe(36);
+    // 318 / 354 / 398 / 500 -> 127 / 181 / 262 / 400 AT G-059. Every rung falls: the three
+    // lean rungs turn guests away and those stays are at the floor now, and the top rung — which
+    // houses and serves everybody — falls from 5.00 to 4.00 because a PROVISIONED hotel with no
+    // FACILITY is not a five-star hotel and its standing is now a term in the mean.
+    // **THE DISCHARGE THIS BLOCK EXISTS FOR IS UNTOUCHED**: the ladder is still strictly
+    // increasing, which is the assertion below and the whole of the claim. The knife-edge margin
+    // between rungs 1 and 2 WIDENS from 36 to 54, so the break this file has seen twice is
+    // further away than it was.
+    expect(reviewMeans).toEqual([127, 181, 262, 400]);
+    expect(reviewMeans[1]! - reviewMeans[0]!).toBe(54);
     // THE DISCHARGE HOLDS ACROSS THE WHOLE LADDER AGAIN. One predicate, not two: a `slice(1)`
     // clause stood here beside the whole-ladder one and is entailed by it (ADR-0035), which is
     // the shape this file has already deleted three of.
@@ -1092,7 +1100,13 @@ describe('and the phase noise ADR-0033 measured moves the snapshot far more than
     // gets served, and which tick it departs on decides nothing. That is what makes the spread
     // above a clamp rather than robustness, and the literals are kept at full width for the
     // reason the block above gives: a second band growing by one guest must go red here.
-    expect(occupancy).toEqual(['5:468', '5:464', '5:461', '5:438']);
+    // 5 -> 4 AT G-059 at all four cadences, and the COUNTS are byte-identical. **The clamp this
+    // block reports is unchanged in kind and the band it clamps at has moved down one**: the
+    // rung is still saturated — one band, every guest, at every cadence — and it is no longer
+    // the TOP band, because a hotel with no facility cannot reach the top star tier and its
+    // standing caps the score at 4. The literals are kept at full width for the reason the block
+    // above gives: a second band growing by one guest must go red here.
+    expect(occupancy).toEqual(['4:468', '4:464', '4:461', '4:438']);
     for (const summary of phases) {
       const occupied = summary.reviews.distribution.filter((row) => row.count > 0);
       // THE MODAL BAND IS NO LONGER THE TOP BAND AT EVERY CADENCE (G-041) — at cadence 119 it
@@ -1235,6 +1249,11 @@ describe('THE CONTROL: the departures this counter does not decide', () => {
     // scorer's point mass. The fence is unchanged and the scorer is not: departures and revenue
     // hold, the distribution moves, and asserting only the first would let a goal that shipped
     // nothing pass. `scorer.report.test.ts` carries the same pair as its own criterion.
-    expect(control.reviews.distribution.map((row) => row.count)).toEqual([0, 0, 214, 0, 256]);
+    // RE-TAKEN AT G-059: [0, 0, 214, 0, 256] -> [214, 0, 0, 256, 0], both occupied bands moving
+    // with the DEPARTURES AND THE LEDGER HELD BYTE-IDENTICAL above — which is exactly the pair
+    // this arm exists to assert, and the strongest reading of it the file has had. The 214 that
+    // never got a room fall to the floor; the 256 that checked out fall 5 -> 4 on a three-star
+    // hotel's standing.
+    expect(control.reviews.distribution.map((row) => row.count)).toEqual([214, 0, 0, 256, 0]);
   });
 });

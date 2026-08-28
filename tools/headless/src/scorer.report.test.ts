@@ -226,7 +226,11 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
     // G-037a's fold makes three rooms amenity-bound again it goes red and says so.
     // ========================================================================
     expect(mean(rich)).toBe(mean(lean));
-    expect(mean(rich)).toBe(354);
+    // 354 -> 181 AT G-059, AND THE PAIR'S OWN CLAIM IS UNTOUCHED — the two arms are still
+    // BYTE-IDENTICAL, which is the whole of what this line reads. Both fall because a
+    // three-bedroom hotel turns away 346 of its 474 guests and every one of those stays now
+    // reviews at the floor (E-014, ADR-0104), and because two stars caps the 128 it houses.
+    expect(mean(rich)).toBe(181);
     // G-040b-ii: read in GUESTS rather than in parties, and the pair is untouched by the dial —
     // three bedrooms hold six lodgers, which is still far under what one provider sustains, so
     // the second amenity still has nothing to serve and both arms still read 354.
@@ -429,7 +433,9 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
       // hotel where one guest gets everything and nine get nothing should not out-score one
       // where all ten get most of it, and today it does. **The cell is still under-provisioned
       // and the player's repair is still one amenity**: the cell to its right reads 500.
-    ).toEqual(['room axis at 1 amenities, 6->12: -15']);
+      // G-059: the fall NARROWS from 15 hundredths to 11, at the same cell. Same finding, on a
+      // grid whose every cell has moved.
+    ).toEqual(['room axis at 1 amenities, 6->12: -11']);
     // THE 30s DEFAULT WAS NOT ENOUGH UNDER `pnpm verify` AT G-041 and this is a DEADLOCK
     // DETECTOR rather than a performance bound — nothing here asserts a duration. This sweep
     // spawns nine child CLI runs, the file now also warms a three-run contended ladder, and the
@@ -598,7 +604,21 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // finding about the game rather than about the test, and G-037a's fold is what is supposed
     // to put the middle back — a bare room serves at the floor, and a starting hotel is bare.
     // ==========================================================================================
-    expect(clearing.map((row) => row.score)).toEqual([3, 5]);
+    // ==========================================================================================
+    // **[3, 5] -> [1, 4] AT G-059, AND THE CRITERION STILL FAILS AND FAILS DIFFERENTLY.** Two
+    // bands, both far above the floor, and they are the two populations a three-room hotel has:
+    // 346 of 474 guests never get a bed and now review at the FLOOR rather than at band 3, and
+    // the 128 that do are capped at 4 because a three-bedroom hotel is two stars of five.
+    //
+    // **THE HONEST REPORT IS UNCHANGED IN KIND AND SHARPER IN DEGREE**: the starting hotel does
+    // not spread, and G-059 did not repair that — it repaired the DOMAIN the bands divide and it
+    // made the review see the hotel, neither of which puts a middle band back. What now stands
+    // between this criterion and a spread is stated in `review.report.test.ts`'s criterion 2
+    // block: a score of 2 or 3 needs a stay that RAN ITS COURSE and was badly served, and
+    // `dissatisfactionCapacityTicks: 301` against a 1,440-tick stay ejects that guest first.
+    // That is a content question and it is parked with its falsification test.
+    // ==========================================================================================
+    expect(clearing.map((row) => row.score)).toEqual([1, 4]);
     // AND THE SHARE PER NAMED SCORE, which is the criterion's own wording. The floor as a share
     // is derived from the same two numbers rather than chosen: one guest per simulated day over
     // the run's own departures.
@@ -633,11 +653,16 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // each kind makes being served a matter of degree again.
     const rejected = at(6, 1);
     const occupied = rejected.reviews.distribution.filter((row) => row.count > 0);
-    expect(occupied.map((row) => row.score)).toEqual([2, 3, 4, 5]);
-    // 10 -> 6 AT G-054. The contrast this arm wants is the rejected configuration failing the
-    // one-guest-per-simulated-day floor, and it fails it by more than it did.
-    expect(Math.min(...occupied.map((row) => row.count))).toBe(6);
-    expect(Math.min(...occupied.map((row) => row.count))).toBeLessThan(rejected.world.days);
+    // **[2, 3, 4, 5] -> [1, 4] AT G-059, AND THE CONTRAST THIS ARM WANTED IS GONE AGAIN.** The
+    // rejected configuration now has the SAME two fat bands the shipped one has — 216 at the
+    // floor and 254 at 4 — so it no longer fails the one-guest-per-simulated-day floor and the
+    // two configurations no longer separate on it. **Asserted as the loss it is**: the arm's
+    // conclusion (the shipped configuration is the discriminating one) is not supported by this
+    // pair any more, and the line below records the rejected arm CLEARING the floor rather than
+    // failing it. The cause is the criterion 2 finding in `review.report.test.ts`.
+    expect(occupied.map((row) => row.score)).toEqual([1, 4]);
+    expect(Math.min(...occupied.map((row) => row.count))).toBe(216);
+    expect(Math.min(...occupied.map((row) => row.count))).toBeGreaterThan(rejected.world.days);
     // `expect(Math.min(...clearing.map(count)) > floor)` STOOD HERE AND IS GONE (ADR-0035).
     // `clearing` is DEFINED as the rows above the floor, so its minimum exceeding the floor
     // cannot fail — and on an empty `clearing` it is `Infinity`, so it would have passed
@@ -670,7 +695,9 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
       // AND THE NEIGHBOUR-CADENCE ARM AGREES WITH THE SHIPPED ONE ACROSS G-041 TOO, which is the
       // property this pair exists for: [2, 3, 5] -> [3, 5] at 119 and at 121 as well as at 120,
       // so the band that went is not a phase artefact of one cadence.
-      expect(clearing.map((row) => row.score), `arrivals ${arrivals}`).toEqual([3, 5]);
+      // G-059: [3, 5] -> [1, 4] at 119 and at 121 as well as at 120, so the move is not a phase
+      // artefact of one cadence either. The property this pair exists for is unchanged.
+      expect(clearing.map((row) => row.score), `arrivals ${arrivals}`).toEqual([1, 4]);
     }
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 10,229ms
 
@@ -718,8 +745,20 @@ describe('THE FENCE HOLDS AND THE VERDICT MOVES — two claims, not one', () => 
     expect(control.reviews.distribution.find((row) => row.count === count('checkedOut'))).toBeDefined();
     // AND A GUEST THAT NEVER GOT A BED IS NOT AT THE TOP, which `reviews.ts` proves structurally
     // and this reads back off a real hotel with five of every amenity.
-    const top = control.reviews.distribution[control.reviews.distribution.length - 1]!;
-    expect(top.count).toBe(count('checkedOut'));
+    // G-059: the highest OCCUPIED band rather than the last row of the table. The claim is the
+    // same one — a guest that never got a bed is not at the top — and it is read off the two
+    // populations rather than off a fixed score, because a three-star hotel caps its checkouts
+    // at 4 and `SCALE.max` is now empty here.
+    // SWEEP 1: THE FIRST REPAIR TURNED THIS FROM A MEASUREMENT INTO AN IDENTITY. Asserting that
+    // the highest OCCUPIED band holds the checkouts says little once the two lines above have
+    // already found a band holding exactly that count. **The claim in the title is about ORDER**
+    // — the guests that never got a bed are BELOW the guests that did — so the order is what is
+    // asserted, and it is a thing the distribution can get wrong.
+    const bands = control.reviews.distribution.filter((row) => row.count > 0);
+    expect(bands).toHaveLength(2);
+    expect(bands[0]!.count).toBe(count('gaveUp'));
+    expect(bands[1]!.count).toBe(count('checkedOut'));
+    expect(bands[0]!.score).toBeLessThan(bands[1]!.score);
   });
 
   it('and the printed report says the same thing as the JSON, on the line that carries both', () => {

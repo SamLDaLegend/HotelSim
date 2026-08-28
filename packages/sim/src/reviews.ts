@@ -41,10 +41,17 @@
 // THE FUNCTION, AND WHY EVERY NUMBER IN IT IS DERIVED (HOTELSIM.md §2.1 — a threshold must
 // be derivable from a stated requirement; a review scale is full of thresholds).
 //
-//   band(need) = floor( (stay - unserved) x bands / stay )   clamped to bands - 1
+//   windowTicks= min( stay, (dissatisfactionCapacityTicks + relief x stay) / (1 + relief) )
+//   band(need) = floor( (windowTicks - unserved) x bands / windowTicks )   clamped to bands - 1
+//   band(hotel)= floor( stars x bands / topTierStars )           the same function, same clamp
 //
-//   score      = min + floor( SUM band / needCount )
-//   score      = min           if the stay was cut short
+//   score      = min + floor( (SUM band(need) + band(hotel)) / (needCount + 1) )
+//   score      = min           if the stay did not run its course
+//
+// THREE OF THOSE FIVE LINES ARE G-059's AND EACH ANSWERS A DIFFERENT E-014 FINDING: the WINDOW
+// is the domain the simulation can occupy (`letDownWindowOf` carries the derivation), the HOTEL
+// is the human's *"including facilities"* (`reviewOf` carries the ruling), and the floor now
+// covers every stay that did not run its course rather than the three evictions (`isCutShort`).
 //
 // ============================================================================
 // THE SCORE IS AN INTEGRAL OVER THE STAY, NOT A READING TAKEN AS THE GUEST WALKS OUT (G-028b,
@@ -71,8 +78,13 @@
 // AND WHY THIS IS NOT THE POOLED SCORE THE SAME ADR REJECTED — the difference is the DOUBLE
 // ROUNDING, and it is the design rather than a smell:
 //
-//   POOLED   floor( (n x stay - SUM unserved) x bands / (n x stay) )      ONE rounding
-//   THIS     floor( SUM floor((stay - unserved) x bands / stay) / n )     TWO
+//   POOLED   floor( (n x w - SUM unserved) x bands / (n x w) )              ONE rounding
+//   THIS     floor( (SUM floor((w - unserved) x bands / w) + hotel) / (n + 1) )  TWO
+//
+// `w` IS THE LET-DOWN WINDOW AND `hotel` IS THE HOTEL'S OWN BAND, both G-059 (ADR-0104). The
+// formula above read `stay` for `w` and had no `hotel` term until sweep 1 caught it. **Neither
+// changes what this block is about**: the distinction between the two lines is still the INNER
+// floor, and the hotel term sits inside the same outer mean as every need.
 //
 // On the vector that rejected pooling — one need starved for 80 % of a stay, the rest perfect —
 // the pooled form scores the TOP band and this one loses a band. **The per-need floor is what
@@ -96,10 +108,26 @@
 //   measured 0 red of 30 configurations, against 11 red if the score moves and `met` does not.
 //
 //   A GUEST WHOSE VECTOR CONTAINS THE LODGING NEED AND NEVER GOT A BED CANNOT LEAVE A TOP
-//   REVIEW. That band is 0, so the mean over `n` bands is at most `(n-1)(bands-1)/n`, which is
-//   below `bands - 1` for every `n` — and at `n = 1` the mean IS 0, so such a guest scores the
-//   FLOOR rather than merely short of the top. Two rejected candidates got this outcome only
-//   because the shipped content happens to produce it; here it is structural.
+//   REVIEW. That band is 0, so the mean over the `n + 1` terms is at most `n(bands-1)/(n+1)`,
+//   which is below `bands - 1` for every `n`. **The property survives G-059 and its ARITHMETIC
+//   MOVED, which sweep 1 caught in two places at once.**
+//
+//   ~~"the mean over `n` bands is at most `(n-1)(bands-1)/n` … and at `n = 1` the mean IS 0, so
+//   such a guest scores the FLOOR rather than merely short of the top … here it is
+//   structural."~~ **BOTH HALVES WERE FALSIFIED BY THE TERM THIS GOAL ADDED.** The denominator
+//   is `n + 1` now, not `n`; and at `n = 1` the mean is `floor((0 + hotel) / 2)`, which under a
+//   four-star ladder is `min + 2` rather than the floor. **So the FLOOR half is content-dependent
+//   again — it depends on the hotel's rating — which is precisely what the old sentence was
+//   boasting it was not.** Recorded rather than quietly re-pinned, because the paragraph's whole
+//   point was the distinction between a property and a coincidence of the shipped tables.
+//
+//   WHAT IS STILL STRUCTURAL, AND IT IS THE HALF THE LAW RESTS ON: the guest cannot reach the
+//   TOP. A starved lodging band is 0 and every other term is at most `bands - 1`, so the mean
+//   cannot be `bands - 1`. That is the clause `report.ts`'s review law A needs and it is
+//   unconditional at every `n` and every rating. **A guest that never got a bed reaching the
+//   floor is now a fact about the hotel it never got into, not about the scorer** — and on
+//   shipped content it reaches the floor anyway, by a different route: `isCutShort` floors every
+//   stay that did not run its course, and a guest with no bed leaves as `gaveUp`.
 //
 //   **THE QUALIFIER ON THAT SENTENCE USED TO READ "for any need count above one" AND IT WAS THE
 //   WRONG VARIABLE** (ADR-0037's amendment). The cap does not depend on how many needs a guest
@@ -202,9 +230,9 @@
 // NO RANDOMNESS, NO WALL CLOCK, INTEGER ARITHMETIC END TO END (I2). Every input is the
 // departing guest's own state and injected content.
 
-import { firstGuestRules } from './content.js';
+import { firstGuestRules, starTiersInOrder } from './content.js';
 import type { BoundContent } from './content.js';
-import { needBandOf } from './needs.js';
+import { letDownWindowOf, needBandOf } from './needs.js';
 import type { NeedState } from './needs.js';
 
 /**
@@ -291,6 +319,95 @@ export function reviewScaleOf(bound: BoundContent): ReviewScale | undefined {
 /**
  * THE REVIEW A DEPARTING GUEST LEAVES, or `undefined` under content that declares no scale.
  *
+ * ===========================================================================================
+ * RULED BY THE HUMAN, 2026-08-27 (E-014, ADR-0104), AND THE RULING IS THIS FUNCTION'S SPEC:
+ *
+ *   *"Measurement is of the whole stay, INCLUDING FACILITIES … Guest rating is like a
+ *   tripadvisor score."*
+ *
+ * THREE THINGS FOLLOW AND THE FIRST IS A REFUSAL. The escalation recommended a WORST-NEED
+ * scorer with the mean as a tie-break. **It was overruled: the MEAN SURVIVES**, and nothing here
+ * may reintroduce a worst-part measure under another name. A `min` over the bands, a cap by the
+ * lowest term, a penalty proportional to the worst — all of them are the rejected design.
+ *
+ * SECOND, AND IT IS THE WORK: **THE REVIEW CAN SEE THE HOTEL NOW.** Until G-059 this function
+ * read the guest's four needs and nothing else, so a guest whose needs were equally met scored a
+ * hotel with a Spa exactly as it scored a shed. On shipped content a FACILITY IS PRECISELY A
+ * ROOM THAT SERVES NO NEED (`facilityRoomTypesOf` picks them out that way), so the old scorer was
+ * not merely coarse about facilities — it was structurally blind to them.
+ *
+ * THIRD, THE TWO SYSTEMS STAY DISTINCT (ADR-0082, ADR-0102). The STAR RATING is a criteria-based
+ * inspection that tells the player what to build — `starRatingOf` returns `nextStars` and
+ * `shortfall` for exactly that. The REVIEW is one guest's impression of one stay. They are not
+ * merged here: **what crosses is a number, `standing`, and this function never learns what a
+ * tier is, what a room type is or what the hotel is short of.**
+ * ===========================================================================================
+ *
+ * HOW MUCH DO FACILITIES MOVE A REVIEW: **ONE TERM IN THE MEAN, AND THE WEIGHT IS FORCED RATHER
+ * THAN CHOSEN.** §2.1 wants every number traced to a stated requirement, so here is the trace.
+ * Given (a) the ruling — the measurement is of the whole stay INCLUDING facilities — and (b) the
+ * shipped aggregation, which is an UNWEIGHTED mean over the things the guest experienced (a
+ * weighted or pooled form is what ADR-0034 §1 rejected), the hotel enters as one unweighted term
+ * and there is nothing left to pick. **Any other weight is a number nobody can source.**
+ *
+ * AND IT IS ONE TERM FOR THE HOTEL, NOT ONE PER FACILITY TYPE, WHICH IS THE ONE REAL CHOICE IN
+ * THE PARAGRAPH ABOVE AND IS SETTLED ON A MECHANICAL GROUND RATHER THAN A TASTEFUL ONE: a term
+ * per facility type makes the DENOMINATOR a function of the content table's LENGTH, so adding a
+ * room type to `star-tiers.json` would silently re-weight every review ever taken. A weight that
+ * moves when content grows a row is not a weight anybody chose. The four need terms are the
+ * guest's OWN vector and are already content-length-dependent for a reason ADR-0027 records —
+ * a migrated guest is reviewed on the needs it has — and the hotel is one thing the guest formed
+ * no need for.
+ *
+ * THE HOTEL'S BAND IS QUANTISED BY `needBandOf`, THE SAME FUNCTION AND THE SAME RULE, and that is
+ * what makes "one more term in the same mean" true rather than a figure of speech:
+ *
+ *     needBandOf(bands, window = topTierStars, unserved = topTierStars - standing)
+ *
+ * — the served share of the ladder the hotel has climbed, quantised exactly as the served share
+ * of a stay is. On shipped content (five tiers, five bands) that is stars 0..5 -> bands 0,1,2,3,4,4:
+ * a four- and a five-star hotel share the top band for the same reason a need served 80% and one
+ * served 100% do, which is `needBandOf`'s clamp and not a special case written here.
+ *
+ * LAW A SURVIVES BY CONSTRUCTION AND THAT IS NOT A HAPPY ACCIDENT. `report.ts`'s review law A
+ * refuses a run with more top reviews than the least-met need. A top score still needs EVERY term
+ * at the top band, so it still needs every need at its top band, which is what `met` counts
+ * (ADR-0037). Adding a term can only make the top HARDER to reach, never easier — which is why
+ * the hotel enters the MEAN and not as a bonus on top of it. A bonus would have broken law A on
+ * the first run.
+ *
+ * ---------------------------------------------------------------------------
+ * `standing` IS THE HOTEL AS IT STOOD AT DEPARTURE, AND THE ALTERNATIVE WAS COSTED AND REFUSED.
+ *
+ * The question is real: a guest who stayed before the Spa was built should not review the Spa.
+ * **THE NARROW CLAIM, WHICH IS THE ONE THAT HOLDS: no facility that NEVER existed during the stay
+ * can be credited.** A review is filed on the way out, so every facility it credits stood in the
+ * hotel at the departure instant, and the only way to credit one that never existed during the
+ * stay would be to build it after the guest left — which this ordering makes unreachable.
+ *
+ * ~~"The at-departure reading has no false-credit case at all."~~ **OVERSTATED, AND STRUCK AT
+ * SWEEP 1 BY THE PARAGRAPH THAT ALREADY CONCEDED IT.** A facility built MID-STAY is credited in
+ * full to a guest that only had it for part of its stay, and the paragraph below calls that a
+ * one-day transient two sentences later. *"No false-credit case"* and *"a one-day transient in
+ * the credit"* cannot both be true; the second is the measured one and the first is a slogan.
+ * **What is claimed is the narrow statement above, and the trade below is what it is chosen on.**
+ *
+ * The alternative — snapshot the rating at ARRIVAL — is not more correct, it is wrong in the
+ * mirror direction: it denies credit for a facility that stood for all but the first tick of a
+ * stay. Both are one-day transients, in opposite directions, and only one of them costs a
+ * `Guest` field, a SAVE_SCHEMA_VERSION bump, a migration and a permanent piece of state that can
+ * disagree with the building (ADR-0102 §2's argument about a stored rating, one scale down).
+ *
+ * AND THE BUILD LOOP WANTS THE FEEDBACK IN THE DAY THE CASH WAS SPENT. `runDemand` is positioned
+ * inside the tick for exactly this reason — *"reversing either half would put a day's lag between
+ * building a Spa and anybody noticing"* (`tick.ts`) — and a review scored at arrival would put
+ * that lag back for the other of the two channels a player can watch.
+ *
+ * IT IS READ ONCE PER TICK, off the same `ValidityContext` `runDemand` reads, so the rating that
+ * decides who turns up and the rating the departing guest scores are the same number about the
+ * same building. `guests.ts` owns that plumbing; this function takes an integer.
+ * ---------------------------------------------------------------------------
+ *
  * Takes the guest's parts rather than the guest, and that is structural rather than
  * fussy: `Guest` lives in `guests.ts`, `guests.ts` calls this, and
  * `.dependency-cruiser.cjs` makes a circular import an ERROR. Passing primitives is what
@@ -321,12 +438,53 @@ export function reviewScaleOf(bound: BoundContent): ReviewScale | undefined {
  * one answers a different question, because the hotel took the room out from under a guest
  * who was paying for it, and no amount of dinner makes that a stay.
  *
+ * ---------------------------------------------------------------------------
+ * AND AT G-059 THE FLOOR COVERS EVERY STAY THAT DID NOT HAPPEN OR DID NOT FINISH, WHICH
+ * REVERSES A WRITTEN DECISION. `isCutShort` used to partition on AGENCY — the three evictions
+ * were the hotel's doing and everything else was the guest's — and said in terms that flooring
+ * a guest who got fed up and left *"would double-count the same fact"*, because *"its needs are
+ * unmet, by construction — that is why it left"*.
+ *
+ * **MEASURED, THAT SENTENCE IS FALSE.** At `--days 200 --seed 42 --rooms 24 --amenities 1`,
+ * **1,677 of 3,186 guests stormed out and the distribution was `3:580, 4:2497, 5:109`** — so at
+ * least 1,097 guests who walked out in disgust filed FOUR STARS (ADR-0100, verified on the
+ * shipped CLI). The mean does not carry the fact the sentence relies on: `dissatisfaction` is a
+ * DRAINING mood and `unservedTicks` is an UNDRAINED per-need integral, so a guest driven out by
+ * ONE need has its other three near the top and the mean washes out the need that ended the stay.
+ *
+ * ON A TRIPADVISOR READING — which is the human's word for what this scale is — a guest who
+ * storms out does not file four stars, and neither does one the hotel never found a room for.
+ * So the partition is no longer agency, it is COMPLETION:
+ *
+ *   `checkedOut` and `visitEnded` are the stays that RAN THEIR COURSE and are scored on what the
+ *   guest got. Every other reason is a stay that ended early or never began, and reviews at the
+ *   floor.
+ *
+ * THE ROW ORDER STILL MAKES IT CONTIGUOUS, which is what `GUEST_DEPARTURE_REASONS` was ordered
+ * for: the two completed rows sit at the head and the five that do not follow them, so
+ * `evictedGuests` still folds a contiguous tail and the report can still fold the cut-short set
+ * without naming rows one at a time.
+ *
+ * AND THE COST IS THE ONE THIS PARAGRAPH ALREADY STATED, WIDER: the floor no longer distinguishes
+ * an eviction from a walk-out from a guest the hotel never housed. That was already true of the
+ * eviction and the unhoused (below); it is now true of one more row. Review law B is an
+ * INEQUALITY and absorbs it exactly, and it is STRENGTHENED in the same diff to ask for a floor
+ * review per NON-COMPLETED stay rather than per eviction — so the widening is checked rather
+ * than asserted.
+ * ---------------------------------------------------------------------------
+ *
  * SAY THE COST, BECAUSE IT IS REAL AND IT IS VISIBLE IN A DISTRIBUTION. It read, until G-028b:
  * *"an evicted guest that met three of its four needs scores the floor, 1, while a guest that
  * merely gave up waiting having met one scores 2."* **The second half is false under the mean of
  * bands** — measured through a real run, every guest that gave up waiting scores the floor too,
  * because its lodging need went unserved for its whole stay and its engagement needs had a
- * lobby's worth of time to be served in. So the eviction floor is no longer the ONLY route to the
+ * lobby's worth of time to be served in. *THAT REASON WAS FALSIFIED BEFORE G-059 AND THE CLAIM
+ * NOW HOLDS FOR A DIFFERENT ONE, which is worth separating: ADR-0100 measured `--rooms 1
+ * --amenities 1` and found **2,906 of 2,906 `gaveUp` guests scoring 3, none scoring 1** — the
+ * lobby has a café, so three of the four bands were top and only lodging was 0. The arithmetic
+ * reason was always content-dependent. `gaveUp` reaches the floor at G-059 because it is not a
+ * COMPLETED STAY, which is a fact about the departure table and not about where the café is.*
+ * So the eviction floor is no longer the ONLY route to the
  * floor, and the cost is stated the other way round: **an eviction is indistinguishable in the
  * distribution from a guest the hotel simply never housed.** Law B in `report.ts` is an
  * INEQUALITY and survives that exactly — it asks for at least as many floor reviews as evictions,
@@ -371,6 +529,7 @@ export function reviewOf(
   needs: readonly NeedState[],
   cutShort: boolean,
   stayTicks: number,
+  standing: number,
 ): number | undefined {
   const scale = reviewScaleOf(bound);
   if (scale === undefined) return undefined;
@@ -383,16 +542,61 @@ export function reviewOf(
   // band — so without this line a guest with no needs at all leaves a PERFECT review, which is
   // the one answer nothing could justify. Same line, opposite failure.
   if (needs.length === 0) return undefined;
-  // THE MEAN OF THE PER-NEED BANDS. `needBandOf` divides once per need, by the stay; this divides
-  // once more, by the vector length. The two roundings are the design and not an accident — see
-  // the header, and `review.scorer.test.ts`'s falsification vector, where collapsing them into
-  // one division is exactly the pooled score ADR-0034 §1 rejected.
+  // THE MEAN OF THE BANDS — THE FOUR NEEDS AND THE HOTEL. `needBandOf` divides once per term, by
+  // that term's window; this divides once more, by the number of terms. The two roundings are the
+  // design and not an accident — see the header, and `review.scorer.test.ts`'s falsification
+  // vector, where collapsing them into one division is exactly the pooled score ADR-0034 §1
+  // rejected.
   //
   // The walk is over the vector the guest FORMED rather than over the content table, so a guest
   // migrated from v5 carrying one need is reviewed on the need it has.
+  const windowTicks = letDownWindowOf(bound, stayTicks);
   let total = 0;
-  for (const need of needs) total += needBandOf(scale.bands, stayTicks, need.unservedTicks);
-  return scale.min + Math.floor(total / needs.length);
+  let terms = 0;
+  for (const need of needs) {
+    total += needBandOf(scale.bands, windowTicks, need.unservedTicks);
+    terms += 1;
+  }
+  // THE HOTEL ITSELF, AS ONE MORE TERM (G-059). `topTierStarsOf` is `undefined` for content that
+  // declares no ladder, and then this is byte-identical to the four-term mean that shipped before
+  // — the `reviewScaleOf` contract one field over, and ADR-0008's rule: a run under content with
+  // no inspection is not a run at a nought-star hotel.
+  const topStars = topTierStarsOf(bound);
+  if (topStars !== undefined) {
+    total += needBandOf(scale.bands, topStars, topStars - standing);
+    terms += 1;
+  }
+  return scale.min + Math.floor(total / terms);
+}
+
+/**
+ * The highest star count this content's ladder awards, or `undefined` if it declares none.
+ *
+ * THE LAST ROW, NOT A FOLD, AND THIS SHIPPED AS A FOLD FOR ONE ROUND ON TWO FALSE PREMISES.
+ * It read: *"A MAX RATHER THAN THE LAST ROW, because `starTiersInOrder` is ordered by `stars` as
+ * a CONTENT fact … and the whole point of `starRatingIn`'s prefix scan is that a non-monotone
+ * table is a table somebody could write."* **Both halves are wrong.**
+ *
+ *   1. THE ORDER IS A BIND-TIME GUARANTEE, NOT A CONTENT FACT. `normaliseStarTiers`
+ *      (`content.ts`) sorts ascending by `stars` on the one door every host goes through, and
+ *      THROWS on a duplicate — *"the ladder's order IS that field, so a duplicate leaves two
+ *      tiers with no order between them"*. A non-monotone table cannot bind, so there is no
+ *      state for a fold to be safer in.
+ *   2. THE PREFIX SCAN IS ABOUT A DIFFERENT NON-MONOTONICITY. `starRatingIn` scans a prefix
+ *      because a tier's REQUIREMENTS need not grow with its stars — a hotel with a Theatre and
+ *      no Cafe must not skip to four. That says nothing about the `stars` column, which is what
+ *      this function reads.
+ *
+ * AND THE RULE IS WRITTEN IN THE FILE THIS MODULE IMPORTS `starTiersInOrder` FROM.
+ * `assertDemandCoversTheLadder` (`content.ts`) takes `starTiers[length - 1]` under the sentence
+ * *"a SECOND FOLD WOULD BE A SECOND DEFINITION OF 'THE TOP'"*. A fold here and an index there
+ * agree on every table that can bind — **and they can only diverge in the exact case each one
+ * claims to guard against**, which is the worst possible place for two spellings of one rule.
+ * One definition, and it is the ladder's own order.
+ */
+function topTierStarsOf(bound: BoundContent): number | undefined {
+  const tiers = starTiersInOrder(bound);
+  return tiers[tiers.length - 1]?.stars;
 }
 
 /** One row of the review distribution: a score, and how many guests left it. */
