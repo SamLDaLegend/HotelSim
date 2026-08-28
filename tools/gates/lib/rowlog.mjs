@@ -47,12 +47,55 @@ import { stripAnsi } from './annotate.mjs';
 export const KEEP_BYTES = 4 * 1024 * 1024;
 
 /**
- * The last `KEEP_BYTES` of a stream, plus how much was dropped to stay inside it.
+ * How many UTF-16 code units of `text` must go to shed at least `atLeast` bytes off its front,
+ * and how many bytes that actually sheds.
+ *
+ * MULTI-BYTE CHARACTERS ARE NEVER CUT IN HALF. The cut lands on a character boundary, so it
+ * may overshoot `atLeast` by up to three bytes — the largest amount by which one character can
+ * straddle the boundary. Overshooting is the safe direction: the surplus is counted in
+ * `dropped`, and what is kept stays inside the limit. Cutting a character in half would put a
+ * replacement byte sequence at the front of a diagnostic, which is the one place a reader is
+ * least equipped to recognise as an artefact of the capper.
+ *
+ * Code points rather than code units, and the byte width computed arithmetically rather than
+ * by calling `Buffer.byteLength` per character: this walks each byte of the stream at most
+ * once over the life of the `Tail`, which keeps the whole class linear in the stream.
+ */
+const shedFront = (text, atLeast) => {
+  let units = 0;
+  let bytes = 0;
+  while (units < text.length && bytes < atLeast) {
+    const code = text.codePointAt(units);
+    // A lone surrogate (which a `StringDecoder`-fed stream does not produce, but a caller
+    // could) encodes as U+FFFD — three bytes — and lands in the same branch as a BMP
+    // character, so this agrees with `Buffer.byteLength` on every input.
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+    units += code < 0x10000 ? 1 : 2;
+  }
+  return { units, bytes };
+};
+
+/**
+ * The last `limit` bytes of a stream, plus how much was dropped to stay inside it.
+ *
+ * THE UNIT IS THE BYTE, NOT THE CHUNK, AND THAT IS THE WHOLE POINT (G-039a, fixed after CI).
+ * A chunk is whatever one `push()` received — which is however the child process and the OS
+ * happened to flush, and nothing else. It differs between platforms (POSIX hands over up to a
+ * pipe buffer at a time; Windows hands over what was written), between a loaded machine and a
+ * quiet one, and between two runs on the same machine. The first version of this class shed
+ * WHOLE CHUNKS and stopped at `chunks.length > 1`, so what it kept was "the last chunk,
+ * whatever size that is": under a stream that arrived as one chunk it kept ALL of it and
+ * reported nothing dropped, and under a stream that arrived in small pieces it kept `limit`.
+ * A diagnostic whose contents depend on how the OS scheduled a pipe is not a diagnostic.
+ *
+ * So a chunk is shed only when the whole of it is surplus; otherwise its front is trimmed.
+ * The kept text is now a suffix of the stream of at most `limit` bytes on every platform, and
+ * `dropped` counts exactly the bytes that are not in it.
  *
  * Written as a class rather than a growing string because `text += chunk` over a megabyte of
  * vitest output is quadratic, and this runs inside the command that already takes minutes.
  */
-class Tail {
+export class Tail {
   constructor(limit = KEEP_BYTES) {
     this.limit = limit;
     this.chunks = [];
@@ -61,13 +104,28 @@ class Tail {
   }
 
   push(text) {
+    if (text.length === 0) return;
     this.chunks.push(text);
     this.bytes += Buffer.byteLength(text);
-    while (this.bytes > this.limit && this.chunks.length > 1) {
-      const gone = this.chunks.shift();
-      const size = Buffer.byteLength(gone);
-      this.bytes -= size;
-      this.dropped += size;
+    // `length > 0`, NOT the old `length > 1`. One is "there is something left to shed from";
+    // the other was "keep the last chunk whatever it costs", which is the defect.
+    while (this.bytes > this.limit && this.chunks.length > 0) {
+      const head = this.chunks[0];
+      const headBytes = Buffer.byteLength(head);
+      const surplus = this.bytes - this.limit;
+      if (headBytes <= surplus) {
+        this.chunks.shift();
+        this.bytes -= headBytes;
+        this.dropped += headBytes;
+        continue;
+      }
+      // The head outlives the surplus, so it is TRIMMED rather than shed. This branch always
+      // clears the surplus, so the loop ends here — including when the head is the only chunk,
+      // which is the single-chunk stream the old code could not cap at all.
+      const { units, bytes } = shedFront(head, surplus);
+      this.chunks[0] = head.slice(units);
+      this.bytes -= bytes;
+      this.dropped += bytes;
     }
   }
 

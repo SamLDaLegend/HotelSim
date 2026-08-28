@@ -65,6 +65,12 @@ type RowLog = {
   readonly prepareLogDir: (dir: string, scripts: readonly string[]) => string;
   readonly writeRowLog: (dir: string, script: string, output: string) => string;
   readonly logNameFor: (script: string) => string;
+  readonly Tail: new (limit: number) => {
+    push: (text: string) => void;
+    text: () => string;
+    readonly dropped: number;
+    readonly bytes: number;
+  };
 };
 
 let lib: RowLog;
@@ -201,14 +207,31 @@ describe('the failure modes a diagnostic must survive, because it runs while som
   it('the in-memory cap keeps the END of a long row and says how much it dropped', async () => {
     // The tail, not the head: a runner prints its banner first and its failures last. A cap
     // that kept the head would keep the banner and lose the diagnosis.
+    //
+    // THE CHILD SETS `exitCode` INSTEAD OF CALLING `process.exit`, AND THAT IS NOT A DETAIL.
+    // This arm was red on ubuntu and macOS and green on Windows in CI run 33154305802, and the
+    // divergence was not in the cap: on POSIX `process.stdout` to a PIPE is ASYNCHRONOUS, so
+    // `process.exit(1)` abandons whatever the child has queued and not yet handed over. On
+    // Windows the same write is synchronous, so nothing is abandoned. MEASURED: bytes received
+    // by the parent from this exact child, over a probe that blocks the parent 200ms before it
+    // drains — the shape of a loaded vitest worker — 2 runs per arm, identical readings, on
+    // Linux (WSL2 Ubuntu, quiet, node 22.16.0). `process.exit` delivered 34,960 of 83,904
+    // bytes and no last line; `exitCode` delivered 83,904 and the last line. So the subject was
+    // never reaching the subject. `exitCode` is still a red row: the process exits 1, and it
+    // exits when its writes are done.
     const out = sink();
     const result = await lib.runRow(
       nodeCommand(
         'for (let i = 0; i < 400; i += 1) console.log("line-" + i + "-" + "x".repeat(200));' +
-          'console.log("THE-LAST-LINE");process.exit(1)',
+          'console.log("THE-LAST-LINE");process.exitCode = 1',
       ),
       { cwd: ROOT, out, keepBytes: 4096 },
     );
+    expect(result.status).toBe(1);
+    // THE FIXTURE'S OWN INTEGRITY, ASSERTED BEFORE THE SUBJECT IS. If the child ever abandons
+    // its tail again, this line fails and names the child; the three below would fail and
+    // blame the cap, which is exactly the week that was lost to this once.
+    expect(out.text()).toContain('THE-LAST-LINE');
     expect(result.output).toContain('THE-LAST-LINE');
     expect(result.output).not.toContain('line-0-');
     expect(result.output).toContain('earlier bytes dropped');
@@ -236,6 +259,86 @@ describe('the failure modes a diagnostic must survive, because it runs while som
     const esc = String.fromCharCode(27);
     const path = lib.writeRowLog(lib.prepareLogDir(dir, ['test']), 'test', `${esc}[31mRED${esc}[0m text`);
     expect(readFileSync(path, 'utf8')).toBe('RED text');
+  });
+});
+
+describe('the cap counts BYTES, so how the OS chunked the stream cannot change what it keeps', () => {
+  // A PLATFORM-INDEPENDENT REPRODUCTION OF A PLATFORM-DEPENDENT BUG, WHICH IS THE ONLY KIND
+  // WORTH PINNING.
+  //
+  // The arm above drives a real child, and a real child hands its bytes over in whatever
+  // pieces the OS chose: on POSIX up to a pipe buffer at a time, on Windows what was written,
+  // and on either one differently when the machine is busy. That is not a knob a test can
+  // hold still — so the pair below holds the BYTES still and varies the CHUNKING, which is the
+  // one variable the shipped cap is not allowed to be sensitive to.
+  //
+  // The first `Tail` shed WHOLE CHUNKS and stopped while `chunks.length > 1`, so "the cap" was
+  // really "keep the last chunk". The many-pieces arm passed. The single-chunk arm kept the
+  // entire stream, reported nothing dropped, and could not have kept a bounded tail of
+  // anything. Both arms carry identical bytes, so a difference between them is the defect and
+  // nothing else.
+  const LIMIT = 4096;
+  const lines = Array.from({ length: 400 }, (_, i) => `line-${i}-${'x'.repeat(200)}\n`);
+  const stream = `${lines.join('')}THE-LAST-LINE\n`;
+
+  const keep = (chunks: readonly string[]): { text: string; dropped: number } => {
+    const tail = new lib.Tail(LIMIT);
+    for (const chunk of chunks) tail.push(chunk);
+    return { text: tail.text(), dropped: tail.dropped };
+  };
+
+  /** What `text()` prepends, so an arm can compare the kept BODY without the banner. */
+  const body = (text: string): string => (text.startsWith('[…') ? text.slice(text.indexOf('\n') + 1) : text);
+
+  it('the two arms carry identical bytes — the control, so a difference can only be chunking', () => {
+    expect([...lines, 'THE-LAST-LINE\n'].join('')).toBe(stream);
+  });
+
+  it('one chunk carrying the whole stream is capped, and keeps the END of it', () => {
+    // THE ARM THE OLD CODE FAILED. One `push` of everything: `chunks.length > 1` was never
+    // true, so nothing was ever shed and `output` was the whole stream with no banner.
+    const kept = keep([stream]);
+    expect(Buffer.byteLength(body(kept.text))).toBeLessThanOrEqual(LIMIT);
+    expect(kept.text).toContain('THE-LAST-LINE');
+    expect(kept.text).not.toContain('line-0-');
+    expect(kept.text).toContain('earlier bytes dropped');
+    // Nothing is invented and nothing goes missing: what was dropped plus what was kept is
+    // what arrived.
+    expect(kept.dropped + Buffer.byteLength(body(kept.text))).toBe(Buffer.byteLength(stream));
+  });
+
+  it('and the SAME bytes arriving one line at a time keep the SAME tail, to the byte', () => {
+    const one = keep([stream]);
+    const many = keep(lines.concat('THE-LAST-LINE\n'));
+    expect(many.text).toBe(one.text);
+    expect(many.dropped).toBe(one.dropped);
+    // Said again against the stream itself rather than against the other arm, so an arm that
+    // is wrong in the same way twice does not pass by agreeing with itself.
+    expect(stream.endsWith(body(many.text))).toBe(true);
+  });
+
+  it('a chunk larger than the whole cap is trimmed rather than kept whole', () => {
+    // The degenerate shape of the same defect: one push, bigger than the limit, arriving when
+    // there is nothing else to shed.
+    const kept = keep([stream.slice(0, 200), stream.slice(200)]);
+    expect(Buffer.byteLength(body(kept.text))).toBeLessThanOrEqual(LIMIT);
+    expect(kept.text).toContain('THE-LAST-LINE');
+  });
+
+  it('a multi-byte character is never cut in half by the trim', () => {
+    // The cost of counting bytes instead of chunks: the cut can land inside a character. It
+    // must not. `é` is two bytes, so an even limit against an odd-length stream of them puts
+    // the boundary INSIDE a character on every run, and the trim has to walk past it.
+    const small = 100;
+    const tail = new lib.Tail(small);
+    tail.push(`${'é'.repeat(500)}END`);
+    const kept = tail.text();
+    expect(kept).not.toContain('�');
+    expect(kept.endsWith('END')).toBe(true);
+    const keptBody = body(kept);
+    expect(Buffer.byteLength(keptBody)).toBeLessThanOrEqual(small);
+    expect(`${'é'.repeat(500)}END`.endsWith(keptBody)).toBe(true);
+    expect(tail.dropped + Buffer.byteLength(keptBody)).toBe(Buffer.byteLength(`${'é'.repeat(500)}END`));
   });
 });
 
