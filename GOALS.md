@@ -126,7 +126,7 @@
   either, it gets a block and rejoins; if not, the slot is closed and was always empty.
   **THEN M3 RESUMES at G-023b — UNBLOCKED** (960 ticks of slack where its plan pass measured zero)
   → G-024/G-025 → G-026, last in milestone, two critics. **Four M3 goals of its own remain.**
-- **Owed by the human**: ~~M3 exit~~ **SIGNED OFF 2026-08-24 (ADR-0081), qualified.** *(**M2.5 EXIT: SIGNED OFF 2026-08-14.** And **WATCH #11 discharged
+- **Owed by the human**: ~~M3 exit~~ **SIGNED OFF 2026-08-24 (ADR-0081), qualified.** ~~M4 exit~~ **SIGNED OFF 2026-08-28, and M5 IS OPEN.** *(Asked only after `2eb2cfb` repaired the WATCH recorder, which had filmed a hotel nobody could arrive in since `4656f56` — a milestone question put to a camera pointed at an empty building answers nothing. The qualification is STATED rather than left to be found: the shipped scenario is capped at THREE STARS and no facility appears at any tick, so the star ladder’s top two tiers have no picture, and that is M5’s first goal.)* *(**M2.5 EXIT: SIGNED OFF 2026-08-14.** And **WATCH #11 discharged
   all three owed WATCHes in one look** — napping reads as resting, the departure distinction **IS**
   visible via the lobby fuse, and the needs-met bar survives its redefinition. **ADR-0037's scoring
   ruling is human-confirmed**: responsiveness over severity. **ADR-0015's blind-spot call is
@@ -1802,6 +1802,76 @@ Critique rounds used: 0/3
   name this goal by number or by subject, each with the invocation and reading that settles
   it. **A parked hypothesis with its test is a result waiting for a goal that happens to run
   it** — this is that goal, and it should report them as results rather than re-derive them.
+
+## M4 exit — human sign-off
+
+Status: **SIGNED OFF 2026-08-28 by the human.** *"Go for it. Signed off."*
+
+**The question was asked only after the instrument was repaired, and that ordering is the point.**
+`apps/game`'s recorder had filmed a hotel nobody could arrive in since `4656f56` — `loadContent()`
+with no market argument took the `commanded` clamp, and G-051b had removed the scenario's last
+`guestArrives`. A milestone question put to a camera pointed at an empty building would have been
+worthless, and ADR-0013 exists because thirteen goals once ran with nobody watching. Fixed at
+`2eb2cfb`; the recorder now exits non-zero if no frame contains a guest, so it cannot go blind
+quietly again.
+
+**WHAT WAS SIGNED OFF IS WHAT ADR-0105 RE-SCOPED M4 TO BE** — settlement, wages, and demand
+answering the star rating — **not §8's original five.** The cut is legible in the charter line
+itself, struck rather than deleted, and each item that never started names an EVENT rather than a
+milestone: **decay is the first post-playtest system**, hiring follows decay, pricing is parked.
+
+**THE EVIDENCE, AND THE MIDDLE ARM IS WHAT MAKES IT A MEASUREMENT.** `--days 30 --seed 42 --rooms
+12 --amenities 2`, three arms one flag apart: build three facility rooms and the rating goes
+**3 → 4**, arrivals **240 → 480**, revenue **1,972,000p → 3,944,000p**. Build the same three rooms
+with arrivals **pinned** and revenue does not move by one penny. **The gain belongs to the RATING.**
+Six invariants green on three platforms; `compare-hashes` success on macOS, Windows and Ubuntu over
+all 49 commits that had gone unpushed for seven days.
+
+**STATED AT SIGN-OFF RATHER THAN DISCOVERED AFTER IT**, because a qualification found later reads as
+a defect and a qualification stated now is a scope: **the shipped scenario is capped at THREE STARS
+and no facility appears at any tick.** `scenario.ts` selects room types by what they SERVE, and a
+facility serves nothing — so the second currency the star rating is built on **has no picture**, and
+floor 1's nine bedrooms are empty in all twelve recorded frames. Half the building is dead scenery.
+**One clause, already measured**: widening the selector takes the basement from 3 rooms to 6 and
+peak guests from 8 to 16, which independently reproduces WATCH #26's three-stars-eight-guests
+against four-stars-sixteen **through a different instrument**. That is why it is M5's first goal.
+
+## M5 — OPENED 2026-08-28 on the sign-off above
+
+§8: *Render. Pixi isometric floorplan view, camera, build tools, HUD, speed controls, save/load UI.
+The first playable build ships PLACEHOLDER ART* (ADR-0014 — M5 neither relitigates it nor waits on
+it).
+
+**Much of §8's list already exists**, because the renderer opened at G-030 and has taken continuous
+work every time the game needed watching: camera, HUD, speed controls, picking, input-to-command,
+the ladder, the session. **M5 is therefore not "build the renderer" — it is CLOSE THE GAP BETWEEN
+WHAT THE SIMULATION DOES AND WHAT A STRANGER CAN SEE IT DOING.** The simulation is ahead of the
+game and the game is ahead of the feeling.
+
+**THE ORDER, and every entry is a legibility defect with a measurement already attached:**
+
+1. **G-061 — the scenario seeds facilities.** One clause. Without it the star ladder's top two
+   tiers have no picture and the sign-off's own qualification stands. Measured: 3 basement rooms →
+   6, peak guests 8 → 16.
+2. **G-047a / G-047b — guests stop teleporting.** The human's own eye at E-012, fully designed
+   (ADR-0095/0096), depends on nothing. The largest watchability defect in the project.
+3. **G-062 — the rating is on screen.** `grep -in "star\|rating" apps/game/src/hud.ts` returns two
+   hits and neither displays one. The loop's second currency is invisible on the surface of record,
+   and `starRatingOf` already returns `nextStars` and `shortfall` — the Two Point Hospital shape the
+   human named, already computed and never shown.
+4. **G-060 — the ladder's negative region.** Taking the fifth star raises the rating, doubles
+   arrivals and LOSES money; the exchange rate is 99,000,000p for 0.51% of the distribution. Pinned
+   red-on-fix in `demand.report.test.ts`.
+5. **Refusal reasons and a lose state.** 10 of 12 builds in the opening-balance probe were refused
+   with nothing on screen saying why, and there is no bankruptcy, so a session has no stakes.
+6. **Then hand it to a stranger and watch.** §5.4 already routes *fun-critical and not resolvable
+   by test* to the human, and direct observation outranks critique.
+
+**NOT ON M5's PATH, said once so it is not rediscovered:** G-024/025/026 (congestion does not occur
+on shipped content, ADR-0075), G-037b/c, G-046, G-052b, and every parked instrument campaign.
+**G-037a (room quality) sits on a branch 62 commits behind `main` and widens with every goal that
+touches needs or content — it does not block first fun, and it should not keep ageing silently.**
+
 
 ## M3 exit — human sign-off required
 
