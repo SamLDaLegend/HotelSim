@@ -4383,3 +4383,123 @@ that takes this decides which.
 is read from a body is read from half the ledgers, so a stale golden in DECISIONS.md or PARKING.md would
 be invisible; and the gate prints all four readings under the label `digest body:`, so its own output
 tells a reader the opposite of what it did.
+
+
+## G-061 — five items, each with its falsification test
+
+*The goal that stopped being about a selector clause the moment it was measured. Four of these are
+findings the diff does not contain; the fifth is the instruction that produced two of them.*
+
+### 1. THE RUNG AT WHICH THE STAR LADDER TURNS NEGATIVE IS A FUNCTION OF AMENITY DENSITY
+
+**This generalises G-060's finding and demotes it to a special case.** G-060 is pinned as *"taking
+the FIFTH star loses money"*, measured at `--amenities 2`. It is not a fact about the fifth star.
+**Measured on the shipped game scenario at one-of-each density, the FOURTH star loses money by the
+same mechanism**: seeding the facilities takes the rating 3 -> 4, `runDemand` doubles arrivals
+exactly as the curve promises, and at seed 7 over 30 days revenue falls 1,972,000p -> 1,887,000p
+and balance 987,000p -> 707,000p with **245 `leftDissatisfied` against 0**. The orchestrator
+reproduced the sign on the CLI analogue — `--days 30 --seed 7 --rooms 18 --amenities 1 --demand`,
+`--facilities` 0 -> 1: 3 stars/240/1,972,000p/987,000p against 4 stars/480/**2,006,000p**/826,000p.
+**Different host, different layout, same sign, same mechanism.**
+
+**Why it happens, and it is the amenity clause rather than the bedroom clause**: every tier's
+amenity requirement counts `distinctTypes` and never LOAD, so a hotel can satisfy the clause that
+DOUBLES its arrivals without adding one seat. The negative rung is therefore wherever the hotel's
+serving capacity stops covering the arrivals the next tier buys — which moves with density, not
+with the tier number.
+
+**FALSIFICATION TEST.** `--days 30 --seed 7 --rooms 18 --demand`, sweeping `--amenities` 1, 2, 3
+against `--facilities` 0, 1. The claim is REFUTED if the sign of the balance delta across the
+`--facilities` step is the same at every amenity level — i.e. if the rung does not move. It is
+CONFIRMED if the fourth star is negative at `--amenities 1` and non-negative at some higher level,
+which is what one arm of it already shows: on the game scenario at two copies each, the same step is
+987,000p -> **2,629,000p** with zero dissatisfied. **Owner: G-060**, whose brief should be widened
+from "the fifth star" to "the rung, as a function of density", because a fix aimed only at tier 5
+leaves the defect alive one rung down.
+
+### 2. A DECLARED `kind: "facility"` IN `room-types.json` — THE POSITIVE FIELD THAT WOULD RETIRE THE UNION
+
+**Addressed to `packages/content` (schema) and `packages/sim` (structural type). Not the render
+layer's to give, and not taken at G-061.**
+
+`apps/game/src/scenario.ts` now selects the basement band by a UNION of two positive tests — serves
+a need, OR a star tier counts it. That union exists because **there is no way to ask content "is
+this a facility?"**, and both single-clause alternatives were rejected with reasons: the negation
+(`!servesSomething`, which `report.ts` uses) is the ABSENCE of properties and cannot tell a facility
+from a mis-authored room type; the tier clause alone silently DROPS any serving room type no tier
+happens to name, which is this file's own historical defect class.
+
+**A declared field makes the question answerable and retires both proxies at once.** It would also
+let `report.ts`'s `facilityRoomTypesOf` stop being a negation.
+
+**FALSIFICATION TEST.** The item dies when a room type can be classified without inference. It is
+REFUTED — i.e. the union is right and should stay — if somebody shows the classification is
+genuinely derivable from what a room DOES, in which case the union is the derivation and the field
+would be a second source of truth. **The cheap probe**: add a room type to `room-types.json` with
+empty `provides`, empty `requires` and no tier naming it, and run the game recorder. Under the
+union it does not appear (correct). Under the negation it stands in the basement charging upkeep.
+Restore with the ADR-0022 recipe.
+
+### 3. THE THREE FACILITIES ARE VISIBLY EMPTY IN EVERY RECORDED FRAME — G-062's FRAME TO POINT AT
+
+**`ADR-0102 §3`'s "a facility is a pure cost" is now VISIBLE rather than merely true**, and that is
+a consequence of G-061 shipping rather than a defect it introduced.
+`shipB-long/t005760-fm1-reduced.svg` — nine basement rooms, and `CH47`, `S48` and `T49` contain no
+guest in **any** frame of **any** of the four recordings taken for this goal (26 + 26 + 18 + 18
+frames). A watching stranger sees three large bright halls that nothing ever uses, with nothing on
+screen saying they bought the fourth star.
+
+**Owner: G-062** (*the rating is on screen*). `starRatingOf` already returns `nextStars` and
+`shortfall`; the frame above is what those two values explain.
+
+**FALSIFICATION TEST.** Re-record after G-062 and read the frame with a stranger: the item dies when
+a viewer of `t005760-fm1` can say WHY the empty rooms are there. It is REFUTED if a guest is ever
+observed inside a facility, which would mean a facility serves something after all and the whole
+`facilityRoomTypesOf` argument needs re-reading.
+
+### 4. SIX DISTINCT BASEMENT FILLS TODAY — THE RE-CHECK EVENT IS A SEVENTH ROOM TYPE, NOT A DATE
+
+The basement band draws **six distinct hues across nine rooms** (`GR37 GR39` orange, `C41 C42`
+olive, `L43 L45` green, `CH47` magenta, `S48` emerald, `T49` cyan). Two copies of a type sharing a
+colour reads WELL — "two Cafes" is legible at a glance — so the count that matters is TYPES and not
+rooms. `L43` (green) beside `S48` (spring green) is the closest adjacent pair and it separates
+today.
+
+**THE TRIGGER IS AN EVENT THE ARTEFACT CAN OBSERVE, not a milestone** (G-051b's rule): **a SEVENTH
+non-lodging room type entering `room-types.json`.** That is the first moment the palette has to
+separate more hues in one frame than it has ever been asked to.
+
+**FALSIFICATION TEST.** `palette.contrast.test.ts` already pins contrast WITHIN a role; this is
+contrast BETWEEN adjacent room fills, which nothing checks. Add the seventh type, record floor -1,
+and ask whether two adjacent rooms read as one. REFUTED if the palette generator is shown to
+guarantee separation for N types by construction, in which case there is no event to wait for.
+
+### 5. TWO INSTRUCTIONS THAT WERE WRONG, AND ONE OF THEM SHIPPED IN A COMMIT MESSAGE
+
+*Parked here rather than in `DECISIONS.md` because settled calls are the orchestrator's to write.
+Both were found by reading the instruction against the tree instead of obeying it.*
+
+**(a) `VERIFY_EXIT` IS NOT A TOKEN THIS REPOSITORY EMITS.** Every brief this session instructed the
+builder to *"read `VERIFY_EXIT` out of the log"*. `tools/gates/verify.mjs` never writes it: the
+green terminal marker is `All six invariant gates green.` and the red one is `N gate(s) red: ...`
+followed by `process.exit(1)`. **The instruction is worse than useless because it SUCCEEDS**:
+`grep VERIFY_EXIT` on any verify log matches the `GOALS.md` digest quoted inside `check:stamp`'s
+own ok-line, so an agent that followed it literally would find a hit and could report a pass it
+never observed. **The correct instruction is: capture the wrapper's exit status yourself, or read
+the tool's own terminal marker.**
+
+**FALSIFICATION TEST.** `grep -c VERIFY_EXIT tools/gates/verify.mjs` returns 0. The item dies when
+the briefs stop asking for it, or when `verify.mjs` is given such a marker deliberately.
+
+**(b) "check:purity's subject is packages/sim/src and nothing else" IS HALF WRONG, AND THE WRONG
+HALF IS IN COMMIT `2eb2cfb`'s MESSAGE.** The npm script is
+`node tools/gates/check-purity.mjs && depcruise --config .dependency-cruiser.cjs packages apps tools`
+— the depcruise arm **takes `apps` as an argument** and applies `no-circular` and
+`tools-may-reach-only-pure-view-modules` there. So the **scanner** says nothing about `apps/game`;
+the **row** covers it narrowly. This is ADR-0086's own class — a gate name read as a description of
+the class rather than as a specification of one clause — appearing inside a correction written to
+enforce ADR-0086.
+
+**FALSIFICATION TEST.** Read `scripts['check:purity']` out of `package.json`. REFUTED if the
+`depcruise` arm is later split into its own row, at which point the original claim becomes true and
+this item is discharged rather than fixed.

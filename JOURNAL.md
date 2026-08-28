@@ -3653,3 +3653,90 @@ tuned here.
 No frame shows a review recorded without a matching departure; `reviewOutcomes` tracks the
 departure total on all 31 frames of the facility recording and all 12 of the other; no guest
 reviews a hotel it never entered.
+
+## WATCH #28 — G-061. The facilities appear, half the building wakes up, and the fourth star had to be paid for before it could be given.
+
+**Instrument**: `pnpm --filter @hotelsim/game record`, the shipped scene builder through the shipped
+content loader (`2eb2cfb`). **Four recordings, three arms, one change apart each**, same invocation
+throughout: `--ticks 1440 --every 240 --seed 7` (26 frames, four floors) plus a `--ticks 5760
+--every 1440` steady-state run for two of them. Frames are derived artefacts and are not committed;
+regenerate with the invocations above.
+
+**THE THREE ARMS.** **HEAD** — the selector was SERVES-SOMETHING alone, so no facility could ever
+be selected and the hotel was capped at 3 stars. **A** — the union selector alone, six basement
+rooms, one of each type. **B** — the union selector plus two copies of each serving type, nine
+basement rooms. **B is what shipped, on the human's ruling, and A is the evidence that chose it.**
+
+### 1. THE FACILITIES ARE THERE, AND THE LADDER'S TOP TIERS HAVE A PICTURE
+
+`shipB/t001440-fm1-reduced.svg`, caption *"tick 1440 · floor -1 · walls reduced · **9 rooms (0
+invalid)**"*. HEAD: **3 rooms**, badges `GR37 C39 L40`, and no facility at any tick of any seed. B:
+**9 rooms**, badges `GR37 GR39 C41 C42 L43 L45 CH47 S48 T49` — two Games Rooms, two Cafes, two
+Lounges, then Conference Hall, Spa, Theatre. **Six distinct hues, nine rooms**, and the pairs
+sharing a colour is a feature rather than a collision: *"two Cafes"* reads at a glance. The serving
+rooms stand nearest the stairwell and the facilities at the far end, which is a measurement rather
+than a tidy-up — see §4.
+
+**THE COST OF NINE COLUMNS IS ON THE CAPTION**: `scale 0.81` against `1.00` at three and six rooms.
+The camera frames what is occupied, so a wider basement is a smaller building on screen. It still
+reads; a fourth serving copy would be the point to look again.
+
+### 2. FLOOR 1 STOPS BEING DEAD SCENERY — THE M4 SIGN-OFF'S OTHER QUALIFICATION, ANSWERED
+
+`t001440-f1-reduced.svg`. HEAD: *"9 rooms (0 invalid) · **0 guests here** · 8 elsewhere"* — nine
+bedrooms, nine beds, nobody, in **all twelve** upper-floor frames of the previous recording. B:
+*"9 rooms (0 invalid) · **3 guests here** · 13 elsewhere"*, guests in SR19, SR21, SR23. Ground floor
+over the same pair: 5 → 9. Peak world-wide guests over 1,440 ticks **8 → 16**, which independently
+reproduces WATCH #26's three-stars-eight against four-stars-sixteen through a different instrument.
+**Half the building came alive, and it stayed alive**: the long run settles at a flat 8 here / 8
+elsewhere on ticks 2880, 4320 and 5760 — an identical census three days running, where arm A's was
+9/4, 10/2, 8/6 because it was ejecting people.
+
+### 3. WHAT LOOKED WRONG UNDER A, AND WHY B EXISTS
+
+`after-long/t005760-f0-reduced.svg` (arm A): *"9 guests here · 4 elsewhere"*, guests standing in
+**pairs on the corridor lanes** beside SR9/SR3 and at SR5, with SR11 and SR17 showing unoccupied
+beds, while the six-room basement held only 3. A crowd milling in a hallway next to empty rooms
+reads as stupid, and the departure table said why: over 30 days arm A records **245
+`leftDissatisfied` against HEAD's 0**, with `guest_comfort` met 50 / unmet 417 and
+`guest_entertainment` met 76 / unmet 391 (`guest_nourishment` and `night_rest` stayed fully met).
+**One Games Room and one armchair cannot serve sixteen guests a day.** `leftDissatisfied` means
+*"it had a bed and nothing to do — build more amenities"*, so the steering signal fired correctly at
+the right lever. The frames were not wrong; the opening position was.
+
+**UNDER B THAT POPULATION IS GONE: 0 dissatisfied over 30 days, 0 over 365, and unanimous `5:464`
+reviews.**
+
+### 4. THE CORRIDOR CROWD IS SMALLER AND IT IS NOT GONE — AND IT WAS NEVER THIS GOAL'S
+
+**Checked because it was asked for, and reported against rather than for the change.**
+`shipB-long/t005760-f0-reduced.svg` (arm B): *"8 guests here · 8 elsewhere"*. SR9 now holds a guest
+INSIDE it where A had a pair on the lane beside it, and the census is flat instead of churning —
+but **a cluster still stands on the lanes around SR11/SR5, and SR17's bed is still unoccupied.**
+
+**That residual is not the overrun and the proof is in HEAD's own frames.** `before/t001440-f0` — 3
+stars, 240 arrivals, **zero dissatisfied departures in the entire run** — already shows a pair at
+SR11 and a figure at SR5 standing on circulation rather than in a room. **The clustering predates
+this goal, occurs at zero dissatisfaction, and survives the fix that removed the dissatisfaction.**
+It is the placement defect **G-047a/G-047b** own, not an amenity-capacity one, and this goal neither
+caused it nor cured it.
+
+### 5. THE HONEST HALF, AND IT IS G-062's FRAME
+
+**`CH47`, `S48` and `T49` contain no guest in any frame of any of the four recordings** — 88 frames.
+Three large, bright, permanently unused halls, because a facility serves nothing. That is
+`ADR-0102 §3`'s *"a facility is a pure cost"* becoming **visible** instead of merely true, and it is
+the thing a stranger will ask about first. Nothing on screen says those rooms bought the fourth
+star. **Parked naming G-062**, which already has `nextStars` and `shortfall` computed and unshown.
+
+### 6. AN AGREEMENT NOBODY ARRANGED
+
+Arm B's revenue is **3,944,000p over 30 days and 49,504,000p over 365** — both **byte-identical** to
+`GOALS.md`'s four-star CLI figures, taken on a different host, a different layout and a different
+seed. Two independent implementations of "what a four-star hotel earns" landing on the same integer
+twice is worth recording precisely because nobody set it up.
+
+### 7. NOTHING ELSE LOOKED WRONG
+
+`0 invalid` on every floor of every frame across all 88. The stairwell reads on all four floors. No
+guest was observed inside a facility. No frame shows a review without a matching departure.

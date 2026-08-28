@@ -21,11 +21,20 @@
 // here is dispatched by anything the player touches. G-031 owns that.
 //
 // NOT ONE CONTENT ID IS NAMED (ADR-0003, and `check:content` scans `apps/game/src`). The
-// room guests sleep in is asked for by WHAT IT PROVIDES and the amenities by WHAT THEY
-// SERVE — the two traps `report.ts:412-475` documents, both of which cost a whole need's
-// worth of satisfaction when they were got wrong: `roomTypes[0]` builds a hotel of cafés,
-// and `roomTypeProvides` drops the lounge (which provides nothing and requires an armchair
-// that does), producing a need every guest forms and no run can satisfy.
+// room guests sleep in is asked for by WHAT IT PROVIDES — the two traps `report.ts:412-475`
+// documents, both of which cost a whole need's worth of satisfaction when they were got
+// wrong: `roomTypes[0]` builds a hotel of cafés, and `roomTypeProvides` drops the lounge
+// (which provides nothing and requires an armchair that does), producing a need every guest
+// forms and no run can satisfy.
+//
+// ~~"and the amenities by WHAT THEY SERVE"~~ **STRUCK AT G-061 — BY THE COMMIT THAT FALSIFIED
+// IT, WHICH IS THE ONLY MOMENT ADR-0084's CLASS IS CHEAP TO CATCH.** Serving was the WHOLE test
+// until this goal and it is now ONE ARM OF A UNION: the basement band is every non-lodging room
+// type that serves a need **or that a star tier COUNTS**. It had to change because a FACILITY
+// SERVES NOTHING, so under the old test the Spa, the Conference Hall and the Theatre could not
+// be selected at any tick — and the ladder's top two tiers, which ask for one of exactly those
+// three, had no picture on the one surface a human watches. `basementRoomTypesOf` argues the
+// predicate and says what it beats.
 
 import {
   entranceCell,
@@ -34,8 +43,9 @@ import {
   needTypesInOrder,
   requiredItemsOf,
   roomTypeServes,
+  starTiersInOrder,
 } from '@hotelsim/sim';
-import type { BoundContent, Cell, Command, GridBounds, RoomTypeData } from '@hotelsim/sim';
+import type { BoundContent, Cell, Command, ContentId, GridBounds, RoomTypeData } from '@hotelsim/sim';
 
 /**
  * How many lodging rooms, and how they stack.
@@ -161,19 +171,177 @@ function lodgingRoomTypeOf(content: BoundContent): RoomTypeData {
   return roomType;
 }
 
-/** The room types that are not lodging and that SERVE something, ascending by id. */
-function amenityRoomTypesOf(content: BoundContent): readonly RoomTypeData[] {
+/**
+ * EVERY ROOM TYPE A STAR TIER COUNTS — the ids named by any clause of any tier, as a lookup.
+ *
+ * NOT ONE ID IS NAMED HERE (ADR-0003, and `check:content` scans `apps/game/src`).
+ * `starTiersInOrder` is the simulation's own content-derived iteration and `roomTypeIds` is
+ * the clause's own field, so the answer moves when `star-tiers.json` moves and this file
+ * never learns a spelling.
+ *
+ * THE SET IS A LOOKUP AND IS NEVER ITERATED — the same disclaimer `tallyValidRooms` carries in
+ * `rating.ts`, and for the same reason. Every ORDER that decides anything in this file comes
+ * from `content.content.roomTypes`; insertion order here decides nothing.
+ */
+function starTierRoomTypeIdsOf(content: BoundContent): ReadonlySet<ContentId> {
+  const ids = new Set<ContentId>();
+  for (const tier of starTiersInOrder(content)) {
+    for (const requirement of tier.requires) {
+      for (const id of requirement.roomTypeIds) ids.add(id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * ==========================================================================================
+ * THE NON-LODGING ROOM TYPES THIS HOTEL STANDS UP, ascending by id: everything that SERVES a
+ * guest need, plus everything a STAR TIER COUNTS (G-061).
+ *
+ * WHAT THIS REPLACED, AND WHY IT WAS A DEFECT RATHER THAN A CHOICE. Until this goal the test
+ * was SERVES-SOMETHING alone, so the set was exactly the three amenities. **A facility serves
+ * nothing — that is what makes it a facility** (`report.ts`'s `facilityRoomTypesOf` carries the
+ * evidence for that being a decision) — so the Spa, the Conference Hall and the Theatre could
+ * not be selected at any tick, in any recording, by any seed. The FOUR-STAR tier's third clause
+ * asks for one of exactly those three, so **the shipped hotel was permanently capped at THREE STARS
+ * and the ladder's top two tiers had no picture.** M4's sign-off states that qualification and
+ * names this as M5's first goal.
+ *
+ * THE PREDICATE IS A UNION OF TWO POSITIVE TESTS, AND BOTH HALVES ARE LOAD-BEARING:
+ *
+ *   1. **A STAR TIER COUNTS IT.** This is the half that ships the facilities. It is the honest
+ *      reading of what the basement is FOR — the hotel exists to be inspected, and a room type
+ *      an inspector counts is a room type the player must be able to see. It is derivable from
+ *      content with no id literal, which "facility" as a category is not.
+ *   2. **IT SERVES A GUEST NEED.** This is the half that was already here, kept unchanged.
+ *
+ * WHY NOT THE NEGATION — `!servesSomething`, which is what the headless harness uses to find
+ * facilities. **"Serves nothing and provides nothing" is the ABSENCE of properties and does not
+ * distinguish a facility from a MIS-AUTHORED ROOM TYPE.** A room type added to
+ * `room-types.json` with an empty `provides`, an empty `requires` and no tier naming it is
+ * almost certainly a mistake; under the negation it would silently appear in the basement of
+ * the shipped game as scenery, cost upkeep every night, and buy nothing. Under this predicate
+ * it is not selected, because nothing positive is true of it. The harness may use the negation
+ * — it is measuring a PARTITION of the room table and wants the residue by construction; this
+ * host is deciding what a player looks at and wants a reason.
+ *
+ * WHY NOT CLAUSE 1 ALONE, which is the predicate G-060's parked note named. On the shipped
+ * tables the two agree exactly, so the difference is entirely in the failure mode: clause 1
+ * alone DROPS any room type that serves a need and that no tier happens to name, and the
+ * dropped room is invisible — the hotel simply never builds it and every guest forms a need
+ * nothing can meet. **That is this file's own documented and expensive defect class**, the one
+ * the header records costing "a whole need's worth of satisfaction" when `roomTypeProvides`
+ * dropped the lounge. A union re-opens it on no axis, and clause 1 alone re-opens it on the
+ * ladder's.
+ *
+ * WHY NOT A `category` FIELD IN `room-types.json` — a `kind: "facility"` an author declares,
+ * which would make the distinction POSITIVE and EXPLICIT rather than inferred. It is the best
+ * answer and it is not this goal's to give: it is a schema change in `packages/content` and a
+ * structural type in `packages/sim`, neither of which the render layer owns. Reported as a
+ * finding, not taken.
+ * ==========================================================================================
+ */
+function basementRoomTypesOf(content: BoundContent): readonly RoomTypeData[] {
   const lodging = lodgingRoomTypeOf(content);
-  const amenities: RoomTypeData[] = [];
+  const countedByATier = starTierRoomTypeIdsOf(content);
+  const wanted: RoomTypeData[] = [];
   for (const roomType of content.content.roomTypes) {
     if (roomType.id === lodging.id) continue;
-    let servesSomething = false;
-    for (const needType of needTypesInOrder(content)) {
-      if (roomTypeServes(content, roomType.id, needType.id)) servesSomething = true;
-    }
-    if (servesSomething) amenities.push(roomType);
+    // ONE SPELLING OF "SERVES SOMETHING", SHARED WITH `basementColumnsOf`. Two copies of this
+    // test is two chances for the selector and the layout to disagree about the same room type,
+    // and the disagreement would be silent — a room selected as an amenity and then laid out as
+    // a facility, or the reverse.
+    if (countedByATier.has(roomType.id) || servesAnything(content, roomType)) wanted.push(roomType);
   }
-  return amenities;
+  return wanted;
+}
+
+/** Whether this room type meets any guest need at all, directly or through an item it requires. */
+function servesAnything(content: BoundContent, roomType: RoomTypeData): boolean {
+  for (const needType of needTypesInOrder(content)) {
+    if (roomTypeServes(content, roomType.id, needType.id)) return true;
+  }
+  return false;
+}
+
+/**
+ * ==========================================================================================
+ * HOW MANY OF EACH SERVING ROOM TYPE THE HOTEL OPENS WITH (G-061, human ruling).
+ *
+ * IT WAS ONE, AND ONE IS THE DENSITY AT WHICH THE FOURTH STAR PUNISHES THE PLAYER. Seeding the
+ * facilities takes the rating 3 -> 4, which is what this goal is for, and the demand curve
+ * answers by DOUBLING arrivals — 240 -> 480 over 30 days. One Games Room and one armchair
+ * cannot serve sixteen guests a day. Measured on this scenario at seed 7 over 30 days, one
+ * copy each: **245 `leftDissatisfied` departures against 0 before**, `guest_comfort` met 50 /
+ * unmet 417, `guest_entertainment` met 76 / unmet 391, revenue DOWN 85,000p and balance down
+ * 280,000p. At two copies each: **464 checked out, ZERO dissatisfied**, every need met, revenue
+ * 3,944,000p and balance 2,629,000p.
+ *
+ * SO THE NUMBER IS BOUNDED AT BOTH ENDS AND CHOSEN INSIDE THE RANGE, which is the shape
+ * `DEFAULT_MAX_ROW` uses in `grid.ts` and for the same reason — a bound that is forced is
+ * stated as forced, and a preference inside it is stated as a preference:
+ *
+ *   - **AT LEAST 2.** One is measured insufficient, above. This end is forced by a reading.
+ *   - **AT MOST 5**, and this end is forced by arithmetic rather than by a run: the hotel holds
+ *     at most `18 bedrooms x 2` = 36 guests at once, so `ceil(36 / 8)` copies of a capacity-8
+ *     room can serve every guest the building can physically contain. Past that a copy cannot
+ *     bind on anything and is pure upkeep.
+ *   - **2 IS A PREFERENCE INSIDE `2..5`, and what recommends it is that it is the SMALLEST
+ *     SUFFICIENT ONE at today's rating.** Nothing anybody has stated derives 2 over 3 or 4; what
+ *     can be said without inventing a requirement is that 2 takes the dissatisfied count to zero
+ *     and 1 does not, and that every copy past the first that binds is upkeep the player pays
+ *     for nothing. The reading is offered as a reading, not as a derivation.
+ *
+ * IT IS NOT A TUNE OF THE LADDER. `star-tiers.json` and `demand.json` are untouched (G-060 owns
+ * both, and picking a threshold to make one run look good is the thing that would be). This is
+ * the HOST deciding what stands on the plot at tick 0, which is the only kind of decision this
+ * file has ever been allowed to make.
+ *
+ * WHAT IS DEFERRED RATHER THAN DELETED, AND IT IS THE POINT OF SHIPPING B: the overrun is real,
+ * it is the build loop working, and a player WILL reach it — by building a twelfth bedroom, or
+ * a fourth amenity type, or anything else that moves the rating. **It is deferred to the moment
+ * the PLAYER causes it, which is the first moment the game can explain it.** Today it cannot:
+ * G-062 has not put the rating on screen and no refusal reason is displayed, so an overrun the
+ * HOST handed the player at tick 0 would be invisible punishment — a hotel quietly getting worse
+ * with nothing saying why, introduced by a goal whose whole purpose is legibility.
+ * ==========================================================================================
+ */
+const SERVING_ROOM_COPIES = 2;
+
+/**
+ * ==========================================================================================
+ * ONE ENTRY PER BASEMENT COLUMN, LEFT TO RIGHT — the band as it actually stands, duplicates and
+ * all. `basementRoomTypesOf` answers WHICH types; this answers HOW MANY of each and IN WHAT
+ * ORDER, and the two are separate because they are decided by different things.
+ *
+ * SERVING ROOMS FIRST, AND THAT IS A MEASUREMENT RATHER THAN A TIDY-UP. The band is laid out
+ * from the entrance, and the stairwell stands at the entrance's own column — so column 0 is the
+ * nearest room to the door and every column after it is a longer walk. Under a plain ascending-id
+ * order the Conference Hall sorts first and takes the nearest slot, pushing all three serving
+ * rooms two columns further from the stairs. Measured at seed 7 over 30 days, one copy each, that
+ * ordering alone is worth 102,000p of balance and 11 dissatisfied departures. **A facility serves
+ * nobody, so it has nothing to lose by standing at the far end.**
+ *
+ * A FACILITY GETS EXACTLY ONE COPY, AND THIS ONE IS DERIVED RATHER THAN PREFERRED. Every star
+ * tier clause that names a facility counts `distinctTypes`, so a second copy cannot raise the
+ * rating; a facility serves no need, so a second copy cannot serve a guest. It would be upkeep
+ * with no upside on either channel the hotel has.
+ *
+ * WITHIN EACH GROUP THE ORDER IS `content.content.roomTypes`, which is the total, content-derived
+ * order this file has always used (ADR-0003) — the grouping re-orders, it does not sort.
+ * ==========================================================================================
+ */
+function basementColumnsOf(content: BoundContent): readonly RoomTypeData[] {
+  const serving: RoomTypeData[] = [];
+  const rest: RoomTypeData[] = [];
+  for (const roomType of basementRoomTypesOf(content)) {
+    if (!servesAnything(content, roomType)) {
+      rest.push(roomType);
+      continue;
+    }
+    for (let copy = 0; copy < SERVING_ROOM_COPIES; copy += 1) serving.push(roomType);
+  }
+  return [...serving, ...rest];
 }
 
 /**
@@ -215,7 +383,15 @@ function lodgingCell(index: number, entrance: Cell): Cell {
 }
 
 /**
- * Where the nth amenity stands: the first basement, left to right.
+ * Where the nth basement room stands: the first basement, left to right.
+ *
+ * `index` IS A COLUMN AND NOT A ROOM TYPE SINCE G-061, and the two stopped being the same
+ * number when the band started carrying two copies of each serving type. `basementColumnsOf`
+ * is what feeds this, one entry per column, and it is where the count and the order are argued.
+ *
+ * THE NAME SAYS `amenity` AND THE BAND HOLDS MORE THAN AMENITIES — the three facilities stand
+ * in it too, on the same stride, for the same reason. The name is kept because what it describes
+ * is the BAND's geometry, which did not move.
  *
  * THE BASEMENT FOR THE REASON `report.ts:305-330` PAID A BROKEN EXIT CRITERION TO LEARN.
  * Amenities on the ground floor sit in the middle of the building space and seal the rooms
@@ -438,22 +614,30 @@ export function seedCommands(content: BoundContent, bounds: GridBounds): readonl
   for (let i = 0; i < LODGING_ROOMS_PER_ROW * LODGING_ROWS * LODGING_FLOORS; i += 1) {
     place(lodging.id, lodgingCell(i, entrance));
   }
-  // ONE COLUMN PER AMENITY TYPE, AND ONE ROOM PER COLUMN, `AMENITY_ROWS` DEEP (G-036b). It was
-  // one room per column PER ROW before this goal — three copies pretending to be a hall. Each
-  // type still stands together rather than interleaved, and the cells occupied are unchanged.
-  const amenityTypes = amenityRoomTypesOf(content);
-  for (let type = 0; type < amenityTypes.length; type += 1) {
-    const amenity = amenityTypes[type];
-    if (amenity === undefined) continue;
-    const at = amenityCell(type, bounds, entrance);
-    // THE MIDDLE ROW, so the furniture is inside the rectangle but NOT at its origin.
+  // ONE ROOM PER BASEMENT COLUMN, `AMENITY_ROWS` DEEP (G-036b). It was one room per column PER
+  // ROW before that goal — three copies pretending to be a hall. Copies of a type still stand
+  // together rather than interleaved, and the cells one room occupies are unchanged.
+  //
+  // THE BAND IS NINE COLUMNS WIDE SINCE G-061 RATHER THAN THREE — two each of the three serving
+  // types and one each of the three facilities — and nothing in this loop needed to change for
+  // it: `basementColumnsOf` returns the columns and every stride, corridor lane and spine below
+  // is derived from `.length`. The geometry was already general; only the selector was not.
+  const basementColumns = basementColumnsOf(content);
+  for (let column = 0; column < basementColumns.length; column += 1) {
+    const room = basementColumns[column];
+    if (room === undefined) continue;
+    const at = amenityCell(column, bounds, entrance);
+    // THE MIDDLE ROW, so the furniture is inside the rectangle but NOT at its origin. A room
+    // type that requires nothing seeds nothing here and this cell is computed and unused, which
+    // is `place`'s existing contract rather than a new case — the Cafe has taken that branch
+    // since G-036b, so the facilities arriving on it exercise no new path.
     const middle = { floor: at.floor, column: at.column, row: at.row + Math.floor(AMENITY_ROWS / 2) };
-    place(amenity.id, at, { columns: 1, rows: AMENITY_ROWS }, middle);
+    place(room.id, at, { columns: 1, rows: AMENITY_ROWS }, middle);
   }
   // AFTER THE ROOMS, AND THE ORDER IS STATED BECAUSE IT IS ASKED. It makes no difference to
   // the result — a corridor is a declaration about a cell and says nothing about what stands
   // there — but a reader should not have to work that out from `corridors.ts` to be sure.
-  commands.push(...corridorCommands(entrance, bounds, amenityTypes.length));
+  commands.push(...corridorCommands(entrance, bounds, basementColumns.length));
   // AND THE STAIRWELL, LAST, FOR THE SAME REASON THE CORRIDORS ARE LAID AFTER THE ROOMS: it
   // makes no difference to the result — a stair is a declaration about a cell and says nothing
   // about what stands there — and a reader should not have to work that out to be sure. It goes
