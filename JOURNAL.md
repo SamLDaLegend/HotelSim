@@ -4047,3 +4047,104 @@ session, so the HUD evidence above is the shipped `renderHud` driven headless ov
 that does NOT cover is layout: whether three more cells wrap the HUD strip onto another line and how
 much height that takes from the stage (E-013's subject). **A human opening `pnpm dev` should look at
 that first.**
+
+## WATCH #31 — G-063. The corridor is a verb now, and the FIRST one laid on a floor can strand a room at the other end of it.
+
+**Recording**: `recording/g063/` — seven frames, written by the shipped `createScene` over the
+shipped `createScenario`, seed 7, walls `reduced`, bodies at carry 1. **Every player action in them
+went through the shipped path** — `actionAt` → `enqueue` → `commandsFor` → `stepTick` →
+`observeTick` — so what is photographed is the code that ships and not a re-enactment of it.
+
+> **THE SHIPPED RECORDER COULD NOT TAKE THIS RECORDING, AND THAT IS A FINDING ABOUT THE INSTRUMENT.**
+> `apps/game/scripts/record-frames.ts` replays `scenarioAt(tick)` and nothing else. **It has no
+> pointer, no session and no queue**, so it cannot photograph any change to `input.ts` — the file
+> this goal is about. The driver used here was a throwaway outside the tree that imports the same
+> `createScene`, `createScenario`, `content.ts`, `input.ts` and `session.ts` the browser does; it was
+> deleted after the run and the frames are what survives. **The recorder was NOT grown a `--script`
+> flag**: §9 lists the recorder acquiring features as a stop condition, and this is the second goal
+> in a row (after G-047b's `--carry`) where the instrument's shape decided what could be evidenced.
+
+### 1. THE HEADLINE, AND IT IS THE THING THE HUMAN ASKED FOR
+
+**A room built away from circulation is stranded, and two clicks of the new tool un-strand it.**
+Measured on the shipped hotel, floor 0, seed 7, exact deterministic integers, one run:
+
+| frame | what the player did | `noCorridor` | corridors declared |
+|---|---|---|---|
+| `a-seeded-f0.svg` | nothing yet, tick 40 | **0** | 83 |
+| `b-stranded-f0.svg` | built a Conference Hall at column 1, **row 5** | **1** | 83 |
+| — | laid corridor at column 0, row 4 | 1 | 84 |
+| `c-joined-f0.svg` | laid corridor at column 0, **row 5** | **0** | 85 |
+
+**The word `noCorridor` is drawn on the room in `b-stranded-f0.svg` and is absent from
+`c-joined-f0.svg`** — checked in the frame's own text elements, not inferred from the census. The
+corridor ink (`#5a6472`) goes 19 → 21 tiles across the same pair. **The first of the two clicks
+changed nothing**: a corridor at row 4 is not a neighbour of a room at row 5, and the tally stayed at
+1 until the second one landed. That is the rule doing what it says rather than a tool that always
+works.
+
+### 2. THE THING I DID NOT EXPECT, AND IT IS THE MOST PLAYER-HOSTILE BEHAVIOUR IN THE BUILD LOOP
+
+**LAYING THE FIRST CORRIDOR ON A FLOOR CAN INVALIDATE A ROOM AT THE OPPOSITE CORNER OF IT.**
+
+`corridors.ts` and `isDeclaredWalkway` state the rule plainly — *"A floor nobody has drawn a corridor
+on has not been PARTITIONED … Draw one corridor on a floor and you have said where people walk on
+it; from then on the rooms of that floor have to open onto it."* **Read as prose it sounds like
+housekeeping. Watched, it is a trap.** Floor 2 carries no seeded corridor, so it is open plan:
+
+| frame | what the player did | `noCorridor` | `unreachable` |
+|---|---|---|---|
+| `d-openplan-f2.svg` | built a Standard Room at column 3, row 2 | **0** — valid | 0 |
+| `e-planned-f2.svg` | laid ONE corridor at **column 9, row 7** | **1** | 0 |
+| `f-recovered-f2.svg` | laid corridor at column 2, row 2, beside the room | 0 | **1** |
+| `g-joined-f2.svg` | laid corridor at column 2 rows 1 and 0, to the shaft | **0** | **0** |
+
+**Six columns and five rows away, on a cell touching nothing, one click took a working room to
+`noCorridor`.** The room did not move, nothing was built on it, no money was spent. Nothing on screen
+connects the cause to the effect: the alarm outline and the word appear on the room, and the thing
+that caused them is a grey tile the player will have scrolled past. **This is not a defect in the
+simulation** — the rule is deliberate, per-floor for a stated reason, and the alternative (a corridor
+in the basement invalidating floor twelve) is worse. **It is a legibility defect and it belongs to
+M5's list**, and it did not exist as a player-reachable state until this goal, because until this
+goal no click could declare the first corridor on a floor.
+
+**`f-recovered-f2.svg` is the second half of the same lesson and I like it better than the first.**
+Laying a corridor beside the room cleared `noCorridor` and immediately raised `unreachable` — the
+stub was a walkway that went nowhere. Two more cells joined it to the stairwell at column 1, row 0
+and the room went valid. **Four distinct room states, all reachable by clicking, all drawn on the
+room, all recovered from without a demolish.** That is the corridor rule being teachable rather than
+merely enforced.
+
+### 3. THE TWO CLICKS THE SIM ANSWERS DIFFERENTLY, SIDE BY SIDE
+
+Same cell, `{floor 0, column -3, row -4}`, off the plot, one tool apart:
+
+- **build tool** → `build Conference Hall at floor 0, column -3, row -4 — refused: out of bounds`
+- **corridor tool** → `actionAt` returns `null`, nothing is dispatched, nothing is said
+
+**That asymmetry is the sim's, not the UI's, and it is worth stating because it looks like an
+inconsistency and is not.** `buildRoom` records `outOfBounds`; `layCorridor` *throws* — `tick.ts`
+calls it the structural door — and there is no player-facing corridor verb that records a refusal.
+**So an off-plot corridor click is silent, and the alternative was ending the session.** The player
+loses a message they would probably not have read; what they keep is the game.
+
+**The idempotent case does read, and it reads correctly**: clicking a cell that is already a
+corridor gives `lay corridor at floor 0, column 0, row 5 — already declared`, with **no refusal
+colouring**, which is exactly what `commands.ts` says a repeat lay is.
+
+### 4. WHAT A STILL FRAME EVIDENCED HERE, AND WHAT IT DID NOT
+
+**It evidenced more than usual, because this goal's subject is static.** Corridors, room validity and
+the invalidity word are all properties of a world at a tick, so a frame is a complete witness for
+every claim in §1 and §2 — unlike G-047b, where the subject was motion between ticks and WATCH #29
+found **3 of 50 frames** with any figure in a different position, so 47 of them could not have shown
+the thing the goal was about.
+
+**What it did NOT evidence, and no frame could**: whether a player *notices* the grey tile, whether
+the toolbar's new button is findable, and whether the causal link in §2 is discoverable without
+reading `corridors.ts`. Those need a person.
+
+**AND THE BROWSER WAS NOT OPENED.** No browser tool was available in this session. The HUD strings
+above are the shipped `describeAction` and `wordsOf` driven headless; the pictures are the shipped
+scene primitives. **What is uncovered is layout** — a fourth button in the tool strip, which is
+E-013's subject, and which a human running `pnpm dev` should look at first.

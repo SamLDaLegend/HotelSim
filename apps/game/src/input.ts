@@ -13,6 +13,7 @@
 // into this layer. The label is `roomType.name` for the same reason the speed buttons use
 // `rung.name`: rename it in content and the button renames itself.
 
+import { isWithinBounds } from '@hotelsim/sim';
 import type { BoundContent, Cell, RoomTypeData, World } from '@hotelsim/sim';
 import { roomEntityAt } from './pick.js';
 import type { PlayerAction } from './session.js';
@@ -24,12 +25,27 @@ import type { PlayerAction } from './session.js';
  * all. A renderer whose every click builds something is a renderer the player cannot look
  * around in.
  */
-export type Tool = { readonly kind: 'build'; readonly roomType: RoomTypeData } | { readonly kind: 'demolish' } | null;
+export type Tool =
+  | { readonly kind: 'build'; readonly roomType: RoomTypeData }
+  /**
+   * THE PLAN SAYS PEOPLE WALK HERE (G-063). `layCorridor` has existed since G-034b and
+   * `scenario.ts` has dispatched it since G-035; until this goal NO CLICK COULD.
+   *
+   * It carries nothing, because the command carries nothing but a cell: a corridor is a
+   * declaration about a cell rather than a thing placed in it, it takes no content id, and
+   * it costs nothing (a corridor's price is a designer's number and there is none —
+   * `commands.ts`). So there is no room type to hold and no catalogue to pick from.
+   */
+  | { readonly kind: 'corridor' }
+  | { readonly kind: 'demolish' }
+  | null;
 
 /** What the tool would do at a cell, in words, for the ghost under the pointer. */
 export function toolLabel(tool: Tool): string | null {
   if (tool === null) return null;
-  return tool.kind === 'build' ? `build ${tool.roomType.name}` : 'demolish';
+  if (tool.kind === 'build') return `build ${tool.roomType.name}`;
+  if (tool.kind === 'corridor') return 'lay corridor';
+  return 'demolish';
 }
 
 /**
@@ -53,6 +69,42 @@ export function toolLabel(tool: Tool): string | null {
  * would be this layer deciding that the player's second move was a mistake, and it would
  * make one of the simulation's four refusal reasons unreachable from the UI — which is how
  * three marks went unwatched at G-030.
+ *
+ * =========================================================================================
+ * THE CORRIDOR TOOL IS THE SECOND PLACE THIS FILE DECLINES TO ACT, AND IT IS THE SAME
+ * REASON AS THE FIRST RATHER THAN A NEW ONE (G-063).
+ *
+ * `layCorridor` IS THE STRUCTURAL DOOR AND IT THROWS OFF THE PLOT. `tick.ts`'s case reads
+ * *"The cell is checked for integer-ness and for being on the plot by `assertCell`, and a
+ * failure THROWS, because this is the structural door and the caller is holding the world
+ * whose plot it just ignored"*, and it closes with *"a corridor whose refusal is RECORDED is
+ * the player-facing verb, and that is G-036's"* — a verb that does not exist. So the two
+ * doors `build.ts` tabulates are not both open here: there is only the primitive one.
+ *
+ * THE CONSEQUENCE FOR THIS LAYER IS EXACT AND IS NOT A JUDGEMENT ABOUT LEGALITY. `cellAt`
+ * does not clamp — `overlay.ts` says so in as many words, *"Drawn even when it is off the
+ * plot, because a click there is a legal move that earns a recorded refusal"* — and that
+ * sentence is true of `buildRoom` and FALSE of `layCorridor`. Handing an off-plot cell to
+ * this command would not refuse it; it would throw out of `stepTick` and end the session.
+ *
+ * SO THE TEST BELOW IS `isWithinBounds`, THE SIMULATION'S OWN PREDICATE, IMPORTED. It is the
+ * first half of `assertCell` — the same function, asked instead of being tripped over — and
+ * it is asked for the reason the demolish branch asks `roomEntityAt`: not "would the sim
+ * allow this", but "is there a thing to send". `demolishRoom` needs an entity id and there
+ * is none; `layCorridor` needs a cell on this plot and there is none. Neither is a second
+ * opinion about a rule the simulation owns, because in neither case is there a rule — the
+ * simulation does not refuse these, it has no vocabulary for them.
+ *
+ * WHAT IT IS NOT, SAID SO A LATER READER DOES NOT WIDEN IT: this is not the affordability
+ * check G-031a refused, and it must not become one. It asks nothing about what stands on the
+ * cell, nothing about the balance, nothing about whether the corridor will help. Those are
+ * judgements; this is an address.
+ *
+ * AND `layCorridor` HAS NO REFUSAL TO REACH. It is idempotent, it costs nothing, and it does
+ * not ask what is standing there, so on-plot there is no move it declines. A player who lays
+ * a corridor where one already runs has laid a corridor where one already runs; see
+ * `attributeCorridor` in `session.ts` for how that is said without calling it a refusal.
+ * =========================================================================================
  */
 export function actionAt(
   world: World,
@@ -67,6 +119,10 @@ export function actionAt(
       at: cell,
       label: `build ${tool.roomType.name}`,
     };
+  }
+  if (tool.kind === 'corridor') {
+    if (!isWithinBounds(cell, world.grid)) return null;
+    return { command: { kind: 'layCorridor', at: cell }, at: cell, label: 'lay corridor' };
   }
   const room = roomEntityAt(world, content, cell);
   if (room === undefined) return null;

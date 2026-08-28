@@ -467,6 +467,19 @@ export function renderTools(
     host.append(button);
   }
 
+  // THE CORRIDOR TOOL (G-063). It sits AFTER the room types and BEFORE demolish, which is the
+  // order the player uses it in: draw where people walk, then hang rooms off it, and only then
+  // take something down. It carries no price because a corridor has none — `commands.ts` says
+  // what a corridor costs is a designer's number and there is no such field — and putting a
+  // `0` there would be this layer inventing a price the content does not hold.
+  const corridor = document.createElement('button');
+  corridor.textContent = 'corridor';
+  corridor.title =
+    'click a cell to declare it a walkway; a room must open onto one, and the first corridor on a floor is what stops that floor being open plan';
+  corridor.classList.toggle('on', tool?.kind === 'corridor');
+  corridor.addEventListener('click', () => handlers.onPick({ kind: 'corridor' }));
+  host.append(corridor);
+
   const demolish = document.createElement('button');
   demolish.textContent = 'demolish';
   demolish.title = 'click a room to demolish it; the refund is a content number';

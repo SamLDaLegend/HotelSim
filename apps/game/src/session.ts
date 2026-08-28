@@ -5,8 +5,8 @@
 //
 //   Render reads state. INPUT DISPATCHES COMMANDS. Neither ever mutates the sim.
 //
-// A click builds a `Command` — the simulation's own type, one of the six it already defines
-// — and puts it in a queue. Nothing else happens at click time: no world is read for a
+// A click builds a `Command` — the simulation's own type, one of the fourteen it already
+// defines — and puts it in a queue. Nothing else happens at click time: no world is read for a
 // decision, no world is written, no rule about legal placement is evaluated here. The queue
 // is drained into ticks by `commandsFor` below, and the simulation judges what it is given.
 //
@@ -35,10 +35,19 @@
 // across the one tick that carried the command, which is only an answer while a tick carries
 // at most one. The alternative was asking `packages/sim` for a per-command result, which
 // this goal's first exit criterion forbids: if it needs a simulation change, it stops.
+//
+// AND THE DISCIPLINE IS ACTUALLY "AT MOST ONE PLAYER COMMAND PER TICK", WHICH IS WIDER AND IS
+// WHAT `commandsFor` ENFORCES (G-063). It shifts exactly one entry off the queue whatever kind
+// it is, so the property survived a verb that is not build-family at all. What did NOT survive
+// is the assumption that every player command lands in `BuildOutcomes`: `layCorridor` records
+// nothing there, and reading its result off those counters answers `unattributed` for a
+// command that cannot fail. `attributeCorridor` below reads the corridor plan instead — a
+// second SOURCE for a second command, never a second RULE about the same one.
 
 import {
   BUILD_REFUSAL_REASONS,
   describeCell,
+  hasCorridorAt,
   hashState,
   SAVE_SCHEMA_VERSION,
 } from '@hotelsim/sim';
@@ -62,6 +71,20 @@ export type PlayerAction = {
  * that reports a refusal reason the simulation never recorded.
  */
 export type ActionOutcome = 'built' | 'demolished' | 'unattributed' | (string & {});
+
+/**
+ * What one resolved command amounted to: the word, and whether it was a refusal.
+ *
+ * THE FLAG TRAVELS WITH THE WORD RATHER THAN BEING RE-DERIVED FROM IT (G-063), and that is
+ * the repair the corridor tool forced rather than a tidy-up beside it. `refused` used to be
+ * `outcome !== 'built' && outcome !== 'demolished'` — a WHITELIST OF THE TWO SUCCESSES the
+ * build family has, evaluated at the one call site. A third verb with a third success makes
+ * that predicate silently wrong: `layCorridor` records no `BuildOutcome` at all, so the
+ * whitelist would have painted every corridor the player successfully laid as a REFUSAL, in
+ * the HUD line and in the cell flash, in the game's own words. Deciding it where the outcome
+ * is decided means the fourth verb cannot inherit that bug from this one.
+ */
+type Attribution = { readonly outcome: ActionOutcome; readonly refused: boolean };
 
 export type ResolvedAction = {
   readonly action: PlayerAction;
@@ -189,6 +212,48 @@ export function attribute(before: BuildOutcomes, after: BuildOutcomes): ActionOu
 }
 
 /**
+ * What a `layCorridor` amounted to, read off the corridor plan itself (G-063).
+ *
+ * =========================================================================================
+ * IT IS NOT A BUILD-FAMILY COMMAND AND THERE IS NOTHING FOR `attribute` ABOVE TO SEE.
+ * `tick.ts` says so at the case: *"NOT A BUILD-FAMILY COMMAND: it charges nothing, records no
+ * outcome and consumes no id, so neither per-tick law below has anything to say about it."*
+ * Run through `attribute`, a perfectly successful corridor moves NO counter, `moved.length`
+ * is 0, and the answer is `unattributed` — "I do not know" reported for the one command in
+ * the game whose result is never in doubt.
+ *
+ * SO IT IS READ FROM `world.corridors`, WHICH IS HASHED, SAVED STATE, THROUGH THE
+ * SIMULATION'S OWN PREDICATE. `hasCorridorAt` is the function `validity.ts` asks — imported,
+ * not re-spelled — and it is asked of the world BEFORE and the world AFTER, which is exactly
+ * the shape `attribute` uses one field over. Nothing here evaluates a rule; it reads a
+ * declaration the simulation made and reports which way it went.
+ *
+ * NEITHER ANSWER IS A REFUSAL, AND THAT IS THE SIMULATION'S WORD RATHER THAN A CHOICE MADE
+ * HERE. `commands.ts`, and the emphasis is this file's: *"Idempotent — declaring a cell that
+ * is already declared is a deterministic no-op, **not a refusal and not a throw**"*. A UI that
+ * called the second case
+ * refused would be reporting a refusal the simulation never recorded, which is the defect the
+ * `unattributed` member exists to avoid.
+ *
+ * `unattributed` SURVIVES AS THE THIRD ANSWER AND IS NOT DECORATION. It is reachable if the
+ * plan does not contain the cell after a tick that carried a `layCorridor` for it — which
+ * nothing in this build can produce, and which is precisely why it must not be assumed away.
+ *
+ * ALL THREE ARMS RETURN `refused: false`, INCLUDING THE ONE THAT SAYS "I DO NOT KNOW", and
+ * that is not the build family's answer being copied carelessly. `layCorridor` has NO refusal
+ * path: on the plot it succeeds, off the plot it throws and `actionAt` never sends it there.
+ * So "this was not refused" is true of a corridor unconditionally, whatever else is unclear
+ * about it. The build family's `unattributed` is refused-coloured because there the honest
+ * doubt INCLUDES the nine refusals; here there are none to be in doubt about.
+ * =========================================================================================
+ */
+export function attributeCorridor(before: World, after: World, at: Cell): Attribution {
+  if (hasCorridorAt(before.corridors, at)) return { outcome: 'alreadyDeclared', refused: false };
+  if (hasCorridorAt(after.corridors, at)) return { outcome: 'laid', refused: false };
+  return { outcome: 'unattributed', refused: false };
+}
+
+/**
  * One tick has run: attribute the player's command, if this tick carried one.
  *
  * Called by the driver with the world BEFORE and the world AFTER, which is the only pair
@@ -204,12 +269,23 @@ export function observeTick(session: Session, before: World, after: World): void
   // the player loses one line of feedback and every later line is still true.
   session.pending = undefined;
   if (pending.tick !== before.tick) return;
-  const outcome = attribute(before.buildOutcomes, after.buildOutcomes);
+  // WHICH ATTRIBUTOR ANSWERS IS DECIDED BY THE COMMAND'S OWN KIND, not by which counters
+  // happened to move (G-063). A corridor moves none, so a single attributor keyed on the
+  // counters cannot tell "the corridor landed" from "something went wrong" — see
+  // `attributeCorridor`. The command is the thing that knows which question to ask.
+  const command = pending.action.command;
+  const attribution: Attribution =
+    command.kind === 'layCorridor'
+      ? attributeCorridor(before, after, command.at)
+      : ((): Attribution => {
+          const outcome = attribute(before.buildOutcomes, after.buildOutcomes);
+          return { outcome, refused: outcome !== 'built' && outcome !== 'demolished' };
+        })();
   const resolved: ResolvedAction = {
     action: pending.action,
     tick: before.tick,
-    outcome,
-    refused: outcome !== 'built' && outcome !== 'demolished',
+    outcome: attribution.outcome,
+    refused: attribution.refused,
   };
   session.last = resolved;
   session.flashes.push(resolved);
