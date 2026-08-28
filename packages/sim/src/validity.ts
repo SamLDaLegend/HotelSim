@@ -1073,8 +1073,16 @@ function moverNeighbours(cell: Cell, stairwell: Cell | null): readonly Cell[] {
   return beside;
 }
 
-/** Whether `stairLeg` would spend the floor axis from this cell. See `moverNeighbours`. */
-function climbsFrom(cell: Cell, stairwell: Cell | null): boolean {
+/**
+ * Whether `stairLeg` would spend the floor axis from this cell. See `moverNeighbours`.
+ *
+ * EXPORTED AT G-047a for its second caller, `pathBetween`, which separates a legitimate
+ * `climb` from a floor change this simulation does not make. Exported rather than restated
+ * there for the reason `isWalkableFor` is shared with `reachableCells`: a two-line predicate
+ * copied is a two-line predicate that can drift, and the drift would be between what a guest
+ * DOES and what a renderer DRAWS.
+ */
+export function climbsFrom(cell: Cell, stairwell: Cell | null): boolean {
   return stairwell === null || (cell.column === stairwell.column && cell.row === stairwell.row);
 }
 

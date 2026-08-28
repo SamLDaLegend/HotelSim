@@ -374,6 +374,14 @@ export { starRatingIn, starRatingOf, UNRATED } from './rating.js';
 // arrivals, which is the arrow at the end of the build loop. See the header of `demand.ts` for
 // why the arithmetic draws no randomness and what that decision costs.
 export { isDemandSlot, partiesArrivingAt } from './demand.js';
+// G-047a — THE ROUTE BETWEEN TWO LANDINGS. Nothing in this package calls it: `stepGuests`
+// chooses over LANDINGS and no cell it crosses is observable in the sim, a save, the state
+// hash or a recorded frame. This is the derivation that lets a HOST draw the walk, and it
+// adds no `World` field, no save version and no migration. See the header of `path.ts` for
+// the contract, for why the search is bounded to the step, and for why a floor change is a
+// third verdict rather than a failure.
+export type { PathResult } from './path.js';
+export { pathBetween } from './path.js';
 export type { RngState } from './rng.js';
 export { createRng, nextIntBelow, nextUint32 } from './rng.js';
 export type { Migration, SaveBlob, SaveSchema } from './save.js';
@@ -410,6 +418,9 @@ export type {
   ValidityContext,
 } from './validity.js';
 export {
+  // G-047a — `pathBetween`'s cross-floor verdict rests on it, and it is exported rather than
+  // restated so a drawn route and a walked one cannot drift. See `path.ts`.
+  climbsFrom,
   countInvalidRooms,
   createValidityCache,
   createValidityContext,
