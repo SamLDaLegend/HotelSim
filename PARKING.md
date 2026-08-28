@@ -4503,3 +4503,55 @@ enforce ADR-0086.
 **FALSIFICATION TEST.** Read `scripts['check:purity']` out of `package.json`. REFUTED if the
 `depcruise` arm is later split into its own row, at which point the original claim becomes true and
 this item is discharged rather than fixed.
+
+## G-064 — four items the drag tool surfaced and is NOT allowed to fix, each with its falsification test
+
+*The goal is "the player drags a rectangle and gets a room that size". Everything below is
+something that became visible BECAUSE a room can now be a rectangle, and none of it is that.*
+
+**1. A ROOM CAN BE DRAWN AT THE WRONG SIZE AND THE ONLY FIX IS DEMOLISH-AND-REDRAW.** `resizeRoom`
+and `moveItem` have existed since G-036c — the sim's own editing verbs, with `breaksAnotherRoom`,
+`noSuchRoom`, `noSuchItem` and a `displaced` counter already built for them — and **no click in the
+game can reach either**. Until this goal that cost nothing, because every room was one cell and
+demolishing one was a whole-room decision. Now a player who draws 4x2 and wanted 3x2 pays the
+demolition refund gap to correct a drag. **It is the same shape as G-063's finding and the same
+shape as this goal's**: a verb the simulation has had for goals, with no UI.
+
+**FALSIFICATION TEST.** `grep -c "resizeRoom\|moveItem" apps/game/src/*.ts` returns 0 today. The
+item dies when a click can reach either, and it is REFUTED if a playtest finds that redrawing is
+cheap enough that nobody misses the handle — the reading is the `demolished` count against `built`
+in a session where the player is drawing rectangles rather than placing cells.
+
+**2. `describeFootprint`'s DOCBLOCK SAYS "FOR ERROR MESSAGES ONLY" AND IT NOW HAS A HUD CALLER.**
+`grid.ts`: *"Human-readable, for error messages only. Never parsed, never hashed, never an id."*
+`input.ts`'s `buildLabel` calls it to put `3x2` in front of the player. **The three prohibitions
+are all respected** — the HUD parses nothing, hashes nothing and treats it as no id — so what is
+stale is the SCOPE clause and not the constraint. **Not fixed here because it is `packages/sim`
+and this goal may not touch it**; it is ADR-0084's class (a claim true when written, falsified by a
+later commit) in the smallest possible form.
+
+**FALSIFICATION TEST.** `grep -rn "describeFootprint" apps/ packages/` — the item dies when the
+docblock names its two classes of caller, and is REFUTED if the render layer's call is removed in
+favour of a local spelling, which would be the drift the import exists to prevent.
+
+**3. THE DRAG IS NOT DISCOVERABLE FROM THE PICTURE.** A build button's tooltip says "click a cell,
+or drag a rectangle"; nothing else on screen does, and a tooltip is found after you already suspect.
+`HOTELSIM.md` §1's headline is that rooms are DESIGNED by the player, and the affordance for the
+one gesture that makes that true is a `title` attribute. **This is a design question and §5.4 routes
+fun-critical-and-not-resolvable-by-test to the human.**
+
+**FALSIFICATION TEST.** The one from §9's milestone question, asked of a stranger rather than of a
+frame: hand somebody `pnpm dev` with no instructions and see whether they ever build a room larger
+than one cell. **A still frame cannot answer it and WATCH #32 says so.**
+
+**4. THE CORRIDOR TOOL STILL DOES NOT DRAG, AND THE PARKED QUESTION IS NOW ASYMMETRIC.**
+`commands.ts` parks a rectangle form of `layCorridor` with an exact trigger — *"it becomes a real
+question the day a corridor gains a COST, because a cost is either per cell or per draw and those
+differ"* — and that reasoning is untouched. What changed is the GESTURE: a player who has just
+dragged a 3x2 room and then clicks a corridor cell at a time is being taught two grammars for one
+grid. **The command-design argument and the input-consistency argument now point opposite ways**,
+which they did not before this goal.
+
+**FALSIFICATION TEST.** Count clicks in a session log: `session.log` entries of kind `layCorridor`
+against `drawRoom`. The item dies if corridor laying is a small enough share of moves that the
+grammar split is invisible; it is CONFIRMED if a playtester lays corridors in runs and says so.

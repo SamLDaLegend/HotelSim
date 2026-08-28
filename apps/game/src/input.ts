@@ -7,14 +7,36 @@
 // and comes back as a recorded refusal (`build.ts`: "two doors, one rule, and the door
 // decides who is at fault").
 //
+// ---------------------------------------------------------------------------------------
+// A BUILD IS A DRAG, NOT A CLICK (G-064), AND THAT IS `HOTELSIM.md` §1'S HEADLINE BECOMING
+// PLAYABLE: *"ROOMS ARE DESIGNED BY THE PLAYER, NOT PLACED FROM A CATALOGUE. The player draws
+// a room's footprint..."* The simulation has accepted a drawn rectangle since G-036b and no
+// click could produce one until now — a human watching the game put it in six words, *"can't
+// currently build a room larger than 1x1."*
+//
+// THE GESTURE IS PRESS, MOVE, RELEASE, AND IT PRODUCES EXACTLY ONE COMMAND. The press records
+// a corner and asks for nothing; the release turns two corners into a rectangle and enqueues
+// one `drawRoom`. A press and a release on ONE cell is a `1x1` rectangle and is not a special
+// case anywhere in this file, in `overlay.ts`, or in `build.ts` (`applyBuildRoom` is one line
+// and it is a call to `applyDrawRoom` at `UNIT_FOOTPRINT`) — which is what keeps the gesture
+// every room in this project was built with working unchanged.
+//
+// NOTHING ABOUT THE RECTANGLE IS JUDGED HERE. Not its size against the room type's band, not
+// what stands under it, not whether the balance covers it, not whether any corner is on the
+// plot. `applyDrawRoom` answers all five with a recorded refusal and the player reads the word
+// on the tile. §6.1's line for this layer is "UI that cannot express a state the sim can
+// reach", and a preview that greyed out a rectangle the sim would refuse would BOTH re-decide
+// a rule the sim owns AND make that state unreachable.
+// ---------------------------------------------------------------------------------------
+//
 // NO CONTENT ID IS NAMED HERE (ADR-0003, and `check:content` scans `apps/game/src`). The
 // tool carries a `RoomTypeData` the player picked out of the injected content, and the
 // command carries `roomType.id` — a value that came from the JSON, never a literal typed
 // into this layer. The label is `roomType.name` for the same reason the speed buttons use
 // `rung.name`: rename it in content and the button renames itself.
 
-import { isWithinBounds } from '@hotelsim/sim';
-import type { BoundContent, Cell, RoomTypeData, World } from '@hotelsim/sim';
+import { describeFootprint, isUnitFootprint, isWithinBounds } from '@hotelsim/sim';
+import type { BoundContent, Cell, Footprint, RoomTypeData, World } from '@hotelsim/sim';
 import { roomEntityAt } from './pick.js';
 import type { PlayerAction } from './session.js';
 
@@ -40,16 +62,135 @@ export type Tool =
   | { readonly kind: 'demolish' }
   | null;
 
-/** What the tool would do at a cell, in words, for the ghost under the pointer. */
-export function toolLabel(tool: Tool): string | null {
+/**
+ * A rectangle of cells: the simulation's own pair, an origin and an extent.
+ *
+ * IT IS THE SHAPE `drawRoom` TAKES, NOT A SECOND DESCRIPTION OF ONE. `commands.ts` spells the
+ * origin as "the rectangle's smallest column and smallest row" and `Footprint` as a pair of
+ * counts along the two axes; this holds exactly those two values, so the thing the preview
+ * draws and the thing the command carries are one object rather than two that have to agree.
+ */
+export type Region = { readonly at: Cell; readonly footprint: Footprint };
+
+/**
+ * THE RECTANGLE A DRAG FROM `from` TO `to` COVERS (G-064).
+ *
+ * =========================================================================================
+ * THE WHOLE OF THE GESTURE'S GEOMETRY, AND IT DECIDES NOTHING. Two corners in, an origin and
+ * an extent out. It does not ask whether the rectangle is on the plot, whether a room stands
+ * in it, how big the room type allows, or what it costs — every one of those is a rule
+ * `packages/sim` owns and answers with a recorded refusal (`applyDrawRoom`, in that order).
+ *
+ * EITHER CORNER MAY BE THE ONE THE PLAYER PRESSED ON. A drag up-and-left is as ordinary as a
+ * drag down-and-right, so the origin is the MINIMUM of the two on each axis and the extent is
+ * the span, inclusive of both ends — which is why the `+ 1` is there and why a press and a
+ * release on ONE cell gives `1x1`, the footprint every build in this project has had until
+ * now.
+ *
+ * OFF-PLOT CORNERS ARE NOT SPECIAL-CASED, AND THAT IS THE POINT RATHER THAN AN OMISSION.
+ * `cellAt` does not clamp, a cell off the plot is an ordinary answer from it, and for the
+ * BUILD family a click there "is a legal move that earns a recorded refusal" (`overlay.ts`,
+ * and G-063 measured both halves: `buildRoom` at column -3 records `outOfBounds`, where
+ * `layCorridor` would have thrown). `applyDrawRoom` asks `footprintWithinBounds`, which tests
+ * the origin AND the far corner, so a rectangle with ANY corner off the plot is refused with
+ * `outOfBounds` — the same word, through the same door, as the single off-plot click that has
+ * been legal since G-031a. Clamping the drag here would be this layer deciding a rule instead,
+ * and it would make that refusal unreachable from the UI, which is how three outcome marks
+ * went unwatched at G-030.
+ *
+ * THE FLOOR IS THE ANCHOR'S, BECAUSE A FOOTPRINT HAS NO FLOOR EXTENT. A rectangle spanning two
+ * storeys is not a thing `Footprint` can express, so `main.ts` DROPS a drag when the player
+ * changes floor mid-gesture rather than letting one end of it hang. This function is total
+ * either way and does not have an opinion about it.
+ * =========================================================================================
+ */
+export function regionBetween(from: Cell, to: Cell): Region {
+  return {
+    at: {
+      floor: from.floor,
+      column: Math.min(from.column, to.column),
+      row: Math.min(from.row, to.row),
+    },
+    footprint: {
+      columns: Math.abs(to.column - from.column) + 1,
+      rows: Math.abs(to.row - from.row) + 1,
+    },
+  };
+}
+
+/**
+ * What the tool would do over `footprint`, in words, for the ghost under the pointer.
+ *
+ * THE SIZE IS A FACT ABOUT THE DRAG AND NEVER A PREDICTION ABOUT THE OUTCOME (§6.1). "build
+ * Standard Room 3x2" says how many cells the player is currently covering; it does not say
+ * whether the room will be built, and nothing in this layer may. A version of this that read
+ * "too big" or that dropped the size once it exceeded `maxFootprintCells` would be the
+ * affordability predictor `overlay.ts` refuses, wearing a tape measure.
+ *
+ * `describeFootprint` IS THE SIMULATION'S OWN SPELLING, IMPORTED. A `${columns}x${rows}` typed
+ * here would be a second format for one quantity, and the day the sim's changes the player's
+ * would not. THE ONE CELL CASE OMITS IT: "build Standard Room 1x1" is noise on the gesture
+ * that is 99% of clicks, and `isUnitFootprint` is the sim's value test rather than a `=== 1 &&
+ * === 1` written again (a migrated world and a fresh spawn carry two objects — `grid.ts`).
+ */
+export function toolLabel(tool: Tool, footprint: Footprint): string | null {
   if (tool === null) return null;
-  if (tool.kind === 'build') return `build ${tool.roomType.name}`;
+  if (tool.kind === 'build') return buildLabel(tool.roomType, footprint);
   if (tool.kind === 'corridor') return 'lay corridor';
   return 'demolish';
 }
 
+/** The words for a build, in ONE place, so the ghost under the pointer and the answer in the
+ *  HUD cannot describe the same rectangle two ways. */
+function buildLabel(roomType: RoomTypeData, footprint: Footprint): string {
+  return `build ${roomType.name}${isUnitFootprint(footprint) ? '' : ` ${describeFootprint(footprint)}`}`;
+}
+
 /**
- * The action a click at `cell` asks for, or `null` when there is nothing to ask.
+ * The action a gesture from `from` to `to` asks for, or `null` when there is nothing to ask.
+ *
+ * =========================================================================================
+ * IT IS `drawRoom` AND IT WAS NEVER A CHOICE BETWEEN TWO COMMANDS THAT COULD BOTH DO IT
+ * (G-064). `buildRoom` CARRIES NO FOOTPRINT FIELD AT ALL — read it in `commands.ts`:
+ *
+ *     | { readonly kind: 'buildRoom'; readonly roomType: ContentId; readonly at: Cell }
+ *
+ * The optional `footprint?: Footprint` one screen above it belongs to `spawnEntity`, the
+ * STRUCTURAL door a scenario seeds through, which throws where the player's verb refuses. So
+ * "buildRoom with a footprint" is not a thing that can be constructed, and the question is
+ * only whether the player-facing rectangle verb exists at all. IT DOES: `drawRoom` has been
+ * "THE PLAYER DRAWS A ROOM ... The primary building verb" since G-036b, it REQUIRES a
+ * footprint, and it refuses — recorded, never thrown — with `outOfBounds`, `footprintTooSmall`,
+ * `footprintTooLarge`, `occupied` and `insufficientFunds`.
+ *
+ * THIS IS THE OPPOSITE OF WHAT G-063 FOUND FOR CORRIDORS, and the difference is worth stating
+ * because the two goals look alike from outside. There, `layCorridor` was "THE PRIMITIVE, NOT
+ * THE PLAYER'S DRAWING", the player-facing verb was named as owed, and this file had to decline
+ * to send an off-plot cell because the only door available THROWS. Here both doors already
+ * exist and the player's one is the wider of the two.
+ *
+ * THE ONE-CELL BUILD NOW SENDS `drawRoom` AT `1x1` RATHER THAN `buildRoom`, AND THAT IS ONE
+ * VERB FOR ONE GESTURE RATHER THAN A FORK. `applyBuildRoom` is a single line — a call to
+ * `applyDrawRoom` at `UNIT_FOOTPRINT` — so the two commands are one rule and produce the same
+ * five refusals, the same charge and the same entity; branching here on `columns === 1 && rows
+ * === 1` would put a fork in the UI mirroring a fork the simulation deliberately does not
+ * have. `buildRoom` is NOT deprecated by this and nothing here retires it: it is what the
+ * determinism harness and `tools/headless/src/report.ts` issue, and every recorded log
+ * containing one still means exactly what it meant (which is `commands.ts`' whole argument for
+ * `drawRoom` being a second command rather than a wider first one).
+ *
+ * WHAT IS LOST, SAID PLAINLY: after this goal no click in the game produces a `buildRoom`, so
+ * the UI no longer exercises that entry point. What that entry point does is call the function
+ * below it with a frozen constant, and it is exercised on every tick of every harness and
+ * every golden in the project — so the coverage that matters is not this layer's to give.
+ * =========================================================================================
+ *
+ * THE CORRIDOR AND DEMOLISH TOOLS TAKE THE RELEASE CELL AND DO NOT DRAG. Neither command has a
+ * rectangle form: `demolishRoom` takes an ENTITY ID, and a corridor rectangle is N idempotent
+ * no-ops which `commands.ts` parks explicitly ("it becomes a real question the day a corridor
+ * gains a COST"). `to` rather than `from` because that is what a press-and-release at one point
+ * already meant, and because a control that acts where the finger LIFTS is what every button on
+ * this page does.
  *
  * DEMOLISH ON AN EMPTY CELL RETURNS `null` AND DISPATCHES NOTHING, and that is the one place
  * this file declines to act. It is not a rule about legality — it is that `demolishRoom`
@@ -110,16 +251,22 @@ export function actionAt(
   world: World,
   content: BoundContent,
   tool: Tool,
-  cell: Cell,
+  from: Cell,
+  to: Cell,
 ): PlayerAction | null {
   if (tool === null) return null;
   if (tool.kind === 'build') {
+    const region = regionBetween(from, to);
     return {
-      command: { kind: 'buildRoom', roomType: tool.roomType.id, at: cell },
-      at: cell,
-      label: `build ${tool.roomType.name}`,
+      command: { kind: 'drawRoom', roomType: tool.roomType.id, at: region.at, footprint: region.footprint },
+      // THE ORIGIN, NOT THE RELEASE, IS THE CELL THE ANSWER IS DRAWN ON. It is the cell
+      // `drawRoom` itself names, so the flash and the HUD line report the rectangle the
+      // simulation judged rather than the corner the player happened to let go on.
+      at: region.at,
+      label: buildLabel(tool.roomType, region.footprint),
     };
   }
+  const cell = to;
   if (tool.kind === 'corridor') {
     if (!isWithinBounds(cell, world.grid)) return null;
     return { command: { kind: 'layCorridor', at: cell }, at: cell, label: 'lay corridor' };
@@ -141,9 +288,28 @@ export type Point = { readonly x: number; readonly y: number };
 export type PointerHandlers = {
   /** The pointer moved, or left the stage (`null`). PIXELS, not a cell — see below. */
   readonly onPointer: (point: Point | null) => void;
-  /** The player clicked. Nothing about legality is decided before this is called. */
-  readonly onClick: (point: Point) => void;
-  /** Escape: put the tool down. */
+  /**
+   * The player pressed. THE GESTURE HAS STARTED AND NOTHING HAS BEEN ASKED FOR YET (G-064).
+   *
+   * No command is constructed here and nothing is queued. A press is a corner; it becomes a
+   * move at `onPressEnd`, which is the only place in this file that produces one.
+   */
+  readonly onPressStart: (point: Point) => void;
+  /**
+   * The player let go. THIS IS THE MOVE — one gesture, one command, whatever it dragged over.
+   *
+   * It fires for a press-and-release on one cell too, which is every build made before this
+   * goal: that gesture is a `1x1` drag and nothing about it is a special case.
+   */
+  readonly onPressEnd: (point: Point) => void;
+  /**
+   * Escape, or the system taking the pointer away: ABANDON.
+   *
+   * It escalates, and `main.ts` owns which rung it is on because `main.ts` owns the anchor: a
+   * gesture in flight is dropped and the tool is KEPT, and only a cancel with no gesture puts
+   * the tool down. Escape mid-drag meaning "not that rectangle" rather than "not that tool" is
+   * what lets a player back out of a mis-started drag without re-picking the room type.
+   */
   readonly onCancel: () => void;
 };
 
@@ -189,8 +355,36 @@ export function attachPointer(canvas: HTMLCanvasElement, handlers: PointerHandle
     // Left button only. A right-click is the browser's menu and a middle-click is a paste on
     // some platforms; neither should build a hotel.
     if (event.button !== 0) return;
-    handlers.onClick(pointOf(event));
+    // ---------------------------------------------------------------------------------
+    // THE CANVAS CAPTURES THE POINTER FOR THE LENGTH OF THE DRAG (G-064), AND IT IS WHAT
+    // MAKES A DRAG OFF THE EDGE OF THE STAGE A COMPLETED GESTURE RATHER THAN A STUCK ONE.
+    //
+    // Without it a `pointerup` outside the canvas is delivered somewhere else, the anchor is
+    // never cleared, and the next click in the game finishes a drag the player abandoned
+    // minutes ago. With it, every `pointermove` and the `pointerup` come back here with
+    // `offsetX`/`offsetY` STILL RELATIVE TO THE CANVAS — negative or past the far edge, which
+    // resolves through `cellAt` to a cell off the plot, which is a legal move that earns
+    // `outOfBounds`. That is the answer this layer wants: the simulation says no, in its own
+    // word, rather than the UI silently eating the gesture.
+    //
+    // GUARDED, BECAUSE IT IS NOT THE POINT OF THE FEATURE. A browser that refuses the capture
+    // (an already-released pointer id is the documented case) must not take the build tool
+    // down with it — the gesture still works, it just stops tracking past the edge.
+    // ---------------------------------------------------------------------------------
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // Nothing to do: capture is an improvement to the gesture, not a precondition for it.
+    }
+    handlers.onPressStart(pointOf(event));
   });
+  canvas.addEventListener('pointerup', (event) => {
+    if (event.button !== 0) return;
+    handlers.onPressEnd(pointOf(event));
+  });
+  // THE SYSTEM TOOK THE POINTER AWAY — a touch became a scroll, a pen left the tablet. The
+  // gesture did not finish, so it must not be completed as though it had: `onCancel` drops it.
+  canvas.addEventListener('pointercancel', () => handlers.onCancel());
   // The canvas is not focusable, so the key listener goes on the window — the same place
   // pause already lives.
   window.addEventListener('keydown', (event) => {

@@ -21,9 +21,15 @@
 //
 //   Render reads state. Input dispatches commands. Neither ever mutates the sim.
 //
-// EVERY PLAYER ACTION IS AN EXISTING COMMAND — `buildRoom` and `demolishRoom`, both defined
-// since G-008, neither changed here. No field on `World`, no argument to `stepTick`, no
-// migration, no new rule about what a legal placement is.
+// EVERY PLAYER ACTION IS AN EXISTING COMMAND — `drawRoom` (G-036b), `layCorridor` (G-034b)
+// and `demolishRoom` (G-008), none of them changed here. No field on `World`, no argument to
+// `stepTick`, no migration, no new rule about what a legal placement is.
+//
+// (This line read "`buildRoom` and `demolishRoom`, both defined since G-008" until G-064, and
+// by then it had been wrong for two goals in two different ways: `layCorridor` joined at
+// G-063, and the build tool now sends `drawRoom` because that is the only one of the two that
+// carries a rectangle. `buildRoom` still exists and is still what the headless harness issues;
+// what changed is which door this layer knocks on.)
 //
 // THE SPEED CONTROL, PAUSE AND THE FLOOR SWITCHER ARE PLAYER ACTIONS AND ARE NOT COMMANDS.
 // They change HOW MANY ticks are run and WHAT IS DRAWN, never WHAT a tick does — and the
@@ -31,7 +37,8 @@
 // the only things that enter it are the commands `commandsFor` hands to a tick.
 // ---------------------------------------------------------------------------------------
 
-import { createWorld, entranceCell } from '@hotelsim/sim';
+import { createWorld, entranceCell, UNIT_FOOTPRINT } from '@hotelsim/sim';
+import type { Cell } from '@hotelsim/sim';
 import { Application } from 'pixi.js';
 import { loadContent, loadSpeedLadder, loadSpriteRefs } from './content.js';
 import { advance, createDriver, restIdle } from './driver.js';
@@ -43,7 +50,7 @@ import {
   renderTransport,
   wordsOf,
 } from './hud.js';
-import { actionAt, attachPointer, toolLabel } from './input.js';
+import { actionAt, attachPointer, regionBetween, toolLabel } from './input.js';
 import type { Point, Tool } from './input.js';
 import { fastestRung, rungById } from './ladder.js';
 import { createMotion, observeMotion } from './motion.js';
@@ -146,6 +153,29 @@ let tool: Tool = null;
 // through the view that frame is drawing with.
 let pointer: Point | null = null;
 let view: View | null = null;
+/**
+ * THE CORNER THE PLAYER PRESSED ON, or `null` when no gesture is in flight (G-064).
+ *
+ * ---------------------------------------------------------------------------------------
+ * RENDER STATE, AND THE THINNEST KIND: a reload loses it and the hotel is unchanged. Nothing
+ * is spent, charged or queued while it is held — the queue gains one entry at the release and
+ * not before.
+ *
+ * IT IS A CELL WHERE `pointer` ABOVE IS A PIXEL, AND THE TWO ARE NOT INCONSISTENT: they are
+ * answers to different questions. `pointer` is a LIVE QUERY — "what is under the cursor now" —
+ * and must be re-resolved every frame, because the camera is rebuilt from the floor's extent
+ * and a build that grows the extent moves the tile out from under a motionless pointer
+ * (`input.ts` carries the measurement: two cells, at 900x700). The anchor is a RECORDED
+ * GESTURE START — "which tile did I grab" — and the same camera movement must NOT move it, or
+ * a still finger would be dragging from a different corner than the one it pressed on. Stored
+ * as a pixel it would slide; stored as a cell it stays on the tile the player grabbed and the
+ * marquee stays pinned to it.
+ *
+ * IT IS RESOLVED ONCE, AT THE PRESS, AGAINST THE VIEW THE PLAYER WAS LOOKING AT — which is
+ * exactly the staleness the click has had since G-031a, unchanged and no worse.
+ * ---------------------------------------------------------------------------------------
+ */
+let dragFrom: Cell | null = null;
 
 /**
  * WHICH FLOOR IS ON SCREEN. Render state, and the one piece of it this projection adds.
@@ -183,6 +213,12 @@ function floors(): void {
   renderFloors(floorsHost, floorsOf(driver.world), floor, (n) => guestsOnFloor(driver.world, n), {
     onSelect: (picked) => {
       floor = picked;
+      // A DRAG DOES NOT SURVIVE A FLOOR CHANGE (G-064). `Footprint` is two counts along the
+      // column and row axes and has no floor extent, so a rectangle spanning two storeys is
+      // not a thing the simulation can be asked for. The gesture is dropped rather than
+      // silently flattened onto one of the two floors, which would build somewhere the player
+      // was no longer looking.
+      dragFrom = null;
       floors();
     },
   });
@@ -222,7 +258,10 @@ attachPointer(app.canvas, {
   onPointer: (point) => {
     pointer = point;
   },
-  onClick: (point) => {
+  // THE PRESS RECORDS A CORNER AND ASKS FOR NOTHING (G-064). No command is constructed, the
+  // queue is untouched, and the world is not read for a decision — the only thing that happens
+  // is that the marquee now has two ends instead of one.
+  onPressStart: (point) => {
     // Resolved against the view the LAST FRAME DREW — the picture the player was looking at,
     // and the same `View` OBJECT the outline was drawn on. Not the same call: this is a second
     // `cellAt` on a second point source, and what makes the two agree is that `view` is
@@ -230,12 +269,34 @@ attachPointer(app.canvas, {
     if (view === null) return;
     // A `pointerdown` can arrive with no `pointermove` before it — touch, pen, or the pointer
     // re-entering after `pointerleave` — and then the outline was showing nothing. Adopting
-    // the click's own point means the next frame draws the outline where the click just went.
+    // the press's own point means the next frame draws the outline where the press just went.
     pointer = point;
-    const action = actionAt(driver.world, content, tool, cellAt(view, point.x, point.y));
+    dragFrom = cellAt(view, point.x, point.y);
+  },
+  // THE RELEASE IS THE MOVE, AND IT IS THE ONLY PLACE A COMMAND IS QUEUED.
+  onPressEnd: (point) => {
+    if (view === null) return;
+    const from = dragFrom;
+    dragFrom = null;
+    // A RELEASE WITH NO PRESS IS NOT A MOVE. It happens whenever the pointer went down
+    // somewhere else — on a toolbar button, or outside the window — and came up over the
+    // stage, and it is also every release after an Escape. Building there would be a gesture
+    // the player never started on this canvas.
+    if (from === null) return;
+    pointer = point;
+    // THE RELEASE RESOLVES ITS OWN POINT, exactly as the click used to, so a fast drag whose
+    // last `pointermove` never arrived still ends where the finger lifted.
+    const action = actionAt(driver.world, content, tool, from, cellAt(view, point.x, point.y));
     if (action !== null) enqueue(session, action);
   },
+  // ESCAPE ESCALATES: the gesture first, the tool second (`input.ts`'s `onCancel`). Backing out
+  // of a mis-started drag must not also put the room type down, or every correction costs two
+  // extra clicks in the toolbar.
   onCancel: () => {
+    if (dragFrom !== null) {
+      dragFrom = null;
+      return;
+    }
     tool = null;
     app.canvas.style.cursor = 'default';
     tools();
@@ -291,6 +352,8 @@ window.addEventListener('keydown', (event) => {
   const next = available[at + (event.key === 'ArrowUp' ? 1 : -1)];
   if (next !== undefined) {
     floor = next;
+    // The floor switcher's reason, one control over — see `renderFloors`' `onSelect` above.
+    dragFrom = null;
     floors();
   }
 });
@@ -344,9 +407,20 @@ app.ticker.add(() => {
   // has earned and not yet spent — it is already render-side, it is already frame-rate
   // independent by `ticksEarned`'s construction, and it crosses no boundary going this way.
   const frame = scene.build(driver.world, view, motion, driver.carry);
+  // WHAT A RELEASE RIGHT NOW WOULD COVER (G-064) — the hovered cell on its own, or the whole
+  // rectangle back to the corner the player pressed on. Resolved HERE, in the frame, through
+  // the view this frame is drawing with, which is the property `input.ts`' header rests on:
+  // the marquee and the command that follows it read one `View` object.
+  //
+  // IT SAYS WHERE THE HAND IS AND NOT WHAT THE ANSWER WILL BE. `regionBetween` is pure
+  // geometry; nothing between here and `overlay.build` asks the world, the content or the
+  // balance a question, and `INK.intent` is one colour for every rectangle. §6.1.
+  const hovered = pointer === null ? null : cellAt(view, pointer.x, pointer.y);
+  const intent =
+    hovered === null ? null : regionBetween(dragFrom ?? hovered, hovered);
   const marks = overlay.build(view, {
-    hovered: pointer === null ? null : cellAt(view, pointer.x, pointer.y),
-    toolLabel: toolLabel(tool),
+    intent,
+    toolLabel: toolLabel(tool, intent?.footprint ?? UNIT_FOOTPRINT),
     queued: session.queue,
     flashes: session.flashes,
     words: wordsOf,

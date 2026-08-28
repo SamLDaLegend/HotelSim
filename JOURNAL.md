@@ -4148,3 +4148,114 @@ reading `corridors.ts`. Those need a person.
 above are the shipped `describeAction` and `wordsOf` driven headless; the pictures are the shipped
 scene primitives. **What is uncovered is layout** — a fourth button in the tool strip, which is
 E-013's subject, and which a human running `pnpm dev` should look at first.
+
+
+## WATCH #32 — G-064. The player drags a rectangle and gets a room that size, and the four ways it can go wrong all arrive with their own word.
+
+**Recording**: `recording/g064/` — nine frames, seed 7, floor 0, walls `reduced`, bodies at carry 1,
+written by the shipped `createScene` and the shipped `createOverlay` over the shipped
+`createScenario`. **Every player action in them went through the shipped path** — `centreOf` →
+`cellAt` → `regionBetween` → `actionAt` → `enqueue` → `commandsFor` → `stepTick` → `observeTick` →
+`overlay.build` → `frameSvg`. The cells are not typed in: each gesture is a PIXEL, taken from
+`centreOf` and handed back through `cellAt`, so the projection's inverse is exercised for real.
+
+> **THE SHIPPED RECORDER STILL CANNOT TAKE THIS RECORDING, AND THAT IS THE SECOND GOAL RUNNING.**
+> `apps/game/scripts/record-frames.ts` replays `scenarioAt(tick)` and has no pointer, no session and
+> no queue, so it cannot photograph any change to `input.ts` — the file this goal is about, and the
+> file G-063 was about. The driver used here was a throwaway inside `apps/game/` (so that
+> `@hotelsim/sim` resolves to the same module instance the browser gets) which imported the same
+> `content.ts`, `driver.ts`, `input.ts`, `session.ts`, `hud.ts`, `scene.ts` and `overlay.ts`; it was
+> deleted after the run and the frames are what survives. **The recorder was NOT grown a `--script`
+> flag** — §9 lists the recorder acquiring features as a stop condition. **Two bites is a pattern and
+> it is reported as a finding rather than absorbed a third time.**
+
+### 1. THE HEADLINE, AND IT IS THE SENTENCE `HOTELSIM.md` §1 OPENS WITH
+
+**A 3x2 drag builds a 3x2 room.** Floor 0, seed 7, one run, exact deterministic integers. The
+gesture is a press at column 7 row 1 and a release at column 9 row 2 — three columns and two rows
+apart — with the pointer parked between the two for one frame so the preview could be photographed.
+
+| frame | what the player did | what the overlay says | room-floor tiles drawn |
+|---|---|---|---|
+| `a-before.svg` | build tool held, hovering c7 r1, nothing pressed | `build Standard Room` | **9** |
+| `b-dragging.svg` | pressed c7 r1, pointer at c9 r2, **NOT RELEASED** | **`build Standard Room 3x2`** | **9** |
+| `c-queued.svg` | released — nothing has ticked yet | `build Standard Room` \| `1` | **9** |
+| `d-built.svg` | one tick later | `build Standard Room` \| **`built`** | **15** |
+
+**The room-floor tile count is the measurement and it is taken out of the frame's own bytes**: nine
+`#eaeef2` polygons before (the nine seeded 1x1 bedrooms), **fifteen after — exactly six more, which
+is 3 x 2**. World state agrees and was read separately: `room 50 standard_room at f0 c7 r1 3x2 = 6
+cells`, on a floor the scene reports as **11 rooms drawn, 0 invalid**. The room is not merely big,
+it is **VALID** — columns 7 to 9 sit against the seeded corridor spine at column 6.
+
+**THE PREVIEW IS A REAL FRAME AND NOT A DESCRIPTION OF ONE.** `b-dragging.svg` was written between
+the press and the release, and its intent-coloured outline is
+`928,420 1120,516 992,580 800,484` — a parallelogram 320px wide, against `a-before.svg`'s
+`928,420 992,452 928,484 864,452`, the 128x64 diamond of one tile. **Four points either way**: an
+axis-aligned rectangle is still a parallelogram after an affine projection, so the marquee is the
+outline of the extreme corners rather than N diamonds, which is what keeps an off-plot drag from
+putting hundreds of polygons in a frame.
+
+### 2. THE ONE-CELL GESTURE, WHICH IS THE THING MOST AT RISK AND IS UNREGRESSED
+
+`e-onecell.svg`. A press and a release on the SAME cell, c7 r0. The queued command reads
+`{"kind":"drawRoom","roomType":"standard_room","at":{"floor":0,"column":7,"row":0},"footprint":{"columns":1,"rows":1}}`,
+the HUD line reads **`build Standard Room at floor 0, column 7, row 0 — built (tick 41)`** with **no
+size in it**, and the room-floor tiles go **15 → 16**. One cell, one room, and the words the player
+has read since G-031a are byte-identical because `isUnitFootprint` suppresses the size.
+
+**It is not a special case anywhere.** `applyBuildRoom` is one line and it is a call to
+`applyDrawRoom` at `UNIT_FOOTPRINT`, so the sim has one rule; this layer now has one gesture.
+
+### 3. FOUR REFUSALS, ALL REACHED BY DRAGGING, ALL ARRIVING WITH THEIR OWN WORD
+
+| frame | the gesture | HUD line | tally |
+|---|---|---|---|
+| `f-toobig-dragging.svg` | dragging 3x3, not released | preview reads **`build Standard Room 3x3`**, in the SAME blue | — |
+| `g-toobig-refused.svg` | released 3x3 = 9 cells | `build Standard Room 3x3 at floor 0, column 13, row 1 — refused: footprint too large` | `footprintTooLarge=1` |
+| `h-offplot.svg` | pressed on the plot, released at pixel (-400,-400) | `build Standard Room 17x3 at floor 0, column -15, row -2 — refused: out of bounds` | `outOfBounds=1` |
+| `i-occupied.svg` | 3x2 laid across the room from frame `d` | `build Standard Room 3x2 at floor 0, column 8, row 1 — refused: occupied` | `occupied=1` |
+
+**`f-toobig-dragging` IS THE FRAME THAT EVIDENCES THE RULE THIS GOAL WAS MOST AT RISK OF BREAKING.**
+The room type's maximum is 6 cells; the player is covering 9; **the outline is the same
+`#8fb4ff` it is at 1x1 and at 3x2, and the label says the size rather than a verdict.** Turning it
+red there would have meant this layer holding a copy of `maxFootprintCells`, which is content and
+differs per room type — the `topTierStarsOf` defect, and the reason G-030's refusal states went
+unwatched in the first place. The player learns the bound one tick later, from the simulation, in
+the simulation's own word.
+
+**AND THE OFF-PLOT DRAG IS THE ANSWER TO THE QUESTION THE BRIEF ASKED.** A drag has two endpoints
+and either may be off the plot; nothing clamps. The release at pixel (-400,-400) resolved through
+`cellAt` to a cell at negative column and row, `regionBetween` produced a **17x3 rectangle with its
+origin at column -15**, and `applyDrawRoom` refused it with `outOfBounds` — the same word, through
+the same door, as the single off-plot click that has been legal since G-031a. **The rectangle is
+still DRAWN**, running off the left of the canvas (`-576,-332` is one of its corners), because
+`overlay.ts`'s standing rule is that a cell the player cannot see is a cell they cannot learn from.
+**This is the OPPOSITE of the corridor tool's answer at WATCH #31, and the difference is the
+simulation's rather than the UI's**: `layCorridor` throws off the plot and has no player verb, so
+`actionAt` declines; `drawRoom` refuses and records, so `actionAt` sends it.
+
+**Nothing was built by any of the three refusals**: `built` stayed at 2 and the room-floor tile count
+stayed at 16 across all of them.
+
+### 4. WHAT A STILL FRAME EVIDENCED HERE, AND WHAT IT DID NOT
+
+**It evidenced the whole of §1 and §3, because both subjects are static.** A rectangle under a
+pointer, a rectangle in the queue, a rectangle in the world and a word on a tile are all properties
+of one moment, and `b-dragging.svg` is a genuine mid-gesture frame rather than a reconstruction —
+the press had happened and the release had not.
+
+**What it did NOT evidence, and no frame could**: whether a drag is DISCOVERABLE. Nothing on screen
+says "you may drag" except a tooltip added on the build buttons in this goal, and a tooltip is a
+thing you find after you already suspect. Nor whether the marquee reads as a rectangle at speed,
+whether releasing outside the window feels like a cancel or a mistake, and whether a player who has
+just been refused `footprintTooLarge` understands they should draw smaller rather than move.
+**Those need a person.**
+
+**AND THE BROWSER WAS NOT OPENED.** No browser tool was available in this session, and no SVG
+rasteriser exists on this machine, so the frames were read as geometry and text rather than looked
+at. Three things are therefore uncovered and a human running `pnpm dev` should check them first:
+**pointer capture** (`setPointerCapture` is called on `pointerdown` and is what makes a drag off the
+edge of the stage complete rather than hang — it has been typechecked and never executed), whether
+the marquee is legible against the floor at the default camera, and the tool strip's layout, which
+is still E-013's subject.

@@ -14,6 +14,12 @@
 // ticks a second a queue of four takes most of a second to drain, and the player should be
 // able to see their own moves standing in line.
 //
+// AND SINCE G-064 THE INTENT IS A RECTANGLE RATHER THAN A CELL, WHICH CHANGES NOTHING ABOVE.
+// A build is a drag now (`input.ts`), so what is drawn under the pointer is the rectangle the
+// gesture currently covers and what is drawn on a queued build is the rectangle it will ask
+// for. Both are read from the player's own gesture and from the `Command` already
+// constructed — not computed a second time, and not checked against anything.
+//
 // THE OVERLAY NEVER PREDICTS AN OUTCOME, AND THE DELIBERATE CHOICE NOT TO GREY OUT ILLEGAL
 // MOVES IS ONE OF THE FIVE THINGS ADR-0046 §3 SAYS TO REBUILD RATHER THAN RETHINK. There is no
 // red ghost for "you cannot afford this" and no grey-out for an occupied cell. Predicting a
@@ -23,21 +29,40 @@
 // `outOfBounds`, `occupied` or `insufficientFunds` at all. The player clicks, the simulation
 // answers, the answer is drawn.
 //
+// THAT NOW COVERS TWO MORE REFUSALS AND THEY ARE THE REASON TO SAY IT AGAIN. `drawRoom` adds
+// `footprintTooSmall` and `footprintTooLarge`, both of which are functions of the rectangle
+// ALONE — so they are the easiest refusal in the game to predict locally and the most
+// tempting to paint red. That is exactly why this file does not: `maxFootprintCells` is
+// content (I3), a copy of it here would be a second definition of a rule `applyDrawRoom`
+// owns, and the two would agree until the day a designer edits the JSON.
+//
 // WHAT THE PROJECTION CHANGED: a cell is a DIAMOND rather than a rectangle, and a cell not on
 // the drawn floor has no picture at all. That second one is new and it is handled rather than
 // ignored — see `OFF_FLOOR` below.
 
-import type { Cell } from '@hotelsim/sim';
+import { UNIT_FOOTPRINT } from '@hotelsim/sim';
+import type { Cell, Footprint } from '@hotelsim/sim';
 import { centreOf, toCanvas } from './camera.js';
 import type { View } from './camera.js';
 import { cornerOf, toView } from './iso.js';
 import { INK } from './palette.js';
 import type { Primitive } from './primitives.js';
+import type { Region } from '../input.js';
 import type { PlayerAction, ResolvedAction } from '../session.js';
 
 export type OverlayState = {
-  /** The cell under the pointer, or `null` when the pointer is off the stage. */
-  readonly hovered: Cell | null;
+  /**
+   * THE RECTANGLE A RELEASE RIGHT NOW WOULD COVER, or `null` when the pointer is off the
+   * stage (G-064).
+   *
+   * IT IS THE GESTURE, NOT A PREDICTION OF THE ANSWER, and the distinction is the one §6.1
+   * and this file's header are about. With no drag in flight it is the hovered cell at
+   * `1x1` — exactly the `hovered` field it replaces. With a drag in flight it is anchor-to-
+   * pointer. In BOTH cases it says only where the player's hand is; whether the simulation
+   * will accept it is not asked here, is not colour-coded here, and is not knowable here
+   * without writing `applyDrawRoom`'s five rules a second time.
+   */
+  readonly intent: Region | null;
   /** What a click would ask for, in words — or `null` when no tool is held. */
   readonly toolLabel: string | null;
   /** Clicked and not yet spent, in the order they will be spent. */
@@ -80,20 +105,68 @@ export type Overlay = {
   build: (view: View, state: OverlayState) => { readonly shapes: readonly Primitive[]; readonly labels: readonly Primitive[] };
 };
 
-/** The four canvas-space corners of one tile. The overlay's only geometry. */
-function diamond(view: View, at: Cell): number[] {
-  const tile = toView(at.column, at.row, view.orientation);
+/**
+ * The four canvas-space corners of a RECTANGLE of tiles. The overlay's only geometry.
+ *
+ * =========================================================================================
+ * FOUR POINTS FOR ANY RECTANGLE, NOT ONE DIAMOND PER CELL (G-064). An axis-aligned rectangle
+ * in grid space is still a parallelogram after `cornerOf`, because the projection is two
+ * affine lines — so its outline is the outline of its extreme corners and nothing is gained
+ * by drawing the interior tiles. The cost matters as well as the tidiness: `cellAt` does not
+ * clamp, so a drag can legally span a rectangle far larger than the plot, and a per-cell loop
+ * would put that number of polygons in a frame for a gesture that is about to be refused.
+ *
+ * THE EXTREMES ARE TAKEN IN VIEW SPACE RATHER THAN IN GRID SPACE, AND THAT IS NOT
+ * DECORATION. `toView` NEGATES an axis at three of the four orientations (`{ u: row, v:
+ * -column - 1 }` at orientation 1), so the grid's smallest column is not the view's smallest
+ * `u` at every camera. Taking the min and max of the two projected corners is right at all
+ * four; taking them before projecting is right at one, and would draw the marquee inside-out
+ * at the other three the day this camera learns to rotate.
+ *
+ * AT A ONE-CELL FOOTPRINT IT RETURNS EXACTLY THE FOUR POINTS IT ALWAYS DID — `u0 === u1` and
+ * `v0 === v1`, so the expression collapses to the tile's own four corners.
+ * =========================================================================================
+ */
+function marquee(view: View, at: Cell, footprint: Footprint): number[] {
+  const near = toView(at.column, at.row, view.orientation);
+  const far = toView(at.column + footprint.columns - 1, at.row + footprint.rows - 1, view.orientation);
+  const u0 = Math.min(near.u, far.u);
+  const u1 = Math.max(near.u, far.u);
+  const v0 = Math.min(near.v, far.v);
+  const v1 = Math.max(near.v, far.v);
   const points: number[] = [];
   for (const [a, b] of [
-    [tile.u, tile.v],
-    [tile.u + 1, tile.v],
-    [tile.u + 1, tile.v + 1],
-    [tile.u, tile.v + 1],
+    [u0, v0],
+    [u1 + 1, v0],
+    [u1 + 1, v1 + 1],
+    [u0, v1 + 1],
   ] as const) {
     const p = toCanvas(view, cornerOf(a, b));
     points.push(p.x, p.y);
   }
   return points;
+}
+
+/**
+ * HOW MANY CELLS A QUEUED OR ANSWERED ACTION COVERS, read off the command the player actually
+ * sent (G-064).
+ *
+ * IT IS A LOOKUP, NOT A RE-DERIVATION. The rectangle is already in the `Command` — this layer
+ * put it there and the simulation is about to judge that exact pair — so the ghost the player
+ * watches queue up is the rectangle that will be built, by construction rather than by two
+ * calculations agreeing. Everything that is not a `drawRoom` occupies its one cell:
+ * `layCorridor` declares a cell and `demolishRoom` names an id whose room is drawn by
+ * `scene.ts` anyway.
+ */
+function extentOf(action: PlayerAction): Footprint {
+  return action.command.kind === 'drawRoom' ? action.command.footprint : UNIT_FOOTPRINT;
+}
+
+/** The canvas point at the middle of a rectangle of tiles. Affine in both arguments, so the
+ *  midpoint of the extreme cells IS the middle of the rectangle (`iso.ts`: "`u` and `v` may
+ *  be fractional"). */
+function middleOf(view: View, at: Cell, footprint: Footprint): { readonly x: number; readonly y: number } {
+  return centreOf(view, at.column + (footprint.columns - 1) / 2, at.row + (footprint.rows - 1) / 2);
 }
 
 export function createOverlay(): Overlay {
@@ -104,12 +177,20 @@ export function createOverlay(): Overlay {
     const shapes: Primitive[] = [];
     const labels: Primitive[] = [];
 
-    // THE HOVERED CELL. Drawn even when it is off the plot, because a click there is a legal
-    // move that earns a recorded refusal, and a cell the player cannot see is a cell they
-    // cannot learn from.
-    if (state.hovered !== null && state.toolLabel !== null) {
-      shapes.push({ kind: 'poly', points: diamond(view, state.hovered), stroke: { width: 2, colour: INK.intent, alpha: 0.9 } });
-      const centre = centreOf(view, state.hovered.column, state.hovered.row);
+    // THE RECTANGLE UNDER THE POINTER. Drawn even when it is off the plot, because a click
+    // there is a legal move that earns a recorded refusal, and a cell the player cannot see is
+    // a cell they cannot learn from.
+    //
+    // ONE COLOUR, WHATEVER THE RECTANGLE IS (G-064). `INK.intent` is the same blue for a
+    // one-cell hover, for a 3x2 the sim will accept and for a 9x9 it will refuse as
+    // `footprintTooLarge` — because turning it red on the third would mean this file holding a
+    // copy of `maxFootprintCells`, and the player learns the bound from the word on the tile
+    // one tick later, which is the same way they learn `occupied` and `insufficientFunds`.
+    // The header's "no red ghost for you cannot afford this" is a rule about the SHAPE too.
+    if (state.intent !== null && state.toolLabel !== null) {
+      const { at, footprint } = state.intent;
+      shapes.push({ kind: 'poly', points: marquee(view, at, footprint), stroke: { width: 2, colour: INK.intent, alpha: 0.9 } });
+      const centre = middleOf(view, at, footprint);
       labels.push({
         kind: 'text',
         text: state.toolLabel,
@@ -177,10 +258,10 @@ export function createOverlay(): Overlay {
         });
         continue;
       }
-      const centre = centreOf(view, first.at.column, first.at.row);
+      const centre = middleOf(view, first.at, extentOf(first));
       shapes.push({
         kind: 'poly',
-        points: diamond(view, first.at),
+        points: marquee(view, first.at, extentOf(first)),
         fill: INK.intent,
         alpha: 0.16,
         stroke: { width: 2, colour: INK.intent, alpha: 0.6 },
@@ -244,10 +325,10 @@ export function createOverlay(): Overlay {
 
       shapes.push({
         kind: 'poly',
-        points: diamond(view, newest.action.at),
+        points: marquee(view, newest.action.at, extentOf(newest.action)),
         stroke: { width: 3, colour: newest.refused ? INK.alarm : INK.ok, alpha: 0.9 },
       });
-      const centre = centreOf(view, newest.action.at.column, newest.action.at.row);
+      const centre = middleOf(view, newest.action.at, extentOf(newest.action));
       lines.forEach((line, i) => {
         labels.push({
           kind: 'text',

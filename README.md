@@ -49,7 +49,7 @@ not a viewer and must not grow into one — the browser is the viewer.
 | | |
 |---|---|
 | pick a room from the **build** strip | one button per room type the content defines, with what it costs |
-| click a cell | queues a `buildRoom` there — including a bad cell, on purpose |
+| **drag a rectangle**, or click one cell | queues a `drawRoom` of exactly that size — including a bad rectangle, on purpose. A click is a `1x1` drag and is not a special case |
 | **demolish**, then click a room | queues a `demolishRoom` and refunds part of what it cost |
 | `Escape`, or **none** | put the tool down. No tool is held at start, so a stray click does nothing |
 | **export session** | downloads the seed, the command log and the state hash |
@@ -59,9 +59,17 @@ not a viewer and must not grow into one — the browser is the viewer.
 is deliberately not among them: changing speed changes how many ticks are run, never what a
 tick does, and it never enters the command log.
 
-**A click is spent by the next tick, not immediately.** A queued command is drawn as a
-numbered blue ghost on its cell, so at pause — where no tick runs — you can see the moves
-standing in line. One build or demolish is spent per tick, in the order you clicked.
+**A room is the size you drew it** (G-064). `HOTELSIM.md` §1: *"rooms are designed by the
+player, not placed from a catalogue"*. Press, drag, release: the blue outline under the
+pointer is the rectangle you are currently covering, and it is one colour whatever size it is
+— **nothing here predicts whether the simulation will take it**. Too big for the room type,
+overlapping, off the plot, unaffordable: all four come back as recorded refusals with the word
+on the tile, exactly as a bad one-cell click always has. `Escape` mid-drag drops the rectangle
+and keeps the tool.
+
+**A move is spent by the next tick, not immediately.** A queued command is drawn as a numbered
+blue ghost over the cells it asks for, so at pause — where no tick runs — you can see the moves
+standing in line. One player command is spent per tick, in the order you made them.
 
 **The game does not stop you making a bad move, and this is the point.** Build in mid-air,
 seal a room between its neighbours, or spend down to nothing: nothing is greyed out and

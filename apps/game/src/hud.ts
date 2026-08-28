@@ -462,6 +462,12 @@ export function renderTools(
     price.className = 'u';
     price.textContent = moneyOf(constructionCostOf(content, roomType.id));
     button.append(name, ' ', price);
+    // HOW TO DRAW ONE (G-064). A drag is not discoverable from a picture the way a click is,
+    // and `HOTELSIM.md` §1's headline — "the player draws a room's footprint" — is the thing
+    // this tool is for. It says what the GESTURE is and nothing about what the simulation will
+    // accept: the size band is content, it differs per room type, and a tooltip quoting it
+    // would be a copy of `maxFootprintCells` going stale in a string.
+    button.title = 'click a cell, or drag a rectangle, to draw the room; the size is refused or accepted by the simulation, not by this button';
     button.classList.toggle('on', tool?.kind === 'build' && tool.roomType.id === roomType.id);
     button.addEventListener('click', () => handlers.onPick({ kind: 'build', roomType }));
     host.append(button);
