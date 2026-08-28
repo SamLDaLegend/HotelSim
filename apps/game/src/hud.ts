@@ -77,6 +77,28 @@ export type HudState = {
   /** Needed to name needs in the content's own words rather than by id (ADR-0003). */
   readonly content: BoundContent;
   readonly crowdedOut: number;
+  /**
+   * Guests on this floor whose walk could not be drawn this tick (G-047b). See
+   * `SceneReport.unwalkable`, and `SnapReason` in `motion.ts` for what it does and does not
+   * claim: it says the RENDERER could not find a route, never that the simulation misbehaved.
+   */
+  readonly unwalkable: number;
+  /**
+   * THE MOMENT THE BODIES ARE STANDING AT — `world.tick - 1 + carry` (G-047b).
+   *
+   * ==========================================================================================
+   * IT IS ON SCREEN BECAUSE IT IS OTHERWISE A DEFECT REPORT WAITING TO HAPPEN. Interpolation
+   * means drawing the move that has already happened as it is paid off, so the guests stand up
+   * to one in-game minute behind the clock beside them. A watcher who notices a guest still in
+   * the corridor while `tick` has moved on is seeing the design; a watcher who is not told is
+   * seeing a bug. ADR-0096 ruling 3 lists this as one of three consequences to OWN, and the
+   * cheapest way to own it is to print it.
+   *
+   * IT ALSO MAKES THE PAUSE SNAP LEGIBLE. `restIdle` zeroes the carry, so pausing puts this
+   * number exactly one behind `tick` and the figures step back to their last landed cells.
+   * ==========================================================================================
+   */
+  readonly drawnTick: number;
   readonly invalidRooms: number;
   readonly rooms: number;
   readonly fps: number;
@@ -226,9 +248,12 @@ export function renderHud(host: HTMLElement, state: HudState): void {
     ...outcomeCells(world, state.content),
     ...buildCells(world),
     cell('walls', `${state.walls}  (w)`),
-    cell('tick', String(world.tick)),
+    cell('tick', `${world.tick}  (bodies at ${state.drawnTick.toFixed(2)})`),
     cell('fps', String(Math.round(state.fps))),
     state.crowdedOut > 0 ? cell('not drawn', `${state.crowdedOut} guest(s) — tile too narrow`) : '',
+    state.unwalkable > 0
+      ? cell('no walk drawn', `${state.unwalkable} guest(s) — no route between their last two cells`)
+      : '',
     state.guestsElsewhere > 0 ? cell('off this floor', `${state.guestsElsewhere} guest(s)`) : '',
     state.queued > 0 ? cell('queued', `${state.queued} waiting for the next tick`) : '',
     // THE LAST MOVE, AND IT NEVER EXPIRES. A message that fades is a message a player can

@@ -73,6 +73,7 @@ import type { World } from '@hotelsim/sim';
  * ==========================================================================================
  */
 import { loadContent, loadSpriteRefs } from '../src/content.js';
+import { createMotion, observeMotion } from '../src/motion.js';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, frameSvg, hex } from './svg.js';
 import { createScenario } from '../src/scenario.js';
 import { floorsOf, guestsOnFloor, viewFor } from '../src/view/camera.js';
@@ -113,6 +114,39 @@ if (walls !== wallsArg) {
 const seed = arg('seed', 7);
 const ticks = arg('ticks', 2880);
 const every = arg('every', 240);
+
+/**
+ * WHICH SUB-TICK MOMENT TO DRAW THE BODIES AT (G-047b) — `--carry 0..1`, DEFAULT 1.
+ *
+ * ==========================================================================================
+ * AT THE DEFAULT THIS FILE WRITES THE FRAMES IT ALWAYS WROTE, TO THE PIXEL. A guest is drawn
+ * at `route(1)`, which `tweenView` clamps to the route's last tile — its cell at `world.tick`
+ * — with the slot offset it has at `world.tick`. That is the definition of the picture this
+ * recorder produced before interpolation existed, so a before/after comparison of two default
+ * recordings is a real check rather than a hope, and it is the check this goal used.
+ *
+ * WHY THE FLAG EXISTS AT ALL, GIVEN §9 MAKES "THE RECORDER ACQUIRING FEATURES" A STOP
+ * CONDITION. A guest between two cells is the entire subject of this goal and **a frame at an
+ * integer tick cannot contain one**: at `carry = 1` every figure is on a tile centre, by
+ * construction, forever. Without this the instrument of record can photograph every state of
+ * the hotel except the one the goal is about. It is one number, validated, loud when it is
+ * wrong, and it changes nothing else — the same shape as `--walls`, which exists for the same
+ * reason: a position that cannot be photographed cannot be argued about.
+ *
+ * IT IS A MOMENT, NOT A RATE. Nothing here consumes real time, and this number never reaches
+ * `stepTick`; it selects which instant between two completed ticks is drawn.
+ * ==========================================================================================
+ */
+const carryArg = process.argv.includes('--carry')
+  ? Number(process.argv[process.argv.indexOf('--carry') + 1])
+  : 1;
+const carry = Number.isFinite(carryArg) && carryArg >= 0 && carryArg <= 1 ? carryArg : 1;
+if (carry !== carryArg) {
+  // LOUD, NOT QUIET, for `--walls`' reason: a mistyped `--carry` that silently recorded the
+  // default would produce two identical recordings and an argument about what they showed.
+  process.stdout.write(`--carry "${String(process.argv[process.argv.indexOf('--carry') + 1])}" is not a number in 0..1; recording at 1
+`);
+}
 const outDir = process.argv.includes('--out')
   ? String(process.argv[process.argv.indexOf('--out') + 1])
   : join(process.cwd(), 'recording');
@@ -126,13 +160,25 @@ const scenarioAt = createScenario(content, world.grid);
 // as the withheld demand curve above.
 const scene = createScene(content, loadSpriteRefs());
 const cache = createValidityCache();
+/**
+ * HOW EVERY GUEST GOT FROM ONE TICK TO THE NEXT (G-047b), fed from the same two worlds
+ * `stepTick` produces below — which is the browser's `observe(before, after)` hook, spelled out
+ * in a loop that has both worlds in hand anyway.
+ *
+ * IT IS OBSERVED ON EVERY TICK, NOT ONLY ON RECORDED ONES, because a record describes the move
+ * INTO a tick: skipping the ticks between two frames at `--every 240` would leave the recorded
+ * frame describing a move 240 ticks long, and `pathBetween`'s cost bound is the STEP's (two
+ * cells N ticks apart span O(N^2) lattice cells). Observing every tick keeps every lookup the
+ * one it is correct for.
+ */
+const motion = createMotion();
 
 mkdirSync(outDir, { recursive: true });
 
 /** A census line per frame, so a description of the recording rests on counts. */
 function census(current: World, floor: number): string {
   const view = viewFor(current, floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT, walls);
-  const frame = scene.build(current, view);
+  const frame = scene.build(current, view, motion, carry);
   const figures = frame.shapes.filter((item) => item.kind === 'figure');
   const tints = new Map<string, number>();
   let hollow = 0;
@@ -155,6 +201,10 @@ function census(current: World, floor: number): string {
     `guests-here ${figures.length}`,
     `hollow ${hollow}`,
     `elsewhere ${frame.report.guestsElsewhere}`,
+    // BOTH COUNTS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS. The first is what the picture is
+    // marked with; the second is world-wide, so a silent floor can be told apart from a silent
+    // hotel — the split `elsewhere` above already makes.
+    `unwalkable ${frame.report.unwalkable}/${motion.unwalkable}`,
     `tints ${[...tints.entries()].map(([k, v]) => `${k}x${v}`).join(',') || 'none'}`,
     `facings ${[...facings.entries()].map(([k, v]) => `${k}x${v}`).join(',') || 'none'}`,
   ].join('  ');
@@ -180,14 +230,22 @@ for (let tick = 0; tick <= ticks; tick += 1) {
   if (tick % every === 0) {
     for (const floor of floorsOf(current)) {
       const view = viewFor(current, floor, SHIPPED_ORIENTATION, CANVAS_WIDTH, CANVAS_HEIGHT, walls);
-      const frame = scene.build(current, view);
+      const frame = scene.build(current, view, motion, carry);
       const caption =
-        `tick ${current.tick} · floor ${floor} · walls ${walls} · ${frame.report.rooms} rooms ` +
+        `tick ${current.tick} · floor ${floor} · walls ${walls} · bodies at ` +
+        `${(current.tick - 1 + carry).toFixed(2)} · ${frame.report.rooms} rooms ` +
         `(${frame.report.invalidRooms} invalid) · ${guestsOnFloor(current, floor)} guests here · ` +
-        `${frame.report.guestsElsewhere} elsewhere · scale ${view.scale.toFixed(2)}`;
+        `${frame.report.guestsElsewhere} elsewhere · ${frame.report.unwalkable} no walk drawn · ` +
+        `scale ${view.scale.toFixed(2)}`;
       // THE POSITION IS IN THE FILENAME, so three recordings of one tick can sit in one
       // directory and a report can name the frame it is describing.
-      const file = `t${String(current.tick).padStart(6, '0')}-f${floor < 0 ? `m${-floor}` : floor}-${walls}.svg`;
+      // THE MOMENT IS IN THE FILENAME BESIDE THE POSITION, for the reason the position is:
+      // several recordings of one tick sit in one directory and a report has to be able to name
+      // the frame it is describing. `c100` is `--carry 1`, which is every frame written before
+      // G-047b — so a filename says which arm it came from without opening it.
+      const file =
+        `t${String(current.tick).padStart(6, '0')}-f${floor < 0 ? `m${-floor}` : floor}` +
+        `-${walls}-c${String(Math.round(carry * 100)).padStart(3, '0')}.svg`;
       writeFileSync(join(outDir, file), frameSvg(frame.shapes, frame.labels, caption), 'utf8');
       written.push({ file, caption });
       const inWorld = guestsOnFloor(current, floor) + frame.report.guestsElsewhere;
@@ -199,7 +257,9 @@ for (let tick = 0; tick <= ticks; tick += 1) {
     process.stdout.write(`${census(current, entrance.floor)}\n`);
   }
   if (tick === ticks) break;
+  const before = current;
   current = stepTick(current, content, scenarioAt(current.tick), cache);
+  observeMotion(motion, content, before, current);
 }
 
 // THE RUN'S OWN SUMMARY, printed rather than inferred from the pictures.

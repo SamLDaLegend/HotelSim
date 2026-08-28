@@ -46,6 +46,7 @@ import {
 import { actionAt, attachPointer, toolLabel } from './input.js';
 import type { Point, Tool } from './input.js';
 import { fastestRung, rungById } from './ladder.js';
+import { createMotion, observeMotion } from './motion.js';
 import { createScenario } from './scenario.js';
 import {
   commandsFor,
@@ -102,6 +103,15 @@ const world = createWorld(SEED, content);
 const scenarioAt = createScenario(content, world.grid);
 const driver = createDriver(world);
 const session = createSession();
+/**
+ * HOW EVERY GUEST GOT FROM THE LAST TICK TO THIS ONE (G-047b).
+ *
+ * RENDER STATE, AND THE SAME STATUS AS THE LINE ABOVE IT AND THE CAMERA BELOW: a reload loses
+ * it and the hotel is unchanged. It is a DERIVATION over the two worlds `advance` already
+ * hands to `observe`, recorded once per tick because a path is constant between ticks and this
+ * loop draws 145 frames a second.
+ */
+const motion = createMotion();
 
 const app = new Application();
 await app.init({
@@ -312,7 +322,10 @@ app.ticker.add(() => {
       performance.now(),
       speed,
       (tick) => commandsFor(session, scenarioAt, tick),
-      (before, after) => observeTick(session, before, after),
+      (before, after) => {
+        observeTick(session, before, after);
+        observeMotion(motion, content, before, after);
+      },
     );
   }
   recordFrame(session, spent);
@@ -326,7 +339,11 @@ app.ticker.add(() => {
   // here and nowhere else. A second assignment (a resize handler is the obvious candidate)
   // would let a click resolve against a camera the player never saw.
   view = viewFor(driver.world, floor, SHIPPED_ORIENTATION, width, height, walls);
-  const frame = scene.build(driver.world, view);
+  // THE BODIES ARE DRAWN AT `tick - 1 + carry` AND EVERYTHING ELSE AT `tick` (ADR-0096
+  // ruling 3, and see `Scene.build`). `driver.carry` is the fraction of a tick the wall clock
+  // has earned and not yet spent — it is already render-side, it is already frame-rate
+  // independent by `ticksEarned`'s construction, and it crosses no boundary going this way.
+  const frame = scene.build(driver.world, view, motion, driver.carry);
   const marks = overlay.build(view, {
     hovered: pointer === null ? null : cellAt(view, pointer.x, pointer.y),
     toolLabel: toolLabel(tool),
@@ -340,6 +357,8 @@ app.ticker.add(() => {
     world: driver.world,
     content,
     crowdedOut: frame.report.crowdedOut,
+    unwalkable: frame.report.unwalkable,
+    drawnTick: driver.world.tick - 1 + driver.carry,
     invalidRooms: frame.report.invalidRooms,
     rooms: frame.report.rooms,
     guestsElsewhere: frame.report.guestsElsewhere,

@@ -349,9 +349,80 @@ export function tileCorners(u: number, v: number): readonly ScreenPoint[] {
   return [cornerOf(u, v), cornerOf(u + 1, v), cornerOf(u + 1, v + 1), cornerOf(u, v + 1)];
 }
 
-/** The centre of a view tile's diamond, which is where anything standing on it is anchored. */
+/**
+ * The centre of a view tile's diamond, which is where anything standing on it is anchored.
+ *
+ * `u` AND `v` MAY BE FRACTIONAL, and that is what makes a sub-cell position expressible at all
+ * (G-047b). The two lines are affine in both arguments, so a point half a tile along the `u`
+ * axis lands exactly half a tile along the screen diagonal — no separate sub-cell projection
+ * exists, and one would be a second description of the two lines below.
+ */
 export function tileCentre(u: number, v: number): ScreenPoint {
   return { x: (u - v) * HALF_WIDTH, y: (u + v + 1) * HALF_HEIGHT };
+}
+
+/**
+ * WHERE A THING IS WHEN IT IS PART OF THE WAY ALONG A ROUTE (G-047b) — the sub-cell helper.
+ *
+ * ==========================================================================================
+ * THE PROBLEM IT SOLVES. A guest's cell moves up to `guestCellsPerTick` in one tick, so a
+ * renderer drawing `guest.at` draws a guest TELEPORTING: measured at G-045, 72.1% of moving
+ * guest-ticks jump two or more cells between redraws and a guest crosses 9.34 of its own body
+ * widths with nothing drawn in between. `pathBetween` (packages/sim) says which cells the guest
+ * went through; this says where along them it is at fraction `t`.
+ *
+ * IT LIVES HERE BECAUSE IT IS ARITHMETIC AND BECAUSE THE FENCE ADMITS THIS FILE.
+ * `.dependency-cruiser.cjs` lets `tools/` import `palette.ts`, `iso.ts` and `depth.ts` and
+ * nothing else under `apps/`, so a criterion about interpolated positions can be a TEST rather
+ * than a screenshot — `tools/headless/src/iso.tween.test.ts`. Moving the fence to reach a
+ * criterion is the wrong repair (WATCH #14), and this needed no move: `view-fence.test.ts`
+ * asserts that this file imports NOTHING AT ALL, so the parameter is a `ViewTile` and never a
+ * `Cell`. The caller converts, once, through `toView`.
+ *
+ * FRAME-RATE INDEPENDENT BY CONSTRUCTION, WHICH IS A PROPERTY OF THE SIGNATURE RATHER THAN OF
+ * THE BODY. There is no delta, no clock, no accumulator and no state: the answer is a function
+ * of the route and of `t` alone. A 60Hz frame and a 145Hz frame that ask for the same `t` get
+ * the same point, and `t` is the driver's `carry` — which `driver.ts` already earns from ticks
+ * per real SECOND rather than per rendered frame (§2.1.1). §6.1's catalogue lists frame-rate
+ * dependent advance as a defect; the way to not have it is to have nowhere to put it.
+ *
+ * CONSTANT SPEED ALONG THE ROUTE, NOT PER STEP. `t` is spread over the whole route rather than
+ * over each leg, so a two-cell tick and a one-cell tick both take exactly one tick: the guest
+ * that moved further moves faster, which is what actually happened. Splitting `t` per leg would
+ * draw every guest at the same pace and lose the only speed information the tick carries.
+ *
+ * `t` IS CLAMPED TO [0, 1], not wrapped and not extrapolated. `carry` is already in range by
+ * `ticksEarned`'s construction; the clamp is so a caller that passes exactly 1 (a snapshot with
+ * no sub-tick moment — every frame `record-frames.ts` wrote before this goal) lands EXACTLY on
+ * the last tile and therefore draws the picture it drew before this function existed.
+ *
+ * A NON-FINITE `t` THROWS AND IS NOT CLAMPED, because the two are different statements. Out of
+ * range is a moment slightly past a boundary and the nearest end of the route is the right
+ * answer; `NaN` is a caller whose clock arithmetic came apart, and quietly drawing the guest at
+ * one end of its walk would hide that in the reassuring direction — the direction
+ * `stockFractionOf` records as the worst one for something whose output becomes evidence.
+ * ==========================================================================================
+ */
+export function tweenView(tiles: readonly ViewTile[], t: number): ViewTile {
+  const last = tiles.length - 1;
+  const first = tiles[0];
+  // LOUD, NOT A DEFAULT. An empty route is a caller bug — `pathBetween`'s `walk` always carries
+  // `from` first and `to` last — and a silent `{u: 0, v: 0}` would draw the guest at the plot's
+  // corner, which reads as a simulation fault rather than as the render fault it is.
+  if (first === undefined) throw new Error('tweenView: a route needs at least one tile');
+  if (!Number.isFinite(t)) throw new Error(`tweenView: t is ${String(t)}`);
+  if (last === 0) return first;
+  const along = (t <= 0 ? 0 : t >= 1 ? 1 : t) * last;
+  // `last - 1` so `t === 1` takes the FINAL leg at fraction 1 rather than a leg past the end.
+  const leg = Math.min(Math.floor(along), last - 1);
+  const from = tiles[leg];
+  const to = tiles[leg + 1];
+  // Unreachable: `0 <= leg <= last - 1`, so both reads are inside the array. Stated as the
+  // postcondition of that bound rather than offered as evidence anything was checked
+  // (ADR-0010's amendment), and a throw rather than a fallback for `first`'s reason.
+  if (from === undefined || to === undefined) throw new Error(`tweenView: leg ${leg} of ${last}`);
+  const fraction = along - leg;
+  return { u: from.u + (to.u - from.u) * fraction, v: from.v + (to.v - from.v) * fraction };
 }
 
 /**

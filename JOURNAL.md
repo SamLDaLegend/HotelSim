@@ -3740,3 +3740,158 @@ twice is worth recording precisely because nobody set it up.
 
 `0 invalid` on every floor of every frame across all 88. The stairwell reads on all four floors. No
 guest was observed inside a facility. No frame shows a review without a matching departure.
+
+---
+
+## WATCH #29 — G-047b. The guest walks; the corridor cluster does not move, because it never was moving.
+
+**Instrument**: `pnpm --filter @hotelsim/game record` — the shipped scene builder, the shipped
+content loader, one new argument (`--carry`, default 1). Frames are derived artefacts and are not
+committed; every one below regenerates from the invocation quoted with it. Regime: win32 / 12 cpu,
+quiet, one sitting. Seed 7 throughout, which is the seed every observation in this project is taken
+at.
+
+**THE THREE ARMS.** **BEFORE** — `66e43b6`, reached with `git stash push -u` / `git stash pop`
+(ADR-0022's recipe; a `sha256` manifest was taken first and the pop was verified, and the surviving
+stash entry was checked to be the untouched G-052a one). **AFTER c100** — this goal at `--carry 1`,
+the snapshot moment. **AFTER c000/c033/c050/c066** — this goal at sub-tick moments, which is the only
+way a still frame can contain a guest between two cells.
+
+### 1. THE MOST IMPORTANT FRAME PAIR IS THE ONE WHERE NOTHING CHANGED
+
+`--ticks 2880 --every 240` on both arms, 50 frames each, four floors.
+
+> **48 of the 50 frames are byte-identical once the caption line is removed. The other 2 differ by
+> exactly one magenta diamond.**
+
+`before/t001920-fm1-reduced.svg` against `after-c100/t001920-fm1-reduced-c100.svg`: the whole diff
+is one added `<polygon ... stroke="#ff00ff">` at `(276, 188)` on floor -1, plus the caption gaining
+`1 no walk drawn`. Same at tick 2400. **Every other shape, on every other frame, is the same byte.**
+
+That is the identity `--carry 1` was built to have — `tweenView` clamps `t` to 1 and lands exactly
+on the route's last tile, so the snapshot moment IS `guest.at` at `world.tick` — and it is checked
+rather than asserted. It also means **a recording taken the way every recording in this project has
+been taken shows the change only where the change is a MARK**, which is what makes the marker's
+count trustworthy: nothing else moved.
+
+### 2. THE GUEST IS BETWEEN TWO CELLS, AND HERE IS THE FRAME
+
+`pnpm exec tsx scripts/record-frames.ts --ticks 243 --every 243 --carry {0,0.33,0.66,1} --out
+.tmp/g047b/subtick`. Two guests walking on floor -1 at tick 243, four cells each (three steps). The
+`<g transform="translate(...)">` of the leading figure, one frame per carry:
+
+| frame | x | y |
+|---|---|---|
+| `t000243-fm1-reduced-c000.svg` | 315.50 | 109.75 |
+| `t000243-fm1-reduced-c033.svg` | 366.98 | 135.49 |
+| `t000243-fm1-reduced-c066.svg` | 418.46 | 161.23 |
+| `t000243-fm1-reduced-c100.svg` | 471.50 | 187.75 |
+
+Three even steps of about 51.5px where the incumbent drawing had one jump of 156px and nothing in
+between. **G-045 measured that jump as 214.66 px-per-redraw at EVERY rung**; this is the first frame
+in the project's history containing a guest that is not standing on a tile centre.
+
+`t002160-fm1-reduced` from the 2,880-tick run is the same thing inside an ordinary recording: one
+guest at `(666.00, 304.75)` at `--carry 0.5` and `(588.00, 343.75)` at `--carry 1`.
+
+### 3. WHAT A STILL FRAME CANNOT SHOW, SAID PLAINLY
+
+**Smoothness is a property of a sequence and no SVG contains one.** What the frames above evidence
+is that *sub-cell positions exist and are correctly placed*; that the motion between them is smooth
+rests on `tweenView` being linear in `t` and on `t` being the driver's carry, which is the
+measurement in section 5 rather than a picture. **Nobody has yet watched this in a browser** — that
+is the real WATCH, it is the human's, and this entry does not claim it.
+
+**And a randomly-sampled still frame almost never contains a moving guest at all.** Comparing the
+50-frame run at `--carry 0.5` against `--carry 1`, **3 of 50 frames** have any figure in a different
+place. That is not a defect; it is 95.47% of guest-ticks being stationary (section 4), and it is why
+the sampled-frame instrument is the wrong one for this goal and the census is the right one.
+
+### 4. THE CENSUS — WHAT FRACTION OF MOVEMENT IS NOW DRAWN
+
+Over `--seed 7 --ticks 2880`, every tick observed, exact deterministic integers:
+
+| | count |
+|---|---|
+| guest-ticks | 35,040 |
+| standing still | 33,454 (95.47%) |
+| arrived this tick (snap, unmarked) | 32 |
+| **moved** | **1,554** |
+| ... drawn as a walk | **898** |
+| ... changed floor (snap, unmarked) | 279 |
+| ... **no walk could be drawn (marked)** | **377** |
+
+**Of same-floor moves, 70.43% are now drawn as a walk and 29.57% still snap.** The 898 walks cross
+2,132 cells and 742 of them are multi-cell, so the drawn movement is overwhelmingly the movement
+that used to teleport furthest.
+
+### 5. THE 29.57% IS THE HUMAN'S OTHER SENTENCE, AND IT IS NOW COUNTED
+
+*"They also seem to jump through walls rather than looking for a door."* Broken down by what the
+guest was standing on and what it landed on, same run:
+
+| | count |
+|---|---|
+| from **another room's footprint** to circulation | 245 |
+| from **its own room** to circulation | 68 |
+| from circulation **into a room** | 64 |
+| step length 2 cells / 3 cells | 23 / 354 |
+
+**309 of the 377 are a monotone route crossing a room that is not the destination** — which is
+exactly the through-wall class. `stepTowards` checks the LANDING and says nothing about the cells
+between (its own docblock: *"nothing in the simulation ... can observe a cell it passed through"*),
+so the renderer asking for a route is the first thing in this project that ever looked. **The marker
+does not fix it — G-046 owns the door question and needs a human ruling — it makes it visible and
+countable for the first time.**
+
+**HOW LOUD IT ACTUALLY IS, because 377 sounds like a lot and is not**: 377 firings spread over 2,880
+ticks and four floors is 0.13 marked guests world-wide at any instant, and each mark lasts one tick.
+In 50 recorded frames it appeared **twice**. At the top rung that is a 33ms magenta blink, which is
+honest and is close to invisible — **the HUD cell and the recorder's `unwalkable N/M` census are the
+readable form of it, and a watcher should read those rather than hunt for diamonds.**
+
+### 6. THE CORRIDOR CLUSTER — THE INHERITED FRAME REFERENCE, ANSWERED HONESTLY
+
+The frame this goal inherited is `.tmp/g061/shipB-long/t005760-f0-reduced.svg`: guests clustered on
+the corridor lanes while a bed stands empty. Reproduced on this tree with `--ticks 5760 --every
+5760`:
+
+> **All eight figure positions are byte-identical to the inherited frame, and identical again at
+> `--carry 0`, `0.5` and `1`.**
+
+`(480,292) (416,324) (672,324) (544,388) (785.5,388) (814.5,388) (721.5,420) (750.5,420)` in all
+four. **Every guest in that frame is STATIONARY**, so there is nothing for interpolation to move.
+
+> **THE CLUSTER READS EXACTLY THE SAME, AND THAT IS THE FINDING RATHER THAN A DISAPPOINTMENT.** It
+> was never a movement artefact. It is where guests STAND — 95.47% of guest-ticks — and the question
+> it raises (why is a guest waiting in a corridor beside an empty bed?) is a simulation question this
+> goal does not touch and could not have touched. **Interpolation was sold on the human's FIRST
+> sentence — "movement is far too fast, people are zooming around" — and it answers that one. It is
+> not an answer to the second, and claiming it would be the ADR-0007 class.**
+
+### 7. FRAME-RATE INDEPENDENCE, MEASURED RATHER THAN ASSERTED
+
+The composed chain — `advance` earning ticks from the wall clock, then `tweenView` placing the guest
+at `carry` — driven at four frame schedules over the same three real seconds at the top rung (30
+ticks/s), one sitting, regime win32/12cpu quiet. The quantity compared is the DRAWN MOMENT
+`tick - 1 + carry` against what the wall clock owes, at every frame of every schedule:
+
+| schedule | frames | worst \|drawn − wallclock\| |
+|---|---|---|
+| 30 Hz | 90 | 1.421e-14 ticks |
+| 60 Hz | 180 | 1.421e-14 ticks |
+| 145 Hz | 435 | 2.132e-14 ticks |
+| 240 Hz | 720 | 1.421e-14 ticks |
+
+Eight times the frame rate, the same drawn moment to within double-precision noise. At 1,000ms the
+60 Hz arm is drawing at tick 28.5 and the 240 Hz arm at 28.875 — **different frames, the same
+function of the clock.** (Run with a temporary probe importing the real `driver.ts` and the real
+`iso.ts`; the probe is deleted, and the pure half of the property is pinned permanently in
+`tools/headless/src/iso.tween.test.ts` because `driver.ts` is on the far side of the `tools/` fence.)
+
+### 8. NOTHING ELSE LOOKED WRONG
+
+`0 invalid` on every floor of every frame across all 50 + 16 + 4. Peak world-wide guests 16 at tick
+1440, unchanged from the before arm, and `guests: peak 16 in one frame` printed on both arms. No
+frame shows a figure outside its own tile's diamond. **No marker fired on a floor change in any
+frame** — 279 climbs over the run, zero marked, which is ADR-0096's first ruling holding.

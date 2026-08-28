@@ -73,6 +73,8 @@ import {
   hasEntity,
 } from '@hotelsim/sim';
 import type { BoundContent, Cell, Entity, Guest, World } from '@hotelsim/sim';
+import { keyOf, UNOBSERVED } from '../motion.js';
+import type { Motion } from '../motion.js';
 import { isRoomEntity } from '../pick.js';
 import { colourOf, createAppearances } from './appearance.js';
 import type { Appearances } from './appearance.js';
@@ -88,19 +90,23 @@ import {
   ITEM_PLATE_PAD,
   ITEM_SIZE,
   neighbourAcross,
+  tileCentre,
   toView,
+  tweenView,
   wallPositionOf,
   WALL_SHADE_HUNDREDTHS,
   FLOOR_SHADE_HUNDREDTHS,
 } from './iso.js';
-import type { Side } from './iso.js';
-import { createPalette, INK } from './palette.js';
+import type { ScreenPoint, Side } from './iso.js';
+import { createPalette, INK, UNKNOWN } from './palette.js';
 import type { Palette } from './palette.js';
 import { shade } from './primitives.js';
 import type { Primitive } from './primitives.js';
 
-/** A cell, as a map key. All four coordinates, because two floors share column and row. */
-const keyOf = (at: Cell): string => `${at.floor},${at.column},${at.row}`;
+// `keyOf` LIVES IN `../motion.js` SINCE G-047b, and is imported rather than spelled twice.
+// The slot a guest occupies in a tile's row is decided by this key at BOTH ends of an
+// interpolation — there for the tick it came from, here for the tick it is going to — and two
+// spellings of one key is how the two ends quietly stop describing the same tile.
 
 /** Up to three initials of the type's NAME, read from content. Never an id (ADR-0003), and
  *  never a literal: a rebalance that renames a room renames its badge. */
@@ -146,6 +152,17 @@ export type SceneReport = {
   readonly invalidRooms: number;
   /** Guests standing on a floor that is NOT being drawn. See `hud.ts`. */
   readonly guestsElsewhere: number;
+  /**
+   * Guests DRAWN ON THIS FLOOR whose walk between the last tick and this one could not be
+   * drawn — `pathBetween` found no shortest route (G-047b, ADR-0095's second binding
+   * condition: *"a failed lookup is LOUD — a visible marker and a recorded count, NEVER a
+   * silent straight line"*).
+   *
+   * IT MEANS *"I CANNOT DRAW A WALK HERE"*, NEVER *"the simulation did something illegal."*
+   * See `SnapReason` in `../motion.js`, which states the difference at length. Always zero
+   * when the scene is built with no `Motion` — a snapshot has no previous tick to walk from.
+   */
+  readonly unwalkable: number;
 };
 
 export type Frame = {
@@ -168,7 +185,38 @@ export type Frame = {
 export type Scene = {
   readonly palette: Palette;
   readonly appearances: Appearances;
-  build: (world: World, view: View) => Frame;
+  /**
+   * `motion` and `carry` are how the picture is drawn ONE TICK BEHIND (ADR-0096 ruling 3).
+   *
+   * ==========================================================================================
+   * THE BODY IS DRAWN AT `world.tick - 1 + carry`; EVERYTHING ELSE IS `world.tick`. A tween
+   * needs both ends of a move and the simulation only ever hands over one world at a time, so
+   * the only way to draw a guest part of the way along a walk is to draw the move that has
+   * ALREADY HAPPENED as it is being paid off. That is frame-rate independent by construction —
+   * `carry` is the driver's fractional tick, earned from ticks per real SECOND — and it is not
+   * a boundary violation: `driver.carry` already lives render-side and `stepTick`'s argument
+   * list is untouched.
+   *
+   * THREE CONSEQUENCES, OWNED RATHER THAN DISCOVERED:
+   *
+   *   1. The previous cell comes from `observeMotion`, once per tick. There is no second
+   *      history and no world held between frames.
+   *   2. `restIdle` ZEROES THE CARRY, so pausing, resuming, changing rung or hiding the tab
+   *      puts the bodies back at `tick - 1` — a snap of at most one tick's travel. It is the
+   *      price of not spending, on the first frame after a resume, all the time the game sat
+   *      still.
+   *   3. THE HUD PRINTS `world.tick` WHILE THE BODIES STAND AT `tick - 1 + carry`, so it prints
+   *      BOTH (`hud.ts`, the `tick` cell). A one-minute discrepancy between the clock and the
+   *      figures is exactly the sort of thing a first WATCH reports as a defect, so it is on
+   *      screen rather than in a comment.
+   *
+   * BOTH DEFAULT, AND THE DEFAULTS ARE THE PICTURE THIS FUNCTION DREW BEFORE G-047b. With no
+   * `Motion` and `carry = 1` every guest stands on `guest.at` at `world.tick`, which is what a
+   * SNAPSHOT means and what `record-frames.ts` has always written. `tweenView` clamps `t` to 1
+   * and lands exactly on the route's last tile, so that is an identity rather than a near miss.
+   * ==========================================================================================
+   */
+  build: (world: World, view: View, motion?: Motion | null, carry?: number) => Frame;
 };
 
 export function createScene(content: BoundContent, sprites: ReadonlyMap<string, string>): Scene {
@@ -176,7 +224,18 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
   const palette = createPalette(content);
   const appearances = createAppearances(palette, sprites);
 
-  const build = (world: World, view: View): Frame => {
+  const build = (world: World, view: View, motion: Motion | null = null, carry = 1): Frame => {
+    // THE MOTION MUST DESCRIBE THE ARRIVAL OF *THIS* TICK, AND A MISMATCH THROWS.
+    //
+    // `commandsFor` (session.ts) already throws when it is asked twice for one tick or asked
+    // to go backwards, for this reason exactly: a lockstep contract that is only DESCRIBED is
+    // a contract that breaks quietly. A stale `Motion` would draw every guest along the route
+    // it took on some earlier tick — a picture of a hotel that never existed, in the file whose
+    // header promises the drawing is a function of the world handed in. `UNOBSERVED` is the one
+    // legal disagreement: the frames before the first tick has run.
+    if (motion !== null && motion.tick !== world.tick && motion.tick !== UNOBSERVED) {
+      throw new Error(`scene.build: motion describes tick ${motion.tick}, world is at ${world.tick}`);
+    }
     const collector = createCollector<Primitive>();
     const labels: Primitive[] = [];
     const entrance = entranceCell(world.grid);
@@ -268,6 +327,7 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
     let roomsHere = 0;
     let invalidRooms = 0;
     let crowdedOut = 0;
+    let unwalkable = 0;
 
     for (let column = view.minColumn; column <= view.maxColumn; column += 1) {
       for (let row = view.minRow; row <= view.maxRow; row += 1) {
@@ -338,7 +398,21 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
 
         const here = standing.get(key);
         if (here !== undefined) {
-          crowdedOut += drawStandingGuests(collector, labels, view, content, palette, world, here, cell, depth);
+          const drew = drawStandingGuests(
+            collector,
+            labels,
+            view,
+            content,
+            palette,
+            world,
+            here,
+            cell,
+            depth,
+            motion,
+            carry,
+          );
+          crowdedOut += drew.crowdedOut;
+          unwalkable += drew.unwalkable;
         }
       }
     }
@@ -346,7 +420,7 @@ export function createScene(content: BoundContent, sprites: ReadonlyMap<string, 
     return {
       shapes: collector.take(),
       labels,
-      report: { view, crowdedOut, rooms: roomsHere, invalidRooms, guestsElsewhere },
+      report: { view, crowdedOut, unwalkable, rooms: roomsHere, invalidRooms, guestsElsewhere },
     };
   };
 
@@ -821,7 +895,8 @@ function drawItems(
 }
 
 /**
- * A row of guests standing on one tile, feet on the tile's centre line.
+ * A row of guests standing on one tile, feet on the tile's centre line — **each of them drawn
+ * where it is at `world.tick - 1 + carry`, not where it lands** (G-047b).
  *
  * THE PITCH IS DRIVEN BY THE NEED VECTOR, NOT BY THE BODY — inherited as a finding from
  * `drawGuests` in `viewer.js`, measured at `--rooms 2 --arrivals 20` frame 2600: seven guests
@@ -830,6 +905,34 @@ function drawItems(
  *
  * Returns how many did not fit, so the HUD can say so. A guest that is not drawn must be
  * COUNTED — silently dropping one is the difference between an instrument and a decoration.
+ *
+ * ==========================================================================================
+ * THE TILE STILL DECIDES THE CROWD; IT NO LONGER DECIDES THE PLACE.
+ *
+ * WHICH GUESTS ARE DRAWN IS EXACTLY WHAT IT WAS. Guests are bucketed by `keyOf(guest.at)` at
+ * `world.tick`, the pitch and the tile's capacity are computed from that bucket, and
+ * `crowdedOut` is `guests.length - drawn`. Every one of those sentences was true before this
+ * goal and is true after it; `crowdedOut`'s definition has not moved.
+ *
+ * WHERE A DRAWN GUEST IS PUT IS THE PART THAT CHANGED, and it is ONE expression:
+ *
+ *     route(carry) + lerp(offset(previous slot), offset(this slot), carry)
+ *
+ * BOTH TERMS ARE INTERPOLATED AND THAT IS THE WHOLE OF ADR-0096's FIFTH POINT. A guest
+ * interpolated perfectly in cell space would still jump one pitch at every tick boundary if
+ * its place in the ROW snapped, so the slot is the second term of the same interpolation
+ * rather than a decoration on top of it. At `carry = 1` the expression is `cell(N) +
+ * offset(N)`, which is the pixel this function chose before G-047b, and it is also what the
+ * next tick's `carry = 0` produces — the two ticks meet at the boundary by construction.
+ *
+ * THE PREVIOUS SLOT IS EVALUATED WITH **THIS** TILE'S PITCH AND CAPACITY, and the residual is
+ * stated rather than hidden: if the tile a guest came from held guests with a DIFFERENT number
+ * of needs, its pitch differed, and the guest's offset at `carry = 0` is then a few pixels
+ * from where the previous frame left it. Every guest formed under one content revision carries
+ * the same needs, so on any world this project builds the two pitches are equal and the
+ * residual is exactly zero. Carrying a per-tile pitch across a tick to close a gap that is
+ * empty on every shipped world would be state held for a case nobody can produce.
+ * ==========================================================================================
  */
 function drawStandingGuests(
   collector: ReturnType<typeof createCollector<Primitive>>,
@@ -841,7 +944,9 @@ function drawStandingGuests(
   guests: readonly Guest[],
   cell: Cell,
   depth: number,
-): number {
+  motion: Motion | null,
+  carry: number,
+): { readonly crowdedOut: number; readonly unwalkable: number } {
   const geometry = guestGeometry(view.scale);
   const centre = centreOf(view, cell.column, cell.row);
   // Four fifths of the tile's screen width, so a guest at either end is still inside its own
@@ -855,23 +960,51 @@ function drawStandingGuests(
   const pitch = Math.max(geometry.bodyWidth, needVectorWidth(longestVector, geometry)) + 5;
   const room = Math.max(1, Math.floor(width / pitch));
   const drawn = Math.min(room, guests.length);
-  const x0 = centre.x - ((drawn - 1) * pitch) / 2;
+  // THE BODY'S MOMENT, AND THE FUSE IS FED THE SAME ONE. `lobbyFractionOf` is a continuous
+  // function of the tick and is the ONE quantity in `guest.ts` where interpolation is correct
+  // — need columns and occupancy pips are not, because easing either invents a reading the
+  // simulation never held (§6.1). A fuse drawn at `world.tick` under a body drawn at
+  // `tick - 1 + carry` would have the figure and its clock disagreeing about what moment is on
+  // screen, which is the kind of half-repair that reads as two bugs.
+  const drawnTick = motion === null ? world.tick : world.tick - 1 + carry;
+  let unwalkable = 0;
   for (let i = 0; i < drawn; i += 1) {
     const guest = guests[i];
     if (guest === undefined) continue;
+    const record = motion?.guests.get(guest.id);
+    // THE SLOT THIS GUEST IS GOING TO, IN PIXELS ABOUT THE TILE'S CENTRE. `x0 + i * pitch` is
+    // the same number written the way the row reads; this is it written the way it interpolates.
+    const here = (i - (drawn - 1) / 2) * pitch;
+    const wasDrawn = record === undefined ? drawn : Math.min(room, record.from.count);
+    const wasAt =
+      record === undefined ? here : (Math.min(record.from.index, wasDrawn - 1) - (wasDrawn - 1) / 2) * pitch;
+    const offset = wasAt + (here - wasAt) * carry;
+    const route = record?.cells;
+    // A SNAP (`route` absent) AND A STANDING GUEST (one cell) LAND ON THE SAME LINE, and they
+    // are the same picture: the tile's centre. The difference between them is the marker below,
+    // not the position — a guest that changed floor and a guest that did not move are both
+    // exactly where the simulation says they are.
+    const place =
+      route === undefined || route === null || route.length < 2
+        ? { point: centre, depth }
+        : along(view, route, carry);
     const out: Primitive[] = [];
     drawGuest(
       out,
       content,
       palette,
       guest,
-      x0 + i * pitch,
-      centre.y,
+      place.point.x + offset,
+      place.point.y,
       geometry,
-      world.tick,
+      drawnTick,
       facingOf(guest.at, lookedAtBy(world, guest)),
     );
-    for (const shape of out) collector.add(depth, LAYER.guest, shape);
+    for (const shape of out) collector.add(place.depth, LAYER.guest, shape);
+    if (record?.reason === 'unwalkable') {
+      unwalkable += 1;
+      drawUnwalkable(collector, place.point.x + offset, place.point.y, geometry.bodyWidth, place.depth);
+    }
   }
   const crowdedOut = guests.length - drawn;
   if (crowdedOut > 0) {
@@ -886,7 +1019,65 @@ function drawStandingGuests(
       anchorY: 1,
     });
   }
-  return crowdedOut;
+  return { crowdedOut, unwalkable };
+}
+
+/**
+ * Where a guest standing `carry` of the way along `route` is, and how deep it is in the scene.
+ *
+ * THE DEPTH IS THE INTERPOLATED TILE'S, NOT THE BUCKET'S. `depthOf` is `u + v` and this is the
+ * same sum over a fractional view tile, so a guest walking toward the camera passes in front of
+ * the things it has passed and behind the things it has not. A stationary guest's route is one
+ * cell, this function is not called for it, and its depth is the tile's exactly as before — so
+ * nothing that stands still moved in the draw order.
+ */
+function along(view: View, route: readonly Cell[], carry: number): { readonly point: ScreenPoint; readonly depth: number } {
+  const tiles = route.map((step) => toView(step.column, step.row, view.orientation));
+  const at = tweenView(tiles, carry);
+  return { point: toCanvas(view, tileCentre(at.u, at.v)), depth: at.u + at.v };
+}
+
+/**
+ * THE CANNOT-DRAW-A-WALK MARKER (ADR-0095's second binding condition, ADR-0096's correction).
+ *
+ * ==========================================================================================
+ * WHAT IT MEANS, IN ONE SENTENCE: **the renderer could not find a route to draw between where
+ * this guest was and where it now is.** It does NOT mean the simulation made an illegal move,
+ * and nothing in this layer is entitled to say that — `stepTowards` checks the LANDING and says
+ * nothing about the cells between, `pathBetween` refuses a route that only exists by doubling
+ * back, and the renderer cannot see the engagement state the simulation resolves a destination
+ * from. `SnapReason` in `../motion.js` states the difference at length.
+ *
+ * IT IS MAGENTA FOR `guest.ts`'s REASON, WHICH IS ALREADY THE RULE IN THIS RENDERER: a need the
+ * content cannot name fills its column `UNKNOWN`, "unanswerable, and loud about it". This is the
+ * same class of statement about a different question, so it gets the same colour rather than a
+ * second vocabulary. It is deliberately NOT `INK.alarm`: alarm means the HOTEL is in trouble,
+ * and this means the PICTURE is.
+ *
+ * A RING UNDER THE FEET, NOT A LINE FROM WHERE THE GUEST WAS. Drawing that line is precisely
+ * what ADR-0095 forbids — *"a renderer that quietly draws a straight line through a wall when
+ * the path lookup fails is a UI drawing a state the sim cannot reach"* — and a mark that
+ * implied a route would be that line with extra steps. The guest is drawn where the simulation
+ * put it and the mark says the journey is missing.
+ *
+ * AND IT IS COUNTED AS WELL AS DRAWN: `SceneReport.unwalkable` for this floor, `Motion.unwalkable`
+ * for the world. A mark with no count is a thing a watcher has to notice; a count is a thing a
+ * report can carry.
+ * ==========================================================================================
+ */
+function drawUnwalkable(
+  collector: ReturnType<typeof createCollector<Primitive>>,
+  x: number,
+  y: number,
+  bodyWidth: number,
+  depth: number,
+): void {
+  const half = bodyWidth / 2 + 3;
+  collector.add(depth, LAYER.guest, {
+    kind: 'poly',
+    points: [x - half, y, x, y - half / 2, x + half, y, x, y + half / 2],
+    stroke: { width: 2, colour: UNKNOWN },
+  });
 }
 
 /**
