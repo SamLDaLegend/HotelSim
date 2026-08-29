@@ -27,11 +27,12 @@ import {
   parseSpeedLadder,
   parseStaffRoles,
   parseDemand,
+  parseGuestRemarks,
   parseStarTiers,
 } from '@hotelsim/content';
-import type { SpeedRung } from '@hotelsim/content';
-import { bindContent } from '@hotelsim/sim';
-import type { BoundContent, SimContent } from '@hotelsim/sim';
+import type { GuestRemark, SpeedRung } from '@hotelsim/content';
+import { bindContent, bindGuestRemarks } from '@hotelsim/sim';
+import type { BoundContent, GuestRemarkData, RemarkBook, SimContent } from '@hotelsim/sim';
 
 import economyJson from '@hotelsim/content/data/economy.json';
 import guestRulesJson from '@hotelsim/content/data/guest-rules.json';
@@ -43,6 +44,7 @@ import staffRolesJson from '@hotelsim/content/data/staff-roles.json';
 import starTiersJson from '@hotelsim/content/data/star-tiers.json';
 import demandJson from '@hotelsim/content/data/demand.json';
 import speedLadderJson from '@hotelsim/content/data/speed-ladder.json';
+import guestRemarksJson from '@hotelsim/content/data/guest-remarks.json';
 
 /**
  * The shipped content, validated and bound for injection.
@@ -135,4 +137,37 @@ export function loadSpriteRefs(): ReadonlyMap<string, string> {
     if (itemType.sprite !== undefined) refs.set(itemType.id, itemType.sprite);
   }
   return refs;
+}
+
+/**
+ * WHAT A DEPARTING GUEST SAID, AS A BOOK THIS BUILD CAN SPEAK FROM (G-066b).
+ *
+ * ---------------------------------------------------------------------------------------
+ * IT IS A THIRD LOADER AND NOT A FIELD ON `SimContent`, AND THE REASON IS G-065's RULING.
+ *
+ * `guest-remarks.json` is deliberately OUTSIDE `bindContent`'s fingerprint. `World.contentHash`
+ * is that fingerprint and `assertContentMatches` compares it on EVERY TICK, so a punchline
+ * inside it would mean REWORDING A JOKE INVALIDATES EVERY SAVE AND MOVES EVERY DETERMINISM
+ * HASH. Nothing the simulation decides reads a remark, so the table is loaded by whoever
+ * intends to SHOW one — which, in the browser, is this file.
+ *
+ * `loadSpeedLadder` above is the same arrangement taken for a different reason, and the two
+ * together are why `loadContent` is not the only door in here.
+ *
+ * THE RETURN TYPE IS THE CROSS-CHECK, exactly as `loadGuestRemarksFrom` in the headless host
+ * states: the parsed `GuestRemark[]` is assigned into `packages/sim`'s structurally-declared
+ * `GuestRemarkData[]` before it is bound, so ADR-0001's two shapes are kept in step HERE, at
+ * compile time, rather than by a rule somebody has to remember.
+ *
+ * IT RETURNS A BOUND BOOK AND NEVER A BARE ARRAY. `bindGuestRemarks` refuses a table with a
+ * hole in it — a score, or a score-and-need cell, that no row can answer — at STARTUP, with
+ * the missing cell named, rather than at the moment a particular guest happens to leave with
+ * a particular grievance. That is `assertNeedsAreSatisfiable`'s discipline applied to the
+ * hotel's voice, and a `RemarkBook` is a type there is no other way to obtain.
+ * ---------------------------------------------------------------------------------------
+ */
+export function loadRemarkBook(content: BoundContent): RemarkBook {
+  const parsed: readonly GuestRemark[] = parseGuestRemarks(guestRemarksJson, 'guest-remarks.json');
+  const remarks: readonly GuestRemarkData[] = parsed;
+  return bindGuestRemarks(content, remarks);
 }

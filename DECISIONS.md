@@ -10181,3 +10181,95 @@ M0 sign-off"*, and `render-engineer.md` carries a blocking obligation *"on M5"* 
 because M5 never opens.
 
 **The human sign-off and the milestone question are kept. The sequencing is what is dropped.**
+
+---
+
+## ADR-0106 — A PARKED FALSIFICATION TEST IS A CONDITION FOR A BELIEF, NOT A TARGET FOR A BUILD. Promoting one to an exit criterion imports an arithmetic nobody checked.
+
+**Ruled 2026-08-29 at G-066b's VERIFY, by the orchestrator, against the orchestrator's own brief.**
+Found by the builder, confirmed independently by measurement before it was accepted.
+
+### What happened
+
+WATCH #34 parked the G-066a finding *"the feed repeats itself"* **with its falsification test
+already run**, exactly as §4 requires: *refuted when a 30+-record feed shows more than half
+distinct lines; current readings 3/32 and 1/4.*
+
+At G-066b I promoted that sentence verbatim into the goal block as **exit criterion 2**. It is not
+satisfiable, and the reason is arithmetic that was available before the goal was written.
+
+`spokenRemarkFrom`'s only variation source is `nthTied`, which returns `guestId % tied` among rows
+of equal rank. So for any window of records:
+
+> **distinct ≤ Σ over cells of min(records in that cell, k)**, where k is rows per cell.
+
+**Confirmed at two points with no residual**, paired, one sitting, k=1 against k=4: the healthy arm
+(`--days 30 --seed 42 --rooms 12 --facilities 1 --amenities 2 --demand`, 48 records over 3 cells)
+read **3 -> 12**, which is exactly 3k; the starved arm (`--rooms 1 --amenities 0`, 40 records in
+ONE cell) read **1 -> 4**, which is exactly k.
+
+So *"more than half of 40 in one cell"* requires **k >= 21, which is 525 rows**, and the healthy arm
+requires **k >= 9, which is 225 rows**. My criterion demanded two hundred to five hundred lines of
+comedy prose written to move a ratio — **§9's stop condition in as many words**: *coverage being
+added to satisfy a number rather than to pin behaviour.*
+
+**And it contradicted itself**: it said *"at BOTH arms above"* while naming as its second arm the
+one that *"read 1/4"* — a **4-record** feed, not a 30+-record one. The criterion could not be
+applied to the arm the same paragraph named for it.
+
+### The ruling, and it is not about the arithmetic
+
+**A falsification test and an exit criterion do different jobs, and a sentence that is sound as one
+can be incoherent as the other.**
+
+- A **falsification test** asks *what reading would make me abandon this belief?* It is allowed to
+  be unreachable. An unreachable falsification test is not broken — it means the hypothesis is hard
+  to kill, which is information.
+- An **exit criterion** asserts *this is achievable and the goal is not done until it is achieved.*
+  It carries a feasibility claim that a falsification test never made.
+
+**Promoting the first to the second silently manufactures that feasibility claim**, and nobody
+checks it, because the sentence already had standing from being parked. It arrived pre-approved.
+
+> **A parked test earns its standing from having been WRITTEN BEFORE THE FIX. It does not thereby
+> earn standing as a TARGET.** The check when promoting one is the check nobody ran here: *what
+> value of the thing I control would satisfy this, and is that value sourceable?*
+
+### The second half, which outranks the first: IT MEASURED THE WRONG THING
+
+Satisfiability is not the deepest defect. **"Fraction of distinct lines in a 40-record window" and
+"the panel in front of me repeats itself" diverge exactly when the hotel is UNIFORMLY BAD** — and a
+one-room hotel with no amenities producing forty near-identical complaints is **the simulation
+telling the truth**, not a content defect. The metric would have punished the sim for being right.
+
+**The replacement is better in KIND, not merely reachable**, and is the builder's:
+
+> *No two lines visible on the panel at one time are word-for-word identical, in the worst case the
+> simulation produces — every record in one `(score, needId, hours)` cell.*
+
+The panel shows 4, so the table carries **k = 4**, which is 100 rows. **The requirement is
+player-facing, the number falls out of the panel, and the panel size is labelled a LAYOUT decision
+rather than a derived one** — §2.1 governs numbers a gate compares against, and nothing compares
+against this. That labelling is correct and is adopted.
+
+### What the orchestrator's own verification added, and it narrows the builder's claim
+
+The builder called the no-repeat property **guaranteed** on three end-state observations. **It is
+not guaranteed, and the distinction is where the property lives**: no-repeat rests on the ring's
+guest ids being spread across residues mod 4, which is a property of **arrival ordering**, not of
+the selector. `nthTied` returns one line four times for ids 4/8/12/16 in a single cell.
+
+**Measured rather than argued, over EVERY window of 4 consecutive ring entries across a run and not
+only the last**: five arms (healthy; starved at seeds 42, 7, 13, 99), **193 windows, worst-case
+collisions ZERO**. Probe deleted after reading; it created no file it did not remove.
+
+**So the standing claim is "measured zero over 193 windows and five arms", NOT "guaranteed".**
+Parked with its falsification test: *a panel window whose four guest ids are congruent mod 4.*
+
+### Third instance of one move
+
+ADR-0013 (a perceptual criterion needs a perceptual check), ADR-0086 (a gate's name is a claim
+about one clause), and now this. **Every one is a sentence that was true in the job it was written
+for and false in the job it was moved to.** The general form: *a claim's warrant does not travel
+with its words.*
+

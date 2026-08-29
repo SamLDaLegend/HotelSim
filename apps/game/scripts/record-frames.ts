@@ -72,12 +72,16 @@ import type { World } from '@hotelsim/sim';
  * no DOM lib; `src/content.ts` names no DOM type, so it compiles under both configs.
  * ==========================================================================================
  */
-import { loadContent, loadSpriteRefs } from '../src/content.js';
+import { loadContent, loadRemarkBook, loadSpriteRefs } from '../src/content.js';
 import { createMotion, observeMotion } from '../src/motion.js';
 // THE SAME WORDS THE HUD PRINTS (G-062), from the same function. A recorded frame is the
 // surface of record for a WATCH, and a caption that described the rating in its own phrasing
 // would be a second opinion about the thing the player is actually shown.
 import { describeRating } from '../src/rating.js';
+// AND THE SAME LINES THE FEED PRINTS (G-066b), from the same formatter, for the reason above
+// it: a recorded frame has no HUD, and a caption that phrased a guest's review in its own
+// words would be a second opinion about the thing the player is actually shown.
+import { describeFeed, REMARKS_SHOWN } from '../src/remarks.js';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, escape, frameSvg, hex } from './svg.js';
 import { createScenario } from '../src/scenario.js';
 import { floorsOf, guestsOnFloor, viewFor } from '../src/view/camera.js';
@@ -163,6 +167,10 @@ const scenarioAt = createScenario(content, world.grid);
 // substitute — the substitution is invisible until the day it is not, which is the same shape
 // as the withheld demand curve above.
 const scene = createScene(content, loadSpriteRefs());
+// THE BOOK THE BROWSER BINDS, through the game's own loader. Same argument as the content
+// above: a second path to the remark table is a second place for the recording and the screen
+// to disagree about what a guest said.
+const remarkBook = loadRemarkBook(content);
 const cache = createValidityCache();
 /**
  * HOW EVERY GUEST GOT FROM ONE TICK TO THE NEXT (G-047b), fed from the same two worlds
@@ -254,7 +262,16 @@ for (let tick = 0; tick <= ticks; tick += 1) {
       // travel with the picture, from the same `describeRating` the HUD calls.
       // ==================================================================================
       const rating = describeRating(content, frame.report.rating);
+      // WHAT THE LAST FEW DEPARTURES SAID (G-066b), NEWEST FIRST AND ABOVE THE RATING.
+      //
+      // It goes at the TOP of the block because `frameSvg` stacks upward from the bottom: the
+      // census line keeps the exact y it has had since G-035 and the rating lines keep theirs,
+      // so a frame taken today is still comparable by eye with every frame in this project's
+      // recordings. An empty feed contributes no lines at all, which is why a hotel nobody has
+      // left yet writes the caption it always wrote.
+      const feed = describeFeed(content, remarkBook, current.recentRemarks, REMARKS_SHOWN);
       const caption = [
+        ...feed.map((line) => `said ${line.score}  ${line.text}`),
         `stars ${rating.stars} · next ${rating.next}`,
         rating.earnedBy === null ? '' : `earned by ${rating.earnedBy}`,
         `tick ${current.tick} · floor ${floor} · walls ${walls} · bodies at ` +

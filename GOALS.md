@@ -1835,6 +1835,128 @@ G-065 reported a seam rather than crossing it: `reviewOutcomes` is a bare histog
 
 I told the builder *"do not touch the ledgers"* **and** *"run `pnpm verify`"*. **`check:stamp` compares the four digests against `SAVE_SCHEMA_VERSION` and the measure golden, and I4 re-runs that same gate** — so **any goal that bumps the save version or moves a golden makes two rows red until REFLECT moves the ledgers.** The builder reported `EXIT=1` with 13 of 15 rows green and named the single cause rather than editing a ledger it had been forbidden. **This is structural for every future save-bump goal, not a one-off**, and the remedy is that the ORCHESTRATOR runs the digest update as part of VERIFY rather than treating a red stamp row as the builder's failure.
 
+## G-066b — The player reads what guests said, and the tie-break finally has a tie
+Status: **DONE 2026-08-29.** Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
+
+> **EXIT CRITERION 2 AS WRITTEN BELOW IS UNSATISFIABLE AND IS STRUCK — see ADR-0106.** It demanded
+> **k >= 21, which is 525 rows** of comedy prose at the starved arm, because `distinct <= sum over
+> cells of min(records in cell, k)` and 40 records land in ONE cell. **It also measured the wrong
+> thing**: a one-room hotel producing forty near-identical complaints is the simulation telling the
+> truth, and the metric would have punished it for that. **Replaced by the requirement the number
+> falls out of**: *no two lines visible on the panel at once are word-for-word identical, in the
+> worst case the sim produces.* The panel shows 4, so the table carries **k = 4** — 25 cells x 4 =
+> **100 rows**. The panel size is labelled a LAYOUT decision, not a derived one, and that labelling
+> is correct: §2.1 governs numbers a gate compares against and nothing compares against this.
+
+**Shipped**: `guest-remarks.json` 25 -> 100 rows, every original row untouched, each gaining three
+siblings **in the same cell at the same `minUnservedHours` gate** (a differing gate wins outright
+rather than ties, so a sibling at another gate creates no tie). New `apps/game/src/remarks.ts`
+exposing `describeFeed`, which calls `spokenRemarkFrom` and **holds no selection of its own** —
+G-066a's one-path argument survives intact. `bindGuestRemarks` wired in `apps/game` for the first
+time. Panel absolutely positioned inside `#stage`, `pointer-events: none` so a build drag passes
+through, `r` collapses it.
+
+**PREDICTED-UNMOVED, ASSERTED RATHER THAN ASSUMED**, paired by stash on one tree: `sim:run --ticks
+100000 --seed 7` -> `49f7d3b43655a4e8` **byte-identical**; the whole `--days 30 --seed 42 --json`
+document **byte-identical**, so `contentHash`, summary schema 4 and every economic figure are
+unmoved. `SAVE_SCHEMA_VERSION` still **25** — no bump appeared, and none was wanted. **75 new rows
+were free because G-065 ruled the table OUTSIDE `contentHash`**, which is that ruling paying for
+itself one goal later.
+
+**THE ORCHESTRATOR NARROWED THE BUILDER'S CENTRAL CLAIM.** It called no-repeat **guaranteed** on
+three end-state readings. It is not: the property rests on ring guest ids spreading across residues
+**mod 4**, which is a fact about ARRIVAL ORDERING and not about the selector — `nthTied` returns one
+line four times for ids 4/8/12/16 in a single cell. Re-measured over **every** window of four
+consecutive ring entries rather than only the last: **five arms (healthy; starved at seeds 42, 7, 13,
+99), 193 windows, worst-case collisions ZERO.** The standing claim is therefore **"measured zero over
+193 windows and five arms", NOT "guaranteed"**, and the failure case is parked with its falsification
+test: *a panel window whose four guest ids are congruent mod 4.*
+
+**WATCH #35 — and the orchestrator saw this game render for the first time.** WATCH #33's *"nobody
+but the human has seen this build render"* is retired. The panel's EMPTY state is evidenced in
+pixels; **the POPULATED panel is not**, because the pane throttles rAF to 7fps and the sim advanced
+0.5 ticks/s against a nominal 30, putting the first check-out ~45 real minutes away. `driver.ts`'s
+`MAX_BACKLOG_SECONDS = 1` is NOT the cause. **E-013 read 36.1% stage / 63.9% HUD at a 404px pane**,
+and a SECOND mechanism appeared that no rebalancing fixes: **HUD rows CLIP rather than wrap**
+(`rooms 9/9 valic`, `Games Room £2,50`). Neither is G-066b's doing — its own cost is 10.0% of the
+stage by area and zero grid rows.
+
+Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
+
+The human asked for the feed — *"agreed with needing a review feed"* — and G-066a bought the
+storage for it. This goal spends it: `world.recentRemarks` becomes something a player can read,
+and the table stops repeating itself before anyone reads it.
+
+**TWO HALVES, ONE GOAL, AND THE SEAM IS NAMED RATHER THAN TAKEN.** The content half (rows in
+`guest-remarks.json`) and the render half (a HUD panel) are independent — neither compiles against
+the other. **Declining the split is a judgement and carries its prediction, scored at REFLECT: a
+feed shipped on the current table shows THREE distinct lines across THIRTY-TWO departures
+(WATCH #34, measured), and a character surface that repeats itself is worse than no character
+surface.** They ship together or the goal has not been done. If the render half runs long, the
+content half is what survives a split, because it is the one with a measured defect behind it.
+
+### The defect, read out of the bytes rather than inferred
+
+`guest-remarks.json` is 25 rows: 5 scores x (4 needs + 1 generic), **exactly one row per cell,
+every cell.** `spokenRemarkFrom` selects on `(score, needId, hours)` and then breaks ties with
+`nthTied`, which picks `guestId % tied` among rows of equal rank.
+
+> **`nthTied` IS LIVE CODE THAT HAS NEVER HAD A TIE TO BREAK.** `chosen = tied === 1 ? best :
+> nthTied(...)` (reviews.ts:1282) and `tied` is 1 for every cell in the shipped table. **The
+> number of distinct lines a feed can show equals the number of distinct `(score, needId)` pairs
+> among its records — no more, ever.** That is 3/32 and 1/4 exactly.
+
+**So the content half adds rows and writes NO code**, and its diff is I3 data with zero `packages/sim`
+change. Predicted: I2, `contentHash`, save v25 and the measure golden all unmoved — `guest-remarks.json`
+is outside `contentHash` by G-065's ruling, which is the property that makes this cheap.
+
+### The target is DERIVED, and it is measured rather than computed (§2.1)
+
+**The criterion already has standing because it was written before the fix**, which is the right
+order: WATCH #34 parked *"refuted when a 30+-record feed shows more than half distinct lines"*.
+That is the exit criterion. Current readings: **3/32 and 1/4.**
+
+**IT MUST BE MEASURED, NOT ARITHMETIC.** Variation keys on `guestId % tied`, so distinct-line
+count in a window is a function of the guest-id distribution as well as of rows-per-cell — two
+guests four apart say the same thing at `tied = 2`. **Deriving k by division would be a number
+nobody can source (§2.1).** The procedure: add rows, run the feed at both arms, read the ratio,
+add more if short. Report `k` as what the measurement forced, not as what was chosen.
+
+**Both arms, because they fail differently**: a healthy hotel (`--rooms 12 --facilities 1
+--amenities 2 --demand`) concentrates on high scores; a starved one concentrates on ONE cell and
+is the harder arm — it read 1/4.
+
+### The render half
+
+`apps/game/src` **references remarks NOWHERE** — verified, zero hits — so nothing here is a rebuild
+of a shipped surface, and the G-063 error class does not apply. `rating.ts` is the pattern: a
+small module owning one HUD region, built from world state each frame.
+
+- The panel reads `world.recentRemarks` and renders through `spokenRemarkFrom` **and no second
+  selection path** — G-066a's whole design argument is that there is one, and a HUD that
+  re-implements selection would spend it.
+- **`bindGuestRemarks` must be called in `apps/game`**, which today it is not. That is the one
+  wiring step.
+- E-013 is live and unclosed: the HUD already takes **45% of a 580px pane** (WATCH #33). **A new
+  panel makes a measured, open complaint worse, so it states its cost in cells and stays
+  collapsible or bounded.** Do not silently grow the HUD.
+
+### Exit criteria — commands, not adjectives
+
+1. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **No save bump is expected;
+   if one appears, stop — this goal has no reason to move the schema.**
+2. A 30+-record feed renders **more than half distinct lines**, at BOTH arms above, with the raw
+   counts recorded. This is WATCH #34's own falsification test and it is being RUN, not re-parked.
+3. `check:ladder` and `check:unpinned` green over the new `apps/game` module.
+4. **WATCH #35**: a recording in which the panel is legible, with the frame reference. A
+   perceptual claim needs a perceptual check (ADR-0013) and *"the feed reads as characterful"* is
+   a perceptual claim.
+
+### What is NOT in this goal
+
+Player-authored anything, sentiment beyond the five bands, a scrollback longer than the ring, and
+any change to `reviews.ts` selection. The ring is 48 and stays 48.
+
 ## G-061 — The scenario seeds facilities, and the fourth star stops losing money
 Status: **DONE 2026-08-28, `dd681cf`.** Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
 

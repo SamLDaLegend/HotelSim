@@ -28,6 +28,7 @@ import {
 import type { BoundContent, Guest, RoomTypeData, StarRating, World } from '@hotelsim/sim';
 import type { SpeedRung } from '@hotelsim/content';
 import { describeRating } from './rating.js';
+import type { FeedLine } from './remarks.js';
 import { describeAction } from './session.js';
 import type { ResolvedAction } from './session.js';
 import type { Tool } from './input.js';
@@ -340,6 +341,79 @@ export function renderGuestPositions(host: HTMLElement, world: World, limit: num
   }
   const shown = guests.slice(0, limit).map(describeGuestPosition).join('   ');
   host.textContent = guests.length > limit ? `${shown}   … +${guests.length - limit} more` : shown;
+}
+
+/**
+ * THE REVIEW FEED — what the last few departures said (G-066b).
+ *
+ * ---------------------------------------------------------------------------------------
+ * IT IS DRAWN OVER THE STAGE AND COSTS THE HUD ZERO CELLS, WHICH IS E-013's ANSWER.
+ *
+ * E-013 is an OPEN human complaint that the chrome already takes 45% of a 580px pane
+ * (WATCH #33), and the ruling that produced this layout was "fine for it to be at the top,
+ * everything else is". A new chrome row would have made a measured, open complaint worse by
+ * four more lines. So `#remarks` is absolutely positioned INSIDE `#stage`, which has carried
+ * `position: relative` since G-030: the grid gains no row, every existing control keeps its
+ * distance from the top of the page, and the cost is a corner of the picture instead.
+ *
+ * IT IS COLLAPSIBLE AND IT SAYS SO. `r` toggles it, and the header carries the key exactly as
+ * the HUD's `walls` cell carries `(w)` and for that cell's stated reason: a control the player
+ * cannot see the state of is a control they have to discover by pressing it. Collapsed, the
+ * header stays — one line — so the control is never invisible.
+ *
+ * NOTHING HERE HOLDS STATE. The lines are a fold over `world.recentRemarks` performed by
+ * `describeFeed` (`remarks.ts`), which is hashed, saved simulation state; this function is
+ * handed the result and writes DOM. The panel accumulates nothing, caches no sentence, and a
+ * reload shows the same feed because the feed is in the save.
+ *
+ * `textContent`, NOT `innerHTML`, and it is not a style choice: every line here is CONTENT a
+ * designer wrote in `guest-remarks.json`, and the one place in this layer where a content
+ * string reaches the page is the one place it must not be parsed as markup.
+ * ---------------------------------------------------------------------------------------
+ */
+export function renderRemarks(host: HTMLElement, lines: readonly FeedLine[], shown: boolean): void {
+  host.replaceChildren();
+
+  // THE HEADER SAYS THE RULING RATHER THAN HIDING IT IN A TOOLTIP. ADR-0082: the star rating
+  // judges what the hotel HAS and a review judges ONE GUEST'S ONE STAY, they are two
+  // currencies, and the design depends on a player seeing that they can disagree. A `title`
+  // would have been the obvious home for that sentence and would never have appeared: the
+  // panel carries `pointer-events: none` so that a build drag can pass through it, and an
+  // element that takes no pointer event shows no tooltip. A tooltip nobody can summon is a
+  // claim with no reader.
+  const header = document.createElement('div');
+  header.className = 'rh';
+  const title = document.createElement('span');
+  title.textContent = 'guests said';
+  const key = document.createElement('span');
+  key.className = 'k';
+  key.textContent = shown ? '  their own stay, not the star rating  (r to hide)' : '  hidden  (r)';
+  header.append(title, key);
+  host.append(header);
+
+  if (!shown) return;
+
+  if (lines.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'k';
+    // NOBODY HAS LEFT IS A STATEMENT, NOT AN EMPTY LIST. `createRecentRemarks` makes the same
+    // one in the simulation: an empty ring means no departures, never a silent hotel.
+    empty.textContent = 'nobody has checked out yet';
+    host.append(empty);
+    return;
+  }
+
+  for (const line of lines) {
+    const row = document.createElement('div');
+    row.className = 'rl';
+    const score = document.createElement('span');
+    score.className = 'rs';
+    score.textContent = line.score;
+    const text = document.createElement('span');
+    text.textContent = line.text;
+    row.append(score, ' ', text);
+    host.append(row);
+  }
 }
 
 export type TransportHandlers = {

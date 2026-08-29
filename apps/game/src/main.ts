@@ -38,14 +38,15 @@
 // ---------------------------------------------------------------------------------------
 
 import { createWorld, entranceCell, UNIT_FOOTPRINT } from '@hotelsim/sim';
-import type { Cell } from '@hotelsim/sim';
+import type { Cell, RemarkRecord } from '@hotelsim/sim';
 import { Application } from 'pixi.js';
-import { loadContent, loadSpeedLadder, loadSpriteRefs } from './content.js';
+import { loadContent, loadRemarkBook, loadSpeedLadder, loadSpriteRefs } from './content.js';
 import { advance, createDriver, restIdle } from './driver.js';
 import {
   renderFloors,
   renderGuestPositions,
   renderHud,
+  renderRemarks,
   renderTools,
   renderTransport,
   wordsOf,
@@ -54,6 +55,7 @@ import { actionAt, attachPointer, regionBetween, toolLabel } from './input.js';
 import type { Point, Tool } from './input.js';
 import { fastestRung, rungById } from './ladder.js';
 import { createMotion, observeMotion } from './motion.js';
+import { describeFeed, REMARKS_SHOWN } from './remarks.js';
 import { createScenario } from './scenario.js';
 import {
   commandsFor,
@@ -95,6 +97,7 @@ function hostElement(id: string): HTMLElement {
 
 const stage = hostElement('stage');
 const hudHost = hostElement('hud');
+const remarksHost = hostElement('remarks');
 const transportHost = hostElement('transport');
 const guestsHost = hostElement('guests');
 const toolsHost = hostElement('tools');
@@ -105,6 +108,20 @@ const floorsHost = hostElement('floors');
 const content = loadContent();
 const sprites = loadSpriteRefs();
 const rungs = loadSpeedLadder();
+/**
+ * THE HOTEL'S VOICE (G-066b), bound at startup and never rebuilt.
+ *
+ * IT IS LOADED SEPARATELY FROM `loadContent` AND THAT IS G-065's RULING, not an oversight:
+ * `guest-remarks.json` is outside `bindContent`'s fingerprint so that rewording a joke
+ * invalidates no save and moves no determinism hash. `loadRemarkBook` states the whole
+ * argument. Nothing the simulation decides reads a remark; this book exists only so the
+ * screen can turn `world.recentRemarks` back into sentences.
+ *
+ * A FAILURE HERE THROWS BEFORE THE HOTEL EXISTS, exactly as `loadContent` above does:
+ * `bindGuestRemarks` refuses a table with a hole in it and names the missing cell, rather
+ * than letting a guest reach the feed with nothing to say.
+ */
+const remarkBook = loadRemarkBook(content);
 
 const world = createWorld(SEED, content);
 const scenarioAt = createScenario(content, world.grid);
@@ -325,7 +342,38 @@ document.addEventListener('visibilitychange', () => {
  */
 let walls: WallVisibility = DEFAULT_WALL_VISIBILITY;
 
+/**
+ * WHETHER THE REVIEW FEED IS OPEN (G-066b). Render state, the same status as `walls` above:
+ * a reload puts it back to open, nothing is saved, and the simulation cannot see it.
+ *
+ * IT OPENS OPEN. The feed is the only place the hotel says anything in its own voice, and a
+ * surface that has to be discovered is a surface most players never see. Collapsed it keeps
+ * its header, so the control is never invisible (`renderRemarks`).
+ */
+let remarksShown = true;
+
+/**
+ * THE RING THE PANEL WAS LAST DRAWN FROM, so the DOM is rebuilt when a guest leaves and not
+ * 145 times a second.
+ *
+ * IT IS AN IDENTITY CHECK AND NOT A COPY OF THE FEED. `recordRemark` returns a NEW frozen
+ * array on every departure and the world is replaced rather than mutated (I2), so the
+ * reference moving is exactly "somebody checked out". Nothing about the feed is stored here —
+ * the panel is rebuilt from `world.recentRemarks` when it changes, which is the same redraw
+ * policy the floor switcher uses and for the reason recorded there.
+ */
+let lastRingDrawn: readonly RemarkRecord[] | null = null;
+let lastRemarksShown = remarksShown;
+
 window.addEventListener('keydown', (event) => {
+  // `r` OPENS AND CLOSES THE FEED. One key, beside `w` for the walls, and the panel's own
+  // header carries it — the `walls` cell's rule: a control the player cannot see the state of
+  // is a control they have to discover by pressing it.
+  if (event.key === 'r' || event.key === 'R') {
+    event.preventDefault();
+    remarksShown = !remarksShown;
+    return;
+  }
   // `w` CYCLES THE WALLS, in the order `WALL_VISIBILITIES` lists them: reduced -> transparent
   // -> full. One key rather than three, because a control with three positions and three keys
   // is three things to remember; the HUD says which one is live.
@@ -445,6 +493,16 @@ app.ticker.add(() => {
     walls,
   });
   renderGuestPositions(guestsHost, driver.world, GUEST_POSITIONS_SHOWN);
+
+  // WHAT THE LAST FEW DEPARTURES SAID. Redrawn when the ring moves or the panel is toggled,
+  // never every frame: replacing DOM at the ticker's rate is what makes text unselectable and
+  // buttons unclickable, which is the defect the floor switcher's beat exists to avoid.
+  const ring = driver.world.recentRemarks;
+  if (ring !== lastRingDrawn || remarksShown !== lastRemarksShown) {
+    lastRingDrawn = ring;
+    lastRemarksShown = remarksShown;
+    renderRemarks(remarksHost, describeFeed(content, remarkBook, ring, REMARKS_SHOWN), remarksShown);
+  }
 
   // THE FLOOR SWITCHER IS REBUILT WHEN THE SET OF FLOORS CHANGES, NOT EVERY FRAME. It carries
   // live guest counts, so it does have to be refreshed — but replacing a row of DOM buttons

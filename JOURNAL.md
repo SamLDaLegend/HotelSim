@@ -4284,3 +4284,66 @@ is still E-013's subject.
 
 **WHAT THE ORCHESTRATOR COULD NOT DO, STATED RATHER THAN IMPLIED**: the Browser pane would not composite frames in this session, so **every claim above about what is ON SCREEN is read from the DOM and the console, not from pixels.** The star cells, the `tick 142 (bodies at 141.62)` lag line, the `corridor` tool and the three facility buttons were all confirmed as text. **Nobody but the human has seen this build render.**
 
+
+## WATCH #35 — 2026-08-29 — G-066b's panel, and THE ORCHESTRATOR SAW THE GAME RENDER FOR THE FIRST TIME
+
+**Instrument**: the shipped game at `http://localhost:5180` (`.claude/launch.json` -> `game`), Browser
+pane, no console errors, viewport **404x419**.
+
+### THE CAPABILITY CHANGED, AND WATCH #33's LIMIT IS RETIRED
+
+WATCH #33 recorded, of this same surface: *"the Browser pane would not composite frames in this
+session, so every claim above about what is ON SCREEN is read from the DOM and the console, not from
+pixels. Nobody but the human has seen this build render."*
+
+**It composites now.** The isometric floor, its nine rooms and the guest bodies are in a screenshot
+this session took. **That sentence in WATCH #33 was true when written and is no longer true**, which
+is ADR-0084's shape applied to a WATCH rather than to an ADR: *a recorded observation is evidence of
+what was SEEN, never of what is VISIBLE NOW.*
+
+### WHAT WAS OBSERVED IN PIXELS
+
+- **The panel renders, bottom-left, in the position the builder described**: header *"guests said
+  their own stay, not the star rating (r to hide)"* over the empty-state line **"nobody has checked
+  out yet"**. The empty state is the first thing every new player sees and it is now evidenced.
+- **The header does the work E-014 asked for.** It draws the TripAdvisor/criteria line the human drew
+  — *"their own stay, not the star rating"* — one row under the rating cell that says *"what the
+  hotel HAS, not what its guests said"*. **Two surfaces, one distinction, stated in both.**
+- **Measured from the DOM, not estimated**: panel **440x50**, `position: absolute`,
+  `pointer-events: none` — both properties the builder claimed, confirmed. It is **10.0% of the stage
+  by area** and adds **zero grid rows**.
+
+### E-013 IS WORSE THAN WATCH #33 MEASURED, AND THERE IS A SECOND MECHANISM
+
+- **Stage is 36.1% of viewport height; the HUD is the other 63.9%.** WATCH #33 read 55/45 at a 580px
+  pane; this is a 404px pane, so **the two are not the same measurement and the trend is the finding,
+  not the pair of numbers.** At this width the stage is nearly gone.
+- **NEW, and independent of the ratio: HUD rows CLIP rather than wrap.** Read off the screenshot:
+  `rooms 9/9 valic`, `Games Room £2,50`, `(r to`. Text is cut at the right edge. **This is a
+  legibility defect that no amount of stage/HUD rebalancing fixes**, and it is not G-066b's — the
+  clipped rows include ones shipped long before it.
+- **G-066b did not cause either.** The panel is absolutely positioned and took no row. Its own cost is
+  the 10% of picture named above.
+
+### WHAT WAS **NOT** OBSERVED, KEPT SEPARATE (ADR-0013)
+
+**The POPULATED panel was never seen.** The empty state was. The reason is the instrument, stated
+precisely: the pane throttles `requestAnimationFrame` to **7 frames per second** (measured in-page,
+`document.hidden` false, `visibilityState` "visible"), and the sim advanced **tick 68 -> 70 in four
+seconds** at the `Fast 30/s` rung — about **0.5 ticks/s against a nominal 30**. First check-out is at
+tick ~1440, which is **~45 real minutes away**. `driver.ts`'s `MAX_BACKLOG_SECONDS = 1` is NOT the
+cause — at 143ms frames it permits 4.3 ticks/frame — so the shortfall is the pane's throttling and
+not the game's clamp. *(Not a defect claim about the game: no arm here measures the game on a real
+display, and §rule-4's REGIME slot forbids treating a throttled pane as a machine reading.)*
+
+**So the words are evidenced and the populated LAYOUT is not.** The builder's recorded SVG frames
+(`t002880-f0-reduced-c100.svg`) carry four different `said 5/5 ...` caption lines from the same
+`describeFeed` the panel calls, so **what the feed SAYS is pinned; whether four real lines sit in
+that corner without fouling the stage is still unphotographed.** It is a smaller open question than
+the one WATCH #34 raised and it is not treated as closed.
+
+### THE PROJECT'S ONE-LINE FINDING
+
+**A perceptual check that reaches the empty state and not the populated one has discharged half a
+perceptual criterion**, and the half it discharged is the one a new player meets first. The other
+half needs a display the pane does not provide.

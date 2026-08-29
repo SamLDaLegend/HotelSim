@@ -51,6 +51,41 @@
       #stage canvas {
         display: block;
       }
+      /* THE REVIEW FEED SITS ON THE PICTURE, NOT IN THE CHROME (G-066b, E-013).
+         E-013 is an open human complaint that the chrome already takes 45% of a 580px
+         pane (WATCH #33). A fifth row above the stage would have made a measured, open
+         complaint worse by four more lines, so this panel is absolutely positioned inside
+         #stage — which has carried `position: relative` since G-030 — and the grid gains
+         NO ROW. Every control keeps the distance from the top of the page it had.
+
+         `pointer-events: none` IS LOAD-BEARING, NOT POLISH. The stage is the build
+         surface: a click that lands here must reach the canvas underneath, or the panel
+         would silently eat the player's drags in the corner it covers. It is a readout
+         with no controls in it for exactly that reason, and `r` toggles it. */
+      #remarks {
+        position: absolute;
+        left: 10px;
+        bottom: 8px;
+        max-width: 54%;
+        padding: 5px 8px;
+        pointer-events: none;
+        background: rgba(20, 24, 31, 0.82);
+        border: 1px solid #232833;
+        border-radius: 3px;
+      }
+      #remarks .rh {
+        color: #e8edf5;
+      }
+      #remarks .rl {
+        color: #c8cfda;
+        margin-top: 2px;
+        /* A long line WRAPS rather than truncating. The punchline is at the end of a guest
+           remark, so an ellipsis would cut off the only part worth reading. */
+        line-height: 1.3;
+      }
+      #remarks .rs {
+        color: #8f9db0;
+      }
       .k {
         color: #6b7787;
       }
@@ -127,7 +162,12 @@
              the stage because it changes what the stage shows and nothing else. -->
         <div id="floors"></div>
       </div>
-      <div id="stage"></div>
+      <div id="stage">
+        <!-- WHAT RECENT GUESTS SAID (G-066b). Drawn OVER the picture rather than above
+             it, so the HUD gains no cells; see the #remarks rule for why that is E-013's
+             answer and why it cannot take a pointer event. -->
+        <div id="remarks"></div>
+      </div>
       <!-- A READOUT, not a control. See the #guests rule above. -->
       <div id="guests"></div>
     </div>
