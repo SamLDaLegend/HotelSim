@@ -268,7 +268,12 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // for the reason the G-054 note beside it gives — sixty bedrooms behind ONE amenity is a long
     // way below the provider bottleneck, so almost nothing about how a guest travels can help it.
     // `workload.mjs` carries the five slots and the ADR-0058 statement that the BOUND is untouched.
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_244);
+    // 1,244 -> 1,213 AT G-046b: a room is LEFT through its door too, so a journey costs a tick
+    // at BOTH thresholds and this hotel's stays end sooner again. -2.5%, roughly twice what the
+    // entry rule cost, which is what a second threshold per journey predicts and the first move
+    // on this arm big enough to read. `workload.mjs` carries the five slots and the ADR-0058
+    // statement that the BOUND is untouched and the campaign is not re-taken.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_213);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -594,7 +599,15 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     // command from being an equality and has moved away from it, so the two inequalities below
     // are no longer near a knife edge. Cause: every journey is a tick longer, so how far a guest
     // has to walk starts mattering again beside how often one arrives.
-    expect([below, here, above], readings).toEqual([1_242, 1_244, 1_237]);
+    // 1242 / 1244 / 1237 -> **1215 / 1213 / 1220 AT G-046b, AND THE SHAPE CHANGES A FIFTH TIME.**
+    // The shipped cadence is a TROUGH now rather than a peak — it was a peak at G-046, the middle
+    // of a rising sequence at G-054 and a peak before that — and the sensitivity is 2 and 7
+    // hundredths, the same size it was. **The two inequalities below are the claim and both are
+    // comfortably clear**; the shape flipping again on a workload this far below its provider
+    // bottleneck is the honest reading, and it is why this arm asserts the literals rather than a
+    // direction. Cause: a second threshold per journey, so how far a guest walks matters more
+    // again beside how often one arrives.
+    expect([below, here, above], readings).toEqual([1_215, 1_213, 1_220]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
     // either side is a different hotel. Stated as the two inequalities that ARE the claim — see
     // the block above for why the set-size spelling came out.

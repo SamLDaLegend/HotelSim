@@ -934,8 +934,17 @@ export function commandLog(ticks: number, content: BoundContent): readonly Sched
     // by measuring when each host's item is actually occupied and landing inside a window,
     // which is what the census test verifies rather than trusts.
     //
-    seal(30, 47, 6_800); // WAVE 1 — early and thin; see above.
-    seal(35, 20_011, 59_900); // WAVE 2 — late and robust; the one the final hash carries.
+    // AND BOTH MOVED AGAIN AT G-046b, 6,800 -> 6,730 AND 59,900 -> 59,850, BY THE SAME
+    // PROCEDURE AND FOR THE SAME KIND OF REASON. A room is LEFT through its door now as well as
+    // entered through it, so every journey costs a tick at both thresholds and every engagement
+    // window in this log slid. Measured on this build before re-aiming: host 30's last window
+    // before the old tick ran 6,713-6,751 and host 35's ran 59,834-59,878 — **both old ticks sat
+    // in a GAP, exactly as 7,001 and 60,013 did at G-014a.** Neither pass was broken; both were
+    // aimed at a schedule that had moved under them. The new ticks are inside measured windows
+    // and `provider.determinism.test.ts` is what verifies that rather than this paragraph.
+    //
+    seal(30, 47, 6_730); // WAVE 1 — early and thin; see above.
+    seal(35, 20_011, 59_850); // WAVE 2 — late and robust; the one the final hash carries.
   }
   // Some of these target ids that are not live yet, or are already gone. That is
   // deliberate: a despawn of an unknown id must be a deterministic no-op.

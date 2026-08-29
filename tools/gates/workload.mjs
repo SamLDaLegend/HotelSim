@@ -254,8 +254,36 @@ export const ROOMS = 60;
  * is what ADR-0058 instructs and what `workload.concurrency.test.ts`'s own failure message
  * spells out. Editing the BOUND would be the forbidden move; this is not it.
  * ===========================================================================================
+ * 1244 -> 1213 AT G-046b, RE-TAKEN ALONE AGAIN, UNDER THE SAME ADR-0058 RULING. **-2.5%, and it
+ * is the LARGEST move this constant has made since the stairwell.**
+ *
+ * **THE FIVE SLOTS.** WHAT: concurrent guests in hundredths, as guest-frames divided by ticks —
+ * an exact deterministic integer count. WORKLOAD: `--rooms 60 --amenities 1 --arrivals 96
+ * --seed 42`, 30 simulated days, this file's own constants, run through `report.ts`'s schedule.
+ * SAMPLE COUNT: n = 1, which is the whole distribution — the quantity is deterministic, so one
+ * reading IS the distribution. AGGREGATION: none; one division, rounded once. REGIME: none
+ * applies — no clock is read.
+ *
+ * WHY IT MOVED: G-046b made a room something you LEAVE through a door as well as enter through
+ * one. A guest now spends a tick on the threshold at BOTH ends of a journey instead of at one,
+ * so journeys are longer again. No content moved, no room count moved, no cadence moved.
+ *
+ * **AND IT IS THE FIRST TIME THIS DIRECTION HAS PRODUCED A MOVE WORTH READING ON THIS ARM.**
+ * The two notes above both said the same thing about the same workload — sixty bedrooms behind
+ * ONE amenity is far below the provider bottleneck, so almost nothing about how a guest travels
+ * can help it, and -1.3% and -1.1% were what "almost nothing" read as. **-2.5% is the exit rule
+ * costing roughly twice what the entry rule did, which is what a second threshold per journey
+ * predicts.** It is a fall in OCCUPANCY and not in service: the same guests arrive, and each of
+ * them finishes fractionally sooner.
+ *
+ * **THE BOUND IS UNTOUCHED AND THE CAMPAIGN IS NOT RE-TAKEN.** The gap against the campaign's
+ * `occupancyWhenTaken: 872` narrows again, 42.7% -> 39.1%, and `tripwire.mjs` prints it. This
+ * constant is a RECORDED MEASUREMENT of what the benchmark holds, not a threshold: re-taking it
+ * is what ADR-0058 instructs and what `workload.concurrency.test.ts`'s own failure message
+ * spells out. Editing the BOUND would be the forbidden move; this is not it.
+ * ===========================================================================================
  */
-export const TARGET_CONCURRENT_HUNDREDTHS = 1244;
+export const TARGET_CONCURRENT_HUNDREDTHS = 1213;
 
 /**
  * THE ARRIVAL INTERVAL. It INFLUENCES concurrent guests; it does not set them.

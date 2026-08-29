@@ -223,7 +223,12 @@ describe('the I2 harness reaches the loan', () => {
     // different figure on the night the last instalment falls due. **Every payment is still the
     // full instalment and none is capped by the till** — the assertion beneath this one is
     // unchanged and is the one that carries the claim.
-    expect(repayments).toHaveLength(31);
+    // AND RE-TAKEN AT G-046b: BACK TO THIRTY, and assertion 4 below records what that costs.
+    // A room is LEFT through its door now as well as entered through it, so this hotel completes
+    // slightly different stays again and the till stands at a different figure on every night a
+    // settlement falls. **The property is unchanged and is the one this arm demonstrates below**:
+    // the payments are spread all run long rather than clustered, and none is capped.
+    expect(repayments).toHaveLength(30);
     // 51,839 -> 44,639 AT G-054. The hotel trades slightly differently — guests reach for
     // different things first (`needTieBreakRank`, ADR-0078) — so the thirtieth repayment falls
     // five simulated days earlier. **The claim is the one on the line above and it is unmoved:
@@ -236,7 +241,12 @@ describe('the I2 harness reaches the loan', () => {
     // the repayments are spread ALL RUN LONG rather than clustered at the nightly settlement**,
     // every one of them is the full instalment (assertion 4 below), and 48,959 is still deep
     // inside the 100,000-tick horizon rather than at its start.
-    expect(lastRepaymentTick).toBe(48_959);
+    // 48,959 -> 43,199 AT G-046b, four simulated days EARLIER and one instalment shorter — the
+    // exact reverse of the move G-046 made, and for the mirror-image reason: this hotel's till is
+    // fuller on the nights that matter, so thirty full instalments clear the debt where
+    // thirty-one part-instalments were needed. 43,199 is still deep inside the 100,000-tick
+    // horizon rather than at its start, which is the claim.
+    expect(lastRepaymentTick).toBe(43_199);
     // 3 — THE FINAL HASH CARRIES THEM. Not "a repayment happened" and not "one happened late":
     // the gate's own hash function, over the gate's own final world, moves when the repayment
     // entries are taken out of it. That is the claim the old bar was a proxy for.
@@ -248,20 +258,30 @@ describe('the I2 harness reaches the loan', () => {
     expect(lastRepaymentTick).toBeLessThan(TICKS);
     expect(repayments.every((entry) => entry.tick >= 0 && entry.tick < TICKS)).toBe(true);
 
-    // 4 — RESTORED AT G-046. TWO of the thirty-one payments are capped by the till, which is
-    // the end-to-end confirmation inside the 100,000-tick proof that the block above records as
-    // lost and asks a later goal to recover. Every payment is still POSITIVE and none exceeds
-    // the nightly rate, which is the invariant `Math.min(debt, rate, cash)` states; what is new
-    // is that the third argument is the binding one twice.
+    // 4 — RESTORED AT G-046 AND RETIRED AGAIN AT G-046b, PINNED AS RETIRED SO THAT ITS RETURN IS
+    // A RED LINE. **This is the SECOND time this arm has changed state and the pin is what caught
+    // it both ways round**, which is the whole argument for pinning an absence rather than
+    // deleting the assertion. G-046 restored it — two of thirty-one payments capped by the till,
+    // the cash arm of `Math.min(debt, rate, cash)` exercised end-to-end inside the 100,000-tick
+    // proof for the first time since G-041 — and this goal takes it away again by making the
+    // hotel's till fuller on the nights a settlement falls. **NEITHER GOAL AIMED AT IT**: it is
+    // a property of how much money is in the till on one particular night, and every goal that
+    // moves a journey by a tick moves that. The invariant is untouched and is what the two
+    // assertions below carry: every payment is POSITIVE and none exceeds the nightly rate.
+    //
+    // WHAT IS LOST WHILE IT READS ZERO, said plainly rather than left implicit: the cash arm of
+    // `Math.min` is covered by unit tests (`recovery.loan.test.ts`) and by nothing end-to-end.
+    // A build that broke it would go red there and stay green here.
     const partial = repayments.filter(
       (entry) => 0 - entry.amount > 0 && 0 - entry.amount < economy.loanRepaymentPerNightPence,
     );
-    expect(partial).toHaveLength(2);
+    expect(partial).toHaveLength(0);
     expect(repayments.every((entry) => 0 - entry.amount > 0)).toBe(true);
     expect(repayments.every((entry) => 0 - entry.amount <= economy.loanRepaymentPerNightPence)).toBe(true);
-    // AND THE OTHER TWENTY-NINE ARE THE FULL INSTALMENT, so "two are capped" is a statement
-    // about two payments rather than about the rule.
-    expect(repayments.filter((entry) => 0 - entry.amount === economy.loanRepaymentPerNightPence)).toHaveLength(29);
+    // AND ALL THIRTY ARE THE FULL INSTALMENT, which is the same sentence as the zero above it
+    // read from the other side — and it is the assertion that says the zero is a measurement of
+    // the payments rather than of an empty array.
+    expect(repayments.filter((entry) => 0 - entry.amount === economy.loanRepaymentPerNightPence)).toHaveLength(30);
   });
 
   it('records one outcome per drawLoan command, which is the per-tick law over a whole run', () => {

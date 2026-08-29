@@ -259,6 +259,12 @@ export {
   // `stairLeg(...)`. A copy of that composition in `tools/` would be the drift `placed`
   // refuses in the sim — see the lift gate's comment there.
   doorLeg,
+  // `exitLeg` JOINS IT FOR THE SAME CONSUMER (G-046b). A room is LEFT through its door as well
+  // as entered through it, so the cell a guest walks towards is now
+  // `exitLeg(doorLeg(stairLeg(...)))`. `unreproduced` in that file is what says a reconstruction
+  // has gone stale — it went 0 -> 403 on the day `doorLeg` landed uncomposed — so the third leg
+  // is composed there rather than restated.
+  exitLeg,
   // `stairLeg` AND `stepTowards` ARE EXPORTED FOR ONE CONSUMER, AND IT IS THE OPPOSITE OF
   // `isCutShort`'s case above (G-058). Both had lived inside this package because nothing
   // outside it asked; `travel.walls.report.test.ts` now asks, and asks the FUNCTIONS rather
@@ -458,6 +464,10 @@ export {
   // THE DOOR AS A PLACE (G-046). Exported for `doorLeg`'s consumer above and for
   // `travel.door.test.ts`; nothing outside this package derives a doorway of its own.
   doorwayFor,
+  // AND THE DOOR AS THE WAY OUT (G-046b). Exported for `travel.exit.test.ts` alone, which pins
+  // the two guards that make `exitLeg` terminate and needs to ask the way out DIRECTLY to show
+  // that a refused divert was refused by a guard rather than by there being no door.
+  doorwayOut,
   draftEntities,
   guestAccessTo,
   isProviding,

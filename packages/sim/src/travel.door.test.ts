@@ -36,7 +36,7 @@ import { createStairs, stairwellOf, withStair } from './stairs.js';
 import type { Corridors } from './corridors.js';
 import type { Stairs } from './stairs.js';
 import type { Entity, EntityStore } from './entities.js';
-import { doorLeg, stairLeg, stepTowards } from './guests.js';
+import { doorLeg, exitLeg, stairLeg, stepTowards } from './guests.js';
 import { createGridBounds, GROUND_FLOOR, UNIT_FOOTPRINT } from './grid.js';
 import type { Cell, Footprint, GridBounds } from './grid.js';
 import { createValidityContext, doorwayFor, roomIdAt, roomInvalidity, storeEntities } from './validity.js';
@@ -86,14 +86,20 @@ function contextOf(
 
 /**
  * ONE TICK OF WALKING, COMPOSED THE WAY `placed` COMPOSES IT — stair leg, then door leg, then
- * the permit asked of the cell the guest is actually walking towards. This helper is the whole
- * of `placed`'s movement arithmetic and nothing else; if it drifts from `placed` the tests
- * below stop describing the simulation, which is why every line of it is a call into the sim
- * rather than a restatement.
+ * EXIT leg, then the permit asked of the cell the guest is actually walking towards. This helper
+ * is the whole of `placed`'s movement arithmetic and nothing else; if it drifts from `placed` the
+ * tests below stop describing the simulation, which is why every line of it is a call into the
+ * sim rather than a restatement.
+ *
+ * THE THIRD LEG ARRIVED AT G-046b AND CHANGES NO ANSWER IN THIS FILE, which is a claim rather
+ * than an aside: every journey below either starts on circulation, or starts inside the room it
+ * is walking to. `exitLeg` returns its leg untouched in both cases — the first on
+ * `doorwayOut`'s "not in a room" branch and the second on its "the leg is inside this same
+ * room" branch. `travel.exit.test.ts` is where the new leg is pinned.
  */
 function walk(ctx: ValidityContext, from: Cell, to: Cell, speed: number, stairs: Stairs = createStairs()): Cell {
   const leg = stairLeg(from, to, stairwellOf(stairs));
-  const approach = doorLeg(ctx, from, leg, to);
+  const approach = exitLeg(ctx, from, doorLeg(ctx, from, leg, to), speed);
   return stepTowards(from, approach, speed, ctx, roomIdAt(ctx, approach));
 }
 
@@ -305,8 +311,7 @@ describe('the two legs compose', () => {
     );
     let at = cell(GROUND_FLOOR, 9, 3);
     for (let tick = 0; tick < 40; tick += 1) {
-      const leg = stairLeg(at, room, stairwellOf(stairs));
-      at = stepTowards(at, doorLeg(blocked, at, leg, room), 3, blocked, roomIdAt(blocked, doorLeg(blocked, at, leg, room)));
+      at = walk(blocked, at, room, 3, stairs);
       if (key(at) === key(room)) break;
     }
     expect(key(at)).toBe(key(room));

@@ -299,7 +299,11 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // 5,914 -> 5,865 AT G-046, AND IT MOVES THE HELPFUL WAY. A door is a PLACE now, so this
     // guest spends 49 more basis points of its stay WALKING — and walking is not idling. The
     // margin clause at the foot is 7,003 - 5,865 = 1,138, wider than the 1,089 G-054 left it.
-    expect(box.idleBasisPoints).toBe(5_865);
+    // 5,865 -> 5,657 AT G-046b, AND IT MOVES THE HELPFUL WAY AGAIN AND FOR THE SAME REASON.
+    // A room is LEFT through its door as well as entered through it, so this guest spends 208
+    // more basis points of its stay WALKING — and walking is not idling. The margin clause at
+    // the foot is 7,003 - 5,657 = 1,346, wider again than the 1,138 G-046 left it.
+    expect(box.idleBasisPoints).toBe(5_657);
     // THE CONTROL, SAME SITTING, SAME BOX, ONE DECLARATION APART. 271 was the reading this arm
     // pinned before G-041 and it is re-measured here rather than quoted (`CLAUDE.md` rule 3) —
     // the shaft still costs idleness, and the DIRECTION is the claim this pair exists for.
@@ -309,7 +313,9 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // exists for: the shaft still costs idleness.
     // 6,004 -> 5,914 AT G-046, moving with the arm above and keeping the gap this pair exists
     // for: the shaft still costs idleness, and the door still spends some of it walking.
-    expect(withoutTheShaft.idleBasisPoints).toBe(5_914);
+    // 5,914 -> 5,740 AT G-046b, moving with the arm above and keeping the gap this pair exists
+    // for: the shaft still costs idleness, and both doors now spend some of it walking.
+    expect(withoutTheShaft.idleBasisPoints).toBe(5_740);
     expect(withoutTheShaft.idleBasisPoints).toBeGreaterThan(box.idleBasisPoints);
     // AND THE TWO STRUCTURAL CLAUSES, WHICH SURVIVE ANY RE-PIN OF THE LITERAL ABOVE: the share
     // is under its derived ceiling, and it is under it by a margin rather than by a rounding.

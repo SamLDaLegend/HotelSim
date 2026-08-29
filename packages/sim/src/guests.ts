@@ -103,6 +103,7 @@ import type { RemarkRecord, ReviewOutcomeRow } from './reviews.js';
 import {
   createValidityContext,
   doorwayFor,
+  doorwayOut,
   guestAccessTo,
   isProviding,
   isValidRoom,
@@ -3999,7 +4000,15 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
   // the plan says. Never stored, for `stairLeg`'s reason exactly — the destination can change
   // mid-journey and a stored one would go stale silently. On a leg that is not the journey's
   // end, and on a destination that is not a room, this is `leg` unchanged and by reference.
-  const approach = doorLeg(search.input.validity, guest.at, leg, at);
+  //
+  // AND A ROOM IS LEFT THROUGH ITS DOOR TOO (G-046b). The THIRD waypoint, and it is the first
+  // one that reads `guest.at` as a PLACE THE GUEST IS rather than as the start of a line: the
+  // two legs above ask where the journey is going, this asks what the guest has to get out of
+  // first. Derived every tick from the same cells, never stored, and returning `leg` untouched
+  // for a guest standing on circulation — which is almost every moving guest on almost every
+  // tick. **It is applied LAST because it constrains the FIRST step**: whatever the two legs
+  // above decided the guest is heading for, it cannot start by walking through its own wall.
+  const approach = exitLeg(search.input.validity, guest.at, doorLeg(search.input.validity, guest.at, leg, at), search.speed);
   // THE ROOM STANDING ON THE CELL THE GUEST IS WALKING TO, RESOLVED ONCE AND ONLY FOR A GUEST
   // THAT IS ACTUALLY MOVING (G-038a-i). It is asked AFTER the `cellsEqual` return above, so a
   // sleeping guest — which is almost every guest on almost every tick — pays nothing for
@@ -4147,6 +4156,93 @@ export function stairLeg(from: Cell, to: Cell, stairwell: Cell | null): Cell {
 export function doorLeg(validity: ValidityContext, from: Cell, leg: Cell, to: Cell): Cell {
   if (!cellsEqual(leg, to)) return leg;
   return doorwayFor(validity, from, to) ?? leg;
+}
+
+/**
+ * ==========================================================================================
+ * A ROOM IS *LEFT* THROUGH ITS DOOR (G-046b). `doorLeg`'s sentence, running the other way.
+ *
+ *   A FLOOR IS REACHED BY A STAIR.  A ROOM IS ENTERED THROUGH ITS DOOR.
+ *   A ROOM IS LEFT THROUGH ITS DOOR.
+ *
+ * G-046 answered ENTERING and said so: on the WATCH surface at seed 7 over 2,880 ticks it took
+ * guests walking IN through a wall from 64 to 19, and left 248 walking OUT. **An approach rule
+ * cannot answer an exit** — `doorLeg` rewrites the target when the target IS the destination,
+ * and a guest that is leaving has already got where it was going. What has to be constrained is
+ * its FIRST step, and the only input that says so is where the guest IS.
+ *
+ * ------------------------------------------------------------------------------------------
+ * THE LIVELOCK THIS GOAL WAS BLOCKED ON, AND THE TWO GUARDS THAT ANSWER IT.
+ *
+ * `stepTowards` returns an untested `fallback` when every candidate landing is a wall. Point a
+ * guest at its own doorway naively and that fallback can drop it into a THIRD room, from which
+ * the same rule fires again — **and a guest that cannot legally leave anywhere never leaves**,
+ * which the departure accounting has no word for. G-046's builder named the risk and refused to
+ * take it blind. **Neither guard below is a tuning knob; each is one half of a termination
+ * proof, and `travel.exit.test.ts` builds the geometry that fails without it.**
+ *
+ *   1. WITHIN ONE TICK'S BUDGET. The rule fires only when the doorway is at most
+ *      `cellsPerTick` steps away. Then `stepTowards` has EXACTLY ONE candidate — the whole
+ *      remaining distance fits in the budget, so `leastOnColumn` and `mostOnColumn` coincide —
+ *      and that candidate IS the doorway. A doorway is a declared walkway that no room stands
+ *      on, so `isWalkableFor` admits it for every permit. **The candidate loop therefore
+ *      returns on its first and only candidate and the fallback cannot run.** A guest that
+ *      takes this rule lands ON its doorway, in circulation: never inside a third room, never
+ *      inside the room it is leaving, and — because it is no longer inside any room — **the
+ *      rule cannot fire on two consecutive ticks.**
+ *   2. NEVER BACKWARDS. The rule fires only when the doorway is no further from the leg than
+ *      the guest already is. Without it a guest whose door is on the far side of its room walks
+ *      out, is pushed straight back in by `stepTowards`' fallback, and walks out again forever
+ *      — the two cells map onto each other and neither is wrong on its own tick.
+ *
+ * TERMINATION, IN THREE LINES. Let `d` be the guest's distance to `leg` across the floor. On a
+ * tick where this rule fires, `d` does not increase (guard 2) and the guest ends outside every
+ * room (guard 1). On a tick where it does not, `stepTowards` spends the whole budget toward
+ * `leg`, so `d` falls by `min(budget, d)`. The rule cannot fire twice running, so `d` strictly
+ * falls at least every second tick and the guest reaches its leg in at most `2d` of them.
+ * **No guest is stranded, and `stepTowards`' fallback is untouched** — which it had to be:
+ * it is documented in two places as the anti-stranding guarantee and changing it would change
+ * what `unreachable` means.
+ * ------------------------------------------------------------------------------------------
+ *
+ * WHAT GUARD 2 COSTS, STATED AS THE SCOPE OF THE RULE RATHER THAN AS A REGRET: **a guest whose
+ * door is behind it still steps out through the wall in front of it.** Sending it out of the
+ * far door instead needs a route AROUND the room, and that is option (c) — full routing, priced
+ * at 1.70x-1.91x and refused twice. Without one, "leave by the far door" puts the guest on its
+ * doorstep and then walks it straight back through the room it just left, which is a worse
+ * picture than the one being fixed as well as a livelock. **The residue is named in G-046b's
+ * census rather than hidden.**
+ *
+ * ABSENT SPEED MEANS NO STEP, SO THERE IS NO THRESHOLD TO BE PART OF. Content that declares no
+ * `guestCellsPerTick` arrives instantaneously (`hasArrivedAt`), and such content behaves after
+ * this goal exactly as it did before it, to the cell.
+ *
+ * A BOARDING GUEST IS NEVER DIVERTED, and it falls out of guard 2 rather than needing a clause:
+ * the lift gate fires only for a guest whose leg is on another FLOOR, which `stairLeg` returns
+ * only for a guest already standing on the stairwell's column and row — so its distance across
+ * the floor to that leg is zero, and no doorway can beat zero.
+ *
+ * IT ALLOCATES NOTHING AND RETURNS BY REFERENCE on every branch, like the two legs above it.
+ */
+export function exitLeg(validity: ValidityContext, from: Cell, leg: Cell, cellsPerTick: number | undefined): Cell {
+  if (cellsPerTick === undefined) return leg;
+  const doorway = doorwayOut(validity, from, leg);
+  if (doorway === null) return leg;
+  if (stepsAcross(from, doorway) > cellsPerTick) return leg;
+  return stepsAcross(doorway, leg) > stepsAcross(from, leg) ? leg : doorway;
+}
+
+/**
+ * How many steps apart two cells are ACROSS THE FLOOR, ignoring the floor axis.
+ *
+ * THE FLOOR IS LEFT OUT ON PURPOSE AND IT IS WHAT MAKES GUARD 2 CORRECT ON A STAIRWELL. A leg
+ * `stairLeg` put on another floor sits at the stairwell's own column and row, so a guest
+ * standing there is zero steps from it across the floor and any doorway is at least one — the
+ * rule refuses, and a guest climbing out of a room somebody built over the shaft still climbs.
+ * Counting the floor gap instead would make that distance three and divert it forever.
+ */
+function stepsAcross(a: Cell, b: Cell): number {
+  return Math.abs(a.column - b.column) + Math.abs(a.row - b.row);
 }
 
 /**

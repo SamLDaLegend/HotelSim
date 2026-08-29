@@ -279,7 +279,13 @@ describe('THE LOWER CLIFF — 63, derived and then measured on the shipped table
     // is adjacent to the room's own footprint), and the shipped footprint cap is far under the
     // 194-cell span, so the inequality above still holds with three figures of room. **A goal
     // that raises `maxFootprintCells` meets this paragraph first.**
-    expect(uncontended).toBe(94);
+    // 94 -> 96 AT G-046b. A room is LEFT through its door as well as entered through it, so a
+    // journey costs a tick at both thresholds and the deepest any need in the 60-room hotel gets
+    // is two ticks deeper. **The paragraph above already covers it**: the exit detour is bounded
+    // by the ROOM exactly as the approach detour is, because a doorway is adjacent to the room's
+    // own footprint whichever direction the guest is crossing it in. Still an order of magnitude
+    // inside the 63 + 198 bound the arm above asserts.
+    expect(uncontended).toBe(96);
     // AND THE SIX-ROOM ARM STILL DOES NOT MOVE, at 179, THROUGH THE STAIRWELL AS WELL AS
     // THROUGH TRAVEL. The paragraph above calls that evidence rather than luck — its peak
     // belongs to guests queueing for a bed, and a guest nobody has given a room is going

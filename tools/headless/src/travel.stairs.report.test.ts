@@ -284,7 +284,10 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // stands in it for a tick before it turns in — more move events from the same population,
     // with guest-frames unmoved at 43,660 above. The control's job is unchanged: it is the
     // pre-goal world obtained by subtraction, and the door is in both arms.
-    expect(without.moves).toBe(1_854);
+    // 1,854 -> 2,123 AT G-046b. A room is LEFT through its door too, so a journey costs a tick
+    // at both thresholds and there are more move events again from the same population — with
+    // guest-frames still unmoved at 43,660, which is what says it is the same population.
+    expect(without.moves).toBe(2_123);
     // AND THE CROSS-FLOOR TRAFFIC IS REAL: the amenities are in the basement and the bedrooms
     // are on floor 0, so guests genuinely change floor on this workload. Without this the whole
     // file would be measuring a rule with no population. **UNMOVED AT 290 across the layout
@@ -295,7 +298,11 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // 416 -> 432 AT G-046. Sixteen more floor changes on the control, for the same reason the
     // move count rose: a doorway is one more cell of a journey and a re-target is one more tick
     // away, so a guest crosses a floor slightly more often over the same run.
-    expect(without.ascents).toBe(432);
+    // 432 -> 411 AT G-046b, and it moves the OPPOSITE way from the move count above. A guest
+    // that leaves by its door spends a tick on the threshold, so it makes the same journeys with
+    // fewer of them completed inside the run — twenty-one fewer floor changes on 269 more move
+    // events. The claim this arm makes is the NON-ZERO below, and it is unmoved.
+    expect(without.ascents).toBe(411);
     // AND `without.moves` IS 1,289 -> 1,468 AT G-054, with guest-frames UNMOVED at 43,660 —
     // same population, more walking. The need tie-break is per guest now (`needTieBreakRank`,
     // ADR-0078), so guests spread across the basement amenities instead of queueing at the
@@ -321,7 +328,11 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // no shaft declared, every traversal is off the shaft, so this arm and that one are the
     // same count wearing the name that makes the pair below readable.
     // 416 -> 432 AT G-046, in step with `without.ascents` above and for the same reason.
-    expect(without.ascentsOffTheStairwell).toBe(432);
+    // 432 -> 411 AT G-046b, in step with `without.ascents` above and for the same reason. **The
+    // equality with it is the claim** — with no shaft declared every traversal is off the shaft —
+    // and it is what would go red if the two ever stopped being one count under two names.
+    expect(without.ascentsOffTheStairwell).toBe(411);
+    expect(without.ascentsOffTheStairwell).toBe(without.ascents);
   });
 
   it('WITH A STAIRWELL, EVERY TRAVERSAL HAPPENS ON THE STAIRWELL COLUMN — none land off it', () => {
@@ -337,17 +348,22 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // above it, and it is unmoved.**
     // 257 -> 264 AT G-046. Seven more traversals on 361 more move events; the property this arm
     // asserts is the ZERO above it, and it is unmoved.
-    expect(withStairs.ascents).toBe(264);
+    // 264 -> 259 AT G-046b, tracking the control's 432 -> 411 for the same reason. What this arm
+    // asserts is the ZERO above it, and it is unmoved.
+    expect(withStairs.ascents).toBe(259);
     // AND THE JOURNEYS GET LONGER, WHICH IS THE COST AND IS REPORTED RATHER THAN BURIED. Move
     // events double — 910 -> 1,948 — because a guest crossing floors now walks to the stairwell
     // and back out again instead of rising where it stood. That is the mechanic doing its job:
     // G-038a-i could say a wall never lengthens a journey, and a stair is the change that
     // makes that false, which is why the speed window is re-derived in this same goal
     // (`dissatisfaction.content.test.ts`, worst journey 108 -> 194).
-    expect(without.moves).toBe(1_854);
+    // 1,854 -> 2,123 AT G-046b, the same reading one goal on: a room is LEFT through its door
+    // now, so both arms lengthen again and the stair's own contribution is again unchanged.
+    expect(without.moves).toBe(2_123);
     // 2,244 -> 2,605 AT G-046, and the pair is what matters: the door lengthens both arms, so
     // the stair's own contribution to journey length is unchanged by it.
-    expect(withStairs.moves).toBe(2_605);
+    // 2,605 -> 2,828 AT G-046b, and the pair still is.
+    expect(withStairs.moves).toBe(2_828);
   });
 
   it('and guests are SEEN on the stairwell, which is the watchable this goal claims', () => {
@@ -371,7 +387,8 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // 639 -> 519 AT G-054, tracking the ascent count above for the same reason. The claim is
     // that the instrument SEES guests on the shaft, and a three-figure count still says so.
     // 519 -> 534 AT G-046, tracking the ascent count above.
-    expect(withStairs.onTheStairwell).toBe(534);
+    // 534 -> 521 AT G-046b, tracking the ascent count above.
+    expect(withStairs.onTheStairwell).toBe(521);
   });
 
   it('NO GUEST GETS STUCK: the two arms serve the same guests, and the walk does not stall', () => {
@@ -416,10 +433,18 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // longest unbroken walk on the stairless harness is one cell longer. **Both are still inside
     // the derived 66 that the inequality above enforces**, which is the property; the literals
     // are the sharpener.
-    expect(without.longestJourney).toBe(9);
+    // 9 -> 12 AT G-046b ON THE CONTROL, and it is the exit's own cost stated where the door's
+    // was: a guest that used to step out of a room now steps to the cell beside it first, so the
+    // longest unbroken walk on the stairless harness is three cells longer. Still inside the
+    // derived 66 that the inequality above enforces.
+    expect(without.longestJourney).toBe(12);
     // 15 -> 17 AT G-046, the other half of the control's 8 -> 9 above and the same cause. Still
     // inside the derived 66.
-    expect(withStairs.longestJourney).toBe(17);
+    // 17 -> 14 AT G-046b, and it FALLS where the control rises — the only place in this file
+    // where the two arms disagree on direction. With the shaft declared a journey is broken into
+    // legs by the stairwell, and the exit rule breaks the first leg again at the doorway, so the
+    // longest UNBROKEN walk gets shorter while the whole journey gets longer. Still inside 66.
+    expect(withStairs.longestJourney).toBe(14);
   });
 
   it('THE ONE THING THAT READS AS STUPID: turn-arounds appear, and the cause is NOT the stair', () => {
@@ -450,14 +475,26 @@ describe('the shipped harness workload, with and without a stairwell', () => {
     // tick, so the cause is the re-target and not the stair — which is exactly what this arm
     // was written to separate. A per-guest tie-break gives a guest more distinct things worth
     // re-targeting to, so two more of them land mid-flight.
-    expect(without.turnArounds).toBe(0);
+    // 0 -> 10 AT G-046b, AND THE CONTROL STOPS BEING A ZERO — read the equality below it before
+    // reading the number. **Every one of the ten is a guest whose HOLDINGS changed on the turn
+    // tick**, so the cause is the pre-existing mid-journey re-target and not the exit rule, which
+    // is exactly the separation this arm was written to make. What changed is the OPPORTUNITY: a
+    // guest that steps out to its doorway is one tick further into a journey that a re-target can
+    // land in the middle of, on an arm where journeys just got 14.5% more numerous. **A zero that
+    // becomes a ten is a weaker pin becoming a stronger one**, because the equality below it now
+    // carries a claim on this arm as well as on the shipped one.
+    expect(without.turnArounds).toBe(10);
+    expect(without.turnAroundsOnRetarget).toBe(without.turnArounds);
     // 17 -> 14 AT G-046, AND THE CONTROL IS STILL 0. It falls, which was not predicted: a guest
     // walking to a doorway is walking to a cell that does not move when its holdings change
     // WITHIN the same room, so three fewer re-targets land in a place that produces a visible
     // reversal. The equality below is unmoved and is still what carries the finding.
-    expect(withStairs.turnArounds).toBe(14);
+    // 14 -> 17 AT G-046b, back to G-054's level and for the reason the control's 0 -> 10 is:
+    // more journeys, so more ticks in which a re-target can land mid-flight. The equality below
+    // is unmoved and is still what carries the finding.
+    expect(withStairs.turnArounds).toBe(17);
     // AND THE CAUSE, COUNTED RATHER THAN INFERRED FROM THE HANDFUL I READ IN THE RECORDING:
-    // EVERY ONE OF THE 14 is a guest whose HOLDINGS changed on the turn tick. Not most, not
+    // EVERY ONE OF THEM is a guest whose HOLDINGS changed on the turn tick. Not most, not
     // typically — all of them. If a turn-around ever appeared with the holdings unchanged, that
     // WOULD be the stair rule and this equality is what would say so.
     expect(withStairs.turnAroundsOnRetarget).toBe(withStairs.turnArounds);

@@ -1618,6 +1618,64 @@ export function doorwayFor(ctx: ValidityContext, from: Cell, to: Cell): Cell | n
 }
 
 /**
+ * ==========================================================================================
+ * THE CELL A GUEST STANDING INSIDE A ROOM MUST LEAVE BY (G-046b) — or `null` when it may go
+ * straight. **`doorwayFor` IS THE WAY IN AND THIS IS THE WAY OUT, AND THEY ARE NOT THE SAME
+ * QUESTION ASKED TWICE.**
+ *
+ * `doorwayFor` reads the DESTINATION: it fires when a guest is heading INTO a room, and the
+ * room whose door it names is the one at the far end of the journey. This one reads WHERE THE
+ * GUEST IS: it fires when a guest is standing inside a room and going somewhere that room does
+ * not contain, and the room whose door it names is the one under the guest's own feet. That is
+ * why an exit could not be the entry rule mirrored — an approach rule constrains a journey's
+ * LAST step and an exit constrains its FIRST.
+ *
+ * WHAT IT MEASURED, BECAUSE THIS FUNCTION EXISTS FOR A COUNT RATHER THAN FOR A FEELING. After
+ * G-046 the WATCH surface still crossed a wall on 267 of 1,832 move events, and 248 of those
+ * were guests walking OUT — see `travel.exit.test.ts` and G-046b's block. The door was a place
+ * you arrived at and not a place you left through.
+ *
+ * ------------------------------------------------------------------------------------------
+ * THREE REASONS TO RETURN `null`, AND EACH ONE IS A JOURNEY THAT BEHAVES EXACTLY AS IT DID
+ * BEFORE THIS GOAL:
+ *
+ *   NOT IN A ROOM AT ALL   the guest is standing on circulation. Almost every guest on almost
+ *                          every tick, and the branch this function is fastest on.
+ *   GOING SOMEWHERE THIS   `leg` is covered by the same room's footprint: a guest crossing its
+ *   ROOM CONTAINS          own suite, or standing on the stair cell of a room somebody built
+ *                          over the stairwell. There is no threshold to cross, so there is no
+ *                          rule. **This is the clause that keeps `stepTowards`' documented
+ *                          behaviour for a room drawn across a stairwell** — the guest
+ *                          converges on the stair foot inside that room and climbs.
+ *   NO DOORWAY             the room is sealed, in mid-air, unplaced or `noCorridor`. The guest
+ *                          leaves the way every build before G-046b left: straight at its leg.
+ *                          **A room that cannot be left legibly must never become a room that
+ *                          cannot be left**, which is `doorwayFor`'s own rule one direction over.
+ *
+ * IT DOES NOT ASK WHETHER `from` IS THE DOORWAY, and that is a difference from `doorwayFor`
+ * rather than an omission: the doorway is a cell no room stands on, so a guest standing in one
+ * is not standing in a room and has already returned on the first branch.
+ *
+ * IT IS A LOOKUP, NOT A SEARCH. `roomAtCell` is the same binary search over the placement index
+ * that `roomIdAt` makes one line later in `placed`, and the doorway is the field the boundary
+ * walk in `computeRoomInvalidity` was already filling. **No frontier, no queue, no per-guest
+ * fill** — G-046's affordability argument, unchanged, because this adds the same kind of work
+ * to the same tick. `check:tickcost` is the row that tests it.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DECIDE: whether the guest may actually GO there this tick.
+ * Reachability-in-one-tick and the no-going-backwards rule are `exitLeg`'s in `guests.ts`,
+ * because both need the guest's SPEED and speed is content. This function answers only "which
+ * cell is the way out of the room this guest is standing in".
+ * ==========================================================================================
+ */
+export function doorwayOut(ctx: ValidityContext, from: Cell, leg: Cell): Cell | null {
+  const room = roomAtCell(ctx, from);
+  if (room === undefined) return null;
+  if (coversCell(room, leg)) return null;
+  return answerFor(ctx, room).doorway;
+}
+
+/**
  * Whether `cell` is part of this room's own footprint. A RECTANGLE-CONTAINS TEST, NOT A SCAN,
  * and the complexity is the point (G-036b).
  *

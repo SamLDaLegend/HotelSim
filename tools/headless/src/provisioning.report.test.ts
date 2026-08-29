@@ -282,8 +282,31 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     // history is the point: "neither rung is repaired" (G-043), "one of them is" (G-054), "both
     // are" (G-046). The verdict tuple below is the claim; the title is the record of it moving.
     // ========================================================================================
+    // ========================================================================================
+    // **AND AT G-046b THE THREE-ROOM RUNG COMES BACK OPEN, WHICH IS REPORTED RATHER THAN
+    // ABSORBED — IT IS G-046's OWN DISCHARGE BEING PARTLY UNDONE BY THE NEXT GOAL.**
+    //
+    //     verdicts (worstFalls, meanFalls):  3 rooms  TRUE/false -> false/false
+    //                                        6 rooms  TRUE/TRUE  -> TRUE/TRUE
+    //
+    // WHAT MOVED, AS THE ROWS RATHER THAN THE BOOLEAN. Three rooms reads 1,193 -> 848 -> 865:
+    // **the SECOND copy still buys a great deal and the THIRD gives eighteen basis points back.**
+    // Six rooms is 1,766 -> 615 -> 594 and is strictly decreasing on both axes, so the rung that
+    // matters to a player who is actually provisioning a hotel is unmoved.
+    //
+    // WHY, AND IT IS THE SAME MECHANISM G-046's NOTE ABOVE DESCRIBES RUNNING INTO ITS OWN LIMIT.
+    // The distance term is what made this axis monotone: a second copy is somewhere else on the
+    // plot, so its guests walk less far as well as queue less long. G-046b puts a tick on the
+    // way OUT of a room as well as the way in, which makes distance cost MORE — and at three
+    // rooms the third copy is far enough from the hotel that the walk to it costs more than the
+    // queue it removes. **That is the `ceil` granularity the paragraph above names, showing up
+    // as a distance effect instead of as a queueing one.** It is still not this file's to fix.
+    //
+    // **THE TITLE STAYS WRONG AND STAYS**: "neither rung is repaired" (G-043), "one of them is"
+    // (G-054), "both are" (G-046), "one of them again" (G-046b). The verdict tuple is the claim.
+    // ========================================================================================
     expect(verdicts.map((v) => [v.rooms, v.worstFalls, v.meanFalls])).toEqual([
-      [BELOW_ROOMS[0], true, false],
+      [BELOW_ROOMS[0], false, false],
       [BELOW_ROOMS[1], true, true],
     ]);
     // AND THE ROWS THE VERDICTS ARE READ OFF, so a build that moves them says so rather than
@@ -291,9 +314,13 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     // 1,084/801/811 -> 1,174/841/837 and 1,414/570/557 -> 1,599/606/577 AT G-046. Every row is
     // worse in absolute terms — a tick of walking is a tick unserved — and both are now strictly
     // decreasing, which is the verdict above and the thing a player is buying.
+    // 1,174/841/837 -> 1,193/848/865 and 1,599/606/577 -> 1,766/615/594 AT G-046b. Every row is
+    // worse in absolute terms again — a second tick of walking per journey is a second tick
+    // unserved — and the three-room row stops being strictly decreasing at its last step, which
+    // is the verdict above.
     expect(verdicts.map((v) => v.worst)).toEqual([
-      [1_174, 841, 837],
-      [1_599, 606, 577],
+      [1_193, 848, 865],
+      [1_766, 615, 594],
     ]);
   });
 
@@ -321,30 +348,35 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     // unserved, and these are unserved-basis-point rows. The rows rise across the board and the
     // shape the block above describes — the rank ordering gone, the columns intact — is
     // unchanged. The verdict tuple two tests up is where the reading that MOVED lives.
+    // EVERY CELL MOVED AGAIN AT G-046b AND THE COLUMN STRUCTURE STILL DID NOT. A room is LEFT
+    // through its door as well as entered through it, so a journey costs a tick at both
+    // thresholds; these are unserved-basis-point rows, and a tick spent walking is a tick
+    // unserved. **The one reading that MOVED is the three-room verdict two tests up** — its
+    // middle and last columns stop falling — and it is argued there rather than here.
     expect(tally(BELOW[0]!), `${BELOW_ROOMS[0]} rooms`).toEqual([
-      [1_174, 1_150, 578],
-      [841, 834, 790],
-      [837, 828, 822],
+      [1_171, 1_193, 576],
+      [843, 848, 799],
+      [851, 865, 847],
     ]);
     expect(tally(BELOW[1]!), `${BELOW_ROOMS[1]} rooms`).toEqual([
-      [1_599, 1_292, 285],
-      [606, 596, 528],
-      [577, 568, 559],
+      [1_766, 1_381, 294],
+      [615, 613, 542],
+      [585, 594, 576],
     ]);
     expect(tally(ABOVE[0]!), `${ABOVE_RUNGS[0]![0]} rooms`).toEqual([
-      [3_005, 2_765, 230],
-      [530, 488, 391],
-      [446, 423, 411],
+      [3_041, 2_975, 262],
+      [531, 515, 404],
+      [457, 445, 426],
     ]);
     expect(tally(ABOVE[1]!), `${ABOVE_RUNGS[1]![0]} rooms`).toEqual([
-      [5_208, 5_082, 228],
-      [3_020, 2_083, 213],
-      [678, 628, 439],
+      [5_260, 5_023, 257],
+      [2_786, 2_471, 217],
+      [699, 648, 449],
     ]);
     expect(tally(ABOVE[2]!), `${ABOVE_RUNGS[2]![0]} rooms`).toEqual([
-      [5_242, 5_109, 254],
-      [3_138, 2_746, 203],
-      [824, 661, 308],
+      [5_149, 5_054, 264],
+      [3_280, 2_803, 217],
+      [854, 694, 309],
     ]);
   });
 
@@ -436,7 +468,12 @@ describe('what the rule claims a provider sustains is an UPPER bound, and here i
     // the rule still over-provisions this hotel with one amenity, a second still relieves it,
     // and the relief is now 482 basis points where it was 433 — because a second copy is
     // somewhere else on the plot, so it shortens journeys as well as queues.
-    expect([meanEngagement(lean), meanEngagement(rich)]).toEqual([1_059, 577]);
+    // 1,059 / 577 -> 1,147 / 590 AT G-046b. **The GAP is what this arm is about and it WIDENS
+    // again**: the rule still over-provisions this hotel with one amenity, a second still
+    // relieves it, and the relief is 557 basis points where G-046 left it at 482 — because a
+    // second copy is somewhere else on the plot, and a journey now pays a threshold tick at each
+    // end, so shortening it is worth more than it was.
+    expect([meanEngagement(lean), meanEngagement(rich)]).toEqual([1_147, 590]);
     // And it is not the population moving: the same guests give up either way.
     expect(departures(rich, 'gaveUp')).toBe(departures(lean, 'gaveUp'));
   });

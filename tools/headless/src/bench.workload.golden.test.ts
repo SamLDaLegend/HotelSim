@@ -563,7 +563,14 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   workload's rating reads it — nothing in `packages/sim` does. No `World` field, no save
     //   bump, no migration. **THE OUTCOME TEST BELOW DID NOT MOVE, WHICH IS THE CONTROL**: the
     //   same 100 arrived, 27 checked out, 59 dissatisfied, 14 still in the hotel.
-    expect(hashState(plain)).toBe('186f1a5f3a22ff2b');
+    // - `186f1a5f3a22ff2b` -> `fe487876ca239a92` AT G-046b, AND IT IS PURELY BEHAVIOURAL AGAIN.
+    //   No `World` field, no save bump, no migration, `World.contentHash` unmoved. A room is
+    //   LEFT through its door now as well as entered through it, so a journey costs a tick at
+    //   BOTH thresholds instead of one. On this arm — sixty bedrooms behind TWO amenities, the
+    //   most starved workload in the project — that second tick turns three more completed stays
+    //   into walk-outs. The outcome test below carries the split, and it is the same trade in
+    //   the same direction the door made at G-046.
+    expect(hashState(plain)).toBe('fe487876ca239a92');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -687,9 +694,14 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // guest that tick comes straight out of the time a guest was willing to wait. **Five fewer
     // guests complete a stay and five more walk out** — the same trade G-054 made in the other
     // direction, and the honest price of the door on the arm least able to pay it.
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(22);
+    // 22 -> 19 AT G-046b, the same column moving the same way for the same reason one goal on.
+    // The exit costs a second tick per journey and this arm has the least slack in the project
+    // to pay it with; three more stays end in a walk-out.
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(19);
     // 61 -> 65 AT G-046, the other side of `checkedOut` 27 -> 22 and the same four guests.
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(65);
+    // 65 -> 69 AT G-046b, the other side of `checkedOut` 22 -> 19 and the one guest that was
+    // still in the building at the horizon.
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(69);
     // AND THE STILL-IN-THE-HOTEL COLUMN IS WHAT MOVED, 9 -> 13, WHICH IS THE FOURTH NUMBER THE
     // CONSERVATION NEEDS AND THE ONE THIS ARM HAD NEVER PINNED. 33 + 29 + 13 = 75, every other
     // departure row is zero, and `gaveUp` is still zero — nobody in this hotel fails to get a
@@ -701,7 +713,8 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // 14 -> 12 AT G-054. 27 + 61 + 12 = 100, the conservation still closes, and `gaveUp` is
     // still zero for the same reason it always was.
     // 12 -> 13 AT G-046: 22 + 65 + 13 = 100 arrived, and the conservation still closes.
-    expect(plain.guests.list.length).toBe(13);
+    // 13 -> 12 AT G-046b: 19 + 69 + 12 = 100 arrived, and the conservation still closes.
+    expect(plain.guests.list.length).toBe(12);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -1013,7 +1026,12 @@ describe('the same workload with the player churning the building', () => {
     // `fb0f09a36a1d24d7` -> `cc271243434506ff` AT G-060: `World.contentHash` and nothing else,
     //   because ADR-0107 re-tabled `star-tiers.json`. No `World` field, no save bump, no
     //   migration, and the eviction count this arm exists to produce is unmoved.
-    expect(hashState(churn)).toBe('cc271243434506ff');
+    // `cc271243434506ff` -> `fff8c100622117ac` AT G-046b: a room is LEFT through its door,
+    //   purely behavioural, no `World` field and no save bump. **The eviction count this arm
+    //   exists to produce is UNMOVED at 24**, which is the control — the player still knocks the
+    //   same rooms down under the same guests, and what moved is how long they took to walk
+    //   there. 16 + 48 + 24 + 12 = 100 and the conservation still closes.
+    expect(hashState(churn)).toBe('fff8c100622117ac');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

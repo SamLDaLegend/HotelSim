@@ -139,12 +139,16 @@ describe('the I2 harness reaches rooms that do not work', () => {
       // completes slightly different stays, and the player's blind build cadence lands on a
       // different balance — two more rooms end up floating. **The other five rows do not move
       // at all**, which is the same control the G-041 paragraph above rests on.
-      unsupported: 43,
+      // 43 -> 42 AT G-046b. The exit rule moves how long a journey takes, so the hotel affords a
+      // slightly different set of builds and one fewer of them lands in mid-air. Every reason is
+      // still non-zero except the two this file pins at zero deliberately, which is the claim.
+      unsupported: 42,
     });
   });
 
   it('contains rooms with nothing beneath them', () => {
-    expect(tally.unsupported).toBe(43);
+    // 43 -> 42 AT G-046b, for the build-cadence reason the tally above states.
+    expect(tally.unsupported).toBe(42);
   });
 
   it('contains rooms with no bed in them — AND THE COUNT IS ONE, which is a knife edge', () => {
@@ -414,7 +418,9 @@ describe('the replay is the thing the gate runs', () => {
     // 80 -> 79 AT G-046, at the gate's own horizon and for the reason the 41 -> 43 above moved:
     // the build cadence lands on a different balance. **Every reason is still PRODUCED**, which
     // is the claim this arm makes.
-    expect(tally.unsupported).toBe(79);
+    // 79 -> 80 AT G-046b, moving the OTHER way from the 43 -> 42 above — different horizon,
+    // different balance, and the claim this arm makes is that every reason is still produced.
+    expect(tally.unsupported).toBe(80);
     expect(tally.unplaced).toBe(0);
   });
 

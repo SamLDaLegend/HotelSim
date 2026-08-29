@@ -758,7 +758,13 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // because both paragraphs will be read again: a THIN row is pinned at what it is, a DEAD one
     // is a schedule that no longer reaches the mechanism the criterion is about.
     // ==========================================================================================
-    expect(count('evictedRoomUnusable')).toBe(2);
+    // 2 -> 1 AT G-046b, BACK TO THIN AND STILL FIRING — **and the line the paragraph above draws
+    // is what decides the response, which is why it was written down.** The reason is not DEAD, so
+    // the row is pinned at what it IS and the schedule is not retuned; `outcome.test.ts` and the
+    // criterion two tests up are both green. Cause: the exit rule costs every journey a second
+    // threshold tick, so one of the two guests that used to be standing in a room whose support
+    // was demolished is somewhere else on the tick the demolition lands.
+    expect(count('evictedRoomUnusable')).toBe(1);
     // The two rows that still have headroom, for contrast — and `checkedOut`, which no longer
     // does, pinned exactly rather than under a bound it would have to be given to clear.
     // 16 -> 50 AT G-054, AND THIS ROW GETS ITS HEADROOM BACK. **Three times as many guests
@@ -769,7 +775,10 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // interesting; it did not have to be, and that is worth reading beside the refusal.
     // 50 -> 41 AT G-046, on the retuned cadence above. The door costs every journey a tick and
     // this arm's hotel has two amenity sets for forty rooms, so nine fewer guests finish.
-    expect(count('checkedOut')).toBe(41);
+    // 41 -> 28 AT G-046b, the same trade one goal on and a larger one: a second threshold tick
+    // per journey against two amenity sets for forty rooms, so thirteen more guests run out of
+    // patience before they run out of stay. The two rows below still have headroom.
+    expect(count('checkedOut')).toBe(28);
     expect(count('gaveUp')).toBeGreaterThan(50);
     expect(count('evictedRoomGone')).toBeGreaterThan(1);
     // AND THE ROW THAT ABSORBED THEM, so the collapse above is visibly a SHIFT rather than a
@@ -780,7 +789,10 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // demolish cadence takes rooms away faster, so more guests never get one at all and fewer
     // get one and then run out of patience. The five reasons still sum to the departures the
     // conservation law counts, which is what the next test asserts.
-    expect(count('leftDissatisfied')).toBe(1_273);
+    // 1,273 -> 1,319 AT G-046b, and it is the other side of `checkedOut` 41 -> 28 plus the guests
+    // that used to still be in the building at the horizon. The five reasons still sum to the
+    // departures the conservation law counts, which is what the next test asserts.
+    expect(count('leftDissatisfied')).toBe(1_319);
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 16,946ms
 
   it('and the numbers close, through a real process rather than in-memory', () => {
