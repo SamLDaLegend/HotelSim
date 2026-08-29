@@ -302,7 +302,14 @@ export {
   // the predicate this goal exists to make single.
   wantsSomethingUnserved,
 } from './needs.js';
-export type { GuestRemarkData, RemarkBook, ReviewOutcomeRow, ReviewScale, SpokenRemark } from './reviews.js';
+export type {
+  GuestRemarkData,
+  RemarkBook,
+  RemarkRecord,
+  ReviewOutcomeRow,
+  ReviewScale,
+  SpokenRemark,
+} from './reviews.js';
 // `experienceBasisPoints` WAS DELIBERATELY ABSENT (G-019) AND IS NOW DELETED (G-028b), along
 // with `qualitySum` behind it. The score is no longer a sum of quality terms, so there is no
 // two-step intermediate to withhold — see the epitaph in `reviews.ts`, and note that the ONE
@@ -310,17 +317,27 @@ export type { GuestRemarkData, RemarkBook, ReviewOutcomeRow, ReviewScale, Spoken
 // survives in `review.scorer.test.ts` rather than dying with the function.
 // (`lodgingWaitBasisPoints` shared the original note until G-027a deleted it.)
 export {
+  assertRecentRemarks,
   assertReviewOutcomes,
-  // G-065: the hotel's only voice. A remark is DERIVED from a departing guest's own parts and
-  // is stored nowhere — `remarkFor`'s docblock carries the seam that leaves behind, and
-  // `guestRemarkSchema` carries why the table is not injected content.
+  // G-065: the hotel's only voice. `guestRemarkSchema` carries why the table is not injected
+  // content, and that is what decides the shape of everything below it.
   bindGuestRemarks,
+  createRecentRemarks,
   createReviewOutcomes,
+  // G-066a: THE FEED. A departure stores the four values a line is made FROM
+  // (`remarkRecordOf` -> `recordRemark`); a host with a book turns one back into a sentence
+  // (`spokenRemarkFrom`). The rendered text is never stored, so rewording a joke changes what
+  // an old save displays — which is the point — and no id into the remark table can dangle.
+  // `remarkFor` is the composition of the two for a caller holding a whole stay.
+  RECENT_REMARKS_CAPACITY,
+  recordRemark,
   recordReview,
   remarkFor,
+  remarkRecordOf,
   reviewCountOf,
   reviewOf,
   reviewScaleOf,
+  spokenRemarkFrom,
   TICKS_PER_HOUR,
   totalReviews,
 } from './reviews.js';

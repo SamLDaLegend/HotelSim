@@ -256,7 +256,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
     // AGAINST TODAY'S KEYS MINUS THE ONES LATER STEPS ADD, and the exclusion is spelled as a
     // list rather than a single name since G-038a-ii-alpha: this asserts what the 17 -> 18 step
     // produces, which is a v18 world, and `stairs` does not arrive until the 20 -> 21 step.
-    const laterThanV18 = ['stairs', 'lift', 'liftQueue', 'staff'];
+    const laterThanV18 = ['stairs', 'lift', 'liftQueue', 'staff', 'recentRemarks'];
     const migrated = Object.keys(migrate() as unknown as Record<string, unknown>).sort();
     expect(migrated).toEqual([...WORLD_KEYS].filter((key) => !laterThanV18.includes(key)));
     expect(Object.keys(v17World()).sort()).toEqual(
@@ -409,6 +409,10 @@ describe('a v17 blob loads, and what it becomes is a world this build could have
       // a v17 world had no word for a staff role and employed nobody. Spelled here rather than
       // read back out of the step, which is what makes the two hashes an independent agreement.
       staff: { nextId: 1, list: [] },
+      // AND THE 24 -> 25 STEP: an empty feed (G-066a), because no build before v25 had a word
+      // for a remark. Spelled here rather than read back out of the step, for the reason every
+      // literal in this block is spelled.
+      recentRemarks: [],
       // AND THE 20 -> 21 STEP: an empty stairwell (G-038a-ii-alpha), because a v17 world's
       // floor axis spent unconditionally and no v17 fact can name a cell as a stair.
       stairs: [],

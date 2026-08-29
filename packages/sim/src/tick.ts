@@ -128,7 +128,7 @@ import {
   stepGuests,
 } from './guests.js';
 import { assertNeedOutcomes } from './needs.js';
-import { assertReviewOutcomes } from './reviews.js';
+import { assertRecentRemarks, assertReviewOutcomes } from './reviews.js';
 import { appendTransaction, balanceOf, outstandingDebtOf } from './ledger.js';
 import type { Transaction } from './ledger.js';
 import { applyDrawLoan, assertLoanOutcomes, totalLoanOutcomes } from './loan.js';
@@ -952,6 +952,7 @@ export function runGuests(state: TickState): TickState {
     outcomes: state.world.guestOutcomes,
     needOutcomes: state.world.needOutcomes,
     reviewOutcomes: state.world.reviewOutcomes,
+    recentRemarks: state.world.recentRemarks,
     ledger: state.world.ledger,
     entities: state.entities,
     content: state.content,
@@ -996,6 +997,9 @@ export function runGuests(state: TickState): TickState {
     result.outcomes === state.world.guestOutcomes &&
     result.needOutcomes === state.world.needOutcomes &&
     result.reviewOutcomes === state.world.reviewOutcomes &&
+    // BY IDENTITY, for `reviewOutcomes`'s reason: only a departure writes the feed, and
+    // `recordRemark` returns a NEW array whenever it does (G-066a).
+    result.recentRemarks === state.world.recentRemarks &&
     result.ledger === state.world.ledger &&
     // BY IDENTITY (G-038b-i). `settleLiftQueue` returns the line it was given when nobody
     // joined it and nobody left it, so a world with a lift and a steady line still takes the
@@ -1008,6 +1012,7 @@ export function runGuests(state: TickState): TickState {
           guestOutcomes: result.outcomes,
           needOutcomes: result.needOutcomes,
           reviewOutcomes: result.reviewOutcomes,
+          recentRemarks: result.recentRemarks,
           ledger: result.ledger,
           liftQueue: result.liftQueue,
         };
@@ -1280,6 +1285,13 @@ export function stepTick(
   // one pointer comparison, and every world this build LOADS is checked unconditionally.
   if (state.world.reviewOutcomes !== world.reviewOutcomes) {
     assertReviewOutcomes(state.world.reviewOutcomes, departedGuests(state.world.guestOutcomes));
+  }
+  // And the remark feed still describes those departures (G-066a). Same function
+  // `assertWorldShape` calls at load, gated on the same identity compare and for the same
+  // reason: only a DEPARTURE writes this ring, so on the vast majority of ticks it costs one
+  // pointer comparison, and every world this build LOADS is checked unconditionally.
+  if (state.world.recentRemarks !== world.recentRemarks) {
+    assertRecentRemarks(state.world.recentRemarks, departedGuests(state.world.guestOutcomes));
   }
   // And the build counters are still counters (G-008). The same function `assertWorldShape`
   // calls at load, so "valid build outcomes" has one definition rather than two that

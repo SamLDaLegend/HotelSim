@@ -26,8 +26,8 @@ import { createGuestOutcomes, createGuestStore, createLiftQueue } from './guests
 import type { GuestOutcomes, GuestStore, LiftQueue } from './guests.js';
 import { createNeedOutcomes } from './needs.js';
 import type { NeedOutcome } from './needs.js';
-import { createReviewOutcomes } from './reviews.js';
-import type { ReviewOutcomeRow } from './reviews.js';
+import { createRecentRemarks, createReviewOutcomes } from './reviews.js';
+import type { RemarkRecord, ReviewOutcomeRow } from './reviews.js';
 import { hashJson } from './hash.js';
 import type { JsonValue } from './hash.js';
 import { appendTransaction } from './ledger.js';
@@ -122,6 +122,27 @@ export type World = {
    * checks and for why the reasons to read it are M4's.
    */
   readonly reviewOutcomes: readonly ReviewOutcomeRow[];
+  /**
+   * WHAT THE LAST FEW DEPARTURES SAID, oldest first (G-066a).
+   *
+   * NOT A SECOND REVIEW TABLE. `reviewOutcomes` above is a histogram of the WHOLE HOTEL'S
+   * history and grows a row per score; this is a bounded ring of the last
+   * `RECENT_REMARKS_CAPACITY` departures and forgets. They answer different questions and
+   * neither is derivable from the other: the histogram cannot say who said what, and the ring
+   * cannot say what the hotel's record is.
+   *
+   * IT HOLDS THE INPUTS TO A REMARK AND NOT THE REMARK. The stored tuple is
+   * `{ guestId, score, needId, unservedTicks }`, and `reviews.ts` carries the argument for why
+   * it is those four — the short form is that `guest-remarks.json` is outside `contentHash` on
+   * purpose, so a stored SENTENCE would freeze old jokes into old saves and a stored REMARK ID
+   * would dangle the first time a line was deleted. A stored need id does neither: it indexes
+   * content `contentHash` covers, which is `guest.needs[].needId`'s own argument (ADR-0003).
+   *
+   * NOTHING IN `packages/sim` READS IT — the same boundary `reviewOutcomes` has, enforced by
+   * the same scan (`review.boundary.test.ts`). It is written by a departure and shown by a
+   * host; no simulation decision may consult one.
+   */
+  readonly recentRemarks: readonly RemarkRecord[];
   /**
    * The plot this hotel is built on (G-007): the four edges of the coordinate space.
    *
@@ -278,6 +299,7 @@ const WORLD_KEY_SET: Readonly<Record<keyof World, true>> = {
   liftQueue: true,
   loanOutcomes: true,
   needOutcomes: true,
+  recentRemarks: true,
   reviewOutcomes: true,
   rng: true,
   staff: true,
@@ -360,6 +382,10 @@ export function createWorld(seed: number, content: BoundContent): World {
     // reviews, whatever content created it — which is what lets the v9 -> v10 migration
     // default to the same value honestly, having no content and so no scale to read.
     reviewOutcomes: createReviewOutcomes(),
+    // EMPTY, AND IT IS A HISTORICAL STATEMENT (G-066a): nobody has left, so nobody has said
+    // anything. Same argument as the tally above, and it is what lets the v24 -> v25 migration
+    // default to this value honestly — no build before that version had a word for a remark.
+    recentRemarks: createRecentRemarks(),
     grid: createGridBounds(),
     // EMPTY, AND THAT IS A STATEMENT RATHER THAN A DEFAULT (G-034b). A new hotel is a bare
     // plot: nobody has drawn a corridor on it, so every floor is OPEN PLAN and every cell no

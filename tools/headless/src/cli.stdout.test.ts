@@ -337,7 +337,28 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // MOVED AGAIN AT G-059 to `bf65fd6522ddf4f1`, ONE cause: the review tally is world state and
     // the scorer records different scores. See the `distribution` block below for both halves of
     // the move and the text golden's `state hash` line for the control.
-    stateHash: 'bf65fd6522ddf4f1',
+    // MOVED AGAIN AT G-066a to `00000ef70ad7566b`, TWO HASHED-STATE CAUSES AND NO BEHAVIOUR.
+    //
+    //   1. `World` GAINED `recentRemarks`, a bounded ring of what recent departures said, and
+    //      the save went to **v25** with a real 24 -> 25 migration and a `without-remarks.ts`
+    //      stripper. That alone moves the hash: `worldToJson` is an identity cast, so a new key
+    //      lands in the hashed document whether or not anything is in it.
+    //   2. IT IS NOT EMPTY ON THIS RUN. 27 guests depart over two days (6 checked out, 21 gave
+    //      up), all 27 of them under the 48 the ring keeps, so the ring holds 27 records.
+    //
+    // **`World.contentHash` DID NOT MOVE, AND THAT IS THE POINT OF THE WHOLE DESIGN.**
+    // `guest-remarks.json` is deliberately outside `bindContent`'s fingerprint (G-065), and what
+    // is stored here is the four values a line is made FROM and never the line — so rewording a
+    // joke moves nothing in this document, and no id into the remark table can dangle.
+    //
+    // **THE CONTROL IS THE WHOLE DOCUMENT AND IT IS EXACT.** Nothing in `packages/sim` reads the
+    // ring: 32 arrived, 6 checked out, 21 gave up, 5 in the hotel, 51,000p revenue, -24,000p
+    // upkeep, 527,000p balance to the penny, the same four need rows, the same review
+    // distribution, the same mean, 11 entities, 6 valid rooms, the same 0/0/0/0/0/0 tally,
+    // 750,000p of scrap, no debt, the same rating block and the whole build and loan blocks. NO
+    // key is added to this document at all, so `SUMMARY_SCHEMA_VERSION` stays 4 — showing the
+    // feed is G-066b's, and it is a report line this goal deliberately did not write.
+    stateHash: '00000ef70ad7566b',
   },
   guests: {
     arrived: 32,
@@ -1001,7 +1022,18 @@ const GOLDEN_2_DAYS_SEED_42 =
     // four need rows to the basis point, the same 11 transactions, the same 51,000p, the same
     // 527,000p, the same 6 valid rooms and the same two `stars` lines. `SAVE_SCHEMA_VERSION`
     // does not move — no field was added to `World` — and neither does `SUMMARY_SCHEMA_VERSION`.
-    'state hash  bf65fd6522ddf4f1',
+    // G-066a: `bf65fd6522ddf4f1` -> `00000ef70ad7566b`. `World` GAINED `recentRemarks` — a
+    // bounded ring of the last 48 departures, holding the four values a remark is derived FROM
+    // and never the sentence — so the hashed document gained a key AND that key is non-empty
+    // here: this run departs 27 guests. **SAVE_SCHEMA_VERSION MOVES TO 25** with a real 24 -> 25
+    // migration, which is the FIRST cause on this golden ever to be a save bump rather than a
+    // scorer or a fingerprint. `World.contentHash` does NOT move and `SUMMARY_SCHEMA_VERSION`
+    // does not either. The control is the whole document, and it is the whole document: the same
+    // 32 arrivals, the same 6/21 split, the same four need rows to the basis point, the same 11
+    // transactions, the same 51,000p, the same 527,000p, the same 6 valid rooms, the same review
+    // distribution and mean, and the same two `stars` lines. NOT ONE OTHER CHARACTER MOVES,
+    // because showing the feed is G-066b's and this goal wrote no report line for it.
+    'state hash  00000ef70ad7566b',
   ].join('\n') + '\n';
 
 /**

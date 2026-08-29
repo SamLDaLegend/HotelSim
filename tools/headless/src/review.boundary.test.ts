@@ -150,6 +150,10 @@ const ALLOWED = {
   'tick.ts': 'threads it from the guest loop into the world and asserts its shape',
   'save.ts': 'serialises, migrates and validates it',
   'index.ts': 'the public surface',
+  // G-066a. The v24 -> v25 stripper, which names `recentRemarks` in order to take it back off a
+  // world document. It is on the list for the same reason `save.ts` is — taking a field OUT of a
+  // blob is the store's own machinery, not a decision made from a review.
+  'without-remarks.ts': 'strips the feed back to its pre-v25 shape for the migration tests',
 } as const;
 
 /**
@@ -158,7 +162,11 @@ const ALLOWED = {
  * that validates a loaded table.
  */
 const READERS_ALLOWED = new Set(['reviews.ts', 'save.ts', 'index.ts']);
-const READERS = ['reviewCountOf', 'totalReviews'];
+// G-066a adds `spokenRemarkFrom`: it is the accessor that turns a STORED record back into a
+// sentence, so it is the function a decision made from the feed would have to call, exactly as
+// `reviewCountOf` is for the histogram. `remarkFor` and `remarkRecordOf` are deliberately NOT
+// here — they PRODUCE, and `guests.ts` is allowed to produce.
+const READERS = ['reviewCountOf', 'totalReviews', 'spokenRemarkFrom'];
 
 /**
  * The scan's predicate: `name` as a whole word, INCLUDING AFTER A DOT.
@@ -183,6 +191,14 @@ const READERS = ['reviewCountOf', 'totalReviews'];
  */
 const mentions = (source: string, name: string): boolean =>
   new RegExp(`(?<![\\w$])${name}(?![\\w$])`).test(source);
+
+/**
+ * The `World` keys the review store owns. NOT derivable from `reviews.ts`'s exports — they are
+ * fields of `World`, declared in `world.ts`, so `reviewExports()` cannot see them. G-066a added
+ * the second; a THIRD store field added without a line here would be invisible to this scan,
+ * which is stated rather than left to be inferred from silence.
+ */
+const STORE_FIELDS = ['reviewOutcomes', 'recentRemarks'];
 
 describe('THE SOURCE SCAN — no sim module outside the allow-list names the review store', () => {
   it('reads the token list off `reviews.ts` itself, and the list is not empty', () => {
@@ -216,7 +232,13 @@ describe('THE SOURCE SCAN — no sim module outside the allow-list names the rev
       for (const name of names) {
         if (mentions(source, name)) offences.push(`${file}: ${name}`);
       }
-      if (mentions(source, 'reviewOutcomes')) offences.push(`${file}: reviewOutcomes`);
+      // THE TWO STORE FIELDS ARE NAMED HERE AND NOT DERIVED, because neither is an EXPORT of
+      // `reviews.ts` — they are keys of `World`, so `reviewExports()` cannot see them. G-066a
+      // added the second; a third store field added without a line here is invisible to this
+      // scan, which is stated rather than left to be assumed.
+      for (const field of STORE_FIELDS) {
+        if (mentions(source, field)) offences.push(`${file}: ${field}`);
+      }
     }
     expect(offences).toEqual([]);
   });
@@ -244,7 +266,8 @@ describe('THE SOURCE SCAN — no sim module outside the allow-list names the rev
     for (const path of simSources()) {
       const file = path.split(/[\\/]/).pop()!;
       const source = stripComments(readFileSync(path, 'utf8'));
-      const touches = names.some((name) => mentions(source, name)) || mentions(source, 'reviewOutcomes');
+      const touches =
+        names.some((name) => mentions(source, name)) || STORE_FIELDS.some((field) => mentions(source, field));
       if (touches) touching.push(file);
     }
     expect([...touching].sort()).toEqual(Object.keys(ALLOWED).sort());

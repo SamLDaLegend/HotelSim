@@ -44,6 +44,9 @@ import { stripLift } from './without-lift.js';
 // G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
 // one that does, exactly as every earlier step refuses the field it is about.
 import { stripStaff } from './without-staff.js';
+// G-066a: v25 adds `recentRemarks`, so an era blob must not carry it either — `migrateV24ToV25`
+// REFUSES a world that already names it, which is what makes this strip load-bearing.
+import { stripRecentRemarks } from './without-remarks.js';
 import { stripFootprints } from './without-footprints.js';
 import { bindContent } from './content.js';
 import type { NeedTypeData, RoomTypeData, SimContent } from './content.js';
@@ -360,7 +363,7 @@ const v11Labels = (world: Record<string, unknown>): unknown => {
    */
   const asV8Bytes = (world: World): string => {
     const json = stripLift(stripStairs(stripEditCounters(
-      stripFootprints(stripCorridors(stripDepth(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)))),
+      stripFootprints(stripCorridors(stripDepth(stripRecentRemarks(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))))),
     )));
     const guests = json['guests'] as { nextId: number; list: Record<string, unknown>[] };
     // THE v10 FIELD COMES OFF TOO (G-019), for the reason the v9 fields come off below: "the

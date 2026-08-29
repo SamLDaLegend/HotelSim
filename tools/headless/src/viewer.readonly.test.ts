@@ -327,6 +327,23 @@ const DELIBERATELY_NOT_DRAWN: Readonly<Record<string, string>> = {
   // MEMBER OF STAFF A POSITION THIS LINE IS A LIE, and that goal must budget the drawing, in
   // exactly the sense the lift lines say it must.
   staff: 'no position at G-052a; G-052b places staff and owns the drawing',
+  // G-066a. THE REMARK FEED, AND THIS EXEMPTION IS A DEBT WITH A NAMED OWNER — the lift pair's
+  // kind, not the payroll's.
+  //
+  // A guest saying what it thought of the hotel is exactly the sort of thing a watcher WOULD
+  // read; there is nothing structural stopping it being drawn, and that is what separates this
+  // from `staff`. What stops it HERE is scope: G-066a is the sim half and ships the ring, and
+  // G-066b is the renderer and is a different goal with a different owner. The sim half cannot
+  // render a line anyway — turning a stored record into a sentence needs a `RemarkBook`, and the
+  // remark table is deliberately outside injected content, so `tools/viewer` would have to load
+  // `guest-remarks.json` through its own door exactly as `tools/headless` does.
+  //
+  // WHAT A WATCHER LOSES BY THIS, STATED SO IT IS A CHOICE AND NOT AN OVERSIGHT: nothing on
+  // screen says a departing guest had an opinion, so this goal's change is INVISIBLE in a
+  // recording — which is why its WATCH reports no frame rather than manufacturing one. THE
+  // MOMENT G-066b DRAWS THE FEED THIS LINE IS A LIE, in exactly the sense the lift lines say
+  // theirs are.
+  recentRemarks: 'the sim half only at G-066a; G-066b renders the feed and owns the drawing',
 };
 
 describe('the viewer shows what the simulation records, or says why not', () => {

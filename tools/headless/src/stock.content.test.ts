@@ -465,14 +465,24 @@ describe('THE EXHAUSTION ARM — every number in the census moves the SIMULATION
       // the rng, the grid, the entities, the build or loan outcomes — or `reviewOutcomes`,
       // which the comment table above claims a value for at two arms and nothing asserted.
       //
-      // So the whole world is compared with exactly TWO fields excluded, each for a stated
+      // So the whole world is compared with exactly THREE fields excluded, each for a stated
       // reason: `contentHash`, because the two documents genuinely differ and that is the mask
-      // this file exists to justify; and `reviewOutcomes`, because it is the one thing the
-      // field is ALLOWED to move — and it is pinned separately, per arm, immediately below.
+      // this file exists to justify; `reviewOutcomes`, because it is the one thing the field is
+      // ALLOWED to move — and it is pinned separately, per arm, immediately below — and, since
+      // G-066a, `recentRemarks`.
+      //
+      // THE THIRD EXCLUSION IS A REAL FINDING AND NOT BOOKKEEPING, WHICH IS WHY IT IS SPELLED
+      // OUT. The remark feed stores the SCORE `reviewOf` gave each departure, so moving
+      // `reviewScoreMin` moves the feed — measured here as `score: 1` becoming `score: 0` on
+      // every record, which is the floor of the scale arriving exactly where it should. It is
+      // excluded rather than pinned per arm because it says the same thing `reviewOutcomes`
+      // already says at the arm chosen for it: this arm's subject is the STOCK MODEL, and a
+      // second copy of the review claim would not sharpen it.
       const exceptReviews = (world: typeof base): unknown => ({
         ...world,
         contentHash: '',
         reviewOutcomes: [],
+        recentRemarks: [],
         // The two the scale is ALLOWED to reach, both excluded by name and both pinned above:
         // the review rows, and the tally's band-valued columns.
         needOutcomes: tickColumns(world.needOutcomes),

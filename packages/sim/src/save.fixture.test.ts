@@ -60,7 +60,7 @@ describe('I6 stored v1 save fixture', () => {
     ]);
   });
 
-  it('is a v1 blob, and this build now writes v22', () => {
+  it('is a v1 blob, and this build now writes v25', () => {
     expect((JSON.parse(SAVE_V1_BYTES) as { schemaVersion: number }).schemaVersion).toBe(1);
     expect(SAVE_V1_STATE_HASH).toHaveLength(16);
     // It stopped being true at G-004, exactly as ADR-0006 said it would, and again at
@@ -90,7 +90,7 @@ describe('I6 stored v1 save fixture', () => {
     // assertions wearing an absolute — files that say in their own comments that they do not
     // own the current era, and that had to be edited at every bump. This file's whole subject
     // IS the walk from v1 to today, so it is the one that should go red when the era moves.
-    expect(SAVE_SCHEMA_VERSION).toBe(24);
+    expect(SAVE_SCHEMA_VERSION).toBe(25);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
   });
 
@@ -151,7 +151,15 @@ describe('I6 stored v1 save fixture', () => {
     // lift it IS a fact about v1 as much as about v23, because no era up to it had a word for a
     // staff role, a wage or a payroll. The step writes no wage transactions for nights already
     // simulated, which is why the v1 ledger below still folds to exactly what it always did.
-    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 12);
+    //
+    // THIRTEEN AFTER G-066a: `recentRemarks` (24 -> 25), the thirteenth. What it says about
+    // THESE bytes is the same shape as `staff`'s and is a fact about v1 as much as about v24 —
+    // a v1 world's departing guests said nothing that anything kept, because no era up to it
+    // had anywhere to put a remark. It is also the one addition of the thirteen that could not
+    // have been reconstructed even in principle: `reviewOutcomes` records a score per departure
+    // and throws the rest of the stay away, so an empty ring is not a default here, it is the
+    // only reading of these bytes that exists.
+    expect(Object.keys(after)).toHaveLength(Object.keys(before).length + 13);
   });
 
   it('continues to simulate from where it was saved', () => {

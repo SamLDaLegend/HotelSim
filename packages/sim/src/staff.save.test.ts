@@ -57,6 +57,9 @@ import { createWorld, hashState, TICKS_PER_DAY } from './world.js';
 import type { World } from './world.js';
 import { WORLD_KEYS } from './world.js';
 import { stripStaff } from './without-staff.js';
+// G-066a: v25 adds `recentRemarks`, so an era blob must not carry it either — `migrateV24ToV25`
+// REFUSES a world that already names it, which is what makes this strip load-bearing.
+import { stripRecentRemarks } from './without-remarks.js';
 
 const RATE = 8_500;
 const UPKEEP = 2_500;
@@ -123,7 +126,7 @@ function livedIn(): World {
 /** The lived-in world as a v23 document: this build's bytes with v24's one change taken back out. */
 function v23World(): Json {
   const blob = JSON.parse(serialise(livedIn())) as { world: Json };
-  return stripStaff(blob.world);
+  return stripRecentRemarks(stripStaff(blob.world));
 }
 
 const v23Blob = (world: Json = v23World()): string => JSON.stringify({ schemaVersion: 23, world });
@@ -135,12 +138,18 @@ const step = MIGRATIONS.find((entry) => entry.from === 23);
 // ==========================================================================================
 
 describe('the chain walks 1 -> ... -> today, and the 23 -> 24 step is the twenty-third of it', () => {
-  it('ships one step per version, gapless, and this one is the newest', () => {
+  it('ships one step per version, gapless, and this one is still the twenty-third of them', () => {
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
     expect(MIGRATIONS).toHaveLength(SAVE_SCHEMA_VERSION - MIN_SUPPORTED_SCHEMA_VERSION);
     expect(step).toBeDefined();
     expect(step?.to).toBe(24);
-    expect(SAVE_SCHEMA_VERSION).toBe(24);
+    // WAS `toBe(24)` AND THE TITLE SAID "this one is the newest" (G-066a). Both were true on
+    // the day and neither is now — v25 exists. Corrected rather than deleted, in the shape
+    // `travel.save.test.ts` and `review.save.test.ts` already use: what this file is entitled
+    // to assert is that ITS OWN step is where it always was, which `step?.to` says exactly.
+    // A file claiming to be the head of the chain is a claim the next bump must remember to
+    // move, and ADR-0008 says an artefact about the past must not track the present.
+    expect(SAVE_SCHEMA_VERSION).toBeGreaterThanOrEqual(24);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
 
@@ -162,9 +171,16 @@ describe('the chain walks 1 -> ... -> today, and the 23 -> 24 step is the twenty
   });
 
   it('adds exactly ONE top-level key, and it is the one this goal is about', () => {
+    // AGAINST v24's OWN KEY SET, not against today's (G-066a): `WORLD_KEYS` tracks the present
+    // and this step lands in v24, so every key a LATER version added has to come off both sides.
+    // The alternative is a frozen literal, which `grid.depth.save.test.ts` uses and which rots
+    // in the other direction; the filter is the form `corridors.save.test.ts` already uses.
+    const laterThanV24 = ['recentRemarks'];
     const migrated = Object.keys(step?.migrate(v23World()) as Json).sort();
-    expect(migrated).toEqual([...WORLD_KEYS]);
-    expect(Object.keys(v23World()).sort()).toEqual([...WORLD_KEYS].filter((key) => key !== 'staff'));
+    expect(migrated).toEqual([...WORLD_KEYS].filter((key) => !laterThanV24.includes(key)));
+    expect(Object.keys(v23World()).sort()).toEqual(
+      [...WORLD_KEYS].filter((key) => key !== 'staff' && !laterThanV24.includes(key)),
+    );
     expect([...WORLD_KEYS]).toEqual([...WORLD_KEYS].sort());
   });
 });
@@ -201,7 +217,14 @@ describe('v23 -> v24 employs nobody, because a v23 world had no word for a staff
 
   it('hashes identically to the same world with the v24 field written in by hand', () => {
     const loaded = deserialise(v23Blob());
-    const byHand = { ...(v23World() as unknown as World), staff: { nextId: 1, list: [] } } as unknown as World;
+    const byHand = {
+      ...(v23World() as unknown as World),
+      staff: { nextId: 1, list: [] },
+      // v25's field, written in by hand for the same reason `staff` is (G-066a): `loaded` has
+      // walked the WHOLE chain, so it carries every later era's fields too, and a comparison
+      // that ignored them would be comparing two different shapes and calling it a hash match.
+      recentRemarks: [],
+    } as unknown as World;
     expect(hashState(loaded)).toBe(hashState(byHand));
   });
 

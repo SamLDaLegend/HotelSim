@@ -539,7 +539,19 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   the same guests did the same things and were scored differently for it. Fifty-nine of
     //   this workload's hundred guests stormed out and used to review like contented checkouts;
     //   they review at the floor now.
-    expect(hashState(plain)).toBe('ce9bc72375ddd24f');
+    // - `ce9bc72375ddd24f` -> `612531853a713e01` AT G-066a, AND THIS ONE IS **STRUCTURAL AND
+    //   BEHAVIOURAL AT ONCE**, which is a third kind and is worth separating from both above.
+    //   `World` gains `recentRemarks`, so the hashed document gains a key — that alone moves this
+    //   number even on a world where nobody departs. It ALSO fills, because this arm departs 86
+    //   guests, and a bounded ring of the last 48 of them is real hashed state. **SAVE BUMPS TO
+    //   v25** with a real 24 -> 25 migration, a `without-remarks.ts` stripper and an
+    //   `assertWorldShape` clause. `World.contentHash` did NOT move: `guest-remarks.json` is
+    //   deliberately outside `bindContent`'s fingerprint, and nothing this goal touched is
+    //   injected content. **checkedOut 27, leftDissatisfied 59, still-in-the-hotel 14, 100
+    //   arrived, `gaveUp` and `evictedGuests` zero** — the outcome test below re-checks that and
+    //   did NOT move, which is the control: the same guests did the same things, and what changed
+    //   is that the hotel now keeps a note of what the last few of them said.
+    expect(hashState(plain)).toBe('612531853a713e01');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -969,7 +981,13 @@ describe('the same workload with the player churning the building', () => {
     //   migration, no ledger line, and `World.contentHash` unmoved. **20 + 43 + 25 and 100
     //   arrived still closes**, and `gaveUp` is still zero — so the twenty-five evictions this
     //   arm exists to produce still happen, and still review at the floor as they always did.
-    expect(hashState(churn)).toBe('8d8d01695c3b5fa5');
+    // `8d8d01695c3b5fa5` -> `6e6193cd6c82e881` AT G-066a: `World` gains `recentRemarks`, so the
+    //   hashed document gains a key, and this arm's 88 departures fill the ring. **Save bumps to
+    //   v25** with a real migration; `World.contentHash` unmoved, because the remark table is not
+    //   injected content. **20 + 43 + 25 and 100 arrived still closes**, and `gaveUp` is still
+    //   zero — so the twenty-five evictions this arm exists to produce still happen, and now say
+    //   so out loud.
+    expect(hashState(churn)).toBe('6e6193cd6c82e881');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

@@ -956,8 +956,8 @@ function grievanceOf(needs: readonly NeedState[]): NeedState | undefined {
  * the grievance's whole hours, and the specificity term is multiplied by one more than that
  * ceiling. So no stack of severity can outrank naming the need.
  */
-function rankOf(row: GuestRemarkData, hours: number, grievance: NeedState): number {
-  const specific = row.needId === grievance.needId ? 1 : 0;
+function rankOf(row: GuestRemarkData, hours: number, needId: string): number {
+  const specific = row.needId === needId ? 1 : 0;
   return specific * (hours + 1) + minHoursOf(row);
 }
 
@@ -965,19 +965,23 @@ function rankOf(row: GuestRemarkData, hours: number, grievance: NeedState): numb
  * What a departing guest says about its stay, or `undefined` if this content gives it no voice.
  *
  * ===========================================================================================
- * NOTHING IN `packages/sim` CALLS THIS, AND THAT IS A SEAM RATHER THAN DEAD CODE. Say it here
- * because the next reader will otherwise reach for the obvious wiring and find out why the
- * hard way.
+ * ~~"NOTHING IN `packages/sim` CALLS THIS, AND THAT IS A SEAM RATHER THAN DEAD CODE… Showing a
+ * feed of what recent guests said therefore needs somewhere to put them — a bounded ring on
+ * `World` — and that is a save bump, a migration, a stripper and a shape check, which is a
+ * different goal with a different owner."~~ STRUCK 2026-08-29 (G-066a). THE RING EXISTS: it is
+ * `World.recentRemarks`, it is save v25, and the four costs the paragraph named were all paid.
+ * Struck rather than deleted because the ARGUMENT is what the section below is built on and it
+ * survives verbatim — the material a remark is made of exists only inside `depart` and is gone
+ * one tick later, so what is stored is that material and never the sentence made from it.
  *
- * The material a remark is made of — the guest's own `unservedTicks` vector, its stay length,
- * and the departure reason that decides `cutShort` — exists only INSIDE `depart`, and is gone
- * one tick later: `world.reviewOutcomes` is a `{ score, count }` histogram and carries no
- * per-guest detail at all. So a remark can be DERIVED at a departure and cannot be
- * RECONSTRUCTED from any world afterwards. Showing a feed of what recent guests said therefore
- * needs somewhere to put them — a bounded ring on `World` — and that is a save bump, a
- * migration, a stripper and a shape check, which is a different goal with a different owner.
- * Deriving-not-storing is what keeps THIS goal free of all four (ADR-0104's precedent), and
- * the cost of that choice is exactly this paragraph.
+ * THIS FUNCTION IS STILL NOT ON THE DEPARTURE PATH, AND NOW FOR A DIFFERENT REASON. `depart`
+ * cannot call it: it needs a `RemarkBook`, and the remark table is deliberately NOT injected
+ * content (see this section's header), so no `BoundContent` carries one and the simulation has
+ * no way to reach one from inside a tick. That is not an obstacle worked around — it is the
+ * design working. `depart` writes `remarkRecordOf`'s four-field tuple; a HOST that has a book
+ * calls `spokenRemarkFrom` on it whenever it wants to show the line. This function is the
+ * composition of those two, kept because it is the one-call door a test or a host with the
+ * whole stay in hand should use, and because it is what makes "one selection path" checkable.
  * ===========================================================================================
  *
  * THE SCORE IS COMPUTED HERE RATHER THAN PASSED IN, so the stars and the sentence cannot
@@ -1016,47 +1020,16 @@ export function remarkFor(
 ): SpokenRemark | undefined {
   const score = reviewOf(bound, needs, cutShort, stayTicks, standing);
   if (score === undefined) return undefined;
-  const grievance = grievanceOf(needs);
-  if (grievance === undefined) return undefined;
-  const hours = Math.floor(grievance.unservedTicks / TICKS_PER_HOUR);
-  let best: GuestRemarkData | undefined;
-  let bestRank = 0;
-  let tied = 0;
-  for (const row of book.rows) {
-    if (!selectable(row, score, hours, grievance)) continue;
-    const rank = rankOf(row, hours, grievance);
-    if (best === undefined || rank > bestRank) {
-      best = row;
-      bestRank = rank;
-      tied = 1;
-      continue;
-    }
-    if (rank === bestRank) tied += 1;
-  }
-  // `bindGuestRemarks` guarantees a zero-severity candidate at every score for every need, and
-  // `selectable` rejects a row only on score, severity or need — so this cannot be taken under a
-  // bound book. It is a postcondition rather than a case, and it THROWS rather than returning
-  // `undefined` because a silently mute guest is the failure the coverage refusal exists to
-  // prevent, arriving through the one door that bypassed it.
-  if (best === undefined) {
-    throw new Error(
-      `No guest remark for a score of ${score} with "${grievance.needId}" as the worst-served need. ` +
-        'A bound book covers every score and every need, so this one did not come from bindGuestRemarks.',
-    );
-  }
-  const chosen = tied === 1 ? best : nthTied(book, score, hours, grievance, bestRank, guestId, tied);
-  return Object.freeze({
-    remarkId: chosen.id,
-    score,
-    text: chosen.text.split(HOURS_PLACEHOLDER).join(String(hours)),
-  });
+  const record = remarkRecordOf(needs, score, guestId);
+  if (record === undefined) return undefined;
+  return spokenRemarkFrom(book, record);
 }
 
-/** Step 1 of `remarkFor`'s selection order, spelled once because two walks apply it. */
-function selectable(row: GuestRemarkData, score: number, hours: number, grievance: NeedState): boolean {
+/** Step 1 of the selection order, spelled once because two walks apply it. */
+function selectable(row: GuestRemarkData, score: number, hours: number, needId: string): boolean {
   if (row.score !== score) return false;
   if (minHoursOf(row) > hours) return false;
-  return row.needId === undefined || row.needId === grievance.needId;
+  return row.needId === undefined || row.needId === needId;
 }
 
 /**
@@ -1072,7 +1045,7 @@ function nthTied(
   book: RemarkBook,
   score: number,
   hours: number,
-  grievance: NeedState,
+  needId: string,
   bestRank: number,
   guestId: number,
   tied: number,
@@ -1080,8 +1053,8 @@ function nthTied(
   const wanted = ((guestId % tied) + tied) % tied;
   let seen = 0;
   for (const row of book.rows) {
-    if (!selectable(row, score, hours, grievance)) continue;
-    if (rankOf(row, hours, grievance) !== bestRank) continue;
+    if (!selectable(row, score, hours, needId)) continue;
+    if (rankOf(row, hours, needId) !== bestRank) continue;
     if (seen === wanted) return row;
     seen += 1;
   }
@@ -1090,4 +1063,279 @@ function nthTied(
   // reason `remarkFor`'s postcondition throws — a silent fallback here would hide a change to
   // one of the two walks that did not reach the other.
   throw new Error(`Guest remark tie-break walked ${seen} row(s) of ${tied} at a score of ${score}.`);
+}
+
+// ============================================================================
+//  THE FEED (G-066a) — WHAT RECENT DEPARTURES SAID, STORED AS WHAT THEY SAID IT WITH.
+//
+//  G-065 ended by reporting a seam rather than crossing it: a remark can be DERIVED at a
+//  departure and can never be RECONSTRUCTED from a later world, because `reviewOutcomes` is a
+//  `{ score, count }` histogram and the guest is off `world.guests` one tick after it leaves.
+//  This is that seam crossed. The human ruled it; the renderer is G-066b and is not here.
+//
+//  ------------------------------------------------------------------------------------------
+//  WHAT IS STORED, AND WHY IT IS THE MINIMUM.
+//
+//  NOT THE RENDERED LINE. `guest-remarks.json` is deliberately outside `bindContent`'s
+//  fingerprint (this section's header, G-065), so that rewording a joke invalidates no save and
+//  moves no determinism hash. Storing the sentence would throw exactly that away: every save
+//  would freeze the wording of the build that wrote it, and the table's whole point would die
+//  the first time a line was improved.
+//
+//  NOT A `remarkId` EITHER, AND THIS IS THE LESS OBVIOUS HALF. An id into the REMARK TABLE is
+//  not the same kind of id as `guest.needs[].needId`. A need id indexes content that
+//  `World.contentHash` covers, so `assertContentMatches` refuses — on every tick — a world
+//  whose content moved underneath it, and the id therefore cannot dangle. A remark id indexes
+//  a table NOTHING fingerprints, precisely so it can be edited freely: deleting a line would
+//  leave a dangling reference in every save that held it, with no check anywhere able to see
+//  it. The two ids look identical and have opposite safety properties.
+//
+//  SO: THE INPUTS TO THE SELECTION, AND NOTHING ELSE. `spokenRemarkFrom` below reads exactly
+//  four values, and `RemarkRecord` is exactly those four:
+//
+//    guestId         step 4 of the selection order, the tie-break. Already in world state.
+//    score           `reviewOf`'s answer for this stay, on this content's scale.
+//    needId          the grievance — the need this guest went longest without. A CONTENT ID,
+//                    and the fingerprinted kind: `needTypesInOrder` declares it, `contentHash`
+//                    covers it, `guest.needs[].needId` is the established precedent (ADR-0003).
+//    unservedTicks   how long it went unserved. The `{hours}` placeholder is
+//                    `floor(unservedTicks / TICKS_PER_HOUR)`; the TICKS are stored because they
+//                    are what the simulation measured and the hours are a rendering of them.
+//
+//  The consequence is the one the design wanted: REWORDING A JOKE CHANGES WHAT AN OLD SAVE
+//  DISPLAYS, which is correct, and there is no id that can dangle.
+//
+//  WHY `score` IS STORED RATHER THAN RE-DERIVED. `reviewOf` needs the whole `NeedState` vector,
+//  the stay length, the cut-short flag and the hotel's standing at that departure — four more
+//  fields, one of them an array, none of which the SELECTION reads. Storing them to recompute a
+//  number would be several times the size for a worse answer: `world.reviewOutcomes` already
+//  records this stay's score, so a re-derived one could DISAGREE with the histogram the moment
+//  `reviewOf` moved — which it has, three times. One score per stay, recorded once, is the same
+//  discipline `remarkFor` states for not taking a score as a parameter.
+//
+//  ------------------------------------------------------------------------------------------
+//  THE CAPACITY IS DERIVED (§2.1), NOT CHOSEN.
+//
+//  REQUIREMENT: *a player who checks the feed once per simulated day sees every departure since
+//  they last looked.* The arithmetic, every input from a content file on disk:
+//
+//    a stay is one day        `guest-rules.json`, `stayDurationTicks: 1440`, against
+//                             `TICKS_PER_DAY = 1440`. So in steady state a day's DEPARTURES are
+//                             a day's ARRIVALS.
+//    arrivals a day, at most  `demand.json`, `max(partiesPerDayByStars)` = 24 parties. That is
+//                             the top rung of the curve, so it is the most a hotel can earn.
+//    guests a party, at most  `guest-rules.json`, `partySizeWeights` has length 2, so a party is
+//                             at most 2 guests.
+//
+//    24 x 2 = 48 departures in the busiest day the shipped tables can produce.
+//
+//  Headroom multiple 1.0, and it is LABELLED a design statement rather than smuggled in, exactly
+//  as `partiesPerDaySchema` labels its own: the requirement is "since they last looked", so the
+//  bound is met at 1.0 and any multiple above it would be a number nobody could source.
+//
+//  `remark.capacity.test.ts` (tools/headless) re-runs that arithmetic against the two JSON files
+//  and this constant, so a demand rebalance or a party-size change reddens rather than silently
+//  making the sentence above false. It cannot live in `packages/sim`: I1 bans `node:fs` here.
+//
+//  THE LIMIT OF THE CLAIM, STATED RATHER THAN LEFT TO BE ASSUMED. Departures are bounded by
+//  arrivals only IN STEADY STATE. A demolition can evict many guests in one tick, and a day
+//  carrying such a burst can exceed 48 — those overflow and the oldest are lost, which is the
+//  eviction rule below and is pinned at the boundary. The requirement is stated over the demand
+//  curve because that is the regime a player is in when they are reading a feed at all; a hotel
+//  being bulldozed is not one.
+//
+//  ------------------------------------------------------------------------------------------
+//  I2. A PLAIN ARRAY, OLDEST FIRST. No Set, no Map, no iteration-order dependence: the ring is
+//  read front-to-back by index and written by append. Eviction is OLDEST OUT — when an append
+//  would take the length past the capacity, index 0 is dropped. Nothing here draws from the
+//  PRNG or reads a clock, so `demand.ts`'s property that the seed is economically inert is
+//  untouched, and a departure that speaks costs one array copy bounded by 48.
+// ============================================================================
+
+/**
+ * The four values a remark is re-derived from, recorded at the departure that produced them.
+ *
+ * FROZEN AT CREATION and never edited afterwards: this is world state, and the ring that holds
+ * it is copied rather than mutated. See the section header for why it is these four fields and
+ * not the rendered text, not a `remarkId`, and not the whole stay.
+ */
+export type RemarkRecord = {
+  /** The guest that said it. `remarkFor` step 4's tie-break input. */
+  readonly guestId: number;
+  /** `reviewOf`'s score for the same stay. One departure, one score, recorded once. */
+  readonly score: number;
+  /** The worst-served need: a content id from the need table, which `contentHash` covers. */
+  readonly needId: string;
+  /** That need's unserved ticks. `{hours}` renders `floor(this / TICKS_PER_HOUR)`. */
+  readonly unservedTicks: number;
+};
+
+/**
+ * How many departures the feed keeps. DERIVED — see the section header for the arithmetic and
+ * for `remark.capacity.test.ts`, which re-runs it against the content on disk.
+ *
+ * 24 parties a day at the top rung of the demand curve, times at most 2 guests a party, times a
+ * headroom multiple of 1.0 that is labelled a design statement.
+ */
+export const RECENT_REMARKS_CAPACITY = 48;
+
+/**
+ * A world that has had no departures.
+ *
+ * EMPTY IS A STATEMENT RATHER THAN A DEFAULT, and it is the same one `createReviewOutcomes`
+ * makes one table over: nobody has left, so nobody has said anything. That is what lets the
+ * v24 -> v25 migration default to this value honestly, having no era to read it from — no build
+ * before this one had a word for a remark at all.
+ */
+export function createRecentRemarks(): readonly RemarkRecord[] {
+  return Object.freeze([]);
+}
+
+/**
+ * The tuple a departing guest leaves behind, from the stay `reviewOf` has just scored.
+ *
+ * TAKES THE SCORE RATHER THAN COMPUTING IT, which is the exact inverse of `remarkFor`'s rule and
+ * for the same reason. `remarkFor` is handed a whole stay and must not accept a second opinion
+ * about its score; this is called from `depart`, one line after `reviewOf` produced the score
+ * that went into `world.reviewOutcomes`, and taking that same number is what makes the feed and
+ * the histogram incapable of disagreeing.
+ *
+ * `undefined` ONLY WHEN THERE IS NO NEED VECTOR AT ALL, which `reviewOf` has already refused
+ * before a score exists — so under the one caller this cannot be taken. It is the `grievanceOf`
+ * contract surfaced rather than an outcome, exactly as `remarkFor` treats it.
+ */
+export function remarkRecordOf(
+  needs: readonly NeedState[],
+  score: number,
+  guestId: number,
+): RemarkRecord | undefined {
+  const grievance = grievanceOf(needs);
+  if (grievance === undefined) return undefined;
+  return Object.freeze({
+    guestId,
+    score,
+    needId: grievance.needId,
+    unservedTicks: grievance.unservedTicks,
+  });
+}
+
+/**
+ * Append one record, evicting the OLDEST when the ring is full.
+ *
+ * OLDEST OUT, STATED HERE AND PINNED AT THE BOUNDARY. `remark.save.test.ts` drives the length to
+ * exactly the capacity, to one over and to two over, and asserts which record left each time —
+ * an off-by-one at a ring's edge is the defect this shape is famous for, and "capacity minus
+ * one" and "capacity plus one" both look right in a diff.
+ *
+ * A COPY RATHER THAN A MUTATION even though the caller owns the array: a world someone else
+ * holds a reference to must never move underneath them (I2). The copy is bounded by
+ * `RECENT_REMARKS_CAPACITY`, so the cost is a constant per departure and not per guest.
+ */
+export function recordRemark(
+  ring: readonly RemarkRecord[],
+  record: RemarkRecord,
+): readonly RemarkRecord[] {
+  const next = ring.length < RECENT_REMARKS_CAPACITY ? [...ring, record] : [...ring.slice(1), record];
+  return Object.freeze(next);
+}
+
+/**
+ * The line a stored record renders to, under a book bound to the content it will be shown with.
+ *
+ * THE ONE SELECTION PATH. `remarkFor` reaches this function and so does a host reading the feed
+ * out of a save, so "what a guest said at its departure" and "what the feed shows for that
+ * departure" are the same code and cannot drift. `remark.save.test.ts` asserts that equality
+ * directly rather than trusting this sentence.
+ *
+ * IT THROWS on a record no bound book can answer, for `remarkFor`'s stated reason: a silently
+ * mute guest is the failure `bindGuestRemarks`'s coverage refusal exists to prevent, and a
+ * record that reaches here unanswerable came from a book that skipped it.
+ */
+export function spokenRemarkFrom(book: RemarkBook, record: RemarkRecord): SpokenRemark {
+  const { score, needId } = record;
+  const hours = Math.floor(record.unservedTicks / TICKS_PER_HOUR);
+  let best: GuestRemarkData | undefined;
+  let bestRank = 0;
+  let tied = 0;
+  for (const row of book.rows) {
+    if (!selectable(row, score, hours, needId)) continue;
+    const rank = rankOf(row, hours, needId);
+    if (best === undefined || rank > bestRank) {
+      best = row;
+      bestRank = rank;
+      tied = 1;
+      continue;
+    }
+    if (rank === bestRank) tied += 1;
+  }
+  // `bindGuestRemarks` guarantees a zero-severity candidate at every score for every need, and
+  // `selectable` rejects a row only on score, severity or need — so this cannot be taken under a
+  // bound book. It is a postcondition rather than a case, and it THROWS rather than returning
+  // `undefined` because a silently mute guest is the failure the coverage refusal exists to
+  // prevent, arriving through the one door that bypassed it.
+  if (best === undefined) {
+    throw new Error(
+      `No guest remark for a score of ${score} with "${needId}" as the worst-served need. ` +
+        'A bound book covers every score and every need, so this one did not come from bindGuestRemarks.',
+    );
+  }
+  const chosen = tied === 1 ? best : nthTied(book, score, hours, needId, bestRank, record.guestId, tied);
+  return Object.freeze({
+    remarkId: chosen.id,
+    score,
+    text: chosen.text.split(HOURS_PLACEHOLDER).join(String(hours)),
+  });
+}
+
+/**
+ * The laws the feed obeys, checked at the tick boundary and again at load.
+ *
+ * ONE DEFINITION, TWO CALLERS — `assertReviewOutcomes`'s arrangement exactly, and for its
+ * reason: a law spelled twice is a law that drifts. `tick.ts` calls it only when a departure
+ * moved the ring; `assertWorldShape` calls it unconditionally on every world this build loads.
+ *
+ * CONTENT-FREE, AND THE OMISSION IS THE POINT. It runs where no content is in hand, so it
+ * cannot ask whether `needId` names a need this save was played under or whether `score` lies
+ * inside that content's scale — `assertContentMatches` refuses a mismatched world before
+ * anything reads these rows, and that is the check those two questions belong to. What IS
+ * checkable from the bytes alone is here:
+ *
+ *   - no more records than the capacity, which is the ring's whole contract;
+ *   - no more records than there have been departures, because every record IS one;
+ *   - integer `unservedTicks`, not negative — a float in hashed state is the one thing I2 has
+ *     no tolerance to absorb, and `guestId` and `score` get the same treatment.
+ *
+ * NOT CHECKED, DELIBERATELY: that the records are in departure order. Nothing in the bytes says
+ * which order that was, and a guest id is not a clock — a stored world's ids ascend by ARRIVAL,
+ * and two guests can depart in the opposite order to the one they arrived in. Asserting it
+ * would be a check that holds for the wrong reason (build.ts's phrase), so it is stated as an
+ * absence rather than left to a reader to infer from silence.
+ */
+export function assertRecentRemarks(ring: readonly RemarkRecord[], departed: number): void {
+  if (ring.length > RECENT_REMARKS_CAPACITY) {
+    throw new Error(
+      `Save is corrupt: world.recentRemarks holds ${ring.length} records, more than the ` +
+        `${RECENT_REMARKS_CAPACITY} the feed keeps`,
+    );
+  }
+  if (ring.length > departed) {
+    throw new Error(
+      `Save is corrupt: world.recentRemarks holds ${ring.length} records but only ${departed} guest(s) ` +
+        'have departed, and every record is a departure',
+    );
+  }
+  ring.forEach((record, index) => {
+    for (const key of ['guestId', 'score', 'unservedTicks'] as const) {
+      const value = record[key];
+      if (!Number.isInteger(value)) {
+        throw new Error(`Save is corrupt: world.recentRemarks[${index}].${key} is not an integer`);
+      }
+    }
+    if (record.unservedTicks < 0) {
+      throw new Error(`Save is corrupt: world.recentRemarks[${index}].unservedTicks is negative`);
+    }
+    if (record.needId.length === 0) {
+      throw new Error(`Save is corrupt: world.recentRemarks[${index}].needId is empty`);
+    }
+  });
 }

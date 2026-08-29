@@ -31,7 +31,7 @@ import {
 import type { Guest, GuestStore } from './guests.js';
 import { createGuestOutcomes, createLiftQueue } from './guests.js';
 import { createNeedOutcomes, findNeedState } from './needs.js';
-import { createReviewOutcomes } from './reviews.js';
+import { createRecentRemarks, createReviewOutcomes } from './reviews.js';
 import { tickValidityContext } from './validity.js';
 
 const BOUNDS = createGridBounds();
@@ -180,6 +180,7 @@ function tick(guests: GuestStore, entities: EntityStore, arrivingParties = 0) {
     outcomes: { ...createGuestOutcomes(), arrived: guests.list.length },
     needOutcomes: createNeedOutcomes(),
     reviewOutcomes: createReviewOutcomes(),
+    recentRemarks: createRecentRemarks(),
     ledger: [],
     entities: draft,
     content,

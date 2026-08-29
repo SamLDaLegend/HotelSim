@@ -63,6 +63,9 @@ import { stripLift } from './without-lift.js';
 // G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
 // one that does, exactly as every earlier step refuses the field it is about.
 import { stripStaff } from './without-staff.js';
+// G-066a: v25 adds `recentRemarks`, so an era blob must not carry it either — `migrateV24ToV25`
+// REFUSES a world that already names it, which is what makes this strip load-bearing.
+import { stripRecentRemarks } from './without-remarks.js';
 import { stripFootprints } from './without-footprints.js';
 
 /** The 9 -> 10 step itself. Index 8, the ninth link. */
@@ -179,6 +182,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed', 
       [21, 22],
       [22, 23],
       [23, 24],
+      [24, 25],
     ]);
     expect(() => assertMigrationPathComplete()).not.toThrow();
   });
@@ -387,7 +391,7 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
     // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v9 floor was a
     // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
     const { reviewOutcomes: _drop, ...rest } = stripLift(stripStairs(stripEditCounters(
-      stripFootprints(stripCorridors(stripDepth(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)))),
+      stripFootprints(stripCorridors(stripDepth(stripRecentRemarks(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))))),
     )));
     // AND THE v14 FIELD COMES OFF EVERY GUEST (θ-b1), for the reason `reviewOutcomes` comes off
     // the world: "the same world written in the v9 SHAPE" means every difference v9 had, and a
@@ -429,7 +433,7 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
     expect(serialise(deserialise(serialise(world)))).toBe(serialise(world));
   });
 
-  it('and a migrated v9 world differs from it in exactly the reviews — history is not invented', () => {
+  it('and a migrated v9 world differs from it in the reviews and the REMARKS — history is not invented', () => {
     // The other half of the era argument, and the one that could go wrong quietly: a
     // migrated world must NOT acquire the reviews the lived world has. Its guests departed
     // in an era with no reviews, and the migration says so by leaving the table empty.
@@ -437,15 +441,23 @@ describe('a migrated v9 world and a v10 world with the same history are the SAME
     const migrated = deserialise(asV9Bytes(world));
     expect(migrated.reviewOutcomes).toEqual([]);
     expect(world.reviewOutcomes).not.toEqual([]);
+    // AND NOT THE REMARKS EITHER (G-066a). THE TITLE SAID "in exactly the reviews" AND THIS
+    // COMMIT MADE THAT FALSE — a second thing a pre-v25 world could not have had, defaulted to
+    // empty by the 24 -> 25 step for the identical reason. It is asserted rather than absorbed
+    // into `withoutCounters` because it is the SAME claim the reviews make and deserves the
+    // same visibility: the lived world's guest really did speak, and the migrated one's really
+    // did not, and no step invented a sentence for it.
+    expect(migrated.recentRemarks).toEqual([]);
+    expect(world.recentRemarks).not.toEqual([]);
     expect(hashState(migrated)).not.toBe(hashState(world));
     // Everything else about them is identical EXCEPT the counters a v9 world could not carry,
     // and those are put back the same way and for the same reason (G-028a): the migration
     // defaults them to zero because that is what the bytes support, so a lived world's real
-    // counts are a second thing the migration does not invent. Restoring both is what makes
-    // this "the reviews and the counters, and nothing else".
-    expect(withoutCounters({ ...migrated, reviewOutcomes: world.reviewOutcomes })).toEqual(
-      withoutCounters(world),
-    );
+    // counts are a second thing the migration does not invent. Restoring all three is what
+    // makes this "the reviews, the remarks and the counters, and nothing else".
+    expect(
+      withoutCounters({ ...migrated, reviewOutcomes: world.reviewOutcomes, recentRemarks: world.recentRemarks }),
+    ).toEqual(withoutCounters(world));
     expect(migrated.needOutcomes.every((row) => row.unservedTicks === 0 && row.instanceTicks === 0)).toBe(true);
     expect(world.needOutcomes.some((row) => row.instanceTicks > 0)).toBe(true);
   });

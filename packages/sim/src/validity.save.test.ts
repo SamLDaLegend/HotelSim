@@ -186,6 +186,11 @@ describe('validity adds nothing to the save', () => {
       'liftQueue',
       'loanOutcomes',
       'needOutcomes',
+      // G-066a. WHAT THE LAST FEW DEPARTURES SAID. Listed here for `reviewOutcomes`' reason,
+      // which is the row directly below it and which it is deliberately NOT a duplicate of: a
+      // guest writes it on its way out, it is bounded and it forgets, and it is not a cached
+      // property of the building — which is what this test is about.
+      'recentRemarks',
       // G-019. A field a GUEST writes on its way out, not a cached property of the building —
       // which is what this test is about, and why it is listed here rather than being an
       // exception to it.

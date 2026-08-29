@@ -98,8 +98,8 @@ import type { Lift } from './lift.js';
 import { stairwellOf } from './stairs.js';
 import type { Stairs } from './stairs.js';
 import { starRatingIn } from './rating.js';
-import { recordReview, reviewOf, reviewScaleOf } from './reviews.js';
-import type { ReviewOutcomeRow } from './reviews.js';
+import { recordRemark, recordReview, remarkRecordOf, reviewOf, reviewScaleOf } from './reviews.js';
+import type { RemarkRecord, ReviewOutcomeRow } from './reviews.js';
 import {
   createValidityContext,
   guestAccessTo,
@@ -1940,6 +1940,8 @@ export type GuestTickInput = {
   readonly needOutcomes: readonly NeedOutcome[];
   /** The review distribution (G-019). Moved only by a departure, and read by nothing. */
   readonly reviewOutcomes: readonly ReviewOutcomeRow[];
+  /** The remark feed (G-066a). Moved only by a departure, and read by nothing in this package. */
+  readonly recentRemarks: readonly RemarkRecord[];
   readonly ledger: readonly Transaction[];
   /** The open entity draft: spawns staged this tick are visible, despawns are not. */
   readonly entities: EntityDraft;
@@ -1983,6 +1985,7 @@ export type GuestTickResult = {
   readonly outcomes: GuestOutcomes;
   readonly needOutcomes: readonly NeedOutcome[];
   readonly reviewOutcomes: readonly ReviewOutcomeRow[];
+  readonly recentRemarks: readonly RemarkRecord[];
   readonly ledger: readonly Transaction[];
   /**
    * THE LINE AS THIS TICK LEAVES IT (G-038b-i), returned BY REFERENCE when nobody joined it and
@@ -2376,6 +2379,14 @@ type RoomSearch = {
    */
   reviewOutcomes: readonly ReviewOutcomeRow[];
   /**
+   * The remark feed, threaded through the tick beside the review distribution (G-066a).
+   *
+   * Here for the reason `reviewOutcomes` is here, and moved by the same one line of `depart`.
+   * Tick-local and mutable, handed back out through `GuestTickResult`, never itself hashed
+   * until it reaches the world.
+   */
+  recentRemarks: readonly RemarkRecord[];
+  /**
    * THE HOTEL'S STAR RATING AS THIS TICK SEES IT, resolved on first use (G-059).
    *
    * `null` MEANS "NOT ASKED YET", NOT "UNRATED" — `UNRATED` is 0 and is a value this field
@@ -2568,7 +2579,20 @@ function depart(
   // memo makes the second departure of a tick free. `reviews.ts` carries the ruling this
   // implements and the defence of at-departure over at-arrival.
   const score = reviewOf(content, guest.needs, isCutShort(reason), stayTicks, hotelStandingOf(search));
-  if (score !== undefined) search.reviewOutcomes = recordReview(search.reviewOutcomes, score);
+  if (score === undefined) return;
+  search.reviewOutcomes = recordReview(search.reviewOutcomes, score);
+  // AND WHAT IT SAID, AS THE FOUR VALUES A LINE IS MADE FROM (G-066a). Behind the SAME
+  // `score !== undefined` guard as the histogram above and one line below it, so the feed and
+  // the distribution move together or not at all: a departure that leaves no review leaves no
+  // remark either, and `assertRecentRemarks` states that as a law rather than trusting this
+  // comment. THE SCORE IS THE ONE ALREADY COMPUTED, never a second call — `remarkRecordOf`
+  // takes it rather than deriving it, which is why the two records cannot disagree.
+  //
+  // NO SENTENCE IS RENDERED HERE AND NONE CAN BE: rendering needs a `RemarkBook`, and the remark
+  // table is deliberately not injected content, so no `BoundContent` in this simulation carries
+  // one. That is the design rather than a limitation — see `reviews.ts`.
+  const record = remarkRecordOf(guest.needs, score, guest.id);
+  if (record !== undefined) search.recentRemarks = recordRemark(search.recentRemarks, record);
 }
 
 /**
@@ -2611,6 +2635,9 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
       outcomes,
       needOutcomes: input.needOutcomes,
       reviewOutcomes: input.reviewOutcomes,
+      // BY REFERENCE, for `reviewOutcomes`'s reason: an empty hotel has nobody to depart, so
+      // nobody says anything and the ring is the one it was handed (G-066a).
+      recentRemarks: input.recentRemarks,
       ledger: input.ledger,
       // BY REFERENCE. An empty hotel has nobody in the line, so there is nothing to settle and
       // nothing to allocate — the O(1) idle tick this branch exists for.
@@ -2652,6 +2679,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     exhausted: null,
     needOutcomes: input.needOutcomes,
     reviewOutcomes: input.reviewOutcomes,
+    recentRemarks: input.recentRemarks,
     // NOT READ HERE, DELIBERATELY — unlike every field above it. `hotelStandingOf` resolves it on
     // the first departure of the tick and most ticks have none. See the field's own note.
     hotelStanding: null,
@@ -3436,6 +3464,7 @@ export function stepGuests(input: GuestTickInput): GuestTickResult {
     outcomes: nextOutcomes,
     needOutcomes: search.needOutcomes,
     reviewOutcomes: search.reviewOutcomes,
+    recentRemarks: search.recentRemarks,
     ledger,
     // THE LINE, REBUILT FROM WHO ACTUALLY NEEDED THE SHAFT (G-038b-i). A guest that boarded,
     // that stopped needing to climb, or that departed for any reason simply is not in it — which

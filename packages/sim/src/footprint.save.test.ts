@@ -58,6 +58,9 @@ import { stripLift } from './without-lift.js';
 // G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
 // one that does, exactly as every earlier step refuses the field it is about.
 import { stripStaff } from './without-staff.js';
+// G-066a: v25 adds `recentRemarks`, so an era blob must not carry it either — `migrateV24ToV25`
+// REFUSES a world that already names it, which is what makes this strip load-bearing.
+import { stripRecentRemarks } from './without-remarks.js';
 import { stripFootprints } from './without-footprints.js';
 
 const content = bindContent({
@@ -121,7 +124,7 @@ function drawnWorld(): World {
 
 /** The same world written the way an era with no word for a footprint wrote it. */
 const asV18 = (world: World): Record<string, unknown> =>
-  stripLift(stripStairs(stripEditCounters(stripFootprints(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)))));
+  stripLift(stripStairs(stripEditCounters(stripFootprints(stripRecentRemarks(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))))));
 
 describe('the chain walks 1 -> ... -> today, and the 18 -> 19 step is the eighteenth of it', () => {
   it('ships one step per version, gapless', () => {
@@ -252,7 +255,7 @@ describe('the step refuses to destroy a footprint somebody drew', () => {
     // TODAY'S KEYS MINUS THE ONES LATER STEPS ADD. The 18 -> 19 step produces a v19 world, and
     // `stairs` does not arrive until the 20 -> 21 step (G-038a-ii-alpha) — so excluding it is
     // what keeps this arm about the claim in its own title rather than about the current era.
-    const laterThanV19 = ['stairs', 'lift', 'liftQueue', 'staff'];
+    const laterThanV19 = ['stairs', 'lift', 'liftQueue', 'staff', 'recentRemarks'];
     expect(Object.keys(migrated).sort()).toEqual([...WORLD_KEYS].filter((key) => !laterThanV19.includes(key)));
   });
 });

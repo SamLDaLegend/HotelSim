@@ -40,6 +40,9 @@ import { stripLift } from './without-lift.js';
 // G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
 // one that does, exactly as every earlier step refuses the field it is about.
 import { stripStaff } from './without-staff.js';
+// G-066a: v25 adds `recentRemarks`, so an era blob must not carry it either — `migrateV24ToV25`
+// REFUSES a world that already names it, which is what makes this strip load-bearing.
+import { stripRecentRemarks } from './without-remarks.js';
 import { stripFootprints } from './without-footprints.js';
 import { bindContent } from './content.js';
 import type { SimContent } from './content.js';
@@ -426,7 +429,7 @@ describe('a migrated v7 world and a v8 world with the same history are the SAME 
     // AND THE v17 DEPTH COMES OFF THE PLOT AND OFF EVERY POSITION (G-034a): a v7 floor was a
     // strip, and `migrateV16ToV17` refuses a plot or a cell that already names a row.
     const { reviewOutcomes: _noReviews, ...withoutV10 } = stripLift(
-      stripStairs(stripEditCounters(stripFootprints(stripCorridors(stripDepth(stripStaff(json)))))),
+      stripStairs(stripEditCounters(stripFootprints(stripCorridors(stripDepth(stripRecentRemarks(stripStaff(json))))))),
     );
     return JSON.stringify({
       schemaVersion: 7,

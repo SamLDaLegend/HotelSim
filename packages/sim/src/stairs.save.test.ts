@@ -273,7 +273,7 @@ describe('the chain walks 1 -> ... -> today, and every link is still observed (G
     // AGAINST TODAY'S KEYS MINUS THE ONES LATER STEPS ADD, spelled as a list since G-038b-i for
     // the reason `corridors.save.test.ts` spells one: this asserts what the 20 -> 21 step
     // produces, which is a v21 world, and the two lift fields do not arrive until 22 -> 23.
-    const laterThanV21 = ['lift', 'liftQueue', 'staff'];
+    const laterThanV21 = ['lift', 'liftQueue', 'staff', 'recentRemarks'];
     const migrated = Object.keys(migrate() as unknown as Record<string, unknown>).sort();
     expect(migrated).toEqual([...WORLD_KEYS].filter((key) => !laterThanV21.includes(key)));
     expect(Object.keys(v20World()).sort()).toEqual(
@@ -356,6 +356,10 @@ describe('a v20 blob loads, and what it becomes is a world this build could have
       // AND THE 23 -> 24 STEP: an empty payroll, no staff id ever issued (G-052a), because a
       // v20 world had no word for a staff role. Spelled here for the reason the lift is.
       staff: { nextId: 1, list: [] },
+      // AND THE 24 -> 25 STEP: an empty feed (G-066a), because no build before v25 had a word
+      // for a remark. Spelled here rather than read back out of the step, for the reason every
+      // literal in this block is spelled.
+      recentRemarks: [],
       guestOutcomes: {
         arrived: 3,
         departures: [

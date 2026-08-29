@@ -65,6 +65,9 @@ import { stripLift } from './without-lift.js';
 // G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
 // one that does, exactly as every earlier step refuses the field it is about.
 import { stripStaff } from './without-staff.js';
+// G-066a: v25 adds `recentRemarks`, so an era blob must not carry it either — `migrateV24ToV25`
+// REFUSES a world that already names it, which is what makes this strip load-bearing.
+import { stripRecentRemarks } from './without-remarks.js';
 
 const content = bindContent({
   roomTypes: [
@@ -129,7 +132,7 @@ function editedWorld(): World {
 
 /** The same world written the way an era with no verb for an edit wrote it. */
 const asV19 = (world: World): Record<string, unknown> =>
-  stripLift(stripStairs(stripEditCounters(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>))));
+  stripLift(stripStairs(stripEditCounters(stripRecentRemarks(stripStaff(JSON.parse(JSON.stringify(world)) as Record<string, unknown>)))));
 
 describe('the chain walks 1 -> ... -> today, and the 19 -> 20 step is the nineteenth of it', () => {
   it('ships one step per version, gapless', () => {

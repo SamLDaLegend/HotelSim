@@ -23,13 +23,13 @@ import { assertNeedOutcomes } from './needs.js';
 import type { NeedOutcome } from './needs.js';
 import { assertStaffStoreInvariants } from './staff.js';
 import type { StaffStore } from './staff.js';
-import { assertReviewOutcomes } from './reviews.js';
-import type { ReviewOutcomeRow } from './reviews.js';
+import { assertRecentRemarks, assertReviewOutcomes } from './reviews.js';
+import type { RemarkRecord, ReviewOutcomeRow } from './reviews.js';
 import { WORLD_KEYS } from './world.js';
 import type { World } from './world.js';
 
 /** Bump this in the same commit as the migration that reaches it. Never edit in place. */
-export const SAVE_SCHEMA_VERSION = 24;
+export const SAVE_SCHEMA_VERSION = 25;
 
 /** Oldest version `deserialise` will accept. Raising it drops old saves — human call. */
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
@@ -2432,6 +2432,51 @@ function migrateV23ToV24(world: unknown): unknown {
 }
 
 /**
+ * The feed a v24 world could not have had (G-066a).
+ *
+ * Frozen at the value THIS MIGRATION means, never read from `createRecentRemarks()`, for the
+ * reason every literal in this file is frozen (ADR-0008): a migration's output must be a pure
+ * function of its input bytes and of its own era. If it called today's constructor, the meaning
+ * of a v24 save would drift with whatever a new hotel's feed becomes, and the pinned hash of a
+ * migrated fixture would turn into a tripwire on an unrelated change.
+ */
+const V25_MIGRATION_RECENT_REMARKS: readonly unknown[] = Object.freeze([]);
+
+/**
+ * v24 -> v25: a world from an era with no word for a remark (G-066a).
+ *
+ * AND THAT IS THE HONEST HISTORICAL STATEMENT, not a convenient default. A v24 world is not a
+ * world whose feed was left out of the file, and it is not a world whose guests departed in
+ * silence and were not recorded. NO BUILD BEFORE THIS ONE COULD FORM A REMARK AT ALL: `depart`
+ * scored the stay into `reviewOutcomes` and threw the rest of it away one tick later, which is
+ * the seam G-065 reported and this version closes. So an empty ring is exactly what those bytes
+ * said, and it is also the only thing they COULD say — the material is not recoverable from
+ * them even in principle, which is why this migration cannot reconstruct a single record and
+ * must not pretend to.
+ *
+ * Its guests really did depart, and `world.guestOutcomes` still says how many, so
+ * `assertRecentRemarks`'s `ring.length <= departed` law passes trivially in the direction that
+ * matters: an empty ring claims nothing about anybody.
+ *
+ * Reads no content and no live constant, so the same v24 bytes produce the same v25 world
+ * however the feed's capacity changes afterwards.
+ *
+ * THE OVERWRITE GUARD IS `Object.keys().includes` rather than `in`, because `JSON.parse` makes
+ * `__proto__` an own key (the G-003 lesson) — the same guard all twenty-three earlier steps use.
+ */
+function migrateV24ToV25(world: unknown): unknown {
+  if (!isRecord(world)) {
+    throw new Error('Save is corrupt: world is not an object');
+  }
+  if (Object.keys(world).includes('recentRemarks')) {
+    throw new Error(
+      'world already has a "recentRemarks" field, so it is not a v24 world; migrating it would overwrite a real feed',
+    );
+  }
+  return { ...world, recentRemarks: V25_MIGRATION_RECENT_REMARKS };
+}
+
+/**
  * Ordered, gapless chain from MIN_SUPPORTED_SCHEMA_VERSION to SAVE_SCHEMA_VERSION.
  * `test:save` asserts the chain is complete, so this cannot silently rot.
  *
@@ -2463,6 +2508,7 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ from: 21, to: 22, migrate: migrateV21ToV22 }),
   Object.freeze({ from: 22, to: 23, migrate: migrateV22ToV23 }),
   Object.freeze({ from: 23, to: 24, migrate: migrateV23ToV24 }),
+  Object.freeze({ from: 24, to: 25, migrate: migrateV24ToV25 }),
 ]);
 
 /**
@@ -3107,6 +3153,37 @@ export function assertWorldShape(value: unknown): asserts value is World {
   });
   assertReviewOutcomes(
     reviewOutcomes as unknown as readonly ReviewOutcomeRow[],
+    departedGuests(guestOutcomes as unknown as GuestOutcomes),
+  );
+
+  // The remark feed (G-066a). Checked after the guest outcomes for the reason the review
+  // distribution is: its law is stated against the departure count those counters carry.
+  //
+  // CONTENT-FREE, THE SAME WAY AND WITH A SHARPER EDGE. `assertWorldShape` runs at load with no
+  // content in hand, so nothing here can ask whether `needId` names a need this save was played
+  // under, nor whether `score` lies inside its scale. `assertContentMatches` refuses a world
+  // whose content moved before anything reads these rows, and that is where those two questions
+  // live. What is checkable from the bytes alone is the shape — the four fields, their types —
+  // and then `assertRecentRemarks`'s laws over them.
+  const recentRemarks = value['recentRemarks'];
+  if (!Array.isArray(recentRemarks)) {
+    throw new Error('Save is corrupt: world.recentRemarks is missing or not an array');
+  }
+  recentRemarks.forEach((record: unknown, index: number) => {
+    if (!isRecord(record)) {
+      throw new Error(`Save is corrupt: world.recentRemarks[${index}] is not an object`);
+    }
+    for (const key of ['guestId', 'score', 'unservedTicks'] as const) {
+      if (typeof record[key] !== 'number') {
+        throw new Error(`Save is corrupt: world.recentRemarks[${index}].${key} is missing or not a number`);
+      }
+    }
+    if (typeof record['needId'] !== 'string') {
+      throw new Error(`Save is corrupt: world.recentRemarks[${index}].needId is missing or not a string`);
+    }
+  });
+  assertRecentRemarks(
+    recentRemarks as unknown as readonly RemarkRecord[],
     departedGuests(guestOutcomes as unknown as GuestOutcomes),
   );
 

@@ -34,6 +34,9 @@ import { stripLift } from './without-lift.js';
 // G-052a: v24 adds `staff`, and a pre-v24 blob must not carry it — `migrateV23ToV24` refuses
 // one that does, exactly as every earlier step refuses the field it is about.
 import { stripStaff } from './without-staff.js';
+// G-066a: v25 adds `recentRemarks`, so an era blob must not carry it either — `migrateV24ToV25`
+// REFUSES a world that already names it, which is what makes this strip load-bearing.
+import { stripRecentRemarks } from './without-remarks.js';
 
 const cell = (floor: number, column: number, row = 0): Cell => ({ floor, column, row });
 
@@ -135,7 +138,7 @@ type Json = Record<string, unknown>;
 /** The lived-in world as a v22 document: this build's bytes with v23's three changes taken back out. */
 function v22World(): Json {
   const blob = JSON.parse(serialise(livedIn(null))) as { world: Json };
-  return stripLift(stripStaff(blob.world));
+  return stripLift(stripRecentRemarks(stripStaff(blob.world)));
 }
 
 /**
@@ -253,6 +256,11 @@ describe('a v22 blob loads, and what it becomes is a world this build could have
       // v22 world had no word for a staff role. Spelled here for the reason the lift is —
       // an oracle that read the step back agrees with whatever the step does.
       staff: { nextId: 1, list: [] },
+      // AND THE 24 -> 25 STEP: an empty feed (G-066a), because no build before v25 had a word
+      // for a remark. Spelled here rather than read back out of the step, for the reason every
+      // literal in this block is spelled: an oracle that reads the step agrees with whatever
+      // the step does, which is not an agreement.
+      recentRemarks: [],
       guestOutcomes: {
         arrived: V22_DEPARTED + loaded.guests.list.length,
         departures: [
