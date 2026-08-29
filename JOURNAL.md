@@ -4259,3 +4259,28 @@ at. Three things are therefore uncovered and a human running `pnpm dev` should c
 edge of the stage complete rather than hang — it has been typechecked and never executed), whether
 the marquee is legible against the floor at the default camera, and the tool strip's layout, which
 is still E-013's subject.
+
+## WATCH #33 — 2026-08-29 — A HUMAN PLAYED IT, AND THAT IS THE POINT
+
+**The first WATCH in this project made by a person watching the game move**, rather than an agent reading SVG geometry or a census. Thirty-three observations in, and ADR-0013's argument is that this one outranks the other thirty-two on the questions it can answer.
+
+**Instrument**: the shipped game at `http://localhost:5180`, `pnpm --filter @hotelsim/game exec vite --port 5180`, Vite 7.3.6, no console errors, **143 fps**, tick 142.
+
+**The observation, verbatim:**
+
+> *"Walking looks so much better now, can build rooms larger than 1 x 1 and can build corridors."*
+
+**WHAT IT DISCHARGES, AND THE PRECISION MATTERS:**
+
+- **G-047b's perceptual half.** E-012 was a human perception — *"movement is FAR too fast to my eye, people are zooming around all over the place"* — and no census, frame-rate table or sub-cell coordinate could close it. **A person looked and said it is better.** That is the only evidence that was ever going to settle it.
+- **G-064**, and with it `HOTELSIM.md` §1's opening sentence — *"rooms are designed by the player, not placed from a catalogue"* — **confirmed playable by the player.**
+- **G-063**, corridors, confirmed reachable by a click.
+- **`setPointerCapture` has now executed.** G-064 shipped it typechecked and never run, and said so; a human dragging a rectangle is the first time that line has done anything.
+
+**WHAT IT DOES NOT DISCHARGE, KEPT SEPARATE:**
+
+- **E-012's SECOND sentence** — *"they also seem to jump through walls rather than looking for a door"* — is **untouched and now counted at 309 monotone routes crossing a room that is not the destination** (WATCH #29). **G-046 owns the door and it needs a human ruling.** The human's report named walking and did not name walls, which is consistent with it being unfixed rather than with it being fixed.
+- **E-013** is not closed. Measured live rather than guessed for the first time: **the canvas is 327px of a 595px viewport — the stage is 55% and the HUD is the other 45%**, which is G-062's own unverified question answered. **Two caveats on that figure**: the pane was **580px wide**, far narrower than a real window, so the HUD wraps much harder than it would at desktop width, and the canvas is 1280 wide being scaled to fit. **The human did not complain about it, which is evidence it is not blocking and is not evidence that it is fine.**
+
+**WHAT THE ORCHESTRATOR COULD NOT DO, STATED RATHER THAN IMPLIED**: the Browser pane would not composite frames in this session, so **every claim above about what is ON SCREEN is read from the DOM and the console, not from pixels.** The star cells, the `tick 142 (bodies at 141.62)` lag line, the `corridor` tool and the three facility buttons were all confirmed as text. **Nobody but the human has seen this build render.**
+

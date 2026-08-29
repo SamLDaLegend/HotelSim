@@ -1803,6 +1803,77 @@ Critique rounds used: 0/3
   it. **A parked hypothesis with its test is a result waiting for a goal that happens to run
   it** — this is that goal, and it should report them as results rather than re-derive them.
 
+## G-061 — The scenario seeds facilities, and the fourth star stops losing money
+Status: **DONE 2026-08-28, `dd681cf`.** Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
+
+`scenario.ts` selected non-lodging room types by what they SERVE, and **a facility serves nothing** — so the shipped hotel was permanently capped at three stars and the star ladder's top two tiers had **no picture at all**. The selector is now a **union**: every type that serves a need, unioned with every type a star tier counts, derived from `starTiersInOrder`, **zero content-ID literals**.
+
+**The negation was rejected because it is the ABSENCE of properties** — a room type authored with empty `provides` and no tier naming it would silently become scenery the player pays upkeep on. **Tier-only was rejected** because it drops serving types no tier names, which is this file's own documented defect class.
+
+**AND THE GOAL FOUND THAT ITS OWN CHANGE PUNISHED THE PLAYER, AND STOPPED.** Four stars doubles arrivals; at one-of-each amenity density that meant **245 furious departures and −280,000p over 30 days**. Ruled: ship the working opening position (two of each serving type), because with the rating not yet on screen the overrun would have been **invisible punishment**. Measured after: **464 checked out, ZERO dissatisfied, `5:464` unanimous, +27,921,500p over a year.**
+
+> **THE FINDING OUTRANKS THE GOAL: G-060's "the fifth star loses money" is a SPECIAL CASE. The rung at which the ladder turns negative is a function of AMENITY DENSITY**, so a fix aimed at tier 5 leaves the defect alive one rung down. G-060's brief widens.
+
+**An agreement nobody arranged, at both horizons**: 3,944,000p (30d) and 49,504,000p (365d) are **byte-identical** to `GOALS.md`'s four-star CLI figures — different host, different layout, different seed.
+
+## G-047a COMPLETION RECORD — the sim exports a path
+Status: **DONE 2026-08-28, `66e43b6`.** *(The PLAN block keeps its heading further down; this is the record, not a second goal.)* Milestone: M5 · Owner pair: sim-engineer / (orchestrator-verified)
+
+`pathBetween(ctx, from, to, destinationRoom, stairwell)` returning **`walk` / `climb` / `blocked`** — three arms, because with two a caller must conflate *"took the stairs"* with *"cannot draw"*. Search bounded to the step's Manhattan distance; determinism without a container to iterate (dense `boolean[]`, counted loops, no Set/Map order).
+
+**`check:tickcost` was the negative control and confirmed on both halves**: `ARM_PATHS` includes `packages/sim/src`, so the arms genuinely differed and the gate **MEASURED** rather than reporting INCOMPARABLE — ratio **0.9825** (mine) and **1.0010** (builder's) against a 1.4640 bound.
+
+**A proof-of-bite probe found a DEAD BRANCH** — the `cellsEqual` early return was unreachable, deleted per ADR-0010's amendment. **And a redundancy in a ruling it was told not to revert**: `stairwell` is derivable from `ctx`, reported rather than quietly fixed, as an ADR-0096 amendment.
+
+*My brief's "≤16 cells in a ≤3×3 box" was **three figures that are not each other's** — the box is 9, the bound at speed 3 is 6, and 16 needs Manhattan 6. Inherited from the goal block and propagated by me.*
+
+## G-047b COMPLETION RECORD — the guest is drawn between ticks
+Status: **DONE 2026-08-28, `b890bfa`. THE PERCEPTUAL HALF IS DISCHARGED BY A HUMAN — see WATCH #33.** Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
+
+Bodies draw at `tick − 1 + carry`. **Frame-rate independence demonstrated, not asserted**: 30/60/145/240 Hz, worst `|drawn − wallclock|` = **2.1e-14 ticks**.
+
+**The bucketing ruling is the elegant part**: the slot is the *second term of the same interpolation*, so at `carry = 1` the result is identically what the next tick's `carry = 0` produces — **the ticks meet at every boundary BY CONSTRUCTION** rather than by tuning. `crowdedOut`'s definition did not move.
+
+**IT CORRECTED THE EVIDENCE I HANDED IT.** I gave it G-061's corridor cluster as its defect; it measured **identical at carry 0, 0.5 and 1 — every guest in that frame is STATIONARY**, and standing is 95.47% of guest-ticks. *"Interpolation answers the human's first sentence and is not an answer to the second; claiming otherwise would be the ADR-0007 class."*
+
+> **THE SECOND SENTENCE IS NOW COUNTED**: 1,554 moves = 898 walks / 279 climbs / **377 unmarkable**, of which **309 are a monotone route crossing a room that is not the destination** — the through-wall class. **G-046 owns the door and needs a human ruling.**
+
+## G-062 — The rating is on screen
+Status: **DONE 2026-08-28, `cce6ac7`.** Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
+
+Three cells, because a player asks three questions — *what am I* / *why am I that* / *what next*. Nothing needed computing: `nextStars` and `shortfall` have existed since G-051a, **added unasked, questioned by me as scope creep, and ruled by the human to be the core of the system.**
+
+**THE MEMO DID NOT COVER THE RENDERER**, and the deciding arm is the one nobody would pick: `ValidityCache` is the *tick's*, so `scene.build` builds a fresh context every frame. On an **empty floor** — which warms nothing — the rating paid full cold cost on a frame that costs almost nothing: **5.96×**, against 1.08× on a busy floor.
+
+**A bug shipping since G-035**: contact-sheet captions ran through the **global `escape`** (the URL encoder) because `record-frames.ts` never imported the local HTML one.
+
+## G-063 — The player can lay a corridor
+Status: **DONE 2026-08-28, `8ab26ca`. CONFIRMED BY A HUMAN — see WATCH #33.** Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
+
+**HALF THIS GOAL WAS ALREADY BUILT AND MY BRIEF SAID OTHERWISE.** Refusal reporting shipped in **G-031a (`7f0be45`, 2026-08-13)** — a persistent per-reason tally *and* a never-expiring last-action line. **And I inverted a parked note**: it says the UI deliberately never **PREDICTS** a refusal, because that would be a second implementation of a rule the sim owns. I read *predicts* as *reports*. **Acting on my brief would have rebuilt a shipped surface or built the exact predictor G-031a refused on principle.**
+
+**Two defects a naive build would have shipped**: `layCorridor` **THROWS** off-plot where `buildRoom` refuses, so a stray click would have ended the session; and because it records no `BuildOutcome` while `refused` was *"neither built nor demolished"*, **every corridor successfully laid would have flashed refusal-coloured.**
+
+**The measurement, and the first click is the good part**: corridor at row 4 changed nothing (not a neighbour); corridor at row 5 took `noCorridor` 1 → 0. *The rule working, rather than a tool that always works.*
+
+## G-064 — The player draws a room's footprint
+Status: **DONE 2026-08-28, `1cd7c42`. CONFIRMED BY A HUMAN — see WATCH #33.** Milestone: M5 · Owner pair: render-engineer / (orchestrator-verified)
+
+**`HOTELSIM.md` §1's opening sentence, playable for the first time in the project's history.** Measured out of the frame's own bytes: a 3×2 drag takes room-floor polygons **9 → 15, exactly +6**, on a floor reporting **0 invalid**.
+
+**It sends `drawRoom`, and there was never a choice — `buildRoom` has no footprint field.** *My brief said it did; my grep's `-A 8` window spilled into the next command's docblock, so **the tool's context window was the population and I read it as `buildRoom`'s**.*
+
+**The preview shows the drag, not a verdict** — same blue at 1×1, at a legal 3×2, at an illegal 3×3 and at a 17×3 off the plot. A preview that reddens on *"this will be refused"* is the affordability predictor wearing a different hat.
+
+## §5.7 FINDING — FOUR GOALS RAN WITHOUT A BLOCK, AND THE GATE COULD NOT SEE IT
+
+**G-061, G-062, G-063 and G-064 had NO block in `GOALS.md` while nine commits referenced them.** M5 was opened with a **prose queue** inside its "M5 — OPENED" block instead of goal blocks, and four goals ran against prose. **The blocks above are written retroactively and say so.**
+
+**`check:status` could not catch it, and the reason is exact**: its predicate resolves goal IDs found in commit **SUBJECTS**, and every one of those nine put the ID in the **BODY**. The gate passed truthfully over a ledger that named none of the work. *(`1cd7c42` is the first whose subject carries its ID, which is why the gate can see that one.)*
+
+> **This is ADR-0105's ruling one level up — a prerequisite in prose has no discharge point — except the thing in prose is a GOAL.** Parked with its predicate: *does every goal ID referenced anywhere in a commit resolve to a block?* — which is a **strictly wider** subject than the shipped one and must be stated as such rather than swapped in silently (ADR-0086).
+
+
 ## M4 exit — human sign-off
 
 Status: **SIGNED OFF 2026-08-28 by the human.** *"Go for it. Signed off."*
@@ -4762,7 +4833,7 @@ number** · **I2 unchanged** *(a counter that changes no landing changes no hash
 `pnpm verify` fourteen rows.
 
 ## G-047a — The sim exports a path
-Status: **PLANNED. Depends on nothing; G-058 first only because it is smaller.**
+Status: **DONE 2026-08-28, `66e43b6` — the completion record is the "G-047a COMPLETION RECORD" block above.** *(Was PLANNED; the plan below stands as written and was followed.)*
 Owner pair: sim-engineer / sim-critic
 
 **THE SIGNATURE AS RULED WOULD HAVE INSPECTED NOTHING.** `world.grid` is `GridBounds` — **six
@@ -4785,7 +4856,7 @@ genuinely differ and the gate MEASURES rather than reporting INCOMPARABLE.** *A 
 then real evidence the tick did not change.*
 
 ## G-047b — The guest is drawn between ticks
-Status: **PLANNED. Depends on G-047a.** Owner pair: render-engineer / render-critic
+Status: **DONE 2026-08-28, `b890bfa` — the completion record is the "G-047b COMPLETION RECORD" block above.** *(Was PLANNED; the plan below stands as written and was followed.)* Owner pair: render-engineer / render-critic
 **Carries the watchable. This is why the goal exists.**
 
 **THE RENDERER CANNOT SUPPLY `destinationRoom`, and both surrogates break in OPPOSITE directions** —
