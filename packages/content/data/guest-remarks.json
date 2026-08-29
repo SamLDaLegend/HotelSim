@@ -1,0 +1,189 @@
+[
+  {
+    "id": "floor_wrote_to_the_council",
+    "name": "Floor - The Council",
+    "score": 1,
+    "text": "I have written to the council. I have also written to you, but the council will act."
+  },
+  {
+    "id": "floor_stood_like_furniture",
+    "name": "Floor - No Room",
+    "score": 1,
+    "needId": "night_rest",
+    "minUnservedHours": 2,
+    "text": "{hours} hours without a room. I stood in your lobby like furniture, and furniture at least gets sat on."
+  },
+  {
+    "id": "floor_waited_to_sit_down",
+    "name": "Floor - Nowhere To Sit",
+    "score": 1,
+    "needId": "guest_comfort",
+    "minUnservedHours": 2,
+    "text": "{hours} hours. I waited {hours} hours to sit down. I am told that is not a record."
+  },
+  {
+    "id": "floor_nothing_happened",
+    "name": "Floor - Nothing To Do",
+    "score": 1,
+    "needId": "guest_entertainment",
+    "minUnservedHours": 2,
+    "text": "{hours} hours and nothing happened. Nothing at all. I checked twice."
+  },
+  {
+    "id": "floor_paint_it_on_the_building",
+    "name": "Floor - Nothing To Eat",
+    "score": 1,
+    "needId": "guest_nourishment",
+    "minUnservedHours": 2,
+    "text": "{hours} hours, no food, and I would like that painted on the front of the building."
+  },
+
+  {
+    "id": "poor_expected_more",
+    "name": "Poor - Let Them Wonder",
+    "score": 2,
+    "text": "I expected more. I will not be saying what. Let them wonder."
+  },
+  {
+    "id": "poor_awake_in_a_paid_bed",
+    "name": "Poor - No Sleep",
+    "score": 2,
+    "needId": "night_rest",
+    "minUnservedHours": 3,
+    "text": "I did not sleep. {hours} hours of not sleeping, in a hotel, which is the one thing a hotel is for."
+  },
+  {
+    "id": "poor_upright_in_a_hotel",
+    "name": "Poor - Standing",
+    "score": 2,
+    "needId": "guest_comfort",
+    "minUnservedHours": 3,
+    "text": "I would like it noted that I spent {hours} hours upright. Standing. In a hotel."
+  },
+  {
+    "id": "poor_through_my_own_pockets",
+    "name": "Poor - Nothing To Do",
+    "score": 2,
+    "needId": "guest_entertainment",
+    "minUnservedHours": 3,
+    "text": "Nothing to do for {hours} hours. I have been through my own pockets twice and found nothing."
+  },
+  {
+    "id": "poor_on_an_empty_stomach",
+    "name": "Poor - Empty Stomach",
+    "score": 2,
+    "needId": "guest_nourishment",
+    "minUnservedHours": 3,
+    "text": "{hours} hours without food. I am writing this on an empty stomach and I think it shows."
+  },
+
+  {
+    "id": "fair_it_was_a_hotel",
+    "name": "Fair - It Was A Hotel",
+    "score": 3,
+    "text": "It was a hotel. It was, I suppose, a hotel."
+  },
+  {
+    "id": "fair_acquainted_with_the_ceiling",
+    "name": "Fair - The Ceiling",
+    "score": 3,
+    "needId": "night_rest",
+    "minUnservedHours": 2,
+    "text": "Slept badly. {hours} hours of ceiling. I know that ceiling now. We are acquainted."
+  },
+  {
+    "id": "fair_like_a_coat_rack",
+    "name": "Fair - Coat Rack",
+    "score": 3,
+    "needId": "guest_comfort",
+    "minUnservedHours": 2,
+    "text": "Pleasant enough. Nowhere to sit for {hours} hours. I stood in the lobby like a coat rack."
+  },
+  {
+    "id": "fair_hotels_with_rooms",
+    "name": "Fair - Hotels With Rooms",
+    "score": 3,
+    "needId": "guest_entertainment",
+    "text": "It was a hotel. It had rooms. I have stayed in hotels with rooms before."
+  },
+  {
+    "id": "fair_queue_for_a_sandwich",
+    "name": "Fair - The Sandwich",
+    "score": 3,
+    "needId": "guest_nourishment",
+    "minUnservedHours": 2,
+    "text": "I did not travel all this way to spend {hours} hours queueing for a sandwich. I say that as a patient man."
+  },
+
+  {
+    "id": "good_disagrees_professionally",
+    "name": "Good - My Wife Disagrees",
+    "score": 4,
+    "text": "Nearly perfect. My wife disagrees, but she disagrees professionally."
+  },
+  {
+    "id": "good_blame_the_traffic",
+    "name": "Good - The Traffic",
+    "score": 4,
+    "needId": "night_rest",
+    "minUnservedHours": 2,
+    "text": "Good hotel. I was awake for {hours} hours of it, which I have decided to blame on the traffic."
+  },
+  {
+    "id": "good_not_a_young_man",
+    "name": "Good - Not A Young Man",
+    "score": 4,
+    "needId": "guest_comfort",
+    "minUnservedHours": 2,
+    "text": "Very nearly perfect. {hours} hours without a chair. I am not a young man and I made this known."
+  },
+  {
+    "id": "good_united_in_nothing",
+    "name": "Good - United In Nothing",
+    "score": 4,
+    "needId": "guest_entertainment",
+    "text": "Lovely place. Nothing whatever to do in it. Others were also doing nothing, so at least we were united."
+  },
+  {
+    "id": "good_would_eat_first",
+    "name": "Good - Would Eat First",
+    "score": 4,
+    "needId": "guest_nourishment",
+    "text": "Would return. Would eat first."
+  },
+
+  {
+    "id": "top_hard_to_please",
+    "name": "Top - Hard To Please",
+    "score": 5,
+    "text": "Nothing to report. I am told I am hard to please. I am not hard to please."
+  },
+  {
+    "id": "top_woke_once",
+    "name": "Top - Woke Once",
+    "score": 5,
+    "needId": "night_rest",
+    "text": "Slept like a stone. Woke once. Went back to sleep. That is the entire report."
+  },
+  {
+    "id": "top_i_like_standing",
+    "name": "Top - I Like Standing",
+    "score": 5,
+    "needId": "guest_comfort",
+    "text": "Everything was fine. I stood for a while, but I like standing. My wife says I do not."
+  },
+  {
+    "id": "top_i_brought_a_book",
+    "name": "Top - I Brought A Book",
+    "score": 5,
+    "needId": "guest_entertainment",
+    "text": "Faultless. There was nothing to do, but I had brought a book, so that one is on me."
+  },
+  {
+    "id": "top_ignore_the_man",
+    "name": "Top - Ignore The Man",
+    "score": 5,
+    "needId": "guest_nourishment",
+    "text": "No notes. Ignore the man complaining about the food, he never stopped eating it."
+  }
+]

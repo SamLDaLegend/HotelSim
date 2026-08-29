@@ -2733,6 +2733,120 @@ export const speedLadderSchema = z
     });
   });
 
+/**
+ * The only placeholder a remark may carry, and the smallest count at which "hours" is true.
+ *
+ * SPELLED ONCE AND SHARED WITH `packages/sim`'s SUBSTITUTION BY A LIVE CROSS-CHECK rather than
+ * by a copied literal — `remark.content.test.ts` drives the shipped table through `remarkFor`
+ * and asserts no rendered line still contains the placeholder, which is what fails if the two
+ * spellings ever drift. That is the `contentIdSchema` / `lib/content-id.mjs` arrangement one
+ * package over, and ADR-0005's distinction: a cross-check between two live values.
+ */
+export const HOURS_PLACEHOLDER = '{hours}';
+const PLURAL_HOURS_FLOOR = 2;
+
+/**
+ * WHAT A DEPARTING GUEST SAYS (G-065) — the hotel's only voice.
+ *
+ * ==========================================================================================
+ * THIS TABLE IS A DESIGN STATEMENT, NOT A DERIVED ONE. Read `partiesPerDaySchema` above for
+ * the distinction and `starsSchema` for the other side of it: there is no requirement above a
+ * joke to derive it from. What IS derived is the one number a row may carry, and it is
+ * derived in `minUnservedHoursSchema` below.
+ *
+ * IT IS NOT PART OF `ContentRegistry` AND IT NEVER REACHES `bindContent`, WHICH IS THE ONE
+ * THING TO UNDERSTAND ABOUT IT. That is `speedLadderSchema`'s arrangement, taken for a
+ * different reason, and the reason is worth stating because the obvious build is the other
+ * one:
+ *
+ *   `World.contentHash` is `bindContent`'s fingerprint of the injected tables, and
+ *   `assertContentMatches` refuses, on EVERY TICK, a world whose fingerprint has moved.
+ *   Putting a punchline in that document would mean REWORDING A JOKE INVALIDATES EVERY SAVE
+ *   AND MOVES EVERY DETERMINISM HASH IN THE PROJECT.
+ *
+ * A remark decides nothing. No simulation branch reads one — `reviews.ts` is write-only from
+ * the simulation's point of view and this is downstream of that — so the table is loaded by
+ * whoever intends to SHOW it and bound separately (`bindGuestRemarks`, `packages/sim`). The
+ * cost is stated rather than hidden: a `--content` directory does not have to carry this file,
+ * exactly as it does not have to carry `speed-ladder.json`, because no code path that changes
+ * what a run DOES consumes it.
+ * ==========================================================================================
+ *
+ * A TOP-LEVEL ARRAY WITH AN `id`, like every other table here, for `staffRoleSchema`'s two
+ * mechanical reasons: `check:content` fails a content file it can find no `id` in at any
+ * depth, and the sim reaches rows by ITERATION IN A TOTAL ORDER and never by name, so no
+ * snake_case literal enters `packages/sim` (ADR-0003).
+ */
+export const guestRemarkSchema = z.strictObject({
+  id: contentIdSchema,
+  name: z.string().min(1),
+  /**
+   * The review score this line belongs to. Bounded against the CONTENT'S OWN review scale by
+   * `bindGuestRemarks`, not here: `reviewScoreMin` and `reviewScoreMax` live in
+   * `guest-rules.json` and a cross-table reference is not a schema's business — the
+   * `assertStarTierRoomTypesExist` arrangement exactly. `int()` and nothing more is what this
+   * file can honestly say.
+   */
+  score: z.int(),
+  /**
+   * The need this line is a complaint ABOUT, or absent for a line that names no need.
+   *
+   * ABSENCE IS A WILDCARD HERE AND NOT A HISTORICAL STATEMENT, which is the one place this
+   * table departs from the ADR-0008 reading every other optional field in this file carries. A
+   * row without it is selectable whatever the guest's worst-served need turned out to be, and
+   * that is what makes total coverage of the scale reachable with five rows instead of one per
+   * cell. `bindGuestRemarks` REQUIRES such a row at every score, so a guest is never mute.
+   */
+  needId: contentIdSchema.optional(),
+  /**
+   * How long the grievance need must have gone unserved before this line may be used, in whole
+   * hours. Absent is zero — the line is always available.
+   *
+   * THE ONE DERIVED NUMBER IN THIS TABLE, AND WHAT IT IS DERIVED FROM IS ENGLISH GRAMMAR
+   * (HOTELSIM.md section 2.1: a threshold is derivable from a stated requirement, or it is a
+   * superstition). The requirement is `{hours}`: a line that interpolates the count into a
+   * PLURAL noun reads as broken at one, and `hours` is the only placeholder this table has. So
+   * a row whose `text` contains `{hours}` is refused below unless this field is at least 2, and
+   * the bound is the smallest integer at which the plural is true rather than a taste.
+   *
+   * IT IS NOT A CLAIM ABOUT THE SIMULATION'S UNITS. `world.ts` fixes those — *"One tick is one
+   * in-game minute. 1440 ticks make a day"* — and `remarkFor` does the division.
+   */
+  minUnservedHours: z.int().min(0).optional(),
+  /**
+   * What the guest says. `{hours}` is replaced by the whole hours its worst-served need went
+   * unserved; there is no other placeholder.
+   *
+   * WHAT THIS FIELD MAY NOT CONTAIN IS A FACT THE SIMULATION NEVER HELD (HOTELSIM.md section
+   * 6.1). That is not machine-checkable and is not claimed to be: what IS checked is that the
+   * one number a line can print is measured rather than typed, which is why `{hours}` exists at
+   * all and why a row may not simply write a numeral and hope.
+   */
+  text: z.string().min(1),
+});
+
+/**
+ * The whole `guest-remarks.json` document. A top-level array, for the same reason.
+ *
+ * Uniqueness of ids is checked in `parseGuestRemarks` with every other table's. The PLURAL
+ * RULE is checked here, because it is a relationship between two fields of one row and this is
+ * the only place both are in hand — `guestRulesSchema`'s own cross-field refusals are placed
+ * on the same argument.
+ */
+export const guestRemarksSchema = z.array(guestRemarkSchema).min(1).superRefine((rows, ctx) => {
+  rows.forEach((row, index) => {
+    if (!row.text.includes(HOURS_PLACEHOLDER)) return;
+    if ((row.minUnservedHours ?? 0) >= PLURAL_HOURS_FLOOR) return;
+    ctx.addIssue({
+      code: 'custom',
+      path: [index, 'minUnservedHours'],
+      message:
+        `"${row.id}" interpolates ${HOURS_PLACEHOLDER} into a plural noun but is reachable below ` +
+        `${PLURAL_HOURS_FLOOR} hours - set minUnservedHours to at least ${PLURAL_HOURS_FLOOR} (G-065)`,
+    });
+  });
+});
+
 export type GuestRules = z.infer<typeof guestRulesSchema>;
 export type RoomType = z.infer<typeof roomTypeSchema>;
 export type RoomAccessRule = z.infer<typeof roomAccessRuleSchema>;
@@ -2749,3 +2863,4 @@ export type StarTier = z.infer<typeof starTierSchema>;
 export type StarTierRequirement = z.infer<typeof starTierRequirementSchema>;
 export type StarTierCounting = z.infer<typeof starTierCountingSchema>;
 export type Demand = z.infer<typeof demandSchema>;
+export type GuestRemark = z.infer<typeof guestRemarkSchema>;

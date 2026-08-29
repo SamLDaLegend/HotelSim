@@ -10,6 +10,7 @@
     "./data/need-types.json": "./data/need-types.json",
     "./data/item-types.json": "./data/item-types.json",
     "./data/economy.json": "./data/economy.json",
+    "./data/guest-remarks.json": "./data/guest-remarks.json",
     "./data/guest-rules.json": "./data/guest-rules.json",
     "./data/scenarios.json": "./data/scenarios.json",
     "./data/staff-roles.json": "./data/staff-roles.json",

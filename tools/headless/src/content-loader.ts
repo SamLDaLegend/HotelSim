@@ -18,6 +18,7 @@ import {
   ContentError,
   parseContentJson,
   parseEconomiesJson,
+  parseGuestRemarksJson,
   parseGuestRulesJson,
   parseItemTypesJson,
   parseNeedTypesJson,
@@ -30,6 +31,7 @@ import {
 import type {
   ContentRegistry,
   Economy,
+  GuestRemark,
   GuestRules,
   ItemType,
   NeedType,
@@ -40,7 +42,7 @@ import type {
   Demand,
 } from '@hotelsim/content';
 import { bindContent } from '@hotelsim/sim';
-import type { BoundContent, SimContent } from '@hotelsim/sim';
+import type { BoundContent, GuestRemarkData, SimContent } from '@hotelsim/sim';
 
 /**
  * Resolved through the package's `exports` map rather than by walking `../../..`, so
@@ -65,6 +67,11 @@ export const STAFF_ROLES_PATH = resolveContent('@hotelsim/content/data/staff-rol
 export const STAR_TIERS_PATH = resolveContent('@hotelsim/content/data/star-tiers.json');
 /** How many parties a day a hotel of each rating earns (G-051b). */
 export const DEMAND_PATH = resolveContent('@hotelsim/content/data/demand.json');
+/**
+ * WHAT A DEPARTING GUEST SAYS (G-065). Resolved here like every other table — and, like the
+ * speed ladder below it, NOT read by `loadContent`. The reason is on `guestRemarkSchema`.
+ */
+export const GUEST_REMARKS_PATH = resolveContent('@hotelsim/content/data/guest-remarks.json');
 /**
  * The play-speed ladder (G-021). Resolved here like every other table — and read by
  * `loadSpeedLadderFrom` below, which `loadContent` deliberately never calls. The reason is
@@ -123,6 +130,37 @@ export function loadStarTiersFrom(path: string): readonly StarTier[] {
 /** Read and validate one demand file (G-051b). Same all-or-nothing discipline. */
 export function loadDemandFrom(path: string): readonly Demand[] {
   return parseDemandJson(readContentFile(path), path);
+}
+
+/**
+ * Read and validate one guest-remark file (G-065). Same all-or-nothing discipline.
+ *
+ * IT IS NOT CALLED BY `loadContent`, AND THE OMISSION IS THE DESIGN — `loadSpeedLadderFrom`
+ * below is the precedent and the shape is identical, but the argument is not, so it is stated
+ * rather than borrowed.
+ *
+ * The ladder is withheld because ticks per REAL SECOND is a wall-clock quantity and I2 says the
+ * simulation's time is the tick counter. This table is withheld because it is TEXT.
+ * `bindContent` fingerprints what it is given into `World.contentHash`, and
+ * `assertContentMatches` compares that on EVERY TICK — so a punchline inside the injected
+ * document would mean rewording a joke invalidates every save in existence and moves every
+ * determinism hash in the project. Nothing the simulation decides reads a remark, so nothing is
+ * bought by that price.
+ *
+ * THE CONSEQUENCE IS THE LADDER'S, AND IT IS DELIBERATE: a `--content <dir>` directory does NOT
+ * have to carry this file, where it must carry the nine that `loadContent` reads. G-014b's
+ * argument for making a file compulsory — a missing one hands the designer a silent historical
+ * default and a hotel that behaves differently — does not reach here, because no headless code
+ * path consumes a remark and a missing one cannot change what a run does.
+ *
+ * THE RETURN TYPE IS THE CROSS-CHECK. It is assigned into `GuestRemarkData` at the one call
+ * site a host writes, which is where `@hotelsim/content`'s `GuestRemark` and `@hotelsim/sim`'s
+ * structurally-declared row are kept in step at compile time — `loadContent`'s `injected` line
+ * makes exactly this trade for the injected tables.
+ */
+export function loadGuestRemarksFrom(path: string): readonly GuestRemarkData[] {
+  const remarks: readonly GuestRemark[] = parseGuestRemarksJson(readContentFile(path), path);
+  return remarks;
 }
 
 /**

@@ -16,6 +16,7 @@
 export type {
   Demand,
   Economy,
+  GuestRemark,
   GuestRules,
   ItemType,
   NeedRole,
@@ -37,6 +38,13 @@ export {
   contentIdSchema,
   economiesSchema,
   economySchema,
+  // G-065: the hotel's only voice. `guestRemarkSchema`'s docblock carries the one thing a reader
+  // must not get wrong about this table — it is NOT part of `ContentRegistry` and never reaches
+  // `bindContent`, because `World.contentHash` is compared on every tick and rewording a joke
+  // must not invalidate a save.
+  guestRemarkSchema,
+  guestRemarksSchema,
+  HOURS_PLACEHOLDER,
   guestRulesSchema,
   guestRulesTableSchema,
   itemTypeSchema,
@@ -99,6 +107,8 @@ export {
   parseContentJson,
   parseEconomies,
   parseEconomiesJson,
+  parseGuestRemarks,
+  parseGuestRemarksJson,
   parseGuestRules,
   parseGuestRulesJson,
   parseItemTypes,

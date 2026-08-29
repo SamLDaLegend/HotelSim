@@ -13,6 +13,7 @@ import { z } from 'zod';
 import {
   demandTableSchema,
   economiesSchema,
+  guestRemarksSchema,
   guestRulesTableSchema,
   itemTypesSchema,
   needTypesSchema,
@@ -25,6 +26,7 @@ import {
 import type {
   Demand,
   Economy,
+  GuestRemark,
   GuestRules,
   ItemType,
   NeedType,
@@ -401,6 +403,44 @@ ${z.prettifyError(result.error)}`);
   }
   assertUniqueIds(result.data, 'demand');
   return result.data;
+}
+
+/**
+ * Validate an already-parsed guest-remark document (G-065). Same all-or-nothing discipline, and
+ * a table rather than a registry for the same reason: one file is one table.
+ *
+ * IT IS NOT A FIELD OF `ContentRegistry`, WHICH MAKES IT THE SECOND TABLE IN THIS FILE THE
+ * SIMULATION IS NEVER INJECTED WITH. `parseSpeedLadder` is the first and its docblock carries
+ * the general shape; the reason here is different and is on `guestRemarkSchema`. In one line:
+ * `World.contentHash` is checked against the injected tables on every tick, so a table inside it
+ * cannot be edited without invalidating every save, and rewording a joke must not do that.
+ *
+ * What it does NOT check is the two things that decide whether a line can ever be spoken — that
+ * its `score` is on this content's review scale, and that its `needId` names a need type this
+ * content declares. Both read `guest-rules.json` and `need-types.json`, so they live where every
+ * other cross-table check lives: `bindGuestRemarks` in `packages/sim`, which is the one path a
+ * host that intends to show a remark goes through. Two definitions of "coherent content" would
+ * drift.
+ */
+export function parseGuestRemarks(raw: unknown, sourceLabel = 'content'): readonly GuestRemark[] {
+  const result = guestRemarksSchema.safeParse(raw);
+  if (!result.success) {
+    throw new ContentError(`${sourceLabel} is not valid content:
+${z.prettifyError(result.error)}`);
+  }
+  assertUniqueIds(result.data, 'guest remark');
+  return result.data;
+}
+
+/** Validate a guest-remark JSON document. "Not JSON" and "not content" stay apart. */
+export function parseGuestRemarksJson(text: string, sourceLabel = 'content'): readonly GuestRemark[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new ContentError(`${sourceLabel} is not valid JSON: ${describe(error)}`);
+  }
+  return parseGuestRemarks(raw, sourceLabel);
 }
 
 /** Validate a demand JSON document. "Not JSON" and "not content" stay apart. */

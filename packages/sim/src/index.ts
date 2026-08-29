@@ -302,7 +302,7 @@ export {
   // the predicate this goal exists to make single.
   wantsSomethingUnserved,
 } from './needs.js';
-export type { ReviewOutcomeRow, ReviewScale } from './reviews.js';
+export type { GuestRemarkData, RemarkBook, ReviewOutcomeRow, ReviewScale, SpokenRemark } from './reviews.js';
 // `experienceBasisPoints` WAS DELIBERATELY ABSENT (G-019) AND IS NOW DELETED (G-028b), along
 // with `qualitySum` behind it. The score is no longer a sum of quality terms, so there is no
 // two-step intermediate to withhold — see the epitaph in `reviews.ts`, and note that the ONE
@@ -311,11 +311,17 @@ export type { ReviewOutcomeRow, ReviewScale } from './reviews.js';
 // (`lodgingWaitBasisPoints` shared the original note until G-027a deleted it.)
 export {
   assertReviewOutcomes,
+  // G-065: the hotel's only voice. A remark is DERIVED from a departing guest's own parts and
+  // is stored nowhere — `remarkFor`'s docblock carries the seam that leaves behind, and
+  // `guestRemarkSchema` carries why the table is not injected content.
+  bindGuestRemarks,
   createReviewOutcomes,
   recordReview,
+  remarkFor,
   reviewCountOf,
   reviewOf,
   reviewScaleOf,
+  TICKS_PER_HOUR,
   totalReviews,
 } from './reviews.js';
 export type { JsonValue } from './hash.js';

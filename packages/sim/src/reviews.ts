@@ -230,7 +230,7 @@
 // NO RANDOMNESS, NO WALL CLOCK, INTEGER ARITHMETIC END TO END (I2). Every input is the
 // departing guest's own state and injected content.
 
-import { firstGuestRules, starTiersInOrder } from './content.js';
+import { firstGuestRules, needTypesInOrder, starTiersInOrder } from './content.js';
 import type { BoundContent } from './content.js';
 import { letDownWindowOf, needBandOf } from './needs.js';
 import type { NeedState } from './needs.js';
@@ -737,4 +737,357 @@ export function assertReviewOutcomes(rows: readonly ReviewOutcomeRow[], departed
         'most one review, on the way out, so the distribution can never hold more than the departure table does.',
     );
   }
+}
+
+// ============================================================================
+// WHAT THE GUEST ACTUALLY SAYS (G-065). THE HOTEL'S ONLY VOICE.
+//
+// `reviewOf` above turns a stay into an integer. This turns the SAME stay into a sentence,
+// and it is the only place in this project where anything speaks. The register is the
+// charter's — nostalgic, cartoon, Theme Hospital's announcer with the announcer removed —
+// and it lives in `guest-remarks.json` rather than here, because I3 is not negotiable and an
+// English sentence about a hotel is content like any other.
+//
+// THREE THINGS ABOUT THIS BLOCK ARE DESIGN AND NOT HOUSEKEEPING:
+//
+//   NOTHING IS STORED. A remark is a pure function of the parts `reviewOf` already takes,
+//   plus the guest's id. `World` gains no field, `SAVE_SCHEMA_VERSION` does not move, there
+//   is no migration and no `without-*` stripper — G-051a's star rating made the same call for
+//   the same reason and ADR-0104 records it. The consequence is stated where it hurts, at
+//   `remarkFor`: the material a remark is made of exists only INSIDE `depart`, so today
+//   nothing in the tree calls this at a departure. That is a seam, not an oversight.
+//
+//   THE TABLE IS NOT INJECTED CONTENT. It never reaches `bindContent`, so it is not in
+//   `World.contentHash` and `assertContentMatches` — which runs on every tick — cannot see
+//   it. Rewording a joke therefore invalidates no save and moves no determinism hash.
+//   `guestRemarkSchema` in `packages/content` carries the argument; `bindGuestRemarks` below
+//   is the separate door such a table comes through.
+//
+//   NOTHING IS DRAWN. `demand.ts` draws no randomness so that the seed stays economically
+//   inert (ADR-0104), and the same discipline applies here for a weaker but real reason: a
+//   remark that consumed the stream would make every economic figure in this project depend
+//   on how many guests happened to speak. Variety comes from the guest's own id, the way
+//   `needTieBreakRank` gets its answer — a total order over state that already exists.
+// ============================================================================
+
+/**
+ * Minutes in an hour, which under `world.ts`'s calendar is ticks in an hour.
+ *
+ * NOT IMPORTED, AND THE REASON IS THE IMPORT GRAPH RATHER THAN A PREFERENCE. `world.ts` fixes
+ * the calendar — *"One tick is one in-game minute. 1440 ticks make a day"* — and it
+ * value-imports `createReviewOutcomes` from THIS file, so an import back the other way is a
+ * cycle and `.dependency-cruiser.cjs` makes a cycle an ERROR. The two halves cannot drift
+ * silently: `review.remark.test.ts` imports `TICKS_PER_DAY` and this constant and asserts the
+ * calendar closes, so a change to either side reddens rather than diverging.
+ */
+export const TICKS_PER_HOUR = 60;
+
+/**
+ * One row of the remark table, as `packages/sim` sees it.
+ *
+ * DECLARED STRUCTURALLY, NOT IMPORTED (ADR-0001). It is the `RoomTypeData` arrangement in
+ * `content.ts` exactly: the sim states the shape it needs, `packages/content` states the
+ * shape it validates, and the two are kept in step at COMPILE TIME in the host — here, by
+ * `loadGuestRemarksFrom`'s return type flowing into `bindGuestRemarks`.
+ *
+ * `needId` ABSENT IS A WILDCARD AND NOT A HISTORICAL STATEMENT, which is the one place this
+ * type departs from ADR-0008's reading of an absent field. `guestRemarkSchema` says why: a row
+ * that names no need is selectable whatever the guest's worst-served need was, and it is what
+ * makes total coverage of the scale reachable without one row per cell.
+ */
+export type GuestRemarkData = {
+  readonly id: string;
+  readonly name: string;
+  readonly score: number;
+  readonly needId?: string | undefined;
+  readonly minUnservedHours?: number | undefined;
+  readonly text: string;
+};
+
+/**
+ * A remark table that has been checked against the content it will be spoken under.
+ *
+ * A TYPE THAT CAN ONLY BE OBTAINED FROM `bindGuestRemarks`, for `BoundContent`'s reason: it
+ * makes "these rows were checked against this scale and this need table" a fact the type
+ * system carries, rather than a rule each caller has to remember. `remarkFor` takes one of
+ * these and never a bare array, so there is no path to a remark that skipped the coverage
+ * refusal.
+ */
+export type RemarkBook = {
+  /** Ascending by `id`. See `bindGuestRemarks` for why the order is imposed rather than read. */
+  readonly rows: readonly GuestRemarkData[];
+};
+
+/** A line a guest said, and the score it goes with. */
+export type SpokenRemark = {
+  /** The content id of the row that was chosen. */
+  readonly remarkId: string;
+  /** The score `reviewOf` gave the same stay. One call answers both, so they cannot disagree. */
+  readonly score: number;
+  /** The row's `text`, with every placeholder replaced by a number the simulation measured. */
+  readonly text: string;
+};
+
+/** `minUnservedHours` absent means "always available". Spelled once. */
+const minHoursOf = (row: GuestRemarkData): number => row.minUnservedHours ?? 0;
+
+/**
+ * The one placeholder a remark may carry.
+ *
+ * SPELLED HERE AND IN `guestRemarkSchema`, AND CROSS-CHECKED RATHER THAN SHARED — ADR-0001
+ * forbids `packages/sim` a value import from `packages/content`, so the constant cannot be
+ * single-sourced any more than `contentIdSchema` and `lib/content-id.mjs` can. What holds them
+ * together is `remark.content.test.ts`, which drives the SHIPPED table through `remarkFor` and
+ * asserts no rendered line still contains it. A drift in either spelling turns that red;
+ * comparing this literal against a retyped copy would not.
+ */
+const HOURS_PLACEHOLDER = '{hours}';
+
+/**
+ * Check a remark table against the content it will be spoken under, and fix its order.
+ *
+ * ===========================================================================================
+ * A GUEST THAT CANNOT SPEAK IS THIS GOAL'S "NEED WITH NO PROVIDER", AND IT IS REFUSED AT THE
+ * BOUNDARY FOR THE SAME REASON `assertNeedsAreSatisfiable` refuses that one. A table with a
+ * hole in it fails at the moment a particular guest happens to leave with a particular
+ * grievance, which may be an hour into a session and may be never — so the hole is found at
+ * load, with the missing cell named, rather than by a silent `undefined` reaching a caller
+ * that has nothing to show.
+ *
+ * WHAT IS REQUIRED IS EXACTLY TOTAL COVERAGE AT ZERO SEVERITY: for every score the content's
+ * review scale admits and every need type it declares, at least one row must be selectable
+ * when that need went unserved for NO time at all. `minUnservedHours` is a gate, so a table
+ * whose every row demands severity has cells nothing can fill. One wildcard row per score
+ * satisfies the whole requirement, which is why the wildcard exists.
+ *
+ * THE THREE REFUSALS BEFORE IT ARE ORDERED THE WAY `bindContent`'s ARE — the ones that say
+ * "this names something that does not exist" run before the one that counts cells, so a table
+ * with a typo in a `needId` says THAT rather than reporting every cell of that need as
+ * uncovered.
+ * ===========================================================================================
+ *
+ * THE ORDER IS IMPOSED RATHER THAN READ, and that is `normaliseTable`'s argument one package
+ * over: selection below walks this array and stops at a winner, so document order would be an
+ * input to the answer and re-ordering the JSON would change what a guest says. Ascending `id`,
+ * compared by code unit and never by locale, because a locale-sensitive comparison is exactly
+ * the platform-dependent ordering I2 exists to catch.
+ */
+export function bindGuestRemarks(bound: BoundContent, remarks: readonly GuestRemarkData[]): RemarkBook {
+  const scale = reviewScaleOf(bound);
+  if (scale === undefined) {
+    throw new Error(
+      'Guest remarks are unreachable: this content declares no review scale, so no guest leaves a review ' +
+        'for a remark to accompany. Give the guest rules a reviewScoreMin and a reviewScoreMax, or ship no remarks.',
+    );
+  }
+  const needTypes = needTypesInOrder(bound);
+  if (needTypes.length === 0) {
+    throw new Error(
+      'Guest remarks are unreachable: this content declares no need types, so no guest can form a need ' +
+        'vector and none can be reviewed. Give it a need table, or ship no remarks.',
+    );
+  }
+  const rows = [...remarks].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const row of rows) {
+    if (row.score < scale.min || row.score > scale.max) {
+      throw new Error(
+        `Guest remark "${row.id}" is unreachable: it is filed at score ${row.score}, and this content's ` +
+          `review scale runs from ${scale.min} to ${scale.max}. No guest can leave that score.`,
+      );
+    }
+    if (row.needId !== undefined && needTypes.every((need) => need.id !== row.needId)) {
+      throw new Error(
+        `Guest remark "${row.id}" is unreachable: it complains about "${row.needId}", which this content ` +
+          'declares no need type for. No guest can form that need, so nothing can select this line.',
+      );
+    }
+  }
+  for (let score = scale.min; score <= scale.max; score += 1) {
+    for (const need of needTypes) {
+      const covered = rows.some(
+        (row) => row.score === score && minHoursOf(row) === 0 && (row.needId === undefined || row.needId === need.id),
+      );
+      if (covered) continue;
+      throw new Error(
+        `Guest remarks do not cover every outcome: a guest scoring ${score} whose worst-served need was ` +
+          `"${need.id}" has nothing to say. Every score and every need needs at least one row that is ` +
+          'available from zero unserved hours — one row per score with no needId covers a whole row of the grid.',
+      );
+    }
+  }
+  return Object.freeze({ rows: Object.freeze(rows) });
+}
+
+/**
+ * The need this guest is going to complain about: the one it went longest without.
+ *
+ * TIES ARE BROKEN BY ASCENDING `needId`, EXPLICITLY (I2). The guest's own vector is already
+ * ordered, so reading position would work today and would be an answer that depends on how a
+ * vector happened to be built — the failure mode `stepGuests` names when it settles two guests
+ * wanting the same room by the lower id. A rule stated here survives a change to the other end.
+ *
+ * A guest whose needs were ALL served perfectly still has a worst need; it is just one with
+ * zero unserved ticks, which is the case the top-score rows are written for. There is no
+ * "no grievance" branch and there must not be one, because `needs.length === 0` is already
+ * refused by `reviewOf` before this is reached.
+ */
+function grievanceOf(needs: readonly NeedState[]): NeedState | undefined {
+  let worst: NeedState | undefined;
+  for (const need of needs) {
+    if (worst === undefined) {
+      worst = need;
+      continue;
+    }
+    if (need.unservedTicks > worst.unservedTicks) {
+      worst = need;
+      continue;
+    }
+    if (need.unservedTicks === worst.unservedTicks && need.needId < worst.needId) worst = need;
+  }
+  return worst;
+}
+
+/**
+ * How strongly a row claims this grievance. Higher wins; the two terms are steps 2 and 3 of
+ * `remarkFor`'s selection order and are kept in one function so they cannot be spelled twice.
+ *
+ * SPECIFICITY DOMINATES SEVERITY BY CONSTRUCTION rather than by a weight nobody can source:
+ * the severity term is `minUnservedHours`, a row is only a candidate when that is at or below
+ * the grievance's whole hours, and the specificity term is multiplied by one more than that
+ * ceiling. So no stack of severity can outrank naming the need.
+ */
+function rankOf(row: GuestRemarkData, hours: number, grievance: NeedState): number {
+  const specific = row.needId === grievance.needId ? 1 : 0;
+  return specific * (hours + 1) + minHoursOf(row);
+}
+
+/**
+ * What a departing guest says about its stay, or `undefined` if this content gives it no voice.
+ *
+ * ===========================================================================================
+ * NOTHING IN `packages/sim` CALLS THIS, AND THAT IS A SEAM RATHER THAN DEAD CODE. Say it here
+ * because the next reader will otherwise reach for the obvious wiring and find out why the
+ * hard way.
+ *
+ * The material a remark is made of — the guest's own `unservedTicks` vector, its stay length,
+ * and the departure reason that decides `cutShort` — exists only INSIDE `depart`, and is gone
+ * one tick later: `world.reviewOutcomes` is a `{ score, count }` histogram and carries no
+ * per-guest detail at all. So a remark can be DERIVED at a departure and cannot be
+ * RECONSTRUCTED from any world afterwards. Showing a feed of what recent guests said therefore
+ * needs somewhere to put them — a bounded ring on `World` — and that is a save bump, a
+ * migration, a stripper and a shape check, which is a different goal with a different owner.
+ * Deriving-not-storing is what keeps THIS goal free of all four (ADR-0104's precedent), and
+ * the cost of that choice is exactly this paragraph.
+ * ===========================================================================================
+ *
+ * THE SCORE IS COMPUTED HERE RATHER THAN PASSED IN, so the stars and the sentence cannot
+ * disagree. A caller that had already scored the stay and handed the number over would be a
+ * second definition of the same stay's review, and the two would drift the first time
+ * `reviewOf` moved — which it has, three times.
+ *
+ * SELECTION, AND EVERY STEP OF IT IS A TOTAL ORDER OVER STATE THE SIMULATION ALREADY HOLDS:
+ *
+ *   1. Candidates are the rows filed at this score whose severity gate the grievance clears
+ *      and which either name the grievance need or name none.
+ *   2. A row that NAMES THE NEED beats one that does not. The register rule this implements is
+ *      the human's: *the grievance is specific and countable, never "service was poor"*. The
+ *      wildcard is the safety net that makes coverage reachable, not the preferred answer.
+ *   3. Among equally specific rows, the HIGHEST severity gate wins — say the strongest thing
+ *      that is true of this stay rather than the mildest.
+ *   4. Anything still tied is settled by `guestId`, taken modulo the tied count over the book's
+ *      ascending-id order. NOT a draw from the PRNG: `demand.ts` draws nothing so that the seed
+ *      has no economic effect, and a remark drawing would make the number of guests who spoke
+ *      an input to every economic figure in this project. Ids are sequential, so consecutive
+ *      guests in the same cell say different things, which is the variety a draw was for.
+ *
+ * `undefined` IS CONTENT THAT DECLARES NO REVIEW SCALE — the `reviewOf` contract verbatim, and
+ * ADR-0008's rule: a run under content with no reviews is not a run where everyone was silent
+ * and happy. It is the only `undefined` this can return, because `bindGuestRemarks` has already
+ * refused every table with a hole in it and `reviewOf` has already refused an empty vector.
+ */
+export function remarkFor(
+  book: RemarkBook,
+  bound: BoundContent,
+  needs: readonly NeedState[],
+  cutShort: boolean,
+  stayTicks: number,
+  standing: number,
+  guestId: number,
+): SpokenRemark | undefined {
+  const score = reviewOf(bound, needs, cutShort, stayTicks, standing);
+  if (score === undefined) return undefined;
+  const grievance = grievanceOf(needs);
+  if (grievance === undefined) return undefined;
+  const hours = Math.floor(grievance.unservedTicks / TICKS_PER_HOUR);
+  let best: GuestRemarkData | undefined;
+  let bestRank = 0;
+  let tied = 0;
+  for (const row of book.rows) {
+    if (!selectable(row, score, hours, grievance)) continue;
+    const rank = rankOf(row, hours, grievance);
+    if (best === undefined || rank > bestRank) {
+      best = row;
+      bestRank = rank;
+      tied = 1;
+      continue;
+    }
+    if (rank === bestRank) tied += 1;
+  }
+  // `bindGuestRemarks` guarantees a zero-severity candidate at every score for every need, and
+  // `selectable` rejects a row only on score, severity or need — so this cannot be taken under a
+  // bound book. It is a postcondition rather than a case, and it THROWS rather than returning
+  // `undefined` because a silently mute guest is the failure the coverage refusal exists to
+  // prevent, arriving through the one door that bypassed it.
+  if (best === undefined) {
+    throw new Error(
+      `No guest remark for a score of ${score} with "${grievance.needId}" as the worst-served need. ` +
+        'A bound book covers every score and every need, so this one did not come from bindGuestRemarks.',
+    );
+  }
+  const chosen = tied === 1 ? best : nthTied(book, score, hours, grievance, bestRank, guestId, tied);
+  return Object.freeze({
+    remarkId: chosen.id,
+    score,
+    text: chosen.text.split(HOURS_PLACEHOLDER).join(String(hours)),
+  });
+}
+
+/** Step 1 of `remarkFor`'s selection order, spelled once because two walks apply it. */
+function selectable(row: GuestRemarkData, score: number, hours: number, grievance: NeedState): boolean {
+  if (row.score !== score) return false;
+  if (minHoursOf(row) > hours) return false;
+  return row.needId === undefined || row.needId === grievance.needId;
+}
+
+/**
+ * The `guestId`-th row of the tied set, in the book's ascending-id order.
+ *
+ * A SECOND WALK RATHER THAN AN ARRAY BUILT IN THE FIRST, because the first walk runs at every
+ * departure and a tie is the rare case — the shipped table has none, which is why this has an
+ * arm in `review.remark.test.ts` driven by a table written for it. `(n % t + t) % t` rather
+ * than `n % t` so a negative id indexes into the set instead of off the front of it; ids are
+ * positive today and a total function is cheaper than the sentence explaining why it is safe.
+ */
+function nthTied(
+  book: RemarkBook,
+  score: number,
+  hours: number,
+  grievance: NeedState,
+  bestRank: number,
+  guestId: number,
+  tied: number,
+): GuestRemarkData {
+  const wanted = ((guestId % tied) + tied) % tied;
+  let seen = 0;
+  for (const row of book.rows) {
+    if (!selectable(row, score, hours, grievance)) continue;
+    if (rankOf(row, hours, grievance) !== bestRank) continue;
+    if (seen === wanted) return row;
+    seen += 1;
+  }
+  // Unreachable: `wanted < tied` and the walk above visits exactly `tied` rows, over the same
+  // frozen book with the same predicate. Thrown rather than returned-as-a-default for the
+  // reason `remarkFor`'s postcondition throws — a silent fallback here would hide a change to
+  // one of the two walks that did not reach the other.
+  throw new Error(`Guest remark tie-break walked ${seen} row(s) of ${tied} at a score of ${score}.`);
 }
