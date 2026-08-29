@@ -263,7 +263,12 @@ describe('the benchmark measures the occupancy its bound was calibrated at', () 
     // reason is worth reading**: this workload is sixty bedrooms behind ONE amenity, so almost
     // nobody is served whatever they reach for first, and the tie-break has next to nothing to
     // decide. `workload.mjs` carries the five slots.
-    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_258);
+    // 1,258 -> 1,244 AT G-046: a door is a PLACE, so guests spend more of a stay walking and
+    // this hotel's stays end fractionally sooner. -1.1%, the smallest move the constant has made,
+    // for the reason the G-054 note beside it gives — sixty bedrooms behind ONE amenity is a long
+    // way below the provider bottleneck, so almost nothing about how a guest travels can help it.
+    // `workload.mjs` carries the five slots and the ADR-0058 statement that the BOUND is untouched.
+    expect(workload.TARGET_CONCURRENT_HUNDREDTHS).toBe(1_244);
     expect(stayDurationOf(content)).toBe(1_440);
     // `ROOMS` is not the cost driver (G-010 made tick cost O(guests)), but it has to exceed the
     // occupancy or the hotel queues and the axis stops being arrivals at all. In hundredths, so
@@ -582,7 +587,14 @@ describe('THE CADENCE CENSUS — what one arrival tick does to the axis every ga
     // equality, which would make the shipped cadence indistinguishable from its neighbour. That
     // is a claim about THIS workload's sensitivity, not about the tie-break, and it is recorded
     // here so a future re-take reads it as a narrowing margin rather than as a surprise.
-    expect([below, here, above], readings).toEqual([1_252, 1_258, 1_259]);
+    // 1252 / 1258 / 1259 -> **1242 / 1244 / 1237 AT G-046, AND THE SHAPE CHANGES A FOURTH TIME.**
+    // The shipped cadence is a PEAK again rather than the middle of a rising sequence, and the
+    // sensitivity widens back out to 2 and 7 hundredths from 6 and 1. **The narrowing margin the
+    // paragraph above recorded is discharged rather than realised**: the +1 side was one arrival
+    // command from being an equality and has moved away from it, so the two inequalities below
+    // are no longer near a knife edge. Cause: every journey is a tick longer, so how far a guest
+    // has to walk starts mattering again beside how often one arrives.
+    expect([below, here, above], readings).toEqual([1_242, 1_244, 1_237]);
     // THE STRUCTURAL CLAUSE, which survives every re-pin of the three literals above: one tick
     // either side is a different hotel. Stated as the two inequalities that ARE the claim — see
     // the block above for why the set-size spelling came out.

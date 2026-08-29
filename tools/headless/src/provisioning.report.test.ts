@@ -261,15 +261,39 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
       const mean = cells.map((summary) => meanEngagement(summary));
       return { rooms, worst, mean, worstFalls: strictlyDecreasing(worst), meanFalls: strictlyDecreasing(mean) };
     });
+    // ========================================================================================
+    // **AND AT G-046 THE OTHER HALF IS FALSE TOO. THE THREE-ROOM RUNG IS REPAIRED AND THE
+    // SIX-ROOM MEAN WITH IT** — the debt the paragraph above records as "what is still owed",
+    // discharged by a goal that was not looking for it.
+    //
+    //     verdicts (worstFalls, meanFalls):  3 rooms  false/false -> TRUE/false
+    //                                        6 rooms   true/false -> TRUE/TRUE
+    //
+    // WHY. A door is a PLACE now, so a journey to a provider costs a tick more than it did. That
+    // makes travel a real term in what a provider can serve, and travel is the one term that
+    // FALLS when you buy a second amenity: the extra copy is somewhere else on the plot, so the
+    // guests that go to it walk less far as well as queue less long. Below the bound the rows
+    // used to trade against each other because an extra provider only moved guest-ticks between
+    // queues; with a distance cost in the loop the second copy buys something the first cannot
+    // hand over, and the axis becomes monotone.
+    //
+    // **THE ARM'S TITLE IS NOW WRONG IN BOTH DIRECTIONS AND IS LEFT ALONE DELIBERATELY**, the
+    // way the paragraph above left G-043's. What it names is the history of the claim, and the
+    // history is the point: "neither rung is repaired" (G-043), "one of them is" (G-054), "both
+    // are" (G-046). The verdict tuple below is the claim; the title is the record of it moving.
+    // ========================================================================================
     expect(verdicts.map((v) => [v.rooms, v.worstFalls, v.meanFalls])).toEqual([
-      [BELOW_ROOMS[0], false, false],
-      [BELOW_ROOMS[1], true, false],
+      [BELOW_ROOMS[0], true, false],
+      [BELOW_ROOMS[1], true, true],
     ]);
     // AND THE ROWS THE VERDICTS ARE READ OFF, so a build that moves them says so rather than
     // flipping a boolean silently.
+    // 1,084/801/811 -> 1,174/841/837 and 1,414/570/557 -> 1,599/606/577 AT G-046. Every row is
+    // worse in absolute terms — a tick of walking is a tick unserved — and both are now strictly
+    // decreasing, which is the verdict above and the thing a player is buying.
     expect(verdicts.map((v) => v.worst)).toEqual([
-      [1_084, 801, 811],
-      [1_414, 570, 557],
+      [1_174, 841, 837],
+      [1_599, 606, 577],
     ]);
   });
 
@@ -292,30 +316,35 @@ describe('THE BOTTLENECK QUESTION, ANSWERED BY MEASUREMENT ON BOTH SIDES', () =>
     // few per cent of each other — 801/790/750 where they were 252/722/1,439. The column
     // structure the block above describes is unchanged; what has gone is the rank ordering that
     // a spelling imposed on the rows.
+    // EVERY CELL OF EVERY RUNG MOVED AT G-046 AND THE COLUMN STRUCTURE DID NOT. A door is a
+    // PLACE, so a journey costs a tick; a tick a guest spends walking is a tick its need is
+    // unserved, and these are unserved-basis-point rows. The rows rise across the board and the
+    // shape the block above describes — the rank ordering gone, the columns intact — is
+    // unchanged. The verdict tuple two tests up is where the reading that MOVED lives.
     expect(tally(BELOW[0]!), `${BELOW_ROOMS[0]} rooms`).toEqual([
-      [1_074, 1_084, 571],
-      [801, 790, 750],
-      [811, 805, 798],
+      [1_174, 1_150, 578],
+      [841, 834, 790],
+      [837, 828, 822],
     ]);
     expect(tally(BELOW[1]!), `${BELOW_ROOMS[1]} rooms`).toEqual([
-      [1_414, 1_216, 302],
-      [570, 560, 503],
-      [557, 547, 538],
+      [1_599, 1_292, 285],
+      [606, 596, 528],
+      [577, 568, 559],
     ]);
     expect(tally(ABOVE[0]!), `${ABOVE_RUNGS[0]![0]} rooms`).toEqual([
-      [2_867, 2_922, 203],
-      [493, 470, 369],
-      [428, 401, 393],
+      [3_005, 2_765, 230],
+      [530, 488, 391],
+      [446, 423, 411],
     ]);
     expect(tally(ABOVE[1]!), `${ABOVE_RUNGS[1]![0]} rooms`).toEqual([
-      [5_040, 5_011, 217],
-      [2_891, 1_695, 193],
-      [643, 588, 422],
+      [5_208, 5_082, 228],
+      [3_020, 2_083, 213],
+      [678, 628, 439],
     ]);
     expect(tally(ABOVE[2]!), `${ABOVE_RUNGS[2]![0]} rooms`).toEqual([
-      [5_037, 5_110, 208],
-      [3_153, 2_520, 183],
-      [756, 629, 304],
+      [5_242, 5_109, 254],
+      [3_138, 2_746, 203],
+      [824, 661, 308],
     ]);
   });
 
@@ -403,7 +432,11 @@ describe('what the rule claims a provider sustains is an UPPER bound, and here i
     const [lean, rich] = [BELOW[1]![0]!, BELOW[1]![1]!];
     // 949 / 541 -> 977 / 544 AT G-054. The GAP is what this arm is about — the rule provisions
     // this hotel with one amenity and a second still relieves it — and the gap is unmoved.
-    expect([meanEngagement(lean), meanEngagement(rich)]).toEqual([977, 544]);
+    // 977 / 544 -> 1,059 / 577 AT G-046. **The GAP is what this arm is about and it WIDENS**:
+    // the rule still over-provisions this hotel with one amenity, a second still relieves it,
+    // and the relief is now 482 basis points where it was 433 — because a second copy is
+    // somewhere else on the plot, so it shortens journeys as well as queues.
+    expect([meanEngagement(lean), meanEngagement(rich)]).toEqual([1_059, 577]);
     // And it is not the population moving: the same guests give up either way.
     expect(departures(rich, 'gaveUp')).toBe(departures(lean, 'gaveUp'));
   });

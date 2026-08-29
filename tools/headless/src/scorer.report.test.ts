@@ -435,7 +435,17 @@ describe('THE SCORE RESPONDS TO THE AXIS A PLAYER MOVES', () => {
       // and the player's repair is still one amenity**: the cell to its right reads 500.
       // G-059: the fall NARROWS from 15 hundredths to 11, at the same cell. Same finding, on a
       // grid whose every cell has moved.
-    ).toEqual(['room axis at 1 amenities, 6->12: -11']);
+      // G-046: THE FALL DEEPENS, 11 hundredths -> 18, AND IT IS STILL THE ONLY ONE AND STILL IN
+      // THE SAME CELL. The guard above says a BIGGER fall needs a measurement rather than a
+      // re-pin, so here it is, and it is the same measurement the whole goal rests on: a door is
+      // a PLACE, every journey costs a tick, and a tick of walking is only expensive where the
+      // providers are already the binding constraint. **This cell is defined as the first on the
+      // grid where they are** — 16 concurrent guests against the `1 + refillPerTick` one provider
+      // sustains — so it is the cell the door was always going to deepen, and the fact that no
+      // OTHER cell fell is the reading that says so. Measured across G-046's own arms in the same
+      // direction: the twelve-room healthy arm loses no revenue at all, the twenty-four-room
+      // five-star arm loses 3.3%, and the six-room-at-960-arrivals arm loses 14.7%.
+    ).toEqual(['room axis at 1 amenities, 6->12: -18']);
     // THE 30s DEFAULT WAS NOT ENOUGH UNDER `pnpm verify` AT G-041 and this is a DEADLOCK
     // DETECTOR rather than a performance bound — nothing here asserts a duration. This sweep
     // spawns nine child CLI runs, the file now also warms a three-run contended ladder, and the
@@ -661,7 +671,10 @@ describe('THE DISTRIBUTION IS NOT A POINT MASS, at a configuration named for hav
     // pair any more, and the line below records the rejected arm CLEARING the floor rather than
     // failing it. The cause is the criterion 2 finding in `review.report.test.ts`.
     expect(occupied.map((row) => row.score)).toEqual([1, 4]);
-    expect(Math.min(...occupied.map((row) => row.count))).toBe(216);
+    // 216 -> 217 AT G-046: one guest moves between the two fat bands. The claim on the line
+    // above and the one below are both unmoved — two occupied bands, and the smaller of them
+    // still clears the one-guest-per-simulated-day floor.
+    expect(Math.min(...occupied.map((row) => row.count))).toBe(217);
     expect(Math.min(...occupied.map((row) => row.count))).toBeGreaterThan(rejected.world.days);
     // `expect(Math.min(...clearing.map(count)) > floor)` STOOD HERE AND IS GONE (ADR-0035).
     // `clearing` is DEFINED as the rows above the floor, so its minimum exceeding the floor

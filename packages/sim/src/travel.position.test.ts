@@ -89,6 +89,14 @@ const content = bindContent(DEFINITIONS);
 const BEDROOM: Cell = { floor: 0, column: 3, row: 0 };
 const CAFE: Cell = { floor: -1, column: 6, row: 0 };
 const DOOR: Cell = { floor: 0, column: 0, row: 0 };
+// AND SINCE G-046 EACH ROOM HAS A DOORWAY, WHICH IS A FOURTH AND FIFTH CELL THAT CANNOT BE
+// MISTAKEN FOR THE OTHERS. Neither floor here declares a corridor, so both floors are OPEN
+// PLAN and every free cell is somewhere people walk; the boundary walk therefore stops on the
+// FIRST neighbour of the room's own origin, which is the cell to its left. That is the same
+// rule a planned floor takes — `isDeclaredWalkway` is one function — and these two constants
+// are what it comes to on this fixture.
+const DOOR_BEDROOM: Cell = { floor: 0, column: 2, row: 0 };
+const DOOR_CAFE: Cell = { floor: -1, column: 5, row: 0 };
 
 const spawn = (entityKind: string, at: Cell): Command => ({ kind: 'spawnEntity', entityKind, at });
 const arrives: ScheduledCommand = { tick: 1, command: { kind: 'guestArrives' } };
@@ -195,14 +203,26 @@ describe('3. the rule through the tick — a guest arrives, checks in, eats, sle
     expect(guest.at).toEqual(DOOR);
   });
 
-  it('and it is standing in the room on the tick it checks in, not one tick later', () => {
+  it('and it is standing IN THE DOORWAY on the tick it checks in, and in the room the tick after', () => {
+    // ==================================================================================
+    // THIS TEST READ *"standing in the room on the tick it checks in, not one tick later"*
+    // FROM G-023a UNTIL G-046, AND G-046 IS WHAT MADE IT FALSE — deliberately, by a human
+    // ruling: *"Room should get a door before a stranger plays it."* A room is entered
+    // through its doorway now, so the last cell of the journey is a step from `DOOR_BEDROOM`
+    // and the guest spends the check-in tick standing in it.
+    //
+    // THE CLAIM THE OLD TITLE WAS MAKING SURVIVES, and it is asserted on the line below:
+    // taking a room and STANDING IN IT are still one tick apart at most, so a guest does not
+    // hold a room it is nowhere near for an unbounded time. What moved is the size of that
+    // gap — from zero to one — and it is the price of the door, paid once per entry.
+    // ==================================================================================
     const world = run(hotel(spawn('bedroom', BEDROOM)), content, 1, [arrives]);
     const guest = onlyGuest(world);
-    // One tick, containing the arrival: it took a room and is in it already.
     expect(world.tick).toBe(2);
     expect(guest.arrivedTick).toBe(1);
     expect(isResting(guest)).toBe(true);
-    expect(guest.at).toEqual(BEDROOM);
+    expect(guest.at).toEqual(DOOR_BEDROOM);
+    expect(onlyGuest(run(world, content, 1)).at).toEqual(BEDROOM);
   });
 
   it('gives the guest its OWN cell object, never the room\'s — the copy rule, live', () => {
@@ -214,7 +234,10 @@ describe('3. the rule through the tick — a guest arrives, checks in, eats, sle
     //
     // Nothing can write through the shared object today — every field of `Cell` is `readonly`
     // and the round trip re-splits them — so this pins a STRUCTURE rather than a symptom.
-    const world = run(hotel(spawn('bedroom', BEDROOM), spawn('cafe', CAFE)), content, 1, [arrives]);
+    // TWO TICKS RATHER THAN ONE SINCE G-046: the first puts the guest in the cafe's doorway,
+    // the second turns it in. The copy rule is a claim about the tick the guest lands ON the
+    // host's cell, so the assertion has to be taken on that tick and not before it.
+    const world = run(hotel(spawn('bedroom', BEDROOM), spawn('cafe', CAFE)), content, 2, [arrives]);
     const guest = onlyGuest(world);
     const hosts = entitiesInOrder(world.entities);
     const cafe = hosts.find((entity) => entity.kind === 'cafe');
@@ -233,7 +256,14 @@ describe('3. the rule through the tick — a guest arrives, checks in, eats, sle
     // asleep in a basement café. That rule predates this goal; positions are what make it
     // possible to SEE. Changing service rules to hide it is G-023b's decision and is under a
     // human ruling — asserted here so it is recorded rather than discovered.
-    const world = run(hotel(spawn('bedroom', BEDROOM), spawn('cafe', CAFE)), content, 1, [arrives]);
+    // TWO TICKS SINCE G-046 — doorway, then cafe. The guest is ENGAGED on the first of them,
+    // which is the pre-existing rule this test is about: a reservation is held from the tick
+    // it is taken and the position lags it. The door made that lag one tick longer and did
+    // not create it.
+    const walking = run(hotel(spawn('bedroom', BEDROOM), spawn('cafe', CAFE)), content, 1, [arrives]);
+    expect(isEngaged(onlyGuest(walking))).toBe(true);
+    expect(onlyGuest(walking).at).toEqual(DOOR_CAFE);
+    const world = run(walking, content, 1);
     const guest = onlyGuest(world);
     expect(isEngaged(guest)).toBe(true);
     expect(isResting(guest)).toBe(true);
@@ -272,12 +302,23 @@ describe('3. the rule through the tick — a guest arrives, checks in, eats, sle
     // Nothing is finished under a stock: `food` decays past its want line again and the guest
     // makes the same trip a second time. That oscillation is the goal's headline, and the
     // trajectory is what a watcher would see it as.
-    expect(seen).toEqual([CAFE, BEDROOM, CAFE, BEDROOM]);
-    // The door is missing from that list for a reason worth stating: this guest never spends
-    // a tick holding nothing, because the room and the café were both free when it walked in.
-    // The empty-hotel case above is where the door is observed.
+    // ==================================================================================
+    // AND SINCE G-046 THE DOORWAY IS IN THE TRAJECTORY, WHICH IS THE POINT OF THE GOAL.
+    //
+    // This read `[CAFE, BEDROOM, CAFE, BEDROOM]` and now reads eight cells: the guest stands
+    // in each room's doorway on the tick before it is inside. **That is the human's ruling,
+    // observed end to end through the tick rather than on a helper** — the strongest evidence
+    // in this package that a door is a PLACE, because nothing here calls `doorwayFor`.
+    //
+    // The oscillation the old comment describes is untouched: the guest still makes the trip
+    // twice, and it is still `food` decaying past its want line that sends it.
+    // ==================================================================================
+    expect(seen).toEqual([DOOR_CAFE, CAFE, DOOR_BEDROOM, BEDROOM, DOOR_CAFE, CAFE, DOOR_BEDROOM, BEDROOM]);
+    // The ENTRANCE is missing from that list for a reason worth stating: this guest never
+    // spends a tick holding nothing, because the room and the café were both free when it
+    // walked in. The empty-hotel case above is where the entrance is observed.
     const engagedThen = onlyGuest(run(start, content, 1, [arrives]));
-    expect(engagedThen.at).toEqual(CAFE);
+    expect(engagedThen.at).toEqual(DOOR_CAFE);
   });
 });
 

@@ -192,6 +192,42 @@ export function isRoomInvalidityReason(value: string): value is RoomInvalidityRe
 export type RoomInvalidityTally = Readonly<Record<RoomInvalidityReason, number>>;
 
 /**
+ * ==========================================================================================
+ * WHAT ONE PASS OVER A ROOM'S BOUNDARY ANSWERS (G-046). Two questions, one walk, one memo
+ * entry.
+ *
+ * `reason` is what it always was. `doorway` is NEW and it is **the cell the circulation half
+ * of that same walk stopped on** — the first neighbour of the room that no room stands on and
+ * that the plan calls a walkway. Since G-046 a guest walks to that cell before it may enter,
+ * so a door is a PLACE rather than only a property (the human's ruling, `GOALS.md` G-046).
+ *
+ * ONE MAP AND NOT TWO, WHICH IS THE WHOLE REASON THIS TYPE EXISTS. The doorway is not a
+ * second fact about a room, it is the SAME fact `noCorridor` is about, read positively: the
+ * loop that sets `hasCirculation = true` is the loop that knows where. A second
+ * `Map<EntityId, Cell | null>` filled beside the first would be two records of one walk, and
+ * the way that drifts is a context whose reason memo is warm and whose doorway memo is cold —
+ * a guest sent to a doorway that the room no longer has. There is one entry, written once,
+ * and a hit on it carries both answers or neither.
+ *
+ * `doorway` IS NULL EXACTLY WHERE THE WALK NEVER REACHED CIRCULATION: an unplaced room, a
+ * room in mid-air, a sealed room, and a room whose door opens onto nothing anybody walks
+ * (`noCorridor`). Every one of those is an INVALID room, so no guest is ever sent to one —
+ * and `doorwayFor` degrades to the pre-G-046 destination rather than stranding anybody, which
+ * is the branch a room that becomes invalid mid-stay takes.
+ *
+ * IT IS NOT `noDoor`'S CELL, AND THE NAMES ARE DELIBERATELY DIFFERENT. `noDoor` is *"there is
+ * nowhere on the plot for this room to open into"* — a free neighbour, corridor or not.
+ * `doorway` is the way IN: free AND circulation. A room can have the first and not the
+ * second, which is exactly what `noCorridor` reports. Neither reason changed meaning here
+ * (G-046 "still out of scope").
+ * ==========================================================================================
+ */
+type RoomAnswer = {
+  readonly reason: RoomInvalidityReason | null;
+  readonly doorway: Cell | null;
+};
+
+/**
  * Every live entity, in the one canonical order, however the caller is holding them.
  *
  * Exists so this module works against an open DRAFT (during a tick: staged spawns
@@ -289,8 +325,9 @@ export type ValidityContext = {
    * `plannedFloors`' shape one field over, and it answers the other half of `isEmptyFloor`.
    */
   builtFloors: Set<number> | null;
-  /** Answers already computed. LOOKUP ONLY — never iterated (I2). */
-  memo: Map<EntityId, RoomInvalidityReason | null> | null;
+  /** Answers already computed. LOOKUP ONLY — never iterated (I2). See `RoomAnswer` for why
+   *  one map carries two answers rather than two maps carrying one each. */
+  memo: Map<EntityId, RoomAnswer> | null;
   /**
    * Every VALID room, in the canonical ascending-id entity order. Null until first asked.
    *
@@ -813,7 +850,18 @@ export function roomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // and `findRoomType` is a binary search plus an array walk paid before the answer that
   // was already known. This is a reordering, not a weakening: an entity that is not a room
   // still throws, on the same line, with the same message.
-  const memo = (ctx.memo ??= new Map<EntityId, RoomInvalidityReason | null>());
+  return answerFor(ctx, room).reason;
+}
+
+/**
+ * The memoised pair — the reason and the doorway — for one room. See `RoomAnswer`.
+ *
+ * THE MEMO IS CONSULTED FIRST AND THE NOT-A-ROOM GUARD SECOND, which is `roomInvalidity`'s own
+ * ordering argument moved here with the memo it is about, not weakened: an entity that is not
+ * a room still throws, on the same line, with the same message.
+ */
+function answerFor(ctx: ValidityContext, room: Entity): RoomAnswer {
+  const memo = (ctx.memo ??= new Map<EntityId, RoomAnswer>());
   const remembered = memo.get(room.id);
   if (remembered !== undefined) return remembered;
   if (findRoomType(ctx.content, room.kind) === undefined) {
@@ -822,13 +870,20 @@ export function roomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
         'and validity is a property of rooms',
     );
   }
-  const reason = computeRoomInvalidity(ctx, room);
-  memo.set(room.id, reason);
-  return reason;
+  const answer = computeRoomInvalidity(ctx, room);
+  memo.set(room.id, answer);
+  return answer;
 }
 
-function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidityReason | null {
-  if (room.at === null) return 'unplaced';
+/**
+ * ONE ANSWER OBJECT PER ROOM PER VALIDITY CONTEXT, and that is the whole allocation this goal
+ * adds (G-046). It is not per tick and not per guest: `ValidityCache` holds the context across
+ * every tick that changed no entity, so the shipped 60-room bench allocates these once for a
+ * 43,200-tick run. Each return below is the reason that return always was, with the doorway the
+ * boundary walk had found by that point — `null` everywhere the walk never reached circulation.
+ */
+function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomAnswer {
+  if (room.at === null) return { reason: 'unplaced', doorway: null };
 
   const cells = roomCellsOf(room);
 
@@ -837,7 +892,7 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // that room must itself be standing on something, or the pair of them are in mid-air
   // together. See `groundedRooms` for why the chain is resolved in one pass rather than
   // walked from here, and for the sky tower this rule was rewritten to refuse.
-  if (!isGrounded(ctx, room)) return 'unsupported';
+  if (!isGrounded(ctx, room)) return { reason: 'unsupported', doorway: null };
 
   // A DOOR: somewhere on this floor to open into. A cell beyond the plot edge is not a
   // door — a door opening off the edge of the world is not a door — and a cell holding
@@ -886,8 +941,29 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // about it. The two are reported separately (`noDoor` vs `noCorridor`) and the door
   // question is answered first, because having somewhere to open into is a precondition of
   // that somewhere being a walkway.
+  //
+  // ==========================================================================
+  // AND SINCE G-046 THE WALK KEEPS THE CELL IT STOPPED ON, WHICH IS THE DOOR AS A PLACE.
+  //
+  // `doorway` is `beside` at the moment `hasCirculation` becomes true — the FIRST neighbour
+  // that is on the plot, is not the room's own, has no room standing on it, and that the plan
+  // calls a walkway. Nothing here searches for it: it is the cell this loop was already about
+  // to break on, kept instead of discarded, so the door costs exactly one field.
+  //
+  // THE ORDER IS THE ONE ALREADY FIXED ABOVE and it is what makes the choice stable rather than
+  // incidental: footprint cells in `footprintCells` order (column-major from the room's own
+  // origin), neighbours left/right/front/back. `cells[0]` IS `room.at`, and `room.at` is where
+  // `standingCell` sends a lodging guest — so on a room whose origin corner touches a lane the
+  // doorway is adjacent to the destination itself and the guest turns in from beside it. That is
+  // a legibility property, not an accident, and `travel.door.test.ts` pins the order.
+  //
+  // TIE-BREAKS ARE THEREFORE EXPLICIT (I2): a room with circulation on all four sides has ONE
+  // doorway, the same one on every platform and in every replay, and it does not depend on any
+  // Set or Map enumeration.
+  // ==========================================================================
   let hasDoor = false;
   let hasCirculation = false;
+  let doorway: Cell | null = null;
   for (const cell of cells) {
     for (const beside of [cellLeft(cell), cellRight(cell), cellFront(cell), cellBack(cell)]) {
       if (!isWithinBounds(beside, ctx.bounds)) continue;
@@ -904,12 +980,13 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
       // stops being a DOOR, which is a thing the tick already computes.
       if (isDeclaredWalkway(ctx, beside)) {
         hasCirculation = true;
+        doorway = beside;
         break;
       }
     }
     if (hasCirculation) break;
   }
-  if (!hasDoor) return 'noDoor';
+  if (!hasDoor) return { reason: 'noDoor', doorway: null };
 
   // FURNISHED: every item this room type requires stands in one of its cells.
   for (const itemId of requiredItemsOf(ctx.content, room.kind)) {
@@ -920,7 +997,7 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
         break;
       }
     }
-    if (!held) return 'missingItem';
+    if (!held) return { reason: 'missingItem', doorway };
   }
 
   // CONNECTED: one of those door cells is somewhere people walk (G-034b, ADR-0047 B2).
@@ -940,7 +1017,7 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   //
   // It costs nothing to defer: the answer was computed by the door walk above, which was
   // being paid for anyway, so the cost order the docblock claims is undisturbed.
-  if (!hasCirculation) return 'noCorridor';
+  if (!hasCirculation) return { reason: 'noCorridor', doorway: null };
 
   // REACHED: a route runs from the door to one of those cells (G-038a-ii-beta).
   //
@@ -954,9 +1031,9 @@ function computeRoomInvalidity(ctx: ValidityContext, room: Entity): RoomInvalidi
   // THE CONSEQUENCE, STATED AS A CHOICE: this can only ever convert a room that would
   // otherwise be VALID. Every other reason's count is therefore unchanged in every world,
   // which is a property rather than a hope — `validity.reach.test.ts` drives it.
-  if (!isReachableRoom(ctx, cells)) return 'unreachable';
+  if (!isReachableRoom(ctx, cells)) return { reason: 'unreachable', doorway };
 
-  return null;
+  return { reason: null, doorway };
 }
 
 /**
@@ -1486,6 +1563,58 @@ export function isWalkableFor(ctx: ValidityContext, cell: Cell, destinationRoom:
  */
 export function roomIdAt(ctx: ValidityContext, cell: Cell): EntityId {
   return roomAtCell(ctx, cell)?.id ?? NO_ENTITY;
+}
+
+/**
+ * ==========================================================================================
+ * THE CELL A GUEST MUST STAND ON BEFORE IT MAY ENTER (G-046) — or `null` when it may go
+ * straight there. **A DOOR IS A PLACE.** Ruled by the human, 2026-08-29: *"Room should get a
+ * door before a stranger plays it."*
+ *
+ * `isWalkableFor` says what a guest may STAND on; this says where it must GO FIRST. They are
+ * two halves of one rule and they are in one file for the reason the third set is:
+ * `standingCell` ends every journey inside a room, so the question "may I be here" is
+ * meaningless without "how did I get in".
+ *
+ * ------------------------------------------------------------------------------------------
+ * IT IS A LOOKUP, NOT A SEARCH, AND THAT IS THE WHOLE AFFORDABILITY ARGUMENT. G-046's block
+ * priced option (c) — full routing — and refused it TWICE on measured cost. Nothing here
+ * searches: `roomAtCell` is the binary search `placed` was already making one line later, and
+ * the doorway itself was computed by the boundary walk `roomInvalidity` runs anyway and is
+ * memoised for the life of the validity context. **No frontier, no queue, no per-guest fill.**
+ *
+ * FOUR REASONS TO RETURN `null`, AND EACH ONE IS A JOURNEY THAT BEHAVES EXACTLY AS IT DID
+ * BEFORE THIS GOAL:
+ *
+ *   NO ROOM ON `to`       the guest is walking to circulation — the entrance, a stair leg —
+ *                         and there is no threshold in the story.
+ *   NO DOORWAY            the room is sealed, in mid-air, unplaced or `noCorridor`. Every one
+ *                         of those is an INVALID room and no guest reserves one; a room that
+ *                         goes invalid MID-STAY takes this branch and its guest keeps walking
+ *                         to it exactly as every build before G-046 did. **A destination that
+ *                         cannot be approached is never a destination that cannot be
+ *                         REACHED** — that would be a need nobody can satisfy.
+ *   ALREADY INSIDE        `from` is covered by the room's own footprint. Without this clause a
+ *                         guest three cells inside a suite would be sent back out to the
+ *                         doorway it came through, arrive, be sent in, and oscillate forever.
+ *                         **This clause is the termination argument** and `travel.door.test.ts`
+ *                         drives it.
+ *   STANDING IN IT        `from` IS the doorway. The guest has arrived at the door; the next
+ *                         thing it does is turn in.
+ *
+ * WHAT IT COSTS A JOURNEY, STATED RATHER THAN DISCOVERED: up to ONE tick of unspent budget at
+ * the threshold, exactly as `stairLeg`'s phase change costs one, plus whatever detour the
+ * doorway is from the straight line. That is the mechanic — a guest walks to the door — and it
+ * is why this goal re-measures the economic arms rather than assuming they held.
+ * ------------------------------------------------------------------------------------------
+ */
+export function doorwayFor(ctx: ValidityContext, from: Cell, to: Cell): Cell | null {
+  const room = roomAtCell(ctx, to);
+  if (room === undefined) return null;
+  const doorway = answerFor(ctx, room).doorway;
+  if (doorway === null) return null;
+  if (coversCell(room, from)) return null;
+  return cellsEqual(from, doorway) ? null : doorway;
 }
 
 /**

@@ -266,7 +266,20 @@ describe('THE LOWER CLIFF — 63, derived and then measured on the shipped table
     // 60-room hotel gets is ten ticks deeper. **It is still an order of magnitude inside the
     // 129 + 198 bound the arm above asserts**, which is the derived property; this literal is
     // the sharpener, and it is re-pinned rather than widened.
-    expect(uncontended).toBe(88);
+    // 88 -> 94 AT G-046. A door is a PLACE now: a guest walks to the cell beside its
+    // destination and stands in it for a tick before it turns in, so the deepest any need in the
+    // 60-room hotel gets is six ticks deeper. **It is still an order of magnitude inside the
+    // 63 + 198 bound the arm above asserts**, which is the derived property; this literal is the
+    // sharpener, and it is re-pinned rather than widened.
+    //
+    // AND THE DERIVATION IS STILL AN UPPER BOUND, WHICH IS WORTH SAYING RATHER THAN ASSUMING.
+    // `worstJourneyCells` is the plot's own worst Manhattan span, and G-046 lets a journey
+    // exceed it — by the detour from the destination to its doorway, plus the tick of unspent
+    // budget at the threshold. Both are bounded by the ROOM rather than by the plot (a doorway
+    // is adjacent to the room's own footprint), and the shipped footprint cap is far under the
+    // 194-cell span, so the inequality above still holds with three figures of room. **A goal
+    // that raises `maxFootprintCells` meets this paragraph first.**
+    expect(uncontended).toBe(94);
     // AND THE SIX-ROOM ARM STILL DOES NOT MOVE, at 179, THROUGH THE STAIRWELL AS WELL AS
     // THROUGH TRAVEL. The paragraph above calls that evidence rather than luck — its peak
     // belongs to guests queueing for a bed, and a guest nobody has given a room is going

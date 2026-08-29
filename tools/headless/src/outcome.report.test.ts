@@ -579,9 +579,42 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
   // gaveUp, 870 leftDissatisfied, 29 evictedRoomGone, 1 evictedRoomUnusable — all five, with
   // the thin row still thin and still non-zero.
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // `--demolish 1440 -> 1080` AT G-046, AND IT IS **STEP 2 OF THE PROCEDURE BELOW, NOT A
+  // RE-RECORD.** The thin row died: a door is a PLACE now, so a guest walks to a room's doorway
+  // and stands in it for a tick before it turns in, and at the instant `--demolish` takes a
+  // room's support away NO guest is standing in the room above it. `evictedRoomUnusable` read 1
+  // and reads 0, so the criterion two tests down asked for five reasons and got four — which is
+  // exactly the failure the note beneath `ARGS` has predicted twice and told its reader not to
+  // answer by weakening the criterion to four.
+  //
+  // STEP 1 IS ANSWERED FIRST, EVERY TIME: `outcome.test.ts` drives BOTH eviction reasons
+  // deterministically on a two-room stack and is green. The split works; this is the schedule.
+  //
+  // STEP 2, AND THE SWEEP IS RECORDED SO THE NEXT READER CAN SEE THE NUMBER WAS FOUND RATHER
+  // THAN GUESSED. The demolish cadence is the lever that decides how often a room's support is
+  // taken; the amenity count is FORCED by the two inequalities above and was not touched. One
+  // run per rung, exact deterministic integers, n = 1 is the whole distribution, no clock read:
+  //
+  //     --demolish   checkedOut  gaveUp  leftDissatisfied  evictedRoomGone  evictedRoomUnusable
+  //       720            34       1,025        802               51                 0
+  //       960            28         679      1,160               43                 2
+  //     **1080**         41         547      1,273               49                 2
+  //      1200            37         411      1,414               44                 1
+  //      1440 (was)      36         239      1,593               34                 0
+  //      1800            15          64      1,787               27                 0
+  //      2160            22          22      1,820               25                 0
+  //      2880            16           0      1,863               16                 0
+  //
+  // **1080 IS CHOSEN ON THE THIN ROW FIRST AND THE CONTRAST ROWS SECOND**: it is one of the two
+  // rungs that reach 2 on `evictedRoomUnusable` — double the margin this arm has carried since
+  // G-041 — and of those two it is the one whose `checkedOut` row is healthiest (41 against 28),
+  // so the criterion is not resting on a hotel where nobody finishes anything. **The margin is
+  // TWO, which is better than the ONE the paragraphs below spent two goals warning about.**
+  // ---------------------------------------------------------------------------
   const ARGS = [
     '--days', '30', '--seed', '7', '--rooms', '40', '--amenities', '2', '--arrivals', '30',
-    '--build', '360', '--demolish', '1440',
+    '--build', '360', '--demolish', '1080',
   ];
 
   it('the pinned invocation exits 0 and reports at least FOUR reasons non-zero', () => {
@@ -709,7 +742,23 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // pinned at what it IS, beside the two rows that still have the headroom this block is
     // about, and the criterion two tests up still reads five non-zero reasons.
     // ==========================================================================================
-    expect(count('evictedRoomUnusable')).toBe(1);
+    // ==========================================================================================
+    // 1 -> 2 AT G-046, AND THE PARAGRAPH ABOVE AND THE `ARGS` NOTE GIVE OPPOSITE INSTRUCTIONS,
+    // SO WHICH ONE APPLIES IS STATED RATHER THAN CHOSEN QUIETLY.
+    //
+    // The paragraph above refuses a retune, and it is right to: it was written when this row read
+    // ONE — thin, but FIRING — and retuning then would have been "tune the workload until the
+    // test is interesting again", which is §9's stop condition and which G-039b-alpha refused by
+    // name. **At G-046 the row read ZERO and the criterion two tests up went RED.** That is the
+    // other case, and the `ARGS` note has an explicit procedure for it — step 1 (is the cause
+    // still reachable? yes, `outcome.test.ts` is green), then step 2 (retune until a guest is
+    // again in a room whose support is demolished), and *"Do not weaken the criterion to four."*
+    //
+    // **THE LINE BETWEEN THEM IS WHETHER THE REASON STILL FIRES**, and it is worth writing down
+    // because both paragraphs will be read again: a THIN row is pinned at what it is, a DEAD one
+    // is a schedule that no longer reaches the mechanism the criterion is about.
+    // ==========================================================================================
+    expect(count('evictedRoomUnusable')).toBe(2);
     // The two rows that still have headroom, for contrast — and `checkedOut`, which no longer
     // does, pinned exactly rather than under a bound it would have to be given to clear.
     // 16 -> 50 AT G-054, AND THIS ROW GETS ITS HEADROOM BACK. **Three times as many guests
@@ -718,14 +767,20 @@ describe('G-015 exit criterion 2: which reasons a REAL RUN produces', () => {
     // the hotel's amenities serve a wider slice of the population instead of the same slice
     // repeatedly. The block above records the threshold NOT being lowered to keep this row
     // interesting; it did not have to be, and that is worth reading beside the refusal.
-    expect(count('checkedOut')).toBe(50);
+    // 50 -> 41 AT G-046, on the retuned cadence above. The door costs every journey a tick and
+    // this arm's hotel has two amenity sets for forty rooms, so nine fewer guests finish.
+    expect(count('checkedOut')).toBe(41);
     expect(count('gaveUp')).toBeGreaterThan(50);
     expect(count('evictedRoomGone')).toBeGreaterThan(1);
     // AND THE ROW THAT ABSORBED THEM, so the collapse above is visibly a SHIFT rather than a
     // loss: the five reasons still sum to the departures the conservation law counts.
     // 1,635 -> 1,603 AT G-054: the 34 extra checkouts come out of here, which is the shift
     // this line exists to make visible.
-    expect(count('leftDissatisfied')).toBe(1_603);
+    // 1,603 -> 1,273 AT G-046. **READ THIS BESIDE `gaveUp`, WHICH ROSE 239 -> 547**: the retuned
+    // demolish cadence takes rooms away faster, so more guests never get one at all and fewer
+    // get one and then run out of patience. The five reasons still sum to the departures the
+    // conservation law counts, which is what the next test asserts.
+    expect(count('leftDissatisfied')).toBe(1_273);
   }, 60_000); // G-055, derived in vitest.config.ts: 3x the worst of 9 in-suite readings, 16,946ms
 
   it('and the numbers close, through a real process rather than in-memory', () => {

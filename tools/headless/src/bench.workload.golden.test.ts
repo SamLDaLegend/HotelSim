@@ -551,7 +551,13 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   arrived, `gaveUp` and `evictedGuests` zero** — the outcome test below re-checks that and
     //   did NOT move, which is the control: the same guests did the same things, and what changed
     //   is that the hotel now keeps a note of what the last few of them said.
-    expect(hashState(plain)).toBe('612531853a713e01');
+    // - `612531853a713e01` -> `7a19fc0f9477a733` AT G-046, AND IT IS PURELY BEHAVIOURAL. No
+    //   `World` field, no save bump, no migration, and `World.contentHash` unmoved — a door is a
+    //   PLACE now (the human's ruling), so every guest walks to a room's doorway and stands in it
+    //   for a tick before it turns in. Journeys are one cell and one tick longer, which on this
+    //   workload — sixty bedrooms behind TWO amenities, the most starved arm in the project —
+    //   turns five completed stays into walk-outs. The outcome test below carries the split.
+    expect(hashState(plain)).toBe('7a19fc0f9477a733');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -670,8 +676,14 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // amenities serve a wider slice of the population instead of the same slice repeatedly.
     // **That is the goal's own claim showing up in an outcome column rather than in a
     // statistic**, and it is the workload ADR-0078 would least have expected it on.
-    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(27);
-    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(61);
+    // 27 -> 22 AT G-046, AND IT IS THE OPPOSITE DIRECTION FROM G-054 ON THE SAME COLUMN. The
+    // door costs every journey a tick, and on the workload with the least service capacity per
+    // guest that tick comes straight out of the time a guest was willing to wait. **Five fewer
+    // guests complete a stay and five more walk out** — the same trade G-054 made in the other
+    // direction, and the honest price of the door on the arm least able to pay it.
+    expect(departureCountOf(plain.guestOutcomes, 'checkedOut')).toBe(22);
+    // 61 -> 65 AT G-046, the other side of `checkedOut` 27 -> 22 and the same four guests.
+    expect(departureCountOf(plain.guestOutcomes, 'leftDissatisfied')).toBe(65);
     // AND THE STILL-IN-THE-HOTEL COLUMN IS WHAT MOVED, 9 -> 13, WHICH IS THE FOURTH NUMBER THE
     // CONSERVATION NEEDS AND THE ONE THIS ARM HAD NEVER PINNED. 33 + 29 + 13 = 75, every other
     // departure row is zero, and `gaveUp` is still zero — nobody in this hotel fails to get a
@@ -682,7 +694,8 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     // is still zero — sixty bedrooms of capacity 2 cannot run out of beds at this cadence.
     // 14 -> 12 AT G-054. 27 + 61 + 12 = 100, the conservation still closes, and `gaveUp` is
     // still zero for the same reason it always was.
-    expect(plain.guests.list.length).toBe(12);
+    // 12 -> 13 AT G-046: 22 + 65 + 13 = 100 arrived, and the conservation still closes.
+    expect(plain.guests.list.length).toBe(13);
     expect(
       departedGuests(plain.guestOutcomes) + plain.guests.list.length,
     ).toBe(plain.guestOutcomes.arrived);
@@ -987,14 +1000,20 @@ describe('the same workload with the player churning the building', () => {
     //   injected content. **20 + 43 + 25 and 100 arrived still closes**, and `gaveUp` is still
     //   zero — so the twenty-five evictions this arm exists to produce still happen, and now say
     //   so out loud.
-    expect(hashState(churn)).toBe('6e6193cd6c82e881');
+    // `6e6193cd6c82e881` -> `fb0f09a36a1d24d7` AT G-046: the door as a place, purely behavioural,
+    //   no `World` field and no save bump. The eviction count this arm exists to produce moves by
+    //   one (25 -> 24) because a guest spends its stay in slightly different places, and the
+    //   conservation still closes.
+    expect(hashState(churn)).toBe('fb0f09a36a1d24d7');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {
     expect(evictedGuests(churn.guestOutcomes)).toBeGreaterThan(0);
     // 24 -> 25 AT G-054. One more guest is in a room at the tick the demolish walk takes it,
     // because guests now spend their stays in different places.
-    expect(evictedGuests(churn.guestOutcomes)).toBe(25);
+    // 25 -> 24 AT G-046. One fewer guest is in a room at the tick the demolish walk takes it,
+    // because a guest that is walking to a doorway is out of its room for one tick longer.
+    expect(evictedGuests(churn.guestOutcomes)).toBe(24);
     expect(hashState(churn)).not.toBe(hashState(runWorkload(0, 0)));
   });
 
@@ -1022,7 +1041,9 @@ describe('the same workload with the player churning the building', () => {
     // guests to one demolition.
     // 24 -> 25 AT G-054, AND THE SPLIT IS UNCHANGED — every eviction in this run is still a
     // room that is GONE rather than one made unusable, which is what the demolish walk does.
-    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(25);
+    // 25 -> 24 AT G-046, AND THE SPLIT IS UNCHANGED — every eviction in this run is still a
+    // room that is GONE rather than one made unusable, which is what the demolish walk does.
+    expect(departureCountOf(churn.guestOutcomes, 'evictedRoomGone')).toBe(24);
     expect(departureCountOf(churn.guestOutcomes, 'evictedRoomUnusable')).toBe(0);
     // Only a migration writes the third, so a run that never loaded a save must read zero.
     expect(departureCountOf(churn.guestOutcomes, 'evictedCauseUnrecorded')).toBe(0);

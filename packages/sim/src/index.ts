@@ -252,6 +252,13 @@ export {
   lodgingNeedStateOf,
   maxGuestLifetimeTicks,
   NO_GUEST,
+  // `doorLeg` IS EXPORTED FOR THE SAME ONE CONSUMER AS THE TWO BELOW (G-046).
+  // `travel.walls.report.test.ts` re-runs the sim's own step to prove its reconstruction of
+  // the inputs is the sim's (`unreproduced`, asserted zero on every arm), and since a door is
+  // a PLACE the cell a guest walks towards is `doorLeg(stairLeg(...))` rather than
+  // `stairLeg(...)`. A copy of that composition in `tools/` would be the drift `placed`
+  // refuses in the sim — see the lift gate's comment there.
+  doorLeg,
   // `stairLeg` AND `stepTowards` ARE EXPORTED FOR ONE CONSUMER, AND IT IS THE OPPOSITE OF
   // `isCutShort`'s case above (G-058). Both had lived inside this package because nothing
   // outside it asked; `travel.walls.report.test.ts` now asks, and asks the FUNCTIONS rather
@@ -448,6 +455,9 @@ export {
   createValidityCache,
   createValidityContext,
   describeRoomInvalidity,
+  // THE DOOR AS A PLACE (G-046). Exported for `doorLeg`'s consumer above and for
+  // `travel.door.test.ts`; nothing outside this package derives a doorway of its own.
+  doorwayFor,
   draftEntities,
   guestAccessTo,
   isProviding,

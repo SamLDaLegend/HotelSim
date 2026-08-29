@@ -395,9 +395,12 @@ describe('THE REVIEW SEES THE FACILITIES — the grid E-014 was ruled on (G-059)
     // up). The player's repair is a second amenity set, which is the cell to its right.
     const bottleneck = cell(1, 1);
     expect(bottleneck.rating.stars).toBe(4);
-    expect(scores(bottleneck)).toBe('1:233, 4:233, 5:3');
+    // `1:233, 4:233, 5:3` -> `1:243, 4:218, 5:4` AT G-046. The door costs every journey a tick
+    // and this is the cell least able to absorb one, so ten more guests walk out and the finding
+    // this arm makes — the build loop punishing an unbalanced build — is ten guests sharper.
+    expect(scores(bottleneck)).toBe('1:243, 4:218, 5:4');
     const dissatisfied = bottleneck.guests.departures.find((row) => row.reason === 'leftDissatisfied')?.count ?? 0;
-    expect(dissatisfied).toBe(233);
+    expect(dissatisfied).toBe(243);
     expect(bottleneck.money.balancePennies).toBeLessThan(cell(0, 1).money.balancePennies);
   });
 });
@@ -479,12 +482,16 @@ describe('the ladder responds at every rung, and an UNRATED hotel receives nobod
     expect(five.guests.arrived).toBe(2 * four.guests.arrived);
     // And revenue FELL. This is the assertion the old title denied was possible.
     expect(five.money.revenuePennies).toBeLessThan(four.money.revenuePennies);
-    expect(four.money.revenuePennies - five.money.revenuePennies).toBe(76_500);
-    expect(four.money.balancePennies - five.money.balancePennies).toBe(151_500);
+    // 76,500p -> 204,000p AT G-046. The finding is unchanged and is the inequality above — one
+    // build raises the rating and STRICTLY LOSES MONEY — and the door makes the loss nearly
+    // three times deeper, because the fifth-star hotel is the one whose amenities are already
+    // stretched and a tick of walking per journey comes straight out of them.
+    expect(four.money.revenuePennies - five.money.revenuePennies).toBe(204_000);
+    expect(four.money.balancePennies - five.money.balancePennies).toBe(279_000);
     const dissatisfied = (summary: RunSummary): number =>
       summary.guests.departures.find((row) => row.reason === 'leftDissatisfied')?.count ?? 0;
     expect(dissatisfied(four)).toBe(0);
-    expect(dissatisfied(five)).toBe(477);
+    expect(dissatisfied(five)).toBe(498);
     // AND THE THIRD AMENITY SET IS THE ANSWER THE LADDER DOES NOT ASK FOR. Same 24-bedroom
     // five-star hotel, one flag apart.
     const fiveProvisioned = inProcess([

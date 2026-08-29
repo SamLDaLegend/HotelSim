@@ -102,6 +102,7 @@ import { recordRemark, recordReview, remarkRecordOf, reviewOf, reviewScaleOf } f
 import type { RemarkRecord, ReviewOutcomeRow } from './reviews.js';
 import {
   createValidityContext,
+  doorwayFor,
   guestAccessTo,
   isProviding,
   isValidRoom,
@@ -3993,13 +3994,27 @@ function placed(guest: Guest, lodgingRoom: Entity | null, engagedProvider: Entit
   if (search.lift !== null && leg.floor !== guest.at.floor && !boardLift(search.lift, guest.id)) {
     return guest;
   }
-  // THE ROOM STANDING ON THE DESTINATION CELL, RESOLVED ONCE AND ONLY FOR A GUEST THAT IS
-  // ACTUALLY MOVING (G-038a-i). It is asked AFTER the `cellsEqual` return above, so a
+  // A ROOM IS ENTERED THROUGH ITS DOOR (G-046). The second waypoint, derived every tick from
+  // the same three cells the stair leg is: where the guest is, where it is going, and what
+  // the plan says. Never stored, for `stairLeg`'s reason exactly — the destination can change
+  // mid-journey and a stored one would go stale silently. On a leg that is not the journey's
+  // end, and on a destination that is not a room, this is `leg` unchanged and by reference.
+  const approach = doorLeg(search.input.validity, guest.at, leg, at);
+  // THE ROOM STANDING ON THE CELL THE GUEST IS WALKING TO, RESOLVED ONCE AND ONLY FOR A GUEST
+  // THAT IS ACTUALLY MOVING (G-038a-i). It is asked AFTER the `cellsEqual` return above, so a
   // sleeping guest — which is almost every guest on almost every tick — pays nothing for
   // walls, exactly as it already paid nothing for a step. See `isWalkableFor` for why the
   // ROOM rather than the destination ENTITY: a guest engaged with an item walks to a cell
   // inside that item's host room.
-  const next = stepTowards(guest.at, leg, search.speed, search.input.validity, roomIdAt(search.input.validity, leg));
+  //
+  // IT IS ASKED OF `approach` AND NOT OF `leg`, WHICH IS THE OTHER HALF OF G-046 AND IS NOT A
+  // TIDY-UP. The third set of `isWalkableFor` — "the destination room's own footprint" — is a
+  // PERMIT, and the permit must be for the cell the guest is walking to THIS tick. While the
+  // guest is walking to a DOORWAY the answer is `NO_ENTITY`, so no room's footprint is
+  // admissible and a guest may not land inside its own destination on the way to the door; the
+  // permit reappears the moment the guest turns in. That is what makes the door the way in
+  // rather than a suggestion, and it costs nothing: it is the same call on a different cell.
+  const next = stepTowards(guest.at, approach, search.speed, search.input.validity, roomIdAt(search.input.validity, approach));
   return cellsEqual(guest.at, next) ? guest : { ...guest, at: next };
 }
 
@@ -4080,6 +4095,58 @@ export function stairLeg(from: Cell, to: Cell, stairwell: Cell | null): Cell {
     return { floor: to.floor, column: stairwell.column, row: stairwell.row };
   }
   return { floor: from.floor, column: stairwell.column, row: stairwell.row };
+}
+
+/**
+ * ==========================================================================================
+ * A ROOM IS ENTERED THROUGH ITS DOOR (G-046). `stairLeg`'s shape, one question over.
+ *
+ *   A FLOOR IS REACHED BY A STAIR.  A ROOM IS ENTERED THROUGH ITS DOOR.
+ *
+ * The human watched the game and said guests *"seem to jump through walls rather than looking
+ * for a door (which I guess doesn't exist!)"*. It did not. `standingCell` returns the room's
+ * own cell and `stepTowards` walked at it, so a guest crossed whichever wall it happened to be
+ * beside. This inserts the doorway as a WAYPOINT: the guest walks to the cell outside the
+ * room, and only from there turns in.
+ *
+ * ------------------------------------------------------------------------------------------
+ * IT IS OPTION (b), AND OPTION (c) IS STILL REFUSED. `GOALS.md` G-046 prices three answers and
+ * the human ruled the middle one. **Nothing here searches for a route** — `doorwayFor` is a
+ * memo lookup over a walk `roomInvalidity` already runs, and `stepTowards` is the same
+ * four-or-fewer-candidate step it has always been. What the guest gets is a different
+ * DESTINATION, not a different way of travelling.
+ *
+ * WHAT IT THEREFORE DOES NOT BUY, SAID PLAINLY SO NOBODY READS THIS AS MORE THAN IT IS: the
+ * approach to the doorway is still a straight two-axis walk, so a guest whose doorway lies past
+ * an obstruction still spends its candidates and still falls back. **The door fixes the LAST
+ * step of a journey, which is the one a watcher is looking at.** The cells crossed between two
+ * landings are `stepTowards`' own documented non-question and remain one.
+ * ------------------------------------------------------------------------------------------
+ *
+ * ------------------------------------------------------------------------------------------
+ * IT APPLIES ONLY TO THE FINAL LEG, AND THAT GUARD IS LOAD-BEARING RATHER THAN TIDY.
+ *
+ * `cellsEqual(leg, to)` asks whether the stair leg is the journey's END. Drop the guard and a
+ * room built ON the stairwell cell LIVELOCKS every guest trying to climb past it: the leg is
+ * the stair foot, the stair foot is inside that room, so the door rule diverts the guest to
+ * THAT room's doorway — where the leg is still the stair foot, so it diverts again, forever.
+ * The guest never climbs and never gives up. `stepTowards`' own docblock records the incumbent
+ * behaviour for that layout ("a guest converges on the stairwell anyway, stands inside that
+ * room for a tick, and climbs"), and this guard is what preserves it.
+ *
+ * A GUEST CLIMBING IS NOT AT ITS DESTINATION AND HAS NO DOOR TO LOOK FOR. The two legs compose
+ * in the only order that means anything: reach the destination's FLOOR, then its DOOR, then
+ * the cell itself. Each phase closes monotonically because `stepTowards` spends
+ * `min(cellsPerTick, distance)` toward whatever target it is given, whatever the building looks
+ * like — so a guest cannot be stranded between the stairs and the door.
+ * ------------------------------------------------------------------------------------------
+ *
+ * IT ALLOCATES NOTHING AND RETURNS BY REFERENCE, on both branches: `leg` unchanged, or the
+ * doorway cell the validity memo is already holding. `stepTowards` only ever reads it.
+ */
+export function doorLeg(validity: ValidityContext, from: Cell, leg: Cell, to: Cell): Cell {
+  if (!cellsEqual(leg, to)) return leg;
+  return doorwayFor(validity, from, to) ?? leg;
 }
 
 /**

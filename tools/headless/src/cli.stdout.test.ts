@@ -358,7 +358,11 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // 750,000p of scrap, no debt, the same rating block and the whole build and loan blocks. NO
     // key is added to this document at all, so `SUMMARY_SCHEMA_VERSION` stays 4 — showing the
     // feed is G-066b's, and it is a report line this goal deliberately did not write.
-    stateHash: '00000ef70ad7566b',
+    // G-046: `00000ef70ad7566b` -> `6191199638412542`. PURELY BEHAVIOURAL — no `World` field, no
+    // save bump, no migration, `World.contentHash` unmoved. A room is entered through its doorway
+    // now, so guests stand in different cells and `Guest.at` is hashed state. Four lines of the
+    // text golden move with it and not one other character: three need rows and this hash.
+    stateHash: '6191199638412542',
   },
   guests: {
     arrived: 32,
@@ -569,9 +573,22 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // MOVED AT G-054 — the paired before/after and the reason nourishment overtakes the other
     // two are at `stateHash` above. `instanceTicks` is UNMOVED at 12,420 on every row, which is
     // what says the population is the same and only its choices differ.
-    { needId: 'guest_comfort', lodging: false, met: 17, unmet: 10, metByItem: 17, abandoned: 0, unservedTicks: 1_573, instanceTicks: 12_420 },
-    { needId: 'guest_entertainment', lodging: false, met: 19, unmet: 8, metByItem: 0, abandoned: 0, unservedTicks: 1_371, instanceTicks: 12_420 },
-    { needId: 'guest_nourishment', lodging: false, met: 23, unmet: 4, metByItem: 6, abandoned: 0, unservedTicks: 798, instanceTicks: 12_420 },
+    // ==========================================================================================
+    // MOVED AT G-046 — A DOOR BECAME A PLACE — AND ON THIS HOTEL IT MOVED **THESE THREE ROWS AND
+    // NOTHING ELSE**. Every departure count, every review band, the mean, the stars, the ledger
+    // and the balance are byte-identical; `night_rest` is byte-identical too, because a lodging
+    // need is served by the room a guest HOLDS wherever it is standing (ADR-0017 §2) and holding
+    // is not walking. **The door costs TRAVEL TIME, and the only rows that can see travel time
+    // are the engagement ones.** `instanceTicks` is UNMOVED at 12,420 on every row, which says
+    // the population is the same and only how long it spent walking differs.
+    //
+    // The `metByItem` fall on nourishment (6 -> 4) is the same tick spent differently: two
+    // guests reach the cafe's own service instead of a stocked item, because a guest that walks
+    // one cell further arrives on a tick when the room can take it.
+    // ==========================================================================================
+    { needId: 'guest_comfort', lodging: false, met: 17, unmet: 10, metByItem: 17, abandoned: 0, unservedTicks: 1_641, instanceTicks: 12_420 },
+    { needId: 'guest_entertainment', lodging: false, met: 18, unmet: 9, metByItem: 0, abandoned: 0, unservedTicks: 1_437, instanceTicks: 12_420 },
+    { needId: 'guest_nourishment', lodging: false, met: 22, unmet: 5, metByItem: 4, abandoned: 0, unservedTicks: 822, instanceTicks: 12_420 },
     { needId: 'night_rest', lodging: true, met: 6, unmet: 21, metByItem: 0, abandoned: 0, unservedTicks: 4_020, instanceTicks: 12_420 },
   ],
   // The seeded hotel WORKS (G-009): three rooms, each furnished, each with a corridor
@@ -837,9 +854,9 @@ const GOLDEN_2_DAYS_SEED_42 =
     // beds there are. See the JSON golden's need-row block for the mechanism.
     // The three rows below move at G-054 — see the note at `stateHash` above for the paired
     // before/after and why nourishment overtaking the other two is the finding.
-    'need       guest_comfort 17 met, 10 unmet (0 by room, 17 by item), 0 abandoned, 1266 bp unserved',
-    'need       guest_entertainment 19 met, 8 unmet (19 by room, 0 by item), 0 abandoned, 1103 bp unserved',
-    'need       guest_nourishment 23 met, 4 unmet (17 by room, 6 by item), 0 abandoned, 642 bp unserved',
+    'need       guest_comfort 17 met, 10 unmet (0 by room, 17 by item), 0 abandoned, 1321 bp unserved',
+    'need       guest_entertainment 18 met, 9 unmet (18 by room, 0 by item), 0 abandoned, 1157 bp unserved',
+    'need       guest_nourishment 22 met, 5 unmet (18 by room, 4 by item), 0 abandoned, 661 bp unserved',
     'need L     night_rest 6 met, 21 unmet (6 by room, 0 by item), 0 abandoned, 3236 bp unserved',
     // G-023b-ii: one guest moves 2 -> 3 and the mean rises with it. See the JSON golden's
     // distribution above for why a hotel whose guests must now WALK reviews slightly better.
@@ -1033,7 +1050,7 @@ const GOLDEN_2_DAYS_SEED_42 =
     // transactions, the same 51,000p, the same 527,000p, the same 6 valid rooms, the same review
     // distribution and mean, and the same two `stars` lines. NOT ONE OTHER CHARACTER MOVES,
     // because showing the feed is G-066b's and this goal wrote no report line for it.
-    'state hash  00000ef70ad7566b',
+    'state hash  6191199638412542',
   ].join('\n') + '\n';
 
 /**

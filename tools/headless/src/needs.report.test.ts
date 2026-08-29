@@ -275,8 +275,10 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // cause is the need tie-break becoming per guest (`needTieBreakRank`, ADR-0078): a guest
     // that reaches for a different thing first spends its stay differently, and one more of
     // them walks out on a bed it was given.
-    expect(departuresOf(summary, 'checkedOut')).toBe(254);
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(2);
+    // 254 -> 253 AT G-046. A door is a PLACE now, so a journey costs a tick; one more guest
+    // walks out on a bed it was given.
+    expect(departuresOf(summary, 'checkedOut')).toBe(253);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(3);
     // AND `met` NO LONGER EQUALS `checkedOut`, WHICH IS THE STOCK MODEL SHOWING (G-027b). Under
     // the countdown, a guest that checked out had by definition completed its lodging need, so
     // the two columns were the same number. "Met" is now a BAND read at the moment of
@@ -305,7 +307,7 @@ describe('the criterion invocation prints a per-need table that measures somethi
     expect(lodging?.met).toBe(
       departuresOf(summary, 'checkedOut') + departuresOf(summary, 'leftDissatisfied'),
     );
-    expect(departuresOf(summary, 'leftDissatisfied')).toBe(2);
+    expect(departuresOf(summary, 'leftDissatisfied')).toBe(3);
   });
 
   it('tells THREE DIFFERENT STORIES, which is what the criterion above needs to mean anything', () => {
@@ -427,7 +429,11 @@ describe('the criterion invocation prints a per-need table that measures somethi
     // which has two providers and is barely failed at all, does not move by one guest.
     // **THE CLAIM THIS ARM MAKES IS THE LINE ABOVE AND IT SURVIVES, WIDER**: three rows, three
     // different stories, and the spread grows from 161 guests to 208.
-    expect(engagement.map((row) => row.met)).toEqual([252, 292, 460]);
+    // [252, 292, 460] -> [216, 281, 459] AT G-046. **THE CLAIM THIS ARM MAKES IS THE THREE
+    // DIFFERENT STORIES AND IT SURVIVES** — the spread grows again, from 208 guests to 243,
+    // because a door costs a journey a tick and the need whose provider is furthest away pays
+    // most of it.
+    expect(engagement.map((row) => row.met)).toEqual([216, 281, 459]);
     // AND THE SPREAD IS BOUNDED BY THE REQUIREMENT NAMED ABOVE, WHICH IS THE ONLY THING THAT
     // SOURCES IT (`HOTELSIM.md` §2.1). G-014a refused a replacement control that pinned two
     // counts A SINGLE GUEST APART; "further apart than that" is `> 1`, in GUESTS, and it is

@@ -296,7 +296,10 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     // it can act on. **The two structural clauses at the foot are what carry the claim and
     // both still hold**; the margin clause is 7,003 - 5,914 = 1,089, so it is 89 basis points
     // from failing rather than 256 — closer, and still a real gap rather than a trivial one.
-    expect(box.idleBasisPoints).toBe(5_914);
+    // 5,914 -> 5,865 AT G-046, AND IT MOVES THE HELPFUL WAY. A door is a PLACE now, so this
+    // guest spends 49 more basis points of its stay WALKING — and walking is not idling. The
+    // margin clause at the foot is 7,003 - 5,865 = 1,138, wider than the 1,089 G-054 left it.
+    expect(box.idleBasisPoints).toBe(5_865);
     // THE CONTROL, SAME SITTING, SAME BOX, ONE DECLARATION APART. 271 was the reading this arm
     // pinned before G-041 and it is re-measured here rather than quoted (`CLAUDE.md` rule 3) —
     // the shaft still costs idleness, and the DIRECTION is the claim this pair exists for.
@@ -304,7 +307,9 @@ describe('X — the AT-HOME idle share (ADR-0029: not a defect), derived and the
     expect(withoutTheShaft.frames).toBe(box.frames);
     // 5,844 -> 6,004 AT G-054, moving with the arm above and keeping the DIRECTION this pair
     // exists for: the shaft still costs idleness.
-    expect(withoutTheShaft.idleBasisPoints).toBe(6_004);
+    // 6,004 -> 5,914 AT G-046, moving with the arm above and keeping the gap this pair exists
+    // for: the shaft still costs idleness, and the door still spends some of it walking.
+    expect(withoutTheShaft.idleBasisPoints).toBe(5_914);
     expect(withoutTheShaft.idleBasisPoints).toBeGreaterThan(box.idleBasisPoints);
     // AND THE TWO STRUCTURAL CLAUSES, WHICH SURVIVE ANY RE-PIN OF THE LITERAL ABOVE: the share
     // is under its derived ceiling, and it is under it by a margin rather than by a rounding.
