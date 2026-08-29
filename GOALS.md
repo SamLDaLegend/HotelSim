@@ -5102,7 +5102,7 @@ forbids* — and if no requirement can be sourced, **say so and escalate rather 
 · I2 unchanged, `check:tickcost` a real ratio · the ladder's own gate green.
 
 ## G-046 — Is a door a place, or a property?
-Status: **PLANNED 2026-08-23 — NEEDS A HUMAN RULING BEFORE IT CAN BE SIZED.** From the human watching
+Status: **IN-PROGRESS 2026-08-29 — RULED BY THE HUMAN. Option (b) selected; see the amendment below.** *(Was PLANNED 2026-08-23, needing a ruling before it could be sized.)* From the human watching
 the game: *"they seem to jump through walls rather than looking for a door (which I guess doesn't
 exist!)."* Milestone: M3 · Owner pair: sim-engineer / ai-critic
 
@@ -5141,7 +5141,78 @@ refused twice on cost.*
 — **without the cost that killed (c) twice.** *(b) is a change to `standingCell`'s destination, not to
 how a guest travels.*
 
-**DO NOT BUILD UNTIL RULED.**
+~~**DO NOT BUILD UNTIL RULED.**~~ **RULED — see below.**
+
+### RULED 2026-08-29 BY THE HUMAN — *"Room should get a door before a stranger plays it."*
+
+**(a) IS OUT.** The human asked for a door, and (a) is the answer in which there is never one.
+**(b) IS SELECTED**, which is what this block already recommended in 2026-08-23. Milestone moves
+**M3 -> M5**, because the reason it is being built now is that a stranger is about to play it.
+
+**THE ORCHESTRATOR DRAFTED A REPLACEMENT BLOCK FOR THIS GOAL WITHOUT READING THIS ONE, AND IT
+OFFERED (c) AS A LIVE OPTION.** It was deleted rather than merged, and this note is what survives it,
+because the failure is worth more than the draft: **the draft's "consume `pathBetween`" is (c) under
+another name — full routing — which this block had already refused twice on measured cost.** Same
+shape as G-063's brief, which described a surface that had shipped ten days earlier. *The rule the
+project already has and that I did not follow: read the ledger for the goal before writing a brief
+about it.*
+
+### WHAT HAS CHANGED SINCE 2026-08-23, AND ONE ITEM REOPENS (c)'s PRICE
+
+1. **`pathBetween` NOW EXISTS** (G-047a, 2026-08-28) — `walk` / `climb` / `blocked`, search bounded
+   to the step's Manhattan distance, deterministic with no container to iterate. **It has ZERO
+   callers in shipped sim code**: the only non-test references are `index.ts`'s export line, its own
+   file, and comments. **This does not make (c) affordable — it makes (c)'s cost RE-MEASURABLE rather
+   than inherited.** The 1.70x-1.91x figure predates this function and was taken on a different
+   search; under CLAUDE.md rule 3 it may not be compared against a fresh reading. **If (c) is ever
+   re-priced it is re-measured paired, not argued from that number.** (b) remains selected.
+2. **A SECOND DEFECT IN `stepTowards`, WHICH THIS BLOCK DID NOT NAME.** The block correctly says a
+   guest "steps into its room across whichever wall it happens to be beside". It does not say this:
+   **the wall test is applied ONLY to the landing cell, never to the cells crossed** — at
+   `cellsPerTick` = 3 a guest moves three squares and only the third is checked — **and when no
+   candidate is walkable `stepTowards` returns `fallback`, the first candidate, which was never
+   tested.** A guest with nowhere legal to go goes anyway. **Neither is fixed by (b) alone**, and
+   whether they belong in this goal or a sibling is a PLAN question.
+3. **E-012's second sentence is now COUNTED**: 309 monotone routes crossing a non-destination room,
+   of 1,554 moves (WATCH #29).
+
+### THE RISK THAT WAS NOT IN THE 2026-08-23 BLOCK, AND IT IS THE LARGEST ONE
+
+**Every economic figure in this project was measured on a hotel where guests cut corners through
+rooms.** `5:464` unanimous, `+27,921,500p` over a year, the three-arm demand chain, and the
+five-star negative rung G-060 is queued to fix — **all taken on the broken movement.** Making a
+guest walk to a doorway lengthens journeys, which raises unserved ticks, which lowers need bands,
+which moves reviews and dissatisfied departures.
+
+> **THE FIRST DELIVERABLE IS A BASELINE, NOT A FIX.** Record the shipped arms before behaviour
+> changes — healthy (`--days 30 --seed 42 --rooms 12 --facilities 1 --amenities 2 --demand`), the
+> five-star arm G-060 depends on, and a starved arm — so the change lands as a **measured delta**
+> rather than a discovery made afterwards. Paired, interleaved, one sitting, **and every figure
+> states the arm it was taken on** (the human's standing condition, ADR-0105).
+
+**A large movement in those arms is NOT a failure of this goal — it is the correct number finally
+appearing.** The failure would be landing it without knowing which figures moved.
+
+### Exit criteria — commands, not adjectives
+
+1. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **I2 WILL MOVE** (guest
+   positions change); predict the hash before the run. A save bump is **not** expected under (b).
+2. `pnpm check:tickcost` returns a **real ratio, not INCOMPARABLE**, inside its bound. (b) claims to
+   add no search — **that claim is what this row tests.**
+3. **The through-wall census re-run**: 309 of 1,554 is the standing reading. Report the new figure.
+   **A non-zero residue is acceptable if each remaining class is named**; reaching zero by disabling
+   the census is not.
+4. **The economic delta, arm by arm**, against the baseline.
+5. **WATCH #36 with a frame reference**: a guest observed entering through a door rather than a
+   wall. ADR-0013 governs the repair exactly as it governs the finding.
+
+### Still out of scope
+
+A **player-placed** door (stored state, a schema bump — park it with what it would cost), a door as
+a drawn sprite, lift or stairwell re-routing beyond what (b) requires, and any change to
+`validity.ts`'s six reasons or their order. **`noDoor` and `noCorridor` keep their meanings**; (b) is
+a change to where a guest is headed, not to whether a room is valid.
+
 
 ## G-038b-i — The queue mechanism, `packages/sim` only
 Status: **done 2026-08-23.** The half of G-038b that can be built honestly: the MECHANISM,
