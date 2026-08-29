@@ -5310,6 +5310,71 @@ scenario arm and both tails.
 A player-placed door, a drawn door sprite, anything that adds a search, and the `stepTowards`
 fallback.
 
+## G-068 — The purse: a new hotel can start, and a broke one can come back
+Status: **IN-PROGRESS 2026-08-30. Both amounts RULED IN PRINCIPLE (ADR-0108, human) and DERIVED here.** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+
+**E-015 resolved.** G-060's proportional amenity clause made tier 1 cost **four rooms x 250,000p =
+1,000,000p** against opening capital 500,000p plus a 300,000p loan — **permanently short**, so a bare
+plot reaches three rooms at 365 days AND at 1,000, with 997 refusals, and scores **zero stars** where
+that same hotel traded at one before.
+
+### TWO RULINGS, TWO FIELDS, TWO REQUIREMENTS — and collapsing them leaves one ruling unenforced
+
+ADR-0108's finding, and it is the shape of this goal:
+
+- **`openingCapitalPence` answers: CAN A NEW HOTEL START?**
+  Requirement: **a bare plot can build the first tier.** Tier 1 is one bedroom plus one amenity set —
+  one each of `hotel_lounge`, `games_room`, `hotel_cafe` — read off `star-tiers.json` and
+  `room-types.json`, **not counted by hand here.**
+- **`loanPrincipalPence` answers: CAN A BROKE HOTEL COME BACK?**
+  Requirement: **a hotel that has lost its rooms can borrow its way to the first tier again.** This
+  is ruling 2 — *bankruptcy is RECOVERABLE* — expressed as an integer. **It is a different sum**,
+  because it interacts with `canDrawLoan`'s gate (`balance + liquidation < minConstructionCost`) and
+  with whatever liquidation value the wreckage still carries.
+
+> **§2.1 GOVERNS BOTH. Derive each from its own sentence.** A capital figure chosen to look generous
+> is a superstition with CI access, and this project already has one unrepaired instance of that
+> class in `check:scaling`. **If a derivation yields a number that feels wrong, report it — do not
+> round it to something comfortable.**
+
+### THE PRICE WAS ACCEPTED WITH THE RULING, AND IT CARRIES ITS OWN CHECK
+
+**Every measured balance in this project was taken against 500,000p of opening capital.** Raising it
+moves every balance figure in every ledger, goal block and economic test.
+
+**BUT CAPITAL IS AN OPENING POSITION, NOT A RATE — and that asymmetry is a PREDICTION made before
+the build, not an observation made after it:**
+
+- **Revenue, arrivals, departures and reviews must come back BYTE-IDENTICAL** on every arm.
+- **Only balances move, by EXACTLY the capital delta**, on any arm that does not thereby become able
+  to build something it previously could not.
+- **AN ARM WHOSE REVENUE MOVES HAS FOUND SOMETHING ELSE.** That is a finding to report, not an
+  inconvenience to absorb.
+
+**A law is asserted against this field and must survive:**
+`balanceOf(ledger) + stockValueOf(entities) === openingCapitalPence`.
+
+### Exit criteria
+
+1. **Both derivations written down with every input named and its file**, in the shape
+   `partiesPerDaySchema` uses — carried at the point of use, and re-run against the files on disk by
+   a test, so a retune reddens it.
+2. **A bare plot reaches tier 1**, measured: `--rooms 0 --build 1440 --demand` at 365 days now scores
+   **at least 1 star** where it scored zero. State how long it takes.
+3. **A broke hotel recovers**, measured. **Design the arm and say what it demonstrates** — this is
+   the first goal in the project to test recovery, and there may be no harness flag that produces
+   bankruptcy. **If there is not, say so and state what would be needed rather than inventing a
+   proxy.**
+4. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`.
+5. **The prediction above, checked arm by arm**: revenue/arrivals/departures/reviews byte-identical,
+   balances moved by exactly the delta.
+
+### Out of scope
+
+The lose STATE itself — what happens when you go broke, what tells the player, what it feels like.
+**G-067 asks a stranger that**, and ADR-0108 explicitly does not pre-empt it. This goal makes
+recovery *arithmetically possible*; it does not make it *a mechanic*.
+
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
 Status: **PLANNED 2026-08-29. Blocked on G-060 and G-046b landing; the PROTOCOL is not blocked and is stated here.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
 
