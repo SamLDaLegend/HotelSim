@@ -2407,8 +2407,8 @@ export const scenariosSchema = z.array(scenarioSchema).min(1);
 export const starsSchema = z.int().min(1);
 
 /**
- * HOW A REQUIREMENT COUNTS WHAT THE HOTEL HAS (G-051a). Two modes, and they are not
- * interchangeable:
+ * HOW A REQUIREMENT COUNTS WHAT THE HOTEL HAS (G-051a, third mode G-060). Three modes, and no
+ * two of them are interchangeable:
  *
  *   rooms          at least `minimum` ROOMS whose type is in `roomTypeIds`. Asks for SCALE.
  *                  Twelve bedrooms is twelve bedrooms.
@@ -2417,12 +2417,75 @@ export const starsSchema = z.int().min(1);
  *                  by spamming whichever entry in the set is cheapest — which is exactly
  *                  ADR-0078's dominance arriving through the rating instead of through
  *                  satisfaction.
+ *   sets           at least `minimum` rooms of EVERY type in `roomTypeIds` — the MIN over the
+ *                  named types, which is how many complete SETS of one-of-each the hotel has.
+ *                  Asks for LOAD. It is `distinctTypes` at `minimum` = the set's size when
+ *                  `minimum` is 1, and it is the only mode that can say "and now twice as
+ *                  many of them".
  *
- * AN ENUM RATHER THAN TWO OPTIONAL FIELDS, for `seededStockPolicySchema`'s reason: a row
- * carrying both a room minimum and a type minimum would have four states and mean two, and
- * the two extra states are the ones nobody tests.
+ * WHY THE THIRD MODE EXISTS (ADR-0107, human, 2026-08-29). `distinctTypes` can only ever say
+ * *the hotel OWNS one of everything*. A rating built out of it doubles a hotel's demand at the
+ * top tier while asking for exactly the service capacity the tier below asked for, and G-051b
+ * measured the consequence: taking the fifth star at two amenity sets raised the rating,
+ * doubled arrivals and LOST 204,000p of revenue over 30 days. **The mode a ladder needs in
+ * order to say *can SERVE the guests its own rating brings* is a count of COMPLETE SETS, not
+ * of kinds.**
+ *
+ * AN ENUM RATHER THAN THREE OPTIONAL FIELDS, for `seededStockPolicySchema`'s reason: a row
+ * carrying a room minimum and a type minimum and a set minimum would have eight states and
+ * mean three, and the five extra states are the ones nobody tests.
+ *
+ * ==========================================================================================
+ * THE SHIPPED `sets` MINIMUMS ARE **DERIVED**, AND THIS IS THE DERIVATION AT THE POINT OF USE
+ * — `partiesPerDaySchema`'s arrangement below, which ADR-0107 §4 names as the pattern to copy.
+ * Read `starsSchema` above first: everything ELSE in `star-tiers.json` is a DESIGN STATEMENT.
+ * These three numbers are not, and saying which is which at the point of use is ADR-0102 §1.
+ *
+ * THE STATED REQUIREMENT, in one sentence:
+ *
+ *     *A hotel that meets a tier's clauses can SERVE the guests that tier's rating brings.*
+ *
+ * The inputs are four files and none of them is this one:
+ *
+ *   1. `demand.json` — `partiesPerDayByStars[s]` is the parties a day a hotel rated `s` earns.
+ *   2. `guest-rules.json` — `stayDurationTicks` (1,440, against a 1,440-tick day) puts every
+ *      one of those parties in a bed at once, and `partySizeWeights` ([3, 1]) makes the mean
+ *      party 4/3 guests over the cycle it emits.
+ *   3. `need-types.json` — an engagement need's `refillPerTick` (14). One provider of a kind
+ *      sustains `refillPerTick + 1` = 15 guests, by flow conservation over a closed cycle:
+ *      decay equals refill, so the served fraction is `1 / (1 + refillPerTick)` whatever the
+ *      capacity and the want line (`guestsPerProvider`, `provisioning.ts`, G-043).
+ *   4. `room-types.json` — one SET is one room of each amenity type. Read together with
+ *      `item-types.json` (a room's `requires` provide too), a set puts AT LEAST ONE provider
+ *      behind EVERY engagement need, which is what makes `guestsPerProvider` the right
+ *      denominator for it. It is not a partition — the shipped Games Room answers
+ *      entertainment and, through the vending machine it requires, nourishment as well — so
+ *      the count is an upper bound on sets needed and a set is a CONSERVATIVE unit.
+ *
+ *     sets(tier) = ceil( partiesPerDay(tier.stars) x guestsPerParty / guestsPerProvider )
+ *                = ceil( partiesPerDay(tier.stars) x (4/3) / 15 )
+ *
+ * which on the shipped tables is 1, 1, 1, 2, 3 at one through five stars, AND NOT ONE OF THOSE
+ * FIVE NUMBERS WAS CHOSEN. `amenity.derivation.test.ts` re-runs the arithmetic against all
+ * four files on disk through `provisioning.ts` — the shared module, so there is no second copy
+ * of it — and fails if this table disagrees.
+ *
+ * THE PROXY IS NAMED RATHER THAN ASSUMED (ADR-0107). Amenity load is driven by ARRIVALS, which
+ * are driven by the RATING, and NOT by the bedroom count: a hotel with a hundred bedrooms at
+ * four stars still receives twelve parties a day, and the other eighty-eight bedrooms stand
+ * empty and load nothing. So the clause is a per-tier CONSTANT and not a function of the
+ * hotel's own bedrooms — which is also what keeps `starRatingOf` MONOTONE IN WHAT IS BUILT.
+ * Expressed in bedrooms the constant is ONE SET PER 11.25 BEDROOMS, uniform across the ladder,
+ * because `demand.json`'s own derivation makes each tier's parties-a-day equal its bedroom
+ * minimum; 11.25 is not a number of bedrooms anybody can build, which is why the TABLE carries
+ * the per-tier integer and this comment carries the ratio.
+ *
+ * *"One set per 8 bedrooms" agrees with the derivation at 1, 3, 6, 12 and 24 bedrooms and is
+ * NOT it*: `ceil(b/8)` and `ceil(4b/45)` first disagree at b = 9, where 8 asks for two sets and
+ * the requirement asks for one. It fitted five points and would have been wrong on the sixth.
+ * ==========================================================================================
  */
-export const starTierCountingSchema = z.enum(['rooms', 'distinctTypes']);
+export const starTierCountingSchema = z.enum(['rooms', 'distinctTypes', 'sets']);
 
 /**
  * ONE CLAUSE OF A STAR TIER'S PREDICATE (G-051a): a set of room types, a way of counting them,
@@ -2447,7 +2510,11 @@ export const starTierCountingSchema = z.enum(['rooms', 'distinctTypes']);
  * rather than a balance opinion: such a tier is unsatisfiable by construction, so it is a
  * ceiling no player can ever pass however they build. A currency nobody can earn is not a
  * currency. (The `rooms` mode has no such bound and deliberately gets none — how many rooms
- * fit is a property of the PLOT, which is world state, and content cannot see it.)
+ * fit is a property of the PLOT, which is world state, and content cannot see it. **`sets` is
+ * in the `rooms` camp and not the `distinctTypes` one, and the reason is worth stating because
+ * the mode LOOKS like variety**: `sets` asks for `minimum` rooms of each named type, so any
+ * minimum is satisfiable by building enough rooms and only the plot can refuse it. What the
+ * set's SIZE bounds is how many rooms one set costs, which is a price and not a ceiling.)
  */
 export const starTierRequirementSchema = z
   .strictObject({

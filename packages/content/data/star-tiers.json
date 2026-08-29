@@ -3,7 +3,14 @@
     "id": "star_one",
     "name": "One Star",
     "stars": 1,
-    "requires": [{ "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 1 }]
+    "requires": [
+      { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 1 },
+      {
+        "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
+        "counting": "sets",
+        "minimum": 1
+      }
+    ]
   },
   {
     "id": "star_two",
@@ -13,7 +20,7 @@
       { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 3 },
       {
         "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
-        "counting": "distinctTypes",
+        "counting": "sets",
         "minimum": 1
       }
     ]
@@ -26,8 +33,8 @@
       { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 6 },
       {
         "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
-        "counting": "distinctTypes",
-        "minimum": 2
+        "counting": "sets",
+        "minimum": 1
       }
     ]
   },
@@ -39,8 +46,8 @@
       { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 12 },
       {
         "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
-        "counting": "distinctTypes",
-        "minimum": 3
+        "counting": "sets",
+        "minimum": 2
       },
       {
         "roomTypeIds": ["conference_hall", "hotel_spa", "hotel_theatre"],
@@ -57,7 +64,7 @@
       { "roomTypeIds": ["standard_room"], "counting": "rooms", "minimum": 24 },
       {
         "roomTypeIds": ["games_room", "hotel_cafe", "hotel_lounge"],
-        "counting": "distinctTypes",
+        "counting": "sets",
         "minimum": 3
       },
       {

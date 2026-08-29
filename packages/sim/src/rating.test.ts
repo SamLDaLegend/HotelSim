@@ -343,6 +343,128 @@ describe('`distinctTypes` asks for VARIETY, which is what stops the cheapest ent
   });
 });
 
+describe('`sets` asks for LOAD, which is the mode a scaling clause needs (G-060, ADR-0107)', () => {
+  // ==========================================================================================
+  // THE HUMAN'S RULING: *a tier asks for one amenity SET PER N BEDROOMS, not "one of each
+  // kind".* `distinctTypes` can only ever say the hotel OWNS one of everything, so a ladder
+  // built out of it doubles a hotel's demand at the top tier while asking for exactly the
+  // service capacity the tier below asked for. `sets` counts COMPLETE SETS — the MIN over the
+  // named types — and is the only one of the three modes that can say "and now twice as many".
+  //
+  // THE LADDER HERE IS THIS FILE'S OWN AND NOT THE SHIPPED ONE (camelCase ids, ADR-0003), so
+  // these cases pin the FOLD. `amenity.derivation.test.ts` pins the shipped numbers against the
+  // files they were derived from, which is a different claim.
+  // ==========================================================================================
+  const setsLadder: readonly StarTierData[] = [
+    tier('tierOne', 1, [{ roomTypeIds: ['cafe', 'lounge'], counting: 'sets', minimum: 1 }]),
+    tier('tierTwo', 2, [{ roomTypeIds: ['cafe', 'lounge'], counting: 'sets', minimum: 2 }]),
+  ];
+  const setsContent = bindContent(contentWith(setsLadder));
+  const rate = (...commands: readonly Command[]): ReturnType<typeof starRatingOf> => {
+    const world = stepTick(createWorld(3, setsContent), setsContent, [...commands]);
+    return starRatingOf(world.entities, world.grid, world.corridors, world.stairs, setsContent);
+  };
+
+  it('counts the MIN over the named types, so a missing type is a missing SET', () => {
+    // Ten cafes and no lounge is ten rooms and ZERO sets. This is the case that separates `sets`
+    // from `rooms` — a sum would call this ten — and from `distinctTypes`, which would call it
+    // one. The whole reason the mode exists is that the hotel's guests need one of each.
+    const commands: Command[] = [];
+    for (let i = 0; i < 10; i += 1) commands.push(spawn('cafe', i * 2));
+    const rating = rate(...commands);
+    expect(rating.stars).toBe(UNRATED);
+    expect(rating.shortfall).toEqual([
+      { roomTypeIds: ['cafe', 'lounge'], counting: 'sets', minimum: 1, have: 0 },
+    ]);
+  });
+
+  it('and one of each is one set, whatever else stands beside it', () => {
+    const commands: Command[] = [spawn('cafe', 0), spawn('lounge', 2)];
+    for (let i = 0; i < 5; i += 1) commands.push(spawn('cafe', 10 + i * 2));
+    const rating = rate(...commands);
+    expect(rating.stars).toBe(1);
+    // Six cafes and one lounge is still ONE set, so the second tier is not bought by spamming
+    // the type the hotel already has plenty of.
+    expect(rating.shortfall).toEqual([
+      { roomTypeIds: ['cafe', 'lounge'], counting: 'sets', minimum: 2, have: 1 },
+    ]);
+  });
+
+  it('two of each is two sets, which is the rung a scaling clause exists to sell', () => {
+    const rating = rate(spawn('cafe', 0), spawn('lounge', 2), spawn('cafe', 4), spawn('lounge', 6));
+    expect(rating.stars).toBe(2);
+    expect(rating.nextStars).toBeNull();
+    expect(rating.shortfall).toEqual([]);
+  });
+
+  it('`sets` at minimum 1 IS `distinctTypes` at the size of the set, and that is checked', () => {
+    // The two modes agree at exactly one point, which is why the shipped tiers 1 to 3 could be
+    // written either way and why tiers 4 and 5 could not. Asserted rather than asserted-in-prose,
+    // because it is the sentence that says what the new mode is a generalisation OF.
+    const asSets = bindContent(
+      contentWith([tier('tierOne', 1, [{ roomTypeIds: ['cafe', 'lounge'], counting: 'sets', minimum: 1 }])]),
+    );
+    const asVariety = bindContent(
+      contentWith([tier('tierOne', 1, [{ roomTypeIds: ['cafe', 'lounge'], counting: 'distinctTypes', minimum: 2 }])]),
+    );
+    for (const commands of [
+      [] as readonly Command[],
+      [spawn('cafe', 0)],
+      [spawn('cafe', 0), spawn('lounge', 2)],
+      [spawn('cafe', 0), spawn('cafe', 2), spawn('lounge', 4)],
+    ]) {
+      const world = worldOf(...commands);
+      const bySets = starRatingOf(world.entities, world.grid, world.corridors, world.stairs, asSets).stars;
+      const byVariety = starRatingOf(world.entities, world.grid, world.corridors, world.stairs, asVariety).stars;
+      expect(bySets, JSON.stringify(commands)).toBe(byVariety);
+    }
+  });
+
+  it('an INVALID room is not part of a set either, because an inspector grades what WORKS', () => {
+    // The same rule `rooms` and `distinctTypes` obey, checked for the new mode rather than
+    // inherited from them — a `min` over tallies would count an unfurnished outline exactly as
+    // eagerly as a sum would. The clause is over BEDROOM and cafe here, because a bedroom with
+    // no bed is `missingItem` and is the only invalid room this fixture can build.
+    const bedded = bindContent(
+      contentWith([tier('tierOne', 1, [{ roomTypeIds: ['bedroom', 'cafe'], counting: 'sets', minimum: 2 }])]),
+    );
+    const rateWith = (...commands: readonly Command[]): ReturnType<typeof starRatingOf> => {
+      const world = stepTick(createWorld(3, bedded), bedded, [...commands]);
+      return starRatingOf(world.entities, world.grid, world.corridors, world.stairs, bedded);
+    };
+    // Two furnished bedrooms and two cafes is two sets.
+    expect(rateWith(...bedrooms(2), spawn('cafe', 20), spawn('cafe', 22)).stars).toBe(1);
+    // The same hotel with the second bedroom's bed left out — one command apart — is ONE set.
+    const short = rateWith(...bedrooms(1), spawn('bedroom', 2), spawn('cafe', 20), spawn('cafe', 22));
+    expect(short.stars).toBe(UNRATED);
+    expect(short.shortfall).toEqual([
+      { roomTypeIds: ['bedroom', 'cafe'], counting: 'sets', minimum: 2, have: 1 },
+    ]);
+  });
+
+  it('BUILDING NEVER LOWERS THE RATING under a `sets` clause either, which is what makes it safe', () => {
+    // ADR-0107 names the alternative it refused: a clause proportional to the hotel's OWN
+    // bedroom count would raise its own requirement as the player builds, and a four-star hotel
+    // that laid one more bedroom could drop to UNRATED. `sets` is a per-tier CONSTANT, so this
+    // property survives the new mode — and it is checked one room at a time rather than argued.
+    const commands: Command[] = [
+      spawn('cafe', 0),
+      spawn('lounge', 2),
+      spawn('bedroom', 4),
+      spawn('bed', 4),
+      spawn('cafe', 6),
+      spawn('lounge', 8),
+    ];
+    let previous = UNRATED;
+    for (let n = 0; n <= commands.length; n += 1) {
+      const stars = rate(...commands.slice(0, n)).stars;
+      expect(stars, `after ${n} commands`).toBeGreaterThanOrEqual(previous);
+      previous = stars;
+    }
+    expect(previous).toBe(2);
+  });
+});
+
 describe('bindContent refuses a ladder nobody could climb', () => {
   const withTiers = (tiers: readonly StarTierData[]): (() => unknown) => () => bindContent(contentWith(tiers));
 

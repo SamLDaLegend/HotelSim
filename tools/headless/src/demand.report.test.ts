@@ -209,14 +209,19 @@ describe('the demand curve is DERIVED, and the derivation is re-run against the 
     // THIS TITLE READ "…so no building a player does is strictly punished" UNTIL SWEEP 1, AND
     // THE "SO" CLAUSE WAS FALSE. **Monotone in the CURVE is not monotone in the OUTCOME**, and
     // this goal is what made the difference bite: the curve promises more ARRIVALS at a higher
-    // rating, and arrivals are only money if the hotel can SERVE them. The counter-example is
+    // rating, and arrivals are only money if the hotel can SERVE them. The counter-example was
     // measured and pinned three cases down — taking the fifth star at two sets of amenities
-    // raises the rating, doubles arrivals and LOSES 1,657,500p of revenue.
+    // raised the rating, doubled arrivals and lost 204,000p of revenue over 30 days.
     //
-    // The claim that survives is exactly the one the loop needs and no more: *spend cash, add
-    // capacity, raise the rating, RAISE DEMAND*. Whether raised demand raises INCOME is a
-    // question about the building, and the ladder does not currently ask a player to scale the
-    // part of the building that answers it.
+    // THE COUNTER-EXAMPLE IS GONE SINCE G-060 AND THE TITLE IS NOT, WHICH IS THE POINT OF THE
+    // TITLE. ADR-0107 made the ladder ask for the service capacity each tier's own demand needs,
+    // so on the SHIPPED tables monotone in the curve and monotone in the outcome now agree — but
+    // they are still different claims and this case still only checks the first. The one below
+    // checks the second, on runs, and it is the one that would go red on a retune.
+    //
+    // The claim this case supports is exactly the one the loop needs and no more: *spend cash,
+    // add capacity, raise the rating, RAISE DEMAND*. Whether raised demand raises INCOME is a
+    // question about the building, and it is answered three cases down rather than here.
     //
     // Stated of the shipped table rather than of the arithmetic — `demand.ts` deliberately does
     // not enforce monotonicity, because a designer may legitimately want a quieter top rung.
@@ -316,14 +321,21 @@ describe('THE REVIEW SEES THE FACILITIES — the grid E-014 was ruled on (G-059)
   // FACILITY IS A ROOM THAT SERVES NO NEED (`facilityRoomTypesOf`) — so before G-059 the review
   // function could not see one even in principle.
   //
-  //   BEFORE (the tree at 4656f56)          AFTER (this tree)
-  //   fac amen  reviews          mean       reviews            mean   stars
-  //    0    1   5:232            5.00       4:232              4.00     3
-  //    0    2   5:232            5.00       4:232              4.00     3
-  //    0    3   5:232            5.00       4:232              4.00     3
-  //    1    1   3:93 4:362 5:14  3.83       1:233 4:233 5:3    2.52     4
-  //    1    2   5:464            5.00       5:464              5.00     4
-  //    1    3   5:464            5.00       5:464              5.00     4
+  //   BEFORE (the tree at 4656f56)          AFTER G-059            AFTER G-060 (this tree)
+  //   fac amen  reviews          mean       reviews         stars   reviews   stars
+  //    0    1   5:232            5.00       4:232             3     4:232       3
+  //    0    2   5:232            5.00       4:232             3     4:232       3
+  //    0    3   5:232            5.00       4:232             3     4:232       3
+  //    1    1   3:93 4:362 5:14  3.83       1:243 4:218 5:4   4     4:232       3
+  //    1    2   5:464            5.00       5:464             4     5:464       4
+  //    1    3   5:464            5.00       5:464             4     5:464       4
+  //
+  // THE ONE CELL THAT MOVED AT G-060 IS THE BOTTLENECK ONE, AND IT MOVED BECAUSE THE RATING
+  // STOPPED SELLING A TIER THE HOTEL COULD NOT SERVE. `--facilities 1 --amenities 1` used to
+  // buy the fourth star, double the arrivals and strand 243 guests at a mean of 2.52; under
+  // ADR-0107's amenity clause it buys no tier at all, so the cell reads what its `--facilities
+  // 0` neighbour reads and the facility is a pure 195,000p cost. **The grid is one separating
+  // cell smaller and the separation it lost was a punishment**, which is the last case here.
   //
   // **BEFORE: ELEVEN OF THE FIFTEEN CELLS OF THE FULL 3x5 GRID WERE BYTE-IDENTICAL `5:all`** —
   // ADR-0100's zero-bit finding — and the four that were not were all at the amenity bottleneck.
@@ -385,23 +397,52 @@ describe('THE REVIEW SEES THE FACILITIES — the grid E-014 was ruled on (G-059)
     expect(topReviews).toBe(leastMet);
   });
 
-  it('and the BOTTLENECK cell is where the facility HURTS, which is the loop biting back', () => {
-    // `--facilities 1 --amenities 1`: the facility earns the fourth star, the fourth star doubles
-    // arrivals, and one amenity set cannot serve twice the guests — so 233 of 469 walk out and
-    // the mean review FALLS from 4.00 to 2.52 for a build that cost money. **That is the build
-    // loop punishing an unbalanced build, and it is the one cell in this grid where the review
-    // and the balance sheet disagree** (balance rises 1,437,000p -> 1,276,000p... it falls, by
-    // 161,000p, so they agree here too and the disagreement is with the STAR RATING, which went
-    // up). The player's repair is a second amenity set, which is the cell to its right.
+  it('and the BOTTLENECK cell is where the facility now buys NOTHING, which is the repair', () => {
+    // ======================================================================================
+    // THIS CASE ASSERTED THE OPPOSITE UNTIL G-060, AND WHAT IT ASSERTED WAS TRUE.
+    //
+    // `--facilities 1 --amenities 1`: the facility earned the fourth star, the fourth star
+    // doubled arrivals, and one amenity set could not serve twice the guests — so 243 of 465
+    // walked out and the mean review FELL from 4.00 to 2.52 for a build that cost money. It was
+    // recorded here as *"the build loop punishing an unbalanced build"*.
+    //
+    // IT WAS THE SAME DEFECT AS THE FIFTH-STAR TRAP, ONE RUNG DOWN, WHICH IS WHY ADR-0107
+    // REJECTED WIDENING THE LADDER: **the rung at which the ladder turns negative is a function
+    // of AMENITY DENSITY**, so more rungs move the trap rather than remove it. Tier 4 now asks
+    // for two amenity sets, so this hotel is held at three stars and the facility buys no tier.
+    //
+    // MEASURED, ONE RUN PER CELL, `--days 30 --seed 42 --rooms 12 --demand`, exact integers, no
+    // aggregation, win32/12cpu quiet:
+    //
+    //     cell       stars  arrived  dissatisfied  reviews          balance
+    //     (0, 1)       3       240        0        4:232          1,437,000p
+    //     (1, 1) OLD   4       480      243        1:243 4:218 5:4  1,157,000p
+    //     (1, 1) NEW   3       240        0        4:232          1,242,000p
+    //
+    // SO THE FACILITY IS A PURE COST HERE, AND THAT IS THE HONEST OUTCOME RATHER THAN A LOSS OF
+    // SIGNAL. 195,000p over 30 days is exactly the three seeded facility rooms' upkeep —
+    // 6,500p a night — and the hotel's own shortfall now reads `sets 1/2`, which tells the
+    // player the second amenity set is what the fourth star costs. The old cell charged them
+    // 280,000p AND 243 disappointed guests to find that out.
+    //
+    // WHAT IS LOST IS NAMED: this cell used to be the one place in the grid where the review
+    // channel separated at the amenity bottleneck, so the grid is one separating cell smaller.
+    // The separation it lost was a PUNISHMENT for a build the ladder should not have sold, and
+    // the two cells above it still separate — which is the case two up.
+    // ======================================================================================
     const bottleneck = cell(1, 1);
-    expect(bottleneck.rating.stars).toBe(4);
-    // `1:233, 4:233, 5:3` -> `1:243, 4:218, 5:4` AT G-046. The door costs every journey a tick
-    // and this is the cell least able to absorb one, so ten more guests walk out and the finding
-    // this arm makes — the build loop punishing an unbalanced build — is ten guests sharper.
-    expect(scores(bottleneck)).toBe('1:243, 4:218, 5:4');
+    const bare = cell(0, 1);
+    expect(bottleneck.rating.stars).toBe(3);
+    expect(bottleneck.rating.stars).toBe(bare.rating.stars);
+    expect(scores(bottleneck)).toBe('4:232');
+    expect(scores(bottleneck)).toBe(scores(bare));
     const dissatisfied = bottleneck.guests.departures.find((row) => row.reason === 'leftDissatisfied')?.count ?? 0;
-    expect(dissatisfied).toBe(243);
-    expect(bottleneck.money.balancePennies).toBeLessThan(cell(0, 1).money.balancePennies);
+    expect(dissatisfied).toBe(0);
+    expect(bottleneck.guests.arrived).toBe(bare.guests.arrived);
+    // It still COSTS — an unbought tier does not make a room free — and the cost is the three
+    // facility rooms' nightly upkeep over thirty nights and nothing else.
+    expect(bottleneck.money.balancePennies).toBeLessThan(bare.money.balancePennies);
+    expect(bare.money.balancePennies - bottleneck.money.balancePennies).toBe(195_000);
   });
 });
 
@@ -428,78 +469,83 @@ describe('the ladder responds at every rung, and an UNRATED hotel receives nobod
     }
   });
 
-  it('AND ONE BUILD ON THE SHIPPED LADDER RAISES THE RATING AND STRICTLY LOSES MONEY', () => {
+  it('AND NO BUILD ON THE SHIPPED LADDER RAISES THE RATING AND LOSES MONEY', () => {
     // ========================================================================================
-    // THE THIRD REGION, AND IT IS NOT THE SATURATION G-051b DEFERRED. That deferral names two
-    // FLAT regions — below the facility gate and above the top tier — where a build earns
-    // nothing and costs upkeep. **THIS ONE IS NEGATIVE RATHER THAN FLAT**: the build RAISES the
-    // rating, demand does exactly what it promises, and the hotel is worse off.
+    // THIS CASE WAS THE OPPOSITE ASSERTION UNTIL G-060 AND IT IS THE SAME THREE ARMS.
     //
-    // THE MECHANISM IS THE LADDER AND NOT THE CURVE. Tier 5's bedroom clause doubles 12 -> 24
-    // and its AMENITY clause counts VARIETY and never LOAD, so the fifth star doubles demand
-    // into a building whose service capacity it never asked to scale. More than half the new
-    // arrivals leave without paying.
+    // WHAT IT USED TO PIN, and it was true: *one build on the shipped ladder raises the rating
+    // and STRICTLY LOSES MONEY.* Tier 5's bedroom clause doubled 12 -> 24 while its amenity
+    // clause counted VARIETY and never LOAD, so taking the fifth star doubled demand into a
+    // building whose service capacity the ladder never asked to scale. At `--days 30 --seed 42
+    // --amenities 2 --facilities 1 --demand`, ONE BEDROOM APART: 23 rooms was 4 stars, 480
+    // arrived, 3,944,000p, 0 dissatisfied; 24 rooms was 5 stars, 960 arrived, **3,740,000p and
+    // 498 dissatisfied** — revenue down 204,000p and balance down 279,000p. The old comment
+    // ended *"when G-060 re-tables the ladder this test goes RED, and that is the point."*
     //
-    // MEASURED AT TWO HORIZONS AND THE EFFECT IS THE SAME SHAPE AT BOTH. `--seed 42 --amenities 2
-    // --facilities 1 --demand`, ONE BEDROOM APART, one run each, exact deterministic integers, no
-    // aggregation, win32/12cpu quiet:
+    // IT WENT RED. ADR-0107 (human) made the amenity clause count COMPLETE SETS, tier 5 now asks
+    // for three of them, and the twenty-fourth bedroom no longer buys a star it cannot serve.
+    // THE SAME THREE ARMS, one run each, exact deterministic integers, no aggregation, regime
+    // win32/12cpu quiet:
     //
-    //     days   rooms  stars   arrived   revenue        dissatisfied   balance
-    //       30      23      4       480    3,944,000p              0    2,254,000p
-    //       30      24      5       960    3,867,500p            477    2,102,500p
-    //      365      23      4     5,840   49,504,000p              0   23,359,000p
-    //      365      24      5    11,680   47,846,500p          6,026   20,789,000p
+    //     days  rooms  sets  stars  arrived  checkedOut  dissatisfied   revenue      balance
+    //       30     23     2      4      480         464             0  3,944,000p  2,254,000p
+    //       30     24     2      4      480         464             0  3,944,000p  2,179,000p
+    //       30     24     3      5      960         928             0  7,888,000p  5,988,000p
+    //      365     23     2      4    5,840       5,824             0 49,504,000p 23,359,000p
+    //      365     24     2      4    5,840       5,824             0 49,504,000p 22,446,500p
+    //      365     24     3      5   11,680      11,648             0 99,008,000p 70,308,000p
     //
-    // **THE ASSERTIONS BELOW RUN THE 30-DAY PAIR**, and the horizon is the suite's reliability
-    // budget rather than the claim: the 365-day version of this case cost 78s in-process and
-    // TIMED OUT at vitest's shared 30,000ms, which is HOTELSIM.md section 2.0's unreliable state
-    // in a project already carrying two of them. The year-long arm was RUN and is in the table.
+    // THREE THINGS ARE PINNED BELOW AND EACH IS A DIFFERENT CLAIM.
     //
-    // AND THE CLAMPED CONTROL SAYS THE COST IS THIS GOAL'S. The identical 23 -> 24 build at
-    // `--arrivals 120` costs 75,000p of pure upkeep over 30 days (2,254,000p -> 2,179,000p) with
-    // ZERO dissatisfied departures; 912,500p and still zero over the year. **Demand turns a
-    // 75,000p build into a 151,500p one and invents 477 disappointed guests** — 912,500p into
-    // 2,570,000p and 6,026 guests at a year.
+    //  1. THE BUILD THAT USED TO BE A TRAP IS NOW EXACTLY ITS OWN UPKEEP. The 24th bedroom
+    //     leaves the rating, the arrivals, the departures and the revenue byte-identical and
+    //     costs 75,000p over 30 days — 30 x `nightlyUpkeepPence`. **That is the number G-051b's
+    //     CLAMPED control already measured for this build** (`--arrivals 120`: 75,000p of pure
+    //     upkeep, zero dissatisfied), so demand and the clamp now agree about what a room the
+    //     hotel does not need costs. They differed by 76,500p before G-046 and by 204,000p after.
     //
-    // THE REMEDY IS A LADDER EDIT AND IT IS G-060's, NOT A CURVE EDIT AND NOT MINE. At three sets
-    // of amenities the SAME 24-bedroom hotel earns 7,888,000p over 30 days against 3,867,500p —
-    // and +48,591,500p over a year against the four-star hotel beside it (21,716,500p ->
-    // 70,308,000p) — so the game's own physics already price the answer. **Nothing in the game
-    // SAYS so, which is the defect.** Re-deriving the curve until this arm looks healthy would be
-    // picking a threshold by running the sim, which HOTELSIM.md section 2.1 forbids and which
-    // G-059 was refused for.
+    //  2. THE BUILD THAT DOES RAISE THE RATING PAYS FOR ITSELF MANY TIMES OVER. One more amenity
+    //     set at the same 24 bedrooms takes the hotel to five stars and DOUBLES its revenue.
     //
-    // IT IS PINNED HERE SO IT CANNOT VANISH QUIETLY. When G-060 re-tables the ladder this test
-    // goes RED, and that is the point: a measured defect nothing pins is an unpinned claim, and a
-    // fix nobody notices is a fix nobody can score.
+    //  3. AND NOBODY IS TURNED AWAY AT ANY OF THE THREE. The 498 dissatisfied departures the old
+    //     pin recorded are gone, and their absence is asserted rather than left implied — a
+    //     rating that stopped over-selling the hotel is the whole mechanism.
+    //
+    // WHAT IS NOT CLAIMED, because this arm cannot support it: that no build ANYWHERE loses
+    // money. Building a bedroom the rating will not fill costs upkeep and always did — arm two
+    // IS that build — and over-building is punished and survivable by design. The claim is the
+    // one the old title denied: **a build that RAISES THE RATING is never a build that loses.**
     // ========================================================================================
     const base = ['--days', '30', '--seed', '42', '--amenities', '2', '--facilities', '1', '--demand'];
     const four = inProcess([...base, '--rooms', '23']);
     const five = inProcess([...base, '--rooms', '24']);
-    expect(four.rating.stars).toBe(4);
-    expect(five.rating.stars).toBe(5);
-    // The rating rose and arrivals doubled, exactly as the curve promises.
-    expect(five.guests.arrived).toBe(2 * four.guests.arrived);
-    // And revenue FELL. This is the assertion the old title denied was possible.
-    expect(five.money.revenuePennies).toBeLessThan(four.money.revenuePennies);
-    // 76,500p -> 204,000p AT G-046. The finding is unchanged and is the inequality above — one
-    // build raises the rating and STRICTLY LOSES MONEY — and the door makes the loss nearly
-    // three times deeper, because the fifth-star hotel is the one whose amenities are already
-    // stretched and a tick of walking per journey comes straight out of them.
-    expect(four.money.revenuePennies - five.money.revenuePennies).toBe(204_000);
-    expect(four.money.balancePennies - five.money.balancePennies).toBe(279_000);
     const dissatisfied = (summary: RunSummary): number =>
       summary.guests.departures.find((row) => row.reason === 'leftDissatisfied')?.count ?? 0;
+
+    // 1. THE TWENTY-FOURTH BEDROOM NO LONGER BUYS A STAR, and everything except upkeep is equal.
+    expect(four.rating.stars).toBe(4);
+    expect(five.rating.stars).toBe(4);
+    expect(five.guests.arrived).toBe(four.guests.arrived);
+    expect(five.money.revenuePennies).toBe(four.money.revenuePennies);
     expect(dissatisfied(four)).toBe(0);
-    expect(dissatisfied(five)).toBe(498);
-    // AND THE THIRD AMENITY SET IS THE ANSWER THE LADDER DOES NOT ASK FOR. Same 24-bedroom
-    // five-star hotel, one flag apart.
+    expect(dissatisfied(five)).toBe(0);
+    // 75,000p is DERIVED and not pinned as a mood: 30 nights of one bedroom's upkeep, read out
+    // of the same content the run was given. A rebalance of `nightlyUpkeepPence` moves both
+    // sides together.
+    const nightlyUpkeep = lodgingRoomTypeOf(played).nightlyUpkeepPence ?? 0;
+    expect(nightlyUpkeep).toBeGreaterThan(0);
+    expect(four.money.balancePennies - five.money.balancePennies).toBe(30 * nightlyUpkeep);
+
+    // 2. AND THE BUILD THAT DOES RAISE THE RATING DOUBLES THE HOTEL.
     const fiveProvisioned = inProcess([
       '--days', '30', '--seed', '42', '--amenities', '3', '--facilities', '1', '--demand', '--rooms', '24',
     ]);
     expect(fiveProvisioned.rating.stars).toBe(5);
     expect(dissatisfied(fiveProvisioned)).toBe(0);
+    expect(fiveProvisioned.guests.arrived).toBe(2 * five.guests.arrived);
     expect(fiveProvisioned.money.revenuePennies).toBe(7_888_000);
+    expect(fiveProvisioned.money.revenuePennies).toBe(2 * five.money.revenuePennies);
+    expect(fiveProvisioned.money.balancePennies).toBeGreaterThan(five.money.balancePennies);
   }, 90_000); // G-055's house pattern, and G-059 is the goal that had to apply it.
   // DERIVED, NOT CHOSEN, AND THE DERIVATION IS ABOUT CONTENTION RATHER THAN ABOUT THIS TEST.
   // This case has no explicit budget and fell to the shared 30,000ms `testTimeout`, which it
@@ -523,6 +569,11 @@ describe('the ladder responds at every rung, and an UNRATED hotel receives nobod
   // machine's contention, and no amount of making the case faster changes that.
   //
   // THE SHARED `testTimeout` IS NOT TOUCHED (§9). Widening it would hide the next instance.
+  //
+  // THE BUDGET IS UNMOVED BY G-060 AND THE ARM IT COVERS IS THE SAME THREE RUNS. The two
+  // 365-day rows in the table above were RUN and are QUOTED rather than asserted, for the
+  // reason the paragraphs above give: the year-long version of this case cost 78s in-process
+  // and timed out at the shared limit.
 
 
   it('a bare plot earns NOBODY and loses NOTHING, which is a state and not a bug', () => {

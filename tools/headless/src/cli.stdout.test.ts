@@ -362,7 +362,19 @@ const GOLDEN_2_DAYS_SEED_42_JSON = {
     // save bump, no migration, `World.contentHash` unmoved. A room is entered through its doorway
     // now, so guests stand in different cells and `Guest.at` is hashed state. Four lines of the
     // text golden move with it and not one other character: three need rows and this hash.
-    stateHash: '6191199638412542',
+    // G-060: `6191199638412542` -> `a7e308c6450fe6aa`. **ONE HASHED-STATE CAUSE AND NO
+    // BEHAVIOUR AT ALL, and it is the narrowest kind this golden has: `World.contentHash`.**
+    // ADR-0107 re-tabled `star-tiers.json` — the amenity clauses count COMPLETE SETS rather
+    // than kinds — and the fingerprint is a hash of the injected content, so it moves whether
+    // or not this run's rating does. IT DOES NOT: the default arm is three bedrooms and one
+    // amenity set, which satisfies tier 2 under both ladders, so `stars 2 of 5, next 3` and
+    // `to climb 3/6 rooms of [standard_room]` are byte-identical. **THE CONTROL IS THE WHOLE
+    // DOCUMENT**: the same 32 arrivals, 6 checked out, 21 gave up, 5 in the hotel, 51,000p
+    // revenue, -24,000p upkeep, 527,000p balance, the same four need rows, the same review
+    // distribution and mean, 11 entities, 6 valid rooms, the same rating block and the same
+    // demand line. `SAVE_SCHEMA_VERSION` stays 25 and `SUMMARY_SCHEMA_VERSION` stays 4 — no
+    // `World` field was added, and no migration exists, because a ladder is content.
+    stateHash: 'a7e308c6450fe6aa',
   },
   guests: {
     arrived: 32,
@@ -1050,7 +1062,11 @@ const GOLDEN_2_DAYS_SEED_42 =
     // transactions, the same 51,000p, the same 527,000p, the same 6 valid rooms, the same review
     // distribution and mean, and the same two `stars` lines. NOT ONE OTHER CHARACTER MOVES,
     // because showing the feed is G-066b's and this goal wrote no report line for it.
-    'state hash  6191199638412542',
+    // G-060: `6191199638412542` -> `a7e308c6450fe6aa`, for ONE hashed-state cause and NO
+    // behaviour: `World.contentHash`, because ADR-0107 re-tabled `star-tiers.json`. **NOT ONE
+    // OTHER CHARACTER OF THIS GOLDEN MOVES** — the default hotel satisfies tier 2 under both
+    // ladders, so both `stars` lines, the demand line and every count are byte-identical.
+    'state hash  a7e308c6450fe6aa',
   ].join('\n') + '\n';
 
 /**

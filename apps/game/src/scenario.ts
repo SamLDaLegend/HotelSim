@@ -297,13 +297,40 @@ function servesAnything(content: BoundContent, roomType: RoomTypeData): boolean 
  * the HOST deciding what stands on the plot at tick 0, which is the only kind of decision this
  * file has ever been allowed to make.
  *
- * WHAT IS DEFERRED RATHER THAN DELETED, AND IT IS THE POINT OF SHIPPING B: the overrun is real,
- * it is the build loop working, and a player WILL reach it — by building a twelfth bedroom, or
- * a fourth amenity type, or anything else that moves the rating. **It is deferred to the moment
- * the PLAYER causes it, which is the first moment the game can explain it.** Today it cannot:
- * G-062 has not put the rating on screen and no refusal reason is displayed, so an overrun the
- * HOST handed the player at tick 0 would be invisible punishment — a hotel quietly getting worse
- * with nothing saying why, introduced by a goal whose whole purpose is legibility.
+ * ==========================================================================================
+ * G-060 LANDED AND THE PREFERENCE ABOVE BECAME A REQUIREMENT. THE NUMBER DID NOT MOVE.
+ *
+ * ADR-0107 (human) made a tier's amenity clause count COMPLETE SETS, and tier 4 — the tier this
+ * scenario is built to sit on — now asks for TWO of them. So `SERVING_ROOM_COPIES = 2` is no
+ * longer *"a preference inside 2..5"*: it is the smallest value at which this hotel is rated
+ * four stars at all, and the LADDER says so rather than a reading of one run. The lower bound
+ * moved from measured-insufficient to required; the upper bound and the preference argument
+ * above are unchanged and are kept, because they are why 2 rather than 5.
+ *
+ * **THE SCENARIO IS BYTE-IDENTICAL ACROSS THE CHANGE**, which is the control and was measured
+ * rather than assumed. The harness arm that matches what this file seeds — 18 bedrooms, two
+ * amenity copies, one of each facility — reads the same on both ladders: `--days 30 --seed 42
+ * --rooms 18 --amenities 2 --facilities 1 --demand`, one run each, exact integers, win32/12cpu
+ * quiet, **4 stars, 480 arrived, 464 checked out, 0 dissatisfied, 3,944,000p revenue,
+ * 2,629,000p balance** before and after.
+ *
+ * AND THE ONE-COPY ARM THIS BLOCK REJECTED IS NO LONGER PUNISHED, WHICH RETIRES THE DEFERRAL
+ * BELOW RATHER THAN SATISFYING IT. ~~"the overrun is real, it is the build loop working, and a
+ * player WILL reach it — by building a twelfth bedroom, or a fourth amenity type, or anything
+ * else that moves the rating."~~ **STRUCK.** Under the new ladder one copy each does not earn
+ * the fourth star, so the demand that overran the building is never granted: the same arm at
+ * `--amenities 1` reads 4 stars / 243 dissatisfied / 707,000p BEFORE and 3 stars / ZERO
+ * dissatisfied / 792,000p AFTER. A player can still overrun a hotel — by demolishing an
+ * amenity, or by content that scales differently — but they can no longer do it by BUILDING,
+ * because the rating will not sell a tier the hotel cannot serve. The legibility argument that
+ * follows stands on its own and is why this file still seeds two.
+ * ==========================================================================================
+ *
+ * WHAT WAS DEFERRED RATHER THAN DELETED, AND IT IS THE POINT OF SHIPPING B: **it is deferred to
+ * the moment the PLAYER causes it, which is the first moment the game can explain it.** Today
+ * it cannot: G-062 has not put the rating on screen and no refusal reason is displayed, so an
+ * overrun the HOST handed the player at tick 0 would be invisible punishment — a hotel quietly
+ * getting worse with nothing saying why, introduced by a goal whose whole purpose is legibility.
  * ==========================================================================================
  */
 const SERVING_ROOM_COPIES = 2;

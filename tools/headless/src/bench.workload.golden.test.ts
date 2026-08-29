@@ -557,7 +557,13 @@ describe('the I5 bench workload hashes to a committed literal', () => {
     //   for a tick before it turns in. Journeys are one cell and one tick longer, which on this
     //   workload — sixty bedrooms behind TWO amenities, the most starved arm in the project —
     //   turns five completed stays into walk-outs. The outcome test below carries the split.
-    expect(hashState(plain)).toBe('7a19fc0f9477a733');
+    // - `7a19fc0f9477a733` -> `186f1a5f3a22ff2b` AT G-060, AND IT IS `World.contentHash` AND
+    //   NOTHING ELSE. ADR-0107 re-tabled `star-tiers.json` so that a tier's amenity clause counts
+    //   COMPLETE SETS, and the fingerprint hashes the injected content whether or not this
+    //   workload's rating reads it — nothing in `packages/sim` does. No `World` field, no save
+    //   bump, no migration. **THE OUTCOME TEST BELOW DID NOT MOVE, WHICH IS THE CONTROL**: the
+    //   same 100 arrived, 27 checked out, 59 dissatisfied, 14 still in the hotel.
+    expect(hashState(plain)).toBe('186f1a5f3a22ff2b');
   });
 
   it('and its outcomes are the hand-checked ones, so the hash is not the only claim', () => {
@@ -1004,7 +1010,10 @@ describe('the same workload with the player churning the building', () => {
     //   no `World` field and no save bump. The eviction count this arm exists to produce moves by
     //   one (25 -> 24) because a guest spends its stay in slightly different places, and the
     //   conservation still closes.
-    expect(hashState(churn)).toBe('fb0f09a36a1d24d7');
+    // `fb0f09a36a1d24d7` -> `cc271243434506ff` AT G-060: `World.contentHash` and nothing else,
+    //   because ADR-0107 re-tabled `star-tiers.json`. No `World` field, no save bump, no
+    //   migration, and the eviction count this arm exists to produce is unmoved.
+    expect(hashState(churn)).toBe('cc271243434506ff');
   });
 
   it('and it really does evict, or this arm is the plain one wearing a different name', () => {

@@ -103,16 +103,31 @@ function namesOf(content: BoundContent, roomTypeIds: readonly ContentId[]): stri
  *   rooms          `12 Standard Room`               — SCALE. Twelve bedrooms is twelve bedrooms.
  *   distinctTypes  `2 kinds of Conference Hall/Spa/Theatre` — VARIETY, which is a different
  *                  question and must not read as a room count.
+ *   sets           `3 sets of Games Room/Cafe/Lounge` — LOAD (G-060). Three of EACH, which is
+ *                  nine rooms, and it must not read as either of the two above: a player who
+ *                  read it as `distinctTypes` would buy three rooms and a player who read it as
+ *                  `rooms` would buy three of the cheapest.
  *
- * A TWO-WAY TEST AND NOT AN EXHAUSTIVE SWITCH, which is `haveFor`'s shape in the simulation and
- * is copied deliberately rather than improved on: `cloneStarTier` refuses any counting outside
- * `STAR_TIER_COUNTINGS` at bind time, so a third mode cannot reach here. A goal that adds one
- * edits that guard and this line together.
+ * AN EXHAUSTIVE SWITCH, WHICH IS `haveFor`'s SHAPE IN THE SIMULATION and is copied deliberately
+ * rather than improved on — both were two-way tests until G-060 added the third mode, and both
+ * changed in that goal because a HUD that silently prints a clause in the wrong unit is worse
+ * than one that prints nothing. `cloneStarTier` refuses any counting outside
+ * `STAR_TIER_COUNTINGS` at bind time, so the fall-through is unreachable; it names the mode
+ * rather than guessing at it, which is the only honest thing a bill can say about a unit it
+ * does not know. A goal that adds a fourth mode edits that guard, `haveFor` and this together.
  */
 function clauseOf(content: BoundContent, roomTypeIds: readonly ContentId[], counting: StarTierCountingData, minimum: number): string {
   const names = namesOf(content, roomTypeIds);
-  if (counting === 'rooms') return `${minimum} ${names}`;
-  return `${minimum} ${minimum === 1 ? 'kind' : 'kinds'} of ${names}`;
+  switch (counting) {
+    case 'rooms':
+      return `${minimum} ${names}`;
+    case 'distinctTypes':
+      return `${minimum} ${minimum === 1 ? 'kind' : 'kinds'} of ${names}`;
+    case 'sets':
+      return `${minimum} ${minimum === 1 ? 'set' : 'sets'} of ${names}`;
+    default:
+      return `${minimum} ${String(counting)} of ${names}`;
+  }
 }
 
 /** What the tier asks for, and what the hotel has — the actionable half. */

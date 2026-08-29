@@ -57,12 +57,29 @@
 // penny while its balance falls 195,000p — so the facility is still a pure cost and the GAIN IS
 // THE RATING'S.
 //
-// AND THE HONEST QUALIFICATION IS NOW THE OTHER WAY ROUND: a rating that buys arrivals can buy
-// arrivals a hotel cannot SERVE. Taking the FIFTH star at two sets of amenities doubles demand
-// into a building whose amenity capacity the ladder never asked to scale, and LOSES MONEY —
-// `--days 365 --seed 42 --amenities 2 --facilities 1 --demand`, one bedroom apart, 23 rooms
-// gives 49,504,000p and 24 rooms gives 47,846,500p with 6,026 disappointed departures where
-// there were none. `demand.report.test.ts` pins it and G-060 owns it.
+// ~~"AND THE HONEST QUALIFICATION IS NOW THE OTHER WAY ROUND: a rating that buys arrivals can
+// buy arrivals a hotel cannot SERVE. Taking the FIFTH star at two sets of amenities doubles
+// demand into a building whose amenity capacity the ladder never asked to scale, and LOSES
+// MONEY… `demand.report.test.ts` pins it and G-060 owns it."~~ **STRUCK AT G-060, WHICH IS THE
+// GOAL THAT SENTENCE NAMED.** The human ruled (ADR-0107) that a tier asks for one amenity SET
+// PER N BEDROOMS rather than one of each kind, and the shipped minimums — 1, 1, 1, 2, 3 — are
+// DERIVED from the guests each tier's own rating brings (`starTierCountingSchema` carries the
+// arithmetic; `amenity.derivation.test.ts` re-runs it against the files on disk). So the rating
+// no longer sells a tier the hotel cannot serve.
+//
+// RE-MEASURED ON THE SAME ARM RATHER THAN ASSUMED, `--days 365 --seed 42 --amenities 2
+// --facilities 1 --demand`, one bedroom apart, one run each, exact integers, win32/12cpu quiet:
+// BEFORE, 23 rooms gave 49,504,000p and 24 rooms gave 45,976,500p with 6,247 disappointed
+// departures. AFTER, both give 49,504,000p and NOBODY is disappointed — the twenty-fourth
+// bedroom stays at four stars and costs 912,500p, which is 365 nights of its own upkeep and
+// nothing else. The build that DOES raise the rating is the third amenity set, and it takes the
+// same hotel to 99,008,000p. (The figures this paragraph replaced — 47,846,500p and 6,026 —
+// were taken before G-046 and are not the readings this tree gives.)
+//
+// WHAT SURVIVES OF THE QUALIFICATION, because the mechanism is unchanged: a rating that buys
+// arrivals CAN buy arrivals a hotel cannot serve. What changed is that the shipped ladder no
+// longer awards one. A retune that raised a tier's bedroom clause without its `sets` clause
+// would put the trap back, and the derivation test is what says so out loud.
 //
 // ------------------------------------------------------------------------------------------
 // DERIVED, NEVER STORED, AND THE PRECEDENT IS I4's.
@@ -176,28 +193,50 @@ function tallyValidRooms(ctx: ValidityContext): ReadonlyMap<ContentId, number> {
 /**
  * What the hotel has, counted the clause's own way.
  *
- * `rooms` sums the tally over the clause's types; `distinctTypes` counts how many of them are
- * present at all.
+ *   rooms          the SUM of the tally over the clause's types.
+ *   distinctTypes  how many of them are present at all.
+ *   sets           the MIN over them: how many complete sets of one-of-each the hotel has
+ *                  (G-060, ADR-0107). The empty set would be `Infinity` under a bare min and
+ *                  is unreachable — `cloneStarTier` refuses a clause naming no room types —
+ *                  so the fold is seeded from the first type rather than from a sentinel.
  *
- * IT IS A TWO-WAY TEST AND NOT AN EXHAUSTIVE SWITCH, AND THAT IS SAID PRECISELY BECAUSE THE
- * DIFFERENCE MATTERS: anything that is not `rooms` is counted as `distinctTypes`. What makes that
- * safe is NOT this line — it is `cloneStarTier`, which refuses any value outside
- * `STAR_TIER_COUNTINGS` at bind time, on the one path every host goes through. **So a third mode
- * cannot reach here, and if one ever could it would be silently counted as variety rather than
- * loudly refused.** A goal adding a mode edits the guard and this line together; `rating.test.ts`
- * pins the refusal so the guard cannot quietly stop being the thing that holds this up.
+ * IT IS AN EXHAUSTIVE SWITCH SINCE G-060 AND IT USED TO BE A TWO-WAY TERNARY, which is worth
+ * one sentence because the two fail differently. The old shape tested for `rooms` and treated
+ * everything else as `distinctTypes`, so an unknown mode was counted as VARIETY and a clause
+ * asking for three kinds could be satisfied by one room. A third mode made that untenable. The
+ * arm below is UNREACHABLE — `cloneStarTier` refuses any value outside `STAR_TIER_COUNTINGS` at
+ * bind time, on the one path every host goes through, and `rating.test.ts` pins that refusal —
+ * and it returns ZERO, so if it ever did run the clause would be unsatisfiable and LOUD in the
+ * shortfall rather than quietly generous. A goal adding a fourth mode edits the guard, this
+ * switch and `apps/game/src/rating.ts`'s `clauseOf` together.
  */
 function haveFor(
   tally: ReadonlyMap<ContentId, number>,
   roomTypeIds: readonly ContentId[],
   counting: StarTierCountingData,
 ): number {
-  let have = 0;
-  for (const roomTypeId of roomTypeIds) {
-    const built = tally.get(roomTypeId) ?? 0;
-    have += counting === 'rooms' ? built : built > 0 ? 1 : 0;
+  switch (counting) {
+    case 'rooms': {
+      let have = 0;
+      for (const roomTypeId of roomTypeIds) have += tally.get(roomTypeId) ?? 0;
+      return have;
+    }
+    case 'distinctTypes': {
+      let have = 0;
+      for (const roomTypeId of roomTypeIds) have += (tally.get(roomTypeId) ?? 0) > 0 ? 1 : 0;
+      return have;
+    }
+    case 'sets': {
+      let have: number | undefined;
+      for (const roomTypeId of roomTypeIds) {
+        const built = tally.get(roomTypeId) ?? 0;
+        have = have === undefined ? built : Math.min(have, built);
+      }
+      return have ?? 0;
+    }
+    default:
+      return 0;
   }
-  return have;
 }
 
 /** Every clause of `tier` the hotel falls short of, in the tier's own clause order. */

@@ -439,19 +439,23 @@ export type StaffRoleData = {
 };
 
 /**
- * HOW A STAR TIER'S REQUIREMENT COUNTS WHAT THE HOTEL HAS (G-051a).
+ * HOW A STAR TIER'S REQUIREMENT COUNTS WHAT THE HOTEL HAS (G-051a, third mode G-060).
  *
  *   rooms          at least `minimum` ROOMS whose type is in the set. Asks for SCALE.
  *   distinctTypes  at least `minimum` of the TYPES in the set are present. Asks for VARIETY,
  *                  and it is the mode that stops a tier being bought by spamming whichever
  *                  entry in the set is cheapest — ADR-0078's dominance arriving through the
  *                  rating instead of through satisfaction.
+ *   sets           at least `minimum` rooms of EVERY type in the set — the MIN over the named
+ *                  types. Asks for LOAD: it is the only mode that can say "twice as many of
+ *                  them", which is what a tier needs in order to claim the hotel can SERVE the
+ *                  guests its own rating brings (ADR-0107, human).
  *
  * A closed union with a `some` guard, exactly as `SEEDED_STOCK_POLICIES` and
  * `ROOM_ACCESS_RULES` are, so a host handing the sim a mode it has no branch for is refused
  * at bind time rather than counted as zero at inspection time.
  */
-export const STAR_TIER_COUNTINGS = ['rooms', 'distinctTypes'] as const;
+export const STAR_TIER_COUNTINGS = ['rooms', 'distinctTypes', 'sets'] as const;
 
 export type StarTierCountingData = (typeof STAR_TIER_COUNTINGS)[number];
 
@@ -3064,13 +3068,17 @@ function cloneStaffRole(role: StaffRoleData): StaffRoleData {
  * SCHEMA'S OPINIONS: the schema produces a designer-facing message with a JSON path, this
  * produces a programmer-facing one, and the alternative is a second, laxer door.
  *
- * `counting` IS CHECKED AGAINST THE CLOSED UNION rather than trusted, AND THIS GUARD IS THE ONLY
- * THING HOLDING IT UP. `haveFor` in `rating.ts` is a TWO-WAY TERNARY and not an exhaustive switch —
- * it tests for `rooms` and treats everything else as `distinctTypes` — so an unknown mode reaching
- * it would be counted as VARIETY and a clause asking for three distinct types could be satisfied by
- * one room. (This block said "would fall through `starRatingOf`'s SWITCH and count as zero" until
- * sweep 1: there is no switch, and the wrong branch is the generous one rather than the empty one.
- * Two descriptions of one mechanism, one of them wrong, inside the guard's own justification.)
+ * `counting` IS CHECKED AGAINST THE CLOSED UNION rather than trusted, AND THIS GUARD IS STILL THE
+ * ONLY THING HOLDING IT UP — but what it holds up changed at G-060 and the change is recorded here
+ * rather than left for a reader to discover. `haveFor` in `rating.ts` WAS a two-way ternary that
+ * tested for `rooms` and treated everything else as `distinctTypes`, so an unknown mode reaching it
+ * was counted as VARIETY and a clause asking for three distinct types could be satisfied by one
+ * room. A THIRD MODE made that shape untenable, so `haveFor` is now an EXHAUSTIVE SWITCH over this
+ * union whose unreachable arm returns ZERO. **The guard's job is unchanged and its stakes are
+ * lower**: an unknown mode now makes a clause UNSATISFIABLE — a ceiling nobody can pass, loud in
+ * the shortfall — rather than satisfiable by one room. Both are wrong; only one is silent.
+ * (This block said "would fall through `starRatingOf`'s SWITCH and count as zero" until G-051a's
+ * sweep 1, when there was no switch. There is one now, and it counts zero.)
  */
 function cloneStarTier(tier: StarTierData): StarTierData {
   const stars = tier.stars;

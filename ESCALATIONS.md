@@ -2382,3 +2382,72 @@ FAILING again and is asserted as false rather than absorbed.** It is a CONTENT q
 a scorer one and it is parked with its falsification test (`PARKING.md`), because choosing a mood
 ceiling by which distribution looks better is exactly the §2.1 order this escalation exists to
 avoid.
+
+---
+
+## E-015 — THE FIRST RUNG IS NOW UNAFFORDABLE FROM A BARE PLOT. ADR-0107 fixed the trap at the top of the ladder and put a wall at the bottom.
+
+**Raised 2026-08-29 at G-060's VERIFY. Found by the builder, flagged rather than fixed, and
+confirmed by the orchestrator from the content files.**
+
+### The arithmetic, and every figure is a file on disk
+
+ADR-0107 (human) made a tier ask for **one amenity SET per N bedrooms**. The derivation gives
+**1, 1, 1, 2, 3 sets** at one to five stars — sound, re-derived independently, and not in question.
+
+**Tier 1 therefore asks for one bedroom AND one amenity set**, because the ceiling forces at least
+one provider per engagement need. An amenity set is **one of each amenity type** — `hotel_lounge`,
+`games_room`, `hotel_cafe` — so tier 1 is **four rooms**.
+
+| | | file |
+|---|---|---|
+| room build cost | 250,000p each, so tier 1 costs **1,000,000p** | `room-types.json` |
+| opening capital | **500,000p** | `scenarios.json` |
+| loan principal | **300,000p** | `economy.json` |
+| **maximum ever available** | **800,000p** | |
+
+**Short by 200,000p, and permanently** — `canDrawLoan` grants only while
+`balance + liquidation < minConstructionCost`, so with three rooms standing (liquidation 375,000p)
+a draw fires below −125,000p and lands the balance at **at most 175,000p**, under the 250,000p a
+fourth room costs.
+
+**MEASURED, not argued**: a bare plot that builds and borrows every day reaches **THREE rooms at
+365 days and THREE at 1,000 days**, with **362 and 997 refusals**. Under the old ladder that same
+three-room hotel — bedroom, games room, lounge — traded at **1 star**. **It now scores zero.**
+
+### WHAT IS AND IS NOT BROKEN, KEPT APART
+
+- **THE SHIPPED GAME IS FINE AND THAT IS MEASURED**: the scenario `apps/game` starts is
+  **byte-identical** before and after — 4 stars, 480 arrived, 464 out, 0 dissatisfied, 3,944,000p.
+  **A stranger does not meet this on turn one**, which is why this is an escalation and not a stop.
+- **THE BUILD-FROM-NOTHING PATH IS BROKEN.** That path is the build loop's own claim — *spend cash,
+  add capacity, raise rating, raise demand* — starting from zero.
+- **AND IT DECIDES WHAT THE LOSE STATE MEANS, WHICH IS THE PART THE ORCHESTRATOR ADDS.** The next
+  goal in the queue is bankruptcy. **A lose state plus an unreachable first rung makes going broke
+  TERMINAL** — a player who loses their rooms can never climb back, because the ladder's bottom rung
+  costs more than the game will ever lend them. **That may be the right design. It must not be an
+  accident**, and today it would be one.
+
+### The three answers, with their prices
+
+- **(a) RAISE THE OPENING CAPITAL AND/OR THE LOAN.** One or two fields in `scenarios.json` /
+  `economy.json`. **It moves every measured balance in the project** — every economic figure in
+  every ledger is taken against 500,000p of opening capital.
+- **(b) MAKE TIER 1 CHEAPER — ask for a bedroom and NOTHING else, as it did before.** Keeps the
+  proportional clause from tier 2 up. **But the reason tier 1 gained a set is that a bedroom-only
+  hotel EARNS ZERO** (measured: 40 arrived, 0 checked out, 40 dissatisfied), so this restores a
+  first rung that describes a hotel which cannot trade — the exact defect G-060's block opened with.
+- **(c) MAKE AN AMENITY SET SMALLER**, so a set is fewer than three rooms. That is a change to what
+  amenity TYPES exist or to what a need requires — the largest content change of the three, and it
+  touches the need model rather than the ladder.
+
+**No recommendation is offered on (a) versus (c)**; (b) is the one the orchestrator would argue
+against, because it re-opens a defect this goal exists to close. **(a) is the smallest edit and the
+largest blast radius; (c) is the largest edit and the smallest.**
+
+### What is being asked
+
+**Which of the three, and — separately — is bankruptcy meant to be terminal?** The second question
+is not rhetorical: it is the lose-state goal's requirement, and G-067's fifth question asks a
+stranger the same thing. **If the answer is "ask the stranger", this entry says so and the
+lose-state goal waits.**
