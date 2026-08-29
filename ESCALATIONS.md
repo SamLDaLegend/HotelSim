@@ -2385,6 +2385,21 @@ avoid.
 
 ---
 
+## E-015 [RESOLVED 2026-08-29 — human ruling] — THE FIRST RUNG IS NOW UNAFFORDABLE FROM A BARE PLOT.
+
+**Resolution (2026-08-29, ADR-0108): RAISE THE OPENING CAPITAL / LOAN — answer (a).** Making tier 1
+cheaper and shrinking an amenity set were both rejected. **And separately ruled: BANKRUPTCY IS
+RECOVERABLE, not terminal** — which was only available BECAUSE the wall comes down; had it stayed,
+going broke would have been terminal by accident. **The two rulings derive two DIFFERENT fields**:
+`openingCapitalPence` answers *can a new hotel start?* and `loanPrincipalPence` answers *can a broke
+hotel come back?*, and collapsing them into one edit would leave the second ruling unenforced. The
+price was accepted with the ruling: **every measured balance in the project moves**, while revenue,
+arrivals, departures and reviews must be byte-identical — an asymmetry that is the change's own
+cheap check. **G-067's fifth question is NOT pre-empted**: this settles that bankruptcy is
+survivable, not what it should feel like or what tells the player it is happening.
+
+### The original entry follows.
+
 ## E-015 — THE FIRST RUNG IS NOW UNAFFORDABLE FROM A BARE PLOT. ADR-0107 fixed the trap at the top of the ladder and put a wall at the bottom.
 
 **Raised 2026-08-29 at G-060's VERIFY. Found by the builder, flagged rather than fixed, and

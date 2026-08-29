@@ -5190,6 +5190,72 @@ forbids* — and if no requirement can be sourced, **say so and escalate rather 
 **Exit criteria**: the requirement stated and the rung derived from it · `pnpm verify` fourteen rows
 · I2 unchanged, `check:tickcost` a real ratio · the ladder's own gate green.
 
+## G-046b — A guest leaves through the door it came in by
+Status: **IN-PROGRESS 2026-08-29. Ordered by the human ahead of the lose state: *"guests walking out through walls looks worse."*** Milestone: M5 · Owner pair: ai-engineer / ai-critic
+
+**G-046 answered ENTERING and explicitly did not answer LEAVING.** The seam was offered by the
+builder at PLAN and taken. **Measured on the WATCH surface, seed 7, 2,880 ticks: of the 267
+through-wall moves that remain, 248 are guests walking OUT.** Entering fell 64 -> 19.
+
+### WHY IT IS A DIFFERENT MECHANISM AND NOT THE SAME FIX MIRRORED
+
+**(b) is an APPROACH rule: it changes where a guest is HEADED.** `doorLeg` rewrites the leg target
+to the doorway when the leg target IS the destination room. **An exit depends on where the guest
+IS**, not on where it is going — the guest is already inside, and the thing that must be constrained
+is its FIRST step rather than its last.
+
+**THE RISK THE G-046 BUILDER NAMED AND WOULD NOT TAKE BLIND: LIVELOCK.** `stepTowards`' fallback
+returns an untested candidate when nothing is walkable. **Constrain the exit and that fallback can
+drop a guest into a THIRD room**, from which the same constraint applies again. **A guest that
+cannot legally leave anywhere is a guest that never leaves**, and the eviction and departure
+accounting has no vocabulary for it. *That is the design question this goal must answer before it
+writes the constraint, not after.*
+
+### WHAT IT MAY NOT DO
+
+- **It may not become (c).** ADR-0102-era cost still stands: a route search per guest per tick was
+  measured at 1.70x-1.91x and refused twice. **`check:tickcost`'s 1.4640 bound is the row that
+  tests this**, and G-046 came in at 1.0237 by adding no search at all. Match that discipline.
+- **It may not delete `stepTowards`' fallback.** It is documented in two places as the
+  anti-stranding guarantee, and removing it is a behaviour design question — what does the guest do
+  instead: stand, queue, give up? — that also changes what `unreachable` means. **If this goal needs
+  the fallback changed, that is an escalation, not a decision.**
+- **It may not touch `validity.ts`'s six reasons or their order.**
+
+### THE ECONOMICS WILL MOVE AGAIN, AND TWO GOALS NOW DEPEND ON THE ARMS
+
+**G-046 lengthened journeys and moved the five-star gap 76,500p -> 204,000p.** This goal lengthens
+them again. **AND G-060 JUST RE-TABLED THE LADDER AGAINST THE POST-G-046 ECONOMICS** — its
+verification arms are the ones this change perturbs, so **re-running them is part of THIS goal's
+delta, not a separate exercise.**
+
+**Baseline first, then the delta**, one deterministic run per arm — **no medians; these are exact
+integers and repetition buys nothing.** Every figure names its arm (ADR-0105). The arms are G-060's:
+`--days 30 --seed 42 --facilities 1 --demand` at 23/2 sets, 24/2 sets, 24/3 sets, plus the shipped
+scenario arm and both tails.
+
+> **A LADDER THAT WAS ZERO-DISSATISFIED AT EVERY RUNG MUST STILL BE ZERO-DISSATISFIED**, or G-060's
+> repair has been partly undone by this goal and that is the headline rather than a footnote.
+
+### Exit criteria
+
+1. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **I2 will move**; predict
+   which arms move and which do not.
+2. `pnpm check:tickcost` **MEASURED**, not INCOMPARABLE, inside 1.4640.
+3. **The through-wall census**: 267 of 1,832 is the standing reading, of which **248 leaving / 19
+   entering / 111 corridor-to-corridor**. Report the new split. **A non-zero residue is acceptable
+   if each remaining class is named**; reaching zero by disabling the census is not.
+4. **No guest is stranded.** Whatever guards against livelock is asserted by a test that FAILS
+   without it — an anti-vacuity arm, not a hope.
+5. **G-060's arms re-run**, with the dissatisfied column called out.
+6. **WATCH #37 with a frame reference**: a guest observed leaving through its doorway. *(Numbering
+   note: G-067's playtest WATCH will take the next free number when it runs.)*
+
+### Out of scope
+
+A player-placed door, a drawn door sprite, anything that adds a search, and the `stepTowards`
+fallback.
+
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
 Status: **PLANNED 2026-08-29. Blocked on G-060 and G-046b landing; the PROTOCOL is not blocked and is stated here.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
 

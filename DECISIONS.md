@@ -10355,3 +10355,63 @@ out of concurrent demand over per-set throughput.**
 4. **I3 holds: this is a content change.** `star-tiers.json` and its schema. If the clause shape
    needs a new field, the schema carries the derivation at the point of use, exactly as
    `partiesPerDaySchema` does.
+
+---
+
+## ADR-0108 — THE PURSE IS RAISED AND BANKRUPTCY IS RECOVERABLE. Two rulings, and they turn out to derive two DIFFERENT fields.
+
+**RULED 2026-08-29 BY THE HUMAN**, resolving E-015 and specifying the lose-state goal.
+
+1. **Raise the opening capital / loan** so the ladder's bottom rung is reachable from a bare plot.
+   *Rejected: making tier 1 cheaper (it re-opens the "a bedroom-only hotel earns ZERO" defect that
+   G-060 exists to close) and shrinking an amenity set (it changes the need model rather than the
+   ladder).*
+2. **Bankruptcy is RECOVERABLE, not terminal.** A player who goes broke can climb back.
+
+### THE TWO RULINGS ARE COUPLED, AND THAT IS WHY THEY ARE ONE ADR
+
+**"Recoverable" was not free to choose alongside "leave the wall".** A lose state you can climb back
+from REQUIRES a reachable bottom rung; had the wall been left standing, going broke would have been
+terminal by accident. **The human's first answer is what makes the second one available.**
+
+### AND THEY DERIVE TWO DIFFERENT FIELDS, WHICH IS THE FINDING
+
+The obvious reading is *"raise the purse"* as one edit. It is two, with two separate requirements,
+and **collapsing them would leave one of the two rulings unenforced**:
+
+- **`openingCapitalPence` answers: CAN A NEW HOTEL START?** Requirement: *a bare plot can build the
+  first tier.* Tier 1 is four rooms — one bedroom plus a set of one lounge, one games room, one
+  cafe — at 250,000p each, so **1,000,000p**, and the figure is read off `room-types.json` and
+  `star-tiers.json` rather than chosen.
+- **`loanPrincipalPence` answers: CAN A BROKE HOTEL COME BACK?** Requirement: *a hotel that has lost
+  its rooms can borrow its way to the first tier again.* **That is ruling 2 expressed as an
+  integer**, and it is NOT the same requirement — it interacts with `canDrawLoan`'s gate, which
+  grants only while `balance + liquidation < minConstructionCost`, and with whatever liquidation
+  value the wreckage still carries.
+
+> **§2.1 GOVERNS BOTH: the amounts are DERIVED FROM THOSE TWO SENTENCES, not chosen to look
+> generous.** A capital figure picked by eye is a superstition with CI access, and this project has
+> a live instance of exactly that in `check:scaling`.
+
+### THE PRICE, ACCEPTED WITH THE RULING RATHER THAN DISCOVERED AFTER IT
+
+**EVERY MEASURED BALANCE IN THIS PROJECT WAS TAKEN AGAINST 500,000p OF OPENING CAPITAL.** Raising it
+moves every balance figure in every ledger, every goal block and every economic test — while leaving
+REVENUE, arrivals, departures and reviews untouched, because capital is an opening position and not
+a rate.
+
+**That asymmetry is the cheap check and it is a PREDICTION, made before the build**: a run's revenue
+and departure columns must be **byte-identical** across the change, and only balances may move, by
+**exactly the capital delta** on any arm that does not become newly able to build. **An arm whose
+revenue moves has found something else**, and it is a finding rather than an inconvenience.
+
+### What this obliges
+
+- **A goal of its own** — it is a content edit with a project-wide re-measurement, not a footnote to
+  G-060. The lose-state goal DEPENDS on it: *recoverable* cannot be built while recovery is
+  arithmetically impossible.
+- **E-015 is RESOLVED by this entry** and stops blocking.
+- **G-067's fifth question stands and is NOT pre-empted.** It asks a stranger what they thought
+  losing would look like. **This ADR settles that bankruptcy is survivable; it does not settle what
+  it should FEEL like, or what tells the player it is happening** — and that is still the stranger's
+  to answer.
