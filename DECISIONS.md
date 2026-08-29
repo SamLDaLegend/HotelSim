@@ -10273,3 +10273,85 @@ about one clause), and now this. **Every one is a sentence that was true in the 
 for and false in the job it was moved to.** The general form: *a claim's warrant does not travel
 with its words.*
 
+
+---
+
+## ADR-0107 — THE AMENITY CLAUSE SCALES WITH THE HOTEL. A rating that counts variety says the hotel owns one of everything; a rating that counts load says it can serve its guests.
+
+**RULED 2026-08-29 BY THE HUMAN**, on G-060's first exit criterion — *a stated design statement for
+the new ladder, BEFORE any table is edited.* G-051's block said this choice **is a design statement,
+not a derivation**, and it was put to the human with four options and the measured evidence.
+
+### The ruling
+
+**A tier asks for one amenity SET PER N BEDROOMS, not "one of each kind".** The clause shape
+changes; the rating stops being a claim that the hotel OWNS one of everything and becomes a claim
+that it can SERVE the guests its own rating brings.
+
+Rejected, with reasons, so they are not re-argued:
+
+- **Widen the ladder (more rungs).** G-061 already measured that **the rung at which the ladder
+  turns negative is a FUNCTION of amenity density**, so a wider ladder with a variety-only clause
+  moves the trap to a different rung instead of removing it.
+- **Cap the rating by measured capacity.** Smallest content change, but it derives the rating partly
+  from live occupancy and so contradicts the line the game already puts on screen — *"what the hotel
+  HAS, not what its guests said"* — and ADR-0082's separation of the rating from reputation.
+
+### The defect it repairs, re-measured AFTER G-046 rather than inherited
+
+`--days 30 --seed 42 --facilities 1 --demand`, one deterministic run per arm, exact integers, no
+aggregation, regime win32/12cpu quiet. *(One run IS the reading: these are integers out of a
+deterministic sim. Medians are for stopwatches.)*
+
+| arm | stars | arrived | checkedOut | leftDissatisfied | revenue | balance |
+|---|---|---|---|---|---|---|
+| 23 bedrooms, 2 amenity sets | 4 | 480 | 464 | **0** | 3,944,000p | 2,254,000p |
+| 24 bedrooms, 2 amenity sets | **5** | 960 | 440 | **498** | 3,740,000p | 1,975,000p |
+| 24 bedrooms, 3 amenity sets | 5 | 960 | **928** | **0** | **7,888,000p** | 5,988,000p |
+
+**Taking the fifth star costs 204,000p of revenue and 279,000p of balance. Adding one amenity set
+instead DOUBLES revenue at the same 24 bedrooms and the same 960 arrivals.** One clause apart.
+
+**THE TRAP DEEPENED AT G-046 AND THE DIRECTION IS THE EVIDENCE**: the same gap was 76,500p before
+the door landed. A door lengthens journeys, which costs most exactly where guests are already
+queueing for a provider — so the two goals agree about where this economy hurts.
+
+### N IS DERIVED, NOT CHOSEN — and two fitted points are NOT a derivation (§2.1)
+
+*"One set per 8 bedrooms"* **fits both measured sizes under a ceiling** — `ceil(12/8) = 2` and
+`ceil(24/8) = 3`, and 2 and 3 are exactly the counts that measured ZERO storm-outs at 12 and 24
+bedrooms. **That is a prediction to check, NOT the derivation**, and shipping 8 because it fits two
+points would be *"a number nobody can source"* — a superstition with CI access.
+
+**The requirement to derive from, and it is `partiesPerDaySchema`'s own shape:** *a hotel that meets
+a tier's clauses can SERVE the guests that tier's rating brings.* The inputs are all files on disk —
+`demand.json`'s `partiesPerDayByStars` gives the arrivals a rating earns, `guest-rules.json` gives
+party size and stay length, and provider capacity per amenity set is content. **Sets needed falls
+out of concurrent demand over per-set throughput.**
+
+> **AND THE PROXY IS NAMED RATHER THAN ASSUMED.** Amenity load is driven by ARRIVALS, which are
+> driven by the RATING — not by bedrooms directly. **Bedrooms are a proxy** and the clause is
+> expressed in them because that is what a player can count while building. **If the derivation
+> gives a bedroom ratio that is not constant across tiers, the TABLE carries the per-tier number and
+> the ratio is not forced to exist.**
+
+### What this obliges, and one of them reopens a ruling
+
+1. **ADR-0102 AMENDMENT 2 §3 IS MADE SHARPER, NOT MERELY REOPENED.** It rules that *the scale clause
+   and the facility clause cannot be satisfied at the same time* — small enough to afford facilities
+   and you have too few bedrooms; large enough for the bedrooms and upkeep eats the cash the
+   facilities need — **and tier 5 asks for both.** A proportional amenity clause **adds a third
+   thing to buy at the tier where money is already tightest.** *(An earlier orchestrator framing
+   called §3's "scale clause" a size-proportional clause. It is not: it is the BEDROOM-COUNT clause.
+   Corrected here at the point of use.)* **G-060 must answer whether the top tier is reachable
+   under the new clause, or state which rung is the wall and why that is the design** — which is
+   already its third draft exit criterion.
+2. **`demand.report.test.ts`'s pin goes RED by design.** It pins *"one build raises the rating and
+   STRICTLY LOSES MONEY"* at 204,000p, and this ruling exists to make that false. **A red there is
+   the goal succeeding**, and the test is rewritten to pin the repaired property rather than deleted.
+3. **The first rung still describes a hotel that cannot trade** — tier 1 asks for one bedroom and
+   nothing else, and a bedroom-only hotel earns ZERO. The new clause shape must say what tier 1
+   asks for, because `ceil(1/N)` is 1 amenity set and that is a different first rung from today's.
+4. **I3 holds: this is a content change.** `star-tiers.json` and its schema. If the clause shape
+   needs a new field, the schema carries the derivation at the point of use, exactly as
+   `partiesPerDaySchema` does.

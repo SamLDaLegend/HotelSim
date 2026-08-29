@@ -4597,7 +4597,48 @@ therefore a save bump; parked with its test already run).
 Critique rounds used: 1/3
 
 ## G-060 — The star ladder's two flat regions, and the amenity clause that counts variety instead of load
-Status: **pending.** Milestone: M4 · Owner pair: economy-engineer / balance-critic
+Status: **IN-PROGRESS 2026-08-29. THE DESIGN STATEMENT IS RULED (ADR-0107, human), which is this goal's own FIRST exit criterion.** Milestone: **M5** *(was M4; ADR-0105 re-scoped M4 to settlement, wages and demand, so this goal outlived the milestone that named it)* · Owner pair: economy-engineer / balance-critic
+
+> **RULED: THE AMENITY CLAUSE SCALES WITH THE HOTEL — one amenity SET PER N BEDROOMS, not "one of
+> each kind".** The rating stops claiming the hotel OWNS one of everything and starts claiming it
+> can SERVE the guests its own rating brings. **Widening the ladder was REJECTED** because G-061
+> measured that the negative rung is a FUNCTION of amenity density, so more rungs move the trap
+> rather than remove it; **capping the rating by live capacity was REJECTED** because it contradicts
+> the line already on screen, *"what the hotel HAS, not what its guests said"*.
+
+**THE EVIDENCE IS RE-MEASURED AFTER G-046, NOT INHERITED** — every figure in the analysis below this
+banner predates the door. `--days 30 --seed 42 --facilities 1 --demand`, one deterministic run per
+arm *(one run IS the reading; medians are for stopwatches)*:
+
+| arm | stars | arrived | checkedOut | leftDissatisfied | revenue | balance |
+|---|---|---|---|---|---|---|
+| 23 bedrooms, 2 sets | 4 | 480 | 464 | **0** | 3,944,000p | 2,254,000p |
+| 24 bedrooms, 2 sets | **5** | 960 | 440 | **498** | 3,740,000p | 1,975,000p |
+| 24 bedrooms, 3 sets | 5 | 960 | **928** | **0** | **7,888,000p** | 5,988,000p |
+
+**The fifth star costs 204,000p of revenue; one more amenity set at the SAME 24 bedrooms and the
+SAME 960 arrivals DOUBLES it.** The gap was 76,500p before the door landed — **G-046 deepened it,
+and the two goals agree about where this economy hurts.**
+
+**N IS DERIVED, NOT CHOSEN, AND TWO FITTED POINTS ARE NOT A DERIVATION.** *"One set per 8 bedrooms"*
+fits both measured sizes under a ceiling — `ceil(12/8) = 2`, `ceil(24/8) = 3`, which are exactly the
+counts that measured ZERO storm-outs — **but that is a PREDICTION TO CHECK.** Shipping 8 because it
+fits two points is §2.1's superstition with CI access. Derive it from the requirement *a hotel that
+meets a tier can SERVE the guests that tier brings*, whose inputs are all on disk: `demand.json`'s
+`partiesPerDayByStars`, `guest-rules.json`'s party size and stay length, and per-set provider
+capacity. **Amenity load is driven by ARRIVALS, not by bedrooms — bedrooms are a PROXY, named as
+one — so if the derivation gives no constant ratio, the table carries a per-tier number and the
+ratio is not forced to exist.**
+
+**THREE OBLIGATIONS THIS INHERITS**, and the first is a ruling made sharper rather than reopened:
+**(1)** ADR-0102 amendment 2 §3 rules that the bedroom-count clause and the facility clause cannot
+both be satisfied, and tier 5 asks for both — **a proportional amenity clause adds a THIRD thing to
+buy at the tier where money is already tightest**, so this goal must show the top tier is reachable
+or say which rung is the wall and why that is the design. **(2)** `demand.report.test.ts`'s pin goes
+**RED BY DESIGN** — it pins *"one build raises the rating and STRICTLY LOSES MONEY"* and this goal
+exists to make that false; it is REWRITTEN to pin the repaired property, never deleted. **(3)** Tier
+1 asks for one bedroom and nothing else, and **a bedroom-only hotel earns ZERO** — `ceil(1/N)` is
+one amenity set, which is a different first rung from today's, and the goal must say so deliberately.
 Statement: **demand responds to the rating everywhere a player can build, not only between the rungs.**
 
 **G-051b HANDS IT THREE MEASURED THINGS AND ONE OPEN RULING.**
@@ -5100,6 +5141,77 @@ forbids* — and if no requirement can be sourced, **say so and escalate rather 
 
 **Exit criteria**: the requirement stated and the rung derived from it · `pnpm verify` fourteen rows
 · I2 unchanged, `check:tickcost` a real ratio · the ladder's own gate green.
+
+## G-067 — A stranger plays it, and the protocol is written BEFORE they do
+Status: **PLANNED 2026-08-29. Blocked on G-060 and G-046b landing; the PROTOCOL is not blocked and is stated here.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
+
+**Nobody who does not already know how this game works has ever played it.** WATCH #33 is the only
+human observation in the project and it is the human who commissioned the game, wrote its charter
+and ruled on its design. **That is the most informed possible player, and this goal needs the least
+informed one.**
+
+> **THE PRINCIPLE, AND EVERY RULE BELOW FOLLOWS FROM IT: A STRANGER'S VALUE IS THEIR IGNORANCE, AND
+> IT IS SPENT THE FIRST TIME SOMEBODY EXPLAINS SOMETHING TO THEM.** They cannot tell us whether the
+> amenity ratio should be 8. They can tell us what they understood, what they tried, and what they
+> never noticed — and **no agent and no informed human can answer those at all.**
+
+### WHY A PLAYTEST IS WORTH MORE HERE THAN IT USUALLY IS
+
+**`export session` makes the session a REPRODUCIBLE ARTEFACT.** It writes the seed, the command log
+and the state hash, and G-031b replays it headless. So a stranger's subjective report can be
+**anchored to frames afterwards** — which is what ADR-0013 demands (*a "reads as stupid" finding
+requires a frame reference*) and what an ordinary playtest can never supply. **The report says what
+they felt; the log says what happened; the replay reconciles them.**
+
+### THE FIVE THINGS, AND ONLY THESE
+
+A protocol that asks twenty questions gets twenty shallow answers.
+
+1. **THE FIRST FIVE MINUTES, UNPROMPTED.** What did they think the game wanted? What did they build
+   first? **Did they build at all?** The only test of whether the opening position teaches itself.
+   *Falsified if they sit still, or build at random.*
+2. **DOES THE RATING READ AS AN INSTRUCTION?** The panel says `next 5 stars: 24 Standard Room — has
+   18`. **G-062's claim is that a player asks three questions — *what am I* / *why am I that* /
+   *what next* — and nobody has checked that a stranger reads the third line as WHAT NEXT.** Did
+   they act on it? Did they see it?
+3. **DO THEY NOTICE GUESTS WALKING THROUGH WALLS — UNPROMPTED?** The human noticed inside one
+   session, unasked (E-012). **THIS QUESTION IS DESTROYED BY ASKING IT.** Observed only, never
+   posed. *If a stranger does not notice, that recalibrates what G-046b was worth; if they do, it
+   confirms the ruling.*
+4. **DID THE REMARKS LAND?** Did they read the feed? Did a line make them laugh, or change what they
+   built? **G-066b bought character and WATCH #35 could not test the populated panel** — a stranger
+   is the only route to closing it.
+5. **WHEN DID THEY STOP, AND WHY?** Boredom, confusion, satisfaction, or a bug. **And ask what they
+   thought LOSING would look like — whatever they answer IS the requirement**, because a lose state
+   nobody anticipates is not a stake, it is a surprise. *This question specifies the lose-state goal
+   rather than reporting on it.*
+
+### WHAT MUST NOT HAPPEN — each one silently voids a result
+
+- **Do not explain a system** before or during. Not the star tiers, not corridors, not doors.
+- **"What do I do now?" is answered with "whatever you like"** and nothing else.
+- **Do not ask about balance, difficulty or fairness.** They have no basis and will invent one, and
+  an invented answer is indistinguishable from a real one in the write-up.
+- **Do not ask leading questions about known defects.** Every one of E-012, E-013 and WATCH #34 is a
+  thing we already believe; asking about it converts a test into a confirmation.
+
+### ARTEFACTS THE SESSION MUST PRODUCE
+
+The exported session file · anything said out loud · the wall-clock time they stopped.
+
+### Exit criteria
+
+- **WATCH #37** in `JOURNAL.md`, written from the session, **separating what was OBSERVED from what
+  was REPORTED** — the two have different standing and WATCH #33 already keeps them apart.
+- **Every finding either carries a frame reference from the replayed log, or is explicitly marked as
+  unanchorable** (a comprehension finding usually is, and that is fine — it must just say so).
+- **The lose-state goal's requirement is written from answer 5**, not from the orchestrator's guess.
+
+### Out of scope
+
+Tuning anything in response. **This goal GATHERS; it does not fix.** A finding that produces an
+immediate patch has skipped the step where it is written down and weighed against every other
+finding — and with one session's data that is the moment overfitting happens.
 
 ## G-046 — Is a door a place, or a property?
 Status: **DONE 2026-08-29. Option (b) BUILT and MEASURED; the exit half is seamed off as G-046b.** Owner pair: ai-engineer / (orchestrator-verified)
