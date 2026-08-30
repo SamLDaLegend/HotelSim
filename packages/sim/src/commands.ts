@@ -118,9 +118,13 @@ export type Command =
    * and it exists because an item's provision is entirely borrowed from its host room, so an
    * unhosted item is furniture that can never serve anybody.
    *
-   * IT COSTS NOTHING YET, and that is a gap with a name rather than a design: an item price is
-   * a designer's number and `ItemTypeData` has no such field. See `applyPlaceItem` for the
-   * parked question and what would falsify it.
+   * IT COSTS MONEY SINCE G-075a (ADR-0111, human). This paragraph read "IT COSTS NOTHING YET,
+   * and that is a gap with a name rather than a design: an item price is a designer's number and
+   * `ItemTypeData` has no such field" — and `ItemTypeData` gained `purchaseCostPence` in the same
+   * commit that made `applyPlaceItem` book an `itemPurchase` and refuse `insufficientFunds`.
+   * `applyPlaceItem`'s docblock recorded the change and THIS SITE WAS NOT SWEPT, which is
+   * ADR-0084's class: a sentence true when written and falsified by a commit that did not look
+   * here. Found by G-075c's builder while reading for something else.
    */
   | { readonly kind: 'placeItem'; readonly itemType: ContentId; readonly at: Cell }
   /**
