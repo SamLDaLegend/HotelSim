@@ -5691,7 +5691,15 @@ warning ARRIVES IN TIME to act on** — that is perceptual, it is G-067's narrow
 it needs a stranger (ADR-0013).
 
 ## G-071 — BUG: the corridor tool previews a rectangle and lays one cell
-Status: **PLANNED 2026-08-30. Reported by the human. Queued behind G-070, which is live in `apps/game`.** Milestone: M5 · Owner pair: render-engineer / render-critic
+Status: **BINNED 2026-08-30 (ADR-0110). The tool is being deleted; do not fix it.** *(Was PLANNED, reported by the human.)*
+
+> **THE HUMAN RULED THE FLOOR IS THE SHELL**, so circulation becomes the LEFTOVER and the corridor
+> tool goes. **Fixing a drag on a tool being deleted is work with a negative return.**
+>
+> **ITS FINDING IS CARRIED FORWARD RATHER THAN LOST, AND THIS IS THE HALF THAT SURVIVES**: the
+> preview at `main.ts:470` never knew which tool was held — `regionBetween(dragFrom ?? hovered,
+> hovered)` with no reference to `tool` — and **DEMOLISH HAS THE SAME MISMATCH AND SURVIVES THE
+> MODEL CHANGE.** Whoever builds the shell inherits that clause. Milestone: M5 · Owner pair: render-engineer / render-critic
 
 **The human, playing the shipped build:** *"When placing corridors it's not possible to drag/place —
 The drag works but only places a corridor at the end tile."*
@@ -5965,8 +5973,163 @@ stale log fails loudly rather than as two hex strings differing for an unstated 
 Replaying frames into the VIEWER (`tools/viewer` reads recordings, a different format), and any
 change to `exportSession`'s document shape — **it is fine; nothing had read it.**
 
+## G-074 — A stranger's session can be LOOKED AT, not only hash-checked
+Status: **IN-PROGRESS 2026-08-30. NOT a blocker on G-067 — an improvement to its evidence, and labelled one.** Milestone: M5 · Owner pair: render-engineer / render-critic
+
+G-073 made an exported session **replayable**: `pnpm sim:replay` reproduces `finalHash` from a real
+download. **That proves the run happened. It does not show anybody what it looked like.**
+
+**Measured**: `replay.ts` VALIDATES `frameTicks` and emits no frames — no svg, no render.
+`record-frames.ts` takes `--carry`, `--out`, `--walls` and **cannot accept a session**: it does
+`createWorld(seed, content)` then `createScenario(content, world.grid)` and drives its own hotel.
+
+### WHY IT MATTERS FOR EXACTLY ONE CLASS OF FINDING
+
+**ADR-0013**: *"a 'reads as stupid' finding requires a frame reference — recording, tick number, what
+it shows."* A comprehension finding (*"I didn't know what to build"*) is unanchorable anyway and the
+numbers suffice. ***"The guests were doing something weird around there"* needs a picture**, and that
+is the class WATCH exists for.
+
+### AND IT IS HONESTLY NOT A BLOCKER, WHICH IS WHY THIS BLOCK SAYS SO
+
+G-067's criterion reads *"a frame reference from the replayed log, **or is explicitly marked as
+unanchorable**."* **The escape hatch is real and G-067 can complete without this.** *G-073 was
+different — without it a stranger's session could not be shown to have happened at all. This is the
+second M5 extension found by testing a premise, and the distinction is recorded so the pattern
+stays honest rather than becoming a way to keep finding work.*
+
+### The shape
+
+`record-frames.ts` gains a `--session <file>` flag. With it, the world is driven from the session's
+commands instead of `createScenario` — **the same substitution G-073 made in `replay.ts`**, and the
+one place the two must agree.
+
+### Exit criteria
+
+1. **Frames rendered from `fixtures/played-session.json`**, the real download G-073 committed, at
+   ticks the operator names. **Not from a synthesised log** — G-073's criterion, for G-073's reason.
+2. **The replayed world at the filmed tick matches the replay's own**, so a frame and a hash cannot
+   disagree about the same session. **Assert it, do not assume it.**
+3. **Without `--session` the recorder is BYTE-IDENTICAL** to today, frame for frame — the flag is
+   additive, and the existing WATCH surface must not move under it.
+4. `pnpm verify` — fourteen rows, fourteen PASS, exit read from `$?`. **No save bump; `packages/sim`
+   should have a zero-line diff, as G-073 did.**
+
+### Out of scope
+
+Any change to the export format, to `replay.ts`'s document validation, or to what the recorder draws.
+
+## G-075a — Every room type has something worth putting in it
+Status: **PLANNED 2026-08-30. Human-specified: *"each current room type has at least 5 items that could be placed within them, suitable to the room type and serving a purpose (either functionally or decoratively)."*** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+
+**The catalogue is THREE items against SEVEN room types**: `single_bed` (provides nothing),
+`arm_chair` (`guest_comfort`), `vending_machine` (`guest_nourishment`). Item fields are `id`, `name`,
+`provides`, `fitBasisPoints`.
+
+### THE FINDING THAT MAKES THIS MORE THAN A CONTENT CHORE
+
+**FOUR OF THE SEVEN ROOM TYPES PROVIDE NOTHING.** `hotel_lounge`, `hotel_spa`, `conference_hall` and
+`hotel_theatre` have empty `provides` — they count toward the star rating and serve no guest need,
+**which is exactly why G-051b measured a facility as "a PURE COST"**. And an item's provision is
+**borrowed by its host room** (`commands.ts:105`).
+
+> **SO ITEMS ARE NOT DECORATION ON A WORKING SYSTEM — THEY ARE HOW HALF THIS GAME'S ROOM TYPES WOULD
+> ACQUIRE A PURPOSE AT ALL.** A lounge with nothing in it is upkeep; a lounge with seating in it
+> serves comfort. *That is a live economic consequence and it must be MEASURED, not assumed.*
+
+### What is owed
+
+**Every room type has at least FIVE suitable items. An item may suit more than one room** — an arm
+chair belongs in a lounge, a cafe and a theatre — so this is not 35 new rows, and the honest count
+falls out of the design rather than being set here.
+
+**A `suits` FIELD IS NEEDED EVEN IF NOTHING ENFORCES IT**, because the palette has to group by room
+type and the grouping must live in content (I3), not in the UI.
+
+### THE FORK, WITH A RECOMMENDATION — and it does NOT block the catalogue
+
+Whether the SIM refuses an unsuitable placement is a separate decision from whether the catalogue
+exists. **The catalogue is needed under either answer, so build it and leave the rule alone.**
+
+**RECOMMENDED: SUGGEST, DO NOT ENFORCE.** Three reasons, and the third is the strongest:
+`placeItem` today has exactly ONE rule — the cell must be in a room — documented and deliberate;
+ADR-0046 §4.2 called it *"the primary player verb"* without a suitability constraint; and **because
+provision is borrowed by the host room, a vending machine in a bedroom makes that bedroom serve
+nourishment.** *Enforcing suitability would DELETE an emergent player choice that the existing rules
+already make interesting.* **Flagged for the human; not taken here.**
+
+### Exit criteria
+
+1. **Every room type has >= 5 suitable items**, asserted by a test that reads both JSON files on disk,
+   so a later edit that starves a room type goes RED.
+2. **Every item states what it is FOR** — a need it provides, or **explicitly decorative and labelled
+   as inert**. *A decorative item does nothing measurable until G-037a scores rooms on their contents
+   (`HOTELSIM.md`'s third clause, OWED); shipping it unlabelled would be content pretending to a
+   purpose that does not exist yet.*
+3. **THE ECONOMIC CONSEQUENCE MEASURED, arm by arm, one deterministic run each.** Furnishing a
+   lounge with seating gives it a provision it never had — **this can move review scores, dissatisfied
+   departures and the amenity arithmetic G-060 derived.** If the shipped scenario's economics move,
+   that is a FINDING and it is reported, not absorbed.
+4. `pnpm verify` — fourteen rows, fourteen PASS. **I2 will move (`World.contentHash`), by
+   construction, on any content edit.** No save bump.
+
+### Out of scope
+
+The item TOOL (G-075b). Scoring a room on its contents (**G-037a, OWED — this goal must not deliver
+half of it**). Enforcing suitability (open on the human, above).
+
+## G-075b — The player puts something in the room
+Status: **PLANNED 2026-08-30. Follows G-075a. The charter's SECOND CLAUSE.** Milestone: M5 · Owner pair: render-engineer / render-critic
+
+**IT IS NOT A MISSING FEATURE. IT IS A RULED VERB WITH NO BUTTON.** `placeItem` exists
+(`commands.ts:125`) with refusal rules — off-plot, and no room covering the cell — **recorded, never
+thrown**. `commands.ts:105` records that ADR-0046 §4.2 **promoted it out of M6 and made it "the
+primary player verb" alongside the drawing one**. `input.ts`'s tool union is room, corridor,
+demolish. **The simulation has been waiting for a message the player has no way to send.**
+
+> **`HOTELSIM.md:5` IS THREE CLAUSES AND ONLY THE FIRST IS PLAYABLE.** Clause 1 shipped at G-064;
+> clause 3 is marked OWED; **clause 2 carries NO MARK, so it reads as built.** And G-064's block
+> claimed *"§1's opening sentence playable for the first time"* when it had made **one clause of
+> three** playable — ADR-0081's failure inside a single sentence.
+
+### The first measurement, before any code
+
+Room types `require` items and `missingItem` is a validity reason. **When a player draws a room
+today, does it come out INVALID?** If YES this fixes a visible defect; **if NO, something furnishes
+it, and that thing must be FOUND AND NAMED**, because it is doing silently what ADR-0046 §4.2 ruled
+the player should do. *G-064's block reports a drawn 3x2 room on a floor reading `0 invalid`, which
+points at NO — but that is one reading of one room type, quoted from a block rather than measured.*
+
+### Exit criteria
+
+1. **A player can place items**, measured out of the frame or summary, not from the HUD's own report.
+2. **The refusals are reachable and RECORDED** — a cell with no room, and off the plot. *The UI must
+   not pre-empt them: that is the G-031a/G-063 lesson about the UI re-deciding a rule the sim owns.*
+3. **The preview shows ONE CELL for the item tool** and the room tool's rectangle is unchanged.
+   *`main.ts:470` computes `regionBetween(...)` with NO reference to `tool` — G-071's finding, binned
+   with the corridor tool, and THIS HALF SURVIVES.*
+4. `pnpm verify` — fourteen rows, fourteen PASS. **No save bump expected.**
+5. **WATCH with a frame reference**: an item standing in a player-drawn room.
+
+### Out of scope
+
+Moving or removing a placed item (G-036c's editing verbs). Room scoring (**G-037a, OWED**).
+
 ## G-067 — A stranger plays it, and the protocol is written BEFORE they do
-Status: **READY 2026-08-30 — every dependency has landed and this is the ONLY remaining M5 item. It cannot be run by an agent.** Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
+Status: **DEFERRED 2026-08-30 by the human (ADR-0110) — NOT blocked, NOT YET WORTH SPENDING.**
+
+> **THE HUMAN, ASKED WHAT THEY NEEDED TO SUPPLY:** *"I don't know we're at that stage in reality. The
+> end game requires rooms to be built and then items to be added, we have no items here. A stranger
+> will simply put some rooms down and wait, quite bored I anticipate."*
+>
+> **VERIFIED, AND SHARPER THAN THE RULING PUT IT**: `placeItem` EXISTS (`commands.ts:125`) and the UI
+> has NO item tool — **the simulation is waiting for a message the player has no way to send.**
+> `HOTELSIM.md:5` is a THREE-clause sentence; clause 1 shipped at G-064, clause 3 is marked OWED, and
+> **clause 2 carries no mark at all, so it reads as built.**
+>
+> **A stranger's ignorance is a ONE-SHOT instrument — this goal's own founding principle. Spending it
+> on a build that cannot yet show what it is FOR would burn the instrument to learn something already
+> known.** The protocol keeps. G-073's replay and G-074's filming keep. What changes is WHEN. Milestone: M5 · Owner pair: (human-run) / orchestrator-analysed
 
 > **G-060 and G-046b landed, so nothing blocks this but the absence of a person.** The build a
 > stranger would meet is `7cd5be7`: doors both ways, the ladder counting LOAD, the purse at

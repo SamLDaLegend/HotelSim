@@ -10503,3 +10503,64 @@ from the end of its options. **The warning is about the runway, not the sign of 
   perceptual question and still needs a stranger (ADR-0013).
 - **E-016 CLOSES.** The requirement stands and is repriced to 1,000,000; the storey moves from day 3
   to day 13, which the human took with that figure in hand.
+
+---
+
+## ADR-0110 — THE PLAYTEST WAITS FOR ITEMS, AND THE FLOOR IS THE SHELL. Two human rulings, and the first one found a hole in the charter's own opening sentence.
+
+**RULED 2026-08-30 BY THE HUMAN**, in one message, after being asked what was needed from them.
+
+### 1 — THE STRANGER WAITS. *"We have no items here."*
+
+Verbatim: *"I don't know we're at that stage in reality. The end game requires rooms to be built and
+then items to be added, we have no items here. A stranger will simply put some rooms down and wait,
+quite bored I anticipate."*
+
+**VERIFIED BEFORE ACCEPTING, AND IT IS SHARPER THAN THE RULING PUT IT:**
+
+- **`placeItem` EXISTS** — `commands.ts:125`, `{ kind: 'placeItem'; itemType: ContentId; at: Cell }`.
+  **The simulation is waiting for a message the player has no way to send.**
+- **The UI has NO item tool.** `input.ts`'s tool union is room, corridor, demolish. Nothing else.
+- **`HOTELSIM.md:5` is a THREE-CLAUSE sentence and only the first is playable**: *"The player draws a
+  room's footprint, PLACES ITEMS INSIDE IT, and the room is scored on what it contains
+  [OWED — G-037a]."* Clause 1 shipped at G-064. **Clause 3 is marked OWED. CLAUSE 2 CARRIES NO MARK
+  AT ALL** — so it reads as built, and it is not.
+
+> **AND G-064's BLOCK OVER-CLAIMED IN THE WAY THAT HID IT.** It says *"`HOTELSIM.md` §1's opening
+> sentence, playable for the first time in the project's history."* **It made ONE CLAUSE of that
+> sentence playable.** ADR-0081 exists because the loop's terms were descriptions read as
+> specifications; **this is the same failure inside a single sentence** — and the human found it
+> from the outside, in one line, by asking what a stranger would actually DO.
+
+**G-067 IS DEFERRED, AND THE DISTINCTION MATTERS: IT IS NOT BLOCKED, IT IS NOT YET WORTH SPENDING.**
+A stranger's ignorance is a one-shot instrument (G-067's own founding principle). **Spending it on a
+build that cannot yet show what it is FOR would burn the instrument to learn something already
+known.** The protocol, the replay (G-073) and the session-filming (G-074) all keep; what changes is
+WHEN.
+
+**THE NEXT GOAL IS THE CHARTER'S SECOND CLAUSE: the player can place items in a room.**
+
+### 2 — THE FLOOR IS THE SHELL, AND `unsupported` MEASURES AGAINST IT
+
+Verbatim: *"Big area is just going to be the floor and should then allow a floor above, etc. The
+current unsupported measure can then be used against that, rather than a specific room needing to be
+beneath (which is a bit annoying when you are playing)."*
+
+**Three consequences, and the third is a gameplay complaint being fixed rather than a model being
+tidied:**
+
+1. **Circulation is the LEFTOVER, not a declaration.** Whatever is not a room, on a floor that
+   exists, is where people walk. `world.corridors` stops being player-authored.
+2. **A floor above is permitted once the floor below EXISTS AS A FLOOR.**
+3. **`unsupported` measures against THE FLOOR, not against a specific room directly beneath** —
+   *"which is a bit annoying when you are playing"*, which is the whole reason.
+
+> **THE CORRIDOR TOOL GOES, AND SO DOES G-071.** That bug — the corridor tool previews a rectangle
+> and lays one cell — **is not worth fixing on a tool being deleted.** Binned, with its finding kept:
+> the preview never knew which tool was held, and **demolish has the same mismatch and survives the
+> change**, so that half must be carried forward rather than lost with the corridor.
+
+**This is M6-sized and it re-specifies `validity.ts`.** `noCorridor` and `isDeclaredWalkway` are
+load-bearing under ADR-0047 B2 and G-034b; `world.corridors` is SAVED STATE, so this is a schema
+bump that cannot be dodged by deriving — **removing a field is not the trick G-051a and G-066a used.**
+It does not start until the items goal lands.
