@@ -6064,91 +6064,103 @@ one place the two must agree.
 
 Any change to the export format, to `replay.ts`'s document validation, or to what the recorder draws.
 
-## G-075a — Every room type has something worth putting in it
-Status: **PLANNED 2026-08-30. Human-specified: *"each current room type has at least 5 items that could be placed within them, suitable to the room type and serving a purpose (either functionally or decoratively)."*** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+## G-075a — An item costs money, and the charge lands before the button
+Status: **IN-PROGRESS 2026-08-30. RULED (ADR-0111, human). THE MECHANISM, INERT ON SHIPPED CONTENT.** Milestone: M5 · Owner pair: economy-engineer / balance-critic
 
-**The catalogue is THREE items against SEVEN room types**: `single_bed` (provides nothing),
-`arm_chair` (`guest_comfort`), `vending_machine` (`guest_nourishment`). Item fields are `id`, `name`,
-`provides`, `fitBasisPoints`.
+**AN ITEM IS A PROVIDER IN ITS OWN RIGHT.** `content.ts:758`: *"THE GUEST ENGAGES THE ITEM, NOT THE
+ROOM IT STANDS IN. An arm chair in a lounge is the provider; the lounge is the place it stands, and
+it may provide nothing itself."* `isProviding` adds one condition — the item must stand in a VALID
+room. **And `placeItem` books NO transaction** (`tick.ts:536`).
 
-### THE FINDING THAT MAKES THIS MORE THAN A CONTENT CHORE
+**Each provider serves `refillPerTick + 1` = 15 concurrent guests — the same figure G-060's amenity
+derivation rests on.** So a player with twelve bedrooms could place twelve FREE nourishment providers
+and never build a cafe, **dissolving the amenity clause the week it was derived** and re-opening the
+five-star trap ADR-0107 closed.
 
-**FOUR OF THE SEVEN ROOM TYPES PROVIDE NOTHING.** `hotel_lounge`, `hotel_spa`, `conference_hall` and
-`hotel_theatre` have empty `provides` — they count toward the star rating and serve no guest need,
-**which is exactly why G-051b measured a facility as "a PURE COST"**. And an item's provision is
-**borrowed by its host room** (`commands.ts:105`).
+> **THE EXPLOIT DOES NOT EXIST TODAY AND THE TOOL CREATES IT.** No player can place an item. **So the
+> ordering is load-bearing: this goal lands before G-075c, and this block says so where the next
+> reader will look.**
 
-> **SO ITEMS ARE NOT DECORATION ON A WORKING SYSTEM — THEY ARE HOW HALF THIS GAME'S ROOM TYPES WOULD
-> ACQUIRE A PURPOSE AT ALL.** A lounge with nothing in it is upkeep; a lounge with seating in it
-> serves comfort. *That is a live economic consequence and it must be MEASURED, not assumed.*
+### The shape — G-038b-i's, deliberately
 
-### What is owed
+**The MECHANISM, inert on shipped content, proved against hand-built worlds.** A price field on the
+item type, and `placeItem` booking a transaction and refusing `insufficientFunds`. **Priced against
+the THREE items that exist**; the catalogue is G-075b's and must not be started here.
 
-**Every room type has at least FIVE suitable items. An item may suit more than one room** — an arm
-chair belongs in a lounge, a cafe and a theatre — so this is not 35 new rows, and the honest count
-falls out of the design rather than being set here.
+**Seeded items are NOT charged**, because a scenario places them with `spawnEntity`, not `placeItem`.
+**State that asymmetry rather than let it be rediscovered** — it already exists for rooms, and it is
+why a demolished seeded room refunds money nobody paid (G-068's finding).
 
-**A `suits` FIELD IS NEEDED EVEN IF NOTHING ENFORCES IT**, because the palette has to group by room
-type and the grouping must live in content (I3), not in the UI.
-
-**AND THE SAME NEED MAY BE SERVED BY DIFFERENT ITEMS IN DIFFERENT ROOMS — this is a REQUIREMENT, not
-a nicety.** A `minibar` in a bedroom and a `vending_machine` in a public room both provide
-`guest_nourishment`; **what differs is which room each READS correctly in.** *An item that is right
-functionally and wrong perceptually is a defect a player sees before any number moves.*
-
-### THE FORK, WITH A RECOMMENDATION — and it does NOT block the catalogue
-
-Whether the SIM refuses an unsuitable placement is a separate decision from whether the catalogue
-exists. **The catalogue is needed under either answer, so build it and leave the rule alone.**
-
-**RECOMMENDED: SUGGEST, DO NOT ENFORCE** — `placeItem` today has exactly ONE rule, the cell must be
-in a room, documented and deliberate; ADR-0046 §4.2 called it *"the primary player verb"* without a
-suitability constraint; and because provision is BORROWED by the host room, a vending machine in a
-bedroom makes that bedroom serve nourishment.
-
-> **AND THE HUMAN FOUND A THIRD ANSWER THAT IS BETTER THAN EITHER, WHICH SPLITS THIS QUESTION IN
-> TWO.** Verbatim: *"A vending machine in a room is perceptually weird, but a minibar isn't. One
-> would think having a vending machine in your room would actually be bad, whilst providing
-> nourishment it would create noise and light."*
->
-> **THE PERCEPTUAL HALF IS FREE AND IT IS THIS GOAL'S.** A `minibar` and a `vending_machine` can BOTH
-> `provide: [guest_nourishment]` and differ only in which rooms they suit. **The weirdness disappears
-> with NO mechanic**, and it settles what `suits` is FOR: **not a restriction — a VOCABULARY.** Each
-> room type gets the items that read correctly in it. *That is what the human asked for and it needs
-> nothing new.*
->
-> **THE "ACTUALLY BAD" HALF IS A NEW MECHANIC AND IT DISSOLVES THE ENFORCEMENT QUESTION.** Do not
-> REFUSE the placement — let the CONSEQUENCE teach. **Measured: nothing in this simulation can harm a
-> need.** `needs.ts:58` — *"every number in it is a non-negative safe integer"* — and
-> `fitBasisPoints` expresses only HOW WELL something serves; the four need types carry
-> `capacityTicks`, `refillPerTick` and `serviceFloorBasisPoints`, all serving, none degrading.
-> **Parked as its own goal, because the chain it would close is one THIS SESSION finished building:
-> vending machine in a bedroom -> guest sleeps badly -> worse review -> THE GUEST SAYS SO IN THE FEED
-> (G-066a/b).** Placement becomes legible through systems that already exist rather than through a
-> refusal message. **Not this goal. Open on the human.**
+**A PRICE IS A DESIGN STATEMENT AND MUST BE LABELLED ONE.** §2.1 governs numbers a GATE compares
+against; nothing compares against a price, exactly as `room-types.json`'s 250,000 is not derived.
+**Do not manufacture a derivation for it** — say it is chosen, and say against what.
 
 ### Exit criteria
 
-1. **Every room type has >= 5 suitable items**, asserted by a test that reads both JSON files on disk,
-   so a later edit that starves a room type goes RED.
-2. **Every item states what it is FOR** — a need it provides, or **explicitly decorative and labelled
-   as inert**. *A decorative item does nothing measurable until G-037a scores rooms on their contents
-   (`HOTELSIM.md`'s third clause, OWED); shipping it unlabelled would be content pretending to a
-   purpose that does not exist yet.*
-3. **THE ECONOMIC CONSEQUENCE MEASURED, arm by arm, one deterministic run each.** Furnishing a
-   lounge with seating gives it a provision it never had — **this can move review scores, dissatisfied
-   departures and the amenity arithmetic G-060 derived.** If the shipped scenario's economics move,
-   that is a FINDING and it is reported, not absorbed.
-4. `pnpm verify` — fourteen rows, fourteen PASS. **I2 will move (`World.contentHash`), by
-   construction, on any content edit.** No save bump.
+1. **A placement is charged and appears in the ledger**, folded not stored (I4).
+2. **`insufficientFunds` is reachable and RECORDED, never thrown** — the contract every build-family
+   command already keeps.
+3. **Anti-vacuity: a hotel that CAN afford it still places.** *A refusal test alone would pass on a
+   command that always refuses.*
+4. **The shipped scenario is BYTE-IDENTICAL** — it places items with `spawnEntity` and must not be
+   charged. **If it moves, the asymmetry is wrong and that is the finding.**
+5. `pnpm verify` — fourteen rows, fourteen PASS. **I2 moves only by `World.contentHash`** if the
+   price field is added to content; **no save bump** — a price is content, not world state.
 
 ### Out of scope
 
-The item TOOL (G-075b). Scoring a room on its contents (**G-037a, OWED — this goal must not deliver
-half of it**). Enforcing suitability (open on the human, above).
+The catalogue (**G-075b**), the tool (**G-075c**), refunds for removing an item, and any change to
+what `placeItem` already refuses.
 
-## G-075b — The player puts something in the room
-Status: **PLANNED 2026-08-30. Follows G-075a. The charter's SECOND CLAUSE.** Milestone: M5 · Owner pair: render-engineer / render-critic
+## G-075b — Every room type has something worth putting in it
+Status: **PLANNED 2026-08-30. Follows G-075a. Human-specified: *"at least 5 items per room type, suitable to the room type, serving a purpose functionally or decoratively."*** Milestone: M5 · Owner pair: economy-engineer / balance-critic
+
+**Three items against seven room types.** `single_bed` (provides nothing), `arm_chair`
+(`guest_comfort`), `vending_machine` (`guest_nourishment`).
+
+### THE FINDING THAT MAKES THIS MORE THAN A CONTENT CHORE
+
+**FOUR OF THE SEVEN ROOM TYPES PROVIDE NOTHING** — `hotel_lounge`, `hotel_spa`, `conference_hall`,
+`hotel_theatre` have empty `provides`, **which is exactly why G-051b measured a facility as "a PURE
+COST"**. And an item is a provider in its own right. **So items are how half this game's room types
+would acquire a purpose at all** — and that is a live economic consequence to be MEASURED, not
+assumed.
+
+### What is owed
+
+**At least FIVE suitable items per room type. An item may suit more than one room**, so this is not
+35 rows and the honest count falls out of the design.
+
+**A `suits` FIELD IS A VOCABULARY, NOT A RESTRICTION** — the palette must group by room type and the
+grouping belongs in content (I3), not the UI.
+
+**THE SAME NEED MAY BE SERVED BY DIFFERENT ITEMS IN DIFFERENT ROOMS, and this is a REQUIREMENT.** The
+human: *"A vending machine in a room is perceptually weird, but a minibar isn't."* A `minibar` and a
+`vending_machine` both provide `guest_nourishment`; **what differs is which room each READS correctly
+in.** *An item that is right functionally and wrong perceptually is a defect a player sees before any
+number moves.*
+
+**EVERY ITEM STATES WHAT IT IS FOR** — a need it provides, or **explicitly decorative and labelled
+INERT**, because a decorative item does nothing measurable until G-037a scores rooms on their
+contents (`HOTELSIM.md`'s third clause, **OWED**).
+
+### Exit criteria
+
+1. **>= 5 suitable items per room type**, asserted by a test reading both JSON files on disk, so a
+   later edit that starves a room type goes RED.
+2. **THE ECONOMIC CONSEQUENCE MEASURED, arm by arm, one deterministic run each.** Furnishing a lounge
+   gives it a provision it never had. **If the shipped scenario's economics move, that is a FINDING**
+   — reported, not absorbed. **G-060's eleven rungs must still be zero-dissatisfied.**
+3. **Prices are DESIGN STATEMENTS, labelled**, against G-075a's mechanism.
+4. `pnpm verify` — fourteen rows, fourteen PASS. **I2 moves by `World.contentHash`, by construction.**
+
+### Out of scope
+
+The tool (**G-075c**). Room scoring (**G-037a, OWED — do not deliver half of it**). Enforcing
+suitability (**open on the human; ADR-0111 recommends suggest-not-enforce**).
+
+## G-075c — The player puts something in the room
+Status: **PLANNED 2026-08-30. Follows G-075a AND G-075b. The charter's SECOND CLAUSE. MAY NOT SHIP BEFORE G-075a — see ADR-0111.** Milestone: M5 · Owner pair: render-engineer / render-critic
 
 **IT IS NOT A MISSING FEATURE. IT IS A RULED VERB WITH NO BUTTON.** `placeItem` exists
 (`commands.ts:125`) with refusal rules — off-plot, and no room covering the cell — **recorded, never

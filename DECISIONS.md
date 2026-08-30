@@ -10564,3 +10564,57 @@ tidied:**
 load-bearing under ADR-0047 B2 and G-034b; `world.corridors` is SAVED STATE, so this is a schema
 bump that cannot be dodged by deriving — **removing a field is not the trick G-051a and G-066a used.**
 It does not start until the items goal lands.
+
+---
+
+## ADR-0111 — AN ITEM COSTS MONEY, because an item is a PROVIDER and a free provider dissolves the ladder that was just derived.
+
+**RULED 2026-08-30 BY THE HUMAN.** Rejected: free-but-capped (a new sim rule with a number §2.1 could
+not source), free-and-measure-it, and catalogue-only.
+
+### The finding that forced the question
+
+**AN ITEM IS A PROVIDER IN ITS OWN RIGHT**, and the docblock is explicit (`content.ts:758`):
+
+> *"THE GUEST ENGAGES THE ITEM, NOT THE ROOM IT STANDS IN. An arm chair in a lounge is the provider;
+> the lounge is the place it stands, and it may provide nothing itself."*
+
+`isProviding` (`validity.ts:1883`) adds the only condition: the item must stand in a VALID room.
+**And `placeItem` books NO transaction** — `tick.ts:536`, *"It books no transaction, so unlike its
+siblings it leaves the ledger by reference."*
+
+**Each provider serves `refillPerTick + 1` = 15 concurrent guests** (G-043's flow conservation, the
+same figure G-060's amenity derivation rests on). So a player with twelve bedrooms could place twelve
+**free** nourishment providers and never build a cafe.
+
+> **THAT WOULD DISSOLVE G-060's AMENITY CLAUSE THE WEEK IT WAS DERIVED.** The clause exists because
+> `sets(tier) = ceil(parties x guestsPerParty / guestsPerProvider)` — **it is arithmetic about
+> PROVIDER CAPACITY**, and a free source of providers makes the numerator irrelevant. It would also
+> re-open the five-star trap ADR-0107 closed.
+
+**THE EXPLOIT DOES NOT EXIST TODAY AND THE TOOL IS WHAT CREATES IT.** No player can place an item —
+`input.ts` has no item tool. **So the ordering is load-bearing: the charge must land BEFORE the
+button.**
+
+### What the ruling obliges, and it is not a content edit
+
+- **A price on the item type** — content, I3.
+- **`placeItem` BOOKS A TRANSACTION and refuses `insufficientFunds`** — that is `packages/sim`, a new
+  path through an existing command, and the ledger stays append-only (I4).
+- **Seeded items are NOT charged**, because scenarios place them with `spawnEntity`, not `placeItem`.
+  *That asymmetry already exists for rooms and is the reason a demolished seeded room refunds money
+  nobody paid — G-068's finding. It must be stated, not discovered again.*
+
+### AND IT RE-SPLITS THE WORK, because a price nothing charges is a number that lies
+
+**G-075a becomes the MECHANISM, inert on shipped content** — the price field and the charge, priced
+against the THREE items that exist, proved against hand-built worlds. **That is G-038b-i's shape
+exactly** (*"the MECHANISM, inert on shipped content, proved against hand-built worlds"*), and it
+keeps the blast radius of a sim change away from a thirty-item content design.
+
+**G-075b becomes the CATALOGUE** — pure content, five-plus items per room type, `suits` as a
+vocabulary, and every price a **DESIGN STATEMENT labelled as one** (§2.1 governs numbers a gate
+compares against; nothing compares against a price, exactly as `room-types.json`'s 250,000 is not
+derived).
+
+**G-075c becomes the TOOL** — render, and it may not ship before G-075a.
